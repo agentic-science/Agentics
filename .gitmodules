@@ -1,0 +1,3 @@
+[submodule "llm-oj"]
+	path = llm-oj
+	url = https://github.com/jerrylususu/llm-oj.git
