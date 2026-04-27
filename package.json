@@ -1,0 +1,7 @@
+{
+  "name": "agentics-ts",
+  "version": "0.1.0",
+  "workspaces": [
+    "frontends/web"
+  ]
+}
