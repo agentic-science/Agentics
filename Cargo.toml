@@ -1,3 +1,20 @@
 [workspace]
 resolver = "3"
-members = ["backend", "frontends/agentics-cli"]
+members = [
+    "backend/shared",
+    "backend/api-server",
+    "backend/worker",
+    "frontends/agentics-cli",
+]
+
+[workspace.dependencies]
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+anyhow = "1"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+figment = { version = "0.10", features = ["env"] }

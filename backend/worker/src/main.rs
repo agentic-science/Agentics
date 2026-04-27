@@ -4,7 +4,7 @@ use tracing::info;
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
-    let config = shared::config::Config::from_env()?;
+    let _config = shared::config::Config::from_env()?;
     info!("starting worker");
 
     // TODO: initialize db pool, start evaluation polling loop
