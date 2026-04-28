@@ -3,8 +3,6 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use serde_json::Value;
-use std::sync::Arc;
 use uuid::Uuid;
 
 use shared::auth;
@@ -339,8 +337,6 @@ fn is_likely_zip(bytes: &[u8]) -> bool {
 }
 
 pub async fn read_submission_artifact_summary(artifact_path: &str) -> Result<SubmissionArtifactResponse> {
-    use tokio::io::AsyncReadExt;
-
     let artifact_bytes = tokio::fs::read(artifact_path).await?;
     let archive_size = artifact_bytes.len() as i64;
     let reader = std::io::Cursor::new(&artifact_bytes);

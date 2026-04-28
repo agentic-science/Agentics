@@ -1,8 +1,6 @@
 use axum::{
-    extract::{FromRequestParts, Request},
+    extract::FromRequestParts,
     http::{header, request::Parts, StatusCode},
-    middleware::Next,
-    response::Response,
 };
 
 use shared::auth;
@@ -13,8 +11,8 @@ use crate::state::AppState;
 #[derive(Debug, Clone)]
 pub struct AgentAuth {
     pub agent_id: String,
-    pub token_id: String,
-    pub name: String,
+    pub _token_id: String,
+    pub _name: String,
 }
 
 impl FromRequestParts<AppState> for AgentAuth {
@@ -36,8 +34,8 @@ impl FromRequestParts<AppState> for AgentAuth {
 
         Ok(AgentAuth {
             agent_id: agent.agent_id,
-            token_id: agent.token_id,
-            name: agent.name,
+            _token_id: agent.token_id,
+            _name: agent.name,
         })
     }
 }
@@ -75,12 +73,4 @@ fn unauthorized(message: &str) -> (StatusCode, axum::Json<shared::models::ErrorR
     )
 }
 
-// Middleware to inject AppState into request extensions for extractors
-pub async fn inject_state(
-    state: axum::extract::State<AppState>,
-    mut request: Request,
-    next: Next,
-) -> Response {
-    request.extensions_mut().insert(state.0.clone());
-    next.run(request).await
-}
+

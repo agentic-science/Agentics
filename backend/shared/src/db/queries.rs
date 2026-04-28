@@ -328,7 +328,7 @@ pub async fn get_published_problem(pool: &PgPool, problem_id_or_slug: &str) -> R
         version: r.try_get("version").unwrap_or_default(),
         bundle_path: r.try_get("bundle_path").unwrap_or_default(),
         statement_path: r.try_get("statement_path").unwrap_or_default(),
-        spec_json: r.try_get("spec_json").unwrap_or_else(|_| Value::Null),
+        spec_json: r.try_get("spec_json").unwrap_or(Value::Null),
     }))
 }
 
@@ -1053,7 +1053,7 @@ pub async fn queue_evaluation_job(pool: &PgPool, input: &QueueEvaluationJobInput
         submission_id: row.try_get("id")?,
         problem_id: row.try_get("problem_id")?,
         problem_version_id: row.try_get("problem_version_id")?,
-        eval_type: input.eval_type.clone(),
+        eval_type: input.eval_type,
         status: "queued".to_string(),
         attempt_count: 0,
         payload: serde_json::from_value(payload).map_err(|e| AppError::Internal(e.to_string()))?,
@@ -1160,13 +1160,10 @@ pub async fn mark_evaluation_finished(pool: &PgPool, result: &PersistedEvaluatio
         if let Some(ref hidden) = result.hidden_summary {
             upsert_leaderboard_entry_for_submission_tx(&mut tx, &result.submission_id, hidden.score, &result.shown_results).await?;
         }
-    }
-
-    if result.status == EvaluationStatus::Completed && result.eval_type == ScoringMode::Official {
-        if let Some(ref official) = result.official_summary {
+    } else if result.status == EvaluationStatus::Completed && result.eval_type == ScoringMode::Official
+        && let Some(ref official) = result.official_summary {
             update_official_score_for_submission_tx(&mut tx, &result.submission_id, official.score).await?;
         }
-    }
 
     tx.commit().await?;
     Ok(())

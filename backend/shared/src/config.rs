@@ -23,6 +23,10 @@ pub struct Config {
     pub runner_timeout_sec: u64,
     #[serde(default = "default_runner_python_image")]
     pub runner_python_image: String,
+    #[serde(default = "default_runner_memory_limit_mb")]
+    pub runner_memory_limit_mb: u64,
+    #[serde(default = "default_runner_cpu_limit")]
+    pub runner_cpu_limit: f64,
     #[serde(default = "default_log_level")]
     pub log_level: String,
 }
@@ -65,6 +69,14 @@ fn default_runner_timeout_sec() -> u64 {
 
 fn default_runner_python_image() -> String {
     "python:3.12-slim".to_string()
+}
+
+fn default_runner_memory_limit_mb() -> u64 {
+    512
+}
+
+fn default_runner_cpu_limit() -> f64 {
+    1.0
 }
 
 fn default_log_level() -> String {

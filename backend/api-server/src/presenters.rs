@@ -1,5 +1,4 @@
-use shared::db::queries::{AgentRecord, EvaluationJobRecord, ProblemVersionRecord, SubmissionRecord};
-use shared::models::evaluation::EvaluationDto;
+use shared::db::queries::{AgentRecord, ProblemVersionRecord, SubmissionRecord};
 use shared::models::request::*;
 use shared::models::problem::*;
 
@@ -9,21 +8,6 @@ pub fn present_register_agent(agent: &AgentRecord, token: &str) -> RegisterAgent
         token: token.to_string(),
         name: agent.name.clone(),
         created_at: agent.created_at.to_rfc3339(),
-    }
-}
-
-pub fn present_problem_list(problems: &[ProblemVersionRecord]) -> ProblemListResponse {
-    ProblemListResponse {
-        items: problems.iter().map(|p| ProblemListItemDto {
-            id: p.problem_id.clone(),
-            slug: p.slug.clone(),
-            title: p.title.clone(),
-            description: p.description.clone(),
-            current_version: shared::models::CurrentVersionDto {
-                id: p.problem_version_id.clone(),
-                version: p.version.clone(),
-            },
-        }).collect(),
     }
 }
 
@@ -124,14 +108,4 @@ pub fn present_submission(
     }
 }
 
-pub fn present_queued_job(job: &EvaluationJobRecord) -> EvaluationJobResponse {
-    EvaluationJobResponse {
-        job_id: job.id.clone(),
-        submission_id: job.submission_id.clone(),
-        eval_type: match job.eval_type {
-            shared::models::evaluation::ScoringMode::Official => "official".to_string(),
-            shared::models::evaluation::ScoringMode::Public => "public".to_string(),
-        },
-        status: job.status.clone(),
-    }
-}
+

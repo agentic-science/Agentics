@@ -121,6 +121,6 @@ pub fn is_safe_relative_path(value: &str) -> bool {
     if value.starts_with('/') {
         return false;
     }
-    let segments: Vec<&str> = value.split(|c| c == '/' || c == '\\').collect();
+    let segments: Vec<&str> = value.split(['/', '\\']).collect();
     segments.iter().all(|s| !s.is_empty() && *s != "..")
 }

@@ -12,7 +12,7 @@ use shared::db::queries::{
     upsert_service_heartbeat, reap_stuck_jobs, PersistedEvaluationResult,
     HeartbeatPayload,
 };
-use shared::models::evaluation::{EvaluationStatus, ScoringMode};
+use shared::models::evaluation::EvaluationStatus;
 use shared::runner::{execute_evaluation_job, pre_pull_image};
 use shared::storage::LocalStorage;
 
@@ -100,14 +100,14 @@ impl Worker {
             evaluation_id: evaluation_id.clone(),
             submission_id: job.submission_id.clone(),
             job_id: job.id.clone(),
-            eval_type: job.eval_type.clone(),
+            eval_type: job.eval_type,
         }).await?;
 
         let exec_result = execute_evaluation_job(
             &self.docker,
             &self.config,
             &job.id,
-            job.eval_type.clone(),
+            job.eval_type,
             &job.payload,
             self.storage.as_ref(),
         ).await;
@@ -121,7 +121,7 @@ impl Worker {
                     evaluation_id,
                     submission_id: submission_id.clone(),
                     job_id: job_id.clone(),
-                    eval_type: job.eval_type.clone(),
+                    eval_type: job.eval_type,
                     status: EvaluationStatus::Completed,
                     primary_score: Some(result.result.primary_score),
                     shown_results: result.result.shown_results,
@@ -152,7 +152,7 @@ impl Worker {
                     evaluation_id,
                     submission_id: job.submission_id.clone(),
                     job_id: job.id.clone(),
-                    eval_type: job.eval_type.clone(),
+                    eval_type: job.eval_type,
                     status: EvaluationStatus::Failed,
                     primary_score: None,
                     shown_results: vec![],

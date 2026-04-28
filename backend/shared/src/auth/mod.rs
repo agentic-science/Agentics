@@ -31,7 +31,7 @@ pub fn hash_agent_token(token: &str) -> String {
 
 pub fn parse_bearer_token(value: Option<&str>) -> Option<ParsedBearerToken> {
     let value = value?;
-    let parts: Vec<&str> = value.trim().split_whitespace().collect();
+    let parts: Vec<&str> = value.split_whitespace().collect();
 
     if parts.len() != 2 || parts[0].to_lowercase() != "bearer" {
         return None;
@@ -49,7 +49,7 @@ pub fn parse_bearer_token(value: Option<&str>) -> Option<ParsedBearerToken> {
 
 pub fn parse_basic_auth(value: Option<&str>) -> Option<ParsedBasicAuth> {
     let value = value?;
-    let parts: Vec<&str> = value.trim().split_whitespace().collect();
+    let parts: Vec<&str> = value.split_whitespace().collect();
 
     if parts.len() != 2 || parts[0].to_lowercase() != "basic" {
         return None;

@@ -1,19 +1,12 @@
-mod extractors;
-mod handlers;
-mod presenters;
-mod router;
-mod state;
-
 use std::sync::Arc;
 
-use axum::Router;
+use api_server::router;
+use api_server::state::AppState;
 use shared::config::Config;
 use shared::db::pool::create_pool;
 use shared::storage::LocalStorage;
 use tokio::net::TcpListener;
 use tracing::info;
-
-use crate::state::AppState;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -41,7 +34,24 @@ async fn main() -> anyhow::Result<()> {
     let listener = TcpListener::bind(format!("{}:{}", config.api_host, config.api_port)).await?;
     info!("api server listening on {}", listener.local_addr()?);
 
-    axum::serve(listener, app).await?;
+    let shutdown = async {
+        let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler");
+        let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
+            .expect("failed to install SIGINT handler");
 
+        tokio::select! {
+            _ = sigterm.recv() => {},
+            _ = sigint.recv() => {},
+        }
+
+        info!("received shutdown signal");
+    };
+
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown)
+        .await?;
+
+    info!("api server exited");
     Ok(())
 }

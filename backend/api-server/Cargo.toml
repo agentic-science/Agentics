@@ -3,6 +3,10 @@ name = "api-server"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "api_server"
+path = "src/lib.rs"
+
 [[bin]]
 name = "api"
 path = "src/main.rs"

@@ -69,10 +69,15 @@ pub async fn execute_evaluation_job(
         },
     ];
 
+    let memory_bytes = config.runner_memory_limit_mb * 1024 * 1024;
+    let nano_cpus = (config.runner_cpu_limit * 1_000_000_000.0) as i64;
+
     let host_config = bollard::models::HostConfig {
         network_mode: Some("none".to_string()),
         mounts: Some(mounts),
         auto_remove: Some(false),
+        memory: Some(memory_bytes as i64),
+        nano_cpus: Some(nano_cpus),
         ..Default::default()
     };
 
@@ -126,13 +131,7 @@ pub async fn execute_evaluation_job(
 
     let wait_ok = match wait_result {
         Ok(results) => {
-            let mut exit_code = 0i64;
-            for r in results {
-                if let Ok(status) = r {
-                    exit_code = status.status_code;
-                }
-            }
-            exit_code == 0
+            results.into_iter().flatten().last().is_none_or(|s| s.status_code == 0)
         }
         Err(_) => {
             // Timeout — kill container
