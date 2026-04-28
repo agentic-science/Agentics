@@ -4,6 +4,7 @@ members = [
     "backend/shared",
     "backend/api-server",
     "backend/worker",
+    "backend/integration-tests",
     "frontends/agentics-cli",
 ]
 
