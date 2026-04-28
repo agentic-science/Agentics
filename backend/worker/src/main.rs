@@ -1,10 +1,9 @@
-mod cycle;
-
 use std::sync::Arc;
 
 use tracing::info;
 
 use shared::config::Config;
+use worker::cycle::Worker;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -13,12 +12,13 @@ async fn main() -> anyhow::Result<()> {
     let config = Arc::new(Config::from_env()?);
     info!("starting worker");
 
-    let worker = cycle::Worker::new(config.clone()).await?;
+    let worker = Worker::new(config.clone()).await?;
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 
     tokio::spawn(async move {
-        let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+        let mut sigterm =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
         let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
 
         tokio::select! {

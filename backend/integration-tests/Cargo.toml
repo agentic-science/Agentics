@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 shared = { path = "../shared" }
 api-server = { path = "../api-server" }
+worker = { path = "../worker" }
 
 tokio = { workspace = true }
 tracing = { workspace = true }
@@ -14,7 +15,10 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 axum = "0.8"
+base64 = "0.22"
 reqwest = { version = "0.13", features = ["json"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "migrate"] }
 uuid = { workspace = true }
 bollard = "0.20"
+tempfile = "3"
+zip = "8"

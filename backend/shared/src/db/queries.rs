@@ -1,17 +1,34 @@
+//! Database query helpers for agents, problems, submissions, leaderboards, and evaluations.
+//!
+//! The API server and worker both depend on this module, so public functions
+//! describe transactional side effects such as queueing jobs, changing
+//! submission visibility, and updating leaderboard rows.
+
 use chrono::{DateTime, Utc};
 use serde_json::Value;
-use sqlx::{PgPool, Transaction, Postgres, Row};
+use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use crate::error::{AppError, Result};
-use crate::models::evaluation::{EvaluationDto, EvaluationJobPayload, EvaluationStatus, ScoreSummary, ScoringMode, ShownCaseResult};
-use crate::models::problem::{CreateProblemVersionResponse, ProblemBundleSpec, ProblemListItemDto};
-use crate::models::request::{DiscussionReplyDto, DiscussionThreadDto, LeaderboardEntryDto, PublicSubmissionListItemDto};
 use crate::leaderboard::should_replace_leaderboard_entry;
+use crate::models::evaluation::{
+    EvaluationDto, EvaluationJobPayload, EvaluationStatus, ScoreSummary, ScoringMode,
+    ShownCaseResult,
+};
+use crate::models::problem::{CreateProblemVersionResponse, ProblemBundleSpec, ProblemListItemDto};
+use crate::models::request::{LeaderboardEntryDto, PublicSubmissionListItemDto};
+
+pub use super::discussions::{
+    create_discussion_reply, create_discussion_thread, list_discussion_threads,
+};
+pub use super::maintenance::{
+    HeartbeatPayload, ensure_problems_seeded_from_root, reap_stuck_jobs, upsert_service_heartbeat,
+};
 
 // ---------------------------------------------------------------------------
 // Agent
 // ---------------------------------------------------------------------------
 
+/// Input for creating an agent and its initial bearer token in one transaction.
 #[derive(Debug, Clone)]
 pub struct RegisterAgentInput {
     pub agent_id: String,
@@ -23,6 +40,7 @@ pub struct RegisterAgentInput {
     pub model_info: Value,
 }
 
+/// Persisted agent row returned after registration.
 #[derive(Debug, Clone)]
 pub struct AgentRecord {
     pub id: String,
@@ -34,6 +52,7 @@ pub struct AgentRecord {
     pub created_at: DateTime<Utc>,
 }
 
+/// Agent identity resolved from a valid, active bearer token.
 #[derive(Debug, Clone)]
 pub struct AuthenticatedAgent {
     pub agent_id: String,
@@ -41,6 +60,7 @@ pub struct AuthenticatedAgent {
     pub name: String,
 }
 
+/// Register an active agent and insert its first token.
 pub async fn register_agent(pool: &PgPool, input: &RegisterAgentInput) -> Result<AgentRecord> {
     let mut tx = pool.begin().await?;
 
@@ -49,7 +69,7 @@ pub async fn register_agent(pool: &PgPool, input: &RegisterAgentInput) -> Result
         INSERT INTO agents (id, name, description, owner, model_info, status)
         VALUES ($1, $2, $3, $4, $5, 'active')
         RETURNING id, name, description, owner, model_info, status, created_at
-        "#
+        "#,
     )
     .bind(&input.agent_id)
     .bind(&input.name)
@@ -79,7 +99,11 @@ pub async fn register_agent(pool: &PgPool, input: &RegisterAgentInput) -> Result
     })
 }
 
-pub async fn authenticate_agent_token(pool: &PgPool, token: &str) -> Result<Option<AuthenticatedAgent>> {
+/// Authenticate a bearer token and refresh its `last_used_at` timestamp.
+pub async fn authenticate_agent_token(
+    pool: &PgPool,
+    token: &str,
+) -> Result<Option<AuthenticatedAgent>> {
     let token_hash = crate::auth::hash_agent_token(token);
 
     let row = sqlx::query(
@@ -91,13 +115,15 @@ pub async fn authenticate_agent_token(pool: &PgPool, token: &str) -> Result<Opti
           AND t.revoked_at IS NULL
           AND a.status = 'active'
         LIMIT 1
-        "#
+        "#,
     )
     .bind(&token_hash)
     .fetch_optional(pool)
     .await?;
 
-    let Some(row) = row else { return Ok(None); };
+    let Some(row) = row else {
+        return Ok(None);
+    };
 
     let token_id: String = row.try_get("token_id")?;
     sqlx::query("UPDATE agent_tokens SET last_used_at = NOW() WHERE id = $1")
@@ -112,6 +138,7 @@ pub async fn authenticate_agent_token(pool: &PgPool, token: &str) -> Result<Opti
     }))
 }
 
+/// Disable an agent and revoke all of its tokens.
 pub async fn disable_agent(pool: &PgPool, agent_id: &str) -> Result<()> {
     let row = sqlx::query("UPDATE agents SET status = 'disabled' WHERE id = $1 RETURNING id")
         .bind(agent_id)
@@ -122,10 +149,12 @@ pub async fn disable_agent(pool: &PgPool, agent_id: &str) -> Result<()> {
         return Err(AppError::NotFound);
     }
 
-    sqlx::query("UPDATE agent_tokens SET revoked_at = COALESCE(revoked_at, NOW()) WHERE agent_id = $1")
-        .bind(agent_id)
-        .execute(pool)
-        .await?;
+    sqlx::query(
+        "UPDATE agent_tokens SET revoked_at = COALESCE(revoked_at, NOW()) WHERE agent_id = $1",
+    )
+    .bind(agent_id)
+    .execute(pool)
+    .await?;
 
     Ok(())
 }
@@ -134,6 +163,7 @@ pub async fn disable_agent(pool: &PgPool, agent_id: &str) -> Result<()> {
 // Problem
 // ---------------------------------------------------------------------------
 
+/// Latest published problem version joined with problem metadata.
 #[derive(Debug, Clone)]
 pub struct ProblemVersionRecord {
     pub problem_id: String,
@@ -147,6 +177,7 @@ pub struct ProblemVersionRecord {
     pub spec_json: Value,
 }
 
+/// Create or update the problem shell that versions attach to.
 pub async fn create_or_update_problem(
     pool: &PgPool,
     id: &str,
@@ -165,7 +196,7 @@ pub async fn create_or_update_problem(
             status = 'active',
             updated_at = NOW()
         RETURNING id, slug, title, description, status, created_at, updated_at
-        "#
+        "#,
     )
     .bind(id)
     .bind(slug)
@@ -185,6 +216,7 @@ pub async fn create_or_update_problem(
     })
 }
 
+/// Publish a validated bundle as the current problem version.
 pub async fn publish_problem_version(
     pool: &PgPool,
     problem_id: &str,
@@ -226,7 +258,7 @@ pub async fn publish_problem_version(
             v.version,
             v.bundle_path,
             v.statement_path
-        "#
+        "#,
     )
     .bind(&version_id)
     .bind(problem_id)
@@ -250,6 +282,7 @@ pub async fn publish_problem_version(
     })
 }
 
+/// List active problems with their latest published version.
 pub async fn list_published_problems(pool: &PgPool) -> Result<Vec<ProblemListItemDto>> {
     let rows = sqlx::query(
         r#"
@@ -271,24 +304,31 @@ pub async fn list_published_problems(pool: &PgPool) -> Result<Vec<ProblemListIte
         ) pv ON TRUE
         WHERE p.status = 'active'
         ORDER BY p.created_at ASC
-        "#
+        "#,
     )
     .fetch_all(pool)
     .await?;
 
-    Ok(rows.into_iter().map(|r| ProblemListItemDto {
-        id: r.try_get("problem_id").unwrap_or_default(),
-        slug: r.try_get("slug").unwrap_or_default(),
-        title: r.try_get("title").unwrap_or_default(),
-        description: r.try_get("description").unwrap_or_default(),
-        current_version: crate::models::CurrentVersionDto {
-            id: r.try_get("version_id").unwrap_or_default(),
-            version: r.try_get("version").unwrap_or_default(),
-        },
-    }).collect())
+    Ok(rows
+        .into_iter()
+        .map(|r| ProblemListItemDto {
+            id: r.try_get("problem_id").unwrap_or_default(),
+            slug: r.try_get("slug").unwrap_or_default(),
+            title: r.try_get("title").unwrap_or_default(),
+            description: r.try_get("description").unwrap_or_default(),
+            current_version: crate::models::CurrentVersionDto {
+                id: r.try_get("version_id").unwrap_or_default(),
+                version: r.try_get("version").unwrap_or_default(),
+            },
+        })
+        .collect())
 }
 
-pub async fn get_published_problem(pool: &PgPool, problem_id_or_slug: &str) -> Result<Option<ProblemVersionRecord>> {
+/// Fetch one active problem by id or slug with its latest published version.
+pub async fn get_published_problem(
+    pool: &PgPool,
+    problem_id_or_slug: &str,
+) -> Result<Option<ProblemVersionRecord>> {
     let row = sqlx::query(
         r#"
         SELECT
@@ -313,7 +353,7 @@ pub async fn get_published_problem(pool: &PgPool, problem_id_or_slug: &str) -> R
         WHERE p.status = 'active'
           AND (p.id = $1 OR p.slug = $1)
         LIMIT 1
-        "#
+        "#,
     )
     .bind(problem_id_or_slug)
     .fetch_optional(pool)
@@ -336,6 +376,7 @@ pub async fn get_published_problem(pool: &PgPool, problem_id_or_slug: &str) -> R
 // Submission
 // ---------------------------------------------------------------------------
 
+/// Input for creating a submission and its initial public evaluation job.
 #[derive(Debug, Clone)]
 pub struct CreateSubmissionInput {
     pub submission_id: String,
@@ -348,6 +389,7 @@ pub struct CreateSubmissionInput {
     pub credit_text: String,
 }
 
+/// Submission row with optional joined evaluation and job metadata.
 #[derive(Debug, Clone)]
 pub struct SubmissionRecord {
     pub id: String,
@@ -372,19 +414,33 @@ pub struct SubmissionRecord {
     pub official_evaluation: Option<EvaluationDto>,
 }
 
+/// Parse an evaluation DTO from a row using a prefix such as `public_eval`.
 fn parse_eval_from_row(row: &sqlx::postgres::PgRow, prefix: &str) -> Result<Option<EvaluationDto>> {
     let id_col = format!("{}_id", prefix);
     let id: Option<String> = row.try_get(id_col.as_str()).ok();
-    let id = match id { Some(i) if !i.is_empty() => i, _ => return Ok(None) };
+    let id = match id {
+        Some(i) if !i.is_empty() => i,
+        _ => return Ok(None),
+    };
     let status_str: Option<String> = row.try_get(format!("{}_status", prefix).as_str()).ok();
     let eval_type_str: Option<String> = row.try_get(format!("{}_eval_type", prefix).as_str()).ok();
-    let primary_score: Option<f64> = row.try_get(format!("{}_primary_score", prefix).as_str()).ok();
-    let shown_json: Option<Value> = row.try_get(format!("{}_shown_results", prefix).as_str()).ok();
-    let hidden_json: Option<Value> = row.try_get(format!("{}_hidden_summary", prefix).as_str()).ok();
-    let official_json: Option<Value> = row.try_get(format!("{}_official_summary", prefix).as_str()).ok();
+    let primary_score: Option<f64> = row
+        .try_get(format!("{}_primary_score", prefix).as_str())
+        .ok();
+    let shown_json: Option<Value> = row
+        .try_get(format!("{}_shown_results", prefix).as_str())
+        .ok();
+    let hidden_json: Option<Value> = row
+        .try_get(format!("{}_hidden_summary", prefix).as_str())
+        .ok();
+    let official_json: Option<Value> = row
+        .try_get(format!("{}_official_summary", prefix).as_str())
+        .ok();
     let log_path: Option<String> = row.try_get(format!("{}_log_path", prefix).as_str()).ok();
-    let started_at: Option<DateTime<Utc>> = row.try_get(format!("{}_started_at", prefix).as_str()).ok();
-    let finished_at: Option<DateTime<Utc>> = row.try_get(format!("{}_finished_at", prefix).as_str()).ok();
+    let started_at: Option<DateTime<Utc>> =
+        row.try_get(format!("{}_started_at", prefix).as_str()).ok();
+    let finished_at: Option<DateTime<Utc>> =
+        row.try_get(format!("{}_finished_at", prefix).as_str()).ok();
 
     let status = match status_str.as_deref() {
         Some("queued") => EvaluationStatus::Queued,
@@ -397,9 +453,13 @@ fn parse_eval_from_row(row: &sqlx::postgres::PgRow, prefix: &str) -> Result<Opti
         Some("official") => ScoringMode::Official,
         _ => ScoringMode::Public,
     };
-    let shown_results: Vec<ShownCaseResult> = shown_json.and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
-    let hidden_summary: Option<ScoreSummary> = hidden_json.and_then(|v| serde_json::from_value(v).ok());
-    let official_summary: Option<ScoreSummary> = official_json.and_then(|v| serde_json::from_value(v).ok());
+    let shown_results: Vec<ShownCaseResult> = shown_json
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default();
+    let hidden_summary: Option<ScoreSummary> =
+        hidden_json.and_then(|v| serde_json::from_value(v).ok());
+    let official_summary: Option<ScoreSummary> =
+        official_json.and_then(|v| serde_json::from_value(v).ok());
 
     Ok(Some(EvaluationDto {
         id,
@@ -415,7 +475,11 @@ fn parse_eval_from_row(row: &sqlx::postgres::PgRow, prefix: &str) -> Result<Opti
     }))
 }
 
-pub async fn create_submission_with_job(pool: &PgPool, input: &CreateSubmissionInput) -> Result<SubmissionRecord> {
+/// Create a submission and queue its first public evaluation atomically.
+pub async fn create_submission_with_job(
+    pool: &PgPool,
+    input: &CreateSubmissionInput,
+) -> Result<SubmissionRecord> {
     let problem = get_published_problem(pool, &input.problem_id).await?;
     let problem = problem.ok_or_else(|| AppError::BadRequest("problem not found".to_string()))?;
 
@@ -432,7 +496,7 @@ pub async fn create_submission_with_job(pool: &PgPool, input: &CreateSubmissionI
             id, problem_id, problem_version_id, agent_id, artifact_path, language,
             status, explanation, parent_submission_id, credit_text, visible_after_eval,
             created_at, updated_at
-        "#
+        "#,
     )
     .bind(&input.submission_id)
     .bind(&problem.problem_id)
@@ -450,7 +514,8 @@ pub async fn create_submission_with_job(pool: &PgPool, input: &CreateSubmissionI
         bundle_path: problem.bundle_path.clone(),
         problem_id: problem.problem_id.clone(),
         problem_version_id: problem.problem_version_id.clone(),
-    }).map_err(|e| AppError::Internal(e.to_string()))?;
+    })
+    .map_err(|e| AppError::Internal(e.to_string()))?;
 
     sqlx::query(
         r#"
@@ -458,7 +523,7 @@ pub async fn create_submission_with_job(pool: &PgPool, input: &CreateSubmissionI
             id, submission_id, problem_id, problem_version_id, eval_type, status, payload_json
         )
         VALUES ($1, $2, $3, $4, 'public', 'queued', $5)
-        "#
+        "#,
     )
     .bind(&input.job_id)
     .bind(&input.submission_id)
@@ -494,7 +559,11 @@ pub async fn create_submission_with_job(pool: &PgPool, input: &CreateSubmissionI
     })
 }
 
-pub async fn get_submission_by_id(pool: &PgPool, submission_id: &str) -> Result<Option<SubmissionRecord>> {
+/// Fetch one submission with latest job state and public/official evaluations.
+pub async fn get_submission_by_id(
+    pool: &PgPool,
+    submission_id: &str,
+) -> Result<Option<SubmissionRecord>> {
     let row = sqlx::query(
         r#"
         SELECT
@@ -504,12 +573,26 @@ pub async fn get_submission_by_id(pool: &PgPool, submission_id: &str) -> Result<
             s.parent_submission_id, s.credit_text, s.visible_after_eval,
             s.created_at, s.updated_at,
             j.id AS latest_job_id, j.status AS latest_job_status,
-            pe.id AS public_eval_id, pe.status AS public_eval_status, pe.eval_type AS public_eval_type, pe.primary_score AS public_score,
-            pe.shown_results_json AS public_shown, pe.hidden_summary_json AS public_hidden, pe.official_summary_json AS public_official,
-            pe.log_path AS public_log, pe.started_at AS public_started, pe.finished_at AS public_finished,
-            oe.id AS official_eval_id, oe.status AS official_eval_status, oe.eval_type AS official_eval_type, oe.primary_score AS official_score,
-            oe.shown_results_json AS official_shown, oe.hidden_summary_json AS official_hidden, oe.official_summary_json AS official_official,
-            oe.log_path AS official_log, oe.started_at AS official_started, oe.finished_at AS official_finished
+            pe.id AS public_eval_id,
+            pe.status AS public_eval_status,
+            pe.eval_type AS public_eval_eval_type,
+            pe.primary_score AS public_eval_primary_score,
+            pe.shown_results_json AS public_eval_shown_results,
+            pe.hidden_summary_json AS public_eval_hidden_summary,
+            pe.official_summary_json AS public_eval_official_summary,
+            pe.log_path AS public_eval_log_path,
+            pe.started_at AS public_eval_started_at,
+            pe.finished_at AS public_eval_finished_at,
+            oe.id AS official_eval_id,
+            oe.status AS official_eval_status,
+            oe.eval_type AS official_eval_eval_type,
+            oe.primary_score AS official_eval_primary_score,
+            oe.shown_results_json AS official_eval_shown_results,
+            oe.hidden_summary_json AS official_eval_hidden_summary,
+            oe.official_summary_json AS official_eval_official_summary,
+            oe.log_path AS official_eval_log_path,
+            oe.started_at AS official_eval_started_at,
+            oe.finished_at AS official_eval_finished_at
         FROM submissions s
         JOIN agents a ON a.id = s.agent_id
         JOIN problems p ON p.id = s.problem_id
@@ -532,7 +615,9 @@ pub async fn get_submission_by_id(pool: &PgPool, submission_id: &str) -> Result<
     .fetch_optional(pool)
     .await?;
 
-    let Some(r) = row else { return Ok(None); };
+    let Some(r) = row else {
+        return Ok(None);
+    };
 
     let public_eval = parse_eval_from_row(&r, "public_eval")?;
     let official_eval = parse_eval_from_row(&r, "official_eval")?;
@@ -542,26 +627,30 @@ pub async fn get_submission_by_id(pool: &PgPool, submission_id: &str) -> Result<
         problem_id: r.try_get("problem_id")?,
         problem_version_id: r.try_get("problem_version_id")?,
         agent_id: r.try_get("agent_id")?,
-        agent_name: r.try_get("agent_name").ok(),
-        problem_title: r.try_get("problem_title").ok(),
+        agent_name: r.try_get::<Option<String>, _>("agent_name")?,
+        problem_title: r.try_get::<Option<String>, _>("problem_title")?,
         artifact_path: r.try_get("artifact_path")?,
         language: r.try_get("language")?,
         status: r.try_get("status")?,
         explanation: r.try_get("explanation")?,
-        parent_submission_id: r.try_get("parent_submission_id").ok(),
+        parent_submission_id: r.try_get::<Option<String>, _>("parent_submission_id")?,
         credit_text: r.try_get("credit_text")?,
         visible_after_eval: r.try_get("visible_after_eval")?,
         created_at: r.try_get("created_at")?,
         updated_at: r.try_get("updated_at")?,
-        evaluation_job_id: r.try_get("latest_job_id").ok(),
-        evaluation_job_status: r.try_get("latest_job_status").ok(),
+        evaluation_job_id: r.try_get::<Option<String>, _>("latest_job_id")?,
+        evaluation_job_status: r.try_get::<Option<String>, _>("latest_job_status")?,
         evaluation: public_eval.clone().or_else(|| official_eval.clone()),
         public_evaluation: public_eval,
         official_evaluation: official_eval,
     }))
 }
 
-pub async fn list_public_submissions_for_problem(pool: &PgPool, problem_id_or_slug: &str) -> Result<Vec<PublicSubmissionListItemDto>> {
+/// List public submissions for a problem after their public evaluation is visible.
+pub async fn list_public_submissions_for_problem(
+    pool: &PgPool,
+    problem_id_or_slug: &str,
+) -> Result<Vec<PublicSubmissionListItemDto>> {
     let rows = sqlx::query(
         r#"
         SELECT
@@ -589,31 +678,41 @@ pub async fn list_public_submissions_for_problem(pool: &PgPool, problem_id_or_sl
         WHERE (p.id = $1 OR p.slug = $1)
           AND s.visible_after_eval = TRUE
         ORDER BY s.created_at DESC
-        "#
+        "#,
     )
     .bind(problem_id_or_slug)
     .fetch_all(pool)
     .await?;
 
-    Ok(rows.into_iter().map(|r| PublicSubmissionListItemDto {
-        id: r.try_get("id").unwrap_or_default(),
-        problem_id: r.try_get("problem_id").unwrap_or_default(),
-        problem_version_id: r.try_get("problem_version_id").unwrap_or_default(),
-        problem_title: r.try_get("problem_title").unwrap_or_default(),
-        agent_id: r.try_get("agent_id").unwrap_or_default(),
-        agent_name: r.try_get("agent_name").unwrap_or_default(),
-        status: r.try_get("status").unwrap_or_default(),
-        explanation: r.try_get("explanation").unwrap_or_default(),
-        parent_submission_id: r.try_get("parent_submission_id").ok(),
-        credit_text: r.try_get("credit_text").unwrap_or_default(),
-        created_at: r.try_get::<DateTime<Utc>, _>("created_at").map(|d| d.to_rfc3339()).unwrap_or_default(),
-        updated_at: r.try_get::<DateTime<Utc>, _>("updated_at").map(|d| d.to_rfc3339()).unwrap_or_default(),
-        public_score: r.try_get("public_score").ok(),
-        hidden_score: r.try_get("hidden_score").ok(),
-        official_score: r.try_get("official_score").ok(),
-    }).collect())
+    Ok(rows
+        .into_iter()
+        .map(|r| PublicSubmissionListItemDto {
+            id: r.try_get("id").unwrap_or_default(),
+            problem_id: r.try_get("problem_id").unwrap_or_default(),
+            problem_version_id: r.try_get("problem_version_id").unwrap_or_default(),
+            problem_title: r.try_get("problem_title").unwrap_or_default(),
+            agent_id: r.try_get("agent_id").unwrap_or_default(),
+            agent_name: r.try_get("agent_name").unwrap_or_default(),
+            status: r.try_get("status").unwrap_or_default(),
+            explanation: r.try_get("explanation").unwrap_or_default(),
+            parent_submission_id: r.try_get("parent_submission_id").ok(),
+            credit_text: r.try_get("credit_text").unwrap_or_default(),
+            created_at: r
+                .try_get::<DateTime<Utc>, _>("created_at")
+                .map(|d| d.to_rfc3339())
+                .unwrap_or_default(),
+            updated_at: r
+                .try_get::<DateTime<Utc>, _>("updated_at")
+                .map(|d| d.to_rfc3339())
+                .unwrap_or_default(),
+            public_score: r.try_get("public_score").ok(),
+            hidden_score: r.try_get("hidden_score").ok(),
+            official_score: r.try_get("official_score").ok(),
+        })
+        .collect())
 }
 
+/// Hide a submission and repair or remove the affected leaderboard entry.
 pub async fn hide_submission(pool: &PgPool, submission_id: &str) -> Result<()> {
     let mut tx = pool.begin().await?;
 
@@ -636,7 +735,10 @@ pub async fn hide_submission(pool: &PgPool, submission_id: &str) -> Result<()> {
     .fetch_optional(&mut *tx)
     .await?;
 
-    if leaderboard_entry.map(|e| e.0 == submission_id).unwrap_or(false) {
+    if leaderboard_entry
+        .map(|e| e.0 == submission_id)
+        .unwrap_or(false)
+    {
         let replacement: Option<(String, f64, Value)> = sqlx::query_as(
             r#"
             SELECT s.id, (e.hidden_summary_json->>'score')::double precision AS hidden_score, e.shown_results_json
@@ -695,7 +797,11 @@ pub async fn hide_submission(pool: &PgPool, submission_id: &str) -> Result<()> {
 // Leaderboard
 // ---------------------------------------------------------------------------
 
-pub async fn list_leaderboard_entries(pool: &PgPool, problem_id_or_slug: &str) -> Result<Vec<LeaderboardEntryDto>> {
+/// List leaderboard entries for a problem id or slug.
+pub async fn list_leaderboard_entries(
+    pool: &PgPool,
+    problem_id_or_slug: &str,
+) -> Result<Vec<LeaderboardEntryDto>> {
     let rows = sqlx::query(
         r#"
         SELECT
@@ -706,36 +812,44 @@ pub async fn list_leaderboard_entries(pool: &PgPool, problem_id_or_slug: &str) -
         JOIN problems p ON p.id = le.problem_id
         WHERE p.id = $1 OR p.slug = $1
         ORDER BY le.best_hidden_score DESC, le.updated_at ASC
-        "#
+        "#,
     )
     .bind(problem_id_or_slug)
     .fetch_all(pool)
     .await?;
 
-    Ok(rows.into_iter().map(|r| LeaderboardEntryDto {
-        agent_id: r.try_get("agent_id").unwrap_or_default(),
-        agent_name: r.try_get("agent_name").unwrap_or_default(),
-        best_submission_id: r.try_get("best_submission_id").unwrap_or_default(),
-        best_hidden_score: r.try_get("best_hidden_score").unwrap_or(0.0),
-        official_score: r.try_get("official_score").ok(),
-        updated_at: r.try_get::<DateTime<Utc>, _>("updated_at").map(|d| d.to_rfc3339()).unwrap_or_default(),
-    }).collect())
+    Ok(rows
+        .into_iter()
+        .map(|r| LeaderboardEntryDto {
+            agent_id: r.try_get("agent_id").unwrap_or_default(),
+            agent_name: r.try_get("agent_name").unwrap_or_default(),
+            best_submission_id: r.try_get("best_submission_id").unwrap_or_default(),
+            best_hidden_score: r.try_get("best_hidden_score").unwrap_or(0.0),
+            official_score: r.try_get("official_score").ok(),
+            updated_at: r
+                .try_get::<DateTime<Utc>, _>("updated_at")
+                .map(|d| d.to_rfc3339())
+                .unwrap_or_default(),
+        })
+        .collect())
 }
 
+/// Upsert a leaderboard entry when a public run improves an agent's hidden score.
 pub async fn upsert_leaderboard_entry_for_submission(
     pool: &PgPool,
     submission_id: &str,
     hidden_score: f64,
     shown_results: &[ShownCaseResult],
 ) -> Result<()> {
-    let row: Option<(String, String)> = sqlx::query_as(
-        "SELECT problem_id, agent_id FROM submissions WHERE id = $1 LIMIT 1"
-    )
-    .bind(submission_id)
-    .fetch_optional(pool)
-    .await?;
+    let row: Option<(String, String)> =
+        sqlx::query_as("SELECT problem_id, agent_id FROM submissions WHERE id = $1 LIMIT 1")
+            .bind(submission_id)
+            .fetch_optional(pool)
+            .await?;
 
-    let Some((problem_id, agent_id)) = row else { return Ok(()); };
+    let Some((problem_id, agent_id)) = row else {
+        return Ok(());
+    };
 
     let current: Option<(f64,)> = sqlx::query_as(
         "SELECT best_hidden_score FROM leaderboard_entries WHERE problem_id = $1 AND agent_id = $2 LIMIT 1"
@@ -749,7 +863,8 @@ pub async fn upsert_leaderboard_entry_for_submission(
         return Ok(());
     }
 
-    let shown_json = serde_json::to_value(shown_results).map_err(|e| AppError::Internal(e.to_string()))?;
+    let shown_json =
+        serde_json::to_value(shown_results).map_err(|e| AppError::Internal(e.to_string()))?;
 
     sqlx::query(
         r#"
@@ -773,15 +888,21 @@ pub async fn upsert_leaderboard_entry_for_submission(
     Ok(())
 }
 
-pub async fn update_official_score_for_submission(pool: &PgPool, submission_id: &str, official_score: f64) -> Result<()> {
-    let row: Option<(String, String)> = sqlx::query_as(
-        "SELECT problem_id, agent_id FROM submissions WHERE id = $1 LIMIT 1"
-    )
-    .bind(submission_id)
-    .fetch_optional(pool)
-    .await?;
+/// Attach an official score to the leaderboard row for a submission's agent/problem.
+pub async fn update_official_score_for_submission(
+    pool: &PgPool,
+    submission_id: &str,
+    official_score: f64,
+) -> Result<()> {
+    let row: Option<(String, String)> =
+        sqlx::query_as("SELECT problem_id, agent_id FROM submissions WHERE id = $1 LIMIT 1")
+            .bind(submission_id)
+            .fetch_optional(pool)
+            .await?;
 
-    let Some((problem_id, agent_id)) = row else { return Ok(()); };
+    let Some((problem_id, agent_id)) = row else {
+        return Ok(());
+    };
 
     sqlx::query(
         "UPDATE leaderboard_entries SET official_score = $3, updated_at = NOW() WHERE problem_id = $1 AND agent_id = $2"
@@ -796,117 +917,10 @@ pub async fn update_official_score_for_submission(pool: &PgPool, submission_id: 
 }
 
 // ---------------------------------------------------------------------------
-// Discussions
-// ---------------------------------------------------------------------------
-
-pub async fn create_discussion_thread(
-    pool: &PgPool,
-    id: &str,
-    problem_id: &str,
-    agent_id: &str,
-    title: &str,
-    body: &str,
-) -> Result<()> {
-    let problem = get_published_problem(pool, problem_id).await?;
-    if problem.is_none() {
-        return Err(AppError::NotFound);
-    }
-
-    sqlx::query("INSERT INTO discussion_threads (id, problem_id, agent_id, title, body) VALUES ($1, $2, $3, $4, $5)")
-        .bind(id)
-        .bind(problem_id)
-        .bind(agent_id)
-        .bind(title)
-        .bind(body)
-        .execute(pool)
-        .await?;
-
-    Ok(())
-}
-
-pub async fn create_discussion_reply(
-    pool: &PgPool,
-    id: &str,
-    thread_id: &str,
-    agent_id: &str,
-    body: &str,
-) -> Result<()> {
-    sqlx::query("INSERT INTO discussion_replies (id, thread_id, agent_id, body) VALUES ($1, $2, $3, $4)")
-        .bind(id)
-        .bind(thread_id)
-        .bind(agent_id)
-        .bind(body)
-        .execute(pool)
-        .await?;
-
-    Ok(())
-}
-
-pub async fn list_discussion_threads(pool: &PgPool, problem_id_or_slug: &str) -> Result<Vec<DiscussionThreadDto>> {
-    let threads = sqlx::query(
-        r#"
-        SELECT t.id, t.problem_id, t.agent_id, a.name AS agent_name, t.title, t.body, t.created_at
-        FROM discussion_threads t
-        JOIN agents a ON a.id = t.agent_id
-        JOIN problems p ON p.id = t.problem_id
-        WHERE p.id = $1 OR p.slug = $1
-        ORDER BY t.created_at DESC
-        "#
-    )
-    .bind(problem_id_or_slug)
-    .fetch_all(pool)
-    .await?;
-
-    let thread_ids: Vec<String> = threads.iter().filter_map(|t| t.try_get("id").ok()).collect();
-
-    let replies = if thread_ids.is_empty() {
-        vec![]
-    } else {
-        sqlx::query(
-            r#"
-            SELECT r.id, r.thread_id, r.agent_id, a.name AS agent_name, r.body, r.created_at
-            FROM discussion_replies r
-            JOIN agents a ON a.id = r.agent_id
-            WHERE r.thread_id = ANY($1)
-            ORDER BY r.created_at ASC
-            "#
-        )
-        .bind(&thread_ids)
-        .fetch_all(pool)
-        .await?
-    };
-
-    Ok(threads.into_iter().map(|t| {
-        let tid: String = t.try_get("id").unwrap_or_default();
-        let thread_replies: Vec<DiscussionReplyDto> = replies.iter()
-            .filter(|r| r.try_get::<String, _>("thread_id").map(|id| id == tid).unwrap_or(false))
-            .map(|r| DiscussionReplyDto {
-                id: r.try_get("id").unwrap_or_default(),
-                thread_id: r.try_get("thread_id").unwrap_or_default(),
-                agent_id: r.try_get("agent_id").unwrap_or_default(),
-                agent_name: r.try_get("agent_name").unwrap_or_default(),
-                body: r.try_get("body").unwrap_or_default(),
-                created_at: r.try_get::<DateTime<Utc>, _>("created_at").map(|d| d.to_rfc3339()).unwrap_or_default(),
-            })
-            .collect();
-
-        DiscussionThreadDto {
-            id: tid,
-            problem_id: t.try_get("problem_id").unwrap_or_default(),
-            agent_id: t.try_get("agent_id").unwrap_or_default(),
-            agent_name: t.try_get("agent_name").unwrap_or_default(),
-            title: t.try_get("title").unwrap_or_default(),
-            body: t.try_get("body").unwrap_or_default(),
-            created_at: t.try_get::<DateTime<Utc>, _>("created_at").map(|d| d.to_rfc3339()).unwrap_or_default(),
-            replies: thread_replies,
-        }
-    }).collect())
-}
-
-// ---------------------------------------------------------------------------
 // Evaluation Jobs
 // ---------------------------------------------------------------------------
 
+/// Claimed or queued evaluation job with parsed runner payload.
 #[derive(Debug, Clone)]
 pub struct EvaluationJobRecord {
     pub id: String,
@@ -919,7 +933,14 @@ pub struct EvaluationJobRecord {
     pub payload: EvaluationJobPayload,
 }
 
-pub async fn claim_next_evaluation_job(pool: &PgPool, worker_id: &str) -> Result<Option<EvaluationJobRecord>> {
+/// Claim the next queued job using `FOR UPDATE SKIP LOCKED`.
+///
+/// Public jobs also move their submission into `running`; official jobs leave
+/// public submission visibility unchanged.
+pub async fn claim_next_evaluation_job(
+    pool: &PgPool,
+    worker_id: &str,
+) -> Result<Option<EvaluationJobRecord>> {
     let mut tx = pool.begin().await?;
 
     let row = sqlx::query(
@@ -978,6 +999,7 @@ pub async fn claim_next_evaluation_job(pool: &PgPool, worker_id: &str) -> Result
     }))
 }
 
+/// Input for queueing a public re-run or an official evaluation.
 #[derive(Debug, Clone)]
 pub struct QueueEvaluationJobInput {
     pub job_id: String,
@@ -985,7 +1007,14 @@ pub struct QueueEvaluationJobInput {
     pub eval_type: ScoringMode,
 }
 
-pub async fn queue_evaluation_job(pool: &PgPool, input: &QueueEvaluationJobInput) -> Result<EvaluationJobRecord> {
+/// Queue an evaluation job for an existing submission.
+///
+/// Official jobs are rejected when the problem version does not enable heldout
+/// data. Public jobs reset visibility until the new public result completes.
+pub async fn queue_evaluation_job(
+    pool: &PgPool,
+    input: &QueueEvaluationJobInput,
+) -> Result<EvaluationJobRecord> {
     let mut tx = pool.begin().await?;
 
     let row = sqlx::query(
@@ -1004,11 +1033,13 @@ pub async fn queue_evaluation_job(pool: &PgPool, input: &QueueEvaluationJobInput
     .map_err(|_| AppError::NotFound)?;
 
     let spec_json: Value = row.try_get("spec_json")?;
-    let spec: ProblemBundleSpec = serde_json::from_value(spec_json)
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let spec: ProblemBundleSpec =
+        serde_json::from_value(spec_json).map_err(|e| AppError::Internal(e.to_string()))?;
 
     if input.eval_type == ScoringMode::Official && !spec.datasets.heldout_enabled {
-        return Err(AppError::BadRequest("problem version does not support heldout official run".to_string()));
+        return Err(AppError::BadRequest(
+            "problem version does not support heldout official run".to_string(),
+        ));
     }
 
     let payload = serde_json::to_value(EvaluationJobPayload {
@@ -1016,10 +1047,18 @@ pub async fn queue_evaluation_job(pool: &PgPool, input: &QueueEvaluationJobInput
         bundle_path: row.try_get("bundle_path")?,
         problem_id: row.try_get("problem_id")?,
         problem_version_id: row.try_get("problem_version_id")?,
-    }).map_err(|e| AppError::Internal(e.to_string()))?;
+    })
+    .map_err(|e| AppError::Internal(e.to_string()))?;
 
-    let eval_type_str = match input.eval_type { ScoringMode::Official => "official", ScoringMode::Public => "public" };
-    let priority = if input.eval_type == ScoringMode::Official { 10 } else { 0 };
+    let eval_type_str = match input.eval_type {
+        ScoringMode::Official => "official",
+        ScoringMode::Public => "public",
+    };
+    let priority = if input.eval_type == ScoringMode::Official {
+        10
+    } else {
+        0
+    };
 
     sqlx::query(
         r#"
@@ -1060,6 +1099,7 @@ pub async fn queue_evaluation_job(pool: &PgPool, input: &QueueEvaluationJobInput
     })
 }
 
+/// Input for creating or resetting the evaluation row associated with a job.
 #[derive(Debug, Clone)]
 pub struct MarkEvaluationStartedInput {
     pub evaluation_id: String,
@@ -1068,8 +1108,15 @@ pub struct MarkEvaluationStartedInput {
     pub eval_type: ScoringMode,
 }
 
-pub async fn mark_evaluation_started(pool: &PgPool, input: &MarkEvaluationStartedInput) -> Result<()> {
-    let eval_type_str = match input.eval_type { ScoringMode::Official => "official", ScoringMode::Public => "public" };
+/// Mark a job's evaluation as running.
+pub async fn mark_evaluation_started(
+    pool: &PgPool,
+    input: &MarkEvaluationStartedInput,
+) -> Result<()> {
+    let eval_type_str = match input.eval_type {
+        ScoringMode::Official => "official",
+        ScoringMode::Public => "public",
+    };
 
     sqlx::query(
         r#"
@@ -1077,7 +1124,7 @@ pub async fn mark_evaluation_started(pool: &PgPool, input: &MarkEvaluationStarte
         VALUES ($1, $2, $3, $4, 'running', NOW())
         ON CONFLICT (job_id) DO UPDATE
         SET status = 'running', started_at = NOW(), finished_at = NULL
-        "#
+        "#,
     )
     .bind(&input.evaluation_id)
     .bind(&input.submission_id)
@@ -1089,6 +1136,7 @@ pub async fn mark_evaluation_started(pool: &PgPool, input: &MarkEvaluationStarte
     Ok(())
 }
 
+/// Validated runner result prepared for persistence.
 #[derive(Debug, Clone)]
 pub struct PersistedEvaluationResult {
     pub evaluation_id: String,
@@ -1104,13 +1152,23 @@ pub struct PersistedEvaluationResult {
     pub last_error: Option<String>,
 }
 
-pub async fn mark_evaluation_finished(pool: &PgPool, result: &PersistedEvaluationResult) -> Result<()> {
+/// Persist a finished evaluation and update dependent submission/leaderboard state.
+pub async fn mark_evaluation_finished(
+    pool: &PgPool,
+    result: &PersistedEvaluationResult,
+) -> Result<()> {
     let mut tx = pool.begin().await?;
 
-    let shown_json = serde_json::to_value(&result.shown_results).map_err(|e| AppError::Internal(e.to_string()))?;
-    let hidden_json = serde_json::to_value(&result.hidden_summary).map_err(|e| AppError::Internal(e.to_string()))?;
-    let official_json = serde_json::to_value(&result.official_summary).map_err(|e| AppError::Internal(e.to_string()))?;
-    let status_str = match result.status { EvaluationStatus::Completed => "completed", _ => "failed" };
+    let shown_json = serde_json::to_value(&result.shown_results)
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let hidden_json = serde_json::to_value(&result.hidden_summary)
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let official_json = serde_json::to_value(&result.official_summary)
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let status_str = match result.status {
+        EvaluationStatus::Completed => "completed",
+        _ => "failed",
+    };
 
     sqlx::query(
         r#"
@@ -1118,7 +1176,7 @@ pub async fn mark_evaluation_finished(pool: &PgPool, result: &PersistedEvaluatio
         SET status = $2, primary_score = $3, shown_results_json = $4,
             hidden_summary_json = $5, official_summary_json = $6, log_path = $7, finished_at = NOW()
         WHERE job_id = $1
-        "#
+        "#,
     )
     .bind(&result.job_id)
     .bind(status_str)
@@ -1135,7 +1193,7 @@ pub async fn mark_evaluation_finished(pool: &PgPool, result: &PersistedEvaluatio
         UPDATE evaluation_jobs
         SET status = $2, finished_at = NOW(), last_error = $3
         WHERE id = $1
-        "#
+        "#,
     )
     .bind(&result.job_id)
     .bind(status_str)
@@ -1158,12 +1216,21 @@ pub async fn mark_evaluation_finished(pool: &PgPool, result: &PersistedEvaluatio
 
     if result.status == EvaluationStatus::Completed && result.eval_type == ScoringMode::Public {
         if let Some(ref hidden) = result.hidden_summary {
-            upsert_leaderboard_entry_for_submission_tx(&mut tx, &result.submission_id, hidden.score, &result.shown_results).await?;
+            upsert_leaderboard_entry_for_submission_tx(
+                &mut tx,
+                &result.submission_id,
+                hidden.score,
+                &result.shown_results,
+            )
+            .await?;
         }
-    } else if result.status == EvaluationStatus::Completed && result.eval_type == ScoringMode::Official
-        && let Some(ref official) = result.official_summary {
-            update_official_score_for_submission_tx(&mut tx, &result.submission_id, official.score).await?;
-        }
+    } else if result.status == EvaluationStatus::Completed
+        && result.eval_type == ScoringMode::Official
+        && let Some(ref official) = result.official_summary
+    {
+        update_official_score_for_submission_tx(&mut tx, &result.submission_id, official.score)
+            .await?;
+    }
 
     tx.commit().await?;
     Ok(())
@@ -1175,14 +1242,15 @@ async fn upsert_leaderboard_entry_for_submission_tx<'a>(
     hidden_score: f64,
     shown_results: &[ShownCaseResult],
 ) -> Result<()> {
-    let row: Option<(String, String)> = sqlx::query_as(
-        "SELECT problem_id, agent_id FROM submissions WHERE id = $1 LIMIT 1"
-    )
-    .bind(submission_id)
-    .fetch_optional(&mut **tx)
-    .await?;
+    let row: Option<(String, String)> =
+        sqlx::query_as("SELECT problem_id, agent_id FROM submissions WHERE id = $1 LIMIT 1")
+            .bind(submission_id)
+            .fetch_optional(&mut **tx)
+            .await?;
 
-    let Some((problem_id, agent_id)) = row else { return Ok(()); };
+    let Some((problem_id, agent_id)) = row else {
+        return Ok(());
+    };
 
     let current: Option<(f64,)> = sqlx::query_as(
         "SELECT best_hidden_score FROM leaderboard_entries WHERE problem_id = $1 AND agent_id = $2 LIMIT 1"
@@ -1196,7 +1264,8 @@ async fn upsert_leaderboard_entry_for_submission_tx<'a>(
         return Ok(());
     }
 
-    let shown_json = serde_json::to_value(shown_results).map_err(|e| AppError::Internal(e.to_string()))?;
+    let shown_json =
+        serde_json::to_value(shown_results).map_err(|e| AppError::Internal(e.to_string()))?;
 
     sqlx::query(
         r#"
@@ -1225,14 +1294,15 @@ async fn update_official_score_for_submission_tx<'a>(
     submission_id: &str,
     official_score: f64,
 ) -> Result<()> {
-    let row: Option<(String, String)> = sqlx::query_as(
-        "SELECT problem_id, agent_id FROM submissions WHERE id = $1 LIMIT 1"
-    )
-    .bind(submission_id)
-    .fetch_optional(&mut **tx)
-    .await?;
+    let row: Option<(String, String)> =
+        sqlx::query_as("SELECT problem_id, agent_id FROM submissions WHERE id = $1 LIMIT 1")
+            .bind(submission_id)
+            .fetch_optional(&mut **tx)
+            .await?;
 
-    let Some((problem_id, agent_id)) = row else { return Ok(()); };
+    let Some((problem_id, agent_id)) = row else {
+        return Ok(());
+    };
 
     sqlx::query(
         "UPDATE leaderboard_entries SET official_score = $3, updated_at = NOW() WHERE problem_id = $1 AND agent_id = $2"
@@ -1244,142 +1314,4 @@ async fn update_official_score_for_submission_tx<'a>(
     .await?;
 
     Ok(())
-}
-
-// ---------------------------------------------------------------------------
-// Heartbeat
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct HeartbeatPayload {
-    pub status: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub job_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub submission_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_completed_job_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_failed_job_id: Option<String>,
-}
-
-pub async fn upsert_service_heartbeat(pool: &PgPool, service_name: &str, payload: &HeartbeatPayload) -> Result<()> {
-    let payload_json = serde_json::to_value(payload).map_err(|e| AppError::Internal(e.to_string()))?;
-
-    sqlx::query(
-        r#"
-        INSERT INTO service_heartbeats (service_name, last_seen_at, payload)
-        VALUES ($1, NOW(), $2)
-        ON CONFLICT (service_name)
-        DO UPDATE SET last_seen_at = EXCLUDED.last_seen_at, payload = EXCLUDED.payload
-        "#
-    )
-    .bind(service_name)
-    .bind(&payload_json)
-    .execute(pool)
-    .await?;
-
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
-// Problem seeding
-// ---------------------------------------------------------------------------
-
-
-pub async fn ensure_problems_seeded_from_root(pool: &PgPool, problems_root: &str) -> Result<usize> {
-    tokio::fs::create_dir_all(problems_root).await?;
-    let mut entries = tokio::fs::read_dir(problems_root).await?;
-    let mut synced = 0usize;
-
-    while let Some(entry) = entries.next_entry().await? {
-        if !entry.file_type().await?.is_dir() {
-            continue;
-        }
-        let slug_root = entry.path();
-        let mut versions = tokio::fs::read_dir(&slug_root).await?;
-
-        while let Some(v_entry) = versions.next_entry().await? {
-            if !v_entry.file_type().await?.is_dir() {
-                continue;
-            }
-            let bundle_dir = v_entry.path();
-            let spec_path = bundle_dir.join("spec.json");
-            if !spec_path.exists() {
-                continue;
-            }
-
-            let spec = crate::problem_bundle::read_problem_bundle_spec(&bundle_dir).await?;
-            let statement_path = bundle_dir.join("statement.md");
-            let description = crate::problem_bundle::extract_problem_description(&statement_path).await?;
-            let problem_id = &spec.problem_id;
-            let version_id = format!("{}:{}", problem_id, spec.problem_version);
-
-            sqlx::query(
-                r#"
-                INSERT INTO problems (id, slug, title, description, status)
-                VALUES ($1, $2, $3, $4, 'active')
-                ON CONFLICT (id) DO UPDATE
-                SET slug = EXCLUDED.slug,
-                    title = EXCLUDED.title,
-                    description = CASE WHEN problems.description = '' THEN EXCLUDED.description ELSE problems.description END,
-                    status = 'active',
-                    updated_at = NOW()
-                "#
-            )
-            .bind(problem_id)
-            .bind(problem_id)
-            .bind(&spec.problem_title)
-            .bind(&description)
-            .execute(pool)
-            .await?;
-
-            let spec_json = serde_json::to_value(&spec).map_err(|e| AppError::Internal(e.to_string()))?;
-
-            sqlx::query(
-                r#"
-                INSERT INTO problem_versions (id, problem_id, version, bundle_path, statement_path, spec_json, status)
-                VALUES ($1, $2, $3, $4, $5, $6, 'published')
-                ON CONFLICT (problem_id, version) DO UPDATE
-                SET bundle_path = EXCLUDED.bundle_path,
-                    statement_path = EXCLUDED.statement_path,
-                    spec_json = EXCLUDED.spec_json,
-                    status = 'published'
-                "#
-            )
-            .bind(&version_id)
-            .bind(problem_id)
-            .bind(&spec.problem_version)
-            .bind(bundle_dir.to_string_lossy().as_ref())
-            .bind(statement_path.to_string_lossy().as_ref())
-            .bind(&spec_json)
-            .execute(pool)
-            .await?;
-
-            synced += 1;
-        }
-    }
-
-    Ok(synced)
-}
-
-// ---------------------------------------------------------------------------
-// Stuck job reaper
-// ---------------------------------------------------------------------------
-
-pub async fn reap_stuck_jobs(pool: &PgPool, timeout_minutes: i32) -> Result<u64> {
-    let result = sqlx::query(
-        r#"
-        UPDATE evaluation_jobs
-        SET status = 'queued', worker_id = NULL, claimed_at = NULL
-        WHERE status = 'running'
-          AND claimed_at < NOW() - INTERVAL '1 minute' * $1
-        "#
-    )
-    .bind(timeout_minutes)
-    .execute(pool)
-    .await?;
-
-
-    Ok(result.rows_affected())
 }

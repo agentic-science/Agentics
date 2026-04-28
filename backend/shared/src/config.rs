@@ -1,6 +1,9 @@
+//! Environment-backed runtime configuration.
+
 use figment::{Figment, providers::Env};
 use serde::Deserialize;
 
+/// Application configuration loaded from `LLM_OJ_*` environment variables.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     #[serde(default = "default_database_url")]
@@ -27,6 +30,9 @@ pub struct Config {
     pub runner_memory_limit_mb: u64,
     #[serde(default = "default_runner_cpu_limit")]
     pub runner_cpu_limit: f64,
+    /// Optional Docker host URI used by CI or remote Docker setups.
+    #[serde(default)]
+    pub docker_host: Option<String>,
     #[serde(default = "default_log_level")]
     pub log_level: String,
 }
@@ -68,7 +74,7 @@ fn default_runner_timeout_sec() -> u64 {
 }
 
 fn default_runner_python_image() -> String {
-    "python:3.12-slim".to_string()
+    "python:3.12-slim-bookworm".to_string()
 }
 
 fn default_runner_memory_limit_mb() -> u64 {
@@ -84,10 +90,9 @@ fn default_log_level() -> String {
 }
 
 impl Config {
+    /// Load configuration from `LLM_OJ_*` environment variables with defaults.
     pub fn from_env() -> anyhow::Result<Self> {
-        let config: Config = Figment::new()
-            .merge(Env::prefixed("LLM_OJ_"))
-            .extract()?;
+        let config: Config = Figment::new().merge(Env::prefixed("LLM_OJ_")).extract()?;
         Ok(config)
     }
 }

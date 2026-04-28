@@ -1,7 +1,10 @@
-use shared::db::queries::{AgentRecord, ProblemVersionRecord, SubmissionRecord};
-use shared::models::request::*;
-use shared::models::problem::*;
+//! Conversion helpers from database records to API DTOs.
 
+use shared::db::queries::{AgentRecord, ProblemVersionRecord, SubmissionRecord};
+use shared::models::problem::*;
+use shared::models::request::*;
+
+/// Present a newly registered agent together with its one-time bearer token.
 pub fn present_register_agent(agent: &AgentRecord, token: &str) -> RegisterAgentResponse {
     RegisterAgentResponse {
         agent_id: agent.id.clone(),
@@ -11,7 +14,11 @@ pub fn present_register_agent(agent: &AgentRecord, token: &str) -> RegisterAgent
     }
 }
 
-pub fn present_problem_detail(problem: &ProblemVersionRecord, statement: &str) -> ProblemDetailResponse {
+/// Present public problem details from a published version record and statement body.
+pub fn present_problem_detail(
+    problem: &ProblemVersionRecord,
+    statement: &str,
+) -> ProblemDetailResponse {
     let spec: ProblemBundleSpec =
         serde_json::from_value(problem.spec_json.clone()).unwrap_or_else(|_| ProblemBundleSpec {
             schema_version: 1,
@@ -55,6 +62,7 @@ pub fn present_problem_detail(problem: &ProblemVersionRecord, statement: &str) -
     }
 }
 
+/// Present the response returned immediately after submission creation.
 pub fn present_create_submission(submission: &SubmissionRecord) -> CreateSubmissionResponse {
     CreateSubmissionResponse {
         id: submission.id.clone(),
@@ -67,6 +75,7 @@ pub fn present_create_submission(submission: &SubmissionRecord) -> CreateSubmiss
     }
 }
 
+/// Present a submission while controlling fields that are hidden on public routes.
 pub fn present_submission(
     submission: &SubmissionRecord,
     include_artifact_path: bool,
@@ -84,14 +93,20 @@ pub fn present_submission(
         parent_submission_id: submission.parent_submission_id.clone(),
         credit_text: submission.credit_text.clone(),
         visible_after_eval: submission.visible_after_eval,
-        artifact_path: if include_artifact_path { Some(submission.artifact_path.clone()) } else { None },
+        artifact_path: if include_artifact_path {
+            Some(submission.artifact_path.clone())
+        } else {
+            None
+        },
         evaluation_job: if include_evaluation_job {
             submission.evaluation_job_id.as_ref().map(|id| {
                 shared::models::evaluation::EvaluationJobDto {
                     id: id.clone(),
                     status: match submission.evaluation_job_status.as_deref() {
                         Some("running") => shared::models::evaluation::EvaluationStatus::Running,
-                        Some("completed") => shared::models::evaluation::EvaluationStatus::Completed,
+                        Some("completed") => {
+                            shared::models::evaluation::EvaluationStatus::Completed
+                        }
                         Some("failed") => shared::models::evaluation::EvaluationStatus::Failed,
                         _ => shared::models::evaluation::EvaluationStatus::Queued,
                     },
@@ -107,5 +122,3 @@ pub fn present_submission(
         updated_at: submission.updated_at.to_rfc3339(),
     }
 }
-
-

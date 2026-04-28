@@ -13,7 +13,10 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     let config = Config::from_env()?;
-    info!("starting api server on {}:{}", config.api_host, config.api_port);
+    info!(
+        "starting api server on {}:{}",
+        config.api_host, config.api_port
+    );
 
     let db = create_pool(&config, 10).await?;
     let storage = Arc::new(LocalStorage::new(&config.storage_root));

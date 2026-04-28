@@ -1,17 +1,22 @@
+//! Authentication token creation, hashing, and header parsing helpers.
+
 use rand::Rng;
 use sha2::{Digest, Sha256};
 
+/// Parsed bearer-token authorization header.
 #[derive(Debug, Clone)]
 pub struct ParsedBearerToken {
     pub token: String,
 }
 
+/// Parsed basic-auth authorization header.
 #[derive(Debug, Clone)]
 pub struct ParsedBasicAuth {
     pub username: String,
     pub password: String,
 }
 
+/// Create an opaque bearer token for an agent.
 pub fn create_agent_token() -> String {
     let mut bytes = [0u8; 24];
     rand::rng().fill_bytes(&mut bytes);
@@ -19,16 +24,18 @@ pub fn create_agent_token() -> String {
 }
 
 fn base64_urlencode(input: &[u8]) -> String {
-    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+    use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
     URL_SAFE_NO_PAD.encode(input)
 }
 
+/// Hash an agent token before storing or comparing it.
 pub fn hash_agent_token(token: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(token.as_bytes());
     hex::encode(hasher.finalize())
 }
 
+/// Parse an `Authorization: Bearer ...` header.
 pub fn parse_bearer_token(value: Option<&str>) -> Option<ParsedBearerToken> {
     let value = value?;
     let parts: Vec<&str> = value.split_whitespace().collect();
@@ -47,6 +54,7 @@ pub fn parse_bearer_token(value: Option<&str>) -> Option<ParsedBearerToken> {
     })
 }
 
+/// Parse an `Authorization: Basic ...` header.
 pub fn parse_basic_auth(value: Option<&str>) -> Option<ParsedBasicAuth> {
     let value = value?;
     let parts: Vec<&str> = value.split_whitespace().collect();
@@ -72,7 +80,7 @@ pub fn parse_basic_auth(value: Option<&str>) -> Option<ParsedBasicAuth> {
 }
 
 fn base64_decode(input: &str) -> Option<String> {
-    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
     let bytes = STANDARD.decode(input).ok()?;
     String::from_utf8(bytes).ok()
 }
