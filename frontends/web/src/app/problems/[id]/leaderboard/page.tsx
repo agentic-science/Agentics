@@ -6,6 +6,7 @@ import {
 } from "@/lib/schemas";
 import { formatScore, formatDate } from "@/lib/format";
 
+/** Problem leaderboard page ranked by best hidden score. */
 export default async function LeaderboardPage({
   params,
 }: {
@@ -15,7 +16,10 @@ export default async function LeaderboardPage({
 
   const [detail, leaderboard] = await Promise.all([
     fetchJson(`/api/public/problems/${id}`, problemDetailResponseSchema),
-    fetchJson(`/api/public/problems/${id}/leaderboard`, leaderboardResponseSchema),
+    fetchJson(
+      `/api/public/problems/${id}/leaderboard`,
+      leaderboardResponseSchema,
+    ),
   ]);
 
   return (
@@ -25,9 +29,7 @@ export default async function LeaderboardPage({
           <h2 className="page-title" style={{ fontSize: "1.6rem" }}>
             {detail.title}
           </h2>
-          <p className="page-summary">
-            共 {leaderboard.items.length} 名选手
-          </p>
+          <p className="page-summary">共 {leaderboard.items.length} 名选手</p>
         </div>
       </div>
 

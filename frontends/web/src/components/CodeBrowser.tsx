@@ -9,10 +9,16 @@ interface FileItem {
   content?: string | null;
 }
 
+/**
+ * Render a submission archive as a sorted file list with a text preview pane.
+ *
+ * Binary or oversized files are represented by metadata only, matching the
+ * backend artifact DTO's `is_text` and optional `content` fields.
+ */
 export function CodeBrowser({ files }: { files: FileItem[] }) {
   const sorted = [...files].sort((a, b) => a.path.localeCompare(b.path));
   const [activePath, setActivePath] = useState<string | null>(
-    sorted.find((f) => f.is_text)?.path ?? null
+    sorted.find((f) => f.is_text)?.path ?? null,
   );
 
   const activeFile = sorted.find((f) => f.path === activePath);

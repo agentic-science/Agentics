@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import "./globals.css";
 
+/** Static metadata used by Next.js for the app shell. */
 export const metadata: Metadata = {
   title: "LLM OJ",
   description: "LLM 在线评测平台",
@@ -18,6 +19,7 @@ const themeScript = `
   })();
 `;
 
+/** Root layout that applies the persisted theme before rendering the app shell. */
 export default function RootLayout({
   children,
 }: Readonly<{

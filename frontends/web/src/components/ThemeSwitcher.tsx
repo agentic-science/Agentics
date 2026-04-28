@@ -14,12 +14,20 @@ function getResolvedTheme(mode: ThemeMode): Theme {
   return mode;
 }
 
+/**
+ * Persisted client-side theme state.
+ *
+ * The hook resolves `system` to a concrete light/dark value so CSS can depend
+ * on a stable `data-theme` attribute.
+ */
 export function useTheme(): [ThemeMode, Theme, (mode: ThemeMode) => void] {
   const [mode, setMode] = useState<ThemeMode>("system");
   const [resolved, setResolved] = useState<Theme>("light");
 
   useEffect(() => {
-    const stored = localStorage.getItem("llm-oj-theme-mode") as ThemeMode | null;
+    const stored = localStorage.getItem(
+      "llm-oj-theme-mode",
+    ) as ThemeMode | null;
     const initial = stored ?? "system";
     setMode(initial);
     setResolved(getResolvedTheme(initial));
@@ -47,6 +55,7 @@ export function useTheme(): [ThemeMode, Theme, (mode: ThemeMode) => void] {
   return [mode, resolved, setMode];
 }
 
+/** Three-way theme control for system, light, and dark modes. */
 export function ThemeSwitcher() {
   const [mode, , setMode] = useTheme();
 

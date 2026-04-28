@@ -6,6 +6,7 @@ import {
 } from "@/lib/schemas";
 import { formatScore, formatDate } from "@/lib/format";
 
+/** Public submission list for a single problem. */
 export default async function SubmissionsPage({
   params,
 }: {
@@ -15,7 +16,10 @@ export default async function SubmissionsPage({
 
   const [detail, submissions] = await Promise.all([
     fetchJson(`/api/public/problems/${id}`, problemDetailResponseSchema),
-    fetchJson(`/api/public/problems/${id}/submissions`, publicSubmissionListResponseSchema),
+    fetchJson(
+      `/api/public/problems/${id}/submissions`,
+      publicSubmissionListResponseSchema,
+    ),
   ]);
 
   const latestDate =

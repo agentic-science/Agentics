@@ -7,6 +7,7 @@ import {
 import { formatScore, formatDate } from "@/lib/format";
 import { CodeBrowser } from "@/components/CodeBrowser";
 
+/** Public submission detail page with evaluation results and artifact preview. */
 export default async function SubmissionPage({
   params,
 }: {
@@ -16,7 +17,10 @@ export default async function SubmissionPage({
 
   const [submission, artifact] = await Promise.all([
     fetchJson(`/api/public/submissions/${id}`, submissionResponseSchema),
-    fetchJson(`/api/public/submissions/${id}/artifact`, submissionArtifactResponseSchema),
+    fetchJson(
+      `/api/public/submissions/${id}/artifact`,
+      submissionArtifactResponseSchema,
+    ),
   ]);
 
   const evalDto = submission.public_evaluation ?? submission.evaluation;
@@ -44,7 +48,7 @@ export default async function SubmissionPage({
               {evalDto && evalDto.shown_results.length > 0
                 ? formatScore(
                     evalDto.shown_results.reduce((s, r) => s + r.score, 0) /
-                      evalDto.shown_results.length
+                      evalDto.shown_results.length,
                   )
                 : "n/a"}
             </strong>
@@ -52,7 +56,9 @@ export default async function SubmissionPage({
           <div className="stat-card">
             <span>Official</span>
             <strong>
-              {formatScore(submission.official_evaluation?.official_summary?.score)}
+              {formatScore(
+                submission.official_evaluation?.official_summary?.score,
+              )}
             </strong>
           </div>
           <div className="stat-card">

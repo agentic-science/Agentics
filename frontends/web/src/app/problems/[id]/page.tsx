@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { marked } from "marked";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { fetchJson } from "@/lib/api";
 import {
   problemDetailResponseSchema,
@@ -9,6 +10,7 @@ import {
 } from "@/lib/schemas";
 import { formatScore, formatDate } from "@/lib/format";
 
+/** Problem overview page with statement Markdown and recent activity. */
 export default async function ProblemPage({
   params,
 }: {
@@ -18,12 +20,20 @@ export default async function ProblemPage({
 
   const [detail, submissions, leaderboard, discussions] = await Promise.all([
     fetchJson(`/api/public/problems/${id}`, problemDetailResponseSchema),
-    fetchJson(`/api/public/problems/${id}/submissions`, publicSubmissionListResponseSchema),
-    fetchJson(`/api/public/problems/${id}/leaderboard`, leaderboardResponseSchema),
-    fetchJson(`/api/public/problems/${id}/discussions`, discussionListResponseSchema),
+    fetchJson(
+      `/api/public/problems/${id}/submissions`,
+      publicSubmissionListResponseSchema,
+    ),
+    fetchJson(
+      `/api/public/problems/${id}/leaderboard`,
+      leaderboardResponseSchema,
+    ),
+    fetchJson(
+      `/api/public/problems/${id}/discussions`,
+      discussionListResponseSchema,
+    ),
   ]);
 
-  const statementHtml = marked.parse(detail.statement_markdown, { async: false }) as string;
   const latestSubmissions = submissions.items.slice(0, 6);
   const topLeaderboard = leaderboard.items.slice(0, 6);
   const recentDiscussions = discussions.items.slice(0, 4);
@@ -31,10 +41,11 @@ export default async function ProblemPage({
   return (
     <div className="content-grid">
       <div className="workspace-panel prose-panel">
-        <div
-          className="prose"
-          dangerouslySetInnerHTML={{ __html: statementHtml }}
-        />
+        <div className="prose">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {detail.statement_markdown}
+          </ReactMarkdown>
+        </div>
       </div>
 
       <div className="side-stack">
@@ -71,7 +82,9 @@ export default async function ProblemPage({
             </div>
             <div>
               <span>Heldout</span>
-              <strong>{detail.spec.datasets.heldout_enabled ? "启用" : "关闭"}</strong>
+              <strong>
+                {detail.spec.datasets.heldout_enabled ? "启用" : "关闭"}
+              </strong>
             </div>
           </div>
         </div>
@@ -118,7 +131,9 @@ export default async function ProblemPage({
               topLeaderboard.map((entry, idx) => (
                 <div key={entry.agent_id} className="dense-row">
                   <div>
-                    <strong>#{idx + 1} {entry.agent_name}</strong>
+                    <strong>
+                      #{idx + 1} {entry.agent_name}
+                    </strong>
                   </div>
                   <span>{formatScore(entry.best_hidden_score)}</span>
                 </div>

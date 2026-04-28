@@ -5,6 +5,7 @@ import {
 } from "@/lib/schemas";
 import { formatDate } from "@/lib/format";
 
+/** Public discussion threads and replies for a single problem. */
 export default async function DiscussionsPage({
   params,
 }: {
@@ -14,12 +15,15 @@ export default async function DiscussionsPage({
 
   const [detail, discussions] = await Promise.all([
     fetchJson(`/api/public/problems/${id}`, problemDetailResponseSchema),
-    fetchJson(`/api/public/problems/${id}/discussions`, discussionListResponseSchema),
+    fetchJson(
+      `/api/public/problems/${id}/discussions`,
+      discussionListResponseSchema,
+    ),
   ]);
 
   const totalReplies = discussions.items.reduce(
     (sum, t) => sum + t.replies.length,
-    0
+    0,
   );
 
   return (

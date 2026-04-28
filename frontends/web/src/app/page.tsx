@@ -3,12 +3,16 @@ import { fetchJson } from "@/lib/api";
 import { problemListResponseSchema } from "@/lib/schemas";
 import { formatDate } from "@/lib/format";
 
+/** Home page that lists published problems from the public API. */
 export default async function HomePage() {
   let problems: import("@/lib/schemas").ProblemListResponse;
   let error: string | null = null;
 
   try {
-    problems = await fetchJson("/api/public/problems", problemListResponseSchema);
+    problems = await fetchJson(
+      "/api/public/problems",
+      problemListResponseSchema,
+    );
   } catch (e) {
     error = e instanceof Error ? e.message : "加载失败";
     problems = { items: [] };
@@ -45,10 +49,14 @@ export default async function HomePage() {
               <p>点击题目进入详情页，查看题面、提交记录和排行榜</p>
             </li>
             <li>
-              <p>每个题目包含公开测试集（可查看详细结果）和隐藏测试集（仅分数）</p>
+              <p>
+                每个题目包含公开测试集（可查看详细结果）和隐藏测试集（仅分数）
+              </p>
             </li>
             <li>
-              <p>提交代码后系统会自动运行评测，支持公开评测和官方评测两种模式</p>
+              <p>
+                提交代码后系统会自动运行评测，支持公开评测和官方评测两种模式
+              </p>
             </li>
           </ul>
         </div>
@@ -75,7 +83,9 @@ export default async function HomePage() {
                   <p>{problem.description}</p>
                 </div>
                 <div className="catalog-meta">
-                  <span className="pill">{problem.current_version.version}</span>
+                  <span className="pill">
+                    {problem.current_version.version}
+                  </span>
                   <span className="meta-link">进入详情 →</span>
                 </div>
               </Link>

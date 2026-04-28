@@ -4,6 +4,7 @@ import { problemDetailResponseSchema } from "@/lib/schemas";
 import { ProblemTabs } from "@/components/ProblemTabs";
 import { formatScore } from "@/lib/format";
 
+/** Shared problem detail shell with header metadata and subpage tabs. */
 export default async function ProblemLayout({
   children,
   params,
@@ -16,7 +17,10 @@ export default async function ProblemLayout({
   let error: string | null = null;
 
   try {
-    problem = await fetchJson(`/api/public/problems/${id}`, problemDetailResponseSchema);
+    problem = await fetchJson(
+      `/api/public/problems/${id}`,
+      problemDetailResponseSchema,
+    );
   } catch (e) {
     error = e instanceof Error ? e.message : "加载失败";
     return (

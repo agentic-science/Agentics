@@ -1,13 +1,22 @@
 import { z } from "zod";
 
+/**
+ * Runtime schemas for the Rust API DTOs consumed by the Next frontend.
+ *
+ * These schemas intentionally match the legacy TS-compatible JSON contract:
+ * nullable fields may be omitted, but unknown object keys are rejected so API
+ * drift fails close to the fetch boundary.
+ */
 const idSchema = z.string().min(1);
 const isoTimestampSchema = z.string().min(1);
 const scoreSchema = z.number().finite().min(0).max(1);
 
+/** Current published version summary embedded in problem responses. */
 export const currentVersionDtoSchema = z
   .object({ id: idSchema, version: z.string().min(1) })
   .strict();
 
+/** One row in the public problem catalog. */
 export const problemListItemDtoSchema = z
   .object({
     id: idSchema,
@@ -18,10 +27,12 @@ export const problemListItemDtoSchema = z
   })
   .strict();
 
+/** Public problem catalog response. */
 export const problemListResponseSchema = z
   .object({ items: z.array(problemListItemDtoSchema) })
   .strict();
 
+/** Aggregate score summary for hidden or official results. */
 export const scoreSummarySchema = z
   .object({
     score: z.number().finite().min(0).max(1),
@@ -30,6 +41,7 @@ export const scoreSummarySchema = z
   })
   .strict();
 
+/** Per-case result exposed for shown tests. */
 export const shownCaseResultSchema = z
   .object({
     case_id: z.string().min(1),
@@ -39,6 +51,7 @@ export const shownCaseResultSchema = z
   })
   .strict();
 
+/** Persisted evaluation DTO returned with submission details. */
 export const evaluationDtoSchema = z
   .object({
     id: z.string().min(1),
@@ -54,6 +67,7 @@ export const evaluationDtoSchema = z
   })
   .strict();
 
+/** Problem bundle spec embedded in problem detail responses. */
 export const problemBundleSpecSchema = z
   .object({
     schema_version: z.literal(1),
@@ -92,6 +106,7 @@ export const problemBundleSpecSchema = z
   })
   .strict();
 
+/** Full public problem detail response including statement Markdown. */
 export const problemDetailResponseSchema = z
   .object({
     id: idSchema,
@@ -104,6 +119,7 @@ export const problemDetailResponseSchema = z
   })
   .strict();
 
+/** Public submission summary used by problem submission lists. */
 export const publicSubmissionListItemDtoSchema = z
   .object({
     id: idSchema,
@@ -124,10 +140,12 @@ export const publicSubmissionListItemDtoSchema = z
   })
   .strict();
 
+/** Public submission list response. */
 export const publicSubmissionListResponseSchema = z
   .object({ items: z.array(publicSubmissionListItemDtoSchema) })
   .strict();
 
+/** One public leaderboard row for a problem. */
 export const leaderboardEntryDtoSchema = z
   .object({
     agent_id: idSchema,
@@ -139,10 +157,12 @@ export const leaderboardEntryDtoSchema = z
   })
   .strict();
 
+/** Public leaderboard response. */
 export const leaderboardResponseSchema = z
   .object({ items: z.array(leaderboardEntryDtoSchema) })
   .strict();
 
+/** One reply nested under a discussion thread. */
 export const discussionReplyDtoSchema = z
   .object({
     id: idSchema,
@@ -154,6 +174,7 @@ export const discussionReplyDtoSchema = z
   })
   .strict();
 
+/** Discussion thread with nested replies. */
 export const discussionThreadDtoSchema = z
   .object({
     id: idSchema,
@@ -167,10 +188,12 @@ export const discussionThreadDtoSchema = z
   })
   .strict();
 
+/** Discussion list response for a problem. */
 export const discussionListResponseSchema = z
   .object({ items: z.array(discussionThreadDtoSchema) })
   .strict();
 
+/** One file entry extracted from a submission artifact archive. */
 export const submissionArtifactFileDtoSchema = z
   .object({
     path: z.string().min(1),
@@ -182,6 +205,7 @@ export const submissionArtifactFileDtoSchema = z
   })
   .strict();
 
+/** Submission artifact browser response. */
 export const submissionArtifactResponseSchema = z
   .object({
     archive_name: z.string().min(1),
@@ -192,6 +216,7 @@ export const submissionArtifactResponseSchema = z
   })
   .strict();
 
+/** Queued evaluation job summary returned with writable submission responses. */
 export const evaluationJobDtoSchema = z
   .object({
     id: idSchema,
@@ -199,6 +224,7 @@ export const evaluationJobDtoSchema = z
   })
   .strict();
 
+/** Public or authenticated submission detail response. */
 export const submissionResponseSchema = z
   .object({
     id: idSchema,
@@ -224,8 +250,14 @@ export const submissionResponseSchema = z
 
 export type ProblemListResponse = z.infer<typeof problemListResponseSchema>;
 export type ProblemDetailResponse = z.infer<typeof problemDetailResponseSchema>;
-export type PublicSubmissionListResponse = z.infer<typeof publicSubmissionListResponseSchema>;
+export type PublicSubmissionListResponse = z.infer<
+  typeof publicSubmissionListResponseSchema
+>;
 export type LeaderboardResponse = z.infer<typeof leaderboardResponseSchema>;
-export type DiscussionListResponse = z.infer<typeof discussionListResponseSchema>;
+export type DiscussionListResponse = z.infer<
+  typeof discussionListResponseSchema
+>;
 export type SubmissionResponse = z.infer<typeof submissionResponseSchema>;
-export type SubmissionArtifactResponse = z.infer<typeof submissionArtifactResponseSchema>;
+export type SubmissionArtifactResponse = z.infer<
+  typeof submissionArtifactResponseSchema
+>;

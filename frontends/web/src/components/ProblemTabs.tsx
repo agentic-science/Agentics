@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+/** Navigation tabs shared by every problem detail subpage. */
 export function ProblemTabs({ problemId }: { problemId: string }) {
   const pathname = usePathname();
   const base = `/problems/${problemId}`;
