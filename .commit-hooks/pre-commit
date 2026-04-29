@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+staged=$(git diff --cached --name-only --diff-filter=ACM | grep -v '^llm-oj/' || true)
+[ -z "$staged" ] && exit 0
+
+rust_files=$(echo "$staged" | grep '\.rs$' || true)
+ts_files=$(echo "$staged" | grep -E '\.(ts|tsx|js|jsx|mjs|cjs)$' || true)
+
+if [ -n "$rust_files" ]; then
+  echo "[pre-commit] Formatting Rust..."
+  cargo fmt --all
+
+  echo "[pre-commit] Linting Rust..."
+  cargo clippy --workspace --all-targets -- -D warnings
+fi
+
+if [ -n "$ts_files" ]; then
+  echo "[pre-commit] Formatting and linting TS/JS..."
+  cd frontends/web
+  npx biome check --write
+fi
+
+echo "[pre-commit] Done."
