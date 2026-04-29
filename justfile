@@ -28,7 +28,7 @@ dev-worker:
 
 # Dev: Next.js frontend (separate service)
 dev-web:
-    cd frontends/web && npm run dev
+    cd frontends/web && API_BASE_URL="${API_BASE_URL:-http://127.0.0.1:3000}" bun run dev -- -p 3001
 
 # Dev: all three in parallel (requires tmux or multiple terminals)
 dev-all:
@@ -47,11 +47,11 @@ test-rust-integration:
 
 # Frontend unit tests
 test-web-unit:
-    cd frontends/web && npx vitest run
+    cd frontends/web && bun run test
 
 # Frontend E2E tests
 test-web-e2e:
-    cd frontends/web && npx playwright test
+    cd frontends/web && bunx playwright test
 
 # All tests
 test-all: test-rust test-web-unit test-web-e2e
@@ -65,10 +65,10 @@ cargo-clippy:
 
 # Lint frontend
 web-lint:
-    cd frontends/web && npx biome check
+    cd frontends/web && bun run lint
 
 web-format:
-    cd frontends/web && npx biome format --write
+    cd frontends/web && bun run format
 
 # Prepare sqlx offline queries
 sqlx-prepare:
