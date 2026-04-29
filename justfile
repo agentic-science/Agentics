@@ -1,5 +1,11 @@
 set fallback := true
 
+# Install Git pre-commit hooks
+setup-hooks:
+    chmod +x .commit-hooks/pre-commit
+    git config core.hooksPath .commit-hooks
+    @echo "Pre-commit hooks installed."
+
 # Start infrastructure (Postgres)
 infra-up:
     docker compose up -d postgres
