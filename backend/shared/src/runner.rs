@@ -23,6 +23,10 @@ use crate::error::{AppError, Result};
 use crate::models::evaluation::{EvaluationJobPayload, ScorerRunResult, ScoringMode};
 use crate::storage::Storage;
 
+const MAX_RUNNER_ARTIFACT_BYTES: u64 = 20 * 1024 * 1024;
+const MAX_RUNNER_FILE_COUNT: usize = 256;
+const MAX_RUNNER_UNCOMPRESSED_BYTES: u64 = 50 * 1024 * 1024;
+
 /// Validated scorer result plus the persisted runner log location.
 #[derive(Debug, Clone)]
 pub struct ExecutionResult {
@@ -54,88 +58,133 @@ pub async fn execute_evaluation_job(
     tokio::fs::create_dir_all(&working_root).await?;
     tokio::fs::create_dir_all(&extraction_root).await?;
 
-    extract_zip_safe(&payload.artifact_path, &extraction_root).await?;
+    let execution = async {
+        extract_zip_safe(&payload.artifact_path, &extraction_root).await?;
 
-    let container_name = format!("llm-oj-{}", job_id);
-    let mode_str = match eval_type {
-        ScoringMode::Official => "official",
-        ScoringMode::Public => "public",
-    };
+        let container_name = format!("llm-oj-{}", job_id);
+        let mode_str = match eval_type {
+            ScoringMode::Official => "official",
+            ScoringMode::Public => "public",
+        };
 
-    let mounts = vec![
-        bollard::models::Mount {
-            target: Some("/problem".to_string()),
-            source: Some(payload.bundle_path.clone()),
-            typ: Some(bollard::models::MountTypeEnum::BIND),
-            read_only: Some(true),
+        let mounts = vec![
+            bollard::models::Mount {
+                target: Some("/problem".to_string()),
+                source: Some(payload.bundle_path.clone()),
+                typ: Some(bollard::models::MountTypeEnum::BIND),
+                read_only: Some(true),
+                ..Default::default()
+            },
+            bollard::models::Mount {
+                target: Some("/submission".to_string()),
+                source: Some(extraction_root.to_string_lossy().to_string()),
+                typ: Some(bollard::models::MountTypeEnum::BIND),
+                read_only: Some(true),
+                ..Default::default()
+            },
+            bollard::models::Mount {
+                target: Some("/output".to_string()),
+                source: Some(working_root.to_string_lossy().to_string()),
+                typ: Some(bollard::models::MountTypeEnum::BIND),
+                read_only: Some(false),
+                ..Default::default()
+            },
+        ];
+
+        let memory_bytes = config.runner_memory_limit_mb * 1024 * 1024;
+        let nano_cpus = (config.runner_cpu_limit * 1_000_000_000.0) as i64;
+
+        // Keep runner containers hermetic: no network, read-only inputs, and a
+        // single writable output mount for result.json and captured artifacts.
+        let host_config = bollard::models::HostConfig {
+            network_mode: Some("none".to_string()),
+            mounts: Some(mounts),
+            auto_remove: Some(false),
+            memory: Some(memory_bytes as i64),
+            nano_cpus: Some(nano_cpus),
             ..Default::default()
-        },
-        bollard::models::Mount {
-            target: Some("/submission".to_string()),
-            source: Some(extraction_root.to_string_lossy().to_string()),
-            typ: Some(bollard::models::MountTypeEnum::BIND),
-            read_only: Some(true),
+        };
+
+        let container_config = ContainerCreateBody {
+            image: Some(config.runner_python_image.clone()),
+            cmd: Some(vec![
+                "python".to_string(),
+                "/problem/scorer/run.py".to_string(),
+                "--problem-dir".to_string(),
+                "/problem".to_string(),
+                "--submission-dir".to_string(),
+                "/submission".to_string(),
+                "--output-path".to_string(),
+                "/output/result.json".to_string(),
+                "--mode".to_string(),
+                mode_str.to_string(),
+            ]),
+            working_dir: Some("/problem".to_string()),
+            host_config: Some(host_config),
+            labels: Some({
+                let mut labels = std::collections::HashMap::new();
+                labels.insert("llm-oj.job_id".to_string(), job_id.to_string());
+                labels.insert("llm-oj.test".to_string(), "false".to_string());
+                labels
+            }),
             ..Default::default()
-        },
-        bollard::models::Mount {
-            target: Some("/output".to_string()),
-            source: Some(working_root.to_string_lossy().to_string()),
-            typ: Some(bollard::models::MountTypeEnum::BIND),
-            read_only: Some(false),
-            ..Default::default()
-        },
-    ];
+        };
 
-    let memory_bytes = config.runner_memory_limit_mb * 1024 * 1024;
-    let nano_cpus = (config.runner_cpu_limit * 1_000_000_000.0) as i64;
+        let create_opts = CreateContainerOptionsBuilder::default()
+            .name(&container_name)
+            .build();
 
-    // Keep runner containers hermetic: no network, read-only inputs, and a
-    // single writable output mount for result.json and captured artifacts.
-    let host_config = bollard::models::HostConfig {
-        network_mode: Some("none".to_string()),
-        mounts: Some(mounts),
-        auto_remove: Some(false),
-        memory: Some(memory_bytes as i64),
-        nano_cpus: Some(nano_cpus),
-        ..Default::default()
-    };
+        let create_resp = docker
+            .create_container(Some(create_opts), container_config)
+            .await
+            .map_err(|e| AppError::Docker(format!("create container failed: {e}")))?;
+        let container_id = create_resp.id;
 
-    let container_config = ContainerCreateBody {
-        image: Some(config.runner_python_image.clone()),
-        cmd: Some(vec![
-            "python".to_string(),
-            "/problem/scorer/run.py".to_string(),
-            "--problem-dir".to_string(),
-            "/problem".to_string(),
-            "--submission-dir".to_string(),
-            "/submission".to_string(),
-            "--output-path".to_string(),
-            "/output/result.json".to_string(),
-            "--mode".to_string(),
-            mode_str.to_string(),
-        ]),
-        working_dir: Some("/problem".to_string()),
-        host_config: Some(host_config),
-        labels: Some({
-            let mut labels = std::collections::HashMap::new();
-            labels.insert("llm-oj.job_id".to_string(), job_id.to_string());
-            labels.insert("llm-oj.test".to_string(), "false".to_string());
-            labels
-        }),
-        ..Default::default()
-    };
+        let run_result = run_created_container(
+            docker,
+            config,
+            &container_id,
+            &result_path,
+            &log_path_rel,
+            eval_type,
+            storage,
+        )
+        .await;
 
-    let create_opts = CreateContainerOptionsBuilder::default()
-        .name(&container_name)
-        .build();
+        let remove_result = remove_container(docker, &container_id).await;
+        match (run_result, remove_result) {
+            (Ok(result), Ok(())) => Ok(result),
+            (Ok(_), Err(cleanup_err)) => Err(cleanup_err),
+            (Err(run_err), Ok(())) => Err(run_err),
+            (Err(run_err), Err(cleanup_err)) => Err(AppError::Docker(format!(
+                "{run_err}; additionally failed to remove runner container: {cleanup_err}"
+            ))),
+        }
+    }
+    .await;
 
-    let create_resp = docker
-        .create_container(Some(create_opts), container_config)
-        .await
-        .map_err(|e| AppError::Docker(format!("create container failed: {e}")))?;
+    let cleanup = remove_extraction_root(&extraction_root).await;
+    match (execution, cleanup) {
+        (Ok(result), Ok(())) => Ok(result),
+        (Ok(_), Err(cleanup_err)) => Err(cleanup_err),
+        (Err(run_err), Ok(())) => Err(run_err),
+        (Err(run_err), Err(cleanup_err)) => Err(AppError::Runner(format!(
+            "{run_err}; additionally failed to remove extracted submission: {cleanup_err}"
+        ))),
+    }
+}
 
+async fn run_created_container(
+    docker: &Docker,
+    config: &Config,
+    container_id: &str,
+    result_path: &Path,
+    log_path_rel: &str,
+    eval_type: ScoringMode,
+    storage: &dyn Storage,
+) -> Result<ExecutionResult> {
     docker
-        .start_container(&create_resp.id, None::<StartContainerOptions>)
+        .start_container(container_id, None::<StartContainerOptions>)
         .await
         .map_err(|e| AppError::Docker(format!("start container failed: {e}")))?;
 
@@ -146,15 +195,12 @@ pub async fn execute_evaluation_job(
     let wait_result = timeout(
         Duration::from_secs(config.runner_timeout_sec),
         docker
-            .wait_container(&create_resp.id, Some(wait_opts))
+            .wait_container(container_id, Some(wait_opts))
             .collect::<Vec<_>>(),
     )
     .await;
 
-    // Collect logs regardless of outcome
-    let logs = collect_container_logs(docker, &create_resp.id)
-        .await
-        .unwrap_or_default();
+    let logs = collect_container_logs(docker, container_id).await?;
 
     let wait_ok = match wait_result {
         Ok(results) => results
@@ -166,19 +212,15 @@ pub async fn execute_evaluation_job(
             let kill_opts = KillContainerOptionsBuilder::default()
                 .signal("SIGKILL")
                 .build();
-            let _ = docker
-                .kill_container(&create_resp.id, Some(kill_opts))
-                .await;
+            docker
+                .kill_container(container_id, Some(kill_opts))
+                .await
+                .map_err(|e| AppError::Docker(format!("kill timed out container failed: {e}")))?;
             false
         }
     };
 
-    storage.put(&log_path_rel, logs.as_bytes()).await?;
-
-    let remove_opts = RemoveContainerOptionsBuilder::default().force(true).build();
-    let _ = docker
-        .remove_container(&create_resp.id, Some(remove_opts))
-        .await;
+    storage.put(log_path_rel, logs.as_bytes()).await?;
 
     if !wait_ok {
         return Err(AppError::Runner(
@@ -186,7 +228,7 @@ pub async fn execute_evaluation_job(
         ));
     }
 
-    let result_raw = tokio::fs::read_to_string(&result_path)
+    let result_raw = tokio::fs::read_to_string(result_path)
         .await
         .map_err(|e| AppError::Runner(format!("missing result.json: {e}")))?;
 
@@ -198,12 +240,27 @@ pub async fn execute_evaluation_job(
         .map_err(|e| AppError::Runner(format!("invalid result.json: {e}")))?;
     result.mode = Some(eval_type);
 
-    let _ = tokio::fs::remove_dir_all(&extraction_root).await;
-
     Ok(ExecutionResult {
         result,
-        log_path: log_path_rel,
+        log_path: log_path_rel.to_string(),
     })
+}
+
+async fn remove_container(docker: &Docker, container_id: &str) -> Result<()> {
+    let remove_opts = RemoveContainerOptionsBuilder::default().force(true).build();
+    docker
+        .remove_container(container_id, Some(remove_opts))
+        .await
+        .map_err(|e| AppError::Docker(format!("remove runner container failed: {e}")))?;
+    Ok(())
+}
+
+async fn remove_extraction_root(extraction_root: &Path) -> Result<()> {
+    match tokio::fs::remove_dir_all(extraction_root).await {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(AppError::Io(e)),
+    }
 }
 
 /// Connect to Docker using `LLM_OJ_DOCKER_HOST` when configured, otherwise the local default.
@@ -239,6 +296,11 @@ async fn collect_container_logs(docker: &Docker, container_id: &str) -> Result<S
             Ok(LogOutput::Console { message }) => {
                 output.push_str(&String::from_utf8_lossy(&message));
             }
+            Err(e) => {
+                return Err(AppError::Docker(format!(
+                    "collect container logs failed: {e}"
+                )));
+            }
             _ => {}
         }
     }
@@ -248,10 +310,36 @@ async fn collect_container_logs(docker: &Docker, container_id: &str) -> Result<S
 
 /// Extract a submitted ZIP archive while ignoring entries that escape `target_dir`.
 async fn extract_zip_safe(artifact_path: &str, target_dir: &Path) -> Result<()> {
-    let artifact_bytes = tokio::fs::read(artifact_path).await?;
-    let reader = std::io::Cursor::new(artifact_bytes);
+    let artifact_size = tokio::fs::metadata(artifact_path).await?.len();
+    if artifact_size > MAX_RUNNER_ARTIFACT_BYTES {
+        return Err(AppError::Validation(format!(
+            "submission archive must be at most {} bytes",
+            MAX_RUNNER_ARTIFACT_BYTES
+        )));
+    }
+
+    let artifact_path = artifact_path.to_string();
+    let target_dir = target_dir.to_path_buf();
+    tokio::task::spawn_blocking(move || extract_zip_safe_blocking(&artifact_path, &target_dir))
+        .await
+        .map_err(|e| AppError::Internal(format!("zip extraction task failed: {e}")))?
+}
+
+fn extract_zip_safe_blocking(artifact_path: &str, target_dir: &Path) -> Result<()> {
+    let reader = std::fs::File::open(artifact_path)?;
     let mut archive = zip::ZipArchive::new(reader)?;
 
+    if archive.len() > MAX_RUNNER_FILE_COUNT {
+        return Err(AppError::Validation(format!(
+            "submission archive must contain at most {} entries",
+            MAX_RUNNER_FILE_COUNT
+        )));
+    }
+
+    let canonical_target = target_dir
+        .canonicalize()
+        .unwrap_or_else(|_| target_dir.to_path_buf());
+    let mut total_uncompressed_size = 0u64;
     for i in 0..archive.len() {
         let mut file = archive.by_index(i)?;
         let outpath = match file.enclosed_name() {
@@ -259,11 +347,18 @@ async fn extract_zip_safe(artifact_path: &str, target_dir: &Path) -> Result<()> 
             None => continue,
         };
 
+        total_uncompressed_size = total_uncompressed_size
+            .checked_add(file.size())
+            .ok_or_else(|| AppError::Validation("submission archive is too large".to_string()))?;
+        if total_uncompressed_size > MAX_RUNNER_UNCOMPRESSED_BYTES {
+            return Err(AppError::Validation(format!(
+                "submission archive must expand to at most {} bytes",
+                MAX_RUNNER_UNCOMPRESSED_BYTES
+            )));
+        }
+
         // ZipArchive::enclosed_name covers obvious traversal. Canonicalization
         // keeps symlinked parent directories from escaping the extraction root.
-        let canonical_target = target_dir
-            .canonicalize()
-            .unwrap_or_else(|_| target_dir.to_path_buf());
         let canonical_out = if outpath.exists() {
             outpath.canonicalize().unwrap_or_else(|_| outpath.clone())
         } else {
@@ -279,16 +374,13 @@ async fn extract_zip_safe(artifact_path: &str, target_dir: &Path) -> Result<()> 
         }
 
         if file.is_dir() {
-            tokio::fs::create_dir_all(&outpath).await?;
+            std::fs::create_dir_all(&outpath)?;
         } else {
             if let Some(parent) = outpath.parent() {
-                tokio::fs::create_dir_all(parent).await?;
+                std::fs::create_dir_all(parent)?;
             }
-            use tokio::io::AsyncWriteExt;
-            let mut outfile = tokio::fs::File::create(&outpath).await?;
-            let mut buf = Vec::new();
-            std::io::Read::read_to_end(&mut file, &mut buf)?;
-            outfile.write_all(&buf).await?;
+            let mut outfile = std::fs::File::create(&outpath)?;
+            std::io::copy(&mut file, &mut outfile)?;
         }
     }
 
@@ -313,4 +405,82 @@ pub async fn pre_pull_image(docker: &Docker, image: &str) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Write;
+    use std::path::{Path, PathBuf};
+
+    use super::*;
+
+    fn temp_path(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("llm-oj-runner-{name}-{}", uuid::Uuid::new_v4()))
+    }
+
+    fn write_zip(path: &Path, entries: Vec<(String, Vec<u8>)>) {
+        let file = std::fs::File::create(path).expect("failed to create test zip");
+        let mut archive = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+
+        for (name, bytes) in entries {
+            archive
+                .start_file(name, options)
+                .expect("failed to start zip entry");
+            archive
+                .write_all(&bytes)
+                .expect("failed to write zip entry");
+        }
+
+        archive.finish().expect("failed to finish test zip");
+    }
+
+    #[tokio::test]
+    async fn extract_zip_safe_skips_unsafe_entry_names() {
+        let zip_path = temp_path("unsafe-entry.zip");
+        let target_dir = temp_path("unsafe-target");
+        std::fs::create_dir_all(&target_dir).expect("failed to create target dir");
+        write_zip(
+            &zip_path,
+            vec![
+                ("../escape.py".to_string(), b"print('bad')\n".to_vec()),
+                ("main.py".to_string(), b"print('ok')\n".to_vec()),
+            ],
+        );
+
+        extract_zip_safe(&zip_path.to_string_lossy(), &target_dir)
+            .await
+            .expect("extraction should succeed");
+
+        let extracted_files = std::fs::read_dir(&target_dir)
+            .expect("failed to read target dir")
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .expect("failed to collect target dir entries");
+        assert_eq!(extracted_files.len(), 1);
+        assert_eq!(extracted_files[0].file_name(), "main.py");
+
+        let _ = std::fs::remove_file(zip_path);
+        let _ = std::fs::remove_dir_all(target_dir);
+    }
+
+    #[tokio::test]
+    async fn extract_zip_safe_rejects_too_many_entries() {
+        let zip_path = temp_path("too-many.zip");
+        let target_dir = temp_path("too-many-target");
+        std::fs::create_dir_all(&target_dir).expect("failed to create target dir");
+        let entries = (0..=MAX_RUNNER_FILE_COUNT)
+            .map(|i| (format!("file-{i}.txt"), Vec::new()))
+            .collect();
+        write_zip(&zip_path, entries);
+
+        let result = extract_zip_safe(&zip_path.to_string_lossy(), &target_dir).await;
+
+        assert!(
+            matches!(result, Err(AppError::Validation(message)) if message.contains("at most"))
+        );
+
+        let _ = std::fs::remove_file(zip_path);
+        let _ = std::fs::remove_dir_all(target_dir);
+    }
 }
