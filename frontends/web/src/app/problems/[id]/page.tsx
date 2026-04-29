@@ -2,13 +2,13 @@ import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { fetchJson } from "@/lib/api";
+import { formatDate, formatScore } from "@/lib/format";
 import {
+  discussionListResponseSchema,
+  leaderboardResponseSchema,
   problemDetailResponseSchema,
   publicSubmissionListResponseSchema,
-  leaderboardResponseSchema,
-  discussionListResponseSchema,
 } from "@/lib/schemas";
-import { formatScore, formatDate } from "@/lib/format";
 
 /** Problem overview page with statement Markdown and recent activity. */
 export default async function ProblemPage({

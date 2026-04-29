@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Script from "next/script";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import "./globals.css";
 
@@ -8,16 +9,6 @@ export const metadata: Metadata = {
   title: "LLM OJ",
   description: "LLM 在线评测平台",
 };
-
-const themeScript = `
-  (function() {
-    const mode = localStorage.getItem('llm-oj-theme-mode') || 'system';
-    const theme = mode === 'system'
-      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-      : mode;
-    document.documentElement.dataset.theme = theme;
-  })();
-`;
 
 /** Root layout that applies the persisted theme before rendering the app shell. */
 export default function RootLayout({
@@ -28,7 +19,7 @@ export default function RootLayout({
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <Script src="/theme-init.js" strategy="beforeInteractive" />
       </head>
       <body>
         <div className="shell">

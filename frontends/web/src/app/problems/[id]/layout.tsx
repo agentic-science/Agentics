@@ -1,8 +1,6 @@
-import Link from "next/link";
+import { ProblemTabs } from "@/components/ProblemTabs";
 import { fetchJson } from "@/lib/api";
 import { problemDetailResponseSchema } from "@/lib/schemas";
-import { ProblemTabs } from "@/components/ProblemTabs";
-import { formatScore } from "@/lib/format";
 
 /** Shared problem detail shell with header metadata and subpage tabs. */
 export default async function ProblemLayout({

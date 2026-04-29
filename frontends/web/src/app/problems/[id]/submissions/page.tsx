@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { fetchJson } from "@/lib/api";
+import { formatDate, formatScore } from "@/lib/format";
 import {
   problemDetailResponseSchema,
   publicSubmissionListResponseSchema,
 } from "@/lib/schemas";
-import { formatScore, formatDate } from "@/lib/format";
 
 /** Public submission list for a single problem. */
 export default async function SubmissionsPage({

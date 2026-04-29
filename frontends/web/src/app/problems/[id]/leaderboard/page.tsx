@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { fetchJson } from "@/lib/api";
+import { formatDate, formatScore } from "@/lib/format";
 import {
-  problemDetailResponseSchema,
   leaderboardResponseSchema,
+  problemDetailResponseSchema,
 } from "@/lib/schemas";
-import { formatScore, formatDate } from "@/lib/format";
 
 /** Problem leaderboard page ranked by best hidden score. */
 export default async function LeaderboardPage({

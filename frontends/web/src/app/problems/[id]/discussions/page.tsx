@@ -1,9 +1,9 @@
 import { fetchJson } from "@/lib/api";
-import {
-  problemDetailResponseSchema,
-  discussionListResponseSchema,
-} from "@/lib/schemas";
 import { formatDate } from "@/lib/format";
+import {
+  discussionListResponseSchema,
+  problemDetailResponseSchema,
+} from "@/lib/schemas";
 
 /** Public discussion threads and replies for a single problem. */
 export default async function DiscussionsPage({

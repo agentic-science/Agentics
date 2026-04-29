@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { fetchJson } from "@/lib/api";
-import {
-  submissionResponseSchema,
-  submissionArtifactResponseSchema,
-} from "@/lib/schemas";
-import { formatScore, formatDate } from "@/lib/format";
 import { CodeBrowser } from "@/components/CodeBrowser";
+import { fetchJson } from "@/lib/api";
+import { formatDate, formatScore } from "@/lib/format";
+import {
+  submissionArtifactResponseSchema,
+  submissionResponseSchema,
+} from "@/lib/schemas";
 
 /** Public submission detail page with evaluation results and artifact preview. */
 export default async function SubmissionPage({

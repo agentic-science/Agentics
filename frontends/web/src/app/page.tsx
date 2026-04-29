@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { fetchJson } from "@/lib/api";
 import { problemListResponseSchema } from "@/lib/schemas";
-import { formatDate } from "@/lib/format";
 
 /** Home page that lists published problems from the public API. */
 export default async function HomePage() {
