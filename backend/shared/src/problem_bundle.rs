@@ -37,7 +37,9 @@ pub async fn validate_problem_bundle(bundle_dir: &Path) -> Result<()> {
     assert_path_type(&shown_dir, "directory", "shown data dir").await?;
     assert_path_type(&hidden_dir, "directory", "hidden data dir").await?;
 
-    if let Some(ref heldout_dir) = spec.datasets.heldout_dir {
+    if spec.datasets.heldout_enabled
+        && let Some(ref heldout_dir) = spec.datasets.heldout_dir
+    {
         assert_path_type(
             &bundle_dir.join(heldout_dir),
             "directory",
@@ -224,14 +226,34 @@ fn validate_problem_bundle_spec(spec: &ProblemBundleSpec) -> Result<()> {
     Ok(())
 }
 
+fn require_non_empty(value: &str, field: &str) -> Result<()> {
+    if value.trim().is_empty() {
+        return Err(AppError::Validation(format!("{field} must not be empty")));
+    }
+
+    Ok(())
+}
+
+fn require_safe_relative_path(value: &str, field: &str) -> Result<()> {
+    if !is_safe_relative_path(value) {
+        return Err(AppError::Validation(format!(
+            "{field} must be a safe relative path"
+        )));
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use crate::models::evaluation::ScoreVisibility;
     use crate::models::problem::{
         DatasetsSpec, LimitsSpec, ProblemBundleSpec, ScorerSpec, SubmissionSpec,
     };
 
-    use super::validate_problem_bundle_spec;
+    use super::{validate_problem_bundle, validate_problem_bundle_spec};
 
     fn base_spec() -> ProblemBundleSpec {
         ProblemBundleSpec {
@@ -280,22 +302,53 @@ mod tests {
 
         assert!(validate_problem_bundle_spec(&spec).is_err());
     }
-}
 
-fn require_non_empty(value: &str, field: &str) -> Result<()> {
-    if value.trim().is_empty() {
-        return Err(AppError::Validation(format!("{field} must not be empty")));
+    fn create_bundle(root: &Path, spec: &ProblemBundleSpec) {
+        std::fs::create_dir_all(root.join("scorer")).expect("failed to create scorer dir");
+        std::fs::create_dir_all(root.join("shown")).expect("failed to create shown dir");
+        std::fs::create_dir_all(root.join("hidden")).expect("failed to create hidden dir");
+        std::fs::write(
+            root.join("spec.json"),
+            serde_json::to_string(spec).expect("failed to serialize spec"),
+        )
+        .expect("failed to write spec");
+        std::fs::write(root.join("statement.md"), "# Sample\n\nBody\n")
+            .expect("failed to write statement");
+        std::fs::write(root.join("scorer/run.py"), "print('ok')\n")
+            .expect("failed to write scorer");
     }
 
-    Ok(())
-}
+    #[tokio::test]
+    async fn disabled_heldout_bundle_does_not_require_directory() {
+        let root = std::env::temp_dir().join(format!(
+            "llm-oj-bundle-disabled-heldout-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let mut spec = base_spec();
+        spec.datasets.heldout_enabled = false;
+        spec.datasets.heldout_dir = Some("heldout".to_string());
+        create_bundle(&root, &spec);
 
-fn require_safe_relative_path(value: &str, field: &str) -> Result<()> {
-    if !is_safe_relative_path(value) {
-        return Err(AppError::Validation(format!(
-            "{field} must be a safe relative path"
-        )));
+        let result = validate_problem_bundle(&root).await;
+        let _ = std::fs::remove_dir_all(root);
+
+        assert!(result.is_ok());
     }
 
-    Ok(())
+    #[tokio::test]
+    async fn enabled_heldout_bundle_requires_directory() {
+        let root = std::env::temp_dir().join(format!(
+            "llm-oj-bundle-enabled-heldout-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let mut spec = base_spec();
+        spec.datasets.heldout_enabled = true;
+        spec.datasets.heldout_dir = Some("heldout".to_string());
+        create_bundle(&root, &spec);
+
+        let result = validate_problem_bundle(&root).await;
+        let _ = std::fs::remove_dir_all(root);
+
+        assert!(result.is_err());
+    }
 }

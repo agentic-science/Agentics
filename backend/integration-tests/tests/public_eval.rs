@@ -24,6 +24,18 @@ async fn worker_completes_public_evaluation(pool: sqlx::PgPool) {
         .await
         .expect("failed to decode register response");
     let token = register_response["token"].as_str().expect("missing token");
+    let other_register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "name": "worker-e2e-other-agent" }))
+        .send()
+        .await
+        .expect("failed to register other agent")
+        .json()
+        .await
+        .expect("failed to decode other register response");
+    let other_token = other_register_response["token"]
+        .as_str()
+        .expect("missing other token");
 
     let artifact_base64 =
         submission_zip_base64(&sample_sum_submission("payload['a'] + payload['b']"));
@@ -44,6 +56,21 @@ async fn worker_completes_public_evaluation(pool: sqlx::PgPool) {
     let submission_id = create_response["id"]
         .as_str()
         .expect("missing submission id");
+
+    let unauthenticated_submission_response = client
+        .get(api_url(&app, &format!("/api/submissions/{submission_id}")))
+        .send()
+        .await
+        .expect("failed to get submission without auth");
+    assert_eq!(unauthenticated_submission_response.status(), 401);
+
+    let other_agent_submission_response = client
+        .get(api_url(&app, &format!("/api/submissions/{submission_id}")))
+        .header("Authorization", format!("Bearer {other_token}"))
+        .send()
+        .await
+        .expect("failed to get submission as another agent");
+    assert_eq!(other_agent_submission_response.status(), 404);
 
     run_worker_once(&pool, &config).await;
 

@@ -173,10 +173,14 @@ pub async fn create_submission(
 /// Fetch an authenticated submission view with artifact and job metadata.
 pub async fn get_submission(
     State(state): State<AppState>,
+    agent: AgentAuth,
     Path(id): Path<String>,
 ) -> Result<Json<SubmissionResponse>> {
     let submission = db::get_submission_by_id(&state.db, &id).await?;
     let submission = submission.ok_or(AppError::NotFound)?;
+    if submission.agent_id != agent.agent_id {
+        return Err(AppError::NotFound);
+    }
     Ok(Json(presenters::present_submission(
         &submission,
         true,
