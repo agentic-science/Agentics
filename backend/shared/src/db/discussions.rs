@@ -4,10 +4,12 @@
 //! problem/submission query module while preserving the same DTO shapes exposed
 //! by the old TS API.
 
+use std::collections::HashMap;
+
 use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Row};
 
-use crate::db::queries::get_published_problem;
+use crate::db::problems::get_published_problem;
 use crate::error::{AppError, Result};
 use crate::models::request::{DiscussionReplyDto, DiscussionThreadDto};
 
@@ -79,8 +81,8 @@ pub async fn list_discussion_threads(
 
     let thread_ids: Vec<String> = threads
         .iter()
-        .filter_map(|t| t.try_get("id").ok())
-        .collect();
+        .map(|t| t.try_get("id"))
+        .collect::<std::result::Result<_, sqlx::Error>>()?;
 
     let replies = if thread_ids.is_empty() {
         vec![]
@@ -99,43 +101,36 @@ pub async fn list_discussion_threads(
         .await?
     };
 
-    Ok(threads
-        .into_iter()
-        .map(|t| {
-            let tid: String = t.try_get("id").unwrap_or_default();
-            let thread_replies: Vec<DiscussionReplyDto> = replies
-                .iter()
-                .filter(|r| {
-                    r.try_get::<String, _>("thread_id")
-                        .map(|id| id == tid)
-                        .unwrap_or(false)
-                })
-                .map(|r| DiscussionReplyDto {
-                    id: r.try_get("id").unwrap_or_default(),
-                    thread_id: r.try_get("thread_id").unwrap_or_default(),
-                    agent_id: r.try_get("agent_id").unwrap_or_default(),
-                    agent_name: r.try_get("agent_name").unwrap_or_default(),
-                    body: r.try_get("body").unwrap_or_default(),
-                    created_at: r
-                        .try_get::<DateTime<Utc>, _>("created_at")
-                        .map(|d| d.to_rfc3339())
-                        .unwrap_or_default(),
-                })
-                .collect();
+    let mut replies_by_thread: HashMap<String, Vec<DiscussionReplyDto>> = HashMap::new();
+    for r in replies {
+        let thread_id: String = r.try_get("thread_id")?;
+        replies_by_thread
+            .entry(thread_id.clone())
+            .or_default()
+            .push(DiscussionReplyDto {
+                id: r.try_get("id")?,
+                thread_id,
+                agent_id: r.try_get("agent_id")?,
+                agent_name: r.try_get("agent_name")?,
+                body: r.try_get("body")?,
+                created_at: r.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
+            });
+    }
 
-            DiscussionThreadDto {
-                id: tid,
-                problem_id: t.try_get("problem_id").unwrap_or_default(),
-                agent_id: t.try_get("agent_id").unwrap_or_default(),
-                agent_name: t.try_get("agent_name").unwrap_or_default(),
-                title: t.try_get("title").unwrap_or_default(),
-                body: t.try_get("body").unwrap_or_default(),
-                created_at: t
-                    .try_get::<DateTime<Utc>, _>("created_at")
-                    .map(|d| d.to_rfc3339())
-                    .unwrap_or_default(),
-                replies: thread_replies,
-            }
-        })
-        .collect())
+    let mut dtos = Vec::with_capacity(threads.len());
+    for t in threads {
+        let id: String = t.try_get("id")?;
+        dtos.push(DiscussionThreadDto {
+            replies: replies_by_thread.remove(&id).unwrap_or_default(),
+            id,
+            problem_id: t.try_get("problem_id")?,
+            agent_id: t.try_get("agent_id")?,
+            agent_name: t.try_get("agent_name")?,
+            title: t.try_get("title")?,
+            body: t.try_get("body")?,
+            created_at: t.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
+        });
+    }
+
+    Ok(dtos)
 }
