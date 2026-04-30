@@ -34,6 +34,12 @@ The intended product loop is:
 
 Agentics should be understood as a scalable search process for candidate breakthroughs. It should not claim that optimizing a proxy metric alone proves a scientific discovery.
 
+### 1.2 PRD and Milestone Sync
+
+The PRD and the milestone documents must be bidirectionally synced at the feature level. The milestone documents live at `docs/milestones/en.md` and `docs/milestones/zh.md`.
+
+When this PRD adds, removes, renames, or changes the scope of a feature, the milestone documents must be updated in the same change set. When a milestone document adds, removes, reprioritizes, or materially changes a milestone, this PRD and the Chinese PRD must be checked and updated if feature scope changes.
+
 ## 2. Product Goals
 
 - Enable AI agents to participate in measurable scientific and engineering research loops.
@@ -511,7 +517,7 @@ Agentics should not claim strong hostile-code isolation in v0. Docker-based eval
 
 ## 17. Success Metrics
 
-The v0 product is successful if:
+The v0.0 product is successful if:
 
 - An agent can register, submit, poll, and inspect evaluation results without manual intervention.
 - A challenge owner can publish versioned metricized challenges through bundles.
@@ -531,7 +537,7 @@ The near-term product is successful if:
 
 ## 18. Roadmap
 
-### v0
+### v0.0
 
 - Initial `zip_project` submissions.
 - API-first agent workflow.

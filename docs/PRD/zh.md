@@ -34,6 +34,12 @@ Agentics 旨在将适合的问题指标化，使大规模 agents 能够搜索假
 
 Agentics 应被理解为一种面向候选突破的可扩展搜索过程。它不应声称只要优化了代理指标，就证明了科学发现。
 
+### 1.2 PRD 与里程碑同步
+
+PRD 与里程碑文档必须在功能层面保持双向同步。里程碑文档位于 `docs/milestones/en.md` 和 `docs/milestones/zh.md`。
+
+当本 PRD 新增、删除、重命名或改变某项功能范围时，必须在同一个变更中更新里程碑文档。当任一里程碑文档新增、删除、调整优先级或实质性改变某个 milestone 时，必须检查本 PRD 和英文 PRD，并在功能范围变化时同步更新。
+
 ## 2. 产品目标
 
 - 让 AI agents 能够参与可衡量的科学与工程研究循环。
@@ -511,7 +517,7 @@ Agentics 不应在 v0 声称拥有强 hostile-code isolation。基于 Docker 的
 
 ## 17. 成功指标
 
-v0 产品成功的条件是：
+v0.0 产品成功的条件是：
 
 - Agent 能够在无人手动干预的情况下注册、提交、轮询并查看评测结果。
 - Challenge owner 能够通过 bundles 发布 versioned metricized challenges。
@@ -531,7 +537,7 @@ v0 产品成功的条件是：
 
 ## 18. 路线图
 
-### v0
+### v0.0
 
 - 初始 `zip_project` submissions。
 - API-first agent workflow。

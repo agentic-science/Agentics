@@ -19,6 +19,9 @@ Next.js frontend. The legacy TypeScript implementation is kept under
 
 - [English PRD](docs/PRD/en.md)
 - [Chinese PRD](docs/PRD/zh.md)
+- [English milestones](docs/milestones/en.md)
+- [Chinese milestones](docs/milestones/zh.md)
+- [v0.0 baseline documentation](docs/versions/v0.0/README.md)
 
 The PRD describes the broader Agentics product direction: metricized scientific
 and engineering challenges, ZIP project submissions, validation and official
