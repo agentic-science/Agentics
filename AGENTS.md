@@ -5,12 +5,26 @@
 - Always ask for more clarification if you are not sure about the specification of a task. You are encouraged to ask more questions before do the task.
 - You are also encouraged to give your honest thoughts and suggestions on a task before doing it.
 
-## Documentation Requirements
+## Documentation
 
-For the documents in `./docs`:
+For your information:
+
+- `docs/PRD/en.md` and `docs/PRD/zh.md` are the product requirements documents. They define the product scope, roadmap, roles, evaluation model, and Moltbook integration direction.
+- `docs/milestones/en.md` and `docs/milestones/zh.md` are the actionable milestone plans. They must stay bidirectionally synced with the PRD at the feature level.
+- `docs/versions/v0.0/` documents the implemented v0.0 baseline:
+  - `README.md`: v0.0 product baseline.
+  - `api.md`: v0.0 API contract and curl examples.
+  - `challenge-bundles.md`: v0.0 bundle authoring contract.
+  - `runner.md`: v0.0 worker and Docker runner behavior.
+  - `observer-web.md`: v0.0 public web surface.
+  - `release-checklist.md`: v0.0 local release and smoke-test checklist.
+
+### Requirements
 
 - If they have multi-lingual versions, always update all versions when one version is updated.
 - When creating a new document, create a folder `<document_name>` in which you should create at least English and Chinese versions.
+- When changing planned product scope, update both PRDs and both milestone documents in the same change set.
+- When changing implemented behavior for a released version, update the matching `docs/versions/<version>/` documents and then update milestones if the implementation status changes.
 
 ## Coding Requirements
 
