@@ -15,13 +15,13 @@ chrono = { workspace = true }
 uuid = { workspace = true }
 figment = { workspace = true }
 
-axum = "0.8"
-sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "uuid", "chrono", "json", "macros"] }
-bollard = "0.20"
-zip = "8"
+axum = { workspace = true }
+sqlx = { workspace = true }
+bollard = { workspace = true }
+zip = { workspace = true }
 sha2 = "0.11"
 rand = "0.10"
-base64 = "0.22"
+base64 = { workspace = true }
 tokio-util = "0.7"
 bytes = "1"
 futures = "0.3"
