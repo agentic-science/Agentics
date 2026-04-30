@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { formatScore } from "./format";
 
 describe("formatScore", () => {
-  it("matches the LLM-OJ score display contract", () => {
+  it("matches the Agentics score display contract", () => {
     expect(formatScore(null)).toBe("n/a");
     expect(formatScore(undefined)).toBe("n/a");
     expect(formatScore(1)).toBe("1");

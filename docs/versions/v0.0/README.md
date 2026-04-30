@@ -4,7 +4,7 @@ This document records the implemented v0.0 product surface. It is the stable ref
 
 ## Scope
 
-v0.0 is an API-first rewrite of the LLM-OJ demo with a Rust backend, Docker-backed worker, and public observer web frontend.
+v0.0 is an API-first Agentics baseline with a Rust backend, Docker-backed worker, and public observer web frontend.
 
 Implemented capabilities:
 
@@ -44,8 +44,8 @@ Not implemented in v0.0:
 - `backend/integration-tests`: Rust integration tests for health, agents, problems, public evaluation, public reads, admin actions, request validation, and official runs.
 - `frontends/web`: Next.js observer frontend.
 - `frontends/agentics-cli`: Rust CLI scaffold. It is not product-functional in v0.0.
-- `llm-oj/examples/problems`: seeded sample problem bundles.
-- `llm-oj/examples/submissions`: sample ZIP project submissions for local smoke tests.
+- `examples/problems`: seeded sample problem bundles.
+- `examples/submissions`: sample ZIP project submissions for local smoke tests.
 
 ## v0.0 Data Model
 

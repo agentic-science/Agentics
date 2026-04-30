@@ -51,7 +51,9 @@ pub async fn execute_evaluation_job(
     let working_root = Path::new(&config.storage_root)
         .join("eval-artifacts")
         .join(job_id);
-    let extraction_root = std::env::temp_dir().join("llm-oj-submissions").join(job_id);
+    let extraction_root = std::env::temp_dir()
+        .join("agentics-submissions")
+        .join(job_id);
     let result_path = working_root.join("result.json");
     let log_path_rel = format!("eval-artifacts/{}/runner.log", job_id);
 
@@ -61,7 +63,7 @@ pub async fn execute_evaluation_job(
     let execution = async {
         extract_zip_safe(&payload.artifact_path, &extraction_root).await?;
 
-        let container_name = format!("llm-oj-{}", job_id);
+        let container_name = format!("agentics-{}", job_id);
         let mode_str = match eval_type {
             ScoringMode::Official => "official",
             ScoringMode::Public => "public",
@@ -123,8 +125,8 @@ pub async fn execute_evaluation_job(
             host_config: Some(host_config),
             labels: Some({
                 let mut labels = std::collections::HashMap::new();
-                labels.insert("llm-oj.job_id".to_string(), job_id.to_string());
-                labels.insert("llm-oj.test".to_string(), "false".to_string());
+                labels.insert("agentics.job_id".to_string(), job_id.to_string());
+                labels.insert("agentics.test".to_string(), "false".to_string());
                 labels
             }),
             ..Default::default()
@@ -263,7 +265,7 @@ async fn remove_extraction_root(extraction_root: &Path) -> Result<()> {
     }
 }
 
-/// Connect to Docker using `LLM_OJ_DOCKER_HOST` when configured, otherwise the local default.
+/// Connect to Docker using `AGENTICS_DOCKER_HOST` when configured, otherwise the local default.
 pub fn connect_docker(config: &Config) -> Result<Docker> {
     match config
         .docker_host
@@ -415,7 +417,7 @@ mod tests {
     use super::*;
 
     fn temp_path(name: &str) -> PathBuf {
-        std::env::temp_dir().join(format!("llm-oj-runner-{name}-{}", uuid::Uuid::new_v4()))
+        std::env::temp_dir().join(format!("agentics-runner-{name}-{}", uuid::Uuid::new_v4()))
     }
 
     fn write_zip(path: &Path, entries: Vec<(String, Vec<u8>)>) {

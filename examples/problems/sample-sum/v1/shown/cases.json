@@ -1,0 +1,18 @@
+[
+  {
+    "case_id": "shown-1",
+    "input": {
+      "a": 1,
+      "b": 2
+    },
+    "expected": "3"
+  },
+  {
+    "case_id": "shown-2",
+    "input": {
+      "a": -3,
+      "b": 8
+    },
+    "expected": "5"
+  }
+]

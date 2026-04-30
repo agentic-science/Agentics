@@ -321,7 +321,7 @@ mod tests {
     #[tokio::test]
     async fn disabled_heldout_bundle_does_not_require_directory() {
         let root = std::env::temp_dir().join(format!(
-            "llm-oj-bundle-disabled-heldout-{}",
+            "agentics-bundle-disabled-heldout-{}",
             uuid::Uuid::new_v4()
         ));
         let mut spec = base_spec();
@@ -338,7 +338,7 @@ mod tests {
     #[tokio::test]
     async fn enabled_heldout_bundle_requires_directory() {
         let root = std::env::temp_dir().join(format!(
-            "llm-oj-bundle-enabled-heldout-{}",
+            "agentics-bundle-enabled-heldout-{}",
             uuid::Uuid::new_v4()
         ));
         let mut spec = base_spec();

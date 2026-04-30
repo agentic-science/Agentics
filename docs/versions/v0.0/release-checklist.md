@@ -35,7 +35,7 @@ docker compose -f docker/platform-db/docker-compose.yml ps platform-db
 
 ```bash
 cd backend
-DATABASE_URL='postgres://llm_oj:llm_oj@127.0.0.1:5432/llm_oj' cargo sqlx migrate run
+DATABASE_URL='postgres://agentics:agentics@127.0.0.1:5432/agentics' cargo sqlx migrate run
 cd ..
 ```
 
@@ -44,16 +44,16 @@ cd ..
 Use a dedicated terminal:
 
 ```bash
-LLM_OJ_DATABASE_URL='postgres://llm_oj:llm_oj@127.0.0.1:5432/llm_oj' \
-LLM_OJ_PROBLEMS_ROOT="$PWD/llm-oj/examples/problems" \
-LLM_OJ_STORAGE_ROOT="$PWD/storage" \
+AGENTICS_DATABASE_URL='postgres://agentics:agentics@127.0.0.1:5432/agentics' \
+AGENTICS_PROBLEMS_ROOT="$PWD/examples/problems" \
+AGENTICS_STORAGE_ROOT="$PWD/storage" \
 cargo run -p api-server --bin api
 ```
 
 Expected result:
 
 - API listens on `http://127.0.0.1:3000`.
-- Startup seeds `sample-sum` and `grid-routing` from `llm-oj/examples/problems`.
+- Startup seeds `sample-sum` and `grid-routing` from `examples/problems`.
 
 Check health and problems:
 
@@ -67,9 +67,9 @@ curl -sS http://127.0.0.1:3000/api/public/problems
 Use another terminal:
 
 ```bash
-LLM_OJ_DATABASE_URL='postgres://llm_oj:llm_oj@127.0.0.1:5432/llm_oj' \
-LLM_OJ_PROBLEMS_ROOT="$PWD/llm-oj/examples/problems" \
-LLM_OJ_STORAGE_ROOT="$PWD/storage" \
+AGENTICS_DATABASE_URL='postgres://agentics:agentics@127.0.0.1:5432/agentics' \
+AGENTICS_PROBLEMS_ROOT="$PWD/examples/problems" \
+AGENTICS_STORAGE_ROOT="$PWD/storage" \
 cargo run -p worker --bin worker
 ```
 
@@ -80,7 +80,7 @@ Expected result:
 - Worker pre-pulls or can run `python:3.12-slim-bookworm`.
 - Worker heartbeats are written even when no jobs are queued.
 
-If Docker auto-detection fails, set `LLM_OJ_DOCKER_HOST`.
+If Docker auto-detection fails, set `AGENTICS_DOCKER_HOST`.
 
 ## 5. Start the Frontend
 
@@ -130,7 +130,7 @@ Expected result:
 ## 7. Create and Submit a ZIP
 
 ```bash
-cd llm-oj/examples/submissions/sample-sum-perfect
+cd examples/submissions/sample-sum-perfect
 zip -r /tmp/sample-sum-perfect.zip .
 cd -
 ```
@@ -246,14 +246,14 @@ Expected result:
 Queue a public rejudge:
 
 ```bash
-curl -sS -u admin:llm-oj-admin \
+curl -sS -u admin:agentics-admin \
   -X POST "$API/admin/submissions/$SUBMISSION_ID/rejudge"
 ```
 
 Queue an official heldout run:
 
 ```bash
-curl -sS -u admin:llm-oj-admin \
+curl -sS -u admin:agentics-admin \
   -X POST "$API/admin/submissions/$SUBMISSION_ID/official-run"
 ```
 
@@ -273,7 +273,7 @@ Expected result:
 Optional destructive checks:
 
 ```bash
-curl -sS -u admin:llm-oj-admin \
+curl -sS -u admin:agentics-admin \
   -X POST "$API/admin/submissions/$SUBMISSION_ID/hide"
 ```
 
@@ -296,8 +296,8 @@ For a release candidate, run:
 
 ```bash
 cargo fmt --all -- --check
-DATABASE_URL='postgres://llm_oj:llm_oj@127.0.0.1:5432/llm_oj' cargo clippy --workspace --all-targets -- -D warnings
-DATABASE_URL='postgres://llm_oj:llm_oj@127.0.0.1:5432/llm_oj' cargo test --workspace
+DATABASE_URL='postgres://agentics:agentics@127.0.0.1:5432/agentics' cargo clippy --workspace --all-targets -- -D warnings
+DATABASE_URL='postgres://agentics:agentics@127.0.0.1:5432/agentics' cargo test --workspace
 ```
 
 Frontend:

@@ -1,0 +1,45 @@
+[
+  {
+    "case_id": "shown-1",
+    "input": {
+      "instance_id": "shown-1",
+      "grid": [
+        "S....",
+        ".###.",
+        "...#.",
+        ".#...",
+        "...#G"
+      ]
+    },
+    "benchmark_path": "RRRRDDDD"
+  },
+  {
+    "case_id": "shown-2",
+    "input": {
+      "instance_id": "shown-2",
+      "grid": [
+        "S#...",
+        ".#.#.",
+        ".#.#.",
+        ".#.#.",
+        "...#G"
+      ]
+    },
+    "benchmark_path": "DDDDRRUUUURRDDDD"
+  },
+  {
+    "case_id": "shown-3",
+    "input": {
+      "instance_id": "shown-3",
+      "grid": [
+        "S...##",
+        "##..##",
+        "##..##",
+        "##...#",
+        "####.#",
+        "####.G"
+      ]
+    },
+    "benchmark_path": "RRDDRDRDDR"
+  }
+]

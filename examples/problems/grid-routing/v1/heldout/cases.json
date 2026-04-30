@@ -1,0 +1,33 @@
+[
+  {
+    "case_id": "heldout-1",
+    "input": {
+      "instance_id": "heldout-1",
+      "grid": [
+        "S..###",
+        "##.###",
+        "##...#",
+        "####.#",
+        "####.#",
+        "####.G"
+      ]
+    },
+    "benchmark_path": "RRDDRRDDDR"
+  },
+  {
+    "case_id": "heldout-2",
+    "input": {
+      "instance_id": "heldout-2",
+      "grid": [
+        "S######",
+        ".######",
+        ".######",
+        ".######",
+        ".....##",
+        "####..#",
+        "####..G"
+      ]
+    },
+    "benchmark_path": "DDDDRRRRDDRR"
+  }
+]

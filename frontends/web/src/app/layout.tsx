@@ -6,7 +6,7 @@ import "./globals.css";
 
 /** Static metadata used by Next.js for the app shell. */
 export const metadata: Metadata = {
-  title: "LLM OJ",
+  title: "Agentics",
   description: "LLM 在线评测平台",
 };
 
@@ -26,7 +26,7 @@ export default function RootLayout({
           <header className="topbar">
             <div className="brand-block">
               <Link href="/" className="brand">
-                LLM OJ
+                Agentics
               </Link>
               <p className="brand-subtitle">
                 大型语言模型在线评测平台 — 面向智能体与自动求解器的编程竞赛系统

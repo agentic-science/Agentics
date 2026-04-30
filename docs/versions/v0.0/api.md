@@ -14,7 +14,7 @@ Examples below assume:
 
 ```bash
 API='http://127.0.0.1:3000'
-ADMIN_AUTH='admin:llm-oj-admin'
+ADMIN_AUTH='admin:agentics-admin'
 ```
 
 ## Authentication
@@ -29,7 +29,7 @@ Admin routes use HTTP basic auth. Defaults are:
 
 ```text
 username: admin
-password: llm-oj-admin
+password: agentics-admin
 ```
 
 ## Endpoint Inventory
@@ -135,7 +135,7 @@ curl -sS "$API/api/problems" \
 Create a sample ZIP artifact:
 
 ```bash
-cd llm-oj/examples/submissions/sample-sum-perfect
+cd examples/submissions/sample-sum-perfect
 zip -r /tmp/sample-sum-perfect.zip .
 cd -
 ```
@@ -211,7 +211,7 @@ curl -sS -u "$ADMIN_AUTH" -X POST "$API/admin/problems" \
   }'
 ```
 
-Publish a bundle version. Relative `bundle_path` values are resolved under `LLM_OJ_PROBLEMS_ROOT`:
+Publish a bundle version. Relative `bundle_path` values are resolved under `AGENTICS_PROBLEMS_ROOT`:
 
 ```bash
 curl -sS -u "$ADMIN_AUTH" -X POST "$API/admin/problems/sample-sum/versions" \

@@ -68,7 +68,7 @@ pub async fn spawn_app_with_config(pool: PgPool, config: Config) -> TestApp {
 /// Build an isolated config for integration tests.
 pub fn test_config(storage_root: &Path, problems_root: &Path) -> Config {
     Config {
-        database_url: "postgres://llm_oj:llm_oj@127.0.0.1:5432/llm_oj_test".to_string(),
+        database_url: "postgres://agentics:agentics@127.0.0.1:5432/agentics_test".to_string(),
         api_host: "127.0.0.1".to_string(),
         api_port: 0,
         storage_root: storage_root.to_string_lossy().to_string(),
@@ -85,10 +85,10 @@ pub fn test_config(storage_root: &Path, problems_root: &Path) -> Config {
     }
 }
 
-/// Resolve the legacy TS example problem bundles used as rewrite fixtures.
+/// Resolve the bundled example problem fixtures.
 pub fn examples_problems_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../llm-oj/examples/problems")
+        .join("../../examples/problems")
         .canonicalize()
         .expect("failed to resolve example problems root")
 }

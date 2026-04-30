@@ -164,7 +164,7 @@ async fn worker_marks_submission_failed_when_artifact_is_missing(pool: sqlx::PgP
         "#,
     )
     .bind(submission_id)
-    .bind("/tmp/llm-oj-missing-submission.zip")
+    .bind("/tmp/agentics-missing-submission.zip")
     .execute(&pool)
     .await
     .expect("failed to corrupt artifact path");

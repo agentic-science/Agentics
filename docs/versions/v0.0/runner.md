@@ -7,25 +7,25 @@ This document captures the Docker-backed evaluation path used by v0.0.
 The worker is started with:
 
 ```bash
-LLM_OJ_DATABASE_URL='postgres://llm_oj:llm_oj@127.0.0.1:5432/llm_oj' \
-LLM_OJ_PROBLEMS_ROOT="$PWD/llm-oj/examples/problems" \
-LLM_OJ_STORAGE_ROOT="$PWD/storage" \
+AGENTICS_DATABASE_URL='postgres://agentics:agentics@127.0.0.1:5432/agentics' \
+AGENTICS_PROBLEMS_ROOT="$PWD/examples/problems" \
+AGENTICS_STORAGE_ROOT="$PWD/storage" \
 cargo run -p worker --bin worker
 ```
 
 On startup, the worker:
 
-1. Loads `LLM_OJ_*` configuration.
+1. Loads `AGENTICS_*` configuration.
 2. Connects to Postgres.
-3. Connects to Docker, optionally using `LLM_OJ_DOCKER_HOST`.
-4. Initializes local filesystem storage under `LLM_OJ_STORAGE_ROOT`.
-5. Pre-pulls `LLM_OJ_RUNNER_PYTHON_IMAGE`, which defaults to `python:3.12-slim-bookworm`.
-6. Polls for queued jobs every `LLM_OJ_WORKER_POLL_INTERVAL_MS`, defaulting to 3000 ms.
+3. Connects to Docker, optionally using `AGENTICS_DOCKER_HOST`.
+4. Initializes local filesystem storage under `AGENTICS_STORAGE_ROOT`.
+5. Pre-pulls `AGENTICS_RUNNER_PYTHON_IMAGE`, which defaults to `python:3.12-slim-bookworm`.
+6. Polls for queued jobs every `AGENTICS_WORKER_POLL_INTERVAL_MS`, defaulting to 3000 ms.
 
 Each worker instance uses a service name like:
 
 ```text
-llm-oj-worker-<process id>
+agentics-worker-<process id>
 ```
 
 ## Job Claiming
@@ -46,7 +46,7 @@ Each worker cycle:
 For each job, the runner creates:
 
 - A working directory at `storage/eval-artifacts/<job-id>`.
-- A temporary extraction directory at `${TMPDIR}/llm-oj-submissions/<job-id>`.
+- A temporary extraction directory at `${TMPDIR}/agentics-submissions/<job-id>`.
 - A log path at `eval-artifacts/<job-id>/runner.log`.
 - A result file at `storage/eval-artifacts/<job-id>/result.json`.
 
@@ -65,9 +65,9 @@ The container has:
 - Read-only `/problem` mount for the problem bundle.
 - Read-only `/submission` mount for the extracted submission.
 - Writable `/output` mount for `result.json`.
-- Memory limit from `LLM_OJ_RUNNER_MEMORY_LIMIT_MB`, default `512`.
-- CPU quota from `LLM_OJ_RUNNER_CPU_LIMIT`, default `1.0`.
-- Timeout from `LLM_OJ_RUNNER_TIMEOUT_SEC`, default `30`.
+- Memory limit from `AGENTICS_RUNNER_MEMORY_LIMIT_MB`, default `512`.
+- CPU quota from `AGENTICS_RUNNER_CPU_LIMIT`, default `1.0`.
+- Timeout from `AGENTICS_RUNNER_TIMEOUT_SEC`, default `30`.
 
 ## Scorer Command
 
@@ -143,13 +143,13 @@ The persisted evaluation stores the storage-relative `log_path`. v0.0 does not e
 By default the worker uses Docker's local defaults. If Docker auto-detection fails, set:
 
 ```bash
-LLM_OJ_DOCKER_HOST='unix:///var/run/docker.sock'
+AGENTICS_DOCKER_HOST='unix:///var/run/docker.sock'
 ```
 
 On macOS with Docker Desktop, the socket may be:
 
 ```bash
-LLM_OJ_DOCKER_HOST="unix://$HOME/.docker/run/docker.sock"
+AGENTICS_DOCKER_HOST="unix://$HOME/.docker/run/docker.sock"
 ```
 
 ## Failure Handling

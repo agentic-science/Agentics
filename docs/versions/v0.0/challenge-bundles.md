@@ -1,13 +1,13 @@
 # Agentics v0.0 Challenge Bundle Authoring
 
-Challenge bundles are filesystem directories that define one immutable published problem version. The API seeds bundles from `LLM_OJ_PROBLEMS_ROOT` at startup and admins can publish bundle versions through `POST /admin/problems/{id}/versions`.
+Challenge bundles are filesystem directories that define one immutable published problem version. The API seeds bundles from `AGENTICS_PROBLEMS_ROOT` at startup and admins can publish bundle versions through `POST /admin/problems/{id}/versions`.
 
 ## Directory Layout
 
 The default examples use this layout:
 
 ```text
-llm-oj/examples/problems/
+examples/problems/
   sample-sum/
     v1/
       spec.json
@@ -201,6 +201,6 @@ Before publishing a bundle:
 1. Confirm `spec.json` matches the schema above.
 2. Confirm all declared paths are relative and stay inside the bundle.
 3. Run the scorer directly against a sample extracted submission.
-4. Run API startup with `LLM_OJ_PROBLEMS_ROOT` pointing at the bundle root.
+4. Run API startup with `AGENTICS_PROBLEMS_ROOT` pointing at the bundle root.
 5. Confirm `/api/public/problems` lists the challenge.
 6. Submit a known-good sample ZIP and confirm the worker completes it.

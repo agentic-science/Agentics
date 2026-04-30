@@ -3,7 +3,9 @@
 use figment::{Figment, providers::Env};
 use serde::Deserialize;
 
-/// Application configuration loaded from `LLM_OJ_*` environment variables.
+const CONFIG_ENV_PREFIX: &str = "AGENTICS_";
+
+/// Application configuration loaded from `AGENTICS_*` environment variables.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     #[serde(default = "default_database_url")]
@@ -38,7 +40,7 @@ pub struct Config {
 }
 
 fn default_database_url() -> String {
-    "postgres://llm_oj:llm_oj@127.0.0.1:5432/llm_oj".to_string()
+    "postgres://agentics:agentics@127.0.0.1:5432/agentics".to_string()
 }
 
 fn default_api_host() -> String {
@@ -62,7 +64,7 @@ fn default_admin_username() -> String {
 }
 
 fn default_admin_password() -> String {
-    "llm-oj-admin".to_string()
+    "agentics-admin".to_string()
 }
 
 fn default_worker_poll_interval_ms() -> u64 {
@@ -90,9 +92,21 @@ fn default_log_level() -> String {
 }
 
 impl Config {
-    /// Load configuration from `LLM_OJ_*` environment variables with defaults.
+    /// Load configuration from `AGENTICS_*` environment variables with defaults.
     pub fn from_env() -> anyhow::Result<Self> {
-        let config: Config = Figment::new().merge(Env::prefixed("LLM_OJ_")).extract()?;
+        let config: Config = Figment::new()
+            .merge(Env::prefixed(CONFIG_ENV_PREFIX))
+            .extract()?;
         Ok(config)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CONFIG_ENV_PREFIX;
+
+    #[test]
+    fn uses_agentics_environment_prefix() {
+        assert_eq!(CONFIG_ENV_PREFIX, "AGENTICS_");
     }
 }

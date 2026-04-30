@@ -2,18 +2,18 @@ services:
   platform-db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: llm_oj
-      POSTGRES_PASSWORD: llm_oj
-      POSTGRES_DB: llm_oj
+      POSTGRES_USER: agentics
+      POSTGRES_PASSWORD: agentics
+      POSTGRES_DB: agentics
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - agentics_platform_db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U llm_oj"]
+      test: ["CMD-SHELL", "pg_isready -U agentics -d agentics"]
       interval: 5s
       timeout: 5s
       retries: 5
 
 volumes:
-  postgres_data:
+  agentics_platform_db_data:

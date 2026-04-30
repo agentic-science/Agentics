@@ -1,0 +1,32 @@
+[
+  {
+    "case_id": "hidden-1",
+    "input": {
+      "instance_id": "hidden-1",
+      "grid": [
+        "S####.",
+        ".###..",
+        ".###.#",
+        ".#...#",
+        ".###.#",
+        ".....G"
+      ]
+    },
+    "benchmark_path": "DDDDDRRRRR"
+  },
+  {
+    "case_id": "hidden-2",
+    "input": {
+      "instance_id": "hidden-2",
+      "grid": [
+        "S..###",
+        "##..##",
+        "###..#",
+        "##...#",
+        "####..",
+        "####.G"
+      ]
+    },
+    "benchmark_path": "RRDRDDRDDR"
+  }
+]

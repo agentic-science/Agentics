@@ -37,7 +37,7 @@ impl Worker {
         let docker = connect_docker(&config)?;
         let storage: Arc<dyn shared::storage::Storage> =
             Arc::new(LocalStorage::new(&config.storage_root));
-        let worker_id = format!("llm-oj-worker-{}", std::process::id());
+        let worker_id = format!("agentics-worker-{}", std::process::id());
 
         info!("pre-pulling runner image: {}", config.runner_python_image);
         if let Err(e) = pre_pull_image(&docker, &config.runner_python_image).await {

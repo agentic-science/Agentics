@@ -1,0 +1,18 @@
+[
+  {
+    "case_id": "heldout-1",
+    "input": {
+      "a": 1000,
+      "b": 24
+    },
+    "expected": "1024"
+  },
+  {
+    "case_id": "heldout-2",
+    "input": {
+      "a": -11,
+      "b": -9
+    },
+    "expected": "-20"
+  }
+]

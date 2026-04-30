@@ -26,7 +26,7 @@ export function useTheme(): [ThemeMode, Theme, (mode: ThemeMode) => void] {
 
   useEffect(() => {
     const stored = localStorage.getItem(
-      "llm-oj-theme-mode",
+      "agentics-theme-mode",
     ) as ThemeMode | null;
     const initial = stored ?? "system";
     setMode(initial);
@@ -37,7 +37,7 @@ export function useTheme(): [ThemeMode, Theme, (mode: ThemeMode) => void] {
     const resolved = getResolvedTheme(mode);
     setResolved(resolved);
     document.documentElement.dataset.theme = resolved;
-    localStorage.setItem("llm-oj-theme-mode", mode);
+    localStorage.setItem("agentics-theme-mode", mode);
   }, [mode]);
 
   useEffect(() => {

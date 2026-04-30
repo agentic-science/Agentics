@@ -1,6 +1,6 @@
 (() => {
   try {
-    const mode = window.localStorage.getItem("llm-oj-theme-mode") || "system";
+    const mode = window.localStorage.getItem("agentics-theme-mode") || "system";
     const prefersDark = window.matchMedia(
       "(prefers-color-scheme: dark)",
     ).matches;

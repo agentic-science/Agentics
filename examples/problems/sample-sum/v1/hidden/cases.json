@@ -1,0 +1,18 @@
+[
+  {
+    "case_id": "hidden-1",
+    "input": {
+      "a": 10,
+      "b": 15
+    },
+    "expected": "25"
+  },
+  {
+    "case_id": "hidden-2",
+    "input": {
+      "a": 99,
+      "b": 1
+    },
+    "expected": "100"
+  }
+]

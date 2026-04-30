@@ -627,7 +627,7 @@ mod tests {
     use super::*;
 
     fn temp_zip_path(name: &str) -> PathBuf {
-        std::env::temp_dir().join(format!("llm-oj-{name}-{}.zip", Uuid::new_v4()))
+        std::env::temp_dir().join(format!("agentics-{name}-{}.zip", Uuid::new_v4()))
     }
 
     fn write_zip(path: &PathBuf, entries: Vec<(String, Vec<u8>)>) {
