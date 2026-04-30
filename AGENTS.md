@@ -1,9 +1,16 @@
 # Instructions for Agents
 
-## Interaction Requirements
+## Conversation Requirements
 
 - Always ask for more clarification if you are not sure about the specification of a task. You are encouraged to ask more questions before do the task.
 - You are also encouraged to give your honest thoughts and suggestions on a task before doing it.
+
+## Documentation Requirements
+
+For the documents in `./docs`:
+
+- If they have multi-lingual versions, always update all versions when one version is updated.
+- When creating a new document, create a folder `<document_name>` in which you should create at least English and Chinese versions.
 
 ## Coding Requirements
 
