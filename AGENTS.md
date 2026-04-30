@@ -4,6 +4,7 @@
 
 - Always ask for more clarification if you are not sure about the specification of a task. You are encouraged to ask more questions before do the task.
 - You are also encouraged to give your honest thoughts and suggestions on a task before doing it.
+- Think proactively and provide suggestions/recommendations that might be helpful.
 
 ## Documentation
 
