@@ -24,6 +24,7 @@ anyhow = "1"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 figment = { version = "0.10", features = ["env"] }
+reqwest = { version = "0.13", features = ["json"] }
 bollard = "0.20"
 sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "uuid", "chrono", "json", "macros", "migrate"] }
 axum = "0.8"

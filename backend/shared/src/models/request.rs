@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use super::evaluation::EvaluationJobDto;
 
 /// Agent registration payload accepted by the public API.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RegisterAgentRequest {
     pub name: String,
@@ -22,7 +22,7 @@ pub struct RegisterAgentRequest {
 }
 
 /// Agent registration response containing the one-time bearer token.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegisterAgentResponse {
     pub agent_id: String,
     pub token: String,
@@ -31,7 +31,7 @@ pub struct RegisterAgentResponse {
 }
 
 /// Submission creation payload with a base64-encoded ZIP artifact.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CreateSubmissionRequest {
     pub problem_id: String,
@@ -45,7 +45,7 @@ pub struct CreateSubmissionRequest {
 }
 
 /// Response returned after a submission is accepted and queued.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateSubmissionResponse {
     pub id: String,
     pub status: String,
@@ -57,7 +57,7 @@ pub struct CreateSubmissionResponse {
 }
 
 /// Submission detail DTO used by both public and authenticated routes.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubmissionResponse {
     pub id: String,
     pub problem_id: String,
@@ -87,7 +87,7 @@ pub struct SubmissionResponse {
 }
 
 /// One row in a public problem submission list.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PublicSubmissionListItemDto {
     pub id: String,
     pub problem_id: String,
@@ -110,13 +110,13 @@ pub struct PublicSubmissionListItemDto {
 }
 
 /// Public submission-list response.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PublicSubmissionListResponse {
     pub items: Vec<PublicSubmissionListItemDto>,
 }
 
 /// One extracted file entry from a submitted archive.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubmissionArtifactFileDto {
     pub path: String,
     pub size: i64,
@@ -127,7 +127,7 @@ pub struct SubmissionArtifactFileDto {
 }
 
 /// Archive browser response for a submission artifact.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubmissionArtifactResponse {
     pub archive_name: String,
     pub archive_size: i64,
@@ -137,7 +137,7 @@ pub struct SubmissionArtifactResponse {
 }
 
 /// One leaderboard row for an agent's best submission.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaderboardEntryDto {
     pub agent_id: String,
     pub agent_name: String,
@@ -149,13 +149,13 @@ pub struct LeaderboardEntryDto {
 }
 
 /// Problem leaderboard response.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaderboardResponse {
     pub items: Vec<LeaderboardEntryDto>,
 }
 
 /// Reply nested under a discussion thread.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiscussionReplyDto {
     pub id: String,
     pub thread_id: String,
@@ -166,7 +166,7 @@ pub struct DiscussionReplyDto {
 }
 
 /// Discussion thread with nested replies.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiscussionThreadDto {
     pub id: String,
     pub problem_id: String,
@@ -179,13 +179,13 @@ pub struct DiscussionThreadDto {
 }
 
 /// Discussion list response for a problem.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiscussionListResponse {
     pub items: Vec<DiscussionThreadDto>,
 }
 
 /// Payload for creating a discussion thread.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CreateDiscussionThreadRequest {
     pub title: String,
@@ -193,14 +193,14 @@ pub struct CreateDiscussionThreadRequest {
 }
 
 /// Payload for replying to a discussion thread.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CreateDiscussionReplyRequest {
     pub body: String,
 }
 
 /// Admin payload for creating or updating a problem shell.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CreateProblemRequest {
     pub id: String,
@@ -212,14 +212,14 @@ pub struct CreateProblemRequest {
 }
 
 /// Admin payload for publishing a bundle as a problem version.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CreateProblemVersionRequest {
     pub bundle_path: String,
 }
 
 /// Admin response returned when an official evaluation job is queued.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvaluationJobResponse {
     pub job_id: String,
     pub submission_id: String,
@@ -228,14 +228,14 @@ pub struct EvaluationJobResponse {
 }
 
 /// Admin response returned after toggling submission visibility.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HideSubmissionResponse {
     pub id: String,
     pub hidden: bool,
 }
 
 /// Admin response returned after disabling an agent.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DisableAgentResponse {
     pub id: String,
     pub status: String,

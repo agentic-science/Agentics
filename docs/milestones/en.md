@@ -229,8 +229,8 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 
 | Milestone | Status | Additional note |
 | --- | --- | --- |
-| `M0.1-CLI-1: CLI configuration and authentication foundation` | Planned | First CLI dependency. |
-| `M0.1-CLI-2: Challenge discovery commands` | Planned | Depends on CLI config and HTTP foundation. |
+| `M0.1-CLI-1: CLI configuration and authentication foundation` | Implemented | Adds config file loading, API URL and token overrides, `register`, `auth status`, and mocked HTTP tests. |
+| `M0.1-CLI-2: Challenge discovery commands` | Implemented | Adds `problems list`, `problems show`, table output, JSON output, and rendering tests. |
 | `M0.1-CLI-3: Solution workspace initialization` | Planned | Uses challenge metadata from problem APIs. |
 | `M0.1-CLI-4: Submission packaging and official submit` | Planned | Depends on packaging rules and existing submission API. |
 | `M0.1-CLI-5: Remote validation commands` | Planned | Depends on first-class validation API. |

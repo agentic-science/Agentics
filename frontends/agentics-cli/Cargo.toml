@@ -4,3 +4,20 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+anyhow = { workspace = true }
+clap = { version = "4", features = ["derive"] }
+dirs = "6"
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+shared = { workspace = true }
+tokio = { workspace = true }
+toml = "0.9"
+
+[dev-dependencies]
+tempfile = "3"
+wiremock = "0.6"
+
+[[bin]]
+name = "agentics"
+path = "src/main.rs"
