@@ -21,7 +21,7 @@ dependencies = [
 
 [[package]]
 name = "agentics-cli"
-version = "0.1.0"
+version = "0.0.0"
 
 [[package]]
 name = "aho-corasick"
@@ -55,7 +55,7 @@ checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
 name = "api-server"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -1295,7 +1295,7 @@ dependencies = [
 
 [[package]]
 name = "integration-tests"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "api-server",
@@ -2399,7 +2399,7 @@ dependencies = [
 
 [[package]]
 name = "shared"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3775,7 +3775,7 @@ dependencies = [
 
 [[package]]
 name = "worker"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "bollard",

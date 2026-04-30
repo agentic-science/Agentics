@@ -8,6 +8,10 @@ members = [
     "frontends/agentics-cli",
 ]
 
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+
 [workspace.dependencies]
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
