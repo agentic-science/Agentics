@@ -22,13 +22,13 @@ cargo install sqlx-cli --no-default-features --features postgres,rustls
 From the repository root:
 
 ```bash
-docker compose up -d postgres
+docker compose -f docker/platform-db/docker-compose.yml up -d platform-db
 ```
 
 Verify Postgres is reachable:
 
 ```bash
-docker compose ps postgres
+docker compose -f docker/platform-db/docker-compose.yml ps platform-db
 ```
 
 ## 2. Run Migrations
@@ -314,11 +314,11 @@ bun run build
 Stop services with Ctrl-C in each terminal, then:
 
 ```bash
-docker compose down
+docker compose -f docker/platform-db/docker-compose.yml down
 ```
 
 For a clean database next time:
 
 ```bash
-docker compose down -v
+docker compose -f docker/platform-db/docker-compose.yml down -v
 ```

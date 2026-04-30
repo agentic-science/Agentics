@@ -1,5 +1,5 @@
 services:
-  postgres:
+  platform-db:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: llm_oj

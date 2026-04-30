@@ -62,7 +62,7 @@ bun install
 ### 2. Start Postgres
 
 ```bash
-docker compose up -d postgres
+docker compose -f docker/platform-db/docker-compose.yml up -d platform-db
 ```
 
 The compose file exposes Postgres at:
@@ -317,13 +317,13 @@ bun run build
 Stop local infrastructure:
 
 ```bash
-docker compose down
+docker compose -f docker/platform-db/docker-compose.yml down
 ```
 
 Remove the Postgres volume if you want a clean database next time:
 
 ```bash
-docker compose down -v
+docker compose -f docker/platform-db/docker-compose.yml down -v
 ```
 
 ## License

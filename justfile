@@ -1,18 +1,20 @@
 set fallback := true
 
+platform_db_compose := "docker compose -f docker/platform-db/docker-compose.yml"
+
 # Install Git pre-commit hooks
 setup-hooks:
     chmod +x .commit-hooks/pre-commit
     git config core.hooksPath .commit-hooks
     @echo "Pre-commit hooks installed."
 
-# Start infrastructure (Postgres)
+# Start infrastructure (platform database)
 infra-up:
-    docker compose up -d postgres
+    {{platform_db_compose}} up -d platform-db
 
 # Stop infrastructure
 infra-down:
-    docker compose down
+    {{platform_db_compose}} down
 
 # Run database migrations
 migrate:
