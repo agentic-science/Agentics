@@ -237,10 +237,32 @@ pub async fn create_submission_with_job(
     })
 }
 
+/// Verify that the published problem accepts the requested evaluation mode.
+///
+/// API handlers call this before storing uploaded artifacts so disabled
+/// validation does not consume storage; write paths repeat the same check inside
+/// their transaction as the authoritative guard.
+pub async fn ensure_published_problem_supports_eval_type(
+    pool: &PgPool,
+    problem_id: &str,
+    eval_type: ScoringMode,
+) -> Result<()> {
+    let problem = get_published_problem(pool, problem_id).await?;
+    let problem = problem.ok_or_else(|| AppError::BadRequest("problem not found".to_string()))?;
+    let spec: ProblemBundleSpec =
+        serde_json::from_value(problem.spec_json).map_err(|e| AppError::Internal(e.to_string()))?;
+    ensure_problem_supports_eval_type(&spec, eval_type)
+}
+
 fn ensure_problem_supports_eval_type(
     spec: &ProblemBundleSpec,
     eval_type: ScoringMode,
 ) -> Result<()> {
+    if eval_type == ScoringMode::Validation && !spec.datasets.validation_enabled {
+        return Err(AppError::BadRequest(
+            "validation pass is disabled for this problem version".to_string(),
+        ));
+    }
     if eval_type == ScoringMode::Official && !spec.datasets.heldout_enabled {
         return Err(AppError::BadRequest(
             "problem version does not support official runs".to_string(),
@@ -735,11 +757,7 @@ pub async fn queue_evaluation_job(
     let spec: ProblemBundleSpec =
         serde_json::from_value(spec_json).map_err(|e| AppError::Internal(e.to_string()))?;
 
-    if input.eval_type == ScoringMode::Official && !spec.datasets.heldout_enabled {
-        return Err(AppError::BadRequest(
-            "problem version does not support heldout official run".to_string(),
-        ));
-    }
+    ensure_problem_supports_eval_type(&spec, input.eval_type)?;
 
     let payload = serde_json::to_value(EvaluationJobPayload {
         artifact_path: row.try_get("artifact_path")?,

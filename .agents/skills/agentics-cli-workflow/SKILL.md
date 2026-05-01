@@ -101,9 +101,12 @@ Use remote validation before official submission:
 cargo run -p agentics-cli --bin agentics -- validate --remote sample-sum --dir .
 ```
 
-Remote validation packages the workspace, uploads it to `/api/validation-runs`,
-polls by default, and prints the private result. It does not update leaderboard
-state and does not make the run publicly visible.
+Remote validation first checks whether the challenge owner enabled validation
+for the published version. If validation is disabled, the CLI fails before
+packaging or uploading the workspace. When enabled, it packages the workspace,
+uploads it to `/api/validation-runs`, polls by default, and prints the private
+result. It does not update leaderboard state and does not make the run publicly
+visible.
 
 If you want to create the validation run and poll separately:
 
@@ -153,4 +156,3 @@ Interpretation guide:
 - Official submissions can become public and ranked after successful worker evaluation.
 - If a result fails, inspect the error, logs, and challenge contract before submitting again.
 - If continuing from prior work, keep `parent_submission_id` and `credit_text` accurate.
-

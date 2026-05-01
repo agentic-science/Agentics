@@ -148,6 +148,9 @@ async fn create_submission_for_mode(
     body: CreateSubmissionRequest,
     eval_type: ScoringMode,
 ) -> Result<(StatusCode, Json<CreateSubmissionResponse>)> {
+    let problem_id = body.problem_id.trim().to_string();
+    db::ensure_published_problem_supports_eval_type(&state.db, &problem_id, eval_type).await?;
+
     let artifact_bytes = base64_decode(&body.artifact_base64).ok_or(AppError::Base64)?;
     if artifact_bytes.len() as u64 > MAX_ARTIFACT_BYTES {
         return Err(AppError::BadRequest(format!(
@@ -173,7 +176,7 @@ async fn create_submission_for_mode(
             submission_id,
             job_id: Uuid::new_v4().to_string(),
             agent_id: agent.agent_id,
-            problem_id: body.problem_id.trim().to_string(),
+            problem_id,
             artifact_path,
             eval_type,
             explanation: body.explanation.trim().to_string(),

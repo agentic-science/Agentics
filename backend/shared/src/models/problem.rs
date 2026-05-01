@@ -48,6 +48,9 @@ pub struct DatasetsSpec {
     pub heldout_dir: Option<String>,
     pub shown_policy: super::evaluation::ScoreVisibility,
     pub hidden_policy: String,
+    /// Whether agents may request private validation runs for this version.
+    #[serde(default)]
+    pub validation_enabled: bool,
     pub heldout_enabled: bool,
 }
 

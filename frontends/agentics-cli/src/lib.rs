@@ -173,6 +173,15 @@ async fn validate(
         bail!("local validation is not implemented yet; pass --remote to use the Agentics API");
     }
 
+    let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
+    let problem = client.get_problem(&args.problem_id).await?;
+    if !problem.spec.datasets.validation_enabled {
+        bail!(
+            "validation pass is disabled for problem `{}`; submit officially or ask the challenge owner to enable validation",
+            problem.id
+        );
+    }
+
     let package = package::package_solution_workspace(&args.dir)?;
     let request = create_submission_request(
         args.problem_id,
@@ -182,7 +191,6 @@ async fn validate(
         args.credit_text,
     );
 
-    let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
     let response = client.create_validation_run(&request).await?;
     if args.no_wait {
         return output::render_create_validation_run(&response, &package, output_format);
@@ -536,6 +544,11 @@ mod tests {
     #[tokio::test]
     async fn validate_remote_posts_validation_run_and_polls_status() {
         let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/public/problems/sample-sum"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(problem_detail_json(true)))
+            .mount(&server)
+            .await;
         Mock::given(method("POST"))
             .and(path("/api/validation-runs"))
             .and(header("authorization", "Bearer test-token"))
@@ -641,5 +654,89 @@ mod tests {
         assert_eq!(body["problem_id"], "sample-sum");
         assert_eq!(body["explanation"], "quick check");
         assert!(body["artifact_base64"].as_str().expect("artifact").len() > 20);
+    }
+
+    #[tokio::test]
+    async fn validate_remote_rejects_disabled_validation_before_packaging() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/public/problems/sample-sum"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(problem_detail_json(false)))
+            .mount(&server)
+            .await;
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let workspace_dir = temp.path().join("workspace");
+        std::fs::create_dir(&workspace_dir).expect("workspace dir");
+
+        let config_path = temp.path().join("config.toml");
+        let cli = Cli::parse_from([
+            "agentics",
+            "--config",
+            config_path.to_str().expect("utf8 path"),
+            "--api-base-url",
+            &server.uri(),
+            "--token",
+            "test-token",
+            "validate",
+            "--remote",
+            "sample-sum",
+            "--dir",
+            workspace_dir.to_str().expect("utf8 path"),
+        ]);
+
+        let error = execute(cli, Environment::default())
+            .await
+            .expect_err("validation should be rejected before packaging");
+        let requests = server
+            .received_requests()
+            .await
+            .expect("requests should be recorded");
+
+        assert!(error.to_string().contains("validation pass is disabled"));
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].url.path(), "/api/public/problems/sample-sum");
+    }
+
+    fn problem_detail_json(validation_enabled: bool) -> serde_json::Value {
+        json!({
+            "id": "sample-sum",
+            "slug": "sample-sum",
+            "title": "Sample Sum",
+            "description": "Add numbers",
+            "current_version": {
+                "id": "version-1",
+                "version": "v1"
+            },
+            "spec": {
+                "schema_version": 1,
+                "problem_id": "sample-sum",
+                "problem_title": "Sample Sum",
+                "problem_version": "v1",
+                "submission": {
+                    "format": "python_zip_project",
+                    "language": "python",
+                    "entrypoint": "main.py"
+                },
+                "scorer": {
+                    "entrypoint": "scorer/run.py",
+                    "result_file": "result.json"
+                },
+                "limits": {
+                    "time_limit_sec": 2.0,
+                    "memory_limit_mb": 128
+                },
+                "datasets": {
+                    "shown_dir": "shown",
+                    "hidden_dir": "hidden",
+                    "shown_policy": "full",
+                    "hidden_policy": "score_only",
+                    "validation_enabled": validation_enabled,
+                    "heldout_enabled": true,
+                    "heldout_dir": "heldout"
+                }
+            },
+            "statement_markdown": "# Sample Sum"
+        })
     }
 }

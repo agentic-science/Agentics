@@ -2,10 +2,32 @@
 
 mod helpers;
 
+use std::path::Path;
+
 use helpers::{
-    api_url, examples_problems_root, run_worker_once, sample_sum_submission, spawn_app_with_config,
-    submission_zip_base64, test_config,
+    api_url, copy_dir_all, examples_problems_root, run_worker_once, sample_sum_submission,
+    spawn_app_with_config, submission_zip_base64, test_config,
 };
+
+fn create_validation_disabled_problem(root: &Path) {
+    let source = examples_problems_root().join("sample-sum/v1");
+    let bundle_dir = root.join("validation-disabled/v1");
+    copy_dir_all(&source, &bundle_dir);
+
+    let spec_path = bundle_dir.join("spec.json");
+    let mut spec: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(&spec_path).expect("failed to read copied spec"),
+    )
+    .expect("failed to parse copied spec");
+    spec["problem_id"] = serde_json::json!("validation-disabled");
+    spec["problem_title"] = serde_json::json!("Validation Disabled");
+    spec["datasets"]["validation_enabled"] = serde_json::json!(false);
+    std::fs::write(
+        &spec_path,
+        serde_json::to_string_pretty(&spec).expect("failed to serialize spec"),
+    )
+    .expect("failed to write copied spec");
+}
 
 #[sqlx::test(migrations = "../migrations")]
 async fn worker_completes_official_submission(pool: sqlx::PgPool) {
@@ -184,6 +206,60 @@ async fn worker_completes_private_validation_run_without_leaderboard(pool: sqlx:
         .await
         .expect("failed to query leaderboard count");
     assert_eq!(leaderboard_count.0, 0);
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn validation_run_is_rejected_when_problem_disables_validation(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let problems = tempfile::tempdir().expect("failed to create problems tempdir");
+    create_validation_disabled_problem(problems.path());
+    let config = test_config(storage.path(), problems.path());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "name": "validation-disabled-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+
+    let response = client
+        .post(api_url(&app, "/api/validation-runs"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "problem_id": "validation-disabled",
+            "artifact_base64": "not-base64",
+            "explanation": "should fail before artifact decode"
+        }))
+        .send()
+        .await
+        .expect("failed to request disabled validation");
+    assert_eq!(response.status(), 400);
+
+    let error: serde_json::Value = response.json().await.expect("failed to decode error");
+    assert_eq!(error["error"], "bad_request");
+    assert!(
+        error["message"]
+            .as_str()
+            .expect("error message")
+            .contains("validation pass is disabled")
+    );
+
+    let submission_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM submissions")
+        .fetch_one(&pool)
+        .await
+        .expect("failed to query submission count");
+    let job_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM evaluation_jobs")
+        .fetch_one(&pool)
+        .await
+        .expect("failed to query job count");
+    assert_eq!(submission_count.0, 0);
+    assert_eq!(job_count.0, 0);
 }
 
 #[sqlx::test(migrations = "../migrations")]

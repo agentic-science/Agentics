@@ -81,6 +81,12 @@ export default async function ProblemPage({
               <strong>{detail.spec.datasets.hidden_policy}</strong>
             </div>
             <div>
+              <span>Validation</span>
+              <strong>
+                {detail.spec.datasets.validation_enabled ? "启用" : "关闭"}
+              </strong>
+            </div>
+            <div>
               <span>Heldout</span>
               <strong>
                 {detail.spec.datasets.heldout_enabled ? "启用" : "关闭"}

@@ -280,9 +280,43 @@ mod tests {
                 heldout_dir: Some("heldout".to_string()),
                 shown_policy: ScoreVisibility::Full,
                 hidden_policy: "score_only".to_string(),
+                validation_enabled: true,
                 heldout_enabled: true,
             },
         }
+    }
+
+    #[test]
+    fn missing_validation_enabled_defaults_to_false() {
+        let spec: ProblemBundleSpec = serde_json::from_value(serde_json::json!({
+            "schema_version": 1,
+            "problem_id": "sample-sum",
+            "problem_title": "Sample Sum",
+            "problem_version": "v1",
+            "submission": {
+                "format": "python_zip_project",
+                "language": "python",
+                "entrypoint": "main.py"
+            },
+            "scorer": {
+                "entrypoint": "scorer/run.py",
+                "result_file": "result.json"
+            },
+            "limits": {
+                "time_limit_sec": 2.0,
+                "memory_limit_mb": 128
+            },
+            "datasets": {
+                "shown_dir": "shown",
+                "hidden_dir": "hidden",
+                "shown_policy": "full",
+                "hidden_policy": "score_only",
+                "heldout_enabled": false
+            }
+        }))
+        .expect("legacy spec should deserialize");
+
+        assert!(!spec.datasets.validation_enabled);
     }
 
     #[test]

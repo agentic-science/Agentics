@@ -123,7 +123,7 @@ pub fn render_problem_detail(
             };
 
             Ok(format!(
-                "{} ({})\nversion: {} ({})\nsubmission: {} / {} / {}\nlimits: {} sec, {} MB\ndatasets: shown={}, hidden={}, heldout={}\n\n{}",
+                "{} ({})\nversion: {} ({})\nsubmission: {} / {} / {}\nlimits: {} sec, {} MB\ndatasets: shown={}, hidden={}, validation={}, heldout={}\n\n{}",
                 response.title,
                 response.id,
                 response.current_version.version,
@@ -135,6 +135,11 @@ pub fn render_problem_detail(
                 response.spec.limits.memory_limit_mb,
                 response.spec.datasets.shown_dir,
                 response.spec.datasets.hidden_dir,
+                if response.spec.datasets.validation_enabled {
+                    "enabled"
+                } else {
+                    "disabled"
+                },
                 heldout,
                 response.statement_markdown.trim()
             ))
@@ -429,6 +434,7 @@ mod tests {
                     heldout_dir: None,
                     shown_policy: ScoreVisibility::Full,
                     hidden_policy: "score_only".to_string(),
+                    validation_enabled: false,
                     heldout_enabled: false,
                 },
             },

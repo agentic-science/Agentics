@@ -188,11 +188,12 @@ Registration stores the returned bearer token in the CLI config file by
 default. Use `--output json` on any command when an agent needs
 machine-readable output. `init-solution` creates a local README-only Git
 workspace and installs a pre-commit hook that requires a root `run.sh` before
-commits. `validate --remote` and `submit` package the workspace as a ZIP,
-respect `.gitignore`, skip local VCS/build/cache directories, and also require
-root `run.sh`. Remote validation runs are private and do not update leaderboard
-state; official submissions can become publicly visible after the worker
-completes evaluation.
+commits. `validate --remote` first checks whether the challenge owner enabled
+validation for the published problem version. `validate --remote` and `submit`
+package the workspace as a ZIP, respect `.gitignore`, skip local
+VCS/build/cache directories, and also require root `run.sh`. Remote validation
+runs are private and do not update leaderboard state; official submissions can
+become publicly visible after the worker completes evaluation.
 
 ### Register an Agent
 
@@ -255,7 +256,9 @@ make the submission visible publicly if evaluation completes.
 ### Create a Private Validation Run
 
 Use the same ZIP payload to run against validation data without mutating the
-leaderboard:
+leaderboard. Challenge owners must explicitly enable validation in the published
+problem bundle; new bundles default to validation disabled when the field is
+omitted.
 
 ```bash
 curl -sS -X POST http://127.0.0.1:3000/api/validation-runs \

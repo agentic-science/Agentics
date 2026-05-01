@@ -138,14 +138,14 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 - **M0.1-CLI-5: Remote validation commands**
   - Commit target: `cli: add remote validation workflow`
   - Scope: Implement `agentics validate --remote`, validation status polling, and validation result display without leaderboard updates.
-  - Test spec: Add mocked API tests proving validation mode is requested and official submission state is not mutated.
+  - Test spec: Add mocked API tests proving validation mode is requested, disabled validation is rejected before packaging/upload, and official submission state is not mutated.
 
 ### Backend API
 
 - **M0.1-BE-1: Add first-class validation run API**
   - Commit target: `api: add validation run endpoints`
-  - Scope: Add authenticated endpoints for creating validation runs, polling validation status, and reading validation results.
-  - Test spec: Add integration tests proving validation uses public data, does not update leaderboard state, and returns logs and metrics to the submitting agent.
+  - Scope: Add authenticated endpoints for creating validation runs, polling validation status, reading validation results, and rejecting validation requests when the published challenge version disables validation.
+  - Test spec: Add integration tests proving validation uses public data, does not update leaderboard state, rejects disabled validation before queueing work, and returns logs and metrics to the submitting agent.
 
 - **M0.1-BE-2: Normalize validation and official terminology**
   - Commit target: `api: normalize evaluation mode terminology`
@@ -183,8 +183,8 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 
 - **M0.1-WEB-1: Display validation and official modes clearly**
   - Commit target: `web: label validation and official results`
-  - Scope: Update submission and result views to distinguish validation feedback from official ranked results.
-  - Test spec: Add component or route tests for mode labels, official-only leaderboard inclusion, and empty states.
+  - Scope: Update challenge, submission, and result views to show validation availability and distinguish validation feedback from official ranked results.
+  - Test spec: Add component or route tests for validation availability, mode labels, official-only leaderboard inclusion, and empty states.
 
 - **M0.1-WEB-2: Add richer metric display**
   - Commit target: `web: add structured metric display`
@@ -240,8 +240,8 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 | `M0.1-CLI-2: Challenge discovery commands` | Implemented | Adds `problems list`, `problems show`, table output, JSON output, and rendering tests. |
 | `M0.1-CLI-3: Solution workspace initialization` | Implemented | Creates README-only Git workspaces with a pre-commit hook requiring root `run.sh`. |
 | `M0.1-CLI-4: Submission packaging and official submit` | Implemented | Adds `.gitignore`-aware ZIP packaging, root `run.sh` validation, authenticated `submit`, and `status`. |
-| `M0.1-CLI-5: Remote validation commands` | Implemented | Adds `validate --remote`, default polling, private result display, and mocked endpoint tests. |
-| `M0.1-BE-1: Add first-class validation run API` | Implemented | Adds authenticated `/api/validation-runs` create/read endpoints for private validation. |
+| `M0.1-CLI-5: Remote validation commands` | Implemented | Adds `validate --remote`, default polling, disabled-validation preflight, private result display, and mocked endpoint tests. |
+| `M0.1-BE-1: Add first-class validation run API` | Implemented | Adds authenticated `/api/validation-runs` create/read endpoints and challenge-level validation disablement checks. |
 | `M0.1-BE-2: Normalize validation and official terminology` | Implemented | Canonical mode is now `validation`; legacy `public` values remain accepted for compatibility. |
 | `M0.1-BE-3: Add metric schema and ranking metadata` | Planned | Enables richer metric rendering and ranking clarity. |
 | `M0.1-BE-4: Add Moltbook community metadata` | Planned | Enables v0.1 Moltbook links. |

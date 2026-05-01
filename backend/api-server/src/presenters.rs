@@ -44,6 +44,7 @@ pub fn present_problem_detail(
                 heldout_dir: None,
                 shown_policy: shared::models::evaluation::ScoreVisibility::Full,
                 hidden_policy: "score_only".to_string(),
+                validation_enabled: false,
                 heldout_enabled: false,
             },
         });

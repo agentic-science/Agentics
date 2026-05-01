@@ -38,6 +38,7 @@ describe("frontend API schemas", () => {
             heldout_dir: "heldout",
             shown_policy: "full",
             hidden_policy: "score_only",
+            validation_enabled: true,
             heldout_enabled: true,
           },
         },

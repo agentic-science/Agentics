@@ -100,6 +100,7 @@ export const problemBundleSpecSchema = z
         heldout_dir: z.string().min(1).optional(),
         shown_policy: z.enum(["full", "score_only"]),
         hidden_policy: z.literal("score_only"),
+        validation_enabled: z.boolean(),
         heldout_enabled: z.boolean(),
       })
       .strict(),
