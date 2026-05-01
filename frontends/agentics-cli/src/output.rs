@@ -2,10 +2,13 @@ use anyhow::Result;
 use serde::Serialize;
 use serde_json::json;
 use shared::models::problem::{ProblemDetailResponse, ProblemListResponse};
-use shared::models::request::RegisterAgentResponse;
+use shared::models::request::{
+    CreateSubmissionResponse, RegisterAgentResponse, SubmissionResponse,
+};
 
 use crate::cli::OutputFormat;
 use crate::config::ResolvedSettings;
+use crate::package::SubmissionPackage;
 use crate::workspace::InitSolutionSummary;
 
 pub fn render_register_agent(
@@ -152,8 +155,81 @@ pub fn render_init_solution(summary: &InitSolutionSummary, format: OutputFormat)
     }
 }
 
+pub fn render_create_submission(
+    response: &CreateSubmissionResponse,
+    package: &SubmissionPackage,
+    format: OutputFormat,
+) -> Result<String> {
+    match format {
+        OutputFormat::Json => pretty_json(&json!({
+            "submission": response,
+            "package": {
+                "workspace_dir": package.workspace_dir,
+                "file_count": package.file_count,
+                "uncompressed_bytes": package.uncompressed_bytes,
+                "zip_bytes": package.bytes.len(),
+            }
+        })),
+        OutputFormat::Table => Ok(format!(
+            "Submitted {}\nproblem: {}\nstatus: {}\nevaluation_job: {}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}",
+            response.id,
+            response.problem_id,
+            response.status,
+            response.evaluation_job_id,
+            package.file_count,
+            package.uncompressed_bytes,
+            package.bytes.len(),
+            package.workspace_dir.display()
+        )),
+    }
+}
+
+pub fn render_submission_status(
+    response: &SubmissionResponse,
+    format: OutputFormat,
+) -> Result<String> {
+    match format {
+        OutputFormat::Json => pretty_json(response),
+        OutputFormat::Table => {
+            let evaluation_job = response
+                .evaluation_job
+                .as_ref()
+                .map(|job| format!("{} ({})", job.id, status_label(&job.status)))
+                .unwrap_or_else(|| "none".to_string());
+            let public_eval = response
+                .public_evaluation
+                .as_ref()
+                .map(|eval| status_label(&eval.status))
+                .unwrap_or_else(|| "none".to_string());
+            let official_eval = response
+                .official_evaluation
+                .as_ref()
+                .map(|eval| status_label(&eval.status))
+                .unwrap_or_else(|| "none".to_string());
+
+            Ok(format!(
+                "submission: {}\nproblem: {}\nstatus: {}\nevaluation_job: {}\npublic_evaluation: {}\nofficial_evaluation: {}\nvisible_after_eval: {}",
+                response.id,
+                response.problem_id,
+                response.status,
+                evaluation_job,
+                public_eval,
+                official_eval,
+                response.visible_after_eval
+            ))
+        }
+    }
+}
+
 fn pretty_json<T: Serialize>(value: &T) -> Result<String> {
     Ok(serde_json::to_string_pretty(value)?)
+}
+
+fn status_label<T: Serialize>(status: &T) -> String {
+    serde_json::to_value(status)
+        .ok()
+        .and_then(|value| value.as_str().map(ToOwned::to_owned))
+        .unwrap_or_else(|| "unknown".to_string())
 }
 
 fn render_table(headers: &[&str], rows: &[Vec<String>]) -> String {

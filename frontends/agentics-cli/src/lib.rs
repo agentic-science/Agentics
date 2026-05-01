@@ -2,15 +2,17 @@ mod api;
 mod cli;
 mod config;
 mod output;
+mod package;
 mod workspace;
 
 use anyhow::{Context, Result};
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use clap::Parser;
-use shared::models::request::RegisterAgentRequest;
+use shared::models::request::{CreateSubmissionRequest, RegisterAgentRequest};
 
 use crate::api::ApiClient;
 use crate::cli::{
-    AuthCommand, Cli, Commands, ConfigCommand, ConfigKey, ProblemsCommand, RegisterArgs,
+    AuthCommand, Cli, Commands, ConfigCommand, ConfigKey, ProblemsCommand, RegisterArgs, SubmitArgs,
 };
 use crate::config::{
     CliConfig, ConfigStore, Environment, ResolvedSettings, normalize_api_base_url,
@@ -68,6 +70,12 @@ pub async fn execute(cli: Cli, env: Environment) -> Result<String> {
             let problem = client.get_problem(&args.problem_id).await?;
             let summary = workspace::init_solution_workspace(&problem, args.dir)?;
             output::render_init_solution(&summary, cli.output)
+        }
+        Commands::Submit(args) => submit(args, cli.output, &settings).await,
+        Commands::Status(args) => {
+            let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
+            let response = client.get_submission(&args.submission_id).await?;
+            output::render_submission_status(&response, cli.output)
         }
     }
 }
@@ -132,6 +140,26 @@ fn parse_model_info(raw: &str) -> Result<serde_json::Value> {
     serde_json::from_str(raw).context("--model-info-json must be valid JSON")
 }
 
+async fn submit(
+    args: SubmitArgs,
+    output_format: cli::OutputFormat,
+    settings: &ResolvedSettings,
+) -> Result<String> {
+    let package = package::package_solution_workspace(&args.dir)?;
+    let request = CreateSubmissionRequest {
+        problem_id: args.problem_id,
+        artifact_base64: STANDARD.encode(&package.bytes),
+        explanation: args.explanation,
+        parent_submission_id: args.parent_submission_id,
+        credit_text: args.credit_text,
+    };
+
+    let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
+    let response = client.create_submission(&request).await?;
+
+    output::render_create_submission(&response, &package, output_format)
+}
+
 fn config_path(cli: &Cli) -> Result<std::path::PathBuf> {
     match &cli.config {
         Some(path) => Ok(path.clone()),
@@ -143,7 +171,7 @@ fn config_path(cli: &Cli) -> Result<std::path::PathBuf> {
 mod tests {
     use clap::Parser;
     use serde_json::json;
-    use wiremock::matchers::{body_json, method, path};
+    use wiremock::matchers::{body_json, header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     use crate::cli::Cli;
@@ -312,5 +340,119 @@ mod tests {
         assert!(workspace_dir.join("README.md").is_file());
         assert!(workspace_dir.join(".git/hooks/pre-commit").is_file());
         assert!(!workspace_dir.join("run.sh").exists());
+    }
+
+    #[tokio::test]
+    async fn submit_packages_workspace_and_posts_authenticated_request() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/submissions"))
+            .and(header("authorization", "Bearer test-token"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+                "id": "submission-1",
+                "status": "queued",
+                "problem_id": "sample-sum",
+                "problem_version_id": "version-1",
+                "artifact_path": "submissions/submission-1.zip",
+                "evaluation_job_id": "job-1",
+                "created_at": "2026-05-01T00:00:00Z"
+            })))
+            .mount(&server)
+            .await;
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let workspace_dir = temp.path().join("workspace");
+        std::fs::create_dir(&workspace_dir).expect("workspace dir");
+        std::fs::write(
+            workspace_dir.join("run.sh"),
+            "#!/usr/bin/env bash\npython main.py\n",
+        )
+        .expect("run.sh");
+        std::fs::write(workspace_dir.join("main.py"), "print('ok')\n").expect("main.py");
+        std::fs::write(workspace_dir.join("ignored.txt"), "ignored").expect("ignored");
+        std::fs::write(workspace_dir.join(".gitignore"), "ignored.txt\n").expect("gitignore");
+
+        let config_path = temp.path().join("config.toml");
+        let cli = Cli::parse_from([
+            "agentics",
+            "--config",
+            config_path.to_str().expect("utf8 path"),
+            "--api-base-url",
+            &server.uri(),
+            "--token",
+            "test-token",
+            "submit",
+            "sample-sum",
+            "--dir",
+            workspace_dir.to_str().expect("utf8 path"),
+            "--explanation",
+            "first attempt",
+        ]);
+
+        let output = execute(cli, Environment::default())
+            .await
+            .expect("submit should succeed");
+        let requests = server
+            .received_requests()
+            .await
+            .expect("requests should be recorded");
+        let body: serde_json::Value =
+            serde_json::from_slice(&requests[0].body).expect("request body should be JSON");
+
+        assert!(output.contains("Submitted submission-1"));
+        assert_eq!(body["problem_id"], "sample-sum");
+        assert_eq!(body["explanation"], "first attempt");
+        assert!(body["artifact_base64"].as_str().expect("artifact").len() > 20);
+    }
+
+    #[tokio::test]
+    async fn status_fetches_authenticated_submission() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/submissions/submission-1"))
+            .and(header("authorization", "Bearer test-token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "submission-1",
+                "problem_id": "sample-sum",
+                "problem_title": "Sample Sum",
+                "problem_version_id": "version-1",
+                "agent_id": "agent-1",
+                "agent_name": "solver",
+                "status": "queued",
+                "explanation": "",
+                "parent_submission_id": null,
+                "credit_text": "",
+                "visible_after_eval": false,
+                "artifact_path": "submissions/submission-1.zip",
+                "evaluation_job": {
+                    "id": "job-1",
+                    "status": "queued"
+                },
+                "created_at": "2026-05-01T00:00:00Z",
+                "updated_at": "2026-05-01T00:00:00Z"
+            })))
+            .mount(&server)
+            .await;
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let config_path = temp.path().join("config.toml");
+        let cli = Cli::parse_from([
+            "agentics",
+            "--config",
+            config_path.to_str().expect("utf8 path"),
+            "--api-base-url",
+            &server.uri(),
+            "--token",
+            "test-token",
+            "status",
+            "submission-1",
+        ]);
+
+        let output = execute(cli, Environment::default())
+            .await
+            .expect("status should succeed");
+
+        assert!(output.contains("submission: submission-1"));
+        assert!(output.contains("evaluation_job: job-1 (queued)"));
     }
 }

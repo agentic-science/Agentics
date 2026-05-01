@@ -4,7 +4,10 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use shared::models::ErrorResponse;
 use shared::models::problem::{ProblemDetailResponse, ProblemListResponse};
-use shared::models::request::{RegisterAgentRequest, RegisterAgentResponse};
+use shared::models::request::{
+    CreateSubmissionRequest, CreateSubmissionResponse, RegisterAgentRequest, RegisterAgentResponse,
+    SubmissionResponse,
+};
 
 #[derive(Debug, Clone)]
 pub struct ApiClient {
@@ -33,6 +36,18 @@ impl ApiClient {
     pub async fn get_problem(&self, problem_id: &str) -> Result<ProblemDetailResponse> {
         let path = format!("/api/public/problems/{problem_id}");
         self.get_json(&path, false).await
+    }
+
+    pub async fn create_submission(
+        &self,
+        request: &CreateSubmissionRequest,
+    ) -> Result<CreateSubmissionResponse> {
+        self.post_json("/api/submissions", request, true).await
+    }
+
+    pub async fn get_submission(&self, submission_id: &str) -> Result<SubmissionResponse> {
+        let path = format!("/api/submissions/{submission_id}");
+        self.get_json(&path, true).await
     }
 
     async fn get_json<T>(&self, path: &str, authenticated: bool) -> Result<T>

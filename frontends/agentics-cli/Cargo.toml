@@ -5,14 +5,17 @@ edition.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
+base64 = { workspace = true }
 clap = { version = "4", features = ["derive"] }
 dirs = "6"
+ignore = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 shared = { workspace = true }
 tokio = { workspace = true }
 toml = "0.9"
+zip = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"

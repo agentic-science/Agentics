@@ -132,8 +132,8 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 
 - **M0.1-CLI-4: Submission packaging and official submit**
   - Commit target: `cli: add zip submission workflow`
-  - Scope: Implement ZIP packaging, archive validation, `agentics submit`, `agentics status <submission-id>`, and result display.
-  - Test spec: Add tests for ignore rules, size/file-count failures, generated ZIP layout, mocked submission creation, polling state transitions, and output rendering.
+  - Scope: Implement ZIP packaging that respects `.gitignore`, archive validation, `agentics submit`, `agentics status <submission-id>`, and result display.
+  - Test spec: Add tests for `.gitignore` behavior, missing or ignored `run.sh`, generated ZIP layout, mocked submission creation, authenticated status reads, and output rendering.
 
 - **M0.1-CLI-5: Remote validation commands**
   - Commit target: `cli: add remote validation workflow`
@@ -239,7 +239,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 | `M0.1-CLI-1: CLI configuration and authentication foundation` | Implemented | Adds config file loading, API URL and token overrides, `register`, `auth status`, and mocked HTTP tests. |
 | `M0.1-CLI-2: Challenge discovery commands` | Implemented | Adds `problems list`, `problems show`, table output, JSON output, and rendering tests. |
 | `M0.1-CLI-3: Solution workspace initialization` | Implemented | Creates README-only Git workspaces with a pre-commit hook requiring root `run.sh`. |
-| `M0.1-CLI-4: Submission packaging and official submit` | Planned | Depends on packaging rules and existing submission API. |
+| `M0.1-CLI-4: Submission packaging and official submit` | Implemented | Adds `.gitignore`-aware ZIP packaging, root `run.sh` validation, authenticated `submit`, and `status`. |
 | `M0.1-CLI-5: Remote validation commands` | Planned | Depends on first-class validation API. |
 | `M0.1-BE-1: Add first-class validation run API` | Planned | Backend prerequisite for remote validation. |
 | `M0.1-BE-2: Normalize validation and official terminology` | Planned | Coordinate with worker and API clients. |

@@ -46,6 +46,10 @@ pub enum Commands {
     Problems(ProblemsArgs),
     /// Initialize a local solution workspace for a challenge.
     InitSolution(InitSolutionArgs),
+    /// Package and submit a solution workspace.
+    Submit(SubmitArgs),
+    /// Show the status of one of this agent's submissions.
+    Status(StatusArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -130,4 +134,32 @@ pub struct InitSolutionArgs {
     /// Target workspace directory. Defaults to <challenge-id>-solution.
     #[arg(long, value_name = "PATH")]
     pub dir: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct SubmitArgs {
+    /// Challenge id or slug to submit against.
+    pub problem_id: String,
+
+    /// Workspace directory to package. Defaults to the current directory.
+    #[arg(long, value_name = "PATH", default_value = ".")]
+    pub dir: PathBuf,
+
+    /// Explanation to attach to the submission.
+    #[arg(long, default_value = "")]
+    pub explanation: String,
+
+    /// Parent submission id when this submission is an iteration.
+    #[arg(long)]
+    pub parent_submission_id: Option<String>,
+
+    /// Optional credit or provenance text.
+    #[arg(long, default_value = "")]
+    pub credit_text: String,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct StatusArgs {
+    /// Submission id returned by `agentics submit`.
+    pub submission_id: String,
 }

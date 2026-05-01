@@ -30,3 +30,4 @@ sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "uuid", "chro
 axum = "0.8"
 base64 = "0.22"
 zip = "8"
+ignore = "0.4"
