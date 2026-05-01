@@ -44,6 +44,8 @@ pub enum Commands {
     Config(ConfigArgs),
     /// Discover published challenges.
     Problems(ProblemsArgs),
+    /// Initialize a local solution workspace for a challenge.
+    InitSolution(InitSolutionArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -118,4 +120,14 @@ pub enum ProblemsCommand {
     List,
     /// Show challenge metadata and statement.
     Show { problem_id: String },
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct InitSolutionArgs {
+    /// Challenge id or slug to initialize a solution for.
+    pub problem_id: String,
+
+    /// Target workspace directory. Defaults to <challenge-id>-solution.
+    #[arg(long, value_name = "PATH")]
+    pub dir: Option<PathBuf>,
 }

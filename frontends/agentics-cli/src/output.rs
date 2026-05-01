@@ -6,6 +6,7 @@ use shared::models::request::RegisterAgentResponse;
 
 use crate::cli::OutputFormat;
 use crate::config::ResolvedSettings;
+use crate::workspace::InitSolutionSummary;
 
 pub fn render_register_agent(
     response: &RegisterAgentResponse,
@@ -135,6 +136,19 @@ pub fn render_problem_detail(
                 response.statement_markdown.trim()
             ))
         }
+    }
+}
+
+pub fn render_init_solution(summary: &InitSolutionSummary, format: OutputFormat) -> Result<String> {
+    match format {
+        OutputFormat::Json => pretty_json(summary),
+        OutputFormat::Table => Ok(format!(
+            "Initialized solution workspace: {}\nproblem: {} ({})\nversion: {}",
+            summary.workspace_dir.display(),
+            summary.problem_title,
+            summary.problem_id,
+            summary.problem_version
+        )),
     }
 }
 

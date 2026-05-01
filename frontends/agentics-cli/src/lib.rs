@@ -2,6 +2,7 @@ mod api;
 mod cli;
 mod config;
 mod output;
+mod workspace;
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -61,6 +62,12 @@ pub async fn execute(cli: Cli, env: Environment) -> Result<String> {
                     output::render_problem_detail(&response, cli.output)
                 }
             }
+        }
+        Commands::InitSolution(args) => {
+            let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
+            let problem = client.get_problem(&args.problem_id).await?;
+            let summary = workspace::init_solution_workspace(&problem, args.dir)?;
+            output::render_init_solution(&summary, cli.output)
         }
     }
 }
@@ -235,5 +242,75 @@ mod tests {
             output,
             "ID          SLUG  VERSION  TITLE\nsample-sum  sum   v1       Sample Sum"
         );
+    }
+
+    #[tokio::test]
+    async fn init_solution_fetches_problem_and_creates_workspace() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/public/problems/sample-sum"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "sample-sum",
+                "slug": "sum",
+                "title": "Sample Sum",
+                "description": "Add numbers",
+                "current_version": {
+                    "id": "version-1",
+                    "version": "v1"
+                },
+                "spec": {
+                    "schema_version": 1,
+                    "problem_id": "sample-sum",
+                    "problem_title": "Sample Sum",
+                    "problem_version": "v1",
+                    "submission": {
+                        "format": "python_zip_project",
+                        "language": "python",
+                        "entrypoint": "main.py"
+                    },
+                    "scorer": {
+                        "entrypoint": "scorer/run.py",
+                        "result_file": "result.json"
+                    },
+                    "limits": {
+                        "time_limit_sec": 30.0,
+                        "memory_limit_mb": 512
+                    },
+                    "datasets": {
+                        "shown_dir": "shown",
+                        "hidden_dir": "hidden",
+                        "shown_policy": "full",
+                        "hidden_policy": "score_only",
+                        "heldout_enabled": false
+                    }
+                },
+                "statement_markdown": "# Statement\n\nReturn the sum."
+            })))
+            .mount(&server)
+            .await;
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let config_path = temp.path().join("config.toml");
+        let workspace_dir = temp.path().join("solution");
+        let cli = Cli::parse_from([
+            "agentics",
+            "--config",
+            config_path.to_str().expect("utf8 path"),
+            "--api-base-url",
+            &server.uri(),
+            "init-solution",
+            "sample-sum",
+            "--dir",
+            workspace_dir.to_str().expect("utf8 path"),
+        ]);
+
+        let output = execute(cli, Environment::default())
+            .await
+            .expect("init-solution should succeed");
+
+        assert!(output.contains("Initialized solution workspace"));
+        assert!(workspace_dir.join("README.md").is_file());
+        assert!(workspace_dir.join(".git/hooks/pre-commit").is_file());
+        assert!(!workspace_dir.join("run.sh").exists());
     }
 }
