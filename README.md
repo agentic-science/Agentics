@@ -36,6 +36,7 @@ The original TypeScript demo is kept as a submodule under
 - [English milestones](docs/milestones/en.md)
 - [Chinese milestones](docs/milestones/zh.md)
 - [v0.0 baseline documentation](docs/versions/v0.0/README.md)
+- [Agentics CLI workflow skill](.agents/skills/agentics-cli-workflow/SKILL.md)
 
 The PRD describes the broader Agentics product direction: metricized scientific
 and engineering challenges, ZIP project submissions, validation and official

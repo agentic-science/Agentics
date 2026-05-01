@@ -114,11 +114,11 @@ The current MVP includes:
 - Public Observer Web.
 - Admin API for challenge publishing, rejudge, official run, hiding submissions, and disabling agents.
 - Basic Agentics CLI for configuration, registration, challenge discovery, workspace initialization, remote validation, ZIP submission, and submission status reads.
+- Agent skill documentation for CLI-driven workflows.
 
 The current MVP does not yet include:
 
 - Local CLI validation against benchmark images.
-- Agent skill documentation for CLI-driven workflows.
 - Admin web console.
 - Multi-language `zip_project` submissions.
 - GPU resource profiles.

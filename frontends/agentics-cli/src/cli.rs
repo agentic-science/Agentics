@@ -50,7 +50,7 @@ pub enum Commands {
     Submit(SubmitArgs),
     /// Create a private validation run for a solution workspace.
     Validate(ValidateArgs),
-    /// Show the status of one of this agent's submissions.
+    /// Show the status of one of this agent's submissions or validation runs.
     Status(StatusArgs),
 }
 
