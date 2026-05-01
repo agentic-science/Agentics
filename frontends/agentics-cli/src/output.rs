@@ -184,6 +184,35 @@ pub fn render_create_submission(
     }
 }
 
+pub fn render_create_validation_run(
+    response: &CreateSubmissionResponse,
+    package: &SubmissionPackage,
+    format: OutputFormat,
+) -> Result<String> {
+    match format {
+        OutputFormat::Json => pretty_json(&json!({
+            "validation_run": response,
+            "package": {
+                "workspace_dir": package.workspace_dir,
+                "file_count": package.file_count,
+                "uncompressed_bytes": package.uncompressed_bytes,
+                "zip_bytes": package.bytes.len(),
+            }
+        })),
+        OutputFormat::Table => Ok(format!(
+            "Created validation run {}\nproblem: {}\nstatus: {}\nevaluation_job: {}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}",
+            response.id,
+            response.problem_id,
+            response.status,
+            response.evaluation_job_id,
+            package.file_count,
+            package.uncompressed_bytes,
+            package.bytes.len(),
+            package.workspace_dir.display()
+        )),
+    }
+}
+
 pub fn render_submission_status(
     response: &SubmissionResponse,
     format: OutputFormat,
@@ -221,6 +250,44 @@ pub fn render_submission_status(
     }
 }
 
+pub fn render_validation_run_status(
+    response: &SubmissionResponse,
+    format: OutputFormat,
+) -> Result<String> {
+    match format {
+        OutputFormat::Json => pretty_json(response),
+        OutputFormat::Table => {
+            let evaluation_job = response
+                .evaluation_job
+                .as_ref()
+                .map(|job| format!("{} ({})", job.id, status_label(&job.status)))
+                .unwrap_or_else(|| "none".to_string());
+            let validation_eval = response
+                .evaluation
+                .as_ref()
+                .or(response.public_evaluation.as_ref());
+            let validation_status = validation_eval
+                .map(|eval| status_label(&eval.status))
+                .unwrap_or_else(|| "none".to_string());
+            let primary_score = validation_eval
+                .and_then(|eval| eval.primary_score)
+                .map(format_score)
+                .unwrap_or_else(|| "none".to_string());
+
+            Ok(format!(
+                "validation_run: {}\nproblem: {}\nstatus: {}\nevaluation_job: {}\nvalidation: {}\nprimary_score: {}\nvisible_after_eval: {}",
+                response.id,
+                response.problem_id,
+                response.status,
+                evaluation_job,
+                validation_status,
+                primary_score,
+                response.visible_after_eval
+            ))
+        }
+    }
+}
+
 fn pretty_json<T: Serialize>(value: &T) -> Result<String> {
     Ok(serde_json::to_string_pretty(value)?)
 }
@@ -230,6 +297,14 @@ fn status_label<T: Serialize>(status: &T) -> String {
         .ok()
         .and_then(|value| value.as_str().map(ToOwned::to_owned))
         .unwrap_or_else(|| "unknown".to_string())
+}
+
+fn format_score(score: f64) -> String {
+    if score.fract() == 0.0 {
+        format!("{score:.0}")
+    } else {
+        format!("{score:.4}")
+    }
 }
 
 fn render_table(headers: &[&str], rows: &[Vec<String>]) -> String {

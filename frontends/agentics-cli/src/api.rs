@@ -45,8 +45,20 @@ impl ApiClient {
         self.post_json("/api/submissions", request, true).await
     }
 
+    pub async fn create_validation_run(
+        &self,
+        request: &CreateSubmissionRequest,
+    ) -> Result<CreateSubmissionResponse> {
+        self.post_json("/api/validation-runs", request, true).await
+    }
+
     pub async fn get_submission(&self, submission_id: &str) -> Result<SubmissionResponse> {
         let path = format!("/api/submissions/{submission_id}");
+        self.get_json(&path, true).await
+    }
+
+    pub async fn get_validation_run(&self, validation_run_id: &str) -> Result<SubmissionResponse> {
+        let path = format!("/api/validation-runs/{validation_run_id}");
         self.get_json(&path, true).await
     }
 

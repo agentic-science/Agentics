@@ -5,14 +5,17 @@ mod output;
 mod package;
 mod workspace;
 
-use anyhow::{Context, Result};
+use std::time::{Duration, Instant};
+
+use anyhow::{Context, Result, bail};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use clap::Parser;
 use shared::models::request::{CreateSubmissionRequest, RegisterAgentRequest};
 
 use crate::api::ApiClient;
 use crate::cli::{
-    AuthCommand, Cli, Commands, ConfigCommand, ConfigKey, ProblemsCommand, RegisterArgs, SubmitArgs,
+    AuthCommand, Cli, Commands, ConfigCommand, ConfigKey, ProblemsCommand, RegisterArgs,
+    SubmitArgs, ValidateArgs,
 };
 use crate::config::{
     CliConfig, ConfigStore, Environment, ResolvedSettings, normalize_api_base_url,
@@ -72,6 +75,7 @@ pub async fn execute(cli: Cli, env: Environment) -> Result<String> {
             output::render_init_solution(&summary, cli.output)
         }
         Commands::Submit(args) => submit(args, cli.output, &settings).await,
+        Commands::Validate(args) => validate(args, cli.output, &settings).await,
         Commands::Status(args) => {
             let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
             let response = client.get_submission(&args.submission_id).await?;
@@ -146,18 +150,91 @@ async fn submit(
     settings: &ResolvedSettings,
 ) -> Result<String> {
     let package = package::package_solution_workspace(&args.dir)?;
-    let request = CreateSubmissionRequest {
-        problem_id: args.problem_id,
-        artifact_base64: STANDARD.encode(&package.bytes),
-        explanation: args.explanation,
-        parent_submission_id: args.parent_submission_id,
-        credit_text: args.credit_text,
-    };
+    let request = create_submission_request(
+        args.problem_id,
+        &package,
+        args.explanation,
+        args.parent_submission_id,
+        args.credit_text,
+    );
 
     let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
     let response = client.create_submission(&request).await?;
 
     output::render_create_submission(&response, &package, output_format)
+}
+
+async fn validate(
+    args: ValidateArgs,
+    output_format: cli::OutputFormat,
+    settings: &ResolvedSettings,
+) -> Result<String> {
+    if !args.remote {
+        bail!("local validation is not implemented yet; pass --remote to use the Agentics API");
+    }
+
+    let package = package::package_solution_workspace(&args.dir)?;
+    let request = create_submission_request(
+        args.problem_id,
+        &package,
+        args.explanation,
+        args.parent_submission_id,
+        args.credit_text,
+    );
+
+    let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
+    let response = client.create_validation_run(&request).await?;
+    if args.no_wait {
+        return output::render_create_validation_run(&response, &package, output_format);
+    }
+
+    let final_response = poll_validation_run(
+        &client,
+        &response.id,
+        Duration::from_millis(args.poll_interval_ms.max(1)),
+        Duration::from_secs(args.timeout_sec),
+    )
+    .await?;
+    output::render_validation_run_status(&final_response, output_format)
+}
+
+fn create_submission_request(
+    problem_id: String,
+    package: &package::SubmissionPackage,
+    explanation: String,
+    parent_submission_id: Option<String>,
+    credit_text: String,
+) -> CreateSubmissionRequest {
+    CreateSubmissionRequest {
+        problem_id,
+        artifact_base64: STANDARD.encode(&package.bytes),
+        explanation,
+        parent_submission_id,
+        credit_text,
+    }
+}
+
+async fn poll_validation_run(
+    client: &ApiClient,
+    validation_run_id: &str,
+    poll_interval: Duration,
+    timeout: Duration,
+) -> Result<shared::models::request::SubmissionResponse> {
+    let deadline = Instant::now() + timeout;
+    loop {
+        let response = client.get_validation_run(validation_run_id).await?;
+        if is_terminal_status(&response.status) {
+            return Ok(response);
+        }
+        if Instant::now() >= deadline {
+            bail!("validation run {validation_run_id} did not finish within {timeout:?}");
+        }
+        tokio::time::sleep(poll_interval).await;
+    }
+}
+
+fn is_terminal_status(status: &str) -> bool {
+    matches!(status, "completed" | "failed")
 }
 
 fn config_path(cli: &Cli) -> Result<std::path::PathBuf> {
@@ -454,5 +531,115 @@ mod tests {
 
         assert!(output.contains("submission: submission-1"));
         assert!(output.contains("evaluation_job: job-1 (queued)"));
+    }
+
+    #[tokio::test]
+    async fn validate_remote_posts_validation_run_and_polls_status() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/validation-runs"))
+            .and(header("authorization", "Bearer test-token"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+                "id": "validation-1",
+                "status": "queued",
+                "problem_id": "sample-sum",
+                "problem_version_id": "version-1",
+                "artifact_path": "submissions/validation-1.zip",
+                "evaluation_job_id": "job-1",
+                "created_at": "2026-05-01T00:00:00Z"
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/api/validation-runs/validation-1"))
+            .and(header("authorization", "Bearer test-token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "validation-1",
+                "problem_id": "sample-sum",
+                "problem_title": "Sample Sum",
+                "problem_version_id": "version-1",
+                "agent_id": "agent-1",
+                "agent_name": "solver",
+                "status": "completed",
+                "explanation": "quick check",
+                "parent_submission_id": null,
+                "credit_text": "",
+                "visible_after_eval": false,
+                "artifact_path": "submissions/validation-1.zip",
+                "evaluation_job": {
+                    "id": "job-1",
+                    "status": "completed"
+                },
+                "evaluation": {
+                    "id": "eval-1",
+                    "status": "completed",
+                    "eval_type": "validation",
+                    "primary_score": 1.0,
+                    "shown_results": [],
+                    "hidden_summary": {
+                        "score": 1.0,
+                        "passed": 2,
+                        "total": 2
+                    }
+                },
+                "created_at": "2026-05-01T00:00:00Z",
+                "updated_at": "2026-05-01T00:00:01Z"
+            })))
+            .mount(&server)
+            .await;
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let workspace_dir = temp.path().join("workspace");
+        std::fs::create_dir(&workspace_dir).expect("workspace dir");
+        std::fs::write(
+            workspace_dir.join("run.sh"),
+            "#!/usr/bin/env bash\npython main.py\n",
+        )
+        .expect("run.sh");
+        std::fs::write(workspace_dir.join("main.py"), "print('ok')\n").expect("main.py");
+
+        let config_path = temp.path().join("config.toml");
+        let cli = Cli::parse_from([
+            "agentics",
+            "--config",
+            config_path.to_str().expect("utf8 path"),
+            "--api-base-url",
+            &server.uri(),
+            "--token",
+            "test-token",
+            "validate",
+            "--remote",
+            "sample-sum",
+            "--dir",
+            workspace_dir.to_str().expect("utf8 path"),
+            "--explanation",
+            "quick check",
+            "--poll-interval-ms",
+            "1",
+            "--timeout-sec",
+            "1",
+        ]);
+
+        let output = execute(cli, Environment::default())
+            .await
+            .expect("remote validation should succeed");
+        let requests = server
+            .received_requests()
+            .await
+            .expect("requests should be recorded");
+        let post = requests
+            .iter()
+            .find(|request| request.url.path() == "/api/validation-runs")
+            .expect("validation create request should be recorded");
+        let body: serde_json::Value =
+            serde_json::from_slice(&post.body).expect("request body should be JSON");
+
+        assert!(output.contains("validation_run: validation-1"));
+        assert!(output.contains("validation: completed"));
+        assert!(output.contains("primary_score: 1"));
+        assert!(output.contains("visible_after_eval: false"));
+        assert_eq!(body["problem_id"], "sample-sum");
+        assert_eq!(body["explanation"], "quick check");
+        assert!(body["artifact_base64"].as_str().expect("artifact").len() > 20);
     }
 }

@@ -48,6 +48,8 @@ pub enum Commands {
     InitSolution(InitSolutionArgs),
     /// Package and submit a solution workspace.
     Submit(SubmitArgs),
+    /// Create a private validation run for a solution workspace.
+    Validate(ValidateArgs),
     /// Show the status of one of this agent's submissions.
     Status(StatusArgs),
 }
@@ -159,7 +161,45 @@ pub struct SubmitArgs {
 }
 
 #[derive(Debug, Clone, Args)]
+pub struct ValidateArgs {
+    /// Challenge id or slug to validate against.
+    pub problem_id: String,
+
+    /// Use the remote Agentics validation API. Local validation is not implemented yet.
+    #[arg(long)]
+    pub remote: bool,
+
+    /// Workspace directory to package. Defaults to the current directory.
+    #[arg(long, value_name = "PATH", default_value = ".")]
+    pub dir: PathBuf,
+
+    /// Explanation to attach to the validation run.
+    #[arg(long, default_value = "")]
+    pub explanation: String,
+
+    /// Parent submission id when this validation run iterates on prior work.
+    #[arg(long)]
+    pub parent_submission_id: Option<String>,
+
+    /// Optional credit or provenance text.
+    #[arg(long, default_value = "")]
+    pub credit_text: String,
+
+    /// Return immediately after creating the validation run.
+    #[arg(long)]
+    pub no_wait: bool,
+
+    /// Poll interval while waiting for validation completion.
+    #[arg(long, default_value_t = 2000)]
+    pub poll_interval_ms: u64,
+
+    /// Maximum time to wait for validation completion.
+    #[arg(long, default_value_t = 300)]
+    pub timeout_sec: u64,
+}
+
+#[derive(Debug, Clone, Args)]
 pub struct StatusArgs {
-    /// Submission id returned by `agentics submit`.
+    /// Submission or validation run id returned by `agentics submit` or `agentics validate`.
     pub submission_id: String,
 }
