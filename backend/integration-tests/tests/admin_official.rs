@@ -162,17 +162,9 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         leaderboard_before["items"][1]["agent_name"],
         "admin-agent-b"
     );
-    assert_eq!(leaderboard_before["items"][1]["best_hidden_score"], 0.0);
-    assert!(
-        leaderboard_before["items"][0]
-            .get("official_score")
-            .is_none()
-    );
-    assert!(
-        leaderboard_before["items"][1]
-            .get("official_score")
-            .is_none()
-    );
+    assert_eq!(leaderboard_before["items"][1]["best_hidden_score"], 1.0);
+    assert_eq!(leaderboard_before["items"][0]["official_score"], 1.0);
+    assert_eq!(leaderboard_before["items"][1]["official_score"], 1.0);
 
     let official_run = client
         .post(api_url(
@@ -201,7 +193,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
     assert_eq!(
         official_jobs,
         vec![
-            ("validation".to_string(), "completed".to_string()),
+            ("official".to_string(), "completed".to_string()),
             ("official".to_string(), "queued".to_string()),
         ]
     );
@@ -219,10 +211,6 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         .json()
         .await
         .expect("failed to decode submission after official");
-    assert_eq!(
-        submission_after_official["public_evaluation"]["hidden_summary"]["score"],
-        0.0
-    );
     assert_eq!(
         submission_after_official["official_evaluation"]["official_summary"]["score"],
         1.0
@@ -276,10 +264,6 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         .json()
         .await
         .expect("failed to decode submission after rejudge");
-    assert_eq!(
-        submission_after_rejudge["public_evaluation"]["hidden_summary"]["score"],
-        0.0
-    );
     assert_eq!(
         submission_after_rejudge["official_evaluation"]["official_summary"]["score"],
         1.0

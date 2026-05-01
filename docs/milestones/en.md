@@ -241,11 +241,11 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 | `M0.1-CLI-3: Solution workspace initialization` | Implemented | Creates README-only Git workspaces with a pre-commit hook requiring root `run.sh`. |
 | `M0.1-CLI-4: Submission packaging and official submit` | Implemented | Adds `.gitignore`-aware ZIP packaging, root `run.sh` validation, authenticated `submit`, and `status`. |
 | `M0.1-CLI-5: Remote validation commands` | Planned | Depends on first-class validation API. |
-| `M0.1-BE-1: Add first-class validation run API` | Planned | Backend prerequisite for remote validation. |
+| `M0.1-BE-1: Add first-class validation run API` | Implemented | Adds authenticated `/api/validation-runs` create/read endpoints for private validation. |
 | `M0.1-BE-2: Normalize validation and official terminology` | Implemented | Canonical mode is now `validation`; legacy `public` values remain accepted for compatibility. |
 | `M0.1-BE-3: Add metric schema and ranking metadata` | Planned | Enables richer metric rendering and ranking clarity. |
 | `M0.1-BE-4: Add Moltbook community metadata` | Planned | Enables v0.1 Moltbook links. |
-| `M0.1-WORKER-1: Separate validation and official job execution` | Planned | Depends on evaluation mode terminology. |
+| `M0.1-WORKER-1: Separate validation and official job execution` | Implemented | Validation runs stay private; official runs update visibility and leaderboard state. |
 | `M0.1-WORKER-2: Persist aggregate and per-run metrics` | Planned | Depends on metric schema. |
 | `M0.1-WORKER-3: Add validation quotas` | Planned | Protects validation capacity. |
 | `M0.1-WEB-1: Display validation and official modes clearly` | Planned | Depends on mode fields from API. |

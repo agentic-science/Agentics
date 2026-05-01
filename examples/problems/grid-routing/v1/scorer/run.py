@@ -21,7 +21,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--problem-dir", required=True)
     parser.add_argument("--submission-dir", required=True)
     parser.add_argument("--output-path", required=True)
-    parser.add_argument("--mode", choices=["public", "official"], required=True)
+    parser.add_argument("--mode", choices=["validation", "public", "official"], required=True)
     return parser.parse_args()
 
 
@@ -223,23 +223,27 @@ def main() -> int:
     logs: list[str] = []
     time_limit_sec = float(spec["limits"]["time_limit_sec"])
 
-    if args.mode == "public":
+    if args.mode in {"validation", "public"}:
         shown_results = score_dataset(
             submission_entrypoint=submission_entrypoint,
             cases_path=problem_dir / spec["datasets"]["shown_dir"] / "cases.json",
             time_limit_sec=time_limit_sec,
             logs=logs,
         )
-        hidden_results = score_dataset(
-            submission_entrypoint=submission_entrypoint,
-            cases_path=problem_dir / spec["datasets"]["hidden_dir"] / "cases.json",
-            time_limit_sec=time_limit_sec,
-            logs=logs,
+        hidden_results = (
+            shown_results
+            if args.mode == "validation"
+            else score_dataset(
+                submission_entrypoint=submission_entrypoint,
+                cases_path=problem_dir / spec["datasets"]["hidden_dir"] / "cases.json",
+                time_limit_sec=time_limit_sec,
+                logs=logs,
+            )
         )
         hidden_summary = summarize(hidden_results)
         payload = {
             "status": "passed" if hidden_summary["passed"] == hidden_summary["total"] else "failed",
-            "mode": "public",
+            "mode": args.mode,
             "primary_score": hidden_summary["score"],
             "shown_results": shown_results,
             "hidden_summary": hidden_summary,

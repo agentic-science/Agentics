@@ -1,4 +1,4 @@
-//! Integration tests for the worker-backed public evaluation path.
+//! Integration tests for worker-backed official submissions and validation runs.
 
 mod helpers;
 
@@ -8,7 +8,7 @@ use helpers::{
 };
 
 #[sqlx::test(migrations = "../migrations")]
-async fn worker_completes_public_evaluation(pool: sqlx::PgPool) {
+async fn worker_completes_official_submission(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let config = test_config(storage.path(), &examples_problems_root());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
@@ -45,7 +45,7 @@ async fn worker_completes_public_evaluation(pool: sqlx::PgPool) {
         .json(&serde_json::json!({
             "problem_id": "sample-sum",
             "artifact_base64": artifact_base64,
-            "explanation": "public eval smoke test"
+            "explanation": "official eval smoke test"
         }))
         .send()
         .await
@@ -89,33 +89,101 @@ async fn worker_completes_public_evaluation(pool: sqlx::PgPool) {
     assert_eq!(submission["status"], "completed");
     assert_eq!(submission["visible_after_eval"], true);
     assert_eq!(submission["evaluation"]["status"], "completed");
+    assert_eq!(submission["evaluation"]["eval_type"], "official");
     assert_eq!(submission["evaluation"]["primary_score"], 1.0);
-    assert_eq!(submission["evaluation"]["hidden_summary"]["score"], 1.0);
-    assert_eq!(submission["evaluation"]["hidden_summary"]["passed"], 2);
-    assert_eq!(submission["evaluation"]["hidden_summary"]["total"], 2);
-    assert_eq!(
-        submission["evaluation"]["shown_results"]
-            .as_array()
-            .unwrap()
-            .len(),
-        2
-    );
+    assert_eq!(submission["evaluation"]["official_summary"]["score"], 1.0);
+    assert_eq!(submission["evaluation"]["official_summary"]["passed"], 2);
+    assert_eq!(submission["evaluation"]["official_summary"]["total"], 2);
 
-    let job_status: (String,) =
-        sqlx::query_as("SELECT status FROM evaluation_jobs WHERE submission_id = $1")
+    let job_status: (String, String) =
+        sqlx::query_as("SELECT status, eval_type FROM evaluation_jobs WHERE submission_id = $1")
             .bind(submission_id)
             .fetch_one(&pool)
             .await
             .expect("failed to query evaluation job");
-    let evaluation_status: (String, f64) =
-        sqlx::query_as("SELECT status, primary_score FROM evaluations WHERE submission_id = $1")
-            .bind(submission_id)
-            .fetch_one(&pool)
-            .await
-            .expect("failed to query evaluation");
+    let evaluation_status: (String, String, f64) = sqlx::query_as(
+        "SELECT status, eval_type, primary_score FROM evaluations WHERE submission_id = $1",
+    )
+    .bind(submission_id)
+    .fetch_one(&pool)
+    .await
+    .expect("failed to query evaluation");
 
-    assert_eq!(job_status.0, "completed");
-    assert_eq!(evaluation_status, ("completed".to_string(), 1.0));
+    assert_eq!(
+        job_status,
+        ("completed".to_string(), "official".to_string())
+    );
+    assert_eq!(
+        evaluation_status,
+        ("completed".to_string(), "official".to_string(), 1.0)
+    );
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn worker_completes_private_validation_run_without_leaderboard(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = test_config(storage.path(), &examples_problems_root());
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "name": "validation-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+
+    let artifact_base64 =
+        submission_zip_base64(&sample_sum_submission("payload['a'] + payload['b']"));
+    let create_response: serde_json::Value = client
+        .post(api_url(&app, "/api/validation-runs"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "problem_id": "sample-sum",
+            "artifact_base64": artifact_base64,
+            "explanation": "validation smoke test"
+        }))
+        .send()
+        .await
+        .expect("failed to create validation run")
+        .json()
+        .await
+        .expect("failed to decode create validation response");
+    let validation_id = create_response["id"]
+        .as_str()
+        .expect("missing validation id");
+
+    run_worker_once(&pool, &config).await;
+
+    let validation_response = client
+        .get(api_url(
+            &app,
+            &format!("/api/validation-runs/{validation_id}"),
+        ))
+        .header("Authorization", format!("Bearer {token}"))
+        .send()
+        .await
+        .expect("failed to get validation run");
+    assert_eq!(validation_response.status(), 200);
+
+    let validation: serde_json::Value = validation_response
+        .json()
+        .await
+        .expect("failed to decode validation response");
+    assert_eq!(validation["status"], "completed");
+    assert_eq!(validation["visible_after_eval"], false);
+    assert_eq!(validation["evaluation"]["eval_type"], "validation");
+    assert_eq!(validation["evaluation"]["hidden_summary"]["score"], 1.0);
+
+    let leaderboard_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM leaderboard_entries")
+        .fetch_one(&pool)
+        .await
+        .expect("failed to query leaderboard count");
+    assert_eq!(leaderboard_count.0, 0);
 }
 
 #[sqlx::test(migrations = "../migrations")]
@@ -144,7 +212,7 @@ async fn worker_marks_submission_failed_when_artifact_is_missing(pool: sqlx::PgP
         .json(&serde_json::json!({
             "problem_id": "sample-sum",
             "artifact_base64": artifact_base64,
-            "explanation": "public eval failure test"
+            "explanation": "official eval failure test"
         }))
         .send()
         .await

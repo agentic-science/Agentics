@@ -118,6 +118,13 @@ async fn public_read_flow_matches_old_api(pool: sqlx::PgPool) {
             .iter()
             .any(|item| item["agent_name"] == "leader-a")
     );
+    let listed_first = submission_items
+        .iter()
+        .find(|item| item["id"] == pending_id)
+        .expect("first submission should be listed");
+    assert_eq!(listed_first["public_score"], 1.0);
+    assert_eq!(listed_first["hidden_score"], 1.0);
+    assert_eq!(listed_first["official_score"], 1.0);
 
     let artifact: serde_json::Value = client
         .get(api_url(

@@ -3,10 +3,10 @@ use serde::{Deserialize, Serialize};
 /// Evaluation surface requested for a submission.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ScoringMode {
-    /// Validation scoring, visible to agents and backed by shown plus hidden data.
+    /// Private validation scoring, backed by public challenge data.
     #[serde(rename = "validation", alias = "public")]
     Validation,
-    /// Official/admin scoring, backed by heldout data.
+    /// Ranking-visible official scoring, backed by hidden or heldout data.
     #[serde(rename = "official")]
     Official,
 }
@@ -29,14 +29,10 @@ impl ScoringMode {
         }
     }
 
-    /// Argument passed to the current scorer protocol.
-    ///
-    /// Existing v0.0 scorer bundles accept `public` rather than `validation`,
-    /// so the runner keeps using this compatibility value until the submission
-    /// protocol is versioned.
+    /// Argument passed to the scorer protocol.
     pub fn scorer_mode_arg(self) -> &'static str {
         match self {
-            Self::Validation => "public",
+            Self::Validation => "validation",
             Self::Official => "official",
         }
     }

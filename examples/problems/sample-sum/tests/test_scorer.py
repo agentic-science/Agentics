@@ -62,7 +62,18 @@ def run_scorer(tmp_path: Path, *, mode: str, expression: str) -> dict:
     return json.loads(output_path.read_text(encoding="utf-8"))
 
 
-def test_public_mode_returns_shown_and_hidden_summary(tmp_path: Path) -> None:
+def test_validation_mode_returns_shown_summary(tmp_path: Path) -> None:
+    result = run_scorer(tmp_path, mode="validation", expression="payload['a'] + payload['b']")
+
+    assert result["status"] == "passed"
+    assert result["mode"] == "validation"
+    assert result["primary_score"] == 1
+    assert len(result["shown_results"]) == 2
+    assert result["hidden_summary"] == {"score": 1, "passed": 2, "total": 2}
+    assert result["official_summary"] is None
+
+
+def test_legacy_public_mode_returns_shown_and_hidden_summary(tmp_path: Path) -> None:
     result = run_scorer(tmp_path, mode="public", expression="payload['a'] + payload['b']")
 
     assert result["status"] == "passed"
@@ -84,7 +95,7 @@ def test_official_mode_uses_heldout_cases(tmp_path: Path) -> None:
 
 
 def test_failed_submission_is_reported(tmp_path: Path) -> None:
-    result = run_scorer(tmp_path, mode="public", expression="payload['a'] - payload['b']")
+    result = run_scorer(tmp_path, mode="validation", expression="payload['a'] - payload['b']")
 
     assert result["status"] == "failed"
     assert result["primary_score"] == 0

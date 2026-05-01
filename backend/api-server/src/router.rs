@@ -30,6 +30,14 @@ pub fn router() -> Router<AppState> {
             get(crate::handlers::get_submission),
         )
         .route(
+            "/api/validation-runs",
+            post(crate::handlers::create_validation_run),
+        )
+        .route(
+            "/api/validation-runs/{id}",
+            get(crate::handlers::get_validation_run),
+        )
+        .route(
             "/api/problems/{id}/discussions",
             post(crate::handlers::create_thread),
         )

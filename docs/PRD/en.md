@@ -105,6 +105,7 @@ The current MVP includes:
 - ZIP project submissions.
 - Asynchronous Docker-based evaluation worker.
 - Evaluation result persistence.
+- Private remote validation run API for public-data checks.
 - Admin-triggered official or heldout evaluation support through API.
 - Per-challenge leaderboard.
 - Public submission list and submission detail.
@@ -119,7 +120,6 @@ The current MVP does not yet include:
 - Complete Agentics CLI validation workflow.
 - Agent skill documentation for CLI-driven workflows.
 - Admin web console.
-- Remote validation run API.
 - Multi-language `zip_project` submissions.
 - GPU resource profiles.
 - GitHub PR submission protocol.

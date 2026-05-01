@@ -133,11 +133,20 @@ async fn get_problem_detail_response(
     )))
 }
 
-/// Create a submission, store its ZIP artifact, and queue validation evaluation.
+/// Create a ranking-visible submission, store its ZIP artifact, and queue official evaluation.
 pub async fn create_submission(
     State(state): State<AppState>,
     agent: AgentAuth,
     ValidatedJson(body): ValidatedJson<CreateSubmissionRequest>,
+) -> Result<(StatusCode, Json<CreateSubmissionResponse>)> {
+    create_submission_for_mode(state, agent, body, ScoringMode::Official).await
+}
+
+async fn create_submission_for_mode(
+    state: AppState,
+    agent: AgentAuth,
+    body: CreateSubmissionRequest,
+    eval_type: ScoringMode,
 ) -> Result<(StatusCode, Json<CreateSubmissionResponse>)> {
     let artifact_bytes = base64_decode(&body.artifact_base64).ok_or(AppError::Base64)?;
     if artifact_bytes.len() as u64 > MAX_ARTIFACT_BYTES {
@@ -166,6 +175,7 @@ pub async fn create_submission(
             agent_id: agent.agent_id,
             problem_id: body.problem_id.trim().to_string(),
             artifact_path,
+            eval_type,
             explanation: body.explanation.trim().to_string(),
             parent_submission_id: body
                 .parent_submission_id
@@ -180,6 +190,15 @@ pub async fn create_submission(
         StatusCode::CREATED,
         Json(presenters::present_create_submission(&submission)),
     ))
+}
+
+/// Create a private validation run, store its ZIP artifact, and queue validation evaluation.
+pub async fn create_validation_run(
+    State(state): State<AppState>,
+    agent: AgentAuth,
+    ValidatedJson(body): ValidatedJson<CreateSubmissionRequest>,
+) -> Result<(StatusCode, Json<CreateSubmissionResponse>)> {
+    create_submission_for_mode(state, agent, body, ScoringMode::Validation).await
 }
 
 /// Fetch an authenticated submission view with artifact and job metadata.
@@ -198,6 +217,15 @@ pub async fn get_submission(
         true,
         true,
     )))
+}
+
+/// Fetch an authenticated validation run view owned by the caller.
+pub async fn get_validation_run(
+    State(state): State<AppState>,
+    agent: AgentAuth,
+    Path(id): Path<String>,
+) -> Result<Json<SubmissionResponse>> {
+    get_submission(State(state), agent, Path(id)).await
 }
 
 /// Create a discussion thread as an authenticated agent.
@@ -383,7 +411,7 @@ pub async fn publish_version(
     Ok((StatusCode::CREATED, Json(version)))
 }
 
-/// Queue a validation rejudge for an existing submission.
+/// Queue an official rejudge for an existing submission.
 pub async fn rejudge(
     _admin: AdminAuth,
     State(state): State<AppState>,
@@ -394,7 +422,7 @@ pub async fn rejudge(
         &QueueEvaluationJobInput {
             job_id: Uuid::new_v4().to_string(),
             submission_id: id.clone(),
-            eval_type: ScoringMode::Validation,
+            eval_type: ScoringMode::Official,
         },
     )
     .await?;
@@ -404,7 +432,7 @@ pub async fn rejudge(
         Json(EvaluationJobResponse {
             job_id: job.id,
             submission_id: job.submission_id,
-            eval_type: ScoringMode::Validation.as_str().to_string(),
+            eval_type: ScoringMode::Official.as_str().to_string(),
             status: job.status,
         }),
     ))

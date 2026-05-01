@@ -70,7 +70,28 @@ def run_scorer(tmp_path: Path, *, mode: str, paths_by_instance: dict[str, str]) 
     return json.loads(output_path.read_text(encoding="utf-8"))
 
 
-def test_public_mode_returns_partial_scores(tmp_path: Path) -> None:
+def test_validation_mode_returns_shown_scores(tmp_path: Path) -> None:
+    result = run_scorer(
+        tmp_path,
+        mode="validation",
+        paths_by_instance={
+            "shown-1": "RRRRDDDD",
+            "shown-2": "DDDDRRUUUURRDDDD",
+            "shown-3": "RRDDRDRDDR",
+        },
+    )
+
+    assert result["status"] == "passed"
+    assert result["mode"] == "validation"
+    assert result["primary_score"] == 1
+    assert len(result["shown_results"]) == 3
+    assert all(item["status"] == "passed" for item in result["shown_results"])
+    assert all(item["score"] == 1 for item in result["shown_results"])
+    assert result["hidden_summary"] == {"score": 1, "passed": 3, "total": 3}
+    assert result["official_summary"] is None
+
+
+def test_legacy_public_mode_returns_hidden_summary(tmp_path: Path) -> None:
     result = run_scorer(
         tmp_path,
         mode="public",
@@ -85,24 +106,18 @@ def test_public_mode_returns_partial_scores(tmp_path: Path) -> None:
 
     assert result["status"] == "passed"
     assert result["mode"] == "public"
-    assert result["primary_score"] == 1
-    assert len(result["shown_results"]) == 3
-    assert all(item["status"] == "passed" for item in result["shown_results"])
-    assert all(item["score"] == 1 for item in result["shown_results"])
     assert result["hidden_summary"] == {"score": 1, "passed": 2, "total": 2}
     assert result["official_summary"] is None
 
 
-def test_public_mode_rewards_valid_but_indirect_route(tmp_path: Path) -> None:
+def test_validation_mode_rewards_valid_but_indirect_route(tmp_path: Path) -> None:
     result = run_scorer(
         tmp_path,
-        mode="public",
+        mode="validation",
         paths_by_instance={
             "shown-1": "RRLLRRRRDDDD",
             "shown-2": "DDDDRRUUUURRDDDD",
             "shown-3": "RRDDRDRDDR",
-            "hidden-1": "DDDDDRRRRR",
-            "hidden-2": "RRDRDDRDDR",
         },
     )
 
@@ -117,17 +132,15 @@ def test_public_mode_rewards_valid_but_indirect_route(tmp_path: Path) -> None:
 def test_failed_path_is_reported(tmp_path: Path) -> None:
     result = run_scorer(
         tmp_path,
-        mode="public",
+        mode="validation",
         paths_by_instance={
             "shown-1": "RDDDD",
             "shown-2": "DDDDRRUUUURRDDDD",
             "shown-3": "RRDDRDRDDR",
-            "hidden-1": "DDDDDRRRRR",
-            "hidden-2": "RRDRDDRDDR",
         },
     )
 
-    assert result["status"] == "passed"
+    assert result["status"] == "failed"
     assert result["shown_results"][0]["status"] == "failed"
     assert result["shown_results"][0]["score"] == 0
     assert "hit obstacle" in result["shown_results"][0]["message"]

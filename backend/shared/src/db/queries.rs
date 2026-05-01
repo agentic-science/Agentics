@@ -36,7 +36,7 @@ pub use super::problems::{
 // Submission
 // ---------------------------------------------------------------------------
 
-/// Input for creating a submission and its initial validation evaluation job.
+/// Input for creating a submission and its initial evaluation job.
 #[derive(Debug, Clone)]
 pub struct CreateSubmissionInput {
     pub submission_id: String,
@@ -44,6 +44,7 @@ pub struct CreateSubmissionInput {
     pub agent_id: String,
     pub problem_id: String,
     pub artifact_path: String,
+    pub eval_type: ScoringMode,
     pub explanation: String,
     pub parent_submission_id: Option<String>,
     pub credit_text: String,
@@ -141,13 +142,16 @@ where
     }
 }
 
-/// Create a submission and queue its first validation evaluation atomically.
+/// Create a submission and queue its first evaluation atomically.
 pub async fn create_submission_with_job(
     pool: &PgPool,
     input: &CreateSubmissionInput,
 ) -> Result<SubmissionRecord> {
     let problem = get_published_problem(pool, &input.problem_id).await?;
     let problem = problem.ok_or_else(|| AppError::BadRequest("problem not found".to_string()))?;
+    let spec: ProblemBundleSpec = serde_json::from_value(problem.spec_json.clone())
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    ensure_problem_supports_eval_type(&spec, input.eval_type)?;
 
     let mut tx = pool.begin().await?;
 
@@ -183,18 +187,26 @@ pub async fn create_submission_with_job(
     })
     .map_err(|e| AppError::Internal(e.to_string()))?;
 
+    let priority = if input.eval_type == ScoringMode::Official {
+        10
+    } else {
+        0
+    };
+
     sqlx::query(
         r#"
         INSERT INTO evaluation_jobs (
-            id, submission_id, problem_id, problem_version_id, eval_type, status, payload_json
+            id, submission_id, problem_id, problem_version_id, eval_type, status, priority, payload_json
         )
-        VALUES ($1, $2, $3, $4, 'validation', 'queued', $5)
+        VALUES ($1, $2, $3, $4, $5, 'queued', $6, $7)
         "#,
     )
     .bind(&input.job_id)
     .bind(&input.submission_id)
     .bind(&problem.problem_id)
     .bind(&problem.problem_version_id)
+    .bind(input.eval_type.as_str())
+    .bind(priority)
     .bind(&payload)
     .execute(&mut *tx)
     .await?;
@@ -223,6 +235,19 @@ pub async fn create_submission_with_job(
         public_evaluation: None,
         official_evaluation: None,
     })
+}
+
+fn ensure_problem_supports_eval_type(
+    spec: &ProblemBundleSpec,
+    eval_type: ScoringMode,
+) -> Result<()> {
+    if eval_type == ScoringMode::Official && !spec.datasets.heldout_enabled {
+        return Err(AppError::BadRequest(
+            "problem version does not support official runs".to_string(),
+        ));
+    }
+
+    Ok(())
 }
 
 /// Fetch one submission with latest job state and validation/official evaluations.
@@ -312,7 +337,7 @@ pub async fn get_submission_by_id(
     }))
 }
 
-/// List public submissions for a problem after their validation evaluation is visible.
+/// List submissions for a problem after an official evaluation makes them visible.
 pub async fn list_public_submissions_for_problem(
     pool: &PgPool,
     problem_id_or_slug: &str,
@@ -323,8 +348,8 @@ pub async fn list_public_submissions_for_problem(
             s.id, s.problem_id, s.problem_version_id, p.title AS problem_title,
             s.agent_id, a.name AS agent_name, s.status, s.explanation,
             s.parent_submission_id, s.credit_text, s.created_at, s.updated_at,
-            pe.primary_score AS public_score,
-            (pe.hidden_summary_json->>'score')::double precision AS hidden_score,
+            COALESCE(pe.primary_score, (oe.official_summary_json->>'score')::double precision) AS public_score,
+            COALESCE((pe.hidden_summary_json->>'score')::double precision, (oe.official_summary_json->>'score')::double precision) AS hidden_score,
             (oe.official_summary_json->>'score')::double precision AS official_score
         FROM submissions s
         JOIN agents a ON a.id = s.agent_id
@@ -402,17 +427,33 @@ pub async fn hide_submission(pool: &PgPool, submission_id: &str) -> Result<()> {
     {
         let replacement: Option<(String, f64, Value)> = sqlx::query_as(
             r#"
-            SELECT s.id, (e.hidden_summary_json->>'score')::double precision AS hidden_score, e.shown_results_json
+            SELECT
+                s.id,
+                COALESCE(
+                    (ve.hidden_summary_json->>'score')::double precision,
+                    (oe.official_summary_json->>'score')::double precision
+                ) AS ranking_score,
+                COALESCE(ve.shown_results_json, oe.shown_results_json, '[]'::jsonb) AS shown_results
             FROM submissions s
-            JOIN LATERAL (
+            LEFT JOIN LATERAL (
                 SELECT hidden_summary_json, shown_results_json
                 FROM evaluations
                 WHERE submission_id = s.id AND eval_type IN ('validation', 'public') AND status = 'completed'
                 ORDER BY created_at DESC LIMIT 1
-            ) e ON TRUE
+            ) ve ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT official_summary_json, shown_results_json
+                FROM evaluations
+                WHERE submission_id = s.id AND eval_type = 'official' AND status = 'completed'
+                ORDER BY created_at DESC LIMIT 1
+            ) oe ON TRUE
             WHERE s.problem_id = $1 AND s.agent_id = $2 AND s.id <> $3
               AND s.visible_after_eval = TRUE AND s.status = 'completed'
-            ORDER BY hidden_score DESC, s.created_at ASC
+              AND COALESCE(
+                    (ve.hidden_summary_json->>'score')::double precision,
+                    (oe.official_summary_json->>'score')::double precision
+                  ) IS NOT NULL
+            ORDER BY ranking_score DESC, s.created_at ASC
             LIMIT 1
             "#
         )
@@ -493,7 +534,7 @@ pub async fn list_leaderboard_entries(
         .collect::<Result<Vec<_>>>()
 }
 
-/// Upsert a leaderboard entry when a validation run improves an agent's hidden score.
+/// Upsert a leaderboard entry when a ranked score improves an agent's best result.
 pub async fn upsert_leaderboard_entry_for_submission(
     pool: &PgPool,
     submission_id: &str,
@@ -594,8 +635,8 @@ pub struct EvaluationJobRecord {
 
 /// Claim the next queued job using `FOR UPDATE SKIP LOCKED`.
 ///
-/// Validation jobs also move their submission into `running`; official jobs leave
-/// public submission visibility unchanged.
+/// Claimed jobs move their submission into `running` so public visibility can be
+/// controlled consistently by the completion path for each evaluation mode.
 pub async fn claim_next_evaluation_job(
     pool: &PgPool,
     worker_id: &str,
@@ -634,12 +675,10 @@ pub async fn claim_next_evaluation_job(
     })?;
     let submission_id: String = r.try_get("submission_id")?;
 
-    if eval_type == ScoringMode::Validation {
-        sqlx::query("UPDATE submissions SET status = 'running', updated_at = NOW() WHERE id = $1")
-            .bind(&submission_id)
-            .execute(&mut *tx)
-            .await?;
-    }
+    sqlx::query("UPDATE submissions SET status = 'running', updated_at = NOW() WHERE id = $1")
+        .bind(&submission_id)
+        .execute(&mut *tx)
+        .await?;
 
     let payload: EvaluationJobPayload = serde_json::from_value(r.try_get("payload_json")?)
         .map_err(|e| AppError::Internal(e.to_string()))?;
@@ -658,7 +697,7 @@ pub async fn claim_next_evaluation_job(
     }))
 }
 
-/// Input for queueing a validation re-run or an official evaluation.
+/// Input for queueing a validation or official re-run.
 #[derive(Debug, Clone)]
 pub struct QueueEvaluationJobInput {
     pub job_id: String,
@@ -669,7 +708,8 @@ pub struct QueueEvaluationJobInput {
 /// Queue an evaluation job for an existing submission.
 ///
 /// Official jobs are rejected when the problem version does not enable heldout
-/// data. Validation jobs reset visibility until the new validation result completes.
+/// data. Any queued re-run hides the submission until its completion path decides
+/// whether the result should become public.
 pub async fn queue_evaluation_job(
     pool: &PgPool,
     input: &QueueEvaluationJobInput,
@@ -732,14 +772,12 @@ pub async fn queue_evaluation_job(
     .execute(&mut *tx)
     .await?;
 
-    if input.eval_type == ScoringMode::Validation {
-        sqlx::query(
-            "UPDATE submissions SET status = 'queued', visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1"
-        )
-        .bind(row.try_get::<String, _>("id")?)
-        .execute(&mut *tx)
-        .await?;
-    }
+    sqlx::query(
+        "UPDATE submissions SET status = 'queued', visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1"
+    )
+    .bind(row.try_get::<String, _>("id")?)
+    .execute(&mut *tx)
+    .await?;
 
     tx.commit().await?;
 
@@ -854,35 +892,51 @@ pub async fn mark_evaluation_finished(
     .execute(&mut *tx)
     .await?;
 
-    if result.eval_type == ScoringMode::Validation {
-        let visible = result.status == EvaluationStatus::Completed;
-        let sub_status = if visible { "completed" } else { "failed" };
-        sqlx::query(
-            "UPDATE submissions SET status = $2, visible_after_eval = $3, updated_at = NOW() WHERE id = $1"
-        )
-        .bind(&result.submission_id)
-        .bind(sub_status)
-        .bind(visible)
-        .execute(&mut *tx)
-        .await?;
-    }
-
-    if result.status == EvaluationStatus::Completed && result.eval_type == ScoringMode::Validation {
-        if let Some(ref hidden) = result.hidden_summary {
-            upsert_leaderboard_entry_for_submission_tx(
-                &mut tx,
-                &result.submission_id,
-                hidden.score,
-                &result.shown_results,
+    match result.eval_type {
+        ScoringMode::Validation => {
+            let sub_status = if result.status == EvaluationStatus::Completed {
+                "completed"
+            } else {
+                "failed"
+            };
+            sqlx::query(
+                "UPDATE submissions SET status = $2, visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1"
             )
+            .bind(&result.submission_id)
+            .bind(sub_status)
+            .execute(&mut *tx)
             .await?;
         }
-    } else if result.status == EvaluationStatus::Completed
-        && result.eval_type == ScoringMode::Official
-        && let Some(ref official) = result.official_summary
-    {
-        update_official_score_for_submission_tx(&mut tx, &result.submission_id, official.score)
+        ScoringMode::Official => {
+            let visible = result.status == EvaluationStatus::Completed;
+            let sub_status = if visible { "completed" } else { "failed" };
+            sqlx::query(
+                "UPDATE submissions SET status = $2, visible_after_eval = $3, updated_at = NOW() WHERE id = $1"
+            )
+            .bind(&result.submission_id)
+            .bind(sub_status)
+            .bind(visible)
+            .execute(&mut *tx)
             .await?;
+
+            if result.status == EvaluationStatus::Completed
+                && let Some(ref official) = result.official_summary
+            {
+                upsert_leaderboard_entry_for_submission_tx(
+                    &mut tx,
+                    &result.submission_id,
+                    official.score,
+                    &result.shown_results,
+                )
+                .await?;
+                update_official_score_for_submission_tx(
+                    &mut tx,
+                    &result.submission_id,
+                    official.score,
+                )
+                .await?;
+            }
+        }
     }
 
     tx.commit().await?;
