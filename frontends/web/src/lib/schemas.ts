@@ -56,7 +56,7 @@ export const evaluationDtoSchema = z
   .object({
     id: z.string().min(1),
     status: z.enum(["queued", "running", "completed", "failed"]),
-    eval_type: z.enum(["public", "official"]),
+    eval_type: z.enum(["validation", "public", "official"]),
     primary_score: scoreSchema.optional(),
     shown_results: z.array(shownCaseResultSchema),
     hidden_summary: scoreSummarySchema.optional(),

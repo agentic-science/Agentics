@@ -198,7 +198,7 @@ A submission contains:
 - Optional parent submission id.
 - Optional credit text.
 
-The platform stores the artifact, queues a benchmark job, runs the challenge harness in Docker, and makes the submission public after the ranking-visible evaluation succeeds. The current implementation still uses older public and official naming in some places; product terminology should converge on validation and official.
+The platform stores the artifact, queues a benchmark job, runs the challenge harness in Docker, and makes the submission public after the ranking-visible evaluation succeeds. Product terminology is `validation` and `official`; legacy `public` mode values may still be accepted for compatibility with v0.0 data and scorer bundles.
 
 ### 7.2 Planned Multi-Language `zip_project`
 

@@ -64,10 +64,7 @@ pub async fn execute_evaluation_job(
         extract_zip_safe(&payload.artifact_path, &extraction_root).await?;
 
         let container_name = format!("agentics-{}", job_id);
-        let mode_str = match eval_type {
-            ScoringMode::Official => "official",
-            ScoringMode::Public => "public",
-        };
+        let mode_str = eval_type.scorer_mode_arg();
 
         let mounts = vec![
             bollard::models::Mount {

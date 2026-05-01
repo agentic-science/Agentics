@@ -36,7 +36,7 @@ pub use super::problems::{
 // Submission
 // ---------------------------------------------------------------------------
 
-/// Input for creating a submission and its initial public evaluation job.
+/// Input for creating a submission and its initial validation evaluation job.
 #[derive(Debug, Clone)]
 pub struct CreateSubmissionInput {
     pub submission_id: String,
@@ -106,15 +106,9 @@ fn parse_eval_from_row(row: &sqlx::postgres::PgRow, prefix: &str) -> Result<Opti
             )));
         }
     };
-    let eval_type = match eval_type_str.as_str() {
-        "public" => ScoringMode::Public,
-        "official" => ScoringMode::Official,
-        other => {
-            return Err(AppError::Internal(format!(
-                "unexpected evaluation type `{other}`"
-            )));
-        }
-    };
+    let eval_type = ScoringMode::from_storage_value(&eval_type_str).ok_or_else(|| {
+        AppError::Internal(format!("unexpected evaluation type `{eval_type_str}`"))
+    })?;
     let shown_results: Vec<ShownCaseResult> =
         decode_optional_json(shown_json, &format!("{prefix} shown results"))?.unwrap_or_default();
     let hidden_summary = decode_optional_json(hidden_json, &format!("{prefix} hidden summary"))?;
@@ -147,7 +141,7 @@ where
     }
 }
 
-/// Create a submission and queue its first public evaluation atomically.
+/// Create a submission and queue its first validation evaluation atomically.
 pub async fn create_submission_with_job(
     pool: &PgPool,
     input: &CreateSubmissionInput,
@@ -194,7 +188,7 @@ pub async fn create_submission_with_job(
         INSERT INTO evaluation_jobs (
             id, submission_id, problem_id, problem_version_id, eval_type, status, payload_json
         )
-        VALUES ($1, $2, $3, $4, 'public', 'queued', $5)
+        VALUES ($1, $2, $3, $4, 'validation', 'queued', $5)
         "#,
     )
     .bind(&input.job_id)
@@ -231,7 +225,7 @@ pub async fn create_submission_with_job(
     })
 }
 
-/// Fetch one submission with latest job state and public/official evaluations.
+/// Fetch one submission with latest job state and validation/official evaluations.
 pub async fn get_submission_by_id(
     pool: &PgPool,
     submission_id: &str,
@@ -273,7 +267,7 @@ pub async fn get_submission_by_id(
         ) j ON TRUE
         LEFT JOIN LATERAL (
             SELECT id, status, eval_type, primary_score, shown_results_json, hidden_summary_json, official_summary_json, log_path, started_at, finished_at
-            FROM evaluations WHERE submission_id = s.id AND eval_type = 'public' ORDER BY created_at DESC LIMIT 1
+            FROM evaluations WHERE submission_id = s.id AND eval_type IN ('validation', 'public') ORDER BY created_at DESC LIMIT 1
         ) pe ON TRUE
         LEFT JOIN LATERAL (
             SELECT id, status, eval_type, primary_score, shown_results_json, hidden_summary_json, official_summary_json, log_path, started_at, finished_at
@@ -318,7 +312,7 @@ pub async fn get_submission_by_id(
     }))
 }
 
-/// List public submissions for a problem after their public evaluation is visible.
+/// List public submissions for a problem after their validation evaluation is visible.
 pub async fn list_public_submissions_for_problem(
     pool: &PgPool,
     problem_id_or_slug: &str,
@@ -338,7 +332,7 @@ pub async fn list_public_submissions_for_problem(
         LEFT JOIN LATERAL (
             SELECT primary_score, hidden_summary_json
             FROM evaluations
-            WHERE submission_id = s.id AND eval_type = 'public' AND status = 'completed'
+            WHERE submission_id = s.id AND eval_type IN ('validation', 'public') AND status = 'completed'
             ORDER BY created_at DESC LIMIT 1
         ) pe ON TRUE
         LEFT JOIN LATERAL (
@@ -413,7 +407,7 @@ pub async fn hide_submission(pool: &PgPool, submission_id: &str) -> Result<()> {
             JOIN LATERAL (
                 SELECT hidden_summary_json, shown_results_json
                 FROM evaluations
-                WHERE submission_id = s.id AND eval_type = 'public' AND status = 'completed'
+                WHERE submission_id = s.id AND eval_type IN ('validation', 'public') AND status = 'completed'
                 ORDER BY created_at DESC LIMIT 1
             ) e ON TRUE
             WHERE s.problem_id = $1 AND s.agent_id = $2 AND s.id <> $3
@@ -499,7 +493,7 @@ pub async fn list_leaderboard_entries(
         .collect::<Result<Vec<_>>>()
 }
 
-/// Upsert a leaderboard entry when a public run improves an agent's hidden score.
+/// Upsert a leaderboard entry when a validation run improves an agent's hidden score.
 pub async fn upsert_leaderboard_entry_for_submission(
     pool: &PgPool,
     submission_id: &str,
@@ -600,7 +594,7 @@ pub struct EvaluationJobRecord {
 
 /// Claim the next queued job using `FOR UPDATE SKIP LOCKED`.
 ///
-/// Public jobs also move their submission into `running`; official jobs leave
+/// Validation jobs also move their submission into `running`; official jobs leave
 /// public submission visibility unchanged.
 pub async fn claim_next_evaluation_job(
     pool: &PgPool,
@@ -635,18 +629,12 @@ pub async fn claim_next_evaluation_job(
     };
 
     let eval_type_raw: String = r.try_get("eval_type")?;
-    let eval_type = match eval_type_raw.as_str() {
-        "official" => ScoringMode::Official,
-        "public" => ScoringMode::Public,
-        other => {
-            return Err(AppError::Internal(format!(
-                "unexpected evaluation job type `{other}`"
-            )));
-        }
-    };
+    let eval_type = ScoringMode::from_storage_value(&eval_type_raw).ok_or_else(|| {
+        AppError::Internal(format!("unexpected evaluation job type `{eval_type_raw}`"))
+    })?;
     let submission_id: String = r.try_get("submission_id")?;
 
-    if eval_type == ScoringMode::Public {
+    if eval_type == ScoringMode::Validation {
         sqlx::query("UPDATE submissions SET status = 'running', updated_at = NOW() WHERE id = $1")
             .bind(&submission_id)
             .execute(&mut *tx)
@@ -670,7 +658,7 @@ pub async fn claim_next_evaluation_job(
     }))
 }
 
-/// Input for queueing a public re-run or an official evaluation.
+/// Input for queueing a validation re-run or an official evaluation.
 #[derive(Debug, Clone)]
 pub struct QueueEvaluationJobInput {
     pub job_id: String,
@@ -681,7 +669,7 @@ pub struct QueueEvaluationJobInput {
 /// Queue an evaluation job for an existing submission.
 ///
 /// Official jobs are rejected when the problem version does not enable heldout
-/// data. Public jobs reset visibility until the new public result completes.
+/// data. Validation jobs reset visibility until the new validation result completes.
 pub async fn queue_evaluation_job(
     pool: &PgPool,
     input: &QueueEvaluationJobInput,
@@ -721,10 +709,7 @@ pub async fn queue_evaluation_job(
     })
     .map_err(|e| AppError::Internal(e.to_string()))?;
 
-    let eval_type_str = match input.eval_type {
-        ScoringMode::Official => "official",
-        ScoringMode::Public => "public",
-    };
+    let eval_type_str = input.eval_type.as_str();
     let priority = if input.eval_type == ScoringMode::Official {
         10
     } else {
@@ -747,7 +732,7 @@ pub async fn queue_evaluation_job(
     .execute(&mut *tx)
     .await?;
 
-    if input.eval_type == ScoringMode::Public {
+    if input.eval_type == ScoringMode::Validation {
         sqlx::query(
             "UPDATE submissions SET status = 'queued', visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1"
         )
@@ -784,10 +769,7 @@ pub async fn mark_evaluation_started(
     pool: &PgPool,
     input: &MarkEvaluationStartedInput,
 ) -> Result<()> {
-    let eval_type_str = match input.eval_type {
-        ScoringMode::Official => "official",
-        ScoringMode::Public => "public",
-    };
+    let eval_type_str = input.eval_type.as_str();
 
     sqlx::query(
         r#"
@@ -872,7 +854,7 @@ pub async fn mark_evaluation_finished(
     .execute(&mut *tx)
     .await?;
 
-    if result.eval_type == ScoringMode::Public {
+    if result.eval_type == ScoringMode::Validation {
         let visible = result.status == EvaluationStatus::Completed;
         let sub_status = if visible { "completed" } else { "failed" };
         sqlx::query(
@@ -885,7 +867,7 @@ pub async fn mark_evaluation_finished(
         .await?;
     }
 
-    if result.status == EvaluationStatus::Completed && result.eval_type == ScoringMode::Public {
+    if result.status == EvaluationStatus::Completed && result.eval_type == ScoringMode::Validation {
         if let Some(ref hidden) = result.hidden_summary {
             upsert_leaderboard_entry_for_submission_tx(
                 &mut tx,

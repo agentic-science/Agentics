@@ -201,7 +201,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
     assert_eq!(
         official_jobs,
         vec![
-            ("public".to_string(), "completed".to_string()),
+            ("validation".to_string(), "completed".to_string()),
             ("official".to_string(), "queued".to_string()),
         ]
     );

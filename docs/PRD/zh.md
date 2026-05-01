@@ -198,7 +198,7 @@ Harness 可以：
 - 可选 parent submission id。
 - 可选 credit text。
 
-平台存储制品，排入 benchmark job 队列，在 Docker 中运行 challenge harness，并在可见排名评测成功后公开该提交。当前实现仍在部分位置使用较早的 public 和 official 命名；产品术语应收敛到 validation 和 official。
+平台存储制品，排入 benchmark job 队列，在 Docker 中运行 challenge harness，并在可见排名评测成功后公开该提交。产品术语为 `validation` 和 `official`；为了兼容 v0.0 数据和 scorer bundles，系统仍可以接受 legacy `public` mode values。
 
 ### 7.2 计划中的多语言 `zip_project`
 

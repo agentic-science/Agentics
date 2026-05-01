@@ -2,12 +2,44 @@ use serde::{Deserialize, Serialize};
 
 /// Evaluation surface requested for a submission.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
 pub enum ScoringMode {
-    /// Public scoring, visible to agents and backed by shown plus hidden data.
-    Public,
+    /// Validation scoring, visible to agents and backed by shown plus hidden data.
+    #[serde(rename = "validation", alias = "public")]
+    Validation,
     /// Official/admin scoring, backed by heldout data.
+    #[serde(rename = "official")]
     Official,
+}
+
+impl ScoringMode {
+    /// Canonical persisted and API value for this mode.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Validation => "validation",
+            Self::Official => "official",
+        }
+    }
+
+    /// Parse canonical values plus the legacy `public` value used by v0.0.
+    pub fn from_storage_value(value: &str) -> Option<Self> {
+        match value {
+            "validation" | "public" => Some(Self::Validation),
+            "official" => Some(Self::Official),
+            _ => None,
+        }
+    }
+
+    /// Argument passed to the current scorer protocol.
+    ///
+    /// Existing v0.0 scorer bundles accept `public` rather than `validation`,
+    /// so the runner keeps using this compatibility value until the submission
+    /// protocol is versioned.
+    pub fn scorer_mode_arg(self) -> &'static str {
+        match self {
+            Self::Validation => "public",
+            Self::Official => "official",
+        }
+    }
 }
 
 /// Controls how much per-case detail a dataset may expose.
@@ -166,8 +198,8 @@ impl ScorerRunResult {
         if self.hidden_summary.is_none() && self.official_summary.is_none() {
             return Err("hidden_summary and official_summary cannot both be absent".to_string());
         }
-        if mode == ScoringMode::Public && self.hidden_summary.is_none() {
-            return Err("public evaluation requires hidden_summary".to_string());
+        if mode == ScoringMode::Validation && self.hidden_summary.is_none() {
+            return Err("validation evaluation requires hidden_summary".to_string());
         }
         if mode == ScoringMode::Official && self.official_summary.is_none() {
             return Err("official evaluation requires official_summary".to_string());
@@ -189,10 +221,10 @@ fn validate_score(value: f64, field: &str) -> Result<(), String> {
 mod tests {
     use super::{ScoreSummary, ScorerRunResult, ScorerRunStatus, ScoringMode};
 
-    fn valid_public_result() -> ScorerRunResult {
+    fn valid_validation_result() -> ScorerRunResult {
         ScorerRunResult {
             status: ScorerRunStatus::Passed,
-            mode: Some(ScoringMode::Public),
+            mode: Some(ScoringMode::Validation),
             primary_score: 1.0,
             shown_results: vec![],
             hidden_summary: Some(ScoreSummary {
@@ -207,7 +239,7 @@ mod tests {
 
     #[test]
     fn scorer_mode_mismatch_is_rejected() {
-        let mut result = valid_public_result();
+        let mut result = valid_validation_result();
         result.mode = Some(ScoringMode::Official);
         result.official_summary = Some(ScoreSummary {
             score: 1.0,
@@ -215,15 +247,26 @@ mod tests {
             total: 1,
         });
 
-        assert!(result.validate_for_mode(ScoringMode::Public).is_err());
+        assert!(result.validate_for_mode(ScoringMode::Validation).is_err());
     }
 
     #[test]
     fn scorer_mode_can_be_absent() {
-        let mut result = valid_public_result();
+        let mut result = valid_validation_result();
         result.mode = None;
 
-        assert!(result.validate_for_mode(ScoringMode::Public).is_ok());
+        assert!(result.validate_for_mode(ScoringMode::Validation).is_ok());
+    }
+
+    #[test]
+    fn legacy_public_mode_deserializes_as_validation() {
+        let mode: ScoringMode = serde_json::from_str("\"public\"").expect("legacy mode parses");
+
+        assert_eq!(mode, ScoringMode::Validation);
+        assert_eq!(
+            serde_json::to_string(&mode).expect("mode serializes"),
+            "\"validation\""
+        );
     }
 }
 

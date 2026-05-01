@@ -243,7 +243,7 @@ curl -sS -X POST http://127.0.0.1:3000/api/submissions \
   }"
 ```
 
-The API creates a queued public evaluation job. The worker will claim it,
+The API creates a queued validation evaluation job. The worker will claim it,
 execute the scorer in Docker, persist the result, and make the submission
 visible publicly if evaluation completes.
 

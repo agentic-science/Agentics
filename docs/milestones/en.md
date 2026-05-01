@@ -242,7 +242,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 | `M0.1-CLI-4: Submission packaging and official submit` | Implemented | Adds `.gitignore`-aware ZIP packaging, root `run.sh` validation, authenticated `submit`, and `status`. |
 | `M0.1-CLI-5: Remote validation commands` | Planned | Depends on first-class validation API. |
 | `M0.1-BE-1: Add first-class validation run API` | Planned | Backend prerequisite for remote validation. |
-| `M0.1-BE-2: Normalize validation and official terminology` | Planned | Coordinate with worker and API clients. |
+| `M0.1-BE-2: Normalize validation and official terminology` | Implemented | Canonical mode is now `validation`; legacy `public` values remain accepted for compatibility. |
 | `M0.1-BE-3: Add metric schema and ranking metadata` | Planned | Enables richer metric rendering and ranking clarity. |
 | `M0.1-BE-4: Add Moltbook community metadata` | Planned | Enables v0.1 Moltbook links. |
 | `M0.1-WORKER-1: Separate validation and official job execution` | Planned | Depends on evaluation mode terminology. |

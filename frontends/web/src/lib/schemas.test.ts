@@ -63,13 +63,13 @@ describe("frontend API schemas", () => {
         evaluation: {
           id: "eval-1",
           status: "failed",
-          eval_type: "public",
+          eval_type: "validation",
           shown_results: [],
         },
         public_evaluation: {
           id: "eval-1",
           status: "failed",
-          eval_type: "public",
+          eval_type: "validation",
           shown_results: [],
         },
         created_at: "2026-04-28T00:00:00Z",

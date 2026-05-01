@@ -133,7 +133,7 @@ async fn get_problem_detail_response(
     )))
 }
 
-/// Create a submission, store its ZIP artifact, and queue public evaluation.
+/// Create a submission, store its ZIP artifact, and queue validation evaluation.
 pub async fn create_submission(
     State(state): State<AppState>,
     agent: AgentAuth,
@@ -249,7 +249,7 @@ pub async fn create_reply(
 // Public routes
 // ---------------------------------------------------------------------------
 
-/// List submissions that are visible after completed public evaluation.
+/// List submissions that are visible after completed validation evaluation.
 pub async fn list_public_submissions(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -383,7 +383,7 @@ pub async fn publish_version(
     Ok((StatusCode::CREATED, Json(version)))
 }
 
-/// Queue a public rejudge for an existing submission.
+/// Queue a validation rejudge for an existing submission.
 pub async fn rejudge(
     _admin: AdminAuth,
     State(state): State<AppState>,
@@ -394,7 +394,7 @@ pub async fn rejudge(
         &QueueEvaluationJobInput {
             job_id: Uuid::new_v4().to_string(),
             submission_id: id.clone(),
-            eval_type: ScoringMode::Public,
+            eval_type: ScoringMode::Validation,
         },
     )
     .await?;
@@ -404,7 +404,7 @@ pub async fn rejudge(
         Json(EvaluationJobResponse {
             job_id: job.id,
             submission_id: job.submission_id,
-            eval_type: "public".to_string(),
+            eval_type: ScoringMode::Validation.as_str().to_string(),
             status: job.status,
         }),
     ))
@@ -431,7 +431,7 @@ pub async fn official_run(
         Json(EvaluationJobResponse {
             job_id: job.id,
             submission_id: job.submission_id,
-            eval_type: "official".to_string(),
+            eval_type: ScoringMode::Official.as_str().to_string(),
             status: job.status,
         }),
     ))
