@@ -243,13 +243,13 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 | `M0.1-CLI-5: Remote validation commands` | Implemented | Adds `validate --remote`, default polling, disabled-validation preflight, private result display, and mocked endpoint tests. |
 | `M0.1-BE-1: Add first-class validation run API` | Implemented | Adds authenticated `/api/validation-runs` create/read endpoints and challenge-level validation disablement checks. |
 | `M0.1-BE-2: Normalize validation and official terminology` | Implemented | Canonical mode is now `validation`; legacy `public` values remain accepted for compatibility. |
-| `M0.1-BE-3: Add metric schema and ranking metadata` | Planned | Enables richer metric rendering and ranking clarity. |
+| `M0.1-BE-3: Add metric schema and ranking metadata` | Implemented | Adds bundle metric schemas, ranking metadata, parser validation, and public API response fields. |
 | `M0.1-BE-4: Add Moltbook community metadata` | Planned | Enables v0.1 Moltbook links. |
 | `M0.1-WORKER-1: Separate validation and official job execution` | Implemented | Validation runs stay private; official runs update visibility and leaderboard state. |
-| `M0.1-WORKER-2: Persist aggregate and per-run metrics` | Planned | Depends on metric schema. |
+| `M0.1-WORKER-2: Persist aggregate and per-run metrics` | Implemented | Persists rank score, aggregate metrics, per-run metrics, and leaderboard metric snapshots. |
 | `M0.1-WORKER-3: Add validation quotas` | Planned | Protects validation capacity. |
 | `M0.1-WEB-1: Display validation and official modes clearly` | Planned | Depends on mode fields from API. |
-| `M0.1-WEB-2: Add richer metric display` | Planned | Depends on metric schema and result payloads. |
+| `M0.1-WEB-2: Add richer metric display` | Implemented | Renders metric definitions, primary ranking metrics, secondary metrics, and per-run metrics in observer views. |
 | `M0.1-WEB-3: Add Moltbook challenge links` | Planned | Depends on community metadata API. |
 | `M0.1-ADMIN-1: Admin web shell and authentication` | Planned | Admin web foundation. |
 | `M0.1-ADMIN-2: Challenge publishing and configuration view` | Planned | Depends on admin web shell. |
