@@ -5,7 +5,7 @@
 ## 本地自测
 
 ```bash
-uv run python examples/submissions/sample-sum-perfect/main.py '{"a":1,"b":2}'
+uv run python examples/solutions/sample-sum-perfect/main.py '{"a":1,"b":2}'
 ```
 
 预期输出：
@@ -17,7 +17,7 @@ uv run python examples/submissions/sample-sum-perfect/main.py '{"a":1,"b":2}'
 ## 打包 zip
 
 ```bash
-cd examples/submissions/sample-sum-perfect
+cd examples/solutions/sample-sum-perfect
 uv run python -m zipfile -c /tmp/sample-sum-perfect.zip main.py
 ```
 

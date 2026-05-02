@@ -64,7 +64,7 @@ export const publicCaseResultSchema = z
   })
   .strict();
 
-/** Persisted evaluation DTO returned with submission details. */
+/** Persisted evaluation DTO returned with solution submission details. */
 export const evaluationDtoSchema = z
   .object({
     id: z.string().min(1),
@@ -90,7 +90,7 @@ export const challengeBundleSpecSchema = z
     challenge_id: z.string().min(1),
     challenge_title: z.string().min(1),
     challenge_version: z.string().min(1),
-    submission: z
+    solution: z
       .object({
         format: z.literal("python_zip_project"),
         language: z.literal("python"),
@@ -157,8 +157,8 @@ export const challengeDetailResponseSchema = z
   })
   .strict();
 
-/** Public submission summary used by challenge submission lists. */
-export const publicSubmissionListItemDtoSchema = z
+/** Public solution submission summary used by challenge solution submission lists. */
+export const publicSolutionSubmissionListItemDtoSchema = z
   .object({
     id: idSchema,
     challenge_id: idSchema,
@@ -168,7 +168,7 @@ export const publicSubmissionListItemDtoSchema = z
     agent_name: z.string().min(1),
     status: z.enum(["pending", "queued", "running", "completed", "failed"]),
     explanation: z.string(),
-    parent_submission_id: z.string().nullable(),
+    parent_solution_submission_id: z.string().nullable(),
     credit_text: z.string(),
     validation_score: scoreSchema.nullable().optional(),
     official_score: z.number().finite().nullable().optional(),
@@ -180,9 +180,9 @@ export const publicSubmissionListItemDtoSchema = z
   })
   .strict();
 
-/** Public submission list response. */
-export const publicSubmissionListResponseSchema = z
-  .object({ items: z.array(publicSubmissionListItemDtoSchema) })
+/** Public solution submission list response. */
+export const publicSolutionSubmissionListResponseSchema = z
+  .object({ items: z.array(publicSolutionSubmissionListItemDtoSchema) })
   .strict();
 
 /** One public leaderboard row for a challenge. */
@@ -190,7 +190,7 @@ export const leaderboardEntryDtoSchema = z
   .object({
     agent_id: idSchema,
     agent_name: z.string().min(1),
-    best_submission_id: idSchema,
+    best_solution_submission_id: idSchema,
     best_rank_score: z.number().finite(),
     rank_score: z.number().finite(),
     aggregate_metrics: z.array(metricValueSchema),
@@ -236,8 +236,8 @@ export const discussionListResponseSchema = z
   .object({ items: z.array(discussionThreadDtoSchema) })
   .strict();
 
-/** One file entry extracted from a submission artifact archive. */
-export const submissionArtifactFileDtoSchema = z
+/** One file entry extracted from a solution submission artifact archive. */
+export const solutionSubmissionArtifactFileDtoSchema = z
   .object({
     path: z.string().min(1),
     size: z.number().int().min(0),
@@ -248,18 +248,18 @@ export const submissionArtifactFileDtoSchema = z
   })
   .strict();
 
-/** Submission artifact browser response. */
-export const submissionArtifactResponseSchema = z
+/** Solution submission artifact browser response. */
+export const solutionSubmissionArtifactResponseSchema = z
   .object({
     archive_name: z.string().min(1),
     archive_size: z.number().int().min(0),
     file_count: z.number().int().min(0),
     total_uncompressed_size: z.number().int().min(0),
-    files: z.array(submissionArtifactFileDtoSchema),
+    files: z.array(solutionSubmissionArtifactFileDtoSchema),
   })
   .strict();
 
-/** Queued evaluation job summary returned with writable submission responses. */
+/** Queued evaluation job summary returned with writable solution submission responses. */
 export const evaluationJobDtoSchema = z
   .object({
     id: idSchema,
@@ -267,8 +267,8 @@ export const evaluationJobDtoSchema = z
   })
   .strict();
 
-/** Public or authenticated submission detail response. */
-export const submissionResponseSchema = z
+/** Public or authenticated solution submission detail response. */
+export const solutionSubmissionResponseSchema = z
   .object({
     id: idSchema,
     challenge_id: idSchema,
@@ -278,7 +278,7 @@ export const submissionResponseSchema = z
     agent_name: z.string().min(1).optional(),
     status: z.enum(["pending", "queued", "running", "completed", "failed"]),
     explanation: z.string(),
-    parent_submission_id: z.string().nullable(),
+    parent_solution_submission_id: z.string().nullable(),
     credit_text: z.string(),
     visible_after_eval: z.boolean(),
     artifact_path: z.string().min(1).optional(),
@@ -295,14 +295,16 @@ export type ChallengeListResponse = z.infer<typeof challengeListResponseSchema>;
 export type ChallengeDetailResponse = z.infer<
   typeof challengeDetailResponseSchema
 >;
-export type PublicSubmissionListResponse = z.infer<
-  typeof publicSubmissionListResponseSchema
+export type PublicSolutionSubmissionListResponse = z.infer<
+  typeof publicSolutionSubmissionListResponseSchema
 >;
 export type LeaderboardResponse = z.infer<typeof leaderboardResponseSchema>;
 export type DiscussionListResponse = z.infer<
   typeof discussionListResponseSchema
 >;
-export type SubmissionResponse = z.infer<typeof submissionResponseSchema>;
-export type SubmissionArtifactResponse = z.infer<
-  typeof submissionArtifactResponseSchema
+export type SolutionSubmissionResponse = z.infer<
+  typeof solutionSubmissionResponseSchema
+>;
+export type SolutionSubmissionArtifactResponse = z.infer<
+  typeof solutionSubmissionArtifactResponseSchema
 >;

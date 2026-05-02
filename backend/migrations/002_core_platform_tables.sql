@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS challenge_versions (
   UNIQUE (challenge_id, version)
 );
 
-CREATE TABLE IF NOT EXISTS submissions (
+CREATE TABLE IF NOT EXISTS solution_submissions (
   id TEXT PRIMARY KEY,
   challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE RESTRICT,
   challenge_version_id TEXT NOT NULL REFERENCES challenge_versions(id) ON DELETE RESTRICT,
@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS submissions (
   language TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'queued', 'running', 'completed', 'failed')),
   explanation TEXT NOT NULL DEFAULT '',
-  parent_submission_id TEXT REFERENCES submissions(id) ON DELETE SET NULL,
+  parent_solution_submission_id TEXT REFERENCES solution_submissions(id) ON DELETE SET NULL,
   credit_text TEXT NOT NULL DEFAULT '',
   visible_after_eval BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS submissions (
 
 CREATE TABLE IF NOT EXISTS evaluation_jobs (
   id TEXT PRIMARY KEY,
-  submission_id TEXT NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
+  solution_submission_id TEXT NOT NULL REFERENCES solution_submissions(id) ON DELETE CASCADE,
   challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE RESTRICT,
   challenge_version_id TEXT NOT NULL REFERENCES challenge_versions(id) ON DELETE RESTRICT,
   eval_type TEXT NOT NULL CHECK (eval_type IN ('validation', 'official')),
@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS evaluation_jobs (
 
 CREATE TABLE IF NOT EXISTS evaluations (
   id TEXT PRIMARY KEY,
-  submission_id TEXT NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
+  solution_submission_id TEXT NOT NULL REFERENCES solution_submissions(id) ON DELETE CASCADE,
   job_id TEXT NOT NULL REFERENCES evaluation_jobs(id) ON DELETE CASCADE UNIQUE,
   eval_type TEXT NOT NULL CHECK (eval_type IN ('validation', 'official')),
   status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'completed', 'failed')),
@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS evaluations (
 CREATE TABLE IF NOT EXISTS leaderboard_entries (
   challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
   agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-  best_submission_id TEXT NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
+  best_solution_submission_id TEXT NOT NULL REFERENCES solution_submissions(id) ON DELETE CASCADE,
   best_rank_score DOUBLE PRECISION NOT NULL DEFAULT 0,
   public_results_json JSONB NOT NULL DEFAULT '[]'::jsonb,
   official_score DOUBLE PRECISION,
@@ -122,10 +122,10 @@ CREATE TABLE IF NOT EXISTS discussion_replies (
 
 CREATE INDEX IF NOT EXISTS idx_agent_tokens_agent_id ON agent_tokens (agent_id);
 CREATE INDEX IF NOT EXISTS idx_challenge_versions_challenge_id ON challenge_versions (challenge_id);
-CREATE INDEX IF NOT EXISTS idx_submissions_challenge_agent ON submissions (challenge_id, agent_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_submissions_challenge_version ON submissions (challenge_version_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_solution_submissions_challenge_agent ON solution_submissions (challenge_id, agent_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_solution_submissions_challenge_version ON solution_submissions (challenge_version_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_evaluation_jobs_status_scheduled ON evaluation_jobs (status, scheduled_at, priority DESC);
-CREATE INDEX IF NOT EXISTS idx_evaluation_jobs_submission_id ON evaluation_jobs (submission_id);
-CREATE INDEX IF NOT EXISTS idx_evaluations_submission_id ON evaluations (submission_id);
+CREATE INDEX IF NOT EXISTS idx_evaluation_jobs_solution_submission_id ON evaluation_jobs (solution_submission_id);
+CREATE INDEX IF NOT EXISTS idx_evaluations_solution_submission_id ON evaluations (solution_submission_id);
 CREATE INDEX IF NOT EXISTS idx_discussion_threads_challenge_id ON discussion_threads (challenge_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_discussion_replies_thread_id ON discussion_replies (thread_id, created_at ASC);

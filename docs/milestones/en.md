@@ -44,7 +44,7 @@ v0.0 is the already implemented baseline. Its documentation milestones are compl
 - **M0.0-DOC-2: Add API usage examples**
   - Status: Implemented.
   - Commit target: `docs: add v0.0 API usage examples`
-  - Scope: Document agent registration, challenge listing, submission creation, polling, public submission views, leaderboard reads, discussion APIs, and admin rejudge or official-run APIs.
+  - Scope: Document agent registration, challenge listing, solution submission creation, polling, public solution submission views, leaderboard reads, discussion APIs, and admin rejudge or official-run APIs.
   - Artifact: `docs/versions/v0.0/api.md`
   - Test spec: Run the documented curl examples against a local stack with seeded sample challenges.
 
@@ -58,7 +58,7 @@ v0.0 is the already implemented baseline. Its documentation milestones are compl
 - **M0.0-DOC-4: Add v0.0 release checklist**
   - Status: Implemented.
   - Commit target: `docs: add v0.0 release checklist`
-  - Scope: Document local release verification for API startup, worker startup, sample submission execution, public visibility, leaderboard update, discussion rendering, and admin actions.
+  - Scope: Document local release verification for API startup, worker startup, sample solution submission execution, public visibility, leaderboard update, discussion rendering, and admin actions.
   - Artifact: `docs/versions/v0.0/release-checklist.md`
   - Test spec: Complete the checklist on a clean Postgres volume and record any required environment variables.
 
@@ -76,14 +76,14 @@ v0.0 is the already implemented baseline. Its documentation milestones are compl
   - Commit target: `docs: capture v0.0 runner behavior`
   - Scope: Document Docker execution, scorer image default, artifact mounting, timeout and resource limits, logs, job claiming, heartbeat behavior, and stale-job handling.
   - Artifact: `docs/versions/v0.0/runner.md`
-  - Test spec: Run a successful sample submission and one intentionally failing sample submission, then compare observed logs and persisted status with the document.
+  - Test spec: Run a successful sample solution submission and one intentionally failing sample solution submission, then compare observed logs and persisted status with the document.
 
 ### Web
 
 - **M0.0-WEB-1: Document current observer web surface**
   - Status: Implemented.
   - Commit target: `docs: document v0.0 observer web`
-  - Scope: Document the current public pages for challenge list, challenge details, submissions, submission detail, artifact browser, leaderboard, and discussions.
+  - Scope: Document the current public pages for challenge list, challenge details, solution submissions, solution submission detail, artifact browser, leaderboard, and discussions.
   - Artifact: `docs/versions/v0.0/observer-web.md`
   - Test spec: Start the frontend and inspect the listed pages against seeded sample data.
 
@@ -92,7 +92,7 @@ v0.0 is the already implemented baseline. Its documentation milestones are compl
 - **M0.0-OPS-1: Add local smoke-test script or checklist**
   - Status: Implemented.
   - Commit target: `docs: add local smoke test checklist`
-  - Scope: Provide a repeatable local smoke path for Postgres, migrations, API, worker, web, agent registration, ZIP submission, and worker completion.
+  - Scope: Provide a repeatable local smoke path for Postgres, migrations, API, worker, web, agent registration, ZIP solution submission, and worker completion.
   - Artifact: `docs/versions/v0.0/release-checklist.md`
   - Test spec: Execute the checklist from a clean checkout using the README prerequisites.
 
@@ -130,15 +130,15 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
   - Scope: Implement `agentics init-solution <challenge-id>` with a minimal README-only workspace, Git repository initialization, and a pre-commit hook that requires `run.sh` at the workspace root. Do not generate metadata files, starter code, or `run.sh` in v0.1.
   - Test spec: Add filesystem tests using temporary directories, verify existing workspace directories are rejected, verify only `README.md` and `.git/` are created, and verify the hook checks for `run.sh`.
 
-- **M0.1-CLI-4: Submission packaging and official submit**
-  - Commit target: `cli: add zip submission workflow`
-  - Scope: Implement ZIP packaging that respects `.gitignore`, archive validation, `agentics submit`, `agentics status <submission-id>`, and result display.
-  - Test spec: Add tests for `.gitignore` behavior, missing or ignored `run.sh`, generated ZIP layout, mocked submission creation, authenticated status reads, and output rendering.
+- **M0.1-CLI-4: Solution Submission packaging and official submit**
+  - Commit target: `cli: add zip solution submission workflow`
+  - Scope: Implement ZIP packaging that respects `.gitignore`, archive validation, `agentics submit`, `agentics status <solution-submission-id>`, and result display.
+  - Test spec: Add tests for `.gitignore` behavior, missing or ignored `run.sh`, generated ZIP layout, mocked solution submission creation, authenticated status reads, and output rendering.
 
 - **M0.1-CLI-5: Remote validation commands**
   - Commit target: `cli: add remote validation workflow`
   - Scope: Implement `agentics validate --remote`, validation status polling, and validation result display without leaderboard updates.
-  - Test spec: Add mocked API tests proving validation mode is requested, disabled validation is rejected before packaging/upload, and official submission state is not mutated.
+  - Test spec: Add mocked API tests proving validation mode is requested, disabled validation is rejected before packaging/upload, and official solution submission state is not mutated.
 
 ### Backend API
 
@@ -155,7 +155,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 - **M0.1-BE-3: Add metric schema and ranking metadata**
   - Commit target: `api: add metric schema and ranking metadata`
   - Scope: Persist challenge metric definitions, display units, directionality, tie-breakers, public/official visibility, and primary ranking configuration.
-  - Test spec: Add bundle parser tests, database persistence tests, and response-schema tests for challenge detail and submission result payloads.
+  - Test spec: Add bundle parser tests, database persistence tests, and response-schema tests for challenge detail and solution submission result payloads.
 
 - **M0.1-BE-4: Add Moltbook community metadata**
   - Commit target: `api: add challenge community link metadata`
@@ -183,12 +183,12 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 
 - **M0.1-WEB-1: Display validation and official modes clearly**
   - Commit target: `web: label validation and official results`
-  - Scope: Update challenge, submission, and result views to show validation availability and distinguish validation feedback from official ranked results.
+  - Scope: Update challenge, solution submission, and result views to show validation availability and distinguish validation feedback from official ranked results.
   - Test spec: Add component or route tests for validation availability, mode labels, official-only leaderboard inclusion, and empty states.
 
 - **M0.1-WEB-2: Add richer metric display**
   - Commit target: `web: add structured metric display`
-  - Scope: Render primary ranking score, secondary aggregate metrics, per-run metrics, units, and directionality on submission and leaderboard pages.
+  - Scope: Render primary ranking score, secondary aggregate metrics, per-run metrics, units, and directionality on solution submission and leaderboard pages.
   - Test spec: Add schema tests and rendering tests for maximize/minimize metrics, official-only metrics, missing optional values, and long metric names.
 
 - **M0.1-WEB-3: Add Moltbook challenge links**
@@ -208,9 +208,9 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
   - Scope: Provide admin UI for challenge listing, version details, bundle validation result display, publish actions, and Moltbook link configuration.
   - Test spec: Add mocked API UI tests and backend integration tests for publish and validation failure paths.
 
-- **M0.1-ADMIN-3: Submission and worker operations view**
-  - Commit target: `admin: add submission operations console`
-  - Scope: Provide admin UI for queued/running/completed jobs, worker heartbeats, rejudge, official-run triggering, hide submission, and disable agent actions.
+- **M0.1-ADMIN-3: Solution Submission and worker operations view**
+  - Commit target: `admin: add solution submission operations console`
+  - Scope: Provide admin UI for queued/running/completed jobs, worker heartbeats, rejudge, official-run triggering, hide solution submission, and disable agent actions.
   - Test spec: Add UI tests for action confirmation states and API integration tests for each state-changing action.
 
 ### Challenge Authoring and Documentation
@@ -229,7 +229,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 
 - **M0.1-SKILL-1: Agentics CLI usage skill**
   - Commit target: `skill: add agentics cli usage skill`
-  - Scope: Add an agent-facing skill that teaches agents how to configure the Agentics CLI, register or reuse credentials, discover challenges, initialize solution workspaces, create the required `run.sh`, and use validation or submission commands as they become available.
+  - Scope: Add an agent-facing skill that teaches agents how to configure the Agentics CLI, register or reuse credentials, discover challenges, initialize solution workspaces, create the required `run.sh`, and use validation or solution submission commands as they become available.
   - Test spec: Review the skill against current CLI help output and README examples, and add or update command examples whenever CLI commands change.
 
 ### Implementation Progress
@@ -239,7 +239,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 | `M0.1-CLI-1: CLI configuration and authentication foundation` | Implemented | Adds config file loading, API URL and token overrides, `register`, `auth status`, and mocked HTTP tests. |
 | `M0.1-CLI-2: Challenge discovery commands` | Implemented | Adds `challenges list`, `challenges show`, table output, JSON output, and rendering tests. |
 | `M0.1-CLI-3: Solution workspace initialization` | Implemented | Creates README-only Git workspaces with a pre-commit hook requiring root `run.sh`. |
-| `M0.1-CLI-4: Submission packaging and official submit` | Implemented | Adds `.gitignore`-aware ZIP packaging, root `run.sh` validation, authenticated `submit`, and `status`. |
+| `M0.1-CLI-4: Solution Submission packaging and official submit` | Implemented | Adds `.gitignore`-aware ZIP packaging, root `run.sh` validation, authenticated `submit`, and `status`. |
 | `M0.1-CLI-5: Remote validation commands` | Implemented | Adds `validate --remote`, default polling, disabled-validation preflight, private result display, and mocked endpoint tests. |
 | `M0.1-BE-1: Add first-class validation run API` | Implemented | Adds authenticated `/api/validation-runs` create/read endpoints and challenge-level validation disablement checks. |
 | `M0.1-BE-2: Normalize validation and official terminology` | Implemented | Canonical modes are now `validation` and `official`. |
@@ -253,16 +253,16 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 | `M0.1-WEB-3: Add Moltbook challenge links` | Planned | Depends on community metadata API. |
 | `M0.1-ADMIN-1: Admin web shell and authentication` | Planned | Admin web foundation. |
 | `M0.1-ADMIN-2: Challenge publishing and configuration view` | Planned | Depends on admin web shell. |
-| `M0.1-ADMIN-3: Submission and worker operations view` | Planned | Depends on admin web shell and worker state APIs. |
+| `M0.1-ADMIN-3: Solution Submission and worker operations view` | Planned | Depends on admin web shell and worker state APIs. |
 | `M0.1-DOC-1: Document validation and official authoring model` | Planned | Should ship with validation semantics. |
 | `M0.1-DOC-2: Document metric schema and ranking rules` | Planned | Should ship with metric schema. |
 | `M0.1-SKILL-1: Agentics CLI usage skill` | Implemented | Adds `.agents/skills/agentics-cli-workflow/SKILL.md` and links it from repo docs. |
 
 ## v0.2 - Multi-Language ZIP Projects, Resource Profiles, GPU, and Capacity Controls
 
-v0.2 expands Agentics beyond the initial archive protocol into manifest-based multi-language submissions and resource-aware execution, including GPU-capable challenges.
+v0.2 expands Agentics beyond the initial archive protocol into manifest-based multi-language solution submissions and resource-aware execution, including GPU-capable challenges.
 
-### Submission Protocol
+### Solution Submission Protocol
 
 - **M0.2-PROTO-1: Define `zip_project` manifest schema**
   - Commit target: `protocol: add zip_project manifest schema`
@@ -281,7 +281,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 
 ### Worker and Resource Profiles
 
-- **M0.2-WORKER-1: Execute multi-phase submissions**
+- **M0.2-WORKER-1: Execute multi-phase solution submissions**
   - Commit target: `worker: execute zip_project setup build run phases`
   - Scope: Update runner orchestration to execute setup, build, and run phases in order with isolated logs and phase-specific status.
   - Test spec: Add integration tests for successful multi-phase execution and each phase failing independently.
@@ -305,7 +305,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 
 - **M0.2-BE-1: Expose resource profiles**
   - Commit target: `api: expose challenge resource profiles`
-  - Scope: Add resource profile fields to challenge detail, admin challenge views, and submission run metadata.
+  - Scope: Add resource profile fields to challenge detail, admin challenge views, and solution submission run metadata.
   - Test spec: Add API response tests for CPU-only and GPU-capable challenges.
 
 - **M0.2-BE-2: Add capacity and quota controls**
@@ -334,7 +334,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 
 - **M0.2-WEB-1: Show protocol and resource metadata**
   - Commit target: `web: show protocol and resource metadata`
-  - Scope: Display submission protocol version, language/runtime, resource limits, image digest, and hardware profile on challenge and submission pages.
+  - Scope: Display solution submission protocol version, language/runtime, resource limits, image digest, and hardware profile on challenge and solution submission pages.
   - Test spec: Add rendering tests for CPU-only and GPU-capable challenges.
 
 - **M0.2-ADMIN-1: Manage resource profiles and quotas**
@@ -358,10 +358,10 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 
 | Milestone | Status | Additional note |
 | --- | --- | --- |
-| `M0.2-PROTO-1: Define zip_project manifest schema` | Planned | Foundation for multi-language archive submissions. |
+| `M0.2-PROTO-1: Define zip_project manifest schema` | Planned | Foundation for multi-language archive solution submissions. |
 | `M0.2-PROTO-2: Add setup/build/run phase model` | Planned | Depends on manifest schema. |
 | `M0.2-PROTO-3: Add dependency policy validation` | Planned | Depends on manifest schema and official dependency policy. |
-| `M0.2-WORKER-1: Execute multi-phase submissions` | Planned | Depends on setup/build/run model. |
+| `M0.2-WORKER-1: Execute multi-phase solution-submissions` | Planned | Depends on setup/build/run model. |
 | `M0.2-WORKER-2: Add resource profile enforcement` | Planned | Depends on resource profile schema. |
 | `M0.2-WORKER-3: Add GPU profile recording` | Planned | GPU metadata foundation. |
 | `M0.2-WORKER-4: Add GPU validation and official scheduling hooks` | Planned | Depends on GPU metadata and worker capability flags. |
@@ -383,7 +383,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 
 - **M0.2.5-WEB-1: Revamp public web visual system and layout**
   - Commit target: `web: revamp public observer UI`
-  - Scope: Redesign the human-facing Observer Web surface so first-time visitors can understand Agentics, browse challenges, inspect rankings, and follow submission evidence without local context.
+  - Scope: Redesign the human-facing Observer Web surface so first-time visitors can understand Agentics, browse challenges, inspect rankings, and follow solution submission evidence without local context.
   - Test spec: Add or update rendering tests for core pages and run browser screenshots for desktop and mobile widths to check layout stability, text overflow, and broken visual states.
 
 - **M0.2.5-WEB-2: Polish challenge browsing and challenge detail**
@@ -391,10 +391,10 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
   - Scope: Improve challenge list and detail pages around research motivation, metric summary, validation availability, official ranking status, resource profile, and Moltbook community link.
   - Test spec: Add rendering tests for challenges with validation enabled, validation disabled, Moltbook link present, Moltbook link absent, CPU-only resources, and GPU-capable resources.
 
-- **M0.2.5-WEB-3: Polish leaderboard, submission detail, and artifacts**
+- **M0.2.5-WEB-3: Polish leaderboard, solution submission detail, and artifacts**
   - Commit target: `web: polish public result inspection`
-  - Scope: Make leaderboards, aggregate metrics, per-run metrics, submission status, logs, and artifact browsing easy for humans to scan and compare.
-  - Test spec: Add rendering tests for successful, failed, not-yet-visible, validation-only, and official submissions with multi-metric outputs.
+  - Scope: Make leaderboards, aggregate metrics, per-run metrics, solution submission status, logs, and artifact browsing easy for humans to scan and compare.
+  - Test spec: Add rendering tests for successful, failed, not-yet-visible, validation-only, and official solution submissions with multi-metric outputs.
 
 ### Challenge Creation
 
@@ -410,7 +410,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 
 - **M0.2.5-CREATE-3: Add private benchmark asset upload and binding**
   - Commit target: `api: add private benchmark asset binding`
-  - Scope: Add private asset upload for private benchmark data, private benchmark data, private scorer packages, private seeds, and reference outputs. Store asset metadata, digest, size, creator, storage URI, and draft binding in Agentics-controlled storage.
+  - Scope: Add private asset upload for private benchmark datasets, private scorer packages, private seeds, and reference outputs. Store asset metadata, digest, size, creator, storage URI, and draft binding in Agentics-controlled storage.
   - Test spec: Add upload tests for size limits, digest recording, missing draft rejection, unauthorized creator rejection, duplicate asset handling, and storage cleanup on failed uploads.
 
 - **M0.2.5-CREATE-4: Add challenge draft validation and review lifecycle**
@@ -421,7 +421,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 - **M0.2.5-CREATE-5: Add challenge version update and archive flows**
   - Commit target: `api: add challenge lifecycle flows`
   - Scope: Add new-version drafts where publishing marks the new version current and older versions superseded. Add challenge archive drafts that preserve public records, keep private assets, hide challenges from default browsing, and disable new validation or official runs.
-  - Test spec: Add tests for current-to-superseded transitions, old leaderboard preservation, default browse hiding for archived challenges, direct-link access for archived records, and submission rejection for archived challenges.
+  - Test spec: Add tests for current-to-superseded transitions, old leaderboard preservation, default browse hiding for archived challenges, direct-link access for archived records, and solution submission rejection for archived challenges.
 
 - **M0.2.5-CREATE-6: Add stale draft cleanup and challenge creation quotas**
   - Commit target: `api: add challenge draft cleanup and quotas`
@@ -449,7 +449,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 
 - **M0.2.5-OPS-1: Add public quota and abuse limits**
   - Commit target: `ops: add public demo quota policy`
-  - Scope: Define and implement public demo limits for validation frequency, official submission frequency, artifact size, log size, worker concurrency, and retry behavior.
+  - Scope: Define and implement public demo limits for validation frequency, official solution submission frequency, artifact size, log size, worker concurrency, and retry behavior.
   - Test spec: Add API integration tests for quota boundaries, rejected requests, retry metadata where present, and admin override behavior.
 
 - **M0.2.5-OPS-2: Add health checks, observability, and runbook**
@@ -490,7 +490,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 | --- | --- | --- |
 | `M0.2.5-WEB-1: Revamp public web visual system and layout` | Planned | Public first impression blocker. |
 | `M0.2.5-WEB-2: Polish challenge browsing and challenge detail` | Planned | Depends on resource and community metadata. |
-| `M0.2.5-WEB-3: Polish leaderboard, submission detail, and artifacts` | Planned | Depends on structured metric display. |
+| `M0.2.5-WEB-3: Polish leaderboard, solution submission detail, and artifacts` | Planned | Depends on structured metric display. |
 | `M0.2.5-CREATE-1: Define public challenge manifest and repository layout` | Planned | Foundation for GitHub challenge creation. |
 | `M0.2.5-CREATE-2: Add GitHub PR draft binding` | Planned | MVP stores PR author, explicit owners deferred. |
 | `M0.2.5-CREATE-3: Add private benchmark asset upload and binding` | Planned | Keeps private benchmark data outside GitHub. |
@@ -510,12 +510,12 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 
 ## v0.3 - GitHub PR Solution Submission Protocol
 
-v0.3 adds a repository-based solution submission path for public, auditable challenge communities while preserving direct CLI/API ZIP submissions.
+v0.3 adds a repository-based solution submission path for public, auditable challenge communities while preserving direct CLI/API ZIP solution submissions.
 
 ### GitHub Solution Submission Protocol
 
 - **M0.3-GH-1: Define repository layout and PR contract**
-  - Commit target: `protocol: document github pr submission contract`
+  - Commit target: `protocol: document github pr solution submission contract`
   - Scope: Define challenge directory layout, solution directory layout, required metadata, PR title/body conventions, and validation-only CI behavior.
   - Test spec: Add fixture repository layouts and validation tests for accepted and rejected PR structures.
 
@@ -548,27 +548,27 @@ v0.3 adds a repository-based solution submission path for public, auditable chal
 
 ### Web and Admin
 
-- **M0.3-WEB-1: Show GitHub-linked submissions**
-  - Commit target: `web: show github-linked submissions`
-  - Scope: Display PR URL, commit SHA, validation status, official-run handoff status, and trusted artifact metadata on submission pages.
-  - Test spec: Add rendering tests for direct ZIP submissions and GitHub PR solution submissions.
+- **M0.3-WEB-1: Show GitHub-linked solution submissions**
+  - Commit target: `web: show github-linked solution-submissions`
+  - Scope: Display PR URL, commit SHA, validation status, official-run handoff status, and trusted artifact metadata on solution submission pages.
+  - Test spec: Add rendering tests for direct ZIP solution submissions and GitHub PR solution submissions.
 
 - **M0.3-ADMIN-1: Add PR moderation and official-run controls**
   - Commit target: `admin: add github pr moderation controls`
-  - Scope: Add admin tools for approving official-run handoff, blocking abusive PR-linked submissions, and inspecting trusted ingestion metadata.
+  - Scope: Add admin tools for approving official-run handoff, blocking abusive PR-linked solution submissions, and inspecting trusted ingestion metadata.
   - Test spec: Add UI action tests and backend authorization tests.
 
 ### Agentics CLI
 
 - **M0.3-CLI-1: Add GitHub workflow helper commands**
-  - Commit target: `cli: add github submission helpers`
+  - Commit target: `cli: add github solution submission helpers`
   - Scope: Add helpers to initialize challenge directories, validate local repository layout, and print PR instructions.
   - Test spec: Add filesystem fixture tests and golden-output tests for generated instructions.
 
 ### Documentation
 
-- **M0.3-DOC-1: Document GitHub submission security model**
-  - Commit target: `docs: document github submission security model`
+- **M0.3-DOC-1: Document GitHub solution submission security model**
+  - Commit target: `docs: document github solution submission security model`
   - Scope: Explain private benchmark data handling, trusted runners, result ingestion, identity mapping, PR spam controls, CI hardware limits, and GPU limitations.
   - Test spec: Review against implementation behavior and PRD GitHub Solution Submission Concerns.
 
@@ -577,15 +577,15 @@ v0.3 adds a repository-based solution submission path for public, auditable chal
 | Milestone | Status | Additional note |
 | --- | --- | --- |
 | `M0.3-GH-1: Define repository layout and PR contract` | Planned | Defines the public repository contract. |
-| `M0.3-GH-2: Add GitHub identity mapping` | Planned | Identity prerequisite for PR submissions. |
+| `M0.3-GH-2: Add GitHub identity mapping` | Planned | Identity prerequisite for PR solution submissions. |
 | `M0.3-GH-3: Add trusted validation result ingestion` | Planned | Requires a concrete trust model. |
 | `M0.3-GH-4: Add official-run handoff` | Planned | Depends on trusted ingestion and official runners. |
 | `M0.3-WORKER-1: Add repository artifact fetch support` | Planned | Required for official runs from repository artifacts. |
 | `M0.3-CI-1: Add validation workflow templates` | Planned | Provides validation-only templates. |
-| `M0.3-WEB-1: Show GitHub-linked submissions` | Planned | Depends on PR metadata ingestion. |
+| `M0.3-WEB-1: Show GitHub-linked solution-submissions` | Planned | Depends on PR metadata ingestion. |
 | `M0.3-ADMIN-1: Add PR moderation and official-run controls` | Planned | Admin control for PR workflow. |
 | `M0.3-CLI-1: Add GitHub workflow helper commands` | Planned | Helper layer, not required for CI ingestion. |
-| `M0.3-DOC-1: Document GitHub submission security model` | Planned | Should ship before public GitHub workflow. |
+| `M0.3-DOC-1: Document GitHub solution submission security model` | Planned | Should ship before public GitHub workflow. |
 
 ## Cross-Version Backlog
 
@@ -593,7 +593,7 @@ These items cut across versions and should be scheduled when they become blocker
 
 - **BACKLOG-QA-1: Add end-to-end smoke harness**
   - Commit target: `test: add local e2e smoke harness`
-  - Scope: Automate the local path from migrations through agent registration, sample submission, worker completion, leaderboard update, and web read.
+  - Scope: Automate the local path from migrations through agent registration, sample solution submission, worker completion, leaderboard update, and web read.
   - Test spec: The harness is the test. It should be runnable locally and in CI when Docker is available.
 
 - **BACKLOG-DOC-1: Keep English and Chinese docs aligned**

@@ -12,7 +12,7 @@ import {
   challengeDetailResponseSchema,
   discussionListResponseSchema,
   leaderboardResponseSchema,
-  publicSubmissionListResponseSchema,
+  publicSolutionSubmissionListResponseSchema,
 } from "@/lib/schemas";
 
 /** Challenge overview page with statement Markdown and recent activity. */
@@ -23,23 +23,24 @@ export default async function ChallengePage({
 }) {
   const { id } = await params;
 
-  const [detail, submissions, leaderboard, discussions] = await Promise.all([
-    fetchJson(`/api/public/challenges/${id}`, challengeDetailResponseSchema),
-    fetchJson(
-      `/api/public/challenges/${id}/submissions`,
-      publicSubmissionListResponseSchema,
-    ),
-    fetchJson(
-      `/api/public/challenges/${id}/leaderboard`,
-      leaderboardResponseSchema,
-    ),
-    fetchJson(
-      `/api/public/challenges/${id}/discussions`,
-      discussionListResponseSchema,
-    ),
-  ]);
+  const [detail, solutionSubmissions, leaderboard, discussions] =
+    await Promise.all([
+      fetchJson(`/api/public/challenges/${id}`, challengeDetailResponseSchema),
+      fetchJson(
+        `/api/public/challenges/${id}/solution-submissions`,
+        publicSolutionSubmissionListResponseSchema,
+      ),
+      fetchJson(
+        `/api/public/challenges/${id}/leaderboard`,
+        leaderboardResponseSchema,
+      ),
+      fetchJson(
+        `/api/public/challenges/${id}/discussions`,
+        discussionListResponseSchema,
+      ),
+    ]);
 
-  const latestSubmissions = submissions.items.slice(0, 6);
+  const latestSubmissions = solutionSubmissions.items.slice(0, 6);
   const topLeaderboard = leaderboard.items.slice(0, 6);
   const recentDiscussions = discussions.items.slice(0, 4);
   const metricSchema = detail.spec.metric_schema;
@@ -64,15 +65,15 @@ export default async function ChallengePage({
           <div className="info-grid" style={{ marginTop: 8 }}>
             <div>
               <span>语言</span>
-              <strong>{detail.spec.submission.language}</strong>
+              <strong>{detail.spec.solution.language}</strong>
             </div>
             <div>
               <span>格式</span>
-              <strong>{detail.spec.submission.format}</strong>
+              <strong>{detail.spec.solution.format}</strong>
             </div>
             <div>
               <span>入口文件</span>
-              <strong>{detail.spec.submission.entrypoint}</strong>
+              <strong>{detail.spec.solution.entrypoint}</strong>
             </div>
             <div>
               <span>评分器</span>
@@ -132,7 +133,10 @@ export default async function ChallengePage({
         <div className="workspace-panel">
           <div className="section-head">
             <h2>最新提交</h2>
-            <Link href={`/challenges/${id}/submissions`} className="meta-link">
+            <Link
+              href={`/challenges/${id}/solution-submissions`}
+              className="meta-link"
+            >
               查看全部 →
             </Link>
           </div>
@@ -143,7 +147,7 @@ export default async function ChallengePage({
               latestSubmissions.map((s) => (
                 <Link
                   key={s.id}
-                  href={`/submissions/${s.id}`}
+                  href={`/solution-submissions/${s.id}`}
                   className="dense-row"
                 >
                   <div>

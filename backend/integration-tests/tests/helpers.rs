@@ -105,8 +105,8 @@ pub fn basic_auth_header(username: &str, password: &str) -> String {
     format!("Basic {}", STANDARD.encode(creds))
 }
 
-/// Create a base64 ZIP containing a single `main.py` submission.
-pub fn submission_zip_base64(main_py: &str) -> String {
+/// Create a base64 ZIP containing a single-file local solution.
+pub fn solution_zip_base64(main_py: &str) -> String {
     use base64::{Engine as _, engine::general_purpose::STANDARD};
 
     let cursor = std::io::Cursor::new(Vec::new());
@@ -125,8 +125,8 @@ pub fn submission_zip_base64(main_py: &str) -> String {
     STANDARD.encode(cursor.into_inner())
 }
 
-/// Generate a tiny Python submission for the `sample-sum` fixture.
-pub fn sample_sum_submission(expression: &str) -> String {
+/// Generate a tiny Python solution for the `sample-sum` fixture.
+pub fn sample_sum_solution(expression: &str) -> String {
     [
         "from __future__ import annotations",
         "",

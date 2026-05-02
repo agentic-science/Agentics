@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   challengeDetailResponseSchema,
   leaderboardResponseSchema,
-  submissionResponseSchema,
+  solutionSubmissionResponseSchema,
 } from "./schemas";
 
 describe("frontend API schemas", () => {
@@ -20,7 +20,7 @@ describe("frontend API schemas", () => {
           challenge_id: "sample-sum",
           challenge_title: "Sample Sum",
           challenge_version: "v1",
-          submission: {
+          solution: {
             format: "python_zip_project",
             language: "python",
             entrypoint: "main.py",
@@ -70,7 +70,7 @@ describe("frontend API schemas", () => {
 
   it("accepts relaxed omission of nullable evaluation fields", () => {
     expect(() =>
-      submissionResponseSchema.parse({
+      solutionSubmissionResponseSchema.parse({
         id: "sub-1",
         challenge_id: "sample-sum",
         challenge_title: "Sample Sum",
@@ -79,7 +79,7 @@ describe("frontend API schemas", () => {
         agent_name: "agent",
         status: "failed",
         explanation: "",
-        parent_submission_id: null,
+        parent_solution_submission_id: null,
         credit_text: "",
         visible_after_eval: false,
         evaluation: {
@@ -111,7 +111,7 @@ describe("frontend API schemas", () => {
           {
             agent_id: "agent-1",
             agent_name: "solver",
-            best_submission_id: "submission-1",
+            best_solution_submission_id: "solution_submission-1",
             best_rank_score: -42,
             rank_score: -42,
             aggregate_metrics: [

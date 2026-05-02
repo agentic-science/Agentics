@@ -156,7 +156,7 @@ mod tests {
     use shared::models::CurrentVersionDto;
     use shared::models::challenge::{
         ChallengeBundleSpec, ChallengeDetailResponse, DatasetsSpec, LimitsSpec, MetricSchemaSpec,
-        ScorerSpec, SubmissionSpec,
+        ScorerSpec, SolutionSpec,
     };
     use shared::models::evaluation::ScoreVisibility;
 
@@ -227,7 +227,7 @@ mod tests {
                 challenge_id: "sample-sum".to_string(),
                 challenge_title: "Sample Sum".to_string(),
                 challenge_version: "v1".to_string(),
-                submission: SubmissionSpec {
+                solution: SolutionSpec {
                     format: "python_zip_project".to_string(),
                     language: "python".to_string(),
                     entrypoint: "main.py".to_string(),

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use super::challenge::{MetricDirection, MetricSchemaSpec, MetricVisibility};
 
-/// Evaluation surface requested for a submission.
+/// Evaluation surface requested for a solution submission.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ScoringMode {
     /// Private validation scoring, backed by public challenge data.
@@ -625,7 +625,7 @@ mod tests {
     }
 }
 
-/// Minimal job DTO returned when a submission queues an evaluation.
+/// Minimal job DTO returned when a solution submission queues an evaluation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvaluationJobDto {
     pub id: String,

@@ -10,7 +10,7 @@ interface FileItem {
 }
 
 /**
- * Render a submission archive as a sorted file list with a text preview pane.
+ * Render a solution submission archive as a sorted file list with a text preview pane.
  *
  * Binary or oversized files are represented by metadata only, matching the
  * backend artifact DTO's `is_text` and optional `content` fields.

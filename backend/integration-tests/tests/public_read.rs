@@ -3,8 +3,8 @@
 mod helpers;
 
 use helpers::{
-    api_url, examples_challenges_root, run_worker_once, sample_sum_submission,
-    spawn_app_with_config, submission_zip_base64, test_config,
+    api_url, examples_challenges_root, run_worker_once, sample_sum_solution, solution_zip_base64,
+    spawn_app_with_config, test_config,
 };
 
 #[sqlx::test(migrations = "../migrations")]
@@ -35,12 +35,11 @@ async fn public_read_flow_matches_old_api(pool: sqlx::PgPool) {
     let token_a = agent_a["token"].as_str().expect("missing token a");
     let token_b = agent_b["token"].as_str().expect("missing token b");
 
-    let good_artifact =
-        submission_zip_base64(&sample_sum_submission("payload['a'] + payload['b']"));
-    let bad_artifact = submission_zip_base64(&sample_sum_submission("payload['a'] - payload['b']"));
+    let good_artifact = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
+    let bad_artifact = solution_zip_base64(&sample_sum_solution("payload['a'] - payload['b']"));
 
-    let pending_submission: serde_json::Value = client
-        .post(api_url(&app, "/api/submissions"))
+    let pending_solution_submission: serde_json::Value = client
+        .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token_a}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
@@ -49,28 +48,28 @@ async fn public_read_flow_matches_old_api(pool: sqlx::PgPool) {
         }))
         .send()
         .await
-        .expect("failed to create first submission")
+        .expect("failed to create first solution_submission")
         .json()
         .await
-        .expect("failed to decode first submission");
-    let pending_id = pending_submission["id"]
+        .expect("failed to decode first solution_submission");
+    let pending_id = pending_solution_submission["id"]
         .as_str()
-        .expect("missing submission id");
+        .expect("missing solution submission id");
 
     let not_visible_before = client
         .get(api_url(
             &app,
-            &format!("/api/public/submissions/{pending_id}"),
+            &format!("/api/public/solution-submissions/{pending_id}"),
         ))
         .send()
         .await
-        .expect("failed to check public submission before eval");
+        .expect("failed to check public solution submission before eval");
     assert_eq!(not_visible_before.status(), 404);
 
     run_worker_once(&pool, &config).await;
 
     let second_response = client
-        .post(api_url(&app, "/api/submissions"))
+        .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token_b}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
@@ -79,52 +78,56 @@ async fn public_read_flow_matches_old_api(pool: sqlx::PgPool) {
         }))
         .send()
         .await
-        .expect("failed to create second submission");
+        .expect("failed to create second solution_submission");
     assert_eq!(second_response.status(), 201);
     run_worker_once(&pool, &config).await;
 
-    let public_submission_response = client
+    let public_solution_submission_response = client
         .get(api_url(
             &app,
-            &format!("/api/public/submissions/{pending_id}"),
+            &format!("/api/public/solution-submissions/{pending_id}"),
         ))
         .send()
         .await
-        .expect("failed to get public submission");
-    assert_eq!(public_submission_response.status(), 200);
-    let public_submission: serde_json::Value = public_submission_response
+        .expect("failed to get public solution submission");
+    assert_eq!(public_solution_submission_response.status(), 200);
+    let public_solution_submission: serde_json::Value = public_solution_submission_response
         .json()
         .await
-        .expect("failed to decode public submission");
-    assert_eq!(public_submission["visible_after_eval"], true);
-    assert_eq!(public_submission["agent_name"], "leader-a");
-    assert!(public_submission["parent_submission_id"].is_null());
+        .expect("failed to decode public solution submission");
+    assert_eq!(public_solution_submission["visible_after_eval"], true);
+    assert_eq!(public_solution_submission["agent_name"], "leader-a");
+    assert!(public_solution_submission["parent_solution_submission_id"].is_null());
 
-    let public_submission_list: serde_json::Value = client
+    let public_solution_submission_list: serde_json::Value = client
         .get(api_url(
             &app,
-            "/api/public/challenges/sample-sum/submissions",
+            "/api/public/challenges/sample-sum/solution-submissions",
         ))
         .send()
         .await
-        .expect("failed to list public submissions")
+        .expect("failed to list public solution submissions")
         .json()
         .await
-        .expect("failed to decode public submissions");
-    let submission_items = public_submission_list["items"]
+        .expect("failed to decode public solution submissions");
+    let solution_submission_items = public_solution_submission_list["items"]
         .as_array()
         .expect("items is array");
-    assert_eq!(submission_items.len(), 2);
-    assert!(submission_items.iter().any(|item| item["id"] == pending_id));
+    assert_eq!(solution_submission_items.len(), 2);
     assert!(
-        submission_items
+        solution_submission_items
+            .iter()
+            .any(|item| item["id"] == pending_id)
+    );
+    assert!(
+        solution_submission_items
             .iter()
             .any(|item| item["agent_name"] == "leader-a")
     );
-    let listed_first = submission_items
+    let listed_first = solution_submission_items
         .iter()
         .find(|item| item["id"] == pending_id)
-        .expect("first submission should be listed");
+        .expect("first solution submission should be listed");
     assert!(listed_first["validation_score"].is_null());
     assert_eq!(listed_first["official_score"], 1.0);
     assert_eq!(listed_first["rank_score"], 1.0);
@@ -132,7 +135,7 @@ async fn public_read_flow_matches_old_api(pool: sqlx::PgPool) {
     let artifact: serde_json::Value = client
         .get(api_url(
             &app,
-            &format!("/api/public/submissions/{pending_id}/artifact"),
+            &format!("/api/public/solution-submissions/{pending_id}/artifact"),
         ))
         .send()
         .await

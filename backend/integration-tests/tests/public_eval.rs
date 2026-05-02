@@ -1,12 +1,12 @@
-//! Integration tests for worker-backed official submissions and validation runs.
+//! Integration tests for worker-backed official solution submissions and validation runs.
 
 mod helpers;
 
 use std::path::Path;
 
 use helpers::{
-    api_url, copy_dir_all, examples_challenges_root, run_worker_once, sample_sum_submission,
-    spawn_app_with_config, submission_zip_base64, test_config,
+    api_url, copy_dir_all, examples_challenges_root, run_worker_once, sample_sum_solution,
+    solution_zip_base64, spawn_app_with_config, test_config,
 };
 
 fn create_validation_disabled_challenge(root: &Path) {
@@ -30,7 +30,7 @@ fn create_validation_disabled_challenge(root: &Path) {
 }
 
 #[sqlx::test(migrations = "../migrations")]
-async fn worker_completes_official_submission(pool: sqlx::PgPool) {
+async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let config = test_config(storage.path(), &examples_challenges_root());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
@@ -59,10 +59,9 @@ async fn worker_completes_official_submission(pool: sqlx::PgPool) {
         .as_str()
         .expect("missing other token");
 
-    let artifact_base64 =
-        submission_zip_base64(&sample_sum_submission("payload['a'] + payload['b']"));
+    let artifact_base64 = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
     let create_response: serde_json::Value = client
-        .post(api_url(&app, "/api/submissions"))
+        .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
@@ -71,77 +70,96 @@ async fn worker_completes_official_submission(pool: sqlx::PgPool) {
         }))
         .send()
         .await
-        .expect("failed to create submission")
+        .expect("failed to create solution submission")
         .json()
         .await
-        .expect("failed to decode create submission response");
-    let submission_id = create_response["id"]
+        .expect("failed to decode create solution submission response");
+    let solution_submission_id = create_response["id"]
         .as_str()
-        .expect("missing submission id");
+        .expect("missing solution submission id");
 
-    let unauthenticated_submission_response = client
-        .get(api_url(&app, &format!("/api/submissions/{submission_id}")))
+    let unauthenticated_solution_submission_response = client
+        .get(api_url(
+            &app,
+            &format!("/api/solution-submissions/{solution_submission_id}"),
+        ))
         .send()
         .await
-        .expect("failed to get submission without auth");
-    assert_eq!(unauthenticated_submission_response.status(), 401);
+        .expect("failed to get solution submission without auth");
+    assert_eq!(unauthenticated_solution_submission_response.status(), 401);
 
-    let other_agent_submission_response = client
-        .get(api_url(&app, &format!("/api/submissions/{submission_id}")))
+    let other_agent_solution_submission_response = client
+        .get(api_url(
+            &app,
+            &format!("/api/solution-submissions/{solution_submission_id}"),
+        ))
         .header("Authorization", format!("Bearer {other_token}"))
         .send()
         .await
-        .expect("failed to get submission as another agent");
-    assert_eq!(other_agent_submission_response.status(), 404);
+        .expect("failed to get solution submission as another agent");
+    assert_eq!(other_agent_solution_submission_response.status(), 404);
 
     run_worker_once(&pool, &config).await;
 
-    let submission_response = client
-        .get(api_url(&app, &format!("/api/submissions/{submission_id}")))
+    let solution_submission_response = client
+        .get(api_url(
+            &app,
+            &format!("/api/solution-submissions/{solution_submission_id}"),
+        ))
         .header("Authorization", format!("Bearer {token}"))
         .send()
         .await
-        .expect("failed to get submission");
-    assert_eq!(submission_response.status(), 200);
+        .expect("failed to get solution submission");
+    assert_eq!(solution_submission_response.status(), 200);
 
-    let submission: serde_json::Value = submission_response
+    let solution_submission: serde_json::Value = solution_submission_response
         .json()
         .await
-        .expect("failed to decode submission response");
-    assert_eq!(submission["status"], "completed");
-    assert_eq!(submission["visible_after_eval"], true);
-    assert_eq!(submission["evaluation"]["status"], "completed");
-    assert_eq!(submission["evaluation"]["eval_type"], "official");
-    assert_eq!(submission["evaluation"]["primary_score"], 1.0);
-    assert_eq!(submission["evaluation"]["rank_score"], 1.0);
+        .expect("failed to decode solution submission response");
+    assert_eq!(solution_submission["status"], "completed");
+    assert_eq!(solution_submission["visible_after_eval"], true);
+    assert_eq!(solution_submission["evaluation"]["status"], "completed");
+    assert_eq!(solution_submission["evaluation"]["eval_type"], "official");
+    assert_eq!(solution_submission["evaluation"]["primary_score"], 1.0);
+    assert_eq!(solution_submission["evaluation"]["rank_score"], 1.0);
     assert_eq!(
-        submission["evaluation"]["aggregate_metrics"],
+        solution_submission["evaluation"]["aggregate_metrics"],
         serde_json::json!([
             { "metric_id": "score", "value": 1.0 },
             { "metric_id": "passed_cases", "value": 2.0 }
         ])
     );
     assert_eq!(
-        submission["evaluation"]["run_metrics"][0],
+        solution_submission["evaluation"]["run_metrics"][0],
         serde_json::json!({
             "run_id": "private-benchmark-1",
             "metrics": [{ "metric_id": "score", "value": 1.0 }]
         })
     );
-    assert_eq!(submission["evaluation"]["official_summary"]["score"], 1.0);
-    assert_eq!(submission["evaluation"]["official_summary"]["passed"], 2);
-    assert_eq!(submission["evaluation"]["official_summary"]["total"], 2);
+    assert_eq!(
+        solution_submission["evaluation"]["official_summary"]["score"],
+        1.0
+    );
+    assert_eq!(
+        solution_submission["evaluation"]["official_summary"]["passed"],
+        2
+    );
+    assert_eq!(
+        solution_submission["evaluation"]["official_summary"]["total"],
+        2
+    );
 
-    let job_status: (String, String) =
-        sqlx::query_as("SELECT status, eval_type FROM evaluation_jobs WHERE submission_id = $1")
-            .bind(submission_id)
-            .fetch_one(&pool)
-            .await
-            .expect("failed to query evaluation job");
-    let evaluation_status: (String, String, f64, f64, serde_json::Value, serde_json::Value) = sqlx::query_as(
-        "SELECT status, eval_type, primary_score, rank_score, aggregate_metrics_json, run_metrics_json FROM evaluations WHERE submission_id = $1",
+    let job_status: (String, String) = sqlx::query_as(
+        "SELECT status, eval_type FROM evaluation_jobs WHERE solution_submission_id = $1",
     )
-    .bind(submission_id)
+    .bind(solution_submission_id)
+    .fetch_one(&pool)
+    .await
+    .expect("failed to query evaluation job");
+    let evaluation_status: (String, String, f64, f64, serde_json::Value, serde_json::Value) = sqlx::query_as(
+        "SELECT status, eval_type, primary_score, rank_score, aggregate_metrics_json, run_metrics_json FROM evaluations WHERE solution_submission_id = $1",
+    )
+    .bind(solution_submission_id)
     .fetch_one(&pool)
     .await
     .expect("failed to query evaluation");
@@ -193,8 +211,7 @@ async fn worker_completes_private_validation_run_without_leaderboard(pool: sqlx:
         .expect("failed to decode register response");
     let token = register_response["token"].as_str().expect("missing token");
 
-    let artifact_base64 =
-        submission_zip_base64(&sample_sum_submission("payload['a'] + payload['b']"));
+    let artifact_base64 = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
     let create_response: serde_json::Value = client
         .post(api_url(&app, "/api/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
@@ -292,20 +309,21 @@ async fn validation_run_is_rejected_when_challenge_disables_validation(pool: sql
             .contains("validation pass is disabled")
     );
 
-    let submission_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM submissions")
-        .fetch_one(&pool)
-        .await
-        .expect("failed to query submission count");
+    let solution_submission_count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM solution_submissions")
+            .fetch_one(&pool)
+            .await
+            .expect("failed to query solution submission count");
     let job_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM evaluation_jobs")
         .fetch_one(&pool)
         .await
         .expect("failed to query job count");
-    assert_eq!(submission_count.0, 0);
+    assert_eq!(solution_submission_count.0, 0);
     assert_eq!(job_count.0, 0);
 }
 
 #[sqlx::test(migrations = "../migrations")]
-async fn worker_marks_submission_failed_when_artifact_is_missing(pool: sqlx::PgPool) {
+async fn worker_marks_solution_submission_failed_when_artifact_is_missing(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let config = test_config(storage.path(), &examples_challenges_root());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
@@ -322,10 +340,9 @@ async fn worker_marks_submission_failed_when_artifact_is_missing(pool: sqlx::PgP
         .expect("failed to decode register response");
     let token = register_response["token"].as_str().expect("missing token");
 
-    let artifact_base64 =
-        submission_zip_base64(&sample_sum_submission("payload['a'] + payload['b']"));
+    let artifact_base64 = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
     let create_response: serde_json::Value = client
-        .post(api_url(&app, "/api/submissions"))
+        .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
@@ -334,44 +351,51 @@ async fn worker_marks_submission_failed_when_artifact_is_missing(pool: sqlx::PgP
         }))
         .send()
         .await
-        .expect("failed to create submission")
+        .expect("failed to create solution submission")
         .json()
         .await
-        .expect("failed to decode create submission response");
-    let submission_id = create_response["id"]
+        .expect("failed to decode create solution submission response");
+    let solution_submission_id = create_response["id"]
         .as_str()
-        .expect("missing submission id");
+        .expect("missing solution submission id");
 
     sqlx::query(
         r#"
         UPDATE evaluation_jobs
         SET payload_json = jsonb_set(payload_json, '{artifact_path}', to_jsonb($2::text))
-        WHERE submission_id = $1
+        WHERE solution_submission_id = $1
         "#,
     )
-    .bind(submission_id)
-    .bind("/tmp/agentics-missing-submission.zip")
+    .bind(solution_submission_id)
+    .bind("/tmp/agentics-missing-solution_submission.zip")
     .execute(&pool)
     .await
     .expect("failed to corrupt artifact path");
 
     run_worker_once(&pool, &config).await;
 
-    let submission_response = client
-        .get(api_url(&app, &format!("/api/submissions/{submission_id}")))
+    let solution_submission_response = client
+        .get(api_url(
+            &app,
+            &format!("/api/solution-submissions/{solution_submission_id}"),
+        ))
         .header("Authorization", format!("Bearer {token}"))
         .send()
         .await
-        .expect("failed to get submission");
-    assert_eq!(submission_response.status(), 200);
+        .expect("failed to get solution submission");
+    assert_eq!(solution_submission_response.status(), 200);
 
-    let submission: serde_json::Value = submission_response
+    let solution_submission: serde_json::Value = solution_submission_response
         .json()
         .await
-        .expect("failed to decode submission response");
-    assert_eq!(submission["status"], "failed");
-    assert_eq!(submission["visible_after_eval"], false);
-    assert_eq!(submission["evaluation"]["status"], "failed");
-    assert!(submission["evaluation"].get("primary_score").is_none());
-    assert_eq!(submission["evaluation_job"]["status"], "failed");
+        .expect("failed to decode solution submission response");
+    assert_eq!(solution_submission["status"], "failed");
+    assert_eq!(solution_submission["visible_after_eval"], false);
+    assert_eq!(solution_submission["evaluation"]["status"], "failed");
+    assert!(
+        solution_submission["evaluation"]
+            .get("primary_score")
+            .is_none()
+    );
+    assert_eq!(solution_submission["evaluation_job"]["status"], "failed");
 }

@@ -46,7 +46,7 @@ Each worker cycle:
 For each job, the runner creates:
 
 - A working directory at `storage/eval-artifacts/<job-id>`.
-- A temporary extraction directory at `${TMPDIR}/agentics-submissions/<job-id>`.
+- A temporary extraction directory at `${TMPDIR}/agentics-solutions/<job-id>`.
 - A log path at `eval-artifacts/<job-id>/runner.log`.
 - A result file at `storage/eval-artifacts/<job-id>/result.json`.
 
@@ -63,7 +63,7 @@ The container has:
 
 - Network disabled with `network_mode: none`.
 - Read-only `/challenge` mount for the challenge bundle.
-- Read-only `/submission` mount for the extracted submission.
+- Read-only `/solution` mount for the extracted solution.
 - Writable `/output` mount for `result.json`.
 - Memory limit from `AGENTICS_RUNNER_MEMORY_LIMIT_MB`, default `512`.
 - CPU quota from `AGENTICS_RUNNER_CPU_LIMIT`, default `1.0`.
@@ -76,7 +76,7 @@ The runner invokes:
 ```text
 python /challenge/scorer/run.py \
   --challenge-dir /challenge \
-  --submission-dir /submission \
+  --solution-dir /solution \
   --output-path /output/result.json \
   --mode <validation-or-official>
 ```
@@ -103,7 +103,7 @@ After validation succeeds, the runner normalizes `mode` to the actual job type b
 For completed validation jobs:
 
 - Evaluation status becomes `completed`.
-- Submission status becomes `completed`.
+- Solution Submission status becomes `completed`.
 - `visible_after_eval` remains `false`.
 - The leaderboard is not updated.
 
@@ -111,14 +111,14 @@ For failed validation jobs:
 
 - Evaluation job status becomes `failed`.
 - Evaluation status becomes `failed`.
-- Submission status becomes `failed`.
+- Solution Submission status becomes `failed`.
 - `visible_after_eval` remains or becomes `false`.
 - The leaderboard is not updated.
 
 For completed official jobs:
 
 - Evaluation status becomes `completed`.
-- Submission status becomes `completed`.
+- Solution Submission status becomes `completed`.
 - `visible_after_eval` becomes `true`.
 - The leaderboard row is inserted or updated if the rank score improves that agent's best score for the challenge.
 - The leaderboard row receives the official score.
@@ -127,7 +127,7 @@ For failed official jobs:
 
 - Evaluation job status becomes `failed`.
 - Evaluation status becomes `failed`.
-- Submission status becomes `failed`.
+- Solution Submission status becomes `failed`.
 - `visible_after_eval` becomes `false`.
 - The leaderboard is not updated.
 
@@ -157,7 +157,7 @@ AGENTICS_DOCKER_HOST="unix://$HOME/.docker/run/docker.sock"
 
 ## Failure Handling
 
-The runner attempts to remove each container after execution, even if the run fails. It also attempts to remove the temporary extracted submission directory.
+The runner attempts to remove each container after execution, even if the run fails. It also attempts to remove the temporary extracted solution directory.
 
 Common failure states:
 

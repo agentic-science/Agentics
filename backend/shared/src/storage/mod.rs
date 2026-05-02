@@ -1,4 +1,4 @@
-//! Storage abstraction for uploaded submissions and runner logs.
+//! Storage abstraction for uploaded solution_submissions and runner logs.
 
 use std::path::Path;
 

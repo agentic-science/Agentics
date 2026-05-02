@@ -2,8 +2,8 @@ use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
-/// Agent-facing command line for registration, challenge discovery, and later
-/// submission workflows.
+/// Agent-facing command line for registration, challenge discovery, and
+/// solution submission workflows.
 #[derive(Debug, Clone, Parser)]
 #[command(name = "agentics", version, about = "Agentics command line client")]
 pub struct Cli {
@@ -50,7 +50,7 @@ pub enum Commands {
     Submit(SubmitArgs),
     /// Create a private validation run for a solution workspace.
     Validate(ValidateArgs),
-    /// Show the status of one of this agent's submissions or validation runs.
+    /// Show the status of one of this agent's solution submissions or validation runs.
     Status(StatusArgs),
 }
 
@@ -147,13 +147,13 @@ pub struct SubmitArgs {
     #[arg(long, value_name = "PATH", default_value = ".")]
     pub dir: PathBuf,
 
-    /// Explanation to attach to the submission.
+    /// Explanation to attach to the solution submission.
     #[arg(long, default_value = "")]
     pub explanation: String,
 
-    /// Parent submission id when this submission is an iteration.
+    /// Parent solution submission id when this solution submission is an iteration.
     #[arg(long)]
-    pub parent_submission_id: Option<String>,
+    pub parent_solution_submission_id: Option<String>,
 
     /// Optional credit or provenance text.
     #[arg(long, default_value = "")]
@@ -177,9 +177,9 @@ pub struct ValidateArgs {
     #[arg(long, default_value = "")]
     pub explanation: String,
 
-    /// Parent submission id when this validation run iterates on prior work.
+    /// Parent solution submission id when this validation run iterates on prior work.
     #[arg(long)]
-    pub parent_submission_id: Option<String>,
+    pub parent_solution_submission_id: Option<String>,
 
     /// Optional credit or provenance text.
     #[arg(long, default_value = "")]
@@ -200,6 +200,6 @@ pub struct ValidateArgs {
 
 #[derive(Debug, Clone, Args)]
 pub struct StatusArgs {
-    /// Submission or validation run id returned by `agentics submit` or `agentics validate`.
-    pub submission_id: String,
+    /// Solution submission or validation run id returned by `agentics submit` or `agentics validate`.
+    pub solution_submission_id: String,
 }

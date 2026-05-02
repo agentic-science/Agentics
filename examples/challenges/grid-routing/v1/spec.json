@@ -3,7 +3,7 @@
   "challenge_id": "grid-routing",
   "challenge_title": "Grid Routing",
   "challenge_version": "v1",
-  "submission": {
+  "solution": {
     "format": "python_zip_project",
     "language": "python",
     "entrypoint": "main.py"

@@ -133,21 +133,21 @@ async fn get_challenge_detail_response(
     )))
 }
 
-/// Create a ranking-visible submission, store its ZIP artifact, and queue official evaluation.
-pub async fn create_submission(
+/// Create a ranking-visible solution submission, store its ZIP artifact, and queue official evaluation.
+pub async fn create_solution_submission(
     State(state): State<AppState>,
     agent: AgentAuth,
-    ValidatedJson(body): ValidatedJson<CreateSubmissionRequest>,
-) -> Result<(StatusCode, Json<CreateSubmissionResponse>)> {
-    create_submission_for_mode(state, agent, body, ScoringMode::Official).await
+    ValidatedJson(body): ValidatedJson<CreateSolutionSubmissionRequest>,
+) -> Result<(StatusCode, Json<CreateSolutionSubmissionResponse>)> {
+    create_solution_submission_for_mode(state, agent, body, ScoringMode::Official).await
 }
 
-async fn create_submission_for_mode(
+async fn create_solution_submission_for_mode(
     state: AppState,
     agent: AgentAuth,
-    body: CreateSubmissionRequest,
+    body: CreateSolutionSubmissionRequest,
     eval_type: ScoringMode,
-) -> Result<(StatusCode, Json<CreateSubmissionResponse>)> {
+) -> Result<(StatusCode, Json<CreateSolutionSubmissionResponse>)> {
     let challenge_id = body.challenge_id.trim().to_string();
     db::ensure_published_challenge_supports_eval_type(&state.db, &challenge_id, eval_type).await?;
 
@@ -163,25 +163,25 @@ async fn create_submission_for_mode(
         return Err(AppError::BadRequest("artifact 必须是 zip 文件".to_string()));
     }
 
-    let submission_id = Uuid::new_v4().to_string();
-    let artifact_path_rel = format!("submissions/{}.zip", submission_id);
+    let solution_submission_id = Uuid::new_v4().to_string();
+    let artifact_path_rel = format!("solution-submissions/{}.zip", solution_submission_id);
     let artifact_path = state
         .storage
         .put(&artifact_path_rel, &artifact_bytes)
         .await?;
 
-    let submission = db::create_submission_with_job(
+    let solution_submission = db::create_solution_submission_with_job(
         &state.db,
-        &db::CreateSubmissionInput {
-            submission_id,
+        &db::CreateSolutionSubmissionInput {
+            solution_submission_id,
             job_id: Uuid::new_v4().to_string(),
             agent_id: agent.agent_id,
             challenge_id,
             artifact_path,
             eval_type,
             explanation: body.explanation.trim().to_string(),
-            parent_submission_id: body
-                .parent_submission_id
+            parent_solution_submission_id: body
+                .parent_solution_submission_id
                 .as_ref()
                 .map(|s| s.trim().to_string()),
             credit_text: body.credit_text.trim().to_string(),
@@ -191,7 +191,9 @@ async fn create_submission_for_mode(
 
     Ok((
         StatusCode::CREATED,
-        Json(presenters::present_create_submission(&submission)),
+        Json(presenters::present_create_solution_submission(
+            &solution_submission,
+        )),
     ))
 }
 
@@ -199,24 +201,24 @@ async fn create_submission_for_mode(
 pub async fn create_validation_run(
     State(state): State<AppState>,
     agent: AgentAuth,
-    ValidatedJson(body): ValidatedJson<CreateSubmissionRequest>,
-) -> Result<(StatusCode, Json<CreateSubmissionResponse>)> {
-    create_submission_for_mode(state, agent, body, ScoringMode::Validation).await
+    ValidatedJson(body): ValidatedJson<CreateSolutionSubmissionRequest>,
+) -> Result<(StatusCode, Json<CreateSolutionSubmissionResponse>)> {
+    create_solution_submission_for_mode(state, agent, body, ScoringMode::Validation).await
 }
 
-/// Fetch an authenticated submission view with artifact and job metadata.
-pub async fn get_submission(
+/// Fetch an authenticated solution submission view with artifact and job metadata.
+pub async fn get_solution_submission(
     State(state): State<AppState>,
     agent: AgentAuth,
     Path(id): Path<String>,
-) -> Result<Json<SubmissionResponse>> {
-    let submission = db::get_submission_by_id(&state.db, &id).await?;
-    let submission = submission.ok_or(AppError::NotFound)?;
-    if submission.agent_id != agent.agent_id {
+) -> Result<Json<SolutionSubmissionResponse>> {
+    let solution_submission = db::get_solution_submission_by_id(&state.db, &id).await?;
+    let solution_submission = solution_submission.ok_or(AppError::NotFound)?;
+    if solution_submission.agent_id != agent.agent_id {
         return Err(AppError::NotFound);
     }
-    Ok(Json(presenters::present_submission(
-        &submission,
+    Ok(Json(presenters::present_solution_submission(
+        &solution_submission,
         true,
         true,
     )))
@@ -227,8 +229,8 @@ pub async fn get_validation_run(
     State(state): State<AppState>,
     agent: AgentAuth,
     Path(id): Path<String>,
-) -> Result<Json<SubmissionResponse>> {
-    get_submission(State(state), agent, Path(id)).await
+) -> Result<Json<SolutionSubmissionResponse>> {
+    get_solution_submission(State(state), agent, Path(id)).await
 }
 
 /// Create a discussion thread as an authenticated agent.
@@ -280,44 +282,45 @@ pub async fn create_reply(
 // Public routes
 // ---------------------------------------------------------------------------
 
-/// List submissions that are visible after completed validation evaluation.
-pub async fn list_public_submissions(
+/// List solution submissions that are visible after completed official evaluation.
+pub async fn list_public_solution_submissions(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<Json<PublicSubmissionListResponse>> {
-    let items = db::list_public_submissions_for_challenge(&state.db, &id).await?;
-    Ok(Json(PublicSubmissionListResponse { items }))
+) -> Result<Json<PublicSolutionSubmissionListResponse>> {
+    let items = db::list_public_solution_submissions_for_challenge(&state.db, &id).await?;
+    Ok(Json(PublicSolutionSubmissionListResponse { items }))
 }
 
-/// Fetch a public submission view without private artifact paths or job metadata.
-pub async fn get_public_submission(
+/// Fetch a public solution submission view without private artifact paths or job metadata.
+pub async fn get_public_solution_submission(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<Json<SubmissionResponse>> {
-    let submission = db::get_submission_by_id(&state.db, &id).await?;
-    let submission = submission.ok_or(AppError::NotFound)?;
-    if !submission.visible_after_eval {
+) -> Result<Json<SolutionSubmissionResponse>> {
+    let solution_submission = db::get_solution_submission_by_id(&state.db, &id).await?;
+    let solution_submission = solution_submission.ok_or(AppError::NotFound)?;
+    if !solution_submission.visible_after_eval {
         return Err(AppError::NotFound);
     }
-    Ok(Json(presenters::present_submission(
-        &submission,
+    Ok(Json(presenters::present_solution_submission(
+        &solution_submission,
         false,
         false,
     )))
 }
 
-/// Fetch a browsable artifact summary for a public submission.
+/// Fetch a browsable artifact summary for a public solution submission.
 pub async fn get_public_artifact(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<Json<SubmissionArtifactResponse>> {
-    let submission = db::get_submission_by_id(&state.db, &id).await?;
-    let submission = submission.ok_or(AppError::NotFound)?;
-    if !submission.visible_after_eval {
+) -> Result<Json<SolutionSubmissionArtifactResponse>> {
+    let solution_submission = db::get_solution_submission_by_id(&state.db, &id).await?;
+    let solution_submission = solution_submission.ok_or(AppError::NotFound)?;
+    if !solution_submission.visible_after_eval {
         return Err(AppError::NotFound);
     }
 
-    let artifact = read_submission_artifact_summary(&submission.artifact_path).await?;
+    let artifact =
+        read_solution_submission_artifact_summary(&solution_submission.artifact_path).await?;
     Ok(Json(artifact))
 }
 
@@ -415,7 +418,7 @@ pub async fn publish_version(
     Ok((StatusCode::CREATED, Json(version)))
 }
 
-/// Queue an official rejudge for an existing submission.
+/// Queue an official rejudge for an existing solution submission.
 pub async fn rejudge(
     _admin: AdminAuth,
     State(state): State<AppState>,
@@ -425,7 +428,7 @@ pub async fn rejudge(
         &state.db,
         &QueueEvaluationJobInput {
             job_id: Uuid::new_v4().to_string(),
-            submission_id: id.clone(),
+            solution_submission_id: id.clone(),
             eval_type: ScoringMode::Official,
         },
     )
@@ -435,14 +438,14 @@ pub async fn rejudge(
         StatusCode::ACCEPTED,
         Json(EvaluationJobResponse {
             job_id: job.id,
-            submission_id: job.submission_id,
+            solution_submission_id: job.solution_submission_id,
             eval_type: ScoringMode::Official.as_str().to_string(),
             status: job.status,
         }),
     ))
 }
 
-/// Queue an official private benchmark run for an existing submission.
+/// Queue an official private benchmark run for an existing solution submission.
 pub async fn official_run(
     _admin: AdminAuth,
     State(state): State<AppState>,
@@ -452,7 +455,7 @@ pub async fn official_run(
         &state.db,
         &QueueEvaluationJobInput {
             job_id: Uuid::new_v4().to_string(),
-            submission_id: id.clone(),
+            solution_submission_id: id.clone(),
             eval_type: ScoringMode::Official,
         },
     )
@@ -462,21 +465,21 @@ pub async fn official_run(
         StatusCode::ACCEPTED,
         Json(EvaluationJobResponse {
             job_id: job.id,
-            submission_id: job.submission_id,
+            solution_submission_id: job.solution_submission_id,
             eval_type: ScoringMode::Official.as_str().to_string(),
             status: job.status,
         }),
     ))
 }
 
-/// Hide a submission from public views and repair leaderboard state.
-pub async fn hide_submission(
+/// Hide a solution submission from public views and repair leaderboard state.
+pub async fn hide_solution_submission(
     _admin: AdminAuth,
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<Json<HideSubmissionResponse>> {
-    db::hide_submission(&state.db, &id).await?;
-    Ok(Json(HideSubmissionResponse { id, hidden: true }))
+) -> Result<Json<HideSolutionSubmissionResponse>> {
+    db::hide_solution_submission(&state.db, &id).await?;
+    Ok(Json(HideSolutionSubmissionResponse { id, hidden: true }))
 }
 
 /// Disable an agent and revoke its tokens.
@@ -510,10 +513,10 @@ fn is_likely_zip(bytes: &[u8]) -> bool {
         || bytes.starts_with(&[0x50, 0x4b, 0x07, 0x08])
 }
 
-/// Summarize a submission ZIP for safe public code browsing.
-pub async fn read_submission_artifact_summary(
+/// Summarize a solution submission ZIP for safe public code browsing.
+pub async fn read_solution_submission_artifact_summary(
     artifact_path: &str,
-) -> Result<SubmissionArtifactResponse> {
+) -> Result<SolutionSubmissionArtifactResponse> {
     let archive_size = tokio::fs::metadata(artifact_path).await?.len();
     if archive_size > MAX_ARTIFACT_BYTES {
         return Err(AppError::BadRequest(format!(
@@ -523,14 +526,16 @@ pub async fn read_submission_artifact_summary(
     }
 
     let artifact_path = artifact_path.to_string();
-    tokio::task::spawn_blocking(move || read_submission_artifact_summary_blocking(&artifact_path))
-        .await
-        .map_err(|e| AppError::Internal(format!("artifact summary task failed: {e}")))?
+    tokio::task::spawn_blocking(move || {
+        read_solution_submission_artifact_summary_blocking(&artifact_path)
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("artifact summary task failed: {e}")))?
 }
 
-fn read_submission_artifact_summary_blocking(
+fn read_solution_submission_artifact_summary_blocking(
     artifact_path: &str,
-) -> Result<SubmissionArtifactResponse> {
+) -> Result<SolutionSubmissionArtifactResponse> {
     let archive_size = std::fs::metadata(artifact_path)?.len();
     let reader = std::fs::File::open(artifact_path)?;
     let mut archive = zip::ZipArchive::new(reader)?;
@@ -592,7 +597,7 @@ fn read_submission_artifact_summary_blocking(
             None
         };
 
-        files.push(SubmissionArtifactFileDto {
+        files.push(SolutionSubmissionArtifactFileDto {
             path: entry_path.clone(),
             size: size as i64,
             compressed_size,
@@ -604,7 +609,7 @@ fn read_submission_artifact_summary_blocking(
 
     files.sort_by(|a, b| a.path.cmp(&b.path));
 
-    Ok(SubmissionArtifactResponse {
+    Ok(SolutionSubmissionArtifactResponse {
         archive_name: std::path::Path::new(artifact_path)
             .file_name()
             .map(|s| s.to_string_lossy().to_string())
@@ -691,7 +696,7 @@ mod tests {
             ],
         );
 
-        let summary = read_submission_artifact_summary(&path.to_string_lossy())
+        let summary = read_solution_submission_artifact_summary(&path.to_string_lossy())
             .await
             .expect("summary should succeed");
         let _ = std::fs::remove_file(path);
@@ -708,7 +713,7 @@ mod tests {
             .collect();
         write_zip(&path, entries);
 
-        let result = read_submission_artifact_summary(&path.to_string_lossy()).await;
+        let result = read_solution_submission_artifact_summary(&path.to_string_lossy()).await;
         let _ = std::fs::remove_file(path);
 
         assert!(
@@ -727,7 +732,7 @@ mod tests {
             )],
         );
 
-        let summary = read_submission_artifact_summary(&path.to_string_lossy())
+        let summary = read_solution_submission_artifact_summary(&path.to_string_lossy())
             .await
             .expect("summary should succeed");
         let _ = std::fs::remove_file(path);

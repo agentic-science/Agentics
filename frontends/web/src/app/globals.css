@@ -164,7 +164,7 @@ input {
 
 .page-grid,
 .content-grid,
-.submission-layout {
+.solution-submission-layout {
   display: grid;
   gap: 14px;
 }
@@ -175,7 +175,7 @@ input {
 .content-grid {
   grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.78fr);
 }
-.submission-layout {
+.solution-submission-layout {
   grid-template-columns: minmax(340px, 0.8fr) minmax(0, 1.2fr);
 }
 
@@ -503,7 +503,7 @@ th {
   .topbar,
   .page-grid,
   .content-grid,
-  .submission-layout,
+  .solution-submission-layout,
   .hero-panel,
   .compact-hero,
   .code-browser {

@@ -10,7 +10,7 @@ export function ChallengeTabs({ challengeId }: { challengeId: string }) {
 
   const tabs = [
     { href: base, label: "题面", end: true },
-    { href: `${base}/submissions`, label: "提交" },
+    { href: `${base}/solution-submissions`, label: "提交" },
     { href: `${base}/leaderboard`, label: "排行榜" },
     { href: `${base}/discussions`, label: "讨论" },
   ];

@@ -51,7 +51,7 @@ export default async function ChallengeLayout({
           </div>
           <div className="stat-card">
             <span>提交格式</span>
-            <strong>{challenge.spec.submission.format}</strong>
+            <strong>{challenge.spec.solution.format}</strong>
           </div>
         </div>
       </div>

@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use clap::Parser;
-use shared::models::request::{CreateSubmissionRequest, RegisterAgentRequest};
+use shared::models::request::{CreateSolutionSubmissionRequest, RegisterAgentRequest};
 
 use crate::api::ApiClient;
 use crate::cli::{
@@ -78,8 +78,10 @@ pub async fn execute(cli: Cli, env: Environment) -> Result<String> {
         Commands::Validate(args) => validate(args, cli.output, &settings).await,
         Commands::Status(args) => {
             let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-            let response = client.get_submission(&args.submission_id).await?;
-            output::render_submission_status(&response, cli.output)
+            let response = client
+                .get_solution_submission(&args.solution_submission_id)
+                .await?;
+            output::render_solution_submission_status(&response, cli.output)
         }
     }
 }
@@ -150,18 +152,18 @@ async fn submit(
     settings: &ResolvedSettings,
 ) -> Result<String> {
     let package = package::package_solution_workspace(&args.dir)?;
-    let request = create_submission_request(
+    let request = create_solution_submission_request(
         args.challenge_id,
         &package,
         args.explanation,
-        args.parent_submission_id,
+        args.parent_solution_submission_id,
         args.credit_text,
     );
 
     let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-    let response = client.create_submission(&request).await?;
+    let response = client.create_solution_submission(&request).await?;
 
-    output::render_create_submission(&response, &package, output_format)
+    output::render_create_solution_submission(&response, &package, output_format)
 }
 
 async fn validate(
@@ -183,11 +185,11 @@ async fn validate(
     }
 
     let package = package::package_solution_workspace(&args.dir)?;
-    let request = create_submission_request(
+    let request = create_solution_submission_request(
         args.challenge_id,
         &package,
         args.explanation,
-        args.parent_submission_id,
+        args.parent_solution_submission_id,
         args.credit_text,
     );
 
@@ -206,18 +208,18 @@ async fn validate(
     output::render_validation_run_status(&final_response, output_format)
 }
 
-fn create_submission_request(
+fn create_solution_submission_request(
     challenge_id: String,
-    package: &package::SubmissionPackage,
+    package: &package::SolutionPackage,
     explanation: String,
-    parent_submission_id: Option<String>,
+    parent_solution_submission_id: Option<String>,
     credit_text: String,
-) -> CreateSubmissionRequest {
-    CreateSubmissionRequest {
+) -> CreateSolutionSubmissionRequest {
+    CreateSolutionSubmissionRequest {
         challenge_id,
         artifact_base64: STANDARD.encode(&package.bytes),
         explanation,
-        parent_submission_id,
+        parent_solution_submission_id,
         credit_text,
     }
 }
@@ -227,7 +229,7 @@ async fn poll_validation_run(
     validation_run_id: &str,
     poll_interval: Duration,
     timeout: Duration,
-) -> Result<shared::models::request::SubmissionResponse> {
+) -> Result<shared::models::request::SolutionSubmissionResponse> {
     let deadline = Instant::now() + timeout;
     loop {
         let response = client.get_validation_run(validation_run_id).await?;
@@ -376,7 +378,7 @@ mod tests {
                     "challenge_id": "sample-sum",
                     "challenge_title": "Sample Sum",
                     "challenge_version": "v1",
-                    "submission": {
+                    "solution": {
                         "format": "python_zip_project",
                         "language": "python",
                         "entrypoint": "main.py"
@@ -431,14 +433,14 @@ mod tests {
     async fn submit_packages_workspace_and_posts_authenticated_request() {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
-            .and(path("/api/submissions"))
+            .and(path("/api/solution-submissions"))
             .and(header("authorization", "Bearer test-token"))
             .respond_with(ResponseTemplate::new(201).set_body_json(json!({
-                "id": "submission-1",
+                "id": "solution_submission-1",
                 "status": "queued",
                 "challenge_id": "sample-sum",
                 "challenge_version_id": "version-1",
-                "artifact_path": "submissions/submission-1.zip",
+                "artifact_path": "solution-submissions/solution_submission-1.zip",
                 "evaluation_job_id": "job-1",
                 "created_at": "2026-05-01T00:00:00Z"
             })))
@@ -484,20 +486,20 @@ mod tests {
         let body: serde_json::Value =
             serde_json::from_slice(&requests[0].body).expect("request body should be JSON");
 
-        assert!(output.contains("Submitted submission-1"));
+        assert!(output.contains("Submitted solution_submission-1"));
         assert_eq!(body["challenge_id"], "sample-sum");
         assert_eq!(body["explanation"], "first attempt");
         assert!(body["artifact_base64"].as_str().expect("artifact").len() > 20);
     }
 
     #[tokio::test]
-    async fn status_fetches_authenticated_submission() {
+    async fn status_fetches_authenticated_solution_submission() {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
-            .and(path("/api/submissions/submission-1"))
+            .and(path("/api/solution-submissions/solution_submission-1"))
             .and(header("authorization", "Bearer test-token"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-                "id": "submission-1",
+                "id": "solution_submission-1",
                 "challenge_id": "sample-sum",
                 "challenge_title": "Sample Sum",
                 "challenge_version_id": "version-1",
@@ -505,10 +507,10 @@ mod tests {
                 "agent_name": "solver",
                 "status": "queued",
                 "explanation": "",
-                "parent_submission_id": null,
+                "parent_solution_submission_id": null,
                 "credit_text": "",
                 "visible_after_eval": false,
-                "artifact_path": "submissions/submission-1.zip",
+                "artifact_path": "solution-submissions/solution_submission-1.zip",
                 "evaluation_job": {
                     "id": "job-1",
                     "status": "queued"
@@ -530,14 +532,14 @@ mod tests {
             "--token",
             "test-token",
             "status",
-            "submission-1",
+            "solution_submission-1",
         ]);
 
         let output = execute(cli, Environment::default())
             .await
             .expect("status should succeed");
 
-        assert!(output.contains("submission: submission-1"));
+        assert!(output.contains("solution submission: solution_submission-1"));
         assert!(output.contains("evaluation_job: job-1 (queued)"));
     }
 
@@ -557,7 +559,7 @@ mod tests {
                 "status": "queued",
                 "challenge_id": "sample-sum",
                 "challenge_version_id": "version-1",
-                "artifact_path": "submissions/validation-1.zip",
+                "artifact_path": "solution-submissions/validation-1.zip",
                 "evaluation_job_id": "job-1",
                 "created_at": "2026-05-01T00:00:00Z"
             })))
@@ -575,10 +577,10 @@ mod tests {
                 "agent_name": "solver",
                 "status": "completed",
                 "explanation": "quick check",
-                "parent_submission_id": null,
+                "parent_solution_submission_id": null,
                 "credit_text": "",
                 "visible_after_eval": false,
-                "artifact_path": "submissions/validation-1.zip",
+                "artifact_path": "solution-submissions/validation-1.zip",
                 "evaluation_job": {
                     "id": "job-1",
                     "status": "completed"
@@ -720,7 +722,7 @@ mod tests {
                 "challenge_id": "sample-sum",
                 "challenge_title": "Sample Sum",
                 "challenge_version": "v1",
-                "submission": {
+                "solution": {
                     "format": "python_zip_project",
                     "language": "python",
                     "entrypoint": "main.py"

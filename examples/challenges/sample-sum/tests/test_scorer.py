@@ -11,10 +11,10 @@ CHALLENGE_DIR = ROOT / "examples" / "challenges" / "sample-sum" / "v1"
 SCORER_PATH = CHALLENGE_DIR / "scorer" / "run.py"
 
 
-def write_submission(target_dir: Path, expression: str) -> Path:
-    submission_dir = target_dir / "submission"
-    submission_dir.mkdir(parents=True, exist_ok=True)
-    (submission_dir / "main.py").write_text(
+def write_solution(target_dir: Path, expression: str) -> Path:
+    solution_dir = target_dir / "solution"
+    solution_dir.mkdir(parents=True, exist_ok=True)
+    (solution_dir / "main.py").write_text(
         "\n".join(
             [
                 "from __future__ import annotations",
@@ -35,11 +35,11 @@ def write_submission(target_dir: Path, expression: str) -> Path:
         ),
         encoding="utf-8",
     )
-    return submission_dir
+    return solution_dir
 
 
 def run_scorer(tmp_path: Path, *, mode: str, expression: str) -> dict:
-    submission_dir = write_submission(tmp_path, expression)
+    solution_dir = write_solution(tmp_path, expression)
     output_path = tmp_path / "result.json"
 
     subprocess.run(
@@ -48,8 +48,8 @@ def run_scorer(tmp_path: Path, *, mode: str, expression: str) -> dict:
             str(SCORER_PATH),
             "--challenge-dir",
             str(CHALLENGE_DIR),
-            "--submission-dir",
-            str(submission_dir),
+            "--solution-dir",
+            str(solution_dir),
             "--output-path",
             str(output_path),
             "--mode",

@@ -63,7 +63,7 @@ export default async function LeaderboardPage({
                 <th>Rank Score</th>
                 <th>Secondary Metrics</th>
                 <th>更新时间</th>
-                <th>Submission</th>
+                <th>Solution Submission</th>
               </tr>
             </thead>
             <tbody>
@@ -95,8 +95,10 @@ export default async function LeaderboardPage({
                     </td>
                     <td>{formatDate(entry.updated_at)}</td>
                     <td>
-                      <Link href={`/submissions/${entry.best_submission_id}`}>
-                        {entry.best_submission_id.slice(0, 8)}…
+                      <Link
+                        href={`/solution-submissions/${entry.best_solution_submission_id}`}
+                      >
+                        {entry.best_solution_submission_id.slice(0, 8)}…
                       </Link>
                     </td>
                   </tr>

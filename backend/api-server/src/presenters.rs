@@ -1,6 +1,6 @@
 //! Conversion helpers from database records to API DTOs.
 
-use shared::db::queries::{AgentRecord, ChallengeVersionRecord, SubmissionRecord};
+use shared::db::queries::{AgentRecord, ChallengeVersionRecord, SolutionSubmissionRecord};
 use shared::models::challenge::*;
 use shared::models::request::*;
 
@@ -25,7 +25,7 @@ pub fn present_challenge_detail(
             challenge_id: challenge.challenge_id.clone(),
             challenge_title: challenge.title.clone(),
             challenge_version: challenge.version.clone(),
-            submission: SubmissionSpec {
+            solution: SolutionSpec {
                 format: "python_zip_project".to_string(),
                 language: "python".to_string(),
                 entrypoint: "main.py".to_string(),
@@ -63,47 +63,52 @@ pub fn present_challenge_detail(
     }
 }
 
-/// Present the response returned immediately after submission creation.
-pub fn present_create_submission(submission: &SubmissionRecord) -> CreateSubmissionResponse {
-    CreateSubmissionResponse {
-        id: submission.id.clone(),
-        status: submission.status.clone(),
-        challenge_id: submission.challenge_id.clone(),
-        challenge_version_id: submission.challenge_version_id.clone(),
-        artifact_path: submission.artifact_path.clone(),
-        evaluation_job_id: submission.evaluation_job_id.clone().unwrap_or_default(),
-        created_at: submission.created_at.to_rfc3339(),
+/// Present the response returned immediately after solution submission creation.
+pub fn present_create_solution_submission(
+    solution_submission: &SolutionSubmissionRecord,
+) -> CreateSolutionSubmissionResponse {
+    CreateSolutionSubmissionResponse {
+        id: solution_submission.id.clone(),
+        status: solution_submission.status.clone(),
+        challenge_id: solution_submission.challenge_id.clone(),
+        challenge_version_id: solution_submission.challenge_version_id.clone(),
+        artifact_path: solution_submission.artifact_path.clone(),
+        evaluation_job_id: solution_submission
+            .evaluation_job_id
+            .clone()
+            .unwrap_or_default(),
+        created_at: solution_submission.created_at.to_rfc3339(),
     }
 }
 
-/// Present a submission while controlling fields that are hidden on public routes.
-pub fn present_submission(
-    submission: &SubmissionRecord,
+/// Present a solution submission while controlling fields that are hidden on public routes.
+pub fn present_solution_submission(
+    solution_submission: &SolutionSubmissionRecord,
     include_artifact_path: bool,
     include_evaluation_job: bool,
-) -> SubmissionResponse {
-    SubmissionResponse {
-        id: submission.id.clone(),
-        challenge_id: submission.challenge_id.clone(),
-        challenge_title: submission.challenge_title.clone(),
-        challenge_version_id: submission.challenge_version_id.clone(),
-        agent_id: submission.agent_id.clone(),
-        agent_name: submission.agent_name.clone(),
-        status: submission.status.clone(),
-        explanation: submission.explanation.clone(),
-        parent_submission_id: submission.parent_submission_id.clone(),
-        credit_text: submission.credit_text.clone(),
-        visible_after_eval: submission.visible_after_eval,
+) -> SolutionSubmissionResponse {
+    SolutionSubmissionResponse {
+        id: solution_submission.id.clone(),
+        challenge_id: solution_submission.challenge_id.clone(),
+        challenge_title: solution_submission.challenge_title.clone(),
+        challenge_version_id: solution_submission.challenge_version_id.clone(),
+        agent_id: solution_submission.agent_id.clone(),
+        agent_name: solution_submission.agent_name.clone(),
+        status: solution_submission.status.clone(),
+        explanation: solution_submission.explanation.clone(),
+        parent_solution_submission_id: solution_submission.parent_solution_submission_id.clone(),
+        credit_text: solution_submission.credit_text.clone(),
+        visible_after_eval: solution_submission.visible_after_eval,
         artifact_path: if include_artifact_path {
-            Some(submission.artifact_path.clone())
+            Some(solution_submission.artifact_path.clone())
         } else {
             None
         },
         evaluation_job: if include_evaluation_job {
-            submission.evaluation_job_id.as_ref().map(|id| {
+            solution_submission.evaluation_job_id.as_ref().map(|id| {
                 shared::models::evaluation::EvaluationJobDto {
                     id: id.clone(),
-                    status: match submission.evaluation_job_status.as_deref() {
+                    status: match solution_submission.evaluation_job_status.as_deref() {
                         Some("running") => shared::models::evaluation::EvaluationStatus::Running,
                         Some("completed") => {
                             shared::models::evaluation::EvaluationStatus::Completed
@@ -116,10 +121,10 @@ pub fn present_submission(
         } else {
             None
         },
-        evaluation: submission.evaluation.clone(),
-        validation_evaluation: submission.validation_evaluation.clone(),
-        official_evaluation: submission.official_evaluation.clone(),
-        created_at: submission.created_at.to_rfc3339(),
-        updated_at: submission.updated_at.to_rfc3339(),
+        evaluation: solution_submission.evaluation.clone(),
+        validation_evaluation: solution_submission.validation_evaluation.clone(),
+        official_evaluation: solution_submission.official_evaluation.clone(),
+        created_at: solution_submission.created_at.to_rfc3339(),
+        updated_at: solution_submission.updated_at.to_rfc3339(),
     }
 }

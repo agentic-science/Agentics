@@ -1,7 +1,7 @@
 //! Discussion thread and reply queries.
 //!
 //! These helpers keep discussion reads and writes separate from the larger
-//! challenge/submission query module while preserving the same DTO shapes exposed
+//! challenge/solution query module while preserving the same DTO shapes exposed
 //! by the old TS API.
 
 use std::collections::HashMap;

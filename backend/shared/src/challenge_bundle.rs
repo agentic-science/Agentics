@@ -170,17 +170,17 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
     if spec.schema_version != 1 {
         return Err(AppError::Validation("schema_version must be 1".to_string()));
     }
-    if spec.submission.format != "python_zip_project" {
+    if spec.solution.format != "python_zip_project" {
         return Err(AppError::Validation(
-            "submission.format must be python_zip_project".to_string(),
+            "solution.format must be python_zip_project".to_string(),
         ));
     }
-    if spec.submission.language != "python" {
+    if spec.solution.language != "python" {
         return Err(AppError::Validation(
-            "submission.language must be python".to_string(),
+            "solution.language must be python".to_string(),
         ));
     }
-    require_safe_relative_path(&spec.submission.entrypoint, "submission.entrypoint")?;
+    require_safe_relative_path(&spec.solution.entrypoint, "solution.entrypoint")?;
     require_safe_relative_path(&spec.scorer.entrypoint, "scorer.entrypoint")?;
     require_safe_relative_path(&spec.scorer.result_file, "scorer.result_file")?;
 
@@ -324,7 +324,7 @@ mod tests {
 
     use crate::models::challenge::{
         ChallengeBundleSpec, DatasetsSpec, LimitsSpec, MetricDirection, MetricSchemaSpec,
-        MetricVisibility, ScorerSpec, SubmissionSpec,
+        MetricVisibility, ScorerSpec, SolutionSpec,
     };
     use crate::models::evaluation::ScoreVisibility;
 
@@ -336,7 +336,7 @@ mod tests {
             challenge_id: "sample-sum".to_string(),
             challenge_title: "Sample Sum".to_string(),
             challenge_version: "v1".to_string(),
-            submission: SubmissionSpec {
+            solution: SolutionSpec {
                 format: "python_zip_project".to_string(),
                 language: "python".to_string(),
                 entrypoint: "main.py".to_string(),
@@ -368,7 +368,7 @@ mod tests {
             "challenge_id": "sample-sum",
             "challenge_title": "Sample Sum",
             "challenge_version": "v1",
-            "submission": {
+            "solution": {
                 "format": "python_zip_project",
                 "language": "python",
                 "entrypoint": "main.py"

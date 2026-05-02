@@ -27,10 +27,13 @@ pub fn router() -> Router<AppState> {
             "/api/challenges/{id}",
             get(crate::handlers::get_agent_challenge),
         )
-        .route("/api/submissions", post(crate::handlers::create_submission))
         .route(
-            "/api/submissions/{id}",
-            get(crate::handlers::get_submission),
+            "/api/solution-submissions",
+            post(crate::handlers::create_solution_submission),
+        )
+        .route(
+            "/api/solution-submissions/{id}",
+            get(crate::handlers::get_solution_submission),
         )
         .route(
             "/api/validation-runs",
@@ -58,8 +61,8 @@ pub fn router() -> Router<AppState> {
             get(crate::handlers::get_challenge),
         )
         .route(
-            "/api/public/challenges/{id}/submissions",
-            get(crate::handlers::list_public_submissions),
+            "/api/public/challenges/{id}/solution-submissions",
+            get(crate::handlers::list_public_solution_submissions),
         )
         .route(
             "/api/public/challenges/{id}/leaderboard",
@@ -70,11 +73,11 @@ pub fn router() -> Router<AppState> {
             get(crate::handlers::list_discussions),
         )
         .route(
-            "/api/public/submissions/{id}",
-            get(crate::handlers::get_public_submission),
+            "/api/public/solution-submissions/{id}",
+            get(crate::handlers::get_public_solution_submission),
         )
         .route(
-            "/api/public/submissions/{id}/artifact",
+            "/api/public/solution-submissions/{id}/artifact",
             get(crate::handlers::get_public_artifact),
         )
         // Admin routes (Basic auth via extractor)
@@ -84,16 +87,16 @@ pub fn router() -> Router<AppState> {
             post(crate::handlers::publish_version),
         )
         .route(
-            "/admin/submissions/{id}/rejudge",
+            "/admin/solution-submissions/{id}/rejudge",
             post(crate::handlers::rejudge),
         )
         .route(
-            "/admin/submissions/{id}/official-run",
+            "/admin/solution-submissions/{id}/official-run",
             post(crate::handlers::official_run),
         )
         .route(
-            "/admin/submissions/{id}/hide",
-            post(crate::handlers::hide_submission),
+            "/admin/solution-submissions/{id}/hide",
+            post(crate::handlers::hide_solution_submission),
         )
         .route(
             "/admin/agents/{id}/disable",

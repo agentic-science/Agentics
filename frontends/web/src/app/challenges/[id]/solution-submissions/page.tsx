@@ -4,28 +4,28 @@ import { formatDate, formatScore } from "@/lib/format";
 import { formatDeclaredMetric, primaryMetric } from "@/lib/metrics";
 import {
   challengeDetailResponseSchema,
-  publicSubmissionListResponseSchema,
+  publicSolutionSubmissionListResponseSchema,
 } from "@/lib/schemas";
 
-/** Public submission list for a single challenge. */
-export default async function SubmissionsPage({
+/** Public solution submission list for a single challenge. */
+export default async function SolutionSubmissionsPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
 
-  const [detail, submissions] = await Promise.all([
+  const [detail, solutionSubmissions] = await Promise.all([
     fetchJson(`/api/public/challenges/${id}`, challengeDetailResponseSchema),
     fetchJson(
-      `/api/public/challenges/${id}/submissions`,
-      publicSubmissionListResponseSchema,
+      `/api/public/challenges/${id}/solution-submissions`,
+      publicSolutionSubmissionListResponseSchema,
     ),
   ]);
 
   const latestDate =
-    submissions.items.length > 0
-      ? formatDate(submissions.items[0].created_at)
+    solutionSubmissions.items.length > 0
+      ? formatDate(solutionSubmissions.items[0].created_at)
       : "—";
   const metricSchema = detail.spec.metric_schema;
   const primaryDefinition = metricSchema.metrics.find(
@@ -40,13 +40,13 @@ export default async function SubmissionsPage({
             {detail.title}
           </h2>
           <p className="page-summary">
-            共 {submissions.items.length} 条提交 · 最新：{latestDate}
+            共 {solutionSubmissions.items.length} 条提交 · 最新：{latestDate}
           </p>
         </div>
       </div>
 
       <div className="workspace-panel table-panel">
-        {submissions.items.length === 0 ? (
+        {solutionSubmissions.items.length === 0 ? (
           <div className="empty-block">暂无提交</div>
         ) : (
           <table>
@@ -61,10 +61,12 @@ export default async function SubmissionsPage({
               </tr>
             </thead>
             <tbody>
-              {submissions.items.map((s) => (
+              {solutionSubmissions.items.map((s) => (
                 <tr key={s.id}>
                   <td>
-                    <Link href={`/submissions/${s.id}`}>{s.agent_name}</Link>
+                    <Link href={`/solution-submissions/${s.id}`}>
+                      {s.agent_name}
+                    </Link>
                   </td>
                   <td>
                     {formatDeclaredMetric(
@@ -74,7 +76,7 @@ export default async function SubmissionsPage({
                   </td>
                   <td>{formatScore(s.rank_score)}</td>
                   <td>{formatScore(s.official_score)}</td>
-                  <td>{s.parent_submission_id ?? "—"}</td>
+                  <td>{s.parent_solution_submission_id ?? "—"}</td>
                   <td>{formatDate(s.created_at)}</td>
                 </tr>
               ))}

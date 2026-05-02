@@ -115,7 +115,7 @@ pub async fn run_worker_cycle(
             &HeartbeatPayload {
                 status: "idle".to_string(),
                 job_id: None,
-                submission_id: None,
+                solution_submission_id: None,
                 last_completed_job_id: None,
                 last_failed_job_id: None,
             },
@@ -130,7 +130,7 @@ pub async fn run_worker_cycle(
         &HeartbeatPayload {
             status: "running".to_string(),
             job_id: Some(job.id.clone()),
-            submission_id: Some(job.submission_id.clone()),
+            solution_submission_id: Some(job.solution_submission_id.clone()),
             last_completed_job_id: None,
             last_failed_job_id: None,
         },
@@ -142,7 +142,7 @@ pub async fn run_worker_cycle(
         db,
         &shared::db::queries::MarkEvaluationStartedInput {
             evaluation_id: evaluation_id.clone(),
-            submission_id: job.submission_id.clone(),
+            solution_submission_id: job.solution_submission_id.clone(),
             job_id: job.id.clone(),
             eval_type: job.eval_type,
         },
@@ -162,7 +162,7 @@ pub async fn run_worker_cycle(
     match exec_result {
         Ok(result) => {
             let job_id = job.id.clone();
-            let submission_id = job.submission_id.clone();
+            let solution_submission_id = job.solution_submission_id.clone();
             let primary_score = result.result.primary_score;
             let rank_score = result.result.rank_score;
 
@@ -170,7 +170,7 @@ pub async fn run_worker_cycle(
                 db,
                 &PersistedEvaluationResult {
                     evaluation_id,
-                    submission_id: submission_id.clone(),
+                    solution_submission_id: solution_submission_id.clone(),
                     job_id: job_id.clone(),
                     eval_type: job.eval_type,
                     status: EvaluationStatus::Completed,
@@ -193,7 +193,7 @@ pub async fn run_worker_cycle(
                 &HeartbeatPayload {
                     status: "idle".to_string(),
                     job_id: None,
-                    submission_id: None,
+                    solution_submission_id: None,
                     last_completed_job_id: Some(job_id.clone()),
                     last_failed_job_id: None,
                 },
@@ -202,7 +202,7 @@ pub async fn run_worker_cycle(
 
             info!(
                 job_id = %job_id,
-                submission_id = %submission_id,
+                solution_submission_id = %solution_submission_id,
                 primary_score = %primary_score,
                 "evaluation completed"
             );
@@ -213,7 +213,7 @@ pub async fn run_worker_cycle(
                 db,
                 &PersistedEvaluationResult {
                     evaluation_id,
-                    submission_id: job.submission_id.clone(),
+                    solution_submission_id: job.solution_submission_id.clone(),
                     job_id: job.id.clone(),
                     eval_type: job.eval_type,
                     status: EvaluationStatus::Failed,
@@ -236,7 +236,7 @@ pub async fn run_worker_cycle(
                 &HeartbeatPayload {
                     status: "idle".to_string(),
                     job_id: None,
-                    submission_id: None,
+                    solution_submission_id: None,
                     last_completed_job_id: None,
                     last_failed_job_id: Some(job.id.clone()),
                 },
@@ -245,7 +245,7 @@ pub async fn run_worker_cycle(
 
             error!(
                 job_id = %job.id,
-                submission_id = %job.submission_id,
+                solution_submission_id = %job.solution_submission_id,
                 error = %error_msg,
                 "evaluation failed"
             );

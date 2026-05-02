@@ -1,7 +1,7 @@
 //! Docker-backed evaluation runner for submitted artifacts.
 //!
 //! The runner mounts the immutable challenge bundle, a safely extracted
-//! submission archive, and a writable output directory into a network-isolated
+//! solution archive, and a writable output directory into a network-isolated
 //! Python container. The scorer must write a TS-compatible `result.json`; this
 //! module validates that output before workers persist it.
 
@@ -61,9 +61,7 @@ pub async fn execute_evaluation_job(
     let working_root = Path::new(&config.storage_root)
         .join("eval-artifacts")
         .join(job_id);
-    let extraction_root = std::env::temp_dir()
-        .join("agentics-submissions")
-        .join(job_id);
+    let extraction_root = std::env::temp_dir().join("agentics-solutions").join(job_id);
     let result_path = working_root.join("result.json");
     let log_path_rel = format!("eval-artifacts/{}/runner.log", job_id);
 
@@ -87,7 +85,7 @@ pub async fn execute_evaluation_job(
                 ..Default::default()
             },
             bollard::models::Mount {
-                target: Some("/submission".to_string()),
+                target: Some("/solution".to_string()),
                 source: Some(extraction_root.to_string_lossy().to_string()),
                 typ: Some(bollard::models::MountTypeEnum::BIND),
                 read_only: Some(true),
@@ -123,8 +121,8 @@ pub async fn execute_evaluation_job(
                 "/challenge/scorer/run.py".to_string(),
                 "--challenge-dir".to_string(),
                 "/challenge".to_string(),
-                "--submission-dir".to_string(),
-                "/submission".to_string(),
+                "--solution-dir".to_string(),
+                "/solution".to_string(),
                 "--output-path".to_string(),
                 "/output/result.json".to_string(),
                 "--mode".to_string(),
@@ -183,7 +181,7 @@ pub async fn execute_evaluation_job(
         (Ok(_), Err(cleanup_err)) => Err(cleanup_err),
         (Err(run_err), Ok(())) => Err(run_err),
         (Err(run_err), Err(cleanup_err)) => Err(AppError::Runner(format!(
-            "{run_err}; additionally failed to remove extracted submission: {cleanup_err}"
+            "{run_err}; additionally failed to remove extracted solution: {cleanup_err}"
         ))),
     }
 }
@@ -335,7 +333,7 @@ async fn extract_zip_safe(artifact_path: &str, target_dir: &Path) -> Result<()> 
     let artifact_size = tokio::fs::metadata(artifact_path).await?.len();
     if artifact_size > MAX_RUNNER_ARTIFACT_BYTES {
         return Err(AppError::Validation(format!(
-            "submission archive must be at most {} bytes",
+            "solution archive must be at most {} bytes",
             MAX_RUNNER_ARTIFACT_BYTES
         )));
     }
@@ -353,7 +351,7 @@ fn extract_zip_safe_blocking(artifact_path: &str, target_dir: &Path) -> Result<(
 
     if archive.len() > MAX_RUNNER_FILE_COUNT {
         return Err(AppError::Validation(format!(
-            "submission archive must contain at most {} entries",
+            "solution archive must contain at most {} entries",
             MAX_RUNNER_FILE_COUNT
         )));
     }
@@ -371,10 +369,10 @@ fn extract_zip_safe_blocking(artifact_path: &str, target_dir: &Path) -> Result<(
 
         total_uncompressed_size = total_uncompressed_size
             .checked_add(file.size())
-            .ok_or_else(|| AppError::Validation("submission archive is too large".to_string()))?;
+            .ok_or_else(|| AppError::Validation("solution archive is too large".to_string()))?;
         if total_uncompressed_size > MAX_RUNNER_UNCOMPRESSED_BYTES {
             return Err(AppError::Validation(format!(
-                "submission archive must expand to at most {} bytes",
+                "solution archive must expand to at most {} bytes",
                 MAX_RUNNER_UNCOMPRESSED_BYTES
             )));
         }

@@ -11,7 +11,7 @@ pub struct ChallengeBundleSpec {
     pub challenge_id: String,
     pub challenge_title: String,
     pub challenge_version: String,
-    pub submission: SubmissionSpec,
+    pub solution: SolutionSpec,
     pub scorer: ScorerSpec,
     pub limits: LimitsSpec,
     pub datasets: DatasetsSpec,
@@ -20,9 +20,9 @@ pub struct ChallengeBundleSpec {
     pub metric_schema: MetricSchemaSpec,
 }
 
-/// Submission format constraints declared by a bundle.
+/// Local solution format constraints declared by a bundle.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SubmissionSpec {
+pub struct SolutionSpec {
     pub format: String,
     pub language: String,
     pub entrypoint: String,

@@ -11,12 +11,12 @@
 本地自测：
 
 ```bash
-uv run python examples/submissions/grid-routing-lexicographic/main.py '{"instance_id":"demo","grid":["S....",".###.","...#.",".#...","...#G"]}'
+uv run python examples/solutions/grid-routing-lexicographic/main.py '{"instance_id":"demo","grid":["S....",".###.","...#.",".#...","...#G"]}'
 ```
 
 打包示例：
 
 ```bash
-cd examples/submissions/grid-routing-lexicographic
+cd examples/solutions/grid-routing-lexicographic
 uv run python -m zipfile -c /tmp/grid-routing-lexicographic.zip main.py
 ```

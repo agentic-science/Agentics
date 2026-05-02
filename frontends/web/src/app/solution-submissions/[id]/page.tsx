@@ -10,39 +10,40 @@ import {
 } from "@/lib/metrics";
 import {
   challengeDetailResponseSchema,
-  submissionArtifactResponseSchema,
-  submissionResponseSchema,
+  solutionSubmissionArtifactResponseSchema,
+  solutionSubmissionResponseSchema,
 } from "@/lib/schemas";
 
-/** Public submission detail page with evaluation results and artifact preview. */
-export default async function SubmissionPage({
+/** Public solution submission detail page with evaluation results and artifact preview. */
+export default async function SolutionSubmissionPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
 
-  const submission = await fetchJson(
-    `/api/public/submissions/${id}`,
-    submissionResponseSchema,
+  const solutionSubmission = await fetchJson(
+    `/api/public/solution-submissions/${id}`,
+    solutionSubmissionResponseSchema,
   );
   const [artifact, detail] = await Promise.all([
     fetchJson(
-      `/api/public/submissions/${id}/artifact`,
-      submissionArtifactResponseSchema,
+      `/api/public/solution-submissions/${id}/artifact`,
+      solutionSubmissionArtifactResponseSchema,
     ),
     fetchJson(
-      `/api/public/challenges/${submission.challenge_id}`,
+      `/api/public/challenges/${solutionSubmission.challenge_id}`,
       challengeDetailResponseSchema,
     ),
   ]);
 
-  const evalDto = submission.validation_evaluation ?? submission.evaluation;
+  const evalDto =
+    solutionSubmission.validation_evaluation ?? solutionSubmission.evaluation;
   const metricSchema = detail.spec.metric_schema;
   const primary = primaryMetric(metricSchema, evalDto?.aggregate_metrics ?? []);
   const officialPrimary = primaryMetric(
     metricSchema,
-    submission.official_evaluation?.aggregate_metrics ?? [],
+    solutionSubmission.official_evaluation?.aggregate_metrics ?? [],
   );
 
   return (
@@ -50,12 +51,15 @@ export default async function SubmissionPage({
       <div className="hero-panel workspace-panel">
         <div className="hero-copy-block">
           <span className="section-kicker">
-            <Link href={`/challenges/${submission.challenge_id}`}>
-              {submission.challenge_title ?? submission.challenge_id}
+            <Link href={`/challenges/${solutionSubmission.challenge_id}`}>
+              {solutionSubmission.challenge_title ??
+                solutionSubmission.challenge_id}
             </Link>
           </span>
-          <h1 className="page-title">Submission {submission.id.slice(0, 8)}</h1>
-          <p className="page-summary">{submission.explanation}</p>
+          <h1 className="page-title">
+            Solution submission {solutionSubmission.id.slice(0, 8)}
+          </h1>
+          <p className="page-summary">{solutionSubmission.explanation}</p>
         </div>
         <div className="stats-grid compact-stats">
           <div className="stat-card">
@@ -79,31 +83,35 @@ export default async function SubmissionPage({
           </div>
           <div className="stat-card">
             <span>Status</span>
-            <strong>{submission.status}</strong>
+            <strong>{solutionSubmission.status}</strong>
           </div>
         </div>
       </div>
 
-      <div className="submission-layout">
+      <div className="solution-submission-layout">
         <div className="side-stack">
           <div className="workspace-panel">
             <p className="section-kicker">提交元信息</p>
             <div className="info-grid" style={{ marginTop: 8 }}>
               <div>
                 <span>Agent</span>
-                <strong>{submission.agent_name ?? submission.agent_id}</strong>
+                <strong>
+                  {solutionSubmission.agent_name ?? solutionSubmission.agent_id}
+                </strong>
               </div>
               <div>
                 <span>Parent</span>
-                <strong>{submission.parent_submission_id ?? "—"}</strong>
+                <strong>
+                  {solutionSubmission.parent_solution_submission_id ?? "—"}
+                </strong>
               </div>
               <div>
                 <span>Created</span>
-                <strong>{formatDate(submission.created_at)}</strong>
+                <strong>{formatDate(solutionSubmission.created_at)}</strong>
               </div>
               <div>
                 <span>Credit</span>
-                <strong>{submission.credit_text || "—"}</strong>
+                <strong>{solutionSubmission.credit_text || "—"}</strong>
               </div>
             </div>
           </div>

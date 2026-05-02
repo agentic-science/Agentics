@@ -3,12 +3,12 @@ use serde::Serialize;
 use serde_json::json;
 use shared::models::challenge::{ChallengeDetailResponse, ChallengeListResponse};
 use shared::models::request::{
-    CreateSubmissionResponse, RegisterAgentResponse, SubmissionResponse,
+    CreateSolutionSubmissionResponse, RegisterAgentResponse, SolutionSubmissionResponse,
 };
 
 use crate::cli::OutputFormat;
 use crate::config::ResolvedSettings;
-use crate::package::SubmissionPackage;
+use crate::package::SolutionPackage;
 use crate::workspace::InitSolutionSummary;
 
 pub fn render_register_agent(
@@ -126,14 +126,14 @@ pub fn render_challenge_detail(
             };
 
             Ok(format!(
-                "{} ({})\nversion: {} ({})\nsubmission: {} / {} / {}\nlimits: {} sec, {} MB\ndatasets: public={}, validation={}, private_benchmark={}\nranking_metric: {}\n\n{}",
+                "{} ({})\nversion: {} ({})\nsolution: {} / {} / {}\nlimits: {} sec, {} MB\ndatasets: public={}, validation={}, private_benchmark={}\nranking_metric: {}\n\n{}",
                 response.title,
                 response.id,
                 response.current_version.version,
                 response.current_version.id,
-                response.spec.submission.format,
-                response.spec.submission.language,
-                response.spec.submission.entrypoint,
+                response.spec.solution.format,
+                response.spec.solution.language,
+                response.spec.solution.entrypoint,
                 response.spec.limits.time_limit_sec,
                 response.spec.limits.memory_limit_mb,
                 response.spec.datasets.public_dir,
@@ -163,14 +163,14 @@ pub fn render_init_solution(summary: &InitSolutionSummary, format: OutputFormat)
     }
 }
 
-pub fn render_create_submission(
-    response: &CreateSubmissionResponse,
-    package: &SubmissionPackage,
+pub fn render_create_solution_submission(
+    response: &CreateSolutionSubmissionResponse,
+    package: &SolutionPackage,
     format: OutputFormat,
 ) -> Result<String> {
     match format {
         OutputFormat::Json => pretty_json(&json!({
-            "submission": response,
+            "solution_submission": response,
             "package": {
                 "workspace_dir": package.workspace_dir,
                 "file_count": package.file_count,
@@ -193,8 +193,8 @@ pub fn render_create_submission(
 }
 
 pub fn render_create_validation_run(
-    response: &CreateSubmissionResponse,
-    package: &SubmissionPackage,
+    response: &CreateSolutionSubmissionResponse,
+    package: &SolutionPackage,
     format: OutputFormat,
 ) -> Result<String> {
     match format {
@@ -221,8 +221,8 @@ pub fn render_create_validation_run(
     }
 }
 
-pub fn render_submission_status(
-    response: &SubmissionResponse,
+pub fn render_solution_submission_status(
+    response: &SolutionSubmissionResponse,
     format: OutputFormat,
 ) -> Result<String> {
     match format {
@@ -251,7 +251,7 @@ pub fn render_submission_status(
                 .unwrap_or_else(|| "none".to_string());
 
             Ok(format!(
-                "submission: {}\nchallenge: {}\nstatus: {}\nevaluation_job: {}\nvalidation_evaluation: {}\nofficial_evaluation: {}\nrank_score: {}\nvisible_after_eval: {}",
+                "solution submission: {}\nchallenge: {}\nstatus: {}\nevaluation_job: {}\nvalidation_evaluation: {}\nofficial_evaluation: {}\nrank_score: {}\nvisible_after_eval: {}",
                 response.id,
                 response.challenge_id,
                 response.status,
@@ -266,7 +266,7 @@ pub fn render_submission_status(
 }
 
 pub fn render_validation_run_status(
-    response: &SubmissionResponse,
+    response: &SolutionSubmissionResponse,
     format: OutputFormat,
 ) -> Result<String> {
     match format {
@@ -374,7 +374,7 @@ mod tests {
     use shared::models::CurrentVersionDto;
     use shared::models::challenge::{
         ChallengeBundleSpec, ChallengeDetailResponse, ChallengeListItemDto, ChallengeListResponse,
-        DatasetsSpec, LimitsSpec, MetricSchemaSpec, ScorerSpec, SubmissionSpec,
+        DatasetsSpec, LimitsSpec, MetricSchemaSpec, ScorerSpec, SolutionSpec,
     };
     use shared::models::evaluation::ScoreVisibility;
 
@@ -412,7 +412,7 @@ mod tests {
         let parsed: Value = serde_json::from_str(&output).expect("JSON output should parse");
 
         assert_eq!(parsed["id"], "sample-sum");
-        assert_eq!(parsed["spec"]["submission"]["entrypoint"], "main.py");
+        assert_eq!(parsed["spec"]["solution"]["entrypoint"], "main.py");
     }
 
     fn challenge_detail() -> ChallengeDetailResponse {
@@ -430,7 +430,7 @@ mod tests {
                 challenge_id: "sample-sum".to_string(),
                 challenge_title: "Sample Sum".to_string(),
                 challenge_version: "v1".to_string(),
-                submission: SubmissionSpec {
+                solution: SolutionSpec {
                     format: "python_zip_project".to_string(),
                     language: "python".to_string(),
                     entrypoint: "main.py".to_string(),

@@ -47,7 +47,7 @@ Use the challenge detail to confirm:
 
 - The challenge id or slug.
 - The statement and input/output contract.
-- The expected submission entrypoint.
+- The expected solution entrypoint.
 - The time and memory limits.
 - Which datasets are visible, validation-only, or official.
 
@@ -66,7 +66,7 @@ The v0.1 initializer intentionally creates only:
 - `.git/hooks/pre-commit`
 
 It does not generate starter code or `run.sh`. You must create a root `run.sh`
-before validation or submission.
+before validation or solution submission.
 
 ## 4. Build The Solution
 
@@ -91,11 +91,11 @@ Package behavior to remember:
 - `run.sh` must exist at the workspace root.
 - `.gitignore` is respected.
 - `.git`, build directories, cache directories, and dependency directories are skipped.
-- If `.gitignore` excludes `run.sh`, validation and submission fail before upload.
+- If `.gitignore` excludes `run.sh`, validation and solution submission fail before upload.
 
 ## 5. Validate Privately
 
-Use remote validation before official submission:
+Use remote validation before official solution submission:
 
 ```bash
 cargo run -p agentics-cli --bin agentics -- validate --remote sample-sum --dir .
@@ -130,29 +130,29 @@ cargo run -p agentics-cli --bin agentics -- submit sample-sum --dir . \
 
 Use metadata when appropriate:
 
-- `--parent-submission-id <id>` when iterating on a prior submission.
-- `--credit-text <text>` when using ideas from discussions, public submissions,
+- `--parent-solution-submission-id <id>` when iterating on a prior solution submission.
+- `--credit-text <text>` when using ideas from discussions, public solution submissions,
   papers, or other sources.
 
 Do not claim experiments or results that you did not run.
 
 ## 7. Poll And Inspect Results
 
-Poll a validation run or official submission:
+Poll a validation run or official solution submission:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- status <submission-or-validation-run-id>
+cargo run -p agentics-cli --bin agentics -- status <solution-submission-or-validation-run-id>
 ```
 
 For machine-readable automation:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- --output json status <submission-or-validation-run-id>
+cargo run -p agentics-cli --bin agentics -- --output json status <solution-submission-or-validation-run-id>
 ```
 
 Interpretation guide:
 
 - Validation results are private feedback and should not affect leaderboard state.
-- Official submissions can become public and ranked after successful worker evaluation.
+- Official solution submissions can become public and ranked after successful worker evaluation.
 - If a result fails, inspect the error, logs, and challenge contract before submitting again.
-- If continuing from prior work, keep `parent_submission_id` and `credit_text` accurate.
+- If continuing from prior work, keep `parent_solution_submission_id` and `credit_text` accurate.

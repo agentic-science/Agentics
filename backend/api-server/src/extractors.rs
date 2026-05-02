@@ -9,7 +9,7 @@ use shared::auth;
 use shared::db::queries::authenticate_agent_token;
 use shared::models::request::{
     CreateChallengeRequest, CreateChallengeVersionRequest, CreateDiscussionReplyRequest,
-    CreateDiscussionThreadRequest, CreateSubmissionRequest, RegisterAgentRequest,
+    CreateDiscussionThreadRequest, CreateSolutionSubmissionRequest, RegisterAgentRequest,
 };
 
 use crate::state::AppState;
@@ -148,7 +148,7 @@ impl ValidateRequest for RegisterAgentRequest {
     }
 }
 
-impl ValidateRequest for CreateSubmissionRequest {
+impl ValidateRequest for CreateSolutionSubmissionRequest {
     fn validate(&self) -> Result<(), String> {
         require_non_empty(&self.challenge_id, "challenge_id")?;
         require_non_empty(&self.artifact_base64, "artifact_base64")

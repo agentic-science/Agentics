@@ -19,7 +19,7 @@ DIRECTIONS = {
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run grid routing scorer")
     parser.add_argument("--challenge-dir", required=True)
-    parser.add_argument("--submission-dir", required=True)
+    parser.add_argument("--solution-dir", required=True)
     parser.add_argument("--output-path", required=True)
     parser.add_argument("--mode", choices=["validation", "official"], required=True)
     return parser.parse_args()
@@ -97,7 +97,7 @@ def analyze_path(grid: list[str], path: str) -> dict[str, Any]:
 def score_case(
     *,
     case: dict[str, Any],
-    submission_entrypoint: Path,
+    solution_entrypoint: Path,
     time_limit_sec: float,
     logs: list[str],
 ) -> dict[str, Any]:
@@ -106,7 +106,7 @@ def score_case(
 
     try:
         completed = subprocess.run(
-            [sys.executable, str(submission_entrypoint), payload],
+            [sys.executable, str(solution_entrypoint), payload],
             capture_output=True,
             text=True,
             timeout=time_limit_sec,
@@ -122,7 +122,7 @@ def score_case(
         }
 
     if completed.returncode != 0:
-        stderr = completed.stderr.strip() or "submission exited with non-zero status"
+        stderr = completed.stderr.strip() or "solution exited with non-zero status"
         logs.append(f"{case_id}: runtime error: {stderr}")
         return {
             "case_id": case_id,
@@ -185,7 +185,7 @@ def score_case(
 
 def score_dataset(
     *,
-    submission_entrypoint: Path,
+    solution_entrypoint: Path,
     cases_path: Path,
     time_limit_sec: float,
     logs: list[str],
@@ -194,7 +194,7 @@ def score_dataset(
     return [
         score_case(
             case=case,
-            submission_entrypoint=submission_entrypoint,
+            solution_entrypoint=solution_entrypoint,
             time_limit_sec=time_limit_sec,
             logs=logs,
         )
@@ -229,20 +229,20 @@ def run_metrics(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def main() -> int:
     args = parse_args()
     challenge_dir = Path(args.challenge_dir)
-    submission_dir = Path(args.submission_dir)
+    solution_dir = Path(args.solution_dir)
     output_path = Path(args.output_path)
     spec = load_json(challenge_dir / "spec.json")
 
-    submission_entrypoint = submission_dir / spec["submission"]["entrypoint"]
-    if not submission_entrypoint.is_file():
-        raise FileNotFoundError(f"submission entrypoint not found: {submission_entrypoint}")
+    solution_entrypoint = solution_dir / spec["solution"]["entrypoint"]
+    if not solution_entrypoint.is_file():
+        raise FileNotFoundError(f"solution entrypoint not found: {solution_entrypoint}")
 
     logs: list[str] = []
     time_limit_sec = float(spec["limits"]["time_limit_sec"])
 
     if args.mode == "validation":
         public_results = score_dataset(
-            submission_entrypoint=submission_entrypoint,
+            solution_entrypoint=solution_entrypoint,
             cases_path=challenge_dir / spec["datasets"]["public_dir"] / "cases.json",
             time_limit_sec=time_limit_sec,
             logs=logs,
@@ -266,7 +266,7 @@ def main() -> int:
             raise ValueError("official mode requires private benchmark dataset")
 
         official_results = score_dataset(
-            submission_entrypoint=submission_entrypoint,
+            solution_entrypoint=solution_entrypoint,
             cases_path=challenge_dir / private_benchmark_dir / "cases.json",
             time_limit_sec=time_limit_sec,
             logs=logs,

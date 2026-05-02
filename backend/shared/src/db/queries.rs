@@ -1,8 +1,8 @@
-//! Submission, leaderboard, and evaluation query helpers.
+//! Solution submission, leaderboard, and evaluation query helpers.
 //!
 //! The API server and worker both depend on this module, so public functions
 //! describe transactional side effects such as queueing jobs, changing
-//! submission visibility, and updating leaderboard rows.
+//! solution submission visibility, and updating leaderboard rows.
 
 use std::cmp::Ordering;
 
@@ -17,7 +17,7 @@ use crate::models::evaluation::{
     EvaluationDto, EvaluationJobPayload, EvaluationStatus, MetricValue, PublicCaseResult,
     RunMetricResult, ScoreSummary, ScoringMode,
 };
-use crate::models::request::{LeaderboardEntryDto, PublicSubmissionListItemDto};
+use crate::models::request::{LeaderboardEntryDto, PublicSolutionSubmissionListItemDto};
 
 pub use super::agents::{
     AgentRecord, AuthenticatedAgent, RegisterAgentInput, authenticate_agent_token, disable_agent,
@@ -35,26 +35,26 @@ pub use super::maintenance::{
 };
 
 // ---------------------------------------------------------------------------
-// Submission
+// Solution submission
 // ---------------------------------------------------------------------------
 
-/// Input for creating a submission and its initial evaluation job.
+/// Input for creating a solution submission and its initial evaluation job.
 #[derive(Debug, Clone)]
-pub struct CreateSubmissionInput {
-    pub submission_id: String,
+pub struct CreateSolutionSubmissionInput {
+    pub solution_submission_id: String,
     pub job_id: String,
     pub agent_id: String,
     pub challenge_id: String,
     pub artifact_path: String,
     pub eval_type: ScoringMode,
     pub explanation: String,
-    pub parent_submission_id: Option<String>,
+    pub parent_solution_submission_id: Option<String>,
     pub credit_text: String,
 }
 
-/// Submission row with optional joined evaluation and job metadata.
+/// Solution submission row with optional joined evaluation and job metadata.
 #[derive(Debug, Clone)]
-pub struct SubmissionRecord {
+pub struct SolutionSubmissionRecord {
     pub id: String,
     pub challenge_id: String,
     pub challenge_version_id: String,
@@ -65,7 +65,7 @@ pub struct SubmissionRecord {
     pub language: String,
     pub status: String,
     pub explanation: String,
-    pub parent_submission_id: Option<String>,
+    pub parent_solution_submission_id: Option<String>,
     pub credit_text: String,
     pub visible_after_eval: bool,
     pub created_at: DateTime<Utc>,
@@ -164,11 +164,11 @@ where
     }
 }
 
-/// Create a submission and queue its first evaluation atomically.
-pub async fn create_submission_with_job(
+/// Create a solution submission and queue its first evaluation atomically.
+pub async fn create_solution_submission_with_job(
     pool: &PgPool,
-    input: &CreateSubmissionInput,
-) -> Result<SubmissionRecord> {
+    input: &CreateSolutionSubmissionInput,
+) -> Result<SolutionSubmissionRecord> {
     let challenge = get_published_challenge(pool, &input.challenge_id).await?;
     let challenge =
         challenge.ok_or_else(|| AppError::BadRequest("challenge not found".to_string()))?;
@@ -180,24 +180,24 @@ pub async fn create_submission_with_job(
 
     let row = sqlx::query(
         r#"
-        INSERT INTO submissions (
+        INSERT INTO solution_submissions (
             id, challenge_id, challenge_version_id, agent_id, artifact_path, language,
-            status, explanation, parent_submission_id, credit_text, visible_after_eval
+            status, explanation, parent_solution_submission_id, credit_text, visible_after_eval
         )
         VALUES ($1, $2, $3, $4, $5, 'python', 'queued', $6, $7, $8, FALSE)
         RETURNING
             id, challenge_id, challenge_version_id, agent_id, artifact_path, language,
-            status, explanation, parent_submission_id, credit_text, visible_after_eval,
+            status, explanation, parent_solution_submission_id, credit_text, visible_after_eval,
             created_at, updated_at
         "#,
     )
-    .bind(&input.submission_id)
+    .bind(&input.solution_submission_id)
     .bind(&challenge.challenge_id)
     .bind(&challenge.challenge_version_id)
     .bind(&input.agent_id)
     .bind(&input.artifact_path)
     .bind(&input.explanation)
-    .bind(&input.parent_submission_id)
+    .bind(&input.parent_solution_submission_id)
     .bind(&input.credit_text)
     .fetch_one(&mut *tx)
     .await?;
@@ -219,13 +219,13 @@ pub async fn create_submission_with_job(
     sqlx::query(
         r#"
         INSERT INTO evaluation_jobs (
-            id, submission_id, challenge_id, challenge_version_id, eval_type, status, priority, payload_json
+            id, solution_submission_id, challenge_id, challenge_version_id, eval_type, status, priority, payload_json
         )
         VALUES ($1, $2, $3, $4, $5, 'queued', $6, $7)
         "#,
     )
     .bind(&input.job_id)
-    .bind(&input.submission_id)
+    .bind(&input.solution_submission_id)
     .bind(&challenge.challenge_id)
     .bind(&challenge.challenge_version_id)
     .bind(input.eval_type.as_str())
@@ -236,7 +236,7 @@ pub async fn create_submission_with_job(
 
     tx.commit().await?;
 
-    Ok(SubmissionRecord {
+    Ok(SolutionSubmissionRecord {
         id: row.try_get("id")?,
         challenge_id: row.try_get("challenge_id")?,
         challenge_version_id: row.try_get("challenge_version_id")?,
@@ -247,7 +247,8 @@ pub async fn create_submission_with_job(
         language: row.try_get("language")?,
         status: row.try_get("status")?,
         explanation: row.try_get("explanation")?,
-        parent_submission_id: row.try_get::<Option<String>, _>("parent_submission_id")?,
+        parent_solution_submission_id: row
+            .try_get::<Option<String>, _>("parent_solution_submission_id")?,
         credit_text: row.try_get("credit_text")?,
         visible_after_eval: row.try_get("visible_after_eval")?,
         created_at: row.try_get("created_at")?,
@@ -296,18 +297,18 @@ fn ensure_challenge_supports_eval_type(
     Ok(())
 }
 
-/// Fetch one submission with latest job state and validation/official evaluations.
-pub async fn get_submission_by_id(
+/// Fetch one solution submission with latest job state and validation/official evaluations.
+pub async fn get_solution_submission_by_id(
     pool: &PgPool,
-    submission_id: &str,
-) -> Result<Option<SubmissionRecord>> {
+    solution_submission_id: &str,
+) -> Result<Option<SolutionSubmissionRecord>> {
     let row = sqlx::query(
         r#"
         SELECT
             s.id, s.challenge_id, s.challenge_version_id, s.agent_id,
             p.title AS challenge_title, a.name AS agent_name,
             s.artifact_path, s.language, s.status, s.explanation,
-            s.parent_submission_id, s.credit_text, s.visible_after_eval,
+            s.parent_solution_submission_id, s.credit_text, s.visible_after_eval,
             s.created_at, s.updated_at,
             j.id AS latest_job_id, j.status AS latest_job_status,
             pe.id AS validation_eval_id,
@@ -336,25 +337,25 @@ pub async fn get_submission_by_id(
             oe.log_path AS official_eval_log_path,
             oe.started_at AS official_eval_started_at,
             oe.finished_at AS official_eval_finished_at
-        FROM submissions s
+        FROM solution_submissions s
         JOIN agents a ON a.id = s.agent_id
         JOIN challenges p ON p.id = s.challenge_id
         LEFT JOIN LATERAL (
-            SELECT id, status FROM evaluation_jobs WHERE submission_id = s.id ORDER BY created_at DESC LIMIT 1
+            SELECT id, status FROM evaluation_jobs WHERE solution_submission_id = s.id ORDER BY created_at DESC LIMIT 1
         ) j ON TRUE
         LEFT JOIN LATERAL (
             SELECT id, status, eval_type, primary_score, rank_score, aggregate_metrics_json, run_metrics_json, public_results_json, validation_summary_json, official_summary_json, log_path, started_at, finished_at
-            FROM evaluations WHERE submission_id = s.id AND eval_type = 'validation' ORDER BY created_at DESC LIMIT 1
+            FROM evaluations WHERE solution_submission_id = s.id AND eval_type = 'validation' ORDER BY created_at DESC LIMIT 1
         ) pe ON TRUE
         LEFT JOIN LATERAL (
             SELECT id, status, eval_type, primary_score, rank_score, aggregate_metrics_json, run_metrics_json, public_results_json, validation_summary_json, official_summary_json, log_path, started_at, finished_at
-            FROM evaluations WHERE submission_id = s.id AND eval_type = 'official' ORDER BY created_at DESC LIMIT 1
+            FROM evaluations WHERE solution_submission_id = s.id AND eval_type = 'official' ORDER BY created_at DESC LIMIT 1
         ) oe ON TRUE
         WHERE s.id = $1
         LIMIT 1
         "#
     )
-    .bind(submission_id)
+    .bind(solution_submission_id)
     .fetch_optional(pool)
     .await?;
 
@@ -365,7 +366,7 @@ pub async fn get_submission_by_id(
     let validation_eval = parse_eval_from_row(&r, "validation_eval")?;
     let official_eval = parse_eval_from_row(&r, "official_eval")?;
 
-    Ok(Some(SubmissionRecord {
+    Ok(Some(SolutionSubmissionRecord {
         id: r.try_get("id")?,
         challenge_id: r.try_get("challenge_id")?,
         challenge_version_id: r.try_get("challenge_version_id")?,
@@ -376,7 +377,8 @@ pub async fn get_submission_by_id(
         language: r.try_get("language")?,
         status: r.try_get("status")?,
         explanation: r.try_get("explanation")?,
-        parent_submission_id: r.try_get::<Option<String>, _>("parent_submission_id")?,
+        parent_solution_submission_id: r
+            .try_get::<Option<String>, _>("parent_solution_submission_id")?,
         credit_text: r.try_get("credit_text")?,
         visible_after_eval: r.try_get("visible_after_eval")?,
         created_at: r.try_get("created_at")?,
@@ -389,35 +391,35 @@ pub async fn get_submission_by_id(
     }))
 }
 
-/// List submissions for a challenge after an official evaluation makes them visible.
-pub async fn list_public_submissions_for_challenge(
+/// List solution submissions for a challenge after an official evaluation makes them visible.
+pub async fn list_public_solution_submissions_for_challenge(
     pool: &PgPool,
     challenge_id_or_slug: &str,
-) -> Result<Vec<PublicSubmissionListItemDto>> {
+) -> Result<Vec<PublicSolutionSubmissionListItemDto>> {
     let rows = sqlx::query(
         r#"
         SELECT
             s.id, s.challenge_id, s.challenge_version_id, p.title AS challenge_title,
             s.agent_id, a.name AS agent_name, s.status, s.explanation,
-            s.parent_submission_id, s.credit_text, s.created_at, s.updated_at,
+            s.parent_solution_submission_id, s.credit_text, s.created_at, s.updated_at,
             COALESCE(pe.primary_score, (pe.validation_summary_json->>'score')::double precision) AS validation_score,
             COALESCE(oe.rank_score, (oe.official_summary_json->>'score')::double precision) AS official_score,
             COALESCE(pe.rank_score, oe.rank_score, (pe.validation_summary_json->>'score')::double precision, (oe.official_summary_json->>'score')::double precision) AS rank_score,
             COALESCE(pe.aggregate_metrics_json, oe.aggregate_metrics_json, '[]'::jsonb) AS aggregate_metrics,
             COALESCE(oe.aggregate_metrics_json, '[]'::jsonb) AS official_metrics
-        FROM submissions s
+        FROM solution_submissions s
         JOIN agents a ON a.id = s.agent_id
         JOIN challenges p ON p.id = s.challenge_id
         LEFT JOIN LATERAL (
             SELECT primary_score, rank_score, aggregate_metrics_json, validation_summary_json
             FROM evaluations
-            WHERE submission_id = s.id AND eval_type = 'validation' AND status = 'completed'
+            WHERE solution_submission_id = s.id AND eval_type = 'validation' AND status = 'completed'
             ORDER BY created_at DESC LIMIT 1
         ) pe ON TRUE
         LEFT JOIN LATERAL (
             SELECT primary_score, rank_score, aggregate_metrics_json, official_summary_json
             FROM evaluations
-            WHERE submission_id = s.id AND eval_type = 'official' AND status = 'completed'
+            WHERE solution_submission_id = s.id AND eval_type = 'official' AND status = 'completed'
             ORDER BY created_at DESC LIMIT 1
         ) oe ON TRUE
         WHERE (p.id = $1 OR p.slug = $1)
@@ -433,16 +435,16 @@ pub async fn list_public_submissions_for_challenge(
         .map(|r| {
             let aggregate_metrics = decode_optional_json(
                 r.try_get::<Option<Value>, _>("aggregate_metrics")?,
-                "submission aggregate metrics",
+                "solution submission aggregate metrics",
             )?
             .unwrap_or_default();
             let official_metrics = decode_optional_json(
                 r.try_get::<Option<Value>, _>("official_metrics")?,
-                "submission official metrics",
+                "solution submission official metrics",
             )?
             .unwrap_or_default();
 
-            Ok(PublicSubmissionListItemDto {
+            Ok(PublicSolutionSubmissionListItemDto {
                 id: r.try_get("id")?,
                 challenge_id: r.try_get("challenge_id")?,
                 challenge_version_id: r.try_get("challenge_version_id")?,
@@ -451,7 +453,8 @@ pub async fn list_public_submissions_for_challenge(
                 agent_name: r.try_get("agent_name")?,
                 status: r.try_get("status")?,
                 explanation: r.try_get("explanation")?,
-                parent_submission_id: r.try_get::<Option<String>, _>("parent_submission_id")?,
+                parent_solution_submission_id: r
+                    .try_get::<Option<String>, _>("parent_solution_submission_id")?,
                 credit_text: r.try_get("credit_text")?,
                 created_at: r.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
                 updated_at: r.try_get::<DateTime<Utc>, _>("updated_at")?.to_rfc3339(),
@@ -465,14 +468,14 @@ pub async fn list_public_submissions_for_challenge(
         .collect::<Result<Vec<_>>>()
 }
 
-/// Hide a submission and repair or remove the affected leaderboard entry.
-pub async fn hide_submission(pool: &PgPool, submission_id: &str) -> Result<()> {
+/// Hide a solution submission and repair or remove the affected leaderboard entry.
+pub async fn hide_solution_submission(pool: &PgPool, solution_submission_id: &str) -> Result<()> {
     let mut tx = pool.begin().await?;
 
     let row: Option<(String, String)> = sqlx::query_as(
-        "UPDATE submissions SET visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1 RETURNING challenge_id, agent_id"
+        "UPDATE solution_submissions SET visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1 RETURNING challenge_id, agent_id"
     )
-    .bind(submission_id)
+    .bind(solution_submission_id)
     .fetch_optional(&mut *tx)
     .await?;
 
@@ -481,7 +484,7 @@ pub async fn hide_submission(pool: &PgPool, submission_id: &str) -> Result<()> {
     };
 
     let leaderboard_entry: Option<(String,)> = sqlx::query_as(
-        "SELECT best_submission_id FROM leaderboard_entries WHERE challenge_id = $1 AND agent_id = $2 LIMIT 1"
+        "SELECT best_solution_submission_id FROM leaderboard_entries WHERE challenge_id = $1 AND agent_id = $2 LIMIT 1"
     )
     .bind(&challenge_id)
     .bind(&agent_id)
@@ -489,7 +492,7 @@ pub async fn hide_submission(pool: &PgPool, submission_id: &str) -> Result<()> {
     .await?;
 
     if leaderboard_entry
-        .map(|e| e.0 == submission_id)
+        .map(|e| e.0 == solution_submission_id)
         .unwrap_or(false)
     {
         let replacement: Option<(String, f64, Value, Value, Option<f64>, Value)> = sqlx::query_as(
@@ -506,17 +509,17 @@ pub async fn hide_submission(pool: &PgPool, submission_id: &str) -> Result<()> {
                 COALESCE(ve.aggregate_metrics_json, oe.aggregate_metrics_json, '[]'::jsonb) AS aggregate_metrics,
                 COALESCE(oe.rank_score, (oe.official_summary_json->>'score')::double precision) AS official_score,
                 COALESCE(oe.aggregate_metrics_json, '[]'::jsonb) AS official_metrics
-            FROM submissions s
+            FROM solution_submissions s
             LEFT JOIN LATERAL (
                 SELECT rank_score, aggregate_metrics_json, validation_summary_json, public_results_json
                 FROM evaluations
-                WHERE submission_id = s.id AND eval_type = 'validation' AND status = 'completed'
+                WHERE solution_submission_id = s.id AND eval_type = 'validation' AND status = 'completed'
                 ORDER BY created_at DESC LIMIT 1
             ) ve ON TRUE
             LEFT JOIN LATERAL (
                 SELECT rank_score, aggregate_metrics_json, official_summary_json, public_results_json
                 FROM evaluations
-                WHERE submission_id = s.id AND eval_type = 'official' AND status = 'completed'
+                WHERE solution_submission_id = s.id AND eval_type = 'official' AND status = 'completed'
                 ORDER BY created_at DESC LIMIT 1
             ) oe ON TRUE
             WHERE s.challenge_id = $1 AND s.agent_id = $2 AND s.id <> $3
@@ -533,7 +536,7 @@ pub async fn hide_submission(pool: &PgPool, submission_id: &str) -> Result<()> {
         )
         .bind(&challenge_id)
         .bind(&agent_id)
-        .bind(submission_id)
+        .bind(solution_submission_id)
         .fetch_optional(&mut *tx)
         .await?;
 
@@ -549,13 +552,13 @@ pub async fn hide_submission(pool: &PgPool, submission_id: &str) -> Result<()> {
             sqlx::query(
                 r#"
                 INSERT INTO leaderboard_entries (
-                    challenge_id, agent_id, best_submission_id, best_rank_score,
+                    challenge_id, agent_id, best_solution_submission_id, best_rank_score,
                     public_results_json, aggregate_metrics_json, official_score,
                     official_metrics_json, updated_at
                 )
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
                 ON CONFLICT (challenge_id, agent_id) DO UPDATE
-                SET best_submission_id = EXCLUDED.best_submission_id,
+                SET best_solution_submission_id = EXCLUDED.best_solution_submission_id,
                     best_rank_score = EXCLUDED.best_rank_score,
                     public_results_json = EXCLUDED.public_results_json,
                     aggregate_metrics_json = EXCLUDED.aggregate_metrics_json,
@@ -602,7 +605,7 @@ pub async fn list_leaderboard_entries(
     let rows = sqlx::query(
         r#"
         SELECT
-            le.agent_id, a.name AS agent_name, le.best_submission_id,
+            le.agent_id, a.name AS agent_name, le.best_solution_submission_id,
             le.best_rank_score, le.aggregate_metrics_json, le.official_score,
             le.official_metrics_json, le.updated_at
         FROM leaderboard_entries le
@@ -634,7 +637,7 @@ pub async fn list_leaderboard_entries(
             Ok(LeaderboardEntryDto {
                 agent_id: r.try_get("agent_id")?,
                 agent_name: r.try_get("agent_name")?,
-                best_submission_id: r.try_get("best_submission_id")?,
+                best_solution_submission_id: r.try_get("best_solution_submission_id")?,
                 best_rank_score,
                 rank_score: best_rank_score,
                 aggregate_metrics,
@@ -754,7 +757,7 @@ fn compare_f64_asc(a: f64, b: f64) -> Ordering {
 #[derive(Debug, Clone)]
 pub struct EvaluationJobRecord {
     pub id: String,
-    pub submission_id: String,
+    pub solution_submission_id: String,
     pub challenge_id: String,
     pub challenge_version_id: String,
     pub eval_type: ScoringMode,
@@ -765,7 +768,7 @@ pub struct EvaluationJobRecord {
 
 /// Claim the next queued job using `FOR UPDATE SKIP LOCKED`.
 ///
-/// Claimed jobs move their submission into `running` so public visibility can be
+/// Claimed jobs move their solution submission into `running` so public visibility can be
 /// controlled consistently by the completion path for each evaluation mode.
 pub async fn claim_next_evaluation_job(
     pool: &PgPool,
@@ -787,7 +790,7 @@ pub async fn claim_next_evaluation_job(
         SET status = 'running', claimed_at = NOW(), worker_id = $1, attempt_count = j.attempt_count + 1
         FROM next_job
         WHERE j.id = next_job.id
-        RETURNING j.id, j.submission_id, j.challenge_id, j.challenge_version_id, j.eval_type, j.status, j.attempt_count, j.payload_json
+        RETURNING j.id, j.solution_submission_id, j.challenge_id, j.challenge_version_id, j.eval_type, j.status, j.attempt_count, j.payload_json
         "#
     )
     .bind(worker_id)
@@ -803,12 +806,14 @@ pub async fn claim_next_evaluation_job(
     let eval_type = ScoringMode::from_storage_value(&eval_type_raw).ok_or_else(|| {
         AppError::Internal(format!("unexpected evaluation job type `{eval_type_raw}`"))
     })?;
-    let submission_id: String = r.try_get("submission_id")?;
+    let solution_submission_id: String = r.try_get("solution_submission_id")?;
 
-    sqlx::query("UPDATE submissions SET status = 'running', updated_at = NOW() WHERE id = $1")
-        .bind(&submission_id)
-        .execute(&mut *tx)
-        .await?;
+    sqlx::query(
+        "UPDATE solution_submissions SET status = 'running', updated_at = NOW() WHERE id = $1",
+    )
+    .bind(&solution_submission_id)
+    .execute(&mut *tx)
+    .await?;
 
     let payload: EvaluationJobPayload = serde_json::from_value(r.try_get("payload_json")?)
         .map_err(|e| AppError::Internal(e.to_string()))?;
@@ -817,7 +822,7 @@ pub async fn claim_next_evaluation_job(
 
     Ok(Some(EvaluationJobRecord {
         id: r.try_get("id")?,
-        submission_id,
+        solution_submission_id,
         challenge_id: r.try_get("challenge_id")?,
         challenge_version_id: r.try_get("challenge_version_id")?,
         eval_type,
@@ -831,14 +836,14 @@ pub async fn claim_next_evaluation_job(
 #[derive(Debug, Clone)]
 pub struct QueueEvaluationJobInput {
     pub job_id: String,
-    pub submission_id: String,
+    pub solution_submission_id: String,
     pub eval_type: ScoringMode,
 }
 
-/// Queue an evaluation job for an existing submission.
+/// Queue an evaluation job for an existing solution submission.
 ///
 /// Official jobs are rejected when the challenge version does not enable private benchmark data
-/// data. Any queued re-run hides the submission until its completion path decides
+/// data. Any queued re-run hides the solution submission until its completion path decides
 /// whether the result should become public.
 pub async fn queue_evaluation_job(
     pool: &PgPool,
@@ -850,13 +855,13 @@ pub async fn queue_evaluation_job(
         r#"
         SELECT s.id, s.challenge_id, s.challenge_version_id, s.agent_id, s.artifact_path, s.visible_after_eval,
                pv.bundle_path, pv.spec_json
-        FROM submissions s
+        FROM solution_submissions s
         JOIN challenge_versions pv ON pv.id = s.challenge_version_id
         WHERE s.id = $1
         LIMIT 1
         "#
     )
-    .bind(&input.submission_id)
+    .bind(&input.solution_submission_id)
     .fetch_one(&mut *tx)
     .await
     .map_err(|_| AppError::NotFound)?;
@@ -884,7 +889,7 @@ pub async fn queue_evaluation_job(
 
     sqlx::query(
         r#"
-        INSERT INTO evaluation_jobs (id, submission_id, challenge_id, challenge_version_id, eval_type, status, priority, payload_json)
+        INSERT INTO evaluation_jobs (id, solution_submission_id, challenge_id, challenge_version_id, eval_type, status, priority, payload_json)
         VALUES ($1, $2, $3, $4, $5, 'queued', $6, $7)
         "#
     )
@@ -899,7 +904,7 @@ pub async fn queue_evaluation_job(
     .await?;
 
     sqlx::query(
-        "UPDATE submissions SET status = 'queued', visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1"
+        "UPDATE solution_submissions SET status = 'queued', visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1"
     )
     .bind(row.try_get::<String, _>("id")?)
     .execute(&mut *tx)
@@ -909,7 +914,7 @@ pub async fn queue_evaluation_job(
 
     Ok(EvaluationJobRecord {
         id: input.job_id.clone(),
-        submission_id: row.try_get("id")?,
+        solution_submission_id: row.try_get("id")?,
         challenge_id: row.try_get("challenge_id")?,
         challenge_version_id: row.try_get("challenge_version_id")?,
         eval_type: input.eval_type,
@@ -923,7 +928,7 @@ pub async fn queue_evaluation_job(
 #[derive(Debug, Clone)]
 pub struct MarkEvaluationStartedInput {
     pub evaluation_id: String,
-    pub submission_id: String,
+    pub solution_submission_id: String,
     pub job_id: String,
     pub eval_type: ScoringMode,
 }
@@ -937,7 +942,7 @@ pub async fn mark_evaluation_started(
 
     sqlx::query(
         r#"
-        INSERT INTO evaluations (id, submission_id, job_id, eval_type, status, started_at)
+        INSERT INTO evaluations (id, solution_submission_id, job_id, eval_type, status, started_at)
         VALUES ($1, $2, $3, $4, 'running', NOW())
         ON CONFLICT (job_id) DO UPDATE
         SET status = 'running',
@@ -954,7 +959,7 @@ pub async fn mark_evaluation_started(
         "#,
     )
     .bind(&input.evaluation_id)
-    .bind(&input.submission_id)
+    .bind(&input.solution_submission_id)
     .bind(&input.job_id)
     .bind(eval_type_str)
     .execute(pool)
@@ -967,7 +972,7 @@ pub async fn mark_evaluation_started(
 #[derive(Debug, Clone)]
 pub struct PersistedEvaluationResult {
     pub evaluation_id: String,
-    pub submission_id: String,
+    pub solution_submission_id: String,
     pub job_id: String,
     pub eval_type: ScoringMode,
     pub status: EvaluationStatus,
@@ -982,7 +987,7 @@ pub struct PersistedEvaluationResult {
     pub last_error: Option<String>,
 }
 
-/// Persist a finished evaluation and update dependent submission/leaderboard state.
+/// Persist a finished evaluation and update dependent solution submission and leaderboard state.
 pub async fn mark_evaluation_finished(
     pool: &PgPool,
     result: &PersistedEvaluationResult,
@@ -1048,9 +1053,9 @@ pub async fn mark_evaluation_finished(
                 "failed"
             };
             sqlx::query(
-                "UPDATE submissions SET status = $2, visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1"
+                "UPDATE solution_submissions SET status = $2, visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1"
             )
-            .bind(&result.submission_id)
+            .bind(&result.solution_submission_id)
             .bind(sub_status)
             .execute(&mut *tx)
             .await?;
@@ -1059,9 +1064,9 @@ pub async fn mark_evaluation_finished(
             let visible = result.status == EvaluationStatus::Completed;
             let sub_status = if visible { "completed" } else { "failed" };
             sqlx::query(
-                "UPDATE submissions SET status = $2, visible_after_eval = $3, updated_at = NOW() WHERE id = $1"
+                "UPDATE solution_submissions SET status = $2, visible_after_eval = $3, updated_at = NOW() WHERE id = $1"
             )
-            .bind(&result.submission_id)
+            .bind(&result.solution_submission_id)
             .bind(sub_status)
             .bind(visible)
             .execute(&mut *tx)
@@ -1070,17 +1075,17 @@ pub async fn mark_evaluation_finished(
             if result.status == EvaluationStatus::Completed
                 && let Some(rank_score) = result.rank_score
             {
-                upsert_leaderboard_entry_for_submission_tx(
+                upsert_leaderboard_entry_for_solution_submission_tx(
                     &mut tx,
-                    &result.submission_id,
+                    &result.solution_submission_id,
                     rank_score,
                     &result.public_results,
                     &result.aggregate_metrics,
                 )
                 .await?;
-                update_official_score_for_submission_tx(
+                update_official_score_for_solution_submission_tx(
                     &mut tx,
-                    &result.submission_id,
+                    &result.solution_submission_id,
                     rank_score,
                     &result.aggregate_metrics,
                 )
@@ -1093,9 +1098,9 @@ pub async fn mark_evaluation_finished(
     Ok(())
 }
 
-async fn upsert_leaderboard_entry_for_submission_tx<'a>(
+async fn upsert_leaderboard_entry_for_solution_submission_tx<'a>(
     tx: &mut Transaction<'a, Postgres>,
-    submission_id: &str,
+    solution_submission_id: &str,
     rank_score: f64,
     public_results: &[PublicCaseResult],
     aggregate_metrics: &[MetricValue],
@@ -1103,13 +1108,13 @@ async fn upsert_leaderboard_entry_for_submission_tx<'a>(
     let row: Option<(String, String, Value)> = sqlx::query_as(
         r#"
         SELECT s.challenge_id, s.agent_id, pv.spec_json
-        FROM submissions s
+        FROM solution_submissions s
         JOIN challenge_versions pv ON pv.id = s.challenge_version_id
         WHERE s.id = $1
         LIMIT 1
         "#,
     )
-    .bind(submission_id)
+    .bind(solution_submission_id)
     .fetch_optional(&mut **tx)
     .await?;
 
@@ -1145,12 +1150,12 @@ async fn upsert_leaderboard_entry_for_submission_tx<'a>(
     sqlx::query(
         r#"
         INSERT INTO leaderboard_entries (
-            challenge_id, agent_id, best_submission_id, best_rank_score,
+            challenge_id, agent_id, best_solution_submission_id, best_rank_score,
             public_results_json, aggregate_metrics_json, updated_at
         )
         VALUES ($1, $2, $3, $4, $5, $6, NOW())
         ON CONFLICT (challenge_id, agent_id) DO UPDATE
-        SET best_submission_id = EXCLUDED.best_submission_id,
+        SET best_solution_submission_id = EXCLUDED.best_solution_submission_id,
             best_rank_score = EXCLUDED.best_rank_score,
             public_results_json = EXCLUDED.public_results_json,
             aggregate_metrics_json = EXCLUDED.aggregate_metrics_json,
@@ -1159,7 +1164,7 @@ async fn upsert_leaderboard_entry_for_submission_tx<'a>(
     )
     .bind(&challenge_id)
     .bind(&agent_id)
-    .bind(submission_id)
+    .bind(solution_submission_id)
     .bind(rank_score)
     .bind(&public_results_json)
     .bind(&aggregate_metrics_json)
@@ -1169,17 +1174,18 @@ async fn upsert_leaderboard_entry_for_submission_tx<'a>(
     Ok(())
 }
 
-async fn update_official_score_for_submission_tx<'a>(
+async fn update_official_score_for_solution_submission_tx<'a>(
     tx: &mut Transaction<'a, Postgres>,
-    submission_id: &str,
+    solution_submission_id: &str,
     official_score: f64,
     official_metrics: &[MetricValue],
 ) -> Result<()> {
-    let row: Option<(String, String)> =
-        sqlx::query_as("SELECT challenge_id, agent_id FROM submissions WHERE id = $1 LIMIT 1")
-            .bind(submission_id)
-            .fetch_optional(&mut **tx)
-            .await?;
+    let row: Option<(String, String)> = sqlx::query_as(
+        "SELECT challenge_id, agent_id FROM solution_submissions WHERE id = $1 LIMIT 1",
+    )
+    .bind(solution_submission_id)
+    .fetch_optional(&mut **tx)
+    .await?;
 
     let Some((challenge_id, agent_id)) = row else {
         return Ok(());

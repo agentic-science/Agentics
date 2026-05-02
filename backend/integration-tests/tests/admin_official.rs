@@ -6,7 +6,7 @@ use std::path::Path;
 
 use helpers::{
     api_url, basic_auth_header, copy_dir_all, examples_challenges_root, run_worker_once,
-    sample_sum_submission, spawn_app_with_config, submission_zip_base64, test_config,
+    sample_sum_solution, solution_zip_base64, spawn_app_with_config, test_config,
 };
 
 /// Create an admin-published bundle by adapting the legacy `sample-sum` fixture.
@@ -100,13 +100,13 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
     let token_b = register_b["token"].as_str().expect("missing token b");
     let agent_b_id = register_b["agent_id"].as_str().expect("missing agent b id");
 
-    let perfect_zip = submission_zip_base64(&sample_sum_submission("payload['a'] + payload['b']"));
-    let private_benchmark_only_zip = submission_zip_base64(&sample_sum_submission(
+    let perfect_zip = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
+    let private_benchmark_only_zip = solution_zip_base64(&sample_sum_solution(
         "(payload['a'] + payload['b']) if payload['a'] not in (10, 99) else 0",
     ));
 
-    let submission_a: serde_json::Value = client
-        .post(api_url(&app, "/api/submissions"))
+    let solution_submission_a: serde_json::Value = client
+        .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token_a}"))
         .json(&serde_json::json!({
             "challenge_id": "admin-sum",
@@ -115,18 +115,18 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         }))
         .send()
         .await
-        .expect("failed to create submission a")
+        .expect("failed to create solution submission a")
         .json()
         .await
-        .expect("failed to decode submission a");
-    let submission_a_id = submission_a["id"]
+        .expect("failed to decode solution submission a");
+    let solution_submission_a_id = solution_submission_a["id"]
         .as_str()
-        .expect("missing submission a id")
+        .expect("missing solution submission a id")
         .to_string();
     run_worker_once(&pool, &config).await;
 
-    let submission_b: serde_json::Value = client
-        .post(api_url(&app, "/api/submissions"))
+    let solution_submission_b: serde_json::Value = client
+        .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token_b}"))
         .json(&serde_json::json!({
             "challenge_id": "admin-sum",
@@ -135,13 +135,13 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         }))
         .send()
         .await
-        .expect("failed to create submission b")
+        .expect("failed to create solution submission b")
         .json()
         .await
-        .expect("failed to decode submission b");
-    let submission_b_id = submission_b["id"]
+        .expect("failed to decode solution submission b");
+    let solution_submission_b_id = solution_submission_b["id"]
         .as_str()
-        .expect("missing submission b id")
+        .expect("missing solution submission b id")
         .to_string();
     run_worker_once(&pool, &config).await;
 
@@ -172,7 +172,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
     let official_run = client
         .post(api_url(
             &app,
-            &format!("/admin/submissions/{submission_b_id}/official-run"),
+            &format!("/admin/solution-submissions/{solution_submission_b_id}/official-run"),
         ))
         .header("Authorization", &admin_auth)
         .json(&serde_json::json!({}))
@@ -185,11 +185,11 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         r#"
         SELECT eval_type, status
         FROM evaluation_jobs
-        WHERE submission_id = $1
+        WHERE solution_submission_id = $1
         ORDER BY created_at ASC
         "#,
     )
-    .bind(&submission_b_id)
+    .bind(&solution_submission_b_id)
     .fetch_all(&pool)
     .await
     .expect("failed to query official jobs");
@@ -203,19 +203,19 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
 
     run_worker_once(&pool, &config).await;
 
-    let submission_after_official: serde_json::Value = client
+    let solution_submission_after_official: serde_json::Value = client
         .get(api_url(
             &app,
-            &format!("/api/public/submissions/{submission_b_id}"),
+            &format!("/api/public/solution-submissions/{solution_submission_b_id}"),
         ))
         .send()
         .await
-        .expect("failed to get submission after official")
+        .expect("failed to get solution submission after official")
         .json()
         .await
-        .expect("failed to decode submission after official");
+        .expect("failed to decode solution submission after official");
     assert_eq!(
-        submission_after_official["official_evaluation"]["official_summary"]["score"],
+        solution_submission_after_official["official_evaluation"]["official_summary"]["score"],
         1.0
     );
 
@@ -238,7 +238,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
     let rejudge = client
         .post(api_url(
             &app,
-            &format!("/admin/submissions/{submission_b_id}/rejudge"),
+            &format!("/admin/solution-submissions/{solution_submission_b_id}/rejudge"),
         ))
         .header("Authorization", &admin_auth)
         .json(&serde_json::json!({}))
@@ -250,52 +250,52 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
     let not_visible_during_rejudge = client
         .get(api_url(
             &app,
-            &format!("/api/public/submissions/{submission_b_id}"),
+            &format!("/api/public/solution-submissions/{solution_submission_b_id}"),
         ))
         .send()
         .await
-        .expect("failed to check submission during rejudge");
+        .expect("failed to check solution submission during rejudge");
     assert_eq!(not_visible_during_rejudge.status(), 404);
 
     run_worker_once(&pool, &config).await;
 
-    let submission_after_rejudge: serde_json::Value = client
+    let solution_submission_after_rejudge: serde_json::Value = client
         .get(api_url(
             &app,
-            &format!("/api/public/submissions/{submission_b_id}"),
+            &format!("/api/public/solution-submissions/{solution_submission_b_id}"),
         ))
         .send()
         .await
-        .expect("failed to get submission after rejudge")
+        .expect("failed to get solution submission after rejudge")
         .json()
         .await
-        .expect("failed to decode submission after rejudge");
+        .expect("failed to decode solution submission after rejudge");
     assert_eq!(
-        submission_after_rejudge["official_evaluation"]["official_summary"]["score"],
+        solution_submission_after_rejudge["official_evaluation"]["official_summary"]["score"],
         1.0
     );
 
     let hide = client
         .post(api_url(
             &app,
-            &format!("/admin/submissions/{submission_a_id}/hide"),
+            &format!("/admin/solution-submissions/{solution_submission_a_id}/hide"),
         ))
         .header("Authorization", &admin_auth)
         .json(&serde_json::json!({}))
         .send()
         .await
-        .expect("failed to hide submission a");
+        .expect("failed to hide solution submission a");
     assert_eq!(hide.status(), 200);
 
-    let not_visible_submission_a = client
+    let not_visible_solution_submission_a = client
         .get(api_url(
             &app,
-            &format!("/api/public/submissions/{submission_a_id}"),
+            &format!("/api/public/solution-submissions/{solution_submission_a_id}"),
         ))
         .send()
         .await
-        .expect("failed to check not-visible submission a");
-    assert_eq!(not_visible_submission_a.status(), 404);
+        .expect("failed to check not-visible solution submission a");
+    assert_eq!(not_visible_solution_submission_a.status(), 404);
 
     let leaderboard_after_hide: serde_json::Value = client
         .get(api_url(
@@ -314,8 +314,8 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         "admin-agent-b"
     );
     assert_eq!(
-        leaderboard_after_hide["items"][0]["best_submission_id"],
-        submission_b_id
+        leaderboard_after_hide["items"][0]["best_solution_submission_id"],
+        solution_submission_b_id
     );
 
     let disable = client

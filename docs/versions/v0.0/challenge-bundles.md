@@ -44,7 +44,7 @@ v0.0 supports schema version `1`:
   "challenge_id": "sample-sum",
   "challenge_title": "Sample Sum",
   "challenge_version": "v1",
-  "submission": {
+  "solution": {
     "format": "python_zip_project",
     "language": "python",
     "entrypoint": "main.py"
@@ -72,9 +72,9 @@ Validation rules:
 
 - `schema_version` must be `1`.
 - `challenge_id`, `challenge_title`, and `challenge_version` must be non-empty.
-- `submission.format` must be `python_zip_project`.
-- `submission.language` must be `python`.
-- `submission.entrypoint`, `scorer.entrypoint`, `scorer.result_file`, and dataset paths must be safe relative paths.
+- `solution.format` must be `python_zip_project`.
+- `solution.language` must be `python`.
+- `solution.entrypoint`, `scorer.entrypoint`, `scorer.result_file`, and dataset paths must be safe relative paths.
 - `limits.time_limit_sec` must be positive and finite.
 - `limits.memory_limit_mb` must be positive.
 - `datasets.private_benchmark_policy` must be `score_only`.
@@ -95,7 +95,7 @@ The worker runs the scorer inside the configured Docker image with this command 
 ```text
 python /challenge/scorer/run.py \
   --challenge-dir /challenge \
-  --submission-dir /submission \
+  --solution-dir /solution \
   --output-path /output/result.json \
   --mode validation
 ```
@@ -105,19 +105,19 @@ For official runs, `--mode official` is used.
 Mounted paths:
 
 - `/challenge`: read-only challenge bundle.
-- `/submission`: read-only extracted submitted ZIP.
+- `/solution`: read-only extracted submitted ZIP.
 - `/output`: writable output directory for `result.json`.
 
 The current runner always invokes `/challenge/scorer/run.py`, so v0.0 bundles should keep the scorer entrypoint at `scorer/run.py` even though `spec.json` stores the declared path.
 
-## Submission Contract
+## Solution Contract
 
-A submitted ZIP must contain the declared `submission.entrypoint`, currently `main.py`.
+A solution ZIP must contain the declared `solution.entrypoint`, currently `main.py`.
 
 The example scorers execute the submitted entrypoint as:
 
 ```text
-python /submission/main.py '<case input as compact JSON>'
+python /solution/main.py '<case input as compact JSON>'
 ```
 
 The exact input and output contract is challenge-owned. For the seeded examples:
@@ -186,8 +186,8 @@ Relaxed JSON compatibility:
 - `scorer entrypoint does not exist`: missing scorer file.
 - `public data dir does not exist`: missing public dataset directory.
 - `private benchmark data dir does not exist`: private benchmark enabled without a directory.
-- `submission entrypoint not found`: uploaded ZIP does not contain the expected entrypoint.
-- `container exited with non-zero code or timed out`: scorer or submission failed, or the runner timeout was exceeded.
+- `solution entrypoint not found`: uploaded ZIP does not contain the expected entrypoint.
+- `container exited with non-zero code or timed out`: scorer or solution failed, or the runner timeout was exceeded.
 - `missing result.json`: scorer did not write the expected output file.
 - `invalid result.json`: scorer output failed JSON parsing or mode-specific validation.
 
@@ -197,7 +197,7 @@ Before publishing a bundle:
 
 1. Confirm `spec.json` matches the schema above.
 2. Confirm all declared paths are relative and stay inside the bundle.
-3. Run the scorer directly against a sample extracted submission.
+3. Run the scorer directly against a sample extracted solution.
 4. Run API startup with `AGENTICS_CHALLENGES_ROOT` pointing at the bundle root.
 5. Confirm `/api/public/challenges` lists the challenge.
 6. Submit a known-good sample ZIP and confirm the worker completes it.

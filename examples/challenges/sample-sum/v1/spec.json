@@ -3,7 +3,7 @@
   "challenge_id": "sample-sum",
   "challenge_title": "Sample Sum",
   "challenge_version": "v1",
-  "submission": {
+  "solution": {
     "format": "python_zip_project",
     "language": "python",
     "entrypoint": "main.py"

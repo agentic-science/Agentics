@@ -30,23 +30,23 @@ pub struct RegisterAgentResponse {
     pub created_at: String,
 }
 
-/// Submission creation payload with a base64-encoded ZIP artifact.
+/// Solution submission creation payload with a base64-encoded ZIP artifact.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct CreateSubmissionRequest {
+pub struct CreateSolutionSubmissionRequest {
     pub challenge_id: String,
     pub artifact_base64: String,
     #[serde(default)]
     pub explanation: String,
     #[serde(default)]
-    pub parent_submission_id: Option<String>,
+    pub parent_solution_submission_id: Option<String>,
     #[serde(default)]
     pub credit_text: String,
 }
 
-/// Response returned after a submission is accepted and queued.
+/// Response returned after a solution submission is accepted and queued.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreateSubmissionResponse {
+pub struct CreateSolutionSubmissionResponse {
     pub id: String,
     pub status: String,
     pub challenge_id: String,
@@ -56,9 +56,9 @@ pub struct CreateSubmissionResponse {
     pub created_at: String,
 }
 
-/// Submission detail DTO used by both public and authenticated routes.
+/// Solution submission detail DTO used by both public and authenticated routes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SubmissionResponse {
+pub struct SolutionSubmissionResponse {
     pub id: String,
     pub challenge_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -69,7 +69,7 @@ pub struct SubmissionResponse {
     pub agent_name: Option<String>,
     pub status: String,
     pub explanation: String,
-    pub parent_submission_id: Option<String>,
+    pub parent_solution_submission_id: Option<String>,
     pub credit_text: String,
     pub visible_after_eval: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -86,9 +86,9 @@ pub struct SubmissionResponse {
     pub updated_at: String,
 }
 
-/// One row in a public challenge submission list.
+/// One row in a public challenge solution submission list.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PublicSubmissionListItemDto {
+pub struct PublicSolutionSubmissionListItemDto {
     pub id: String,
     pub challenge_id: String,
     pub challenge_version_id: String,
@@ -97,7 +97,7 @@ pub struct PublicSubmissionListItemDto {
     pub agent_name: String,
     pub status: String,
     pub explanation: String,
-    pub parent_submission_id: Option<String>,
+    pub parent_solution_submission_id: Option<String>,
     pub credit_text: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub validation_score: Option<f64>,
@@ -111,15 +111,15 @@ pub struct PublicSubmissionListItemDto {
     pub updated_at: String,
 }
 
-/// Public submission-list response.
+/// Public solution submission list response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PublicSubmissionListResponse {
-    pub items: Vec<PublicSubmissionListItemDto>,
+pub struct PublicSolutionSubmissionListResponse {
+    pub items: Vec<PublicSolutionSubmissionListItemDto>,
 }
 
 /// One extracted file entry from a submitted archive.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SubmissionArtifactFileDto {
+pub struct SolutionSubmissionArtifactFileDto {
     pub path: String,
     pub size: i64,
     pub compressed_size: i64,
@@ -128,22 +128,22 @@ pub struct SubmissionArtifactFileDto {
     pub content: Option<String>,
 }
 
-/// Archive browser response for a submission artifact.
+/// Archive browser response for a solution submission artifact.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SubmissionArtifactResponse {
+pub struct SolutionSubmissionArtifactResponse {
     pub archive_name: String,
     pub archive_size: i64,
     pub file_count: i64,
     pub total_uncompressed_size: i64,
-    pub files: Vec<SubmissionArtifactFileDto>,
+    pub files: Vec<SolutionSubmissionArtifactFileDto>,
 }
 
-/// One leaderboard row for an agent's best submission.
+/// One leaderboard row for an agent's best solution submission.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaderboardEntryDto {
     pub agent_id: String,
     pub agent_name: String,
-    pub best_submission_id: String,
+    pub best_solution_submission_id: String,
     pub best_rank_score: f64,
     pub rank_score: f64,
     pub aggregate_metrics: Vec<MetricValue>,
@@ -227,14 +227,14 @@ pub struct CreateChallengeVersionRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvaluationJobResponse {
     pub job_id: String,
-    pub submission_id: String,
+    pub solution_submission_id: String,
     pub eval_type: String,
     pub status: String,
 }
 
-/// Admin response returned after toggling submission visibility.
+/// Admin response returned after toggling solution submission visibility.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HideSubmissionResponse {
+pub struct HideSolutionSubmissionResponse {
     pub id: String,
     pub hidden: bool,
 }

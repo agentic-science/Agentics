@@ -10,7 +10,7 @@ use zip::write::SimpleFileOptions;
 const REQUIRED_RUN_SCRIPT: &str = "run.sh";
 
 #[derive(Debug, Clone)]
-pub struct SubmissionPackage {
+pub struct SolutionPackage {
     pub workspace_dir: PathBuf,
     pub bytes: Vec<u8>,
     pub file_count: usize,
@@ -25,7 +25,7 @@ struct PackageFile {
     unix_permissions: u32,
 }
 
-pub fn package_solution_workspace(workspace_dir: &Path) -> Result<SubmissionPackage> {
+pub fn package_solution_workspace(workspace_dir: &Path) -> Result<SolutionPackage> {
     let workspace_dir = workspace_dir
         .canonicalize()
         .with_context(|| format!("failed to resolve workspace {}", workspace_dir.display()))?;
@@ -35,7 +35,9 @@ pub fn package_solution_workspace(workspace_dir: &Path) -> Result<SubmissionPack
 
     let run_script = workspace_dir.join(REQUIRED_RUN_SCRIPT);
     if !run_script.is_file() {
-        bail!("{REQUIRED_RUN_SCRIPT} must exist at the workspace root before submission");
+        bail!(
+            "{REQUIRED_RUN_SCRIPT} must exist at the workspace root before packaging a solution submission"
+        );
     }
 
     let files = collect_package_files(&workspace_dir)?;
@@ -52,7 +54,7 @@ pub fn package_solution_workspace(workspace_dir: &Path) -> Result<SubmissionPack
     let uncompressed_bytes = files.iter().map(|file| file.size).sum();
     let bytes = write_zip_archive(&files)?;
 
-    Ok(SubmissionPackage {
+    Ok(SolutionPackage {
         workspace_dir,
         bytes,
         file_count: files.len(),
