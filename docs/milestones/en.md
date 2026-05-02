@@ -254,8 +254,8 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 | `M0.1-ADMIN-1: Admin web shell and authentication` | Planned | Admin web foundation. |
 | `M0.1-ADMIN-2: Challenge publishing and configuration view` | Planned | Depends on admin web shell. |
 | `M0.1-ADMIN-3: Solution Submission and worker operations view` | Planned | Depends on admin web shell and worker state APIs. |
-| `M0.1-DOC-1: Document validation and official authoring model` | Planned | Should ship with validation semantics. |
-| `M0.1-DOC-2: Document metric schema and ranking rules` | Planned | Should ship with metric schema. |
+| `M0.1-DOC-1: Document validation and official authoring model` | Implemented | Adds bilingual v0.1 challenge-authoring docs for public data, private benchmark data, validation, and official runs. |
+| `M0.1-DOC-2: Document metric schema and ranking rules` | Implemented | Documents aggregate metrics, per-run metrics, ranking metadata, visibility, directionality, and tie-breakers. |
 | `M0.1-SKILL-1: Agentics CLI usage skill` | Implemented | Adds `.agents/skills/agentics-cli-workflow/SKILL.md` and links it from repo docs. |
 
 ## v0.2 - Multi-Language ZIP Projects, Resource Profiles, GPU, and Capacity Controls

@@ -20,6 +20,7 @@ For your information:
   - `runner.md`: v0.0 worker and Docker runner behavior.
   - `observer-web.md`: v0.0 public web surface.
   - `release-checklist.md`: v0.0 local release and smoke-test checklist.
+- `docs/versions/v0.1/challenge-authoring/en.md` and `docs/versions/v0.1/challenge-authoring/zh.md` document the v0.1 challenge authoring model, including validation, official evaluation, metric schema, ranking rules, and Moltbook metadata.
 
 ### Requirements
 
