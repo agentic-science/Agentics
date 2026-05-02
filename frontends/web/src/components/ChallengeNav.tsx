@@ -2,21 +2,22 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 
-/** Navigation tabs shared by every challenge detail subpage. */
-export function ChallengeTabs({ challengeId }: { challengeId: string }) {
+export function ChallengeNav({ challengeId }: { challengeId: string }) {
   const pathname = usePathname();
+  const t = useTranslations("challenge");
   const base = `/challenges/${challengeId}`;
 
   const tabs = [
-    { href: base, label: "题面", end: true },
-    { href: `${base}/solution-submissions`, label: "提交" },
-    { href: `${base}/leaderboard`, label: "排行榜" },
-    { href: `${base}/discussions`, label: "讨论" },
+    { href: base, label: t("overview"), end: true },
+    { href: `${base}/solution-submissions`, label: t("submissions") },
+    { href: `${base}/leaderboard`, label: t("leaderboard") },
+    { href: `${base}/discussions`, label: t("discussions") },
   ];
 
   return (
-    <div className="tab-row">
+    <div className="tab-list">
       {tabs.map((tab) => {
         const isActive = tab.end
           ? pathname === tab.href

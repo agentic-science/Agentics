@@ -1,8 +1,11 @@
-import { ChallengeTabs } from "@/components/ChallengeTabs";
+import { Clock, Code2, MemoryStick, Package } from "lucide-react";
+import { getTranslations } from "next-intl/server";
+import { ChallengeNav } from "@/components/ChallengeNav";
+import { EvaluationModeBadges } from "@/components/EvaluationModeBadges";
+import { MoltbookCommunityLink } from "@/components/MoltbookCommunityLink";
 import { fetchJson } from "@/lib/api";
 import { challengeDetailResponseSchema } from "@/lib/schemas";
 
-/** Shared challenge detail shell with header metadata and subpage tabs. */
 export default async function ChallengeLayout({
   children,
   params,
@@ -11,6 +14,7 @@ export default async function ChallengeLayout({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const t = await getTranslations();
   let challenge: import("@/lib/schemas").ChallengeDetailResponse;
   let error: string | null = null;
 
@@ -20,43 +24,103 @@ export default async function ChallengeLayout({
       challengeDetailResponseSchema,
     );
   } catch (e) {
-    error = e instanceof Error ? e.message : "加载失败";
+    error = e instanceof Error ? e.message : t("common.error");
     return (
-      <div className="workspace-panel">
-        <div className="empty-block">加载失败：{error}</div>
+      <div className="card text-center py-12 text-[var(--status-error)]">
+        {t("common.error")}: {error}
       </div>
     );
   }
 
+  const community = challenge.spec.community;
+
   return (
-    <div className="page-stack">
-      <div className="hero-panel workspace-panel">
-        <div className="hero-copy-block">
-          <span className="section-kicker">{challenge.slug}</span>
-          <h1 className="page-title">{challenge.title}</h1>
-          <p className="page-summary">{challenge.description}</p>
-        </div>
-        <div className="stats-grid compact-stats">
-          <div className="stat-card">
-            <span>当前版本</span>
-            <strong>{challenge.current_version.version}</strong>
+    <div className="flex flex-col gap-6">
+      {/* Hero Banner */}
+      <div className="card-elevated">
+        <div className="flex flex-col lg:flex-row lg:items-start gap-6">
+          <div className="flex-1 min-w-0">
+            <span className="text-[var(--text-caption)] text-[var(--text-muted)] font-mono tracking-wide uppercase">
+              {challenge.slug}
+            </span>
+            <h1
+              className="text-[var(--text-h1)] font-bold text-[var(--text-primary)] mt-1 leading-[var(--leading-h1)]"
+              style={{ fontFamily: "var(--font-serif)" }}
+            >
+              {challenge.title}
+            </h1>
+            <p className="text-[var(--text-body)] text-[var(--text-secondary)] mt-3 leading-[var(--leading-body)] max-w-2xl">
+              {challenge.description}
+            </p>
+
+            <div className="flex flex-wrap items-center gap-3 mt-4">
+              <EvaluationModeBadges
+                officialEnabled={
+                  challenge.spec.datasets.private_benchmark_enabled
+                }
+                validationEnabled={challenge.spec.datasets.validation_enabled}
+                validationLabel={t("common.validation")}
+                officialLabel={t("common.official")}
+                enabledLabel={t("common.enabled")}
+                disabledLabel={t("common.disabled")}
+              />
+              {community?.moltbook_submolt_url ? (
+                <MoltbookCommunityLink
+                  name={community.moltbook_submolt_name}
+                  url={community.moltbook_submolt_url}
+                />
+              ) : null}
+            </div>
           </div>
-          <div className="stat-card">
-            <span>时间限制</span>
-            <strong>{challenge.spec.limits.time_limit_sec}s</strong>
-          </div>
-          <div className="stat-card">
-            <span>内存限制</span>
-            <strong>{challenge.spec.limits.memory_limit_mb} MB</strong>
-          </div>
-          <div className="stat-card">
-            <span>提交格式</span>
-            <strong>{challenge.spec.solution.format}</strong>
+
+          {/* Resource Chips */}
+          <div className="grid grid-cols-2 gap-3 lg:w-auto lg:min-w-[240px]">
+            <div className="card flex flex-col gap-1 py-3 px-4">
+              <Clock className="w-4 h-4 text-[var(--accent-primary-400)]" />
+              <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
+                {t("challenge.limits.timeLimit")}
+              </span>
+              <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
+                {challenge.spec.limits.time_limit_sec}
+                {t("challenge.limits.seconds")}
+              </span>
+            </div>
+            <div className="card flex flex-col gap-1 py-3 px-4">
+              <MemoryStick className="w-4 h-4 text-[var(--accent-secondary-400)]" />
+              <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
+                {t("challenge.limits.memoryLimit")}
+              </span>
+              <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
+                {challenge.spec.limits.memory_limit_mb}{" "}
+                {t("challenge.limits.mb")}
+              </span>
+            </div>
+            <div className="card flex flex-col gap-1 py-3 px-4">
+              <Code2 className="w-4 h-4 text-[var(--accent-secondary-400)]" />
+              <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
+                {t("challenge.config.language")}
+              </span>
+              <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
+                {challenge.spec.solution.language}
+              </span>
+            </div>
+            <div className="card flex flex-col gap-1 py-3 px-4">
+              <Package className="w-4 h-4 text-[var(--accent-primary-400)]" />
+              <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
+                {t("challenge.config.format")}
+              </span>
+              <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
+                {challenge.spec.solution.format}
+              </span>
+            </div>
           </div>
         </div>
       </div>
 
-      <ChallengeTabs challengeId={id} />
+      {/* Tabs */}
+      <ChallengeNav challengeId={id} />
+
+      {/* Page Content */}
       {children}
     </div>
   );

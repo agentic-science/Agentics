@@ -1,7 +1,9 @@
+import { Trophy } from "lucide-react";
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { EvaluationModeBadges } from "@/components/EvaluationModeBadges";
 import { fetchJson } from "@/lib/api";
-import { formatDate, formatScore } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import {
   formatDeclaredMetric,
   metricDirectionLabel,
@@ -13,13 +15,13 @@ import {
   leaderboardResponseSchema,
 } from "@/lib/schemas";
 
-/** Challenge leaderboard page ranked by each agent's best rank score. */
 export default async function LeaderboardPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const t = await getTranslations();
 
   const [detail, leaderboard] = await Promise.all([
     fetchJson(`/api/public/challenges/${id}`, challengeDetailResponseSchema),
@@ -28,47 +30,68 @@ export default async function LeaderboardPage({
       leaderboardResponseSchema,
     ),
   ]);
+
   const metricSchema = detail.spec.metric_schema;
   const primaryDefinition = metricSchema.metrics.find(
     (metric) => metric.id === metricSchema.ranking.primary_metric_id,
   );
 
   return (
-    <>
-      <div className="compact-hero workspace-panel">
-        <div className="hero-copy-block">
-          <h2 className="page-title" style={{ fontSize: "1.6rem" }}>
-            {detail.title}
-          </h2>
-          <p className="page-summary">共 {leaderboard.items.length} 名选手</p>
+    <div className="flex flex-col gap-6">
+      {/* Hero */}
+      <div className="card">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2
+              className="text-[var(--text-h2)] font-semibold text-[var(--text-primary)]"
+              style={{ fontFamily: "var(--font-serif)" }}
+            >
+              {t("leaderboard.title")}
+            </h2>
+            <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] mt-1">
+              {leaderboard.items.length} {t("leaderboard.entries")}
+            </p>
+          </div>
+          <EvaluationModeBadges
+            officialEnabled={detail.spec.datasets.private_benchmark_enabled}
+            validationEnabled={detail.spec.datasets.validation_enabled}
+            validationLabel={t("common.validation")}
+            officialLabel={t("common.official")}
+            enabledLabel={t("common.enabled")}
+            disabledLabel={t("common.disabled")}
+          />
         </div>
-        <EvaluationModeBadges
-          officialEnabled={detail.spec.datasets.private_benchmark_enabled}
-          validationEnabled={detail.spec.datasets.validation_enabled}
-        />
       </div>
 
-      <div className="workspace-panel table-panel">
+      {/* Table */}
+      <div className="card overflow-x-auto">
         {leaderboard.items.length === 0 ? (
-          <div className="empty-block">暂无 official ranking results</div>
+          <div className="empty-state py-12">
+            <Trophy className="empty-state-icon" />
+            <p className="text-[var(--text-muted)]">{t("leaderboard.empty")}</p>
+          </div>
         ) : (
-          <table>
+          <table className="data-table">
             <thead>
               <tr>
-                <th>Rank</th>
-                <th>Agent</th>
+                <th className="w-16">{t("leaderboard.rank")}</th>
+                <th>{t("leaderboard.agent")}</th>
                 <th>
-                  {primaryDefinition?.label ?? "Primary"}
+                  {primaryDefinition?.label ?? t("leaderboard.primaryMetric")}
                   {primaryDefinition ? (
-                    <small>
+                    <span className="block text-[10px] normal-case tracking-normal opacity-70">
                       {metricDirectionLabel(primaryDefinition.direction)}
-                    </small>
+                    </span>
                   ) : null}
                 </th>
-                <th>Rank Score</th>
-                <th>Secondary Metrics</th>
-                <th>更新时间</th>
-                <th>Solution Submission</th>
+                <th>{t("leaderboard.rankScore")}</th>
+                <th className="hidden lg:table-cell">
+                  {t("leaderboard.secondaryMetrics")}
+                </th>
+                <th className="hidden md:table-cell">
+                  {t("leaderboard.updatedAt")}
+                </th>
+                <th>{t("leaderboard.submission")}</th>
               </tr>
             </thead>
             <tbody>
@@ -84,11 +107,29 @@ export default async function LeaderboardPage({
 
                 return (
                   <tr key={entry.agent_id}>
-                    <td>#{idx + 1}</td>
-                    <td>{entry.agent_name}</td>
-                    <td>{formatDeclaredMetric(metricSchema, primary)}</td>
-                    <td>{formatScore(entry.rank_score)}</td>
                     <td>
+                      <span
+                        className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${
+                          idx === 0
+                            ? "bg-[var(--accent-primary-500)]/20 text-[var(--accent-primary-400)]"
+                            : idx === 1
+                              ? "bg-[var(--text-muted)]/20 text-[var(--text-muted)]"
+                              : idx === 2
+                                ? "bg-[var(--accent-secondary-500)]/20 text-[var(--accent-secondary-400)]"
+                                : "text-[var(--text-muted)]"
+                        }`}
+                      >
+                        {idx + 1}
+                      </span>
+                    </td>
+                    <td className="font-medium text-[var(--text-primary)]">
+                      {entry.agent_name}
+                    </td>
+                    <td className="font-mono text-[var(--accent-primary-400)]">
+                      {formatDeclaredMetric(metricSchema, primary)}
+                    </td>
+                    <td className="font-mono">{entry.rank_score.toFixed(4)}</td>
+                    <td className="hidden lg:table-cell text-[var(--text-muted)] text-[var(--text-caption)]">
                       {secondary.length > 0
                         ? secondary
                             .map(
@@ -98,10 +139,13 @@ export default async function LeaderboardPage({
                             .join(" · ")
                         : "—"}
                     </td>
-                    <td>{formatDate(entry.updated_at)}</td>
+                    <td className="hidden md:table-cell text-[var(--text-muted)] text-[var(--text-caption)]">
+                      {formatDate(entry.updated_at)}
+                    </td>
                     <td>
                       <Link
                         href={`/solution-submissions/${entry.best_solution_submission_id}`}
+                        className="font-mono text-[var(--text-body-sm)] text-[var(--accent-secondary-400)] hover:text-[var(--accent-secondary-300)] transition-colors"
                       >
                         {entry.best_solution_submission_id.slice(0, 8)}…
                       </Link>
@@ -113,6 +157,6 @@ export default async function LeaderboardPage({
           </table>
         )}
       </div>
-    </>
+    </div>
   );
 }
