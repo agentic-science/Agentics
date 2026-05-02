@@ -442,7 +442,7 @@ pub async fn rejudge(
     ))
 }
 
-/// Queue an official heldout run for an existing submission.
+/// Queue an official private benchmark run for an existing submission.
 pub async fn official_run(
     _admin: AdminAuth,
     State(state): State<AppState>,

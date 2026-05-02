@@ -1,8 +1,8 @@
 [
   {
-    "case_id": "shown-1",
+    "case_id": "public-1",
     "input": {
-      "instance_id": "shown-1",
+      "instance_id": "public-1",
       "grid": [
         "S....",
         ".###.",
@@ -14,9 +14,9 @@
     "benchmark_path": "RRRRDDDD"
   },
   {
-    "case_id": "shown-2",
+    "case_id": "public-2",
     "input": {
-      "instance_id": "shown-2",
+      "instance_id": "public-2",
       "grid": [
         "S#...",
         ".#.#.",
@@ -28,9 +28,9 @@
     "benchmark_path": "DDDDRRUUUURRDDDD"
   },
   {
-    "case_id": "shown-3",
+    "case_id": "public-3",
     "input": {
-      "instance_id": "shown-3",
+      "instance_id": "public-3",
       "grid": [
         "S...##",
         "##..##",

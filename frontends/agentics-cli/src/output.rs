@@ -114,11 +114,11 @@ pub fn render_challenge_detail(
     match format {
         OutputFormat::Json => pretty_json(response),
         OutputFormat::Table => {
-            let heldout = if response.spec.datasets.heldout_enabled {
+            let private_benchmark = if response.spec.datasets.private_benchmark_enabled {
                 response
                     .spec
                     .datasets
-                    .heldout_dir
+                    .private_benchmark_dir
                     .as_deref()
                     .unwrap_or("<configured>")
             } else {
@@ -126,7 +126,7 @@ pub fn render_challenge_detail(
             };
 
             Ok(format!(
-                "{} ({})\nversion: {} ({})\nsubmission: {} / {} / {}\nlimits: {} sec, {} MB\ndatasets: shown={}, hidden={}, validation={}, heldout={}\nranking_metric: {}\n\n{}",
+                "{} ({})\nversion: {} ({})\nsubmission: {} / {} / {}\nlimits: {} sec, {} MB\ndatasets: public={}, validation={}, private_benchmark={}\nranking_metric: {}\n\n{}",
                 response.title,
                 response.id,
                 response.current_version.version,
@@ -136,14 +136,13 @@ pub fn render_challenge_detail(
                 response.spec.submission.entrypoint,
                 response.spec.limits.time_limit_sec,
                 response.spec.limits.memory_limit_mb,
-                response.spec.datasets.shown_dir,
-                response.spec.datasets.hidden_dir,
+                response.spec.datasets.public_dir,
                 if response.spec.datasets.validation_enabled {
                     "enabled"
                 } else {
                     "disabled"
                 },
-                heldout,
+                private_benchmark,
                 response.spec.metric_schema.ranking.primary_metric_id,
                 response.statement_markdown.trim()
             ))
@@ -234,8 +233,8 @@ pub fn render_submission_status(
                 .as_ref()
                 .map(|job| format!("{} ({})", job.id, status_label(&job.status)))
                 .unwrap_or_else(|| "none".to_string());
-            let public_eval = response
-                .public_evaluation
+            let validation_eval = response
+                .validation_evaluation
                 .as_ref()
                 .map(|eval| status_label(&eval.status))
                 .unwrap_or_else(|| "none".to_string());
@@ -252,12 +251,12 @@ pub fn render_submission_status(
                 .unwrap_or_else(|| "none".to_string());
 
             Ok(format!(
-                "submission: {}\nchallenge: {}\nstatus: {}\nevaluation_job: {}\npublic_evaluation: {}\nofficial_evaluation: {}\nrank_score: {}\nvisible_after_eval: {}",
+                "submission: {}\nchallenge: {}\nstatus: {}\nevaluation_job: {}\nvalidation_evaluation: {}\nofficial_evaluation: {}\nrank_score: {}\nvisible_after_eval: {}",
                 response.id,
                 response.challenge_id,
                 response.status,
                 evaluation_job,
-                public_eval,
+                validation_eval,
                 official_eval,
                 rank_score,
                 response.visible_after_eval
@@ -281,7 +280,7 @@ pub fn render_validation_run_status(
             let validation_eval = response
                 .evaluation
                 .as_ref()
-                .or(response.public_evaluation.as_ref());
+                .or(response.validation_evaluation.as_ref());
             let validation_status = validation_eval
                 .map(|eval| status_label(&eval.status))
                 .unwrap_or_else(|| "none".to_string());
@@ -445,13 +444,12 @@ mod tests {
                     memory_limit_mb: 512,
                 },
                 datasets: DatasetsSpec {
-                    shown_dir: "data/shown".to_string(),
-                    hidden_dir: "data/hidden".to_string(),
-                    heldout_dir: None,
-                    shown_policy: ScoreVisibility::Full,
-                    hidden_policy: "score_only".to_string(),
+                    public_dir: "data/public".to_string(),
+                    private_benchmark_dir: None,
+                    public_policy: ScoreVisibility::Full,
+                    private_benchmark_policy: "score_only".to_string(),
                     validation_enabled: false,
-                    heldout_enabled: false,
+                    private_benchmark_enabled: false,
                 },
                 metric_schema: MetricSchemaSpec::default(),
             },

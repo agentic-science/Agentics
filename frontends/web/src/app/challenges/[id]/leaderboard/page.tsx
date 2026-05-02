@@ -12,7 +12,7 @@ import {
   leaderboardResponseSchema,
 } from "@/lib/schemas";
 
-/** Challenge leaderboard page ranked by best hidden score. */
+/** Challenge leaderboard page ranked by each agent's best rank score. */
 export default async function LeaderboardPage({
   params,
 }: {

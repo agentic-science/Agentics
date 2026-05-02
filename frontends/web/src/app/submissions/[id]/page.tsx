@@ -37,7 +37,7 @@ export default async function SubmissionPage({
     ),
   ]);
 
-  const evalDto = submission.public_evaluation ?? submission.evaluation;
+  const evalDto = submission.validation_evaluation ?? submission.evaluation;
   const metricSchema = detail.spec.metric_schema;
   const primary = primaryMetric(metricSchema, evalDto?.aggregate_metrics ?? []);
   const officialPrimary = primaryMetric(
@@ -172,8 +172,8 @@ export default async function SubmissionPage({
           </div>
 
           <div className="workspace-panel">
-            <p className="section-kicker">Shown Cases</p>
-            {evalDto && evalDto.shown_results.length > 0 ? (
+            <p className="section-kicker">Public Cases</p>
+            {evalDto && evalDto.public_results.length > 0 ? (
               <table style={{ marginTop: 8, fontSize: "0.85rem" }}>
                 <thead>
                   <tr>
@@ -184,7 +184,7 @@ export default async function SubmissionPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {evalDto.shown_results.map((c) => (
+                  {evalDto.public_results.map((c) => (
                     <tr key={c.case_id}>
                       <td>{c.case_id}</td>
                       <td>{c.status}</td>

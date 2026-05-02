@@ -54,7 +54,7 @@ RRRRDDDD
 
 - 参考路径由出题方预先设定，用来定义“足够短、转弯较少、路线较直”的目标。
 - 更长但更直的路径仍可能拿到一部分附加分。
-- `shown` 返回逐 case 结果与消息，`hidden` / `heldout` 只返回聚合得分。
+- `public` 返回逐 case 结果与消息，`private benchmark` 只返回聚合得分。
 
 ## 题目意图
 

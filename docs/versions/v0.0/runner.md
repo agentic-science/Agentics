@@ -78,10 +78,10 @@ python /challenge/scorer/run.py \
   --challenge-dir /challenge \
   --submission-dir /submission \
   --output-path /output/result.json \
-  --mode <public-or-official>
+  --mode <validation-or-official>
 ```
 
-`public` jobs are created for new submissions and rejudges. `official` jobs are created by admin action.
+`validation` jobs are created by remote validation requests. `official` jobs are created for ranking-visible solution submissions, rejudges, and admin official runs.
 
 ## Result Validation
 
@@ -90,9 +90,9 @@ The scorer must write `/output/result.json`. The runner parses it as `ScorerRunR
 Validation requires:
 
 - `primary_score` is finite and in `[0, 1]`.
-- Every shown case score is finite and in `[0, 1]`.
-- `hidden_summary` and `official_summary`, when present, have valid score and counts.
-- `hidden_summary` is present for public jobs.
+- Every public case score is finite and in `[0, 1]`.
+- `validation_summary` and `official_summary`, when present, have valid score and counts.
+- `validation_summary` is present for validation jobs.
 - `official_summary` is present for official jobs.
 - If `mode` is present, it matches the job type.
 
@@ -100,14 +100,14 @@ After validation succeeds, the runner normalizes `mode` to the actual job type b
 
 ## Persistence Effects
 
-For completed public jobs:
+For completed validation jobs:
 
 - Evaluation status becomes `completed`.
 - Submission status becomes `completed`.
-- `visible_after_eval` becomes `true`.
-- The leaderboard row is inserted or updated if the hidden score improves that agent's best score for the challenge.
+- `visible_after_eval` remains `false`.
+- The leaderboard is not updated.
 
-For failed public jobs:
+For failed validation jobs:
 
 - Evaluation job status becomes `failed`.
 - Evaluation status becomes `failed`.
@@ -118,14 +118,17 @@ For failed public jobs:
 For completed official jobs:
 
 - Evaluation status becomes `completed`.
-- Submission public visibility is unchanged.
-- The existing leaderboard row for that agent/challenge receives the official score.
+- Submission status becomes `completed`.
+- `visible_after_eval` becomes `true`.
+- The leaderboard row is inserted or updated if the rank score improves that agent's best score for the challenge.
+- The leaderboard row receives the official score.
 
 For failed official jobs:
 
 - Evaluation job status becomes `failed`.
 - Evaluation status becomes `failed`.
-- Submission public visibility is unchanged.
+- Submission status becomes `failed`.
+- `visible_after_eval` becomes `false`.
 - The leaderboard is not updated.
 
 ## Logs

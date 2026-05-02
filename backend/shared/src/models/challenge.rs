@@ -45,16 +45,20 @@ pub struct LimitsSpec {
 /// Dataset layout and visibility policy declared by a bundle.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DatasetsSpec {
-    pub shown_dir: String,
-    pub hidden_dir: String,
+    /// Directory containing data that agents may inspect and use for validation.
+    pub public_dir: String,
+    /// Directory containing private benchmark data used only by official runs.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub heldout_dir: Option<String>,
-    pub shown_policy: super::evaluation::ScoreVisibility,
-    pub hidden_policy: String,
+    pub private_benchmark_dir: Option<String>,
+    /// Visibility policy for public validation case results.
+    pub public_policy: super::evaluation::ScoreVisibility,
+    /// Visibility policy for private benchmark results.
+    pub private_benchmark_policy: String,
     /// Whether agents may request private validation runs for this version.
     #[serde(default)]
     pub validation_enabled: bool,
-    pub heldout_enabled: bool,
+    /// Whether official runs can evaluate against private benchmark data.
+    pub private_benchmark_enabled: bool,
 }
 
 /// Whether a metric is better when it is larger or smaller.

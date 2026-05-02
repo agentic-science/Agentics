@@ -7,8 +7,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[4]
-PROBLEM_DIR = ROOT / "examples" / "challenges" / "grid-routing" / "v1"
-SCORER_PATH = PROBLEM_DIR / "scorer" / "run.py"
+CHALLENGE_DIR = ROOT / "examples" / "challenges" / "grid-routing" / "v1"
+SCORER_PATH = CHALLENGE_DIR / "scorer" / "run.py"
 
 
 def write_submission(target_dir: Path, paths_by_instance: dict[str, str]) -> Path:
@@ -55,7 +55,7 @@ def run_scorer(tmp_path: Path, *, mode: str, paths_by_instance: dict[str, str]) 
             sys.executable,
             str(SCORER_PATH),
             "--challenge-dir",
-            str(PROBLEM_DIR),
+            str(CHALLENGE_DIR),
             "--submission-dir",
             str(submission_dir),
             "--output-path",
@@ -70,14 +70,14 @@ def run_scorer(tmp_path: Path, *, mode: str, paths_by_instance: dict[str, str]) 
     return json.loads(output_path.read_text(encoding="utf-8"))
 
 
-def test_validation_mode_returns_shown_scores(tmp_path: Path) -> None:
+def test_validation_mode_returns_public_scores(tmp_path: Path) -> None:
     result = run_scorer(
         tmp_path,
         mode="validation",
         paths_by_instance={
-            "shown-1": "RRRRDDDD",
-            "shown-2": "DDDDRRUUUURRDDDD",
-            "shown-3": "RRDDRDRDDR",
+            "public-1": "RRRRDDDD",
+            "public-2": "DDDDRRUUUURRDDDD",
+            "public-3": "RRDDRDRDDR",
         },
     )
 
@@ -90,33 +90,14 @@ def test_validation_mode_returns_shown_scores(tmp_path: Path) -> None:
         {"metric_id": "passed_cases", "value": 3},
     ]
     assert result["run_metrics"] == [
-        {"run_id": "shown-1", "metrics": [{"metric_id": "score", "value": 1}]},
-        {"run_id": "shown-2", "metrics": [{"metric_id": "score", "value": 1}]},
-        {"run_id": "shown-3", "metrics": [{"metric_id": "score", "value": 1}]},
+        {"run_id": "public-1", "metrics": [{"metric_id": "score", "value": 1}]},
+        {"run_id": "public-2", "metrics": [{"metric_id": "score", "value": 1}]},
+        {"run_id": "public-3", "metrics": [{"metric_id": "score", "value": 1}]},
     ]
-    assert len(result["shown_results"]) == 3
-    assert all(item["status"] == "passed" for item in result["shown_results"])
-    assert all(item["score"] == 1 for item in result["shown_results"])
-    assert result["hidden_summary"] == {"score": 1, "passed": 3, "total": 3}
-    assert result["official_summary"] is None
-
-
-def test_legacy_public_mode_returns_hidden_summary(tmp_path: Path) -> None:
-    result = run_scorer(
-        tmp_path,
-        mode="public",
-        paths_by_instance={
-            "shown-1": "RRRRDDDD",
-            "shown-2": "DDDDRRUUUURRDDDD",
-            "shown-3": "RRDDRDRDDR",
-            "hidden-1": "DDDDDRRRRR",
-            "hidden-2": "RRDRDDRDDR",
-        },
-    )
-
-    assert result["status"] == "passed"
-    assert result["mode"] == "public"
-    assert result["hidden_summary"] == {"score": 1, "passed": 2, "total": 2}
+    assert len(result["public_results"]) == 3
+    assert all(item["status"] == "passed" for item in result["public_results"])
+    assert all(item["score"] == 1 for item in result["public_results"])
+    assert result["validation_summary"] == {"score": 1, "passed": 3, "total": 3}
     assert result["official_summary"] is None
 
 
@@ -125,18 +106,18 @@ def test_validation_mode_rewards_valid_but_indirect_route(tmp_path: Path) -> Non
         tmp_path,
         mode="validation",
         paths_by_instance={
-            "shown-1": "RRLLRRRRDDDD",
-            "shown-2": "DDDDRRUUUURRDDDD",
-            "shown-3": "RRDDRDRDDR",
+            "public-1": "RRLLRRRRDDDD",
+            "public-2": "DDDDRRUUUURRDDDD",
+            "public-3": "RRDDRDRDDR",
         },
     )
 
-    shown_case = result["shown_results"][0]
+    public_case = result["public_results"][0]
 
     assert result["status"] == "passed"
-    assert shown_case["status"] == "passed"
-    assert 0 < shown_case["score"] < 1
-    assert "turns=" in shown_case["message"]
+    assert public_case["status"] == "passed"
+    assert 0 < public_case["score"] < 1
+    assert "turns=" in public_case["message"]
 
 
 def test_failed_path_is_reported(tmp_path: Path) -> None:
@@ -144,33 +125,33 @@ def test_failed_path_is_reported(tmp_path: Path) -> None:
         tmp_path,
         mode="validation",
         paths_by_instance={
-            "shown-1": "RDDDD",
-            "shown-2": "DDDDRRUUUURRDDDD",
-            "shown-3": "RRDDRDRDDR",
+            "public-1": "RDDDD",
+            "public-2": "DDDDRRUUUURRDDDD",
+            "public-3": "RRDDRDRDDR",
         },
     )
 
     assert result["status"] == "failed"
-    assert result["shown_results"][0]["status"] == "failed"
-    assert result["shown_results"][0]["score"] == 0
-    assert "hit obstacle" in result["shown_results"][0]["message"]
+    assert result["public_results"][0]["status"] == "failed"
+    assert result["public_results"][0]["score"] == 0
+    assert "hit obstacle" in result["public_results"][0]["message"]
     assert result["logs"]
 
 
-def test_official_mode_uses_heldout_cases(tmp_path: Path) -> None:
+def test_official_mode_uses_private_benchmark_cases(tmp_path: Path) -> None:
     result = run_scorer(
         tmp_path,
         mode="official",
         paths_by_instance={
-            "heldout-1": "RRDDRRDDDR",
-            "heldout-2": "DDDDRRRRDDRR",
+            "private-benchmark-1": "RRDDRRDDDR",
+            "private-benchmark-2": "DDDDRRRRDDRR",
         },
     )
 
     assert result["status"] == "passed"
     assert result["mode"] == "official"
-    assert result["shown_results"] == []
-    assert result["hidden_summary"] is None
+    assert result["public_results"] == []
+    assert result["validation_summary"] is None
     assert result["official_summary"] == {"score": 1, "passed": 2, "total": 2}
     assert result["aggregate_metrics"] == [
         {"metric_id": "score", "value": 1},

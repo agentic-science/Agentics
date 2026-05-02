@@ -14,11 +14,9 @@ examples/challenges/
       statement.md
       scorer/
         run.py
-      shown/
+      public/
         cases.json
-      hidden/
-        cases.json
-      heldout/
+      private-benchmark/
         cases.json
 ```
 
@@ -31,10 +29,10 @@ Every publishable bundle must include:
 - `spec.json`
 - `statement.md`
 - The scorer entrypoint declared in `spec.json`
-- The shown dataset directory declared in `spec.json`
-- The hidden dataset directory declared in `spec.json`
+- The public dataset directory declared in `spec.json`
+- The private benchmark dataset directory declared in `spec.json`, when official runs are enabled
 
-If `datasets.heldout_enabled` is true, the heldout directory must also exist. If heldout is disabled, `heldout_dir` may be omitted or may remain present for compatibility with older public-only bundles.
+If `datasets.private_benchmark_enabled` is true, the private benchmark directory must also exist. If private benchmark is disabled, `private_benchmark_dir` may be omitted or may remain present for compatibility with older public-only bundles.
 
 ## `spec.json` Contract
 
@@ -60,12 +58,12 @@ v0.0 supports schema version `1`:
     "memory_limit_mb": 128
   },
   "datasets": {
-    "shown_dir": "shown",
-    "hidden_dir": "hidden",
-    "heldout_dir": "heldout",
-    "shown_policy": "full",
-    "hidden_policy": "score_only",
-    "heldout_enabled": true
+    "public_dir": "public",
+    "private_benchmark_dir": "private-benchmark",
+    "public_policy": "full",
+    "private_benchmark_policy": "score_only",
+    "validation_enabled": true,
+    "private_benchmark_enabled": true
   }
 }
 ```
@@ -79,8 +77,8 @@ Validation rules:
 - `submission.entrypoint`, `scorer.entrypoint`, `scorer.result_file`, and dataset paths must be safe relative paths.
 - `limits.time_limit_sec` must be positive and finite.
 - `limits.memory_limit_mb` must be positive.
-- `datasets.hidden_policy` must be `score_only`.
-- `datasets.heldout_dir` is required when `heldout_enabled` is true.
+- `datasets.private_benchmark_policy` must be `score_only`.
+- `datasets.private_benchmark_dir` is required when `private_benchmark_enabled` is true.
 
 Safe relative paths cannot be absolute, cannot contain empty segments, and cannot contain `..`.
 
@@ -99,7 +97,7 @@ python /challenge/scorer/run.py \
   --challenge-dir /challenge \
   --submission-dir /submission \
   --output-path /output/result.json \
-  --mode public
+  --mode validation
 ```
 
 For official runs, `--mode official` is used.
@@ -131,21 +129,21 @@ The exact input and output contract is challenge-owned. For the seeded examples:
 
 The scorer must write JSON to `/output/result.json`.
 
-Public result example:
+Validation result example:
 
 ```json
 {
   "status": "passed",
-  "mode": "public",
+  "mode": "validation",
   "primary_score": 1.0,
-  "shown_results": [
+  "public_results": [
     {
-      "case_id": "shown-1",
+      "case_id": "public-1",
       "status": "passed",
       "score": 1.0
     }
   ],
-  "hidden_summary": {
+  "validation_summary": {
     "score": 1.0,
     "passed": 3,
     "total": 3
@@ -161,7 +159,7 @@ Official result example:
   "status": "passed",
   "mode": "official",
   "primary_score": 1.0,
-  "shown_results": [],
+  "public_results": [],
   "official_summary": {
     "score": 1.0,
     "passed": 3,
@@ -175,20 +173,19 @@ Relaxed JSON compatibility:
 
 - Nullable fields may be omitted.
 - `mode` may be omitted, but if present it must match the job type.
-- `hidden_summary` is required for public runs.
+- `validation_summary` is required for validation runs.
 - `official_summary` is required for official runs.
 - Numeric scores must be finite values in `[0, 1]`.
 - Summary `passed` and `total` must be non-negative, and `passed` cannot exceed `total`.
-- Each shown case result must have a non-empty `case_id` and a score in `[0, 1]`.
+- Each public case result must have a non-empty `case_id` and a score in `[0, 1]`.
 
 ## Common Failure Modes
 
 - `invalid spec.json`: malformed JSON or fields that fail bundle validation.
 - `statement.md does not exist`: missing statement file.
 - `scorer entrypoint does not exist`: missing scorer file.
-- `shown data dir does not exist`: missing shown dataset directory.
-- `hidden data dir does not exist`: missing hidden dataset directory.
-- `heldout data dir does not exist`: heldout enabled without a directory.
+- `public data dir does not exist`: missing public dataset directory.
+- `private benchmark data dir does not exist`: private benchmark enabled without a directory.
 - `submission entrypoint not found`: uploaded ZIP does not contain the expected entrypoint.
 - `container exited with non-zero code or timed out`: scorer or submission failed, or the runner timeout was exceeded.
 - `missing result.json`: scorer did not write the expected output file.

@@ -13,7 +13,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--challenge-dir", required=True)
     parser.add_argument("--submission-dir", required=True)
     parser.add_argument("--output-path", required=True)
-    parser.add_argument("--mode", choices=["validation", "public", "official"], required=True)
+    parser.add_argument("--mode", choices=["validation", "official"], required=True)
     return parser.parse_args()
 
 
@@ -132,44 +132,34 @@ def main() -> int:
     logs: list[str] = []
     time_limit_sec = float(spec["limits"]["time_limit_sec"])
 
-    if args.mode in {"validation", "public"}:
-        shown_results = score_cases(
+    if args.mode == "validation":
+        public_results = score_cases(
             submission_entrypoint=submission_entrypoint,
-            cases_path=challenge_dir / spec["datasets"]["shown_dir"] / "cases.json",
+            cases_path=challenge_dir / spec["datasets"]["public_dir"] / "cases.json",
             time_limit_sec=time_limit_sec,
             logs=logs,
         )
-        hidden_results = (
-            shown_results
-            if args.mode == "validation"
-            else score_cases(
-                submission_entrypoint=submission_entrypoint,
-                cases_path=challenge_dir / spec["datasets"]["hidden_dir"] / "cases.json",
-                time_limit_sec=time_limit_sec,
-                logs=logs,
-            )
-        )
-        hidden_summary = summarize(hidden_results)
+        validation_summary = summarize(public_results)
         payload = {
-            "status": "passed" if hidden_summary["passed"] == hidden_summary["total"] else "failed",
-            "mode": args.mode,
-            "primary_score": hidden_summary["score"],
-            "rank_score": hidden_summary["score"],
-            "aggregate_metrics": aggregate_metrics(hidden_summary),
-            "run_metrics": run_metrics(shown_results),
-            "shown_results": shown_results,
-            "hidden_summary": hidden_summary,
+            "status": "passed" if validation_summary["passed"] == validation_summary["total"] else "failed",
+            "mode": "validation",
+            "primary_score": validation_summary["score"],
+            "rank_score": validation_summary["score"],
+            "aggregate_metrics": aggregate_metrics(validation_summary),
+            "run_metrics": run_metrics(public_results),
+            "public_results": public_results,
+            "validation_summary": validation_summary,
             "official_summary": None,
             "logs": logs,
         }
     else:
-        heldout_dir = spec["datasets"].get("heldout_dir")
-        if not spec["datasets"].get("heldout_enabled") or not heldout_dir:
-            raise ValueError("official mode requires heldout dataset")
+        private_benchmark_dir = spec["datasets"].get("private_benchmark_dir")
+        if not spec["datasets"].get("private_benchmark_enabled") or not private_benchmark_dir:
+            raise ValueError("official mode requires private benchmark dataset")
 
         official_results = score_cases(
             submission_entrypoint=submission_entrypoint,
-            cases_path=challenge_dir / heldout_dir / "cases.json",
+            cases_path=challenge_dir / private_benchmark_dir / "cases.json",
             time_limit_sec=time_limit_sec,
             logs=logs,
         )
@@ -183,8 +173,8 @@ def main() -> int:
             "rank_score": official_summary["score"],
             "aggregate_metrics": aggregate_metrics(official_summary),
             "run_metrics": run_metrics(official_results),
-            "shown_results": [],
-            "hidden_summary": None,
+            "public_results": [],
+            "validation_summary": None,
             "official_summary": official_summary,
             "logs": logs,
         }

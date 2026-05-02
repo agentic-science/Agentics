@@ -14,8 +14,8 @@ use crate::error::{AppError, Result};
 use crate::leaderboard::should_replace_leaderboard_entry;
 use crate::models::challenge::{ChallengeBundleSpec, MetricDirection};
 use crate::models::evaluation::{
-    EvaluationDto, EvaluationJobPayload, EvaluationStatus, MetricValue, RunMetricResult,
-    ScoreSummary, ScoringMode, ShownCaseResult,
+    EvaluationDto, EvaluationJobPayload, EvaluationStatus, MetricValue, PublicCaseResult,
+    RunMetricResult, ScoreSummary, ScoringMode,
 };
 use crate::models::request::{LeaderboardEntryDto, PublicSubmissionListItemDto};
 
@@ -73,11 +73,11 @@ pub struct SubmissionRecord {
     pub evaluation_job_id: Option<String>,
     pub evaluation_job_status: Option<String>,
     pub evaluation: Option<EvaluationDto>,
-    pub public_evaluation: Option<EvaluationDto>,
+    pub validation_evaluation: Option<EvaluationDto>,
     pub official_evaluation: Option<EvaluationDto>,
 }
 
-/// Parse an evaluation DTO from a row using a prefix such as `public_eval`.
+/// Parse an evaluation DTO from a row using a prefix such as `validation_eval`.
 fn parse_eval_from_row(row: &sqlx::postgres::PgRow, prefix: &str) -> Result<Option<EvaluationDto>> {
     let id_col = format!("{}_id", prefix);
     let id: Option<String> = row.try_get(id_col.as_str())?;
@@ -93,8 +93,10 @@ fn parse_eval_from_row(row: &sqlx::postgres::PgRow, prefix: &str) -> Result<Opti
         row.try_get(format!("{}_aggregate_metrics", prefix).as_str())?;
     let run_metrics_json: Option<Value> =
         row.try_get(format!("{}_run_metrics", prefix).as_str())?;
-    let shown_json: Option<Value> = row.try_get(format!("{}_shown_results", prefix).as_str())?;
-    let hidden_json: Option<Value> = row.try_get(format!("{}_hidden_summary", prefix).as_str())?;
+    let public_results_json: Option<Value> =
+        row.try_get(format!("{}_public_results", prefix).as_str())?;
+    let validation_summary_json: Option<Value> =
+        row.try_get(format!("{}_validation_summary", prefix).as_str())?;
     let official_json: Option<Value> =
         row.try_get(format!("{}_official_summary", prefix).as_str())?;
     let log_path: Option<String> = row.try_get(format!("{}_log_path", prefix).as_str())?;
@@ -117,15 +119,19 @@ fn parse_eval_from_row(row: &sqlx::postgres::PgRow, prefix: &str) -> Result<Opti
     let eval_type = ScoringMode::from_storage_value(&eval_type_str).ok_or_else(|| {
         AppError::Internal(format!("unexpected evaluation type `{eval_type_str}`"))
     })?;
-    let shown_results: Vec<ShownCaseResult> =
-        decode_optional_json(shown_json, &format!("{prefix} shown results"))?.unwrap_or_default();
+    let public_results: Vec<PublicCaseResult> =
+        decode_optional_json(public_results_json, &format!("{prefix} public results"))?
+            .unwrap_or_default();
     let aggregate_metrics: Vec<MetricValue> =
         decode_optional_json(aggregate_json, &format!("{prefix} aggregate metrics"))?
             .unwrap_or_default();
     let run_metrics: Vec<RunMetricResult> =
         decode_optional_json(run_metrics_json, &format!("{prefix} run metrics"))?
             .unwrap_or_default();
-    let hidden_summary = decode_optional_json(hidden_json, &format!("{prefix} hidden summary"))?;
+    let validation_summary = decode_optional_json(
+        validation_summary_json,
+        &format!("{prefix} validation summary"),
+    )?;
     let official_summary =
         decode_optional_json(official_json, &format!("{prefix} official summary"))?;
 
@@ -137,8 +143,8 @@ fn parse_eval_from_row(row: &sqlx::postgres::PgRow, prefix: &str) -> Result<Opti
         rank_score,
         aggregate_metrics,
         run_metrics,
-        shown_results,
-        hidden_summary,
+        public_results,
+        validation_summary,
         official_summary,
         log_path,
         started_at: started_at.map(|d| d.to_rfc3339()),
@@ -249,7 +255,7 @@ pub async fn create_submission_with_job(
         evaluation_job_id: Some(input.job_id.clone()),
         evaluation_job_status: Some("queued".to_string()),
         evaluation: None,
-        public_evaluation: None,
+        validation_evaluation: None,
         official_evaluation: None,
     })
 }
@@ -281,9 +287,9 @@ fn ensure_challenge_supports_eval_type(
             "validation pass is disabled for this challenge version".to_string(),
         ));
     }
-    if eval_type == ScoringMode::Official && !spec.datasets.heldout_enabled {
+    if eval_type == ScoringMode::Official && !spec.datasets.private_benchmark_enabled {
         return Err(AppError::BadRequest(
-            "challenge version does not support official runs".to_string(),
+            "challenge version does not have private benchmark data enabled".to_string(),
         ));
     }
 
@@ -304,19 +310,19 @@ pub async fn get_submission_by_id(
             s.parent_submission_id, s.credit_text, s.visible_after_eval,
             s.created_at, s.updated_at,
             j.id AS latest_job_id, j.status AS latest_job_status,
-            pe.id AS public_eval_id,
-            pe.status AS public_eval_status,
-            pe.eval_type AS public_eval_eval_type,
-            pe.primary_score AS public_eval_primary_score,
-            pe.rank_score AS public_eval_rank_score,
-            pe.aggregate_metrics_json AS public_eval_aggregate_metrics,
-            pe.run_metrics_json AS public_eval_run_metrics,
-            pe.shown_results_json AS public_eval_shown_results,
-            pe.hidden_summary_json AS public_eval_hidden_summary,
-            pe.official_summary_json AS public_eval_official_summary,
-            pe.log_path AS public_eval_log_path,
-            pe.started_at AS public_eval_started_at,
-            pe.finished_at AS public_eval_finished_at,
+            pe.id AS validation_eval_id,
+            pe.status AS validation_eval_status,
+            pe.eval_type AS validation_eval_eval_type,
+            pe.primary_score AS validation_eval_primary_score,
+            pe.rank_score AS validation_eval_rank_score,
+            pe.aggregate_metrics_json AS validation_eval_aggregate_metrics,
+            pe.run_metrics_json AS validation_eval_run_metrics,
+            pe.public_results_json AS validation_eval_public_results,
+            pe.validation_summary_json AS validation_eval_validation_summary,
+            pe.official_summary_json AS validation_eval_official_summary,
+            pe.log_path AS validation_eval_log_path,
+            pe.started_at AS validation_eval_started_at,
+            pe.finished_at AS validation_eval_finished_at,
             oe.id AS official_eval_id,
             oe.status AS official_eval_status,
             oe.eval_type AS official_eval_eval_type,
@@ -324,8 +330,8 @@ pub async fn get_submission_by_id(
             oe.rank_score AS official_eval_rank_score,
             oe.aggregate_metrics_json AS official_eval_aggregate_metrics,
             oe.run_metrics_json AS official_eval_run_metrics,
-            oe.shown_results_json AS official_eval_shown_results,
-            oe.hidden_summary_json AS official_eval_hidden_summary,
+            oe.public_results_json AS official_eval_public_results,
+            oe.validation_summary_json AS official_eval_validation_summary,
             oe.official_summary_json AS official_eval_official_summary,
             oe.log_path AS official_eval_log_path,
             oe.started_at AS official_eval_started_at,
@@ -337,11 +343,11 @@ pub async fn get_submission_by_id(
             SELECT id, status FROM evaluation_jobs WHERE submission_id = s.id ORDER BY created_at DESC LIMIT 1
         ) j ON TRUE
         LEFT JOIN LATERAL (
-            SELECT id, status, eval_type, primary_score, rank_score, aggregate_metrics_json, run_metrics_json, shown_results_json, hidden_summary_json, official_summary_json, log_path, started_at, finished_at
-            FROM evaluations WHERE submission_id = s.id AND eval_type IN ('validation', 'public') ORDER BY created_at DESC LIMIT 1
+            SELECT id, status, eval_type, primary_score, rank_score, aggregate_metrics_json, run_metrics_json, public_results_json, validation_summary_json, official_summary_json, log_path, started_at, finished_at
+            FROM evaluations WHERE submission_id = s.id AND eval_type = 'validation' ORDER BY created_at DESC LIMIT 1
         ) pe ON TRUE
         LEFT JOIN LATERAL (
-            SELECT id, status, eval_type, primary_score, rank_score, aggregate_metrics_json, run_metrics_json, shown_results_json, hidden_summary_json, official_summary_json, log_path, started_at, finished_at
+            SELECT id, status, eval_type, primary_score, rank_score, aggregate_metrics_json, run_metrics_json, public_results_json, validation_summary_json, official_summary_json, log_path, started_at, finished_at
             FROM evaluations WHERE submission_id = s.id AND eval_type = 'official' ORDER BY created_at DESC LIMIT 1
         ) oe ON TRUE
         WHERE s.id = $1
@@ -356,7 +362,7 @@ pub async fn get_submission_by_id(
         return Ok(None);
     };
 
-    let public_eval = parse_eval_from_row(&r, "public_eval")?;
+    let validation_eval = parse_eval_from_row(&r, "validation_eval")?;
     let official_eval = parse_eval_from_row(&r, "official_eval")?;
 
     Ok(Some(SubmissionRecord {
@@ -377,8 +383,8 @@ pub async fn get_submission_by_id(
         updated_at: r.try_get("updated_at")?,
         evaluation_job_id: r.try_get::<Option<String>, _>("latest_job_id")?,
         evaluation_job_status: r.try_get::<Option<String>, _>("latest_job_status")?,
-        evaluation: public_eval.clone().or_else(|| official_eval.clone()),
-        public_evaluation: public_eval,
+        evaluation: validation_eval.clone().or_else(|| official_eval.clone()),
+        validation_evaluation: validation_eval,
         official_evaluation: official_eval,
     }))
 }
@@ -394,19 +400,18 @@ pub async fn list_public_submissions_for_challenge(
             s.id, s.challenge_id, s.challenge_version_id, p.title AS challenge_title,
             s.agent_id, a.name AS agent_name, s.status, s.explanation,
             s.parent_submission_id, s.credit_text, s.created_at, s.updated_at,
-            COALESCE(pe.primary_score, oe.primary_score, (oe.official_summary_json->>'score')::double precision) AS public_score,
-            COALESCE(pe.rank_score, oe.rank_score, (pe.hidden_summary_json->>'score')::double precision, (oe.official_summary_json->>'score')::double precision) AS hidden_score,
+            COALESCE(pe.primary_score, (pe.validation_summary_json->>'score')::double precision) AS validation_score,
             COALESCE(oe.rank_score, (oe.official_summary_json->>'score')::double precision) AS official_score,
-            COALESCE(pe.rank_score, oe.rank_score, (pe.hidden_summary_json->>'score')::double precision, (oe.official_summary_json->>'score')::double precision) AS rank_score,
+            COALESCE(pe.rank_score, oe.rank_score, (pe.validation_summary_json->>'score')::double precision, (oe.official_summary_json->>'score')::double precision) AS rank_score,
             COALESCE(pe.aggregate_metrics_json, oe.aggregate_metrics_json, '[]'::jsonb) AS aggregate_metrics,
             COALESCE(oe.aggregate_metrics_json, '[]'::jsonb) AS official_metrics
         FROM submissions s
         JOIN agents a ON a.id = s.agent_id
         JOIN challenges p ON p.id = s.challenge_id
         LEFT JOIN LATERAL (
-            SELECT primary_score, rank_score, aggregate_metrics_json, hidden_summary_json
+            SELECT primary_score, rank_score, aggregate_metrics_json, validation_summary_json
             FROM evaluations
-            WHERE submission_id = s.id AND eval_type IN ('validation', 'public') AND status = 'completed'
+            WHERE submission_id = s.id AND eval_type = 'validation' AND status = 'completed'
             ORDER BY created_at DESC LIMIT 1
         ) pe ON TRUE
         LEFT JOIN LATERAL (
@@ -450,8 +455,7 @@ pub async fn list_public_submissions_for_challenge(
                 credit_text: r.try_get("credit_text")?,
                 created_at: r.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
                 updated_at: r.try_get::<DateTime<Utc>, _>("updated_at")?.to_rfc3339(),
-                public_score: r.try_get::<Option<f64>, _>("public_score")?,
-                hidden_score: r.try_get::<Option<f64>, _>("hidden_score")?,
+                validation_score: r.try_get::<Option<f64>, _>("validation_score")?,
                 official_score: r.try_get::<Option<f64>, _>("official_score")?,
                 rank_score: r.try_get::<Option<f64>, _>("rank_score")?,
                 aggregate_metrics,
@@ -495,22 +499,22 @@ pub async fn hide_submission(pool: &PgPool, submission_id: &str) -> Result<()> {
                 COALESCE(
                     ve.rank_score,
                     oe.rank_score,
-                    (ve.hidden_summary_json->>'score')::double precision,
+                    (ve.validation_summary_json->>'score')::double precision,
                     (oe.official_summary_json->>'score')::double precision
                 ) AS ranking_score,
-                COALESCE(ve.shown_results_json, oe.shown_results_json, '[]'::jsonb) AS shown_results,
+                COALESCE(ve.public_results_json, oe.public_results_json, '[]'::jsonb) AS public_results,
                 COALESCE(ve.aggregate_metrics_json, oe.aggregate_metrics_json, '[]'::jsonb) AS aggregate_metrics,
                 COALESCE(oe.rank_score, (oe.official_summary_json->>'score')::double precision) AS official_score,
                 COALESCE(oe.aggregate_metrics_json, '[]'::jsonb) AS official_metrics
             FROM submissions s
             LEFT JOIN LATERAL (
-                SELECT rank_score, aggregate_metrics_json, hidden_summary_json, shown_results_json
+                SELECT rank_score, aggregate_metrics_json, validation_summary_json, public_results_json
                 FROM evaluations
-                WHERE submission_id = s.id AND eval_type IN ('validation', 'public') AND status = 'completed'
+                WHERE submission_id = s.id AND eval_type = 'validation' AND status = 'completed'
                 ORDER BY created_at DESC LIMIT 1
             ) ve ON TRUE
             LEFT JOIN LATERAL (
-                SELECT rank_score, aggregate_metrics_json, official_summary_json, shown_results_json
+                SELECT rank_score, aggregate_metrics_json, official_summary_json, public_results_json
                 FROM evaluations
                 WHERE submission_id = s.id AND eval_type = 'official' AND status = 'completed'
                 ORDER BY created_at DESC LIMIT 1
@@ -520,7 +524,7 @@ pub async fn hide_submission(pool: &PgPool, submission_id: &str) -> Result<()> {
               AND COALESCE(
                     ve.rank_score,
                     oe.rank_score,
-                    (ve.hidden_summary_json->>'score')::double precision,
+                    (ve.validation_summary_json->>'score')::double precision,
                     (oe.official_summary_json->>'score')::double precision
                   ) IS NOT NULL
             ORDER BY ranking_score DESC, s.created_at ASC
@@ -536,7 +540,7 @@ pub async fn hide_submission(pool: &PgPool, submission_id: &str) -> Result<()> {
         if let Some((
             best_id,
             best_score,
-            shown_results,
+            public_results,
             aggregate_metrics,
             official_score,
             official_metrics,
@@ -545,15 +549,15 @@ pub async fn hide_submission(pool: &PgPool, submission_id: &str) -> Result<()> {
             sqlx::query(
                 r#"
                 INSERT INTO leaderboard_entries (
-                    challenge_id, agent_id, best_submission_id, best_hidden_score,
-                    shown_summary_json, aggregate_metrics_json, official_score,
+                    challenge_id, agent_id, best_submission_id, best_rank_score,
+                    public_results_json, aggregate_metrics_json, official_score,
                     official_metrics_json, updated_at
                 )
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
                 ON CONFLICT (challenge_id, agent_id) DO UPDATE
                 SET best_submission_id = EXCLUDED.best_submission_id,
-                    best_hidden_score = EXCLUDED.best_hidden_score,
-                    shown_summary_json = EXCLUDED.shown_summary_json,
+                    best_rank_score = EXCLUDED.best_rank_score,
+                    public_results_json = EXCLUDED.public_results_json,
                     aggregate_metrics_json = EXCLUDED.aggregate_metrics_json,
                     official_score = EXCLUDED.official_score,
                     official_metrics_json = EXCLUDED.official_metrics_json,
@@ -564,7 +568,7 @@ pub async fn hide_submission(pool: &PgPool, submission_id: &str) -> Result<()> {
             .bind(&agent_id)
             .bind(&best_id)
             .bind(best_score)
-            .bind(&shown_results)
+            .bind(&public_results)
             .bind(&aggregate_metrics)
             .bind(official_score)
             .bind(&official_metrics)
@@ -599,13 +603,13 @@ pub async fn list_leaderboard_entries(
         r#"
         SELECT
             le.agent_id, a.name AS agent_name, le.best_submission_id,
-            le.best_hidden_score, le.aggregate_metrics_json, le.official_score,
+            le.best_rank_score, le.aggregate_metrics_json, le.official_score,
             le.official_metrics_json, le.updated_at
         FROM leaderboard_entries le
         JOIN agents a ON a.id = le.agent_id
         JOIN challenges p ON p.id = le.challenge_id
         WHERE p.id = $1 OR p.slug = $1
-        ORDER BY le.best_hidden_score DESC, le.updated_at ASC
+        ORDER BY le.best_rank_score DESC, le.updated_at ASC
         "#,
     )
     .bind(challenge_id_or_slug)
@@ -625,14 +629,14 @@ pub async fn list_leaderboard_entries(
                 "leaderboard official metrics",
             )?
             .unwrap_or_default();
-            let best_hidden_score: f64 = r.try_get("best_hidden_score")?;
+            let best_rank_score: f64 = r.try_get("best_rank_score")?;
 
             Ok(LeaderboardEntryDto {
                 agent_id: r.try_get("agent_id")?,
                 agent_name: r.try_get("agent_name")?,
                 best_submission_id: r.try_get("best_submission_id")?,
-                best_hidden_score,
-                rank_score: best_hidden_score,
+                best_rank_score,
+                rank_score: best_rank_score,
                 aggregate_metrics,
                 official_metrics,
                 official_score: r.try_get::<Option<f64>, _>("official_score")?,
@@ -833,7 +837,7 @@ pub struct QueueEvaluationJobInput {
 
 /// Queue an evaluation job for an existing submission.
 ///
-/// Official jobs are rejected when the challenge version does not enable heldout
+/// Official jobs are rejected when the challenge version does not enable private benchmark data
 /// data. Any queued re-run hides the submission until its completion path decides
 /// whether the result should become public.
 pub async fn queue_evaluation_job(
@@ -941,8 +945,8 @@ pub async fn mark_evaluation_started(
             rank_score = NULL,
             aggregate_metrics_json = '[]'::jsonb,
             run_metrics_json = '[]'::jsonb,
-            shown_results_json = NULL,
-            hidden_summary_json = NULL,
+            public_results_json = NULL,
+            validation_summary_json = NULL,
             official_summary_json = NULL,
             log_path = NULL,
             started_at = NOW(),
@@ -971,8 +975,8 @@ pub struct PersistedEvaluationResult {
     pub rank_score: Option<f64>,
     pub aggregate_metrics: Vec<MetricValue>,
     pub run_metrics: Vec<RunMetricResult>,
-    pub shown_results: Vec<ShownCaseResult>,
-    pub hidden_summary: Option<ScoreSummary>,
+    pub public_results: Vec<PublicCaseResult>,
+    pub validation_summary: Option<ScoreSummary>,
     pub official_summary: Option<ScoreSummary>,
     pub log_path: Option<String>,
     pub last_error: Option<String>,
@@ -985,9 +989,9 @@ pub async fn mark_evaluation_finished(
 ) -> Result<()> {
     let mut tx = pool.begin().await?;
 
-    let shown_json = serde_json::to_value(&result.shown_results)
+    let public_results_json = serde_json::to_value(&result.public_results)
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    let hidden_json = serde_json::to_value(&result.hidden_summary)
+    let validation_summary_json = serde_json::to_value(&result.validation_summary)
         .map_err(|e| AppError::Internal(e.to_string()))?;
     let official_json = serde_json::to_value(&result.official_summary)
         .map_err(|e| AppError::Internal(e.to_string()))?;
@@ -1005,7 +1009,7 @@ pub async fn mark_evaluation_finished(
         UPDATE evaluations
         SET status = $2, primary_score = $3, rank_score = $4,
             aggregate_metrics_json = $5, run_metrics_json = $6,
-            shown_results_json = $7, hidden_summary_json = $8,
+            public_results_json = $7, validation_summary_json = $8,
             official_summary_json = $9, log_path = $10, finished_at = NOW()
         WHERE job_id = $1
         "#,
@@ -1016,8 +1020,8 @@ pub async fn mark_evaluation_finished(
     .bind(result.rank_score)
     .bind(&aggregate_metrics_json)
     .bind(&run_metrics_json)
-    .bind(&shown_json)
-    .bind(&hidden_json)
+    .bind(&public_results_json)
+    .bind(&validation_summary_json)
     .bind(&official_json)
     .bind(&result.log_path)
     .execute(&mut *tx)
@@ -1070,7 +1074,7 @@ pub async fn mark_evaluation_finished(
                     &mut tx,
                     &result.submission_id,
                     rank_score,
-                    &result.shown_results,
+                    &result.public_results,
                     &result.aggregate_metrics,
                 )
                 .await?;
@@ -1092,8 +1096,8 @@ pub async fn mark_evaluation_finished(
 async fn upsert_leaderboard_entry_for_submission_tx<'a>(
     tx: &mut Transaction<'a, Postgres>,
     submission_id: &str,
-    hidden_score: f64,
-    shown_results: &[ShownCaseResult],
+    rank_score: f64,
+    public_results: &[PublicCaseResult],
     aggregate_metrics: &[MetricValue],
 ) -> Result<()> {
     let row: Option<(String, String, Value)> = sqlx::query_as(
@@ -1115,7 +1119,7 @@ async fn upsert_leaderboard_entry_for_submission_tx<'a>(
     let spec = serde_json::from_value::<ChallengeBundleSpec>(spec_json).ok();
 
     let current: Option<(f64, Value)> = sqlx::query_as(
-        "SELECT best_hidden_score, aggregate_metrics_json FROM leaderboard_entries WHERE challenge_id = $1 AND agent_id = $2 LIMIT 1"
+        "SELECT best_rank_score, aggregate_metrics_json FROM leaderboard_entries WHERE challenge_id = $1 AND agent_id = $2 LIMIT 1"
     )
     .bind(&challenge_id)
     .bind(&agent_id)
@@ -1128,31 +1132,27 @@ async fn upsert_leaderboard_entry_for_submission_tx<'a>(
         })
         .transpose()?;
 
-    if !candidate_replaces_leaderboard_entry(
-        spec.as_ref(),
-        current,
-        hidden_score,
-        aggregate_metrics,
-    ) {
+    if !candidate_replaces_leaderboard_entry(spec.as_ref(), current, rank_score, aggregate_metrics)
+    {
         return Ok(());
     }
 
-    let shown_json =
-        serde_json::to_value(shown_results).map_err(|e| AppError::Internal(e.to_string()))?;
+    let public_results_json =
+        serde_json::to_value(public_results).map_err(|e| AppError::Internal(e.to_string()))?;
     let aggregate_metrics_json =
         serde_json::to_value(aggregate_metrics).map_err(|e| AppError::Internal(e.to_string()))?;
 
     sqlx::query(
         r#"
         INSERT INTO leaderboard_entries (
-            challenge_id, agent_id, best_submission_id, best_hidden_score,
-            shown_summary_json, aggregate_metrics_json, updated_at
+            challenge_id, agent_id, best_submission_id, best_rank_score,
+            public_results_json, aggregate_metrics_json, updated_at
         )
         VALUES ($1, $2, $3, $4, $5, $6, NOW())
         ON CONFLICT (challenge_id, agent_id) DO UPDATE
         SET best_submission_id = EXCLUDED.best_submission_id,
-            best_hidden_score = EXCLUDED.best_hidden_score,
-            shown_summary_json = EXCLUDED.shown_summary_json,
+            best_rank_score = EXCLUDED.best_rank_score,
+            public_results_json = EXCLUDED.public_results_json,
             aggregate_metrics_json = EXCLUDED.aggregate_metrics_json,
             updated_at = NOW()
         "#,
@@ -1160,8 +1160,8 @@ async fn upsert_leaderboard_entry_for_submission_tx<'a>(
     .bind(&challenge_id)
     .bind(&agent_id)
     .bind(submission_id)
-    .bind(hidden_score)
-    .bind(&shown_json)
+    .bind(rank_score)
+    .bind(&public_results_json)
     .bind(&aggregate_metrics_json)
     .execute(&mut **tx)
     .await?;

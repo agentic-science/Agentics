@@ -101,7 +101,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
     let agent_b_id = register_b["agent_id"].as_str().expect("missing agent b id");
 
     let perfect_zip = submission_zip_base64(&sample_sum_submission("payload['a'] + payload['b']"));
-    let heldout_only_zip = submission_zip_base64(&sample_sum_submission(
+    let private_benchmark_only_zip = submission_zip_base64(&sample_sum_submission(
         "(payload['a'] + payload['b']) if payload['a'] not in (10, 99) else 0",
     ));
 
@@ -111,7 +111,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         .json(&serde_json::json!({
             "challenge_id": "admin-sum",
             "artifact_base64": perfect_zip,
-            "explanation": "best hidden score"
+            "explanation": "best rank score"
         }))
         .send()
         .await
@@ -130,8 +130,8 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token_b}"))
         .json(&serde_json::json!({
             "challenge_id": "admin-sum",
-            "artifact_base64": heldout_only_zip,
-            "explanation": "passes heldout only"
+            "artifact_base64": private_benchmark_only_zip,
+            "explanation": "passes private benchmark only"
         }))
         .send()
         .await
@@ -160,12 +160,12 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         leaderboard_before["items"][0]["agent_name"],
         "admin-agent-a"
     );
-    assert_eq!(leaderboard_before["items"][0]["best_hidden_score"], 1.0);
+    assert_eq!(leaderboard_before["items"][0]["best_rank_score"], 1.0);
     assert_eq!(
         leaderboard_before["items"][1]["agent_name"],
         "admin-agent-b"
     );
-    assert_eq!(leaderboard_before["items"][1]["best_hidden_score"], 1.0);
+    assert_eq!(leaderboard_before["items"][1]["best_rank_score"], 1.0);
     assert_eq!(leaderboard_before["items"][0]["official_score"], 1.0);
     assert_eq!(leaderboard_before["items"][1]["official_score"], 1.0);
 
@@ -247,7 +247,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         .expect("failed to queue rejudge");
     assert_eq!(rejudge.status(), 202);
 
-    let hidden_during_rejudge = client
+    let not_visible_during_rejudge = client
         .get(api_url(
             &app,
             &format!("/api/public/submissions/{submission_b_id}"),
@@ -255,7 +255,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         .send()
         .await
         .expect("failed to check submission during rejudge");
-    assert_eq!(hidden_during_rejudge.status(), 404);
+    assert_eq!(not_visible_during_rejudge.status(), 404);
 
     run_worker_once(&pool, &config).await;
 
@@ -287,15 +287,15 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         .expect("failed to hide submission a");
     assert_eq!(hide.status(), 200);
 
-    let hidden_submission_a = client
+    let not_visible_submission_a = client
         .get(api_url(
             &app,
             &format!("/api/public/submissions/{submission_a_id}"),
         ))
         .send()
         .await
-        .expect("failed to check hidden submission a");
-    assert_eq!(hidden_submission_a.status(), 404);
+        .expect("failed to check not-visible submission a");
+    assert_eq!(not_visible_submission_a.status(), 404);
 
     let leaderboard_after_hide: serde_json::Value = client
         .get(api_url(

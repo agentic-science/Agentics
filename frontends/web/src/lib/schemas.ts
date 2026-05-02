@@ -45,7 +45,7 @@ export const challengeListResponseSchema = z
   .object({ items: z.array(challengeListItemDtoSchema) })
   .strict();
 
-/** Aggregate score summary for hidden or official results. */
+/** Aggregate score summary for validation or official results. */
 export const scoreSummarySchema = z
   .object({
     score: z.number().finite().min(0).max(1),
@@ -54,8 +54,8 @@ export const scoreSummarySchema = z
   })
   .strict();
 
-/** Per-case result exposed for shown tests. */
-export const shownCaseResultSchema = z
+/** Per-case result exposed for public validation tests. */
+export const publicCaseResultSchema = z
   .object({
     case_id: z.string().min(1),
     status: z.enum(["passed", "failed", "error"]),
@@ -69,13 +69,13 @@ export const evaluationDtoSchema = z
   .object({
     id: z.string().min(1),
     status: z.enum(["queued", "running", "completed", "failed"]),
-    eval_type: z.enum(["validation", "public", "official"]),
+    eval_type: z.enum(["validation", "official"]),
     primary_score: scoreSchema.optional(),
     rank_score: z.number().finite().optional(),
     aggregate_metrics: z.array(metricValueSchema),
     run_metrics: z.array(runMetricResultSchema),
-    shown_results: z.array(shownCaseResultSchema),
-    hidden_summary: scoreSummarySchema.optional(),
+    public_results: z.array(publicCaseResultSchema),
+    validation_summary: scoreSummarySchema.optional(),
     official_summary: scoreSummarySchema.optional(),
     log_path: z.string().min(1).optional(),
     started_at: z.string().min(1).optional(),
@@ -111,13 +111,12 @@ export const challengeBundleSpecSchema = z
       .strict(),
     datasets: z
       .object({
-        shown_dir: z.string().min(1),
-        hidden_dir: z.string().min(1),
-        heldout_dir: z.string().min(1).optional(),
-        shown_policy: z.enum(["full", "score_only"]),
-        hidden_policy: z.literal("score_only"),
+        public_dir: z.string().min(1),
+        private_benchmark_dir: z.string().min(1).optional(),
+        public_policy: z.enum(["full", "score_only"]),
+        private_benchmark_policy: z.literal("score_only"),
         validation_enabled: z.boolean(),
-        heldout_enabled: z.boolean(),
+        private_benchmark_enabled: z.boolean(),
       })
       .strict(),
     metric_schema: z
@@ -171,8 +170,7 @@ export const publicSubmissionListItemDtoSchema = z
     explanation: z.string(),
     parent_submission_id: z.string().nullable(),
     credit_text: z.string(),
-    public_score: scoreSchema.nullable().optional(),
-    hidden_score: z.number().finite().nullable().optional(),
+    validation_score: scoreSchema.nullable().optional(),
     official_score: z.number().finite().nullable().optional(),
     rank_score: z.number().finite().nullable().optional(),
     aggregate_metrics: z.array(metricValueSchema),
@@ -193,7 +191,7 @@ export const leaderboardEntryDtoSchema = z
     agent_id: idSchema,
     agent_name: z.string().min(1),
     best_submission_id: idSchema,
-    best_hidden_score: z.number().finite(),
+    best_rank_score: z.number().finite(),
     rank_score: z.number().finite(),
     aggregate_metrics: z.array(metricValueSchema),
     official_metrics: z.array(metricValueSchema),
@@ -286,7 +284,7 @@ export const submissionResponseSchema = z
     artifact_path: z.string().min(1).optional(),
     evaluation_job: evaluationJobDtoSchema.nullable().optional(),
     evaluation: evaluationDtoSchema.nullable().optional(),
-    public_evaluation: evaluationDtoSchema.nullable().optional(),
+    validation_evaluation: evaluationDtoSchema.nullable().optional(),
     official_evaluation: evaluationDtoSchema.nullable().optional(),
     created_at: isoTimestampSchema,
     updated_at: isoTimestampSchema,

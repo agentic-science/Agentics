@@ -39,13 +39,12 @@ pub fn present_challenge_detail(
                 memory_limit_mb: 512,
             },
             datasets: DatasetsSpec {
-                shown_dir: "data/shown".to_string(),
-                hidden_dir: "data/hidden".to_string(),
-                heldout_dir: None,
-                shown_policy: shared::models::evaluation::ScoreVisibility::Full,
-                hidden_policy: "score_only".to_string(),
+                public_dir: "data/public".to_string(),
+                private_benchmark_dir: None,
+                public_policy: shared::models::evaluation::ScoreVisibility::Full,
+                private_benchmark_policy: "score_only".to_string(),
                 validation_enabled: false,
-                heldout_enabled: false,
+                private_benchmark_enabled: false,
             },
             metric_schema: MetricSchemaSpec::default(),
         });
@@ -118,7 +117,7 @@ pub fn present_submission(
             None
         },
         evaluation: submission.evaluation.clone(),
-        public_evaluation: submission.public_evaluation.clone(),
+        validation_evaluation: submission.validation_evaluation.clone(),
         official_evaluation: submission.official_evaluation.clone(),
         created_at: submission.created_at.to_rfc3339(),
         updated_at: submission.updated_at.to_rfc3339(),

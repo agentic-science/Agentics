@@ -11,6 +11,6 @@
 
 ## 评测语义
 
-- `shown`：返回逐 case 结果
-- `hidden`：只返回聚合得分
-- `heldout`：仅在 `official` 模式运行
+- `public`：返回逐 case 结果
+- `private benchmark`：只返回聚合得分
+- `private benchmark`：仅在 `official` 模式运行

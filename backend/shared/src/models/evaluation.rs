@@ -8,9 +8,9 @@ use super::challenge::{MetricDirection, MetricSchemaSpec, MetricVisibility};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ScoringMode {
     /// Private validation scoring, backed by public challenge data.
-    #[serde(rename = "validation", alias = "public")]
+    #[serde(rename = "validation")]
     Validation,
-    /// Ranking-visible official scoring, backed by hidden or heldout data.
+    /// Ranking-visible official scoring, backed by private benchmark data.
     #[serde(rename = "official")]
     Official,
 }
@@ -24,10 +24,10 @@ impl ScoringMode {
         }
     }
 
-    /// Parse canonical values plus the legacy `public` value used by v0.0.
+    /// Parse canonical persisted values.
     pub fn from_storage_value(value: &str) -> Option<Self> {
         match value {
-            "validation" | "public" => Some(Self::Validation),
+            "validation" => Some(Self::Validation),
             "official" => Some(Self::Official),
             _ => None,
         }
@@ -50,7 +50,7 @@ pub enum ScoreVisibility {
     ScoreOnly,
 }
 
-/// Per-case scorer outcome for shown tests.
+/// Per-case scorer outcome for public validation tests.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ScorerCaseStatus {
@@ -78,7 +78,7 @@ pub enum EvaluationStatus {
     Failed,
 }
 
-/// Aggregate score summary for hidden or official datasets.
+/// Aggregate score summary for validation or official datasets.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScoreSummary {
     /// Normalized score in the inclusive range `[0, 1]`.
@@ -89,9 +89,9 @@ pub struct ScoreSummary {
     pub total: i64,
 }
 
-/// Public per-case result for shown examples.
+/// Public per-case result exposed for validation feedback.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ShownCaseResult {
+pub struct PublicCaseResult {
     pub case_id: String,
     pub status: ScorerCaseStatus,
     pub score: f64,
@@ -126,9 +126,9 @@ pub struct EvaluationDto {
     pub rank_score: Option<f64>,
     pub aggregate_metrics: Vec<MetricValue>,
     pub run_metrics: Vec<RunMetricResult>,
-    pub shown_results: Vec<ShownCaseResult>,
+    pub public_results: Vec<PublicCaseResult>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub hidden_summary: Option<ScoreSummary>,
+    pub validation_summary: Option<ScoreSummary>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub official_summary: Option<ScoreSummary>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -157,9 +157,9 @@ pub struct ScorerRunResult {
     #[serde(default)]
     pub run_metrics: Vec<RunMetricResult>,
     #[serde(default)]
-    pub shown_results: Vec<ShownCaseResult>,
+    pub public_results: Vec<PublicCaseResult>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub hidden_summary: Option<ScoreSummary>,
+    pub validation_summary: Option<ScoreSummary>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub official_summary: Option<ScoreSummary>,
     #[serde(default)]
@@ -184,13 +184,13 @@ impl ScoreSummary {
     }
 }
 
-impl ShownCaseResult {
-    /// Validate the shown-case id and normalized score.
+impl PublicCaseResult {
+    /// Validate the public-case id and normalized score.
     pub fn validate(&self) -> Result<(), String> {
         if self.case_id.trim().is_empty() {
-            return Err("shown_results.case_id must not be empty".to_string());
+            return Err("public_results.case_id must not be empty".to_string());
         }
-        validate_score(self.score, "shown_results.score")
+        validate_score(self.score, "public_results.score")
     }
 }
 
@@ -254,22 +254,24 @@ impl ScorerRunResult {
             }
         }
 
-        for shown in &self.shown_results {
-            shown.validate()?;
+        for public_result in &self.public_results {
+            public_result.validate()?;
         }
 
-        if let Some(hidden) = &self.hidden_summary {
-            hidden.validate("hidden_summary")?;
+        if let Some(validation) = &self.validation_summary {
+            validation.validate("validation_summary")?;
         }
         if let Some(official) = &self.official_summary {
             official.validate("official_summary")?;
         }
 
-        if self.hidden_summary.is_none() && self.official_summary.is_none() {
-            return Err("hidden_summary and official_summary cannot both be absent".to_string());
+        if self.validation_summary.is_none() && self.official_summary.is_none() {
+            return Err(
+                "validation_summary and official_summary cannot both be absent".to_string(),
+            );
         }
-        if mode == ScoringMode::Validation && self.hidden_summary.is_none() {
-            return Err("validation evaluation requires hidden_summary".to_string());
+        if mode == ScoringMode::Validation && self.validation_summary.is_none() {
+            return Err("validation evaluation requires validation_summary".to_string());
         }
         if mode == ScoringMode::Official && self.official_summary.is_none() {
             return Err("official evaluation requires official_summary".to_string());
@@ -471,8 +473,8 @@ mod tests {
             rank_score: None,
             aggregate_metrics: vec![],
             run_metrics: vec![],
-            shown_results: vec![],
-            hidden_summary: Some(ScoreSummary {
+            public_results: vec![],
+            validation_summary: Some(ScoreSummary {
                 score: 1.0,
                 passed: 1,
                 total: 1,
@@ -504,18 +506,7 @@ mod tests {
     }
 
     #[test]
-    fn legacy_public_mode_deserializes_as_validation() {
-        let mode: ScoringMode = serde_json::from_str("\"public\"").expect("legacy mode parses");
-
-        assert_eq!(mode, ScoringMode::Validation);
-        assert_eq!(
-            serde_json::to_string(&mode).expect("mode serializes"),
-            "\"validation\""
-        );
-    }
-
-    #[test]
-    fn legacy_metric_output_normalizes_to_primary_score() {
+    fn minimal_metric_output_normalizes_to_primary_score() {
         let mut result = valid_validation_result();
         result
             .normalize_metrics(&MetricSchemaSpec::default(), ScoringMode::Validation)
@@ -608,21 +599,21 @@ mod tests {
     fn validation_result_rejects_official_only_metrics() {
         let schema = MetricSchemaSpec {
             metrics: vec![MetricDefinitionSpec {
-                id: "hidden_quality".to_string(),
-                label: "Hidden Quality".to_string(),
+                id: "private_quality".to_string(),
+                label: "Private Quality".to_string(),
                 unit: None,
                 direction: MetricDirection::Maximize,
                 visibility: MetricVisibility::Official,
                 description: None,
             }],
             ranking: RankingSpec {
-                primary_metric_id: "hidden_quality".to_string(),
+                primary_metric_id: "private_quality".to_string(),
                 tie_breaker_metric_ids: vec![],
             },
         };
         let mut result = valid_validation_result();
         result.aggregate_metrics = vec![MetricValue {
-            metric_id: "hidden_quality".to_string(),
+            metric_id: "private_quality".to_string(),
             value: 0.9,
         }];
 

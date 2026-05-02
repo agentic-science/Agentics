@@ -300,7 +300,7 @@ curl -u admin:agentics-admin \
   -X POST http://127.0.0.1:3000/admin/submissions/<submission-id>/official-run
 ```
 
-Official runs require the challenge version to have heldout scoring enabled.
+Official runs require the challenge version to have private benchmark scoring enabled.
 
 ## Configuration
 

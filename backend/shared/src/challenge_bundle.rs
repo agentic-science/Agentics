@@ -1,8 +1,9 @@
 //! Helpers for loading and validating filesystem challenge bundles.
 //!
 //! Challenge bundles are the public contract between seeded/admin-authored
-//! challenges and the runner. Validation here intentionally mirrors the old TS
-//! service while allowing omitted nullable fields in serialized JSON.
+//! challenges and the runner. Validation accepts the relaxed JSON shape used by
+//! the platform: optional nullable fields may be omitted, but contract names are
+//! kept explicit and canonical.
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -21,30 +22,25 @@ pub async fn read_challenge_bundle_spec(bundle_dir: &Path) -> Result<ChallengeBu
 }
 
 /// Validate that a challenge bundle has the required files and declared data directories.
-///
-/// Disabled heldout bundles may still declare a heldout directory for
-/// compatibility with public-only bundles produced by the TS implementation.
 pub async fn validate_challenge_bundle(bundle_dir: &Path) -> Result<()> {
     let spec = read_challenge_bundle_spec(bundle_dir).await?;
     let spec_path = bundle_dir.join("spec.json");
     let statement_path = bundle_dir.join("statement.md");
     let scorer_path = bundle_dir.join(&spec.scorer.entrypoint);
-    let shown_dir = bundle_dir.join(&spec.datasets.shown_dir);
-    let hidden_dir = bundle_dir.join(&spec.datasets.hidden_dir);
+    let public_dir = bundle_dir.join(&spec.datasets.public_dir);
 
     assert_path_type(&spec_path, "file", "spec.json").await?;
     assert_path_type(&statement_path, "file", "statement.md").await?;
     assert_path_type(&scorer_path, "file", "scorer entrypoint").await?;
-    assert_path_type(&shown_dir, "directory", "shown data dir").await?;
-    assert_path_type(&hidden_dir, "directory", "hidden data dir").await?;
+    assert_path_type(&public_dir, "directory", "public data dir").await?;
 
-    if spec.datasets.heldout_enabled
-        && let Some(ref heldout_dir) = spec.datasets.heldout_dir
+    if spec.datasets.private_benchmark_enabled
+        && let Some(ref private_benchmark_dir) = spec.datasets.private_benchmark_dir
     {
         assert_path_type(
-            &bundle_dir.join(heldout_dir),
+            &bundle_dir.join(private_benchmark_dir),
             "directory",
-            "heldout data dir",
+            "private benchmark data dir",
         )
         .await?;
     }
@@ -199,28 +195,28 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
         ));
     }
 
-    require_safe_relative_path(&spec.datasets.shown_dir, "datasets.shown_dir")?;
-    require_safe_relative_path(&spec.datasets.hidden_dir, "datasets.hidden_dir")?;
-    if spec.datasets.hidden_policy != "score_only" {
+    require_safe_relative_path(&spec.datasets.public_dir, "datasets.public_dir")?;
+    if spec.datasets.private_benchmark_policy != "score_only" {
         return Err(AppError::Validation(
-            "datasets.hidden_policy must be score_only".to_string(),
+            "datasets.private_benchmark_policy must be score_only".to_string(),
         ));
     }
 
-    // The TS-era schema allowed public-only bundles to keep heldout_dir present
-    // even when heldout scoring was disabled. Keep accepting that shape while
-    // still requiring the path to be safe if it exists.
+    // Challenge authors may stage private benchmark data before enabling
+    // official runs. The directory is required only when the private benchmark
+    // switch is on, but any declared path must still be safe.
     match (
-        spec.datasets.heldout_enabled,
-        spec.datasets.heldout_dir.as_deref(),
+        spec.datasets.private_benchmark_enabled,
+        spec.datasets.private_benchmark_dir.as_deref(),
     ) {
-        (true, Some(path)) => require_safe_relative_path(path, "datasets.heldout_dir")?,
+        (true, Some(path)) => require_safe_relative_path(path, "datasets.private_benchmark_dir")?,
         (true, None) => {
             return Err(AppError::Validation(
-                "datasets.heldout_dir is required when heldout_enabled is true".to_string(),
+                "datasets.private_benchmark_dir is required when private_benchmark_enabled is true"
+                    .to_string(),
             ));
         }
-        (false, Some(path)) => require_safe_relative_path(path, "datasets.heldout_dir")?,
+        (false, Some(path)) => require_safe_relative_path(path, "datasets.private_benchmark_dir")?,
         (false, None) => {}
     }
 
@@ -354,13 +350,12 @@ mod tests {
                 memory_limit_mb: 128,
             },
             datasets: DatasetsSpec {
-                shown_dir: "shown".to_string(),
-                hidden_dir: "hidden".to_string(),
-                heldout_dir: Some("heldout".to_string()),
-                shown_policy: ScoreVisibility::Full,
-                hidden_policy: "score_only".to_string(),
+                public_dir: "public".to_string(),
+                private_benchmark_dir: Some("private-benchmark".to_string()),
+                public_policy: ScoreVisibility::Full,
+                private_benchmark_policy: "score_only".to_string(),
                 validation_enabled: true,
-                heldout_enabled: true,
+                private_benchmark_enabled: true,
             },
             metric_schema: MetricSchemaSpec::default(),
         }
@@ -387,11 +382,10 @@ mod tests {
                 "memory_limit_mb": 128
             },
             "datasets": {
-                "shown_dir": "shown",
-                "hidden_dir": "hidden",
-                "shown_policy": "full",
-                "hidden_policy": "score_only",
-                "heldout_enabled": false
+                "public_dir": "public",
+                "public_policy": "full",
+                "private_benchmark_policy": "score_only",
+                "private_benchmark_enabled": false
             }
         }))
         .expect("legacy spec should deserialize");
@@ -401,19 +395,19 @@ mod tests {
     }
 
     #[test]
-    fn disabled_heldout_may_still_declare_heldout_dir() {
+    fn disabled_private_benchmark_may_still_declare_directory() {
         let mut spec = base_spec();
-        spec.datasets.heldout_enabled = false;
-        spec.datasets.heldout_dir = Some("heldout".to_string());
+        spec.datasets.private_benchmark_enabled = false;
+        spec.datasets.private_benchmark_dir = Some("private-benchmark".to_string());
 
         assert!(validate_challenge_bundle_spec(&spec).is_ok());
     }
 
     #[test]
-    fn enabled_heldout_requires_heldout_dir() {
+    fn enabled_private_benchmark_requires_directory() {
         let mut spec = base_spec();
-        spec.datasets.heldout_enabled = true;
-        spec.datasets.heldout_dir = None;
+        spec.datasets.private_benchmark_enabled = true;
+        spec.datasets.private_benchmark_dir = None;
 
         assert!(validate_challenge_bundle_spec(&spec).is_err());
     }
@@ -459,8 +453,7 @@ mod tests {
 
     fn create_bundle(root: &Path, spec: &ChallengeBundleSpec) {
         std::fs::create_dir_all(root.join("scorer")).expect("failed to create scorer dir");
-        std::fs::create_dir_all(root.join("shown")).expect("failed to create shown dir");
-        std::fs::create_dir_all(root.join("hidden")).expect("failed to create hidden dir");
+        std::fs::create_dir_all(root.join("public")).expect("failed to create public dir");
         std::fs::write(
             root.join("spec.json"),
             serde_json::to_string(spec).expect("failed to serialize spec"),
@@ -473,14 +466,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn disabled_heldout_bundle_does_not_require_directory() {
+    async fn disabled_private_benchmark_bundle_does_not_require_directory() {
         let root = std::env::temp_dir().join(format!(
-            "agentics-bundle-disabled-heldout-{}",
+            "agentics-bundle-disabled-private-benchmark-{}",
             uuid::Uuid::new_v4()
         ));
         let mut spec = base_spec();
-        spec.datasets.heldout_enabled = false;
-        spec.datasets.heldout_dir = Some("heldout".to_string());
+        spec.datasets.private_benchmark_enabled = false;
+        spec.datasets.private_benchmark_dir = Some("private-benchmark".to_string());
         create_bundle(&root, &spec);
 
         let result = validate_challenge_bundle(&root).await;
@@ -490,14 +483,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn enabled_heldout_bundle_requires_directory() {
+    async fn enabled_private_benchmark_bundle_requires_directory() {
         let root = std::env::temp_dir().join(format!(
-            "agentics-bundle-enabled-heldout-{}",
+            "agentics-bundle-enabled-private-benchmark-{}",
             uuid::Uuid::new_v4()
         ));
         let mut spec = base_spec();
-        spec.datasets.heldout_enabled = true;
-        spec.datasets.heldout_dir = Some("heldout".to_string());
+        spec.datasets.private_benchmark_enabled = true;
+        spec.datasets.private_benchmark_dir = Some("private-benchmark".to_string());
         create_bundle(&root, &spec);
 
         let result = validate_challenge_bundle(&root).await;

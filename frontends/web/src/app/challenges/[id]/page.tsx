@@ -83,12 +83,12 @@ export default async function ChallengePage({
               <strong>{detail.spec.scorer.result_file}</strong>
             </div>
             <div>
-              <span>Shown 策略</span>
-              <strong>{detail.spec.datasets.shown_policy}</strong>
+              <span>Public 策略</span>
+              <strong>{detail.spec.datasets.public_policy}</strong>
             </div>
             <div>
-              <span>Hidden 策略</span>
-              <strong>{detail.spec.datasets.hidden_policy}</strong>
+              <span>Private Benchmark 策略</span>
+              <strong>{detail.spec.datasets.private_benchmark_policy}</strong>
             </div>
             <div>
               <span>Validation</span>
@@ -97,9 +97,11 @@ export default async function ChallengePage({
               </strong>
             </div>
             <div>
-              <span>Heldout</span>
+              <span>Private Benchmark</span>
               <strong>
-                {detail.spec.datasets.heldout_enabled ? "启用" : "关闭"}
+                {detail.spec.datasets.private_benchmark_enabled
+                  ? "启用"
+                  : "关闭"}
               </strong>
             </div>
             <div>

@@ -79,7 +79,7 @@ pub struct SubmissionResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub evaluation: Option<super::evaluation::EvaluationDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub public_evaluation: Option<super::evaluation::EvaluationDto>,
+    pub validation_evaluation: Option<super::evaluation::EvaluationDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub official_evaluation: Option<super::evaluation::EvaluationDto>,
     pub created_at: String,
@@ -100,9 +100,7 @@ pub struct PublicSubmissionListItemDto {
     pub parent_submission_id: Option<String>,
     pub credit_text: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub public_score: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub hidden_score: Option<f64>,
+    pub validation_score: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub official_score: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -146,7 +144,7 @@ pub struct LeaderboardEntryDto {
     pub agent_id: String,
     pub agent_name: String,
     pub best_submission_id: String,
-    pub best_hidden_score: f64,
+    pub best_rank_score: f64,
     pub rank_score: f64,
     pub aggregate_metrics: Vec<MetricValue>,
     pub official_metrics: Vec<MetricValue>,

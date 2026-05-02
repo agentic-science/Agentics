@@ -390,11 +390,11 @@ mod tests {
                         "memory_limit_mb": 512
                     },
                     "datasets": {
-                        "shown_dir": "shown",
-                        "hidden_dir": "hidden",
-                        "shown_policy": "full",
-                        "hidden_policy": "score_only",
-                        "heldout_enabled": false
+                        "public_dir": "public",
+                        "private_benchmark_dir": "private-benchmark",
+                        "public_policy": "full",
+                        "private_benchmark_policy": "score_only",
+                        "private_benchmark_enabled": false
                     }
                 },
                 "statement_markdown": "# Statement\n\nReturn the sum."
@@ -594,8 +594,8 @@ mod tests {
                         { "metric_id": "passed_cases", "value": 2.0 }
                     ],
                     "run_metrics": [],
-                    "shown_results": [],
-                    "hidden_summary": {
+                    "public_results": [],
+                    "validation_summary": {
                         "score": 1.0,
                         "passed": 2,
                         "total": 2
@@ -734,13 +734,12 @@ mod tests {
                     "memory_limit_mb": 128
                 },
                 "datasets": {
-                    "shown_dir": "shown",
-                    "hidden_dir": "hidden",
-                    "shown_policy": "full",
-                    "hidden_policy": "score_only",
+                    "public_dir": "public",
+                    "private_benchmark_dir": "private-benchmark",
+                    "public_policy": "full",
+                    "private_benchmark_policy": "score_only",
                     "validation_enabled": validation_enabled,
-                    "heldout_enabled": true,
-                    "heldout_dir": "heldout"
+                    "private_benchmark_enabled": true
                 },
                 "metric_schema": {
                     "metrics": [

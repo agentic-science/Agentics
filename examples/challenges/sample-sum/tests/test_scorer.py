@@ -7,8 +7,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[4]
-PROBLEM_DIR = ROOT / "examples" / "challenges" / "sample-sum" / "v1"
-SCORER_PATH = PROBLEM_DIR / "scorer" / "run.py"
+CHALLENGE_DIR = ROOT / "examples" / "challenges" / "sample-sum" / "v1"
+SCORER_PATH = CHALLENGE_DIR / "scorer" / "run.py"
 
 
 def write_submission(target_dir: Path, expression: str) -> Path:
@@ -47,7 +47,7 @@ def run_scorer(tmp_path: Path, *, mode: str, expression: str) -> dict:
             sys.executable,
             str(SCORER_PATH),
             "--challenge-dir",
-            str(PROBLEM_DIR),
+            str(CHALLENGE_DIR),
             "--submission-dir",
             str(submission_dir),
             "--output-path",
@@ -62,7 +62,7 @@ def run_scorer(tmp_path: Path, *, mode: str, expression: str) -> dict:
     return json.loads(output_path.read_text(encoding="utf-8"))
 
 
-def test_validation_mode_returns_shown_summary(tmp_path: Path) -> None:
+def test_validation_mode_returns_public_summary(tmp_path: Path) -> None:
     result = run_scorer(tmp_path, mode="validation", expression="payload['a'] + payload['b']")
 
     assert result["status"] == "passed"
@@ -74,32 +74,21 @@ def test_validation_mode_returns_shown_summary(tmp_path: Path) -> None:
         {"metric_id": "passed_cases", "value": 2},
     ]
     assert result["run_metrics"] == [
-        {"run_id": "shown-1", "metrics": [{"metric_id": "score", "value": 1}]},
-        {"run_id": "shown-2", "metrics": [{"metric_id": "score", "value": 1}]},
+        {"run_id": "public-1", "metrics": [{"metric_id": "score", "value": 1}]},
+        {"run_id": "public-2", "metrics": [{"metric_id": "score", "value": 1}]},
     ]
-    assert len(result["shown_results"]) == 2
-    assert result["hidden_summary"] == {"score": 1, "passed": 2, "total": 2}
+    assert len(result["public_results"]) == 2
+    assert result["validation_summary"] == {"score": 1, "passed": 2, "total": 2}
     assert result["official_summary"] is None
 
 
-def test_legacy_public_mode_returns_shown_and_hidden_summary(tmp_path: Path) -> None:
-    result = run_scorer(tmp_path, mode="public", expression="payload['a'] + payload['b']")
-
-    assert result["status"] == "passed"
-    assert result["mode"] == "public"
-    assert result["primary_score"] == 1
-    assert len(result["shown_results"]) == 2
-    assert result["hidden_summary"] == {"score": 1, "passed": 2, "total": 2}
-    assert result["official_summary"] is None
-
-
-def test_official_mode_uses_heldout_cases(tmp_path: Path) -> None:
+def test_official_mode_uses_private_benchmark_cases(tmp_path: Path) -> None:
     result = run_scorer(tmp_path, mode="official", expression="payload['a'] + payload['b']")
 
     assert result["status"] == "passed"
     assert result["mode"] == "official"
-    assert result["shown_results"] == []
-    assert result["hidden_summary"] is None
+    assert result["public_results"] == []
+    assert result["validation_summary"] is None
     assert result["official_summary"] == {"score": 1, "passed": 2, "total": 2}
     assert result["aggregate_metrics"] == [
         {"metric_id": "score", "value": 1},
@@ -112,5 +101,5 @@ def test_failed_submission_is_reported(tmp_path: Path) -> None:
 
     assert result["status"] == "failed"
     assert result["primary_score"] == 0
-    assert result["hidden_summary"] == {"score": 0, "passed": 0, "total": 2}
+    assert result["validation_summary"] == {"score": 0, "passed": 0, "total": 2}
     assert result["logs"]

@@ -124,7 +124,7 @@ async fn worker_completes_official_submission(pool: sqlx::PgPool) {
     assert_eq!(
         submission["evaluation"]["run_metrics"][0],
         serde_json::json!({
-            "run_id": "heldout-1",
+            "run_id": "private-benchmark-1",
             "metrics": [{ "metric_id": "score", "value": 1.0 }]
         })
     );
@@ -163,11 +163,11 @@ async fn worker_completes_official_submission(pool: sqlx::PgPool) {
             ]),
             serde_json::json!([
                 {
-                    "run_id": "heldout-1",
+                    "run_id": "private-benchmark-1",
                     "metrics": [{ "metric_id": "score", "value": 1.0 }]
                 },
                 {
-                    "run_id": "heldout-2",
+                    "run_id": "private-benchmark-2",
                     "metrics": [{ "metric_id": "score", "value": 1.0 }]
                 }
             ])
@@ -233,7 +233,7 @@ async fn worker_completes_private_validation_run_without_leaderboard(pool: sqlx:
     assert_eq!(validation["status"], "completed");
     assert_eq!(validation["visible_after_eval"], false);
     assert_eq!(validation["evaluation"]["eval_type"], "validation");
-    assert_eq!(validation["evaluation"]["hidden_summary"]["score"], 1.0);
+    assert_eq!(validation["evaluation"]["validation_summary"]["score"], 1.0);
     assert_eq!(validation["evaluation"]["rank_score"], 1.0);
     assert_eq!(
         validation["evaluation"]["aggregate_metrics"],

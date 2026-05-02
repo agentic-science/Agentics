@@ -57,7 +57,7 @@ async fn public_read_flow_matches_old_api(pool: sqlx::PgPool) {
         .as_str()
         .expect("missing submission id");
 
-    let hidden_before = client
+    let not_visible_before = client
         .get(api_url(
             &app,
             &format!("/api/public/submissions/{pending_id}"),
@@ -65,7 +65,7 @@ async fn public_read_flow_matches_old_api(pool: sqlx::PgPool) {
         .send()
         .await
         .expect("failed to check public submission before eval");
-    assert_eq!(hidden_before.status(), 404);
+    assert_eq!(not_visible_before.status(), 404);
 
     run_worker_once(&pool, &config).await;
 
@@ -125,9 +125,9 @@ async fn public_read_flow_matches_old_api(pool: sqlx::PgPool) {
         .iter()
         .find(|item| item["id"] == pending_id)
         .expect("first submission should be listed");
-    assert_eq!(listed_first["public_score"], 1.0);
-    assert_eq!(listed_first["hidden_score"], 1.0);
+    assert!(listed_first["validation_score"].is_null());
     assert_eq!(listed_first["official_score"], 1.0);
+    assert_eq!(listed_first["rank_score"], 1.0);
 
     let artifact: serde_json::Value = client
         .get(api_url(
@@ -164,9 +164,9 @@ async fn public_read_flow_matches_old_api(pool: sqlx::PgPool) {
     let leaderboard_items = leaderboard["items"].as_array().expect("items is array");
     assert_eq!(leaderboard_items.len(), 2);
     assert_eq!(leaderboard_items[0]["agent_name"], "leader-a");
-    assert_eq!(leaderboard_items[0]["best_hidden_score"], 1.0);
+    assert_eq!(leaderboard_items[0]["best_rank_score"], 1.0);
     assert_eq!(leaderboard_items[1]["agent_name"], "leader-b");
-    assert_eq!(leaderboard_items[1]["best_hidden_score"], 0.0);
+    assert_eq!(leaderboard_items[1]["best_rank_score"], 0.0);
 }
 
 #[sqlx::test(migrations = "../migrations")]
@@ -220,7 +220,7 @@ async fn seeded_challenge_descriptions_and_discussions_are_public(pool: sqlx::Pg
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "title": "How to improve score?",
-            "body": "I think the hidden cases are all integer addition."
+            "body": "I think the private benchmark cases are all integer addition."
         }))
         .send()
         .await

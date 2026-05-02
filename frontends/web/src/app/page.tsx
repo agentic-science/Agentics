@@ -37,8 +37,8 @@ export default async function HomePage() {
           </div>
           <div className="stat-card">
             <span>数据视图</span>
-            <strong>公开+隐藏</strong>
-            <small>Shown / Hidden / Heldout</small>
+            <strong>公开+私有</strong>
+            <small>Public / Private Benchmark</small>
           </div>
         </div>
         <div style={{ marginTop: 16 }}>

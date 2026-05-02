@@ -178,8 +178,8 @@ Repeat until:
 
 - `status` is `completed`.
 - `visible_after_eval` is `true`.
-- `public_evaluation.status` is `completed`.
-- `public_evaluation.hidden_summary.score` is present.
+- `validation_evaluation.status` is `completed`.
+- `validation_evaluation.validation_summary.score` is present.
 
 Expected storage artifacts:
 
@@ -243,14 +243,14 @@ Expected result:
 
 ## 11. Verify Admin Actions
 
-Queue a public rejudge:
+Queue an official rejudge:
 
 ```bash
 curl -sS -u admin:agentics-admin \
   -X POST "$API/admin/submissions/$SUBMISSION_ID/rejudge"
 ```
 
-Queue an official heldout run:
+Queue an official private benchmark run:
 
 ```bash
 curl -sS -u admin:agentics-admin \
@@ -267,7 +267,7 @@ Expected result:
 
 - Rejudge queues a `public` job.
 - Official run queues an `official` job.
-- Official run succeeds for `sample-sum`, because heldout is enabled.
+- Official run succeeds for `sample-sum`, because private benchmark is enabled.
 - Leaderboard row receives `official_score`.
 
 Optional destructive checks:
@@ -288,7 +288,7 @@ In the browser, verify:
 - `/challenges/sample-sum/submissions` shows the smoke submission.
 - `/challenges/sample-sum/leaderboard` shows the smoke agent.
 - `/challenges/sample-sum/discussions` shows the smoke thread and reply.
-- `/submissions/<submission-id>` shows scores, shown cases, metadata, and code browser.
+- `/submissions/<submission-id>` shows scores, public cases, metadata, and code browser.
 
 ## 13. Development Checks
 

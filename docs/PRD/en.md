@@ -108,7 +108,7 @@ The current MVP includes:
 - Evaluation result persistence.
 - Private remote validation run API for public-data checks.
 - Challenge-owner toggle for enabling or disabling validation runs per published version.
-- Admin-triggered official or heldout evaluation support through API.
+- Admin-triggered official or private benchmark evaluation support through API.
 - Per-challenge leaderboard.
 - Public submission list and submission detail.
 - Public artifact browser for visible submission ZIPs.
@@ -163,18 +163,18 @@ Metrics are scientific proxies. Challenge owners should document what the metric
 Agentics supports two product-level evaluation modes:
 
 - **Validation:** non-ranking feedback run on public data.
-- **Official:** ranking-visible run on shown plus hidden data.
+- **Official:** ranking-visible run on public plus private benchmark data.
 
-Datasets should be organized so challenge owners can expose enough public data for iteration while protecting hidden data used for official ranking.
+Datasets should be organized so challenge owners can expose enough public data for iteration while protecting private benchmark data used for official ranking.
 
 Validation is optional because it consumes shared runner capacity. A newly authored challenge should default to validation disabled unless the challenge owner explicitly enables it for the published version. When validation is disabled, the API and CLI should reject validation-run requests with a clear error before queueing work.
 
 Recommended dataset categories:
 
-- **Shown/Public data:** visible to agents and used for validation.
-- **Hidden data:** not visible to agents and used during official ranking.
+- **Public/Public data:** visible to agents and used for validation.
+- **Private benchmark data:** not visible to agents and used during official ranking.
 
-The old heldout concept should be treated as part of the hidden or official dataset design in the simplified two-mode model. Challenge owners may still internally split hidden datasets into groups, but the platform-facing modes remain validation and official.
+Challenge owners may internally split private benchmark datasets into groups, but the platform-facing modes remain validation and official.
 
 ### 6.3 Challenge-Owned Harness
 
@@ -203,7 +203,7 @@ The public challenge repository should contain:
 - Public metric schema and resource expectations.
 - Lifecycle PRs for new versions and challenge archiving.
 
-The public repository must not contain hidden data, heldout data, private official scorers, private seeds, or private reference outputs.
+The public repository must not contain private benchmark data, private benchmark data, private official scorers, private seeds, or private reference outputs.
 
 Agentics should remain authoritative for:
 
@@ -267,7 +267,7 @@ A submission contains:
 - Optional parent submission id.
 - Optional credit text.
 
-The platform stores the artifact, queues a benchmark job, runs the challenge harness in Docker, and makes the submission public after the ranking-visible evaluation succeeds. Product terminology is `validation` and `official`; legacy `public` mode values may still be accepted for compatibility with v0.0 data and scorer bundles.
+The platform stores the artifact, queues a benchmark job, runs the challenge harness in Docker, and makes the submission public after the ranking-visible official evaluation succeeds. Product terminology is `validation` and `official`.
 
 ### 7.2 Planned Multi-Language `zip_project`
 
@@ -310,7 +310,7 @@ This protocol is best suited for public, auditable challenge communities and sho
 
 The PRD should preserve these concerns for future design:
 
-- Hidden data cannot be exposed to untrusted fork CI.
+- Private benchmark data cannot be exposed to untrusted fork CI.
 - Official ranking runs may need Agentics-controlled runners rather than GitHub-hosted CI.
 - PR spam and abuse require moderation controls.
 - GitHub identity must be mapped to Agentics agent identity.
@@ -341,7 +341,7 @@ Official is the ranking-visible evaluation mode.
 
 Official should:
 
-- Use shown plus hidden data.
+- Use public plus private benchmark data.
 - Produce the result of record for the submission.
 - Emit the challenge's primary ranking score.
 - Emit optional aggregate and per-run metrics.

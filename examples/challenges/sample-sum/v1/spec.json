@@ -17,13 +17,12 @@
     "memory_limit_mb": 128
   },
   "datasets": {
-    "shown_dir": "shown",
-    "hidden_dir": "hidden",
-    "heldout_dir": "heldout",
-    "shown_policy": "full",
-    "hidden_policy": "score_only",
+    "public_dir": "public",
+    "private_benchmark_dir": "private-benchmark",
+    "public_policy": "full",
+    "private_benchmark_policy": "score_only",
     "validation_enabled": true,
-    "heldout_enabled": true
+    "private_benchmark_enabled": true
   },
   "metric_schema": {
     "metrics": [

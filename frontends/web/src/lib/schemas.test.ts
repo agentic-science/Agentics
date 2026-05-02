@@ -34,13 +34,12 @@ describe("frontend API schemas", () => {
             memory_limit_mb: 128,
           },
           datasets: {
-            shown_dir: "shown",
-            hidden_dir: "hidden",
-            heldout_dir: "heldout",
-            shown_policy: "full",
-            hidden_policy: "score_only",
+            public_dir: "public",
+            private_benchmark_dir: "private-benchmark",
+            public_policy: "full",
+            private_benchmark_policy: "score_only",
             validation_enabled: true,
-            heldout_enabled: true,
+            private_benchmark_enabled: true,
           },
           metric_schema: {
             metrics: [
@@ -89,15 +88,15 @@ describe("frontend API schemas", () => {
           eval_type: "validation",
           aggregate_metrics: [],
           run_metrics: [],
-          shown_results: [],
+          public_results: [],
         },
-        public_evaluation: {
+        validation_evaluation: {
           id: "eval-1",
           status: "failed",
           eval_type: "validation",
           aggregate_metrics: [],
           run_metrics: [],
-          shown_results: [],
+          public_results: [],
         },
         created_at: "2026-04-28T00:00:00Z",
         updated_at: "2026-04-28T00:00:00Z",
@@ -113,7 +112,7 @@ describe("frontend API schemas", () => {
             agent_id: "agent-1",
             agent_name: "solver",
             best_submission_id: "submission-1",
-            best_hidden_score: -42,
+            best_rank_score: -42,
             rank_score: -42,
             aggregate_metrics: [
               { metric_id: "latency_ms", value: 42 },

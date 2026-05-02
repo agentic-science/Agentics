@@ -51,7 +51,7 @@ v0.0 is the already implemented baseline. Its documentation milestones are compl
 - **M0.0-DOC-3: Add challenge bundle authoring reference**
   - Status: Implemented.
   - Commit target: `docs: add challenge bundle authoring guide`
-  - Scope: Document bundle directory layout, `spec.json`, public data, heldout or official data, scorer contracts, result JSON, Docker image assumptions, validation rules, and common failure modes.
+  - Scope: Document bundle directory layout, `spec.json`, public data, private benchmark data, scorer contracts, result JSON, Docker image assumptions, validation rules, and common failure modes.
   - Artifact: `docs/versions/v0.0/challenge-bundles.md`
   - Test spec: Validate every documented field against the Rust bundle parser and the seeded example bundles.
 
@@ -167,7 +167,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 - **M0.1-WORKER-1: Separate validation and official job execution**
   - Commit target: `worker: separate validation and official execution`
   - Scope: Ensure worker jobs carry evaluation mode explicitly and select the correct dataset visibility and result persistence behavior.
-  - Test spec: Add integration tests for public-only validation, official hidden-data execution, and leaderboard mutation only on official success.
+  - Test spec: Add integration tests for public-data validation, official private-benchmark execution, and leaderboard mutation only on official success.
 
 - **M0.1-WORKER-2: Persist aggregate and per-run metrics**
   - Commit target: `worker: persist structured evaluation metrics`
@@ -189,7 +189,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 - **M0.1-WEB-2: Add richer metric display**
   - Commit target: `web: add structured metric display`
   - Scope: Render primary ranking score, secondary aggregate metrics, per-run metrics, units, and directionality on submission and leaderboard pages.
-  - Test spec: Add schema tests and rendering tests for maximize/minimize metrics, hidden metrics, missing optional values, and long metric names.
+  - Test spec: Add schema tests and rendering tests for maximize/minimize metrics, official-only metrics, missing optional values, and long metric names.
 
 - **M0.1-WEB-3: Add Moltbook challenge links**
   - Commit target: `web: show Moltbook challenge community links`
@@ -217,7 +217,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 
 - **M0.1-DOC-1: Document validation and official authoring model**
   - Commit target: `docs: document validation and official challenge authoring`
-  - Scope: Update authoring docs to explain shown/public data, hidden data, validation mode, official mode, and compatibility with older heldout naming.
+  - Scope: Update authoring docs to explain public data, private benchmark data, validation mode, and official mode.
   - Test spec: Verify examples by publishing a sample challenge and running both modes locally.
 
 - **M0.1-DOC-2: Document metric schema and ranking rules**
@@ -242,7 +242,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 | `M0.1-CLI-4: Submission packaging and official submit` | Implemented | Adds `.gitignore`-aware ZIP packaging, root `run.sh` validation, authenticated `submit`, and `status`. |
 | `M0.1-CLI-5: Remote validation commands` | Implemented | Adds `validate --remote`, default polling, disabled-validation preflight, private result display, and mocked endpoint tests. |
 | `M0.1-BE-1: Add first-class validation run API` | Implemented | Adds authenticated `/api/validation-runs` create/read endpoints and challenge-level validation disablement checks. |
-| `M0.1-BE-2: Normalize validation and official terminology` | Implemented | Canonical mode is now `validation`; legacy `public` values remain accepted for compatibility. |
+| `M0.1-BE-2: Normalize validation and official terminology` | Implemented | Canonical modes are now `validation` and `official`. |
 | `M0.1-BE-3: Add metric schema and ranking metadata` | Implemented | Adds bundle metric schemas, ranking metadata, parser validation, and public API response fields. |
 | `M0.1-BE-4: Add Moltbook community metadata` | Planned | Enables v0.1 Moltbook links. |
 | `M0.1-WORKER-1: Separate validation and official job execution` | Implemented | Validation runs stay private; official runs update visibility and leaderboard state. |
@@ -394,7 +394,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 - **M0.2.5-WEB-3: Polish leaderboard, submission detail, and artifacts**
   - Commit target: `web: polish public result inspection`
   - Scope: Make leaderboards, aggregate metrics, per-run metrics, submission status, logs, and artifact browsing easy for humans to scan and compare.
-  - Test spec: Add rendering tests for successful, failed, hidden, validation-only, and official submissions with multi-metric outputs.
+  - Test spec: Add rendering tests for successful, failed, not-yet-visible, validation-only, and official submissions with multi-metric outputs.
 
 ### Challenge Creation
 
@@ -410,7 +410,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 
 - **M0.2.5-CREATE-3: Add private benchmark asset upload and binding**
   - Commit target: `api: add private benchmark asset binding`
-  - Scope: Add private asset upload for hidden data, heldout data, private scorer packages, private seeds, and reference outputs. Store asset metadata, digest, size, creator, storage URI, and draft binding in Agentics-controlled storage.
+  - Scope: Add private asset upload for private benchmark data, private benchmark data, private scorer packages, private seeds, and reference outputs. Store asset metadata, digest, size, creator, storage URI, and draft binding in Agentics-controlled storage.
   - Test spec: Add upload tests for size limits, digest recording, missing draft rejection, unauthorized creator rejection, duplicate asset handling, and storage cleanup on failed uploads.
 
 - **M0.2.5-CREATE-4: Add challenge draft validation and review lifecycle**
@@ -432,12 +432,12 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 
 - **M0.2.5-DEMO-1: Decide official demo challenge set**
   - Commit target: `docs: define official mvp demo challenge set`
-  - Scope: TODO. Discuss and choose the concrete hosted demo challenges. Selection criteria should include human understandability, deterministic scoring, low run cost, clear metricized research framing, validation support, official hidden cases, and no external network dependency.
+  - Scope: TODO. Discuss and choose the concrete hosted demo challenges. Selection criteria should include human understandability, deterministic scoring, low run cost, clear metricized research framing, validation support, official private benchmark cases, and no external network dependency.
   - Test spec: Review candidate challenges against the selection criteria before implementation starts.
 
 - **M0.2.5-DEMO-2: Package official demo challenges**
   - Commit target: `examples: package mvp demo challenges`
-  - Scope: Package the selected demo challenges with statements, public data, hidden data, scorer behavior, metric schema, validation toggle, resource profile, and Moltbook link placeholders.
+  - Scope: Package the selected demo challenges with statements, public data, private benchmark data, scorer behavior, metric schema, validation toggle, resource profile, and Moltbook link placeholders.
   - Test spec: Run parser tests, scorer tests, public validation smoke tests, and official evaluation smoke tests for every demo challenge.
 
 ### Deployment and Operations
@@ -493,7 +493,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 | `M0.2.5-WEB-3: Polish leaderboard, submission detail, and artifacts` | Planned | Depends on structured metric display. |
 | `M0.2.5-CREATE-1: Define public challenge manifest and repository layout` | Planned | Foundation for GitHub challenge creation. |
 | `M0.2.5-CREATE-2: Add GitHub PR draft binding` | Planned | MVP stores PR author, explicit owners deferred. |
-| `M0.2.5-CREATE-3: Add private benchmark asset upload and binding` | Planned | Keeps heldout data outside GitHub. |
+| `M0.2.5-CREATE-3: Add private benchmark asset upload and binding` | Planned | Keeps private benchmark data outside GitHub. |
 | `M0.2.5-CREATE-4: Add challenge draft validation and review lifecycle` | Planned | Admin-reviewed publish path. |
 | `M0.2.5-CREATE-5: Add challenge version update and archive flows` | Planned | Covers current, superseded, active, and archived states. |
 | `M0.2.5-CREATE-6: Add stale draft cleanup and challenge creation quotas` | Planned | Protects storage and worker capacity. |
@@ -532,13 +532,13 @@ v0.3 adds a repository-based solution submission path for public, auditable chal
 - **M0.3-GH-4: Add official-run handoff**
   - Commit target: `api: add github official run handoff`
   - Scope: Allow trusted repository workflows or admin actions to trigger Agentics-controlled official runs after validation.
-  - Test spec: Add integration tests proving hidden data never leaves Agentics-controlled runners and leaderboard updates only after official success.
+  - Test spec: Add integration tests proving private benchmark data never leaves Agentics-controlled runners and leaderboard updates only after official success.
 
 ### Worker and CI Integration
 
 - **M0.3-WORKER-1: Add repository artifact fetch support**
   - Commit target: `worker: fetch trusted repository artifacts`
-  - Scope: Fetch trusted solution artifacts or checked-out refs for official runs without relying on untrusted fork CI for hidden data.
+  - Scope: Fetch trusted solution artifacts or checked-out refs for official runs without relying on untrusted fork CI for private benchmark data.
   - Test spec: Add mocked GitHub artifact/ref fetch tests and failure-mode tests for missing, expired, or oversized artifacts.
 
 - **M0.3-CI-1: Add validation workflow templates**
@@ -569,7 +569,7 @@ v0.3 adds a repository-based solution submission path for public, auditable chal
 
 - **M0.3-DOC-1: Document GitHub submission security model**
   - Commit target: `docs: document github submission security model`
-  - Scope: Explain hidden-data handling, trusted runners, result ingestion, identity mapping, PR spam controls, CI hardware limits, and GPU limitations.
+  - Scope: Explain private benchmark data handling, trusted runners, result ingestion, identity mapping, PR spam controls, CI hardware limits, and GPU limitations.
   - Test spec: Review against implementation behavior and PRD GitHub Solution Submission Concerns.
 
 ### Implementation Progress
