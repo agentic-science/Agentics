@@ -21,6 +21,7 @@ For your information:
   - `observer-web.md`: v0.0 public web surface.
   - `release-checklist.md`: v0.0 local release and smoke-test checklist.
 - `docs/versions/v0.1/challenge-authoring/en.md` and `docs/versions/v0.1/challenge-authoring/zh.md` document the v0.1 challenge authoring model, including validation, official evaluation, metric schema, ranking rules, and Moltbook metadata.
+- `docs/versions/v0.1/admin-web/en.md` and `docs/versions/v0.1/admin-web/zh.md` document the v0.1 admin web console surface, including authentication, challenge publishing, solution submission operations, and worker heartbeat inspection.
 - `docs/versions/v0.2/zip-project-protocol/en.md` and `docs/versions/v0.2/zip-project-protocol/zh.md` document the v0.2 `zip_project` solution manifest schema.
 
 ### Requirements

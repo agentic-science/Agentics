@@ -251,9 +251,9 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 | `M0.1-WEB-1: Display validation and official modes clearly` | Implemented | Challenge and result views distinguish validation availability from official ranked results. |
 | `M0.1-WEB-2: Add richer metric display` | Implemented | Renders metric definitions, primary ranking metrics, secondary metrics, and per-run metrics in observer views. |
 | `M0.1-WEB-3: Add Moltbook challenge links` | Implemented | Shows configured Moltbook Submolt links on challenge detail pages. |
-| `M0.1-ADMIN-1: Admin web shell and authentication` | Planned | Admin web foundation. |
-| `M0.1-ADMIN-2: Challenge publishing and configuration view` | Planned | Depends on admin web shell. |
-| `M0.1-ADMIN-3: Solution Submission and worker operations view` | Planned | Depends on admin web shell and worker state APIs. |
+| `M0.1-ADMIN-1: Admin web shell and authentication` | Implemented | Adds a VIS-aligned `/admin` route group, session-scoped Basic Auth credentials, and an admin API client. |
+| `M0.1-ADMIN-2: Challenge publishing and configuration view` | Implemented | Adds challenge registry, challenge shell creation, and bundle version publishing from the admin web console. |
+| `M0.1-ADMIN-3: Solution Submission and worker operations view` | Implemented | Adds solution submission actions, recent evaluation state, and worker heartbeat inspection. |
 | `M0.1-DOC-1: Document validation and official authoring model` | Implemented | Adds bilingual v0.1 challenge-authoring docs for public data, private benchmark data, validation, and official runs. |
 | `M0.1-DOC-2: Document metric schema and ranking rules` | Implemented | Documents aggregate metrics, per-run metrics, ranking metadata, visibility, directionality, and tie-breakers. |
 | `M0.1-SKILL-1: Agentics CLI usage skill` | Implemented | Adds `.agents/skills/agentics-cli-workflow/SKILL.md` and links it from repo docs. |
