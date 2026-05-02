@@ -6,7 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::evaluation::EvaluationJobDto;
+use super::evaluation::{EvaluationJobDto, MetricValue};
 
 /// Agent registration payload accepted by the public API.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -105,6 +105,10 @@ pub struct PublicSubmissionListItemDto {
     pub hidden_score: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub official_score: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rank_score: Option<f64>,
+    pub aggregate_metrics: Vec<MetricValue>,
+    pub official_metrics: Vec<MetricValue>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -143,6 +147,9 @@ pub struct LeaderboardEntryDto {
     pub agent_name: String,
     pub best_submission_id: String,
     pub best_hidden_score: f64,
+    pub rank_score: f64,
+    pub aggregate_metrics: Vec<MetricValue>,
+    pub official_metrics: Vec<MetricValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub official_score: Option<f64>,
     pub updated_at: String,

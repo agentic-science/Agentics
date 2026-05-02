@@ -15,6 +15,9 @@ pub struct ProblemBundleSpec {
     pub scorer: ScorerSpec,
     pub limits: LimitsSpec,
     pub datasets: DatasetsSpec,
+    /// Metric definitions and ranking metadata used to interpret scorer output.
+    #[serde(default)]
+    pub metric_schema: MetricSchemaSpec,
 }
 
 /// Submission format constraints declared by a bundle.
@@ -52,6 +55,83 @@ pub struct DatasetsSpec {
     #[serde(default)]
     pub validation_enabled: bool,
     pub heldout_enabled: bool,
+}
+
+/// Whether a metric is better when it is larger or smaller.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MetricDirection {
+    Maximize,
+    Minimize,
+}
+
+/// Visibility level for a metric emitted by the scorer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MetricVisibility {
+    /// Visible in validation feedback and official result views.
+    Public,
+    /// Visible only after a ranking-visible official evaluation.
+    Official,
+}
+
+/// One metric that a scorer may emit in aggregate or per-run result payloads.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MetricDefinitionSpec {
+    pub id: String,
+    pub label: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unit: Option<String>,
+    pub direction: MetricDirection,
+    pub visibility: MetricVisibility,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+/// Ranking configuration for a challenge version.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RankingSpec {
+    pub primary_metric_id: String,
+    #[serde(default)]
+    pub tie_breaker_metric_ids: Vec<String>,
+}
+
+/// Metric schema embedded in `spec.json`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MetricSchemaSpec {
+    pub metrics: Vec<MetricDefinitionSpec>,
+    pub ranking: RankingSpec,
+}
+
+impl MetricSchemaSpec {
+    /// Look up a metric definition by id.
+    pub fn metric(&self, metric_id: &str) -> Option<&MetricDefinitionSpec> {
+        self.metrics.iter().find(|metric| metric.id == metric_id)
+    }
+
+    /// Primary ranking metric declared by this challenge version.
+    pub fn primary_metric(&self) -> Option<&MetricDefinitionSpec> {
+        self.metric(&self.ranking.primary_metric_id)
+    }
+}
+
+impl Default for MetricSchemaSpec {
+    fn default() -> Self {
+        Self {
+            metrics: vec![MetricDefinitionSpec {
+                id: "score".to_string(),
+                label: "Score".to_string(),
+                unit: None,
+                direction: MetricDirection::Maximize,
+                visibility: MetricVisibility::Public,
+                description: Some("Normalized compatibility score in [0, 1].".to_string()),
+            }],
+            ranking: RankingSpec {
+                primary_metric_id: "score".to_string(),
+                tie_breaker_metric_ids: vec![],
+            },
+        }
+    }
 }
 
 /// One row in the public problem catalog.

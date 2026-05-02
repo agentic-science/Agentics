@@ -113,6 +113,21 @@ async fn worker_completes_official_submission(pool: sqlx::PgPool) {
     assert_eq!(submission["evaluation"]["status"], "completed");
     assert_eq!(submission["evaluation"]["eval_type"], "official");
     assert_eq!(submission["evaluation"]["primary_score"], 1.0);
+    assert_eq!(submission["evaluation"]["rank_score"], 1.0);
+    assert_eq!(
+        submission["evaluation"]["aggregate_metrics"],
+        serde_json::json!([
+            { "metric_id": "score", "value": 1.0 },
+            { "metric_id": "passed_cases", "value": 2.0 }
+        ])
+    );
+    assert_eq!(
+        submission["evaluation"]["run_metrics"][0],
+        serde_json::json!({
+            "run_id": "heldout-1",
+            "metrics": [{ "metric_id": "score", "value": 1.0 }]
+        })
+    );
     assert_eq!(submission["evaluation"]["official_summary"]["score"], 1.0);
     assert_eq!(submission["evaluation"]["official_summary"]["passed"], 2);
     assert_eq!(submission["evaluation"]["official_summary"]["total"], 2);
@@ -123,8 +138,8 @@ async fn worker_completes_official_submission(pool: sqlx::PgPool) {
             .fetch_one(&pool)
             .await
             .expect("failed to query evaluation job");
-    let evaluation_status: (String, String, f64) = sqlx::query_as(
-        "SELECT status, eval_type, primary_score FROM evaluations WHERE submission_id = $1",
+    let evaluation_status: (String, String, f64, f64, serde_json::Value, serde_json::Value) = sqlx::query_as(
+        "SELECT status, eval_type, primary_score, rank_score, aggregate_metrics_json, run_metrics_json FROM evaluations WHERE submission_id = $1",
     )
     .bind(submission_id)
     .fetch_one(&pool)
@@ -137,7 +152,26 @@ async fn worker_completes_official_submission(pool: sqlx::PgPool) {
     );
     assert_eq!(
         evaluation_status,
-        ("completed".to_string(), "official".to_string(), 1.0)
+        (
+            "completed".to_string(),
+            "official".to_string(),
+            1.0,
+            1.0,
+            serde_json::json!([
+                { "metric_id": "score", "value": 1.0 },
+                { "metric_id": "passed_cases", "value": 2.0 }
+            ]),
+            serde_json::json!([
+                {
+                    "run_id": "heldout-1",
+                    "metrics": [{ "metric_id": "score", "value": 1.0 }]
+                },
+                {
+                    "run_id": "heldout-2",
+                    "metrics": [{ "metric_id": "score", "value": 1.0 }]
+                }
+            ])
+        )
     );
 }
 
@@ -200,6 +234,14 @@ async fn worker_completes_private_validation_run_without_leaderboard(pool: sqlx:
     assert_eq!(validation["visible_after_eval"], false);
     assert_eq!(validation["evaluation"]["eval_type"], "validation");
     assert_eq!(validation["evaluation"]["hidden_summary"]["score"], 1.0);
+    assert_eq!(validation["evaluation"]["rank_score"], 1.0);
+    assert_eq!(
+        validation["evaluation"]["aggregate_metrics"],
+        serde_json::json!([
+            { "metric_id": "score", "value": 1.0 },
+            { "metric_id": "passed_cases", "value": 2.0 }
+        ])
+    );
 
     let leaderboard_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM leaderboard_entries")
         .fetch_one(&pool)

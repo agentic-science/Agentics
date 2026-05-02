@@ -156,8 +156,8 @@ mod tests {
     use shared::models::CurrentVersionDto;
     use shared::models::evaluation::ScoreVisibility;
     use shared::models::problem::{
-        DatasetsSpec, LimitsSpec, ProblemBundleSpec, ProblemDetailResponse, ScorerSpec,
-        SubmissionSpec,
+        DatasetsSpec, LimitsSpec, MetricSchemaSpec, ProblemBundleSpec, ProblemDetailResponse,
+        ScorerSpec, SubmissionSpec,
     };
 
     use super::{default_workspace_dir, init_solution_workspace};
@@ -249,6 +249,7 @@ mod tests {
                     validation_enabled: false,
                     heldout_enabled: false,
                 },
+                metric_schema: MetricSchemaSpec::default(),
             },
             statement_markdown: "# Statement\n\nReturn the sum.".to_string(),
         }

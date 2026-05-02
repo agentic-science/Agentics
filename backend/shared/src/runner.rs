@@ -21,6 +21,7 @@ use tokio::time::timeout;
 use crate::config::Config;
 use crate::error::{AppError, Result};
 use crate::models::evaluation::{EvaluationJobPayload, ScorerRunResult, ScoringMode};
+use crate::models::problem::MetricSchemaSpec;
 use crate::storage::Storage;
 
 const MAX_RUNNER_ARTIFACT_BYTES: u64 = 20 * 1024 * 1024;
@@ -34,6 +35,15 @@ pub struct ExecutionResult {
     pub result: ScorerRunResult,
     /// Storage-relative path to stdout and stderr captured from the container.
     pub log_path: String,
+}
+
+struct ContainerRunContext<'a> {
+    config: &'a Config,
+    result_path: &'a Path,
+    log_path_rel: &'a str,
+    eval_type: ScoringMode,
+    metric_schema: &'a MetricSchemaSpec,
+    storage: &'a dyn Storage,
 }
 
 /// Execute one evaluation job in Docker and return the validated scorer result.
@@ -59,6 +69,8 @@ pub async fn execute_evaluation_job(
 
     tokio::fs::create_dir_all(&working_root).await?;
     tokio::fs::create_dir_all(&extraction_root).await?;
+    let spec =
+        crate::problem_bundle::read_problem_bundle_spec(Path::new(&payload.bundle_path)).await?;
 
     let execution = async {
         extract_zip_safe(&payload.artifact_path, &extraction_root).await?;
@@ -141,12 +153,15 @@ pub async fn execute_evaluation_job(
 
         let run_result = run_created_container(
             docker,
-            config,
             &container_id,
-            &result_path,
-            &log_path_rel,
-            eval_type,
-            storage,
+            ContainerRunContext {
+                config,
+                result_path: &result_path,
+                log_path_rel: &log_path_rel,
+                eval_type,
+                metric_schema: &spec.metric_schema,
+                storage,
+            },
         )
         .await;
 
@@ -175,13 +190,18 @@ pub async fn execute_evaluation_job(
 
 async fn run_created_container(
     docker: &Docker,
-    config: &Config,
     container_id: &str,
-    result_path: &Path,
-    log_path_rel: &str,
-    eval_type: ScoringMode,
-    storage: &dyn Storage,
+    context: ContainerRunContext<'_>,
 ) -> Result<ExecutionResult> {
+    let ContainerRunContext {
+        config,
+        result_path,
+        log_path_rel,
+        eval_type,
+        metric_schema,
+        storage,
+    } = context;
+
     docker
         .start_container(container_id, None::<StartContainerOptions>)
         .await
@@ -236,6 +256,9 @@ async fn run_created_container(
 
     result
         .validate_for_mode(eval_type)
+        .map_err(|e| AppError::Runner(format!("invalid result.json: {e}")))?;
+    result
+        .normalize_metrics(metric_schema, eval_type)
         .map_err(|e| AppError::Runner(format!("invalid result.json: {e}")))?;
     result.mode = Some(eval_type);
 

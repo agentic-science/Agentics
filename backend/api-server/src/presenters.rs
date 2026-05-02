@@ -47,6 +47,7 @@ pub fn present_problem_detail(
                 validation_enabled: false,
                 heldout_enabled: false,
             },
+            metric_schema: MetricSchemaSpec::default(),
         });
 
     ProblemDetailResponse {

@@ -4,6 +4,7 @@
 //! problems and the runner. Validation here intentionally mirrors the old TS
 //! service while allowing omitted nullable fields in serialized JSON.
 
+use std::collections::HashSet;
 use std::path::Path;
 
 use crate::error::{AppError, Result};
@@ -223,6 +224,69 @@ fn validate_problem_bundle_spec(spec: &ProblemBundleSpec) -> Result<()> {
         (false, None) => {}
     }
 
+    validate_metric_schema(spec)?;
+
+    Ok(())
+}
+
+fn validate_metric_schema(spec: &ProblemBundleSpec) -> Result<()> {
+    let schema = &spec.metric_schema;
+    if schema.metrics.is_empty() {
+        return Err(AppError::Validation(
+            "metric_schema.metrics must not be empty".to_string(),
+        ));
+    }
+
+    let mut ids = HashSet::with_capacity(schema.metrics.len());
+    for metric in &schema.metrics {
+        require_metric_id(&metric.id, "metric_schema.metrics[].id")?;
+        require_non_empty(&metric.label, "metric_schema.metrics[].label")?;
+        if let Some(unit) = &metric.unit {
+            require_non_empty(unit, "metric_schema.metrics[].unit")?;
+        }
+        if let Some(description) = &metric.description {
+            require_non_empty(description, "metric_schema.metrics[].description")?;
+        }
+        if !ids.insert(metric.id.as_str()) {
+            return Err(AppError::Validation(format!(
+                "metric_schema.metrics contains duplicate id `{}`",
+                metric.id
+            )));
+        }
+    }
+
+    require_metric_id(
+        &schema.ranking.primary_metric_id,
+        "metric_schema.ranking.primary_metric_id",
+    )?;
+    if !ids.contains(schema.ranking.primary_metric_id.as_str()) {
+        return Err(AppError::Validation(format!(
+            "metric_schema.ranking.primary_metric_id references unknown metric `{}`",
+            schema.ranking.primary_metric_id
+        )));
+    }
+
+    let mut tie_breakers = HashSet::with_capacity(schema.ranking.tie_breaker_metric_ids.len());
+    for metric_id in &schema.ranking.tie_breaker_metric_ids {
+        require_metric_id(metric_id, "metric_schema.ranking.tie_breaker_metric_ids[]")?;
+        if metric_id == &schema.ranking.primary_metric_id {
+            return Err(AppError::Validation(
+                "metric_schema.ranking.tie_breaker_metric_ids must not repeat the primary metric"
+                    .to_string(),
+            ));
+        }
+        if !ids.contains(metric_id.as_str()) {
+            return Err(AppError::Validation(format!(
+                "metric_schema.ranking.tie_breaker_metric_ids references unknown metric `{metric_id}`"
+            )));
+        }
+        if !tie_breakers.insert(metric_id.as_str()) {
+            return Err(AppError::Validation(format!(
+                "metric_schema.ranking.tie_breaker_metric_ids contains duplicate metric `{metric_id}`"
+            )));
+        }
+    }
+
     Ok(())
 }
 
@@ -244,13 +308,28 @@ fn require_safe_relative_path(value: &str, field: &str) -> Result<()> {
     Ok(())
 }
 
+fn require_metric_id(value: &str, field: &str) -> Result<()> {
+    require_non_empty(value, field)?;
+    if !value
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
+    {
+        return Err(AppError::Validation(format!(
+            "{field} must contain only ASCII letters, digits, underscores, hyphens, or dots"
+        )));
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::Path;
 
     use crate::models::evaluation::ScoreVisibility;
     use crate::models::problem::{
-        DatasetsSpec, LimitsSpec, ProblemBundleSpec, ScorerSpec, SubmissionSpec,
+        DatasetsSpec, LimitsSpec, MetricDirection, MetricSchemaSpec, MetricVisibility,
+        ProblemBundleSpec, ScorerSpec, SubmissionSpec,
     };
 
     use super::{validate_problem_bundle, validate_problem_bundle_spec};
@@ -283,6 +362,7 @@ mod tests {
                 validation_enabled: true,
                 heldout_enabled: true,
             },
+            metric_schema: MetricSchemaSpec::default(),
         }
     }
 
@@ -317,6 +397,7 @@ mod tests {
         .expect("legacy spec should deserialize");
 
         assert!(!spec.datasets.validation_enabled);
+        assert_eq!(spec.metric_schema.ranking.primary_metric_id, "score");
     }
 
     #[test]
@@ -335,6 +416,45 @@ mod tests {
         spec.datasets.heldout_dir = None;
 
         assert!(validate_problem_bundle_spec(&spec).is_err());
+    }
+
+    #[test]
+    fn metric_schema_rejects_unknown_primary_metric() {
+        let mut spec = base_spec();
+        spec.metric_schema.ranking.primary_metric_id = "missing".to_string();
+
+        assert!(validate_problem_bundle_spec(&spec).is_err());
+    }
+
+    #[test]
+    fn metric_schema_rejects_duplicate_metric_ids() {
+        let mut spec = base_spec();
+        let mut duplicate = spec.metric_schema.metrics[0].clone();
+        duplicate.label = "Duplicate Score".to_string();
+        spec.metric_schema.metrics.push(duplicate);
+
+        assert!(validate_problem_bundle_spec(&spec).is_err());
+    }
+
+    #[test]
+    fn metric_schema_accepts_tie_breaker_metadata() {
+        let mut spec = base_spec();
+        spec.metric_schema
+            .metrics
+            .push(crate::models::problem::MetricDefinitionSpec {
+                id: "runtime_ms".to_string(),
+                label: "Runtime".to_string(),
+                unit: Some("ms".to_string()),
+                direction: MetricDirection::Minimize,
+                visibility: MetricVisibility::Public,
+                description: Some("Wall-clock runtime in milliseconds.".to_string()),
+            });
+        spec.metric_schema
+            .ranking
+            .tie_breaker_metric_ids
+            .push("runtime_ms".to_string());
+
+        assert!(validate_problem_bundle_spec(&spec).is_ok());
     }
 
     fn create_bundle(root: &Path, spec: &ProblemBundleSpec) {

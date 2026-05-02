@@ -24,5 +24,30 @@
     "hidden_policy": "score_only",
     "validation_enabled": true,
     "heldout_enabled": true
+  },
+  "metric_schema": {
+    "metrics": [
+      {
+        "id": "score",
+        "label": "Score",
+        "direction": "maximize",
+        "visibility": "public",
+        "description": "Average route validity score across evaluated cases."
+      },
+      {
+        "id": "passed_cases",
+        "label": "Passed Cases",
+        "unit": "cases",
+        "direction": "maximize",
+        "visibility": "public",
+        "description": "Number of routes that reached the goal without violating constraints."
+      }
+    ],
+    "ranking": {
+      "primary_metric_id": "score",
+      "tie_breaker_metric_ids": [
+        "passed_cases"
+      ]
+    }
   }
 }

@@ -123,7 +123,7 @@ pub fn render_problem_detail(
             };
 
             Ok(format!(
-                "{} ({})\nversion: {} ({})\nsubmission: {} / {} / {}\nlimits: {} sec, {} MB\ndatasets: shown={}, hidden={}, validation={}, heldout={}\n\n{}",
+                "{} ({})\nversion: {} ({})\nsubmission: {} / {} / {}\nlimits: {} sec, {} MB\ndatasets: shown={}, hidden={}, validation={}, heldout={}\nranking_metric: {}\n\n{}",
                 response.title,
                 response.id,
                 response.current_version.version,
@@ -141,6 +141,7 @@ pub fn render_problem_detail(
                     "disabled"
                 },
                 heldout,
+                response.spec.metric_schema.ranking.primary_metric_id,
                 response.statement_markdown.trim()
             ))
         }
@@ -240,15 +241,22 @@ pub fn render_submission_status(
                 .as_ref()
                 .map(|eval| status_label(&eval.status))
                 .unwrap_or_else(|| "none".to_string());
+            let rank_score = response
+                .evaluation
+                .as_ref()
+                .and_then(|eval| eval.rank_score)
+                .map(format_score)
+                .unwrap_or_else(|| "none".to_string());
 
             Ok(format!(
-                "submission: {}\nproblem: {}\nstatus: {}\nevaluation_job: {}\npublic_evaluation: {}\nofficial_evaluation: {}\nvisible_after_eval: {}",
+                "submission: {}\nproblem: {}\nstatus: {}\nevaluation_job: {}\npublic_evaluation: {}\nofficial_evaluation: {}\nrank_score: {}\nvisible_after_eval: {}",
                 response.id,
                 response.problem_id,
                 response.status,
                 evaluation_job,
                 public_eval,
                 official_eval,
+                rank_score,
                 response.visible_after_eval
             ))
         }
@@ -278,15 +286,20 @@ pub fn render_validation_run_status(
                 .and_then(|eval| eval.primary_score)
                 .map(format_score)
                 .unwrap_or_else(|| "none".to_string());
+            let rank_score = validation_eval
+                .and_then(|eval| eval.rank_score)
+                .map(format_score)
+                .unwrap_or_else(|| "none".to_string());
 
             Ok(format!(
-                "validation_run: {}\nproblem: {}\nstatus: {}\nevaluation_job: {}\nvalidation: {}\nprimary_score: {}\nvisible_after_eval: {}",
+                "validation_run: {}\nproblem: {}\nstatus: {}\nevaluation_job: {}\nvalidation: {}\nprimary_score: {}\nrank_score: {}\nvisible_after_eval: {}",
                 response.id,
                 response.problem_id,
                 response.status,
                 evaluation_job,
                 validation_status,
                 primary_score,
+                rank_score,
                 response.visible_after_eval
             ))
         }
@@ -359,8 +372,8 @@ mod tests {
     use shared::models::CurrentVersionDto;
     use shared::models::evaluation::ScoreVisibility;
     use shared::models::problem::{
-        DatasetsSpec, LimitsSpec, ProblemBundleSpec, ProblemDetailResponse, ProblemListItemDto,
-        ProblemListResponse, ScorerSpec, SubmissionSpec,
+        DatasetsSpec, LimitsSpec, MetricSchemaSpec, ProblemBundleSpec, ProblemDetailResponse,
+        ProblemListItemDto, ProblemListResponse, ScorerSpec, SubmissionSpec,
     };
 
     use super::{OutputFormat, render_problem_detail, render_problem_list};
@@ -437,6 +450,7 @@ mod tests {
                     validation_enabled: false,
                     heldout_enabled: false,
                 },
+                metric_schema: MetricSchemaSpec::default(),
             },
             statement_markdown: "# Statement\n\nReturn the sum.".to_string(),
         }

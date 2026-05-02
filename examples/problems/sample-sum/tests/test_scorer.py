@@ -68,6 +68,15 @@ def test_validation_mode_returns_shown_summary(tmp_path: Path) -> None:
     assert result["status"] == "passed"
     assert result["mode"] == "validation"
     assert result["primary_score"] == 1
+    assert result["rank_score"] == 1
+    assert result["aggregate_metrics"] == [
+        {"metric_id": "score", "value": 1},
+        {"metric_id": "passed_cases", "value": 2},
+    ]
+    assert result["run_metrics"] == [
+        {"run_id": "shown-1", "metrics": [{"metric_id": "score", "value": 1}]},
+        {"run_id": "shown-2", "metrics": [{"metric_id": "score", "value": 1}]},
+    ]
     assert len(result["shown_results"]) == 2
     assert result["hidden_summary"] == {"score": 1, "passed": 2, "total": 2}
     assert result["official_summary"] is None
@@ -92,6 +101,10 @@ def test_official_mode_uses_heldout_cases(tmp_path: Path) -> None:
     assert result["shown_results"] == []
     assert result["hidden_summary"] is None
     assert result["official_summary"] == {"score": 1, "passed": 2, "total": 2}
+    assert result["aggregate_metrics"] == [
+        {"metric_id": "score", "value": 1},
+        {"metric_id": "passed_cases", "value": 2},
+    ]
 
 
 def test_failed_submission_is_reported(tmp_path: Path) -> None:

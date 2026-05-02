@@ -84,6 +84,16 @@ def test_validation_mode_returns_shown_scores(tmp_path: Path) -> None:
     assert result["status"] == "passed"
     assert result["mode"] == "validation"
     assert result["primary_score"] == 1
+    assert result["rank_score"] == 1
+    assert result["aggregate_metrics"] == [
+        {"metric_id": "score", "value": 1},
+        {"metric_id": "passed_cases", "value": 3},
+    ]
+    assert result["run_metrics"] == [
+        {"run_id": "shown-1", "metrics": [{"metric_id": "score", "value": 1}]},
+        {"run_id": "shown-2", "metrics": [{"metric_id": "score", "value": 1}]},
+        {"run_id": "shown-3", "metrics": [{"metric_id": "score", "value": 1}]},
+    ]
     assert len(result["shown_results"]) == 3
     assert all(item["status"] == "passed" for item in result["shown_results"])
     assert all(item["score"] == 1 for item in result["shown_results"])
@@ -162,3 +172,7 @@ def test_official_mode_uses_heldout_cases(tmp_path: Path) -> None:
     assert result["shown_results"] == []
     assert result["hidden_summary"] is None
     assert result["official_summary"] == {"score": 1, "passed": 2, "total": 2}
+    assert result["aggregate_metrics"] == [
+        {"metric_id": "score", "value": 1},
+        {"metric_id": "passed_cases", "value": 2},
+    ]

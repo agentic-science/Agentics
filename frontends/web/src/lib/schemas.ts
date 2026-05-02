@@ -10,6 +10,19 @@ import { z } from "zod";
 const idSchema = z.string().min(1);
 const isoTimestampSchema = z.string().min(1);
 const scoreSchema = z.number().finite().min(0).max(1);
+const metricValueSchema = z
+  .object({
+    metric_id: z.string().min(1),
+    value: z.number().finite(),
+  })
+  .strict();
+
+const runMetricResultSchema = z
+  .object({
+    run_id: z.string().min(1),
+    metrics: z.array(metricValueSchema),
+  })
+  .strict();
 
 /** Current published version summary embedded in problem responses. */
 export const currentVersionDtoSchema = z
@@ -58,6 +71,9 @@ export const evaluationDtoSchema = z
     status: z.enum(["queued", "running", "completed", "failed"]),
     eval_type: z.enum(["validation", "public", "official"]),
     primary_score: scoreSchema.optional(),
+    rank_score: z.number().finite().optional(),
+    aggregate_metrics: z.array(metricValueSchema),
+    run_metrics: z.array(runMetricResultSchema),
     shown_results: z.array(shownCaseResultSchema),
     hidden_summary: scoreSummarySchema.optional(),
     official_summary: scoreSummarySchema.optional(),
@@ -104,6 +120,28 @@ export const problemBundleSpecSchema = z
         heldout_enabled: z.boolean(),
       })
       .strict(),
+    metric_schema: z
+      .object({
+        metrics: z.array(
+          z
+            .object({
+              id: z.string().min(1),
+              label: z.string().min(1),
+              unit: z.string().min(1).optional(),
+              direction: z.enum(["maximize", "minimize"]),
+              visibility: z.enum(["public", "official"]),
+              description: z.string().min(1).optional(),
+            })
+            .strict(),
+        ),
+        ranking: z
+          .object({
+            primary_metric_id: z.string().min(1),
+            tie_breaker_metric_ids: z.array(z.string().min(1)),
+          })
+          .strict(),
+      })
+      .strict(),
   })
   .strict();
 
@@ -134,8 +172,11 @@ export const publicSubmissionListItemDtoSchema = z
     parent_submission_id: z.string().nullable(),
     credit_text: z.string(),
     public_score: scoreSchema.nullable().optional(),
-    hidden_score: scoreSchema.nullable().optional(),
-    official_score: scoreSchema.nullable().optional(),
+    hidden_score: z.number().finite().nullable().optional(),
+    official_score: z.number().finite().nullable().optional(),
+    rank_score: z.number().finite().nullable().optional(),
+    aggregate_metrics: z.array(metricValueSchema),
+    official_metrics: z.array(metricValueSchema),
     created_at: isoTimestampSchema,
     updated_at: isoTimestampSchema,
   })
@@ -152,8 +193,11 @@ export const leaderboardEntryDtoSchema = z
     agent_id: idSchema,
     agent_name: z.string().min(1),
     best_submission_id: idSchema,
-    best_hidden_score: scoreSchema,
-    official_score: scoreSchema.nullable().optional(),
+    best_hidden_score: z.number().finite(),
+    rank_score: z.number().finite(),
+    aggregate_metrics: z.array(metricValueSchema),
+    official_metrics: z.array(metricValueSchema),
+    official_score: z.number().finite().nullable().optional(),
     updated_at: isoTimestampSchema,
   })
   .strict();

@@ -164,6 +164,7 @@ pub async fn run_worker_cycle(
             let job_id = job.id.clone();
             let submission_id = job.submission_id.clone();
             let primary_score = result.result.primary_score;
+            let rank_score = result.result.rank_score;
 
             mark_evaluation_finished(
                 db,
@@ -174,6 +175,9 @@ pub async fn run_worker_cycle(
                     eval_type: job.eval_type,
                     status: EvaluationStatus::Completed,
                     primary_score: Some(primary_score),
+                    rank_score,
+                    aggregate_metrics: result.result.aggregate_metrics,
+                    run_metrics: result.result.run_metrics,
                     shown_results: result.result.shown_results,
                     hidden_summary: result.result.hidden_summary,
                     official_summary: result.result.official_summary,
@@ -214,6 +218,9 @@ pub async fn run_worker_cycle(
                     eval_type: job.eval_type,
                     status: EvaluationStatus::Failed,
                     primary_score: None,
+                    rank_score: None,
+                    aggregate_metrics: vec![],
+                    run_metrics: vec![],
                     shown_results: vec![],
                     hidden_summary: None,
                     official_summary: None,

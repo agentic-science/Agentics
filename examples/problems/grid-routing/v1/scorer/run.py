@@ -209,6 +209,23 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
     return {"score": average_score, "passed": passed, "total": total}
 
 
+def aggregate_metrics(summary: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {"metric_id": "score", "value": summary["score"]},
+        {"metric_id": "passed_cases", "value": summary["passed"]},
+    ]
+
+
+def run_metrics(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "run_id": result["case_id"],
+            "metrics": [{"metric_id": "score", "value": result["score"]}],
+        }
+        for result in results
+    ]
+
+
 def main() -> int:
     args = parse_args()
     problem_dir = Path(args.problem_dir)
@@ -245,6 +262,9 @@ def main() -> int:
             "status": "passed" if hidden_summary["passed"] == hidden_summary["total"] else "failed",
             "mode": args.mode,
             "primary_score": hidden_summary["score"],
+            "rank_score": hidden_summary["score"],
+            "aggregate_metrics": aggregate_metrics(hidden_summary),
+            "run_metrics": run_metrics(shown_results),
             "shown_results": shown_results,
             "hidden_summary": hidden_summary,
             "official_summary": None,
@@ -268,6 +288,9 @@ def main() -> int:
             else "failed",
             "mode": "official",
             "primary_score": official_summary["score"],
+            "rank_score": official_summary["score"],
+            "aggregate_metrics": aggregate_metrics(official_summary),
+            "run_metrics": run_metrics(official_results),
             "shown_results": [],
             "hidden_summary": None,
             "official_summary": official_summary,

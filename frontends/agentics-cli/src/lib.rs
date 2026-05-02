@@ -588,6 +588,12 @@ mod tests {
                     "status": "completed",
                     "eval_type": "validation",
                     "primary_score": 1.0,
+                    "rank_score": 1.0,
+                    "aggregate_metrics": [
+                        { "metric_id": "score", "value": 1.0 },
+                        { "metric_id": "passed_cases", "value": 2.0 }
+                    ],
+                    "run_metrics": [],
                     "shown_results": [],
                     "hidden_summary": {
                         "score": 1.0,
@@ -650,6 +656,7 @@ mod tests {
         assert!(output.contains("validation_run: validation-1"));
         assert!(output.contains("validation: completed"));
         assert!(output.contains("primary_score: 1"));
+        assert!(output.contains("rank_score: 1"));
         assert!(output.contains("visible_after_eval: false"));
         assert_eq!(body["problem_id"], "sample-sum");
         assert_eq!(body["explanation"], "quick check");
@@ -734,6 +741,27 @@ mod tests {
                     "validation_enabled": validation_enabled,
                     "heldout_enabled": true,
                     "heldout_dir": "heldout"
+                },
+                "metric_schema": {
+                    "metrics": [
+                        {
+                            "id": "score",
+                            "label": "Score",
+                            "direction": "maximize",
+                            "visibility": "public"
+                        },
+                        {
+                            "id": "passed_cases",
+                            "label": "Passed Cases",
+                            "unit": "cases",
+                            "direction": "maximize",
+                            "visibility": "public"
+                        }
+                    ],
+                    "ranking": {
+                        "primary_metric_id": "score",
+                        "tie_breaker_metric_ids": ["passed_cases"]
+                    }
                 }
             },
             "statement_markdown": "# Sample Sum"
