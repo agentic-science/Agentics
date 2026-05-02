@@ -92,11 +92,13 @@
   --accent-primary-400: #fbbf24;
   --accent-primary-500: #f59e0b;
   --accent-primary-600: #d97706;
+  --accent-primary-text: #fbbf24;
 
   /* Accent: Teal */
   --accent-secondary-300: #5eead4;
   --accent-secondary-400: #2dd4bf;
   --accent-secondary-500: #14b8a6;
+  --accent-secondary-text: #2dd4bf;
 
   /* Text */
   --text-primary: #f8fafc;
@@ -109,6 +111,11 @@
   --status-error: #f43f5e;
   --status-warning: #f59e0b;
   --status-info: #3b82f6;
+  --badge-validation-text: #60a5fa;
+  --badge-official-text: #fbbf24;
+  --badge-success-text: #34d399;
+  --badge-error-text: #fb7185;
+  --badge-warning-text: #fbbf24;
 
   /* Shadows */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
@@ -142,6 +149,13 @@ html[data-theme="light"] {
   --text-secondary: #475569;
   --text-muted: #64748b;
   --text-inverse: #f8fafc;
+  --accent-primary-text: #b45309;
+  --accent-secondary-text: #0f766e;
+  --badge-validation-text: #2563eb;
+  --badge-official-text: #b45309;
+  --badge-success-text: #047857;
+  --badge-error-text: #be123c;
+  --badge-warning-text: #b45309;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
@@ -353,27 +367,27 @@ input {
 
 .badge-validation {
   background: rgba(59, 130, 246, 0.12);
-  color: #60a5fa;
+  color: var(--badge-validation-text);
 }
 
 .badge-official {
   background: rgba(245, 158, 11, 0.12);
-  color: #fbbf24;
+  color: var(--badge-official-text);
 }
 
 .badge-success {
   background: rgba(16, 185, 129, 0.12);
-  color: #34d399;
+  color: var(--badge-success-text);
 }
 
 .badge-error {
   background: rgba(244, 63, 94, 0.12);
-  color: #fb7185;
+  color: var(--badge-error-text);
 }
 
 .badge-warning {
   background: rgba(245, 158, 11, 0.12);
-  color: #fbbf24;
+  color: var(--badge-warning-text);
 }
 
 /* ===================================================================
@@ -534,7 +548,7 @@ html[data-theme="light"] .prose pre {
 }
 
 .prose a {
-  color: var(--accent-secondary-400);
+  color: var(--accent-secondary-text);
   text-decoration: underline;
   text-underline-offset: 2px;
 }

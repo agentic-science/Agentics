@@ -28,7 +28,7 @@ export function LanguageSwitcher() {
           onClick={() => switchLocale(loc.code)}
           className={`px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors ${
             locale === loc.code
-              ? "text-[var(--accent-primary-400)]"
+              ? "text-[var(--accent-primary-text)]"
               : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
           }`}
           aria-label={`Switch to ${loc.code}`}

@@ -93,7 +93,7 @@ export default async function SolutionSubmissionPage({
       <div className="card-elevated">
         <Link
           href={`/challenges/${submission.challenge_id}`}
-          className="inline-flex items-center gap-1.5 text-[var(--text-body-sm)] text-[var(--text-muted)] hover:text-[var(--accent-primary-400)] transition-colors mb-4"
+          className="inline-flex items-center gap-1.5 text-[var(--text-body-sm)] text-[var(--text-muted)] hover:text-[var(--accent-primary-text)] transition-colors mb-4"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           {submission.challenge_title ?? submission.challenge_id}
@@ -135,7 +135,7 @@ export default async function SolutionSubmissionPage({
                         : "badge-default"
                 }`}
               >
-                {t(`common.status.${submission.status}`)}
+                {t(`submissions.status.${submission.status}`)}
               </span>
             </div>
           </div>
@@ -143,7 +143,7 @@ export default async function SolutionSubmissionPage({
           {/* Stats Grid */}
           <div className="grid grid-cols-2 gap-3 lg:w-auto lg:min-w-[280px]">
             <div className="card flex flex-col gap-1 py-3 px-4">
-              <Award className="w-4 h-4 text-[var(--accent-primary-400)]" />
+              <Award className="w-4 h-4 text-[var(--accent-primary-text)]" />
               <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
                 {metricLabel(
                   metricSchema,
@@ -155,7 +155,7 @@ export default async function SolutionSubmissionPage({
               </span>
             </div>
             <div className="card flex flex-col gap-1 py-3 px-4">
-              <Activity className="w-4 h-4 text-[var(--accent-secondary-400)]" />
+              <Activity className="w-4 h-4 text-[var(--accent-secondary-text)]" />
               <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
                 {t("leaderboard.rankScore")}
               </span>
@@ -164,7 +164,7 @@ export default async function SolutionSubmissionPage({
               </span>
             </div>
             <div className="card flex flex-col gap-1 py-3 px-4">
-              <Trophy className="w-4 h-4 text-[var(--accent-primary-400)]" />
+              <Trophy className="w-4 h-4 text-[var(--accent-primary-text)]" />
               <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
                 {t("submissions.officialPrimary")}
               </span>
@@ -173,7 +173,7 @@ export default async function SolutionSubmissionPage({
               </span>
             </div>
             <div className="card flex flex-col gap-1 py-3 px-4">
-              <Calendar className="w-4 h-4 text-[var(--accent-secondary-400)]" />
+              <Calendar className="w-4 h-4 text-[var(--accent-secondary-text)]" />
               <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
                 {t("submissionDetail.metadata.created")}
               </span>
@@ -192,7 +192,7 @@ export default async function SolutionSubmissionPage({
           {/* Metadata */}
           <div className="card">
             <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
-              <User className="w-4 h-4 text-[var(--accent-secondary-400)]" />
+              <User className="w-4 h-4 text-[var(--accent-secondary-text)]" />
               {t("submissionDetail.metadata.title")}
             </h3>
             <div className="grid grid-cols-2 gap-x-4 gap-y-3">
@@ -234,7 +234,7 @@ export default async function SolutionSubmissionPage({
           {/* Aggregate Metrics */}
           <div className="card">
             <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] mb-2 flex items-center gap-2">
-              <Activity className="w-4 h-4 text-[var(--accent-primary-400)]" />
+              <Activity className="w-4 h-4 text-[var(--accent-primary-text)]" />
               {t("submissionDetail.aggregateMetrics.title")}
             </h3>
             <p className="text-[var(--text-caption)] text-[var(--text-muted)] mb-4">
@@ -352,7 +352,7 @@ export default async function SolutionSubmissionPage({
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] flex items-center gap-2">
-              <GitCommit className="w-4 h-4 text-[var(--accent-secondary-400)]" />
+              <GitCommit className="w-4 h-4 text-[var(--accent-secondary-text)]" />
               {t("submissionDetail.codeBrowser.title")}
             </h3>
             <span className="text-[var(--text-caption)] text-[var(--text-muted)]">

@@ -111,11 +111,11 @@ export default async function LeaderboardPage({
                       <span
                         className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${
                           idx === 0
-                            ? "bg-[var(--accent-primary-500)]/20 text-[var(--accent-primary-400)]"
+                            ? "bg-[var(--accent-primary-500)]/20 text-[var(--accent-primary-text)]"
                             : idx === 1
                               ? "bg-[var(--text-muted)]/20 text-[var(--text-muted)]"
                               : idx === 2
-                                ? "bg-[var(--accent-secondary-500)]/20 text-[var(--accent-secondary-400)]"
+                                ? "bg-[var(--accent-secondary-500)]/20 text-[var(--accent-secondary-text)]"
                                 : "text-[var(--text-muted)]"
                         }`}
                       >
@@ -125,7 +125,7 @@ export default async function LeaderboardPage({
                     <td className="font-medium text-[var(--text-primary)]">
                       {entry.agent_name}
                     </td>
-                    <td className="font-mono text-[var(--accent-primary-400)]">
+                    <td className="font-mono text-[var(--accent-primary-text)]">
                       {formatDeclaredMetric(metricSchema, primary)}
                     </td>
                     <td className="font-mono">{entry.rank_score.toFixed(4)}</td>
@@ -145,7 +145,7 @@ export default async function LeaderboardPage({
                     <td>
                       <Link
                         href={`/solution-submissions/${entry.best_solution_submission_id}`}
-                        className="font-mono text-[var(--text-body-sm)] text-[var(--accent-secondary-400)] hover:text-[var(--accent-secondary-300)] transition-colors"
+                        className="font-mono text-[var(--text-body-sm)] text-[var(--accent-secondary-text)] hover:text-[var(--accent-secondary-300)] transition-colors"
                       >
                         {entry.best_solution_submission_id.slice(0, 8)}…
                       </Link>

@@ -141,12 +141,12 @@ export default async function ChallengePage({
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] flex items-center gap-2">
-              <GitCommit className="w-4 h-4 text-[var(--accent-secondary-400)]" />
+              <GitCommit className="w-4 h-4 text-[var(--accent-secondary-text)]" />
               {t("challenge.latestSubmissions")}
             </h3>
             <Link
               href={`/challenges/${id}/solution-submissions`}
-              className="text-[var(--text-body-sm)] text-[var(--text-muted)] hover:text-[var(--accent-primary-400)] transition-colors"
+              className="text-[var(--text-body-sm)] text-[var(--text-muted)] hover:text-[var(--accent-primary-text)] transition-colors"
             >
               {t("challenge.viewAll")}
             </Link>
@@ -171,7 +171,7 @@ export default async function ChallengePage({
                       {formatDate(s.created_at)}
                     </span>
                   </div>
-                  <span className="text-[var(--text-body-sm)] font-mono text-[var(--accent-primary-400)]">
+                  <span className="text-[var(--text-body-sm)] font-mono text-[var(--accent-primary-text)]">
                     {formatDeclaredMetric(
                       metricSchema,
                       primaryMetric(metricSchema, s.aggregate_metrics),
@@ -187,12 +187,12 @@ export default async function ChallengePage({
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-[var(--accent-primary-400)]" />
+              <BarChart3 className="w-4 h-4 text-[var(--accent-primary-text)]" />
               {t("challenge.topLeaderboard")}
             </h3>
             <Link
               href={`/challenges/${id}/leaderboard`}
-              className="text-[var(--text-body-sm)] text-[var(--text-muted)] hover:text-[var(--accent-primary-400)] transition-colors"
+              className="text-[var(--text-body-sm)] text-[var(--text-muted)] hover:text-[var(--accent-primary-text)] transition-colors"
             >
               {t("challenge.viewAll")}
             </Link>
@@ -212,11 +212,11 @@ export default async function ChallengePage({
                     <span
                       className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold ${
                         idx === 0
-                          ? "bg-[var(--accent-primary-500)]/20 text-[var(--accent-primary-400)]"
+                          ? "bg-[var(--accent-primary-500)]/20 text-[var(--accent-primary-text)]"
                           : idx === 1
                             ? "bg-[var(--text-muted)]/20 text-[var(--text-muted)]"
                             : idx === 2
-                              ? "bg-[var(--accent-secondary-500)]/20 text-[var(--accent-secondary-400)]"
+                              ? "bg-[var(--accent-secondary-500)]/20 text-[var(--accent-secondary-text)]"
                               : "text-[var(--text-muted)]"
                       }`}
                     >
@@ -226,7 +226,7 @@ export default async function ChallengePage({
                       {entry.agent_name}
                     </span>
                   </div>
-                  <span className="text-[var(--text-body-sm)] font-mono text-[var(--accent-primary-400)]">
+                  <span className="text-[var(--text-body-sm)] font-mono text-[var(--accent-primary-text)]">
                     {formatDeclaredMetric(
                       metricSchema,
                       primaryMetric(metricSchema, entry.aggregate_metrics),
@@ -242,12 +242,12 @@ export default async function ChallengePage({
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] flex items-center gap-2">
-              <MessageSquare className="w-4 h-4 text-[var(--accent-secondary-400)]" />
+              <MessageSquare className="w-4 h-4 text-[var(--accent-secondary-text)]" />
               {t("challenge.recentDiscussions")}
             </h3>
             <Link
               href={`/challenges/${id}/discussions`}
-              className="text-[var(--text-body-sm)] text-[var(--text-muted)] hover:text-[var(--accent-primary-400)] transition-colors"
+              className="text-[var(--text-body-sm)] text-[var(--text-muted)] hover:text-[var(--accent-primary-text)] transition-colors"
             >
               {t("challenge.viewAll")}
             </Link>

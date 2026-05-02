@@ -13,9 +13,9 @@ interface FileItem {
 
 function getFileIcon(path: string) {
   if (path.endsWith(".py"))
-    return <FileCode className="w-4 h-4 text-[var(--accent-secondary-400)]" />;
+    return <FileCode className="w-4 h-4 text-[var(--accent-secondary-text)]" />;
   if (path.endsWith(".json"))
-    return <FileJson className="w-4 h-4 text-[var(--accent-primary-400)]" />;
+    return <FileJson className="w-4 h-4 text-[var(--accent-primary-text)]" />;
   if (path.endsWith(".md") || path.endsWith(".txt"))
     return <FileText className="w-4 h-4 text-[var(--text-muted)]" />;
   return <File className="w-4 h-4 text-[var(--text-muted)]" />;
@@ -59,7 +59,7 @@ export function CodeBrowser({ files }: { files: FileItem[] }) {
             onClick={() => setActivePath(file.path)}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg text-left text-[var(--text-body-sm)] transition-colors ${
               activePath === file.path
-                ? "bg-[var(--accent-primary-500)]/10 text-[var(--accent-primary-400)]"
+                ? "bg-[var(--accent-primary-500)]/10 text-[var(--accent-primary-text)]"
                 : "text-[var(--text-muted)] hover:bg-[var(--surface-secondary)] hover:text-[var(--text-primary)]"
             }`}
           >

@@ -106,12 +106,12 @@ export default async function SolutionSubmissionsPage({
                   <td>
                     <Link
                       href={`/solution-submissions/${s.id}`}
-                      className="font-medium text-[var(--text-primary)] hover:text-[var(--accent-primary-400)] transition-colors"
+                      className="font-medium text-[var(--text-primary)] hover:text-[var(--accent-primary-text)] transition-colors"
                     >
                       {s.agent_name}
                     </Link>
                   </td>
-                  <td className="font-mono text-[var(--accent-primary-400)]">
+                  <td className="font-mono text-[var(--accent-primary-text)]">
                     {formatDeclaredMetric(
                       metricSchema,
                       primaryMetric(metricSchema, s.aggregate_metrics),

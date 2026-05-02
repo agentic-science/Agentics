@@ -53,7 +53,7 @@ export default async function HomePage() {
         {/* Stats Row */}
         <div className="grid grid-cols-3 gap-4 max-w-lg mx-auto mt-8">
           <div className="card flex flex-col items-center gap-1 py-4">
-            <FlaskConical className="w-5 h-5 text-[var(--accent-secondary-400)]" />
+            <FlaskConical className="w-5 h-5 text-[var(--accent-secondary-text)]" />
             <span className="text-2xl font-bold font-[var(--font-mono)] text-[var(--text-primary)]">
               {challenges.items.length}
             </span>
@@ -62,7 +62,7 @@ export default async function HomePage() {
             </span>
           </div>
           <div className="card flex flex-col items-center gap-1 py-4">
-            <Bot className="w-5 h-5 text-[var(--accent-primary-400)]" />
+            <Bot className="w-5 h-5 text-[var(--accent-primary-text)]" />
             <span className="text-2xl font-bold font-[var(--font-mono)] text-[var(--text-primary)]">
               —
             </span>
@@ -71,7 +71,7 @@ export default async function HomePage() {
             </span>
           </div>
           <div className="card flex flex-col items-center gap-1 py-4">
-            <Users className="w-5 h-5 text-[var(--accent-secondary-400)]" />
+            <Users className="w-5 h-5 text-[var(--accent-secondary-text)]" />
             <span className="text-2xl font-bold font-[var(--font-mono)] text-[var(--text-primary)]">
               —
             </span>
@@ -93,7 +93,7 @@ export default async function HomePage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="card flex flex-col items-center text-center gap-3">
             <div className="w-10 h-10 rounded-full bg-[var(--accent-primary-500)]/10 flex items-center justify-center">
-              <span className="text-lg font-bold text-[var(--accent-primary-400)]">
+              <span className="text-lg font-bold text-[var(--accent-primary-text)]">
                 1
               </span>
             </div>
@@ -106,7 +106,7 @@ export default async function HomePage() {
           </div>
           <div className="card flex flex-col items-center text-center gap-3">
             <div className="w-10 h-10 rounded-full bg-[var(--accent-secondary-500)]/10 flex items-center justify-center">
-              <span className="text-lg font-bold text-[var(--accent-secondary-400)]">
+              <span className="text-lg font-bold text-[var(--accent-secondary-text)]">
                 2
               </span>
             </div>
@@ -119,7 +119,7 @@ export default async function HomePage() {
           </div>
           <div className="card flex flex-col items-center text-center gap-3">
             <div className="w-10 h-10 rounded-full bg-[var(--accent-primary-500)]/10 flex items-center justify-center">
-              <span className="text-lg font-bold text-[var(--accent-primary-400)]">
+              <span className="text-lg font-bold text-[var(--accent-primary-text)]">
                 3
               </span>
             </div>
@@ -161,7 +161,7 @@ export default async function HomePage() {
                 className="card group flex flex-col gap-3"
               >
                 <div className="flex items-start justify-between gap-3">
-                  <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent-primary-400)] transition-colors leading-[var(--leading-h3)]">
+                  <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent-primary-text)] transition-colors leading-[var(--leading-h3)]">
                     {challenge.title}
                   </h3>
                   <span className="badge badge-default shrink-0">
@@ -175,7 +175,7 @@ export default async function HomePage() {
                   <span className="text-[var(--text-caption)] text-[var(--text-muted)] font-mono">
                     {challenge.slug}
                   </span>
-                  <ArrowRight className="w-3.5 h-3.5 text-[var(--text-muted)] group-hover:text-[var(--accent-primary-400)] group-hover:translate-x-0.5 transition-all ml-auto" />
+                  <ArrowRight className="w-3.5 h-3.5 text-[var(--text-muted)] group-hover:text-[var(--accent-primary-text)] group-hover:translate-x-0.5 transition-all ml-auto" />
                 </div>
               </Link>
             ))}

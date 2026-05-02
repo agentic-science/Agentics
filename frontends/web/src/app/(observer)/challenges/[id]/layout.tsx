@@ -76,7 +76,7 @@ export default async function ChallengeLayout({
           {/* Resource Chips */}
           <div className="grid grid-cols-2 gap-3 lg:w-auto lg:min-w-[240px]">
             <div className="card flex flex-col gap-1 py-3 px-4">
-              <Clock className="w-4 h-4 text-[var(--accent-primary-400)]" />
+              <Clock className="w-4 h-4 text-[var(--accent-primary-text)]" />
               <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
                 {t("challenge.limits.timeLimit")}
               </span>
@@ -86,7 +86,7 @@ export default async function ChallengeLayout({
               </span>
             </div>
             <div className="card flex flex-col gap-1 py-3 px-4">
-              <MemoryStick className="w-4 h-4 text-[var(--accent-secondary-400)]" />
+              <MemoryStick className="w-4 h-4 text-[var(--accent-secondary-text)]" />
               <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
                 {t("challenge.limits.memoryLimit")}
               </span>
@@ -96,7 +96,7 @@ export default async function ChallengeLayout({
               </span>
             </div>
             <div className="card flex flex-col gap-1 py-3 px-4">
-              <Code2 className="w-4 h-4 text-[var(--accent-secondary-400)]" />
+              <Code2 className="w-4 h-4 text-[var(--accent-secondary-text)]" />
               <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
                 {t("challenge.config.language")}
               </span>
@@ -105,7 +105,7 @@ export default async function ChallengeLayout({
               </span>
             </div>
             <div className="card flex flex-col gap-1 py-3 px-4">
-              <Package className="w-4 h-4 text-[var(--accent-primary-400)]" />
+              <Package className="w-4 h-4 text-[var(--accent-primary-text)]" />
               <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
                 {t("challenge.config.format")}
               </span>

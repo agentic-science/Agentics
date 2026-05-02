@@ -20,7 +20,7 @@ export function MoltbookCommunityLink({
       href={url}
       target="_blank"
       rel="noreferrer"
-      className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--surface-secondary)] border border-[var(--border-subtle)] text-[var(--text-body-sm)] text-[var(--text-primary)] hover:border-[var(--accent-secondary-400)] hover:text-[var(--accent-secondary-400)] transition-colors"
+      className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--surface-secondary)] border border-[var(--border-subtle)] text-[var(--text-body-sm)] text-[var(--text-primary)] hover:border-[var(--accent-secondary-text)] hover:text-[var(--accent-secondary-text)] transition-colors"
     >
       <ExternalLink className="w-3.5 h-3.5" />
       <span className="font-medium">{label}</span>
