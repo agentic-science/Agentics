@@ -1,4 +1,16 @@
+import {
+  Activity,
+  ArrowLeft,
+  Award,
+  Calendar,
+  GitCommit,
+  ShieldCheck,
+  Trophy,
+  User,
+} from "lucide-react";
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
+import { codeToHtml } from "shiki";
 import { CodeBrowser } from "@/components/CodeBrowser";
 import { fetchJson } from "@/lib/api";
 import { formatDate, formatScore } from "@/lib/format";
@@ -14,167 +26,268 @@ import {
   solutionSubmissionResponseSchema,
 } from "@/lib/schemas";
 
-/** Public solution submission detail page with evaluation results and artifact preview. */
 export default async function SolutionSubmissionPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const t = await getTranslations();
 
-  const solutionSubmission = await fetchJson(
+  const submission = await fetchJson(
     `/api/public/solution-submissions/${id}`,
     solutionSubmissionResponseSchema,
   );
+
   const [artifact, detail] = await Promise.all([
     fetchJson(
       `/api/public/solution-submissions/${id}/artifact`,
       solutionSubmissionArtifactResponseSchema,
     ),
     fetchJson(
-      `/api/public/challenges/${solutionSubmission.challenge_id}`,
+      `/api/public/challenges/${submission.challenge_id}`,
       challengeDetailResponseSchema,
     ),
   ]);
 
-  const evalDto =
-    solutionSubmission.validation_evaluation ?? solutionSubmission.evaluation;
+  // Highlight code with Shiki
+  const filesWithHighlight = await Promise.all(
+    artifact.files.map(async (file) => {
+      if (!file.is_text || !file.content) {
+        return {
+          path: file.path,
+          size: file.size,
+          is_text: file.is_text,
+          content: file.content,
+          highlightedHtml: null,
+        };
+      }
+
+      const lang = file.language || detectLanguage(file.path);
+      const html = await codeToHtml(file.content, {
+        lang: lang || "text",
+        theme: "github-dark",
+      });
+
+      return {
+        path: file.path,
+        size: file.size,
+        is_text: file.is_text,
+        content: file.content,
+        highlightedHtml: html,
+      };
+    }),
+  );
+
+  const evalDto = submission.validation_evaluation ?? submission.evaluation;
   const metricSchema = detail.spec.metric_schema;
   const primary = primaryMetric(metricSchema, evalDto?.aggregate_metrics ?? []);
   const officialPrimary = primaryMetric(
     metricSchema,
-    solutionSubmission.official_evaluation?.aggregate_metrics ?? [],
+    submission.official_evaluation?.aggregate_metrics ?? [],
   );
 
   return (
-    <div className="page-stack">
-      <div className="hero-panel workspace-panel">
-        <div className="hero-copy-block">
-          <span className="section-kicker">
-            <Link href={`/challenges/${solutionSubmission.challenge_id}`}>
-              {solutionSubmission.challenge_title ??
-                solutionSubmission.challenge_id}
-            </Link>
-          </span>
-          <h1 className="page-title">
-            Solution submission {solutionSubmission.id.slice(0, 8)}
-          </h1>
-          <p className="page-summary">{solutionSubmission.explanation}</p>
-          <div className="mode-strip">
-            {solutionSubmission.validation_evaluation ? (
-              <span className="mode-badge validation">Validation feedback</span>
-            ) : null}
-            {solutionSubmission.official_evaluation ? (
-              <span className="mode-badge official">
-                Official ranked result
+    <div className="flex flex-col gap-6">
+      {/* Hero Card */}
+      <div className="card-elevated">
+        <Link
+          href={`/challenges/${submission.challenge_id}`}
+          className="inline-flex items-center gap-1.5 text-[var(--text-body-sm)] text-[var(--text-muted)] hover:text-[var(--accent-primary-400)] transition-colors mb-4"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          {submission.challenge_title ?? submission.challenge_id}
+        </Link>
+
+        <div className="flex flex-col lg:flex-row lg:items-start gap-6">
+          <div className="flex-1 min-w-0">
+            <h1
+              className="text-[var(--text-h1)] font-bold text-[var(--text-primary)] leading-[var(--leading-h1)]"
+              style={{ fontFamily: "var(--font-serif)" }}
+            >
+              Submission {submission.id.slice(0, 8)}
+            </h1>
+            <p className="text-[var(--text-body)] text-[var(--text-secondary)] mt-2 leading-[var(--leading-body)]">
+              {submission.explanation}
+            </p>
+
+            <div className="flex flex-wrap gap-2 mt-4">
+              {submission.validation_evaluation ? (
+                <span className="badge badge-validation inline-flex items-center gap-1.5">
+                  <ShieldCheck className="w-3 h-3" />
+                  {t("submissionDetail.evaluation.validationFeedback")}
+                </span>
+              ) : null}
+              {submission.official_evaluation ? (
+                <span className="badge badge-official inline-flex items-center gap-1.5">
+                  <Trophy className="w-3 h-3" />
+                  {t("submissionDetail.evaluation.officialResult")}
+                </span>
+              ) : null}
+              <span
+                className={`badge ${
+                  submission.status === "completed"
+                    ? "badge-success"
+                    : submission.status === "failed"
+                      ? "badge-error"
+                      : submission.status === "running"
+                        ? "badge-warning"
+                        : "badge-default"
+                }`}
+              >
+                {t(`common.status.${submission.status}`)}
               </span>
-            ) : null}
+            </div>
           </div>
-        </div>
-        <div className="stats-grid compact-stats">
-          <div className="stat-card">
-            <span>
-              {metricLabel(
-                metricSchema,
-                metricSchema.ranking.primary_metric_id,
-              )}
-            </span>
-            <strong>{formatDeclaredMetric(metricSchema, primary)}</strong>
-          </div>
-          <div className="stat-card">
-            <span>Rank Score</span>
-            <strong>{formatScore(evalDto?.rank_score)}</strong>
-          </div>
-          <div className="stat-card">
-            <span>Official Primary</span>
-            <strong>
-              {formatDeclaredMetric(metricSchema, officialPrimary)}
-            </strong>
-          </div>
-          <div className="stat-card">
-            <span>Status</span>
-            <strong>{solutionSubmission.status}</strong>
+
+          {/* Stats Grid */}
+          <div className="grid grid-cols-2 gap-3 lg:w-auto lg:min-w-[280px]">
+            <div className="card flex flex-col gap-1 py-3 px-4">
+              <Award className="w-4 h-4 text-[var(--accent-primary-400)]" />
+              <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
+                {metricLabel(
+                  metricSchema,
+                  metricSchema.ranking.primary_metric_id,
+                )}
+              </span>
+              <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
+                {formatDeclaredMetric(metricSchema, primary)}
+              </span>
+            </div>
+            <div className="card flex flex-col gap-1 py-3 px-4">
+              <Activity className="w-4 h-4 text-[var(--accent-secondary-400)]" />
+              <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
+                {t("leaderboard.rankScore")}
+              </span>
+              <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
+                {formatScore(evalDto?.rank_score)}
+              </span>
+            </div>
+            <div className="card flex flex-col gap-1 py-3 px-4">
+              <Trophy className="w-4 h-4 text-[var(--accent-primary-400)]" />
+              <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
+                {t("submissions.officialPrimary")}
+              </span>
+              <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
+                {formatDeclaredMetric(metricSchema, officialPrimary)}
+              </span>
+            </div>
+            <div className="card flex flex-col gap-1 py-3 px-4">
+              <Calendar className="w-4 h-4 text-[var(--accent-secondary-400)]" />
+              <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
+                {t("submissionDetail.metadata.created")}
+              </span>
+              <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
+                {formatDate(submission.created_at)}
+              </span>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="solution-submission-layout">
-        <div className="side-stack">
-          <div className="workspace-panel">
-            <p className="section-kicker">提交元信息</p>
-            <div className="info-grid" style={{ marginTop: 8 }}>
+      {/* Two Column Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.2fr] gap-6">
+        {/* Left: Metrics & Metadata */}
+        <div className="flex flex-col gap-5">
+          {/* Metadata */}
+          <div className="card">
+            <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
+              <User className="w-4 h-4 text-[var(--accent-secondary-400)]" />
+              {t("submissionDetail.metadata.title")}
+            </h3>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
               <div>
-                <span>Agent</span>
-                <strong>
-                  {solutionSubmission.agent_name ?? solutionSubmission.agent_id}
-                </strong>
+                <span className="block text-[var(--text-caption)] text-[var(--text-muted)] uppercase tracking-wide">
+                  {t("submissionDetail.metadata.agent")}
+                </span>
+                <span className="text-[var(--text-body-sm)] font-medium text-[var(--text-primary)]">
+                  {submission.agent_name ?? submission.agent_id}
+                </span>
               </div>
               <div>
-                <span>Parent</span>
-                <strong>
-                  {solutionSubmission.parent_solution_submission_id ?? "—"}
-                </strong>
+                <span className="block text-[var(--text-caption)] text-[var(--text-muted)] uppercase tracking-wide">
+                  {t("submissionDetail.metadata.parent")}
+                </span>
+                <span className="text-[var(--text-body-sm)] font-mono text-[var(--text-primary)]">
+                  {submission.parent_solution_submission_id ?? t("common.none")}
+                </span>
               </div>
               <div>
-                <span>Created</span>
-                <strong>{formatDate(solutionSubmission.created_at)}</strong>
+                <span className="block text-[var(--text-caption)] text-[var(--text-muted)] uppercase tracking-wide">
+                  {t("submissionDetail.metadata.created")}
+                </span>
+                <span className="text-[var(--text-body-sm)] font-mono text-[var(--text-primary)]">
+                  {formatDate(submission.created_at)}
+                </span>
               </div>
               <div>
-                <span>Credit</span>
-                <strong>{solutionSubmission.credit_text || "—"}</strong>
+                <span className="block text-[var(--text-caption)] text-[var(--text-muted)] uppercase tracking-wide">
+                  {t("submissionDetail.metadata.credit")}
+                </span>
+                <span className="text-[var(--text-body-sm)] text-[var(--text-primary)]">
+                  {submission.credit_text || t("common.none")}
+                </span>
               </div>
             </div>
           </div>
 
-          <div className="workspace-panel">
-            <p className="section-kicker">Aggregate Metrics</p>
-            <p className="section-note">
-              Official metrics are leaderboard-visible. Validation metrics are
-              private feedback for the submitting agent.
+          {/* Aggregate Metrics */}
+          <div className="card">
+            <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] mb-2 flex items-center gap-2">
+              <Activity className="w-4 h-4 text-[var(--accent-primary-400)]" />
+              {t("submissionDetail.aggregateMetrics.title")}
+            </h3>
+            <p className="text-[var(--text-caption)] text-[var(--text-muted)] mb-4">
+              {t("submissionDetail.aggregateMetrics.note")}
             </p>
             {evalDto && evalDto.aggregate_metrics.length > 0 ? (
-              <div className="info-grid" style={{ marginTop: 8 }}>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                 {evalDto.aggregate_metrics.map((metric) => {
                   const definition = detail.spec.metric_schema.metrics.find(
                     (item) => item.id === metric.metric_id,
                   );
                   return (
                     <div key={metric.metric_id}>
-                      <span>
+                      <span className="block text-[var(--text-caption)] text-[var(--text-muted)]">
                         {definition?.label ?? metric.metric_id}
                         {definition
                           ? ` · ${metricDirectionLabel(definition.direction)}`
                           : ""}
                       </span>
-                      <strong>
+                      <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
                         {formatDeclaredMetric(metricSchema, metric)}
-                      </strong>
+                      </span>
                     </div>
                   );
                 })}
               </div>
             ) : (
-              <div className="empty-block" style={{ marginTop: 8 }}>
-                无 aggregate metrics
-              </div>
+              <p className="text-[var(--text-muted)] text-[var(--text-body-sm)]">
+                {t("common.empty")}
+              </p>
             )}
           </div>
 
-          <div className="workspace-panel">
-            <p className="section-kicker">Run Metrics</p>
-            {evalDto && evalDto.run_metrics.length > 0 ? (
-              <table style={{ marginTop: 8, fontSize: "0.85rem" }}>
+          {/* Run Metrics */}
+          {evalDto && evalDto.run_metrics.length > 0 && (
+            <div className="card overflow-x-auto">
+              <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] mb-4">
+                {t("submissionDetail.runMetrics.title")}
+              </h3>
+              <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Run</th>
-                    <th>Metrics</th>
+                    <th>{t("submissionDetail.runMetrics.run")}</th>
+                    <th>{t("submissionDetail.runMetrics.metrics")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {evalDto.run_metrics.map((run) => (
                     <tr key={run.run_id}>
-                      <td>{run.run_id}</td>
-                      <td>
+                      <td className="font-mono text-[var(--text-caption)]">
+                        {run.run_id}
+                      </td>
+                      <td className="text-[var(--text-caption)] text-[var(--text-muted)]">
                         {run.metrics
                           .map(
                             (metric) =>
@@ -186,64 +299,91 @@ export default async function SolutionSubmissionPage({
                   ))}
                 </tbody>
               </table>
-            ) : (
-              <div className="empty-block" style={{ marginTop: 8 }}>
-                无 per-run metrics
-              </div>
-            )}
-          </div>
+            </div>
+          )}
 
-          <div className="workspace-panel">
-            <p className="section-kicker">Public Cases</p>
-            {evalDto && evalDto.public_results.length > 0 ? (
-              <table style={{ marginTop: 8, fontSize: "0.85rem" }}>
+          {/* Public Cases */}
+          {evalDto && evalDto.public_results.length > 0 && (
+            <div className="card overflow-x-auto">
+              <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] mb-4">
+                {t("submissionDetail.publicCases.title")}
+              </h3>
+              <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Case</th>
-                    <th>Status</th>
-                    <th>Score</th>
-                    <th>Message</th>
+                    <th>{t("submissionDetail.publicCases.case")}</th>
+                    <th>{t("submissionDetail.publicCases.status")}</th>
+                    <th>{t("submissionDetail.publicCases.score")}</th>
+                    <th>{t("submissionDetail.publicCases.message")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {evalDto.public_results.map((c) => (
                     <tr key={c.case_id}>
-                      <td>{c.case_id}</td>
-                      <td>{c.status}</td>
-                      <td>{formatScore(c.score)}</td>
-                      <td>{c.message ?? "—"}</td>
+                      <td className="font-mono text-[var(--text-caption)]">
+                        {c.case_id}
+                      </td>
+                      <td>
+                        <span
+                          className={`badge ${
+                            c.status === "passed"
+                              ? "badge-success"
+                              : c.status === "failed"
+                                ? "badge-error"
+                                : "badge-warning"
+                          }`}
+                        >
+                          {c.status}
+                        </span>
+                      </td>
+                      <td className="font-mono">{formatScore(c.score)}</td>
+                      <td className="text-[var(--text-muted)] text-[var(--text-caption)]">
+                        {c.message ?? "—"}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            ) : (
-              <div className="empty-block" style={{ marginTop: 8 }}>
-                无公开用例结果
-              </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
-        <div className="workspace-panel">
-          <div className="section-head">
-            <h2>代码浏览</h2>
-            <span className="section-meta">
-              {artifact.archive_name} · {artifact.file_count} files ·{" "}
-              {artifact.total_uncompressed_size.toLocaleString()} bytes
+        {/* Right: Code Browser */}
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] flex items-center gap-2">
+              <GitCommit className="w-4 h-4 text-[var(--accent-secondary-400)]" />
+              {t("submissionDetail.codeBrowser.title")}
+            </h3>
+            <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
+              {artifact.archive_name} · {artifact.file_count}{" "}
+              {t("submissionDetail.codeBrowser.files")} ·{" "}
+              {artifact.total_uncompressed_size.toLocaleString()}{" "}
+              {t("submissionDetail.codeBrowser.bytes")}
             </span>
           </div>
-          <div style={{ marginTop: 12 }}>
-            <CodeBrowser
-              files={artifact.files.map((f) => ({
-                path: f.path,
-                size: f.size,
-                is_text: f.is_text,
-                content: f.content,
-              }))}
-            />
-          </div>
+          <CodeBrowser
+            files={filesWithHighlight.map((f) => ({
+              path: f.path,
+              size: f.size,
+              is_text: f.is_text,
+              content: f.content,
+              highlightedHtml: f.highlightedHtml,
+            }))}
+          />
         </div>
       </div>
     </div>
   );
+}
+
+function detectLanguage(path: string): string {
+  if (path.endsWith(".py")) return "python";
+  if (path.endsWith(".json")) return "json";
+  if (path.endsWith(".md")) return "markdown";
+  if (path.endsWith(".sh")) return "bash";
+  if (path.endsWith(".js") || path.endsWith(".ts")) return "typescript";
+  if (path.endsWith(".yaml") || path.endsWith(".yml")) return "yaml";
+  if (path.endsWith(".toml")) return "toml";
+  return "text";
 }
