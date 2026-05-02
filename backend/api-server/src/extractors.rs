@@ -6,7 +6,7 @@ use axum::{
 use serde::de::DeserializeOwned;
 
 use shared::auth;
-use shared::db::queries::authenticate_agent_token;
+use shared::db::authenticate_agent_token;
 use shared::models::request::{
     CreateChallengeRequest, CreateChallengeVersionRequest, CreateDiscussionReplyRequest,
     CreateDiscussionThreadRequest, CreateSolutionSubmissionRequest, RegisterAgentRequest,

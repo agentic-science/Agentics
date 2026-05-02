@@ -13,7 +13,7 @@ use tracing::{error, info, warn};
 
 use shared::config::Config;
 use shared::db::pool::create_pool;
-use shared::db::queries::{
+use shared::db::{
     HeartbeatPayload, PersistedEvaluationResult, claim_next_evaluation_job,
     mark_evaluation_finished, mark_evaluation_started, reap_stuck_jobs, upsert_service_heartbeat,
 };
@@ -140,7 +140,7 @@ pub async fn run_worker_cycle(
     let evaluation_id = uuid::Uuid::new_v4().to_string();
     mark_evaluation_started(
         db,
-        &shared::db::queries::MarkEvaluationStartedInput {
+        &shared::db::MarkEvaluationStartedInput {
             evaluation_id: evaluation_id.clone(),
             solution_submission_id: job.solution_submission_id.clone(),
             job_id: job.id.clone(),

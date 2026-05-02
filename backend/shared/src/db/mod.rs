@@ -3,13 +3,22 @@
 pub mod agents;
 pub mod challenges;
 pub mod discussions;
+pub mod evaluation_jobs;
+mod evaluation_policy;
+pub mod evaluations;
+mod json;
+pub mod leaderboard;
 pub mod maintenance;
 pub mod pool;
-pub mod queries;
+pub mod solution_submissions;
 
 pub use agents::*;
 pub use challenges::*;
 pub use discussions::*;
+pub use evaluation_jobs::*;
+pub use evaluation_policy::*;
+pub use evaluations::*;
+pub use leaderboard::*;
 pub use maintenance::*;
 pub use pool::*;
-pub use queries::*;
+pub use solution_submissions::*;

@@ -1,0 +1,185 @@
+use sqlx::PgPool;
+
+use crate::error::{AppError, Result};
+use crate::models::evaluation::{
+    EvaluationStatus, MetricValue, PublicCaseResult, RunMetricResult, ScoreSummary, ScoringMode,
+};
+
+use super::leaderboard::{
+    update_official_score_for_solution_submission_tx,
+    upsert_leaderboard_entry_for_solution_submission_tx,
+};
+
+/// Input for creating or resetting the evaluation row associated with a job.
+#[derive(Debug, Clone)]
+pub struct MarkEvaluationStartedInput {
+    pub evaluation_id: String,
+    pub solution_submission_id: String,
+    pub job_id: String,
+    pub eval_type: ScoringMode,
+}
+
+/// Mark a job's evaluation as running.
+pub async fn mark_evaluation_started(
+    pool: &PgPool,
+    input: &MarkEvaluationStartedInput,
+) -> Result<()> {
+    let eval_type_str = input.eval_type.as_str();
+
+    sqlx::query(
+        r#"
+        INSERT INTO evaluations (id, solution_submission_id, job_id, eval_type, status, started_at)
+        VALUES ($1, $2, $3, $4, 'running', NOW())
+        ON CONFLICT (job_id) DO UPDATE
+        SET status = 'running',
+            primary_score = NULL,
+            rank_score = NULL,
+            aggregate_metrics_json = '[]'::jsonb,
+            run_metrics_json = '[]'::jsonb,
+            public_results_json = NULL,
+            validation_summary_json = NULL,
+            official_summary_json = NULL,
+            log_path = NULL,
+            started_at = NOW(),
+            finished_at = NULL
+        "#,
+    )
+    .bind(&input.evaluation_id)
+    .bind(&input.solution_submission_id)
+    .bind(&input.job_id)
+    .bind(eval_type_str)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+/// Validated runner result prepared for persistence.
+#[derive(Debug, Clone)]
+pub struct PersistedEvaluationResult {
+    pub evaluation_id: String,
+    pub solution_submission_id: String,
+    pub job_id: String,
+    pub eval_type: ScoringMode,
+    pub status: EvaluationStatus,
+    pub primary_score: Option<f64>,
+    pub rank_score: Option<f64>,
+    pub aggregate_metrics: Vec<MetricValue>,
+    pub run_metrics: Vec<RunMetricResult>,
+    pub public_results: Vec<PublicCaseResult>,
+    pub validation_summary: Option<ScoreSummary>,
+    pub official_summary: Option<ScoreSummary>,
+    pub log_path: Option<String>,
+    pub last_error: Option<String>,
+}
+
+/// Persist a finished evaluation and update dependent solution submission and leaderboard state.
+pub async fn mark_evaluation_finished(
+    pool: &PgPool,
+    result: &PersistedEvaluationResult,
+) -> Result<()> {
+    let mut tx = pool.begin().await?;
+
+    let public_results_json = serde_json::to_value(&result.public_results)
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let validation_summary_json = serde_json::to_value(&result.validation_summary)
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let official_json = serde_json::to_value(&result.official_summary)
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let aggregate_metrics_json = serde_json::to_value(&result.aggregate_metrics)
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let run_metrics_json =
+        serde_json::to_value(&result.run_metrics).map_err(|e| AppError::Internal(e.to_string()))?;
+    let status_str = match result.status {
+        EvaluationStatus::Completed => "completed",
+        _ => "failed",
+    };
+
+    sqlx::query(
+        r#"
+        UPDATE evaluations
+        SET status = $2, primary_score = $3, rank_score = $4,
+            aggregate_metrics_json = $5, run_metrics_json = $6,
+            public_results_json = $7, validation_summary_json = $8,
+            official_summary_json = $9, log_path = $10, finished_at = NOW()
+        WHERE job_id = $1
+        "#,
+    )
+    .bind(&result.job_id)
+    .bind(status_str)
+    .bind(result.primary_score)
+    .bind(result.rank_score)
+    .bind(&aggregate_metrics_json)
+    .bind(&run_metrics_json)
+    .bind(&public_results_json)
+    .bind(&validation_summary_json)
+    .bind(&official_json)
+    .bind(&result.log_path)
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        UPDATE evaluation_jobs
+        SET status = $2, finished_at = NOW(), last_error = $3
+        WHERE id = $1
+        "#,
+    )
+    .bind(&result.job_id)
+    .bind(status_str)
+    .bind(&result.last_error)
+    .execute(&mut *tx)
+    .await?;
+
+    match result.eval_type {
+        ScoringMode::Validation => {
+            let sub_status = if result.status == EvaluationStatus::Completed {
+                "completed"
+            } else {
+                "failed"
+            };
+            sqlx::query(
+                "UPDATE solution_submissions SET status = $2, visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1"
+            )
+            .bind(&result.solution_submission_id)
+            .bind(sub_status)
+            .execute(&mut *tx)
+            .await?;
+        }
+        ScoringMode::Official => {
+            let visible = result.status == EvaluationStatus::Completed;
+            let sub_status = if visible { "completed" } else { "failed" };
+            sqlx::query(
+                "UPDATE solution_submissions SET status = $2, visible_after_eval = $3, updated_at = NOW() WHERE id = $1"
+            )
+            .bind(&result.solution_submission_id)
+            .bind(sub_status)
+            .bind(visible)
+            .execute(&mut *tx)
+            .await?;
+
+            if result.status == EvaluationStatus::Completed
+                && let Some(rank_score) = result.rank_score
+            {
+                upsert_leaderboard_entry_for_solution_submission_tx(
+                    &mut tx,
+                    &result.solution_submission_id,
+                    rank_score,
+                    &result.public_results,
+                    &result.aggregate_metrics,
+                )
+                .await?;
+                update_official_score_for_solution_submission_tx(
+                    &mut tx,
+                    &result.solution_submission_id,
+                    rank_score,
+                    &result.aggregate_metrics,
+                )
+                .await?;
+            }
+        }
+    }
+
+    tx.commit().await?;
+    Ok(())
+}

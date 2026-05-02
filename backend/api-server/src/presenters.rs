@@ -1,6 +1,6 @@
 //! Conversion helpers from database records to API DTOs.
 
-use shared::db::queries::{AgentRecord, ChallengeVersionRecord, SolutionSubmissionRecord};
+use shared::db::{AgentRecord, ChallengeVersionRecord, SolutionSubmissionRecord};
 use shared::models::challenge::*;
 use shared::models::request::*;
 

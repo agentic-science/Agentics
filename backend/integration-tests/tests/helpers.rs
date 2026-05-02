@@ -30,7 +30,7 @@ pub async fn spawn_app(pool: PgPool) -> TestApp {
 /// directories while exercising the real router and startup seeding path.
 pub async fn spawn_app_with_config(pool: PgPool, config: Config) -> TestApp {
     if Path::new(&config.challenges_root).exists() {
-        shared::db::queries::ensure_challenges_seeded_from_root(&pool, &config.challenges_root)
+        shared::db::ensure_challenges_seeded_from_root(&pool, &config.challenges_root)
             .await
             .expect("failed to seed challenges");
     }

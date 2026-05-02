@@ -9,8 +9,7 @@ use uuid::Uuid;
 
 use shared::auth;
 use shared::challenge_bundle;
-use shared::db::queries as db;
-use shared::db::queries::QueueEvaluationJobInput;
+use shared::db::{self, QueueEvaluationJobInput};
 use shared::error::{AppError, Result};
 use shared::models::challenge::CreateChallengeVersionResponse;
 use shared::models::evaluation::ScoringMode;
