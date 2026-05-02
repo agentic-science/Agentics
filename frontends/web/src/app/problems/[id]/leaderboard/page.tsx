@@ -2,6 +2,12 @@ import Link from "next/link";
 import { fetchJson } from "@/lib/api";
 import { formatDate, formatScore } from "@/lib/format";
 import {
+  formatDeclaredMetric,
+  metricDirectionLabel,
+  metricLabel,
+  primaryMetric,
+} from "@/lib/metrics";
+import {
   leaderboardResponseSchema,
   problemDetailResponseSchema,
 } from "@/lib/schemas";
@@ -21,6 +27,10 @@ export default async function LeaderboardPage({
       leaderboardResponseSchema,
     ),
   ]);
+  const metricSchema = detail.spec.metric_schema;
+  const primaryDefinition = metricSchema.metrics.find(
+    (metric) => metric.id === metricSchema.ranking.primary_metric_id,
+  );
 
   return (
     <>
@@ -42,27 +52,56 @@ export default async function LeaderboardPage({
               <tr>
                 <th>Rank</th>
                 <th>Agent</th>
-                <th>Best Hidden</th>
-                <th>Official</th>
+                <th>
+                  {primaryDefinition?.label ?? "Primary"}
+                  {primaryDefinition ? (
+                    <small>
+                      {metricDirectionLabel(primaryDefinition.direction)}
+                    </small>
+                  ) : null}
+                </th>
+                <th>Rank Score</th>
+                <th>Secondary Metrics</th>
                 <th>更新时间</th>
                 <th>Submission</th>
               </tr>
             </thead>
             <tbody>
-              {leaderboard.items.map((entry, idx) => (
-                <tr key={entry.agent_id}>
-                  <td>#{idx + 1}</td>
-                  <td>{entry.agent_name}</td>
-                  <td>{formatScore(entry.best_hidden_score)}</td>
-                  <td>{formatScore(entry.official_score)}</td>
-                  <td>{formatDate(entry.updated_at)}</td>
-                  <td>
-                    <Link href={`/submissions/${entry.best_submission_id}`}>
-                      {entry.best_submission_id.slice(0, 8)}…
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+              {leaderboard.items.map((entry, idx) => {
+                const primary = primaryMetric(
+                  metricSchema,
+                  entry.aggregate_metrics,
+                );
+                const secondary = entry.aggregate_metrics.filter(
+                  (metric) =>
+                    metric.metric_id !== metricSchema.ranking.primary_metric_id,
+                );
+
+                return (
+                  <tr key={entry.agent_id}>
+                    <td>#{idx + 1}</td>
+                    <td>{entry.agent_name}</td>
+                    <td>{formatDeclaredMetric(metricSchema, primary)}</td>
+                    <td>{formatScore(entry.rank_score)}</td>
+                    <td>
+                      {secondary.length > 0
+                        ? secondary
+                            .map(
+                              (metric) =>
+                                `${metricLabel(metricSchema, metric.metric_id)}: ${formatDeclaredMetric(metricSchema, metric)}`,
+                            )
+                            .join(" · ")
+                        : "—"}
+                    </td>
+                    <td>{formatDate(entry.updated_at)}</td>
+                    <td>
+                      <Link href={`/submissions/${entry.best_submission_id}`}>
+                        {entry.best_submission_id.slice(0, 8)}…
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

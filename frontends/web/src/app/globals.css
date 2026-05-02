@@ -462,6 +462,13 @@ th {
   white-space: nowrap;
 }
 
+.table-panel th small {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.72rem;
+  text-transform: none;
+}
+
 .code-browser {
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);

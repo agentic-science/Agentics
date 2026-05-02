@@ -3,6 +3,13 @@ import { CodeBrowser } from "@/components/CodeBrowser";
 import { fetchJson } from "@/lib/api";
 import { formatDate, formatScore } from "@/lib/format";
 import {
+  formatDeclaredMetric,
+  metricDirectionLabel,
+  metricLabel,
+  primaryMetric,
+} from "@/lib/metrics";
+import {
+  problemDetailResponseSchema,
   submissionArtifactResponseSchema,
   submissionResponseSchema,
 } from "@/lib/schemas";
@@ -15,15 +22,28 @@ export default async function SubmissionPage({
 }) {
   const { id } = await params;
 
-  const [submission, artifact] = await Promise.all([
-    fetchJson(`/api/public/submissions/${id}`, submissionResponseSchema),
+  const submission = await fetchJson(
+    `/api/public/submissions/${id}`,
+    submissionResponseSchema,
+  );
+  const [artifact, detail] = await Promise.all([
     fetchJson(
       `/api/public/submissions/${id}/artifact`,
       submissionArtifactResponseSchema,
     ),
+    fetchJson(
+      `/api/public/problems/${submission.problem_id}`,
+      problemDetailResponseSchema,
+    ),
   ]);
 
   const evalDto = submission.public_evaluation ?? submission.evaluation;
+  const metricSchema = detail.spec.metric_schema;
+  const primary = primaryMetric(metricSchema, evalDto?.aggregate_metrics ?? []);
+  const officialPrimary = primaryMetric(
+    metricSchema,
+    submission.official_evaluation?.aggregate_metrics ?? [],
+  );
 
   return (
     <div className="page-stack">
@@ -39,26 +59,22 @@ export default async function SubmissionPage({
         </div>
         <div className="stats-grid compact-stats">
           <div className="stat-card">
-            <span>Public Score</span>
-            <strong>{formatScore(evalDto?.primary_score)}</strong>
+            <span>
+              {metricLabel(
+                metricSchema,
+                metricSchema.ranking.primary_metric_id,
+              )}
+            </span>
+            <strong>{formatDeclaredMetric(metricSchema, primary)}</strong>
           </div>
           <div className="stat-card">
-            <span>Shown Avg</span>
-            <strong>
-              {evalDto && evalDto.shown_results.length > 0
-                ? formatScore(
-                    evalDto.shown_results.reduce((s, r) => s + r.score, 0) /
-                      evalDto.shown_results.length,
-                  )
-                : "n/a"}
-            </strong>
+            <span>Rank Score</span>
+            <strong>{formatScore(evalDto?.rank_score)}</strong>
           </div>
           <div className="stat-card">
             <span>Official</span>
             <strong>
-              {formatScore(
-                submission.official_evaluation?.official_summary?.score,
-              )}
+              {formatDeclaredMetric(metricSchema, officialPrimary)}
             </strong>
           </div>
           <div className="stat-card">
@@ -90,6 +106,69 @@ export default async function SubmissionPage({
                 <strong>{submission.credit_text || "—"}</strong>
               </div>
             </div>
+          </div>
+
+          <div className="workspace-panel">
+            <p className="section-kicker">Aggregate Metrics</p>
+            {evalDto && evalDto.aggregate_metrics.length > 0 ? (
+              <div className="info-grid" style={{ marginTop: 8 }}>
+                {evalDto.aggregate_metrics.map((metric) => {
+                  const definition = detail.spec.metric_schema.metrics.find(
+                    (item) => item.id === metric.metric_id,
+                  );
+                  return (
+                    <div key={metric.metric_id}>
+                      <span>
+                        {definition?.label ?? metric.metric_id}
+                        {definition
+                          ? ` · ${metricDirectionLabel(definition.direction)}`
+                          : ""}
+                      </span>
+                      <strong>
+                        {formatDeclaredMetric(metricSchema, metric)}
+                      </strong>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="empty-block" style={{ marginTop: 8 }}>
+                无 aggregate metrics
+              </div>
+            )}
+          </div>
+
+          <div className="workspace-panel">
+            <p className="section-kicker">Run Metrics</p>
+            {evalDto && evalDto.run_metrics.length > 0 ? (
+              <table style={{ marginTop: 8, fontSize: "0.85rem" }}>
+                <thead>
+                  <tr>
+                    <th>Run</th>
+                    <th>Metrics</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {evalDto.run_metrics.map((run) => (
+                    <tr key={run.run_id}>
+                      <td>{run.run_id}</td>
+                      <td>
+                        {run.metrics
+                          .map(
+                            (metric) =>
+                              `${metricLabel(metricSchema, metric.metric_id)}: ${formatDeclaredMetric(metricSchema, metric)}`,
+                          )
+                          .join(" · ")}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="empty-block" style={{ marginTop: 8 }}>
+                无 per-run metrics
+              </div>
+            )}
           </div>
 
           <div className="workspace-panel">

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { fetchJson } from "@/lib/api";
 import { formatDate, formatScore } from "@/lib/format";
+import { formatDeclaredMetric, primaryMetric } from "@/lib/metrics";
 import {
   problemDetailResponseSchema,
   publicSubmissionListResponseSchema,
@@ -26,6 +27,10 @@ export default async function SubmissionsPage({
     submissions.items.length > 0
       ? formatDate(submissions.items[0].created_at)
       : "—";
+  const metricSchema = detail.spec.metric_schema;
+  const primaryDefinition = metricSchema.metrics.find(
+    (metric) => metric.id === metricSchema.ranking.primary_metric_id,
+  );
 
   return (
     <>
@@ -48,8 +53,8 @@ export default async function SubmissionsPage({
             <thead>
               <tr>
                 <th>Agent</th>
-                <th>Public</th>
-                <th>Hidden</th>
+                <th>{primaryDefinition?.label ?? "Primary"}</th>
+                <th>Rank Score</th>
                 <th>Official</th>
                 <th>Parent</th>
                 <th>Time</th>
@@ -61,8 +66,13 @@ export default async function SubmissionsPage({
                   <td>
                     <Link href={`/submissions/${s.id}`}>{s.agent_name}</Link>
                   </td>
-                  <td>{formatScore(s.public_score)}</td>
-                  <td>{formatScore(s.hidden_score)}</td>
+                  <td>
+                    {formatDeclaredMetric(
+                      metricSchema,
+                      primaryMetric(metricSchema, s.aggregate_metrics),
+                    )}
+                  </td>
+                  <td>{formatScore(s.rank_score)}</td>
                   <td>{formatScore(s.official_score)}</td>
                   <td>{s.parent_submission_id ?? "—"}</td>
                   <td>{formatDate(s.created_at)}</td>

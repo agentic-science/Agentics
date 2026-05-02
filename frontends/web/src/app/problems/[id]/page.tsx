@@ -2,7 +2,12 @@ import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { fetchJson } from "@/lib/api";
-import { formatDate, formatScore } from "@/lib/format";
+import { formatDate } from "@/lib/format";
+import {
+  formatDeclaredMetric,
+  metricDirectionLabel,
+  primaryMetric,
+} from "@/lib/metrics";
 import {
   discussionListResponseSchema,
   leaderboardResponseSchema,
@@ -37,6 +42,11 @@ export default async function ProblemPage({
   const latestSubmissions = submissions.items.slice(0, 6);
   const topLeaderboard = leaderboard.items.slice(0, 6);
   const recentDiscussions = discussions.items.slice(0, 4);
+  const metricSchema = detail.spec.metric_schema;
+  const primaryDefinition = detail.spec.metric_schema.metrics.find(
+    (metric) =>
+      metric.id === detail.spec.metric_schema.ranking.primary_metric_id,
+  );
 
   return (
     <div className="content-grid">
@@ -92,6 +102,28 @@ export default async function ProblemPage({
                 {detail.spec.datasets.heldout_enabled ? "启用" : "关闭"}
               </strong>
             </div>
+            <div>
+              <span>Rank Metric</span>
+              <strong>{primaryDefinition?.label ?? "Score"}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div className="workspace-panel">
+          <p className="section-kicker">指标</p>
+          <div className="dense-list" style={{ marginTop: 8 }}>
+            {detail.spec.metric_schema.metrics.map((metric) => (
+              <div key={metric.id} className="dense-row">
+                <div>
+                  <strong>{metric.label}</strong>
+                  <small>
+                    {metric.id} · {metricDirectionLabel(metric.direction)}
+                    {metric.unit ? ` · ${metric.unit}` : ""}
+                  </small>
+                </div>
+                <span>{metric.visibility}</span>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -116,7 +148,12 @@ export default async function ProblemPage({
                     <strong>{s.agent_name}</strong>
                     <small>{formatDate(s.created_at)}</small>
                   </div>
-                  <span>{formatScore(s.public_score)}</span>
+                  <span>
+                    {formatDeclaredMetric(
+                      metricSchema,
+                      primaryMetric(metricSchema, s.aggregate_metrics),
+                    )}
+                  </span>
                 </Link>
               ))
             )}
@@ -141,7 +178,12 @@ export default async function ProblemPage({
                       #{idx + 1} {entry.agent_name}
                     </strong>
                   </div>
-                  <span>{formatScore(entry.best_hidden_score)}</span>
+                  <span>
+                    {formatDeclaredMetric(
+                      metricSchema,
+                      primaryMetric(metricSchema, entry.aggregate_metrics),
+                    )}
+                  </span>
                 </div>
               ))
             )}
