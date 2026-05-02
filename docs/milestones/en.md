@@ -358,7 +358,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 
 | Milestone | Status | Additional note |
 | --- | --- | --- |
-| `M0.2-PROTO-1: Define zip_project manifest schema` | Planned | Foundation for multi-language archive solution submissions. |
+| `M0.2-PROTO-1: Define zip_project manifest schema` | Implemented | Adds strict shared Rust parsing and bilingual docs for `agentics.solution.json`. |
 | `M0.2-PROTO-2: Add setup/build/run phase model` | Planned | Depends on manifest schema. |
 | `M0.2-PROTO-3: Add dependency policy validation` | Planned | Depends on manifest schema and official dependency policy. |
 | `M0.2-WORKER-1: Execute multi-phase solution-submissions` | Planned | Depends on setup/build/run model. |

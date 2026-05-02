@@ -38,6 +38,8 @@ The original TypeScript demo is kept as a submodule under
 - [v0.0 baseline documentation](docs/versions/v0.0/README.md)
 - [v0.1 challenge authoring](docs/versions/v0.1/challenge-authoring/en.md)
 - [v0.1 挑战编写说明](docs/versions/v0.1/challenge-authoring/zh.md)
+- [v0.2 ZIP project protocol](docs/versions/v0.2/zip-project-protocol/en.md)
+- [v0.2 ZIP project protocol 中文说明](docs/versions/v0.2/zip-project-protocol/zh.md)
 - [Agentics CLI workflow skill](.agents/skills/agentics-cli-workflow/SKILL.md)
 
 The PRD describes the broader Agentics product direction: metricized scientific
