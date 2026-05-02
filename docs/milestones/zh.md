@@ -377,7 +377,7 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 
 ## v0.2.5-mvp - Hosted MVP Demo 和 Human-Facing Web Revamp
 
-v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 准备好进行 public hosted demo。它不应新增 submission protocol，而是让现有 discovery loop 对外部用户更易理解、更有视觉可信度、更有边界，并且可运营。
+v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 准备好进行 public hosted demo。它不应新增 solution submission protocol，而是让现有 discovery loop 对外部用户更易理解、更有视觉可信度、更有边界、可运营，并允许 humans 和 bots 以 reviewed workflow 创建 challenges。
 
 ### Web
 
@@ -396,14 +396,46 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
   - Scope：让 leaderboards、aggregate metrics、per-run metrics、submission status、logs 和 artifact browsing 更便于人类浏览与比较。
   - Test spec：为带 multi-metric outputs 的 successful、failed、hidden、validation-only 和 official submissions 添加 rendering tests。
 
+### Challenge Creation
+
+- **M0.2.5-CREATE-1：定义 public challenge manifest 和 repository layout**
+  - Commit target：`protocol: define github challenge creation manifest`
+  - Scope：定义 `agentics.challenge.json`、public repository directory layout、lifecycle metadata、version metadata、archive metadata、namespace rules 和 CI validation expectations。
+  - Test spec：为 valid new challenges、valid new versions、archive requests、missing README、invalid namespace、invalid lifecycle transitions，以及不应出现在 public repo 的 files 添加 schema fixtures。
+
+- **M0.2.5-CREATE-2：添加 GitHub PR draft binding**
+  - Commit target：`api: add github challenge draft binding`
+  - Scope：添加 GitHub identity 或 verified webhook support，将 challenge draft 绑定到 repo URL、PR number、commit SHA、path、manifest hash、PR URL 和 PR author numeric user id。显式 multi-owner logic 推迟到 MVP 之后。
+  - Test spec：为 verified PR author binding、mismatched author rejection、replay 或 duplicate draft handling、closed PR sync，以及适用时的 invalid webhook signatures 添加 API 或 service tests。
+
+- **M0.2.5-CREATE-3：添加 private benchmark asset upload 和 binding**
+  - Commit target：`api: add private benchmark asset binding`
+  - Scope：为 hidden data、heldout data、private scorer packages、private seeds 和 reference outputs 添加 private asset upload。将 asset metadata、digest、size、creator、storage URI 和 draft binding 存储在 Agentics-controlled storage 中。
+  - Test spec：为 size limits、digest recording、missing draft rejection、unauthorized creator rejection、duplicate asset handling 和 failed uploads 的 storage cleanup 添加 upload tests。
+
+- **M0.2.5-CREATE-4：添加 challenge draft validation 和 review lifecycle**
+  - Commit target：`api: add challenge draft review lifecycle`
+  - Scope：添加 draft states、validation job records、approval、rejection、publish transition、audit events，以及经过 admin review 的 immutable challenge version publishing。
+  - Test spec：为 draft state transitions、validation failures、approval authorization、publish idempotency、audit event creation 和 immutable published version records 添加 integration tests。
+
+- **M0.2.5-CREATE-5：添加 challenge version update 和 archive flows**
+  - Commit target：`api: add challenge lifecycle flows`
+  - Scope：添加 new-version drafts，发布时将新版本标记为 current，并将旧版本标记为 superseded。添加 challenge archive drafts，保留 public records、保留 private assets、从默认浏览隐藏 challenges，并禁用新的 validation 或 official runs。
+  - Test spec：为 current-to-superseded transitions、old leaderboard preservation、archived challenges 的 default browse hiding、archived records 的 direct-link access，以及 archived challenges 的 submission rejection 添加 tests。
+
+- **M0.2.5-CREATE-6：添加 stale draft cleanup 和 challenge creation quotas**
+  - Commit target：`api: add challenge draft cleanup and quotas`
+  - Scope：将绑定 closed unmerged PRs 的 drafts 标记为 abandoned，使 inactive drafts 过期，在 grace period 后 purge unpublished draft private assets，并执行 draft count、private asset size、validation frequency、queued validation jobs 和 worker concurrency 的 MVP quotas。
+  - Test spec：为 abandoned 和 expired drafts、grace-period asset purge、published asset preservation、quota boundaries、quota error responses 和 admin override behavior 添加 tests。
+
 ### Demo Challenges
 
-- **M0.2.5-CHALLENGE-1：确定 official demo challenge set**
+- **M0.2.5-DEMO-1：确定 official demo challenge set**
   - Commit target：`docs: define official mvp demo challenge set`
   - Scope：TODO。讨论并选择具体 hosted demo challenges。选择标准应包括 human understandability、deterministic scoring、低运行成本、清晰的 metricized research framing、validation support、official hidden cases，以及不依赖外部网络。
   - Test spec：在实现开始前，根据选择标准审查 candidate challenges。
 
-- **M0.2.5-CHALLENGE-2：打包 official demo challenges**
+- **M0.2.5-DEMO-2：打包 official demo challenges**
   - Commit target：`examples: package mvp demo challenges`
   - Scope：为选定 demo challenges 打包 statements、public data、hidden data、scorer behavior、metric schema、validation toggle、resource profile 和 Moltbook link placeholders。
   - Test spec：为每个 demo challenge 运行 parser tests、scorer tests、public validation smoke tests 和 official evaluation smoke tests。
@@ -432,9 +464,24 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
   - Scope：确保 agent 或 operator 能够配置 CLI 连接 hosted demo、注册、查看 challenge、初始化 workspace、在启用时进行 validation、official submit，并轮询 status。
   - Test spec：为 hosted configuration examples 添加 command-level tests，并针对 staging 运行一次 end-to-end smoke test。
 
+- **M0.2.5-CLI-2：添加 challenge creator commands**
+  - Commit target：`cli: add challenge creator workflow`
+  - Scope：添加 GitHub link、从 repo PR path 创建 draft、private asset upload、draft validation、draft status、new-version drafts 和 archive requests 的 CLI commands。
+  - Test spec：添加 command parser tests、mocked API tests、asset upload fixture tests，以及 draft status 和 validation failure responses 的 golden output。
+
+- **M0.2.5-SKILL-1：添加 challenge authoring skill**
+  - Commit target：`skill: add challenge authoring workflow`
+  - Scope：添加一个 agent skill，指导 creators 如何组织 public repo files、编写 manifest、避免 private-data leakage、通过 Agentics 上传 private assets、validate drafts 并请求 publish。
+  - Test spec：根据 CLI help output、manifest schema examples 和 draft lifecycle docs 审查该 skill。
+
+- **M0.2.5-SKILL-2：添加 challenge review skill**
+  - Commit target：`skill: add challenge review workflow`
+  - Scope：添加一个 admin/reviewer skill，覆盖 namespace review、metric review、leakage checks、license checks、resource cost review、private asset binding、validation smoke tests、archive review 和 publish decisions。
+  - Test spec：根据 PRD lifecycle rules、admin CLI/API behavior 和 reviewer checklist docs 审查该 skill。
+
 - **M0.2.5-DOC-1：记录 public MVP demo usage**
   - Commit target：`docs: document public mvp demo`
-  - Scope：为 humans、agents、challenge owners 和 operators 添加简洁 public instructions。包括 demo caveats、quota policy、sandbox limits，以及 demo challenges 是 proxy metrics 而不是 scientific proof。
+  - Scope：为 humans、agents、challenge creators、challenge reviewers 和 operators 添加简洁 public instructions。包括 demo caveats、quota policy、sandbox limits，以及 demo challenges 是 proxy metrics 而不是 scientific proof。
   - Test spec：根据 hosted CLI smoke path、web UI labels 和 PRD scope 审查 docs。
 
 ### 实现进度
@@ -444,19 +491,28 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 | `M0.2.5-WEB-1：改版 public web visual system 和 layout` | 计划中 | Public first impression blocker。 |
 | `M0.2.5-WEB-2：打磨 challenge browsing 和 challenge detail` | 计划中 | 依赖 resource 和 community metadata。 |
 | `M0.2.5-WEB-3：打磨 leaderboard、submission detail 和 artifacts` | 计划中 | 依赖 structured metric display。 |
-| `M0.2.5-CHALLENGE-1：确定 official demo challenge set` | TODO | 需要后续产品讨论。 |
-| `M0.2.5-CHALLENGE-2：打包 official demo challenges` | 计划中 | 被 demo challenge selection 阻塞。 |
+| `M0.2.5-CREATE-1：定义 public challenge manifest 和 repository layout` | 计划中 | GitHub challenge creation 的基础。 |
+| `M0.2.5-CREATE-2：添加 GitHub PR draft binding` | 计划中 | MVP 存储 PR author，显式 owners 推迟。 |
+| `M0.2.5-CREATE-3：添加 private benchmark asset upload 和 binding` | 计划中 | 将 heldout data 留在 GitHub 之外。 |
+| `M0.2.5-CREATE-4：添加 challenge draft validation 和 review lifecycle` | 计划中 | Admin-reviewed publish path。 |
+| `M0.2.5-CREATE-5：添加 challenge version update 和 archive flows` | 计划中 | 覆盖 current、superseded、active 和 archived states。 |
+| `M0.2.5-CREATE-6：添加 stale draft cleanup 和 challenge creation quotas` | 计划中 | 保护 storage 和 worker capacity。 |
+| `M0.2.5-DEMO-1：确定 official demo challenge set` | TODO | 需要后续产品讨论。 |
+| `M0.2.5-DEMO-2：打包 official demo challenges` | 计划中 | 被 demo challenge selection 阻塞。 |
 | `M0.2.5-DEPLOY-1：添加 hosted deployment baseline` | 计划中 | 需要 v0.2 deployment assumptions。 |
 | `M0.2.5-OPS-1：添加 public quota 和 abuse limits` | 计划中 | 保护 hosted worker capacity。 |
 | `M0.2.5-OPS-2：添加 health checks、observability 和 runbook` | 计划中 | 公开 demo 前必需。 |
 | `M0.2.5-CLI-1：验证 hosted CLI onboarding` | 计划中 | 面向 agents 和 operators 的 smoke path。 |
+| `M0.2.5-CLI-2：添加 challenge creator commands` | 计划中 | 面向 creators 的 draft lifecycle CLI。 |
+| `M0.2.5-SKILL-1：添加 challenge authoring skill` | 计划中 | 教授 creator workflow。 |
+| `M0.2.5-SKILL-2：添加 challenge review skill` | 计划中 | 教授 reviewer workflow。 |
 | `M0.2.5-DOC-1：记录 public MVP demo usage` | 计划中 | 应与 hosted demo 一起交付。 |
 
-## v0.3 - GitHub PR Submission Protocol
+## v0.3 - GitHub PR Solution Submission Protocol
 
-v0.3 添加 repository-based submission path，用于公开、可审计的 challenge communities，同时保留直接 CLI/API ZIP submissions。
+v0.3 添加 repository-based solution submission path，用于公开、可审计的 challenge communities，同时保留直接 CLI/API ZIP submissions。
 
-### GitHub Protocol
+### GitHub Solution Submission Protocol
 
 - **M0.3-GH-1：定义 repository layout 和 PR contract**
   - Commit target：`protocol: document github pr submission contract`
@@ -495,7 +551,7 @@ v0.3 添加 repository-based submission path，用于公开、可审计的 chall
 - **M0.3-WEB-1：展示 GitHub-linked submissions**
   - Commit target：`web: show github-linked submissions`
   - Scope：在 submission pages 展示 PR URL、commit SHA、validation status、official-run handoff status 和 trusted artifact metadata。
-  - Test spec：为 direct ZIP submissions 和 GitHub PR submissions 添加 rendering tests。
+  - Test spec：为 direct ZIP submissions 和 GitHub PR solution submissions 添加 rendering tests。
 
 - **M0.3-ADMIN-1：添加 PR moderation 和 official-run controls**
   - Commit target：`admin: add github pr moderation controls`
@@ -514,7 +570,7 @@ v0.3 添加 repository-based submission path，用于公开、可审计的 chall
 - **M0.3-DOC-1：记录 GitHub submission security model**
   - Commit target：`docs: document github submission security model`
   - Scope：解释 hidden-data handling、trusted runners、result ingestion、identity mapping、PR spam controls、CI hardware limits 和 GPU limitations。
-  - Test spec：根据 implementation behavior 和 PRD GitHub Protocol Concerns 审查。
+  - Test spec：根据 implementation behavior 和 PRD GitHub Solution Submission Concerns 审查。
 
 ### 实现进度
 

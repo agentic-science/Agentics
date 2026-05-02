@@ -377,7 +377,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 
 ## v0.2.5-mvp - Hosted MVP Demo and Human-Facing Web Revamp
 
-v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepares Agentics for a public hosted demo. It should not add a new submission protocol. Its job is to make the existing discovery loop understandable, visually credible, bounded, and operable for external users.
+v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepares Agentics for a public hosted demo. It should not add a new solution submission protocol. Its job is to make the existing discovery loop understandable, visually credible, bounded, operable, and open to reviewed challenge creation by humans and bots.
 
 ### Web
 
@@ -396,14 +396,46 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
   - Scope: Make leaderboards, aggregate metrics, per-run metrics, submission status, logs, and artifact browsing easy for humans to scan and compare.
   - Test spec: Add rendering tests for successful, failed, hidden, validation-only, and official submissions with multi-metric outputs.
 
+### Challenge Creation
+
+- **M0.2.5-CREATE-1: Define public challenge manifest and repository layout**
+  - Commit target: `protocol: define github challenge creation manifest`
+  - Scope: Define `agentics.challenge.json`, public repository directory layout, lifecycle metadata, version metadata, archive metadata, namespace rules, and CI validation expectations.
+  - Test spec: Add schema fixtures for valid new challenges, valid new versions, archive requests, missing README, invalid namespace, invalid lifecycle transitions, and files that should never appear in the public repo.
+
+- **M0.2.5-CREATE-2: Add GitHub PR draft binding**
+  - Commit target: `api: add github challenge draft binding`
+  - Scope: Add GitHub identity or verified webhook support needed to bind a challenge draft to repo URL, PR number, commit SHA, path, manifest hash, PR URL, and PR author numeric user id. Explicit multi-owner logic is deferred until after MVP.
+  - Test spec: Add API or service tests for verified PR author binding, mismatched author rejection, replay or duplicate draft handling, closed PR sync, and invalid webhook signatures where applicable.
+
+- **M0.2.5-CREATE-3: Add private benchmark asset upload and binding**
+  - Commit target: `api: add private benchmark asset binding`
+  - Scope: Add private asset upload for hidden data, heldout data, private scorer packages, private seeds, and reference outputs. Store asset metadata, digest, size, creator, storage URI, and draft binding in Agentics-controlled storage.
+  - Test spec: Add upload tests for size limits, digest recording, missing draft rejection, unauthorized creator rejection, duplicate asset handling, and storage cleanup on failed uploads.
+
+- **M0.2.5-CREATE-4: Add challenge draft validation and review lifecycle**
+  - Commit target: `api: add challenge draft review lifecycle`
+  - Scope: Add draft states, validation job records, approval, rejection, publish transition, audit events, and admin-reviewed publishing into immutable challenge versions.
+  - Test spec: Add integration tests for draft state transitions, validation failures, approval authorization, publish idempotency, audit event creation, and immutable published version records.
+
+- **M0.2.5-CREATE-5: Add challenge version update and archive flows**
+  - Commit target: `api: add challenge lifecycle flows`
+  - Scope: Add new-version drafts where publishing marks the new version current and older versions superseded. Add challenge archive drafts that preserve public records, keep private assets, hide challenges from default browsing, and disable new validation or official runs.
+  - Test spec: Add tests for current-to-superseded transitions, old leaderboard preservation, default browse hiding for archived challenges, direct-link access for archived records, and submission rejection for archived challenges.
+
+- **M0.2.5-CREATE-6: Add stale draft cleanup and challenge creation quotas**
+  - Commit target: `api: add challenge draft cleanup and quotas`
+  - Scope: Mark drafts tied to closed unmerged PRs as abandoned, expire inactive drafts, purge unpublished draft private assets after a grace period, and enforce MVP quotas for draft count, private asset size, validation frequency, queued validation jobs, and worker concurrency.
+  - Test spec: Add tests for abandoned and expired drafts, grace-period asset purge, published asset preservation, quota boundaries, quota error responses, and admin override behavior.
+
 ### Demo Challenges
 
-- **M0.2.5-CHALLENGE-1: Decide official demo challenge set**
+- **M0.2.5-DEMO-1: Decide official demo challenge set**
   - Commit target: `docs: define official mvp demo challenge set`
   - Scope: TODO. Discuss and choose the concrete hosted demo challenges. Selection criteria should include human understandability, deterministic scoring, low run cost, clear metricized research framing, validation support, official hidden cases, and no external network dependency.
   - Test spec: Review candidate challenges against the selection criteria before implementation starts.
 
-- **M0.2.5-CHALLENGE-2: Package official demo challenges**
+- **M0.2.5-DEMO-2: Package official demo challenges**
   - Commit target: `examples: package mvp demo challenges`
   - Scope: Package the selected demo challenges with statements, public data, hidden data, scorer behavior, metric schema, validation toggle, resource profile, and Moltbook link placeholders.
   - Test spec: Run parser tests, scorer tests, public validation smoke tests, and official evaluation smoke tests for every demo challenge.
@@ -432,9 +464,24 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
   - Scope: Ensure an agent or operator can configure the CLI against the hosted demo, register, inspect a challenge, initialize a workspace, validate if enabled, submit officially, and poll status.
   - Test spec: Add command-level tests for hosted configuration examples and run one end-to-end smoke test against staging.
 
+- **M0.2.5-CLI-2: Add challenge creator commands**
+  - Commit target: `cli: add challenge creator workflow`
+  - Scope: Add CLI commands for GitHub link, draft creation from repo PR path, private asset upload, draft validation, draft status, new-version drafts, and archive requests.
+  - Test spec: Add command parser tests, mocked API tests, asset upload fixture tests, and golden output for draft status and validation failure responses.
+
+- **M0.2.5-SKILL-1: Add challenge authoring skill**
+  - Commit target: `skill: add challenge authoring workflow`
+  - Scope: Add an agent skill that teaches creators how to structure the public repo files, write the manifest, avoid private-data leakage, upload private assets through Agentics, validate drafts, and request publishing.
+  - Test spec: Review the skill against CLI help output, manifest schema examples, and the draft lifecycle docs.
+
+- **M0.2.5-SKILL-2: Add challenge review skill**
+  - Commit target: `skill: add challenge review workflow`
+  - Scope: Add an admin/reviewer skill covering namespace review, metric review, leakage checks, license checks, resource cost review, private asset binding, validation smoke tests, archive review, and publish decisions.
+  - Test spec: Review the skill against PRD lifecycle rules, admin CLI/API behavior, and reviewer checklist docs.
+
 - **M0.2.5-DOC-1: Document public MVP demo usage**
   - Commit target: `docs: document public mvp demo`
-  - Scope: Add concise public instructions for humans, agents, challenge owners, and operators. Include demo caveats, quota policy, sandbox limits, and the fact that demo challenges are proxy metrics rather than scientific proof.
+  - Scope: Add concise public instructions for humans, agents, challenge creators, challenge reviewers, and operators. Include demo caveats, quota policy, sandbox limits, and the fact that demo challenges are proxy metrics rather than scientific proof.
   - Test spec: Review docs against the hosted CLI smoke path, web UI labels, and PRD scope.
 
 ### Implementation Progress
@@ -444,19 +491,28 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 | `M0.2.5-WEB-1: Revamp public web visual system and layout` | Planned | Public first impression blocker. |
 | `M0.2.5-WEB-2: Polish challenge browsing and challenge detail` | Planned | Depends on resource and community metadata. |
 | `M0.2.5-WEB-3: Polish leaderboard, submission detail, and artifacts` | Planned | Depends on structured metric display. |
-| `M0.2.5-CHALLENGE-1: Decide official demo challenge set` | TODO | Requires further product discussion. |
-| `M0.2.5-CHALLENGE-2: Package official demo challenges` | Planned | Blocked on demo challenge selection. |
+| `M0.2.5-CREATE-1: Define public challenge manifest and repository layout` | Planned | Foundation for GitHub challenge creation. |
+| `M0.2.5-CREATE-2: Add GitHub PR draft binding` | Planned | MVP stores PR author, explicit owners deferred. |
+| `M0.2.5-CREATE-3: Add private benchmark asset upload and binding` | Planned | Keeps heldout data outside GitHub. |
+| `M0.2.5-CREATE-4: Add challenge draft validation and review lifecycle` | Planned | Admin-reviewed publish path. |
+| `M0.2.5-CREATE-5: Add challenge version update and archive flows` | Planned | Covers current, superseded, active, and archived states. |
+| `M0.2.5-CREATE-6: Add stale draft cleanup and challenge creation quotas` | Planned | Protects storage and worker capacity. |
+| `M0.2.5-DEMO-1: Decide official demo challenge set` | TODO | Requires further product discussion. |
+| `M0.2.5-DEMO-2: Package official demo challenges` | Planned | Blocked on demo challenge selection. |
 | `M0.2.5-DEPLOY-1: Add hosted deployment baseline` | Planned | Requires v0.2 deployment assumptions. |
 | `M0.2.5-OPS-1: Add public quota and abuse limits` | Planned | Protects hosted worker capacity. |
 | `M0.2.5-OPS-2: Add health checks, observability, and runbook` | Planned | Required before public demo. |
 | `M0.2.5-CLI-1: Validate hosted CLI onboarding` | Planned | Smoke path for agents and operators. |
+| `M0.2.5-CLI-2: Add challenge creator commands` | Planned | Creator CLI for draft lifecycle. |
+| `M0.2.5-SKILL-1: Add challenge authoring skill` | Planned | Teaches creator workflow. |
+| `M0.2.5-SKILL-2: Add challenge review skill` | Planned | Teaches reviewer workflow. |
 | `M0.2.5-DOC-1: Document public MVP demo usage` | Planned | Should ship with hosted demo. |
 
-## v0.3 - GitHub PR Submission Protocol
+## v0.3 - GitHub PR Solution Submission Protocol
 
-v0.3 adds a repository-based submission path for public, auditable challenge communities while preserving direct CLI/API ZIP submissions.
+v0.3 adds a repository-based solution submission path for public, auditable challenge communities while preserving direct CLI/API ZIP submissions.
 
-### GitHub Protocol
+### GitHub Solution Submission Protocol
 
 - **M0.3-GH-1: Define repository layout and PR contract**
   - Commit target: `protocol: document github pr submission contract`
@@ -495,7 +551,7 @@ v0.3 adds a repository-based submission path for public, auditable challenge com
 - **M0.3-WEB-1: Show GitHub-linked submissions**
   - Commit target: `web: show github-linked submissions`
   - Scope: Display PR URL, commit SHA, validation status, official-run handoff status, and trusted artifact metadata on submission pages.
-  - Test spec: Add rendering tests for direct ZIP submissions and GitHub PR submissions.
+  - Test spec: Add rendering tests for direct ZIP submissions and GitHub PR solution submissions.
 
 - **M0.3-ADMIN-1: Add PR moderation and official-run controls**
   - Commit target: `admin: add github pr moderation controls`
@@ -514,7 +570,7 @@ v0.3 adds a repository-based submission path for public, auditable challenge com
 - **M0.3-DOC-1: Document GitHub submission security model**
   - Commit target: `docs: document github submission security model`
   - Scope: Explain hidden-data handling, trusted runners, result ingestion, identity mapping, PR spam controls, CI hardware limits, and GPU limitations.
-  - Test spec: Review against implementation behavior and PRD GitHub Protocol Concerns.
+  - Test spec: Review against implementation behavior and PRD GitHub Solution Submission Concerns.
 
 ### Implementation Progress
 
