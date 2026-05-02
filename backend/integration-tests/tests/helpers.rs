@@ -80,6 +80,7 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
         runner_python_image: "python:3.12-slim-bookworm".to_string(),
         runner_memory_limit_mb: 512,
         runner_cpu_limit: 1.0,
+        validation_runs_per_agent_challenge_day: 20,
         docker_host: None,
         log_level: "error".to_string(),
     }

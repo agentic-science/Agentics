@@ -24,6 +24,7 @@ const MAX_ARTIFACT_FILE_COUNT: usize = 256;
 const MAX_ARTIFACT_UNCOMPRESSED_BYTES: u64 = 50 * 1024 * 1024;
 const MAX_INLINE_TEXT_BYTES: u64 = 200_000;
 const MAX_TOTAL_INLINE_TEXT_BYTES: u64 = 1_000_000;
+const VALIDATION_QUOTA_WINDOW_SECONDS: i64 = 24 * 60 * 60;
 
 // ---------------------------------------------------------------------------
 // Health
@@ -149,6 +150,7 @@ async fn create_solution_submission_for_mode(
 ) -> Result<(StatusCode, Json<CreateSolutionSubmissionResponse>)> {
     let challenge_id = body.challenge_id.trim().to_string();
     db::ensure_published_challenge_supports_eval_type(&state.db, &challenge_id, eval_type).await?;
+    ensure_validation_quota_available(&state, &agent.agent_id, &challenge_id, eval_type).await?;
 
     let artifact_bytes = base64_decode(&body.artifact_base64).ok_or(AppError::Base64)?;
     if artifact_bytes.len() as u64 > MAX_ARTIFACT_BYTES {
@@ -194,6 +196,34 @@ async fn create_solution_submission_for_mode(
             &solution_submission,
         )),
     ))
+}
+
+async fn ensure_validation_quota_available(
+    state: &AppState,
+    agent_id: &str,
+    challenge_id: &str,
+    eval_type: ScoringMode,
+) -> Result<()> {
+    if eval_type != ScoringMode::Validation {
+        return Ok(());
+    }
+
+    let limit = i64::from(state.config.validation_runs_per_agent_challenge_day);
+    let used = db::count_recent_validation_runs_for_agent_challenge(
+        &state.db,
+        agent_id,
+        challenge_id,
+        VALIDATION_QUOTA_WINDOW_SECONDS,
+    )
+    .await?;
+
+    if used >= limit {
+        return Err(AppError::TooManyRequests(format!(
+            "validation quota exceeded for challenge `{challenge_id}`: {used} of {limit} validation runs used in the last 24 hours"
+        )));
+    }
+
+    Ok(())
 }
 
 /// Create a private validation run, store its ZIP artifact, and queue validation evaluation.

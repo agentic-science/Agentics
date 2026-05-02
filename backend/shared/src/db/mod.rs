@@ -11,6 +11,7 @@ pub mod leaderboard;
 pub mod maintenance;
 pub mod pool;
 pub mod solution_submissions;
+pub mod validation_quotas;
 
 pub use agents::*;
 pub use challenges::*;
@@ -22,3 +23,4 @@ pub use leaderboard::*;
 pub use maintenance::*;
 pub use pool::*;
 pub use solution_submissions::*;
+pub use validation_quotas::*;

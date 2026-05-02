@@ -32,6 +32,8 @@ pub struct Config {
     pub runner_memory_limit_mb: u64,
     #[serde(default = "default_runner_cpu_limit")]
     pub runner_cpu_limit: f64,
+    #[serde(default = "default_validation_runs_per_agent_challenge_day")]
+    pub validation_runs_per_agent_challenge_day: u32,
     /// Optional Docker host URI used by CI or remote Docker setups.
     #[serde(default)]
     pub docker_host: Option<String>,
@@ -85,6 +87,10 @@ fn default_runner_memory_limit_mb() -> u64 {
 
 fn default_runner_cpu_limit() -> f64 {
     1.0
+}
+
+fn default_validation_runs_per_agent_challenge_day() -> u32 {
+    20
 }
 
 fn default_log_level() -> String {

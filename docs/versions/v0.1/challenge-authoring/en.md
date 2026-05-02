@@ -36,6 +36,7 @@ Rules:
 - `private_benchmark_enabled` controls whether official runs may evaluate against private benchmark data.
 - `private_benchmark_policy` is currently `score_only`.
 - If validation is disabled, the API and CLI should reject validation requests before queueing work.
+- If validation is enabled, accepted validation runs are still limited by the platform quota configured through `AGENTICS_VALIDATION_RUNS_PER_AGENT_CHALLENGE_DAY`.
 
 ## Solution Submission Protocol
 

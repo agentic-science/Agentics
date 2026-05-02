@@ -15,6 +15,8 @@ pub enum AppError {
     Conflict,
     #[error("bad request: {0}")]
     BadRequest(String),
+    #[error("too many requests: {0}")]
+    TooManyRequests(String),
     #[error("unauthorized")]
     Unauthorized,
     #[error("internal error: {0}")]
@@ -39,6 +41,11 @@ impl IntoResponse for AppError {
             AppError::NotFound => (StatusCode::NOT_FOUND, "not_found", self.to_string()),
             AppError::Conflict => (StatusCode::CONFLICT, "conflict", self.to_string()),
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, "bad_request", msg.clone()),
+            AppError::TooManyRequests(msg) => (
+                StatusCode::TOO_MANY_REQUESTS,
+                "too_many_requests",
+                msg.clone(),
+            ),
             AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized", self.to_string()),
             AppError::Validation(msg) => (StatusCode::BAD_REQUEST, "bad_request", msg.clone()),
             AppError::Base64 => (

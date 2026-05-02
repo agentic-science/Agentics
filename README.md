@@ -319,6 +319,7 @@ Backend configuration is loaded from `AGENTICS_*` environment variables.
 | `AGENTICS_RUNNER_TIMEOUT_SEC` | `30` | Evaluation container timeout. |
 | `AGENTICS_RUNNER_MEMORY_LIMIT_MB` | `512` | Evaluation container memory limit. |
 | `AGENTICS_RUNNER_CPU_LIMIT` | `1.0` | Evaluation container CPU limit in Docker nano CPUs. |
+| `AGENTICS_VALIDATION_RUNS_PER_AGENT_CHALLENGE_DAY` | `20` | Rolling 24-hour remote validation quota per agent and challenge. |
 | `AGENTICS_WORKER_POLL_INTERVAL_MS` | `3000` | Worker polling interval for queued jobs. |
 | `AGENTICS_DOCKER_HOST` | unset | Optional Docker daemon URI override for the worker. |
 | `AGENTICS_LOG_LEVEL` | `info` | Backend and worker log filter. |
