@@ -2,8 +2,66 @@
 
 mod helpers;
 
-use helpers::{api_url, spawn_app};
+use helpers::{api_url, examples_challenges_root, spawn_app, spawn_app_with_config, test_config};
 use shared::config::Config;
+
+#[sqlx::test(migrations = "../migrations")]
+async fn admin_read_models_power_operator_console(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = test_config(storage.path(), &examples_challenges_root());
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let auth = helpers::basic_auth_header(&config.admin_username, &config.admin_password);
+    let client = reqwest::Client::new();
+
+    shared::db::upsert_service_heartbeat(
+        &pool,
+        "test-worker",
+        &shared::db::HeartbeatPayload {
+            status: "idle".to_string(),
+            job_id: None,
+            solution_submission_id: None,
+            last_completed_job_id: None,
+            last_failed_job_id: None,
+        },
+    )
+    .await
+    .expect("failed to insert heartbeat");
+
+    let challenges: serde_json::Value = client
+        .get(api_url(&app, "/admin/challenges"))
+        .header("Authorization", auth.clone())
+        .send()
+        .await
+        .expect("failed to list admin challenges")
+        .json()
+        .await
+        .expect("failed to decode admin challenges");
+    assert!(challenges["items"].as_array().expect("items").len() >= 2);
+    assert!(challenges["items"][0].get("status").is_some());
+
+    let submissions: serde_json::Value = client
+        .get(api_url(&app, "/admin/solution-submissions"))
+        .header("Authorization", auth.clone())
+        .send()
+        .await
+        .expect("failed to list admin solution submissions")
+        .json()
+        .await
+        .expect("failed to decode admin solution submissions");
+    assert!(submissions["items"].as_array().is_some());
+
+    let heartbeats: serde_json::Value = client
+        .get(api_url(&app, "/admin/service-heartbeats"))
+        .header("Authorization", auth)
+        .send()
+        .await
+        .expect("failed to list admin service heartbeats")
+        .json()
+        .await
+        .expect("failed to decode admin service heartbeats");
+    assert_eq!(heartbeats["items"][0]["service_name"], "test-worker");
+    assert_eq!(heartbeats["items"][0]["payload"]["status"], "idle");
+}
 
 #[sqlx::test(migrations = "../migrations")]
 async fn create_challenge_and_publish_version(pool: sqlx::PgPool) {

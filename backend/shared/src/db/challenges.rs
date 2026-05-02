@@ -6,7 +6,8 @@ use sqlx::{PgPool, Row};
 
 use crate::error::{AppError, Result};
 use crate::models::challenge::{
-    ChallengeBundleSpec, ChallengeListItemDto, CreateChallengeVersionResponse,
+    AdminChallengeListItemDto, ChallengeBundleSpec, ChallengeListItemDto,
+    CreateChallengeVersionResponse,
 };
 
 /// Latest published challenge version joined with challenge metadata.
@@ -60,6 +61,55 @@ pub async fn create_or_update_challenge(
         created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
         updated_at: row.try_get::<DateTime<Utc>, _>("updated_at")?.to_rfc3339(),
     })
+}
+
+/// List all challenge shells for admin review, including drafts without versions.
+pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeListItemDto>> {
+    let rows = sqlx::query(
+        r#"
+        SELECT
+            p.id,
+            p.slug,
+            p.title,
+            p.description,
+            p.status,
+            p.created_at,
+            p.updated_at,
+            pv.id AS version_id,
+            pv.version
+        FROM challenges p
+        LEFT JOIN LATERAL (
+            SELECT id, version
+            FROM challenge_versions
+            WHERE challenge_id = p.id
+              AND status = 'published'
+            ORDER BY created_at DESC
+            LIMIT 1
+        ) pv ON TRUE
+        ORDER BY p.updated_at DESC, p.created_at DESC
+        "#,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    rows.into_iter()
+        .map(|r| {
+            let version_id: Option<String> = r.try_get("version_id")?;
+            let version: Option<String> = r.try_get("version")?;
+            Ok(AdminChallengeListItemDto {
+                id: r.try_get("id")?,
+                slug: r.try_get("slug")?,
+                title: r.try_get("title")?,
+                description: r.try_get("description")?,
+                status: r.try_get("status")?,
+                current_version: version_id
+                    .zip(version)
+                    .map(|(id, version)| crate::models::CurrentVersionDto { id, version }),
+                created_at: r.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
+                updated_at: r.try_get::<DateTime<Utc>, _>("updated_at")?.to_rfc3339(),
+            })
+        })
+        .collect::<Result<Vec<_>>>()
 }
 
 /// Publish a validated bundle as the current challenge version.

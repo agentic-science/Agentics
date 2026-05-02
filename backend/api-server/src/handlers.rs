@@ -375,6 +375,17 @@ pub async fn list_discussions(
 // Admin routes
 // ---------------------------------------------------------------------------
 
+/// List challenge shells and latest published versions for admins.
+pub async fn list_admin_challenges(
+    _admin: AdminAuth,
+    State(state): State<AppState>,
+) -> Result<Json<shared::models::challenge::AdminChallengeListResponse>> {
+    let items = db::list_admin_challenges(&state.db).await?;
+    Ok(Json(
+        shared::models::challenge::AdminChallengeListResponse { items },
+    ))
+}
+
 /// Create or update a challenge shell.
 pub async fn create_challenge(
     _admin: AdminAuth,
@@ -445,6 +456,24 @@ pub async fn publish_version(
     .await?;
 
     Ok((StatusCode::CREATED, Json(version)))
+}
+
+/// List recent solution submissions for admin operations.
+pub async fn list_admin_solution_submissions(
+    _admin: AdminAuth,
+    State(state): State<AppState>,
+) -> Result<Json<AdminSolutionSubmissionListResponse>> {
+    let items = db::list_admin_solution_submissions(&state.db, 100).await?;
+    Ok(Json(AdminSolutionSubmissionListResponse { items }))
+}
+
+/// List latest service heartbeats for admin operations.
+pub async fn list_admin_service_heartbeats(
+    _admin: AdminAuth,
+    State(state): State<AppState>,
+) -> Result<Json<AdminServiceHeartbeatListResponse>> {
+    let items = db::list_service_heartbeats(&state.db).await?;
+    Ok(Json(AdminServiceHeartbeatListResponse { items }))
 }
 
 /// Queue an official rejudge for an existing solution submission.

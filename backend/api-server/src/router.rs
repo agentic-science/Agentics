@@ -81,10 +81,21 @@ pub fn router() -> Router<AppState> {
             get(crate::handlers::get_public_artifact),
         )
         // Admin routes (Basic auth via extractor)
-        .route("/admin/challenges", post(crate::handlers::create_challenge))
+        .route(
+            "/admin/challenges",
+            get(crate::handlers::list_admin_challenges).post(crate::handlers::create_challenge),
+        )
         .route(
             "/admin/challenges/{id}/versions",
             post(crate::handlers::publish_version),
+        )
+        .route(
+            "/admin/solution-submissions",
+            get(crate::handlers::list_admin_solution_submissions),
+        )
+        .route(
+            "/admin/service-heartbeats",
+            get(crate::handlers::list_admin_service_heartbeats),
         )
         .route(
             "/admin/solution-submissions/{id}/rejudge",

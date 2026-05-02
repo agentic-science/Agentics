@@ -190,6 +190,26 @@ pub struct ChallengeAdminResponse {
     pub updated_at: String,
 }
 
+/// One row in the admin challenge list.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdminChallengeListItemDto {
+    pub id: String,
+    pub slug: String,
+    pub title: String,
+    pub description: String,
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_version: Option<CurrentVersionDto>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// Admin challenge list response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdminChallengeListResponse {
+    pub items: Vec<AdminChallengeListItemDto>,
+}
+
 /// Admin response returned after publishing a bundle version.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateChallengeVersionResponse {

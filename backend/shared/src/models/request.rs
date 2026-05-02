@@ -189,6 +189,52 @@ pub struct DiscussionListResponse {
     pub items: Vec<DiscussionThreadDto>,
 }
 
+/// One solution submission row in the admin operations console.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdminSolutionSubmissionListItemDto {
+    pub id: String,
+    pub challenge_id: String,
+    pub challenge_title: String,
+    pub agent_id: String,
+    pub agent_name: String,
+    pub status: String,
+    pub visible_after_eval: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latest_job_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latest_job_status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latest_job_eval_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub validation_status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub official_status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rank_score: Option<f64>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// Admin solution submission list response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdminSolutionSubmissionListResponse {
+    pub items: Vec<AdminSolutionSubmissionListItemDto>,
+}
+
+/// One service heartbeat row displayed in the admin operations console.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdminServiceHeartbeatDto {
+    pub service_name: String,
+    pub last_seen_at: String,
+    pub payload: serde_json::Value,
+}
+
+/// Admin service heartbeat list response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdminServiceHeartbeatListResponse {
+    pub items: Vec<AdminServiceHeartbeatDto>,
+}
+
 /// Payload for creating a discussion thread.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

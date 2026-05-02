@@ -8,6 +8,7 @@ use crate::models::evaluation::{
     EvaluationDto, EvaluationJobPayload, EvaluationStatus, MetricValue, PublicCaseResult,
     RunMetricResult, ScoringMode,
 };
+use crate::models::request::AdminSolutionSubmissionListItemDto;
 use crate::models::request::PublicSolutionSubmissionListItemDto;
 
 use super::challenges::get_published_challenge;
@@ -242,6 +243,84 @@ pub async fn get_solution_submission_by_id(
         validation_evaluation: validation_eval,
         official_evaluation: official_eval,
     }))
+}
+
+/// List recent solution submissions for admin operations.
+pub async fn list_admin_solution_submissions(
+    pool: &PgPool,
+    limit: i64,
+) -> Result<Vec<AdminSolutionSubmissionListItemDto>> {
+    let rows = sqlx::query(
+        r#"
+        SELECT
+            s.id,
+            s.challenge_id,
+            p.title AS challenge_title,
+            s.agent_id,
+            a.name AS agent_name,
+            s.status,
+            s.visible_after_eval,
+            s.created_at,
+            s.updated_at,
+            j.id AS latest_job_id,
+            j.status AS latest_job_status,
+            j.eval_type AS latest_job_eval_type,
+            ve.status AS validation_status,
+            oe.status AS official_status,
+            oe.rank_score AS official_rank_score
+        FROM solution_submissions s
+        JOIN challenges p ON p.id = s.challenge_id
+        JOIN agents a ON a.id = s.agent_id
+        LEFT JOIN LATERAL (
+            SELECT id, status, eval_type
+            FROM evaluation_jobs
+            WHERE solution_submission_id = s.id
+            ORDER BY created_at DESC
+            LIMIT 1
+        ) j ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT status
+            FROM evaluations
+            WHERE solution_submission_id = s.id AND eval_type = 'validation'
+            ORDER BY created_at DESC
+            LIMIT 1
+        ) ve ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT status, rank_score
+            FROM evaluations
+            WHERE solution_submission_id = s.id AND eval_type = 'official'
+            ORDER BY created_at DESC
+            LIMIT 1
+        ) oe ON TRUE
+        ORDER BY s.updated_at DESC, s.created_at DESC
+        LIMIT $1
+        "#,
+    )
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
+
+    rows.into_iter()
+        .map(|r| {
+            Ok(AdminSolutionSubmissionListItemDto {
+                id: r.try_get("id")?,
+                challenge_id: r.try_get("challenge_id")?,
+                challenge_title: r.try_get("challenge_title")?,
+                agent_id: r.try_get("agent_id")?,
+                agent_name: r.try_get("agent_name")?,
+                status: r.try_get("status")?,
+                visible_after_eval: r.try_get("visible_after_eval")?,
+                latest_job_id: r.try_get("latest_job_id")?,
+                latest_job_status: r.try_get("latest_job_status")?,
+                latest_job_eval_type: r.try_get("latest_job_eval_type")?,
+                validation_status: r.try_get("validation_status")?,
+                official_status: r.try_get("official_status")?,
+                rank_score: r.try_get("official_rank_score")?,
+                created_at: r.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
+                updated_at: r.try_get::<DateTime<Utc>, _>("updated_at")?.to_rfc3339(),
+            })
+        })
+        .collect::<Result<Vec<_>>>()
 }
 
 /// List solution submissions for a challenge after an official evaluation makes them visible.

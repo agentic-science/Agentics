@@ -3,6 +3,7 @@
 use sqlx::PgPool;
 
 use crate::error::{AppError, Result};
+use crate::models::request::AdminServiceHeartbeatDto;
 
 /// JSON payload stored with each service heartbeat.
 ///
@@ -44,6 +45,30 @@ pub async fn upsert_service_heartbeat(
     .await?;
 
     Ok(())
+}
+
+/// List latest service heartbeats for the admin operations console.
+pub async fn list_service_heartbeats(pool: &PgPool) -> Result<Vec<AdminServiceHeartbeatDto>> {
+    let rows = sqlx::query_as::<_, (String, chrono::DateTime<chrono::Utc>, serde_json::Value)>(
+        r#"
+        SELECT service_name, last_seen_at, payload
+        FROM service_heartbeats
+        ORDER BY last_seen_at DESC
+        "#,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(
+            |(service_name, last_seen_at, payload)| AdminServiceHeartbeatDto {
+                service_name,
+                last_seen_at: last_seen_at.to_rfc3339(),
+                payload,
+            },
+        )
+        .collect())
 }
 
 /// Seed or refresh published challenges by scanning a bundle root.
