@@ -248,6 +248,7 @@ mod tests {
                     validation_enabled: false,
                     private_benchmark_enabled: false,
                 },
+                community: None,
                 metric_schema: MetricSchemaSpec::default(),
             },
             statement_markdown: "# Statement\n\nReturn the sum.".to_string(),

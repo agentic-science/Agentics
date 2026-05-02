@@ -46,6 +46,7 @@ pub fn present_challenge_detail(
                 validation_enabled: false,
                 private_benchmark_enabled: false,
             },
+            community: None,
             metric_schema: MetricSchemaSpec::default(),
         });
 

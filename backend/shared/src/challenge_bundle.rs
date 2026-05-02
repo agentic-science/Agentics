@@ -221,6 +221,73 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
     }
 
     validate_metric_schema(spec)?;
+    validate_community(spec)?;
+
+    Ok(())
+}
+
+fn validate_community(spec: &ChallengeBundleSpec) -> Result<()> {
+    let Some(community) = &spec.community else {
+        return Ok(());
+    };
+
+    let has_name = community
+        .moltbook_submolt_name
+        .as_deref()
+        .is_some_and(|value| !value.trim().is_empty());
+    let has_url = community
+        .moltbook_submolt_url
+        .as_deref()
+        .is_some_and(|value| !value.trim().is_empty());
+    if !has_name && !has_url {
+        return Err(AppError::Validation(
+            "community must declare moltbook_submolt_name or moltbook_submolt_url".to_string(),
+        ));
+    }
+
+    if let Some(name) = &community.moltbook_submolt_name {
+        validate_moltbook_submolt_name(name)?;
+    }
+    if let Some(url) = &community.moltbook_submolt_url {
+        validate_moltbook_submolt_url(url)?;
+    }
+
+    Ok(())
+}
+
+fn validate_moltbook_submolt_name(value: &str) -> Result<()> {
+    require_non_empty(value, "community.moltbook_submolt_name")?;
+    if value.chars().count() > 80 {
+        return Err(AppError::Validation(
+            "community.moltbook_submolt_name must be at most 80 characters".to_string(),
+        ));
+    }
+    if !value
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
+    {
+        return Err(AppError::Validation(
+            "community.moltbook_submolt_name must contain only ASCII letters, digits, underscores, hyphens, or dots"
+                .to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+fn validate_moltbook_submolt_url(value: &str) -> Result<()> {
+    require_non_empty(value, "community.moltbook_submolt_url")?;
+    if value.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return Err(AppError::Validation(
+            "community.moltbook_submolt_url must not contain whitespace or control characters"
+                .to_string(),
+        ));
+    }
+    if !value.starts_with("https://www.moltbook.com/") {
+        return Err(AppError::Validation(
+            "community.moltbook_submolt_url must start with https://www.moltbook.com/".to_string(),
+        ));
+    }
 
     Ok(())
 }
@@ -323,8 +390,8 @@ mod tests {
     use std::path::Path;
 
     use crate::models::challenge::{
-        ChallengeBundleSpec, DatasetsSpec, LimitsSpec, MetricDirection, MetricSchemaSpec,
-        MetricVisibility, ScorerSpec, SolutionSpec,
+        ChallengeBundleSpec, CommunitySpec, DatasetsSpec, LimitsSpec, MetricDirection,
+        MetricSchemaSpec, MetricVisibility, ScorerSpec, SolutionSpec,
     };
     use crate::models::evaluation::ScoreVisibility;
 
@@ -357,6 +424,7 @@ mod tests {
                 validation_enabled: true,
                 private_benchmark_enabled: true,
             },
+            community: None,
             metric_schema: MetricSchemaSpec::default(),
         }
     }
@@ -449,6 +517,43 @@ mod tests {
             .push("runtime_ms".to_string());
 
         assert!(validate_challenge_bundle_spec(&spec).is_ok());
+    }
+
+    #[test]
+    fn community_accepts_moltbook_submolt_metadata() {
+        let mut spec = base_spec();
+        spec.community = Some(CommunitySpec {
+            moltbook_submolt_name: Some("agentics-sample-sum".to_string()),
+            moltbook_submolt_url: Some(
+                "https://www.moltbook.com/submolts/agentics-sample-sum".to_string(),
+            ),
+        });
+
+        assert!(validate_challenge_bundle_spec(&spec).is_ok());
+    }
+
+    #[test]
+    fn community_rejects_non_moltbook_url() {
+        let mut spec = base_spec();
+        spec.community = Some(CommunitySpec {
+            moltbook_submolt_name: Some("agentics-sample-sum".to_string()),
+            moltbook_submolt_url: Some("https://example.com/agentics-sample-sum".to_string()),
+        });
+
+        let error = validate_challenge_bundle_spec(&spec).expect_err("invalid URL should fail");
+        assert!(error.to_string().contains("moltbook_submolt_url"));
+    }
+
+    #[test]
+    fn community_rejects_invalid_submolt_name() {
+        let mut spec = base_spec();
+        spec.community = Some(CommunitySpec {
+            moltbook_submolt_name: Some("agentics sample sum".to_string()),
+            moltbook_submolt_url: None,
+        });
+
+        let error = validate_challenge_bundle_spec(&spec).expect_err("invalid name should fail");
+        assert!(error.to_string().contains("moltbook_submolt_name"));
     }
 
     fn create_bundle(root: &Path, spec: &ChallengeBundleSpec) {

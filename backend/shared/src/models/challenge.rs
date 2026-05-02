@@ -15,6 +15,9 @@ pub struct ChallengeBundleSpec {
     pub scorer: ScorerSpec,
     pub limits: LimitsSpec,
     pub datasets: DatasetsSpec,
+    /// Optional external community metadata for this challenge version.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub community: Option<CommunitySpec>,
     /// Metric definitions and ranking metadata used to interpret scorer output.
     #[serde(default)]
     pub metric_schema: MetricSchemaSpec,
@@ -59,6 +62,15 @@ pub struct DatasetsSpec {
     pub validation_enabled: bool,
     /// Whether official runs can evaluate against private benchmark data.
     pub private_benchmark_enabled: bool,
+}
+
+/// External community link metadata owned by the challenge version.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommunitySpec {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub moltbook_submolt_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub moltbook_submolt_url: Option<String>,
 }
 
 /// Whether a metric is better when it is larger or smaller.

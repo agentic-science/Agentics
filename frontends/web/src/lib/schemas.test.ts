@@ -41,6 +41,11 @@ describe("frontend API schemas", () => {
             validation_enabled: true,
             private_benchmark_enabled: true,
           },
+          community: {
+            moltbook_submolt_name: "agentics-sample-sum",
+            moltbook_submolt_url:
+              "https://www.moltbook.com/submolts/agentics-sample-sum",
+          },
           metric_schema: {
             metrics: [
               {
@@ -66,6 +71,62 @@ describe("frontend API schemas", () => {
         statement_markdown: "# Sample Sum",
       }),
     ).not.toThrow();
+  });
+
+  it("rejects non-Moltbook community links", () => {
+    const payload = {
+      id: "sample-sum",
+      slug: "sample-sum",
+      title: "Sample Sum",
+      description: "Add two numbers.",
+      current_version: { id: "sample-sum:v1", version: "v1" },
+      spec: {
+        schema_version: 1,
+        challenge_id: "sample-sum",
+        challenge_title: "Sample Sum",
+        challenge_version: "v1",
+        solution: {
+          format: "python_zip_project",
+          language: "python",
+          entrypoint: "main.py",
+        },
+        scorer: {
+          entrypoint: "scorer/run.py",
+          result_file: "result.json",
+        },
+        limits: {
+          time_limit_sec: 2,
+          memory_limit_mb: 128,
+        },
+        datasets: {
+          public_dir: "public",
+          public_policy: "full",
+          private_benchmark_policy: "score_only",
+          validation_enabled: false,
+          private_benchmark_enabled: false,
+        },
+        community: {
+          moltbook_submolt_url: "https://example.com/submolts/sample-sum",
+        },
+        metric_schema: {
+          metrics: [
+            {
+              id: "score",
+              label: "Score",
+              direction: "maximize",
+              visibility: "public",
+            },
+          ],
+          ranking: {
+            primary_metric_id: "score",
+            tie_breaker_metric_ids: [],
+          },
+        },
+      },
+      statement_markdown: "# Sample Sum",
+    };
+
+    expect(() => challengeDetailResponseSchema.parse(payload)).toThrow();
   });
 
   it("accepts relaxed omission of nullable evaluation fields", () => {

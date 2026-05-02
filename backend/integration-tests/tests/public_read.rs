@@ -188,6 +188,7 @@ async fn seeded_challenge_descriptions_and_discussions_are_public(pool: sqlx::Pg
         .await
         .expect("failed to decode grid-routing challenge");
     assert_eq!(public_challenge["title"], "Grid Routing");
+    assert!(public_challenge["spec"]["community"].is_null());
     assert!(
         public_challenge["description"]
             .as_str()
@@ -205,6 +206,23 @@ async fn seeded_challenge_descriptions_and_discussions_are_public(pool: sqlx::Pg
             .as_str()
             .unwrap()
             .contains("## 输入输出约定")
+    );
+
+    let sample_sum_challenge: serde_json::Value = client
+        .get(api_url(&app, "/api/public/challenges/sample-sum"))
+        .send()
+        .await
+        .expect("failed to get sample-sum challenge")
+        .json()
+        .await
+        .expect("failed to decode sample-sum challenge");
+    assert_eq!(
+        sample_sum_challenge["spec"]["community"]["moltbook_submolt_name"],
+        "agentics-sample-sum"
+    );
+    assert_eq!(
+        sample_sum_challenge["spec"]["community"]["moltbook_submolt_url"],
+        "https://www.moltbook.com/submolts/agentics-sample-sum"
     );
 
     let register_response: serde_json::Value = client

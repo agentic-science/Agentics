@@ -135,7 +135,8 @@ input {
 .tab-link,
 .theme-switcher button,
 .route-chip,
-.pill {
+.pill,
+.external-action {
   border: 1px solid var(--border);
   background: var(--panel-soft);
   padding: 8px 12px;
@@ -301,6 +302,7 @@ h3 {
 .catalog-row:hover,
 .dense-row:hover,
 .file-button:hover,
+.external-action:hover,
 .nav-link:hover,
 .tab-link:hover,
 .theme-switcher button:hover {
@@ -347,6 +349,30 @@ h3 {
 
 .meta-link {
   font-family: var(--font-mono);
+}
+
+.external-action {
+  display: grid;
+  gap: 5px;
+  min-height: 62px;
+  align-content: center;
+  transition:
+    border-color 140ms ease,
+    transform 140ms ease,
+    background 140ms ease;
+}
+
+.external-action span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.external-action strong {
+  font-family: var(--font-mono);
+  font-size: 0.94rem;
+  word-break: break-word;
 }
 
 .tab-row {

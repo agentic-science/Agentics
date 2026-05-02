@@ -119,6 +119,16 @@ export const challengeBundleSpecSchema = z
         private_benchmark_enabled: z.boolean(),
       })
       .strict(),
+    community: z
+      .object({
+        moltbook_submolt_name: z.string().min(1).optional(),
+        moltbook_submolt_url: z
+          .url()
+          .refine((value) => value.startsWith("https://www.moltbook.com/"))
+          .optional(),
+      })
+      .strict()
+      .optional(),
     metric_schema: z
       .object({
         metrics: z.array(

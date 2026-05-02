@@ -1,6 +1,7 @@
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { MoltbookCommunityLink } from "@/components/MoltbookCommunityLink";
 import { fetchJson } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import {
@@ -48,6 +49,7 @@ export default async function ChallengePage({
     (metric) =>
       metric.id === detail.spec.metric_schema.ranking.primary_metric_id,
   );
+  const community = detail.spec.community;
 
   return (
     <div className="content-grid">
@@ -111,6 +113,18 @@ export default async function ChallengePage({
             </div>
           </div>
         </div>
+
+        {community?.moltbook_submolt_url ? (
+          <div className="workspace-panel">
+            <p className="section-kicker">社区</p>
+            <div style={{ marginTop: 8 }}>
+              <MoltbookCommunityLink
+                name={community.moltbook_submolt_name}
+                url={community.moltbook_submolt_url}
+              />
+            </div>
+          </div>
+        ) : null}
 
         <div className="workspace-panel">
           <p className="section-kicker">指标</p>
