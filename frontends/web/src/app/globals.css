@@ -131,6 +131,38 @@ input {
   flex-wrap: wrap;
 }
 
+.mode-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-content: start;
+  align-items: flex-start;
+}
+
+.mode-badge {
+  border: 1px solid var(--border);
+  background: var(--panel-soft);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  padding: 7px 9px;
+}
+
+.mode-badge.validation {
+  background: rgba(59, 130, 246, 0.1);
+  color: #1d4ed8;
+}
+
+.mode-badge.official {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.mode-badge.disabled {
+  background: transparent;
+  color: var(--muted);
+}
+
 .nav-link,
 .tab-link,
 .theme-switcher button,
@@ -238,6 +270,13 @@ h3 {
   margin: 0;
   color: var(--muted);
   line-height: 1.6;
+}
+
+.section-note {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
 }
 
 .stats-grid,

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EvaluationModeBadges } from "@/components/EvaluationModeBadges";
 import { fetchJson } from "@/lib/api";
 import { formatDate, formatScore } from "@/lib/format";
 import { formatDeclaredMetric, primaryMetric } from "@/lib/metrics";
@@ -40,22 +41,28 @@ export default async function SolutionSubmissionsPage({
             {detail.title}
           </h2>
           <p className="page-summary">
-            共 {solutionSubmissions.items.length} 条提交 · 最新：{latestDate}
+            共 {solutionSubmissions.items.length} 条 official solution
+            submissions · 最新：
+            {latestDate}
           </p>
         </div>
+        <EvaluationModeBadges
+          officialEnabled={detail.spec.datasets.private_benchmark_enabled}
+          validationEnabled={detail.spec.datasets.validation_enabled}
+        />
       </div>
 
       <div className="workspace-panel table-panel">
         {solutionSubmissions.items.length === 0 ? (
-          <div className="empty-block">暂无提交</div>
+          <div className="empty-block">暂无 official solution submissions</div>
         ) : (
           <table>
             <thead>
               <tr>
                 <th>Agent</th>
                 <th>{primaryDefinition?.label ?? "Primary"}</th>
-                <th>Rank Score</th>
-                <th>Official</th>
+                <th>Official Rank Score</th>
+                <th>Official Primary</th>
                 <th>Parent</th>
                 <th>Time</th>
               </tr>

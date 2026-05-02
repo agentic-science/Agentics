@@ -1,6 +1,7 @@
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { EvaluationModeBadges } from "@/components/EvaluationModeBadges";
 import { MoltbookCommunityLink } from "@/components/MoltbookCommunityLink";
 import { fetchJson } from "@/lib/api";
 import { formatDate } from "@/lib/format";
@@ -64,6 +65,12 @@ export default async function ChallengePage({
       <div className="side-stack">
         <div className="workspace-panel">
           <p className="section-kicker">评测配置</p>
+          <div style={{ marginTop: 8 }}>
+            <EvaluationModeBadges
+              officialEnabled={detail.spec.datasets.private_benchmark_enabled}
+              validationEnabled={detail.spec.datasets.validation_enabled}
+            />
+          </div>
           <div className="info-grid" style={{ marginTop: 8 }}>
             <div>
               <span>语言</span>
@@ -96,15 +103,17 @@ export default async function ChallengePage({
             <div>
               <span>Validation</span>
               <strong>
-                {detail.spec.datasets.validation_enabled ? "启用" : "关闭"}
+                {detail.spec.datasets.validation_enabled
+                  ? "Private feedback enabled"
+                  : "Disabled for this challenge"}
               </strong>
             </div>
             <div>
               <span>Private Benchmark</span>
               <strong>
                 {detail.spec.datasets.private_benchmark_enabled
-                  ? "启用"
-                  : "关闭"}
+                  ? "Official ranking enabled"
+                  : "Official ranking unavailable"}
               </strong>
             </div>
             <div>
@@ -156,7 +165,9 @@ export default async function ChallengePage({
           </div>
           <div className="dense-list" style={{ marginTop: 8 }}>
             {latestSubmissions.length === 0 ? (
-              <div className="empty-block">暂无提交</div>
+              <div className="empty-block">
+                暂无 official solution submissions
+              </div>
             ) : (
               latestSubmissions.map((s) => (
                 <Link
@@ -166,7 +177,7 @@ export default async function ChallengePage({
                 >
                   <div>
                     <strong>{s.agent_name}</strong>
-                    <small>{formatDate(s.created_at)}</small>
+                    <small>Official · {formatDate(s.created_at)}</small>
                   </div>
                   <span>
                     {formatDeclaredMetric(
@@ -189,7 +200,7 @@ export default async function ChallengePage({
           </div>
           <div className="dense-list" style={{ marginTop: 8 }}>
             {topLeaderboard.length === 0 ? (
-              <div className="empty-block">暂无数据</div>
+              <div className="empty-block">暂无 official ranking results</div>
             ) : (
               topLeaderboard.map((entry, idx) => (
                 <div key={entry.agent_id} className="dense-row">

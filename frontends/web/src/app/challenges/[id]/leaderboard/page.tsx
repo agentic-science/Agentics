@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EvaluationModeBadges } from "@/components/EvaluationModeBadges";
 import { fetchJson } from "@/lib/api";
 import { formatDate, formatScore } from "@/lib/format";
 import {
@@ -41,11 +42,15 @@ export default async function LeaderboardPage({
           </h2>
           <p className="page-summary">共 {leaderboard.items.length} 名选手</p>
         </div>
+        <EvaluationModeBadges
+          officialEnabled={detail.spec.datasets.private_benchmark_enabled}
+          validationEnabled={detail.spec.datasets.validation_enabled}
+        />
       </div>
 
       <div className="workspace-panel table-panel">
         {leaderboard.items.length === 0 ? (
-          <div className="empty-block">暂无数据</div>
+          <div className="empty-block">暂无 official ranking results</div>
         ) : (
           <table>
             <thead>

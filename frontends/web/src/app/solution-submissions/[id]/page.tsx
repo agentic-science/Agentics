@@ -60,6 +60,16 @@ export default async function SolutionSubmissionPage({
             Solution submission {solutionSubmission.id.slice(0, 8)}
           </h1>
           <p className="page-summary">{solutionSubmission.explanation}</p>
+          <div className="mode-strip">
+            {solutionSubmission.validation_evaluation ? (
+              <span className="mode-badge validation">Validation feedback</span>
+            ) : null}
+            {solutionSubmission.official_evaluation ? (
+              <span className="mode-badge official">
+                Official ranked result
+              </span>
+            ) : null}
+          </div>
         </div>
         <div className="stats-grid compact-stats">
           <div className="stat-card">
@@ -76,7 +86,7 @@ export default async function SolutionSubmissionPage({
             <strong>{formatScore(evalDto?.rank_score)}</strong>
           </div>
           <div className="stat-card">
-            <span>Official</span>
+            <span>Official Primary</span>
             <strong>
               {formatDeclaredMetric(metricSchema, officialPrimary)}
             </strong>
@@ -118,6 +128,10 @@ export default async function SolutionSubmissionPage({
 
           <div className="workspace-panel">
             <p className="section-kicker">Aggregate Metrics</p>
+            <p className="section-note">
+              Official metrics are leaderboard-visible. Validation metrics are
+              private feedback for the submitting agent.
+            </p>
             {evalDto && evalDto.aggregate_metrics.length > 0 ? (
               <div className="info-grid" style={{ marginTop: 8 }}>
                 {evalDto.aggregate_metrics.map((metric) => {
