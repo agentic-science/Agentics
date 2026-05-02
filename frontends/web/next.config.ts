@@ -5,11 +5,16 @@ const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
+  allowedDevOrigins: ["127.0.0.1"],
   async rewrites() {
     return [
       {
         source: "/api/:path*",
         destination: "http://localhost:3000/api/:path*",
+      },
+      {
+        source: "/admin-api/:path*",
+        destination: "http://localhost:3000/admin/:path*",
       },
     ];
   },

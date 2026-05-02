@@ -246,6 +246,117 @@ export const discussionListResponseSchema = z
   .object({ items: z.array(discussionThreadDtoSchema) })
   .strict();
 
+/** One row in the admin challenge list. */
+export const adminChallengeListItemSchema = z
+  .object({
+    id: idSchema,
+    slug: z.string().min(1),
+    title: z.string().min(1),
+    description: z.string(),
+    status: z.string().min(1),
+    current_version: currentVersionDtoSchema.optional(),
+    created_at: isoTimestampSchema,
+    updated_at: isoTimestampSchema,
+  })
+  .strict();
+
+/** Admin challenge list response. */
+export const adminChallengeListResponseSchema = z
+  .object({ items: z.array(adminChallengeListItemSchema) })
+  .strict();
+
+/** Challenge shell response returned after an admin create/update action. */
+export const challengeAdminResponseSchema = z
+  .object({
+    id: idSchema,
+    slug: z.string().min(1),
+    title: z.string().min(1),
+    description: z.string(),
+    status: z.string().min(1),
+    created_at: isoTimestampSchema,
+    updated_at: isoTimestampSchema,
+  })
+  .strict();
+
+/** Challenge version response returned after an admin publish action. */
+export const createChallengeVersionResponseSchema = z
+  .object({
+    challenge_id: idSchema,
+    slug: z.string().min(1),
+    title: z.string().min(1),
+    version_id: idSchema,
+    version: z.string().min(1),
+    bundle_path: z.string().min(1),
+    statement_path: z.string().min(1),
+  })
+  .strict();
+
+/** One solution submission row in the admin operations list. */
+export const adminSolutionSubmissionListItemSchema = z
+  .object({
+    id: idSchema,
+    challenge_id: idSchema,
+    challenge_title: z.string().min(1),
+    agent_id: idSchema,
+    agent_name: z.string().min(1),
+    status: z.string().min(1),
+    visible_after_eval: z.boolean(),
+    latest_job_id: idSchema.optional(),
+    latest_job_status: z.string().min(1).optional(),
+    latest_job_eval_type: z.string().min(1).optional(),
+    validation_status: z.string().min(1).optional(),
+    official_status: z.string().min(1).optional(),
+    rank_score: z.number().finite().optional(),
+    created_at: isoTimestampSchema,
+    updated_at: isoTimestampSchema,
+  })
+  .strict();
+
+/** Admin solution submission list response. */
+export const adminSolutionSubmissionListResponseSchema = z
+  .object({ items: z.array(adminSolutionSubmissionListItemSchema) })
+  .strict();
+
+/** Admin response returned when an evaluation job is queued. */
+export const evaluationJobResponseSchema = z
+  .object({
+    job_id: idSchema,
+    solution_submission_id: idSchema,
+    eval_type: z.string().min(1),
+    status: z.string().min(1),
+  })
+  .strict();
+
+/** Admin response returned after hiding a solution submission. */
+export const hideSolutionSubmissionResponseSchema = z
+  .object({
+    id: idSchema,
+    hidden: z.boolean(),
+  })
+  .strict();
+
+/** Admin response returned after disabling an agent. */
+export const disableAgentResponseSchema = z
+  .object({
+    id: idSchema,
+    status: z.string().min(1),
+  })
+  .strict();
+
+/** One service heartbeat row in the admin operations view. */
+export const adminServiceHeartbeatSchema = z
+  .object({
+    service_name: z.string().min(1),
+    last_seen_at: isoTimestampSchema,
+    payload: z.record(z.string(), z.unknown()),
+  })
+  .strict();
+
+/** Admin service heartbeat list response. */
+export const adminServiceHeartbeatListResponseSchema = z
+  .object({ items: z.array(adminServiceHeartbeatSchema) })
+  .strict();
+
 /** One file entry extracted from a solution submission artifact archive. */
 export const solutionSubmissionArtifactFileDtoSchema = z
   .object({
@@ -317,4 +428,19 @@ export type SolutionSubmissionResponse = z.infer<
 >;
 export type SolutionSubmissionArtifactResponse = z.infer<
   typeof solutionSubmissionArtifactResponseSchema
+>;
+export type AdminChallengeListResponse = z.infer<
+  typeof adminChallengeListResponseSchema
+>;
+export type AdminChallengeListItem = z.infer<
+  typeof adminChallengeListItemSchema
+>;
+export type AdminSolutionSubmissionListResponse = z.infer<
+  typeof adminSolutionSubmissionListResponseSchema
+>;
+export type AdminSolutionSubmissionListItem = z.infer<
+  typeof adminSolutionSubmissionListItemSchema
+>;
+export type AdminServiceHeartbeatListResponse = z.infer<
+  typeof adminServiceHeartbeatListResponseSchema
 >;
