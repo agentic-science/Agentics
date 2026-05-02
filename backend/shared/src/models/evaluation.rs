@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
 
-use super::problem::{MetricDirection, MetricSchemaSpec, MetricVisibility};
+use super::challenge::{MetricDirection, MetricSchemaSpec, MetricVisibility};
 
 /// Evaluation surface requested for a submission.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -455,7 +455,7 @@ fn validate_metric_visibility(
 
 #[cfg(test)]
 mod tests {
-    use crate::models::problem::{
+    use crate::models::challenge::{
         MetricDefinitionSpec, MetricDirection, MetricSchemaSpec, MetricVisibility, RankingSpec,
     };
 
@@ -646,6 +646,6 @@ pub struct EvaluationJobDto {
 pub struct EvaluationJobPayload {
     pub artifact_path: String,
     pub bundle_path: String,
-    pub problem_id: String,
-    pub problem_version_id: String,
+    pub challenge_id: String,
+    pub challenge_version_id: String,
 }

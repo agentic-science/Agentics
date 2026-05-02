@@ -1,7 +1,7 @@
 use anyhow::Result;
 use serde::Serialize;
 use serde_json::json;
-use shared::models::problem::{ProblemDetailResponse, ProblemListResponse};
+use shared::models::challenge::{ChallengeDetailResponse, ChallengeListResponse};
 use shared::models::request::{
     CreateSubmissionResponse, RegisterAgentResponse, SubmissionResponse,
 };
@@ -79,23 +79,26 @@ pub fn render_config_set(
     }
 }
 
-pub fn render_problem_list(response: &ProblemListResponse, format: OutputFormat) -> Result<String> {
+pub fn render_challenge_list(
+    response: &ChallengeListResponse,
+    format: OutputFormat,
+) -> Result<String> {
     match format {
         OutputFormat::Json => pretty_json(response),
         OutputFormat::Table => {
             if response.items.is_empty() {
-                return Ok("No published problems found.".to_string());
+                return Ok("No published challenges found.".to_string());
             }
 
             let rows = response
                 .items
                 .iter()
-                .map(|problem| {
+                .map(|challenge| {
                     vec![
-                        problem.id.clone(),
-                        problem.slug.clone(),
-                        problem.current_version.version.clone(),
-                        problem.title.clone(),
+                        challenge.id.clone(),
+                        challenge.slug.clone(),
+                        challenge.current_version.version.clone(),
+                        challenge.title.clone(),
                     ]
                 })
                 .collect::<Vec<_>>();
@@ -104,8 +107,8 @@ pub fn render_problem_list(response: &ProblemListResponse, format: OutputFormat)
     }
 }
 
-pub fn render_problem_detail(
-    response: &ProblemDetailResponse,
+pub fn render_challenge_detail(
+    response: &ChallengeDetailResponse,
     format: OutputFormat,
 ) -> Result<String> {
     match format {
@@ -152,11 +155,11 @@ pub fn render_init_solution(summary: &InitSolutionSummary, format: OutputFormat)
     match format {
         OutputFormat::Json => pretty_json(summary),
         OutputFormat::Table => Ok(format!(
-            "Initialized solution workspace: {}\nproblem: {} ({})\nversion: {}",
+            "Initialized solution workspace: {}\nchallenge: {} ({})\nversion: {}",
             summary.workspace_dir.display(),
-            summary.problem_title,
-            summary.problem_id,
-            summary.problem_version
+            summary.challenge_title,
+            summary.challenge_id,
+            summary.challenge_version
         )),
     }
 }
@@ -177,9 +180,9 @@ pub fn render_create_submission(
             }
         })),
         OutputFormat::Table => Ok(format!(
-            "Submitted {}\nproblem: {}\nstatus: {}\nevaluation_job: {}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}",
+            "Submitted {}\nchallenge: {}\nstatus: {}\nevaluation_job: {}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}",
             response.id,
-            response.problem_id,
+            response.challenge_id,
             response.status,
             response.evaluation_job_id,
             package.file_count,
@@ -206,9 +209,9 @@ pub fn render_create_validation_run(
             }
         })),
         OutputFormat::Table => Ok(format!(
-            "Created validation run {}\nproblem: {}\nstatus: {}\nevaluation_job: {}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}",
+            "Created validation run {}\nchallenge: {}\nstatus: {}\nevaluation_job: {}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}",
             response.id,
-            response.problem_id,
+            response.challenge_id,
             response.status,
             response.evaluation_job_id,
             package.file_count,
@@ -249,9 +252,9 @@ pub fn render_submission_status(
                 .unwrap_or_else(|| "none".to_string());
 
             Ok(format!(
-                "submission: {}\nproblem: {}\nstatus: {}\nevaluation_job: {}\npublic_evaluation: {}\nofficial_evaluation: {}\nrank_score: {}\nvisible_after_eval: {}",
+                "submission: {}\nchallenge: {}\nstatus: {}\nevaluation_job: {}\npublic_evaluation: {}\nofficial_evaluation: {}\nrank_score: {}\nvisible_after_eval: {}",
                 response.id,
-                response.problem_id,
+                response.challenge_id,
                 response.status,
                 evaluation_job,
                 public_eval,
@@ -292,9 +295,9 @@ pub fn render_validation_run_status(
                 .unwrap_or_else(|| "none".to_string());
 
             Ok(format!(
-                "validation_run: {}\nproblem: {}\nstatus: {}\nevaluation_job: {}\nvalidation: {}\nprimary_score: {}\nrank_score: {}\nvisible_after_eval: {}",
+                "validation_run: {}\nchallenge: {}\nstatus: {}\nevaluation_job: {}\nvalidation: {}\nprimary_score: {}\nrank_score: {}\nvisible_after_eval: {}",
                 response.id,
-                response.problem_id,
+                response.challenge_id,
                 response.status,
                 evaluation_job,
                 validation_status,
@@ -370,19 +373,19 @@ fn render_table_row(row: &[String], widths: &[usize]) -> String {
 mod tests {
     use serde_json::Value;
     use shared::models::CurrentVersionDto;
-    use shared::models::evaluation::ScoreVisibility;
-    use shared::models::problem::{
-        DatasetsSpec, LimitsSpec, MetricSchemaSpec, ProblemBundleSpec, ProblemDetailResponse,
-        ProblemListItemDto, ProblemListResponse, ScorerSpec, SubmissionSpec,
+    use shared::models::challenge::{
+        ChallengeBundleSpec, ChallengeDetailResponse, ChallengeListItemDto, ChallengeListResponse,
+        DatasetsSpec, LimitsSpec, MetricSchemaSpec, ScorerSpec, SubmissionSpec,
     };
+    use shared::models::evaluation::ScoreVisibility;
 
-    use super::{OutputFormat, render_problem_detail, render_problem_list};
+    use super::{OutputFormat, render_challenge_detail, render_challenge_list};
 
     #[test]
-    fn renders_problem_list_table() {
-        let output = render_problem_list(
-            &ProblemListResponse {
-                items: vec![ProblemListItemDto {
+    fn renders_challenge_list_table() {
+        let output = render_challenge_list(
+            &ChallengeListResponse {
+                items: vec![ChallengeListItemDto {
                     id: "sample-sum".to_string(),
                     slug: "sum".to_string(),
                     title: "Sample Sum".to_string(),
@@ -404,8 +407,8 @@ mod tests {
     }
 
     #[test]
-    fn renders_problem_detail_json() {
-        let output = render_problem_detail(&problem_detail(), OutputFormat::Json)
+    fn renders_challenge_detail_json() {
+        let output = render_challenge_detail(&challenge_detail(), OutputFormat::Json)
             .expect("render should succeed");
         let parsed: Value = serde_json::from_str(&output).expect("JSON output should parse");
 
@@ -413,8 +416,8 @@ mod tests {
         assert_eq!(parsed["spec"]["submission"]["entrypoint"], "main.py");
     }
 
-    fn problem_detail() -> ProblemDetailResponse {
-        ProblemDetailResponse {
+    fn challenge_detail() -> ChallengeDetailResponse {
+        ChallengeDetailResponse {
             id: "sample-sum".to_string(),
             slug: "sum".to_string(),
             title: "Sample Sum".to_string(),
@@ -423,11 +426,11 @@ mod tests {
                 id: "version-1".to_string(),
                 version: "v1".to_string(),
             },
-            spec: ProblemBundleSpec {
+            spec: ChallengeBundleSpec {
                 schema_version: 1,
-                problem_id: "sample-sum".to_string(),
-                problem_title: "Sample Sum".to_string(),
-                problem_version: "v1".to_string(),
+                challenge_id: "sample-sum".to_string(),
+                challenge_title: "Sample Sum".to_string(),
+                challenge_version: "v1".to_string(),
                 submission: SubmissionSpec {
                     format: "python_zip_project".to_string(),
                     language: "python".to_string(),

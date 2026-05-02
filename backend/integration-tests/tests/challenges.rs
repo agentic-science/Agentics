@@ -3,10 +3,10 @@ mod helpers;
 use helpers::{api_url, spawn_app};
 
 #[sqlx::test(migrations = "../migrations")]
-async fn list_problems_returns_empty_array(pool: sqlx::PgPool) {
+async fn list_challenges_returns_empty_array(pool: sqlx::PgPool) {
     let app = spawn_app(pool).await;
 
-    let response = reqwest::get(api_url(&app, "/api/public/problems"))
+    let response = reqwest::get(api_url(&app, "/api/public/challenges"))
         .await
         .expect("failed to execute request");
 

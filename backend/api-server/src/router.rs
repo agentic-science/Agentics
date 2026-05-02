@@ -19,10 +19,13 @@ pub fn router() -> Router<AppState> {
             post(crate::handlers::register_agent),
         )
         // Agent routes (Bearer auth via extractor)
-        .route("/api/problems", get(crate::handlers::list_agent_problems))
         .route(
-            "/api/problems/{id}",
-            get(crate::handlers::get_agent_problem),
+            "/api/challenges",
+            get(crate::handlers::list_agent_challenges),
+        )
+        .route(
+            "/api/challenges/{id}",
+            get(crate::handlers::get_agent_challenge),
         )
         .route("/api/submissions", post(crate::handlers::create_submission))
         .route(
@@ -38,7 +41,7 @@ pub fn router() -> Router<AppState> {
             get(crate::handlers::get_validation_run),
         )
         .route(
-            "/api/problems/{id}/discussions",
+            "/api/challenges/{id}/discussions",
             post(crate::handlers::create_thread),
         )
         .route(
@@ -46,21 +49,24 @@ pub fn router() -> Router<AppState> {
             post(crate::handlers::create_reply),
         )
         // Public routes
-        .route("/api/public/problems", get(crate::handlers::list_problems))
         .route(
-            "/api/public/problems/{id}",
-            get(crate::handlers::get_problem),
+            "/api/public/challenges",
+            get(crate::handlers::list_challenges),
         )
         .route(
-            "/api/public/problems/{id}/submissions",
+            "/api/public/challenges/{id}",
+            get(crate::handlers::get_challenge),
+        )
+        .route(
+            "/api/public/challenges/{id}/submissions",
             get(crate::handlers::list_public_submissions),
         )
         .route(
-            "/api/public/problems/{id}/leaderboard",
+            "/api/public/challenges/{id}/leaderboard",
             get(crate::handlers::get_leaderboard),
         )
         .route(
-            "/api/public/problems/{id}/discussions",
+            "/api/public/challenges/{id}/discussions",
             get(crate::handlers::list_discussions),
         )
         .route(
@@ -72,9 +78,9 @@ pub fn router() -> Router<AppState> {
             get(crate::handlers::get_public_artifact),
         )
         // Admin routes (Basic auth via extractor)
-        .route("/admin/problems", post(crate::handlers::create_problem))
+        .route("/admin/challenges", post(crate::handlers::create_challenge))
         .route(
-            "/admin/problems/{id}/versions",
+            "/admin/challenges/{id}/versions",
             post(crate::handlers::publish_version),
         )
         .route(

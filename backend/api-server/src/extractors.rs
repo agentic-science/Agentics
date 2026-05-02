@@ -8,8 +8,8 @@ use serde::de::DeserializeOwned;
 use shared::auth;
 use shared::db::queries::authenticate_agent_token;
 use shared::models::request::{
-    CreateDiscussionReplyRequest, CreateDiscussionThreadRequest, CreateProblemRequest,
-    CreateProblemVersionRequest, CreateSubmissionRequest, RegisterAgentRequest,
+    CreateChallengeRequest, CreateChallengeVersionRequest, CreateDiscussionReplyRequest,
+    CreateDiscussionThreadRequest, CreateSubmissionRequest, RegisterAgentRequest,
 };
 
 use crate::state::AppState;
@@ -150,7 +150,7 @@ impl ValidateRequest for RegisterAgentRequest {
 
 impl ValidateRequest for CreateSubmissionRequest {
     fn validate(&self) -> Result<(), String> {
-        require_non_empty(&self.problem_id, "problem_id")?;
+        require_non_empty(&self.challenge_id, "challenge_id")?;
         require_non_empty(&self.artifact_base64, "artifact_base64")
     }
 }
@@ -168,14 +168,14 @@ impl ValidateRequest for CreateDiscussionReplyRequest {
     }
 }
 
-impl ValidateRequest for CreateProblemRequest {
+impl ValidateRequest for CreateChallengeRequest {
     fn validate(&self) -> Result<(), String> {
         require_non_empty(&self.id, "id")?;
         require_non_empty(&self.title, "title")
     }
 }
 
-impl ValidateRequest for CreateProblemVersionRequest {
+impl ValidateRequest for CreateChallengeVersionRequest {
     fn validate(&self) -> Result<(), String> {
         require_non_empty(&self.bundle_path, "bundle_path")
     }

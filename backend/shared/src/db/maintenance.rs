@@ -46,14 +46,17 @@ pub async fn upsert_service_heartbeat(
     Ok(())
 }
 
-/// Seed or refresh published problems by scanning a bundle root.
+/// Seed or refresh published challenges by scanning a bundle root.
 ///
 /// Each immediate child directory may contain one or more version directories.
 /// Directories without `spec.json` are ignored so local notes or partial bundles
 /// do not block startup.
-pub async fn ensure_problems_seeded_from_root(pool: &PgPool, problems_root: &str) -> Result<usize> {
-    tokio::fs::create_dir_all(problems_root).await?;
-    let mut entries = tokio::fs::read_dir(problems_root).await?;
+pub async fn ensure_challenges_seeded_from_root(
+    pool: &PgPool,
+    challenges_root: &str,
+) -> Result<usize> {
+    tokio::fs::create_dir_all(challenges_root).await?;
+    let mut entries = tokio::fs::read_dir(challenges_root).await?;
     let mut synced = 0usize;
 
     while let Some(entry) = entries.next_entry().await? {
@@ -73,28 +76,28 @@ pub async fn ensure_problems_seeded_from_root(pool: &PgPool, problems_root: &str
                 continue;
             }
 
-            let spec = crate::problem_bundle::read_problem_bundle_spec(&bundle_dir).await?;
+            let spec = crate::challenge_bundle::read_challenge_bundle_spec(&bundle_dir).await?;
             let statement_path = bundle_dir.join("statement.md");
             let description =
-                crate::problem_bundle::extract_problem_description(&statement_path).await?;
-            let problem_id = &spec.problem_id;
-            let version_id = format!("{}:{}", problem_id, spec.problem_version);
+                crate::challenge_bundle::extract_challenge_description(&statement_path).await?;
+            let challenge_id = &spec.challenge_id;
+            let version_id = format!("{}:{}", challenge_id, spec.challenge_version);
 
             sqlx::query(
                 r#"
-                INSERT INTO problems (id, slug, title, description, status)
+                INSERT INTO challenges (id, slug, title, description, status)
                 VALUES ($1, $2, $3, $4, 'active')
                 ON CONFLICT (id) DO UPDATE
                 SET slug = EXCLUDED.slug,
                     title = EXCLUDED.title,
-                    description = CASE WHEN problems.description = '' THEN EXCLUDED.description ELSE problems.description END,
+                    description = CASE WHEN challenges.description = '' THEN EXCLUDED.description ELSE challenges.description END,
                     status = 'active',
                     updated_at = NOW()
                 "#
             )
-            .bind(problem_id)
-            .bind(problem_id)
-            .bind(&spec.problem_title)
+            .bind(challenge_id)
+            .bind(challenge_id)
+            .bind(&spec.challenge_title)
             .bind(&description)
             .execute(pool)
             .await?;
@@ -104,9 +107,9 @@ pub async fn ensure_problems_seeded_from_root(pool: &PgPool, problems_root: &str
 
             sqlx::query(
                 r#"
-                INSERT INTO problem_versions (id, problem_id, version, bundle_path, statement_path, spec_json, status)
+                INSERT INTO challenge_versions (id, challenge_id, version, bundle_path, statement_path, spec_json, status)
                 VALUES ($1, $2, $3, $4, $5, $6, 'published')
-                ON CONFLICT (problem_id, version) DO UPDATE
+                ON CONFLICT (challenge_id, version) DO UPDATE
                 SET bundle_path = EXCLUDED.bundle_path,
                     statement_path = EXCLUDED.statement_path,
                     spec_json = EXCLUDED.spec_json,
@@ -114,8 +117,8 @@ pub async fn ensure_problems_seeded_from_root(pool: &PgPool, problems_root: &str
                 "#
             )
             .bind(&version_id)
-            .bind(problem_id)
-            .bind(&spec.problem_version)
+            .bind(challenge_id)
+            .bind(&spec.challenge_version)
             .bind(bundle_dir.to_string_lossy().as_ref())
             .bind(statement_path.to_string_lossy().as_ref())
             .bind(&spec_json)

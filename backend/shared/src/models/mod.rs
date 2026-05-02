@@ -1,7 +1,7 @@
 //! Shared API model types used by backend crates and mirrored by the frontend schemas.
 
+pub mod challenge;
 pub mod evaluation;
-pub mod problem;
 pub mod request;
 
 use serde::{Deserialize, Serialize};
@@ -35,7 +35,7 @@ pub struct IdOnlyResponse {
     pub id: String,
 }
 
-/// Current published version summary embedded in problem DTOs.
+/// Current published version summary embedded in challenge DTOs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CurrentVersionDto {
     pub id: String,

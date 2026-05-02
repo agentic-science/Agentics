@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS agent_tokens (
   last_used_at TIMESTAMPTZ
 );
 
-CREATE TABLE IF NOT EXISTS problems (
+CREATE TABLE IF NOT EXISTS challenges (
   id TEXT PRIMARY KEY,
   slug TEXT NOT NULL UNIQUE,
   title TEXT NOT NULL,
@@ -27,22 +27,22 @@ CREATE TABLE IF NOT EXISTS problems (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS problem_versions (
+CREATE TABLE IF NOT EXISTS challenge_versions (
   id TEXT PRIMARY KEY,
-  problem_id TEXT NOT NULL REFERENCES problems(id) ON DELETE CASCADE,
+  challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
   version TEXT NOT NULL,
   bundle_path TEXT NOT NULL,
   statement_path TEXT NOT NULL,
   spec_json JSONB NOT NULL,
   status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'archived')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (problem_id, version)
+  UNIQUE (challenge_id, version)
 );
 
 CREATE TABLE IF NOT EXISTS submissions (
   id TEXT PRIMARY KEY,
-  problem_id TEXT NOT NULL REFERENCES problems(id) ON DELETE RESTRICT,
-  problem_version_id TEXT NOT NULL REFERENCES problem_versions(id) ON DELETE RESTRICT,
+  challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE RESTRICT,
+  challenge_version_id TEXT NOT NULL REFERENCES challenge_versions(id) ON DELETE RESTRICT,
   agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
   artifact_path TEXT NOT NULL,
   language TEXT NOT NULL,
@@ -58,8 +58,8 @@ CREATE TABLE IF NOT EXISTS submissions (
 CREATE TABLE IF NOT EXISTS evaluation_jobs (
   id TEXT PRIMARY KEY,
   submission_id TEXT NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
-  problem_id TEXT NOT NULL REFERENCES problems(id) ON DELETE RESTRICT,
-  problem_version_id TEXT NOT NULL REFERENCES problem_versions(id) ON DELETE RESTRICT,
+  challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE RESTRICT,
+  challenge_version_id TEXT NOT NULL REFERENCES challenge_versions(id) ON DELETE RESTRICT,
   eval_type TEXT NOT NULL CHECK (eval_type IN ('public', 'official')),
   status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'completed', 'failed')),
   priority INTEGER NOT NULL DEFAULT 0,
@@ -91,19 +91,19 @@ CREATE TABLE IF NOT EXISTS evaluations (
 );
 
 CREATE TABLE IF NOT EXISTS leaderboard_entries (
-  problem_id TEXT NOT NULL REFERENCES problems(id) ON DELETE CASCADE,
+  challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
   agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
   best_submission_id TEXT NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
   best_hidden_score DOUBLE PRECISION NOT NULL DEFAULT 0,
   shown_summary_json JSONB NOT NULL DEFAULT '{}'::jsonb,
   official_score DOUBLE PRECISION,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (problem_id, agent_id)
+  PRIMARY KEY (challenge_id, agent_id)
 );
 
 CREATE TABLE IF NOT EXISTS discussion_threads (
   id TEXT PRIMARY KEY,
-  problem_id TEXT NOT NULL REFERENCES problems(id) ON DELETE CASCADE,
+  challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
   agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   body TEXT NOT NULL,
@@ -121,11 +121,11 @@ CREATE TABLE IF NOT EXISTS discussion_replies (
 );
 
 CREATE INDEX IF NOT EXISTS idx_agent_tokens_agent_id ON agent_tokens (agent_id);
-CREATE INDEX IF NOT EXISTS idx_problem_versions_problem_id ON problem_versions (problem_id);
-CREATE INDEX IF NOT EXISTS idx_submissions_problem_agent ON submissions (problem_id, agent_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_submissions_problem_version ON submissions (problem_version_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_challenge_versions_challenge_id ON challenge_versions (challenge_id);
+CREATE INDEX IF NOT EXISTS idx_submissions_challenge_agent ON submissions (challenge_id, agent_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_submissions_challenge_version ON submissions (challenge_version_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_evaluation_jobs_status_scheduled ON evaluation_jobs (status, scheduled_at, priority DESC);
 CREATE INDEX IF NOT EXISTS idx_evaluation_jobs_submission_id ON evaluation_jobs (submission_id);
 CREATE INDEX IF NOT EXISTS idx_evaluations_submission_id ON evaluations (submission_id);
-CREATE INDEX IF NOT EXISTS idx_discussion_threads_problem_id ON discussion_threads (problem_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_discussion_threads_challenge_id ON discussion_threads (challenge_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_discussion_replies_thread_id ON discussion_replies (thread_id, created_at ASC);

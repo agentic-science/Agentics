@@ -1,16 +1,16 @@
-//! Problem bundle and problem-facing DTOs.
+//! Challenge bundle and challenge-facing DTOs.
 
 use serde::{Deserialize, Serialize};
 
 use super::CurrentVersionDto;
 
-/// Parsed `spec.json` contract for a problem bundle.
+/// Parsed `spec.json` contract for a challenge bundle.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProblemBundleSpec {
+pub struct ChallengeBundleSpec {
     pub schema_version: i32,
-    pub problem_id: String,
-    pub problem_title: String,
-    pub problem_version: String,
+    pub challenge_id: String,
+    pub challenge_title: String,
+    pub challenge_version: String,
     pub submission: SubmissionSpec,
     pub scorer: ScorerSpec,
     pub limits: LimitsSpec,
@@ -134,9 +134,9 @@ impl Default for MetricSchemaSpec {
     }
 }
 
-/// One row in the public problem catalog.
+/// One row in the public challenge catalog.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProblemListItemDto {
+pub struct ChallengeListItemDto {
     pub id: String,
     pub slug: String,
     pub title: String,
@@ -144,27 +144,27 @@ pub struct ProblemListItemDto {
     pub current_version: CurrentVersionDto,
 }
 
-/// Public problem catalog response.
+/// Public challenge catalog response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProblemListResponse {
-    pub items: Vec<ProblemListItemDto>,
+pub struct ChallengeListResponse {
+    pub items: Vec<ChallengeListItemDto>,
 }
 
-/// Public problem detail response with spec and Markdown statement.
+/// Public challenge detail response with spec and Markdown statement.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProblemDetailResponse {
+pub struct ChallengeDetailResponse {
     pub id: String,
     pub slug: String,
     pub title: String,
     pub description: String,
     pub current_version: CurrentVersionDto,
-    pub spec: ProblemBundleSpec,
+    pub spec: ChallengeBundleSpec,
     pub statement_markdown: String,
 }
 
-/// Admin-facing problem metadata response.
+/// Admin-facing challenge metadata response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProblemAdminResponse {
+pub struct ChallengeAdminResponse {
     pub id: String,
     pub slug: String,
     pub title: String,
@@ -176,8 +176,8 @@ pub struct ProblemAdminResponse {
 
 /// Admin response returned after publishing a bundle version.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreateProblemVersionResponse {
-    pub problem_id: String,
+pub struct CreateChallengeVersionResponse {
+    pub challenge_id: String,
     pub slug: String,
     pub title: String,
     pub version_id: String,

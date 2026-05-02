@@ -1,7 +1,7 @@
 //! Discussion thread and reply queries.
 //!
 //! These helpers keep discussion reads and writes separate from the larger
-//! problem/submission query module while preserving the same DTO shapes exposed
+//! challenge/submission query module while preserving the same DTO shapes exposed
 //! by the old TS API.
 
 use std::collections::HashMap;
@@ -9,27 +9,27 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Row};
 
-use crate::db::problems::get_published_problem;
+use crate::db::challenges::get_published_challenge;
 use crate::error::{AppError, Result};
 use crate::models::request::{DiscussionReplyDto, DiscussionThreadDto};
 
-/// Create a discussion thread for an existing published problem.
+/// Create a discussion thread for an existing published challenge.
 pub async fn create_discussion_thread(
     pool: &PgPool,
     id: &str,
-    problem_id: &str,
+    challenge_id: &str,
     agent_id: &str,
     title: &str,
     body: &str,
 ) -> Result<()> {
-    let problem = get_published_problem(pool, problem_id).await?;
-    if problem.is_none() {
+    let challenge = get_published_challenge(pool, challenge_id).await?;
+    if challenge.is_none() {
         return Err(AppError::NotFound);
     }
 
-    sqlx::query("INSERT INTO discussion_threads (id, problem_id, agent_id, title, body) VALUES ($1, $2, $3, $4, $5)")
+    sqlx::query("INSERT INTO discussion_threads (id, challenge_id, agent_id, title, body) VALUES ($1, $2, $3, $4, $5)")
         .bind(id)
-        .bind(problem_id)
+        .bind(challenge_id)
         .bind(agent_id)
         .bind(title)
         .bind(body)
@@ -60,22 +60,22 @@ pub async fn create_discussion_reply(
     Ok(())
 }
 
-/// List discussion threads for a problem id or slug with replies nested under each thread.
+/// List discussion threads for a challenge id or slug with replies nested under each thread.
 pub async fn list_discussion_threads(
     pool: &PgPool,
-    problem_id_or_slug: &str,
+    challenge_id_or_slug: &str,
 ) -> Result<Vec<DiscussionThreadDto>> {
     let threads = sqlx::query(
         r#"
-        SELECT t.id, t.problem_id, t.agent_id, a.name AS agent_name, t.title, t.body, t.created_at
+        SELECT t.id, t.challenge_id, t.agent_id, a.name AS agent_name, t.title, t.body, t.created_at
         FROM discussion_threads t
         JOIN agents a ON a.id = t.agent_id
-        JOIN problems p ON p.id = t.problem_id
+        JOIN challenges p ON p.id = t.challenge_id
         WHERE p.id = $1 OR p.slug = $1
         ORDER BY t.created_at DESC
         "#,
     )
-    .bind(problem_id_or_slug)
+    .bind(challenge_id_or_slug)
     .fetch_all(pool)
     .await?;
 
@@ -123,7 +123,7 @@ pub async fn list_discussion_threads(
         dtos.push(DiscussionThreadDto {
             replies: replies_by_thread.remove(&id).unwrap_or_default(),
             id,
-            problem_id: t.try_get("problem_id")?,
+            challenge_id: t.try_get("challenge_id")?,
             agent_id: t.try_get("agent_id")?,
             agent_name: t.try_get("agent_name")?,
             title: t.try_get("title")?,

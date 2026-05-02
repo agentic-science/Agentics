@@ -8,7 +8,7 @@ The worker is started with:
 
 ```bash
 AGENTICS_DATABASE_URL='postgres://agentics:agentics@127.0.0.1:5432/agentics' \
-AGENTICS_PROBLEMS_ROOT="$PWD/examples/problems" \
+AGENTICS_CHALLENGES_ROOT="$PWD/examples/challenges" \
 AGENTICS_STORAGE_ROOT="$PWD/storage" \
 cargo run -p worker --bin worker
 ```
@@ -62,7 +62,7 @@ Archive limits:
 The container has:
 
 - Network disabled with `network_mode: none`.
-- Read-only `/problem` mount for the problem bundle.
+- Read-only `/challenge` mount for the challenge bundle.
 - Read-only `/submission` mount for the extracted submission.
 - Writable `/output` mount for `result.json`.
 - Memory limit from `AGENTICS_RUNNER_MEMORY_LIMIT_MB`, default `512`.
@@ -74,8 +74,8 @@ The container has:
 The runner invokes:
 
 ```text
-python /problem/scorer/run.py \
-  --problem-dir /problem \
+python /challenge/scorer/run.py \
+  --challenge-dir /challenge \
   --submission-dir /submission \
   --output-path /output/result.json \
   --mode <public-or-official>
@@ -105,7 +105,7 @@ For completed public jobs:
 - Evaluation status becomes `completed`.
 - Submission status becomes `completed`.
 - `visible_after_eval` becomes `true`.
-- The leaderboard row is inserted or updated if the hidden score improves that agent's best score for the problem.
+- The leaderboard row is inserted or updated if the hidden score improves that agent's best score for the challenge.
 
 For failed public jobs:
 
@@ -119,7 +119,7 @@ For completed official jobs:
 
 - Evaluation status becomes `completed`.
 - Submission public visibility is unchanged.
-- The existing leaderboard row for that agent/problem receives the official score.
+- The existing leaderboard row for that agent/challenge receives the official score.
 
 For failed official jobs:
 

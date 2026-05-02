@@ -1,13 +1,13 @@
 # Agentics v0.0 Challenge Bundle Authoring
 
-Challenge bundles are filesystem directories that define one immutable published problem version. The API seeds bundles from `AGENTICS_PROBLEMS_ROOT` at startup and admins can publish bundle versions through `POST /admin/problems/{id}/versions`.
+Challenge bundles are filesystem directories that define one immutable published challenge version. The API seeds bundles from `AGENTICS_CHALLENGES_ROOT` at startup and admins can publish bundle versions through `POST /admin/challenges/{id}/versions`.
 
 ## Directory Layout
 
 The default examples use this layout:
 
 ```text
-examples/problems/
+examples/challenges/
   sample-sum/
     v1/
       spec.json
@@ -22,7 +22,7 @@ examples/problems/
         cases.json
 ```
 
-Each immediate child of the problem root is treated as a problem directory. Each version directory that contains `spec.json` is considered for seeding. Directories without `spec.json` are ignored.
+Each immediate child of the challenge root is treated as a challenge directory. Each version directory that contains `spec.json` is considered for seeding. Directories without `spec.json` are ignored.
 
 ## Required Files
 
@@ -43,9 +43,9 @@ v0.0 supports schema version `1`:
 ```json
 {
   "schema_version": 1,
-  "problem_id": "sample-sum",
-  "problem_title": "Sample Sum",
-  "problem_version": "v1",
+  "challenge_id": "sample-sum",
+  "challenge_title": "Sample Sum",
+  "challenge_version": "v1",
   "submission": {
     "format": "python_zip_project",
     "language": "python",
@@ -73,7 +73,7 @@ v0.0 supports schema version `1`:
 Validation rules:
 
 - `schema_version` must be `1`.
-- `problem_id`, `problem_title`, and `problem_version` must be non-empty.
+- `challenge_id`, `challenge_title`, and `challenge_version` must be non-empty.
 - `submission.format` must be `python_zip_project`.
 - `submission.language` must be `python`.
 - `submission.entrypoint`, `scorer.entrypoint`, `scorer.result_file`, and dataset paths must be safe relative paths.
@@ -86,17 +86,17 @@ Safe relative paths cannot be absolute, cannot contain empty segments, and canno
 
 ## Statement
 
-`statement.md` is returned in public problem detail responses as `statement_markdown`.
+`statement.md` is returned in public challenge detail responses as `statement_markdown`.
 
-The API extracts the problem list description from the first prose paragraph. Headings, lists, tables, block quotes, and fenced code blocks are skipped when extracting this short description.
+The API extracts the challenge list description from the first prose paragraph. Headings, lists, tables, block quotes, and fenced code blocks are skipped when extracting this short description.
 
 ## Scorer Invocation
 
 The worker runs the scorer inside the configured Docker image with this command shape:
 
 ```text
-python /problem/scorer/run.py \
-  --problem-dir /problem \
+python /challenge/scorer/run.py \
+  --challenge-dir /challenge \
   --submission-dir /submission \
   --output-path /output/result.json \
   --mode public
@@ -106,11 +106,11 @@ For official runs, `--mode official` is used.
 
 Mounted paths:
 
-- `/problem`: read-only problem bundle.
+- `/challenge`: read-only challenge bundle.
 - `/submission`: read-only extracted submitted ZIP.
 - `/output`: writable output directory for `result.json`.
 
-The current runner always invokes `/problem/scorer/run.py`, so v0.0 bundles should keep the scorer entrypoint at `scorer/run.py` even though `spec.json` stores the declared path.
+The current runner always invokes `/challenge/scorer/run.py`, so v0.0 bundles should keep the scorer entrypoint at `scorer/run.py` even though `spec.json` stores the declared path.
 
 ## Submission Contract
 
@@ -201,6 +201,6 @@ Before publishing a bundle:
 1. Confirm `spec.json` matches the schema above.
 2. Confirm all declared paths are relative and stay inside the bundle.
 3. Run the scorer directly against a sample extracted submission.
-4. Run API startup with `AGENTICS_PROBLEMS_ROOT` pointing at the bundle root.
-5. Confirm `/api/public/problems` lists the challenge.
+4. Run API startup with `AGENTICS_CHALLENGES_ROOT` pointing at the bundle root.
+5. Confirm `/api/public/challenges` lists the challenge.
 6. Submit a known-good sample ZIP and confirm the worker completes it.

@@ -18,7 +18,7 @@ DIRECTIONS = {
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run grid routing scorer")
-    parser.add_argument("--problem-dir", required=True)
+    parser.add_argument("--challenge-dir", required=True)
     parser.add_argument("--submission-dir", required=True)
     parser.add_argument("--output-path", required=True)
     parser.add_argument("--mode", choices=["validation", "public", "official"], required=True)
@@ -228,10 +228,10 @@ def run_metrics(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def main() -> int:
     args = parse_args()
-    problem_dir = Path(args.problem_dir)
+    challenge_dir = Path(args.challenge_dir)
     submission_dir = Path(args.submission_dir)
     output_path = Path(args.output_path)
-    spec = load_json(problem_dir / "spec.json")
+    spec = load_json(challenge_dir / "spec.json")
 
     submission_entrypoint = submission_dir / spec["submission"]["entrypoint"]
     if not submission_entrypoint.is_file():
@@ -243,7 +243,7 @@ def main() -> int:
     if args.mode in {"validation", "public"}:
         shown_results = score_dataset(
             submission_entrypoint=submission_entrypoint,
-            cases_path=problem_dir / spec["datasets"]["shown_dir"] / "cases.json",
+            cases_path=challenge_dir / spec["datasets"]["shown_dir"] / "cases.json",
             time_limit_sec=time_limit_sec,
             logs=logs,
         )
@@ -252,7 +252,7 @@ def main() -> int:
             if args.mode == "validation"
             else score_dataset(
                 submission_entrypoint=submission_entrypoint,
-                cases_path=problem_dir / spec["datasets"]["hidden_dir"] / "cases.json",
+                cases_path=challenge_dir / spec["datasets"]["hidden_dir"] / "cases.json",
                 time_limit_sec=time_limit_sec,
                 logs=logs,
             )
@@ -277,7 +277,7 @@ def main() -> int:
 
         official_results = score_dataset(
             submission_entrypoint=submission_entrypoint,
-            cases_path=problem_dir / heldout_dir / "cases.json",
+            cases_path=challenge_dir / heldout_dir / "cases.json",
             time_limit_sec=time_limit_sec,
             logs=logs,
         )

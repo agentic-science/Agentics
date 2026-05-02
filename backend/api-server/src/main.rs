@@ -21,9 +21,10 @@ async fn main() -> anyhow::Result<()> {
     let db = create_pool(&config, 10).await?;
     let storage = Arc::new(LocalStorage::new(&config.storage_root));
 
-    // Seed problems from problems_root
-    if tokio::fs::metadata(&config.problems_root).await.is_ok() {
-        shared::db::queries::ensure_problems_seeded_from_root(&db, &config.problems_root).await?;
+    // Seed challenges from challenges_root
+    if tokio::fs::metadata(&config.challenges_root).await.is_ok() {
+        shared::db::queries::ensure_challenges_seeded_from_root(&db, &config.challenges_root)
+            .await?;
     }
 
     let state = AppState {

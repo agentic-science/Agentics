@@ -3,14 +3,14 @@
 mod helpers;
 
 use helpers::{
-    api_url, examples_problems_root, run_worker_once, sample_sum_submission, spawn_app_with_config,
-    submission_zip_base64, test_config,
+    api_url, examples_challenges_root, run_worker_once, sample_sum_submission,
+    spawn_app_with_config, submission_zip_base64, test_config,
 };
 
 #[sqlx::test(migrations = "../migrations")]
 async fn public_read_flow_matches_old_api(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
-    let config = test_config(storage.path(), &examples_problems_root());
+    let config = test_config(storage.path(), &examples_challenges_root());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
 
@@ -43,7 +43,7 @@ async fn public_read_flow_matches_old_api(pool: sqlx::PgPool) {
         .post(api_url(&app, "/api/submissions"))
         .header("Authorization", format!("Bearer {token_a}"))
         .json(&serde_json::json!({
-            "problem_id": "sample-sum",
+            "challenge_id": "sample-sum",
             "artifact_base64": good_artifact,
             "explanation": "perfect score"
         }))
@@ -73,7 +73,7 @@ async fn public_read_flow_matches_old_api(pool: sqlx::PgPool) {
         .post(api_url(&app, "/api/submissions"))
         .header("Authorization", format!("Bearer {token_b}"))
         .json(&serde_json::json!({
-            "problem_id": "sample-sum",
+            "challenge_id": "sample-sum",
             "artifact_base64": bad_artifact,
             "explanation": "bad score"
         }))
@@ -101,7 +101,10 @@ async fn public_read_flow_matches_old_api(pool: sqlx::PgPool) {
     assert!(public_submission["parent_submission_id"].is_null());
 
     let public_submission_list: serde_json::Value = client
-        .get(api_url(&app, "/api/public/problems/sample-sum/submissions"))
+        .get(api_url(
+            &app,
+            "/api/public/challenges/sample-sum/submissions",
+        ))
         .send()
         .await
         .expect("failed to list public submissions")
@@ -148,7 +151,10 @@ async fn public_read_flow_matches_old_api(pool: sqlx::PgPool) {
     );
 
     let leaderboard: serde_json::Value = client
-        .get(api_url(&app, "/api/public/problems/sample-sum/leaderboard"))
+        .get(api_url(
+            &app,
+            "/api/public/challenges/sample-sum/leaderboard",
+        ))
         .send()
         .await
         .expect("failed to get leaderboard")
@@ -164,35 +170,35 @@ async fn public_read_flow_matches_old_api(pool: sqlx::PgPool) {
 }
 
 #[sqlx::test(migrations = "../migrations")]
-async fn seeded_problem_descriptions_and_discussions_are_public(pool: sqlx::PgPool) {
+async fn seeded_challenge_descriptions_and_discussions_are_public(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
-    let config = test_config(storage.path(), &examples_problems_root());
+    let config = test_config(storage.path(), &examples_challenges_root());
     let app = spawn_app_with_config(pool.clone(), config).await;
     let client = reqwest::Client::new();
 
-    let public_problem: serde_json::Value = client
-        .get(api_url(&app, "/api/public/problems/grid-routing"))
+    let public_challenge: serde_json::Value = client
+        .get(api_url(&app, "/api/public/challenges/grid-routing"))
         .send()
         .await
-        .expect("failed to get grid-routing problem")
+        .expect("failed to get grid-routing challenge")
         .json()
         .await
-        .expect("failed to decode grid-routing problem");
-    assert_eq!(public_problem["title"], "Grid Routing");
+        .expect("failed to decode grid-routing challenge");
+    assert_eq!(public_challenge["title"], "Grid Routing");
     assert!(
-        public_problem["description"]
+        public_challenge["description"]
             .as_str()
             .unwrap()
             .contains("二维网格")
     );
     assert!(
-        public_problem["description"]
+        public_challenge["description"]
             .as_str()
             .unwrap()
             .contains("从 S 到 G")
     );
     assert!(
-        public_problem["statement_markdown"]
+        public_challenge["statement_markdown"]
             .as_str()
             .unwrap()
             .contains("## 输入输出约定")
@@ -210,7 +216,7 @@ async fn seeded_problem_descriptions_and_discussions_are_public(pool: sqlx::PgPo
     let token = register_response["token"].as_str().expect("missing token");
 
     let thread_response: serde_json::Value = client
-        .post(api_url(&app, "/api/problems/sample-sum/discussions"))
+        .post(api_url(&app, "/api/challenges/sample-sum/discussions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "title": "How to improve score?",
@@ -239,7 +245,10 @@ async fn seeded_problem_descriptions_and_discussions_are_public(pool: sqlx::PgPo
     assert_eq!(reply_response.status(), 201);
 
     let discussions: serde_json::Value = client
-        .get(api_url(&app, "/api/public/problems/sample-sum/discussions"))
+        .get(api_url(
+            &app,
+            "/api/public/challenges/sample-sum/discussions",
+        ))
         .send()
         .await
         .expect("failed to list discussions")

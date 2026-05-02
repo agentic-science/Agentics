@@ -9,7 +9,7 @@ import {
   primaryMetric,
 } from "@/lib/metrics";
 import {
-  problemDetailResponseSchema,
+  challengeDetailResponseSchema,
   submissionArtifactResponseSchema,
   submissionResponseSchema,
 } from "@/lib/schemas";
@@ -32,8 +32,8 @@ export default async function SubmissionPage({
       submissionArtifactResponseSchema,
     ),
     fetchJson(
-      `/api/public/problems/${submission.problem_id}`,
-      problemDetailResponseSchema,
+      `/api/public/challenges/${submission.challenge_id}`,
+      challengeDetailResponseSchema,
     ),
   ]);
 
@@ -50,8 +50,8 @@ export default async function SubmissionPage({
       <div className="hero-panel workspace-panel">
         <div className="hero-copy-block">
           <span className="section-kicker">
-            <Link href={`/problems/${submission.problem_id}`}>
-              {submission.problem_title ?? submission.problem_id}
+            <Link href={`/challenges/${submission.challenge_id}`}>
+              {submission.challenge_title ?? submission.challenge_id}
             </Link>
           </span>
           <h1 className="page-title">Submission {submission.id.slice(0, 8)}</h1>

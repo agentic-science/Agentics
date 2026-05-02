@@ -8,11 +8,11 @@ import {
   primaryMetric,
 } from "@/lib/metrics";
 import {
+  challengeDetailResponseSchema,
   leaderboardResponseSchema,
-  problemDetailResponseSchema,
 } from "@/lib/schemas";
 
-/** Problem leaderboard page ranked by best hidden score. */
+/** Challenge leaderboard page ranked by best hidden score. */
 export default async function LeaderboardPage({
   params,
 }: {
@@ -21,9 +21,9 @@ export default async function LeaderboardPage({
   const { id } = await params;
 
   const [detail, leaderboard] = await Promise.all([
-    fetchJson(`/api/public/problems/${id}`, problemDetailResponseSchema),
+    fetchJson(`/api/public/challenges/${id}`, challengeDetailResponseSchema),
     fetchJson(
-      `/api/public/problems/${id}/leaderboard`,
+      `/api/public/challenges/${id}/leaderboard`,
       leaderboardResponseSchema,
     ),
   ]);

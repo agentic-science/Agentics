@@ -5,12 +5,12 @@ mod helpers;
 use std::path::Path;
 
 use helpers::{
-    api_url, copy_dir_all, examples_problems_root, run_worker_once, sample_sum_submission,
+    api_url, copy_dir_all, examples_challenges_root, run_worker_once, sample_sum_submission,
     spawn_app_with_config, submission_zip_base64, test_config,
 };
 
-fn create_validation_disabled_problem(root: &Path) {
-    let source = examples_problems_root().join("sample-sum/v1");
+fn create_validation_disabled_challenge(root: &Path) {
+    let source = examples_challenges_root().join("sample-sum/v1");
     let bundle_dir = root.join("validation-disabled/v1");
     copy_dir_all(&source, &bundle_dir);
 
@@ -19,8 +19,8 @@ fn create_validation_disabled_problem(root: &Path) {
         &std::fs::read_to_string(&spec_path).expect("failed to read copied spec"),
     )
     .expect("failed to parse copied spec");
-    spec["problem_id"] = serde_json::json!("validation-disabled");
-    spec["problem_title"] = serde_json::json!("Validation Disabled");
+    spec["challenge_id"] = serde_json::json!("validation-disabled");
+    spec["challenge_title"] = serde_json::json!("Validation Disabled");
     spec["datasets"]["validation_enabled"] = serde_json::json!(false);
     std::fs::write(
         &spec_path,
@@ -32,7 +32,7 @@ fn create_validation_disabled_problem(root: &Path) {
 #[sqlx::test(migrations = "../migrations")]
 async fn worker_completes_official_submission(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
-    let config = test_config(storage.path(), &examples_problems_root());
+    let config = test_config(storage.path(), &examples_challenges_root());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
 
@@ -65,7 +65,7 @@ async fn worker_completes_official_submission(pool: sqlx::PgPool) {
         .post(api_url(&app, "/api/submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "problem_id": "sample-sum",
+            "challenge_id": "sample-sum",
             "artifact_base64": artifact_base64,
             "explanation": "official eval smoke test"
         }))
@@ -178,7 +178,7 @@ async fn worker_completes_official_submission(pool: sqlx::PgPool) {
 #[sqlx::test(migrations = "../migrations")]
 async fn worker_completes_private_validation_run_without_leaderboard(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
-    let config = test_config(storage.path(), &examples_problems_root());
+    let config = test_config(storage.path(), &examples_challenges_root());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
 
@@ -199,7 +199,7 @@ async fn worker_completes_private_validation_run_without_leaderboard(pool: sqlx:
         .post(api_url(&app, "/api/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "problem_id": "sample-sum",
+            "challenge_id": "sample-sum",
             "artifact_base64": artifact_base64,
             "explanation": "validation smoke test"
         }))
@@ -251,11 +251,11 @@ async fn worker_completes_private_validation_run_without_leaderboard(pool: sqlx:
 }
 
 #[sqlx::test(migrations = "../migrations")]
-async fn validation_run_is_rejected_when_problem_disables_validation(pool: sqlx::PgPool) {
+async fn validation_run_is_rejected_when_challenge_disables_validation(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
-    let problems = tempfile::tempdir().expect("failed to create problems tempdir");
-    create_validation_disabled_problem(problems.path());
-    let config = test_config(storage.path(), problems.path());
+    let challenges = tempfile::tempdir().expect("failed to create challenges tempdir");
+    create_validation_disabled_challenge(challenges.path());
+    let config = test_config(storage.path(), challenges.path());
     let app = spawn_app_with_config(pool.clone(), config).await;
     let client = reqwest::Client::new();
 
@@ -274,7 +274,7 @@ async fn validation_run_is_rejected_when_problem_disables_validation(pool: sqlx:
         .post(api_url(&app, "/api/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "problem_id": "validation-disabled",
+            "challenge_id": "validation-disabled",
             "artifact_base64": "not-base64",
             "explanation": "should fail before artifact decode"
         }))
@@ -307,7 +307,7 @@ async fn validation_run_is_rejected_when_problem_disables_validation(pool: sqlx:
 #[sqlx::test(migrations = "../migrations")]
 async fn worker_marks_submission_failed_when_artifact_is_missing(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
-    let config = test_config(storage.path(), &examples_problems_root());
+    let config = test_config(storage.path(), &examples_challenges_root());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
 
@@ -328,7 +328,7 @@ async fn worker_marks_submission_failed_when_artifact_is_missing(pool: sqlx::PgP
         .post(api_url(&app, "/api/submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "problem_id": "sample-sum",
+            "challenge_id": "sample-sum",
             "artifact_base64": artifact_base64,
             "explanation": "official eval failure test"
         }))

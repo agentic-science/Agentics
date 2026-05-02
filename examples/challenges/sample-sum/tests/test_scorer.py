@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[4]
-PROBLEM_DIR = ROOT / "examples" / "problems" / "sample-sum" / "v1"
+PROBLEM_DIR = ROOT / "examples" / "challenges" / "sample-sum" / "v1"
 SCORER_PATH = PROBLEM_DIR / "scorer" / "run.py"
 
 
@@ -46,7 +46,7 @@ def run_scorer(tmp_path: Path, *, mode: str, expression: str) -> dict:
         [
             sys.executable,
             str(SCORER_PATH),
-            "--problem-dir",
+            "--challenge-dir",
             str(PROBLEM_DIR),
             "--submission-dir",
             str(submission_dir),

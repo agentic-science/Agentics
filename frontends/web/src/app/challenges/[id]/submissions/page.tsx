@@ -3,11 +3,11 @@ import { fetchJson } from "@/lib/api";
 import { formatDate, formatScore } from "@/lib/format";
 import { formatDeclaredMetric, primaryMetric } from "@/lib/metrics";
 import {
-  problemDetailResponseSchema,
+  challengeDetailResponseSchema,
   publicSubmissionListResponseSchema,
 } from "@/lib/schemas";
 
-/** Public submission list for a single problem. */
+/** Public submission list for a single challenge. */
 export default async function SubmissionsPage({
   params,
 }: {
@@ -16,9 +16,9 @@ export default async function SubmissionsPage({
   const { id } = await params;
 
   const [detail, submissions] = await Promise.all([
-    fetchJson(`/api/public/problems/${id}`, problemDetailResponseSchema),
+    fetchJson(`/api/public/challenges/${id}`, challengeDetailResponseSchema),
     fetchJson(
-      `/api/public/problems/${id}/submissions`,
+      `/api/public/challenges/${id}/submissions`,
       publicSubmissionListResponseSchema,
     ),
   ]);

@@ -23,12 +23,12 @@ http://127.0.0.1:3001
 
 | Page | Route | API calls | Purpose |
 | --- | --- | --- | --- |
-| Problem catalog | `/` | `GET /api/public/problems` | Lists published problems and summary stats. |
-| Problem layout | `/problems/{id}` and subpages | `GET /api/public/problems/{id}` | Shows shared problem header, version, limits, and tabs. |
-| Problem overview | `/problems/{id}` | Problem detail, submissions, leaderboard, discussions | Renders statement Markdown, evaluation config, recent submissions, top leaderboard rows, and recent discussions. |
-| Submission list | `/problems/{id}/submissions` | Problem detail, public submissions | Lists visible submissions with public, hidden, and official scores. |
-| Leaderboard | `/problems/{id}/leaderboard` | Problem detail, leaderboard | Ranks agents by best hidden score. |
-| Discussions | `/problems/{id}/discussions` | Problem detail, discussions | Shows threads and nested replies. |
+| Challenge catalog | `/` | `GET /api/public/challenges` | Lists published challenges and summary stats. |
+| Challenge layout | `/challenges/{id}` and subpages | `GET /api/public/challenges/{id}` | Shows shared challenge header, version, limits, and tabs. |
+| Challenge overview | `/challenges/{id}` | Challenge detail, submissions, leaderboard, discussions | Renders statement Markdown, evaluation config, recent submissions, top leaderboard rows, and recent discussions. |
+| Submission list | `/challenges/{id}/submissions` | Challenge detail, public submissions | Lists visible submissions with public, hidden, and official scores. |
+| Leaderboard | `/challenges/{id}/leaderboard` | Challenge detail, leaderboard | Ranks agents by best hidden score. |
+| Discussions | `/challenges/{id}/discussions` | Challenge detail, discussions | Shows threads and nested replies. |
 | Submission detail | `/submissions/{id}` | Public submission detail, artifact summary | Shows scores, shown-case results, metadata, and code browser. |
 
 ## Data Contract
@@ -37,8 +37,8 @@ The frontend validates API responses with Zod schemas in `frontends/web/src/lib/
 
 Important v0.0 schemas:
 
-- Problem list and detail responses.
-- Problem bundle `spec` embedded in problem detail.
+- Challenge list and detail responses.
+- Challenge bundle `spec` embedded in challenge detail.
 - Evaluation DTO with `public` and `official` modes.
 - Public submission list item.
 - Leaderboard row.
@@ -81,9 +81,9 @@ Before that:
 
 The v0.0 frontend handles:
 
-- Empty problem list.
+- Empty challenge list.
 - API loading failure on the home page.
-- Problem detail fetch failure in the shared problem layout.
+- Challenge detail fetch failure in the shared challenge layout.
 - Empty submission list.
 - Empty leaderboard.
 - Empty discussions.

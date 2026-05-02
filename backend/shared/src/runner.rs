@@ -1,6 +1,6 @@
 //! Docker-backed evaluation runner for submitted artifacts.
 //!
-//! The runner mounts the immutable problem bundle, a safely extracted
+//! The runner mounts the immutable challenge bundle, a safely extracted
 //! submission archive, and a writable output directory into a network-isolated
 //! Python container. The scorer must write a TS-compatible `result.json`; this
 //! module validates that output before workers persist it.
@@ -20,8 +20,8 @@ use tokio::time::timeout;
 
 use crate::config::Config;
 use crate::error::{AppError, Result};
+use crate::models::challenge::MetricSchemaSpec;
 use crate::models::evaluation::{EvaluationJobPayload, ScorerRunResult, ScoringMode};
-use crate::models::problem::MetricSchemaSpec;
 use crate::storage::Storage;
 
 const MAX_RUNNER_ARTIFACT_BYTES: u64 = 20 * 1024 * 1024;
@@ -69,8 +69,8 @@ pub async fn execute_evaluation_job(
 
     tokio::fs::create_dir_all(&working_root).await?;
     tokio::fs::create_dir_all(&extraction_root).await?;
-    let spec =
-        crate::problem_bundle::read_problem_bundle_spec(Path::new(&payload.bundle_path)).await?;
+    let spec = crate::challenge_bundle::read_challenge_bundle_spec(Path::new(&payload.bundle_path))
+        .await?;
 
     let execution = async {
         extract_zip_safe(&payload.artifact_path, &extraction_root).await?;
@@ -80,7 +80,7 @@ pub async fn execute_evaluation_job(
 
         let mounts = vec![
             bollard::models::Mount {
-                target: Some("/problem".to_string()),
+                target: Some("/challenge".to_string()),
                 source: Some(payload.bundle_path.clone()),
                 typ: Some(bollard::models::MountTypeEnum::BIND),
                 read_only: Some(true),
@@ -120,9 +120,9 @@ pub async fn execute_evaluation_job(
             image: Some(config.runner_python_image.clone()),
             cmd: Some(vec![
                 "python".to_string(),
-                "/problem/scorer/run.py".to_string(),
-                "--problem-dir".to_string(),
-                "/problem".to_string(),
+                "/challenge/scorer/run.py".to_string(),
+                "--challenge-dir".to_string(),
+                "/challenge".to_string(),
                 "--submission-dir".to_string(),
                 "/submission".to_string(),
                 "--output-path".to_string(),
@@ -130,7 +130,7 @@ pub async fn execute_evaluation_job(
                 "--mode".to_string(),
                 mode_str.to_string(),
             ]),
-            working_dir: Some("/problem".to_string()),
+            working_dir: Some("/challenge".to_string()),
             host_config: Some(host_config),
             labels: Some({
                 let mut labels = std::collections::HashMap::new();

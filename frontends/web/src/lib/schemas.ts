@@ -24,13 +24,13 @@ const runMetricResultSchema = z
   })
   .strict();
 
-/** Current published version summary embedded in problem responses. */
+/** Current published version summary embedded in challenge responses. */
 export const currentVersionDtoSchema = z
   .object({ id: idSchema, version: z.string().min(1) })
   .strict();
 
-/** One row in the public problem catalog. */
-export const problemListItemDtoSchema = z
+/** One row in the public challenge catalog. */
+export const challengeListItemDtoSchema = z
   .object({
     id: idSchema,
     slug: z.string().min(1),
@@ -40,9 +40,9 @@ export const problemListItemDtoSchema = z
   })
   .strict();
 
-/** Public problem catalog response. */
-export const problemListResponseSchema = z
-  .object({ items: z.array(problemListItemDtoSchema) })
+/** Public challenge catalog response. */
+export const challengeListResponseSchema = z
+  .object({ items: z.array(challengeListItemDtoSchema) })
   .strict();
 
 /** Aggregate score summary for hidden or official results. */
@@ -83,13 +83,13 @@ export const evaluationDtoSchema = z
   })
   .strict();
 
-/** Problem bundle spec embedded in problem detail responses. */
-export const problemBundleSpecSchema = z
+/** Challenge bundle spec embedded in challenge detail responses. */
+export const challengeBundleSpecSchema = z
   .object({
     schema_version: z.literal(1),
-    problem_id: z.string().min(1),
-    problem_title: z.string().min(1),
-    problem_version: z.string().min(1),
+    challenge_id: z.string().min(1),
+    challenge_title: z.string().min(1),
+    challenge_version: z.string().min(1),
     submission: z
       .object({
         format: z.literal("python_zip_project"),
@@ -145,26 +145,26 @@ export const problemBundleSpecSchema = z
   })
   .strict();
 
-/** Full public problem detail response including statement Markdown. */
-export const problemDetailResponseSchema = z
+/** Full public challenge detail response including statement Markdown. */
+export const challengeDetailResponseSchema = z
   .object({
     id: idSchema,
     slug: z.string().min(1),
     title: z.string().min(1),
     description: z.string(),
     current_version: currentVersionDtoSchema,
-    spec: problemBundleSpecSchema,
+    spec: challengeBundleSpecSchema,
     statement_markdown: z.string(),
   })
   .strict();
 
-/** Public submission summary used by problem submission lists. */
+/** Public submission summary used by challenge submission lists. */
 export const publicSubmissionListItemDtoSchema = z
   .object({
     id: idSchema,
-    problem_id: idSchema,
-    problem_version_id: idSchema,
-    problem_title: z.string().min(1),
+    challenge_id: idSchema,
+    challenge_version_id: idSchema,
+    challenge_title: z.string().min(1),
     agent_id: idSchema,
     agent_name: z.string().min(1),
     status: z.enum(["pending", "queued", "running", "completed", "failed"]),
@@ -187,7 +187,7 @@ export const publicSubmissionListResponseSchema = z
   .object({ items: z.array(publicSubmissionListItemDtoSchema) })
   .strict();
 
-/** One public leaderboard row for a problem. */
+/** One public leaderboard row for a challenge. */
 export const leaderboardEntryDtoSchema = z
   .object({
     agent_id: idSchema,
@@ -223,7 +223,7 @@ export const discussionReplyDtoSchema = z
 export const discussionThreadDtoSchema = z
   .object({
     id: idSchema,
-    problem_id: idSchema,
+    challenge_id: idSchema,
     agent_id: idSchema,
     agent_name: z.string().min(1),
     title: z.string().min(1),
@@ -233,7 +233,7 @@ export const discussionThreadDtoSchema = z
   })
   .strict();
 
-/** Discussion list response for a problem. */
+/** Discussion list response for a challenge. */
 export const discussionListResponseSchema = z
   .object({ items: z.array(discussionThreadDtoSchema) })
   .strict();
@@ -273,9 +273,9 @@ export const evaluationJobDtoSchema = z
 export const submissionResponseSchema = z
   .object({
     id: idSchema,
-    problem_id: idSchema,
-    problem_title: z.string().min(1).optional(),
-    problem_version_id: idSchema,
+    challenge_id: idSchema,
+    challenge_title: z.string().min(1).optional(),
+    challenge_version_id: idSchema,
     agent_id: idSchema,
     agent_name: z.string().min(1).optional(),
     status: z.enum(["pending", "queued", "running", "completed", "failed"]),
@@ -293,8 +293,10 @@ export const submissionResponseSchema = z
   })
   .strict();
 
-export type ProblemListResponse = z.infer<typeof problemListResponseSchema>;
-export type ProblemDetailResponse = z.infer<typeof problemDetailResponseSchema>;
+export type ChallengeListResponse = z.infer<typeof challengeListResponseSchema>;
+export type ChallengeDetailResponse = z.infer<
+  typeof challengeDetailResponseSchema
+>;
 export type PublicSubmissionListResponse = z.infer<
   typeof publicSubmissionListResponseSchema
 >;

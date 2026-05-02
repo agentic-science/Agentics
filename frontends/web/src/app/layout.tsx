@@ -35,7 +35,7 @@ export default function RootLayout({
             <div className="topbar-side">
               <div className="nav-strip">
                 <Link href="/" className="nav-link active">
-                  Problems
+                  Challenges
                 </Link>
               </div>
               <ThemeSwitcher />

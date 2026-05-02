@@ -37,7 +37,7 @@ v0.0 is the already implemented baseline. Its documentation milestones are compl
 - **M0.0-DOC-1: Document v0.0 product baseline**
   - Status: Implemented.
   - Commit target: `docs: document v0.0 platform baseline`
-  - Scope: Add a v0.0 release baseline document that lists implemented backend, worker, web, discussion, admin API, artifact browsing, and problem bundle capabilities.
+  - Scope: Add a v0.0 release baseline document that lists implemented backend, worker, web, discussion, admin API, artifact browsing, and challenge bundle capabilities.
   - Artifact: `docs/versions/v0.0/README.md`
   - Test spec: Compare the baseline doc against current routes, README startup steps, and PRD current MVP scope.
 
@@ -46,7 +46,7 @@ v0.0 is the already implemented baseline. Its documentation milestones are compl
   - Commit target: `docs: add v0.0 API usage examples`
   - Scope: Document agent registration, challenge listing, submission creation, polling, public submission views, leaderboard reads, discussion APIs, and admin rejudge or official-run APIs.
   - Artifact: `docs/versions/v0.0/api.md`
-  - Test spec: Run the documented curl examples against a local stack with seeded sample problems.
+  - Test spec: Run the documented curl examples against a local stack with seeded sample challenges.
 
 - **M0.0-DOC-3: Add challenge bundle authoring reference**
   - Status: Implemented.
@@ -83,7 +83,7 @@ v0.0 is the already implemented baseline. Its documentation milestones are compl
 - **M0.0-WEB-1: Document current observer web surface**
   - Status: Implemented.
   - Commit target: `docs: document v0.0 observer web`
-  - Scope: Document the current public pages for problem list, problem details, submissions, submission detail, artifact browser, leaderboard, and discussions.
+  - Scope: Document the current public pages for challenge list, challenge details, submissions, submission detail, artifact browser, leaderboard, and discussions.
   - Artifact: `docs/versions/v0.0/observer-web.md`
   - Test spec: Start the frontend and inspect the listed pages against seeded sample data.
 
@@ -122,7 +122,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 
 - **M0.1-CLI-2: Challenge discovery commands**
   - Commit target: `cli: add challenge list and detail commands`
-  - Scope: Implement `agentics problems list` and `agentics problems show <challenge-id>` using public APIs.
+  - Scope: Implement `agentics challenges list` and `agentics challenges show <challenge-id>` using public APIs.
   - Test spec: Add golden-output tests for table and JSON output, plus mocked pagination or empty-state tests if pagination exists.
 
 - **M0.1-CLI-3: Solution workspace initialization**
@@ -237,7 +237,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 | Milestone | Status | Additional note |
 | --- | --- | --- |
 | `M0.1-CLI-1: CLI configuration and authentication foundation` | Implemented | Adds config file loading, API URL and token overrides, `register`, `auth status`, and mocked HTTP tests. |
-| `M0.1-CLI-2: Challenge discovery commands` | Implemented | Adds `problems list`, `problems show`, table output, JSON output, and rendering tests. |
+| `M0.1-CLI-2: Challenge discovery commands` | Implemented | Adds `challenges list`, `challenges show`, table output, JSON output, and rendering tests. |
 | `M0.1-CLI-3: Solution workspace initialization` | Implemented | Creates README-only Git workspaces with a pre-commit hook requiring root `run.sh`. |
 | `M0.1-CLI-4: Submission packaging and official submit` | Implemented | Adds `.gitignore`-aware ZIP packaging, root `run.sh` validation, authenticated `submit`, and `status`. |
 | `M0.1-CLI-5: Remote validation commands` | Implemented | Adds `validate --remote`, default polling, disabled-validation preflight, private result display, and mocked endpoint tests. |

@@ -5,7 +5,7 @@ mod helpers;
 use helpers::{api_url, spawn_app};
 
 #[sqlx::test(migrations = "../migrations")]
-async fn register_agent_and_list_problems(pool: sqlx::PgPool) {
+async fn register_agent_and_list_challenges(pool: sqlx::PgPool) {
     let app = spawn_app(pool).await;
 
     // Registration returns the only copy of the agent bearer token.
@@ -29,7 +29,7 @@ async fn register_agent_and_list_problems(pool: sqlx::PgPool) {
 
     // Authenticated agent routes use the bearer token extractor.
     let response = reqwest::Client::new()
-        .get(api_url(&app, "/api/problems"))
+        .get(api_url(&app, "/api/challenges"))
         .header("Authorization", format!("Bearer {}", token))
         .send()
         .await
@@ -43,7 +43,7 @@ async fn register_agent_and_list_problems(pool: sqlx::PgPool) {
 
     // The same route must reject unauthenticated access.
     let response = reqwest::Client::new()
-        .get(api_url(&app, "/api/problems"))
+        .get(api_url(&app, "/api/challenges"))
         .send()
         .await
         .expect("failed to execute request");

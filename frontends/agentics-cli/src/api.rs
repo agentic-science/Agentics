@@ -3,7 +3,7 @@ use reqwest::{Client, Method, Url};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use shared::models::ErrorResponse;
-use shared::models::problem::{ProblemDetailResponse, ProblemListResponse};
+use shared::models::challenge::{ChallengeDetailResponse, ChallengeListResponse};
 use shared::models::request::{
     CreateSubmissionRequest, CreateSubmissionResponse, RegisterAgentRequest, RegisterAgentResponse,
     SubmissionResponse,
@@ -29,12 +29,12 @@ impl ApiClient {
         self.post_json("/api/agents/register", request, false).await
     }
 
-    pub async fn list_problems(&self) -> Result<ProblemListResponse> {
-        self.get_json("/api/public/problems", false).await
+    pub async fn list_challenges(&self) -> Result<ChallengeListResponse> {
+        self.get_json("/api/public/challenges", false).await
     }
 
-    pub async fn get_problem(&self, problem_id: &str) -> Result<ProblemDetailResponse> {
-        let path = format!("/api/public/problems/{problem_id}");
+    pub async fn get_challenge(&self, challenge_id: &str) -> Result<ChallengeDetailResponse> {
+        let path = format!("/api/public/challenges/{challenge_id}");
         self.get_json(&path, false).await
     }
 
@@ -208,7 +208,7 @@ mod tests {
     async fn api_errors_use_structured_error_message() {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
-            .and(path("/api/public/problems"))
+            .and(path("/api/public/challenges"))
             .respond_with(ResponseTemplate::new(400).set_body_json(json!({
                 "error": "bad_request",
                 "message": "name must not be empty"
@@ -218,7 +218,7 @@ mod tests {
 
         let client = ApiClient::new(&server.uri(), None).expect("client should build");
         let error = client
-            .list_problems()
+            .list_challenges()
             .await
             .expect_err("request should fail");
 

@@ -5,13 +5,13 @@ mod helpers;
 use std::path::Path;
 
 use helpers::{
-    api_url, basic_auth_header, copy_dir_all, examples_problems_root, run_worker_once,
+    api_url, basic_auth_header, copy_dir_all, examples_challenges_root, run_worker_once,
     sample_sum_submission, spawn_app_with_config, submission_zip_base64, test_config,
 };
 
 /// Create an admin-published bundle by adapting the legacy `sample-sum` fixture.
 fn create_admin_bundle(root: &Path) -> std::path::PathBuf {
-    let source = examples_problems_root().join("sample-sum/v1");
+    let source = examples_challenges_root().join("sample-sum/v1");
     let bundle_dir = root.join("admin-sum/v1");
     copy_dir_all(&source, &bundle_dir);
 
@@ -20,8 +20,8 @@ fn create_admin_bundle(root: &Path) -> std::path::PathBuf {
         &std::fs::read_to_string(&spec_path).expect("failed to read copied spec"),
     )
     .expect("failed to parse copied spec");
-    spec["problem_id"] = serde_json::json!("admin-sum");
-    spec["problem_title"] = serde_json::json!("Admin Sum");
+    spec["challenge_id"] = serde_json::json!("admin-sum");
+    spec["challenge_title"] = serde_json::json!("Admin Sum");
     std::fs::write(
         &spec_path,
         serde_json::to_string_pretty(&spec).expect("failed to serialize admin spec"),
@@ -40,24 +40,24 @@ fn create_admin_bundle(root: &Path) -> std::path::PathBuf {
 #[sqlx::test(migrations = "../migrations")]
 async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
-    let problems = tempfile::tempdir().expect("failed to create problems tempdir");
+    let challenges = tempfile::tempdir().expect("failed to create challenges tempdir");
     let bundle_root = tempfile::tempdir().expect("failed to create bundle tempdir");
     let bundle_dir = create_admin_bundle(bundle_root.path());
-    let config = test_config(storage.path(), problems.path());
+    let config = test_config(storage.path(), challenges.path());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
     let admin_auth = basic_auth_header(&config.admin_username, &config.admin_password);
 
     let unauthorized = client
-        .post(api_url(&app, "/admin/problems"))
+        .post(api_url(&app, "/admin/challenges"))
         .json(&serde_json::json!({ "id": "admin-sum", "title": "Admin Sum" }))
         .send()
         .await
         .expect("failed to check admin auth");
     assert_eq!(unauthorized.status(), 401);
 
-    let create_problem = client
-        .post(api_url(&app, "/admin/problems"))
+    let create_challenge = client
+        .post(api_url(&app, "/admin/challenges"))
         .header("Authorization", &admin_auth)
         .json(&serde_json::json!({
             "id": "admin-sum",
@@ -66,16 +66,16 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         }))
         .send()
         .await
-        .expect("failed to create problem");
-    assert_eq!(create_problem.status(), 201);
+        .expect("failed to create challenge");
+    assert_eq!(create_challenge.status(), 201);
 
     let publish_version = client
-        .post(api_url(&app, "/admin/problems/admin-sum/versions"))
+        .post(api_url(&app, "/admin/challenges/admin-sum/versions"))
         .header("Authorization", &admin_auth)
         .json(&serde_json::json!({ "bundle_path": bundle_dir }))
         .send()
         .await
-        .expect("failed to publish problem version");
+        .expect("failed to publish challenge version");
     assert_eq!(publish_version.status(), 201);
 
     let register_a: serde_json::Value = client
@@ -109,7 +109,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         .post(api_url(&app, "/api/submissions"))
         .header("Authorization", format!("Bearer {token_a}"))
         .json(&serde_json::json!({
-            "problem_id": "admin-sum",
+            "challenge_id": "admin-sum",
             "artifact_base64": perfect_zip,
             "explanation": "best hidden score"
         }))
@@ -129,7 +129,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         .post(api_url(&app, "/api/submissions"))
         .header("Authorization", format!("Bearer {token_b}"))
         .json(&serde_json::json!({
-            "problem_id": "admin-sum",
+            "challenge_id": "admin-sum",
             "artifact_base64": heldout_only_zip,
             "explanation": "passes heldout only"
         }))
@@ -146,7 +146,10 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
     run_worker_once(&pool, &config).await;
 
     let leaderboard_before: serde_json::Value = client
-        .get(api_url(&app, "/api/public/problems/admin-sum/leaderboard"))
+        .get(api_url(
+            &app,
+            "/api/public/challenges/admin-sum/leaderboard",
+        ))
         .send()
         .await
         .expect("failed to get leaderboard before official")
@@ -217,7 +220,10 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
     );
 
     let leaderboard_after_official: serde_json::Value = client
-        .get(api_url(&app, "/api/public/problems/admin-sum/leaderboard"))
+        .get(api_url(
+            &app,
+            "/api/public/challenges/admin-sum/leaderboard",
+        ))
         .send()
         .await
         .expect("failed to get leaderboard after official")
@@ -292,7 +298,10 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
     assert_eq!(hidden_submission_a.status(), 404);
 
     let leaderboard_after_hide: serde_json::Value = client
-        .get(api_url(&app, "/api/public/problems/admin-sum/leaderboard"))
+        .get(api_url(
+            &app,
+            "/api/public/challenges/admin-sum/leaderboard",
+        ))
         .send()
         .await
         .expect("failed to get leaderboard after hide")
@@ -322,7 +331,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
     assert_eq!(disable.status(), 200);
 
     let disabled_agent_access = client
-        .get(api_url(&app, "/api/problems"))
+        .get(api_url(&app, "/api/challenges"))
         .header("Authorization", format!("Bearer {token_b}"))
         .send()
         .await

@@ -8,13 +8,13 @@ use axum::{
 use uuid::Uuid;
 
 use shared::auth;
+use shared::challenge_bundle;
 use shared::db::queries as db;
 use shared::db::queries::QueueEvaluationJobInput;
 use shared::error::{AppError, Result};
+use shared::models::challenge::CreateChallengeVersionResponse;
 use shared::models::evaluation::ScoringMode;
-use shared::models::problem::CreateProblemVersionResponse;
 use shared::models::request::*;
-use shared::problem_bundle;
 
 use crate::extractors::{AdminAuth, AgentAuth, ValidatedJson};
 use crate::presenters;
@@ -81,55 +81,55 @@ pub async fn register_agent(
     ))
 }
 
-/// List published problems for authenticated agents.
-pub async fn list_agent_problems(
+/// List published challenges for authenticated agents.
+pub async fn list_agent_challenges(
     _agent: AgentAuth,
     State(state): State<AppState>,
-) -> Result<Json<shared::models::problem::ProblemListResponse>> {
-    let problems = db::list_published_problems(&state.db).await?;
-    Ok(Json(shared::models::problem::ProblemListResponse {
-        items: problems,
+) -> Result<Json<shared::models::challenge::ChallengeListResponse>> {
+    let challenges = db::list_published_challenges(&state.db).await?;
+    Ok(Json(shared::models::challenge::ChallengeListResponse {
+        items: challenges,
     }))
 }
 
-/// Fetch problem details for authenticated agents.
-pub async fn get_agent_problem(
+/// Fetch challenge details for authenticated agents.
+pub async fn get_agent_challenge(
     _agent: AgentAuth,
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<Json<shared::models::problem::ProblemDetailResponse>> {
-    get_problem_detail_response(state, id).await
+) -> Result<Json<shared::models::challenge::ChallengeDetailResponse>> {
+    get_challenge_detail_response(state, id).await
 }
 
-/// List published problems on the public API.
-pub async fn list_problems(
+/// List published challenges on the public API.
+pub async fn list_challenges(
     State(state): State<AppState>,
-) -> Result<Json<shared::models::problem::ProblemListResponse>> {
-    let problems = db::list_published_problems(&state.db).await?;
-    Ok(Json(shared::models::problem::ProblemListResponse {
-        items: problems,
+) -> Result<Json<shared::models::challenge::ChallengeListResponse>> {
+    let challenges = db::list_published_challenges(&state.db).await?;
+    Ok(Json(shared::models::challenge::ChallengeListResponse {
+        items: challenges,
     }))
 }
 
-/// Fetch public problem details by problem id or slug.
-pub async fn get_problem(
+/// Fetch public challenge details by challenge id or slug.
+pub async fn get_challenge(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<Json<shared::models::problem::ProblemDetailResponse>> {
-    get_problem_detail_response(state, id).await
+) -> Result<Json<shared::models::challenge::ChallengeDetailResponse>> {
+    get_challenge_detail_response(state, id).await
 }
 
-/// Shared problem-detail response path used by public and agent routes.
-async fn get_problem_detail_response(
+/// Shared challenge-detail response path used by public and agent routes.
+async fn get_challenge_detail_response(
     state: AppState,
     id: String,
-) -> Result<Json<shared::models::problem::ProblemDetailResponse>> {
-    let problem = db::get_published_problem(&state.db, &id).await?;
-    let problem = problem.ok_or(AppError::NotFound)?;
+) -> Result<Json<shared::models::challenge::ChallengeDetailResponse>> {
+    let challenge = db::get_published_challenge(&state.db, &id).await?;
+    let challenge = challenge.ok_or(AppError::NotFound)?;
 
-    let statement = tokio::fs::read_to_string(&problem.statement_path).await?;
-    Ok(Json(presenters::present_problem_detail(
-        &problem, &statement,
+    let statement = tokio::fs::read_to_string(&challenge.statement_path).await?;
+    Ok(Json(presenters::present_challenge_detail(
+        &challenge, &statement,
     )))
 }
 
@@ -148,8 +148,8 @@ async fn create_submission_for_mode(
     body: CreateSubmissionRequest,
     eval_type: ScoringMode,
 ) -> Result<(StatusCode, Json<CreateSubmissionResponse>)> {
-    let problem_id = body.problem_id.trim().to_string();
-    db::ensure_published_problem_supports_eval_type(&state.db, &problem_id, eval_type).await?;
+    let challenge_id = body.challenge_id.trim().to_string();
+    db::ensure_published_challenge_supports_eval_type(&state.db, &challenge_id, eval_type).await?;
 
     let artifact_bytes = base64_decode(&body.artifact_base64).ok_or(AppError::Base64)?;
     if artifact_bytes.len() as u64 > MAX_ARTIFACT_BYTES {
@@ -176,7 +176,7 @@ async fn create_submission_for_mode(
             submission_id,
             job_id: Uuid::new_v4().to_string(),
             agent_id: agent.agent_id,
-            problem_id,
+            challenge_id,
             artifact_path,
             eval_type,
             explanation: body.explanation.trim().to_string(),
@@ -235,14 +235,14 @@ pub async fn get_validation_run(
 pub async fn create_thread(
     State(state): State<AppState>,
     agent: AgentAuth,
-    Path(problem_id): Path<String>,
+    Path(challenge_id): Path<String>,
     ValidatedJson(body): ValidatedJson<CreateDiscussionThreadRequest>,
 ) -> Result<(StatusCode, Json<shared::models::IdOnlyResponse>)> {
     let thread_id = Uuid::new_v4().to_string();
     db::create_discussion_thread(
         &state.db,
         &thread_id,
-        &problem_id,
+        &challenge_id,
         &agent.agent_id,
         &body.title,
         &body.body,
@@ -285,7 +285,7 @@ pub async fn list_public_submissions(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<PublicSubmissionListResponse>> {
-    let items = db::list_public_submissions_for_problem(&state.db, &id).await?;
+    let items = db::list_public_submissions_for_challenge(&state.db, &id).await?;
     Ok(Json(PublicSubmissionListResponse { items }))
 }
 
@@ -321,7 +321,7 @@ pub async fn get_public_artifact(
     Ok(Json(artifact))
 }
 
-/// Fetch leaderboard rows for a problem.
+/// Fetch leaderboard rows for a challenge.
 pub async fn get_leaderboard(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -330,7 +330,7 @@ pub async fn get_leaderboard(
     Ok(Json(LeaderboardResponse { items }))
 }
 
-/// Fetch discussion threads for a problem.
+/// Fetch discussion threads for a challenge.
 pub async fn list_discussions(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -343,22 +343,22 @@ pub async fn list_discussions(
 // Admin routes
 // ---------------------------------------------------------------------------
 
-/// Create or update a problem shell.
-pub async fn create_problem(
+/// Create or update a challenge shell.
+pub async fn create_challenge(
     _admin: AdminAuth,
     State(state): State<AppState>,
-    ValidatedJson(body): ValidatedJson<CreateProblemRequest>,
+    ValidatedJson(body): ValidatedJson<CreateChallengeRequest>,
 ) -> Result<(
     StatusCode,
-    Json<shared::models::problem::ProblemAdminResponse>,
+    Json<shared::models::challenge::ChallengeAdminResponse>,
 )> {
     let slug = body
         .slug
         .as_ref()
         .map(|s| s.trim().to_string())
         .unwrap_or_else(|| body.id.trim().to_string());
-    let problem =
-        db::create_or_update_problem(&state.db, &body.id, &slug, &body.title, &body.description)
+    let challenge =
+        db::create_or_update_challenge(&state.db, &body.id, &slug, &body.title, &body.description)
             .await
             .map_err(|e| match e {
                 AppError::Database(sqlx::Error::Database(db_err))
@@ -368,45 +368,46 @@ pub async fn create_problem(
                 }
                 _ => e,
             })?;
-    Ok((StatusCode::CREATED, Json(problem)))
+    Ok((StatusCode::CREATED, Json(challenge)))
 }
 
-/// Validate and publish a problem bundle version.
+/// Validate and publish a challenge bundle version.
 pub async fn publish_version(
     _admin: AdminAuth,
     State(state): State<AppState>,
-    Path(problem_id): Path<String>,
-    ValidatedJson(body): ValidatedJson<CreateProblemVersionRequest>,
-) -> Result<(StatusCode, Json<CreateProblemVersionResponse>)> {
+    Path(challenge_id): Path<String>,
+    ValidatedJson(body): ValidatedJson<CreateChallengeVersionRequest>,
+) -> Result<(StatusCode, Json<CreateChallengeVersionResponse>)> {
     let bundle_path = if std::path::Path::new(&body.bundle_path).is_absolute() {
         body.bundle_path
     } else {
-        std::path::Path::new(&state.config.problems_root)
+        std::path::Path::new(&state.config.challenges_root)
             .join(&body.bundle_path)
             .to_string_lossy()
             .to_string()
     };
 
-    problem_bundle::validate_problem_bundle(std::path::Path::new(&bundle_path)).await?;
-    let spec = problem_bundle::read_problem_bundle_spec(std::path::Path::new(&bundle_path)).await?;
+    challenge_bundle::validate_challenge_bundle(std::path::Path::new(&bundle_path)).await?;
+    let spec =
+        challenge_bundle::read_challenge_bundle_spec(std::path::Path::new(&bundle_path)).await?;
 
-    if spec.problem_id != problem_id {
+    if spec.challenge_id != challenge_id {
         return Err(AppError::BadRequest(format!(
-            "problem bundle id mismatch: expected {}, got {}",
-            problem_id, spec.problem_id
+            "challenge bundle id mismatch: expected {}, got {}",
+            challenge_id, spec.challenge_id
         )));
     }
 
     let statement_path = std::path::Path::new(&bundle_path).join("statement.md");
-    let description = problem_bundle::extract_problem_description(&statement_path).await?;
+    let description = challenge_bundle::extract_challenge_description(&statement_path).await?;
 
-    let version = db::publish_problem_version(
+    let version = db::publish_challenge_version(
         &state.db,
-        &problem_id,
+        &challenge_id,
         &bundle_path,
         &statement_path.to_string_lossy(),
         &spec,
-        &spec.problem_title,
+        &spec.challenge_title,
         &description,
     )
     .await?;

@@ -1,31 +1,31 @@
-//! Helpers for loading and validating filesystem problem bundles.
+//! Helpers for loading and validating filesystem challenge bundles.
 //!
-//! Problem bundles are the public contract between seeded/admin-authored
-//! problems and the runner. Validation here intentionally mirrors the old TS
+//! Challenge bundles are the public contract between seeded/admin-authored
+//! challenges and the runner. Validation here intentionally mirrors the old TS
 //! service while allowing omitted nullable fields in serialized JSON.
 
 use std::collections::HashSet;
 use std::path::Path;
 
 use crate::error::{AppError, Result};
-use crate::models::problem::ProblemBundleSpec;
+use crate::models::challenge::ChallengeBundleSpec;
 
 /// Read `spec.json` from a bundle directory and validate its contract fields.
-pub async fn read_problem_bundle_spec(bundle_dir: &Path) -> Result<ProblemBundleSpec> {
+pub async fn read_challenge_bundle_spec(bundle_dir: &Path) -> Result<ChallengeBundleSpec> {
     let spec_path = bundle_dir.join("spec.json");
     let raw = tokio::fs::read_to_string(&spec_path).await?;
-    let spec: ProblemBundleSpec = serde_json::from_str(&raw)
+    let spec: ChallengeBundleSpec = serde_json::from_str(&raw)
         .map_err(|e| AppError::Validation(format!("invalid spec.json: {e}")))?;
-    validate_problem_bundle_spec(&spec)?;
+    validate_challenge_bundle_spec(&spec)?;
     Ok(spec)
 }
 
-/// Validate that a problem bundle has the required files and declared data directories.
+/// Validate that a challenge bundle has the required files and declared data directories.
 ///
 /// Disabled heldout bundles may still declare a heldout directory for
 /// compatibility with public-only bundles produced by the TS implementation.
-pub async fn validate_problem_bundle(bundle_dir: &Path) -> Result<()> {
-    let spec = read_problem_bundle_spec(bundle_dir).await?;
+pub async fn validate_challenge_bundle(bundle_dir: &Path) -> Result<()> {
+    let spec = read_challenge_bundle_spec(bundle_dir).await?;
     let spec_path = bundle_dir.join("spec.json");
     let statement_path = bundle_dir.join("statement.md");
     let scorer_path = bundle_dir.join(&spec.scorer.entrypoint);
@@ -75,11 +75,11 @@ async fn assert_path_type(path: &Path, kind: &str, label: &str) -> Result<()> {
     Ok(())
 }
 
-/// Extract the first prose paragraph from a Markdown problem statement.
+/// Extract the first prose paragraph from a Markdown challenge statement.
 ///
-/// The result is used as a compact problem-list description, so headings,
+/// The result is used as a compact challenge-list description, so headings,
 /// lists, tables, block quotes, and fenced code are skipped.
-pub async fn extract_problem_description(statement_path: &Path) -> Result<String> {
+pub async fn extract_challenge_description(statement_path: &Path) -> Result<String> {
     let content = tokio::fs::read_to_string(statement_path).await?;
     let lines: Vec<&str> = content.lines().collect();
     let mut paragraph: Vec<String> = Vec::new();
@@ -166,10 +166,10 @@ pub fn is_safe_relative_path(value: &str) -> bool {
     segments.iter().all(|s| !s.is_empty() && *s != "..")
 }
 
-fn validate_problem_bundle_spec(spec: &ProblemBundleSpec) -> Result<()> {
-    require_non_empty(&spec.problem_id, "problem_id")?;
-    require_non_empty(&spec.problem_title, "problem_title")?;
-    require_non_empty(&spec.problem_version, "problem_version")?;
+fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
+    require_non_empty(&spec.challenge_id, "challenge_id")?;
+    require_non_empty(&spec.challenge_title, "challenge_title")?;
+    require_non_empty(&spec.challenge_version, "challenge_version")?;
 
     if spec.schema_version != 1 {
         return Err(AppError::Validation("schema_version must be 1".to_string()));
@@ -229,7 +229,7 @@ fn validate_problem_bundle_spec(spec: &ProblemBundleSpec) -> Result<()> {
     Ok(())
 }
 
-fn validate_metric_schema(spec: &ProblemBundleSpec) -> Result<()> {
+fn validate_metric_schema(spec: &ChallengeBundleSpec) -> Result<()> {
     let schema = &spec.metric_schema;
     if schema.metrics.is_empty() {
         return Err(AppError::Validation(
@@ -326,20 +326,20 @@ fn require_metric_id(value: &str, field: &str) -> Result<()> {
 mod tests {
     use std::path::Path;
 
-    use crate::models::evaluation::ScoreVisibility;
-    use crate::models::problem::{
-        DatasetsSpec, LimitsSpec, MetricDirection, MetricSchemaSpec, MetricVisibility,
-        ProblemBundleSpec, ScorerSpec, SubmissionSpec,
+    use crate::models::challenge::{
+        ChallengeBundleSpec, DatasetsSpec, LimitsSpec, MetricDirection, MetricSchemaSpec,
+        MetricVisibility, ScorerSpec, SubmissionSpec,
     };
+    use crate::models::evaluation::ScoreVisibility;
 
-    use super::{validate_problem_bundle, validate_problem_bundle_spec};
+    use super::{validate_challenge_bundle, validate_challenge_bundle_spec};
 
-    fn base_spec() -> ProblemBundleSpec {
-        ProblemBundleSpec {
+    fn base_spec() -> ChallengeBundleSpec {
+        ChallengeBundleSpec {
             schema_version: 1,
-            problem_id: "sample-sum".to_string(),
-            problem_title: "Sample Sum".to_string(),
-            problem_version: "v1".to_string(),
+            challenge_id: "sample-sum".to_string(),
+            challenge_title: "Sample Sum".to_string(),
+            challenge_version: "v1".to_string(),
             submission: SubmissionSpec {
                 format: "python_zip_project".to_string(),
                 language: "python".to_string(),
@@ -368,11 +368,11 @@ mod tests {
 
     #[test]
     fn missing_validation_enabled_defaults_to_false() {
-        let spec: ProblemBundleSpec = serde_json::from_value(serde_json::json!({
+        let spec: ChallengeBundleSpec = serde_json::from_value(serde_json::json!({
             "schema_version": 1,
-            "problem_id": "sample-sum",
-            "problem_title": "Sample Sum",
-            "problem_version": "v1",
+            "challenge_id": "sample-sum",
+            "challenge_title": "Sample Sum",
+            "challenge_version": "v1",
             "submission": {
                 "format": "python_zip_project",
                 "language": "python",
@@ -406,7 +406,7 @@ mod tests {
         spec.datasets.heldout_enabled = false;
         spec.datasets.heldout_dir = Some("heldout".to_string());
 
-        assert!(validate_problem_bundle_spec(&spec).is_ok());
+        assert!(validate_challenge_bundle_spec(&spec).is_ok());
     }
 
     #[test]
@@ -415,7 +415,7 @@ mod tests {
         spec.datasets.heldout_enabled = true;
         spec.datasets.heldout_dir = None;
 
-        assert!(validate_problem_bundle_spec(&spec).is_err());
+        assert!(validate_challenge_bundle_spec(&spec).is_err());
     }
 
     #[test]
@@ -423,7 +423,7 @@ mod tests {
         let mut spec = base_spec();
         spec.metric_schema.ranking.primary_metric_id = "missing".to_string();
 
-        assert!(validate_problem_bundle_spec(&spec).is_err());
+        assert!(validate_challenge_bundle_spec(&spec).is_err());
     }
 
     #[test]
@@ -433,7 +433,7 @@ mod tests {
         duplicate.label = "Duplicate Score".to_string();
         spec.metric_schema.metrics.push(duplicate);
 
-        assert!(validate_problem_bundle_spec(&spec).is_err());
+        assert!(validate_challenge_bundle_spec(&spec).is_err());
     }
 
     #[test]
@@ -441,7 +441,7 @@ mod tests {
         let mut spec = base_spec();
         spec.metric_schema
             .metrics
-            .push(crate::models::problem::MetricDefinitionSpec {
+            .push(crate::models::challenge::MetricDefinitionSpec {
                 id: "runtime_ms".to_string(),
                 label: "Runtime".to_string(),
                 unit: Some("ms".to_string()),
@@ -454,10 +454,10 @@ mod tests {
             .tie_breaker_metric_ids
             .push("runtime_ms".to_string());
 
-        assert!(validate_problem_bundle_spec(&spec).is_ok());
+        assert!(validate_challenge_bundle_spec(&spec).is_ok());
     }
 
-    fn create_bundle(root: &Path, spec: &ProblemBundleSpec) {
+    fn create_bundle(root: &Path, spec: &ChallengeBundleSpec) {
         std::fs::create_dir_all(root.join("scorer")).expect("failed to create scorer dir");
         std::fs::create_dir_all(root.join("shown")).expect("failed to create shown dir");
         std::fs::create_dir_all(root.join("hidden")).expect("failed to create hidden dir");
@@ -483,7 +483,7 @@ mod tests {
         spec.datasets.heldout_dir = Some("heldout".to_string());
         create_bundle(&root, &spec);
 
-        let result = validate_problem_bundle(&root).await;
+        let result = validate_challenge_bundle(&root).await;
         let _ = std::fs::remove_dir_all(root);
 
         assert!(result.is_ok());
@@ -500,7 +500,7 @@ mod tests {
         spec.datasets.heldout_dir = Some("heldout".to_string());
         create_bundle(&root, &spec);
 
-        let result = validate_problem_bundle(&root).await;
+        let result = validate_challenge_bundle(&root).await;
         let _ = std::fs::remove_dir_all(root);
 
         assert!(result.is_err());

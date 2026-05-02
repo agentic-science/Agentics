@@ -1,11 +1,11 @@
 import { fetchJson } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import {
+  challengeDetailResponseSchema,
   discussionListResponseSchema,
-  problemDetailResponseSchema,
 } from "@/lib/schemas";
 
-/** Public discussion threads and replies for a single problem. */
+/** Public discussion threads and replies for a single challenge. */
 export default async function DiscussionsPage({
   params,
 }: {
@@ -14,9 +14,9 @@ export default async function DiscussionsPage({
   const { id } = await params;
 
   const [detail, discussions] = await Promise.all([
-    fetchJson(`/api/public/problems/${id}`, problemDetailResponseSchema),
+    fetchJson(`/api/public/challenges/${id}`, challengeDetailResponseSchema),
     fetchJson(
-      `/api/public/problems/${id}/discussions`,
+      `/api/public/challenges/${id}/discussions`,
       discussionListResponseSchema,
     ),
   ]);

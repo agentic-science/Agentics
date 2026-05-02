@@ -12,26 +12,26 @@ use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use crate::error::{AppError, Result};
 use crate::leaderboard::should_replace_leaderboard_entry;
+use crate::models::challenge::{ChallengeBundleSpec, MetricDirection};
 use crate::models::evaluation::{
     EvaluationDto, EvaluationJobPayload, EvaluationStatus, MetricValue, RunMetricResult,
     ScoreSummary, ScoringMode, ShownCaseResult,
 };
-use crate::models::problem::{MetricDirection, ProblemBundleSpec};
 use crate::models::request::{LeaderboardEntryDto, PublicSubmissionListItemDto};
 
 pub use super::agents::{
     AgentRecord, AuthenticatedAgent, RegisterAgentInput, authenticate_agent_token, disable_agent,
     register_agent,
 };
+pub use super::challenges::{
+    ChallengeVersionRecord, create_or_update_challenge, get_published_challenge,
+    list_published_challenges, publish_challenge_version,
+};
 pub use super::discussions::{
     create_discussion_reply, create_discussion_thread, list_discussion_threads,
 };
 pub use super::maintenance::{
-    HeartbeatPayload, ensure_problems_seeded_from_root, reap_stuck_jobs, upsert_service_heartbeat,
-};
-pub use super::problems::{
-    ProblemVersionRecord, create_or_update_problem, get_published_problem, list_published_problems,
-    publish_problem_version,
+    HeartbeatPayload, ensure_challenges_seeded_from_root, reap_stuck_jobs, upsert_service_heartbeat,
 };
 
 // ---------------------------------------------------------------------------
@@ -44,7 +44,7 @@ pub struct CreateSubmissionInput {
     pub submission_id: String,
     pub job_id: String,
     pub agent_id: String,
-    pub problem_id: String,
+    pub challenge_id: String,
     pub artifact_path: String,
     pub eval_type: ScoringMode,
     pub explanation: String,
@@ -56,11 +56,11 @@ pub struct CreateSubmissionInput {
 #[derive(Debug, Clone)]
 pub struct SubmissionRecord {
     pub id: String,
-    pub problem_id: String,
-    pub problem_version_id: String,
+    pub challenge_id: String,
+    pub challenge_version_id: String,
     pub agent_id: String,
     pub agent_name: Option<String>,
-    pub problem_title: Option<String>,
+    pub challenge_title: Option<String>,
     pub artifact_path: String,
     pub language: String,
     pub status: String,
@@ -163,30 +163,31 @@ pub async fn create_submission_with_job(
     pool: &PgPool,
     input: &CreateSubmissionInput,
 ) -> Result<SubmissionRecord> {
-    let problem = get_published_problem(pool, &input.problem_id).await?;
-    let problem = problem.ok_or_else(|| AppError::BadRequest("problem not found".to_string()))?;
-    let spec: ProblemBundleSpec = serde_json::from_value(problem.spec_json.clone())
+    let challenge = get_published_challenge(pool, &input.challenge_id).await?;
+    let challenge =
+        challenge.ok_or_else(|| AppError::BadRequest("challenge not found".to_string()))?;
+    let spec: ChallengeBundleSpec = serde_json::from_value(challenge.spec_json.clone())
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    ensure_problem_supports_eval_type(&spec, input.eval_type)?;
+    ensure_challenge_supports_eval_type(&spec, input.eval_type)?;
 
     let mut tx = pool.begin().await?;
 
     let row = sqlx::query(
         r#"
         INSERT INTO submissions (
-            id, problem_id, problem_version_id, agent_id, artifact_path, language,
+            id, challenge_id, challenge_version_id, agent_id, artifact_path, language,
             status, explanation, parent_submission_id, credit_text, visible_after_eval
         )
         VALUES ($1, $2, $3, $4, $5, 'python', 'queued', $6, $7, $8, FALSE)
         RETURNING
-            id, problem_id, problem_version_id, agent_id, artifact_path, language,
+            id, challenge_id, challenge_version_id, agent_id, artifact_path, language,
             status, explanation, parent_submission_id, credit_text, visible_after_eval,
             created_at, updated_at
         "#,
     )
     .bind(&input.submission_id)
-    .bind(&problem.problem_id)
-    .bind(&problem.problem_version_id)
+    .bind(&challenge.challenge_id)
+    .bind(&challenge.challenge_version_id)
     .bind(&input.agent_id)
     .bind(&input.artifact_path)
     .bind(&input.explanation)
@@ -197,9 +198,9 @@ pub async fn create_submission_with_job(
 
     let payload = serde_json::to_value(EvaluationJobPayload {
         artifact_path: input.artifact_path.clone(),
-        bundle_path: problem.bundle_path.clone(),
-        problem_id: problem.problem_id.clone(),
-        problem_version_id: problem.problem_version_id.clone(),
+        bundle_path: challenge.bundle_path.clone(),
+        challenge_id: challenge.challenge_id.clone(),
+        challenge_version_id: challenge.challenge_version_id.clone(),
     })
     .map_err(|e| AppError::Internal(e.to_string()))?;
 
@@ -212,15 +213,15 @@ pub async fn create_submission_with_job(
     sqlx::query(
         r#"
         INSERT INTO evaluation_jobs (
-            id, submission_id, problem_id, problem_version_id, eval_type, status, priority, payload_json
+            id, submission_id, challenge_id, challenge_version_id, eval_type, status, priority, payload_json
         )
         VALUES ($1, $2, $3, $4, $5, 'queued', $6, $7)
         "#,
     )
     .bind(&input.job_id)
     .bind(&input.submission_id)
-    .bind(&problem.problem_id)
-    .bind(&problem.problem_version_id)
+    .bind(&challenge.challenge_id)
+    .bind(&challenge.challenge_version_id)
     .bind(input.eval_type.as_str())
     .bind(priority)
     .bind(&payload)
@@ -231,11 +232,11 @@ pub async fn create_submission_with_job(
 
     Ok(SubmissionRecord {
         id: row.try_get("id")?,
-        problem_id: row.try_get("problem_id")?,
-        problem_version_id: row.try_get("problem_version_id")?,
+        challenge_id: row.try_get("challenge_id")?,
+        challenge_version_id: row.try_get("challenge_version_id")?,
         agent_id: row.try_get("agent_id")?,
         agent_name: None,
-        problem_title: None,
+        challenge_title: None,
         artifact_path: row.try_get("artifact_path")?,
         language: row.try_get("language")?,
         status: row.try_get("status")?,
@@ -253,35 +254,36 @@ pub async fn create_submission_with_job(
     })
 }
 
-/// Verify that the published problem accepts the requested evaluation mode.
+/// Verify that the published challenge accepts the requested evaluation mode.
 ///
 /// API handlers call this before storing uploaded artifacts so disabled
 /// validation does not consume storage; write paths repeat the same check inside
 /// their transaction as the authoritative guard.
-pub async fn ensure_published_problem_supports_eval_type(
+pub async fn ensure_published_challenge_supports_eval_type(
     pool: &PgPool,
-    problem_id: &str,
+    challenge_id: &str,
     eval_type: ScoringMode,
 ) -> Result<()> {
-    let problem = get_published_problem(pool, problem_id).await?;
-    let problem = problem.ok_or_else(|| AppError::BadRequest("problem not found".to_string()))?;
-    let spec: ProblemBundleSpec =
-        serde_json::from_value(problem.spec_json).map_err(|e| AppError::Internal(e.to_string()))?;
-    ensure_problem_supports_eval_type(&spec, eval_type)
+    let challenge = get_published_challenge(pool, challenge_id).await?;
+    let challenge =
+        challenge.ok_or_else(|| AppError::BadRequest("challenge not found".to_string()))?;
+    let spec: ChallengeBundleSpec = serde_json::from_value(challenge.spec_json)
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    ensure_challenge_supports_eval_type(&spec, eval_type)
 }
 
-fn ensure_problem_supports_eval_type(
-    spec: &ProblemBundleSpec,
+fn ensure_challenge_supports_eval_type(
+    spec: &ChallengeBundleSpec,
     eval_type: ScoringMode,
 ) -> Result<()> {
     if eval_type == ScoringMode::Validation && !spec.datasets.validation_enabled {
         return Err(AppError::BadRequest(
-            "validation pass is disabled for this problem version".to_string(),
+            "validation pass is disabled for this challenge version".to_string(),
         ));
     }
     if eval_type == ScoringMode::Official && !spec.datasets.heldout_enabled {
         return Err(AppError::BadRequest(
-            "problem version does not support official runs".to_string(),
+            "challenge version does not support official runs".to_string(),
         ));
     }
 
@@ -296,8 +298,8 @@ pub async fn get_submission_by_id(
     let row = sqlx::query(
         r#"
         SELECT
-            s.id, s.problem_id, s.problem_version_id, s.agent_id,
-            p.title AS problem_title, a.name AS agent_name,
+            s.id, s.challenge_id, s.challenge_version_id, s.agent_id,
+            p.title AS challenge_title, a.name AS agent_name,
             s.artifact_path, s.language, s.status, s.explanation,
             s.parent_submission_id, s.credit_text, s.visible_after_eval,
             s.created_at, s.updated_at,
@@ -330,7 +332,7 @@ pub async fn get_submission_by_id(
             oe.finished_at AS official_eval_finished_at
         FROM submissions s
         JOIN agents a ON a.id = s.agent_id
-        JOIN problems p ON p.id = s.problem_id
+        JOIN challenges p ON p.id = s.challenge_id
         LEFT JOIN LATERAL (
             SELECT id, status FROM evaluation_jobs WHERE submission_id = s.id ORDER BY created_at DESC LIMIT 1
         ) j ON TRUE
@@ -359,11 +361,11 @@ pub async fn get_submission_by_id(
 
     Ok(Some(SubmissionRecord {
         id: r.try_get("id")?,
-        problem_id: r.try_get("problem_id")?,
-        problem_version_id: r.try_get("problem_version_id")?,
+        challenge_id: r.try_get("challenge_id")?,
+        challenge_version_id: r.try_get("challenge_version_id")?,
         agent_id: r.try_get("agent_id")?,
         agent_name: r.try_get::<Option<String>, _>("agent_name")?,
-        problem_title: r.try_get::<Option<String>, _>("problem_title")?,
+        challenge_title: r.try_get::<Option<String>, _>("challenge_title")?,
         artifact_path: r.try_get("artifact_path")?,
         language: r.try_get("language")?,
         status: r.try_get("status")?,
@@ -381,15 +383,15 @@ pub async fn get_submission_by_id(
     }))
 }
 
-/// List submissions for a problem after an official evaluation makes them visible.
-pub async fn list_public_submissions_for_problem(
+/// List submissions for a challenge after an official evaluation makes them visible.
+pub async fn list_public_submissions_for_challenge(
     pool: &PgPool,
-    problem_id_or_slug: &str,
+    challenge_id_or_slug: &str,
 ) -> Result<Vec<PublicSubmissionListItemDto>> {
     let rows = sqlx::query(
         r#"
         SELECT
-            s.id, s.problem_id, s.problem_version_id, p.title AS problem_title,
+            s.id, s.challenge_id, s.challenge_version_id, p.title AS challenge_title,
             s.agent_id, a.name AS agent_name, s.status, s.explanation,
             s.parent_submission_id, s.credit_text, s.created_at, s.updated_at,
             COALESCE(pe.primary_score, oe.primary_score, (oe.official_summary_json->>'score')::double precision) AS public_score,
@@ -400,7 +402,7 @@ pub async fn list_public_submissions_for_problem(
             COALESCE(oe.aggregate_metrics_json, '[]'::jsonb) AS official_metrics
         FROM submissions s
         JOIN agents a ON a.id = s.agent_id
-        JOIN problems p ON p.id = s.problem_id
+        JOIN challenges p ON p.id = s.challenge_id
         LEFT JOIN LATERAL (
             SELECT primary_score, rank_score, aggregate_metrics_json, hidden_summary_json
             FROM evaluations
@@ -418,7 +420,7 @@ pub async fn list_public_submissions_for_problem(
         ORDER BY s.created_at DESC
         "#,
     )
-    .bind(problem_id_or_slug)
+    .bind(challenge_id_or_slug)
     .fetch_all(pool)
     .await?;
 
@@ -437,9 +439,9 @@ pub async fn list_public_submissions_for_problem(
 
             Ok(PublicSubmissionListItemDto {
                 id: r.try_get("id")?,
-                problem_id: r.try_get("problem_id")?,
-                problem_version_id: r.try_get("problem_version_id")?,
-                problem_title: r.try_get("problem_title")?,
+                challenge_id: r.try_get("challenge_id")?,
+                challenge_version_id: r.try_get("challenge_version_id")?,
+                challenge_title: r.try_get("challenge_title")?,
                 agent_id: r.try_get("agent_id")?,
                 agent_name: r.try_get("agent_name")?,
                 status: r.try_get("status")?,
@@ -464,20 +466,20 @@ pub async fn hide_submission(pool: &PgPool, submission_id: &str) -> Result<()> {
     let mut tx = pool.begin().await?;
 
     let row: Option<(String, String)> = sqlx::query_as(
-        "UPDATE submissions SET visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1 RETURNING problem_id, agent_id"
+        "UPDATE submissions SET visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1 RETURNING challenge_id, agent_id"
     )
     .bind(submission_id)
     .fetch_optional(&mut *tx)
     .await?;
 
-    let Some((problem_id, agent_id)) = row else {
+    let Some((challenge_id, agent_id)) = row else {
         return Err(AppError::NotFound);
     };
 
     let leaderboard_entry: Option<(String,)> = sqlx::query_as(
-        "SELECT best_submission_id FROM leaderboard_entries WHERE problem_id = $1 AND agent_id = $2 LIMIT 1"
+        "SELECT best_submission_id FROM leaderboard_entries WHERE challenge_id = $1 AND agent_id = $2 LIMIT 1"
     )
-    .bind(&problem_id)
+    .bind(&challenge_id)
     .bind(&agent_id)
     .fetch_optional(&mut *tx)
     .await?;
@@ -513,7 +515,7 @@ pub async fn hide_submission(pool: &PgPool, submission_id: &str) -> Result<()> {
                 WHERE submission_id = s.id AND eval_type = 'official' AND status = 'completed'
                 ORDER BY created_at DESC LIMIT 1
             ) oe ON TRUE
-            WHERE s.problem_id = $1 AND s.agent_id = $2 AND s.id <> $3
+            WHERE s.challenge_id = $1 AND s.agent_id = $2 AND s.id <> $3
               AND s.visible_after_eval = TRUE AND s.status = 'completed'
               AND COALESCE(
                     ve.rank_score,
@@ -525,7 +527,7 @@ pub async fn hide_submission(pool: &PgPool, submission_id: &str) -> Result<()> {
             LIMIT 1
             "#
         )
-        .bind(&problem_id)
+        .bind(&challenge_id)
         .bind(&agent_id)
         .bind(submission_id)
         .fetch_optional(&mut *tx)
@@ -543,12 +545,12 @@ pub async fn hide_submission(pool: &PgPool, submission_id: &str) -> Result<()> {
             sqlx::query(
                 r#"
                 INSERT INTO leaderboard_entries (
-                    problem_id, agent_id, best_submission_id, best_hidden_score,
+                    challenge_id, agent_id, best_submission_id, best_hidden_score,
                     shown_summary_json, aggregate_metrics_json, official_score,
                     official_metrics_json, updated_at
                 )
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
-                ON CONFLICT (problem_id, agent_id) DO UPDATE
+                ON CONFLICT (challenge_id, agent_id) DO UPDATE
                 SET best_submission_id = EXCLUDED.best_submission_id,
                     best_hidden_score = EXCLUDED.best_hidden_score,
                     shown_summary_json = EXCLUDED.shown_summary_json,
@@ -558,7 +560,7 @@ pub async fn hide_submission(pool: &PgPool, submission_id: &str) -> Result<()> {
                     updated_at = NOW()
                 "#,
             )
-            .bind(&problem_id)
+            .bind(&challenge_id)
             .bind(&agent_id)
             .bind(&best_id)
             .bind(best_score)
@@ -569,11 +571,13 @@ pub async fn hide_submission(pool: &PgPool, submission_id: &str) -> Result<()> {
             .execute(&mut *tx)
             .await?;
         } else {
-            sqlx::query("DELETE FROM leaderboard_entries WHERE problem_id = $1 AND agent_id = $2")
-                .bind(&problem_id)
-                .bind(&agent_id)
-                .execute(&mut *tx)
-                .await?;
+            sqlx::query(
+                "DELETE FROM leaderboard_entries WHERE challenge_id = $1 AND agent_id = $2",
+            )
+            .bind(&challenge_id)
+            .bind(&agent_id)
+            .execute(&mut *tx)
+            .await?;
         }
     }
 
@@ -581,14 +585,16 @@ pub async fn hide_submission(pool: &PgPool, submission_id: &str) -> Result<()> {
     Ok(())
 }
 
-/// List leaderboard entries for a problem id or slug.
+/// List leaderboard entries for a challenge id or slug.
 pub async fn list_leaderboard_entries(
     pool: &PgPool,
-    problem_id_or_slug: &str,
+    challenge_id_or_slug: &str,
 ) -> Result<Vec<LeaderboardEntryDto>> {
-    let spec = get_published_problem(pool, problem_id_or_slug)
+    let spec = get_published_challenge(pool, challenge_id_or_slug)
         .await?
-        .and_then(|problem| serde_json::from_value::<ProblemBundleSpec>(problem.spec_json).ok());
+        .and_then(|challenge| {
+            serde_json::from_value::<ChallengeBundleSpec>(challenge.spec_json).ok()
+        });
     let rows = sqlx::query(
         r#"
         SELECT
@@ -597,12 +603,12 @@ pub async fn list_leaderboard_entries(
             le.official_metrics_json, le.updated_at
         FROM leaderboard_entries le
         JOIN agents a ON a.id = le.agent_id
-        JOIN problems p ON p.id = le.problem_id
+        JOIN challenges p ON p.id = le.challenge_id
         WHERE p.id = $1 OR p.slug = $1
         ORDER BY le.best_hidden_score DESC, le.updated_at ASC
         "#,
     )
-    .bind(problem_id_or_slug)
+    .bind(challenge_id_or_slug)
     .fetch_all(pool)
     .await?;
 
@@ -643,7 +649,7 @@ pub async fn list_leaderboard_entries(
 }
 
 fn compare_leaderboard_entries(
-    spec: &ProblemBundleSpec,
+    spec: &ChallengeBundleSpec,
     a: &LeaderboardEntryDto,
     b: &LeaderboardEntryDto,
 ) -> Ordering {
@@ -658,7 +664,7 @@ fn compare_leaderboard_entries(
 }
 
 fn compare_rank_payloads(
-    spec: &ProblemBundleSpec,
+    spec: &ChallengeBundleSpec,
     a_score: f64,
     a_metrics: &[MetricValue],
     b_score: f64,
@@ -687,7 +693,7 @@ fn compare_rank_payloads(
 }
 
 fn candidate_replaces_leaderboard_entry(
-    spec: Option<&ProblemBundleSpec>,
+    spec: Option<&ChallengeBundleSpec>,
     current: Option<(f64, Vec<MetricValue>)>,
     candidate_score: f64,
     candidate_metrics: &[MetricValue],
@@ -745,8 +751,8 @@ fn compare_f64_asc(a: f64, b: f64) -> Ordering {
 pub struct EvaluationJobRecord {
     pub id: String,
     pub submission_id: String,
-    pub problem_id: String,
-    pub problem_version_id: String,
+    pub challenge_id: String,
+    pub challenge_version_id: String,
     pub eval_type: ScoringMode,
     pub status: String,
     pub attempt_count: i32,
@@ -777,7 +783,7 @@ pub async fn claim_next_evaluation_job(
         SET status = 'running', claimed_at = NOW(), worker_id = $1, attempt_count = j.attempt_count + 1
         FROM next_job
         WHERE j.id = next_job.id
-        RETURNING j.id, j.submission_id, j.problem_id, j.problem_version_id, j.eval_type, j.status, j.attempt_count, j.payload_json
+        RETURNING j.id, j.submission_id, j.challenge_id, j.challenge_version_id, j.eval_type, j.status, j.attempt_count, j.payload_json
         "#
     )
     .bind(worker_id)
@@ -808,8 +814,8 @@ pub async fn claim_next_evaluation_job(
     Ok(Some(EvaluationJobRecord {
         id: r.try_get("id")?,
         submission_id,
-        problem_id: r.try_get("problem_id")?,
-        problem_version_id: r.try_get("problem_version_id")?,
+        challenge_id: r.try_get("challenge_id")?,
+        challenge_version_id: r.try_get("challenge_version_id")?,
         eval_type,
         status: r.try_get("status")?,
         attempt_count: r.try_get("attempt_count")?,
@@ -827,7 +833,7 @@ pub struct QueueEvaluationJobInput {
 
 /// Queue an evaluation job for an existing submission.
 ///
-/// Official jobs are rejected when the problem version does not enable heldout
+/// Official jobs are rejected when the challenge version does not enable heldout
 /// data. Any queued re-run hides the submission until its completion path decides
 /// whether the result should become public.
 pub async fn queue_evaluation_job(
@@ -838,10 +844,10 @@ pub async fn queue_evaluation_job(
 
     let row = sqlx::query(
         r#"
-        SELECT s.id, s.problem_id, s.problem_version_id, s.agent_id, s.artifact_path, s.visible_after_eval,
+        SELECT s.id, s.challenge_id, s.challenge_version_id, s.agent_id, s.artifact_path, s.visible_after_eval,
                pv.bundle_path, pv.spec_json
         FROM submissions s
-        JOIN problem_versions pv ON pv.id = s.problem_version_id
+        JOIN challenge_versions pv ON pv.id = s.challenge_version_id
         WHERE s.id = $1
         LIMIT 1
         "#
@@ -852,16 +858,16 @@ pub async fn queue_evaluation_job(
     .map_err(|_| AppError::NotFound)?;
 
     let spec_json: Value = row.try_get("spec_json")?;
-    let spec: ProblemBundleSpec =
+    let spec: ChallengeBundleSpec =
         serde_json::from_value(spec_json).map_err(|e| AppError::Internal(e.to_string()))?;
 
-    ensure_problem_supports_eval_type(&spec, input.eval_type)?;
+    ensure_challenge_supports_eval_type(&spec, input.eval_type)?;
 
     let payload = serde_json::to_value(EvaluationJobPayload {
         artifact_path: row.try_get("artifact_path")?,
         bundle_path: row.try_get("bundle_path")?,
-        problem_id: row.try_get("problem_id")?,
-        problem_version_id: row.try_get("problem_version_id")?,
+        challenge_id: row.try_get("challenge_id")?,
+        challenge_version_id: row.try_get("challenge_version_id")?,
     })
     .map_err(|e| AppError::Internal(e.to_string()))?;
 
@@ -874,14 +880,14 @@ pub async fn queue_evaluation_job(
 
     sqlx::query(
         r#"
-        INSERT INTO evaluation_jobs (id, submission_id, problem_id, problem_version_id, eval_type, status, priority, payload_json)
+        INSERT INTO evaluation_jobs (id, submission_id, challenge_id, challenge_version_id, eval_type, status, priority, payload_json)
         VALUES ($1, $2, $3, $4, $5, 'queued', $6, $7)
         "#
     )
     .bind(&input.job_id)
     .bind(row.try_get::<String, _>("id")?)
-    .bind(row.try_get::<String, _>("problem_id")?)
-    .bind(row.try_get::<String, _>("problem_version_id")?)
+    .bind(row.try_get::<String, _>("challenge_id")?)
+    .bind(row.try_get::<String, _>("challenge_version_id")?)
     .bind(eval_type_str)
     .bind(priority)
     .bind(&payload)
@@ -900,8 +906,8 @@ pub async fn queue_evaluation_job(
     Ok(EvaluationJobRecord {
         id: input.job_id.clone(),
         submission_id: row.try_get("id")?,
-        problem_id: row.try_get("problem_id")?,
-        problem_version_id: row.try_get("problem_version_id")?,
+        challenge_id: row.try_get("challenge_id")?,
+        challenge_version_id: row.try_get("challenge_version_id")?,
         eval_type: input.eval_type,
         status: "queued".to_string(),
         attempt_count: 0,
@@ -1092,9 +1098,9 @@ async fn upsert_leaderboard_entry_for_submission_tx<'a>(
 ) -> Result<()> {
     let row: Option<(String, String, Value)> = sqlx::query_as(
         r#"
-        SELECT s.problem_id, s.agent_id, pv.spec_json
+        SELECT s.challenge_id, s.agent_id, pv.spec_json
         FROM submissions s
-        JOIN problem_versions pv ON pv.id = s.problem_version_id
+        JOIN challenge_versions pv ON pv.id = s.challenge_version_id
         WHERE s.id = $1
         LIMIT 1
         "#,
@@ -1103,15 +1109,15 @@ async fn upsert_leaderboard_entry_for_submission_tx<'a>(
     .fetch_optional(&mut **tx)
     .await?;
 
-    let Some((problem_id, agent_id, spec_json)) = row else {
+    let Some((challenge_id, agent_id, spec_json)) = row else {
         return Ok(());
     };
-    let spec = serde_json::from_value::<ProblemBundleSpec>(spec_json).ok();
+    let spec = serde_json::from_value::<ChallengeBundleSpec>(spec_json).ok();
 
     let current: Option<(f64, Value)> = sqlx::query_as(
-        "SELECT best_hidden_score, aggregate_metrics_json FROM leaderboard_entries WHERE problem_id = $1 AND agent_id = $2 LIMIT 1"
+        "SELECT best_hidden_score, aggregate_metrics_json FROM leaderboard_entries WHERE challenge_id = $1 AND agent_id = $2 LIMIT 1"
     )
-    .bind(&problem_id)
+    .bind(&challenge_id)
     .bind(&agent_id)
     .fetch_optional(&mut **tx)
     .await?;
@@ -1139,11 +1145,11 @@ async fn upsert_leaderboard_entry_for_submission_tx<'a>(
     sqlx::query(
         r#"
         INSERT INTO leaderboard_entries (
-            problem_id, agent_id, best_submission_id, best_hidden_score,
+            challenge_id, agent_id, best_submission_id, best_hidden_score,
             shown_summary_json, aggregate_metrics_json, updated_at
         )
         VALUES ($1, $2, $3, $4, $5, $6, NOW())
-        ON CONFLICT (problem_id, agent_id) DO UPDATE
+        ON CONFLICT (challenge_id, agent_id) DO UPDATE
         SET best_submission_id = EXCLUDED.best_submission_id,
             best_hidden_score = EXCLUDED.best_hidden_score,
             shown_summary_json = EXCLUDED.shown_summary_json,
@@ -1151,7 +1157,7 @@ async fn upsert_leaderboard_entry_for_submission_tx<'a>(
             updated_at = NOW()
         "#,
     )
-    .bind(&problem_id)
+    .bind(&challenge_id)
     .bind(&agent_id)
     .bind(submission_id)
     .bind(hidden_score)
@@ -1170,12 +1176,12 @@ async fn update_official_score_for_submission_tx<'a>(
     official_metrics: &[MetricValue],
 ) -> Result<()> {
     let row: Option<(String, String)> =
-        sqlx::query_as("SELECT problem_id, agent_id FROM submissions WHERE id = $1 LIMIT 1")
+        sqlx::query_as("SELECT challenge_id, agent_id FROM submissions WHERE id = $1 LIMIT 1")
             .bind(submission_id)
             .fetch_optional(&mut **tx)
             .await?;
 
-    let Some((problem_id, agent_id)) = row else {
+    let Some((challenge_id, agent_id)) = row else {
         return Ok(());
     };
 
@@ -1183,9 +1189,9 @@ async fn update_official_score_for_submission_tx<'a>(
         serde_json::to_value(official_metrics).map_err(|e| AppError::Internal(e.to_string()))?;
 
     sqlx::query(
-        "UPDATE leaderboard_entries SET official_score = $3, official_metrics_json = $4, updated_at = NOW() WHERE problem_id = $1 AND agent_id = $2"
+        "UPDATE leaderboard_entries SET official_score = $3, official_metrics_json = $4, updated_at = NOW() WHERE challenge_id = $1 AND agent_id = $2"
     )
-    .bind(&problem_id)
+    .bind(&challenge_id)
     .bind(&agent_id)
     .bind(official_score)
     .bind(&official_metrics_json)

@@ -4,7 +4,7 @@ use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 use serde::Serialize;
-use shared::models::problem::ProblemDetailResponse;
+use shared::models::challenge::ChallengeDetailResponse;
 
 const PRE_COMMIT_HOOK: &str = r#"#!/usr/bin/env bash
 set -euo pipefail
@@ -18,16 +18,16 @@ fi
 #[derive(Debug, Clone, Serialize)]
 pub struct InitSolutionSummary {
     pub workspace_dir: PathBuf,
-    pub problem_id: String,
-    pub problem_title: String,
-    pub problem_version: String,
+    pub challenge_id: String,
+    pub challenge_title: String,
+    pub challenge_version: String,
 }
 
 pub fn init_solution_workspace(
-    problem: &ProblemDetailResponse,
+    challenge: &ChallengeDetailResponse,
     dir: Option<PathBuf>,
 ) -> Result<InitSolutionSummary> {
-    let workspace_dir = dir.unwrap_or_else(|| default_workspace_dir(&problem.id));
+    let workspace_dir = dir.unwrap_or_else(|| default_workspace_dir(&challenge.id));
     if workspace_dir.exists() {
         bail!(
             "solution workspace already exists: {}",
@@ -44,7 +44,7 @@ pub fn init_solution_workspace(
     fs::create_dir(&workspace_dir)
         .with_context(|| format!("failed to create workspace {}", workspace_dir.display()))?;
 
-    let result = write_workspace_files(problem, &workspace_dir)
+    let result = write_workspace_files(challenge, &workspace_dir)
         .and_then(|_| initialize_git_repository(&workspace_dir))
         .and_then(|_| install_pre_commit_hook(&workspace_dir));
 
@@ -58,15 +58,15 @@ pub fn init_solution_workspace(
 
     Ok(InitSolutionSummary {
         workspace_dir,
-        problem_id: problem.id.clone(),
-        problem_title: problem.title.clone(),
-        problem_version: problem.current_version.version.clone(),
+        challenge_id: challenge.id.clone(),
+        challenge_title: challenge.title.clone(),
+        challenge_version: challenge.current_version.version.clone(),
     })
 }
 
-fn write_workspace_files(problem: &ProblemDetailResponse, workspace_dir: &Path) -> Result<()> {
+fn write_workspace_files(challenge: &ChallengeDetailResponse, workspace_dir: &Path) -> Result<()> {
     let readme_path = workspace_dir.join("README.md");
-    fs::write(readme_path, render_readme(problem)).with_context(|| {
+    fs::write(readme_path, render_readme(challenge)).with_context(|| {
         format!(
             "failed to write README.md in workspace {}",
             workspace_dir.display()
@@ -74,14 +74,14 @@ fn write_workspace_files(problem: &ProblemDetailResponse, workspace_dir: &Path) 
     })
 }
 
-fn render_readme(problem: &ProblemDetailResponse) -> String {
+fn render_readme(challenge: &ChallengeDetailResponse) -> String {
     format!(
         "# {}\n\nChallenge: `{}`\nVersion: `{}` (`{}`)\n\n{}\n\n## Workspace Contract\n\nCreate a `run.sh` file at the repository root before committing. The generated pre-commit hook checks that this file exists.\n",
-        problem.title.trim(),
-        problem.id,
-        problem.current_version.version,
-        problem.current_version.id,
-        problem.statement_markdown.trim()
+        challenge.title.trim(),
+        challenge.id,
+        challenge.current_version.version,
+        challenge.current_version.id,
+        challenge.statement_markdown.trim()
     )
 }
 
@@ -124,8 +124,8 @@ fn install_pre_commit_hook(workspace_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn default_workspace_dir(problem_id: &str) -> PathBuf {
-    PathBuf::from(format!("{}-solution", sanitize_path_segment(problem_id)))
+fn default_workspace_dir(challenge_id: &str) -> PathBuf {
+    PathBuf::from(format!("{}-solution", sanitize_path_segment(challenge_id)))
 }
 
 fn sanitize_path_segment(value: &str) -> String {
@@ -154,11 +154,11 @@ mod tests {
     use std::fs;
 
     use shared::models::CurrentVersionDto;
-    use shared::models::evaluation::ScoreVisibility;
-    use shared::models::problem::{
-        DatasetsSpec, LimitsSpec, MetricSchemaSpec, ProblemBundleSpec, ProblemDetailResponse,
+    use shared::models::challenge::{
+        ChallengeBundleSpec, ChallengeDetailResponse, DatasetsSpec, LimitsSpec, MetricSchemaSpec,
         ScorerSpec, SubmissionSpec,
     };
+    use shared::models::evaluation::ScoreVisibility;
 
     use super::{default_workspace_dir, init_solution_workspace};
 
@@ -167,7 +167,7 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace_dir = temp.path().join("sample-sum-work");
 
-        let summary = init_solution_workspace(&problem_detail(), Some(workspace_dir.clone()))
+        let summary = init_solution_workspace(&challenge_detail(), Some(workspace_dir.clone()))
             .expect("workspace should initialize");
 
         let readme =
@@ -175,7 +175,7 @@ mod tests {
         let hook = fs::read_to_string(workspace_dir.join(".git/hooks/pre-commit"))
             .expect("hook should be readable");
 
-        assert_eq!(summary.problem_id, "sample-sum");
+        assert_eq!(summary.challenge_id, "sample-sum");
         assert!(readme.contains("# Sample Sum"));
         assert!(readme.contains("Return the sum."));
         assert!(workspace_dir.join(".git").is_dir());
@@ -198,7 +198,7 @@ mod tests {
         let workspace_dir = temp.path().join("existing");
         fs::create_dir(&workspace_dir).expect("existing dir should be created");
 
-        let error = init_solution_workspace(&problem_detail(), Some(workspace_dir))
+        let error = init_solution_workspace(&challenge_detail(), Some(workspace_dir))
             .expect_err("existing dir must be rejected");
 
         assert!(error.to_string().contains("already exists"));
@@ -212,8 +212,8 @@ mod tests {
         );
     }
 
-    fn problem_detail() -> ProblemDetailResponse {
-        ProblemDetailResponse {
+    fn challenge_detail() -> ChallengeDetailResponse {
+        ChallengeDetailResponse {
             id: "sample-sum".to_string(),
             slug: "sum".to_string(),
             title: "Sample Sum".to_string(),
@@ -222,11 +222,11 @@ mod tests {
                 id: "version-1".to_string(),
                 version: "v1".to_string(),
             },
-            spec: ProblemBundleSpec {
+            spec: ChallengeBundleSpec {
                 schema_version: 1,
-                problem_id: "sample-sum".to_string(),
-                problem_title: "Sample Sum".to_string(),
-                problem_version: "v1".to_string(),
+                challenge_id: "sample-sum".to_string(),
+                challenge_title: "Sample Sum".to_string(),
+                challenge_version: "v1".to_string(),
                 submission: SubmissionSpec {
                     format: "python_zip_project".to_string(),
                     language: "python".to_string(),

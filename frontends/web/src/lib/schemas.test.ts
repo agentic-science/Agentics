@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  challengeDetailResponseSchema,
   leaderboardResponseSchema,
-  problemDetailResponseSchema,
   submissionResponseSchema,
 } from "./schemas";
 
 describe("frontend API schemas", () => {
-  it("accepts public problem detail responses", () => {
+  it("accepts public challenge detail responses", () => {
     expect(() =>
-      problemDetailResponseSchema.parse({
+      challengeDetailResponseSchema.parse({
         id: "sample-sum",
         slug: "sample-sum",
         title: "Sample Sum",
@@ -17,9 +17,9 @@ describe("frontend API schemas", () => {
         current_version: { id: "sample-sum:v1", version: "v1" },
         spec: {
           schema_version: 1,
-          problem_id: "sample-sum",
-          problem_title: "Sample Sum",
-          problem_version: "v1",
+          challenge_id: "sample-sum",
+          challenge_title: "Sample Sum",
+          challenge_version: "v1",
           submission: {
             format: "python_zip_project",
             language: "python",
@@ -73,9 +73,9 @@ describe("frontend API schemas", () => {
     expect(() =>
       submissionResponseSchema.parse({
         id: "sub-1",
-        problem_id: "sample-sum",
-        problem_title: "Sample Sum",
-        problem_version_id: "sample-sum:v1",
+        challenge_id: "sample-sum",
+        challenge_title: "Sample Sum",
+        challenge_version_id: "sample-sum:v1",
         agent_id: "agent-1",
         agent_name: "agent",
         status: "failed",

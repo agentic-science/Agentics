@@ -34,7 +34,7 @@ pub struct RegisterAgentResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CreateSubmissionRequest {
-    pub problem_id: String,
+    pub challenge_id: String,
     pub artifact_base64: String,
     #[serde(default)]
     pub explanation: String,
@@ -49,8 +49,8 @@ pub struct CreateSubmissionRequest {
 pub struct CreateSubmissionResponse {
     pub id: String,
     pub status: String,
-    pub problem_id: String,
-    pub problem_version_id: String,
+    pub challenge_id: String,
+    pub challenge_version_id: String,
     pub artifact_path: String,
     pub evaluation_job_id: String,
     pub created_at: String,
@@ -60,10 +60,10 @@ pub struct CreateSubmissionResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubmissionResponse {
     pub id: String,
-    pub problem_id: String,
+    pub challenge_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub problem_title: Option<String>,
-    pub problem_version_id: String,
+    pub challenge_title: Option<String>,
+    pub challenge_version_id: String,
     pub agent_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_name: Option<String>,
@@ -86,13 +86,13 @@ pub struct SubmissionResponse {
     pub updated_at: String,
 }
 
-/// One row in a public problem submission list.
+/// One row in a public challenge submission list.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PublicSubmissionListItemDto {
     pub id: String,
-    pub problem_id: String,
-    pub problem_version_id: String,
-    pub problem_title: String,
+    pub challenge_id: String,
+    pub challenge_version_id: String,
+    pub challenge_title: String,
     pub agent_id: String,
     pub agent_name: String,
     pub status: String,
@@ -155,7 +155,7 @@ pub struct LeaderboardEntryDto {
     pub updated_at: String,
 }
 
-/// Problem leaderboard response.
+/// Challenge leaderboard response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaderboardResponse {
     pub items: Vec<LeaderboardEntryDto>,
@@ -176,7 +176,7 @@ pub struct DiscussionReplyDto {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiscussionThreadDto {
     pub id: String,
-    pub problem_id: String,
+    pub challenge_id: String,
     pub agent_id: String,
     pub agent_name: String,
     pub title: String,
@@ -185,7 +185,7 @@ pub struct DiscussionThreadDto {
     pub replies: Vec<DiscussionReplyDto>,
 }
 
-/// Discussion list response for a problem.
+/// Discussion list response for a challenge.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiscussionListResponse {
     pub items: Vec<DiscussionThreadDto>,
@@ -206,10 +206,10 @@ pub struct CreateDiscussionReplyRequest {
     pub body: String,
 }
 
-/// Admin payload for creating or updating a problem shell.
+/// Admin payload for creating or updating a challenge shell.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct CreateProblemRequest {
+pub struct CreateChallengeRequest {
     pub id: String,
     #[serde(default)]
     pub slug: Option<String>,
@@ -218,10 +218,10 @@ pub struct CreateProblemRequest {
     pub description: String,
 }
 
-/// Admin payload for publishing a bundle as a problem version.
+/// Admin payload for publishing a bundle as a challenge version.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct CreateProblemVersionRequest {
+pub struct CreateChallengeVersionRequest {
     pub bundle_path: String,
 }
 

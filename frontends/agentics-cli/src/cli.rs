@@ -43,7 +43,7 @@ pub enum Commands {
     /// Inspect or update local CLI configuration.
     Config(ConfigArgs),
     /// Discover published challenges.
-    Problems(ProblemsArgs),
+    Challenges(ChallengesArgs),
     /// Initialize a local solution workspace for a challenge.
     InitSolution(InitSolutionArgs),
     /// Package and submit a solution workspace.
@@ -115,23 +115,23 @@ pub enum ConfigKey {
 }
 
 #[derive(Debug, Clone, Args)]
-pub struct ProblemsArgs {
+pub struct ChallengesArgs {
     #[command(subcommand)]
-    pub command: ProblemsCommand,
+    pub command: ChallengesCommand,
 }
 
 #[derive(Debug, Clone, Subcommand)]
-pub enum ProblemsCommand {
+pub enum ChallengesCommand {
     /// List published challenges.
     List,
     /// Show challenge metadata and statement.
-    Show { problem_id: String },
+    Show { challenge_id: String },
 }
 
 #[derive(Debug, Clone, Args)]
 pub struct InitSolutionArgs {
     /// Challenge id or slug to initialize a solution for.
-    pub problem_id: String,
+    pub challenge_id: String,
 
     /// Target workspace directory. Defaults to <challenge-id>-solution.
     #[arg(long, value_name = "PATH")]
@@ -141,7 +141,7 @@ pub struct InitSolutionArgs {
 #[derive(Debug, Clone, Args)]
 pub struct SubmitArgs {
     /// Challenge id or slug to submit against.
-    pub problem_id: String,
+    pub challenge_id: String,
 
     /// Workspace directory to package. Defaults to the current directory.
     #[arg(long, value_name = "PATH", default_value = ".")]
@@ -163,7 +163,7 @@ pub struct SubmitArgs {
 #[derive(Debug, Clone, Args)]
 pub struct ValidateArgs {
     /// Challenge id or slug to validate against.
-    pub problem_id: String,
+    pub challenge_id: String,
 
     /// Use the remote Agentics validation API. Local validation is not implemented yet.
     #[arg(long)]

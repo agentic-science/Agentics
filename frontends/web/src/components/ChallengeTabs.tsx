@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-/** Navigation tabs shared by every problem detail subpage. */
-export function ProblemTabs({ problemId }: { problemId: string }) {
+/** Navigation tabs shared by every challenge detail subpage. */
+export function ChallengeTabs({ challengeId }: { challengeId: string }) {
   const pathname = usePathname();
-  const base = `/problems/${problemId}`;
+  const base = `/challenges/${challengeId}`;
 
   const tabs = [
     { href: base, label: "题面", end: true },

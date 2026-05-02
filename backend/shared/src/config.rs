@@ -16,8 +16,8 @@ pub struct Config {
     pub api_port: u16,
     #[serde(default = "default_storage_root")]
     pub storage_root: String,
-    #[serde(default = "default_problems_root")]
-    pub problems_root: String,
+    #[serde(default = "default_challenges_root")]
+    pub challenges_root: String,
     #[serde(default = "default_admin_username")]
     pub admin_username: String,
     #[serde(default = "default_admin_password")]
@@ -55,8 +55,8 @@ fn default_storage_root() -> String {
     "storage".to_string()
 }
 
-fn default_problems_root() -> String {
-    "examples/problems".to_string()
+fn default_challenges_root() -> String {
+    "examples/challenges".to_string()
 }
 
 fn default_admin_username() -> String {

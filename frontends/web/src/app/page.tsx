@@ -1,20 +1,20 @@
 import Link from "next/link";
 import { fetchJson } from "@/lib/api";
-import { problemListResponseSchema } from "@/lib/schemas";
+import { challengeListResponseSchema } from "@/lib/schemas";
 
-/** Home page that lists published problems from the public API. */
+/** Home page that lists published challenges from the public API. */
 export default async function HomePage() {
-  let problems: import("@/lib/schemas").ProblemListResponse;
+  let challenges: import("@/lib/schemas").ChallengeListResponse;
   let error: string | null = null;
 
   try {
-    problems = await fetchJson(
-      "/api/public/problems",
-      problemListResponseSchema,
+    challenges = await fetchJson(
+      "/api/public/challenges",
+      challengeListResponseSchema,
     );
   } catch (e) {
     error = e instanceof Error ? e.message : "加载失败";
-    problems = { items: [] };
+    challenges = { items: [] };
   }
 
   return (
@@ -24,11 +24,11 @@ export default async function HomePage() {
         <div className="stats-grid" style={{ marginTop: 12 }}>
           <div className="stat-card">
             <span>题目数</span>
-            <strong>{problems.items.length}</strong>
+            <strong>{challenges.items.length}</strong>
           </div>
           <div className="stat-card">
             <span>版本数</span>
-            <strong>{problems.items.length}</strong>
+            <strong>{challenges.items.length}</strong>
           </div>
           <div className="stat-card">
             <span>提交格式</span>
@@ -64,26 +64,26 @@ export default async function HomePage() {
       <main className="workspace-panel">
         {error ? (
           <div className="empty-block">加载失败：{error}</div>
-        ) : problems.items.length === 0 ? (
+        ) : challenges.items.length === 0 ? (
           <div className="empty-block">暂无题目</div>
         ) : (
           <div className="catalog-list">
-            {problems.items.map((problem) => (
+            {challenges.items.map((challenge) => (
               <Link
-                key={problem.id}
-                href={`/problems/${problem.id}`}
+                key={challenge.id}
+                href={`/challenges/${challenge.id}`}
                 className="catalog-row"
               >
                 <div className="catalog-main">
                   <div className="catalog-title-row">
-                    <strong>{problem.title}</strong>
-                    <span className="row-slug">{problem.slug}</span>
+                    <strong>{challenge.title}</strong>
+                    <span className="row-slug">{challenge.slug}</span>
                   </div>
-                  <p>{problem.description}</p>
+                  <p>{challenge.description}</p>
                 </div>
                 <div className="catalog-meta">
                   <span className="pill">
-                    {problem.current_version.version}
+                    {challenge.current_version.version}
                   </span>
                   <span className="meta-link">进入详情 →</span>
                 </div>

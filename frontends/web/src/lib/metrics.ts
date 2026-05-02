@@ -1,11 +1,11 @@
 import { formatMetricValue } from "@/lib/format";
-import type { ProblemDetailResponse } from "@/lib/schemas";
+import type { ChallengeDetailResponse } from "@/lib/schemas";
 
-type MetricSchema = ProblemDetailResponse["spec"]["metric_schema"];
+type MetricSchema = ChallengeDetailResponse["spec"]["metric_schema"];
 type MetricDefinition = MetricSchema["metrics"][number];
 type MetricValue = { metric_id: string; value: number };
 
-/** Find display metadata for a metric id declared by the problem bundle. */
+/** Find display metadata for a metric id declared by the challenge bundle. */
 export function metricDefinition(
   schema: MetricSchema,
   metricId: string,

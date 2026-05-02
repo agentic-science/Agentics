@@ -26,13 +26,13 @@ pub async fn spawn_app(pool: PgPool) -> TestApp {
 
 /// Spawn the API server with a caller-provided config.
 ///
-/// Tests use this to point storage and seeded problem roots at temporary
+/// Tests use this to point storage and seeded challenge roots at temporary
 /// directories while exercising the real router and startup seeding path.
 pub async fn spawn_app_with_config(pool: PgPool, config: Config) -> TestApp {
-    if Path::new(&config.problems_root).exists() {
-        shared::db::queries::ensure_problems_seeded_from_root(&pool, &config.problems_root)
+    if Path::new(&config.challenges_root).exists() {
+        shared::db::queries::ensure_challenges_seeded_from_root(&pool, &config.challenges_root)
             .await
-            .expect("failed to seed problems");
+            .expect("failed to seed challenges");
     }
 
     let storage = Arc::new(LocalStorage::new(&config.storage_root));
@@ -66,13 +66,13 @@ pub async fn spawn_app_with_config(pool: PgPool, config: Config) -> TestApp {
 }
 
 /// Build an isolated config for integration tests.
-pub fn test_config(storage_root: &Path, problems_root: &Path) -> Config {
+pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
     Config {
         database_url: "postgres://agentics:agentics@127.0.0.1:5432/agentics_test".to_string(),
         api_host: "127.0.0.1".to_string(),
         api_port: 0,
         storage_root: storage_root.to_string_lossy().to_string(),
-        problems_root: problems_root.to_string_lossy().to_string(),
+        challenges_root: challenges_root.to_string_lossy().to_string(),
         admin_username: "admin".to_string(),
         admin_password: "secret".to_string(),
         worker_poll_interval_ms: 3000,
@@ -85,12 +85,12 @@ pub fn test_config(storage_root: &Path, problems_root: &Path) -> Config {
     }
 }
 
-/// Resolve the bundled example problem fixtures.
-pub fn examples_problems_root() -> PathBuf {
+/// Resolve the bundled example challenge fixtures.
+pub fn examples_challenges_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../examples/problems")
+        .join("../../examples/challenges")
         .canonicalize()
-        .expect("failed to resolve example problems root")
+        .expect("failed to resolve example challenges root")
 }
 
 /// Build an absolute URL for the spawned test app.

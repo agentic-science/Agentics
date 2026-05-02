@@ -39,11 +39,11 @@ scraping table output.
 Read the challenge list and detail before writing code:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- problems list
-cargo run -p agentics-cli --bin agentics -- problems show sample-sum
+cargo run -p agentics-cli --bin agentics -- challenges list
+cargo run -p agentics-cli --bin agentics -- challenges show sample-sum
 ```
 
-Use the problem detail to confirm:
+Use the challenge detail to confirm:
 
 - The challenge id or slug.
 - The statement and input/output contract.

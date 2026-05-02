@@ -14,7 +14,7 @@ use shared::models::request::{CreateSubmissionRequest, RegisterAgentRequest};
 
 use crate::api::ApiClient;
 use crate::cli::{
-    AuthCommand, Cli, Commands, ConfigCommand, ConfigKey, ProblemsCommand, RegisterArgs,
+    AuthCommand, ChallengesCommand, Cli, Commands, ConfigCommand, ConfigKey, RegisterArgs,
     SubmitArgs, ValidateArgs,
 };
 use crate::config::{
@@ -55,23 +55,23 @@ pub async fn execute(cli: Cli, env: Environment) -> Result<String> {
                 set_config(key, &value, cli.output, &store, &settings)
             }
         },
-        Commands::Problems(args) => {
+        Commands::Challenges(args) => {
             let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
             match args.command {
-                ProblemsCommand::List => {
-                    let response = client.list_problems().await?;
-                    output::render_problem_list(&response, cli.output)
+                ChallengesCommand::List => {
+                    let response = client.list_challenges().await?;
+                    output::render_challenge_list(&response, cli.output)
                 }
-                ProblemsCommand::Show { problem_id } => {
-                    let response = client.get_problem(&problem_id).await?;
-                    output::render_problem_detail(&response, cli.output)
+                ChallengesCommand::Show { challenge_id } => {
+                    let response = client.get_challenge(&challenge_id).await?;
+                    output::render_challenge_detail(&response, cli.output)
                 }
             }
         }
         Commands::InitSolution(args) => {
             let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-            let problem = client.get_problem(&args.problem_id).await?;
-            let summary = workspace::init_solution_workspace(&problem, args.dir)?;
+            let challenge = client.get_challenge(&args.challenge_id).await?;
+            let summary = workspace::init_solution_workspace(&challenge, args.dir)?;
             output::render_init_solution(&summary, cli.output)
         }
         Commands::Submit(args) => submit(args, cli.output, &settings).await,
@@ -151,7 +151,7 @@ async fn submit(
 ) -> Result<String> {
     let package = package::package_solution_workspace(&args.dir)?;
     let request = create_submission_request(
-        args.problem_id,
+        args.challenge_id,
         &package,
         args.explanation,
         args.parent_submission_id,
@@ -174,17 +174,17 @@ async fn validate(
     }
 
     let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-    let problem = client.get_problem(&args.problem_id).await?;
-    if !problem.spec.datasets.validation_enabled {
+    let challenge = client.get_challenge(&args.challenge_id).await?;
+    if !challenge.spec.datasets.validation_enabled {
         bail!(
-            "validation pass is disabled for problem `{}`; submit officially or ask the challenge owner to enable validation",
-            problem.id
+            "validation pass is disabled for challenge `{}`; submit officially or ask the challenge owner to enable validation",
+            challenge.id
         );
     }
 
     let package = package::package_solution_workspace(&args.dir)?;
     let request = create_submission_request(
-        args.problem_id,
+        args.challenge_id,
         &package,
         args.explanation,
         args.parent_submission_id,
@@ -207,14 +207,14 @@ async fn validate(
 }
 
 fn create_submission_request(
-    problem_id: String,
+    challenge_id: String,
     package: &package::SubmissionPackage,
     explanation: String,
     parent_submission_id: Option<String>,
     credit_text: String,
 ) -> CreateSubmissionRequest {
     CreateSubmissionRequest {
-        problem_id,
+        challenge_id,
         artifact_base64: STANDARD.encode(&package.bytes),
         explanation,
         parent_submission_id,
@@ -314,10 +314,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn problems_list_uses_public_api_and_renders_table() {
+    async fn challenges_list_uses_public_api_and_renders_table() {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
-            .and(path("/api/public/problems"))
+            .and(path("/api/public/challenges"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "items": [
                     {
@@ -343,13 +343,13 @@ mod tests {
             config_path.to_str().expect("utf8 path"),
             "--api-base-url",
             &server.uri(),
-            "problems",
+            "challenges",
             "list",
         ]);
 
         let output = execute(cli, Environment::default())
             .await
-            .expect("problem list should succeed");
+            .expect("challenge list should succeed");
 
         assert_eq!(
             output,
@@ -358,10 +358,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn init_solution_fetches_problem_and_creates_workspace() {
+    async fn init_solution_fetches_challenge_and_creates_workspace() {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
-            .and(path("/api/public/problems/sample-sum"))
+            .and(path("/api/public/challenges/sample-sum"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "id": "sample-sum",
                 "slug": "sum",
@@ -373,9 +373,9 @@ mod tests {
                 },
                 "spec": {
                     "schema_version": 1,
-                    "problem_id": "sample-sum",
-                    "problem_title": "Sample Sum",
-                    "problem_version": "v1",
+                    "challenge_id": "sample-sum",
+                    "challenge_title": "Sample Sum",
+                    "challenge_version": "v1",
                     "submission": {
                         "format": "python_zip_project",
                         "language": "python",
@@ -436,8 +436,8 @@ mod tests {
             .respond_with(ResponseTemplate::new(201).set_body_json(json!({
                 "id": "submission-1",
                 "status": "queued",
-                "problem_id": "sample-sum",
-                "problem_version_id": "version-1",
+                "challenge_id": "sample-sum",
+                "challenge_version_id": "version-1",
                 "artifact_path": "submissions/submission-1.zip",
                 "evaluation_job_id": "job-1",
                 "created_at": "2026-05-01T00:00:00Z"
@@ -485,7 +485,7 @@ mod tests {
             serde_json::from_slice(&requests[0].body).expect("request body should be JSON");
 
         assert!(output.contains("Submitted submission-1"));
-        assert_eq!(body["problem_id"], "sample-sum");
+        assert_eq!(body["challenge_id"], "sample-sum");
         assert_eq!(body["explanation"], "first attempt");
         assert!(body["artifact_base64"].as_str().expect("artifact").len() > 20);
     }
@@ -498,9 +498,9 @@ mod tests {
             .and(header("authorization", "Bearer test-token"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "id": "submission-1",
-                "problem_id": "sample-sum",
-                "problem_title": "Sample Sum",
-                "problem_version_id": "version-1",
+                "challenge_id": "sample-sum",
+                "challenge_title": "Sample Sum",
+                "challenge_version_id": "version-1",
                 "agent_id": "agent-1",
                 "agent_name": "solver",
                 "status": "queued",
@@ -545,8 +545,8 @@ mod tests {
     async fn validate_remote_posts_validation_run_and_polls_status() {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
-            .and(path("/api/public/problems/sample-sum"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(problem_detail_json(true)))
+            .and(path("/api/public/challenges/sample-sum"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(challenge_detail_json(true)))
             .mount(&server)
             .await;
         Mock::given(method("POST"))
@@ -555,8 +555,8 @@ mod tests {
             .respond_with(ResponseTemplate::new(201).set_body_json(json!({
                 "id": "validation-1",
                 "status": "queued",
-                "problem_id": "sample-sum",
-                "problem_version_id": "version-1",
+                "challenge_id": "sample-sum",
+                "challenge_version_id": "version-1",
                 "artifact_path": "submissions/validation-1.zip",
                 "evaluation_job_id": "job-1",
                 "created_at": "2026-05-01T00:00:00Z"
@@ -568,9 +568,9 @@ mod tests {
             .and(header("authorization", "Bearer test-token"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "id": "validation-1",
-                "problem_id": "sample-sum",
-                "problem_title": "Sample Sum",
-                "problem_version_id": "version-1",
+                "challenge_id": "sample-sum",
+                "challenge_title": "Sample Sum",
+                "challenge_version_id": "version-1",
                 "agent_id": "agent-1",
                 "agent_name": "solver",
                 "status": "completed",
@@ -658,7 +658,7 @@ mod tests {
         assert!(output.contains("primary_score: 1"));
         assert!(output.contains("rank_score: 1"));
         assert!(output.contains("visible_after_eval: false"));
-        assert_eq!(body["problem_id"], "sample-sum");
+        assert_eq!(body["challenge_id"], "sample-sum");
         assert_eq!(body["explanation"], "quick check");
         assert!(body["artifact_base64"].as_str().expect("artifact").len() > 20);
     }
@@ -667,8 +667,8 @@ mod tests {
     async fn validate_remote_rejects_disabled_validation_before_packaging() {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
-            .and(path("/api/public/problems/sample-sum"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(problem_detail_json(false)))
+            .and(path("/api/public/challenges/sample-sum"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(challenge_detail_json(false)))
             .mount(&server)
             .await;
 
@@ -702,10 +702,10 @@ mod tests {
 
         assert!(error.to_string().contains("validation pass is disabled"));
         assert_eq!(requests.len(), 1);
-        assert_eq!(requests[0].url.path(), "/api/public/problems/sample-sum");
+        assert_eq!(requests[0].url.path(), "/api/public/challenges/sample-sum");
     }
 
-    fn problem_detail_json(validation_enabled: bool) -> serde_json::Value {
+    fn challenge_detail_json(validation_enabled: bool) -> serde_json::Value {
         json!({
             "id": "sample-sum",
             "slug": "sample-sum",
@@ -717,9 +717,9 @@ mod tests {
             },
             "spec": {
                 "schema_version": 1,
-                "problem_id": "sample-sum",
-                "problem_title": "Sample Sum",
-                "problem_version": "v1",
+                "challenge_id": "sample-sum",
+                "challenge_title": "Sample Sum",
+                "challenge_version": "v1",
                 "submission": {
                     "format": "python_zip_project",
                     "language": "python",

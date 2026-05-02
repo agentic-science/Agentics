@@ -9,14 +9,14 @@ import {
   primaryMetric,
 } from "@/lib/metrics";
 import {
+  challengeDetailResponseSchema,
   discussionListResponseSchema,
   leaderboardResponseSchema,
-  problemDetailResponseSchema,
   publicSubmissionListResponseSchema,
 } from "@/lib/schemas";
 
-/** Problem overview page with statement Markdown and recent activity. */
-export default async function ProblemPage({
+/** Challenge overview page with statement Markdown and recent activity. */
+export default async function ChallengePage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -24,17 +24,17 @@ export default async function ProblemPage({
   const { id } = await params;
 
   const [detail, submissions, leaderboard, discussions] = await Promise.all([
-    fetchJson(`/api/public/problems/${id}`, problemDetailResponseSchema),
+    fetchJson(`/api/public/challenges/${id}`, challengeDetailResponseSchema),
     fetchJson(
-      `/api/public/problems/${id}/submissions`,
+      `/api/public/challenges/${id}/submissions`,
       publicSubmissionListResponseSchema,
     ),
     fetchJson(
-      `/api/public/problems/${id}/leaderboard`,
+      `/api/public/challenges/${id}/leaderboard`,
       leaderboardResponseSchema,
     ),
     fetchJson(
-      `/api/public/problems/${id}/discussions`,
+      `/api/public/challenges/${id}/discussions`,
       discussionListResponseSchema,
     ),
   ]);
@@ -130,7 +130,7 @@ export default async function ProblemPage({
         <div className="workspace-panel">
           <div className="section-head">
             <h2>最新提交</h2>
-            <Link href={`/problems/${id}/submissions`} className="meta-link">
+            <Link href={`/challenges/${id}/submissions`} className="meta-link">
               查看全部 →
             </Link>
           </div>
@@ -163,7 +163,7 @@ export default async function ProblemPage({
         <div className="workspace-panel">
           <div className="section-head">
             <h2>排行榜</h2>
-            <Link href={`/problems/${id}/leaderboard`} className="meta-link">
+            <Link href={`/challenges/${id}/leaderboard`} className="meta-link">
               查看全部 →
             </Link>
           </div>
@@ -193,7 +193,7 @@ export default async function ProblemPage({
         <div className="workspace-panel">
           <div className="section-head">
             <h2>讨论</h2>
-            <Link href={`/problems/${id}/discussions`} className="meta-link">
+            <Link href={`/challenges/${id}/discussions`} className="meta-link">
               查看全部 →
             </Link>
           </div>

@@ -1,7 +1,7 @@
 //! Conversion helpers from database records to API DTOs.
 
-use shared::db::queries::{AgentRecord, ProblemVersionRecord, SubmissionRecord};
-use shared::models::problem::*;
+use shared::db::queries::{AgentRecord, ChallengeVersionRecord, SubmissionRecord};
+use shared::models::challenge::*;
 use shared::models::request::*;
 
 /// Present a newly registered agent together with its one-time bearer token.
@@ -14,17 +14,17 @@ pub fn present_register_agent(agent: &AgentRecord, token: &str) -> RegisterAgent
     }
 }
 
-/// Present public problem details from a published version record and statement body.
-pub fn present_problem_detail(
-    problem: &ProblemVersionRecord,
+/// Present public challenge details from a published version record and statement body.
+pub fn present_challenge_detail(
+    challenge: &ChallengeVersionRecord,
     statement: &str,
-) -> ProblemDetailResponse {
-    let spec: ProblemBundleSpec =
-        serde_json::from_value(problem.spec_json.clone()).unwrap_or_else(|_| ProblemBundleSpec {
+) -> ChallengeDetailResponse {
+    let spec: ChallengeBundleSpec = serde_json::from_value(challenge.spec_json.clone())
+        .unwrap_or_else(|_| ChallengeBundleSpec {
             schema_version: 1,
-            problem_id: problem.problem_id.clone(),
-            problem_title: problem.title.clone(),
-            problem_version: problem.version.clone(),
+            challenge_id: challenge.challenge_id.clone(),
+            challenge_title: challenge.title.clone(),
+            challenge_version: challenge.version.clone(),
             submission: SubmissionSpec {
                 format: "python_zip_project".to_string(),
                 language: "python".to_string(),
@@ -50,14 +50,14 @@ pub fn present_problem_detail(
             metric_schema: MetricSchemaSpec::default(),
         });
 
-    ProblemDetailResponse {
-        id: problem.problem_id.clone(),
-        slug: problem.slug.clone(),
-        title: problem.title.clone(),
-        description: problem.description.clone(),
+    ChallengeDetailResponse {
+        id: challenge.challenge_id.clone(),
+        slug: challenge.slug.clone(),
+        title: challenge.title.clone(),
+        description: challenge.description.clone(),
         current_version: shared::models::CurrentVersionDto {
-            id: problem.problem_version_id.clone(),
-            version: problem.version.clone(),
+            id: challenge.challenge_version_id.clone(),
+            version: challenge.version.clone(),
         },
         spec,
         statement_markdown: statement.to_string(),
@@ -69,8 +69,8 @@ pub fn present_create_submission(submission: &SubmissionRecord) -> CreateSubmiss
     CreateSubmissionResponse {
         id: submission.id.clone(),
         status: submission.status.clone(),
-        problem_id: submission.problem_id.clone(),
-        problem_version_id: submission.problem_version_id.clone(),
+        challenge_id: submission.challenge_id.clone(),
+        challenge_version_id: submission.challenge_version_id.clone(),
         artifact_path: submission.artifact_path.clone(),
         evaluation_job_id: submission.evaluation_job_id.clone().unwrap_or_default(),
         created_at: submission.created_at.to_rfc3339(),
@@ -85,9 +85,9 @@ pub fn present_submission(
 ) -> SubmissionResponse {
     SubmissionResponse {
         id: submission.id.clone(),
-        problem_id: submission.problem_id.clone(),
-        problem_title: submission.problem_title.clone(),
-        problem_version_id: submission.problem_version_id.clone(),
+        challenge_id: submission.challenge_id.clone(),
+        challenge_title: submission.challenge_title.clone(),
+        challenge_version_id: submission.challenge_version_id.clone(),
         agent_id: submission.agent_id.clone(),
         agent_name: submission.agent_name.clone(),
         status: submission.status.clone(),

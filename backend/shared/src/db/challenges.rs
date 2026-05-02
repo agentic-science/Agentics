@@ -1,37 +1,39 @@
-//! Problem shell and published version queries.
+//! Challenge shell and published version queries.
 
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 use sqlx::{PgPool, Row};
 
 use crate::error::{AppError, Result};
-use crate::models::problem::{CreateProblemVersionResponse, ProblemBundleSpec, ProblemListItemDto};
+use crate::models::challenge::{
+    ChallengeBundleSpec, ChallengeListItemDto, CreateChallengeVersionResponse,
+};
 
-/// Latest published problem version joined with problem metadata.
+/// Latest published challenge version joined with challenge metadata.
 #[derive(Debug, Clone)]
-pub struct ProblemVersionRecord {
-    pub problem_id: String,
+pub struct ChallengeVersionRecord {
+    pub challenge_id: String,
     pub slug: String,
     pub title: String,
     pub description: String,
-    pub problem_version_id: String,
+    pub challenge_version_id: String,
     pub version: String,
     pub bundle_path: String,
     pub statement_path: String,
     pub spec_json: Value,
 }
 
-/// Create or update the problem shell that versions attach to.
-pub async fn create_or_update_problem(
+/// Create or update the challenge shell that versions attach to.
+pub async fn create_or_update_challenge(
     pool: &PgPool,
     id: &str,
     slug: &str,
     title: &str,
     description: &str,
-) -> Result<crate::models::problem::ProblemAdminResponse> {
+) -> Result<crate::models::challenge::ChallengeAdminResponse> {
     let row = sqlx::query(
         r#"
-        INSERT INTO problems (id, slug, title, description, status)
+        INSERT INTO challenges (id, slug, title, description, status)
         VALUES ($1, $2, $3, $4, 'active')
         ON CONFLICT (id) DO UPDATE
         SET slug = EXCLUDED.slug,
@@ -49,7 +51,7 @@ pub async fn create_or_update_problem(
     .fetch_one(pool)
     .await?;
 
-    Ok(crate::models::problem::ProblemAdminResponse {
+    Ok(crate::models::challenge::ChallengeAdminResponse {
         id: row.try_get("id")?,
         slug: row.try_get("slug")?,
         title: row.try_get("title")?,
@@ -60,42 +62,42 @@ pub async fn create_or_update_problem(
     })
 }
 
-/// Publish a validated bundle as the current problem version.
-pub async fn publish_problem_version(
+/// Publish a validated bundle as the current challenge version.
+pub async fn publish_challenge_version(
     pool: &PgPool,
-    problem_id: &str,
+    challenge_id: &str,
     bundle_path: &str,
     statement_path: &str,
-    spec: &ProblemBundleSpec,
+    spec: &ChallengeBundleSpec,
     title: &str,
     description: &str,
-) -> Result<CreateProblemVersionResponse> {
-    let version_id = format!("{}:{}", problem_id, spec.problem_version);
+) -> Result<CreateChallengeVersionResponse> {
+    let version_id = format!("{}:{}", challenge_id, spec.challenge_version);
     let spec_json = serde_json::to_value(spec).map_err(|e| AppError::Internal(e.to_string()))?;
 
     let row = sqlx::query(
         r#"
         WITH upserted_version AS (
-            INSERT INTO problem_versions (
-                id, problem_id, version, bundle_path, statement_path, spec_json, status
+            INSERT INTO challenge_versions (
+                id, challenge_id, version, bundle_path, statement_path, spec_json, status
             )
             VALUES ($1, $2, $3, $4, $5, $6, 'published')
-            ON CONFLICT (problem_id, version) DO UPDATE
+            ON CONFLICT (challenge_id, version) DO UPDATE
             SET bundle_path = EXCLUDED.bundle_path,
                 statement_path = EXCLUDED.statement_path,
                 spec_json = EXCLUDED.spec_json,
                 status = 'published'
-            RETURNING id, problem_id, version, bundle_path, statement_path
+            RETURNING id, challenge_id, version, bundle_path, statement_path
         )
-        UPDATE problems p
+        UPDATE challenges p
         SET title = $7,
             description = CASE WHEN p.description = '' THEN $8 ELSE p.description END,
             status = 'active',
             updated_at = NOW()
         FROM upserted_version v
-        WHERE p.id = v.problem_id
+        WHERE p.id = v.challenge_id
         RETURNING
-            p.id AS problem_id,
+            p.id AS challenge_id,
             p.slug,
             p.title,
             v.id AS version_id,
@@ -105,8 +107,8 @@ pub async fn publish_problem_version(
         "#,
     )
     .bind(&version_id)
-    .bind(problem_id)
-    .bind(&spec.problem_version)
+    .bind(challenge_id)
+    .bind(&spec.challenge_version)
     .bind(bundle_path)
     .bind(statement_path)
     .bind(&spec_json)
@@ -115,8 +117,8 @@ pub async fn publish_problem_version(
     .fetch_one(pool)
     .await?;
 
-    Ok(CreateProblemVersionResponse {
-        problem_id: row.try_get("problem_id")?,
+    Ok(CreateChallengeVersionResponse {
+        challenge_id: row.try_get("challenge_id")?,
         slug: row.try_get("slug")?,
         title: row.try_get("title")?,
         version_id: row.try_get("version_id")?,
@@ -126,22 +128,22 @@ pub async fn publish_problem_version(
     })
 }
 
-/// List active problems with their latest published version.
-pub async fn list_published_problems(pool: &PgPool) -> Result<Vec<ProblemListItemDto>> {
+/// List active challenges with their latest published version.
+pub async fn list_published_challenges(pool: &PgPool) -> Result<Vec<ChallengeListItemDto>> {
     let rows = sqlx::query(
         r#"
         SELECT
-            p.id AS problem_id,
+            p.id AS challenge_id,
             p.slug,
             p.title,
             p.description,
             pv.id AS version_id,
             pv.version
-        FROM problems p
+        FROM challenges p
         JOIN LATERAL (
             SELECT id, version
-            FROM problem_versions
-            WHERE problem_id = p.id
+            FROM challenge_versions
+            WHERE challenge_id = p.id
               AND status = 'published'
             ORDER BY created_at DESC
             LIMIT 1
@@ -155,8 +157,8 @@ pub async fn list_published_problems(pool: &PgPool) -> Result<Vec<ProblemListIte
 
     rows.into_iter()
         .map(|r| {
-            Ok(ProblemListItemDto {
-                id: r.try_get("problem_id")?,
+            Ok(ChallengeListItemDto {
+                id: r.try_get("challenge_id")?,
                 slug: r.try_get("slug")?,
                 title: r.try_get("title")?,
                 description: r.try_get("description")?,
@@ -169,15 +171,15 @@ pub async fn list_published_problems(pool: &PgPool) -> Result<Vec<ProblemListIte
         .collect::<Result<Vec<_>>>()
 }
 
-/// Fetch one active problem by id or slug with its latest published version.
-pub async fn get_published_problem(
+/// Fetch one active challenge by id or slug with its latest published version.
+pub async fn get_published_challenge(
     pool: &PgPool,
-    problem_id_or_slug: &str,
-) -> Result<Option<ProblemVersionRecord>> {
+    challenge_id_or_slug: &str,
+) -> Result<Option<ChallengeVersionRecord>> {
     let row = sqlx::query(
         r#"
         SELECT
-            p.id AS problem_id,
+            p.id AS challenge_id,
             p.slug,
             p.title,
             p.description,
@@ -186,11 +188,11 @@ pub async fn get_published_problem(
             pv.bundle_path,
             pv.statement_path,
             pv.spec_json
-        FROM problems p
+        FROM challenges p
         JOIN LATERAL (
             SELECT id, version, bundle_path, statement_path, spec_json
-            FROM problem_versions
-            WHERE problem_id = p.id
+            FROM challenge_versions
+            WHERE challenge_id = p.id
               AND status = 'published'
             ORDER BY created_at DESC
             LIMIT 1
@@ -200,17 +202,17 @@ pub async fn get_published_problem(
         LIMIT 1
         "#,
     )
-    .bind(problem_id_or_slug)
+    .bind(challenge_id_or_slug)
     .fetch_optional(pool)
     .await?;
 
     row.map(|r| {
-        Ok(ProblemVersionRecord {
-            problem_id: r.try_get("problem_id")?,
+        Ok(ChallengeVersionRecord {
+            challenge_id: r.try_get("challenge_id")?,
             slug: r.try_get("slug")?,
             title: r.try_get("title")?,
             description: r.try_get("description")?,
-            problem_version_id: r.try_get("version_id")?,
+            challenge_version_id: r.try_get("version_id")?,
             version: r.try_get("version")?,
             bundle_path: r.try_get("bundle_path")?,
             statement_path: r.try_get("statement_path")?,
