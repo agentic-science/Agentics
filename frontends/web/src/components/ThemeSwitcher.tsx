@@ -1,11 +1,12 @@
 "use client";
 
+import { Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type ThemeMode = "system" | "light" | "dark";
-type Theme = "light" | "dark";
+type ResolvedTheme = "light" | "dark";
 
-function getResolvedTheme(mode: ThemeMode): Theme {
+function getResolvedTheme(mode: ThemeMode): ResolvedTheme {
   if (mode === "system") {
     return window.matchMedia("(prefers-color-scheme: dark)").matches
       ? "dark"
@@ -14,63 +15,70 @@ function getResolvedTheme(mode: ThemeMode): Theme {
   return mode;
 }
 
-/**
- * Persisted client-side theme state.
- *
- * The hook resolves `system` to a concrete light/dark value so CSS can depend
- * on a stable `data-theme` attribute.
- */
-export function useTheme(): [ThemeMode, Theme, (mode: ThemeMode) => void] {
+export function ThemeSwitcher() {
   const [mode, setMode] = useState<ThemeMode>("system");
-  const [resolved, setResolved] = useState<Theme>("light");
+  const [resolved, setResolved] = useState<ResolvedTheme>("dark");
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem(
-      "agentics-theme-mode",
-    ) as ThemeMode | null;
+    setMounted(true);
+    const stored = localStorage.getItem("agentics-theme") as ThemeMode | null;
     const initial = stored ?? "system";
     setMode(initial);
-    setResolved(getResolvedTheme(initial));
+    const r = getResolvedTheme(initial);
+    setResolved(r);
+    document.documentElement.dataset.theme = r;
   }, []);
 
   useEffect(() => {
-    const resolved = getResolvedTheme(mode);
-    setResolved(resolved);
-    document.documentElement.dataset.theme = resolved;
-    localStorage.setItem("agentics-theme-mode", mode);
-  }, [mode]);
+    if (!mounted) return;
+    const r = getResolvedTheme(mode);
+    setResolved(r);
+    document.documentElement.dataset.theme = r;
+    localStorage.setItem("agentics-theme", mode);
+  }, [mode, mounted]);
 
   useEffect(() => {
+    if (!mounted) return;
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const handler = () => {
       if (mode === "system") {
-        setResolved(mq.matches ? "dark" : "light");
-        document.documentElement.dataset.theme = mq.matches ? "dark" : "light";
+        const r = mq.matches ? "dark" : "light";
+        setResolved(r);
+        document.documentElement.dataset.theme = r;
       }
     };
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
-  }, [mode]);
+  }, [mode, mounted]);
 
-  return [mode, resolved, setMode];
-}
+  const cycle = () => {
+    const order: ThemeMode[] = ["system", "light", "dark"];
+    const idx = order.indexOf(mode);
+    setMode(order[(idx + 1) % order.length]);
+  };
 
-/** Three-way theme control for system, light, and dark modes. */
-export function ThemeSwitcher() {
-  const [mode, , setMode] = useTheme();
+  if (!mounted) {
+    return (
+      <button type="button" className="btn btn-ghost btn-sm" aria-label="Theme">
+        <Sun className="w-4 h-4" />
+      </button>
+    );
+  }
 
   return (
-    <div className="theme-switcher">
-      {(["system", "light", "dark"] as ThemeMode[]).map((m) => (
-        <button
-          key={m}
-          type="button"
-          className={mode === m ? "is-active" : ""}
-          onClick={() => setMode(m)}
-        >
-          {m === "system" ? "系统" : m === "light" ? "浅色" : "深色"}
-        </button>
-      ))}
-    </div>
+    <button
+      type="button"
+      className="btn btn-ghost btn-sm"
+      onClick={cycle}
+      aria-label={`Theme: ${mode}`}
+      title={`Theme: ${mode}`}
+    >
+      {resolved === "dark" ? (
+        <Moon className="w-4 h-4" />
+      ) : (
+        <Sun className="w-4 h-4" />
+      )}
+    </button>
   );
 }
