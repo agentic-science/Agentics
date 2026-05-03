@@ -1,5 +1,7 @@
 //! Maintenance queries used by server startup and worker liveness.
 
+use std::path::PathBuf;
+
 use sqlx::{PgPool, Row};
 
 use crate::error::{AppError, Result};
@@ -82,25 +84,32 @@ pub async fn ensure_challenges_seeded_from_root(
 ) -> Result<usize> {
     tokio::fs::create_dir_all(challenges_root).await?;
     let mut entries = tokio::fs::read_dir(challenges_root).await?;
+    let mut challenge_dirs = Vec::new();
     let mut synced = 0usize;
 
     while let Some(entry) = entries.next_entry().await? {
-        if !entry.file_type().await?.is_dir() {
-            continue;
+        if entry.file_type().await?.is_dir() {
+            challenge_dirs.push(entry.path());
         }
-        let slug_root = entry.path();
+    }
+    challenge_dirs.sort();
+
+    for slug_root in challenge_dirs {
         let mut versions = tokio::fs::read_dir(&slug_root).await?;
+        let mut version_dirs: Vec<PathBuf> = Vec::new();
 
         while let Some(v_entry) = versions.next_entry().await? {
             if !v_entry.file_type().await?.is_dir() {
                 continue;
             }
             let bundle_dir = v_entry.path();
-            let spec_path = bundle_dir.join("spec.json");
-            if !spec_path.exists() {
-                continue;
+            if bundle_dir.join("spec.json").exists() {
+                version_dirs.push(bundle_dir);
             }
+        }
+        version_dirs.sort();
 
+        for bundle_dir in version_dirs {
             crate::challenge_bundle::validate_challenge_bundle(&bundle_dir).await?;
             let spec = crate::challenge_bundle::read_challenge_bundle_spec(&bundle_dir).await?;
             let statement_path = bundle_dir.join("statement.md");
@@ -148,6 +157,19 @@ pub async fn ensure_challenges_seeded_from_root(
             .bind(bundle_dir.to_string_lossy().as_ref())
             .bind(statement_path.to_string_lossy().as_ref())
             .bind(&spec_json)
+            .execute(pool)
+            .await?;
+
+            sqlx::query(
+                r#"
+                UPDATE challenges
+                SET current_version_id = $2,
+                    updated_at = NOW()
+                WHERE id = $1
+                "#,
+            )
+            .bind(challenge_id)
+            .bind(&version_id)
             .execute(pool)
             .await?;
 

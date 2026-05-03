@@ -180,7 +180,8 @@ pub async fn queue_evaluation_job(
     .bind(priority)
     .bind(&payload)
     .execute(&mut *tx)
-    .await?;
+    .await
+    .map_err(map_active_job_conflict)?;
 
     sqlx::query(
         "UPDATE solution_submissions SET status = 'queued', visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1"
@@ -201,6 +202,19 @@ pub async fn queue_evaluation_job(
         attempt_count: 0,
         payload: serde_json::from_value(payload).map_err(|e| AppError::Internal(e.to_string()))?,
     })
+}
+
+fn map_active_job_conflict(error: sqlx::Error) -> AppError {
+    match error {
+        sqlx::Error::Database(db_err)
+            if db_err.constraint().is_some_and(|constraint| {
+                constraint == "idx_evaluation_jobs_one_active_per_submission_mode"
+            }) =>
+        {
+            AppError::Conflict
+        }
+        other => AppError::Database(other),
+    }
 }
 
 /// Count queued or running jobs for one evaluation type.

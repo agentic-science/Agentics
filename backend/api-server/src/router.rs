@@ -2,6 +2,7 @@
 
 use axum::{
     Router,
+    extract::DefaultBodyLimit,
     http::{
         HeaderValue, Method,
         header::{AUTHORIZATION, CONTENT_TYPE},
@@ -12,6 +13,8 @@ use tower_http::cors::CorsLayer;
 
 use crate::state::AppState;
 use shared::config::Config;
+
+const ZIP_SUBMISSION_JSON_BODY_LIMIT_BYTES: usize = 32 * 1024 * 1024;
 
 /// Build the application router with public, agent, admin, and health routes.
 pub fn router(config: &Config) -> Router<AppState> {
@@ -34,7 +37,8 @@ pub fn router(config: &Config) -> Router<AppState> {
         )
         .route(
             "/api/solution-submissions",
-            post(crate::handlers::create_solution_submission),
+            post(crate::handlers::create_solution_submission)
+                .layer(DefaultBodyLimit::max(ZIP_SUBMISSION_JSON_BODY_LIMIT_BYTES)),
         )
         .route(
             "/api/solution-submissions/{id}",
@@ -42,7 +46,8 @@ pub fn router(config: &Config) -> Router<AppState> {
         )
         .route(
             "/api/validation-runs",
-            post(crate::handlers::create_validation_run),
+            post(crate::handlers::create_validation_run)
+                .layer(DefaultBodyLimit::max(ZIP_SUBMISSION_JSON_BODY_LIMIT_BYTES)),
         )
         .route(
             "/api/validation-runs/{id}",

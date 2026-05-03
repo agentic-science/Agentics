@@ -329,6 +329,7 @@ pub async fn list_admin_solution_submissions(
 pub async fn list_public_solution_submissions_for_challenge(
     pool: &PgPool,
     challenge_id_or_slug: &str,
+    limit: i64,
 ) -> Result<Vec<PublicSolutionSubmissionListItemDto>> {
     let rows = sqlx::query(
         r#"
@@ -359,9 +360,11 @@ pub async fn list_public_solution_submissions_for_challenge(
         WHERE (p.id = $1 OR p.slug = $1)
           AND s.visible_after_eval = TRUE
         ORDER BY s.created_at DESC
+        LIMIT $2
         "#,
     )
     .bind(challenge_id_or_slug)
+    .bind(limit)
     .fetch_all(pool)
     .await?;
 

@@ -4,6 +4,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde_json::json;
+use tracing::error;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
@@ -58,11 +59,18 @@ impl IntoResponse for AppError {
                 "bad_request",
                 "invalid_zip".to_string(),
             ),
-            _ => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "internal_error",
-                self.to_string(),
-            ),
+            AppError::Database(_)
+            | AppError::Internal(_)
+            | AppError::Io(_)
+            | AppError::Docker(_)
+            | AppError::Runner(_) => {
+                error!(error = %self, "internal application error");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "internal_error",
+                    "internal server error".to_string(),
+                )
+            }
         };
 
         let body = Json(json!({ "error": error, "message": message }));
@@ -71,3 +79,29 @@ impl IntoResponse for AppError {
 }
 
 pub type Result<T> = std::result::Result<T, AppError>;
+
+#[cfg(test)]
+mod tests {
+    use axum::body::to_bytes;
+    use axum::response::IntoResponse;
+
+    use super::AppError;
+
+    #[tokio::test]
+    async fn internal_errors_are_redacted_in_http_responses() {
+        let response =
+            AppError::Internal("database password leaked here".to_string()).into_response();
+        assert_eq!(
+            response.status(),
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body should be readable");
+        let body = String::from_utf8(body.to_vec()).expect("response body should be utf8");
+
+        assert!(body.contains("internal server error"));
+        assert!(!body.contains("database password"));
+    }
+}

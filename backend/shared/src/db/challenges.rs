@@ -78,14 +78,7 @@ pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeLi
             pv.id AS version_id,
             pv.version
         FROM challenges p
-        LEFT JOIN LATERAL (
-            SELECT id, version
-            FROM challenge_versions
-            WHERE challenge_id = p.id
-              AND status = 'published'
-            ORDER BY created_at DESC
-            LIMIT 1
-        ) pv ON TRUE
+        LEFT JOIN challenge_versions pv ON pv.id = p.current_version_id
         ORDER BY p.updated_at DESC, p.created_at DESC
         "#,
     )
@@ -139,12 +132,13 @@ pub async fn publish_challenge_version(
                 status = 'published'
             RETURNING id, challenge_id, version, bundle_path, statement_path
         )
-        UPDATE challenges p
-        SET title = $7,
-            description = CASE WHEN p.description = '' THEN $8 ELSE p.description END,
-            status = 'active',
-            updated_at = NOW()
-        FROM upserted_version v
+            UPDATE challenges p
+            SET title = $7,
+                description = CASE WHEN p.description = '' THEN $8 ELSE p.description END,
+                status = 'active',
+                current_version_id = v.id,
+                updated_at = NOW()
+            FROM upserted_version v
         WHERE p.id = v.challenge_id
         RETURNING
             p.id AS challenge_id,
@@ -190,15 +184,9 @@ pub async fn list_published_challenges(pool: &PgPool) -> Result<Vec<ChallengeLis
             pv.id AS version_id,
             pv.version
         FROM challenges p
-        JOIN LATERAL (
-            SELECT id, version
-            FROM challenge_versions
-            WHERE challenge_id = p.id
-              AND status = 'published'
-            ORDER BY created_at DESC
-            LIMIT 1
-        ) pv ON TRUE
+        JOIN challenge_versions pv ON pv.id = p.current_version_id
         WHERE p.status = 'active'
+          AND pv.status = 'published'
         ORDER BY p.created_at ASC
         "#,
     )
@@ -239,15 +227,9 @@ pub async fn get_published_challenge(
             pv.statement_path,
             pv.spec_json
         FROM challenges p
-        JOIN LATERAL (
-            SELECT id, version, bundle_path, statement_path, spec_json
-            FROM challenge_versions
-            WHERE challenge_id = p.id
-              AND status = 'published'
-            ORDER BY created_at DESC
-            LIMIT 1
-        ) pv ON TRUE
+        JOIN challenge_versions pv ON pv.id = p.current_version_id
         WHERE p.status = 'active'
+          AND pv.status = 'published'
           AND (p.id = $1 OR p.slug = $1)
         LIMIT 1
         "#,

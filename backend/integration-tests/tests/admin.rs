@@ -2,7 +2,9 @@
 
 mod helpers;
 
-use helpers::{api_url, examples_challenges_root, spawn_app, spawn_app_with_config, test_config};
+use helpers::{
+    api_url, copy_dir_all, examples_challenges_root, spawn_app, spawn_app_with_config, test_config,
+};
 use shared::config::Config;
 
 #[sqlx::test(migrations = "../migrations")]
@@ -106,6 +108,87 @@ async fn create_challenge_and_publish_version(pool: sqlx::PgPool) {
         .expect("failed to execute request");
 
     assert!(!response.status().is_success());
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn publishing_version_updates_explicit_current_version(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let challenges = tempfile::tempdir().expect("failed to create challenge tempdir");
+    let config = test_config(storage.path(), challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let auth = helpers::basic_auth_header(&config.admin_username, &config.admin_password);
+    let client = reqwest::Client::new();
+
+    let v1 = challenges.path().join("current-pointer/v1");
+    let v2 = challenges.path().join("current-pointer/v2");
+    write_current_pointer_bundle(&v1, "v1");
+    write_current_pointer_bundle(&v2, "v2");
+
+    client
+        .post(api_url(&app, "/admin/challenges"))
+        .header("Authorization", &auth)
+        .json(&serde_json::json!({
+            "id": "current-pointer",
+            "slug": "current-pointer",
+            "title": "Current Pointer",
+            "description": "Current pointer challenge"
+        }))
+        .send()
+        .await
+        .expect("failed to create challenge")
+        .error_for_status()
+        .expect("challenge create should succeed");
+
+    for bundle in [&v1, &v2] {
+        client
+            .post(api_url(&app, "/admin/challenges/current-pointer/versions"))
+            .header("Authorization", &auth)
+            .json(&serde_json::json!({ "bundle_path": bundle.to_string_lossy() }))
+            .send()
+            .await
+            .expect("failed to publish version")
+            .error_for_status()
+            .expect("publish should succeed");
+    }
+
+    let public_challenge: serde_json::Value = client
+        .get(api_url(&app, "/api/public/challenges/current-pointer"))
+        .send()
+        .await
+        .expect("failed to fetch public challenge")
+        .json()
+        .await
+        .expect("failed to decode public challenge");
+
+    assert_eq!(public_challenge["current_version"]["version"], "v2");
+    assert_eq!(
+        public_challenge["current_version"]["id"],
+        "current-pointer:v2"
+    );
+
+    let current_version_id: String =
+        sqlx::query_scalar("SELECT current_version_id FROM challenges WHERE id = $1")
+            .bind("current-pointer")
+            .fetch_one(&pool)
+            .await
+            .expect("failed to query current version");
+    assert_eq!(current_version_id, "current-pointer:v2");
+}
+
+fn write_current_pointer_bundle(target: &std::path::Path, version: &str) {
+    copy_dir_all(&examples_challenges_root().join("sample-sum/v1"), target);
+    let spec_path = target.join("spec.json");
+    let mut spec: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&spec_path).expect("failed to read spec"))
+            .expect("failed to parse spec");
+    spec["challenge_id"] = serde_json::json!("current-pointer");
+    spec["challenge_title"] = serde_json::json!("Current Pointer");
+    spec["challenge_version"] = serde_json::json!(version);
+    std::fs::write(
+        &spec_path,
+        serde_json::to_string_pretty(&spec).expect("failed to serialize spec"),
+    )
+    .expect("failed to write spec");
 }
 
 #[sqlx::test(migrations = "../migrations")]

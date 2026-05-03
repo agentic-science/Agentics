@@ -141,7 +141,10 @@ pub async fn hide_solution_submission(pool: &PgPool, solution_submission_id: &st
 pub async fn list_leaderboard_entries(
     pool: &PgPool,
     challenge_id_or_slug: &str,
+    limit: i64,
 ) -> Result<Vec<LeaderboardEntryDto>> {
+    let requested_limit = limit.max(1);
+    let fetch_limit = requested_limit.saturating_mul(5).clamp(1, 500);
     let spec = get_published_challenge(pool, challenge_id_or_slug)
         .await?
         .and_then(|challenge| {
@@ -158,9 +161,11 @@ pub async fn list_leaderboard_entries(
         JOIN challenges p ON p.id = le.challenge_id
         WHERE p.id = $1 OR p.slug = $1
         ORDER BY le.best_rank_score DESC, le.updated_at ASC
+        LIMIT $2
         "#,
     )
     .bind(challenge_id_or_slug)
+    .bind(fetch_limit)
     .fetch_all(pool)
     .await?;
 
@@ -196,6 +201,7 @@ pub async fn list_leaderboard_entries(
     if let Some(spec) = spec {
         entries.sort_by(|a, b| compare_leaderboard_entries(&spec, a, b));
     }
+    entries.truncate(usize::try_from(requested_limit).unwrap_or(usize::MAX));
 
     Ok(entries)
 }

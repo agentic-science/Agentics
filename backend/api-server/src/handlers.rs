@@ -2,9 +2,10 @@
 
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
 };
+use serde::Deserialize;
 use uuid::Uuid;
 
 use shared::auth;
@@ -25,6 +26,8 @@ const MAX_ARTIFACT_UNCOMPRESSED_BYTES: u64 = 50 * 1024 * 1024;
 const MAX_INLINE_TEXT_BYTES: u64 = 200_000;
 const MAX_TOTAL_INLINE_TEXT_BYTES: u64 = 1_000_000;
 const SUBMISSION_QUOTA_WINDOW_SECONDS: i64 = 24 * 60 * 60;
+const DEFAULT_PUBLIC_LIST_LIMIT: i64 = 50;
+const MAX_PUBLIC_LIST_LIMIT: i64 = 100;
 
 // ---------------------------------------------------------------------------
 // Health
@@ -335,8 +338,10 @@ pub async fn create_reply(
 pub async fn list_public_solution_submissions(
     State(state): State<AppState>,
     Path(id): Path<String>,
+    Query(query): Query<PublicListQuery>,
 ) -> Result<Json<PublicSolutionSubmissionListResponse>> {
-    let items = db::list_public_solution_submissions_for_challenge(&state.db, &id).await?;
+    let items =
+        db::list_public_solution_submissions_for_challenge(&state.db, &id, query.limit()).await?;
     Ok(Json(PublicSolutionSubmissionListResponse { items }))
 }
 
@@ -376,8 +381,9 @@ pub async fn get_public_artifact(
 pub async fn get_leaderboard(
     State(state): State<AppState>,
     Path(id): Path<String>,
+    Query(query): Query<PublicListQuery>,
 ) -> Result<Json<LeaderboardResponse>> {
-    let items = db::list_leaderboard_entries(&state.db, &id).await?;
+    let items = db::list_leaderboard_entries(&state.db, &id, query.limit()).await?;
     Ok(Json(LeaderboardResponse { items }))
 }
 
@@ -385,9 +391,23 @@ pub async fn get_leaderboard(
 pub async fn list_discussions(
     State(state): State<AppState>,
     Path(id): Path<String>,
+    Query(query): Query<PublicListQuery>,
 ) -> Result<Json<DiscussionListResponse>> {
-    let items = db::list_discussion_threads(&state.db, &id).await?;
+    let items = db::list_discussion_threads(&state.db, &id, query.limit()).await?;
     Ok(Json(DiscussionListResponse { items }))
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+pub struct PublicListQuery {
+    limit: Option<i64>,
+}
+
+impl PublicListQuery {
+    fn limit(self) -> i64 {
+        self.limit
+            .unwrap_or(DEFAULT_PUBLIC_LIST_LIMIT)
+            .clamp(1, MAX_PUBLIC_LIST_LIMIT)
+    }
 }
 
 // ---------------------------------------------------------------------------

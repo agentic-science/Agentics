@@ -64,6 +64,7 @@ pub async fn create_discussion_reply(
 pub async fn list_discussion_threads(
     pool: &PgPool,
     challenge_id_or_slug: &str,
+    limit: i64,
 ) -> Result<Vec<DiscussionThreadDto>> {
     let threads = sqlx::query(
         r#"
@@ -73,9 +74,11 @@ pub async fn list_discussion_threads(
         JOIN challenges p ON p.id = t.challenge_id
         WHERE p.id = $1 OR p.slug = $1
         ORDER BY t.created_at DESC
+        LIMIT $2
         "#,
     )
     .bind(challenge_id_or_slug)
+    .bind(limit)
     .fetch_all(pool)
     .await?;
 

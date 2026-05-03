@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS challenges (
   title TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'archived')),
+  current_version_id TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -38,6 +39,10 @@ CREATE TABLE IF NOT EXISTS challenge_versions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (challenge_id, version)
 );
+
+ALTER TABLE challenges
+  ADD CONSTRAINT challenges_current_version_id_fkey
+  FOREIGN KEY (current_version_id) REFERENCES challenge_versions(id) ON DELETE SET NULL;
 
 CREATE TABLE IF NOT EXISTS solution_submissions (
   id TEXT PRIMARY KEY,
@@ -126,6 +131,9 @@ CREATE INDEX IF NOT EXISTS idx_solution_submissions_challenge_agent ON solution_
 CREATE INDEX IF NOT EXISTS idx_solution_submissions_challenge_version ON solution_submissions (challenge_version_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_evaluation_jobs_status_scheduled ON evaluation_jobs (status, scheduled_at, priority DESC);
 CREATE INDEX IF NOT EXISTS idx_evaluation_jobs_solution_submission_id ON evaluation_jobs (solution_submission_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_evaluation_jobs_one_active_per_submission_mode
+  ON evaluation_jobs (solution_submission_id, eval_type)
+  WHERE status IN ('queued', 'running');
 CREATE INDEX IF NOT EXISTS idx_evaluations_solution_submission_id ON evaluations (solution_submission_id);
 CREATE INDEX IF NOT EXISTS idx_discussion_threads_challenge_id ON discussion_threads (challenge_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_discussion_replies_thread_id ON discussion_replies (thread_id, created_at ASC);

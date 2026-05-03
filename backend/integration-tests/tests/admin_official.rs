@@ -181,6 +181,18 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         .expect("failed to queue official run");
     assert_eq!(official_run.status(), 202);
 
+    let duplicate_official_run = client
+        .post(api_url(
+            &app,
+            &format!("/admin/solution-submissions/{solution_submission_b_id}/official-run"),
+        ))
+        .header("Authorization", &admin_auth)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .expect("failed to queue duplicate official run");
+    assert_eq!(duplicate_official_run.status(), 409);
+
     let official_jobs: Vec<(String, String)> = sqlx::query_as(
         r#"
         SELECT eval_type, status

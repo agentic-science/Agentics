@@ -132,6 +132,25 @@ async fn public_read_flow_matches_old_api(pool: sqlx::PgPool) {
     assert_eq!(listed_first["official_score"], 1.0);
     assert_eq!(listed_first["rank_score"], 1.0);
 
+    let limited_solution_submissions: serde_json::Value = client
+        .get(api_url(
+            &app,
+            "/api/public/challenges/sample-sum/solution-submissions?limit=1",
+        ))
+        .send()
+        .await
+        .expect("failed to list limited public solution submissions")
+        .json()
+        .await
+        .expect("failed to decode limited public solution submissions");
+    assert_eq!(
+        limited_solution_submissions["items"]
+            .as_array()
+            .expect("items is array")
+            .len(),
+        1
+    );
+
     let artifact: serde_json::Value = client
         .get(api_url(
             &app,
@@ -174,6 +193,25 @@ async fn public_read_flow_matches_old_api(pool: sqlx::PgPool) {
     assert_eq!(leaderboard_items[0]["best_rank_score"], 1.0);
     assert_eq!(leaderboard_items[1]["agent_name"], "leader-b");
     assert_eq!(leaderboard_items[1]["best_rank_score"], 0.0);
+
+    let limited_leaderboard: serde_json::Value = client
+        .get(api_url(
+            &app,
+            "/api/public/challenges/sample-sum/leaderboard?limit=1",
+        ))
+        .send()
+        .await
+        .expect("failed to get limited leaderboard")
+        .json()
+        .await
+        .expect("failed to decode limited leaderboard");
+    assert_eq!(
+        limited_leaderboard["items"]
+            .as_array()
+            .expect("items is array")
+            .len(),
+        1
+    );
 }
 
 #[sqlx::test(migrations = "../migrations")]
@@ -269,6 +307,18 @@ async fn seeded_challenge_descriptions_and_discussions_are_public(pool: sqlx::Pg
         .expect("failed to create reply");
     assert_eq!(reply_response.status(), 201);
 
+    let second_thread_response = client
+        .post(api_url(&app, "/api/challenges/sample-sum/discussions"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "title": "Second discussion",
+            "body": "This exists to verify list limits."
+        }))
+        .send()
+        .await
+        .expect("failed to create second thread");
+    assert_eq!(second_thread_response.status(), 201);
+
     let discussions: serde_json::Value = client
         .get(api_url(
             &app,
@@ -281,6 +331,26 @@ async fn seeded_challenge_descriptions_and_discussions_are_public(pool: sqlx::Pg
         .await
         .expect("failed to decode discussions");
     let items = discussions["items"].as_array().expect("items is array");
-    assert_eq!(items[0]["title"], "How to improve score?");
-    assert_eq!(items[0]["replies"].as_array().unwrap().len(), 1);
+    assert_eq!(items.len(), 2);
+    let original_thread = items
+        .iter()
+        .find(|item| item["title"] == "How to improve score?")
+        .expect("original discussion should be listed");
+    assert_eq!(original_thread["replies"].as_array().unwrap().len(), 1);
+
+    let limited_discussions: serde_json::Value = client
+        .get(api_url(
+            &app,
+            "/api/public/challenges/sample-sum/discussions?limit=1",
+        ))
+        .send()
+        .await
+        .expect("failed to list limited discussions")
+        .json()
+        .await
+        .expect("failed to decode limited discussions");
+    let limited_items = limited_discussions["items"]
+        .as_array()
+        .expect("items is array");
+    assert_eq!(limited_items.len(), 1);
 }
