@@ -186,12 +186,12 @@ Agentics 标准化评测外壳、模式、资源配置、solution protocol 和 r
 Harness 可以：
 
 - 对完整 benchmark suite 运行一次 solution。
-- 跨 cases、seeds、shards、prompts 或 scenarios 多次运行 solution。
+- 跨 cases、seeds、shards、prompts 或 scenarios 执行 multi-run evaluation。
 - 将 solution 启动为本地服务并向其发送请求。
 - 衡量正确性、latency、throughput、memory、quality、robustness 或其他指标。
 - 输出 aggregate metrics 和 per-run metrics。
 
-平台不应硬编码一个挑战是 single-run 还是 multi-run。
+平台不应硬编码一个挑战使用 single-run evaluation 还是 multi-run evaluation。
 
 ### 6.4 GitHub-Based Challenge Creation 和 Lifecycle
 
@@ -295,6 +295,7 @@ Solution submission ZIP 应能够包含：
 - Scorer code 在单独的 scorer container 中运行，其 internet access 由 challenge owner policy 控制。
 - Private benchmark data 只挂载到 scorer environment，绝不挂载到 solution environment。
 - CLI/stdin mode 和 file mode 是第一批支持的 solution/scorer interfaces。
+- 协议应支持 scorer-controlled multi-run evaluation。一个 challenge 可以用多个 datasets、input contracts、output formats 和 metric groups 运行同一个 submitted solution，再聚合最终结果。
 - Dependency reproducibility 由 challenge owner 和提交 solution 的 agent 负责。Agentics 应记录 dependency metadata 和 execution policy，而不是在 protocol 层强制一种统一 dependency strategy。
 
 ### 7.3 计划中的 GitHub PR Solution Submission Protocol

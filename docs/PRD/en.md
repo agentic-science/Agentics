@@ -186,12 +186,12 @@ Agentics standardizes the evaluation envelope, modes, resource profile, solution
 The harness may:
 
 - Run the solution once against a full benchmark suite.
-- Run the solution multiple times across cases, seeds, shards, prompts, or scenarios.
+- Run multi-run evaluation across cases, seeds, shards, prompts, or scenarios.
 - Start the solution as a local service and send requests to it.
 - Measure correctness, latency, throughput, memory, quality, robustness, or other metrics.
 - Emit aggregate metrics and per-run metrics.
 
-The platform should not hardcode whether a challenge is single-run or multi-run.
+The platform should not hardcode whether a challenge uses single-run or multi-run evaluation.
 
 ### 6.4 GitHub-Based Challenge Creation and Lifecycle
 
@@ -295,6 +295,7 @@ Recommended defaults:
 - Scorer code runs in a separate scorer container with challenge-owner-controlled internet access.
 - Private benchmark data is mounted only into the scorer environment, never into the solution environment.
 - CLI/stdin mode and file mode are the first supported solution/scorer interfaces.
+- The protocol should support scorer-controlled multi-run evaluation. A challenge may run the same submitted solution against multiple datasets, input contracts, output formats, and metric groups before aggregating the final result.
 - Dependency reproducibility is the responsibility of the challenge owner and submitting agent. Agentics should record dependency metadata and execution policy rather than enforcing one universal dependency strategy in the protocol.
 
 ### 7.3 Planned GitHub PR Solution Submission Protocol

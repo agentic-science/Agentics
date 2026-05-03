@@ -279,7 +279,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 - **M0.2-WORKER-1: Execute multi-phase solution submissions**
   - Commit target: `worker: execute zip_project setup build run phases`
   - Scope: Update runner orchestration to execute setup and build in a build solution container, then execute run in a fresh no-egress solution container. Keep scorer execution in a separate scorer container with challenge-owned internet policy. Support CLI/stdin and file interfaces, isolated logs, phase-specific status, and private benchmark data mounted only into the scorer environment.
-  - Test spec: Add integration tests for successful multi-phase execution, each phase failing independently, no private benchmark data mounted into solution containers, setup/build egress behavior, run-phase no-egress behavior, CLI/stdin mode, and file mode.
+  - Test spec: Add integration tests for successful multi-phase execution, each phase failing independently, no private benchmark data mounted into solution containers, setup/build egress behavior, run-phase no-egress behavior, a defensive run-stage internet probe that must fail, CLI/stdin mode, and file mode.
 
 - **M0.2-WORKER-2: Add resource profile enforcement**
   - Commit target: `worker: enforce challenge resource profiles`
@@ -339,9 +339,14 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 
 ### Challenge Authoring and Documentation
 
+- **M0.2-EXAMPLE-1: Add `zip_project` protocol fixture challenges and submissions**
+  - Commit target: `examples: add zip_project protocol fixtures`
+  - Scope: Add small executable fixture challenges and matching solution submissions for CLI/stdin scoring, file-mode scoring, and scorer-controlled multi-run evaluation. Fixtures should exercise setup/build/run phases, build artifact handoff into the fresh run container, valid solutions, intentional phase failures, and private benchmark data visible only to the scorer.
+  - Test spec: Add parser and runner integration tests for each fixture. Assert CLI/stdin outputs are scored, file outputs are scored, multi-run evaluation can use multiple datasets with different output formats or metric groups, phase failures are reported at the right phase, private benchmark data is not mounted into solution containers, and the run-stage internet probe cannot reach external network resources.
+
 - **M0.2-DOC-1: Document multi-language challenge authoring**
   - Commit target: `docs: document multi-language zip_project authoring`
-  - Scope: Add manifest examples, reference image guidance, setup/build/run contract, two-container solution execution model, scorer/solution data boundaries, internet policy, dependency metadata guidance, and language examples.
+  - Scope: Add manifest examples, reference image guidance, setup/build/run contract, two-container solution execution model, scorer/solution data boundaries, internet policy, dependency metadata guidance, multi-run evaluation examples, and language examples.
   - Test spec: Validate documented sample ZIPs against parser fixtures and at least one local runner smoke test.
 
 - **M0.2-DOC-2: Document GPU benchmark expectations**
@@ -367,6 +372,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 | `M0.2-CLI-3: Request GPU validation` | Planned | Depends on GPU validation API and quota. |
 | `M0.2-WEB-1: Show protocol and resource metadata` | Planned | Depends on backend resource metadata. |
 | `M0.2-ADMIN-1: Manage resource profiles and quotas` | Planned | Depends on admin shell and resource profile APIs. |
+| `M0.2-EXAMPLE-1: Add zip_project protocol fixture challenges and submissions` | Planned | Provides executable coverage for phase orchestration, CLI/stdin, file mode, multi-run evaluation, and run-stage no-egress behavior. |
 | `M0.2-DOC-1: Document multi-language challenge authoring` | Planned | Should ship with protocol schema. |
 | `M0.2-DOC-2: Document GPU benchmark expectations` | Planned | Should ship with GPU profile implementation. |
 

@@ -279,7 +279,7 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 - **M0.2-WORKER-1：执行 multi-phase solution submissions**
   - Commit target：`worker: execute zip_project setup build run phases`
   - Scope：更新 runner orchestration，在 build solution container 中执行 setup 和 build，然后在 fresh no-egress solution container 中执行 run。Scorer execution 保持在单独的 scorer container 中，并使用 challenge-owned internet policy。支持 CLI/stdin 和 file interfaces、隔离 logs、phase-specific status，并确保 private benchmark data 只挂载到 scorer environment。
-  - Test spec：为成功 multi-phase execution、每个 phase 独立失败、private benchmark data 不挂载到 solution containers、setup/build egress behavior、run-phase no-egress behavior、CLI/stdin mode 和 file mode 添加 integration tests。
+  - Test spec：为成功 multi-phase execution、每个 phase 独立失败、private benchmark data 不挂载到 solution containers、setup/build egress behavior、run-phase no-egress behavior、必须失败的 run-stage internet probe、CLI/stdin mode 和 file mode 添加 integration tests。
 
 - **M0.2-WORKER-2：添加 resource profile enforcement**
   - Commit target：`worker: enforce challenge resource profiles`
@@ -339,9 +339,14 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 
 ### Challenge Authoring 和 Documentation
 
+- **M0.2-EXAMPLE-1：添加 `zip_project` protocol fixture challenges 和 submissions**
+  - Commit target：`examples: add zip_project protocol fixtures`
+  - Scope：添加小型可执行 fixture challenges 和对应 solution submissions，覆盖 CLI/stdin scoring、file-mode scoring 和 scorer-controlled multi-run evaluation。Fixtures 应覆盖 setup/build/run phases、build artifacts 进入 fresh run container 的 handoff、valid solutions、intentional phase failures，以及 private benchmark data 只对 scorer 可见。
+  - Test spec：为每个 fixture 添加 parser 和 runner integration tests。断言 CLI/stdin outputs 可以被评分、file outputs 可以被评分、multi-run evaluation 可以使用多个 datasets 以及不同 output formats 或 metric groups、phase failures 报告到正确 phase、private benchmark data 不挂载到 solution containers，并且 run-stage internet probe 无法访问 external network resources。
+
 - **M0.2-DOC-1：记录 multi-language challenge authoring**
   - Commit target：`docs: document multi-language zip_project authoring`
-  - Scope：添加 manifest examples、reference image guidance、setup/build/run contract、two-container solution execution model、scorer/solution data boundaries、internet policy、dependency metadata guidance 和 language examples。
+  - Scope：添加 manifest examples、reference image guidance、setup/build/run contract、two-container solution execution model、scorer/solution data boundaries、internet policy、dependency metadata guidance、multi-run evaluation examples 和 language examples。
   - Test spec：使用 parser fixtures 和至少一个 local runner smoke test 验证 documented sample ZIPs。
 
 - **M0.2-DOC-2：记录 GPU benchmark expectations**
@@ -367,6 +372,7 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 | `M0.2-CLI-3：请求 GPU validation` | 计划中 | 依赖 GPU validation API 和 quota。 |
 | `M0.2-WEB-1：展示 protocol 和 resource metadata` | 计划中 | 依赖 backend resource metadata。 |
 | `M0.2-ADMIN-1：管理 resource profiles 和 quotas` | 计划中 | 依赖 admin shell 和 resource profile APIs。 |
+| `M0.2-EXAMPLE-1：添加 zip_project protocol fixture challenges 和 submissions` | 计划中 | 为 phase orchestration、CLI/stdin、file mode、multi-run evaluation 和 run-stage no-egress behavior 提供可执行覆盖。 |
 | `M0.2-DOC-1：记录 multi-language challenge authoring` | 计划中 | 应与 protocol schema 一起交付。 |
 | `M0.2-DOC-2：记录 GPU benchmark expectations` | 计划中 | 应与 GPU profile implementation 一起交付。 |
 
