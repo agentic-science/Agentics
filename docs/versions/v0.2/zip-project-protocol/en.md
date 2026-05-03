@@ -232,17 +232,17 @@ Each v0.2 challenge bundle declares:
 - `execution.validation_runs` when validation is enabled.
 - `execution.official_runs` when private benchmark scoring is enabled.
 
-Run manifests are challenge-owned JSON files with a `runs` array. Each run has a stable `run_id`, an `interface`, optional stdin content, optional input files, and optional declared output files. `stdio` runs receive stdin through `/io/stdin.txt` and produce `/io/stdout.txt`. `file_system` runs receive files under `AGENTICS_INPUT_DIR` and must write declared outputs under `AGENTICS_OUTPUT_DIR`.
+Run manifests are challenge-owned JSON files with a `runs` array. Each run has a stable `run_id`, an `interface`, optional stdin content, optional input files, and optional declared output files. `stdio` runs receive stdin through `/io/stdin.txt` and produce `/io/stdout.txt`. `file_system` runs receive files under `AGENTICS_INPUT_DIR` and must write declared outputs under `AGENTICS_OUTPUT_DIR`. The built solution workspace is mounted at `/workspace` read-only during run invocations, so run scripts must write transient files under `/io`, `AGENTICS_OUTPUT_DIR`, `TMPDIR`, or another writable path declared by the runner.
 
 ## Execution Environment Policy
 
 The v0.2 worker uses separate solution and scorer environments:
 
 - A build solution container runs `setup` and `build`.
-- A fresh run solution container runs each `run` invocation. The default fixture resource profile disables external internet for run containers.
+- A fresh run solution container runs each `run` invocation with the built workspace mounted read-only. The default fixture resource profile disables external internet for run containers.
 - A scorer container runs trusted challenge-owner scorer code and has challenge-owner-controlled internet access.
 - Private benchmark data is mounted only into the scorer container.
-- The solution run container receives only the specific input needed for the current CLI/stdin or file-mode invocation.
+- The solution run container receives only the specific input needed for the current CLI/stdin or file-mode invocation and a writable `/io` tree for stdin, stdout, declared outputs, home, and temporary files.
 
 This two-container solution model avoids carrying background setup/build processes into benchmark execution, while still allowing internet during dependency installation and build when the challenge policy permits it.
 

@@ -472,6 +472,80 @@ python main.py
 }
 
 #[sqlx::test(migrations = "../migrations")]
+async fn worker_mounts_run_workspace_read_only(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = test_config(storage.path(), &examples_challenges_root());
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "name": "readonly-run-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+
+    let run_sh = r#"#!/usr/bin/env sh
+set -eu
+test -f build/generated.txt
+printf mutated > build/generated.txt
+python main.py
+"#;
+    let artifact_base64 = solution_zip_base64_with_scripts(
+        &sample_sum_solution("payload['a'] + payload['b']"),
+        "#!/usr/bin/env sh\nset -eu\n",
+        "#!/usr/bin/env sh\nset -eu\nmkdir -p build\nprintf built > build/generated.txt\n",
+        run_sh,
+    );
+    let create_response: serde_json::Value = client
+        .post(api_url(&app, "/api/validation-runs"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "challenge_id": "sample-sum",
+            "artifact_base64": artifact_base64,
+            "explanation": "run workspace readonly probe"
+        }))
+        .send()
+        .await
+        .expect("failed to create validation run")
+        .json()
+        .await
+        .expect("failed to decode create validation response");
+    let validation_id = create_response["id"]
+        .as_str()
+        .expect("missing validation id");
+
+    run_worker_once(&pool, &config).await;
+
+    let validation: serde_json::Value = client
+        .get(api_url(
+            &app,
+            &format!("/api/validation-runs/{validation_id}"),
+        ))
+        .header("Authorization", format!("Bearer {token}"))
+        .send()
+        .await
+        .expect("failed to get validation run")
+        .json()
+        .await
+        .expect("failed to decode validation response");
+    assert_eq!(validation["status"], "failed");
+    assert_eq!(validation["evaluation"]["status"], "failed");
+
+    let last_error: (String,) =
+        sqlx::query_as("SELECT last_error FROM evaluation_jobs WHERE solution_submission_id = $1")
+            .bind(validation_id)
+            .fetch_one(&pool)
+            .await
+            .expect("failed to query failed job");
+    assert!(last_error.0.contains("\"phase\":\"run\""));
+}
+
+#[sqlx::test(migrations = "../migrations")]
 async fn validation_run_is_rejected_when_challenge_disables_validation(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let challenges = tempfile::tempdir().expect("failed to create challenges tempdir");

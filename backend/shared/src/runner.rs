@@ -1,8 +1,9 @@
 //! Docker-backed `zip_project` evaluation runner.
 //!
 //! v0.2 uses one build solution container for setup/build, fresh no-egress run
-//! solution containers for benchmark invocations, and a separate scorer
-//! container. Private benchmark data is only mounted into the scorer container.
+//! solution containers that mount the build workspace read-only for benchmark
+//! invocations, and a separate scorer container. Private benchmark data is only
+//! mounted into the scorer container.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -257,13 +258,13 @@ async fn run_solution_invocations(
         .ok_or_else(|| AppError::Runner("zip_project manifest has no run phase".to_string()))?;
 
     for run in &request.run_manifest.runs {
-        let run_workspace = request.runs_root.join(&run.run_id).join("workspace");
         let io_root = request.runs_root.join(&run.run_id);
         let input_dir = io_root.join("input");
         let output_dir = io_root.join("output");
+        let tmp_dir = io_root.join("tmp");
         tokio::fs::create_dir_all(&input_dir).await?;
         tokio::fs::create_dir_all(&output_dir).await?;
-        copy_dir_all(request.build_root, &run_workspace).await?;
+        tokio::fs::create_dir_all(&tmp_dir).await?;
         materialize_run_io(run, &io_root, &input_dir).await?;
 
         let limits = effective_phase_limits(request.profile, &run_phase);
@@ -275,7 +276,7 @@ async fn run_solution_invocations(
                 cmd: vec![
                     "sh".to_string(),
                     "-c".to_string(),
-                    "mkdir -p /io/output; if [ -f /io/stdin.txt ]; then sh \"$1\" < /io/stdin.txt > /io/stdout.txt; else sh \"$1\" > /io/stdout.txt; fi"
+                    "mkdir -p /io/output /io/tmp; if [ -f /io/stdin.txt ]; then sh \"$1\" < /io/stdin.txt > /io/stdout.txt; else sh \"$1\" > /io/stdout.txt; fi"
                         .to_string(),
                     "agentics-run".to_string(),
                     format!("/workspace/{}", run_phase.command),
@@ -286,9 +287,12 @@ async fn run_solution_invocations(
                     format!("AGENTICS_INTERFACE={}", run_interface(run.interface)),
                     "AGENTICS_INPUT_DIR=/io/input".to_string(),
                     "AGENTICS_OUTPUT_DIR=/io/output".to_string(),
+                    "HOME=/io".to_string(),
+                    "TMPDIR=/io/tmp".to_string(),
+                    "PYTHONDONTWRITEBYTECODE=1".to_string(),
                 ],
                 mounts: vec![
-                    bind_mount(&run_workspace, "/workspace", false),
+                    bind_mount(request.build_root, "/workspace", true),
                     bind_mount(&io_root, "/io", false),
                 ],
                 working_dir: "/workspace".to_string(),
@@ -298,12 +302,7 @@ async fn run_solution_invocations(
         .await?;
         append_run_logs(logs, &run.run_id, &outcome.logs);
         ensure_container_succeeded(ZipProjectPhaseName::Run, &outcome)?;
-        ensure_disk_limit(
-            &run_workspace,
-            limits.disk_limit_mb,
-            ZipProjectPhaseName::Run,
-        )
-        .await?;
+        ensure_disk_limit(&io_root, limits.disk_limit_mb, ZipProjectPhaseName::Run).await?;
         ensure_declared_outputs_exist(run, &output_dir).await?;
     }
 
