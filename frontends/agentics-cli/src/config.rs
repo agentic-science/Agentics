@@ -1,7 +1,8 @@
 use std::fmt;
 use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
@@ -202,24 +203,70 @@ fn non_empty(value: Option<&str>) -> Option<&str> {
     value.map(str::trim).filter(|value| !value.is_empty())
 }
 
-fn write_private_file(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+fn write_private_file(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    let temp_path = private_temp_path(path)?;
+    let write_result = write_private_temp_file(&temp_path, bytes)
+        .and_then(|()| fs::rename(&temp_path, path))
+        .and_then(|()| set_private_file_permissions(path));
+
+    if write_result.is_err() {
+        let _ = fs::remove_file(&temp_path);
+    }
+
+    write_result
+}
+
+fn private_temp_path(path: &Path) -> io::Result<PathBuf> {
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "config path has no file name")
+        })?;
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+
+    Ok(parent.join(format!(
+        ".{file_name}.{}.{}.tmp",
+        std::process::id(),
+        unique
+    )))
+}
+
+fn write_private_temp_file(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    #[cfg(unix)]
+    use std::os::unix::fs::OpenOptionsExt;
+
+    let mut options = OpenOptions::new();
+    options.create_new(true).write(true);
+
     #[cfg(unix)]
     {
-        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
 
-        let mut file = OpenOptions::new()
-            .create(true)
-            .truncate(true)
-            .write(true)
-            .mode(0o600)
-            .open(path)?;
-        file.write_all(bytes)
+    let mut file = options.open(path)?;
+    file.write_all(bytes)?;
+    file.sync_all()
+}
+
+fn set_private_file_permissions(path: &Path) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
     }
 
     #[cfg(not(unix))]
     {
-        fs::write(path, bytes)
+        let _ = path;
     }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -274,6 +321,33 @@ mod tests {
                 token: None,
             }
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn save_restricts_existing_config_file_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let path = temp.path().join("agentics.toml");
+        std::fs::write(&path, "token = \"old\"\n").expect("seed config");
+        std::fs::set_permissions(&path, fs::Permissions::from_mode(0o644))
+            .expect("loose permissions should be settable");
+
+        let store = ConfigStore::new(path.clone());
+        store
+            .save(&CliConfig {
+                api_base_url: None,
+                token: Some("secret-token".to_string()),
+            })
+            .expect("config should save");
+
+        let mode = std::fs::metadata(path)
+            .expect("metadata")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o600);
     }
 
     #[test]
