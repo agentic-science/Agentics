@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   UploadCloud,
 } from "lucide-react";
+import { useLocale } from "next-intl";
 import {
   type FormEvent,
   type ReactNode,
@@ -25,6 +26,7 @@ import {
   AdminApiError,
   type AdminCredentials,
   adminFetchJson,
+  parseAdminCredentials,
 } from "@/lib/adminApi";
 import { formatDate, formatScore } from "@/lib/format";
 import {
@@ -62,6 +64,7 @@ const emptyData: AdminData = {
 const credentialStorageKey = "agentics-admin-credentials";
 
 export function AdminConsole() {
+  const locale = useLocale();
   const [credentials, setCredentials] = useState<AdminCredentials>({
     username: "admin",
     password: "",
@@ -77,7 +80,11 @@ export function AdminConsole() {
     const stored = sessionStorage.getItem(credentialStorageKey);
     if (!stored) return;
     try {
-      const parsed = JSON.parse(stored) as AdminCredentials;
+      const parsed = parseAdminCredentials(JSON.parse(stored));
+      if (!parsed) {
+        sessionStorage.removeItem(credentialStorageKey);
+        return;
+      }
       setCredentials(parsed);
       setRemember(true);
     } catch {
@@ -206,6 +213,7 @@ export function AdminConsole() {
         <ChallengeAdminPanel
           credentials={credentials}
           challenges={data.challenges.items}
+          locale={locale}
           onRefresh={refresh}
           onError={setError}
           onMessage={setMessage}
@@ -216,6 +224,7 @@ export function AdminConsole() {
           credentials={credentials}
           submissions={data.submissions.items}
           heartbeats={data.heartbeats.items}
+          locale={locale}
           onRefresh={refresh}
           onError={setError}
           onMessage={setMessage}
@@ -374,12 +383,14 @@ function StatCard({
 function ChallengeAdminPanel({
   credentials,
   challenges,
+  locale,
   onRefresh,
   onError,
   onMessage,
 }: {
   credentials: AdminCredentials;
   challenges: AdminChallengeListItem[];
+  locale: string;
   onRefresh: AdminRefresh;
   onError: (message: string | null) => void;
   onMessage: (message: string | null) => void;
@@ -437,7 +448,7 @@ function ChallengeAdminPanel({
                     {challenge.current_version?.version ?? "—"}
                   </td>
                   <td className="text-[var(--text-muted)]">
-                    {formatDate(challenge.updated_at)}
+                    {formatDate(challenge.updated_at, locale)}
                   </td>
                 </tr>
               ))}
@@ -590,6 +601,7 @@ function OperationsPanel({
   credentials,
   submissions,
   heartbeats,
+  locale,
   onRefresh,
   onError,
   onMessage,
@@ -597,6 +609,7 @@ function OperationsPanel({
   credentials: AdminCredentials;
   submissions: AdminSolutionSubmissionListItem[];
   heartbeats: AdminServiceHeartbeatListResponse["items"];
+  locale: string;
   onRefresh: AdminRefresh;
   onError: (message: string | null) => void;
   onMessage: (message: string | null) => void;
@@ -654,7 +667,7 @@ function OperationsPanel({
                     {formatScore(submission.rank_score)}
                   </td>
                   <td className="text-[var(--text-muted)]">
-                    {formatDate(submission.updated_at)}
+                    {formatDate(submission.updated_at, locale)}
                   </td>
                   <td>
                     <SubmissionActions
@@ -702,7 +715,7 @@ function OperationsPanel({
                     />
                   </td>
                   <td className="text-[var(--text-muted)]">
-                    {formatDate(heartbeat.last_seen_at)}
+                    {formatDate(heartbeat.last_seen_at, locale)}
                   </td>
                   <td className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
                     {JSON.stringify(heartbeat.payload)}

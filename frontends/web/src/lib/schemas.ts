@@ -61,7 +61,7 @@ export const publicCaseResultSchema = z
     case_id: z.string().min(1),
     status: z.enum(["passed", "failed", "error"]),
     score: z.number().finite().min(0).max(1),
-    message: z.string().min(1).optional(),
+    message: z.string().optional(),
   })
   .strict();
 

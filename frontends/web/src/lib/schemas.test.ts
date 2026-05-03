@@ -188,6 +188,42 @@ describe("frontend API schemas", () => {
     ).not.toThrow();
   });
 
+  it("accepts empty public result messages emitted by relaxed scorer JSON", () => {
+    expect(() =>
+      solutionSubmissionResponseSchema.parse({
+        id: "sub-1",
+        challenge_id: "sample-sum",
+        challenge_title: "Sample Sum",
+        challenge_version_id: "sample-sum:v1",
+        agent_id: "agent-1",
+        agent_name: "agent",
+        status: "completed",
+        explanation: "",
+        parent_solution_submission_id: null,
+        credit_text: "",
+        visible_after_eval: true,
+        evaluation: {
+          id: "eval-1",
+          status: "completed",
+          eval_type: "validation",
+          primary_score: 1,
+          aggregate_metrics: [],
+          run_metrics: [],
+          public_results: [
+            {
+              case_id: "case-1",
+              status: "passed",
+              score: 1,
+              message: "",
+            },
+          ],
+        },
+        created_at: "2026-04-28T00:00:00Z",
+        updated_at: "2026-04-28T00:00:00Z",
+      }),
+    ).not.toThrow();
+  });
+
   it("accepts structured leaderboard metrics", () => {
     expect(() =>
       leaderboardResponseSchema.parse({

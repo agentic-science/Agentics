@@ -1,4 +1,5 @@
 import type { ZodType } from "zod";
+import { z } from "zod";
 
 const ADMIN_API_BASE_URL =
   process.env.NEXT_PUBLIC_AGENTICS_API_BASE_URL?.replace(/\/$/, "") ?? "";
@@ -6,6 +7,18 @@ const ADMIN_API_BASE_URL =
 export interface AdminCredentials {
   username: string;
   password: string;
+}
+
+const adminCredentialsSchema = z
+  .object({
+    username: z.string(),
+    password: z.string(),
+  })
+  .strict();
+
+export function parseAdminCredentials(value: unknown): AdminCredentials | null {
+  const parsed = adminCredentialsSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 }
 
 export class AdminApiError extends Error {

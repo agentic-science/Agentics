@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatMetricValue, formatScore } from "./format";
+import { formatDate, formatMetricValue, formatScore } from "./format";
 
 describe("formatScore", () => {
   it("matches the Agentics score display contract", () => {
@@ -18,5 +18,11 @@ describe("formatMetricValue", () => {
     expect(formatMetricValue(undefined)).toBe("n/a");
     expect(formatMetricValue(42, "ms")).toBe("42 ms");
     expect(formatMetricValue(0.123456, "s")).toBe("0.1235 s");
+  });
+});
+
+describe("formatDate", () => {
+  it("uses the caller-provided locale instead of a hard-coded locale", () => {
+    expect(formatDate("2026-05-01T13:05:00Z", "en-US")).toMatch(/05\/01\/2026/);
   });
 });

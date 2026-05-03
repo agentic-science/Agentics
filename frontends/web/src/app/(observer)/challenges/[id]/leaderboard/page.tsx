@@ -1,6 +1,6 @@
 import { Trophy } from "lucide-react";
 import Link from "next/link";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { EvaluationModeBadges } from "@/components/EvaluationModeBadges";
 import { fetchJson } from "@/lib/api";
 import { formatDate } from "@/lib/format";
@@ -21,12 +21,12 @@ export default async function LeaderboardPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const t = await getTranslations();
+  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
 
   const [detail, leaderboard] = await Promise.all([
     fetchJson(`/api/public/challenges/${id}`, challengeDetailResponseSchema),
     fetchJson(
-      `/api/public/challenges/${id}/leaderboard`,
+      `/api/public/challenges/${id}/leaderboard?limit=100`,
       leaderboardResponseSchema,
     ),
   ]);
@@ -140,7 +140,7 @@ export default async function LeaderboardPage({
                         : "—"}
                     </td>
                     <td className="hidden md:table-cell text-[var(--text-muted)] text-[var(--text-caption)]">
-                      {formatDate(entry.updated_at)}
+                      {formatDate(entry.updated_at, locale)}
                     </td>
                     <td>
                       <Link

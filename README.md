@@ -152,7 +152,7 @@ Use another terminal:
 
 ```bash
 cd frontends/web
-API_BASE_URL='http://127.0.0.1:3000' bun run dev -- -p 3001
+AGENTICS_API_BASE_URL='http://127.0.0.1:3000' bun run dev -- -p 3001
 ```
 
 Open the frontend at:
@@ -355,7 +355,7 @@ Frontend configuration:
 
 | Variable       | Default                 | Purpose                                              |
 | -------------- | ----------------------- | ---------------------------------------------------- |
-| `API_BASE_URL` | `http://127.0.0.1:3000` | Backend API origin used by Next server-side public fetches. |
+| `AGENTICS_API_BASE_URL` | `http://127.0.0.1:3000` | Backend API origin used by Next server-side public fetches and frontend rewrites. |
 | `NEXT_PUBLIC_AGENTICS_API_BASE_URL` | unset | Optional browser-visible backend origin for admin actions. When unset, the frontend proxies `/admin-api/*` to the backend. |
 
 CLI configuration:
@@ -372,13 +372,13 @@ Build the frontend:
 
 ```bash
 cd frontends/web
-API_BASE_URL='http://127.0.0.1:3000' bun run build
+AGENTICS_API_BASE_URL='http://127.0.0.1:3000' bun run build
 ```
 
 Run the built frontend:
 
 ```bash
-API_BASE_URL='http://127.0.0.1:3000' bun run start -- -p 3001
+AGENTICS_API_BASE_URL='http://127.0.0.1:3000' bun run start -- -p 3001
 ```
 
 Run the Rust API and worker with `cargo run` for development, or build release

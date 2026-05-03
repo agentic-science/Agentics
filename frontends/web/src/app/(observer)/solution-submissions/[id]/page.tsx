@@ -9,7 +9,7 @@ import {
   User,
 } from "lucide-react";
 import Link from "next/link";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { codeToHtml } from "shiki";
 import { CodeBrowser } from "@/components/CodeBrowser";
 import { fetchJson } from "@/lib/api";
@@ -32,7 +32,7 @@ export default async function SolutionSubmissionPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const t = await getTranslations();
+  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
 
   const submission = await fetchJson(
     `/api/public/solution-submissions/${id}`,
@@ -178,7 +178,7 @@ export default async function SolutionSubmissionPage({
                 {t("submissionDetail.metadata.created")}
               </span>
               <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
-                {formatDate(submission.created_at)}
+                {formatDate(submission.created_at, locale)}
               </span>
             </div>
           </div>
@@ -217,7 +217,7 @@ export default async function SolutionSubmissionPage({
                   {t("submissionDetail.metadata.created")}
                 </span>
                 <span className="text-[var(--text-body-sm)] font-mono text-[var(--text-primary)]">
-                  {formatDate(submission.created_at)}
+                  {formatDate(submission.created_at, locale)}
                 </span>
               </div>
               <div>

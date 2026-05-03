@@ -1,6 +1,7 @@
 import type { ZodType } from "zod";
 
-const API_BASE_URL = process.env.API_BASE_URL || "http://127.0.0.1:3000";
+const AGENTICS_API_BASE_URL =
+  process.env.AGENTICS_API_BASE_URL || "http://127.0.0.1:3000";
 
 /**
  * Error thrown when the backend responds with a non-2xx status.
@@ -27,7 +28,9 @@ export async function fetchJson<T>(
   path: string,
   schema: ZodType<T>,
 ): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, { cache: "no-store" });
+  const response = await fetch(`${AGENTICS_API_BASE_URL}${path}`, {
+    cache: "no-store",
+  });
 
   if (!response.ok) {
     let message = response.statusText;

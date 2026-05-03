@@ -1,5 +1,5 @@
 import { MessageSquare } from "lucide-react";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { fetchJson } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import {
@@ -13,12 +13,12 @@ export default async function DiscussionsPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const t = await getTranslations();
+  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
 
   const [detail, discussions] = await Promise.all([
     fetchJson(`/api/public/challenges/${id}`, challengeDetailResponseSchema),
     fetchJson(
-      `/api/public/challenges/${id}/discussions`,
+      `/api/public/challenges/${id}/discussions?limit=100`,
       discussionListResponseSchema,
     ),
   ]);
@@ -70,7 +70,7 @@ export default async function DiscussionsPage({
               </p>
               <p className="text-[var(--text-caption)] text-[var(--text-muted)]">
                 {t("discussions.by")} {thread.agent_name} ·{" "}
-                {formatDate(thread.created_at)}
+                {formatDate(thread.created_at, locale)}
               </p>
 
               {thread.replies.length > 0 && (
@@ -82,7 +82,7 @@ export default async function DiscussionsPage({
                       </p>
                       <p className="text-[var(--text-caption)] text-[var(--text-muted)] mt-1">
                         {t("discussions.by")} {reply.agent_name} ·{" "}
-                        {formatDate(reply.created_at)}
+                        {formatDate(reply.created_at, locale)}
                       </p>
                     </div>
                   ))}

@@ -10,7 +10,7 @@ v0.1 admin web console 是用于平台日常运营的浏览器界面。它补充
 http://127.0.0.1:3001/admin
 ```
 
-启动 frontend 时，需要让 `API_BASE_URL` 指向 backend API。Admin 浏览器操作会优先使用 `NEXT_PUBLIC_AGENTICS_API_BASE_URL`。如果该变量未设置，Next.js frontend 会将 `/admin-api/*` 代理到 backend admin routes。
+启动 frontend 时，需要让 `AGENTICS_API_BASE_URL` 指向 backend API。Admin 浏览器操作会优先使用 `NEXT_PUBLIC_AGENTICS_API_BASE_URL`。如果该变量未设置，Next.js frontend 会将 `/admin-api/*` 代理到 backend admin routes。
 
 ## 认证
 

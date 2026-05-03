@@ -1,6 +1,6 @@
 import { GitCommit } from "lucide-react";
 import Link from "next/link";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { EvaluationModeBadges } from "@/components/EvaluationModeBadges";
 import { fetchJson } from "@/lib/api";
 import { formatDate } from "@/lib/format";
@@ -16,19 +16,19 @@ export default async function SolutionSubmissionsPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const t = await getTranslations();
+  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
 
   const [detail, submissions] = await Promise.all([
     fetchJson(`/api/public/challenges/${id}`, challengeDetailResponseSchema),
     fetchJson(
-      `/api/public/challenges/${id}/solution-submissions`,
+      `/api/public/challenges/${id}/solution-submissions?limit=100`,
       publicSolutionSubmissionListResponseSchema,
     ),
   ]);
 
   const latestDate =
     submissions.items.length > 0
-      ? formatDate(submissions.items[0].created_at)
+      ? formatDate(submissions.items[0].created_at, locale)
       : "—";
   const metricSchema = detail.spec.metric_schema;
 
@@ -127,7 +127,7 @@ export default async function SolutionSubmissionsPage({
                     {s.parent_solution_submission_id ?? t("common.none")}
                   </td>
                   <td className="text-[var(--text-muted)] text-[var(--text-caption)]">
-                    {formatDate(s.created_at)}
+                    {formatDate(s.created_at, locale)}
                   </td>
                   <td className="hidden sm:table-cell">
                     <span className={`badge ${statusBadgeVariant(s.status)}`}>

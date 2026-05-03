@@ -88,7 +88,7 @@ Use another terminal:
 
 ```bash
 cd frontends/web
-API_BASE_URL='http://127.0.0.1:3000' bun run dev -- -p 3001
+AGENTICS_API_BASE_URL='http://127.0.0.1:3000' bun run dev -- -p 3001
 ```
 
 Open:

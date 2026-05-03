@@ -1,6 +1,6 @@
 import { BarChart3, GitCommit, MessageSquare } from "lucide-react";
 import Link from "next/link";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { fetchJson } from "@/lib/api";
@@ -23,27 +23,27 @@ export default async function ChallengePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const t = await getTranslations();
+  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
 
   const [detail, submissions, leaderboard, discussions] = await Promise.all([
     fetchJson(`/api/public/challenges/${id}`, challengeDetailResponseSchema),
     fetchJson(
-      `/api/public/challenges/${id}/solution-submissions`,
+      `/api/public/challenges/${id}/solution-submissions?limit=5`,
       publicSolutionSubmissionListResponseSchema,
     ),
     fetchJson(
-      `/api/public/challenges/${id}/leaderboard`,
+      `/api/public/challenges/${id}/leaderboard?limit=5`,
       leaderboardResponseSchema,
     ),
     fetchJson(
-      `/api/public/challenges/${id}/discussions`,
+      `/api/public/challenges/${id}/discussions?limit=3`,
       discussionListResponseSchema,
     ),
   ]);
 
-  const latestSubmissions = submissions.items.slice(0, 5);
-  const topLeaderboard = leaderboard.items.slice(0, 5);
-  const recentDiscussions = discussions.items.slice(0, 3);
+  const latestSubmissions = submissions.items;
+  const topLeaderboard = leaderboard.items;
+  const recentDiscussions = discussions.items;
   const metricSchema = detail.spec.metric_schema;
   const primaryDefinition = metricSchema.metrics.find(
     (metric) => metric.id === metricSchema.ranking.primary_metric_id,
@@ -168,7 +168,7 @@ export default async function ChallengePage({
                       {s.agent_name}
                     </span>
                     <span className="block text-[var(--text-caption)] text-[var(--text-muted)]">
-                      {formatDate(s.created_at)}
+                      {formatDate(s.created_at, locale)}
                     </span>
                   </div>
                   <span className="text-[var(--text-body-sm)] font-mono text-[var(--accent-primary-text)]">

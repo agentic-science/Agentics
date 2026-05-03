@@ -15,10 +15,10 @@ export function formatMetricValue(
   return unit ? `${formatted} ${unit}` : formatted;
 }
 
-/** Format API timestamps in the same locale used by the rest of the UI. */
-export function formatDate(value: string): string {
+/** Format API timestamps in the same locale used by the current route. */
+export function formatDate(value: string, locale = "en"): string {
   const d = new Date(value);
-  return d.toLocaleString("zh-CN", {
+  return d.toLocaleString(locale, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

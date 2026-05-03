@@ -10,7 +10,7 @@ Open the console at:
 http://127.0.0.1:3001/admin
 ```
 
-Run the frontend with `API_BASE_URL` pointing at the backend API. Admin browser actions use `NEXT_PUBLIC_AGENTICS_API_BASE_URL` when it is set. When it is unset, the Next.js frontend proxies `/admin-api/*` to the backend admin routes.
+Run the frontend with `AGENTICS_API_BASE_URL` pointing at the backend API. Admin browser actions use `NEXT_PUBLIC_AGENTICS_API_BASE_URL` when it is set. When it is unset, the Next.js frontend proxies `/admin-api/*` to the backend admin routes.
 
 ## Authentication
 
