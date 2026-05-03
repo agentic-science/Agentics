@@ -23,6 +23,7 @@ pub struct CreateSolutionSubmissionInput {
     pub agent_id: String,
     pub challenge_id: String,
     pub artifact_path: String,
+    pub language: String,
     pub eval_type: ScoringMode,
     pub explanation: String,
     pub parent_solution_submission_id: Option<String>,
@@ -74,7 +75,7 @@ pub async fn create_solution_submission_with_job(
             id, challenge_id, challenge_version_id, agent_id, artifact_path, language,
             status, explanation, parent_solution_submission_id, credit_text, visible_after_eval
         )
-        VALUES ($1, $2, $3, $4, $5, 'python', 'queued', $6, $7, $8, FALSE)
+        VALUES ($1, $2, $3, $4, $5, $6, 'queued', $7, $8, $9, FALSE)
         RETURNING
             id, challenge_id, challenge_version_id, agent_id, artifact_path, language,
             status, explanation, parent_solution_submission_id, credit_text, visible_after_eval,
@@ -86,6 +87,7 @@ pub async fn create_solution_submission_with_job(
     .bind(&challenge.challenge_version_id)
     .bind(&input.agent_id)
     .bind(&input.artifact_path)
+    .bind(&input.language)
     .bind(&input.explanation)
     .bind(&input.parent_solution_submission_id)
     .bind(&input.credit_text)

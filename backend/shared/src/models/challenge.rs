@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::CurrentVersionDto;
+use crate::zip_project::ZipProjectNetworkAccess;
 
 /// Parsed `spec.json` contract for a challenge bundle.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -13,7 +14,8 @@ pub struct ChallengeBundleSpec {
     pub challenge_version: String,
     pub solution: SolutionSpec,
     pub scorer: ScorerSpec,
-    pub limits: LimitsSpec,
+    pub resource_profile: ResourceProfileSpec,
+    pub execution: ChallengeExecutionSpec,
     pub datasets: DatasetsSpec,
     /// Optional external community metadata for this challenge version.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -26,23 +28,94 @@ pub struct ChallengeBundleSpec {
 /// Local solution format constraints declared by a bundle.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SolutionSpec {
-    pub format: String,
-    pub language: String,
-    pub entrypoint: String,
+    pub protocol: String,
+    pub manifest_file: String,
 }
 
 /// Scorer entrypoint and output-file contract for a bundle.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScorerSpec {
-    pub entrypoint: String,
+    pub command: Vec<String>,
     pub result_file: String,
 }
 
-/// Runtime limits declared by a bundle.
+/// Resource envelope and Docker images declared by a challenge version.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LimitsSpec {
-    pub time_limit_sec: f64,
-    pub memory_limit_mb: i64,
+pub struct ResourceProfileSpec {
+    pub id: String,
+    pub solution_image: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub solution_image_digest: Option<String>,
+    pub scorer_image: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scorer_image_digest: Option<String>,
+    pub timeout_sec: u64,
+    pub memory_limit_mb: u64,
+    pub cpu_limit_millis: u32,
+    pub disk_limit_mb: u64,
+    pub setup_network_access: ZipProjectNetworkAccess,
+    pub build_network_access: ZipProjectNetworkAccess,
+    pub run_network_access: ZipProjectNetworkAccess,
+    pub scorer_network_access: ZipProjectNetworkAccess,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hardware: Option<HardwareProfileSpec>,
+}
+
+/// Optional hardware metadata advertised with a resource profile.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HardwareProfileSpec {
+    pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+/// Challenge-owned run manifest locations for standardized `zip_project` execution.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChallengeExecutionSpec {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub validation_runs: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub official_runs: Option<String>,
+}
+
+/// Challenge-owned list of scorer-controlled solution invocations.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChallengeRunManifest {
+    #[serde(default)]
+    pub runs: Vec<ChallengeRunSpec>,
+}
+
+/// One solution invocation prepared by the worker and later scored by the scorer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChallengeRunSpec {
+    pub run_id: String,
+    pub interface: ChallengeRunInterface,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stdin_json: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stdin_text: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub input_files: Vec<ChallengeRunInputFile>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub output_files: Vec<String>,
+}
+
+/// Supported worker-managed solution input/output interfaces.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChallengeRunInterface {
+    Stdio,
+    FileSystem,
+}
+
+/// One input file materialized into `AGENTICS_INPUT_DIR` for a file-mode run.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChallengeRunInputFile {
+    pub path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_json: Option<serde_json::Value>,
 }
 
 /// Dataset layout and visibility policy declared by a bundle.

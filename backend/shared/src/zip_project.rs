@@ -4,6 +4,7 @@
 //! that the worker will consume in later execution milestones.
 
 use std::collections::HashSet;
+use std::io::Read;
 
 use serde::{Deserialize, Serialize};
 
@@ -110,6 +111,33 @@ pub enum ZipProjectNetworkAccess {
     Enabled,
 }
 
+impl ZipProjectNetworkAccess {
+    /// Docker network mode used by the v0.2 runner.
+    pub fn docker_network_mode(self) -> &'static str {
+        match self {
+            Self::Disabled | Self::Loopback => "none",
+            Self::Enabled => "bridge",
+        }
+    }
+
+    /// Clamp a requested phase policy to a challenge-owned maximum policy.
+    pub fn clamp_to(self, maximum: Self) -> Self {
+        if self.rank() <= maximum.rank() {
+            self
+        } else {
+            maximum
+        }
+    }
+
+    fn rank(self) -> u8 {
+        match self {
+            Self::Disabled => 0,
+            Self::Loopback => 1,
+            Self::Enabled => 2,
+        }
+    }
+}
+
 /// Ordered phase names in the `zip_project` execution model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -201,6 +229,32 @@ pub fn parse_zip_project_manifest(raw: &str) -> Result<ZipProjectManifest> {
         .map_err(|e| AppError::Validation(format!("invalid {ZIP_PROJECT_MANIFEST_FILE}: {e}")))?;
     manifest.validate()?;
     Ok(manifest)
+}
+
+/// Parse and validate `agentics.solution.json` directly from a ZIP artifact.
+pub fn parse_zip_project_manifest_from_zip_bytes(bytes: &[u8]) -> Result<ZipProjectManifest> {
+    let reader = std::io::Cursor::new(bytes);
+    let mut archive = zip::ZipArchive::new(reader)?;
+    let mut manifest = archive
+        .by_name(ZIP_PROJECT_MANIFEST_FILE)
+        .map_err(|_| AppError::Validation(format!("{ZIP_PROJECT_MANIFEST_FILE} is required")))?;
+    if manifest.size() > 128 * 1024 {
+        return Err(AppError::Validation(format!(
+            "{ZIP_PROJECT_MANIFEST_FILE} must be at most 131072 bytes"
+        )));
+    }
+
+    let mut raw = String::new();
+    manifest.read_to_string(&mut raw)?;
+    parse_zip_project_manifest(&raw)
+}
+
+/// Return whether `value` can be safely joined under a project root.
+pub fn is_safe_relative_path(value: &str) -> bool {
+    if value.starts_with('/') {
+        return false;
+    }
+    value.split(['/', '\\']).all(|s| !s.is_empty() && s != "..")
 }
 
 impl ZipProjectManifest {
@@ -434,12 +488,7 @@ fn validate_positive_u32(value: Option<u32>, field: &str) -> Result<()> {
 
 fn require_safe_relative_path(value: &str, field: &str) -> Result<()> {
     require_non_empty(value, field)?;
-    if value.starts_with('/') {
-        return Err(AppError::Validation(format!(
-            "{field} must be a safe relative path"
-        )));
-    }
-    if !value.split(['/', '\\']).all(|s| !s.is_empty() && s != "..") {
+    if !is_safe_relative_path(value) {
         return Err(AppError::Validation(format!(
             "{field} must be a safe relative path"
         )));

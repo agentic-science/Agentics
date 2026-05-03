@@ -143,11 +143,15 @@ async fn public_read_flow_matches_old_api(pool: sqlx::PgPool) {
         .json()
         .await
         .expect("failed to decode artifact");
-    assert_eq!(artifact["file_count"], 1);
-    assert_eq!(artifact["files"][0]["path"], "main.py");
-    assert_eq!(artifact["files"][0]["language"], "python");
+    assert_eq!(artifact["file_count"], 5);
+    let files = artifact["files"].as_array().expect("artifact files");
+    let main_py = files
+        .iter()
+        .find(|file| file["path"] == "main.py")
+        .expect("main.py should be present");
+    assert_eq!(main_py["language"], "python");
     assert!(
-        artifact["files"][0]["content"]
+        main_py["content"]
             .as_str()
             .expect("content should be inline text")
             .contains("payload['a'] + payload['b']")

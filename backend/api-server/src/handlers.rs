@@ -130,7 +130,7 @@ async fn get_challenge_detail_response(
     let statement = tokio::fs::read_to_string(&challenge.statement_path).await?;
     Ok(Json(presenters::present_challenge_detail(
         &challenge, &statement,
-    )))
+    )?))
 }
 
 /// Create a ranking-visible solution submission, store its ZIP artifact, and queue official evaluation.
@@ -163,6 +163,7 @@ async fn create_solution_submission_for_mode(
     if !is_likely_zip(&artifact_bytes) {
         return Err(AppError::BadRequest("artifact 必须是 zip 文件".to_string()));
     }
+    let manifest = shared::zip_project::parse_zip_project_manifest_from_zip_bytes(&artifact_bytes)?;
 
     let solution_submission_id = Uuid::new_v4().to_string();
     let artifact_path_rel = format!("solution-submissions/{}.zip", solution_submission_id);
@@ -179,6 +180,7 @@ async fn create_solution_submission_for_mode(
             agent_id: agent.agent_id,
             challenge_id,
             artifact_path,
+            language: manifest.runtime.language,
             eval_type,
             explanation: body.explanation.trim().to_string(),
             parent_solution_submission_id: body

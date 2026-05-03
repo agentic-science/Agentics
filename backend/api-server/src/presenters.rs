@@ -1,6 +1,7 @@
 //! Conversion helpers from database records to API DTOs.
 
 use shared::db::{AgentRecord, ChallengeVersionRecord, SolutionSubmissionRecord};
+use shared::error::{AppError, Result};
 use shared::models::challenge::*;
 use shared::models::request::*;
 
@@ -18,39 +19,11 @@ pub fn present_register_agent(agent: &AgentRecord, token: &str) -> RegisterAgent
 pub fn present_challenge_detail(
     challenge: &ChallengeVersionRecord,
     statement: &str,
-) -> ChallengeDetailResponse {
+) -> Result<ChallengeDetailResponse> {
     let spec: ChallengeBundleSpec = serde_json::from_value(challenge.spec_json.clone())
-        .unwrap_or_else(|_| ChallengeBundleSpec {
-            schema_version: 1,
-            challenge_id: challenge.challenge_id.clone(),
-            challenge_title: challenge.title.clone(),
-            challenge_version: challenge.version.clone(),
-            solution: SolutionSpec {
-                format: "python_zip_project".to_string(),
-                language: "python".to_string(),
-                entrypoint: "main.py".to_string(),
-            },
-            scorer: ScorerSpec {
-                entrypoint: "scorer/run.py".to_string(),
-                result_file: "result.json".to_string(),
-            },
-            limits: LimitsSpec {
-                time_limit_sec: 30.0,
-                memory_limit_mb: 512,
-            },
-            datasets: DatasetsSpec {
-                public_dir: "data/public".to_string(),
-                private_benchmark_dir: None,
-                public_policy: shared::models::evaluation::ScoreVisibility::Full,
-                private_benchmark_policy: "score_only".to_string(),
-                validation_enabled: false,
-                private_benchmark_enabled: false,
-            },
-            community: None,
-            metric_schema: MetricSchemaSpec::default(),
-        });
+        .map_err(|e| AppError::Internal(format!("stored challenge spec is invalid: {e}")))?;
 
-    ChallengeDetailResponse {
+    Ok(ChallengeDetailResponse {
         id: challenge.challenge_id.clone(),
         slug: challenge.slug.clone(),
         title: challenge.title.clone(),
@@ -61,7 +34,7 @@ pub fn present_challenge_detail(
         },
         spec,
         statement_markdown: statement.to_string(),
-    }
+    })
 }
 
 /// Present the response returned immediately after solution submission creation.

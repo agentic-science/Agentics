@@ -5,8 +5,9 @@ mod helpers;
 use std::path::Path;
 
 use helpers::{
-    api_url, copy_dir_all, examples_challenges_root, run_worker_once, sample_sum_solution,
-    solution_zip_base64, spawn_app_with_config, test_config,
+    api_url, copy_dir_all, examples_challenges_root, grid_routing_solution_zip_base64,
+    run_worker_once, sample_sum_solution, solution_zip_base64, solution_zip_base64_with_scripts,
+    spawn_app_with_config, test_config,
 };
 
 fn create_validation_disabled_challenge(root: &Path) {
@@ -256,7 +257,7 @@ async fn worker_completes_private_validation_run_without_leaderboard(pool: sqlx:
         validation["evaluation"]["aggregate_metrics"],
         serde_json::json!([
             { "metric_id": "score", "value": 1.0 },
-            { "metric_id": "passed_cases", "value": 2.0 }
+            { "metric_id": "passed_cases", "value": 3.0 }
         ])
     );
 
@@ -265,6 +266,218 @@ async fn worker_completes_private_validation_run_without_leaderboard(pool: sqlx:
         .await
         .expect("failed to query leaderboard count");
     assert_eq!(leaderboard_count.0, 0);
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn worker_completes_file_mode_validation_run(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = test_config(storage.path(), &examples_challenges_root());
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "name": "file-mode-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+
+    let artifact_base64 = grid_routing_solution_zip_base64(&[
+        ("public-1", "RRRRDDDD"),
+        ("public-2", "DDDDRRUUUURRDDDD"),
+        ("public-3", "RRDDRDRDDR"),
+    ]);
+    let create_response: serde_json::Value = client
+        .post(api_url(&app, "/api/validation-runs"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "challenge_id": "grid-routing",
+            "artifact_base64": artifact_base64,
+            "explanation": "file mode validation smoke test"
+        }))
+        .send()
+        .await
+        .expect("failed to create validation run")
+        .json()
+        .await
+        .expect("failed to decode create validation response");
+    let validation_id = create_response["id"]
+        .as_str()
+        .expect("missing validation id");
+
+    run_worker_once(&pool, &config).await;
+
+    let validation: serde_json::Value = client
+        .get(api_url(
+            &app,
+            &format!("/api/validation-runs/{validation_id}"),
+        ))
+        .header("Authorization", format!("Bearer {token}"))
+        .send()
+        .await
+        .expect("failed to get validation run")
+        .json()
+        .await
+        .expect("failed to decode validation response");
+    assert_eq!(validation["status"], "completed");
+    assert_eq!(validation["evaluation"]["validation_summary"]["passed"], 3);
+    assert_eq!(
+        validation["evaluation"]["run_metrics"][0],
+        serde_json::json!({
+            "run_id": "public-1",
+            "metrics": [{ "metric_id": "score", "value": 1.0 }]
+        })
+    );
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn worker_reports_build_phase_failure(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = test_config(storage.path(), &examples_challenges_root());
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "name": "build-failure-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+
+    let artifact_base64 = solution_zip_base64_with_scripts(
+        &sample_sum_solution("payload['a'] + payload['b']"),
+        "#!/usr/bin/env sh\nset -eu\n",
+        "#!/usr/bin/env sh\nset -eu\nexit 7\n",
+        "#!/usr/bin/env sh\nset -eu\npython main.py\n",
+    );
+    let create_response: serde_json::Value = client
+        .post(api_url(&app, "/api/validation-runs"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "challenge_id": "sample-sum",
+            "artifact_base64": artifact_base64,
+            "explanation": "build phase failure smoke test"
+        }))
+        .send()
+        .await
+        .expect("failed to create validation run")
+        .json()
+        .await
+        .expect("failed to decode create validation response");
+    let validation_id = create_response["id"]
+        .as_str()
+        .expect("missing validation id");
+
+    run_worker_once(&pool, &config).await;
+
+    let validation: serde_json::Value = client
+        .get(api_url(
+            &app,
+            &format!("/api/validation-runs/{validation_id}"),
+        ))
+        .header("Authorization", format!("Bearer {token}"))
+        .send()
+        .await
+        .expect("failed to get validation run")
+        .json()
+        .await
+        .expect("failed to decode validation response");
+    assert_eq!(validation["status"], "failed");
+    assert_eq!(validation["evaluation"]["status"], "failed");
+    assert_eq!(validation["evaluation_job"]["status"], "failed");
+
+    let last_error: (String,) =
+        sqlx::query_as("SELECT last_error FROM evaluation_jobs WHERE solution_submission_id = $1")
+            .bind(validation_id)
+            .fetch_one(&pool)
+            .await
+            .expect("failed to query failed job");
+    assert!(last_error.0.contains("zip_project phase failed"));
+    assert!(last_error.0.contains("\"phase\":\"build\""));
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn worker_blocks_run_stage_internet_access(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = test_config(storage.path(), &examples_challenges_root());
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "name": "no-egress-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+
+    let run_sh = r#"#!/usr/bin/env sh
+set -eu
+test -f build/generated.txt
+python - <<'PY'
+import socket
+
+try:
+    with socket.create_connection(("1.1.1.1", 53), timeout=1):
+        pass
+except OSError:
+    raise SystemExit(0)
+
+raise SystemExit("run stage unexpectedly has internet access")
+PY
+python main.py
+"#;
+    let artifact_base64 = solution_zip_base64_with_scripts(
+        &sample_sum_solution("payload['a'] + payload['b']"),
+        "#!/usr/bin/env sh\nset -eu\nprintf setup > .setup-marker\n",
+        "#!/usr/bin/env sh\nset -eu\nmkdir -p build\nprintf built > build/generated.txt\n",
+        run_sh,
+    );
+    let create_response: serde_json::Value = client
+        .post(api_url(&app, "/api/validation-runs"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "challenge_id": "sample-sum",
+            "artifact_base64": artifact_base64,
+            "explanation": "run stage internet probe"
+        }))
+        .send()
+        .await
+        .expect("failed to create validation run")
+        .json()
+        .await
+        .expect("failed to decode create validation response");
+    let validation_id = create_response["id"]
+        .as_str()
+        .expect("missing validation id");
+
+    run_worker_once(&pool, &config).await;
+
+    let validation: serde_json::Value = client
+        .get(api_url(
+            &app,
+            &format!("/api/validation-runs/{validation_id}"),
+        ))
+        .header("Authorization", format!("Bearer {token}"))
+        .send()
+        .await
+        .expect("failed to get validation run")
+        .json()
+        .await
+        .expect("failed to decode validation response");
+    assert_eq!(validation["status"], "completed");
+    assert_eq!(validation["evaluation"]["validation_summary"]["score"], 1.0);
 }
 
 #[sqlx::test(migrations = "../migrations")]

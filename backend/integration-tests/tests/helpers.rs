@@ -8,7 +8,7 @@ use std::sync::Arc;
 use api_server::router;
 use api_server::state::AppState;
 use shared::config::Config;
-use shared::runner::{connect_docker, pre_pull_image};
+use shared::runner::connect_docker;
 use shared::storage::{LocalStorage, Storage};
 use sqlx::PgPool;
 
@@ -76,10 +76,7 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
         admin_username: "admin".to_string(),
         admin_password: "secret".to_string(),
         worker_poll_interval_ms: 3000,
-        runner_timeout_sec: 30,
-        runner_python_image: "python:3.12-slim-bookworm".to_string(),
-        runner_memory_limit_mb: 512,
-        runner_cpu_limit: 1.0,
+        worker_stale_job_minutes: 1,
         validation_runs_per_agent_challenge_day: 20,
         docker_host: None,
         log_level: "error".to_string(),
@@ -106,8 +103,127 @@ pub fn basic_auth_header(username: &str, password: &str) -> String {
     format!("Basic {}", STANDARD.encode(creds))
 }
 
-/// Create a base64 ZIP containing a single-file local solution.
+/// Create a base64 ZIP containing a manifest-based `zip_project` solution.
 pub fn solution_zip_base64(main_py: &str) -> String {
+    solution_zip_base64_with_scripts(
+        main_py,
+        "#!/usr/bin/env sh\nset -eu\nprintf setup > .setup-marker\n",
+        "#!/usr/bin/env sh\nset -eu\nmkdir -p build\nprintf built > build/generated.txt\n",
+        "#!/usr/bin/env sh\nset -eu\ntest -f build/generated.txt\npython main.py\n",
+    )
+}
+
+/// Create a base64 sample-sum ZIP with caller-provided phase scripts.
+pub fn solution_zip_base64_with_scripts(
+    main_py: &str,
+    setup_sh: &str,
+    build_sh: &str,
+    run_sh: &str,
+) -> String {
+    zip_project_zip_base64(vec![
+        (
+            "agentics.solution.json",
+            serde_json::json!({
+                "protocol": "zip_project",
+                "protocol_version": 1,
+                "runtime": {
+                    "language": "python",
+                    "language_version": "3.12",
+                    "runtime_profile": "python-cpu"
+                },
+                "commands": {
+                    "setup": "scripts/setup.sh",
+                    "build": "scripts/build.sh",
+                    "run": "run.sh"
+                },
+                "phases": {
+                    "setup": { "timeout_sec": 20, "network_access": "disabled" },
+                    "build": { "timeout_sec": 20, "network_access": "disabled" },
+                    "run": { "timeout_sec": 20, "network_access": "disabled" }
+                },
+                "interface": {
+                    "kind": "stdio",
+                    "input_contract": "JSON on stdin",
+                    "output_contract": "answer on stdout"
+                },
+                "dependencies": { "policy": "image_provided" }
+            })
+            .to_string(),
+        ),
+        ("scripts/setup.sh", setup_sh.to_string()),
+        ("scripts/build.sh", build_sh.to_string()),
+        ("run.sh", run_sh.to_string()),
+        ("main.py", main_py.to_string()),
+    ])
+}
+
+/// Create a base64 ZIP containing a file-mode grid-routing solution.
+pub fn grid_routing_solution_zip_base64(paths_by_instance: &[(&str, &str)]) -> String {
+    let path_entries = paths_by_instance
+        .iter()
+        .map(|(instance_id, path)| format!("    {instance_id:?}: {path:?},"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let main_py = [
+        "from __future__ import annotations",
+        "",
+        "import json",
+        "import os",
+        "from pathlib import Path",
+        "",
+        "PATHS = {",
+        &path_entries,
+        "}",
+        "",
+        "def main() -> None:",
+        "    input_dir = Path(os.environ['AGENTICS_INPUT_DIR'])",
+        "    output_dir = Path(os.environ['AGENTICS_OUTPUT_DIR'])",
+        "    payload = json.loads((input_dir / 'case.json').read_text())",
+        "    output_dir.mkdir(parents=True, exist_ok=True)",
+        "    (output_dir / 'path.txt').write_text(PATHS[payload['instance_id']] + '\\n')",
+        "",
+        "if __name__ == '__main__':",
+        "    main()",
+        "",
+    ]
+    .join("\n");
+
+    zip_project_zip_base64(vec![
+        (
+            "agentics.solution.json",
+            serde_json::json!({
+                "protocol": "zip_project",
+                "protocol_version": 1,
+                "runtime": {
+                    "language": "python",
+                    "language_version": "3.12",
+                    "runtime_profile": "python-cpu"
+                },
+                "commands": {
+                    "run": "run.sh"
+                },
+                "phases": {
+                    "run": { "timeout_sec": 20, "network_access": "disabled" }
+                },
+                "interface": {
+                    "kind": "file_system",
+                    "input_contract": "case.json in AGENTICS_INPUT_DIR",
+                    "output_contract": "path.txt in AGENTICS_OUTPUT_DIR"
+                },
+                "dependencies": { "policy": "image_provided" }
+            })
+            .to_string(),
+        ),
+        (
+            "run.sh",
+            "#!/usr/bin/env sh\nset -eu\npython main.py\n".to_string(),
+        ),
+        ("main.py", main_py),
+    ])
+}
+
+/// Create a base64 ZIP from explicit archive entries.
+pub fn zip_project_zip_base64(entries: Vec<(&str, String)>) -> String {
     use base64::{Engine as _, engine::general_purpose::STANDARD};
 
     let cursor = std::io::Cursor::new(Vec::new());
@@ -115,12 +231,14 @@ pub fn solution_zip_base64(main_py: &str) -> String {
     let options = zip::write::SimpleFileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated);
 
-    archive
-        .start_file("main.py", options)
-        .expect("failed to start main.py in zip");
-    archive
-        .write_all(main_py.as_bytes())
-        .expect("failed to write main.py to zip");
+    for (name, content) in entries {
+        archive
+            .start_file(name, options)
+            .unwrap_or_else(|_| panic!("failed to start {name} in zip"));
+        archive
+            .write_all(content.as_bytes())
+            .unwrap_or_else(|_| panic!("failed to write {name} to zip"));
+    }
 
     let cursor = archive.finish().expect("failed to finish zip");
     STANDARD.encode(cursor.into_inner())
@@ -136,7 +254,7 @@ pub fn sample_sum_solution(expression: &str) -> String {
         "",
         "",
         "def main() -> None:",
-        "    payload = json.loads(sys.argv[1])",
+        "    payload = json.loads(sys.stdin.read())",
         &format!("    print({expression})"),
         "",
         "",
@@ -150,9 +268,6 @@ pub fn sample_sum_solution(expression: &str) -> String {
 /// Execute one production worker cycle against the integration-test database.
 pub async fn run_worker_once(pool: &PgPool, config: &Config) {
     let docker = connect_docker(config).expect("failed to connect to Docker");
-    pre_pull_image(&docker, &config.runner_python_image)
-        .await
-        .expect("failed to pull runner image");
     let storage = LocalStorage::new(&config.storage_root);
 
     worker::cycle::run_worker_cycle(

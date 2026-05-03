@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use bollard::Docker;
 use tokio::time::interval;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 use shared::config::Config;
 use shared::db::pool::create_pool;
@@ -18,7 +18,7 @@ use shared::db::{
     mark_evaluation_finished, mark_evaluation_started, reap_stuck_jobs, upsert_service_heartbeat,
 };
 use shared::models::evaluation::EvaluationStatus;
-use shared::runner::{connect_docker, execute_evaluation_job, pre_pull_image};
+use shared::runner::{connect_docker, execute_evaluation_job};
 use shared::storage::LocalStorage;
 
 /// Long-lived evaluation worker with shared database, Docker, and storage handles.
@@ -31,18 +31,13 @@ pub struct Worker {
 }
 
 impl Worker {
-    /// Build a worker from runtime configuration and pre-pull the runner image.
+    /// Build a worker from runtime configuration.
     pub async fn new(config: Arc<Config>) -> anyhow::Result<Self> {
         let db = create_pool(&config, 2).await?;
         let docker = connect_docker(&config)?;
         let storage: Arc<dyn shared::storage::Storage> =
             Arc::new(LocalStorage::new(&config.storage_root));
         let worker_id = format!("agentics-worker-{}", std::process::id());
-
-        info!("pre-pulling runner image: {}", config.runner_python_image);
-        if let Err(e) = pre_pull_image(&docker, &config.runner_python_image).await {
-            warn!("failed to pre-pull image: {e}")
-        }
 
         Ok(Self {
             config,
@@ -99,7 +94,7 @@ pub async fn run_worker_cycle(
     storage: &dyn shared::storage::Storage,
     worker_id: &str,
 ) -> anyhow::Result<()> {
-    let reaped = reap_stuck_jobs(db, (config.runner_timeout_sec * 2 / 60).max(1) as i32).await?;
+    let reaped = reap_stuck_jobs(db, config.worker_stale_job_minutes.max(1)).await?;
     if reaped > 0 {
         info!("reaped {reaped} stuck jobs");
     }

@@ -101,6 +101,7 @@ pub async fn ensure_challenges_seeded_from_root(
                 continue;
             }
 
+            crate::challenge_bundle::validate_challenge_bundle(&bundle_dir).await?;
             let spec = crate::challenge_bundle::read_challenge_bundle_spec(&bundle_dir).await?;
             let statement_path = bundle_dir.join("statement.md");
             let description =

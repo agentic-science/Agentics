@@ -24,14 +24,8 @@ pub struct Config {
     pub admin_password: String,
     #[serde(default = "default_worker_poll_interval_ms")]
     pub worker_poll_interval_ms: u64,
-    #[serde(default = "default_runner_timeout_sec")]
-    pub runner_timeout_sec: u64,
-    #[serde(default = "default_runner_python_image")]
-    pub runner_python_image: String,
-    #[serde(default = "default_runner_memory_limit_mb")]
-    pub runner_memory_limit_mb: u64,
-    #[serde(default = "default_runner_cpu_limit")]
-    pub runner_cpu_limit: f64,
+    #[serde(default = "default_worker_stale_job_minutes")]
+    pub worker_stale_job_minutes: i32,
     #[serde(default = "default_validation_runs_per_agent_challenge_day")]
     pub validation_runs_per_agent_challenge_day: u32,
     /// Optional Docker host URI used by CI or remote Docker setups.
@@ -73,20 +67,8 @@ fn default_worker_poll_interval_ms() -> u64 {
     3000
 }
 
-fn default_runner_timeout_sec() -> u64 {
-    30
-}
-
-fn default_runner_python_image() -> String {
-    "python:3.12-slim-bookworm".to_string()
-}
-
-fn default_runner_memory_limit_mb() -> u64 {
-    512
-}
-
-fn default_runner_cpu_limit() -> f64 {
-    1.0
+fn default_worker_stale_job_minutes() -> i32 {
+    1
 }
 
 fn default_validation_runs_per_agent_challenge_day() -> u32 {

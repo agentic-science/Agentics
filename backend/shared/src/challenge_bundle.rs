@@ -9,7 +9,10 @@ use std::collections::HashSet;
 use std::path::Path;
 
 use crate::error::{AppError, Result};
-use crate::models::challenge::ChallengeBundleSpec;
+use crate::models::challenge::{
+    ChallengeBundleSpec, ChallengeRunInputFile, ChallengeRunManifest, ChallengeRunSpec,
+};
+use crate::zip_project::{ZIP_PROJECT_MANIFEST_FILE, ZIP_PROJECT_PROTOCOL};
 
 /// Read `spec.json` from a bundle directory and validate its contract fields.
 pub async fn read_challenge_bundle_spec(bundle_dir: &Path) -> Result<ChallengeBundleSpec> {
@@ -21,18 +24,47 @@ pub async fn read_challenge_bundle_spec(bundle_dir: &Path) -> Result<ChallengeBu
     Ok(spec)
 }
 
+/// Read and validate one challenge-owned run manifest from a bundle directory.
+pub async fn read_challenge_run_manifest(
+    bundle_dir: &Path,
+    manifest_path: &str,
+) -> Result<ChallengeRunManifest> {
+    require_safe_relative_path(manifest_path, "execution run manifest")?;
+    let raw = tokio::fs::read_to_string(bundle_dir.join(manifest_path)).await?;
+    let manifest: ChallengeRunManifest = serde_json::from_str(&raw)
+        .map_err(|e| AppError::Validation(format!("invalid run manifest {manifest_path}: {e}")))?;
+    validate_challenge_run_manifest(&manifest)?;
+    Ok(manifest)
+}
+
 /// Validate that a challenge bundle has the required files and declared data directories.
 pub async fn validate_challenge_bundle(bundle_dir: &Path) -> Result<()> {
     let spec = read_challenge_bundle_spec(bundle_dir).await?;
     let spec_path = bundle_dir.join("spec.json");
     let statement_path = bundle_dir.join("statement.md");
-    let scorer_path = bundle_dir.join(&spec.scorer.entrypoint);
     let public_dir = bundle_dir.join(&spec.datasets.public_dir);
 
     assert_path_type(&spec_path, "file", "spec.json").await?;
     assert_path_type(&statement_path, "file", "statement.md").await?;
-    assert_path_type(&scorer_path, "file", "scorer entrypoint").await?;
+    if let Some(script_path) = declared_scorer_script(&spec.scorer.command) {
+        assert_path_type(&bundle_dir.join(script_path), "file", "scorer script").await?;
+    }
     assert_path_type(&public_dir, "directory", "public data dir").await?;
+
+    if spec.datasets.validation_enabled {
+        let validation_runs = spec.execution.validation_runs.as_deref().ok_or_else(|| {
+            AppError::Validation(
+                "execution.validation_runs is required when validation_enabled is true".to_string(),
+            )
+        })?;
+        assert_path_type(
+            &bundle_dir.join(validation_runs),
+            "file",
+            "validation run manifest",
+        )
+        .await?;
+        read_challenge_run_manifest(bundle_dir, validation_runs).await?;
+    }
 
     if spec.datasets.private_benchmark_enabled
         && let Some(ref private_benchmark_dir) = spec.datasets.private_benchmark_dir
@@ -43,6 +75,19 @@ pub async fn validate_challenge_bundle(bundle_dir: &Path) -> Result<()> {
             "private benchmark data dir",
         )
         .await?;
+        let official_runs = spec.execution.official_runs.as_deref().ok_or_else(|| {
+            AppError::Validation(
+                "execution.official_runs is required when private_benchmark_enabled is true"
+                    .to_string(),
+            )
+        })?;
+        assert_path_type(
+            &bundle_dir.join(official_runs),
+            "file",
+            "official run manifest",
+        )
+        .await?;
+        read_challenge_run_manifest(bundle_dir, official_runs).await?;
     }
 
     Ok(())
@@ -170,30 +215,21 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
     if spec.schema_version != 1 {
         return Err(AppError::Validation("schema_version must be 1".to_string()));
     }
-    if spec.solution.format != "python_zip_project" {
-        return Err(AppError::Validation(
-            "solution.format must be python_zip_project".to_string(),
-        ));
+    if spec.solution.protocol != ZIP_PROJECT_PROTOCOL {
+        return Err(AppError::Validation(format!(
+            "solution.protocol must be {ZIP_PROJECT_PROTOCOL}"
+        )));
     }
-    if spec.solution.language != "python" {
-        return Err(AppError::Validation(
-            "solution.language must be python".to_string(),
-        ));
+    require_safe_relative_path(&spec.solution.manifest_file, "solution.manifest_file")?;
+    if spec.solution.manifest_file != ZIP_PROJECT_MANIFEST_FILE {
+        return Err(AppError::Validation(format!(
+            "solution.manifest_file must be {ZIP_PROJECT_MANIFEST_FILE}"
+        )));
     }
-    require_safe_relative_path(&spec.solution.entrypoint, "solution.entrypoint")?;
-    require_safe_relative_path(&spec.scorer.entrypoint, "scorer.entrypoint")?;
+    validate_scorer_command(&spec.scorer.command)?;
     require_safe_relative_path(&spec.scorer.result_file, "scorer.result_file")?;
-
-    if spec.limits.time_limit_sec <= 0.0 || !spec.limits.time_limit_sec.is_finite() {
-        return Err(AppError::Validation(
-            "limits.time_limit_sec must be positive".to_string(),
-        ));
-    }
-    if spec.limits.memory_limit_mb <= 0 {
-        return Err(AppError::Validation(
-            "limits.memory_limit_mb must be positive".to_string(),
-        ));
-    }
+    validate_resource_profile(spec)?;
+    validate_execution(spec)?;
 
     require_safe_relative_path(&spec.datasets.public_dir, "datasets.public_dir")?;
     if spec.datasets.private_benchmark_policy != "score_only" {
@@ -222,6 +258,164 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
 
     validate_metric_schema(spec)?;
     validate_community(spec)?;
+
+    Ok(())
+}
+
+fn validate_scorer_command(command: &[String]) -> Result<()> {
+    if command.is_empty() {
+        return Err(AppError::Validation(
+            "scorer.command must not be empty".to_string(),
+        ));
+    }
+    for (index, part) in command.iter().enumerate() {
+        require_non_empty(part, &format!("scorer.command[{index}]"))?;
+        if part.contains('\0') {
+            return Err(AppError::Validation(format!(
+                "scorer.command[{index}] must not contain NUL bytes"
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+fn declared_scorer_script(command: &[String]) -> Option<&str> {
+    command
+        .iter()
+        .find(|part| is_safe_relative_path(part) && part.ends_with(".py"))
+        .map(String::as_str)
+}
+
+fn validate_resource_profile(spec: &ChallengeBundleSpec) -> Result<()> {
+    let profile = &spec.resource_profile;
+    require_non_empty(&profile.id, "resource_profile.id")?;
+    require_non_empty(&profile.solution_image, "resource_profile.solution_image")?;
+    require_non_empty(&profile.scorer_image, "resource_profile.scorer_image")?;
+    validate_image_digest(
+        &profile.solution_image,
+        profile.solution_image_digest.as_deref(),
+        "resource_profile.solution_image_digest",
+    )?;
+    validate_image_digest(
+        &profile.scorer_image,
+        profile.scorer_image_digest.as_deref(),
+        "resource_profile.scorer_image_digest",
+    )?;
+    validate_positive_u64(profile.timeout_sec, "resource_profile.timeout_sec")?;
+    validate_positive_u64(profile.memory_limit_mb, "resource_profile.memory_limit_mb")?;
+    validate_positive_u32(
+        profile.cpu_limit_millis,
+        "resource_profile.cpu_limit_millis",
+    )?;
+    validate_positive_u64(profile.disk_limit_mb, "resource_profile.disk_limit_mb")?;
+    if let Some(hardware) = &profile.hardware {
+        require_non_empty(&hardware.kind, "resource_profile.hardware.kind")?;
+        if let Some(description) = &hardware.description {
+            require_non_empty(description, "resource_profile.hardware.description")?;
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_image_digest(image: &str, digest: Option<&str>, field: &str) -> Result<()> {
+    let Some(digest) = digest else {
+        return Ok(());
+    };
+    require_non_empty(digest, field)?;
+    if !digest.starts_with("sha256:") {
+        return Err(AppError::Validation(format!(
+            "{field} must start with sha256:"
+        )));
+    }
+    if !image.contains(&format!("@{digest}")) {
+        return Err(AppError::Validation(format!(
+            "{field} must match the digest pinned in the image reference"
+        )));
+    }
+
+    Ok(())
+}
+
+fn validate_execution(spec: &ChallengeBundleSpec) -> Result<()> {
+    if let Some(path) = &spec.execution.validation_runs {
+        require_safe_relative_path(path, "execution.validation_runs")?;
+    }
+    if let Some(path) = &spec.execution.official_runs {
+        require_safe_relative_path(path, "execution.official_runs")?;
+    }
+    if spec.datasets.validation_enabled && spec.execution.validation_runs.is_none() {
+        return Err(AppError::Validation(
+            "execution.validation_runs is required when validation_enabled is true".to_string(),
+        ));
+    }
+    if spec.datasets.private_benchmark_enabled && spec.execution.official_runs.is_none() {
+        return Err(AppError::Validation(
+            "execution.official_runs is required when private_benchmark_enabled is true"
+                .to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+fn validate_challenge_run_manifest(manifest: &ChallengeRunManifest) -> Result<()> {
+    if manifest.runs.is_empty() {
+        return Err(AppError::Validation(
+            "run manifest must declare at least one run".to_string(),
+        ));
+    }
+
+    let mut run_ids = HashSet::with_capacity(manifest.runs.len());
+    for run in &manifest.runs {
+        validate_challenge_run(run)?;
+        if !run_ids.insert(run.run_id.as_str()) {
+            return Err(AppError::Validation(format!(
+                "run manifest contains duplicate run_id `{}`",
+                run.run_id
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_challenge_run(run: &ChallengeRunSpec) -> Result<()> {
+    require_metric_id(&run.run_id, "runs[].run_id")?;
+    if run.stdin_json.is_some() && run.stdin_text.is_some() {
+        return Err(AppError::Validation(
+            "runs[].stdin_json and runs[].stdin_text cannot both be present".to_string(),
+        ));
+    }
+    for input in &run.input_files {
+        validate_run_input_file(input)?;
+    }
+    let mut output_paths = HashSet::with_capacity(run.output_files.len());
+    for path in &run.output_files {
+        require_safe_relative_path(path, "runs[].output_files[]")?;
+        if !output_paths.insert(path.as_str()) {
+            return Err(AppError::Validation(format!(
+                "runs[].output_files contains duplicate path `{path}`"
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_run_input_file(input: &ChallengeRunInputFile) -> Result<()> {
+    require_safe_relative_path(&input.path, "runs[].input_files[].path")?;
+    if input.content.is_some() && input.content_json.is_some() {
+        return Err(AppError::Validation(
+            "runs[].input_files[].content and content_json cannot both be present".to_string(),
+        ));
+    }
+    if input.content.is_none() && input.content_json.is_none() {
+        return Err(AppError::Validation(
+            "runs[].input_files[] must declare content or content_json".to_string(),
+        ));
+    }
 
     Ok(())
 }
@@ -361,6 +555,26 @@ fn require_non_empty(value: &str, field: &str) -> Result<()> {
     Ok(())
 }
 
+fn validate_positive_u64(value: u64, field: &str) -> Result<()> {
+    if value == 0 {
+        return Err(AppError::Validation(format!(
+            "{field} must be greater than 0"
+        )));
+    }
+
+    Ok(())
+}
+
+fn validate_positive_u32(value: u32, field: &str) -> Result<()> {
+    if value == 0 {
+        return Err(AppError::Validation(format!(
+            "{field} must be greater than 0"
+        )));
+    }
+
+    Ok(())
+}
+
 fn require_safe_relative_path(value: &str, field: &str) -> Result<()> {
     if !is_safe_relative_path(value) {
         return Err(AppError::Validation(format!(
@@ -390,10 +604,11 @@ mod tests {
     use std::path::Path;
 
     use crate::models::challenge::{
-        ChallengeBundleSpec, CommunitySpec, DatasetsSpec, LimitsSpec, MetricDirection,
-        MetricSchemaSpec, MetricVisibility, ScorerSpec, SolutionSpec,
+        ChallengeBundleSpec, ChallengeExecutionSpec, CommunitySpec, DatasetsSpec, MetricDirection,
+        MetricSchemaSpec, MetricVisibility, ResourceProfileSpec, ScorerSpec, SolutionSpec,
     };
     use crate::models::evaluation::ScoreVisibility;
+    use crate::zip_project::ZipProjectNetworkAccess;
 
     use super::{validate_challenge_bundle, validate_challenge_bundle_spec};
 
@@ -404,17 +619,32 @@ mod tests {
             challenge_title: "Sample Sum".to_string(),
             challenge_version: "v1".to_string(),
             solution: SolutionSpec {
-                format: "python_zip_project".to_string(),
-                language: "python".to_string(),
-                entrypoint: "main.py".to_string(),
+                protocol: "zip_project".to_string(),
+                manifest_file: "agentics.solution.json".to_string(),
             },
             scorer: ScorerSpec {
-                entrypoint: "scorer/run.py".to_string(),
+                command: vec!["python".to_string(), "scorer/run.py".to_string()],
                 result_file: "result.json".to_string(),
             },
-            limits: LimitsSpec {
-                time_limit_sec: 2.0,
-                memory_limit_mb: 128,
+            resource_profile: ResourceProfileSpec {
+                id: "python-cpu-small".to_string(),
+                solution_image: "python:3.12-slim-bookworm".to_string(),
+                solution_image_digest: None,
+                scorer_image: "python:3.12-slim-bookworm".to_string(),
+                scorer_image_digest: None,
+                timeout_sec: 30,
+                memory_limit_mb: 512,
+                cpu_limit_millis: 1000,
+                disk_limit_mb: 1024,
+                setup_network_access: ZipProjectNetworkAccess::Enabled,
+                build_network_access: ZipProjectNetworkAccess::Disabled,
+                run_network_access: ZipProjectNetworkAccess::Disabled,
+                scorer_network_access: ZipProjectNetworkAccess::Disabled,
+                hardware: None,
+            },
+            execution: ChallengeExecutionSpec {
+                validation_runs: Some("public/runs.json".to_string()),
+                official_runs: Some("private-benchmark/runs.json".to_string()),
             },
             datasets: DatasetsSpec {
                 public_dir: "public".to_string(),
@@ -437,17 +667,28 @@ mod tests {
             "challenge_title": "Sample Sum",
             "challenge_version": "v1",
             "solution": {
-                "format": "python_zip_project",
-                "language": "python",
-                "entrypoint": "main.py"
+                "protocol": "zip_project",
+                "manifest_file": "agentics.solution.json"
             },
             "scorer": {
-                "entrypoint": "scorer/run.py",
+                "command": ["python", "scorer/run.py"],
                 "result_file": "result.json"
             },
-            "limits": {
-                "time_limit_sec": 2.0,
-                "memory_limit_mb": 128
+            "resource_profile": {
+                "id": "python-cpu-small",
+                "solution_image": "python:3.12-slim-bookworm",
+                "scorer_image": "python:3.12-slim-bookworm",
+                "timeout_sec": 30,
+                "memory_limit_mb": 512,
+                "cpu_limit_millis": 1000,
+                "disk_limit_mb": 1024,
+                "setup_network_access": "enabled",
+                "build_network_access": "disabled",
+                "run_network_access": "disabled",
+                "scorer_network_access": "disabled"
+            },
+            "execution": {
+                "official_runs": "private-benchmark/runs.json"
             },
             "datasets": {
                 "public_dir": "public",
@@ -559,6 +800,11 @@ mod tests {
     fn create_bundle(root: &Path, spec: &ChallengeBundleSpec) {
         std::fs::create_dir_all(root.join("scorer")).expect("failed to create scorer dir");
         std::fs::create_dir_all(root.join("public")).expect("failed to create public dir");
+        std::fs::write(
+            root.join("public/runs.json"),
+            r#"{"runs":[{"run_id":"public-1","interface":"stdio","stdin_text":"1"}]}"#,
+        )
+        .expect("failed to write public runs");
         std::fs::write(
             root.join("spec.json"),
             serde_json::to_string(spec).expect("failed to serialize spec"),
