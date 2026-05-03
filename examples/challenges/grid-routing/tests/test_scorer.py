@@ -11,43 +11,27 @@ CHALLENGE_DIR = ROOT / "examples" / "challenges" / "grid-routing" / "v1"
 SCORER_PATH = CHALLENGE_DIR / "scorer" / "run.py"
 
 
-def write_solution(target_dir: Path, paths_by_instance: dict[str, str]) -> Path:
-    solution_dir = target_dir / "solution"
-    solution_dir.mkdir(parents=True, exist_ok=True)
-    (solution_dir / "main.py").write_text(
-        "\n".join(
-            [
-                "from __future__ import annotations",
-                "",
-                "import json",
-                "import sys",
-                "",
-                "",
-                "PATHS = {",
-                *[
-                    f"    {instance_id!r}: {path!r},"
-                    for instance_id, path in sorted(paths_by_instance.items())
-                ],
-                "}",
-                "",
-                "",
-                "def main() -> None:",
-                "    payload = json.loads(sys.argv[1])",
-                "    print(PATHS[payload['instance_id']])",
-                "",
-                "",
-                "if __name__ == '__main__':",
-                "    main()",
-                "",
-            ]
-        ),
-        encoding="utf-8",
+def runs_file_for_mode(mode: str) -> Path:
+    return CHALLENGE_DIR / (
+        "public/runs.json" if mode == "validation" else "private-benchmark/runs.json"
     )
-    return solution_dir
 
 
 def run_scorer(tmp_path: Path, *, mode: str, paths_by_instance: dict[str, str]) -> dict:
-    solution_dir = write_solution(tmp_path, paths_by_instance)
+    runs_file = runs_file_for_mode(mode)
+    solution_runs_dir = tmp_path / "solution-runs"
+    runs = json.loads(runs_file.read_text(encoding="utf-8"))["runs"]
+    for run in runs:
+        run_dir = solution_runs_dir / run["run_id"]
+        input_dir = run_dir / "input"
+        output_dir = run_dir / "output"
+        input_dir.mkdir(parents=True, exist_ok=True)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        case = run["input_files"][0]["content_json"]
+        (input_dir / "case.json").write_text(json.dumps(case), encoding="utf-8")
+        path = paths_by_instance[run["run_id"]]
+        (output_dir / "path.txt").write_text(f"{path}\n", encoding="utf-8")
+
     output_path = tmp_path / "result.json"
 
     subprocess.run(
@@ -56,12 +40,14 @@ def run_scorer(tmp_path: Path, *, mode: str, paths_by_instance: dict[str, str]) 
             str(SCORER_PATH),
             "--challenge-dir",
             str(CHALLENGE_DIR),
-            "--solution-dir",
-            str(solution_dir),
+            "--solution-runs-dir",
+            str(solution_runs_dir),
             "--output-path",
             str(output_path),
             "--mode",
             mode,
+            "--runs-file",
+            str(runs_file),
         ],
         check=True,
         cwd=ROOT,
@@ -98,7 +84,7 @@ def test_validation_mode_returns_public_scores(tmp_path: Path) -> None:
     assert all(item["status"] == "passed" for item in result["public_results"])
     assert all(item["score"] == 1 for item in result["public_results"])
     assert result["validation_summary"] == {"score": 1, "passed": 3, "total": 3}
-    assert result["official_summary"] is None
+    assert result.get("official_summary") is None
 
 
 def test_validation_mode_rewards_valid_but_indirect_route(tmp_path: Path) -> None:
@@ -151,7 +137,7 @@ def test_official_mode_uses_private_benchmark_cases(tmp_path: Path) -> None:
     assert result["status"] == "passed"
     assert result["mode"] == "official"
     assert result["public_results"] == []
-    assert result["validation_summary"] is None
+    assert result.get("validation_summary") is None
     assert result["official_summary"] == {"score": 1, "passed": 2, "total": 2}
     assert result["aggregate_metrics"] == [
         {"metric_id": "score", "value": 1},

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import collections
 import json
+import os
 import sys
+from pathlib import Path
 
 
 DIRECTIONS = {
@@ -72,8 +74,15 @@ def solve(grid: list[str]) -> str:
 
 
 def main() -> None:
-    payload = json.loads(sys.argv[1])
-    print(solve(payload["grid"]))
+    if len(sys.argv) > 1:
+        payload = json.loads(sys.argv[1])
+        print(solve(payload["grid"]))
+        return
+
+    input_path = Path(os.environ["AGENTICS_INPUT_DIR"]) / "case.json"
+    output_path = Path(os.environ["AGENTICS_OUTPUT_DIR"]) / "path.txt"
+    payload = json.loads(input_path.read_text(encoding="utf-8"))
+    output_path.write_text(solve(payload["grid"]) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@
 ## 本地自测
 
 ```bash
-uv run python examples/solutions/sample-sum-perfect/main.py '{"a":1,"b":2}'
+printf '{"a":1,"b":2}' | uv run python examples/solutions/sample-sum-perfect/main.py
 ```
 
 预期输出：
@@ -17,8 +17,7 @@ uv run python examples/solutions/sample-sum-perfect/main.py '{"a":1,"b":2}'
 ## 打包 zip
 
 ```bash
-cd examples/solutions/sample-sum-perfect
-uv run python -m zipfile -c /tmp/sample-sum-perfect.zip main.py
+agentics submit sample-sum --dir examples/solutions/sample-sum-perfect
 ```
 
 ## 转 base64

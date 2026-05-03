@@ -5,7 +5,7 @@ import sys
 
 
 def main() -> None:
-    payload = json.loads(sys.argv[1])
+    payload = json.loads(sys.stdin.read() or sys.argv[1])
     print(payload["a"] + payload["b"])
 
 

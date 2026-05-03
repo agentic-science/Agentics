@@ -1,0 +1,49 @@
+{
+  "runs": [
+    {
+      "run_id": "public-1",
+      "interface": "file_system",
+      "input_files": [
+        {
+          "path": "case.json",
+          "content_json": {
+            "instance_id": "public-1",
+            "grid": ["S....", ".###.", "...#.", ".#...", "...#G"]
+          }
+        }
+      ],
+      "output_files": ["path.txt"],
+      "benchmark_path": "RRRRDDDD"
+    },
+    {
+      "run_id": "public-2",
+      "interface": "file_system",
+      "input_files": [
+        {
+          "path": "case.json",
+          "content_json": {
+            "instance_id": "public-2",
+            "grid": ["S#...", ".#.#.", ".#.#.", ".#.#.", "...#G"]
+          }
+        }
+      ],
+      "output_files": ["path.txt"],
+      "benchmark_path": "DDDDRRUUUURRDDDD"
+    },
+    {
+      "run_id": "public-3",
+      "interface": "file_system",
+      "input_files": [
+        {
+          "path": "case.json",
+          "content_json": {
+            "instance_id": "public-3",
+            "grid": ["S...##", "##..##", "##..##", "##...#", "####.#", "####.G"]
+          }
+        }
+      ],
+      "output_files": ["path.txt"],
+      "benchmark_path": "RRDDRDRDDR"
+    }
+  ]
+}

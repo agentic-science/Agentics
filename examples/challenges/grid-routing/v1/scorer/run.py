@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -17,11 +15,12 @@ DIRECTIONS = {
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run grid routing scorer")
+    parser = argparse.ArgumentParser(description="Score worker-managed grid-routing runs")
     parser.add_argument("--challenge-dir", required=True)
-    parser.add_argument("--solution-dir", required=True)
+    parser.add_argument("--solution-runs-dir", required=True)
     parser.add_argument("--output-path", required=True)
     parser.add_argument("--mode", choices=["validation", "official"], required=True)
+    parser.add_argument("--runs-file", required=True)
     return parser.parse_args()
 
 
@@ -39,10 +38,7 @@ def find_marker(grid: list[str], marker: str) -> tuple[int, int]:
 
 def analyze_path(grid: list[str], path: str) -> dict[str, Any]:
     if any(move not in DIRECTIONS for move in path):
-        return {
-            "status": "error",
-            "message": "path must only contain U, D, L, R",
-        }
+        return {"status": "error", "message": "path must only contain U, D, L, R"}
 
     height = len(grid)
     width = len(grid[0]) if grid else 0
@@ -69,22 +65,13 @@ def analyze_path(grid: list[str], path: str) -> dict[str, Any]:
         previous_move = move
 
         if row < 0 or row >= height or col < 0 or col >= width:
-            return {
-                "status": "failed",
-                "message": f"left grid at step {step_index}",
-            }
+            return {"status": "failed", "message": f"left grid at step {step_index}"}
 
         if grid[row][col] == "#":
-            return {
-                "status": "failed",
-                "message": f"hit obstacle at step {step_index}",
-            }
+            return {"status": "failed", "message": f"hit obstacle at step {step_index}"}
 
     if (row, col) != goal:
-        return {
-            "status": "failed",
-            "message": "did not reach goal",
-        }
+        return {"status": "failed", "message": "did not reach goal"}
 
     return {
         "status": "passed",
@@ -94,119 +81,54 @@ def analyze_path(grid: list[str], path: str) -> dict[str, Any]:
     }
 
 
-def score_case(
-    *,
-    case: dict[str, Any],
-    solution_entrypoint: Path,
-    time_limit_sec: float,
-    logs: list[str],
-) -> dict[str, Any]:
-    case_id = case["case_id"]
-    payload = json.dumps(case["input"], separators=(",", ":"))
-
-    try:
-        completed = subprocess.run(
-            [sys.executable, str(solution_entrypoint), payload],
-            capture_output=True,
-            text=True,
-            timeout=time_limit_sec,
-            check=False,
-        )
-    except subprocess.TimeoutExpired:
-        logs.append(f"{case_id}: timeout")
+def score_run(run: dict[str, Any], solution_runs_dir: Path, logs: list[str]) -> dict[str, Any]:
+    run_id = run["run_id"]
+    candidate_path_file = solution_runs_dir / run_id / "output" / "path.txt"
+    case_file = solution_runs_dir / run_id / "input" / "case.json"
+    if not candidate_path_file.is_file():
         return {
-            "case_id": case_id,
+            "case_id": run_id,
             "status": "error",
             "score": 0,
-            "message": "timeout",
+            "message": "missing output/path.txt",
         }
 
-    if completed.returncode != 0:
-        stderr = completed.stderr.strip() or "solution exited with non-zero status"
-        logs.append(f"{case_id}: runtime error: {stderr}")
-        return {
-            "case_id": case_id,
-            "status": "error",
-            "score": 0,
-            "message": stderr,
-        }
-
-    candidate_path = completed.stdout.strip()
-    if not candidate_path:
-        logs.append(f"{case_id}: empty output")
-        return {
-            "case_id": case_id,
-            "status": "error",
-            "score": 0,
-            "message": "empty output",
-        }
-
-    grid = case["input"]["grid"]
-    benchmark_metrics = analyze_path(grid, case["benchmark_path"])
+    grid = load_json(case_file)["grid"]
+    candidate_path = candidate_path_file.read_text(encoding="utf-8").strip()
+    benchmark_metrics = analyze_path(grid, run["benchmark_path"])
     if benchmark_metrics["status"] != "passed":
-        raise ValueError(f"invalid benchmark for {case_id}: {benchmark_metrics['message']}")
+        raise ValueError(f"invalid benchmark for {run_id}: {benchmark_metrics['message']}")
 
     candidate_metrics = analyze_path(grid, candidate_path)
     if candidate_metrics["status"] != "passed":
-        logs.append(f"{case_id}: {candidate_metrics['message']}")
+        logs.append(f"{run_id}: {candidate_metrics['message']}")
         return {
-            "case_id": case_id,
+            "case_id": run_id,
             "status": candidate_metrics["status"],
             "score": 0,
             "message": candidate_metrics["message"],
         }
 
     efficiency = benchmark_metrics["steps"] / max(candidate_metrics["steps"], 1)
-    turn_bonus = min(
-        (benchmark_metrics["turns"] + 1) / (candidate_metrics["turns"] + 1),
-        1,
-    )
+    turn_bonus = min((benchmark_metrics["turns"] + 1) / (candidate_metrics["turns"] + 1), 1)
     straight_bonus = min(
         candidate_metrics["longest_run"] / max(benchmark_metrics["longest_run"], 1),
         1,
     )
-    score = round(
-        0.60 + 0.20 * efficiency + 0.12 * turn_bonus + 0.08 * straight_bonus,
-        4,
-    )
+    score = round(0.60 + 0.20 * efficiency + 0.12 * turn_bonus + 0.08 * straight_bonus, 4)
     message = (
         f"steps={candidate_metrics['steps']}, turns={candidate_metrics['turns']}, "
         f"longest_run={candidate_metrics['longest_run']}, score={score}"
     )
-    logs.append(f"{case_id}: {message}")
-
-    return {
-        "case_id": case_id,
-        "status": "passed",
-        "score": score,
-        "message": message,
-    }
-
-
-def score_dataset(
-    *,
-    solution_entrypoint: Path,
-    cases_path: Path,
-    time_limit_sec: float,
-    logs: list[str],
-) -> list[dict[str, Any]]:
-    cases = load_json(cases_path)
-    return [
-        score_case(
-            case=case,
-            solution_entrypoint=solution_entrypoint,
-            time_limit_sec=time_limit_sec,
-            logs=logs,
-        )
-        for case in cases
-    ]
+    logs.append(f"{run_id}: {message}")
+    return {"case_id": run_id, "status": "passed", "score": score, "message": message}
 
 
 def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
     total = len(results)
     passed = sum(1 for result in results if result["status"] == "passed")
-    average_score = 0 if total == 0 else round(sum(result["score"] for result in results) / total, 4)
-    return {"score": average_score, "passed": passed, "total": total}
+    score = 0 if total == 0 else round(sum(result["score"] for result in results) / total, 4)
+    return {"score": score, "passed": passed, "total": total}
 
 
 def aggregate_metrics(summary: dict[str, Any]) -> list[dict[str, Any]]:
@@ -228,65 +150,26 @@ def run_metrics(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def main() -> int:
     args = parse_args()
-    challenge_dir = Path(args.challenge_dir)
-    solution_dir = Path(args.solution_dir)
-    output_path = Path(args.output_path)
-    spec = load_json(challenge_dir / "spec.json")
-
-    solution_entrypoint = solution_dir / spec["solution"]["entrypoint"]
-    if not solution_entrypoint.is_file():
-        raise FileNotFoundError(f"solution entrypoint not found: {solution_entrypoint}")
-
+    runs = load_json(Path(args.runs_file))["runs"]
     logs: list[str] = []
-    time_limit_sec = float(spec["limits"]["time_limit_sec"])
-
+    results = [score_run(run, Path(args.solution_runs_dir), logs) for run in runs]
+    summary = summarize(results)
+    payload = {
+        "status": "passed" if summary["passed"] == summary["total"] else "failed",
+        "mode": args.mode,
+        "primary_score": summary["score"],
+        "rank_score": summary["score"],
+        "aggregate_metrics": aggregate_metrics(summary),
+        "run_metrics": run_metrics(results),
+        "public_results": results if args.mode == "validation" else [],
+        "logs": logs,
+    }
     if args.mode == "validation":
-        public_results = score_dataset(
-            solution_entrypoint=solution_entrypoint,
-            cases_path=challenge_dir / spec["datasets"]["public_dir"] / "cases.json",
-            time_limit_sec=time_limit_sec,
-            logs=logs,
-        )
-        validation_summary = summarize(public_results)
-        payload = {
-            "status": "passed" if validation_summary["passed"] == validation_summary["total"] else "failed",
-            "mode": "validation",
-            "primary_score": validation_summary["score"],
-            "rank_score": validation_summary["score"],
-            "aggregate_metrics": aggregate_metrics(validation_summary),
-            "run_metrics": run_metrics(public_results),
-            "public_results": public_results,
-            "validation_summary": validation_summary,
-            "official_summary": None,
-            "logs": logs,
-        }
+        payload["validation_summary"] = summary
     else:
-        private_benchmark_dir = spec["datasets"].get("private_benchmark_dir")
-        if not spec["datasets"].get("private_benchmark_enabled") or not private_benchmark_dir:
-            raise ValueError("official mode requires private benchmark dataset")
+        payload["official_summary"] = summary
 
-        official_results = score_dataset(
-            solution_entrypoint=solution_entrypoint,
-            cases_path=challenge_dir / private_benchmark_dir / "cases.json",
-            time_limit_sec=time_limit_sec,
-            logs=logs,
-        )
-        official_summary = summarize(official_results)
-        payload = {
-            "status": "passed"
-            if official_summary["passed"] == official_summary["total"]
-            else "failed",
-            "mode": "official",
-            "primary_score": official_summary["score"],
-            "rank_score": official_summary["score"],
-            "aggregate_metrics": aggregate_metrics(official_summary),
-            "run_metrics": run_metrics(official_results),
-            "public_results": [],
-            "validation_summary": None,
-            "official_summary": official_summary,
-            "logs": logs,
-        }
-
+    output_path = Path(args.output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return 0

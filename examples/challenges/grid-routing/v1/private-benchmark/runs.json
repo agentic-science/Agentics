@@ -1,0 +1,34 @@
+{
+  "runs": [
+    {
+      "run_id": "private-benchmark-1",
+      "interface": "file_system",
+      "input_files": [
+        {
+          "path": "case.json",
+          "content_json": {
+            "instance_id": "private-benchmark-1",
+            "grid": ["S..###", "##.###", "##...#", "####.#", "####.#", "####.G"]
+          }
+        }
+      ],
+      "output_files": ["path.txt"],
+      "benchmark_path": "RRDDRRDDDR"
+    },
+    {
+      "run_id": "private-benchmark-2",
+      "interface": "file_system",
+      "input_files": [
+        {
+          "path": "case.json",
+          "content_json": {
+            "instance_id": "private-benchmark-2",
+            "grid": ["S######", ".######", ".######", ".######", ".....##", "####..#", "####..G"]
+          }
+        }
+      ],
+      "output_files": ["path.txt"],
+      "benchmark_path": "DDDDRRRRDDRR"
+    }
+  ]
+}

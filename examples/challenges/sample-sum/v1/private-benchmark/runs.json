@@ -1,0 +1,16 @@
+{
+  "runs": [
+    {
+      "run_id": "private-benchmark-1",
+      "interface": "stdio",
+      "stdin_json": { "a": 20, "b": 22 },
+      "expected": "42"
+    },
+    {
+      "run_id": "private-benchmark-2",
+      "interface": "stdio",
+      "stdin_json": { "a": -100, "b": 58 },
+      "expected": "-42"
+    }
+  ]
+}

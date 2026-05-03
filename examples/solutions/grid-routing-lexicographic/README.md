@@ -18,5 +18,5 @@ uv run python examples/solutions/grid-routing-lexicographic/main.py '{"instance_
 
 ```bash
 cd examples/solutions/grid-routing-lexicographic
-uv run python -m zipfile -c /tmp/grid-routing-lexicographic.zip main.py
+agentics submit grid-routing --dir .
 ```
