@@ -32,6 +32,11 @@ Cover these lanes when the user asks for a complete review:
    - Non-idiomatic Rust, weak error handling, avoidable `unwrap` or `expect`,
      duplicated logic, excessive coupling, missing regression tests, and
      reinvented functionality that a mature crate should handle.
+   - Check whether code can be simplified with current Rust language features
+     and standard-library APIs documented in `docs/new-rust-features-apis/en.md`.
+     Prefer these updates when they remove real nesting, repeated allocation,
+     lossy error handling, platform-specific duplication, or manual time/path
+     logic.
 2. Frontend and CLI code quality
    - TypeScript and React correctness, schema drift, weak typing, state
      handling, i18n drift, CLI command structure, package misuse, and missing
@@ -68,6 +73,17 @@ Always inspect these platform-specific risks:
   idempotent result handling.
 - Challenge bundle schemas, CLI packaging rules, web schemas, README examples,
   PRDs, milestones, and skills must stay aligned when behavior changes.
+- Rust review passes should include a modernization check against
+  `docs/new-rust-features-apis/en.md`, especially for `LazyLock`, let chains,
+  `std::fs::exists`, `cfg_select!`, collection helpers, duration constructors,
+  and newer path/string APIs.
+
+## Subagent Instructions
+
+When spawning a subagent for Rust backend, worker, or CLI review, explicitly ask
+that subagent to read `docs/new-rust-features-apis/en.md` before reviewing code.
+The subagent should report places where newer Rust features or APIs simplify
+Agentics code without causing churn for its own sake.
 
 ## Severity Guidance
 
