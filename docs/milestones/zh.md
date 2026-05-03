@@ -359,7 +359,7 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 | 里程碑 | 状态 | 附加说明 |
 | --- | --- | --- |
 | `M0.2-PROTO-1：定义 zip_project manifest schema` | 已实现 | 为 `agentics.solution.json` 添加 strict shared Rust parsing 和双语文档。 |
-| `M0.2-PROTO-2：添加 setup/build/run phase model` | 计划中 | 依赖 manifest schema。 |
+| `M0.2-PROTO-2：添加 setup/build/run phase model` | 已实现 | 添加 per-phase defaults、override validation、execution plan resolution 和 failure-report models。 |
 | `M0.2-PROTO-3：添加 dependency policy validation` | 计划中 | 依赖 manifest schema 和 official dependency policy。 |
 | `M0.2-WORKER-1：执行 multi-phase solution-submissions` | 计划中 | 依赖 setup/build/run model。 |
 | `M0.2-WORKER-2：添加 resource profile enforcement` | 计划中 | 依赖 resource profile schema。 |

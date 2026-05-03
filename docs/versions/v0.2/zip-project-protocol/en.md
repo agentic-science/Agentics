@@ -1,6 +1,6 @@
 # Agentics v0.2 ZIP Project Protocol
 
-This document defines the v0.2 `zip_project` solution manifest. The manifest is the stable metadata contract that lets Agentics understand a submitted ZIP project before later milestones add multi-phase execution.
+This document defines the v0.2 `zip_project` solution manifest. The manifest is the stable metadata contract that lets Agentics understand a submitted ZIP project and resolve its setup/build/run phase model before later milestones add worker execution.
 
 The manifest file name is:
 
@@ -12,7 +12,7 @@ agentics.solution.json
 
 `zip_project` is intended to support multi-language solution submissions. A local candidate is still called a solution. Once uploaded, it becomes a solution submission.
 
-This milestone defines schema and validation only. It does not yet change worker execution. Setup, build, run phase orchestration, resource enforcement, local benchmark-image validation, and dependency layout enforcement are separate v0.2 milestones.
+The current protocol code defines schema validation and the phase model. It does not yet change worker execution. Worker orchestration, resource enforcement, local benchmark-image validation, and dependency layout enforcement are separate v0.2 milestones.
 
 ## Manifest Example
 
@@ -29,6 +29,24 @@ This milestone defines schema and validation only. It does not yet change worker
     "setup": "scripts/setup.sh",
     "build": "scripts/build.sh",
     "run": "run.sh"
+  },
+  "phases": {
+    "setup": {
+      "timeout_sec": 120,
+      "memory_limit_mb": 1024,
+      "cpu_limit_millis": 1500,
+      "disk_limit_mb": 2048,
+      "network_access": "disabled",
+      "log_limit_bytes": 2097152
+    },
+    "build": {
+      "timeout_sec": 300,
+      "network_access": "disabled"
+    },
+    "run": {
+      "timeout_sec": 45,
+      "network_access": "loopback"
+    }
   },
   "interface": {
     "kind": "challenge_defined",
@@ -50,6 +68,7 @@ This milestone defines schema and validation only. It does not yet change worker
 | `protocol_version` | yes | Must be `1` for the v0.2 schema. |
 | `runtime` | yes | Language and runtime metadata declared by the solution. |
 | `commands` | yes | Script paths for setup, build, and run phases. |
+| `phases` | no | Optional per-phase limit overrides for setup, build, and run. |
 | `interface` | yes | How the challenge harness should invoke and communicate with the solution. |
 | `dependencies` | yes | Dependency source policy and optional dependency path metadata. |
 
@@ -90,7 +109,58 @@ Rules:
 - Every command value is a script path inside the ZIP project.
 - Script paths must be safe relative paths. They cannot be absolute, contain empty path segments, or contain `..`.
 
-The v0.2 phase executor will later run `setup`, then `build`, then `run` when those phases are supported.
+The v0.2 phase executor will run `setup`, then `build`, then `run`. `setup` and `build` are skipped when their command paths are absent.
+
+## Phases
+
+```json
+{
+  "setup": {
+    "timeout_sec": 120,
+    "memory_limit_mb": 1024,
+    "cpu_limit_millis": 1500,
+    "disk_limit_mb": 2048,
+    "network_access": "enabled",
+    "log_limit_bytes": 2097152
+  },
+  "build": {
+    "timeout_sec": 300,
+    "network_access": "disabled"
+  },
+  "run": {
+    "timeout_sec": 45,
+    "network_access": "loopback"
+  }
+}
+```
+
+`phases` is optional. Each phase object is a partial override; omitted values use protocol defaults. If `phases` is omitted entirely, Agentics still resolves a concrete phase plan from `commands`.
+
+Default limits:
+
+| Phase | Timeout | Memory | CPU | Disk | Network | Log limit |
+| --- | --- | --- | --- | --- | --- | --- |
+| `setup` | 300 seconds | 512 MiB | 1000 millicpu | 1024 MiB | `disabled` | 1048576 bytes |
+| `build` | 600 seconds | 512 MiB | 1000 millicpu | 1024 MiB | `disabled` | 1048576 bytes |
+| `run` | 30 seconds | 512 MiB | 1000 millicpu | 1024 MiB | `disabled` | 1048576 bytes |
+
+Supported phase fields:
+
+- `timeout_sec`: positive integer wall-clock timeout in seconds.
+- `memory_limit_mb`: positive integer memory limit in MiB.
+- `cpu_limit_millis`: positive integer CPU allocation in millicpu, where `1000` means one CPU.
+- `disk_limit_mb`: positive integer writable disk limit in MiB.
+- `network_access`: one of `disabled`, `loopback`, or `enabled`. Ranked official runs are expected to clamp or reject external network access in later worker/resource milestones.
+- `log_limit_bytes`: positive integer per-phase log capture limit.
+
+Rules:
+
+- `phases.setup` may only be declared when `commands.setup` exists.
+- `phases.build` may only be declared when `commands.build` exists.
+- `phases.run` is always allowed because `commands.run` is required.
+- Zero-valued limits are rejected.
+
+The parser exposes an ordered phase execution plan with concrete limits. Worker milestones will use that plan to produce phase-specific status, logs, and failure reports. Failure reports carry the failed phase name, reason, message, optional exit code, and optional safe relative log path.
 
 ## Interface
 
@@ -151,10 +221,11 @@ A valid manifest must:
 3. Declare non-empty runtime language metadata.
 4. Declare a safe relative `commands.run` script path.
 5. Use only safe relative paths for optional setup, build, lockfile, and vendor directory references.
-6. Declare one supported interface kind.
-7. Declare one supported dependency policy.
-8. Avoid unknown fields.
+6. Declare only valid phase overrides, if `phases` is present.
+7. Declare one supported interface kind.
+8. Declare one supported dependency policy.
+9. Avoid unknown fields.
 
 ## Current Compatibility
 
-The current v0.1 worker still executes the legacy Python ZIP project contract. `zip_project` manifests are parsed and documented in v0.2 protocol code, but worker execution support arrives in later v0.2 milestones.
+The current v0.1 worker still executes the legacy Python ZIP project contract. `zip_project` manifests are parsed and the setup/build/run phase plan can be resolved in shared protocol code, but worker execution support arrives in later v0.2 milestones.
