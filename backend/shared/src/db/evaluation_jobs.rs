@@ -35,7 +35,9 @@ pub async fn claim_next_evaluation_job(
         WITH next_job AS (
             SELECT id
             FROM evaluation_jobs
-            WHERE status = 'queued' AND scheduled_at <= NOW()
+            WHERE status = 'queued'
+              AND scheduled_at <= NOW()
+              AND attempt_count < max_attempts
             ORDER BY priority DESC, scheduled_at ASC
             FOR UPDATE SKIP LOCKED
             LIMIT 1
@@ -84,6 +86,29 @@ pub async fn claim_next_evaluation_job(
         attempt_count: r.try_get("attempt_count")?,
         payload,
     }))
+}
+
+/// Refresh a running job lease owned by one worker.
+pub async fn refresh_evaluation_job_claim(
+    pool: &PgPool,
+    job_id: &str,
+    worker_id: &str,
+) -> Result<bool> {
+    let result = sqlx::query(
+        r#"
+        UPDATE evaluation_jobs
+        SET claimed_at = NOW()
+        WHERE id = $1
+          AND worker_id = $2
+          AND status = 'running'
+        "#,
+    )
+    .bind(job_id)
+    .bind(worker_id)
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected() > 0)
 }
 
 /// Input for queueing a validation or official re-run.
@@ -176,4 +201,21 @@ pub async fn queue_evaluation_job(
         attempt_count: 0,
         payload: serde_json::from_value(payload).map_err(|e| AppError::Internal(e.to_string()))?,
     })
+}
+
+/// Count queued or running jobs for one evaluation type.
+pub async fn count_active_evaluation_jobs(pool: &PgPool, eval_type: ScoringMode) -> Result<i64> {
+    let count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)::BIGINT
+        FROM evaluation_jobs
+        WHERE eval_type = $1
+          AND status IN ('queued', 'running')
+        "#,
+    )
+    .bind(eval_type.as_str())
+    .fetch_one(pool)
+    .await?;
+
+    Ok(count)
 }

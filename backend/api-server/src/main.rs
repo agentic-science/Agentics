@@ -13,6 +13,7 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     let config = Config::from_env()?;
+    config.validate_api_security()?;
     info!(
         "starting api server on {}:{}",
         config.api_host, config.api_port
@@ -32,7 +33,7 @@ async fn main() -> anyhow::Result<()> {
         storage,
     };
 
-    let app = router::router().with_state(state);
+    let app = router::router(&config).with_state(state);
 
     let listener = TcpListener::bind(format!("{}:{}", config.api_host, config.api_port)).await?;
     info!("api server listening on {}", listener.local_addr()?);

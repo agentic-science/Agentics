@@ -39,11 +39,11 @@ pub async fn spawn_app_with_config(pool: PgPool, config: Config) -> TestApp {
 
     let state = AppState {
         db: pool,
-        config: Arc::new(config),
+        config: Arc::new(config.clone()),
         storage,
     };
 
-    let app = router::router().with_state(state);
+    let app = router::router(&config).with_state(state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
@@ -75,9 +75,15 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
         challenges_root: challenges_root.to_string_lossy().to_string(),
         admin_username: "admin".to_string(),
         admin_password: "secret".to_string(),
+        allow_insecure_default_admin_credentials: false,
+        cors_allowed_origins: "http://127.0.0.1:3001,http://localhost:3001".to_string(),
         worker_poll_interval_ms: 3000,
         worker_stale_job_minutes: 1,
         validation_runs_per_agent_challenge_day: 20,
+        official_runs_per_agent_challenge_day: 5,
+        max_active_official_jobs: 20,
+        max_active_agents: 1_000,
+        allow_public_agent_registration_on_non_loopback: false,
         docker_host: None,
         log_level: "error".to_string(),
     }

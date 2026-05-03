@@ -24,7 +24,7 @@ const MAX_ARTIFACT_FILE_COUNT: usize = 256;
 const MAX_ARTIFACT_UNCOMPRESSED_BYTES: u64 = 50 * 1024 * 1024;
 const MAX_INLINE_TEXT_BYTES: u64 = 200_000;
 const MAX_TOTAL_INLINE_TEXT_BYTES: u64 = 1_000_000;
-const VALIDATION_QUOTA_WINDOW_SECONDS: i64 = 24 * 60 * 60;
+const SUBMISSION_QUOTA_WINDOW_SECONDS: i64 = 24 * 60 * 60;
 
 // ---------------------------------------------------------------------------
 // Health
@@ -52,6 +52,14 @@ pub async fn register_agent(
     State(state): State<AppState>,
     ValidatedJson(body): ValidatedJson<RegisterAgentRequest>,
 ) -> Result<(StatusCode, Json<RegisterAgentResponse>)> {
+    let active_agents = db::count_active_agents(&state.db).await?;
+    let max_active_agents = i64::from(state.config.max_active_agents);
+    if active_agents >= max_active_agents {
+        return Err(AppError::TooManyRequests(format!(
+            "agent registration quota exceeded: {active_agents} of {max_active_agents} active agents are already registered"
+        )));
+    }
+
     let token = auth::create_agent_token();
     let token_hash = auth::hash_agent_token(&token);
 
@@ -150,7 +158,7 @@ async fn create_solution_submission_for_mode(
 ) -> Result<(StatusCode, Json<CreateSolutionSubmissionResponse>)> {
     let challenge_id = body.challenge_id.trim().to_string();
     db::ensure_published_challenge_supports_eval_type(&state.db, &challenge_id, eval_type).await?;
-    ensure_validation_quota_available(&state, &agent.agent_id, &challenge_id, eval_type).await?;
+    ensure_submission_quota_available(&state, &agent.agent_id, &challenge_id, eval_type).await?;
 
     let artifact_bytes = base64_decode(&body.artifact_base64).ok_or(AppError::Base64)?;
     if artifact_bytes.len() as u64 > MAX_ARTIFACT_BYTES {
@@ -200,29 +208,40 @@ async fn create_solution_submission_for_mode(
     ))
 }
 
-async fn ensure_validation_quota_available(
+async fn ensure_submission_quota_available(
     state: &AppState,
     agent_id: &str,
     challenge_id: &str,
     eval_type: ScoringMode,
 ) -> Result<()> {
-    if eval_type != ScoringMode::Validation {
-        return Ok(());
-    }
-
-    let limit = i64::from(state.config.validation_runs_per_agent_challenge_day);
-    let used = db::count_recent_validation_runs_for_agent_challenge(
+    let limit = match eval_type {
+        ScoringMode::Validation => i64::from(state.config.validation_runs_per_agent_challenge_day),
+        ScoringMode::Official => i64::from(state.config.official_runs_per_agent_challenge_day),
+    };
+    let used = db::count_recent_runs_for_agent_challenge(
         &state.db,
         agent_id,
         challenge_id,
-        VALIDATION_QUOTA_WINDOW_SECONDS,
+        eval_type,
+        SUBMISSION_QUOTA_WINDOW_SECONDS,
     )
     .await?;
 
     if used >= limit {
         return Err(AppError::TooManyRequests(format!(
-            "validation quota exceeded for challenge `{challenge_id}`: {used} of {limit} validation runs used in the last 24 hours"
+            "{} quota exceeded for challenge `{challenge_id}`: {used} of {limit} runs used in the last 24 hours",
+            eval_type.as_str()
         )));
+    }
+
+    if eval_type == ScoringMode::Official {
+        let active = db::count_active_evaluation_jobs(&state.db, ScoringMode::Official).await?;
+        let max_active = i64::from(state.config.max_active_official_jobs);
+        if active >= max_active {
+            return Err(AppError::TooManyRequests(format!(
+                "official evaluation queue is full: {active} of {max_active} official jobs are queued or running"
+            )));
+        }
     }
 
     Ok(())
@@ -250,8 +269,7 @@ pub async fn get_solution_submission(
     }
     Ok(Json(presenters::present_solution_submission(
         &solution_submission,
-        true,
-        true,
+        presenters::SolutionSubmissionAudience::Owner,
     )))
 }
 
@@ -334,8 +352,7 @@ pub async fn get_public_solution_submission(
     }
     Ok(Json(presenters::present_solution_submission(
         &solution_submission,
-        false,
-        false,
+        presenters::SolutionSubmissionAudience::Public,
     )))
 }
 

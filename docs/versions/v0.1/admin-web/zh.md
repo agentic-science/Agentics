@@ -25,6 +25,8 @@ password: agentics-admin
 
 可以通过 backend 的 `AGENTICS_ADMIN_USERNAME` 和 `AGENTICS_ADMIN_PASSWORD` 覆盖。Web console 默认将 credentials 保存在 component state 中，也可以选择保存在浏览器当前 session 的 `sessionStorage` 中。
 
+Backend 默认绑定到 `127.0.0.1`。非 loopback 部署必须设置非默认 admin password，并且只有在部署层增加 rate limits 后，才应显式允许 public agent registration。
+
 ## 视图
 
 ### Overview

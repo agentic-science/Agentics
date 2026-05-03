@@ -2,14 +2,19 @@
 
 use axum::{
     Router,
+    http::{
+        HeaderValue, Method,
+        header::{AUTHORIZATION, CONTENT_TYPE},
+    },
     routing::{get, post},
 };
 use tower_http::cors::CorsLayer;
 
 use crate::state::AppState;
+use shared::config::Config;
 
 /// Build the application router with public, agent, admin, and health routes.
-pub fn router() -> Router<AppState> {
+pub fn router(config: &Config) -> Router<AppState> {
     Router::new()
         // Health
         .route("/healthz", get(crate::handlers::healthz))
@@ -113,5 +118,22 @@ pub fn router() -> Router<AppState> {
             "/admin/agents/{id}/disable",
             post(crate::handlers::disable_agent),
         )
-        .layer(CorsLayer::permissive())
+        .layer(cors_layer(config))
+}
+
+fn cors_layer(config: &Config) -> CorsLayer {
+    let origins = config
+        .cors_allowed_origin_values()
+        .into_iter()
+        .filter_map(|origin| origin.parse::<HeaderValue>().ok())
+        .collect::<Vec<_>>();
+    let layer = CorsLayer::new()
+        .allow_methods([Method::GET, Method::POST])
+        .allow_headers([AUTHORIZATION, CONTENT_TYPE]);
+
+    if origins.is_empty() {
+        layer
+    } else {
+        layer.allow_origin(origins)
+    }
 }

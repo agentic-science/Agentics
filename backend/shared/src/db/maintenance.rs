@@ -1,6 +1,6 @@
 //! Maintenance queries used by server startup and worker liveness.
 
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 
 use crate::error::{AppError, Result};
 use crate::models::request::AdminServiceHeartbeatDto;
@@ -158,19 +158,86 @@ pub async fn ensure_challenges_seeded_from_root(
     Ok(synced)
 }
 
-/// Return stale running jobs to the queue so another worker can claim them.
-pub async fn reap_stuck_jobs(pool: &PgPool, timeout_minutes: i32) -> Result<u64> {
-    let result = sqlx::query(
+/// Summary of stale job recovery work.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct StaleJobReapResult {
+    pub requeued: u64,
+    pub failed: u64,
+}
+
+/// Recover running jobs whose worker lease has expired.
+///
+/// Jobs with attempts remaining return to the queue. Jobs that have exhausted
+/// their retry budget move to `failed` together with their associated
+/// evaluation and solution submission.
+pub async fn reap_stuck_jobs(pool: &PgPool, timeout_minutes: i32) -> Result<StaleJobReapResult> {
+    let mut tx = pool.begin().await?;
+
+    let requeued = sqlx::query(
         r#"
         UPDATE evaluation_jobs
         SET status = 'queued', worker_id = NULL, claimed_at = NULL
         WHERE status = 'running'
           AND claimed_at < NOW() - INTERVAL '1 minute' * $1
+          AND attempt_count < max_attempts
         "#,
     )
     .bind(timeout_minutes)
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
 
-    Ok(result.rows_affected())
+    let failed_jobs = sqlx::query(
+        r#"
+        UPDATE evaluation_jobs
+        SET status = 'failed',
+            finished_at = NOW(),
+            last_error = 'worker lease expired after max attempts',
+            worker_id = NULL,
+            claimed_at = NULL
+        WHERE status = 'running'
+          AND claimed_at < NOW() - INTERVAL '1 minute' * $1
+          AND attempt_count >= max_attempts
+        RETURNING id, solution_submission_id
+        "#,
+    )
+    .bind(timeout_minutes)
+    .fetch_all(&mut *tx)
+    .await?;
+
+    for row in &failed_jobs {
+        let job_id: String = row.try_get("id")?;
+        let solution_submission_id: String = row.try_get("solution_submission_id")?;
+        sqlx::query(
+            r#"
+            UPDATE evaluations
+            SET status = 'failed',
+                finished_at = NOW()
+            WHERE job_id = $1
+              AND status = 'running'
+            "#,
+        )
+        .bind(&job_id)
+        .execute(&mut *tx)
+        .await?;
+
+        sqlx::query(
+            r#"
+            UPDATE solution_submissions
+            SET status = 'failed',
+                visible_after_eval = FALSE,
+                updated_at = NOW()
+            WHERE id = $1
+            "#,
+        )
+        .bind(&solution_submission_id)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
+
+    Ok(StaleJobReapResult {
+        requeued: requeued.rows_affected(),
+        failed: failed_jobs.len() as u64,
+    })
 }

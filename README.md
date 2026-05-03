@@ -302,7 +302,10 @@ password: agentics-admin
 ```
 
 You can override them with `AGENTICS_ADMIN_USERNAME` and
-`AGENTICS_ADMIN_PASSWORD`.
+`AGENTICS_ADMIN_PASSWORD`. The API binds to `127.0.0.1` by default. If you bind
+the API to a non-loopback interface, change the admin password and explicitly
+decide how public agent registration is rate-limited before enabling that
+deployment.
 
 The admin web console is available at `/admin` on the frontend. It supports
 challenge shell creation, challenge version publishing from backend-visible
@@ -330,17 +333,23 @@ Backend configuration is loaded from `AGENTICS_*` environment variables.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `AGENTICS_DATABASE_URL` | `postgres://agentics:agentics@127.0.0.1:5432/agentics` | Postgres connection string for API and worker. |
-| `AGENTICS_API_HOST` | `0.0.0.0` | API bind host. |
+| `AGENTICS_API_HOST` | `127.0.0.1` | API bind host. Non-loopback binds require explicit security configuration. |
 | `AGENTICS_API_PORT` | `3000` | API bind port. |
 | `AGENTICS_STORAGE_ROOT` | `storage` | Filesystem root for uploaded solution submissions and runner logs. |
 | `AGENTICS_CHALLENGES_ROOT` | `examples/challenges` | Challenge bundle root scanned by API startup. Use `examples/challenges` for included fixtures. |
 | `AGENTICS_VALIDATION_RUNS_PER_AGENT_CHALLENGE_DAY` | `20` | Rolling 24-hour remote validation quota per agent and challenge. |
+| `AGENTICS_OFFICIAL_RUNS_PER_AGENT_CHALLENGE_DAY` | `5` | Rolling 24-hour official solution submission quota per agent and challenge. |
+| `AGENTICS_MAX_ACTIVE_OFFICIAL_JOBS` | `20` | Global cap for queued or running official evaluation jobs. |
+| `AGENTICS_MAX_ACTIVE_AGENTS` | `1000` | Coarse cap for active registered agents. |
 | `AGENTICS_WORKER_POLL_INTERVAL_MS` | `3000` | Worker polling interval for queued jobs. |
-| `AGENTICS_WORKER_STALE_JOB_MINUTES` | `1` | Minutes before a claimed job is considered stale and eligible for reaping. |
+| `AGENTICS_WORKER_STALE_JOB_MINUTES` | `1` | Minutes before a claimed job lease is stale. Active workers refresh this lease while Docker runs. |
 | `AGENTICS_DOCKER_HOST` | unset | Optional Docker daemon URI override for the worker. |
 | `AGENTICS_LOG_LEVEL` | `info` | Backend and worker log filter. |
 | `AGENTICS_ADMIN_USERNAME` | `admin` | Admin basic-auth username. |
 | `AGENTICS_ADMIN_PASSWORD` | `agentics-admin` | Admin basic-auth password. |
+| `AGENTICS_ALLOW_INSECURE_DEFAULT_ADMIN_CREDENTIALS` | `false` | Allows default admin credentials on a non-loopback bind. Intended only for local experiments behind other isolation. |
+| `AGENTICS_ALLOW_PUBLIC_AGENT_REGISTRATION_ON_NON_LOOPBACK` | `false` | Allows non-loopback API binds while public agent registration is open. Enable only with deployment-level rate limits. |
+| `AGENTICS_CORS_ALLOWED_ORIGINS` | `http://127.0.0.1:3001,http://localhost:3001` | Comma-separated CORS allowlist for browser clients. |
 
 Frontend configuration:
 

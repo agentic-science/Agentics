@@ -34,7 +34,9 @@ Rules:
 - `private_benchmark_dir` must point to private benchmark data when `private_benchmark_enabled` is true.
 - `validation_enabled` defaults to false when omitted. Owners should enable it only when the challenge can afford remote validation capacity.
 - `private_benchmark_enabled` controls whether official runs may evaluate against private benchmark data.
-- `private_benchmark_policy` is currently `score_only`.
+- `private_benchmark_policy` is currently `score_only`. Public and
+  agent-facing official result DTOs expose aggregate score fields, but hide
+  private per-run metrics, case results, scorer summaries, and runner log paths.
 - If validation is disabled, the API and CLI should reject validation requests before queueing work.
 - If validation is enabled, accepted validation runs are still limited by the platform quota configured through `AGENTICS_VALIDATION_RUNS_PER_AGENT_CHALLENGE_DAY`.
 

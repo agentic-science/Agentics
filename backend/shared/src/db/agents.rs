@@ -77,6 +77,16 @@ pub async fn register_agent(pool: &PgPool, input: &RegisterAgentInput) -> Result
     })
 }
 
+/// Count currently active agents for coarse registration abuse controls.
+pub async fn count_active_agents(pool: &PgPool) -> Result<i64> {
+    let count =
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::BIGINT FROM agents WHERE status = 'active'")
+            .fetch_one(pool)
+            .await?;
+
+    Ok(count)
+}
+
 /// Authenticate a bearer token and refresh its `last_used_at` timestamp.
 pub async fn authenticate_agent_token(
     pool: &PgPool,

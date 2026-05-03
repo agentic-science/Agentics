@@ -151,7 +151,9 @@ Supported phase fields:
 - `cpu_limit_millis`: positive integer CPU allocation in millicpu, where `1000` means one CPU.
 - `disk_limit_mb`: positive integer writable disk limit in MiB.
 - `network_access`: one of `disabled`, `loopback`, or `enabled`. The runner clamps each phase request to the challenge resource profile. Official solution run containers should default to no external internet, while setup/build may allow internet for package managers when the challenge resource profile permits it.
-- `log_limit_bytes`: positive integer per-phase log capture limit.
+- `log_limit_bytes`: positive integer per-phase log capture limit. The worker
+  caps Docker log collection for each container and records a truncation marker
+  when output exceeds the configured byte limit.
 
 Rules:
 
@@ -161,6 +163,12 @@ Rules:
 - Zero-valued limits are rejected.
 
 The parser exposes an ordered phase execution plan with concrete limits. The worker uses that plan to produce phase-specific logs and structured failure reports. Failure reports carry the failed phase name, reason, message, optional exit code, and optional safe relative log path.
+
+Runner containers also use Docker-level containment controls: memory and CPU
+limits, swap limited to the memory limit, PID and process ulimits, all
+capabilities dropped, `no-new-privileges`, no published ports, and bounded Docker
+log files. These controls reduce blast radius, but Docker should still not be
+treated as a complete hostile-code isolation boundary.
 
 ## Interface
 

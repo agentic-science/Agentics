@@ -9,7 +9,9 @@ use std::time::Duration;
 
 use bollard::Docker;
 use bollard::container::LogOutput;
-use bollard::models::{ContainerCreateBody, HostConfig, Mount, MountTypeEnum};
+use bollard::models::{
+    ContainerCreateBody, HostConfig, HostConfigLogConfig, Mount, MountTypeEnum, ResourcesUlimits,
+};
 use bollard::query_parameters::{
     CreateContainerOptionsBuilder, KillContainerOptionsBuilder, LogsOptionsBuilder,
     RemoveContainerOptionsBuilder, StartContainerOptions, WaitContainerOptionsBuilder,
@@ -374,6 +376,7 @@ fn validate_scorer_result(
 async fn run_container(docker: &Docker, request: ContainerRequest) -> Result<ContainerOutcome> {
     let memory_bytes = request.limits.memory_limit_mb * 1024 * 1024;
     let nano_cpus = i64::from(request.limits.cpu_limit_millis) * 1_000_000;
+    let log_limit_bytes = request.limits.log_limit_bytes;
     let host_config = HostConfig {
         network_mode: Some(
             request
@@ -385,7 +388,28 @@ async fn run_container(docker: &Docker, request: ContainerRequest) -> Result<Con
         mounts: Some(request.mounts),
         auto_remove: Some(false),
         memory: Some(memory_bytes as i64),
+        memory_swap: Some(memory_bytes as i64),
         nano_cpus: Some(nano_cpus),
+        pids_limit: Some(256),
+        ulimits: Some(vec![
+            ResourcesUlimits {
+                name: Some("nofile".to_string()),
+                soft: Some(1024),
+                hard: Some(1024),
+            },
+            ResourcesUlimits {
+                name: Some("nproc".to_string()),
+                soft: Some(256),
+                hard: Some(256),
+            },
+        ]),
+        cap_drop: Some(vec!["ALL".to_string()]),
+        security_opt: Some(vec!["no-new-privileges:true".to_string()]),
+        privileged: Some(false),
+        publish_all_ports: Some(false),
+        init: Some(true),
+        oom_kill_disable: Some(false),
+        log_config: Some(docker_log_config(log_limit_bytes)),
         ..Default::default()
     };
     let container_config = ContainerCreateBody {
@@ -411,7 +435,13 @@ async fn run_container(docker: &Docker, request: ContainerRequest) -> Result<Con
         .map_err(|e| AppError::Docker(format!("create container failed: {e}")))?;
     let container_id = create_resp.id;
 
-    let run_result = run_created_container(docker, &container_id, request.limits.timeout_sec).await;
+    let run_result = run_created_container(
+        docker,
+        &container_id,
+        request.limits.timeout_sec,
+        log_limit_bytes,
+    )
+    .await;
     let remove_result = remove_container(docker, &container_id).await;
     match (run_result, remove_result) {
         (Ok(result), Ok(())) => Ok(result),
@@ -427,6 +457,7 @@ async fn run_created_container(
     docker: &Docker,
     container_id: &str,
     timeout_sec: u64,
+    log_limit_bytes: u64,
 ) -> Result<ContainerOutcome> {
     docker
         .start_container(container_id, None::<StartContainerOptions>)
@@ -465,7 +496,8 @@ async fn run_created_container(
             (124, true)
         }
     };
-    let logs = collect_container_logs(docker, container_id).await?;
+    let (logs, _logs_truncated) =
+        collect_container_logs(docker, container_id, log_limit_bytes).await?;
     Ok(ContainerOutcome {
         exit_code,
         logs,
@@ -480,6 +512,17 @@ async fn remove_container(docker: &Docker, container_id: &str) -> Result<()> {
         .await
         .map_err(|e| AppError::Docker(format!("remove runner container failed: {e}")))?;
     Ok(())
+}
+
+fn docker_log_config(limit_bytes: u64) -> HostConfigLogConfig {
+    let mut config = std::collections::HashMap::new();
+    config.insert("max-size".to_string(), format!("{}b", limit_bytes.max(1)));
+    config.insert("max-file".to_string(), "1".to_string());
+
+    HostConfigLogConfig {
+        typ: Some("json-file".to_string()),
+        config: Some(config),
+    }
 }
 
 /// Connect to Docker using `AGENTICS_DOCKER_HOST` when configured, otherwise the local default.
@@ -497,21 +540,31 @@ pub fn connect_docker(config: &Config) -> Result<Docker> {
     }
 }
 
-async fn collect_container_logs(docker: &Docker, container_id: &str) -> Result<String> {
+async fn collect_container_logs(
+    docker: &Docker,
+    container_id: &str,
+    limit_bytes: u64,
+) -> Result<(String, bool)> {
     let opts = LogsOptionsBuilder::default()
         .stdout(true)
         .stderr(true)
         .tail("all")
         .build();
     let mut logs = docker.logs(container_id, Some(opts));
-    let mut output = String::new();
+    let mut output = Vec::new();
+    let mut truncated = false;
+    let limit = usize::try_from(limit_bytes).unwrap_or(usize::MAX);
 
     while let Some(chunk) = logs.next().await {
         match chunk {
             Ok(LogOutput::StdOut { message })
             | Ok(LogOutput::StdErr { message })
             | Ok(LogOutput::Console { message }) => {
-                output.push_str(&String::from_utf8_lossy(&message));
+                append_bounded_log_bytes(&mut output, &message, limit, &mut truncated);
+                if output.len() >= limit {
+                    truncated = true;
+                    break;
+                }
             }
             Err(e) => {
                 return Err(AppError::Docker(format!(
@@ -522,7 +575,34 @@ async fn collect_container_logs(docker: &Docker, container_id: &str) -> Result<S
         }
     }
 
-    Ok(output)
+    let mut output = String::from_utf8_lossy(&output).into_owned();
+    if truncated {
+        output.push_str(&format!(
+            "\n[agentics] container logs truncated at {limit_bytes} bytes\n"
+        ));
+    }
+
+    Ok((output, truncated))
+}
+
+fn append_bounded_log_bytes(
+    output: &mut Vec<u8>,
+    chunk: &[u8],
+    limit: usize,
+    truncated: &mut bool,
+) {
+    if output.len() >= limit {
+        *truncated = !chunk.is_empty();
+        return;
+    }
+
+    let remaining = limit - output.len();
+    if chunk.len() > remaining {
+        output.extend_from_slice(&chunk[..remaining]);
+        *truncated = true;
+    } else {
+        output.extend_from_slice(chunk);
+    }
 }
 
 async fn extract_zip_safe(artifact_path: &str, target_dir: &Path) -> Result<()> {
@@ -785,12 +865,14 @@ fn directory_size(path: &Path) -> Result<u64> {
     let mut total = 0u64;
     for entry in std::fs::read_dir(path)? {
         let entry = entry?;
-        let metadata = entry.metadata()?;
-        if metadata.is_dir() {
+        let metadata = entry.path().symlink_metadata()?;
+        let file_type = metadata.file_type();
+        if file_type.is_dir() {
             total = total
                 .checked_add(directory_size(&entry.path())?)
                 .ok_or_else(|| AppError::Runner("directory size overflow".to_string()))?;
         } else {
+            // Count symlink directory entries as links, never as their host targets.
             total = total
                 .checked_add(metadata.len())
                 .ok_or_else(|| AppError::Runner("directory size overflow".to_string()))?;
@@ -970,5 +1052,37 @@ mod tests {
             ZipProjectNetworkAccess::Loopback.docker_network_mode(),
             "none"
         );
+    }
+
+    #[test]
+    fn bounded_log_append_truncates_by_byte_limit() {
+        let mut output = Vec::new();
+        let mut truncated = false;
+
+        append_bounded_log_bytes(&mut output, b"abcdef", 4, &mut truncated);
+
+        assert_eq!(output, b"abcd");
+        assert!(truncated);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn directory_size_does_not_follow_symlinks() {
+        let root = temp_path("symlink-size-root");
+        let outside = temp_path("symlink-size-outside.txt");
+        std::fs::create_dir_all(&root).expect("failed to create root");
+        std::fs::write(&outside, vec![b'x'; 1024 * 1024]).expect("failed to write outside file");
+        std::os::unix::fs::symlink(&outside, root.join("outside-link"))
+            .expect("failed to create symlink");
+
+        let bytes = directory_size(&root).expect("directory size should succeed");
+
+        assert!(
+            bytes < 1024 * 1024,
+            "symlink target should not be counted: {bytes}"
+        );
+
+        let _ = std::fs::remove_file(outside);
+        let _ = std::fs::remove_dir_all(root);
     }
 }

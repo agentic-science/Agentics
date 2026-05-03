@@ -4,6 +4,8 @@ use figment::{Figment, providers::Env};
 use serde::Deserialize;
 
 const CONFIG_ENV_PREFIX: &str = "AGENTICS_";
+const DEFAULT_ADMIN_USERNAME: &str = "admin";
+const DEFAULT_ADMIN_PASSWORD: &str = "agentics-admin";
 
 /// Application configuration loaded from `AGENTICS_*` environment variables.
 #[derive(Debug, Clone, Deserialize)]
@@ -22,12 +24,24 @@ pub struct Config {
     pub admin_username: String,
     #[serde(default = "default_admin_password")]
     pub admin_password: String,
+    #[serde(default)]
+    pub allow_insecure_default_admin_credentials: bool,
+    #[serde(default = "default_cors_allowed_origins")]
+    pub cors_allowed_origins: String,
     #[serde(default = "default_worker_poll_interval_ms")]
     pub worker_poll_interval_ms: u64,
     #[serde(default = "default_worker_stale_job_minutes")]
     pub worker_stale_job_minutes: i32,
     #[serde(default = "default_validation_runs_per_agent_challenge_day")]
     pub validation_runs_per_agent_challenge_day: u32,
+    #[serde(default = "default_official_runs_per_agent_challenge_day")]
+    pub official_runs_per_agent_challenge_day: u32,
+    #[serde(default = "default_max_active_official_jobs")]
+    pub max_active_official_jobs: u32,
+    #[serde(default = "default_max_active_agents")]
+    pub max_active_agents: u32,
+    #[serde(default)]
+    pub allow_public_agent_registration_on_non_loopback: bool,
     /// Optional Docker host URI used by CI or remote Docker setups.
     #[serde(default)]
     pub docker_host: Option<String>,
@@ -40,7 +54,7 @@ fn default_database_url() -> String {
 }
 
 fn default_api_host() -> String {
-    "0.0.0.0".to_string()
+    "127.0.0.1".to_string()
 }
 
 fn default_api_port() -> u16 {
@@ -56,11 +70,15 @@ fn default_challenges_root() -> String {
 }
 
 fn default_admin_username() -> String {
-    "admin".to_string()
+    DEFAULT_ADMIN_USERNAME.to_string()
 }
 
 fn default_admin_password() -> String {
-    "agentics-admin".to_string()
+    DEFAULT_ADMIN_PASSWORD.to_string()
+}
+
+fn default_cors_allowed_origins() -> String {
+    "http://127.0.0.1:3001,http://localhost:3001".to_string()
 }
 
 fn default_worker_poll_interval_ms() -> u64 {
@@ -75,6 +93,18 @@ fn default_validation_runs_per_agent_challenge_day() -> u32 {
     20
 }
 
+fn default_official_runs_per_agent_challenge_day() -> u32 {
+    5
+}
+
+fn default_max_active_official_jobs() -> u32 {
+    20
+}
+
+fn default_max_active_agents() -> u32 {
+    1_000
+}
+
 fn default_log_level() -> String {
     "info".to_string()
 }
@@ -87,14 +117,135 @@ impl Config {
             .extract()?;
         Ok(config)
     }
+
+    /// Reject settings that are acceptable for local development but dangerous
+    /// when the API is reachable from another machine.
+    pub fn validate_api_security(&self) -> anyhow::Result<()> {
+        if self.uses_default_admin_credentials()
+            && !self.allow_insecure_default_admin_credentials
+            && !is_loopback_host(&self.api_host)
+        {
+            anyhow::bail!(
+                "refusing to bind API to `{}` with default admin credentials; set AGENTICS_ADMIN_PASSWORD or explicitly set AGENTICS_ALLOW_INSECURE_DEFAULT_ADMIN_CREDENTIALS=true for local-only development",
+                self.api_host
+            );
+        }
+
+        if !is_loopback_host(&self.api_host)
+            && !self.allow_public_agent_registration_on_non_loopback
+        {
+            anyhow::bail!(
+                "refusing to bind API to `{}` with public agent registration enabled; set AGENTICS_ALLOW_PUBLIC_AGENT_REGISTRATION_ON_NON_LOOPBACK=true only after adding deployment-level rate limits",
+                self.api_host
+            );
+        }
+
+        if self.max_active_agents == 0 {
+            anyhow::bail!("AGENTICS_MAX_ACTIVE_AGENTS must be greater than zero");
+        }
+        if self.official_runs_per_agent_challenge_day == 0 {
+            anyhow::bail!(
+                "AGENTICS_OFFICIAL_RUNS_PER_AGENT_CHALLENGE_DAY must be greater than zero"
+            );
+        }
+        if self.max_active_official_jobs == 0 {
+            anyhow::bail!("AGENTICS_MAX_ACTIVE_OFFICIAL_JOBS must be greater than zero");
+        }
+
+        Ok(())
+    }
+
+    /// Split the comma-separated CORS allowlist into trimmed origin strings.
+    pub fn cors_allowed_origin_values(&self) -> Vec<String> {
+        self.cors_allowed_origins
+            .split(',')
+            .map(str::trim)
+            .filter(|origin| !origin.is_empty())
+            .map(ToOwned::to_owned)
+            .collect()
+    }
+
+    fn uses_default_admin_credentials(&self) -> bool {
+        self.admin_username == DEFAULT_ADMIN_USERNAME
+            && self.admin_password == DEFAULT_ADMIN_PASSWORD
+    }
+}
+
+fn is_loopback_host(host: &str) -> bool {
+    let host = host.trim();
+    if host.eq_ignore_ascii_case("localhost") {
+        return true;
+    }
+
+    host.parse::<std::net::IpAddr>()
+        .map(|addr| addr.is_loopback())
+        .unwrap_or(false)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::CONFIG_ENV_PREFIX;
+    use super::{CONFIG_ENV_PREFIX, Config};
 
     #[test]
     fn uses_agentics_environment_prefix() {
         assert_eq!(CONFIG_ENV_PREFIX, "AGENTICS_");
+    }
+
+    #[test]
+    fn default_api_host_is_loopback() {
+        let config = Config {
+            database_url: String::new(),
+            api_host: super::default_api_host(),
+            api_port: 3000,
+            storage_root: String::new(),
+            challenges_root: String::new(),
+            admin_username: super::default_admin_username(),
+            admin_password: super::default_admin_password(),
+            allow_insecure_default_admin_credentials: false,
+            cors_allowed_origins: super::default_cors_allowed_origins(),
+            worker_poll_interval_ms: 3000,
+            worker_stale_job_minutes: 1,
+            validation_runs_per_agent_challenge_day: 20,
+            official_runs_per_agent_challenge_day: 5,
+            max_active_official_jobs: 20,
+            max_active_agents: 1_000,
+            allow_public_agent_registration_on_non_loopback: false,
+            docker_host: None,
+            log_level: "info".to_string(),
+        };
+
+        assert!(config.validate_api_security().is_ok());
+    }
+
+    #[test]
+    fn default_admin_credentials_are_rejected_on_wildcard_bind() {
+        let mut config = Config {
+            database_url: String::new(),
+            api_host: "0.0.0.0".to_string(),
+            api_port: 3000,
+            storage_root: String::new(),
+            challenges_root: String::new(),
+            admin_username: super::default_admin_username(),
+            admin_password: super::default_admin_password(),
+            allow_insecure_default_admin_credentials: false,
+            cors_allowed_origins: super::default_cors_allowed_origins(),
+            worker_poll_interval_ms: 3000,
+            worker_stale_job_minutes: 1,
+            validation_runs_per_agent_challenge_day: 20,
+            official_runs_per_agent_challenge_day: 5,
+            max_active_official_jobs: 20,
+            max_active_agents: 1_000,
+            allow_public_agent_registration_on_non_loopback: false,
+            docker_host: None,
+            log_level: "info".to_string(),
+        };
+
+        assert!(config.validate_api_security().is_err());
+
+        config.admin_password = "changed".to_string();
+        assert!(config.validate_api_security().is_err());
+
+        config.allow_public_agent_registration_on_non_loopback = true;
+        assert!(config.validate_api_security().is_ok());
     }
 }

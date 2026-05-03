@@ -3,6 +3,7 @@
 use shared::db::{AgentRecord, ChallengeVersionRecord, SolutionSubmissionRecord};
 use shared::error::{AppError, Result};
 use shared::models::challenge::*;
+use shared::models::evaluation::{EvaluationDto, ScoringMode};
 use shared::models::request::*;
 
 /// Present a newly registered agent together with its one-time bearer token.
@@ -55,12 +56,43 @@ pub fn present_create_solution_submission(
     }
 }
 
-/// Present a solution submission while controlling fields that are hidden on public routes.
+/// Audience-specific projection for solution submission details.
+#[derive(Debug, Clone, Copy)]
+pub enum SolutionSubmissionAudience {
+    /// The submitting agent can see its artifact path, job id, and validation details.
+    Owner,
+    /// Public viewers can only see ranking-visible data.
+    Public,
+}
+
+impl SolutionSubmissionAudience {
+    fn includes_artifact_path(self) -> bool {
+        matches!(self, Self::Owner)
+    }
+
+    fn includes_evaluation_job(self) -> bool {
+        matches!(self, Self::Owner)
+    }
+
+    fn includes_validation_details(self) -> bool {
+        matches!(self, Self::Owner)
+    }
+}
+
+/// Present a solution submission while applying audience and benchmark visibility policy.
 pub fn present_solution_submission(
     solution_submission: &SolutionSubmissionRecord,
-    include_artifact_path: bool,
-    include_evaluation_job: bool,
+    audience: SolutionSubmissionAudience,
 ) -> SolutionSubmissionResponse {
+    let evaluation = present_evaluation(solution_submission.evaluation.as_ref(), audience);
+    let validation_evaluation = if audience.includes_validation_details() {
+        present_evaluation(solution_submission.validation_evaluation.as_ref(), audience)
+    } else {
+        None
+    };
+    let official_evaluation =
+        present_evaluation(solution_submission.official_evaluation.as_ref(), audience);
+
     SolutionSubmissionResponse {
         id: solution_submission.id.clone(),
         challenge_id: solution_submission.challenge_id.clone(),
@@ -73,12 +105,12 @@ pub fn present_solution_submission(
         parent_solution_submission_id: solution_submission.parent_solution_submission_id.clone(),
         credit_text: solution_submission.credit_text.clone(),
         visible_after_eval: solution_submission.visible_after_eval,
-        artifact_path: if include_artifact_path {
+        artifact_path: if audience.includes_artifact_path() {
             Some(solution_submission.artifact_path.clone())
         } else {
             None
         },
-        evaluation_job: if include_evaluation_job {
+        evaluation_job: if audience.includes_evaluation_job() {
             solution_submission.evaluation_job_id.as_ref().map(|id| {
                 shared::models::evaluation::EvaluationJobDto {
                     id: id.clone(),
@@ -95,10 +127,42 @@ pub fn present_solution_submission(
         } else {
             None
         },
-        evaluation: solution_submission.evaluation.clone(),
-        validation_evaluation: solution_submission.validation_evaluation.clone(),
-        official_evaluation: solution_submission.official_evaluation.clone(),
+        evaluation,
+        validation_evaluation,
+        official_evaluation,
         created_at: solution_submission.created_at.to_rfc3339(),
         updated_at: solution_submission.updated_at.to_rfc3339(),
+    }
+}
+
+fn present_evaluation(
+    evaluation: Option<&EvaluationDto>,
+    audience: SolutionSubmissionAudience,
+) -> Option<EvaluationDto> {
+    let evaluation = evaluation?;
+    match evaluation.eval_type {
+        ScoringMode::Validation if audience.includes_validation_details() => {
+            Some(evaluation.clone())
+        }
+        ScoringMode::Validation => None,
+        ScoringMode::Official => Some(redact_private_benchmark_details(evaluation)),
+    }
+}
+
+fn redact_private_benchmark_details(evaluation: &EvaluationDto) -> EvaluationDto {
+    EvaluationDto {
+        id: evaluation.id.clone(),
+        status: evaluation.status,
+        eval_type: evaluation.eval_type,
+        primary_score: evaluation.primary_score,
+        rank_score: evaluation.rank_score,
+        aggregate_metrics: evaluation.aggregate_metrics.clone(),
+        run_metrics: Vec::new(),
+        public_results: Vec::new(),
+        validation_summary: None,
+        official_summary: None,
+        log_path: None,
+        started_at: evaluation.started_at.clone(),
+        finished_at: evaluation.finished_at.clone(),
     }
 }

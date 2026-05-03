@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use bollard::Docker;
+use tokio::sync::watch;
 use tokio::time::interval;
 use tracing::{error, info};
 
@@ -15,7 +16,8 @@ use shared::config::Config;
 use shared::db::pool::create_pool;
 use shared::db::{
     HeartbeatPayload, PersistedEvaluationResult, claim_next_evaluation_job,
-    mark_evaluation_finished, mark_evaluation_started, reap_stuck_jobs, upsert_service_heartbeat,
+    mark_evaluation_finished, mark_evaluation_started, reap_stuck_jobs,
+    refresh_evaluation_job_claim, upsert_service_heartbeat,
 };
 use shared::models::evaluation::EvaluationStatus;
 use shared::runner::{connect_docker, execute_evaluation_job};
@@ -95,8 +97,12 @@ pub async fn run_worker_cycle(
     worker_id: &str,
 ) -> anyhow::Result<()> {
     let reaped = reap_stuck_jobs(db, config.worker_stale_job_minutes.max(1)).await?;
-    if reaped > 0 {
-        info!("reaped {reaped} stuck jobs");
+    if reaped.requeued > 0 || reaped.failed > 0 {
+        info!(
+            requeued = reaped.requeued,
+            failed = reaped.failed,
+            "reaped stale jobs"
+        );
     }
 
     let job = claim_next_evaluation_job(db, worker_id).await?;
@@ -144,6 +150,15 @@ pub async fn run_worker_cycle(
     )
     .await?;
 
+    let (lease_stop_tx, lease_stop_rx) = watch::channel(false);
+    let lease_task = tokio::spawn(refresh_claim_until_stopped(
+        db.clone(),
+        job.id.clone(),
+        worker_id.to_string(),
+        lease_refresh_interval(config),
+        lease_stop_rx,
+    ));
+
     let exec_result = execute_evaluation_job(
         docker,
         config,
@@ -153,6 +168,10 @@ pub async fn run_worker_cycle(
         storage,
     )
     .await;
+    let _ = lease_stop_tx.send(true);
+    if let Err(join_err) = lease_task.await {
+        error!(error = %join_err, "job lease refresh task failed");
+    }
 
     match exec_result {
         Ok(result) => {
@@ -248,4 +267,42 @@ pub async fn run_worker_cycle(
     }
 
     Ok(())
+}
+
+fn lease_refresh_interval(config: &Config) -> Duration {
+    let stale_secs = u64::try_from(config.worker_stale_job_minutes.max(1)).unwrap_or(1) * 60;
+    Duration::from_secs((stale_secs / 3).clamp(5, 60))
+}
+
+async fn refresh_claim_until_stopped(
+    db: sqlx::PgPool,
+    job_id: String,
+    worker_id: String,
+    refresh_every: Duration,
+    mut stop: watch::Receiver<bool>,
+) {
+    let mut ticker = interval(refresh_every);
+    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
+    loop {
+        tokio::select! {
+            _ = ticker.tick() => {
+                match refresh_evaluation_job_claim(&db, &job_id, &worker_id).await {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        error!(job_id = %job_id, worker_id = %worker_id, "job lease no longer belongs to worker");
+                        break;
+                    }
+                    Err(e) => {
+                        error!(job_id = %job_id, worker_id = %worker_id, error = %e, "failed to refresh job lease");
+                    }
+                }
+            }
+            changed = stop.changed() => {
+                if changed.is_err() || *stop.borrow() {
+                    break;
+                }
+            }
+        }
+    }
 }

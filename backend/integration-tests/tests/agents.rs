@@ -2,7 +2,7 @@
 
 mod helpers;
 
-use helpers::{api_url, spawn_app};
+use helpers::{api_url, examples_challenges_root, spawn_app, spawn_app_with_config, test_config};
 
 #[sqlx::test(migrations = "../migrations")]
 async fn register_agent_and_list_challenges(pool: sqlx::PgPool) {
@@ -49,4 +49,29 @@ async fn register_agent_and_list_challenges(pool: sqlx::PgPool) {
         .expect("failed to execute request");
 
     assert_eq!(response.status(), 401);
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn registration_respects_active_agent_quota(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let mut config = test_config(storage.path(), &examples_challenges_root());
+    config.max_active_agents = 1;
+    let app = spawn_app_with_config(pool, config).await;
+    let client = reqwest::Client::new();
+
+    let first = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "name": "quota-agent-1" }))
+        .send()
+        .await
+        .expect("failed to register first agent");
+    assert_eq!(first.status(), 201);
+
+    let second = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "name": "quota-agent-2" }))
+        .send()
+        .await
+        .expect("failed to register second agent");
+    assert_eq!(second.status(), 429);
 }

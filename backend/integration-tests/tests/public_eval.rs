@@ -131,24 +131,15 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
         ])
     );
     assert_eq!(
-        solution_submission["evaluation"]["run_metrics"][0],
-        serde_json::json!({
-            "run_id": "private-benchmark-1",
-            "metrics": [{ "metric_id": "score", "value": 1.0 }]
-        })
+        solution_submission["evaluation"]["run_metrics"],
+        serde_json::json!([])
     );
     assert_eq!(
-        solution_submission["evaluation"]["official_summary"]["score"],
-        1.0
+        solution_submission["evaluation"]["public_results"],
+        serde_json::json!([])
     );
-    assert_eq!(
-        solution_submission["evaluation"]["official_summary"]["passed"],
-        2
-    );
-    assert_eq!(
-        solution_submission["evaluation"]["official_summary"]["total"],
-        2
-    );
+    assert!(solution_submission["evaluation"]["official_summary"].is_null());
+    assert!(solution_submission["evaluation"]["log_path"].is_null());
 
     let job_status: (String, String) = sqlx::query_as(
         "SELECT status, eval_type FROM evaluation_jobs WHERE solution_submission_id = $1",
@@ -624,6 +615,263 @@ async fn validation_run_quota_rejects_and_resets(pool: sqlx::PgPool) {
         .expect("failed to query job count");
     assert_eq!(solution_submission_count.0, 2);
     assert_eq!(job_count.0, 2);
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn official_submission_quota_rejects_before_artifact_decode(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let mut config = test_config(storage.path(), &examples_challenges_root());
+    config.official_runs_per_agent_challenge_day = 1;
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "name": "official-quota-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+    let artifact_base64 = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
+
+    let first_response = client
+        .post(api_url(&app, "/api/solution-submissions"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "challenge_id": "sample-sum",
+            "artifact_base64": artifact_base64,
+            "explanation": "first official run"
+        }))
+        .send()
+        .await
+        .expect("failed to create first official run");
+    assert_eq!(first_response.status(), 201);
+
+    let quota_response = client
+        .post(api_url(&app, "/api/solution-submissions"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "challenge_id": "sample-sum",
+            "artifact_base64": "not-base64",
+            "explanation": "should fail before artifact decode"
+        }))
+        .send()
+        .await
+        .expect("failed to request over-quota official run");
+    assert_eq!(quota_response.status(), 429);
+
+    let quota_error: serde_json::Value = quota_response
+        .json()
+        .await
+        .expect("failed to decode quota error");
+    assert_eq!(quota_error["error"], "too_many_requests");
+    assert!(
+        quota_error["message"]
+            .as_str()
+            .expect("quota error message")
+            .contains("official quota exceeded")
+    );
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn official_active_queue_limit_rejects_before_artifact_decode(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let mut config = test_config(storage.path(), &examples_challenges_root());
+    config.official_runs_per_agent_challenge_day = 10;
+    config.max_active_official_jobs = 1;
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "name": "official-active-limit-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+    let artifact_base64 = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
+
+    let first_response = client
+        .post(api_url(&app, "/api/solution-submissions"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "challenge_id": "sample-sum",
+            "artifact_base64": artifact_base64,
+            "explanation": "fills active queue"
+        }))
+        .send()
+        .await
+        .expect("failed to create first official run");
+    assert_eq!(first_response.status(), 201);
+
+    let quota_response = client
+        .post(api_url(&app, "/api/solution-submissions"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "challenge_id": "sample-sum",
+            "artifact_base64": "not-base64",
+            "explanation": "should fail before artifact decode"
+        }))
+        .send()
+        .await
+        .expect("failed to request over active official queue limit");
+    assert_eq!(quota_response.status(), 429);
+
+    let quota_error: serde_json::Value = quota_response
+        .json()
+        .await
+        .expect("failed to decode active queue error");
+    assert_eq!(quota_error["error"], "too_many_requests");
+    assert!(
+        quota_error["message"]
+            .as_str()
+            .expect("active queue error message")
+            .contains("official evaluation queue is full")
+    );
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn stale_running_job_fails_after_max_attempts(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = test_config(storage.path(), &examples_challenges_root());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "name": "stale-job-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+    let artifact_base64 = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
+    let create_response: serde_json::Value = client
+        .post(api_url(&app, "/api/solution-submissions"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "challenge_id": "sample-sum",
+            "artifact_base64": artifact_base64,
+            "explanation": "stale job"
+        }))
+        .send()
+        .await
+        .expect("failed to create solution submission")
+        .json()
+        .await
+        .expect("failed to decode create solution submission response");
+    let solution_submission_id = create_response["id"]
+        .as_str()
+        .expect("missing solution submission id");
+
+    sqlx::query(
+        r#"
+        UPDATE evaluation_jobs
+        SET status = 'running',
+            worker_id = 'worker-1',
+            claimed_at = NOW() - INTERVAL '10 minutes',
+            attempt_count = max_attempts
+        WHERE solution_submission_id = $1
+        "#,
+    )
+    .bind(solution_submission_id)
+    .execute(&pool)
+    .await
+    .expect("failed to mark job stale");
+
+    let result = shared::db::reap_stuck_jobs(&pool, 1)
+        .await
+        .expect("failed to reap stale jobs");
+
+    assert_eq!(result.requeued, 0);
+    assert_eq!(result.failed, 1);
+
+    let states: (String, String) = sqlx::query_as(
+        r#"
+        SELECT j.status, s.status
+        FROM evaluation_jobs j
+        JOIN solution_submissions s ON s.id = j.solution_submission_id
+        WHERE s.id = $1
+        "#,
+    )
+    .bind(solution_submission_id)
+    .fetch_one(&pool)
+    .await
+    .expect("failed to query states");
+    assert_eq!(states, ("failed".to_string(), "failed".to_string()));
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn refreshed_job_lease_is_not_reaped(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = test_config(storage.path(), &examples_challenges_root());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "name": "lease-refresh-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+    let artifact_base64 = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
+    let create_response: serde_json::Value = client
+        .post(api_url(&app, "/api/solution-submissions"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "challenge_id": "sample-sum",
+            "artifact_base64": artifact_base64,
+            "explanation": "lease refresh"
+        }))
+        .send()
+        .await
+        .expect("failed to create solution submission")
+        .json()
+        .await
+        .expect("failed to decode create solution submission response");
+    let solution_submission_id = create_response["id"]
+        .as_str()
+        .expect("missing solution submission id");
+    let job_id: String = sqlx::query_scalar(
+        r#"
+        UPDATE evaluation_jobs
+        SET status = 'running',
+            worker_id = 'worker-1',
+            claimed_at = NOW() - INTERVAL '10 minutes',
+            attempt_count = 1,
+            max_attempts = 2
+        WHERE solution_submission_id = $1
+        RETURNING id
+        "#,
+    )
+    .bind(solution_submission_id)
+    .fetch_one(&pool)
+    .await
+    .expect("failed to mark job running");
+
+    let refreshed = shared::db::refresh_evaluation_job_claim(&pool, &job_id, "worker-1")
+        .await
+        .expect("failed to refresh job lease");
+    assert!(refreshed);
+
+    let result = shared::db::reap_stuck_jobs(&pool, 1)
+        .await
+        .expect("failed to reap stale jobs");
+
+    assert_eq!(result.requeued, 0);
+    assert_eq!(result.failed, 0);
 }
 
 #[sqlx::test(migrations = "../migrations")]

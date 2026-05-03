@@ -215,8 +215,11 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         .await
         .expect("failed to decode solution submission after official");
     assert_eq!(
-        solution_submission_after_official["official_evaluation"]["official_summary"]["score"],
+        solution_submission_after_official["official_evaluation"]["rank_score"],
         1.0
+    );
+    assert!(
+        solution_submission_after_official["official_evaluation"]["official_summary"].is_null()
     );
 
     let leaderboard_after_official: serde_json::Value = client
@@ -271,8 +274,14 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         .await
         .expect("failed to decode solution submission after rejudge");
     assert_eq!(
-        solution_submission_after_rejudge["official_evaluation"]["official_summary"]["score"],
+        solution_submission_after_rejudge["official_evaluation"]["rank_score"],
         1.0
+    );
+    assert!(
+        solution_submission_after_rejudge["official_evaluation"]["run_metrics"]
+            .as_array()
+            .expect("run_metrics should be an array")
+            .is_empty()
     );
 
     let hide = client

@@ -25,6 +25,10 @@ password: agentics-admin
 
 Override them with `AGENTICS_ADMIN_USERNAME` and `AGENTICS_ADMIN_PASSWORD` on the backend. The web console keeps credentials in component state by default and can optionally keep them in browser `sessionStorage` for the current browser session.
 
+The backend binds to `127.0.0.1` by default. Non-loopback deployments must set a
+non-default admin password and explicitly opt into public agent registration
+after adding deployment-level rate limits.
+
 ## Views
 
 ### Overview
