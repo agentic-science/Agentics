@@ -274,17 +274,12 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
   - Scope：为 setup、build 和 run 阶段建模，分别设置独立 timeout、memory、CPU、disk、network 和 log limits。
   - Test spec：为 default phase limits、override validation 和 phase-specific failure reporting 添加 unit tests。
 
-- **M0.2-PROTO-3：添加 dependency policy validation**
-  - Commit target：`protocol: validate dependency policy`
-  - Scope：为 official runs 强制执行 vendored、lockfile-pinned 或 image-provided dependency declarations。
-  - Test spec：为允许和拒绝的 dependency layouts 添加 fixture tests。
-
 ### Worker 和 Resource Profiles
 
 - **M0.2-WORKER-1：执行 multi-phase solution submissions**
   - Commit target：`worker: execute zip_project setup build run phases`
-  - Scope：更新 runner orchestration，按顺序执行 setup、build 和 run phases，并提供隔离 logs 和 phase-specific status。
-  - Test spec：为成功 multi-phase execution 和每个 phase 独立失败添加 integration tests。
+  - Scope：更新 runner orchestration，在 build solution container 中执行 setup 和 build，然后在 fresh no-egress solution container 中执行 run。Scorer execution 保持在单独的 scorer container 中，并使用 challenge-owned internet policy。支持 CLI/stdin 和 file interfaces、隔离 logs、phase-specific status，并确保 private benchmark data 只挂载到 scorer environment。
+  - Test spec：为成功 multi-phase execution、每个 phase 独立失败、private benchmark data 不挂载到 solution containers、setup/build egress behavior、run-phase no-egress behavior、CLI/stdin mode 和 file mode 添加 integration tests。
 
 - **M0.2-WORKER-2：添加 resource profile enforcement**
   - Commit target：`worker: enforce challenge resource profiles`
@@ -346,7 +341,7 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 
 - **M0.2-DOC-1：记录 multi-language challenge authoring**
   - Commit target：`docs: document multi-language zip_project authoring`
-  - Scope：添加 manifest examples、reference image guidance、setup/build/run contract、dependency policy 和 language examples。
+  - Scope：添加 manifest examples、reference image guidance、setup/build/run contract、two-container solution execution model、scorer/solution data boundaries、internet policy、dependency metadata guidance 和 language examples。
   - Test spec：使用 parser fixtures 和至少一个 local runner smoke test 验证 documented sample ZIPs。
 
 - **M0.2-DOC-2：记录 GPU benchmark expectations**
@@ -360,8 +355,8 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 | --- | --- | --- |
 | `M0.2-PROTO-1：定义 zip_project manifest schema` | 已实现 | 为 `agentics.solution.json` 添加 strict shared Rust parsing 和双语文档。 |
 | `M0.2-PROTO-2：添加 setup/build/run phase model` | 已实现 | 添加 per-phase defaults、override validation、execution plan resolution 和 failure-report models。 |
-| `M0.2-PROTO-3：添加 dependency policy validation` | 计划中 | 依赖 manifest schema 和 official dependency policy。 |
-| `M0.2-WORKER-1：执行 multi-phase solution-submissions` | 计划中 | 依赖 setup/build/run model。 |
+| `M0.2-PROTO-3：添加 dependency policy validation` | 已推迟 | 作为 standalone milestone 废弃；dependency reproducibility 属于 challenge owners 和 submitting agents 的责任，Agentics 记录 metadata 和 execution policy。 |
+| `M0.2-WORKER-1：执行 multi-phase solution-submissions` | 计划中 | 使用 setup/build container 加 fresh no-egress run container，并将 scorer 隔离在单独 container 中。 |
 | `M0.2-WORKER-2：添加 resource profile enforcement` | 计划中 | 依赖 resource profile schema。 |
 | `M0.2-WORKER-3：添加 GPU profile recording` | 计划中 | GPU metadata foundation。 |
 | `M0.2-WORKER-4：添加 GPU validation 和 official scheduling hooks` | 计划中 | 依赖 GPU metadata 和 worker capability flags。 |

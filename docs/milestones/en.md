@@ -274,17 +274,12 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
   - Scope: Model separate setup, build, and run phases with independent timeout, memory, CPU, disk, network, and log limits.
   - Test spec: Add unit tests for default phase limits, override validation, and phase-specific failure reporting.
 
-- **M0.2-PROTO-3: Add dependency policy validation**
-  - Commit target: `protocol: validate dependency policy`
-  - Scope: Enforce vendored, lockfile-pinned, or image-provided dependency declarations for official runs.
-  - Test spec: Add fixture tests for allowed and rejected dependency layouts.
-
 ### Worker and Resource Profiles
 
 - **M0.2-WORKER-1: Execute multi-phase solution submissions**
   - Commit target: `worker: execute zip_project setup build run phases`
-  - Scope: Update runner orchestration to execute setup, build, and run phases in order with isolated logs and phase-specific status.
-  - Test spec: Add integration tests for successful multi-phase execution and each phase failing independently.
+  - Scope: Update runner orchestration to execute setup and build in a build solution container, then execute run in a fresh no-egress solution container. Keep scorer execution in a separate scorer container with challenge-owned internet policy. Support CLI/stdin and file interfaces, isolated logs, phase-specific status, and private benchmark data mounted only into the scorer environment.
+  - Test spec: Add integration tests for successful multi-phase execution, each phase failing independently, no private benchmark data mounted into solution containers, setup/build egress behavior, run-phase no-egress behavior, CLI/stdin mode, and file mode.
 
 - **M0.2-WORKER-2: Add resource profile enforcement**
   - Commit target: `worker: enforce challenge resource profiles`
@@ -346,7 +341,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 
 - **M0.2-DOC-1: Document multi-language challenge authoring**
   - Commit target: `docs: document multi-language zip_project authoring`
-  - Scope: Add manifest examples, reference image guidance, setup/build/run contract, dependency policy, and language examples.
+  - Scope: Add manifest examples, reference image guidance, setup/build/run contract, two-container solution execution model, scorer/solution data boundaries, internet policy, dependency metadata guidance, and language examples.
   - Test spec: Validate documented sample ZIPs against parser fixtures and at least one local runner smoke test.
 
 - **M0.2-DOC-2: Document GPU benchmark expectations**
@@ -360,8 +355,8 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 | --- | --- | --- |
 | `M0.2-PROTO-1: Define zip_project manifest schema` | Implemented | Adds strict shared Rust parsing and bilingual docs for `agentics.solution.json`. |
 | `M0.2-PROTO-2: Add setup/build/run phase model` | Implemented | Adds per-phase defaults, override validation, execution plan resolution, and failure-report models. |
-| `M0.2-PROTO-3: Add dependency policy validation` | Planned | Depends on manifest schema and official dependency policy. |
-| `M0.2-WORKER-1: Execute multi-phase solution-submissions` | Planned | Depends on setup/build/run model. |
+| `M0.2-PROTO-3: Add dependency policy validation` | Deferred | Discarded as a standalone milestone; dependency reproducibility belongs to challenge owners and submitting agents, while Agentics records metadata and execution policy. |
+| `M0.2-WORKER-1: Execute multi-phase solution-submissions` | Planned | Uses setup/build container plus fresh no-egress run container, with scorer isolated in a separate container. |
 | `M0.2-WORKER-2: Add resource profile enforcement` | Planned | Depends on resource profile schema. |
 | `M0.2-WORKER-3: Add GPU profile recording` | Planned | GPU metadata foundation. |
 | `M0.2-WORKER-4: Add GPU validation and official scheduling hooks` | Planned | Depends on GPU metadata and worker capability flags. |

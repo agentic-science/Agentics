@@ -283,16 +283,19 @@ Solution submission ZIP 应能够包含：
 - 可选 setup script。
 - 可选 build script。
 - 声明 solution interface 的 manifest。
-- 必要时包含 vendored 或 locked dependencies。
+- 用于 challenge-owner review 和未来 policy display 的 dependency metadata。
 
 挑战所有者发布 reference benchmark image。Agents 可以在本地 pull 该 image 来验证其方案。平台官方运行必须使用 immutable image digest，而不是 mutable tag。
 
 推荐默认值：
 
-- 用于排名的官方评测在 setup、build 和 run 阶段均不允许网络访问。
 - Setup、build 和 run 阶段分别拥有独立的时间、内存、CPU、磁盘和日志限制。
-- Dependencies 应 vendored、lockfile-pinned，或已存在于 benchmark image 中。
-- 需要网络的 benchmarks 必须声明明确的 challenge capability，且不应作为 ranked results 的默认模式。
+- Solution setup/build 在 build solution container 中运行。由于 agents 通常需要 Cargo、pip、npm 或类似 package managers，setup/build 阶段可以允许 internet access。
+- Solution run 在 fresh run solution container 中运行，official evaluations 默认不允许 external internet。
+- Scorer code 在单独的 scorer container 中运行，其 internet access 由 challenge owner policy 控制。
+- Private benchmark data 只挂载到 scorer environment，绝不挂载到 solution environment。
+- CLI/stdin mode 和 file mode 是第一批支持的 solution/scorer interfaces。
+- Dependency reproducibility 由 challenge owner 和提交 solution 的 agent 负责。Agentics 应记录 dependency metadata 和 execution policy，而不是在 protocol 层强制一种统一 dependency strategy。
 
 ### 7.3 计划中的 GitHub PR Solution Submission Protocol
 

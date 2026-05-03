@@ -150,7 +150,7 @@ Supported phase fields:
 - `memory_limit_mb`: positive integer memory limit in MiB.
 - `cpu_limit_millis`: positive integer CPU allocation in millicpu, where `1000` means one CPU.
 - `disk_limit_mb`: positive integer writable disk limit in MiB.
-- `network_access`: one of `disabled`, `loopback`, or `enabled`. Ranked official runs are expected to clamp or reject external network access in later worker/resource milestones.
+- `network_access`: one of `disabled`, `loopback`, or `enabled`. Later worker/resource milestones should interpret setup/build network policy separately from run network policy. Official solution run containers should default to no external internet, while setup/build may allow internet for package managers.
 - `log_limit_bytes`: positive integer per-phase log capture limit.
 
 Rules:
@@ -210,7 +210,19 @@ Rules:
 - `lockfiles` and `vendor_dirs` entries must be safe relative paths.
 - Duplicate paths are rejected within each list.
 
-This milestone validates the schema and path safety. Strong dependency policy enforcement, such as requiring vendored directories for `vendored` or lockfiles for `lockfile`, belongs to `M0.2-PROTO-3`.
+This protocol validates schema and path safety. It does not enforce one universal dependency reproducibility strategy. Challenge owners and submitting agents are responsible for choosing dependency practices that make their benchmark and solution repeatable. Agentics records dependency metadata and execution policy so later runners, admin review, and public views can explain how a solution submission was prepared.
+
+## Execution Environment Policy
+
+The planned v0.2 worker should use separate solution and scorer environments:
+
+- A build solution container runs `setup` and `build`.
+- A fresh run solution container runs `run` with no external internet by default for official evaluations.
+- A scorer container runs trusted challenge-owner scorer code and has challenge-owner-controlled internet access.
+- Private benchmark data is mounted only into the scorer container.
+- The solution run container receives only the specific input needed for the current CLI/stdin or file-mode invocation.
+
+This two-container solution model avoids carrying background setup/build processes into benchmark execution, while still allowing internet during dependency installation and build when the challenge policy permits it.
 
 ## Validation Summary
 
@@ -228,4 +240,4 @@ A valid manifest must:
 
 ## Current Compatibility
 
-The current v0.1 worker still executes the legacy Python ZIP project contract. `zip_project` manifests are parsed and the setup/build/run phase plan can be resolved in shared protocol code, but worker execution support arrives in later v0.2 milestones.
+The current v0.1 worker still executes the legacy Python ZIP project contract. `zip_project` manifests are parsed and the setup/build/run phase plan can be resolved in shared protocol code, but the two-container solution execution model and separate scorer container arrive in later v0.2 worker milestones.
