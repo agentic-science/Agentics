@@ -7,12 +7,24 @@
 
 use std::collections::HashSet;
 use std::path::Path;
+use std::sync::LazyLock;
+
+use regex::Regex;
 
 use crate::error::{AppError, Result};
 use crate::models::challenge::{
     ChallengeBundleSpec, ChallengeRunInputFile, ChallengeRunManifest, ChallengeRunSpec,
 };
 use crate::zip_project::{ZIP_PROJECT_MANIFEST_FILE, ZIP_PROJECT_PROTOCOL};
+
+static MARKDOWN_LINK_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\[([^\]]+)\]\([^)]+\)").expect("valid link regex"));
+static MARKDOWN_BOLD_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\*\*([^*]+)\*\*").expect("valid bold regex"));
+static MARKDOWN_ASTERISK_ITALIC_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\*([^*]+)\*").expect("valid italic regex"));
+static MARKDOWN_UNDERSCORE_ITALIC_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"_([^_]+)_").expect("valid italic regex"));
 
 /// Read `spec.json` from a bundle directory and validate its contract fields.
 pub async fn read_challenge_bundle_spec(bundle_dir: &Path) -> Result<ChallengeBundleSpec> {
@@ -171,30 +183,19 @@ pub async fn extract_challenge_description(statement_path: &Path) -> Result<Stri
 
 fn strip_markdown_inline(value: &str) -> String {
     let mut result = value.to_string();
-    // Strip inline code
-    while let Some(start) = result.find('`') {
-        if let Some(end) = result[start + 1..].find('`') {
-            let inner = result[start + 1..start + 1 + end].to_string();
-            result.replace_range(start..start + 1 + end + 1, &inner);
-        } else {
-            break;
-        }
+    while let Some(start) = result.find('`')
+        && let Some(end) = result[start + 1..].find('`')
+    {
+        let inner = result[start + 1..start + 1 + end].to_string();
+        result.replace_range(start..start + 1 + end + 1, &inner);
     }
-    // Strip links
-    result = regex_replace(&result, r"\[([^\]]+)\]\([^)]+\)", "$1");
-    // Strip bold
-    result = regex_replace(&result, r"\*\*([^*]+)\*\*", "$1");
-    // Strip italic
-    result = regex_replace(&result, r"\*([^*]+)\*", "$1");
-    result = regex_replace(&result, r"_([^_]+)_", "$1");
-    result.trim().to_string()
-}
 
-fn regex_replace(input: &str, pattern: &str, replacement: &str) -> String {
-    use regex::Regex;
-    Regex::new(pattern)
-        .unwrap()
-        .replace_all(input, replacement)
+    let result = MARKDOWN_LINK_RE.replace_all(&result, "$1");
+    let result = MARKDOWN_BOLD_RE.replace_all(&result, "$1");
+    let result = MARKDOWN_ASTERISK_ITALIC_RE.replace_all(&result, "$1");
+    MARKDOWN_UNDERSCORE_ITALIC_RE
+        .replace_all(&result, "$1")
+        .trim()
         .to_string()
 }
 
@@ -203,8 +204,7 @@ pub fn is_safe_relative_path(value: &str) -> bool {
     if value.starts_with('/') {
         return false;
     }
-    let segments: Vec<&str> = value.split(['/', '\\']).collect();
-    segments.iter().all(|s| !s.is_empty() && *s != "..")
+    value.split(['/', '\\']).all(|s| !s.is_empty() && s != "..")
 }
 
 fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {

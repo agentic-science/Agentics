@@ -270,8 +270,8 @@ pub async fn run_worker_cycle(
 }
 
 fn lease_refresh_interval(config: &Config) -> Duration {
-    let stale_secs = u64::try_from(config.worker_stale_job_minutes.max(1)).unwrap_or(1) * 60;
-    Duration::from_secs((stale_secs / 3).clamp(5, 60))
+    let stale_window = Duration::from_mins(config.worker_stale_job_minutes.max(1) as u64);
+    (stale_window / 3).clamp(Duration::from_secs(5), Duration::from_mins(1))
 }
 
 async fn refresh_claim_until_stopped(

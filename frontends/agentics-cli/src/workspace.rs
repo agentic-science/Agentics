@@ -33,7 +33,9 @@ pub fn init_solution_workspace(
     dir: Option<PathBuf>,
 ) -> Result<InitSolutionSummary> {
     let workspace_dir = dir.unwrap_or_else(|| default_workspace_dir(&challenge.id));
-    if workspace_dir.exists() {
+    if fs::exists(&workspace_dir)
+        .with_context(|| format!("failed to inspect workspace {}", workspace_dir.display()))?
+    {
         bail!(
             "solution workspace already exists: {}",
             workspace_dir.display()
@@ -149,16 +151,18 @@ fn install_pre_commit_hook(workspace_dir: &Path) -> Result<()> {
     fs::write(&hook_path, PRE_COMMIT_HOOK)
         .with_context(|| format!("failed to write {}", hook_path.display()))?;
 
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
+    cfg_select! {
+        unix => {
+            use std::os::unix::fs::PermissionsExt;
 
-        let mut permissions = fs::metadata(&hook_path)
-            .with_context(|| format!("failed to stat {}", hook_path.display()))?
-            .permissions();
-        permissions.set_mode(0o755);
-        fs::set_permissions(&hook_path, permissions)
-            .with_context(|| format!("failed to chmod {}", hook_path.display()))?;
+            let mut permissions = fs::metadata(&hook_path)
+                .with_context(|| format!("failed to stat {}", hook_path.display()))?
+                .permissions();
+            permissions.set_mode(0o755);
+            fs::set_permissions(&hook_path, permissions)
+                .with_context(|| format!("failed to chmod {}", hook_path.display()))?;
+        }
+        _ => {}
     }
 
     Ok(())

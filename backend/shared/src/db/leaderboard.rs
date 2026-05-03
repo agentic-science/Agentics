@@ -328,6 +328,11 @@ fn compare_leaderboard_entries(
         &b.aggregate_metrics,
     )
     .then_with(|| a.updated_at.cmp(&b.updated_at))
+    .then_with(|| a.agent_name.cmp(&b.agent_name))
+    .then_with(|| {
+        a.best_solution_submission_id
+            .cmp(&b.best_solution_submission_id)
+    })
 }
 
 fn compare_rank_payloads(

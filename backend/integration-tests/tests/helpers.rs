@@ -29,7 +29,7 @@ pub async fn spawn_app(pool: PgPool) -> TestApp {
 /// Tests use this to point storage and seeded challenge roots at temporary
 /// directories while exercising the real router and startup seeding path.
 pub async fn spawn_app_with_config(pool: PgPool, config: Config) -> TestApp {
-    if Path::new(&config.challenges_root).exists() {
+    if std::fs::exists(&config.challenges_root).expect("failed to inspect challenge root") {
         shared::db::ensure_challenges_seeded_from_root(&pool, &config.challenges_root)
             .await
             .expect("failed to seed challenges");

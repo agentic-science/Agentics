@@ -103,7 +103,7 @@ pub async fn ensure_challenges_seeded_from_root(
                 continue;
             }
             let bundle_dir = v_entry.path();
-            if bundle_dir.join("spec.json").exists() {
+            if tokio::fs::try_exists(bundle_dir.join("spec.json")).await? {
                 version_dirs.push(bundle_dir);
             }
         }

@@ -58,13 +58,15 @@ impl Storage for LocalStorage {
 
     async fn exists(&self, path: &str) -> Result<bool> {
         let full = self.resolve(path);
-        Ok(full.exists())
+        Ok(tokio::fs::try_exists(full).await?)
     }
 
     async fn delete(&self, path: &str) -> Result<()> {
         let full = self.resolve(path);
-        if full.exists() {
-            tokio::fs::remove_file(&full).await?;
+        match tokio::fs::remove_file(&full).await {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
         }
         Ok(())
     }

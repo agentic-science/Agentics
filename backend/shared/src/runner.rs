@@ -666,6 +666,10 @@ fn extract_zip_safe_blocking(artifact_path: &str, target_dir: &Path) -> Result<(
 pub async fn pre_pull_image(docker: &Docker, image: &str) -> Result<()> {
     use bollard::query_parameters::CreateImageOptionsBuilder;
 
+    if docker.inspect_image(image).await.is_ok() {
+        return Ok(());
+    }
+
     let opts = CreateImageOptionsBuilder::default()
         .from_image(image)
         .build();

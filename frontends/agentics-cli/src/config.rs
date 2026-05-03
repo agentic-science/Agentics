@@ -115,7 +115,9 @@ impl ConfigStore {
     }
 
     pub fn load(&self) -> Result<CliConfig> {
-        if !self.path.exists() {
+        if !fs::exists(&self.path)
+            .with_context(|| format!("failed to inspect config file {}", self.path.display()))?
+        {
             return Ok(CliConfig::default());
         }
 
@@ -237,15 +239,15 @@ fn private_temp_path(path: &Path) -> io::Result<PathBuf> {
 }
 
 fn write_private_temp_file(path: &Path, bytes: &[u8]) -> io::Result<()> {
-    #[cfg(unix)]
-    use std::os::unix::fs::OpenOptionsExt;
-
     let mut options = OpenOptions::new();
     options.create_new(true).write(true);
 
-    #[cfg(unix)]
-    {
-        options.mode(0o600);
+    cfg_select! {
+        unix => {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        _ => {}
     }
 
     let mut file = options.open(path)?;
@@ -254,19 +256,16 @@ fn write_private_temp_file(path: &Path, bytes: &[u8]) -> io::Result<()> {
 }
 
 fn set_private_file_permissions(path: &Path) -> io::Result<()> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-
-        fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
+    cfg_select! {
+        unix => {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(path, fs::Permissions::from_mode(0o600))
+        }
+        _ => {
+            let _ = path;
+            Ok(())
+        }
     }
-
-    #[cfg(not(unix))]
-    {
-        let _ = path;
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]

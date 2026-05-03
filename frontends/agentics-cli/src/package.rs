@@ -1,4 +1,4 @@
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{Cursor, Read, Seek, Write};
 use std::path::{Component, Path, PathBuf};
 
@@ -34,21 +34,31 @@ pub fn package_solution_workspace(workspace_dir: &Path) -> Result<SolutionPackag
     }
 
     let manifest_path = workspace_dir.join(REQUIRED_MANIFEST);
-    if !manifest_path.is_file() {
+    if !fs::exists(&manifest_path)
+        .with_context(|| format!("failed to inspect {}", manifest_path.display()))?
+    {
         bail!(
             "{REQUIRED_MANIFEST} must exist at the workspace root before packaging a solution submission"
         );
+    }
+    if !manifest_path.is_file() {
+        bail!("{REQUIRED_MANIFEST} must be a file");
     }
     let manifest_raw = std::fs::read_to_string(&manifest_path)
         .with_context(|| format!("failed to read {}", manifest_path.display()))?;
     let manifest = shared::zip_project::parse_zip_project_manifest(&manifest_raw)?;
 
     let run_script = workspace_dir.join(&manifest.commands.run);
-    if !run_script.is_file() {
+    if !fs::exists(&run_script)
+        .with_context(|| format!("failed to inspect {}", run_script.display()))?
+    {
         bail!(
             "{} must exist before packaging a solution submission",
             manifest.commands.run
         );
+    }
+    if !run_script.is_file() {
+        bail!("{} must be a file", manifest.commands.run);
     }
 
     let files = collect_package_files(&workspace_dir)?;
@@ -205,16 +215,17 @@ fn archive_name(path: &Path) -> Result<String> {
     Ok(parts.join("/"))
 }
 
-#[cfg(unix)]
 fn unix_permissions(metadata: &std::fs::Metadata) -> u32 {
-    use std::os::unix::fs::PermissionsExt;
-
-    metadata.permissions().mode() & 0o777
-}
-
-#[cfg(not(unix))]
-fn unix_permissions(_metadata: &std::fs::Metadata) -> u32 {
-    0o644
+    cfg_select! {
+        unix => {
+            use std::os::unix::fs::PermissionsExt;
+            metadata.permissions().mode() & 0o777
+        }
+        _ => {
+            let _ = metadata;
+            0o644
+        }
+    }
 }
 
 #[cfg(test)]
