@@ -7,7 +7,7 @@ use ignore::{DirEntry, WalkBuilder};
 use zip::CompressionMethod;
 use zip::write::SimpleFileOptions;
 
-const REQUIRED_RUN_SCRIPT: &str = "run.sh";
+const REQUIRED_MANIFEST: &str = shared::zip_project::ZIP_PROJECT_MANIFEST_FILE;
 
 #[derive(Debug, Clone)]
 pub struct SolutionPackage {
@@ -33,19 +33,39 @@ pub fn package_solution_workspace(workspace_dir: &Path) -> Result<SolutionPackag
         bail!("workspace is not a directory: {}", workspace_dir.display());
     }
 
-    let run_script = workspace_dir.join(REQUIRED_RUN_SCRIPT);
+    let manifest_path = workspace_dir.join(REQUIRED_MANIFEST);
+    if !manifest_path.is_file() {
+        bail!(
+            "{REQUIRED_MANIFEST} must exist at the workspace root before packaging a solution submission"
+        );
+    }
+    let manifest_raw = std::fs::read_to_string(&manifest_path)
+        .with_context(|| format!("failed to read {}", manifest_path.display()))?;
+    let manifest = shared::zip_project::parse_zip_project_manifest(&manifest_raw)?;
+
+    let run_script = workspace_dir.join(&manifest.commands.run);
     if !run_script.is_file() {
         bail!(
-            "{REQUIRED_RUN_SCRIPT} must exist at the workspace root before packaging a solution submission"
+            "{} must exist before packaging a solution submission",
+            manifest.commands.run
         );
     }
 
     let files = collect_package_files(&workspace_dir)?;
     if !files
         .iter()
-        .any(|file| file.archive_name == REQUIRED_RUN_SCRIPT)
+        .any(|file| file.archive_name == REQUIRED_MANIFEST)
     {
-        bail!("{REQUIRED_RUN_SCRIPT} is excluded by .gitignore or package filters");
+        bail!("{REQUIRED_MANIFEST} is excluded by .gitignore or package filters");
+    }
+    if !files
+        .iter()
+        .any(|file| file.archive_name == manifest.commands.run)
+    {
+        bail!(
+            "{} is excluded by .gitignore or package filters",
+            manifest.commands.run
+        );
     }
     if files.is_empty() {
         bail!("workspace contains no packageable files");
@@ -204,10 +224,27 @@ mod tests {
 
     use super::package_solution_workspace;
 
+    fn write_manifest(root: &std::path::Path) {
+        fs::write(
+            root.join("agentics.solution.json"),
+            serde_json::json!({
+                "protocol": "zip_project",
+                "protocol_version": 1,
+                "runtime": { "language": "python" },
+                "commands": { "run": "run.sh" },
+                "interface": { "kind": "stdio" },
+                "dependencies": { "policy": "image_provided" }
+            })
+            .to_string(),
+        )
+        .expect("manifest");
+    }
+
     #[test]
     fn package_respects_gitignore_and_excludes_git_directory() {
         let temp = tempfile::tempdir().expect("tempdir");
         let root = temp.path();
+        write_manifest(root);
         fs::write(root.join("run.sh"), "#!/usr/bin/env bash\npython main.py\n").expect("run.sh");
         fs::write(root.join("main.py"), "print('ok')\n").expect("main.py");
         fs::write(root.join("ignored.txt"), "ignored").expect("ignored");
@@ -218,13 +255,21 @@ mod tests {
         let package = package_solution_workspace(root).expect("workspace should package");
         let names = zip_file_names(&package.bytes);
 
-        assert_eq!(package.file_count, 2);
-        assert_eq!(names, vec!["main.py".to_string(), "run.sh".to_string()]);
+        assert_eq!(package.file_count, 3);
+        assert_eq!(
+            names,
+            vec![
+                "agentics.solution.json".to_string(),
+                "main.py".to_string(),
+                "run.sh".to_string()
+            ]
+        );
     }
 
     #[test]
     fn package_rejects_missing_run_script() {
         let temp = tempfile::tempdir().expect("tempdir");
+        write_manifest(temp.path());
         fs::write(temp.path().join("main.py"), "print('ok')\n").expect("main.py");
 
         let error = package_solution_workspace(temp.path()).expect_err("run.sh should be required");
@@ -235,6 +280,7 @@ mod tests {
     #[test]
     fn package_rejects_ignored_run_script() {
         let temp = tempfile::tempdir().expect("tempdir");
+        write_manifest(temp.path());
         fs::write(temp.path().join("run.sh"), "#!/usr/bin/env bash\n").expect("run.sh");
         fs::write(temp.path().join(".gitignore"), "run.sh\n").expect("gitignore");
 

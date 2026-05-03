@@ -16,6 +16,7 @@ const metricValueSchema = z
     value: z.number().finite(),
   })
   .strict();
+const networkAccessSchema = z.enum(["disabled", "loopback", "enabled"]);
 
 const runMetricResultSchema = z
   .object({
@@ -92,21 +93,44 @@ export const challengeBundleSpecSchema = z
     challenge_version: z.string().min(1),
     solution: z
       .object({
-        format: z.literal("python_zip_project"),
-        language: z.literal("python"),
-        entrypoint: z.string().min(1),
+        protocol: z.literal("zip_project"),
+        manifest_file: z.literal("agentics.solution.json"),
       })
       .strict(),
     scorer: z
       .object({
-        entrypoint: z.string().min(1),
+        command: z.array(z.string().min(1)).min(1),
         result_file: z.string().min(1),
       })
       .strict(),
-    limits: z
+    resource_profile: z
       .object({
-        time_limit_sec: z.number().positive(),
+        id: z.string().min(1),
+        solution_image: z.string().min(1),
+        solution_image_digest: z.string().min(1).optional(),
+        scorer_image: z.string().min(1),
+        scorer_image_digest: z.string().min(1).optional(),
+        timeout_sec: z.number().int().positive(),
         memory_limit_mb: z.number().int().positive(),
+        cpu_limit_millis: z.number().int().positive(),
+        disk_limit_mb: z.number().int().positive(),
+        setup_network_access: networkAccessSchema,
+        build_network_access: networkAccessSchema,
+        run_network_access: networkAccessSchema,
+        scorer_network_access: networkAccessSchema,
+        hardware: z
+          .object({
+            kind: z.string().min(1),
+            description: z.string().min(1).optional(),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict(),
+    execution: z
+      .object({
+        validation_runs: z.string().min(1).optional(),
+        official_runs: z.string().min(1).optional(),
       })
       .strict(),
     datasets: z

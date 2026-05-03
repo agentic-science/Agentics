@@ -126,16 +126,17 @@ pub fn render_challenge_detail(
             };
 
             Ok(format!(
-                "{} ({})\nversion: {} ({})\nsolution: {} / {} / {}\nlimits: {} sec, {} MB\ndatasets: public={}, validation={}, private_benchmark={}\nranking_metric: {}\n\n{}",
+                "{} ({})\nversion: {} ({})\nsolution_protocol: {} ({})\nresource_profile: {} / {} / {} sec / {} MB\ndatasets: public={}, validation={}, private_benchmark={}\nranking_metric: {}\n\n{}",
                 response.title,
                 response.id,
                 response.current_version.version,
                 response.current_version.id,
-                response.spec.solution.format,
-                response.spec.solution.language,
-                response.spec.solution.entrypoint,
-                response.spec.limits.time_limit_sec,
-                response.spec.limits.memory_limit_mb,
+                response.spec.solution.protocol,
+                response.spec.solution.manifest_file,
+                response.spec.resource_profile.id,
+                response.spec.resource_profile.solution_image,
+                response.spec.resource_profile.timeout_sec,
+                response.spec.resource_profile.memory_limit_mb,
                 response.spec.datasets.public_dir,
                 if response.spec.datasets.validation_enabled {
                     "enabled"
@@ -373,10 +374,12 @@ mod tests {
     use serde_json::Value;
     use shared::models::CurrentVersionDto;
     use shared::models::challenge::{
-        ChallengeBundleSpec, ChallengeDetailResponse, ChallengeListItemDto, ChallengeListResponse,
-        DatasetsSpec, LimitsSpec, MetricSchemaSpec, ScorerSpec, SolutionSpec,
+        ChallengeBundleSpec, ChallengeDetailResponse, ChallengeExecutionSpec, ChallengeListItemDto,
+        ChallengeListResponse, DatasetsSpec, MetricSchemaSpec, ResourceProfileSpec, ScorerSpec,
+        SolutionSpec,
     };
     use shared::models::evaluation::ScoreVisibility;
+    use shared::zip_project::ZipProjectNetworkAccess;
 
     use super::{OutputFormat, render_challenge_detail, render_challenge_list};
 
@@ -412,7 +415,7 @@ mod tests {
         let parsed: Value = serde_json::from_str(&output).expect("JSON output should parse");
 
         assert_eq!(parsed["id"], "sample-sum");
-        assert_eq!(parsed["spec"]["solution"]["entrypoint"], "main.py");
+        assert_eq!(parsed["spec"]["solution"]["protocol"], "zip_project");
     }
 
     fn challenge_detail() -> ChallengeDetailResponse {
@@ -431,17 +434,32 @@ mod tests {
                 challenge_title: "Sample Sum".to_string(),
                 challenge_version: "v1".to_string(),
                 solution: SolutionSpec {
-                    format: "python_zip_project".to_string(),
-                    language: "python".to_string(),
-                    entrypoint: "main.py".to_string(),
+                    protocol: "zip_project".to_string(),
+                    manifest_file: "agentics.solution.json".to_string(),
                 },
                 scorer: ScorerSpec {
-                    entrypoint: "scorer/run.py".to_string(),
+                    command: vec!["python".to_string(), "scorer/run.py".to_string()],
                     result_file: "result.json".to_string(),
                 },
-                limits: LimitsSpec {
-                    time_limit_sec: 30.0,
+                resource_profile: ResourceProfileSpec {
+                    id: "python-cpu-small".to_string(),
+                    solution_image: "python:3.12-slim-bookworm".to_string(),
+                    solution_image_digest: None,
+                    scorer_image: "python:3.12-slim-bookworm".to_string(),
+                    scorer_image_digest: None,
+                    timeout_sec: 30,
                     memory_limit_mb: 512,
+                    cpu_limit_millis: 1000,
+                    disk_limit_mb: 1024,
+                    setup_network_access: ZipProjectNetworkAccess::Enabled,
+                    build_network_access: ZipProjectNetworkAccess::Disabled,
+                    run_network_access: ZipProjectNetworkAccess::Disabled,
+                    scorer_network_access: ZipProjectNetworkAccess::Disabled,
+                    hardware: None,
+                },
+                execution: ChallengeExecutionSpec {
+                    validation_runs: Some("public/runs.json".to_string()),
+                    official_runs: Some("private-benchmark/runs.json".to_string()),
                 },
                 datasets: DatasetsSpec {
                     public_dir: "data/public".to_string(),

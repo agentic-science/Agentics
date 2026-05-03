@@ -44,9 +44,9 @@
     "reply": "条回复",
     "config": {
       "title": "评测配置",
-      "language": "语言",
-      "format": "格式",
-      "entrypoint": "入口文件",
+      "protocol": "协议",
+      "resourceProfile": "资源配置",
+      "manifest": "Manifest",
       "scorer": "评分器",
       "resultFile": "结果文件",
       "publicPolicy": "公开数据策略",

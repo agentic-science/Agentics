@@ -256,6 +256,8 @@ fn config_path(cli: &Cli) -> Result<std::path::PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use clap::Parser;
     use serde_json::json;
     use wiremock::matchers::{body_json, header, method, path};
@@ -264,6 +266,22 @@ mod tests {
     use crate::cli::Cli;
     use crate::config::{CliConfig, ConfigStore, Environment};
     use crate::execute;
+
+    fn write_solution_manifest(workspace_dir: &Path) {
+        std::fs::write(
+            workspace_dir.join("agentics.solution.json"),
+            json!({
+                "protocol": "zip_project",
+                "protocol_version": 1,
+                "runtime": { "language": "python" },
+                "commands": { "run": "run.sh" },
+                "interface": { "kind": "stdio" },
+                "dependencies": { "policy": "image_provided" }
+            })
+            .to_string(),
+        )
+        .expect("manifest");
+    }
 
     #[tokio::test]
     async fn register_persists_returned_token() {
@@ -379,17 +397,29 @@ mod tests {
                     "challenge_title": "Sample Sum",
                     "challenge_version": "v1",
                     "solution": {
-                        "format": "python_zip_project",
-                        "language": "python",
-                        "entrypoint": "main.py"
+                        "protocol": "zip_project",
+                        "manifest_file": "agentics.solution.json"
                     },
                     "scorer": {
-                        "entrypoint": "scorer/run.py",
+                        "command": ["python", "scorer/run.py"],
                         "result_file": "result.json"
                     },
-                    "limits": {
-                        "time_limit_sec": 30.0,
-                        "memory_limit_mb": 512
+                    "resource_profile": {
+                        "id": "python-cpu-small",
+                        "solution_image": "python:3.12-slim-bookworm",
+                        "scorer_image": "python:3.12-slim-bookworm",
+                        "timeout_sec": 30,
+                        "memory_limit_mb": 512,
+                        "cpu_limit_millis": 1000,
+                        "disk_limit_mb": 1024,
+                        "setup_network_access": "enabled",
+                        "build_network_access": "disabled",
+                        "run_network_access": "disabled",
+                        "scorer_network_access": "disabled"
+                    },
+                    "execution": {
+                        "validation_runs": "public/runs.json",
+                        "official_runs": "private-benchmark/runs.json"
                     },
                     "datasets": {
                         "public_dir": "public",
@@ -425,6 +455,7 @@ mod tests {
 
         assert!(output.contains("Initialized solution workspace"));
         assert!(workspace_dir.join("README.md").is_file());
+        assert!(workspace_dir.join("agentics.solution.json").is_file());
         assert!(workspace_dir.join(".git/hooks/pre-commit").is_file());
         assert!(!workspace_dir.join("run.sh").exists());
     }
@@ -450,6 +481,7 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace_dir = temp.path().join("workspace");
         std::fs::create_dir(&workspace_dir).expect("workspace dir");
+        write_solution_manifest(&workspace_dir);
         std::fs::write(
             workspace_dir.join("run.sh"),
             "#!/usr/bin/env bash\npython main.py\n",
@@ -612,6 +644,7 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace_dir = temp.path().join("workspace");
         std::fs::create_dir(&workspace_dir).expect("workspace dir");
+        write_solution_manifest(&workspace_dir);
         std::fs::write(
             workspace_dir.join("run.sh"),
             "#!/usr/bin/env bash\npython main.py\n",
@@ -723,17 +756,29 @@ mod tests {
                 "challenge_title": "Sample Sum",
                 "challenge_version": "v1",
                 "solution": {
-                    "format": "python_zip_project",
-                    "language": "python",
-                    "entrypoint": "main.py"
+                    "protocol": "zip_project",
+                    "manifest_file": "agentics.solution.json"
                 },
                 "scorer": {
-                    "entrypoint": "scorer/run.py",
+                    "command": ["python", "scorer/run.py"],
                     "result_file": "result.json"
                 },
-                "limits": {
-                    "time_limit_sec": 2.0,
-                    "memory_limit_mb": 128
+                "resource_profile": {
+                    "id": "python-cpu-small",
+                    "solution_image": "python:3.12-slim-bookworm",
+                    "scorer_image": "python:3.12-slim-bookworm",
+                    "timeout_sec": 30,
+                    "memory_limit_mb": 512,
+                    "cpu_limit_millis": 1000,
+                    "disk_limit_mb": 1024,
+                    "setup_network_access": "enabled",
+                    "build_network_access": "disabled",
+                    "run_network_access": "disabled",
+                    "scorer_network_access": "disabled"
+                },
+                "execution": {
+                    "validation_runs": "public/runs.json",
+                    "official_runs": "private-benchmark/runs.json"
                 },
                 "datasets": {
                     "public_dir": "public",

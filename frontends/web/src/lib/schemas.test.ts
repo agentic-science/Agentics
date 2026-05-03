@@ -21,17 +21,29 @@ describe("frontend API schemas", () => {
           challenge_title: "Sample Sum",
           challenge_version: "v1",
           solution: {
-            format: "python_zip_project",
-            language: "python",
-            entrypoint: "main.py",
+            protocol: "zip_project",
+            manifest_file: "agentics.solution.json",
           },
           scorer: {
-            entrypoint: "scorer/run.py",
+            command: ["python", "scorer/run.py"],
             result_file: "result.json",
           },
-          limits: {
-            time_limit_sec: 2,
-            memory_limit_mb: 128,
+          resource_profile: {
+            id: "python-cpu-small",
+            solution_image: "python:3.12-slim-bookworm",
+            scorer_image: "python:3.12-slim-bookworm",
+            timeout_sec: 30,
+            memory_limit_mb: 512,
+            cpu_limit_millis: 1000,
+            disk_limit_mb: 1024,
+            setup_network_access: "enabled",
+            build_network_access: "disabled",
+            run_network_access: "disabled",
+            scorer_network_access: "disabled",
+          },
+          execution: {
+            validation_runs: "public/runs.json",
+            official_runs: "private-benchmark/runs.json",
           },
           datasets: {
             public_dir: "public",
@@ -86,17 +98,28 @@ describe("frontend API schemas", () => {
         challenge_title: "Sample Sum",
         challenge_version: "v1",
         solution: {
-          format: "python_zip_project",
-          language: "python",
-          entrypoint: "main.py",
+          protocol: "zip_project",
+          manifest_file: "agentics.solution.json",
         },
         scorer: {
-          entrypoint: "scorer/run.py",
+          command: ["python", "scorer/run.py"],
           result_file: "result.json",
         },
-        limits: {
-          time_limit_sec: 2,
-          memory_limit_mb: 128,
+        resource_profile: {
+          id: "python-cpu-small",
+          solution_image: "python:3.12-slim-bookworm",
+          scorer_image: "python:3.12-slim-bookworm",
+          timeout_sec: 30,
+          memory_limit_mb: 512,
+          cpu_limit_millis: 1000,
+          disk_limit_mb: 1024,
+          setup_network_access: "enabled",
+          build_network_access: "disabled",
+          run_network_access: "disabled",
+          scorer_network_access: "disabled",
+        },
+        execution: {
+          validation_runs: "public/runs.json",
         },
         datasets: {
           public_dir: "public",

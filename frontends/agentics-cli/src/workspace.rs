@@ -13,6 +13,11 @@ if [ ! -f run.sh ]; then
   echo "pre-commit: run.sh must exist at the repository root." >&2
   exit 1
 fi
+
+if [ ! -f agentics.solution.json ]; then
+  echo "pre-commit: agentics.solution.json must exist at the repository root." >&2
+  exit 1
+fi
 "#;
 
 #[derive(Debug, Clone, Serialize)]
@@ -71,6 +76,17 @@ fn write_workspace_files(challenge: &ChallengeDetailResponse, workspace_dir: &Pa
             "failed to write README.md in workspace {}",
             workspace_dir.display()
         )
+    })?;
+    fs::write(
+        workspace_dir.join(shared::zip_project::ZIP_PROJECT_MANIFEST_FILE),
+        render_manifest(),
+    )
+    .with_context(|| {
+        format!(
+            "failed to write {} in workspace {}",
+            shared::zip_project::ZIP_PROJECT_MANIFEST_FILE,
+            workspace_dir.display()
+        )
     })
 }
 
@@ -83,6 +99,30 @@ fn render_readme(challenge: &ChallengeDetailResponse) -> String {
         challenge.current_version.id,
         challenge.statement_markdown.trim()
     )
+}
+
+fn render_manifest() -> String {
+    serde_json::to_string_pretty(&serde_json::json!({
+        "protocol": "zip_project",
+        "protocol_version": 1,
+        "runtime": {
+            "language": "python",
+            "language_version": "3.12",
+            "runtime_profile": "python-cpu"
+        },
+        "commands": {
+            "run": "run.sh"
+        },
+        "interface": {
+            "kind": "stdio",
+            "input_contract": "Challenge-provided input on stdin.",
+            "output_contract": "Challenge-expected output on stdout or declared files."
+        },
+        "dependencies": {
+            "policy": "image_provided"
+        }
+    }))
+    .expect("static manifest should serialize")
 }
 
 fn initialize_git_repository(workspace_dir: &Path) -> Result<()> {
@@ -155,15 +195,16 @@ mod tests {
 
     use shared::models::CurrentVersionDto;
     use shared::models::challenge::{
-        ChallengeBundleSpec, ChallengeDetailResponse, DatasetsSpec, LimitsSpec, MetricSchemaSpec,
-        ScorerSpec, SolutionSpec,
+        ChallengeBundleSpec, ChallengeDetailResponse, ChallengeExecutionSpec, DatasetsSpec,
+        MetricSchemaSpec, ResourceProfileSpec, ScorerSpec, SolutionSpec,
     };
     use shared::models::evaluation::ScoreVisibility;
+    use shared::zip_project::ZipProjectNetworkAccess;
 
     use super::{default_workspace_dir, init_solution_workspace};
 
     #[test]
-    fn init_solution_creates_readme_git_repo_and_hook_only() {
+    fn init_solution_creates_readme_manifest_git_repo_and_hook() {
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace_dir = temp.path().join("sample-sum-work");
 
@@ -180,6 +221,8 @@ mod tests {
         assert!(readme.contains("Return the sum."));
         assert!(workspace_dir.join(".git").is_dir());
         assert!(hook.contains("run.sh must exist"));
+        assert!(hook.contains("agentics.solution.json must exist"));
+        assert!(workspace_dir.join("agentics.solution.json").is_file());
         assert!(!workspace_dir.join("run.sh").exists());
         assert_eq!(
             fs::read_dir(&workspace_dir)
@@ -188,7 +231,7 @@ mod tests {
                 .map(|entry| entry.file_name())
                 .collect::<Vec<_>>()
                 .len(),
-            2
+            3
         );
     }
 
@@ -228,17 +271,32 @@ mod tests {
                 challenge_title: "Sample Sum".to_string(),
                 challenge_version: "v1".to_string(),
                 solution: SolutionSpec {
-                    format: "python_zip_project".to_string(),
-                    language: "python".to_string(),
-                    entrypoint: "main.py".to_string(),
+                    protocol: "zip_project".to_string(),
+                    manifest_file: "agentics.solution.json".to_string(),
                 },
                 scorer: ScorerSpec {
-                    entrypoint: "scorer/run.py".to_string(),
+                    command: vec!["python".to_string(), "scorer/run.py".to_string()],
                     result_file: "result.json".to_string(),
                 },
-                limits: LimitsSpec {
-                    time_limit_sec: 30.0,
+                resource_profile: ResourceProfileSpec {
+                    id: "python-cpu-small".to_string(),
+                    solution_image: "python:3.12-slim-bookworm".to_string(),
+                    solution_image_digest: None,
+                    scorer_image: "python:3.12-slim-bookworm".to_string(),
+                    scorer_image_digest: None,
+                    timeout_sec: 30,
                     memory_limit_mb: 512,
+                    cpu_limit_millis: 1000,
+                    disk_limit_mb: 1024,
+                    setup_network_access: ZipProjectNetworkAccess::Enabled,
+                    build_network_access: ZipProjectNetworkAccess::Disabled,
+                    run_network_access: ZipProjectNetworkAccess::Disabled,
+                    scorer_network_access: ZipProjectNetworkAccess::Disabled,
+                    hardware: None,
+                },
+                execution: ChallengeExecutionSpec {
+                    validation_runs: Some("public/runs.json".to_string()),
+                    official_runs: Some("private-benchmark/runs.json".to_string()),
                 },
                 datasets: DatasetsSpec {
                     public_dir: "data/public".to_string(),

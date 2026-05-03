@@ -81,7 +81,7 @@ export default async function ChallengeLayout({
                 {t("challenge.limits.timeLimit")}
               </span>
               <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
-                {challenge.spec.limits.time_limit_sec}
+                {challenge.spec.resource_profile.timeout_sec}
                 {t("challenge.limits.seconds")}
               </span>
             </div>
@@ -91,26 +91,26 @@ export default async function ChallengeLayout({
                 {t("challenge.limits.memoryLimit")}
               </span>
               <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
-                {challenge.spec.limits.memory_limit_mb}{" "}
+                {challenge.spec.resource_profile.memory_limit_mb}{" "}
                 {t("challenge.limits.mb")}
               </span>
             </div>
             <div className="card flex flex-col gap-1 py-3 px-4">
               <Code2 className="w-4 h-4 text-[var(--accent-secondary-text)]" />
               <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
-                {t("challenge.config.language")}
+                {t("challenge.config.protocol")}
               </span>
               <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
-                {challenge.spec.solution.language}
+                {challenge.spec.solution.protocol}
               </span>
             </div>
             <div className="card flex flex-col gap-1 py-3 px-4">
               <Package className="w-4 h-4 text-[var(--accent-primary-text)]" />
               <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
-                {t("challenge.config.format")}
+                {t("challenge.config.resourceProfile")}
               </span>
               <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
-                {challenge.spec.solution.format}
+                {challenge.spec.resource_profile.id}
               </span>
             </div>
           </div>

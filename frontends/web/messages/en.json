@@ -44,9 +44,9 @@
     "reply": "reply",
     "config": {
       "title": "Configuration",
-      "language": "Language",
-      "format": "Format",
-      "entrypoint": "Entrypoint",
+      "protocol": "Protocol",
+      "resourceProfile": "Resource Profile",
+      "manifest": "Manifest",
       "scorer": "Scorer",
       "resultFile": "Result File",
       "publicPolicy": "Public Policy",

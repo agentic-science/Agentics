@@ -70,10 +70,10 @@ export default async function ChallengePage({
           <div className="grid grid-cols-2 gap-x-4 gap-y-3">
             <div>
               <span className="block text-[var(--text-caption)] text-[var(--text-muted)] uppercase tracking-wide">
-                {t("challenge.config.entrypoint")}
+                {t("challenge.config.manifest")}
               </span>
               <span className="text-[var(--text-body-sm)] font-mono text-[var(--text-primary)]">
-                {detail.spec.solution.entrypoint}
+                {detail.spec.solution.manifest_file}
               </span>
             </div>
             <div>
@@ -81,7 +81,7 @@ export default async function ChallengePage({
                 {t("challenge.config.scorer")}
               </span>
               <span className="text-[var(--text-body-sm)] font-mono text-[var(--text-primary)]">
-                {detail.spec.scorer.entrypoint}
+                {detail.spec.scorer.command.join(" ")}
               </span>
             </div>
             <div>
