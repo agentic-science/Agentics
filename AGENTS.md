@@ -38,6 +38,7 @@ For your information:
 - Do not commit changes automatically unless told (e.g., "do this and commit the changes").
 - Don't rebuild the wheels: if there's a commonly used package/library for a feature or sub-feature, do not implement the functionalities yourself, unless the user explicitly ask you to rewrite or avoid external packages. If unsure, always ask for clarification.
 - Keep track of file sizes. If a file has more then 1200 lines of code, propose a refactor to the user.
+- Before v0.2.5-mvp, DO NOT consider any internal or external API compatibilities. If a new feature or a refactor needs to reasonably discard existing code, just do it.
 
 ### Technical Requirements
 
