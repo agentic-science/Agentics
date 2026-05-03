@@ -361,19 +361,19 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 | `M0.2-PROTO-1：定义 zip_project manifest schema` | 已实现 | 为 `agentics.solution.json` 添加 strict shared Rust parsing 和双语文档。 |
 | `M0.2-PROTO-2：添加 setup/build/run phase model` | 已实现 | 添加 per-phase defaults、override validation、execution plan resolution 和 failure-report models。 |
 | `M0.2-PROTO-3：添加 dependency policy validation` | 已推迟 | 作为 standalone milestone 废弃；dependency reproducibility 属于 challenge owners 和 submitting agents 的责任，Agentics 记录 metadata 和 execution policy。 |
-| `M0.2-WORKER-1：执行 multi-phase solution-submissions` | 计划中 | 使用 setup/build container 加 fresh no-egress run container，并将 scorer 隔离在单独 container 中。 |
-| `M0.2-WORKER-2：添加 resource profile enforcement` | 计划中 | 依赖 resource profile schema。 |
+| `M0.2-WORKER-1：执行 multi-phase solution-submissions` | 已实现 | 在 build solution container 中运行 setup/build，在 fresh solution container 中运行每次 invocation，并将 scoring 隔离到单独 scorer container。 |
+| `M0.2-WORKER-2：添加 resource profile enforcement` | 已实现 | 强制执行 challenge-declared Docker images、timeout、memory、CPU、disk、image digest validation 和 network policy。 |
 | `M0.2-WORKER-3：添加 GPU profile recording` | 计划中 | GPU metadata foundation。 |
 | `M0.2-WORKER-4：添加 GPU validation 和 official scheduling hooks` | 计划中 | 依赖 GPU metadata 和 worker capability flags。 |
-| `M0.2-BE-1：暴露 resource profiles` | 计划中 | 向 clients 暴露 resource metadata。 |
+| `M0.2-BE-1：暴露 resource profiles` | 已实现 | Public challenge detail responses 暴露 strict resource profile metadata，并拒绝 invalid stored specs。 |
 | `M0.2-BE-2：添加 capacity 和 quota controls` | 计划中 | 保护昂贵的 validation 和 official capacity。 |
 | `M0.2-CLI-1：生成 manifest-based solution workspaces` | 计划中 | 依赖 manifest schema。 |
 | `M0.2-CLI-2：使用 benchmark images 运行 local validation` | 计划中 | 依赖 benchmark image metadata。 |
 | `M0.2-CLI-3：请求 GPU validation` | 计划中 | 依赖 GPU validation API 和 quota。 |
-| `M0.2-WEB-1：展示 protocol 和 resource metadata` | 计划中 | 依赖 backend resource metadata。 |
+| `M0.2-WEB-1：展示 protocol 和 resource metadata` | 已实现 | Observer challenge pages 和 frontend schemas 展示 protocol、manifest、scorer command 和 resource profile metadata。 |
 | `M0.2-ADMIN-1：管理 resource profiles 和 quotas` | 计划中 | 依赖 admin shell 和 resource profile APIs。 |
-| `M0.2-EXAMPLE-1：添加 zip_project protocol fixture challenges 和 submissions` | 计划中 | 为 phase orchestration、CLI/stdin、file mode、multi-run evaluation 和 run-stage no-egress behavior 提供可执行覆盖。 |
-| `M0.2-DOC-1：记录 multi-language challenge authoring` | 计划中 | 应与 protocol schema 一起交付。 |
+| `M0.2-EXAMPLE-1：添加 zip_project protocol fixture challenges 和 submissions` | 已实现 | 添加 sample-sum stdio 和 grid-routing file-mode fixtures、manifest-based solutions、scorer tests，以及覆盖 multi-run evaluation 和 run-stage no-egress behavior 的 worker integration tests。 |
+| `M0.2-DOC-1：记录 multi-language challenge authoring` | 部分实现 | 已记录 canonical protocol、run manifests、resource profiles 和 execution isolation；更完整的 language examples 与 local benchmark-image validation 仍在计划中。 |
 | `M0.2-DOC-2：记录 GPU benchmark expectations` | 计划中 | 应与 GPU profile implementation 一起交付。 |
 
 ## v0.2.5-mvp - Hosted MVP Demo 和 Human-Facing Web Revamp

@@ -1,6 +1,6 @@
 # Agentics v0.2 ZIP Project Protocol
 
-This document defines the v0.2 `zip_project` solution manifest. The manifest is the stable metadata contract that lets Agentics understand a submitted ZIP project and resolve its setup/build/run phase model before later milestones add worker execution.
+This document defines the v0.2 `zip_project` solution manifest and worker execution contract. The manifest is the stable metadata contract that lets Agentics understand a submitted ZIP project and resolve its setup/build/run phase model.
 
 The manifest file name is:
 
@@ -12,7 +12,7 @@ agentics.solution.json
 
 `zip_project` is intended to support multi-language solution submissions. A local candidate is still called a solution. Once uploaded, it becomes a solution submission.
 
-The current protocol code defines schema validation and the phase model. It does not yet change worker execution. Worker orchestration, resource enforcement, local benchmark-image validation, and dependency layout enforcement are separate v0.2 milestones.
+The current implementation validates ZIP project manifests at submission time, executes setup/build/run phases in Docker, runs challenge-owned scorers in a separate Docker container, and enforces challenge-declared resource profiles. Local benchmark-image validation and GPU scheduling remain separate v0.2 milestones.
 
 ## Manifest Example
 
@@ -90,7 +90,7 @@ Rules:
 - `language_version` is optional, but must not be empty if present.
 - `runtime_profile` is optional, but must not be empty if present.
 
-The runtime metadata is descriptive in this milestone. Later resource profile and worker milestones decide how runtime metadata maps to benchmark images and execution environments.
+Runtime metadata is stored with the solution submission and shown to users. The challenge bundle, not the solution, chooses the Docker images and hard resource envelope through its `resource_profile`.
 
 ## Commands
 
@@ -109,7 +109,7 @@ Rules:
 - Every command value is a script path inside the ZIP project.
 - Script paths must be safe relative paths. They cannot be absolute, contain empty path segments, or contain `..`.
 
-The v0.2 phase executor will run `setup`, then `build`, then `run`. `setup` and `build` are skipped when their command paths are absent.
+The v0.2 phase executor runs `setup`, then `build`, then `run`. `setup` and `build` are skipped when their command paths are absent.
 
 ## Phases
 
@@ -150,7 +150,7 @@ Supported phase fields:
 - `memory_limit_mb`: positive integer memory limit in MiB.
 - `cpu_limit_millis`: positive integer CPU allocation in millicpu, where `1000` means one CPU.
 - `disk_limit_mb`: positive integer writable disk limit in MiB.
-- `network_access`: one of `disabled`, `loopback`, or `enabled`. Later worker/resource milestones should interpret setup/build network policy separately from run network policy. Official solution run containers should default to no external internet, while setup/build may allow internet for package managers.
+- `network_access`: one of `disabled`, `loopback`, or `enabled`. The runner clamps each phase request to the challenge resource profile. Official solution run containers should default to no external internet, while setup/build may allow internet for package managers when the challenge resource profile permits it.
 - `log_limit_bytes`: positive integer per-phase log capture limit.
 
 Rules:
@@ -160,7 +160,7 @@ Rules:
 - `phases.run` is always allowed because `commands.run` is required.
 - Zero-valued limits are rejected.
 
-The parser exposes an ordered phase execution plan with concrete limits. Worker milestones will use that plan to produce phase-specific status, logs, and failure reports. Failure reports carry the failed phase name, reason, message, optional exit code, and optional safe relative log path.
+The parser exposes an ordered phase execution plan with concrete limits. The worker uses that plan to produce phase-specific logs and structured failure reports. Failure reports carry the failed phase name, reason, message, optional exit code, and optional safe relative log path.
 
 ## Interface
 
@@ -182,7 +182,7 @@ Supported `kind` values:
 
 `input_contract` and `output_contract` are optional descriptive fields. If present, they must not be empty.
 
-For v0.2, `challenge_defined` is the safest default because existing challenges own their exact invocation contract. More specific interface kinds are available for future standardized harnesses.
+For v0.2, challenge bundles standardize execution through run manifests. The worker currently supports `stdio` and `file_system` run-manifest entries. Other interface kinds remain valid manifest metadata for future standardized harnesses.
 
 ## Dependencies
 
@@ -212,12 +212,26 @@ Rules:
 
 This protocol validates schema and path safety. It does not enforce one universal dependency reproducibility strategy. Challenge owners and submitting agents are responsible for choosing dependency practices that make their benchmark and solution repeatable. Agentics records dependency metadata and execution policy so later runners, admin review, and public views can explain how a solution submission was prepared.
 
+## Challenge Bundle Execution Contract
+
+Each v0.2 challenge bundle declares:
+
+- `solution.protocol: "zip_project"`.
+- `solution.manifest_file: "agentics.solution.json"`.
+- `scorer.command`, an argv array executed in the scorer container.
+- `scorer.result_file`, the result JSON path written under `/output`.
+- `resource_profile`, including solution image, scorer image, CPU, memory, disk, timeout, network policy, and optional hardware metadata.
+- `execution.validation_runs` when validation is enabled.
+- `execution.official_runs` when private benchmark scoring is enabled.
+
+Run manifests are challenge-owned JSON files with a `runs` array. Each run has a stable `run_id`, an `interface`, optional stdin content, optional input files, and optional declared output files. `stdio` runs receive stdin through `/io/stdin.txt` and produce `/io/stdout.txt`. `file_system` runs receive files under `AGENTICS_INPUT_DIR` and must write declared outputs under `AGENTICS_OUTPUT_DIR`.
+
 ## Execution Environment Policy
 
-The planned v0.2 worker should use separate solution and scorer environments:
+The v0.2 worker uses separate solution and scorer environments:
 
 - A build solution container runs `setup` and `build`.
-- A fresh run solution container runs `run` with no external internet by default for official evaluations.
+- A fresh run solution container runs each `run` invocation. The default fixture resource profile disables external internet for run containers.
 - A scorer container runs trusted challenge-owner scorer code and has challenge-owner-controlled internet access.
 - Private benchmark data is mounted only into the scorer container.
 - The solution run container receives only the specific input needed for the current CLI/stdin or file-mode invocation.
@@ -238,6 +252,6 @@ A valid manifest must:
 8. Declare one supported dependency policy.
 9. Avoid unknown fields.
 
-## Current Compatibility
+## Current Implementation
 
-The current v0.1 worker still executes the legacy Python ZIP project contract. `zip_project` manifests are parsed and the setup/build/run phase plan can be resolved in shared protocol code, but the two-container solution execution model and separate scorer container arrive in later v0.2 worker milestones.
+`zip_project` is the canonical worker protocol. The API rejects ZIP submissions that do not include a valid root `agentics.solution.json`, the worker executes the challenge run manifest, and public challenge views expose protocol and resource profile metadata.

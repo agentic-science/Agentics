@@ -361,19 +361,19 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 | `M0.2-PROTO-1: Define zip_project manifest schema` | Implemented | Adds strict shared Rust parsing and bilingual docs for `agentics.solution.json`. |
 | `M0.2-PROTO-2: Add setup/build/run phase model` | Implemented | Adds per-phase defaults, override validation, execution plan resolution, and failure-report models. |
 | `M0.2-PROTO-3: Add dependency policy validation` | Deferred | Discarded as a standalone milestone; dependency reproducibility belongs to challenge owners and submitting agents, while Agentics records metadata and execution policy. |
-| `M0.2-WORKER-1: Execute multi-phase solution-submissions` | Planned | Uses setup/build container plus fresh no-egress run container, with scorer isolated in a separate container. |
-| `M0.2-WORKER-2: Add resource profile enforcement` | Planned | Depends on resource profile schema. |
+| `M0.2-WORKER-1: Execute multi-phase solution-submissions` | Implemented | Runs setup/build in a build solution container, runs each invocation in a fresh solution container, and isolates scoring in a separate scorer container. |
+| `M0.2-WORKER-2: Add resource profile enforcement` | Implemented | Enforces challenge-declared Docker images, timeout, memory, CPU, disk, image digest validation, and network policy. |
 | `M0.2-WORKER-3: Add GPU profile recording` | Planned | GPU metadata foundation. |
 | `M0.2-WORKER-4: Add GPU validation and official scheduling hooks` | Planned | Depends on GPU metadata and worker capability flags. |
-| `M0.2-BE-1: Expose resource profiles` | Planned | Exposes resource metadata to clients. |
+| `M0.2-BE-1: Expose resource profiles` | Implemented | Public challenge detail responses expose strict resource profile metadata and reject invalid stored specs. |
 | `M0.2-BE-2: Add capacity and quota controls` | Planned | Protects expensive validation and official capacity. |
 | `M0.2-CLI-1: Generate manifest-based solution workspaces` | Planned | Depends on manifest schema. |
 | `M0.2-CLI-2: Run local validation with benchmark images` | Planned | Depends on benchmark image metadata. |
 | `M0.2-CLI-3: Request GPU validation` | Planned | Depends on GPU validation API and quota. |
-| `M0.2-WEB-1: Show protocol and resource metadata` | Planned | Depends on backend resource metadata. |
+| `M0.2-WEB-1: Show protocol and resource metadata` | Implemented | Observer challenge pages and frontend schemas display protocol, manifest, scorer command, and resource profile metadata. |
 | `M0.2-ADMIN-1: Manage resource profiles and quotas` | Planned | Depends on admin shell and resource profile APIs. |
-| `M0.2-EXAMPLE-1: Add zip_project protocol fixture challenges and submissions` | Planned | Provides executable coverage for phase orchestration, CLI/stdin, file mode, multi-run evaluation, and run-stage no-egress behavior. |
-| `M0.2-DOC-1: Document multi-language challenge authoring` | Planned | Should ship with protocol schema. |
+| `M0.2-EXAMPLE-1: Add zip_project protocol fixture challenges and submissions` | Implemented | Adds sample-sum stdio and grid-routing file-mode fixtures, manifest-based solutions, scorer tests, and worker integration coverage for multi-run evaluation and run-stage no-egress behavior. |
+| `M0.2-DOC-1: Document multi-language challenge authoring` | Partially implemented | Documents the canonical protocol, run manifests, resource profiles, and execution isolation; broader language examples and local benchmark-image validation remain planned. |
 | `M0.2-DOC-2: Document GPU benchmark expectations` | Planned | Should ship with GPU profile implementation. |
 
 ## v0.2.5-mvp - Hosted MVP Demo and Human-Facing Web Revamp

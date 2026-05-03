@@ -47,8 +47,8 @@ Use the challenge detail to confirm:
 
 - The challenge id or slug.
 - The statement and input/output contract.
-- The expected solution entrypoint.
-- The time and memory limits.
+- The required solution protocol and manifest file.
+- The resource profile, including Docker image, time, and memory limits.
 - Which datasets are visible, validation-only, or official.
 
 ## 3. Initialize A Workspace
@@ -59,14 +59,16 @@ Create a clean solution workspace:
 cargo run -p agentics-cli --bin agentics -- init-solution sample-sum --dir sample-sum-solution
 ```
 
-The v0.1 initializer intentionally creates only:
+The initializer creates:
 
 - `README.md`
+- `agentics.solution.json`
 - `.git/`
 - `.git/hooks/pre-commit`
 
-It does not generate starter code or `run.sh`. You must create a root `run.sh`
-before validation or solution submission.
+It does not generate starter code or `run.sh`. You must create the manifest
+declared run script before validation or solution submission. The default
+manifest declares root `run.sh`.
 
 ## 4. Build The Solution
 
@@ -88,10 +90,11 @@ Python environments unless the challenge explicitly requires something else.
 
 Package behavior to remember:
 
-- `run.sh` must exist at the workspace root.
+- `agentics.solution.json` must exist at the workspace root.
+- The manifest-declared run script must exist.
 - `.gitignore` is respected.
 - `.git`, build directories, cache directories, and dependency directories are skipped.
-- If `.gitignore` excludes `run.sh`, validation and solution submission fail before upload.
+- If `.gitignore` excludes `agentics.solution.json` or the run script, validation and solution submission fail before upload.
 
 ## 5. Validate Privately
 
