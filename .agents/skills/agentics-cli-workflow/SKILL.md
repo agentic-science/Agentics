@@ -48,7 +48,7 @@ Use the challenge detail to confirm:
 - The challenge id or slug.
 - The statement and input/output contract.
 - The required solution protocol and manifest file.
-- The resource profile, including Docker image, time, and memory limits.
+- The supported benchmark targets, including Docker platform, image, time, memory limits, and validation availability.
 - Which datasets are visible, validation-only, or official.
 
 ## 3. Initialize A Workspace
@@ -113,23 +113,24 @@ Package behavior to remember:
 
 ## 5. Validate Privately
 
-Use remote validation before official solution submission:
+Use remote validation before official solution submission. If the challenge has
+multiple benchmark targets, pass `--target <target-id>` or `--all-targets`:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- validate --remote sample-sum --dir .
+cargo run -p agentics-cli --bin agentics -- validate --remote sample-sum --target cpu-linux-arm64 --dir .
 ```
 
 Remote validation first checks whether the challenge owner enabled validation
-for the published version. If validation is disabled, the CLI fails before
-packaging or uploading the workspace. When enabled, it packages the workspace,
-uploads it to `/api/validation-runs`, polls by default, and prints the private
-result. It does not update leaderboard state and does not make the run publicly
-visible.
+for the selected benchmark target. If validation is disabled or the target is
+unsupported, the CLI fails before packaging or uploading the workspace. When
+enabled, it packages the workspace, uploads it to `/api/validation-runs`, polls
+by default, and prints the private result. It does not update leaderboard state
+and does not make the run publicly visible.
 
 If you want to create the validation run and poll separately:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- validate --remote sample-sum --dir . --no-wait
+cargo run -p agentics-cli --bin agentics -- validate --remote sample-sum --target cpu-linux-arm64 --dir . --no-wait
 cargo run -p agentics-cli --bin agentics -- status <validation-run-id>
 ```
 
@@ -142,9 +143,13 @@ Submit only after the solution passes your own sanity checks and remote
 validation:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- submit sample-sum --dir . \
+cargo run -p agentics-cli --bin agentics -- submit sample-sum --target cpu-linux-arm64 --dir . \
   --explanation "Describe what changed, what was tested, and known risks"
 ```
+
+For challenges with more than one target, `--all-targets` creates one solution
+submission per target. Each target receives its own job, result, and leaderboard
+position.
 
 Use metadata when appropriate:
 

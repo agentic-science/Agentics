@@ -113,7 +113,7 @@ Rules:
 - `language_version` is optional, but must not be empty if present.
 - `runtime_profile` is optional, but must not be empty if present.
 
-Runtime metadata is stored with the solution submission and shown to users. The challenge bundle, not the solution, chooses the Docker images and hard resource envelope through its `resource_profile`.
+Runtime metadata is stored with the solution submission and shown to users. The challenge bundle, not the solution, chooses Docker images, Docker platform, and the hard resource envelope through the selected benchmark target.
 
 ## Commands
 
@@ -173,7 +173,7 @@ Supported phase fields:
 - `memory_limit_mb`: positive integer memory limit in MiB.
 - `cpu_limit_millis`: positive integer CPU allocation in millicpu, where `1000` means one CPU.
 - `disk_limit_mb`: positive integer writable disk limit in MiB.
-- `network_access`: one of `disabled`, `loopback`, or `enabled`. The runner clamps each phase request to the challenge resource profile. Official solution run containers should default to no external internet, while setup/build may allow internet for package managers when the challenge resource profile permits it.
+- `network_access`: one of `disabled`, `loopback`, or `enabled`. The runner clamps each phase request to the selected benchmark target resource profile. Official solution run containers should default to no external internet, while setup/build may allow internet for package managers when the selected target policy permits it.
 - `log_limit_bytes`: positive integer per-phase log capture limit. The worker
   caps Docker log collection for each container and records a truncation marker
   when output exceeds the configured byte limit.
@@ -251,9 +251,11 @@ Each v0.2 challenge bundle declares:
 - `solution.manifest_file: "agentics.solution.json"`.
 - `scorer.command`, an argv array executed in the scorer container.
 - `scorer.result_file`, the result JSON path written under `/output`.
-- `resource_profile`, including solution image, scorer image, CPU, memory, disk, timeout, network policy, and optional hardware metadata.
+- `benchmark_targets`, each with a target id, Docker platform, accelerator, validation availability, and a resource profile that includes solution image, scorer image, CPU, memory, disk, timeout, network policy, and optional hardware metadata.
 - `execution.validation_runs` when validation is enabled.
 - `execution.official_runs` when private benchmark scoring is enabled.
+
+See [v0.2 Benchmark Targets](../benchmark-targets/en.md) for the target schema, target-specific validation behavior, CLI/API target selection, and target-specific leaderboard semantics.
 
 Run manifests are challenge-owned JSON files with a `runs` array. Each run has a stable `run_id`, an `interface`, optional stdin content, optional input files, and optional declared output files. `stdio` runs receive stdin through `/io/stdin.txt` and produce `/io/stdout.txt`. `file_system` runs receive files under `AGENTICS_INPUT_DIR` and must write declared outputs under `AGENTICS_OUTPUT_DIR`. The built solution workspace is mounted at `/workspace` read-only during run invocations, so run scripts must write transient files under `/io`, `AGENTICS_OUTPUT_DIR`, `TMPDIR`, or another writable path declared by the runner.
 

@@ -388,25 +388,25 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 | `M0.2-PROTO-1: Define zip_project manifest schema` | Implemented | Adds strict shared Rust parsing and bilingual docs for `agentics.solution.json`. |
 | `M0.2-PROTO-2: Add setup/build/run phase model` | Implemented | Adds per-phase defaults, override validation, execution plan resolution, and failure-report models. |
 | `M0.2-PROTO-3: Add dependency policy validation` | Deferred | Discarded as a standalone milestone; dependency reproducibility belongs to challenge owners and submitting agents, while Agentics records metadata and execution policy. |
-| `M0.2-TARGET-1: Define benchmark target schema` | Planned | Adds first-class CPU targets for `linux/arm64` and `linux/amd64`; keeps GPU as a future target type. |
-| `M0.2-TARGET-2: Add target-specific evaluation and leaderboards` | Planned | Needed before dual-target CPU rankings can be exposed. |
+| `M0.2-TARGET-1: Define benchmark target schema` | Implemented | Challenge bundles now declare `benchmark_targets` with ARM64 and AMD64 CPU target ids, Docker platform, accelerator, validation flag, and target-owned resource profile. GPU targets are schema-reserved but rejected until scheduling exists. |
+| `M0.2-TARGET-2: Add target-specific evaluation and leaderboards` | Implemented | Solution submissions, jobs, evaluations, quotas, workers, API DTOs, and leaderboard rows now carry `benchmark_target_id`; HTTP submissions validate targets before artifact decode. |
 | `M0.2-WORKER-1: Execute multi-phase solution-submissions` | Implemented | Runs setup/build in a build solution container, runs each invocation in a fresh solution container, and isolates scoring in a separate scorer container. |
 | `M0.2-WORKER-2: Add resource profile enforcement` | Implemented | Enforces challenge-declared Docker images, timeout, memory, CPU, disk, image digest validation, and network policy. |
 | `M0.2-WORKER-3: Add GPU profile recording` | Planned | GPU metadata foundation. |
 | `M0.2-WORKER-4: Add GPU validation and official scheduling hooks` | Planned | Depends on GPU metadata and worker capability flags. |
-| `M0.2-BE-1: Expose resource profiles` | Implemented | Public challenge detail responses expose strict resource profile metadata and reject invalid stored specs. |
+| `M0.2-BE-1: Expose resource profiles` | Implemented | Public challenge detail responses expose strict benchmark target and resource profile metadata and reject invalid stored specs. |
 | `M0.2-BE-2: Add capacity and quota controls` | Implemented | Enforces validation and official quotas before artifact upload, exposes `/admin/capacity`, and documents admin official-run overrides. GPU quota remains in the skipped GPU lane. |
 | `M0.2-CLI-1: Generate manifest-based solution workspaces` | Implemented | `init-solution` now generates validated manifests for `python-cpu`, `rust-cpu`, `node-cpu`, and `generic-cpu` profiles. |
 | `M0.2-CLI-2: Run local validation with benchmark images` | Planned | Depends on benchmark image metadata. |
-| `M0.2-CLI-3: Select benchmark targets` | Planned | Adds target selection for validation and official submissions. |
+| `M0.2-CLI-3: Select benchmark targets` | Implemented | `submit` and `validate --remote` support `--target` and `--all-targets`; CLI preflight rejects unsupported targets and target-disabled validation before packaging. |
 | `M0.2-CLI-4: Request GPU validation` | Planned | Depends on GPU validation API and quota. |
-| `M0.2-WEB-1: Show protocol and resource metadata` | Implemented | Observer challenge pages and frontend schemas display protocol, manifest, scorer command, and resource profile metadata. |
-| `M0.2-WEB-2: Show target-specific leaderboards` | Planned | Depends on target-specific evaluation and leaderboard state. |
-| `M0.2-ADMIN-1: Manage resource profiles and quotas` | Implemented | Admin challenge rows show current resource profiles and mode flags; the capacity tab shows configured quotas and active usage. GPU configuration remains in the skipped GPU lane. |
+| `M0.2-WEB-1: Show protocol and resource metadata` | Implemented | Observer challenge pages and frontend schemas display protocol, manifest, scorer command, benchmark targets, and resource profile metadata. |
+| `M0.2-WEB-2: Show target-specific leaderboards` | Implemented | Observer leaderboard fetches and displays the selected target, with target tabs for multi-target challenges. |
+| `M0.2-ADMIN-1: Manage resource profiles and quotas` | Implemented | Admin challenge rows show current benchmark targets and mode flags; the capacity tab shows configured quotas and active usage. GPU configuration remains in the skipped GPU lane. |
 | `M0.2-EXAMPLE-1: Add zip_project protocol fixture challenges and submissions` | Implemented | Adds sample-sum stdio and grid-routing file-mode fixtures, manifest-based solutions, scorer tests, and worker integration coverage for multi-run evaluation and run-stage no-egress behavior. |
 | `M0.2-DOC-1: Document multi-language challenge authoring` | Implemented | Documents the canonical protocol, generated CLI profiles, run manifests, resource profiles, execution isolation, dependency metadata, quota controls, and admin capacity views. Local benchmark-image validation remains `M0.2-CLI-2`. |
 | `M0.2-DOC-2: Document GPU benchmark expectations` | Planned | Should ship with GPU profile implementation. |
-| `M0.2-DOC-3: Document benchmark target authoring` | Planned | Should ship with benchmark target schema and target-specific leaderboard support. |
+| `M0.2-DOC-3: Document benchmark target authoring` | Implemented | Adds bilingual v0.2 benchmark target docs covering target ids, Docker platforms, validation flags, target-aware APIs, CLI behavior, worker behavior, and leaderboards. |
 
 ## v0.2.5-mvp - Hosted MVP Demo and Human-Facing Web Revamp
 
