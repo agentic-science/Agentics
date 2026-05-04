@@ -1,0 +1,358 @@
+//! Integration tests for evaluation job leases and stale-worker write guards.
+
+mod helpers;
+
+use helpers::{
+    api_url, examples_challenges_root, sample_sum_solution, solution_zip_base64,
+    spawn_app_with_config, test_config,
+};
+use shared::db::{MarkEvaluationStartedInput, PersistedEvaluationResult};
+use shared::models::evaluation::{EvaluationStatus, MetricValue, ScoreSummary, ScoringMode};
+
+#[sqlx::test(migrations = "../migrations")]
+async fn stale_running_job_fails_after_max_attempts(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = test_config(storage.path(), &examples_challenges_root());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "name": "stale-job-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+    let artifact_base64 = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
+    let create_response: serde_json::Value = client
+        .post(api_url(&app, "/api/solution-submissions"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "challenge_id": "sample-sum",
+            "benchmark_target_id": "cpu-linux-arm64",
+            "artifact_base64": artifact_base64,
+            "explanation": "stale job"
+        }))
+        .send()
+        .await
+        .expect("failed to create solution submission")
+        .json()
+        .await
+        .expect("failed to decode create solution submission response");
+    let solution_submission_id = create_response["id"]
+        .as_str()
+        .expect("missing solution submission id");
+
+    sqlx::query(
+        r#"
+        UPDATE evaluation_jobs
+        SET status = 'running',
+            worker_id = 'worker-1',
+            claimed_at = NOW() - INTERVAL '10 minutes',
+            attempt_count = max_attempts
+        WHERE solution_submission_id = $1
+        "#,
+    )
+    .bind(solution_submission_id)
+    .execute(&pool)
+    .await
+    .expect("failed to mark job stale");
+
+    let result = shared::db::reap_stuck_jobs(&pool, 1)
+        .await
+        .expect("failed to reap stale jobs");
+
+    assert_eq!(result.requeued, 0);
+    assert_eq!(result.failed, 1);
+
+    let states: (String, String) = sqlx::query_as(
+        r#"
+        SELECT j.status, s.status
+        FROM evaluation_jobs j
+        JOIN solution_submissions s ON s.id = j.solution_submission_id
+        WHERE s.id = $1
+        "#,
+    )
+    .bind(solution_submission_id)
+    .fetch_one(&pool)
+    .await
+    .expect("failed to query states");
+    assert_eq!(states, ("failed".to_string(), "failed".to_string()));
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn refreshed_job_lease_is_not_reaped(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = test_config(storage.path(), &examples_challenges_root());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "name": "lease-refresh-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+    let artifact_base64 = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
+    let create_response: serde_json::Value = client
+        .post(api_url(&app, "/api/solution-submissions"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "challenge_id": "sample-sum",
+            "benchmark_target_id": "cpu-linux-arm64",
+            "artifact_base64": artifact_base64,
+            "explanation": "lease refresh"
+        }))
+        .send()
+        .await
+        .expect("failed to create solution submission")
+        .json()
+        .await
+        .expect("failed to decode create solution submission response");
+    let solution_submission_id = create_response["id"]
+        .as_str()
+        .expect("missing solution submission id");
+    let job_id: String = sqlx::query_scalar(
+        r#"
+        UPDATE evaluation_jobs
+        SET status = 'running',
+            worker_id = 'worker-1',
+            claimed_at = NOW() - INTERVAL '10 minutes',
+            attempt_count = 1,
+            max_attempts = 2
+        WHERE solution_submission_id = $1
+        RETURNING id
+        "#,
+    )
+    .bind(solution_submission_id)
+    .fetch_one(&pool)
+    .await
+    .expect("failed to mark job running");
+
+    let refreshed = shared::db::refresh_evaluation_job_claim(&pool, &job_id, "worker-1")
+        .await
+        .expect("failed to refresh job lease");
+    assert!(refreshed);
+
+    let result = shared::db::reap_stuck_jobs(&pool, 1)
+        .await
+        .expect("failed to reap stale jobs");
+
+    assert_eq!(result.requeued, 0);
+    assert_eq!(result.failed, 0);
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = test_config(storage.path(), &examples_challenges_root());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "name": "stale-finish-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+    let artifact_base64 = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
+    let create_response: serde_json::Value = client
+        .post(api_url(&app, "/api/solution-submissions"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "challenge_id": "sample-sum",
+            "benchmark_target_id": "cpu-linux-arm64",
+            "artifact_base64": artifact_base64,
+            "explanation": "stale worker finish"
+        }))
+        .send()
+        .await
+        .expect("failed to create solution submission")
+        .json()
+        .await
+        .expect("failed to decode create response");
+    let solution_submission_id = create_response["id"]
+        .as_str()
+        .expect("missing solution submission id");
+
+    let first_claim = shared::db::claim_next_evaluation_job(&pool, "worker-a")
+        .await
+        .expect("failed to claim first job")
+        .expect("missing first job");
+    assert_eq!(first_claim.solution_submission_id, solution_submission_id);
+    assert_eq!(first_claim.attempt_count, 1);
+    assert!(
+        shared::db::mark_evaluation_started(
+            &pool,
+            &MarkEvaluationStartedInput {
+                evaluation_id: uuid::Uuid::new_v4().to_string(),
+                solution_submission_id: solution_submission_id.to_string(),
+                job_id: first_claim.id.clone(),
+                benchmark_target_id: first_claim.benchmark_target_id.clone(),
+                eval_type: first_claim.eval_type,
+            },
+        )
+        .await
+        .expect("failed to mark first evaluation started")
+    );
+
+    sqlx::query(
+        r#"
+        UPDATE evaluation_jobs
+        SET claimed_at = NOW() - INTERVAL '10 minutes',
+            max_attempts = 2
+        WHERE id = $1
+        "#,
+    )
+    .bind(&first_claim.id)
+    .execute(&pool)
+    .await
+    .expect("failed to age first claim");
+    let reaped = shared::db::reap_stuck_jobs(&pool, 1)
+        .await
+        .expect("failed to reap first claim");
+    assert_eq!(reaped.requeued, 1);
+    assert_eq!(reaped.failed, 0);
+
+    let second_claim = shared::db::claim_next_evaluation_job(&pool, "worker-b")
+        .await
+        .expect("failed to claim second job")
+        .expect("missing second job");
+    assert_eq!(second_claim.id, first_claim.id);
+    assert_eq!(second_claim.attempt_count, 2);
+    assert!(
+        !shared::db::mark_evaluation_started(
+            &pool,
+            &MarkEvaluationStartedInput {
+                evaluation_id: uuid::Uuid::new_v4().to_string(),
+                solution_submission_id: solution_submission_id.to_string(),
+                job_id: second_claim.id.clone(),
+                benchmark_target_id: second_claim.benchmark_target_id.clone(),
+                eval_type: second_claim.eval_type,
+            },
+        )
+        .await
+        .expect("failed to mark second evaluation started"),
+        "a second claim must not reset the original evaluation row"
+    );
+
+    let stale_failure = persisted_result(
+        &first_claim,
+        "worker-a",
+        solution_submission_id,
+        EvaluationStatus::Failed,
+        None,
+    );
+    assert!(
+        !shared::db::mark_evaluation_finished(&pool, &stale_failure)
+            .await
+            .expect("stale finish should be ignored cleanly")
+    );
+    let still_running: (String, String, i32) = sqlx::query_as(
+        "SELECT status, worker_id, attempt_count FROM evaluation_jobs WHERE id = $1",
+    )
+    .bind(&first_claim.id)
+    .fetch_one(&pool)
+    .await
+    .expect("failed to query running job");
+    assert_eq!(
+        still_running,
+        ("running".to_string(), "worker-b".to_string(), 2)
+    );
+
+    let current_success = persisted_result(
+        &second_claim,
+        "worker-b",
+        solution_submission_id,
+        EvaluationStatus::Completed,
+        Some(1.0),
+    );
+    assert!(
+        shared::db::mark_evaluation_finished(&pool, &current_success)
+            .await
+            .expect("current finish should persist")
+    );
+    assert!(
+        !shared::db::mark_evaluation_finished(&pool, &stale_failure)
+            .await
+            .expect("late stale finish should be ignored")
+    );
+
+    let final_state: (String, String, String, bool, String, Option<f64>) = sqlx::query_as(
+        r#"
+        SELECT j.status, j.worker_id, s.status, s.visible_after_eval, e.status, e.rank_score
+        FROM evaluation_jobs j
+        JOIN solution_submissions s ON s.id = j.solution_submission_id
+        JOIN evaluations e ON e.job_id = j.id
+        WHERE j.id = $1
+        "#,
+    )
+    .bind(&first_claim.id)
+    .fetch_one(&pool)
+    .await
+    .expect("failed to query final state");
+    assert_eq!(
+        final_state,
+        (
+            "completed".to_string(),
+            "worker-b".to_string(),
+            "completed".to_string(),
+            true,
+            "completed".to_string(),
+            Some(1.0),
+        )
+    );
+}
+
+fn persisted_result(
+    job: &shared::db::EvaluationJobRecord,
+    worker_id: &str,
+    solution_submission_id: &str,
+    status: EvaluationStatus,
+    score: Option<f64>,
+) -> PersistedEvaluationResult {
+    PersistedEvaluationResult {
+        solution_submission_id: solution_submission_id.to_string(),
+        job_id: job.id.clone(),
+        worker_id: worker_id.to_string(),
+        claim_attempt_count: job.attempt_count,
+        benchmark_target_id: job.benchmark_target_id.clone(),
+        eval_type: ScoringMode::Official,
+        status,
+        primary_score: score,
+        rank_score: score,
+        aggregate_metrics: score
+            .map(|value| {
+                vec![MetricValue {
+                    metric_id: "score".to_string(),
+                    value,
+                }]
+            })
+            .unwrap_or_default(),
+        run_metrics: vec![],
+        public_results: vec![],
+        validation_summary: None,
+        official_summary: score.map(|value| ScoreSummary {
+            score: value,
+            passed: 1,
+            total: 1,
+        }),
+        log_path: None,
+        last_error: if status == EvaluationStatus::Failed {
+            Some("stale worker failure".to_string())
+        } else {
+            None
+        },
+    }
+}

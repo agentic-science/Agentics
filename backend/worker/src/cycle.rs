@@ -10,7 +10,7 @@ use std::time::Duration;
 use bollard::Docker;
 use tokio::sync::watch;
 use tokio::time::interval;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use shared::config::Config;
 use shared::db::pool::create_pool;
@@ -139,7 +139,7 @@ pub async fn run_worker_cycle(
     .await?;
 
     let evaluation_id = uuid::Uuid::new_v4().to_string();
-    mark_evaluation_started(
+    let evaluation_inserted = mark_evaluation_started(
         db,
         &shared::db::MarkEvaluationStartedInput {
             evaluation_id: evaluation_id.clone(),
@@ -150,6 +150,14 @@ pub async fn run_worker_cycle(
         },
     )
     .await?;
+    if !evaluation_inserted {
+        warn!(
+            job_id = %job.id,
+            worker_id,
+            attempt_count = job.attempt_count,
+            "evaluation row already exists for job; preserving original start record"
+        );
+    }
 
     let (lease_stop_tx, lease_stop_rx) = watch::channel(false);
     let lease_task = tokio::spawn(refresh_claim_until_stopped(
@@ -181,12 +189,13 @@ pub async fn run_worker_cycle(
             let primary_score = result.result.primary_score;
             let rank_score = result.result.rank_score;
 
-            mark_evaluation_finished(
+            let persisted = mark_evaluation_finished(
                 db,
                 &PersistedEvaluationResult {
-                    evaluation_id,
                     solution_submission_id: solution_submission_id.clone(),
                     job_id: job_id.clone(),
+                    worker_id: worker_id.to_string(),
+                    claim_attempt_count: job.attempt_count,
                     benchmark_target_id: job.benchmark_target_id.clone(),
                     eval_type: job.eval_type,
                     status: EvaluationStatus::Completed,
@@ -202,6 +211,27 @@ pub async fn run_worker_cycle(
                 },
             )
             .await?;
+            if !persisted {
+                warn!(
+                    job_id = %job_id,
+                    worker_id,
+                    attempt_count = job.attempt_count,
+                    "ignored evaluation completion from stale worker claim"
+                );
+                upsert_service_heartbeat(
+                    db,
+                    worker_id,
+                    &HeartbeatPayload {
+                        status: "idle".to_string(),
+                        job_id: None,
+                        solution_submission_id: None,
+                        last_completed_job_id: None,
+                        last_failed_job_id: None,
+                    },
+                )
+                .await?;
+                return Ok(());
+            }
 
             upsert_service_heartbeat(
                 db,
@@ -225,12 +255,13 @@ pub async fn run_worker_cycle(
         }
         Err(e) => {
             let error_msg = e.to_string();
-            mark_evaluation_finished(
+            let persisted = mark_evaluation_finished(
                 db,
                 &PersistedEvaluationResult {
-                    evaluation_id,
                     solution_submission_id: job.solution_submission_id.clone(),
                     job_id: job.id.clone(),
+                    worker_id: worker_id.to_string(),
+                    claim_attempt_count: job.attempt_count,
                     benchmark_target_id: job.benchmark_target_id.clone(),
                     eval_type: job.eval_type,
                     status: EvaluationStatus::Failed,
@@ -246,6 +277,28 @@ pub async fn run_worker_cycle(
                 },
             )
             .await?;
+            if !persisted {
+                warn!(
+                    job_id = %job.id,
+                    worker_id,
+                    attempt_count = job.attempt_count,
+                    error = %error_msg,
+                    "ignored evaluation failure from stale worker claim"
+                );
+                upsert_service_heartbeat(
+                    db,
+                    worker_id,
+                    &HeartbeatPayload {
+                        status: "idle".to_string(),
+                        job_id: None,
+                        solution_submission_id: None,
+                        last_completed_job_id: None,
+                        last_failed_job_id: None,
+                    },
+                )
+                .await?;
+                return Ok(());
+            }
 
             upsert_service_heartbeat(
                 db,

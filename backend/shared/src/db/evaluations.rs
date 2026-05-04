@@ -10,7 +10,7 @@ use super::leaderboard::{
     upsert_leaderboard_entry_for_solution_submission_tx,
 };
 
-/// Input for creating or resetting the evaluation row associated with a job.
+/// Input for creating the evaluation row associated with a claimed job.
 #[derive(Debug, Clone)]
 pub struct MarkEvaluationStartedInput {
     pub evaluation_id: String,
@@ -24,25 +24,14 @@ pub struct MarkEvaluationStartedInput {
 pub async fn mark_evaluation_started(
     pool: &PgPool,
     input: &MarkEvaluationStartedInput,
-) -> Result<()> {
+) -> Result<bool> {
     let eval_type_str = input.eval_type.as_str();
 
-    sqlx::query(
+    let result = sqlx::query(
         r#"
         INSERT INTO evaluations (id, solution_submission_id, job_id, benchmark_target_id, eval_type, status, started_at)
         VALUES ($1, $2, $3, $4, $5, 'running', NOW())
-        ON CONFLICT (job_id) DO UPDATE
-        SET status = 'running',
-            primary_score = NULL,
-            rank_score = NULL,
-            aggregate_metrics_json = '[]'::jsonb,
-            run_metrics_json = '[]'::jsonb,
-            public_results_json = NULL,
-            validation_summary_json = NULL,
-            official_summary_json = NULL,
-            log_path = NULL,
-            started_at = NOW(),
-            finished_at = NULL
+        ON CONFLICT (job_id) DO NOTHING
         "#,
     )
     .bind(&input.evaluation_id)
@@ -53,15 +42,16 @@ pub async fn mark_evaluation_started(
     .execute(pool)
     .await?;
 
-    Ok(())
+    Ok(result.rows_affected() == 1)
 }
 
 /// Validated runner result prepared for persistence.
 #[derive(Debug, Clone)]
 pub struct PersistedEvaluationResult {
-    pub evaluation_id: String,
     pub solution_submission_id: String,
     pub job_id: String,
+    pub worker_id: String,
+    pub claim_attempt_count: i32,
     pub benchmark_target_id: String,
     pub eval_type: ScoringMode,
     pub status: EvaluationStatus,
@@ -80,7 +70,7 @@ pub struct PersistedEvaluationResult {
 pub async fn mark_evaluation_finished(
     pool: &PgPool,
     result: &PersistedEvaluationResult,
-) -> Result<()> {
+) -> Result<bool> {
     let mut tx = pool.begin().await?;
 
     let public_results_json = serde_json::to_value(&result.public_results)
@@ -98,7 +88,30 @@ pub async fn mark_evaluation_finished(
         _ => "failed",
     };
 
-    sqlx::query(
+    let job_update = sqlx::query(
+        r#"
+        UPDATE evaluation_jobs
+        SET status = $2, finished_at = NOW(), last_error = $3
+        WHERE id = $1
+          AND status = 'running'
+          AND worker_id = $4
+          AND attempt_count = $5
+        "#,
+    )
+    .bind(&result.job_id)
+    .bind(status_str)
+    .bind(&result.last_error)
+    .bind(&result.worker_id)
+    .bind(result.claim_attempt_count)
+    .execute(&mut *tx)
+    .await?;
+
+    if job_update.rows_affected() == 0 {
+        tx.commit().await?;
+        return Ok(false);
+    }
+
+    let evaluation_update = sqlx::query(
         r#"
         UPDATE evaluations
         SET status = $2, primary_score = $3, rank_score = $4,
@@ -106,6 +119,7 @@ pub async fn mark_evaluation_finished(
             public_results_json = $7, validation_summary_json = $8,
             official_summary_json = $9, log_path = $10, finished_at = NOW()
         WHERE job_id = $1
+          AND status = 'running'
         "#,
     )
     .bind(&result.job_id)
@@ -121,18 +135,9 @@ pub async fn mark_evaluation_finished(
     .execute(&mut *tx)
     .await?;
 
-    sqlx::query(
-        r#"
-        UPDATE evaluation_jobs
-        SET status = $2, finished_at = NOW(), last_error = $3
-        WHERE id = $1
-        "#,
-    )
-    .bind(&result.job_id)
-    .bind(status_str)
-    .bind(&result.last_error)
-    .execute(&mut *tx)
-    .await?;
+    if evaluation_update.rows_affected() != 1 {
+        return Err(AppError::Conflict);
+    }
 
     match result.eval_type {
         ScoringMode::Validation => {
@@ -186,5 +191,5 @@ pub async fn mark_evaluation_finished(
     }
 
     tx.commit().await?;
-    Ok(())
+    Ok(true)
 }
