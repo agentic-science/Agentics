@@ -107,6 +107,7 @@ pub fn router(config: &Config) -> Router<AppState> {
             "/admin/service-heartbeats",
             get(crate::handlers::list_admin_service_heartbeats),
         )
+        .route("/admin/capacity", get(crate::handlers::get_admin_capacity))
         .route(
             "/admin/solution-submissions/{id}/rejudge",
             post(crate::handlers::rejudge),

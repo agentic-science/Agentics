@@ -291,3 +291,28 @@ pub struct DisableAgentResponse {
     pub id: String,
     pub status: String,
 }
+
+/// Admin-visible quota limits that bound evaluation and registration capacity.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdminQuotaSettingsDto {
+    pub validation_runs_per_agent_challenge_day: u32,
+    pub official_runs_per_agent_challenge_day: u32,
+    pub max_active_official_jobs: u32,
+    pub max_active_agents: u32,
+}
+
+/// Admin-visible runtime usage for the configured quota envelope.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdminCapacityUsageDto {
+    pub active_agents: i64,
+    pub active_validation_jobs: i64,
+    pub active_official_jobs: i64,
+}
+
+/// Admin response used by the operations console to inspect platform capacity.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdminCapacityResponse {
+    pub quota_window_seconds: i64,
+    pub quotas: AdminQuotaSettingsDto,
+    pub usage: AdminCapacityUsageDto,
+}

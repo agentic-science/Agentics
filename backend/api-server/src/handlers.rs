@@ -514,6 +514,37 @@ pub async fn list_admin_service_heartbeats(
     Ok(Json(AdminServiceHeartbeatListResponse { items }))
 }
 
+/// Show configured quota limits and current queue usage for admin capacity review.
+pub async fn get_admin_capacity(
+    _admin: AdminAuth,
+    State(state): State<AppState>,
+) -> Result<Json<AdminCapacityResponse>> {
+    let active_agents = db::count_active_agents(&state.db).await?;
+    let active_validation_jobs =
+        db::count_active_evaluation_jobs(&state.db, ScoringMode::Validation).await?;
+    let active_official_jobs =
+        db::count_active_evaluation_jobs(&state.db, ScoringMode::Official).await?;
+
+    Ok(Json(AdminCapacityResponse {
+        quota_window_seconds: SUBMISSION_QUOTA_WINDOW_SECONDS,
+        quotas: AdminQuotaSettingsDto {
+            validation_runs_per_agent_challenge_day: state
+                .config
+                .validation_runs_per_agent_challenge_day,
+            official_runs_per_agent_challenge_day: state
+                .config
+                .official_runs_per_agent_challenge_day,
+            max_active_official_jobs: state.config.max_active_official_jobs,
+            max_active_agents: state.config.max_active_agents,
+        },
+        usage: AdminCapacityUsageDto {
+            active_agents,
+            active_validation_jobs,
+            active_official_jobs,
+        },
+    }))
+}
+
 /// Queue an official rejudge for an existing solution submission.
 pub async fn rejudge(
     _admin: AdminAuth,

@@ -40,6 +40,18 @@ async fn admin_read_models_power_operator_console(pool: sqlx::PgPool) {
         .expect("failed to decode admin challenges");
     assert!(challenges["items"].as_array().expect("items").len() >= 2);
     assert!(challenges["items"][0].get("status").is_some());
+    let sample_sum = challenges["items"]
+        .as_array()
+        .expect("items")
+        .iter()
+        .find(|item| item["id"] == "sample-sum")
+        .expect("sample-sum should be seeded");
+    assert_eq!(
+        sample_sum["current_resource_profile"]["id"],
+        "python-cpu-small"
+    );
+    assert_eq!(sample_sum["validation_enabled"], true);
+    assert_eq!(sample_sum["private_benchmark_enabled"], true);
 
     let submissions: serde_json::Value = client
         .get(api_url(&app, "/admin/solution-submissions"))
@@ -51,6 +63,27 @@ async fn admin_read_models_power_operator_console(pool: sqlx::PgPool) {
         .await
         .expect("failed to decode admin solution submissions");
     assert!(submissions["items"].as_array().is_some());
+
+    let capacity: serde_json::Value = client
+        .get(api_url(&app, "/admin/capacity"))
+        .header("Authorization", auth.clone())
+        .send()
+        .await
+        .expect("failed to fetch admin capacity")
+        .json()
+        .await
+        .expect("failed to decode admin capacity");
+    assert_eq!(
+        capacity["quotas"]["validation_runs_per_agent_challenge_day"],
+        20
+    );
+    assert_eq!(
+        capacity["quotas"]["official_runs_per_agent_challenge_day"],
+        5
+    );
+    assert_eq!(capacity["quotas"]["max_active_official_jobs"], 20);
+    assert_eq!(capacity["usage"]["active_agents"], 0);
+    assert_eq!(capacity["usage"]["active_official_jobs"], 0);
 
     let heartbeats: serde_json::Value = client
         .get(api_url(&app, "/admin/service-heartbeats"))
@@ -208,4 +241,89 @@ async fn admin_routes_require_auth(pool: sqlx::PgPool) {
         .expect("failed to execute request");
 
     assert_eq!(response.status(), 401);
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn admin_official_run_bypasses_public_official_queue_limit(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let mut config = test_config(storage.path(), &examples_challenges_root());
+    config.max_active_official_jobs = 1;
+    config.official_runs_per_agent_challenge_day = 1;
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let admin_auth = helpers::basic_auth_header(&config.admin_username, &config.admin_password);
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "name": "admin-override-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+
+    let official = client
+        .post(api_url(&app, "/api/solution-submissions"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "challenge_id": "sample-sum",
+            "artifact_base64": helpers::solution_zip_base64(&helpers::sample_sum_solution("payload['a'] + payload['b']")),
+            "explanation": "fills official queue"
+        }))
+        .send()
+        .await
+        .expect("failed to submit official run");
+    assert_eq!(official.status(), 201);
+
+    let validation_response: serde_json::Value = client
+        .post(api_url(&app, "/api/validation-runs"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "challenge_id": "sample-sum",
+            "artifact_base64": helpers::solution_zip_base64(&helpers::sample_sum_solution("payload['a'] + payload['b']")),
+            "explanation": "admin promotes this validation run"
+        }))
+        .send()
+        .await
+        .expect("failed to submit validation run")
+        .error_for_status()
+        .expect("validation should be accepted")
+        .json()
+        .await
+        .expect("failed to decode validation response");
+    let validation_id = validation_response["id"].as_str().expect("missing id");
+
+    let public_quota_response = client
+        .post(api_url(&app, "/api/solution-submissions"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "challenge_id": "sample-sum",
+            "artifact_base64": "not-base64",
+            "explanation": "public official run should still be rejected"
+        }))
+        .send()
+        .await
+        .expect("failed to request public official run");
+    assert_eq!(public_quota_response.status(), 429);
+
+    let admin_response = client
+        .post(api_url(
+            &app,
+            &format!("/admin/solution-submissions/{validation_id}/official-run"),
+        ))
+        .header("Authorization", admin_auth)
+        .send()
+        .await
+        .expect("failed to request admin official run");
+    assert_eq!(admin_response.status(), 202);
+
+    let active_official_jobs: i64 = shared::db::count_active_evaluation_jobs(
+        &pool,
+        shared::models::evaluation::ScoringMode::Official,
+    )
+    .await
+    .expect("failed to count official jobs");
+    assert_eq!(active_official_jobs, 2);
 }

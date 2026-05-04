@@ -275,6 +275,12 @@ pub struct AdminChallengeListItemDto {
     pub status: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub current_version: Option<CurrentVersionDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_resource_profile: Option<ResourceProfileSpec>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub validation_enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub private_benchmark_enabled: Option<bool>,
     pub created_at: String,
     pub updated_at: String,
 }

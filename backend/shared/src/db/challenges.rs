@@ -76,7 +76,8 @@ pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeLi
             p.created_at,
             p.updated_at,
             pv.id AS version_id,
-            pv.version
+            pv.version,
+            pv.spec_json
         FROM challenges p
         LEFT JOIN challenge_versions pv ON pv.id = p.current_version_id
         ORDER BY p.updated_at DESC, p.created_at DESC
@@ -89,6 +90,11 @@ pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeLi
         .map(|r| {
             let version_id: Option<String> = r.try_get("version_id")?;
             let version: Option<String> = r.try_get("version")?;
+            let spec_json: Option<Value> = r.try_get("spec_json")?;
+            let spec = spec_json
+                .map(serde_json::from_value::<ChallengeBundleSpec>)
+                .transpose()
+                .map_err(|e| AppError::Internal(e.to_string()))?;
             Ok(AdminChallengeListItemDto {
                 id: r.try_get("id")?,
                 slug: r.try_get("slug")?,
@@ -98,6 +104,11 @@ pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeLi
                 current_version: version_id
                     .zip(version)
                     .map(|(id, version)| crate::models::CurrentVersionDto { id, version }),
+                current_resource_profile: spec.as_ref().map(|spec| spec.resource_profile.clone()),
+                validation_enabled: spec.as_ref().map(|spec| spec.datasets.validation_enabled),
+                private_benchmark_enabled: spec
+                    .as_ref()
+                    .map(|spec| spec.datasets.private_benchmark_enabled),
                 created_at: r.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
                 updated_at: r.try_get::<DateTime<Utc>, _>("updated_at")?.to_rfc3339(),
             })
