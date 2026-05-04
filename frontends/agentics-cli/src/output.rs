@@ -1,6 +1,6 @@
-use anyhow::{Result, bail};
+use anyhow::Result;
 use serde::Serialize;
-use serde_json::json;
+use serde_json::{Map, Value, json};
 use shared::models::challenge::{ChallengeDetailResponse, ChallengeListResponse};
 use shared::models::challenge_creation::{
     ChallengeDraftCleanupResponse, ChallengeDraftResponse, ChallengePrivateAssetResponse,
@@ -461,19 +461,18 @@ fn render_create_submission_batch(
 ) -> Result<String> {
     match format {
         OutputFormat::Json => {
-            let mut value = json!({
-                "package": {
+            let mut object = Map::new();
+            object.insert(
+                "package".to_string(),
+                json!({
                     "workspace_dir": package.workspace_dir,
                     "file_count": package.file_count,
                     "uncompressed_bytes": package.uncompressed_bytes,
                     "zip_bytes": package.bytes.len(),
-                }
-            });
-            let Some(object) = value.as_object_mut() else {
-                bail!("static JSON value must be an object");
-            };
+                }),
+            );
             object.insert(response_key.to_string(), serde_json::to_value(responses)?);
-            pretty_json(&value)
+            pretty_json(&Value::Object(object))
         }
         OutputFormat::Table => {
             let rows = responses
