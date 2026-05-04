@@ -11,6 +11,7 @@ pub async fn count_recent_runs_for_agent_challenge(
     pool: &PgPool,
     agent_id: &str,
     challenge_id: &str,
+    benchmark_target_id: &str,
     eval_type: ScoringMode,
     window_seconds: i64,
 ) -> Result<i64> {
@@ -21,12 +22,14 @@ pub async fn count_recent_runs_for_agent_challenge(
         JOIN evaluation_jobs j ON j.solution_submission_id = s.id
         WHERE s.agent_id = $1
           AND s.challenge_id = $2
-          AND j.eval_type = $3
-          AND s.created_at >= NOW() - ($4::DOUBLE PRECISION * INTERVAL '1 second')
+          AND s.benchmark_target_id = $3
+          AND j.eval_type = $4
+          AND s.created_at >= NOW() - ($5::DOUBLE PRECISION * INTERVAL '1 second')
         "#,
     )
     .bind(agent_id)
     .bind(challenge_id)
+    .bind(benchmark_target_id)
     .bind(eval_type.as_str())
     .bind(window_seconds)
     .fetch_one(pool)
@@ -40,12 +43,14 @@ pub async fn count_recent_validation_runs_for_agent_challenge(
     pool: &PgPool,
     agent_id: &str,
     challenge_id: &str,
+    benchmark_target_id: &str,
     window_seconds: i64,
 ) -> Result<i64> {
     count_recent_runs_for_agent_challenge(
         pool,
         agent_id,
         challenge_id,
+        benchmark_target_id,
         ScoringMode::Validation,
         window_seconds,
     )

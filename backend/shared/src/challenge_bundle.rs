@@ -10,7 +10,8 @@ use std::path::Path;
 
 use crate::error::{AppError, Result};
 use crate::models::challenge::{
-    ChallengeBundleSpec, ChallengeRunInputFile, ChallengeRunManifest, ChallengeRunSpec,
+    BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengeRunInputFile,
+    ChallengeRunManifest, ChallengeRunSpec, DockerPlatform, ResourceProfileSpec,
 };
 use crate::zip_project::{ZIP_PROJECT_MANIFEST_FILE, ZIP_PROJECT_PROTOCOL};
 
@@ -51,10 +52,15 @@ pub async fn validate_challenge_bundle(bundle_dir: &Path) -> Result<()> {
     }
     assert_path_type(&public_dir, "directory", "public data dir").await?;
 
-    if spec.datasets.validation_enabled {
+    if spec
+        .benchmark_targets
+        .iter()
+        .any(|target| target.validation_enabled)
+    {
         let validation_runs = spec.execution.validation_runs.as_deref().ok_or_else(|| {
             AppError::Validation(
-                "execution.validation_runs is required when validation_enabled is true".to_string(),
+                "execution.validation_runs is required when any benchmark target has validation_enabled true"
+                    .to_string(),
             )
         })?;
         assert_path_type(
@@ -146,7 +152,7 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
     }
     validate_scorer_command(&spec.scorer.command)?;
     require_safe_relative_path(&spec.scorer.result_file, "scorer.result_file")?;
-    validate_resource_profile(spec)?;
+    validate_benchmark_targets(spec)?;
     validate_execution(spec)?;
 
     require_safe_relative_path(&spec.datasets.public_dir, "datasets.public_dir")?;
@@ -205,36 +211,82 @@ fn declared_scorer_script(command: &[String]) -> Option<&str> {
         .map(String::as_str)
 }
 
-fn validate_resource_profile(spec: &ChallengeBundleSpec) -> Result<()> {
-    let profile = &spec.resource_profile;
-    require_non_empty(&profile.id, "resource_profile.id")?;
-    require_non_empty(&profile.solution_image, "resource_profile.solution_image")?;
-    require_non_empty(&profile.scorer_image, "resource_profile.scorer_image")?;
+fn validate_benchmark_targets(spec: &ChallengeBundleSpec) -> Result<()> {
+    if spec.benchmark_targets.is_empty() {
+        return Err(AppError::Validation(
+            "benchmark_targets must not be empty".to_string(),
+        ));
+    }
+
+    let mut target_ids = HashSet::with_capacity(spec.benchmark_targets.len());
+    for (index, target) in spec.benchmark_targets.iter().enumerate() {
+        let field = format!("benchmark_targets[{index}]");
+        validate_benchmark_target(target, &field)?;
+        if !target_ids.insert(target.id.as_str()) {
+            return Err(AppError::Validation(format!(
+                "benchmark_targets contains duplicate id `{}`",
+                target.id
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_benchmark_target(target: &BenchmarkTargetSpec, field: &str) -> Result<()> {
+    require_non_empty(&target.id, &format!("{field}.id"))?;
+    if target.accelerator != BenchmarkAccelerator::Cpu {
+        return Err(AppError::Validation(format!(
+            "{field}.accelerator must be cpu until GPU scheduling is implemented"
+        )));
+    }
+
+    let expected_id = match target.docker_platform {
+        DockerPlatform::LinuxArm64 => "cpu-linux-arm64",
+        DockerPlatform::LinuxAmd64 => "cpu-linux-amd64",
+    };
+    if target.id != expected_id {
+        return Err(AppError::Validation(format!(
+            "{field}.id must be `{expected_id}` for docker_platform `{}`",
+            target.docker_platform.as_str()
+        )));
+    }
+
+    validate_resource_profile(
+        &target.resource_profile,
+        &format!("{field}.resource_profile"),
+    )
+}
+
+fn validate_resource_profile(profile: &ResourceProfileSpec, field: &str) -> Result<()> {
+    require_non_empty(&profile.id, &format!("{field}.id"))?;
+    require_non_empty(&profile.solution_image, &format!("{field}.solution_image"))?;
+    require_non_empty(&profile.scorer_image, &format!("{field}.scorer_image"))?;
     validate_image_digest(
         &profile.solution_image,
         profile.solution_image_digest.as_deref(),
-        "resource_profile.solution_image_digest",
+        &format!("{field}.solution_image_digest"),
     )?;
     validate_image_digest(
         &profile.scorer_image,
         profile.scorer_image_digest.as_deref(),
-        "resource_profile.scorer_image_digest",
+        &format!("{field}.scorer_image_digest"),
     )?;
-    validate_positive_u64(profile.timeout_sec, "resource_profile.timeout_sec")?;
-    validate_positive_u64(profile.memory_limit_mb, "resource_profile.memory_limit_mb")?;
+    validate_positive_u64(profile.timeout_sec, &format!("{field}.timeout_sec"))?;
+    validate_positive_u64(profile.memory_limit_mb, &format!("{field}.memory_limit_mb"))?;
     validate_positive_u32(
         profile.cpu_limit_millis,
-        "resource_profile.cpu_limit_millis",
+        &format!("{field}.cpu_limit_millis"),
     )?;
-    validate_positive_u64(profile.disk_limit_mb, "resource_profile.disk_limit_mb")?;
+    validate_positive_u64(profile.disk_limit_mb, &format!("{field}.disk_limit_mb"))?;
     if let Some(resource_description) = &profile.resource_description {
         require_non_empty(
             resource_description,
-            "resource_profile.resource_description",
+            &format!("{field}.resource_description"),
         )?;
     }
     if let Some(hardware) = &profile.hardware {
-        require_non_empty(&hardware.kind, "resource_profile.hardware.kind")?;
+        require_non_empty(&hardware.kind, &format!("{field}.hardware.kind"))?;
     }
 
     Ok(())
@@ -266,9 +318,15 @@ fn validate_execution(spec: &ChallengeBundleSpec) -> Result<()> {
     if let Some(path) = &spec.execution.official_runs {
         require_safe_relative_path(path, "execution.official_runs")?;
     }
-    if spec.datasets.validation_enabled && spec.execution.validation_runs.is_none() {
+    if spec
+        .benchmark_targets
+        .iter()
+        .any(|target| target.validation_enabled)
+        && spec.execution.validation_runs.is_none()
+    {
         return Err(AppError::Validation(
-            "execution.validation_runs is required when validation_enabled is true".to_string(),
+            "execution.validation_runs is required when any benchmark target has validation_enabled true"
+                .to_string(),
         ));
     }
     if spec.datasets.private_benchmark_enabled && spec.execution.official_runs.is_none() {
@@ -528,8 +586,9 @@ mod tests {
     use std::path::Path;
 
     use crate::models::challenge::{
-        ChallengeBundleSpec, ChallengeExecutionSpec, CommunitySpec, DatasetsSpec, MetricDirection,
-        MetricSchemaSpec, MetricVisibility, ResourceProfileSpec, ScorerSpec, SolutionSpec,
+        BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengeExecutionSpec,
+        CommunitySpec, DatasetsSpec, DockerPlatform, MetricDirection, MetricSchemaSpec,
+        MetricVisibility, ResourceProfileSpec, ScorerSpec, SolutionSpec,
     };
     use crate::models::evaluation::ScoreVisibility;
     use crate::zip_project::ZipProjectNetworkAccess;
@@ -551,23 +610,29 @@ mod tests {
                 command: vec!["python".to_string(), "scorer/run.py".to_string()],
                 result_file: "result.json".to_string(),
             },
-            resource_profile: ResourceProfileSpec {
-                id: "python-cpu-small".to_string(),
-                resource_description: None,
-                solution_image: "python:3.12-slim-bookworm".to_string(),
-                solution_image_digest: None,
-                scorer_image: "python:3.12-slim-bookworm".to_string(),
-                scorer_image_digest: None,
-                timeout_sec: 30,
-                memory_limit_mb: 512,
-                cpu_limit_millis: 1000,
-                disk_limit_mb: 1024,
-                setup_network_access: ZipProjectNetworkAccess::Enabled,
-                build_network_access: ZipProjectNetworkAccess::Disabled,
-                run_network_access: ZipProjectNetworkAccess::Disabled,
-                scorer_network_access: ZipProjectNetworkAccess::Disabled,
-                hardware: None,
-            },
+            benchmark_targets: vec![BenchmarkTargetSpec {
+                id: "cpu-linux-arm64".to_string(),
+                docker_platform: DockerPlatform::LinuxArm64,
+                accelerator: BenchmarkAccelerator::Cpu,
+                validation_enabled: true,
+                resource_profile: ResourceProfileSpec {
+                    id: "python-cpu-small".to_string(),
+                    resource_description: None,
+                    solution_image: "python:3.12-slim-bookworm".to_string(),
+                    solution_image_digest: None,
+                    scorer_image: "python:3.12-slim-bookworm".to_string(),
+                    scorer_image_digest: None,
+                    timeout_sec: 30,
+                    memory_limit_mb: 512,
+                    cpu_limit_millis: 1000,
+                    disk_limit_mb: 1024,
+                    setup_network_access: ZipProjectNetworkAccess::Enabled,
+                    build_network_access: ZipProjectNetworkAccess::Disabled,
+                    run_network_access: ZipProjectNetworkAccess::Disabled,
+                    scorer_network_access: ZipProjectNetworkAccess::Disabled,
+                    hardware: None,
+                },
+            }],
             execution: ChallengeExecutionSpec {
                 validation_runs: Some("public/runs.json".to_string()),
                 official_runs: Some("private-benchmark/runs.json".to_string()),
@@ -577,7 +642,6 @@ mod tests {
                 private_benchmark_dir: Some("private-benchmark".to_string()),
                 public_policy: ScoreVisibility::Full,
                 private_benchmark_policy: "score_only".to_string(),
-                validation_enabled: true,
                 private_benchmark_enabled: true,
             },
             community: None,
@@ -586,48 +650,22 @@ mod tests {
     }
 
     #[test]
-    fn missing_validation_enabled_defaults_to_false() {
-        let spec: ChallengeBundleSpec = serde_json::from_value(serde_json::json!({
-            "schema_version": 1,
-            "challenge_id": "sample-sum",
-            "challenge_title": "Sample Sum",
-            "challenge_summary": "Add numbers from worker-managed runs.",
-            "challenge_version": "v1",
-            "solution": {
-                "protocol": "zip_project",
-                "manifest_file": "agentics.solution.json"
-            },
-            "scorer": {
-                "command": ["python", "scorer/run.py"],
-                "result_file": "result.json"
-            },
-            "resource_profile": {
-                "id": "python-cpu-small",
-                "solution_image": "python:3.12-slim-bookworm",
-                "scorer_image": "python:3.12-slim-bookworm",
-                "timeout_sec": 30,
-                "memory_limit_mb": 512,
-                "cpu_limit_millis": 1000,
-                "disk_limit_mb": 1024,
-                "setup_network_access": "enabled",
-                "build_network_access": "disabled",
-                "run_network_access": "disabled",
-                "scorer_network_access": "disabled"
-            },
-            "execution": {
-                "official_runs": "private-benchmark/runs.json"
-            },
-            "datasets": {
-                "public_dir": "public",
-                "public_policy": "full",
-                "private_benchmark_policy": "score_only",
-                "private_benchmark_enabled": false
-            }
-        }))
-        .expect("legacy spec should deserialize");
+    fn benchmark_targets_are_required() {
+        let mut spec = base_spec();
+        spec.benchmark_targets.clear();
 
-        assert!(!spec.datasets.validation_enabled);
-        assert_eq!(spec.metric_schema.ranking.primary_metric_id, "score");
+        let error = validate_challenge_bundle_spec(&spec).expect_err("empty targets should fail");
+        assert!(error.to_string().contains("benchmark_targets"));
+    }
+
+    #[test]
+    fn target_id_must_match_docker_platform() {
+        let mut spec = base_spec();
+        spec.benchmark_targets[0].id = "cpu-linux-amd64".to_string();
+
+        let error =
+            validate_challenge_bundle_spec(&spec).expect_err("mismatched target should fail");
+        assert!(error.to_string().contains("docker_platform"));
     }
 
     #[test]
@@ -655,6 +693,20 @@ mod tests {
         spec.datasets.private_benchmark_dir = None;
 
         assert!(validate_challenge_bundle_spec(&spec).is_err());
+    }
+
+    #[test]
+    fn validation_run_manifest_required_only_when_target_enables_validation() {
+        let mut spec = base_spec();
+        spec.execution.validation_runs = None;
+        spec.benchmark_targets[0].validation_enabled = false;
+
+        assert!(validate_challenge_bundle_spec(&spec).is_ok());
+
+        spec.benchmark_targets[0].validation_enabled = true;
+        let error = validate_challenge_bundle_spec(&spec)
+            .expect_err("target validation should require run manifest");
+        assert!(error.to_string().contains("execution.validation_runs"));
     }
 
     #[test]

@@ -72,6 +72,7 @@ async fn zip_submission_routes_accept_declared_large_json_bodies(pool: sqlx::PgP
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "missing-challenge",
+            "benchmark_target_id": "cpu-linux-arm64",
             "artifact_base64": artifact_base64
         }))
         .send()
@@ -83,4 +84,52 @@ async fn zip_submission_routes_accept_declared_large_json_bodies(pool: sqlx::PgP
         reqwest::StatusCode::PAYLOAD_TOO_LARGE,
         "route-specific body limit should exceed Axum's small JSON default"
     );
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn solution_submission_rejects_invalid_target_before_artifact_decode(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = helpers::test_config(storage.path(), &helpers::examples_challenges_root());
+    let app = helpers::spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(helpers::api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "name": "invalid-target-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+
+    let response = client
+        .post(helpers::api_url(&app, "/api/solution-submissions"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "challenge_id": "sample-sum",
+            "benchmark_target_id": "cpu-linux-ppc64le",
+            "artifact_base64": "not-base64"
+        }))
+        .send()
+        .await
+        .expect("failed to send invalid-target submission");
+    assert_eq!(response.status(), 400);
+
+    let error: serde_json::Value = response.json().await.expect("failed to decode error");
+    assert_eq!(error["error"], "bad_request");
+    assert!(
+        error["message"]
+            .as_str()
+            .expect("error message")
+            .contains("benchmark target")
+    );
+
+    let solution_submission_count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM solution_submissions")
+            .fetch_one(&pool)
+            .await
+            .expect("failed to query solution submission count");
+    assert_eq!(solution_submission_count.0, 0);
 }

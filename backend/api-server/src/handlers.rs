@@ -160,8 +160,27 @@ async fn create_solution_submission_for_mode(
     eval_type: ScoringMode,
 ) -> Result<(StatusCode, Json<CreateSolutionSubmissionResponse>)> {
     let challenge_id = body.challenge_id.trim().to_string();
-    db::ensure_published_challenge_supports_eval_type(&state.db, &challenge_id, eval_type).await?;
-    ensure_submission_quota_available(&state, &agent.agent_id, &challenge_id, eval_type).await?;
+    let benchmark_target_id = body.benchmark_target_id.trim().to_string();
+    if benchmark_target_id.is_empty() {
+        return Err(AppError::BadRequest(
+            "benchmark_target_id must not be empty".to_string(),
+        ));
+    }
+    let challenge_id = db::ensure_published_challenge_supports_eval_type(
+        &state.db,
+        &challenge_id,
+        &benchmark_target_id,
+        eval_type,
+    )
+    .await?;
+    ensure_submission_quota_available(
+        &state,
+        &agent.agent_id,
+        &challenge_id,
+        &benchmark_target_id,
+        eval_type,
+    )
+    .await?;
 
     let artifact_bytes = base64_decode(&body.artifact_base64).ok_or(AppError::Base64)?;
     if artifact_bytes.len() as u64 > MAX_ARTIFACT_BYTES {
@@ -190,6 +209,7 @@ async fn create_solution_submission_for_mode(
             job_id: Uuid::new_v4().to_string(),
             agent_id: agent.agent_id,
             challenge_id,
+            benchmark_target_id,
             artifact_path,
             language: manifest.runtime.language,
             eval_type,
@@ -215,6 +235,7 @@ async fn ensure_submission_quota_available(
     state: &AppState,
     agent_id: &str,
     challenge_id: &str,
+    benchmark_target_id: &str,
     eval_type: ScoringMode,
 ) -> Result<()> {
     let limit = match eval_type {
@@ -225,6 +246,7 @@ async fn ensure_submission_quota_available(
         &state.db,
         agent_id,
         challenge_id,
+        benchmark_target_id,
         eval_type,
         SUBMISSION_QUOTA_WINDOW_SECONDS,
     )
@@ -381,10 +403,16 @@ pub async fn get_public_artifact(
 pub async fn get_leaderboard(
     State(state): State<AppState>,
     Path(id): Path<String>,
-    Query(query): Query<PublicListQuery>,
+    Query(query): Query<LeaderboardQuery>,
 ) -> Result<Json<LeaderboardResponse>> {
-    let items = db::list_leaderboard_entries(&state.db, &id, query.limit()).await?;
-    Ok(Json(LeaderboardResponse { items }))
+    let benchmark_target_id =
+        resolve_public_benchmark_target_id(&state.db, &id, query.target.as_deref()).await?;
+    let items =
+        db::list_leaderboard_entries(&state.db, &id, &benchmark_target_id, query.limit()).await?;
+    Ok(Json(LeaderboardResponse {
+        benchmark_target_id,
+        items,
+    }))
 }
 
 /// Fetch discussion threads for a challenge.
@@ -408,6 +436,53 @@ impl PublicListQuery {
             .unwrap_or(DEFAULT_PUBLIC_LIST_LIMIT)
             .clamp(1, MAX_PUBLIC_LIST_LIMIT)
     }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct LeaderboardQuery {
+    limit: Option<i64>,
+    target: Option<String>,
+}
+
+impl LeaderboardQuery {
+    fn limit(&self) -> i64 {
+        self.limit
+            .unwrap_or(DEFAULT_PUBLIC_LIST_LIMIT)
+            .clamp(1, MAX_PUBLIC_LIST_LIMIT)
+    }
+}
+
+async fn resolve_public_benchmark_target_id(
+    pool: &sqlx::PgPool,
+    challenge_id_or_slug: &str,
+    requested_target: Option<&str>,
+) -> Result<String> {
+    let challenge = db::get_published_challenge(pool, challenge_id_or_slug).await?;
+    let challenge = challenge.ok_or(AppError::NotFound)?;
+    let spec: shared::models::challenge::ChallengeBundleSpec =
+        serde_json::from_value(challenge.spec_json)
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    if let Some(target_id) = requested_target
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        if spec.benchmark_target(target_id).is_some() {
+            return Ok(target_id.to_string());
+        }
+        return Err(AppError::BadRequest(format!(
+            "challenge version does not support benchmark target `{target_id}`"
+        )));
+    }
+
+    spec.sole_benchmark_target_id()
+        .map(ToString::to_string)
+        .ok_or_else(|| {
+            AppError::BadRequest(
+                "target query parameter is required for challenges with multiple benchmark targets"
+                    .to_string(),
+            )
+        })
 }
 
 // ---------------------------------------------------------------------------
@@ -566,6 +641,7 @@ pub async fn rejudge(
         Json(EvaluationJobResponse {
             job_id: job.id,
             solution_submission_id: job.solution_submission_id,
+            benchmark_target_id: job.benchmark_target_id,
             eval_type: ScoringMode::Official.as_str().to_string(),
             status: job.status,
         }),
@@ -593,6 +669,7 @@ pub async fn official_run(
         Json(EvaluationJobResponse {
             job_id: job.id,
             solution_submission_id: job.solution_submission_id,
+            benchmark_target_id: job.benchmark_target_id,
             eval_type: ScoringMode::Official.as_str().to_string(),
             status: job.status,
         }),

@@ -47,6 +47,7 @@ pub fn present_create_solution_submission(
         status: solution_submission.status.clone(),
         challenge_id: solution_submission.challenge_id.clone(),
         challenge_version_id: solution_submission.challenge_version_id.clone(),
+        benchmark_target_id: solution_submission.benchmark_target_id.clone(),
         artifact_path: solution_submission.artifact_path.clone(),
         evaluation_job_id: solution_submission
             .evaluation_job_id
@@ -98,6 +99,7 @@ pub fn present_solution_submission(
         challenge_id: solution_submission.challenge_id.clone(),
         challenge_title: solution_submission.challenge_title.clone(),
         challenge_version_id: solution_submission.challenge_version_id.clone(),
+        benchmark_target_id: solution_submission.benchmark_target_id.clone(),
         agent_id: solution_submission.agent_id.clone(),
         agent_name: solution_submission.agent_name.clone(),
         status: solution_submission.status.clone(),
@@ -114,6 +116,7 @@ pub fn present_solution_submission(
             solution_submission.evaluation_job_id.as_ref().map(|id| {
                 shared::models::evaluation::EvaluationJobDto {
                     id: id.clone(),
+                    benchmark_target_id: solution_submission.benchmark_target_id.clone(),
                     status: match solution_submission.evaluation_job_status.as_deref() {
                         Some("running") => shared::models::evaluation::EvaluationStatus::Running,
                         Some("completed") => {
@@ -152,6 +155,7 @@ fn present_evaluation(
 fn redact_private_benchmark_details(evaluation: &EvaluationDto) -> EvaluationDto {
     EvaluationDto {
         id: evaluation.id.clone(),
+        benchmark_target_id: evaluation.benchmark_target_id.clone(),
         status: evaluation.status,
         eval_type: evaluation.eval_type,
         primary_score: evaluation.primary_score,

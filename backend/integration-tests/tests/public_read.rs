@@ -43,6 +43,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token_a}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
+            "benchmark_target_id": "cpu-linux-arm64",
             "artifact_base64": good_artifact,
             "explanation": "perfect score"
         }))
@@ -73,6 +74,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token_b}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
+            "benchmark_target_id": "cpu-linux-arm64",
             "artifact_base64": bad_artifact,
             "explanation": "bad score"
         }))
@@ -179,7 +181,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     let leaderboard: serde_json::Value = client
         .get(api_url(
             &app,
-            "/api/public/challenges/sample-sum/leaderboard",
+            "/api/public/challenges/sample-sum/leaderboard?target=cpu-linux-arm64",
         ))
         .send()
         .await
@@ -197,7 +199,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     let limited_leaderboard: serde_json::Value = client
         .get(api_url(
             &app,
-            "/api/public/challenges/sample-sum/leaderboard?limit=1",
+            "/api/public/challenges/sample-sum/leaderboard?target=cpu-linux-arm64&limit=1",
         ))
         .send()
         .await

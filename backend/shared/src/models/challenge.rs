@@ -16,7 +16,7 @@ pub struct ChallengeBundleSpec {
     pub challenge_version: String,
     pub solution: SolutionSpec,
     pub scorer: ScorerSpec,
-    pub resource_profile: ResourceProfileSpec,
+    pub benchmark_targets: Vec<BenchmarkTargetSpec>,
     pub execution: ChallengeExecutionSpec,
     pub datasets: DatasetsSpec,
     /// Optional external community metadata for this challenge version.
@@ -25,6 +25,23 @@ pub struct ChallengeBundleSpec {
     /// Metric definitions and ranking metadata used to interpret scorer output.
     #[serde(default)]
     pub metric_schema: MetricSchemaSpec,
+}
+
+impl ChallengeBundleSpec {
+    /// Look up one benchmark target declared by this challenge version.
+    pub fn benchmark_target(&self, target_id: &str) -> Option<&BenchmarkTargetSpec> {
+        self.benchmark_targets
+            .iter()
+            .find(|target| target.id == target_id)
+    }
+
+    /// Return the only target id when a challenge version is unambiguous.
+    pub fn sole_benchmark_target_id(&self) -> Option<&str> {
+        match self.benchmark_targets.as_slice() {
+            [target] => Some(target.id.as_str()),
+            _ => None,
+        }
+    }
 }
 
 /// Local solution format constraints declared by a bundle.
@@ -39,6 +56,53 @@ pub struct SolutionSpec {
 pub struct ScorerSpec {
     pub command: Vec<String>,
     pub result_file: String,
+}
+
+/// Supported Docker platforms for benchmark targets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DockerPlatform {
+    #[serde(rename = "linux/arm64")]
+    LinuxArm64,
+    #[serde(rename = "linux/amd64")]
+    LinuxAmd64,
+}
+
+impl DockerPlatform {
+    /// Canonical Docker platform string used in Docker API requests.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::LinuxArm64 => "linux/arm64",
+            Self::LinuxAmd64 => "linux/amd64",
+        }
+    }
+}
+
+/// Accelerator family used by a benchmark target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BenchmarkAccelerator {
+    Cpu,
+    Gpu,
+}
+
+impl BenchmarkAccelerator {
+    /// Stable string form used in user-facing summaries.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Cpu => "cpu",
+            Self::Gpu => "gpu",
+        }
+    }
+}
+
+/// One execution and ranking target declared by a challenge version.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BenchmarkTargetSpec {
+    pub id: String,
+    pub docker_platform: DockerPlatform,
+    pub accelerator: BenchmarkAccelerator,
+    pub validation_enabled: bool,
+    pub resource_profile: ResourceProfileSpec,
 }
 
 /// Resource envelope and Docker images declared by a challenge version.
@@ -132,9 +196,6 @@ pub struct DatasetsSpec {
     pub public_policy: super::evaluation::ScoreVisibility,
     /// Visibility policy for private benchmark results.
     pub private_benchmark_policy: String,
-    /// Whether agents may request private validation runs for this version.
-    #[serde(default)]
-    pub validation_enabled: bool,
     /// Whether official runs can evaluate against private benchmark data.
     pub private_benchmark_enabled: bool,
 }
@@ -276,9 +337,7 @@ pub struct AdminChallengeListItemDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub current_version: Option<CurrentVersionDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub current_resource_profile: Option<ResourceProfileSpec>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub validation_enabled: Option<bool>,
+    pub current_benchmark_targets: Option<Vec<BenchmarkTargetSpec>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub private_benchmark_enabled: Option<bool>,
     pub created_at: String,

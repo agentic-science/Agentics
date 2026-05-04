@@ -118,6 +118,7 @@ pub struct RunMetricResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvaluationDto {
     pub id: String,
+    pub benchmark_target_id: String,
     pub status: EvaluationStatus,
     pub eval_type: ScoringMode,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -629,6 +630,7 @@ mod tests {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvaluationJobDto {
     pub id: String,
+    pub benchmark_target_id: String,
     pub status: EvaluationStatus,
 }
 
@@ -639,4 +641,5 @@ pub struct EvaluationJobPayload {
     pub bundle_path: String,
     pub challenge_id: String,
     pub challenge_version_id: String,
+    pub benchmark_target_id: String,
 }

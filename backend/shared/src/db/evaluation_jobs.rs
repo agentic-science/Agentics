@@ -14,6 +14,7 @@ pub struct EvaluationJobRecord {
     pub solution_submission_id: String,
     pub challenge_id: String,
     pub challenge_version_id: String,
+    pub benchmark_target_id: String,
     pub eval_type: ScoringMode,
     pub status: String,
     pub attempt_count: i32,
@@ -46,7 +47,7 @@ pub async fn claim_next_evaluation_job(
         SET status = 'running', claimed_at = NOW(), worker_id = $1, attempt_count = j.attempt_count + 1
         FROM next_job
         WHERE j.id = next_job.id
-        RETURNING j.id, j.solution_submission_id, j.challenge_id, j.challenge_version_id, j.eval_type, j.status, j.attempt_count, j.payload_json
+        RETURNING j.id, j.solution_submission_id, j.challenge_id, j.challenge_version_id, j.benchmark_target_id, j.eval_type, j.status, j.attempt_count, j.payload_json
         "#
     )
     .bind(worker_id)
@@ -81,6 +82,7 @@ pub async fn claim_next_evaluation_job(
         solution_submission_id,
         challenge_id: r.try_get("challenge_id")?,
         challenge_version_id: r.try_get("challenge_version_id")?,
+        benchmark_target_id: r.try_get("benchmark_target_id")?,
         eval_type,
         status: r.try_get("status")?,
         attempt_count: r.try_get("attempt_count")?,
@@ -132,7 +134,7 @@ pub async fn queue_evaluation_job(
 
     let row = sqlx::query(
         r#"
-        SELECT s.id, s.challenge_id, s.challenge_version_id, s.agent_id, s.artifact_path, s.visible_after_eval,
+        SELECT s.id, s.challenge_id, s.challenge_version_id, s.benchmark_target_id, s.agent_id, s.artifact_path, s.visible_after_eval,
                pv.bundle_path, pv.spec_json
         FROM solution_submissions s
         JOIN challenge_versions pv ON pv.id = s.challenge_version_id
@@ -149,13 +151,15 @@ pub async fn queue_evaluation_job(
     let spec: ChallengeBundleSpec =
         serde_json::from_value(spec_json).map_err(|e| AppError::Internal(e.to_string()))?;
 
-    ensure_challenge_supports_eval_type(&spec, input.eval_type)?;
+    let benchmark_target_id: String = row.try_get("benchmark_target_id")?;
+    ensure_challenge_supports_eval_type(&spec, &benchmark_target_id, input.eval_type)?;
 
     let payload = serde_json::to_value(EvaluationJobPayload {
         artifact_path: row.try_get("artifact_path")?,
         bundle_path: row.try_get("bundle_path")?,
         challenge_id: row.try_get("challenge_id")?,
         challenge_version_id: row.try_get("challenge_version_id")?,
+        benchmark_target_id: benchmark_target_id.clone(),
     })
     .map_err(|e| AppError::Internal(e.to_string()))?;
 
@@ -168,14 +172,15 @@ pub async fn queue_evaluation_job(
 
     sqlx::query(
         r#"
-        INSERT INTO evaluation_jobs (id, solution_submission_id, challenge_id, challenge_version_id, eval_type, status, priority, payload_json)
-        VALUES ($1, $2, $3, $4, $5, 'queued', $6, $7)
+        INSERT INTO evaluation_jobs (id, solution_submission_id, challenge_id, challenge_version_id, benchmark_target_id, eval_type, status, priority, payload_json)
+        VALUES ($1, $2, $3, $4, $5, $6, 'queued', $7, $8)
         "#
     )
     .bind(&input.job_id)
     .bind(row.try_get::<String, _>("id")?)
     .bind(row.try_get::<String, _>("challenge_id")?)
     .bind(row.try_get::<String, _>("challenge_version_id")?)
+    .bind(&benchmark_target_id)
     .bind(eval_type_str)
     .bind(priority)
     .bind(&payload)
@@ -197,6 +202,7 @@ pub async fn queue_evaluation_job(
         solution_submission_id: row.try_get("id")?,
         challenge_id: row.try_get("challenge_id")?,
         challenge_version_id: row.try_get("challenge_version_id")?,
+        benchmark_target_id,
         eval_type: input.eval_type,
         status: "queued".to_string(),
         attempt_count: 0,

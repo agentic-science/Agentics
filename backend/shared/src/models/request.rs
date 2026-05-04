@@ -35,6 +35,7 @@ pub struct RegisterAgentResponse {
 #[serde(deny_unknown_fields)]
 pub struct CreateSolutionSubmissionRequest {
     pub challenge_id: String,
+    pub benchmark_target_id: String,
     pub artifact_base64: String,
     #[serde(default)]
     pub explanation: String,
@@ -51,6 +52,7 @@ pub struct CreateSolutionSubmissionResponse {
     pub status: String,
     pub challenge_id: String,
     pub challenge_version_id: String,
+    pub benchmark_target_id: String,
     pub artifact_path: String,
     pub evaluation_job_id: String,
     pub created_at: String,
@@ -64,6 +66,7 @@ pub struct SolutionSubmissionResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub challenge_title: Option<String>,
     pub challenge_version_id: String,
+    pub benchmark_target_id: String,
     pub agent_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_name: Option<String>,
@@ -92,6 +95,7 @@ pub struct PublicSolutionSubmissionListItemDto {
     pub id: String,
     pub challenge_id: String,
     pub challenge_version_id: String,
+    pub benchmark_target_id: String,
     pub challenge_title: String,
     pub agent_id: String,
     pub agent_name: String,
@@ -141,6 +145,7 @@ pub struct SolutionSubmissionArtifactResponse {
 /// One leaderboard row for an agent's best solution submission.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaderboardEntryDto {
+    pub benchmark_target_id: String,
     pub agent_id: String,
     pub agent_name: String,
     pub best_solution_submission_id: String,
@@ -156,6 +161,7 @@ pub struct LeaderboardEntryDto {
 /// Challenge leaderboard response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaderboardResponse {
+    pub benchmark_target_id: String,
     pub items: Vec<LeaderboardEntryDto>,
 }
 
@@ -195,6 +201,7 @@ pub struct AdminSolutionSubmissionListItemDto {
     pub id: String,
     pub challenge_id: String,
     pub challenge_title: String,
+    pub benchmark_target_id: String,
     pub agent_id: String,
     pub agent_name: String,
     pub status: String,
@@ -274,6 +281,7 @@ pub struct CreateChallengeVersionRequest {
 pub struct EvaluationJobResponse {
     pub job_id: String,
     pub solution_submission_id: String,
+    pub benchmark_target_id: String,
     pub eval_type: String,
     pub status: String,
 }

@@ -145,6 +145,7 @@ pub async fn run_worker_cycle(
             evaluation_id: evaluation_id.clone(),
             solution_submission_id: job.solution_submission_id.clone(),
             job_id: job.id.clone(),
+            benchmark_target_id: job.benchmark_target_id.clone(),
             eval_type: job.eval_type,
         },
     )
@@ -186,6 +187,7 @@ pub async fn run_worker_cycle(
                     evaluation_id,
                     solution_submission_id: solution_submission_id.clone(),
                     job_id: job_id.clone(),
+                    benchmark_target_id: job.benchmark_target_id.clone(),
                     eval_type: job.eval_type,
                     status: EvaluationStatus::Completed,
                     primary_score: Some(primary_score),
@@ -229,6 +231,7 @@ pub async fn run_worker_cycle(
                     evaluation_id,
                     solution_submission_id: job.solution_submission_id.clone(),
                     job_id: job.id.clone(),
+                    benchmark_target_id: job.benchmark_target_id.clone(),
                     eval_type: job.eval_type,
                     status: EvaluationStatus::Failed,
                     primary_score: None,

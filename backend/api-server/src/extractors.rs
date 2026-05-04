@@ -151,6 +151,7 @@ impl ValidateRequest for RegisterAgentRequest {
 impl ValidateRequest for CreateSolutionSubmissionRequest {
     fn validate(&self) -> Result<(), String> {
         require_non_empty(&self.challenge_id, "challenge_id")?;
+        require_non_empty(&self.benchmark_target_id, "benchmark_target_id")?;
         require_non_empty(&self.artifact_base64, "artifact_base64")
     }
 }

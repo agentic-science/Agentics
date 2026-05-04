@@ -24,7 +24,7 @@ use crate::config::Config;
 use crate::error::{AppError, Result};
 use crate::models::challenge::{
     ChallengeBundleSpec, ChallengeRunInputFile, ChallengeRunInterface, ChallengeRunManifest,
-    ChallengeRunSpec, MetricSchemaSpec, ResourceProfileSpec,
+    ChallengeRunSpec, DockerPlatform, MetricSchemaSpec, ResourceProfileSpec,
 };
 use crate::models::evaluation::{EvaluationJobPayload, ScorerRunResult, ScoringMode};
 use crate::storage::Storage;
@@ -55,6 +55,7 @@ struct ContainerRequest {
     env: Vec<String>,
     mounts: Vec<Mount>,
     working_dir: String,
+    docker_platform: DockerPlatform,
     limits: ZipProjectPhaseLimits,
 }
 
@@ -73,6 +74,7 @@ struct RunnerContext<'a> {
 
 struct SolutionRunRequest<'a> {
     profile: &'a ResourceProfileSpec,
+    docker_platform: DockerPlatform,
     manifest: &'a ZipProjectManifest,
     run_manifest: &'a ChallengeRunManifest,
     build_root: &'a Path,
@@ -82,6 +84,8 @@ struct SolutionRunRequest<'a> {
 struct ScorerRequest<'a> {
     eval_type: ScoringMode,
     spec: &'a ChallengeBundleSpec,
+    profile: &'a ResourceProfileSpec,
+    docker_platform: DockerPlatform,
     run_manifest_path: &'a str,
     bundle_dir: &'a Path,
     runs_root: &'a Path,
@@ -122,8 +126,17 @@ pub async fn execute_evaluation_job(
     let runner_context = RunnerContext { docker, job_id };
 
     let execution = async {
-        pre_pull_image(docker, &spec.resource_profile.solution_image).await?;
-        pre_pull_image(docker, &spec.resource_profile.scorer_image).await?;
+        let target = spec
+            .benchmark_target(&payload.benchmark_target_id)
+            .ok_or_else(|| {
+                AppError::Runner(format!(
+                    "challenge version does not declare benchmark target `{}`",
+                    payload.benchmark_target_id
+                ))
+            })?;
+        let profile = &target.resource_profile;
+        pre_pull_image(docker, &profile.solution_image, target.docker_platform).await?;
+        pre_pull_image(docker, &profile.scorer_image, target.docker_platform).await?;
 
         extract_zip_safe(&payload.artifact_path, &source_root).await?;
         let manifest = read_solution_manifest(&source_root, &spec).await?;
@@ -131,7 +144,8 @@ pub async fn execute_evaluation_job(
 
         run_setup_and_build(
             runner_context,
-            &spec.resource_profile,
+            profile,
+            target.docker_platform,
             &manifest,
             &build_root,
             &mut logs,
@@ -145,7 +159,8 @@ pub async fn execute_evaluation_job(
         run_solution_invocations(
             runner_context,
             SolutionRunRequest {
-                profile: &spec.resource_profile,
+                profile,
+                docker_platform: target.docker_platform,
                 manifest: &manifest,
                 run_manifest: &run_manifest,
                 build_root: &build_root,
@@ -160,6 +175,8 @@ pub async fn execute_evaluation_job(
             ScorerRequest {
                 eval_type,
                 spec: &spec,
+                profile,
+                docker_platform: target.docker_platform,
                 run_manifest_path,
                 bundle_dir,
                 runs_root: &runs_root,
@@ -213,6 +230,7 @@ async fn read_solution_manifest(
 async fn run_setup_and_build(
     runner: RunnerContext<'_>,
     profile: &ResourceProfileSpec,
+    docker_platform: DockerPlatform,
     manifest: &ZipProjectManifest,
     build_root: &Path,
     logs: &mut String,
@@ -233,6 +251,7 @@ async fn run_setup_and_build(
                 env: vec![format!("AGENTICS_PHASE={}", phase_name(&phase.name))],
                 mounts: vec![bind_mount(build_root, "/workspace", false)],
                 working_dir: "/workspace".to_string(),
+                docker_platform,
                 limits: limits.clone(),
             },
         )
@@ -296,6 +315,7 @@ async fn run_solution_invocations(
                     bind_mount(&io_root, "/io", false),
                 ],
                 working_dir: "/workspace".to_string(),
+                docker_platform: request.docker_platform,
                 limits: limits.clone(),
             },
         )
@@ -328,12 +348,12 @@ async fn run_scorer(
         format!("/challenge/{}", request.run_manifest_path),
     ]);
 
-    let limits = scorer_limits(&request.spec.resource_profile);
+    let limits = scorer_limits(request.profile);
     let outcome = run_container(
         runner.docker,
         ContainerRequest {
             name: container_name(runner.job_id, "scorer"),
-            image: request.spec.resource_profile.scorer_image.clone(),
+            image: request.profile.scorer_image.clone(),
             cmd,
             env: vec!["AGENTICS_PHASE=scorer".to_string()],
             mounts: vec![
@@ -342,6 +362,7 @@ async fn run_scorer(
                 bind_mount(request.scorer_output_root, "/output", false),
             ],
             working_dir: "/challenge".to_string(),
+            docker_platform: request.docker_platform,
             limits,
         },
     )
@@ -427,6 +448,7 @@ async fn run_container(docker: &Docker, request: ContainerRequest) -> Result<Con
 
     let create_opts = CreateContainerOptionsBuilder::default()
         .name(&request.name)
+        .platform(request.docker_platform.as_str())
         .build();
     let create_resp = docker
         .create_container(Some(create_opts), container_config)
@@ -663,7 +685,11 @@ fn extract_zip_safe_blocking(artifact_path: &str, target_dir: &Path) -> Result<(
 }
 
 /// Pull an image before creating a runner container.
-pub async fn pre_pull_image(docker: &Docker, image: &str) -> Result<()> {
+pub async fn pre_pull_image(
+    docker: &Docker,
+    image: &str,
+    docker_platform: DockerPlatform,
+) -> Result<()> {
     use bollard::query_parameters::CreateImageOptionsBuilder;
 
     if docker.inspect_image(image).await.is_ok() {
@@ -672,6 +698,7 @@ pub async fn pre_pull_image(docker: &Docker, image: &str) -> Result<()> {
 
     let opts = CreateImageOptionsBuilder::default()
         .from_image(image)
+        .platform(docker_platform.as_str())
         .build();
     let mut stream = docker.create_image(Some(opts), None, None);
     while let Some(item) = stream.next().await {

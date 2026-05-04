@@ -104,8 +104,7 @@ pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeLi
                 current_version: version_id
                     .zip(version)
                     .map(|(id, version)| crate::models::CurrentVersionDto { id, version }),
-                current_resource_profile: spec.as_ref().map(|spec| spec.resource_profile.clone()),
-                validation_enabled: spec.as_ref().map(|spec| spec.datasets.validation_enabled),
+                current_benchmark_targets: spec.as_ref().map(|spec| spec.benchmark_targets.clone()),
                 private_benchmark_enabled: spec
                     .as_ref()
                     .map(|spec| spec.datasets.private_benchmark_enabled),
