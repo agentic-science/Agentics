@@ -40,6 +40,16 @@ pub struct Config {
     pub max_active_official_jobs: u32,
     #[serde(default = "default_max_active_agents")]
     pub max_active_agents: u32,
+    #[serde(default = "default_max_active_challenge_drafts_per_agent")]
+    pub max_active_challenge_drafts_per_agent: u32,
+    #[serde(default = "default_challenge_private_asset_bytes_per_draft")]
+    pub challenge_private_asset_bytes_per_draft: u64,
+    #[serde(default = "default_challenge_draft_validations_per_day")]
+    pub challenge_draft_validations_per_day: u32,
+    #[serde(default = "default_challenge_draft_ttl_days")]
+    pub challenge_draft_ttl_days: i64,
+    #[serde(default = "default_unpublished_challenge_asset_grace_days")]
+    pub unpublished_challenge_asset_grace_days: i64,
     #[serde(default)]
     pub allow_public_agent_registration_on_non_loopback: bool,
     /// Optional Docker host URI used by CI or remote Docker setups.
@@ -105,6 +115,26 @@ fn default_max_active_agents() -> u32 {
     1_000
 }
 
+fn default_max_active_challenge_drafts_per_agent() -> u32 {
+    10
+}
+
+fn default_challenge_private_asset_bytes_per_draft() -> u64 {
+    250 * 1024 * 1024
+}
+
+fn default_challenge_draft_validations_per_day() -> u32 {
+    10
+}
+
+fn default_challenge_draft_ttl_days() -> i64 {
+    14
+}
+
+fn default_unpublished_challenge_asset_grace_days() -> i64 {
+    7
+}
+
 fn default_log_level() -> String {
     "info".to_string()
 }
@@ -150,6 +180,27 @@ impl Config {
         }
         if self.max_active_official_jobs == 0 {
             anyhow::bail!("AGENTICS_MAX_ACTIVE_OFFICIAL_JOBS must be greater than zero");
+        }
+        if self.max_active_challenge_drafts_per_agent == 0 {
+            anyhow::bail!(
+                "AGENTICS_MAX_ACTIVE_CHALLENGE_DRAFTS_PER_AGENT must be greater than zero"
+            );
+        }
+        if self.challenge_private_asset_bytes_per_draft == 0 {
+            anyhow::bail!(
+                "AGENTICS_CHALLENGE_PRIVATE_ASSET_BYTES_PER_DRAFT must be greater than zero"
+            );
+        }
+        if self.challenge_draft_validations_per_day == 0 {
+            anyhow::bail!("AGENTICS_CHALLENGE_DRAFT_VALIDATIONS_PER_DAY must be greater than zero");
+        }
+        if self.challenge_draft_ttl_days <= 0 {
+            anyhow::bail!("AGENTICS_CHALLENGE_DRAFT_TTL_DAYS must be greater than zero");
+        }
+        if self.unpublished_challenge_asset_grace_days <= 0 {
+            anyhow::bail!(
+                "AGENTICS_UNPUBLISHED_CHALLENGE_ASSET_GRACE_DAYS must be greater than zero"
+            );
         }
 
         Ok(())
@@ -209,6 +260,11 @@ mod tests {
             official_runs_per_agent_challenge_day: 5,
             max_active_official_jobs: 20,
             max_active_agents: 1_000,
+            max_active_challenge_drafts_per_agent: 10,
+            challenge_private_asset_bytes_per_draft: 250 * 1024 * 1024,
+            challenge_draft_validations_per_day: 10,
+            challenge_draft_ttl_days: 14,
+            unpublished_challenge_asset_grace_days: 7,
             allow_public_agent_registration_on_non_loopback: false,
             docker_host: None,
             log_level: "info".to_string(),
@@ -235,6 +291,11 @@ mod tests {
             official_runs_per_agent_challenge_day: 5,
             max_active_official_jobs: 20,
             max_active_agents: 1_000,
+            max_active_challenge_drafts_per_agent: 10,
+            challenge_private_asset_bytes_per_draft: 250 * 1024 * 1024,
+            challenge_draft_validations_per_day: 10,
+            challenge_draft_ttl_days: 14,
+            unpublished_challenge_asset_grace_days: 7,
             allow_public_agent_registration_on_non_loopback: false,
             docker_host: None,
             log_level: "info".to_string(),

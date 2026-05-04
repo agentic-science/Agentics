@@ -5,7 +5,10 @@ mod helpers;
 use std::path::Path;
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use helpers::{api_url, basic_auth_header, spawn_app_with_config, test_config};
+use helpers::{
+    api_url, basic_auth_header, sample_sum_solution, solution_zip_base64, spawn_app_with_config,
+    test_config, zip_project_zip_base64,
+};
 use serde_json::json;
 
 #[sqlx::test(migrations = "../migrations")]
@@ -13,7 +16,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
     let public_repo = tempfile::tempdir().expect("public repo tempdir");
-    write_public_challenge(public_repo.path(), "v1", None);
+    write_public_challenge(public_repo.path(), "new_challenge", "v1", None);
 
     let config = test_config(storage.path(), seeded_challenges.path());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
@@ -68,7 +71,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
             "asset_id": "official-cases",
             "kind": "private_benchmark_data",
             "required": false,
-            "asset_base64": STANDARD.encode(b"[]")
+            "asset_base64": private_benchmark_asset_zip_base64()
         }))
         .send()
         .await
@@ -79,7 +82,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
         .await
         .expect("asset json");
     assert_eq!(asset["required"], true);
-    assert_eq!(asset["size_bytes"], 2);
+    assert!(asset["size_bytes"].as_i64().expect("asset size") > 2);
 
     let validated: serde_json::Value = client
         .post(api_url(
@@ -132,6 +135,18 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
         .expect("published json");
     assert_eq!(published["status"], "published");
     assert_eq!(published["published_challenge_version_id"], "sample-sum:v1");
+    let bundle_path: String =
+        sqlx::query_scalar("SELECT bundle_path FROM challenge_versions WHERE id = $1")
+            .bind("sample-sum:v1")
+            .fetch_one(&pool)
+            .await
+            .expect("bundle path");
+    assert!(
+        std::path::Path::new(&bundle_path)
+            .join("private-benchmark/runs.json")
+            .exists(),
+        "publish should assemble a runtime bundle with uploaded private benchmark data"
+    );
 
     let public_challenge: serde_json::Value = client
         .get(api_url(&app, "/api/public/challenges/sample-sum"))
@@ -147,6 +162,153 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
 }
 
 #[sqlx::test(migrations = "../migrations")]
+async fn new_version_publish_supersedes_previous_current_version(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("storage tempdir");
+    let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
+    let public_repo = tempfile::tempdir().expect("public repo tempdir");
+    write_public_challenge(public_repo.path(), "new_challenge", "v1", None);
+
+    let config = test_config(storage.path(), seeded_challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let client = reqwest::Client::new();
+    let token = register_agent(&pool, "creator-agent").await;
+    let bearer = format!("Bearer {token}");
+    let admin_auth = basic_auth_header(&config.admin_username, &config.admin_password);
+
+    link_creator_identity(&client, &app, &bearer).await;
+    create_validate_approve_publish_draft(
+        &client,
+        &app,
+        &bearer,
+        &admin_auth,
+        public_repo.path(),
+        21,
+        manifest_json("new_challenge", "v1", None),
+    )
+    .await;
+
+    write_public_challenge(public_repo.path(), "new_version", "v2", Some("v1"));
+    let published_v2 = create_validate_approve_publish_draft(
+        &client,
+        &app,
+        &bearer,
+        &admin_auth,
+        public_repo.path(),
+        22,
+        manifest_json("new_version", "v2", Some("v1")),
+    )
+    .await;
+
+    assert_eq!(
+        published_v2["published_challenge_version_id"],
+        "sample-sum:v2"
+    );
+
+    let versions = sqlx::query_as::<_, (String, String)>(
+        "SELECT version, status FROM challenge_versions WHERE challenge_id = $1 ORDER BY version",
+    )
+    .bind("sample-sum")
+    .fetch_all(&pool)
+    .await
+    .expect("version statuses");
+    assert_eq!(
+        versions,
+        vec![
+            ("v1".to_string(), "superseded".to_string()),
+            ("v2".to_string(), "published".to_string())
+        ]
+    );
+
+    let current_version_id: String =
+        sqlx::query_scalar("SELECT current_version_id FROM challenges WHERE id = $1")
+            .bind("sample-sum")
+            .fetch_one(&pool)
+            .await
+            .expect("current version");
+    assert_eq!(current_version_id, "sample-sum:v2");
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("storage tempdir");
+    let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
+    let public_repo = tempfile::tempdir().expect("public repo tempdir");
+    write_public_challenge(public_repo.path(), "new_challenge", "v1", None);
+
+    let config = test_config(storage.path(), seeded_challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let client = reqwest::Client::new();
+    let creator_token = register_agent(&pool, "creator-agent").await;
+    let participant_token = register_agent(&pool, "participant-agent").await;
+    let creator_bearer = format!("Bearer {creator_token}");
+    let participant_bearer = format!("Bearer {participant_token}");
+    let admin_auth = basic_auth_header(&config.admin_username, &config.admin_password);
+
+    link_creator_identity(&client, &app, &creator_bearer).await;
+    create_validate_approve_publish_draft(
+        &client,
+        &app,
+        &creator_bearer,
+        &admin_auth,
+        public_repo.path(),
+        31,
+        manifest_json("new_challenge", "v1", None),
+    )
+    .await;
+
+    write_archive_manifest(public_repo.path());
+    create_validate_approve_publish_draft(
+        &client,
+        &app,
+        &creator_bearer,
+        &admin_auth,
+        public_repo.path(),
+        32,
+        archive_manifest_json(),
+    )
+    .await;
+
+    let list: serde_json::Value = client
+        .get(api_url(&app, "/api/public/challenges"))
+        .send()
+        .await
+        .expect("challenge list")
+        .error_for_status()
+        .expect("list should succeed")
+        .json()
+        .await
+        .expect("list json");
+    assert!(
+        list["items"]
+            .as_array()
+            .expect("items")
+            .iter()
+            .all(|item| item["id"] != "sample-sum")
+    );
+
+    client
+        .get(api_url(&app, "/api/public/challenges/sample-sum"))
+        .send()
+        .await
+        .expect("archived detail")
+        .error_for_status()
+        .expect("archived direct detail should remain readable");
+
+    let response = client
+        .post(api_url(&app, "/api/solution-submissions"))
+        .header("Authorization", participant_bearer)
+        .json(&json!({
+            "challenge_id": "sample-sum",
+            "benchmark_target_id": "cpu-linux-arm64",
+            "artifact_base64": solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"))
+        }))
+        .send()
+        .await
+        .expect("submission request");
+    assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+}
+
+#[sqlx::test(migrations = "../migrations")]
 async fn challenge_draft_rejects_mismatched_pr_author(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
@@ -156,18 +318,7 @@ async fn challenge_draft_rejects_mismatched_pr_author(pool: sqlx::PgPool) {
     let token = register_agent(&pool, "creator-agent").await;
     let bearer = format!("Bearer {token}");
 
-    client
-        .post(api_url(&app, "/api/challenge-creator/github-identity"))
-        .header("Authorization", &bearer)
-        .json(&json!({
-            "github_user_id": 1001,
-            "github_login": "creator"
-        }))
-        .send()
-        .await
-        .expect("identity request")
-        .error_for_status()
-        .expect("identity should link");
+    link_creator_identity(&client, &app, &bearer).await;
 
     let response = client
         .post(api_url(&app, "/api/challenge-drafts"))
@@ -198,18 +349,7 @@ async fn private_asset_upload_rejects_duplicate_asset_id(pool: sqlx::PgPool) {
     let token = register_agent(&pool, "creator-agent").await;
     let bearer = format!("Bearer {token}");
 
-    client
-        .post(api_url(&app, "/api/challenge-creator/github-identity"))
-        .header("Authorization", &bearer)
-        .json(&json!({
-            "github_user_id": 1001,
-            "github_login": "creator"
-        }))
-        .send()
-        .await
-        .expect("identity request")
-        .error_for_status()
-        .expect("identity should link");
+    link_creator_identity(&client, &app, &bearer).await;
     let draft: serde_json::Value = client
         .post(api_url(&app, "/api/challenge-drafts"))
         .header("Authorization", &bearer)
@@ -251,6 +391,294 @@ async fn private_asset_upload_rejects_duplicate_asset_id(pool: sqlx::PgPool) {
     }
 }
 
+#[sqlx::test(migrations = "../migrations")]
+async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("storage tempdir");
+    let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
+    let public_repo = tempfile::tempdir().expect("public repo tempdir");
+    write_public_challenge(public_repo.path(), "new_challenge", "v1", None);
+
+    let mut config = test_config(storage.path(), seeded_challenges.path());
+    config.max_active_challenge_drafts_per_agent = 1;
+    config.challenge_draft_validations_per_day = 1;
+    config.challenge_private_asset_bytes_per_draft = 1;
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let client = reqwest::Client::new();
+    let token = register_agent(&pool, "quota-creator").await;
+    let bearer = format!("Bearer {token}");
+    let admin_auth = basic_auth_header(&config.admin_username, &config.admin_password);
+
+    link_creator_identity(&client, &app, &bearer).await;
+    let draft: serde_json::Value = create_draft(
+        &client,
+        &app,
+        &bearer,
+        41,
+        manifest_json("new_challenge", "v1", None),
+    )
+    .await;
+    let draft_id = draft["id"].as_str().expect("draft id");
+
+    let quota_response = client
+        .post(api_url(&app, "/api/challenge-drafts"))
+        .header("Authorization", &bearer)
+        .json(&json!({
+            "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
+            "pr_number": 42,
+            "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/42",
+            "commit_sha": "0123456789abcde42",
+            "challenge_path": "challenges/sample-sum",
+            "pr_author_github_user_id": 1001,
+            "manifest": manifest_json("new_challenge", "v1", None)
+        }))
+        .send()
+        .await
+        .expect("draft quota request");
+    assert_eq!(
+        quota_response.status(),
+        reqwest::StatusCode::TOO_MANY_REQUESTS
+    );
+
+    let asset_response = client
+        .post(api_url(
+            &app,
+            &format!("/api/challenge-drafts/{draft_id}/private-assets"),
+        ))
+        .header("Authorization", &bearer)
+        .json(&json!({
+            "asset_id": "official-cases",
+            "kind": "private_benchmark_data",
+            "asset_base64": STANDARD.encode(b"[]")
+        }))
+        .send()
+        .await
+        .expect("asset quota request");
+    assert_eq!(asset_response.status(), reqwest::StatusCode::BAD_REQUEST);
+
+    client
+        .post(api_url(
+            &app,
+            &format!("/admin/challenge-drafts/{draft_id}/validate"),
+        ))
+        .header("Authorization", &admin_auth)
+        .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
+        .send()
+        .await
+        .expect("first validation")
+        .error_for_status()
+        .expect("first validation should pass");
+    let validation_quota_response = client
+        .post(api_url(
+            &app,
+            &format!("/admin/challenge-drafts/{draft_id}/validate"),
+        ))
+        .header("Authorization", &admin_auth)
+        .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
+        .send()
+        .await
+        .expect("second validation");
+    assert_eq!(
+        validation_quota_response.status(),
+        reqwest::StatusCode::TOO_MANY_REQUESTS
+    );
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("storage tempdir");
+    let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
+    let mut config = test_config(storage.path(), seeded_challenges.path());
+    config.unpublished_challenge_asset_grace_days = 1;
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let client = reqwest::Client::new();
+    let token = register_agent(&pool, "cleanup-creator").await;
+    let bearer = format!("Bearer {token}");
+    let admin_auth = basic_auth_header(&config.admin_username, &config.admin_password);
+
+    link_creator_identity(&client, &app, &bearer).await;
+    let draft = create_draft(
+        &client,
+        &app,
+        &bearer,
+        51,
+        manifest_json("new_challenge", "v1", None),
+    )
+    .await;
+    let draft_id = draft["id"].as_str().expect("draft id");
+
+    let asset: serde_json::Value = client
+        .post(api_url(
+            &app,
+            &format!("/api/challenge-drafts/{draft_id}/private-assets"),
+        ))
+        .header("Authorization", &bearer)
+        .json(&json!({
+            "asset_id": "official-cases",
+            "kind": "private_benchmark_data",
+            "asset_base64": STANDARD.encode(b"private")
+        }))
+        .send()
+        .await
+        .expect("asset upload")
+        .error_for_status()
+        .expect("asset should upload")
+        .json()
+        .await
+        .expect("asset json");
+    let storage_uri = asset["storage_uri"]
+        .as_str()
+        .expect("storage uri")
+        .to_string();
+    assert!(std::path::Path::new(&storage_uri).exists());
+
+    client
+        .post(api_url(
+            &app,
+            &format!("/admin/challenge-drafts/{draft_id}/abandon"),
+        ))
+        .header("Authorization", &admin_auth)
+        .json(&json!({ "message": "closed PR" }))
+        .send()
+        .await
+        .expect("abandon")
+        .error_for_status()
+        .expect("abandon should succeed");
+    sqlx::query("UPDATE challenge_drafts SET updated_at = NOW() - INTERVAL '2 days' WHERE id = $1")
+        .bind(draft_id)
+        .execute(&pool)
+        .await
+        .expect("age draft");
+
+    let cleanup: serde_json::Value = client
+        .post(api_url(&app, "/admin/challenge-drafts/cleanup"))
+        .header("Authorization", &admin_auth)
+        .send()
+        .await
+        .expect("cleanup")
+        .error_for_status()
+        .expect("cleanup should succeed")
+        .json()
+        .await
+        .expect("cleanup json");
+    assert_eq!(cleanup["purged_private_assets"], 1);
+    assert!(!std::path::Path::new(&storage_uri).exists());
+}
+
+async fn link_creator_identity(client: &reqwest::Client, app: &helpers::TestApp, bearer: &str) {
+    client
+        .post(api_url(app, "/api/challenge-creator/github-identity"))
+        .header("Authorization", bearer)
+        .json(&json!({
+            "github_user_id": 1001,
+            "github_login": "creator"
+        }))
+        .send()
+        .await
+        .expect("identity request")
+        .error_for_status()
+        .expect("identity should link");
+}
+
+async fn create_validate_approve_publish_draft(
+    client: &reqwest::Client,
+    app: &helpers::TestApp,
+    bearer: &str,
+    admin_auth: &str,
+    public_repo: &Path,
+    pr_number: i32,
+    manifest: serde_json::Value,
+) -> serde_json::Value {
+    let draft = create_draft(client, app, bearer, pr_number, manifest).await;
+    let draft_id = draft["id"].as_str().expect("draft id");
+    if draft["request"] != "archive_challenge" {
+        client
+            .post(api_url(
+                app,
+                &format!("/api/challenge-drafts/{draft_id}/private-assets"),
+            ))
+            .header("Authorization", bearer)
+            .json(&json!({
+                "asset_id": "official-cases",
+                "kind": "private_benchmark_data",
+                "asset_base64": private_benchmark_asset_zip_base64()
+            }))
+            .send()
+            .await
+            .expect("private asset request")
+            .error_for_status()
+            .expect("private asset should upload");
+    }
+
+    client
+        .post(api_url(
+            app,
+            &format!("/admin/challenge-drafts/{draft_id}/validate"),
+        ))
+        .header("Authorization", admin_auth)
+        .json(&json!({ "repository_path": public_repo.to_string_lossy() }))
+        .send()
+        .await
+        .expect("validate request")
+        .error_for_status()
+        .expect("draft should validate");
+    client
+        .post(api_url(
+            app,
+            &format!("/admin/challenge-drafts/{draft_id}/approve"),
+        ))
+        .header("Authorization", admin_auth)
+        .json(&json!({ "message": "approved" }))
+        .send()
+        .await
+        .expect("approve request")
+        .error_for_status()
+        .expect("draft should approve");
+    client
+        .post(api_url(
+            app,
+            &format!("/admin/challenge-drafts/{draft_id}/publish"),
+        ))
+        .header("Authorization", admin_auth)
+        .json(&json!({ "repository_path": public_repo.to_string_lossy() }))
+        .send()
+        .await
+        .expect("publish request")
+        .error_for_status()
+        .expect("draft should publish")
+        .json()
+        .await
+        .expect("publish json")
+}
+
+async fn create_draft(
+    client: &reqwest::Client,
+    app: &helpers::TestApp,
+    bearer: &str,
+    pr_number: i32,
+    manifest: serde_json::Value,
+) -> serde_json::Value {
+    client
+        .post(api_url(app, "/api/challenge-drafts"))
+        .header("Authorization", bearer)
+        .json(&json!({
+            "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
+            "pr_number": pr_number,
+            "pr_url": format!("https://github.com/agentics-reifying/agentics-challenges/pull/{pr_number}"),
+            "commit_sha": format!("0123456789abcde{pr_number:x}"),
+            "challenge_path": "challenges/sample-sum",
+            "pr_author_github_user_id": 1001,
+            "manifest": manifest
+        }))
+        .send()
+        .await
+        .expect("draft request")
+        .error_for_status()
+        .expect("draft should create")
+        .json()
+        .await
+        .expect("draft json")
+}
+
 async fn register_agent(pool: &sqlx::PgPool, name: &str) -> String {
     let token = shared::auth::create_agent_token();
     let token_hash = shared::auth::hash_agent_token(&token);
@@ -271,7 +699,12 @@ async fn register_agent(pool: &sqlx::PgPool, name: &str) -> String {
     token
 }
 
-fn write_public_challenge(repo: &Path, version: &str, supersedes_version: Option<&str>) {
+fn write_public_challenge(
+    repo: &Path,
+    request: &str,
+    version: &str,
+    supersedes_version: Option<&str>,
+) {
     let challenge_root = repo.join("challenges/sample-sum");
     std::fs::create_dir_all(challenge_root.join(format!("versions/{version}/public")))
         .expect("public dir");
@@ -288,11 +721,16 @@ fn write_public_challenge(repo: &Path, version: &str, supersedes_version: Option
                     "run_id": "case-1",
                     "interface": "stdio",
                     "stdin_json": { "a": 1, "b": 2 },
+                    "expected": "3",
                     "output_files": []
                 }
             ]
         })
         .to_string(),
+    );
+    write_file(
+        &challenge_root.join(format!("versions/{version}/scorer/run.py")),
+        SAMPLE_SUM_SCORER,
     );
     write_file(
         &challenge_root.join(format!("versions/{version}/spec.json")),
@@ -360,7 +798,15 @@ fn write_public_challenge(repo: &Path, version: &str, supersedes_version: Option
     );
     write_file(
         &challenge_root.join("agentics.challenge.json"),
-        &manifest_json("new_challenge", version, supersedes_version).to_string(),
+        &manifest_json(request, version, supersedes_version).to_string(),
+    );
+}
+
+fn write_archive_manifest(repo: &Path) {
+    let challenge_root = repo.join("challenges/sample-sum");
+    write_file(
+        &challenge_root.join("agentics.challenge.json"),
+        &archive_manifest_json().to_string(),
     );
 }
 
@@ -395,9 +841,96 @@ fn manifest_json(
     })
 }
 
+fn archive_manifest_json() -> serde_json::Value {
+    json!({
+        "schema_version": 1,
+        "request": "archive_challenge",
+        "challenge_id": "sample-sum",
+        "title": "Sample Sum",
+        "summary": "Add numbers",
+        "readme_path": "README.md",
+        "archive": {
+            "reason": "Retired for MVP lifecycle testing"
+        }
+    })
+}
+
 fn write_file(path: &Path, content: &str) {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).expect("parent dir");
     }
     std::fs::write(path, content).expect("write file");
 }
+
+fn private_benchmark_asset_zip_base64() -> String {
+    zip_project_zip_base64(vec![
+        (
+            "private-benchmark/runs.json",
+            json!({
+                "runs": [
+                    {
+                        "run_id": "private-benchmark-1",
+                        "interface": "stdio",
+                        "stdin_json": { "a": 20, "b": 22 },
+                        "expected": "42",
+                        "output_files": []
+                    }
+                ]
+            })
+            .to_string(),
+        ),
+        (
+            "private-benchmark/cases.json",
+            json!({ "cases": [{ "case_id": "private-benchmark-1" }] }).to_string(),
+        ),
+    ])
+}
+
+const SAMPLE_SUM_SCORER: &str = r#"from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--solution-runs-dir", required=True)
+    parser.add_argument("--output-path", required=True)
+    parser.add_argument("--mode", choices=["validation", "official"], required=True)
+    parser.add_argument("--runs-file", required=True)
+    parser.add_argument("--challenge-dir", required=True)
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    runs = json.loads(Path(args.runs_file).read_text(encoding="utf-8"))["runs"]
+    results = []
+    for run in runs:
+        stdout = (Path(args.solution_runs_dir) / run["run_id"] / "stdout.txt").read_text(encoding="utf-8").strip()
+        passed = stdout == str(run["expected"])
+        results.append({"case_id": run["run_id"], "status": "passed" if passed else "failed", "score": 1 if passed else 0})
+    passed_count = sum(1 for result in results if result["status"] == "passed")
+    total = len(results)
+    score = 0 if total == 0 else passed_count / total
+    payload = {
+        "status": "passed" if passed_count == total else "failed",
+        "mode": args.mode,
+        "primary_score": score,
+        "rank_score": score,
+        "aggregate_metrics": [{"metric_id": "score", "value": score}],
+        "run_metrics": [{"run_id": result["case_id"], "metrics": [{"metric_id": "score", "value": result["score"]}]} for result in results],
+        "public_results": results if args.mode == "validation" else [],
+    }
+    if args.mode == "validation":
+        payload["validation_summary"] = {"score": score, "passed": passed_count, "total": total}
+    else:
+        payload["official_summary"] = {"score": score, "passed": passed_count, "total": total}
+    Path(args.output_path).write_text(json.dumps(payload), encoding="utf-8")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+"#;

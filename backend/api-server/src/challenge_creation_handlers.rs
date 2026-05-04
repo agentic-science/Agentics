@@ -1,25 +1,34 @@
 //! HTTP handlers for GitHub-backed challenge creation drafts.
 
+use std::{
+    collections::HashSet,
+    io::Cursor,
+    path::{Path, PathBuf},
+};
+
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path as AxumPath, State},
     http::StatusCode,
 };
 use uuid::Uuid;
 
 use shared::error::{AppError, Result};
 use shared::models::challenge_creation::{
-    ChallengeCreationRequestKind, ChallengeDraftListResponse, ChallengeDraftResponse,
-    ChallengeDraftStatus, ChallengeDraftValidationStatus, ChallengePrivateAssetResponse,
-    CreateChallengeDraftRequest, GithubIdentityResponse, LinkGithubIdentityRequest,
-    ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest, ValidateChallengeDraftRequest,
+    ChallengeCreationManifest, ChallengeCreationRequestKind, ChallengeCreationVersionSpec,
+    ChallengeDraftCleanupResponse, ChallengeDraftListResponse, ChallengeDraftResponse,
+    ChallengeDraftStatus, ChallengeDraftValidationStatus, ChallengePrivateAssetKind,
+    ChallengePrivateAssetResponse, CreateChallengeDraftRequest, GithubIdentityResponse,
+    LinkGithubIdentityRequest, ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest,
+    ValidateChallengeDraftRequest,
 };
 use shared::{challenge_bundle, challenge_creation, db};
 
 use crate::extractors::{AdminAuth, AgentAuth, ValidatedJson};
 use crate::state::AppState;
 
-const MAX_PRIVATE_ASSET_BYTES: u64 = 100 * 1024 * 1024;
+const CHALLENGE_DRAFT_QUOTA_WINDOW_SECONDS: i64 = 24 * 60 * 60;
+const MAX_PRIVATE_ASSET_FILE_COUNT: usize = 1024;
 
 /// Link the authenticated agent to a GitHub identity that admins have verified.
 pub async fn link_github_identity(
@@ -62,6 +71,14 @@ pub async fn create_challenge_draft(
         return Err(AppError::BadRequest(format!(
             "PR author GitHub user id {} does not match linked agent GitHub user id {}",
             body.pr_author_github_user_id, identity.github_user_id
+        )));
+    }
+    let active_drafts =
+        db::count_active_challenge_drafts_for_agent(&state.db, &agent.agent_id).await?;
+    let max_active_drafts = i64::from(state.config.max_active_challenge_drafts_per_agent);
+    if active_drafts >= max_active_drafts {
+        return Err(AppError::TooManyRequests(format!(
+            "challenge draft quota exceeded: {active_drafts} of {max_active_drafts} active drafts are already open"
         )));
     }
 
@@ -110,7 +127,7 @@ pub async fn create_challenge_draft(
 pub async fn get_challenge_draft(
     State(state): State<AppState>,
     agent: AgentAuth,
-    Path(draft_id): Path<String>,
+    AxumPath(draft_id): AxumPath<String>,
 ) -> Result<Json<ChallengeDraftResponse>> {
     let draft = db::get_challenge_draft(&state.db, &draft_id)
         .await?
@@ -125,7 +142,7 @@ pub async fn get_challenge_draft(
 pub async fn upload_challenge_private_asset(
     State(state): State<AppState>,
     agent: AgentAuth,
-    Path(draft_id): Path<String>,
+    AxumPath(draft_id): AxumPath<String>,
     ValidatedJson(body): ValidatedJson<UploadChallengePrivateAssetRequest>,
 ) -> Result<(StatusCode, Json<ChallengePrivateAssetResponse>)> {
     validate_private_asset_id(&body.asset_id)?;
@@ -164,10 +181,20 @@ pub async fn upload_challenge_private_asset(
     }
 
     let asset_bytes = base64_decode(&body.asset_base64).ok_or(AppError::Base64)?;
-    if asset_bytes.len() as u64 > MAX_PRIVATE_ASSET_BYTES {
+    if asset_bytes.len() as u64 > state.config.challenge_private_asset_bytes_per_draft {
         return Err(AppError::BadRequest(format!(
             "private asset must be at most {} bytes",
-            MAX_PRIVATE_ASSET_BYTES
+            state.config.challenge_private_asset_bytes_per_draft
+        )));
+    }
+    let existing_bytes = db::sum_private_asset_bytes_for_draft(&state.db, &draft.id).await?;
+    let next_total = existing_bytes
+        .checked_add(asset_bytes.len() as i64)
+        .ok_or_else(|| AppError::BadRequest("private asset size overflow".to_string()))?;
+    if next_total as u64 > state.config.challenge_private_asset_bytes_per_draft {
+        return Err(AppError::TooManyRequests(format!(
+            "private asset quota exceeded for draft `{}`: {} of {} bytes would be used",
+            draft.id, next_total, state.config.challenge_private_asset_bytes_per_draft
         )));
     }
     let sha256 = challenge_creation::sha256_hex(&asset_bytes);
@@ -235,12 +262,25 @@ pub async fn list_admin_challenge_drafts(
 pub async fn validate_challenge_draft(
     admin: AdminAuth,
     State(state): State<AppState>,
-    Path(draft_id): Path<String>,
+    AxumPath(draft_id): AxumPath<String>,
     ValidatedJson(body): ValidatedJson<ValidateChallengeDraftRequest>,
 ) -> Result<Json<ChallengeDraftResponse>> {
     let draft = db::get_challenge_draft(&state.db, &draft_id)
         .await?
         .ok_or(AppError::NotFound)?;
+    let recent_validations = db::count_recent_challenge_draft_validations(
+        &state.db,
+        &draft.id,
+        CHALLENGE_DRAFT_QUOTA_WINDOW_SECONDS,
+    )
+    .await?;
+    let validation_limit = i64::from(state.config.challenge_draft_validations_per_day);
+    if recent_validations >= validation_limit {
+        return Err(AppError::TooManyRequests(format!(
+            "challenge draft validation quota exceeded for `{}`: {} of {} validations used in the last 24 hours",
+            draft.id, recent_validations, validation_limit
+        )));
+    }
     let repository_path = body.repository_path.trim();
     let validation = validate_draft_repository(&draft, repository_path).await;
 
@@ -304,11 +344,69 @@ pub async fn validate_challenge_draft(
     }
 }
 
+/// Mark a draft abandoned when the backing PR is closed without merge or the
+/// creator withdraws the request.
+pub async fn abandon_challenge_draft(
+    admin: AdminAuth,
+    State(state): State<AppState>,
+    AxumPath(draft_id): AxumPath<String>,
+    ValidatedJson(body): ValidatedJson<ReviewChallengeDraftRequest>,
+) -> Result<Json<ChallengeDraftResponse>> {
+    db::abandon_challenge_draft(&state.db, &draft_id, non_empty_message(&body.message)).await?;
+    db::create_challenge_draft_audit_event(
+        &state.db,
+        &db::CreateChallengeDraftAuditEventInput {
+            event_id: Uuid::new_v4().to_string(),
+            draft_id: draft_id.clone(),
+            actor_agent_id: None,
+            actor_admin_username: Some(admin.username),
+            action: "draft_abandoned".to_string(),
+            message: body.message.trim().to_string(),
+            metadata: serde_json::json!({}),
+        },
+    )
+    .await?;
+
+    Ok(Json(
+        db::get_challenge_draft(&state.db, &draft_id)
+            .await?
+            .ok_or(AppError::NotFound)?,
+    ))
+}
+
+/// Expire stale drafts and purge private assets for rejected or abandoned
+/// unpublished drafts after the configured grace period.
+pub async fn cleanup_challenge_drafts(
+    _admin: AdminAuth,
+    State(state): State<AppState>,
+) -> Result<Json<ChallengeDraftCleanupResponse>> {
+    let abandoned =
+        db::abandon_stale_challenge_drafts(&state.db, state.config.challenge_draft_ttl_days)
+            .await?;
+    let purge_candidates = db::list_unpublished_private_assets_for_purge(
+        &state.db,
+        state.config.unpublished_challenge_asset_grace_days,
+    )
+    .await?;
+
+    let mut purged = 0;
+    for asset in purge_candidates {
+        state.storage.delete(&asset.storage_uri).await?;
+        db::delete_challenge_private_asset(&state.db, &asset.id).await?;
+        purged += 1;
+    }
+
+    Ok(Json(ChallengeDraftCleanupResponse {
+        abandoned_drafts: abandoned,
+        purged_private_assets: purged,
+    }))
+}
+
 /// Approve a validated draft for publishing.
 pub async fn approve_challenge_draft(
     admin: AdminAuth,
     State(state): State<AppState>,
-    Path(draft_id): Path<String>,
+    AxumPath(draft_id): AxumPath<String>,
     ValidatedJson(body): ValidatedJson<ReviewChallengeDraftRequest>,
 ) -> Result<Json<ChallengeDraftResponse>> {
     let draft = db::get_challenge_draft(&state.db, &draft_id)
@@ -351,7 +449,7 @@ pub async fn approve_challenge_draft(
 pub async fn reject_challenge_draft(
     admin: AdminAuth,
     State(state): State<AppState>,
-    Path(draft_id): Path<String>,
+    AxumPath(draft_id): AxumPath<String>,
     ValidatedJson(body): ValidatedJson<ReviewChallengeDraftRequest>,
 ) -> Result<Json<ChallengeDraftResponse>> {
     let draft = db::get_challenge_draft(&state.db, &draft_id)
@@ -391,7 +489,7 @@ pub async fn reject_challenge_draft(
 pub async fn publish_challenge_draft(
     admin: AdminAuth,
     State(state): State<AppState>,
-    Path(draft_id): Path<String>,
+    AxumPath(draft_id): AxumPath<String>,
     ValidatedJson(body): ValidatedJson<ValidateChallengeDraftRequest>,
 ) -> Result<Json<ChallengeDraftResponse>> {
     let draft = db::get_challenge_draft(&state.db, &draft_id)
@@ -406,44 +504,44 @@ pub async fn publish_challenge_draft(
 
     let repository_path = body.repository_path.trim();
     validate_draft_repository(&draft, repository_path).await?;
-    let proposal_root = std::path::Path::new(repository_path).join(&draft.challenge_path);
+    let proposal_root = Path::new(repository_path).join(&draft.challenge_path);
     let manifest = challenge_creation::read_challenge_creation_manifest(&proposal_root).await?;
-    let Some(version) = manifest.version.as_ref() else {
-        return Err(AppError::BadRequest(
-            "archive challenge publishing is handled by the archive lifecycle milestone"
-                .to_string(),
-        ));
+    let published_version_id = match manifest.request {
+        ChallengeCreationRequestKind::ArchiveChallenge => {
+            db::archive_challenge(&state.db, &manifest.challenge_id).await?;
+            None
+        }
+        ChallengeCreationRequestKind::NewChallenge | ChallengeCreationRequestKind::NewVersion => {
+            let version = manifest.version.as_ref().ok_or_else(|| {
+                AppError::BadRequest("version is required for publishable drafts".to_string())
+            })?;
+            let bundle_path =
+                assemble_runtime_bundle(&state, &draft, &proposal_root, &manifest, version).await?;
+            let spec = challenge_bundle::read_challenge_bundle_spec(&bundle_path).await?;
+            db::create_or_update_challenge(
+                &state.db,
+                &manifest.challenge_id,
+                &manifest.challenge_id,
+                &manifest.title,
+                &manifest.summary,
+            )
+            .await?;
+            let statement_path = bundle_path.join("statement.md");
+            let published = db::publish_challenge_version(
+                &state.db,
+                &manifest.challenge_id,
+                &bundle_path.to_string_lossy(),
+                &statement_path.to_string_lossy(),
+                &spec,
+                &manifest.title,
+                &manifest.summary,
+            )
+            .await?;
+            Some(published.version_id)
+        }
     };
-
-    if manifest.request == ChallengeCreationRequestKind::ArchiveChallenge {
-        return Err(AppError::BadRequest(
-            "archive challenge publishing is handled by the archive lifecycle milestone"
-                .to_string(),
-        ));
-    }
-
-    let bundle_path = proposal_root.join(&version.bundle_path);
-    let spec = challenge_bundle::read_challenge_bundle_spec(&bundle_path).await?;
-    db::create_or_update_challenge(
-        &state.db,
-        &manifest.challenge_id,
-        &manifest.challenge_id,
-        &manifest.title,
-        &manifest.summary,
-    )
-    .await?;
-    let statement_path = bundle_path.join("statement.md");
-    let published = db::publish_challenge_version(
-        &state.db,
-        &manifest.challenge_id,
-        &bundle_path.to_string_lossy(),
-        &statement_path.to_string_lossy(),
-        &spec,
-        &manifest.title,
-        &manifest.summary,
-    )
-    .await?;
-    db::mark_challenge_draft_published(&state.db, &draft.id, &published.version_id).await?;
+    db::mark_challenge_draft_published(&state.db, &draft.id, published_version_id.as_deref())
+        .await?;
     db::create_challenge_draft_audit_event(
         &state.db,
         &db::CreateChallengeDraftAuditEventInput {
@@ -454,8 +552,8 @@ pub async fn publish_challenge_draft(
             action: "draft_published".to_string(),
             message: "challenge draft published".to_string(),
             metadata: serde_json::json!({
-                "challenge_id": &published.challenge_id,
-                "version_id": &published.version_id,
+                "challenge_id": &manifest.challenge_id,
+                "version_id": &published_version_id,
                 "repository_path": repository_path
             }),
         },
@@ -547,7 +645,7 @@ async fn validate_draft_repository(
     draft: &ChallengeDraftResponse,
     repository_path: &str,
 ) -> Result<String> {
-    let proposal_root = std::path::Path::new(repository_path).join(&draft.challenge_path);
+    let proposal_root = Path::new(repository_path).join(&draft.challenge_path);
     let manifest =
         challenge_creation::validate_challenge_creation_repository(&proposal_root).await?;
     let manifest_sha256 = challenge_creation::normalized_manifest_sha256(&manifest)?;
@@ -564,6 +662,202 @@ async fn validate_draft_repository(
         )));
     }
     Ok("challenge draft validation passed".to_string())
+}
+
+async fn assemble_runtime_bundle(
+    state: &AppState,
+    draft: &ChallengeDraftResponse,
+    proposal_root: &Path,
+    manifest: &ChallengeCreationManifest,
+    version: &ChallengeCreationVersionSpec,
+) -> Result<PathBuf> {
+    let public_bundle_path = proposal_root.join(&version.bundle_path);
+    let public_spec = challenge_bundle::read_challenge_bundle_spec(&public_bundle_path).await?;
+    validate_private_assets_for_publish(draft, manifest, &public_spec)?;
+
+    let runtime_bundle_path = Path::new(&state.config.storage_root)
+        .join("challenge-bundles")
+        .join(&manifest.challenge_id)
+        .join(&version.version)
+        .join(&draft.id);
+    copy_public_bundle_dir(&public_bundle_path, &runtime_bundle_path).await?;
+
+    for asset in &draft.private_assets {
+        let bytes = state.storage.get(&asset.storage_uri).await?;
+        extract_private_asset_overlay(
+            &bytes,
+            &runtime_bundle_path,
+            &asset.asset_id,
+            state.config.challenge_private_asset_bytes_per_draft,
+        )
+        .await?;
+    }
+
+    Ok(runtime_bundle_path)
+}
+
+fn validate_private_assets_for_publish(
+    draft: &ChallengeDraftResponse,
+    manifest: &ChallengeCreationManifest,
+    spec: &shared::models::challenge::ChallengeBundleSpec,
+) -> Result<()> {
+    let uploaded: HashSet<&str> = draft
+        .private_assets
+        .iter()
+        .map(|asset| asset.asset_id.as_str())
+        .collect();
+    for requirement in &manifest.private_assets {
+        if requirement.required && !uploaded.contains(requirement.asset_id.as_str()) {
+            return Err(AppError::BadRequest(format!(
+                "required private asset `{}` has not been uploaded",
+                requirement.asset_id
+            )));
+        }
+    }
+
+    let private_benchmark_uploaded = draft
+        .private_assets
+        .iter()
+        .any(|asset| asset.kind == ChallengePrivateAssetKind::PrivateBenchmarkData);
+    if spec.datasets.private_benchmark_enabled && !private_benchmark_uploaded {
+        return Err(AppError::BadRequest(
+            "private_benchmark_enabled challenges must upload a private_benchmark_data asset"
+                .to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+async fn copy_public_bundle_dir(source: &Path, target: &Path) -> Result<()> {
+    let source = source.to_path_buf();
+    let target = target.to_path_buf();
+    tokio::task::spawn_blocking(move || copy_public_bundle_dir_blocking(&source, &target))
+        .await
+        .map_err(|e| AppError::Internal(format!("bundle copy task failed: {e}")))?
+}
+
+fn copy_public_bundle_dir_blocking(source: &Path, target: &Path) -> Result<()> {
+    if target.exists() {
+        std::fs::remove_dir_all(target)?;
+    }
+    std::fs::create_dir_all(target)?;
+
+    let mut stack = vec![(source.to_path_buf(), target.to_path_buf())];
+    while let Some((current_source, current_target)) = stack.pop() {
+        for entry in std::fs::read_dir(&current_source)? {
+            let entry = entry?;
+            let source_path = entry.path();
+            let target_path = current_target.join(entry.file_name());
+            let meta = std::fs::symlink_metadata(&source_path)?;
+            if meta.file_type().is_symlink() {
+                return Err(AppError::Validation(format!(
+                    "public bundle must not contain symlinks: {}",
+                    source_path.display()
+                )));
+            }
+            if meta.is_dir() {
+                std::fs::create_dir_all(&target_path)?;
+                stack.push((source_path, target_path));
+            } else if meta.is_file() {
+                if let Some(parent) = target_path.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+                std::fs::copy(&source_path, &target_path)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn extract_private_asset_overlay(
+    bytes: &[u8],
+    target_dir: &Path,
+    asset_id: &str,
+    max_uncompressed_bytes: u64,
+) -> Result<()> {
+    let bytes = bytes.to_vec();
+    let target_dir = target_dir.to_path_buf();
+    let asset_id = asset_id.to_string();
+    tokio::task::spawn_blocking(move || {
+        extract_private_asset_overlay_blocking(
+            &bytes,
+            &target_dir,
+            &asset_id,
+            max_uncompressed_bytes,
+        )
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("private asset extraction task failed: {e}")))?
+}
+
+fn extract_private_asset_overlay_blocking(
+    bytes: &[u8],
+    target_dir: &Path,
+    asset_id: &str,
+    max_uncompressed_bytes: u64,
+) -> Result<()> {
+    let reader = Cursor::new(bytes);
+    let mut archive = zip::ZipArchive::new(reader)?;
+    if archive.len() > MAX_PRIVATE_ASSET_FILE_COUNT {
+        return Err(AppError::BadRequest(format!(
+            "private asset `{asset_id}` must contain at most {MAX_PRIVATE_ASSET_FILE_COUNT} entries"
+        )));
+    }
+
+    let mut total_uncompressed_size = 0u64;
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i)?;
+        if file
+            .unix_mode()
+            .is_some_and(|mode| mode & 0o170000 == 0o120000)
+        {
+            return Err(AppError::BadRequest(format!(
+                "private asset `{asset_id}` must not contain symlinks"
+            )));
+        }
+
+        let Some(relative_path) = file.enclosed_name() else {
+            continue;
+        };
+        let relative_path = relative_path.to_path_buf();
+        let relative_path_string = relative_path.to_string_lossy();
+        if !challenge_bundle::is_safe_relative_path(&relative_path_string) {
+            return Err(AppError::BadRequest(format!(
+                "private asset `{asset_id}` contains unsafe path `{relative_path_string}`"
+            )));
+        }
+        let output_path = target_dir.join(&relative_path);
+
+        total_uncompressed_size = total_uncompressed_size
+            .checked_add(file.size())
+            .ok_or_else(|| {
+                AppError::BadRequest(format!("private asset `{asset_id}` is too large"))
+            })?;
+        if total_uncompressed_size > max_uncompressed_bytes {
+            return Err(AppError::BadRequest(format!(
+                "private asset `{asset_id}` must expand to at most {max_uncompressed_bytes} bytes"
+            )));
+        }
+
+        if file.is_dir() {
+            std::fs::create_dir_all(&output_path)?;
+        } else {
+            if output_path.exists() {
+                return Err(AppError::BadRequest(format!(
+                    "private asset `{asset_id}` cannot overwrite bundle file `{relative_path_string}`"
+                )));
+            }
+            if let Some(parent) = output_path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            let mut outfile = std::fs::File::create(&output_path)?;
+            std::io::copy(&mut file, &mut outfile)?;
+        }
+    }
+
+    Ok(())
 }
 
 fn non_empty_message(value: &str) -> Option<&str> {

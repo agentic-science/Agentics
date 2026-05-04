@@ -116,6 +116,10 @@ pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeLi
 }
 
 /// Publish a validated bundle as the current challenge version.
+///
+/// Publishing a different version preserves older records and marks the
+/// previous current version `superseded` so historical leaderboards and
+/// solution submissions stay attached to the exact version they evaluated.
 pub async fn publish_challenge_version(
     pool: &PgPool,
     challenge_id: &str,
@@ -127,6 +131,24 @@ pub async fn publish_challenge_version(
 ) -> Result<CreateChallengeVersionResponse> {
     let version_id = format!("{}:{}", challenge_id, spec.challenge_version);
     let spec_json = serde_json::to_value(spec).map_err(|e| AppError::Internal(e.to_string()))?;
+
+    let mut tx = pool.begin().await?;
+
+    sqlx::query(
+        r#"
+        UPDATE challenge_versions pv
+        SET status = 'superseded'
+        FROM challenges p
+        WHERE p.id = $1
+          AND p.current_version_id = pv.id
+          AND pv.id <> $2
+          AND pv.status = 'published'
+        "#,
+    )
+    .bind(challenge_id)
+    .bind(&version_id)
+    .execute(&mut *tx)
+    .await?;
 
     let row = sqlx::query(
         r#"
@@ -168,8 +190,10 @@ pub async fn publish_challenge_version(
     .bind(&spec_json)
     .bind(title)
     .bind(summary)
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await?;
+
+    tx.commit().await?;
 
     Ok(CreateChallengeVersionResponse {
         challenge_id: row.try_get("challenge_id")?,
@@ -180,6 +204,28 @@ pub async fn publish_challenge_version(
         bundle_path: row.try_get("bundle_path")?,
         statement_path: row.try_get("statement_path")?,
     })
+}
+
+/// Archive a challenge shell while preserving versions, private assets, and
+/// historical solution submissions.
+pub async fn archive_challenge(pool: &PgPool, challenge_id: &str) -> Result<()> {
+    let result = sqlx::query(
+        r#"
+        UPDATE challenges
+        SET status = 'archived',
+            updated_at = NOW()
+        WHERE id = $1
+        "#,
+    )
+    .bind(challenge_id)
+    .execute(pool)
+    .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::NotFound);
+    }
+
+    Ok(())
 }
 
 /// List active challenges with their latest published version.
@@ -262,4 +308,51 @@ pub async fn get_published_challenge(
         })
     })
     .transpose()
+}
+
+/// Fetch one public challenge detail by id or slug, including archived records
+/// that are hidden from default browsing.
+pub async fn get_public_challenge(
+    pool: &PgPool,
+    challenge_id_or_slug: &str,
+) -> Result<Option<ChallengeVersionRecord>> {
+    let row = sqlx::query(
+        r#"
+        SELECT
+            p.id AS challenge_id,
+            p.slug,
+            p.title,
+            p.summary,
+            pv.id AS version_id,
+            pv.version,
+            pv.bundle_path,
+            pv.statement_path,
+            pv.spec_json
+        FROM challenges p
+        JOIN challenge_versions pv ON pv.id = p.current_version_id
+        WHERE p.status IN ('active', 'archived')
+          AND pv.status IN ('published', 'archived')
+          AND (p.id = $1 OR p.slug = $1)
+        LIMIT 1
+        "#,
+    )
+    .bind(challenge_id_or_slug)
+    .fetch_optional(pool)
+    .await?;
+
+    row.map(row_to_challenge_version_record).transpose()
+}
+
+fn row_to_challenge_version_record(r: sqlx::postgres::PgRow) -> Result<ChallengeVersionRecord> {
+    Ok(ChallengeVersionRecord {
+        challenge_id: r.try_get("challenge_id")?,
+        slug: r.try_get("slug")?,
+        title: r.try_get("title")?,
+        summary: r.try_get("summary")?,
+        challenge_version_id: r.try_get("version_id")?,
+        version: r.try_get("version")?,
+        bundle_path: r.try_get("bundle_path")?,
+        statement_path: r.try_get("statement_path")?,
+        spec_json: r.try_get("spec_json")?,
+    })
 }

@@ -135,7 +135,7 @@ async fn get_challenge_detail_response(
     state: AppState,
     id: String,
 ) -> Result<Json<shared::models::challenge::ChallengeDetailResponse>> {
-    let challenge = db::get_published_challenge(&state.db, &id).await?;
+    let challenge = db::get_public_challenge(&state.db, &id).await?;
     let challenge = challenge.ok_or(AppError::NotFound)?;
 
     let statement = tokio::fs::read_to_string(&challenge.statement_path).await?;

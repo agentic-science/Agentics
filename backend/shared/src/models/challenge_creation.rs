@@ -261,3 +261,11 @@ pub struct ReviewChallengeDraftRequest {
     #[serde(default)]
     pub message: String,
 }
+
+/// Admin response returned after abandoning stale drafts and deleting expired
+/// unpublished private asset records.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChallengeDraftCleanupResponse {
+    pub abandoned_drafts: i64,
+    pub purged_private_assets: i64,
+}

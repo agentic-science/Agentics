@@ -212,6 +212,61 @@ pub async fn list_challenge_drafts(
     Ok(drafts)
 }
 
+/// Count non-terminal drafts owned by an agent for creator quota enforcement.
+pub async fn count_active_challenge_drafts_for_agent(pool: &PgPool, agent_id: &str) -> Result<i64> {
+    let count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)::BIGINT
+        FROM challenge_drafts
+        WHERE creator_agent_id = $1
+          AND status IN ('draft', 'validated', 'approved')
+        "#,
+    )
+    .bind(agent_id)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(count)
+}
+
+/// Count validation attempts for one draft inside a rolling window.
+pub async fn count_recent_challenge_draft_validations(
+    pool: &PgPool,
+    draft_id: &str,
+    window_seconds: i64,
+) -> Result<i64> {
+    let count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)::BIGINT
+        FROM challenge_draft_validation_records
+        WHERE draft_id = $1
+          AND created_at >= NOW() - ($2::TEXT || ' seconds')::INTERVAL
+        "#,
+    )
+    .bind(draft_id)
+    .bind(window_seconds)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(count)
+}
+
+/// Sum private asset bytes already attached to a draft.
+pub async fn sum_private_asset_bytes_for_draft(pool: &PgPool, draft_id: &str) -> Result<i64> {
+    let bytes = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COALESCE(SUM(size_bytes), 0)::BIGINT
+        FROM challenge_private_assets
+        WHERE draft_id = $1
+        "#,
+    )
+    .bind(draft_id)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(bytes)
+}
+
 /// Insert a private benchmark asset record for a draft.
 pub async fn create_challenge_private_asset(
     pool: &PgPool,
@@ -334,11 +389,91 @@ pub async fn update_challenge_draft_status(
     Ok(())
 }
 
+/// Mark one draft abandoned unless it has already been published.
+pub async fn abandon_challenge_draft(
+    pool: &PgPool,
+    draft_id: &str,
+    message: Option<&str>,
+) -> Result<()> {
+    let result = sqlx::query(
+        r#"
+        UPDATE challenge_drafts
+        SET status = 'abandoned',
+            validation_message = COALESCE($2, validation_message),
+            updated_at = NOW()
+        WHERE id = $1
+          AND status <> 'published'
+        "#,
+    )
+    .bind(draft_id)
+    .bind(message)
+    .execute(pool)
+    .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::NotFound);
+    }
+    Ok(())
+}
+
+/// Mark inactive unpublished drafts abandoned after the configured TTL.
+pub async fn abandon_stale_challenge_drafts(pool: &PgPool, ttl_days: i64) -> Result<i64> {
+    let result = sqlx::query(
+        r#"
+        UPDATE challenge_drafts
+        SET status = 'abandoned',
+            validation_message = COALESCE(validation_message, 'draft expired due to inactivity'),
+            updated_at = NOW()
+        WHERE status IN ('draft', 'validated', 'approved', 'rejected')
+          AND updated_at < NOW() - ($1::TEXT || ' days')::INTERVAL
+        "#,
+    )
+    .bind(ttl_days)
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected() as i64)
+}
+
+/// List private assets eligible for cleanup because their draft did not publish.
+pub async fn list_unpublished_private_assets_for_purge(
+    pool: &PgPool,
+    grace_days: i64,
+) -> Result<Vec<ChallengePrivateAssetResponse>> {
+    let rows = sqlx::query(
+        r#"
+        SELECT a.*
+        FROM challenge_private_assets a
+        JOIN challenge_drafts d ON d.id = a.draft_id
+        WHERE d.status IN ('abandoned', 'rejected')
+          AND d.updated_at < NOW() - ($1::TEXT || ' days')::INTERVAL
+        ORDER BY a.created_at ASC
+        "#,
+    )
+    .bind(grace_days)
+    .fetch_all(pool)
+    .await?;
+
+    rows.into_iter()
+        .map(row_to_private_asset_response)
+        .collect()
+}
+
+/// Delete a private asset record after its object has been removed.
+pub async fn delete_challenge_private_asset(pool: &PgPool, asset_row_id: &str) -> Result<()> {
+    sqlx::query("DELETE FROM challenge_private_assets WHERE id = $1")
+        .bind(asset_row_id)
+        .execute(pool)
+        .await?;
+
+    Ok(())
+}
+
 /// Mark a draft published and bind it to the immutable challenge version row.
 pub async fn mark_challenge_draft_published(
     pool: &PgPool,
     draft_id: &str,
-    published_challenge_version_id: &str,
+    published_challenge_version_id: Option<&str>,
 ) -> Result<()> {
     let result = sqlx::query(
         r#"
