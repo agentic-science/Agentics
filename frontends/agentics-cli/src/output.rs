@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Result, bail};
 use serde::Serialize;
 use serde_json::json;
 use shared::models::challenge::{ChallengeDetailResponse, ChallengeListResponse};
@@ -469,9 +469,10 @@ fn render_create_submission_batch(
                     "zip_bytes": package.bytes.len(),
                 }
             });
-            if let Some(object) = value.as_object_mut() {
-                object.insert(response_key.to_string(), serde_json::to_value(responses)?);
-            }
+            let Some(object) = value.as_object_mut() else {
+                bail!("static JSON value must be an object");
+            };
+            object.insert(response_key.to_string(), serde_json::to_value(responses)?);
             pretty_json(&value)
         }
         OutputFormat::Table => {

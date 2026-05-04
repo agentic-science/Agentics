@@ -416,7 +416,7 @@ async fn run_container(docker: &Docker, request: ContainerRequest) -> Result<Con
         mounts: Some(request.mounts),
         auto_remove: Some(false),
         memory: Some(memory),
-        memory_swap: Some(memory_bytes as i64),
+        memory_swap: Some(memory),
         nano_cpus: Some(nano_cpus),
         pids_limit: Some(256),
         ulimits: Some(vec![
@@ -627,7 +627,7 @@ fn append_bounded_log_bytes(
 
     let remaining = limit.saturating_sub(output.len());
     if chunk.len() > remaining {
-        output.extend_from_slice(chunk.get(..remaining).unwrap_or(chunk));
+        output.extend(chunk.iter().take(remaining).copied());
         *truncated = true;
     } else {
         output.extend_from_slice(chunk);
