@@ -1,3 +1,4 @@
+pub mod challenge_creation_handlers;
 pub mod extractors;
 pub mod handlers;
 pub mod presenters;

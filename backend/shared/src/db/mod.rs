@@ -1,6 +1,7 @@
 //! Database access modules shared by the API server, worker, and tests.
 
 pub mod agents;
+pub mod challenge_creation;
 pub mod challenges;
 pub mod discussions;
 pub mod evaluation_jobs;
@@ -14,6 +15,7 @@ pub mod solution_submissions;
 pub mod validation_quotas;
 
 pub use agents::*;
+pub use challenge_creation::*;
 pub use challenges::*;
 pub use discussions::*;
 pub use evaluation_jobs::*;

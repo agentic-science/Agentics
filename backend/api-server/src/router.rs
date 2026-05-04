@@ -15,6 +15,7 @@ use crate::state::AppState;
 use shared::config::Config;
 
 const ZIP_SUBMISSION_JSON_BODY_LIMIT_BYTES: usize = 32 * 1024 * 1024;
+const PRIVATE_ASSET_JSON_BODY_LIMIT_BYTES: usize = 128 * 1024 * 1024;
 
 /// Build the application router with public, agent, admin, and health routes.
 pub fn router(config: &Config) -> Router<AppState> {
@@ -61,6 +62,23 @@ pub fn router(config: &Config) -> Router<AppState> {
             "/api/discussions/{id}/replies",
             post(crate::handlers::create_reply),
         )
+        .route(
+            "/api/challenge-creator/github-identity",
+            post(crate::challenge_creation_handlers::link_github_identity),
+        )
+        .route(
+            "/api/challenge-drafts",
+            post(crate::challenge_creation_handlers::create_challenge_draft),
+        )
+        .route(
+            "/api/challenge-drafts/{id}",
+            get(crate::challenge_creation_handlers::get_challenge_draft),
+        )
+        .route(
+            "/api/challenge-drafts/{id}/private-assets",
+            post(crate::challenge_creation_handlers::upload_challenge_private_asset)
+                .layer(DefaultBodyLimit::max(PRIVATE_ASSET_JSON_BODY_LIMIT_BYTES)),
+        )
         // Public routes
         .route(
             "/api/public/challenges",
@@ -98,6 +116,26 @@ pub fn router(config: &Config) -> Router<AppState> {
         .route(
             "/admin/challenges/{id}/versions",
             post(crate::handlers::publish_version),
+        )
+        .route(
+            "/admin/challenge-drafts",
+            get(crate::challenge_creation_handlers::list_admin_challenge_drafts),
+        )
+        .route(
+            "/admin/challenge-drafts/{id}/validate",
+            post(crate::challenge_creation_handlers::validate_challenge_draft),
+        )
+        .route(
+            "/admin/challenge-drafts/{id}/approve",
+            post(crate::challenge_creation_handlers::approve_challenge_draft),
+        )
+        .route(
+            "/admin/challenge-drafts/{id}/reject",
+            post(crate::challenge_creation_handlers::reject_challenge_draft),
+        )
+        .route(
+            "/admin/challenge-drafts/{id}/publish",
+            post(crate::challenge_creation_handlers::publish_challenge_draft),
         )
         .route(
             "/admin/solution-submissions",

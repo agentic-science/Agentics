@@ -7,6 +7,10 @@ use serde::de::DeserializeOwned;
 
 use shared::auth;
 use shared::db::authenticate_agent_token;
+use shared::models::challenge_creation::{
+    CreateChallengeDraftRequest, LinkGithubIdentityRequest, ReviewChallengeDraftRequest,
+    UploadChallengePrivateAssetRequest, ValidateChallengeDraftRequest,
+};
 use shared::models::request::{
     CreateChallengeRequest, CreateChallengeVersionRequest, CreateDiscussionReplyRequest,
     CreateDiscussionThreadRequest, CreateSolutionSubmissionRequest, RegisterAgentRequest,
@@ -57,7 +61,9 @@ impl FromRequestParts<AppState> for AgentAuth {
 
 /// Marker extractor for routes that require administrator basic auth.
 #[derive(Debug, Clone)]
-pub struct AdminAuth;
+pub struct AdminAuth {
+    pub username: String,
+}
 
 impl FromRequestParts<AppState> for AdminAuth {
     type Rejection = (StatusCode, axum::Json<shared::models::ErrorResponse>);
@@ -80,7 +86,9 @@ impl FromRequestParts<AppState> for AdminAuth {
             return Err(unauthorized("需要有效的 admin basic auth"));
         }
 
-        Ok(AdminAuth)
+        Ok(AdminAuth {
+            username: parsed.username,
+        })
     }
 }
 
@@ -145,6 +153,50 @@ fn require_non_empty(value: &str, field: &str) -> Result<(), String> {
 impl ValidateRequest for RegisterAgentRequest {
     fn validate(&self) -> Result<(), String> {
         require_non_empty(&self.name, "name")
+    }
+}
+
+impl ValidateRequest for LinkGithubIdentityRequest {
+    fn validate(&self) -> Result<(), String> {
+        if self.github_user_id <= 0 {
+            return Err("github_user_id must be greater than zero".to_string());
+        }
+        require_non_empty(&self.github_login, "github_login")
+    }
+}
+
+impl ValidateRequest for CreateChallengeDraftRequest {
+    fn validate(&self) -> Result<(), String> {
+        require_non_empty(&self.repo_url, "repo_url")?;
+        require_non_empty(&self.pr_url, "pr_url")?;
+        require_non_empty(&self.commit_sha, "commit_sha")?;
+        require_non_empty(&self.challenge_path, "challenge_path")?;
+        if self.pr_number <= 0 {
+            return Err("pr_number must be greater than zero".to_string());
+        }
+        if self.pr_author_github_user_id <= 0 {
+            return Err("pr_author_github_user_id must be greater than zero".to_string());
+        }
+        Ok(())
+    }
+}
+
+impl ValidateRequest for UploadChallengePrivateAssetRequest {
+    fn validate(&self) -> Result<(), String> {
+        require_non_empty(&self.asset_id, "asset_id")?;
+        require_non_empty(&self.asset_base64, "asset_base64")
+    }
+}
+
+impl ValidateRequest for ValidateChallengeDraftRequest {
+    fn validate(&self) -> Result<(), String> {
+        require_non_empty(&self.repository_path, "repository_path")
+    }
+}
+
+impl ValidateRequest for ReviewChallengeDraftRequest {
+    fn validate(&self) -> Result<(), String> {
+        Ok(())
     }
 }
 
