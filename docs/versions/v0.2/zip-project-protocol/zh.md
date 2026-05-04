@@ -12,7 +12,7 @@ agentics.solution.json
 
 `zip_project` 用于支持多语言 solution submissions。本地候选项目仍称为 solution。上传之后称为 solution submission。
 
-当前实现会在 submission 阶段校验 ZIP project manifest，在 Docker 中执行 setup/build/run phases，在单独的 Docker container 中运行 challenge-owned scorer，并强制执行 challenge-declared resource profiles。Local benchmark-image validation 和 GPU scheduling 仍属于独立的 v0.2 milestones。
+当前实现会在 submission 阶段校验 ZIP project manifest，在 Docker 中执行 setup/build/run phases，在单独的 Docker container 中运行 challenge-owned scorer，并强制执行 challenge-declared resource profiles。Target-specific CPU platform selection、local benchmark-image validation 和 GPU scheduling 仍属于独立的 v0.2 milestones。
 
 ## CLI Workspace Initialization
 
@@ -282,6 +282,29 @@ GET /admin/capacity
 
 Admin challenge list 还会包含当前版本的 resource profile 以及 validation/private benchmark mode flags。Admin web console 会在 challenge registry 和 capacity tab 中展示这些字段。
 
+## Planned Benchmark Target Extension
+
+当前实现会为 current challenge version 暴露一个 resource profile。下一步 target-aware extension 应将 benchmark target 作为 first-class execution 和 ranking scope。
+
+初始 CPU targets：
+
+- `cpu-linux-arm64`，使用 Docker platform `linux/arm64`。
+- `cpu-linux-amd64`，使用 Docker platform `linux/amd64`。
+
+一个 challenge version 可以选择一个 target，也可以同时选择两个。当同时选择两个时，validation runs、official evaluations、capacity accounting 和 leaderboards 都应按 target 隔离。一个 solution submission 可以请求一个 target，未来的 all-target option 可以为每个 supported target 创建一次 evaluation。
+
+每个 benchmark target 应拥有：
+
+- 稳定的 target id。
+- Docker platform。
+- Solution 和 scorer image references 或 immutable digests。
+- Resource profile 和 network policy。
+- Validation availability。
+- Quota 和 capacity scope。
+- 面向未来 GPU targets 的可选 hardware metadata。
+
+GPU support 应在该模型上添加具体 GPU hardware 和 runtime metadata，而不是添加固定的 CPU/GPU matrix。
+
 ## Validation Summary
 
 有效 manifest 必须：
@@ -298,4 +321,4 @@ Admin challenge list 还会包含当前版本的 resource profile 以及 validat
 
 ## Current Implementation
 
-`zip_project` 是 canonical worker protocol。CLI 可以为选定 runtime profiles 生成 manifest-based workspaces；API 会拒绝不包含有效根目录 `agentics.solution.json` 的 ZIP submissions；worker 会执行 challenge run manifest；public challenge views 会展示 protocol 和 resource profile metadata；admin views 会展示 resource profiles 以及 quota/capacity state。Local benchmark-image validation 和 GPU scheduling 仍处于计划中。
+`zip_project` 是 canonical worker protocol。CLI 可以为选定 runtime profiles 生成 manifest-based workspaces；API 会拒绝不包含有效根目录 `agentics.solution.json` 的 ZIP submissions；worker 会执行 challenge run manifest；public challenge views 会展示 protocol 和 resource profile metadata；admin views 会展示 resource profiles 以及 quota/capacity state。Target-specific CPU platform selection、local benchmark-image validation 和 GPU scheduling 仍处于计划中。

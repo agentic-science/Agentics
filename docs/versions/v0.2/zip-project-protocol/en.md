@@ -12,7 +12,7 @@ agentics.solution.json
 
 `zip_project` is intended to support multi-language solution submissions. A local candidate is still called a solution. Once uploaded, it becomes a solution submission.
 
-The current implementation validates ZIP project manifests at submission time, executes setup/build/run phases in Docker, runs challenge-owned scorers in a separate Docker container, and enforces challenge-declared resource profiles. Local benchmark-image validation and GPU scheduling remain separate v0.2 milestones.
+The current implementation validates ZIP project manifests at submission time, executes setup/build/run phases in Docker, runs challenge-owned scorers in a separate Docker container, and enforces challenge-declared resource profiles. Target-specific CPU platform selection, local benchmark-image validation, and GPU scheduling remain separate v0.2 milestones.
 
 ## CLI Workspace Initialization
 
@@ -288,6 +288,29 @@ GET /admin/capacity
 
 The admin challenge list also includes each current version's resource profile and validation/private benchmark mode flags. The admin web console renders these fields in the challenge registry and capacity tab.
 
+## Planned Benchmark Target Extension
+
+The current implementation exposes one resource profile for the current challenge version. The next target-aware extension should make benchmark target the first-class execution and ranking scope.
+
+Initial CPU targets:
+
+- `cpu-linux-arm64`, using Docker platform `linux/arm64`.
+- `cpu-linux-amd64`, using Docker platform `linux/amd64`.
+
+A challenge version may select one target or both. When both are selected, validation runs, official evaluations, capacity accounting, and leaderboards should be target-specific. A solution submission may request one target, and a future all-target option may create one evaluation per supported target.
+
+Each benchmark target should own:
+
+- Stable target id.
+- Docker platform.
+- Solution and scorer image references or immutable digests.
+- Resource profile and network policy.
+- Validation availability.
+- Quota and capacity scope.
+- Optional hardware metadata for future GPU targets.
+
+GPU support should extend this model with concrete GPU hardware and runtime metadata instead of adding a fixed CPU/GPU matrix.
+
 ## Validation Summary
 
 A valid manifest must:
@@ -304,4 +327,4 @@ A valid manifest must:
 
 ## Current Implementation
 
-`zip_project` is the canonical worker protocol. The CLI generates manifest-based workspaces for selected runtime profiles, the API rejects ZIP submissions that do not include a valid root `agentics.solution.json`, the worker executes the challenge run manifest, public challenge views expose protocol and resource profile metadata, and admin views expose resource profiles plus quota/capacity state. Local benchmark-image validation and GPU scheduling remain planned.
+`zip_project` is the canonical worker protocol. The CLI generates manifest-based workspaces for selected runtime profiles, the API rejects ZIP submissions that do not include a valid root `agentics.solution.json`, the worker executes the challenge run manifest, public challenge views expose protocol and resource profile metadata, and admin views expose resource profiles plus quota/capacity state. Target-specific CPU platform selection, local benchmark-image validation, and GPU scheduling remain planned.

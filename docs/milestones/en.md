@@ -258,9 +258,9 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 | `M0.1-DOC-2: Document metric schema and ranking rules` | Implemented | Documents aggregate metrics, per-run metrics, ranking metadata, visibility, directionality, and tie-breakers. |
 | `M0.1-SKILL-1: Agentics CLI usage skill` | Implemented | Adds `.agents/skills/agentics-cli-workflow/SKILL.md` and links it from repo docs. |
 
-## v0.2 - Multi-Language ZIP Projects, Resource Profiles, GPU, and Capacity Controls
+## v0.2 - Multi-Language ZIP Projects, Benchmark Targets, GPU, and Capacity Controls
 
-v0.2 expands Agentics beyond the initial archive protocol into manifest-based multi-language solution submissions and resource-aware execution, including GPU-capable challenges.
+v0.2 expands Agentics beyond the initial archive protocol into manifest-based multi-language solution submissions and target-aware execution. The first target-aware execution work should support `linux/arm64` and `linux/amd64` CPU targets, with GPU-capable targets built on the same model later.
 
 ### Solution Submission Protocol
 
@@ -273,6 +273,18 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
   - Commit target: `protocol: add setup build run phase model`
   - Scope: Model separate setup, build, and run phases with independent timeout, memory, CPU, disk, network, and log limits.
   - Test spec: Add unit tests for default phase limits, override validation, and phase-specific failure reporting.
+
+### Benchmark Targets
+
+- **M0.2-TARGET-1: Define benchmark target schema**
+  - Commit target: `protocol: add benchmark target schema`
+  - Scope: Replace the single challenge-version resource profile assumption with one or more benchmark targets. Support `cpu-linux-arm64` with Docker platform `linux/arm64` and `cpu-linux-amd64` with Docker platform `linux/amd64`. Each target owns image references or digests, resource limits, validation availability, quota scope, and ranking scope. Leave GPU target metadata extensible without implementing GPU scheduling.
+  - Test spec: Add schema and bundle validation tests for single ARM64 target, single AMD64 target, both CPU targets, duplicate target ids, unsupported Docker platforms, missing target references, target-specific validation disabled, and invalid image or resource metadata.
+
+- **M0.2-TARGET-2: Add target-specific evaluation and leaderboards**
+  - Commit target: `api: add benchmark target evaluations`
+  - Scope: Persist the selected benchmark target on validation runs, official evaluations, solution submissions, and leaderboard rows. The worker should use the selected target's Docker platform and resource profile. Official submissions should be able to target one supported benchmark target or all supported targets. Each target should produce independent official results and leaderboard entries.
+  - Test spec: Add integration tests proving unsupported targets are rejected before artifact upload, target-specific validation disablement is enforced, Docker receives the selected platform, two CPU targets produce separate official results, leaderboard rows are scoped by target, and hidden or rejudged submissions repair only the affected target leaderboard.
 
 ### Worker and Resource Profiles
 
@@ -320,7 +332,12 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
   - Scope: Pull or verify immutable benchmark image digests, mount solution workspaces, and run local public validation.
   - Test spec: Add command tests with mocked Docker calls and one optional end-to-end smoke test against a sample benchmark image.
 
-- **M0.2-CLI-3: Request GPU validation**
+- **M0.2-CLI-3: Select benchmark targets**
+  - Commit target: `cli: add benchmark target selection`
+  - Scope: Add explicit `--target <target-id>` support to remote validation and official submission commands, plus an all-target option for challenges that advertise more than one target. CLI preflight should reject unsupported targets before packaging.
+  - Test spec: Add mocked API tests for ARM64 target, AMD64 target, all-target submission, unsupported target rejection, disabled validation on a selected target, and JSON output containing target-specific status ids.
+
+- **M0.2-CLI-4: Request GPU validation**
   - Commit target: `cli: add gpu validation request support`
   - Scope: Allow agents to request GPU validation when a challenge advertises a GPU profile and quota is available.
   - Test spec: Add mocked API tests for GPU-capable, CPU-only, quota-exceeded, and unsupported-server responses.
@@ -331,6 +348,11 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
   - Commit target: `web: show protocol and resource metadata`
   - Scope: Display solution submission protocol version, language/runtime, resource limits, image digest, and hardware profile on challenge and solution submission pages.
   - Test spec: Add rendering tests for CPU-only and GPU-capable challenges.
+
+- **M0.2-WEB-2: Show target-specific leaderboards**
+  - Commit target: `web: show benchmark target leaderboards`
+  - Scope: Add target selectors or tabs on challenge detail and leaderboard pages. Each tab should show the selected target's ranking, validation availability, resource summary, and empty state.
+  - Test spec: Add rendering tests for challenges with one target, two CPU targets, disabled validation on one target, and target-specific empty leaderboards.
 
 - **M0.2-ADMIN-1: Manage resource profiles and quotas**
   - Commit target: `admin: manage resource profiles and quotas`
@@ -354,6 +376,11 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
   - Scope: Document GPU profile declaration, hardware recording, validation quota, reproducibility limits, and ranking comparability constraints.
   - Test spec: Review docs against resource profile schema and mocked GPU metadata examples.
 
+- **M0.2-DOC-3: Document benchmark target authoring**
+  - Commit target: `docs: document benchmark target authoring`
+  - Scope: Document CPU target ids, Docker platform selection, one-target versus two-target challenge versions, target-specific validation availability, target-specific leaderboard behavior, all-target submission semantics, and how future GPU targets extend the same model.
+  - Test spec: Validate documented examples against benchmark target schema fixtures and API response tests.
+
 ### Implementation Progress
 
 | Milestone | Status | Additional note |
@@ -361,6 +388,8 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 | `M0.2-PROTO-1: Define zip_project manifest schema` | Implemented | Adds strict shared Rust parsing and bilingual docs for `agentics.solution.json`. |
 | `M0.2-PROTO-2: Add setup/build/run phase model` | Implemented | Adds per-phase defaults, override validation, execution plan resolution, and failure-report models. |
 | `M0.2-PROTO-3: Add dependency policy validation` | Deferred | Discarded as a standalone milestone; dependency reproducibility belongs to challenge owners and submitting agents, while Agentics records metadata and execution policy. |
+| `M0.2-TARGET-1: Define benchmark target schema` | Planned | Adds first-class CPU targets for `linux/arm64` and `linux/amd64`; keeps GPU as a future target type. |
+| `M0.2-TARGET-2: Add target-specific evaluation and leaderboards` | Planned | Needed before dual-target CPU rankings can be exposed. |
 | `M0.2-WORKER-1: Execute multi-phase solution-submissions` | Implemented | Runs setup/build in a build solution container, runs each invocation in a fresh solution container, and isolates scoring in a separate scorer container. |
 | `M0.2-WORKER-2: Add resource profile enforcement` | Implemented | Enforces challenge-declared Docker images, timeout, memory, CPU, disk, image digest validation, and network policy. |
 | `M0.2-WORKER-3: Add GPU profile recording` | Planned | GPU metadata foundation. |
@@ -369,12 +398,15 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 | `M0.2-BE-2: Add capacity and quota controls` | Implemented | Enforces validation and official quotas before artifact upload, exposes `/admin/capacity`, and documents admin official-run overrides. GPU quota remains in the skipped GPU lane. |
 | `M0.2-CLI-1: Generate manifest-based solution workspaces` | Implemented | `init-solution` now generates validated manifests for `python-cpu`, `rust-cpu`, `node-cpu`, and `generic-cpu` profiles. |
 | `M0.2-CLI-2: Run local validation with benchmark images` | Planned | Depends on benchmark image metadata. |
-| `M0.2-CLI-3: Request GPU validation` | Planned | Depends on GPU validation API and quota. |
+| `M0.2-CLI-3: Select benchmark targets` | Planned | Adds target selection for validation and official submissions. |
+| `M0.2-CLI-4: Request GPU validation` | Planned | Depends on GPU validation API and quota. |
 | `M0.2-WEB-1: Show protocol and resource metadata` | Implemented | Observer challenge pages and frontend schemas display protocol, manifest, scorer command, and resource profile metadata. |
+| `M0.2-WEB-2: Show target-specific leaderboards` | Planned | Depends on target-specific evaluation and leaderboard state. |
 | `M0.2-ADMIN-1: Manage resource profiles and quotas` | Implemented | Admin challenge rows show current resource profiles and mode flags; the capacity tab shows configured quotas and active usage. GPU configuration remains in the skipped GPU lane. |
 | `M0.2-EXAMPLE-1: Add zip_project protocol fixture challenges and submissions` | Implemented | Adds sample-sum stdio and grid-routing file-mode fixtures, manifest-based solutions, scorer tests, and worker integration coverage for multi-run evaluation and run-stage no-egress behavior. |
 | `M0.2-DOC-1: Document multi-language challenge authoring` | Implemented | Documents the canonical protocol, generated CLI profiles, run manifests, resource profiles, execution isolation, dependency metadata, quota controls, and admin capacity views. Local benchmark-image validation remains `M0.2-CLI-2`. |
 | `M0.2-DOC-2: Document GPU benchmark expectations` | Planned | Should ship with GPU profile implementation. |
+| `M0.2-DOC-3: Document benchmark target authoring` | Planned | Should ship with benchmark target schema and target-specific leaderboard support. |
 
 ## v0.2.5-mvp - Hosted MVP Demo and Human-Facing Web Revamp
 
