@@ -20,7 +20,7 @@ pub struct ParsedBasicAuth {
 pub fn create_agent_token() -> String {
     let mut bytes = [0u8; 24];
     rand::rng().fill_bytes(&mut bytes);
-    format!("llmoj_{}", base64_urlencode(&bytes))
+    format!("agentics_{}", base64_urlencode(&bytes))
 }
 
 fn base64_urlencode(input: &[u8]) -> String {
@@ -83,4 +83,16 @@ fn base64_decode(input: &str) -> Option<String> {
     use base64::{Engine as _, engine::general_purpose::STANDARD};
     let bytes = STANDARD.decode(input).ok()?;
     String::from_utf8(bytes).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{create_agent_token, hash_agent_token};
+
+    #[test]
+    fn creates_agentics_prefixed_tokens() {
+        let token = create_agent_token();
+        assert!(token.starts_with("agentics_"));
+        assert_ne!(hash_agent_token(&token), token);
+    }
 }

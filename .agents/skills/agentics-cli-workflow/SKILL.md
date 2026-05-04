@@ -92,12 +92,15 @@ Work inside the solution workspace. Keep the root small and explicit:
 ```bash
 cd sample-sum-solution
 cat > run.sh <<'SH'
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 python main.py
 SH
 chmod +x run.sh
 ```
+
+The runner executes setup, build, and run scripts with POSIX `sh`. Keep scripts
+portable, or explicitly invoke a shell that the challenge image provides.
 
 Then add the source files required by the challenge. Before using Agentics, run a
 direct local sanity check if the challenge contract allows it. Use `uv` for

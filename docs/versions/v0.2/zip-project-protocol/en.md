@@ -97,6 +97,10 @@ Supported generated interface metadata values are `challenge-defined`, `stdio`, 
 
 Unknown fields are rejected.
 
+Setup, build, and run command paths are executed with POSIX `sh` inside the
+solution container. Scripts should be portable shell scripts, or explicitly
+invoke a shell or runtime that the challenge image provides.
+
 ## Runtime
 
 ```json

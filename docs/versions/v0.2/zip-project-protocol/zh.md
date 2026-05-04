@@ -97,6 +97,10 @@ cargo run -p agentics-cli --bin agentics -- init-solution sample-sum \
 
 Unknown fields 会被拒绝。
 
+Setup、build 和 run command paths 会在 solution container 内用 POSIX `sh`
+执行。Scripts 应该保持为 portable shell scripts，或者显式调用 challenge image
+提供的 shell 或 runtime。
+
 ## Runtime
 
 ```json
