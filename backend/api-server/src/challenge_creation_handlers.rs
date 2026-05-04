@@ -389,11 +389,13 @@ pub async fn cleanup_challenge_drafts(
     )
     .await?;
 
-    let mut purged = 0;
+    let mut purged = 0_i64;
     for asset in purge_candidates {
         state.storage.delete(&asset.storage_uri).await?;
         db::delete_challenge_private_asset(&state.db, &asset.id).await?;
-        purged += 1;
+        purged = purged
+            .checked_add(1)
+            .ok_or_else(|| AppError::Internal("private asset purge count overflow".to_string()))?;
     }
 
     Ok(Json(ChallengeDraftCleanupResponse {

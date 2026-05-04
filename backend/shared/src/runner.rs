@@ -394,8 +394,16 @@ fn validate_scorer_result(
 }
 
 async fn run_container(docker: &Docker, request: ContainerRequest) -> Result<ContainerOutcome> {
-    let memory_bytes = request.limits.memory_limit_mb * 1024 * 1024;
-    let nano_cpus = i64::from(request.limits.cpu_limit_millis) * 1_000_000;
+    let memory_bytes = request
+        .limits
+        .memory_limit_mb
+        .checked_mul(1024 * 1024)
+        .ok_or_else(|| AppError::Runner("memory limit overflow".to_string()))?;
+    let memory = i64::try_from(memory_bytes)
+        .map_err(|_| AppError::Runner("memory limit exceeds Docker API range".to_string()))?;
+    let nano_cpus = i64::from(request.limits.cpu_limit_millis)
+        .checked_mul(1_000_000)
+        .ok_or_else(|| AppError::Runner("CPU limit overflow".to_string()))?;
     let log_limit_bytes = request.limits.log_limit_bytes;
     let host_config = HostConfig {
         network_mode: Some(
@@ -407,7 +415,7 @@ async fn run_container(docker: &Docker, request: ContainerRequest) -> Result<Con
         ),
         mounts: Some(request.mounts),
         auto_remove: Some(false),
-        memory: Some(memory_bytes as i64),
+        memory: Some(memory),
         memory_swap: Some(memory_bytes as i64),
         nano_cpus: Some(nano_cpus),
         pids_limit: Some(256),
@@ -617,9 +625,9 @@ fn append_bounded_log_bytes(
         return;
     }
 
-    let remaining = limit - output.len();
+    let remaining = limit.saturating_sub(output.len());
     if chunk.len() > remaining {
-        output.extend_from_slice(&chunk[..remaining]);
+        output.extend_from_slice(chunk.get(..remaining).unwrap_or(chunk));
         *truncated = true;
     } else {
         output.extend_from_slice(chunk);
@@ -879,7 +887,9 @@ async fn ensure_disk_limit(
     let bytes = tokio::task::spawn_blocking(move || directory_size(&path))
         .await
         .map_err(|e| AppError::Internal(format!("disk usage task failed: {e}")))??;
-    let limit_bytes = disk_limit_mb * 1024 * 1024;
+    let limit_bytes = disk_limit_mb
+        .checked_mul(1024 * 1024)
+        .ok_or_else(|| AppError::Runner("disk limit overflow".to_string()))?;
     if bytes > limit_bytes {
         return Err(phase_error(
             phase,

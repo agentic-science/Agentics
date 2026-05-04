@@ -498,7 +498,9 @@ async fn poll_validation_run(
     poll_interval: Duration,
     timeout: Duration,
 ) -> Result<shared::models::request::SolutionSubmissionResponse> {
-    let deadline = Instant::now() + timeout;
+    let deadline = Instant::now()
+        .checked_add(timeout)
+        .context("validation poll timeout is too large")?;
     loop {
         let response = client.get_validation_run(validation_run_id).await?;
         if is_terminal_status(&response.status) {

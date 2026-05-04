@@ -781,8 +781,10 @@ fn read_solution_submission_artifact_summary_blocking(
 
         let mut buf = Vec::new();
         let compressed_size = file.compressed_size() as i64;
+        let projected_inline_text_bytes = total_inline_text_bytes.checked_add(size);
         let should_try_inline = size <= MAX_INLINE_TEXT_BYTES
-            && total_inline_text_bytes + size <= MAX_TOTAL_INLINE_TEXT_BYTES;
+            && projected_inline_text_bytes
+                .is_some_and(|projected| projected <= MAX_TOTAL_INLINE_TEXT_BYTES);
         if should_try_inline {
             std::io::Read::read_to_end(&mut file, &mut buf)?;
         }
@@ -795,7 +797,11 @@ fn read_solution_submission_artifact_summary_blocking(
         let is_text = inline_text.is_some() || is_text_like_path(&entry_path);
 
         let content = if let Some(text) = inline_text {
-            total_inline_text_bytes += buf.len() as u64;
+            total_inline_text_bytes = total_inline_text_bytes
+                .checked_add(buf.len() as u64)
+                .ok_or_else(|| {
+                    AppError::BadRequest("artifact inline text budget overflow".to_string())
+                })?;
             Some(text.to_string())
         } else {
             None

@@ -171,7 +171,9 @@ pub async fn ensure_challenges_seeded_from_root(
             .execute(pool)
             .await?;
 
-            synced += 1;
+            synced = synced
+                .checked_add(1)
+                .ok_or_else(|| AppError::Internal("challenge sync count overflow".to_string()))?;
         }
     }
 

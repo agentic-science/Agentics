@@ -3,6 +3,9 @@ name = "api-server"
 version.workspace = true
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [lib]
 name = "api_server"
 path = "src/lib.rs"

@@ -119,7 +119,10 @@ pub fn is_valid_challenge_namespace(value: &str) -> bool {
     if !(3..=63).contains(&bytes.len()) {
         return false;
     }
-    if !bytes[0].is_ascii_alphanumeric() || !bytes[bytes.len() - 1].is_ascii_alphanumeric() {
+    let (Some(first), Some(last)) = (bytes.first(), bytes.last()) else {
+        return false;
+    };
+    if !first.is_ascii_alphanumeric() || !last.is_ascii_alphanumeric() {
         return false;
     }
     if value.contains("--") {

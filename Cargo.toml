@@ -12,6 +12,13 @@ members = [
 version = "0.0.0"
 edition = "2024"
 
+[workspace.lints.clippy]
+arithmetic_side_effects = "warn"
+expect_used = "warn"
+indexing_slicing = "warn"
+panic = "warn"
+unwrap_used = "warn"
+
 [workspace.dependencies]
 shared = { path = "backend/shared" }
 tokio = { version = "1", features = ["full"] }

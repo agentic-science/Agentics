@@ -1,3 +1,14 @@
+#![cfg_attr(
+    test,
+    allow(
+        clippy::arithmetic_side_effects,
+        clippy::expect_used,
+        clippy::indexing_slicing,
+        clippy::panic,
+        clippy::unwrap_used
+    )
+)]
+
 use std::sync::Arc;
 
 use api_server::router;
@@ -38,12 +49,10 @@ async fn main() -> anyhow::Result<()> {
     let listener = TcpListener::bind(format!("{}:{}", config.api_host, config.api_port)).await?;
     info!("api server listening on {}", listener.local_addr()?);
 
-    let shutdown = async {
-        let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-            .expect("failed to install SIGTERM handler");
-        let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
-            .expect("failed to install SIGINT handler");
+    let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+    let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
 
+    let shutdown = async move {
         tokio::select! {
             _ = sigterm.recv() => {},
             _ = sigint.recv() => {},

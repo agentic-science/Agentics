@@ -469,10 +469,9 @@ fn render_create_submission_batch(
                     "zip_bytes": package.bytes.len(),
                 }
             });
-            value
-                .as_object_mut()
-                .expect("static object must be an object")
-                .insert(response_key.to_string(), serde_json::to_value(responses)?);
+            if let Some(object) = value.as_object_mut() {
+                object.insert(response_key.to_string(), serde_json::to_value(responses)?);
+            }
             pretty_json(&value)
         }
         OutputFormat::Table => {
@@ -560,7 +559,7 @@ fn render_table(headers: &[&str], rows: &[Vec<String>]) -> String {
         })
         .collect::<Vec<_>>();
 
-    let mut lines = Vec::with_capacity(rows.len() + 1);
+    let mut lines = Vec::new();
     lines.push(render_table_row(
         &headers
             .iter()

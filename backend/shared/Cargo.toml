@@ -3,6 +3,9 @@ name = "shared"
 version.workspace = true
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 tokio = { workspace = true }
 tracing = { workspace = true }

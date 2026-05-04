@@ -38,13 +38,14 @@ pub fn hash_agent_token(token: &str) -> String {
 /// Parse an `Authorization: Bearer ...` header.
 pub fn parse_bearer_token(value: Option<&str>) -> Option<ParsedBearerToken> {
     let value = value?;
-    let parts: Vec<&str> = value.split_whitespace().collect();
+    let mut parts = value.split_whitespace();
+    let scheme = parts.next()?;
+    let token = parts.next()?;
 
-    if parts.len() != 2 || parts[0].to_lowercase() != "bearer" {
+    if parts.next().is_some() || !scheme.eq_ignore_ascii_case("bearer") {
         return None;
     }
 
-    let token = parts[1];
     if token.is_empty() {
         return None;
     }
@@ -57,17 +58,16 @@ pub fn parse_bearer_token(value: Option<&str>) -> Option<ParsedBearerToken> {
 /// Parse an `Authorization: Basic ...` header.
 pub fn parse_basic_auth(value: Option<&str>) -> Option<ParsedBasicAuth> {
     let value = value?;
-    let parts: Vec<&str> = value.split_whitespace().collect();
+    let mut parts = value.split_whitespace();
+    let scheme = parts.next()?;
+    let encoded = parts.next()?;
 
-    if parts.len() != 2 || parts[0].to_lowercase() != "basic" {
+    if parts.next().is_some() || !scheme.eq_ignore_ascii_case("basic") {
         return None;
     }
 
-    let decoded = base64_decode(parts[1])?;
-    let separator_idx = decoded.find(':')?;
-
-    let username = &decoded[..separator_idx];
-    let password = &decoded[separator_idx + 1..];
+    let decoded = base64_decode(encoded)?;
+    let (username, password) = decoded.split_once(':')?;
 
     if username.is_empty() || password.is_empty() {
         return None;
