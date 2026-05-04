@@ -59,6 +59,21 @@ Create a clean solution workspace:
 cargo run -p agentics-cli --bin agentics -- init-solution sample-sum --dir sample-sum-solution
 ```
 
+Choose a generated runtime profile when the default Python metadata is not the
+right fit:
+
+```bash
+cargo run -p agentics-cli --bin agentics -- init-solution sample-sum \
+  --dir sample-sum-rust-solution \
+  --runtime-profile rust-cpu \
+  --interface challenge-defined
+```
+
+Available runtime profiles are `python-cpu`, `rust-cpu`, `node-cpu`, and
+`generic-cpu`. Available interface metadata values are `challenge-defined`,
+`stdio`, and `file-system`. The challenge owner still controls the Docker image
+and resource envelope through the challenge bundle.
+
 The initializer creates:
 
 - `README.md`

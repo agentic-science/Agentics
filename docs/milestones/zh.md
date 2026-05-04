@@ -305,7 +305,7 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 
 - **M0.2-BE-2：添加 capacity 和 quota controls**
   - Commit target：`api: add evaluation quota controls`
-  - Scope：为 validation quota、official-run limits、GPU quota 和清晰的 quota error responses 添加 API 和 persistence。
+  - Scope：为 validation quota、official-run limits、active official capacity、active agent capacity、admin capacity inspection 和清晰的 quota error responses 添加 API 和 persistence-backed read models。GPU quota 保留在跳过的 GPU lane 中。
   - Test spec：为 quota boundaries、admin override 和存在时的 retry-after metadata 添加 integration tests。
 
 ### Agentics CLI
@@ -334,8 +334,8 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 
 - **M0.2-ADMIN-1：管理 resource profiles 和 quotas**
   - Commit target：`admin: manage resource profiles and quotas`
-  - Scope：添加 admin UI，用于 resource profile review、GPU profile configuration、validation quotas 和 capacity status。
-  - Test spec：为 valid/invalid resource profile forms 添加 UI tests，并为 persistence 添加 backend integration tests。
+  - Scope：添加 admin UI，用于 current resource profile review、validation 和 official quotas，以及 capacity status。GPU profile configuration 保留在跳过的 GPU lane 中。
+  - Test spec：为 resource profile 和 capacity read models 添加 UI rendering tests 与 backend integration tests。
 
 ### Challenge Authoring 和 Documentation
 
@@ -346,7 +346,7 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 
 - **M0.2-DOC-1：记录 multi-language challenge authoring**
   - Commit target：`docs: document multi-language zip_project authoring`
-  - Scope：添加 manifest examples、reference image guidance、setup/build/run contract、two-container solution execution model、scorer/solution data boundaries、internet policy、dependency metadata guidance、multi-run evaluation examples 和 language examples。
+  - Scope：添加 manifest examples、generated CLI workspace profiles、reference image guidance、setup/build/run contract、two-container solution execution model、scorer/solution data boundaries、internet policy、dependency metadata guidance、multi-run evaluation examples、language examples，以及 quota/admin capacity notes。Local benchmark-image validation 保持为独立 CLI milestone。
   - Test spec：使用 parser fixtures 和至少一个 local runner smoke test 验证 documented sample ZIPs。
 
 - **M0.2-DOC-2：记录 GPU benchmark expectations**
@@ -366,14 +366,14 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 | `M0.2-WORKER-3：添加 GPU profile recording` | 计划中 | GPU metadata foundation。 |
 | `M0.2-WORKER-4：添加 GPU validation 和 official scheduling hooks` | 计划中 | 依赖 GPU metadata 和 worker capability flags。 |
 | `M0.2-BE-1：暴露 resource profiles` | 已实现 | Public challenge detail responses 暴露 strict resource profile metadata，并拒绝 invalid stored specs。 |
-| `M0.2-BE-2：添加 capacity 和 quota controls` | 计划中 | 保护昂贵的 validation 和 official capacity。 |
-| `M0.2-CLI-1：生成 manifest-based solution workspaces` | 计划中 | 依赖 manifest schema。 |
+| `M0.2-BE-2：添加 capacity 和 quota controls` | 已实现 | 在 artifact upload 前执行 validation 和 official quotas，暴露 `/admin/capacity`，并记录 admin official-run overrides。GPU quota 保留在跳过的 GPU lane 中。 |
+| `M0.2-CLI-1：生成 manifest-based solution workspaces` | 已实现 | `init-solution` 现在可为 `python-cpu`、`rust-cpu`、`node-cpu` 和 `generic-cpu` profiles 生成通过校验的 manifests。 |
 | `M0.2-CLI-2：使用 benchmark images 运行 local validation` | 计划中 | 依赖 benchmark image metadata。 |
 | `M0.2-CLI-3：请求 GPU validation` | 计划中 | 依赖 GPU validation API 和 quota。 |
 | `M0.2-WEB-1：展示 protocol 和 resource metadata` | 已实现 | Observer challenge pages 和 frontend schemas 展示 protocol、manifest、scorer command 和 resource profile metadata。 |
-| `M0.2-ADMIN-1：管理 resource profiles 和 quotas` | 计划中 | 依赖 admin shell 和 resource profile APIs。 |
+| `M0.2-ADMIN-1：管理 resource profiles 和 quotas` | 已实现 | Admin challenge rows 展示 current resource profiles 和 mode flags；capacity tab 展示 configured quotas 和 active usage。GPU configuration 保留在跳过的 GPU lane 中。 |
 | `M0.2-EXAMPLE-1：添加 zip_project protocol fixture challenges 和 submissions` | 已实现 | 添加 sample-sum stdio 和 grid-routing file-mode fixtures、manifest-based solutions、scorer tests，以及覆盖 multi-run evaluation 和 run-stage no-egress behavior 的 worker integration tests。 |
-| `M0.2-DOC-1：记录 multi-language challenge authoring` | 部分实现 | 已记录 canonical protocol、run manifests、resource profiles 和 execution isolation；更完整的 language examples 与 local benchmark-image validation 仍在计划中。 |
+| `M0.2-DOC-1：记录 multi-language challenge authoring` | 已实现 | 已记录 canonical protocol、generated CLI profiles、run manifests、resource profiles、execution isolation、dependency metadata、quota controls 和 admin capacity views。Local benchmark-image validation 保持为 `M0.2-CLI-2`。 |
 | `M0.2-DOC-2：记录 GPU benchmark expectations` | 计划中 | 应与 GPU profile implementation 一起交付。 |
 
 ## v0.2.5-mvp - Hosted MVP Demo 和 Human-Facing Web Revamp

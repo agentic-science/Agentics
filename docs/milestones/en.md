@@ -305,7 +305,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 
 - **M0.2-BE-2: Add capacity and quota controls**
   - Commit target: `api: add evaluation quota controls`
-  - Scope: Add API and persistence for validation quota, official-run limits, GPU quota, and clear quota error responses.
+  - Scope: Add API and persistence-backed read models for validation quota, official-run limits, active official capacity, active agent capacity, admin capacity inspection, and clear quota error responses. GPU quota remains part of the skipped GPU lane.
   - Test spec: Add integration tests for quota boundaries, admin override, and retry-after metadata if present.
 
 ### Agentics CLI
@@ -334,8 +334,8 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 
 - **M0.2-ADMIN-1: Manage resource profiles and quotas**
   - Commit target: `admin: manage resource profiles and quotas`
-  - Scope: Add admin UI for resource profile review, GPU profile configuration, validation quotas, and capacity status.
-  - Test spec: Add UI tests for valid/invalid resource profile forms and backend integration tests for persistence.
+  - Scope: Add admin UI for current resource profile review, validation and official quotas, and capacity status. GPU profile configuration remains part of the skipped GPU lane.
+  - Test spec: Add UI rendering tests and backend integration tests for resource profile and capacity read models.
 
 ### Challenge Authoring and Documentation
 
@@ -346,7 +346,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 
 - **M0.2-DOC-1: Document multi-language challenge authoring**
   - Commit target: `docs: document multi-language zip_project authoring`
-  - Scope: Add manifest examples, reference image guidance, setup/build/run contract, two-container solution execution model, scorer/solution data boundaries, internet policy, dependency metadata guidance, multi-run evaluation examples, and language examples.
+  - Scope: Add manifest examples, generated CLI workspace profiles, reference image guidance, setup/build/run contract, two-container solution execution model, scorer/solution data boundaries, internet policy, dependency metadata guidance, multi-run evaluation examples, language examples, and quota/admin capacity notes. Local benchmark-image validation remains a separate CLI milestone.
   - Test spec: Validate documented sample ZIPs against parser fixtures and at least one local runner smoke test.
 
 - **M0.2-DOC-2: Document GPU benchmark expectations**
@@ -366,14 +366,14 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 | `M0.2-WORKER-3: Add GPU profile recording` | Planned | GPU metadata foundation. |
 | `M0.2-WORKER-4: Add GPU validation and official scheduling hooks` | Planned | Depends on GPU metadata and worker capability flags. |
 | `M0.2-BE-1: Expose resource profiles` | Implemented | Public challenge detail responses expose strict resource profile metadata and reject invalid stored specs. |
-| `M0.2-BE-2: Add capacity and quota controls` | Planned | Protects expensive validation and official capacity. |
-| `M0.2-CLI-1: Generate manifest-based solution workspaces` | Planned | Depends on manifest schema. |
+| `M0.2-BE-2: Add capacity and quota controls` | Implemented | Enforces validation and official quotas before artifact upload, exposes `/admin/capacity`, and documents admin official-run overrides. GPU quota remains in the skipped GPU lane. |
+| `M0.2-CLI-1: Generate manifest-based solution workspaces` | Implemented | `init-solution` now generates validated manifests for `python-cpu`, `rust-cpu`, `node-cpu`, and `generic-cpu` profiles. |
 | `M0.2-CLI-2: Run local validation with benchmark images` | Planned | Depends on benchmark image metadata. |
 | `M0.2-CLI-3: Request GPU validation` | Planned | Depends on GPU validation API and quota. |
 | `M0.2-WEB-1: Show protocol and resource metadata` | Implemented | Observer challenge pages and frontend schemas display protocol, manifest, scorer command, and resource profile metadata. |
-| `M0.2-ADMIN-1: Manage resource profiles and quotas` | Planned | Depends on admin shell and resource profile APIs. |
+| `M0.2-ADMIN-1: Manage resource profiles and quotas` | Implemented | Admin challenge rows show current resource profiles and mode flags; the capacity tab shows configured quotas and active usage. GPU configuration remains in the skipped GPU lane. |
 | `M0.2-EXAMPLE-1: Add zip_project protocol fixture challenges and submissions` | Implemented | Adds sample-sum stdio and grid-routing file-mode fixtures, manifest-based solutions, scorer tests, and worker integration coverage for multi-run evaluation and run-stage no-egress behavior. |
-| `M0.2-DOC-1: Document multi-language challenge authoring` | Partially implemented | Documents the canonical protocol, run manifests, resource profiles, and execution isolation; broader language examples and local benchmark-image validation remain planned. |
+| `M0.2-DOC-1: Document multi-language challenge authoring` | Implemented | Documents the canonical protocol, generated CLI profiles, run manifests, resource profiles, execution isolation, dependency metadata, quota controls, and admin capacity views. Local benchmark-image validation remains `M0.2-CLI-2`. |
 | `M0.2-DOC-2: Document GPU benchmark expectations` | Planned | Should ship with GPU profile implementation. |
 
 ## v0.2.5-mvp - Hosted MVP Demo and Human-Facing Web Revamp
