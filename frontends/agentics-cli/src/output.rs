@@ -2,6 +2,10 @@ use anyhow::Result;
 use serde::Serialize;
 use serde_json::json;
 use shared::models::challenge::{ChallengeDetailResponse, ChallengeListResponse};
+use shared::models::challenge_creation::{
+    ChallengeDraftCleanupResponse, ChallengeDraftResponse, ChallengePrivateAssetResponse,
+    GithubIdentityResponse,
+};
 use shared::models::request::{
     CreateSolutionSubmissionResponse, RegisterAgentResponse, SolutionSubmissionResponse,
 };
@@ -75,6 +79,78 @@ pub fn render_config_set(
         OutputFormat::Table => Ok(format!(
             "updated: {key}\nconfig: {}",
             settings.config_path.display()
+        )),
+    }
+}
+
+pub fn render_github_identity(
+    response: &GithubIdentityResponse,
+    format: OutputFormat,
+) -> Result<String> {
+    match format {
+        OutputFormat::Json => pretty_json(response),
+        OutputFormat::Table => Ok(format!(
+            "linked_github_identity: {}\ngithub_user_id: {}\nagent_id: {}",
+            response.github_login, response.github_user_id, response.agent_id
+        )),
+    }
+}
+
+pub fn render_challenge_draft(
+    response: &ChallengeDraftResponse,
+    format: OutputFormat,
+) -> Result<String> {
+    match format {
+        OutputFormat::Json => pretty_json(response),
+        OutputFormat::Table => Ok(format!(
+            "challenge_draft: {}\nchallenge: {}\nrequest: {}\nstatus: {}\nrepo: {}#{}\npath: {}\ncommit: {}\nmanifest_sha256: {}\npublished_version: {}\nprivate_assets: {}\nvalidation_records: {}",
+            response.id,
+            response.challenge_id,
+            status_label(&response.request),
+            status_label(&response.status),
+            response.repo_url,
+            response.pr_number,
+            response.challenge_path,
+            response.commit_sha,
+            response.manifest_sha256,
+            response
+                .published_challenge_version_id
+                .as_deref()
+                .unwrap_or("none"),
+            response.private_assets.len(),
+            response.validation_records.len()
+        )),
+    }
+}
+
+pub fn render_challenge_private_asset(
+    response: &ChallengePrivateAssetResponse,
+    format: OutputFormat,
+) -> Result<String> {
+    match format {
+        OutputFormat::Json => pretty_json(response),
+        OutputFormat::Table => Ok(format!(
+            "private_asset: {}\ndraft: {}\nasset_id: {}\nkind: {}\nrequired: {}\nsize_bytes: {}\nsha256: {}",
+            response.id,
+            response.draft_id,
+            response.asset_id,
+            status_label(&response.kind),
+            response.required,
+            response.size_bytes,
+            response.sha256
+        )),
+    }
+}
+
+pub fn render_challenge_draft_cleanup(
+    response: &ChallengeDraftCleanupResponse,
+    format: OutputFormat,
+) -> Result<String> {
+    match format {
+        OutputFormat::Json => pretty_json(response),
+        OutputFormat::Table => Ok(format!(
+            "abandoned_drafts: {}\npurged_private_assets: {}",
+            response.abandoned_drafts, response.purged_private_assets
         )),
     }
 }

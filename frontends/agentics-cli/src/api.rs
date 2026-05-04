@@ -4,6 +4,11 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use shared::models::ErrorResponse;
 use shared::models::challenge::{ChallengeDetailResponse, ChallengeListResponse};
+use shared::models::challenge_creation::{
+    ChallengeDraftCleanupResponse, ChallengeDraftResponse, ChallengePrivateAssetResponse,
+    CreateChallengeDraftRequest, GithubIdentityResponse, LinkGithubIdentityRequest,
+    ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest, ValidateChallengeDraftRequest,
+};
 use shared::models::request::{
     CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse, RegisterAgentRequest,
     RegisterAgentResponse, SolutionSubmissionResponse,
@@ -69,6 +74,109 @@ impl ApiClient {
         self.get_json(&path, true).await
     }
 
+    pub async fn link_github_identity(
+        &self,
+        request: &LinkGithubIdentityRequest,
+    ) -> Result<GithubIdentityResponse> {
+        self.post_json("/api/challenge-creator/github-identity", request, true)
+            .await
+    }
+
+    pub async fn create_challenge_draft(
+        &self,
+        request: &CreateChallengeDraftRequest,
+    ) -> Result<ChallengeDraftResponse> {
+        self.post_json("/api/challenge-drafts", request, true).await
+    }
+
+    pub async fn get_challenge_draft(&self, draft_id: &str) -> Result<ChallengeDraftResponse> {
+        let path = format!("/api/challenge-drafts/{draft_id}");
+        self.get_json(&path, true).await
+    }
+
+    pub async fn upload_challenge_private_asset(
+        &self,
+        draft_id: &str,
+        request: &UploadChallengePrivateAssetRequest,
+    ) -> Result<ChallengePrivateAssetResponse> {
+        let path = format!("/api/challenge-drafts/{draft_id}/private-assets");
+        self.post_json(&path, request, true).await
+    }
+
+    pub async fn validate_challenge_draft_admin(
+        &self,
+        draft_id: &str,
+        request: &ValidateChallengeDraftRequest,
+        username: &str,
+        password: &str,
+    ) -> Result<ChallengeDraftResponse> {
+        let path = format!("/admin/challenge-drafts/{draft_id}/validate");
+        self.post_json_admin(&path, request, username, password)
+            .await
+    }
+
+    pub async fn approve_challenge_draft_admin(
+        &self,
+        draft_id: &str,
+        request: &ReviewChallengeDraftRequest,
+        username: &str,
+        password: &str,
+    ) -> Result<ChallengeDraftResponse> {
+        let path = format!("/admin/challenge-drafts/{draft_id}/approve");
+        self.post_json_admin(&path, request, username, password)
+            .await
+    }
+
+    pub async fn reject_challenge_draft_admin(
+        &self,
+        draft_id: &str,
+        request: &ReviewChallengeDraftRequest,
+        username: &str,
+        password: &str,
+    ) -> Result<ChallengeDraftResponse> {
+        let path = format!("/admin/challenge-drafts/{draft_id}/reject");
+        self.post_json_admin(&path, request, username, password)
+            .await
+    }
+
+    pub async fn publish_challenge_draft_admin(
+        &self,
+        draft_id: &str,
+        request: &ValidateChallengeDraftRequest,
+        username: &str,
+        password: &str,
+    ) -> Result<ChallengeDraftResponse> {
+        let path = format!("/admin/challenge-drafts/{draft_id}/publish");
+        self.post_json_admin(&path, request, username, password)
+            .await
+    }
+
+    pub async fn abandon_challenge_draft_admin(
+        &self,
+        draft_id: &str,
+        request: &ReviewChallengeDraftRequest,
+        username: &str,
+        password: &str,
+    ) -> Result<ChallengeDraftResponse> {
+        let path = format!("/admin/challenge-drafts/{draft_id}/abandon");
+        self.post_json_admin(&path, request, username, password)
+            .await
+    }
+
+    pub async fn cleanup_challenge_drafts_admin(
+        &self,
+        username: &str,
+        password: &str,
+    ) -> Result<ChallengeDraftCleanupResponse> {
+        self.post_json_admin(
+            "/admin/challenge-drafts/cleanup",
+            &serde_json::json!({}),
+            username,
+            password,
+        )
+        .await
+    }
+
     async fn get_json<T>(&self, path: &str, authenticated: bool) -> Result<T>
     where
         T: DeserializeOwned,
@@ -83,6 +191,24 @@ impl ApiClient {
         T: DeserializeOwned,
     {
         let request = self.request(Method::POST, path, authenticated)?.json(body);
+        parse_response(request.send().await?).await
+    }
+
+    async fn post_json_admin<B, T>(
+        &self,
+        path: &str,
+        body: &B,
+        username: &str,
+        password: &str,
+    ) -> Result<T>
+    where
+        B: Serialize + ?Sized,
+        T: DeserializeOwned,
+    {
+        let request = self
+            .request(Method::POST, path, false)?
+            .basic_auth(username, Some(password))
+            .json(body);
         parse_response(request.send().await?).await
     }
 

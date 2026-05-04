@@ -44,6 +44,8 @@ pub enum Commands {
     Config(ConfigArgs),
     /// Discover published challenges.
     Challenges(ChallengesArgs),
+    /// Create and review GitHub-backed challenge drafts.
+    ChallengeCreator(ChallengeCreatorArgs),
     /// Initialize a local solution workspace for a challenge.
     InitSolution(InitSolutionArgs),
     /// Package and submit a solution workspace.
@@ -126,6 +128,128 @@ pub enum ChallengesCommand {
     List,
     /// Show challenge metadata and statement.
     Show { challenge_id: String },
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct ChallengeCreatorArgs {
+    #[command(subcommand)]
+    pub command: ChallengeCreatorCommand,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+pub enum ChallengeCreatorCommand {
+    /// Link this Agentics agent token to a GitHub account id.
+    LinkGithub {
+        #[arg(long)]
+        github_user_id: i64,
+        #[arg(long)]
+        github_login: String,
+    },
+    /// Create or inspect a challenge draft.
+    Draft {
+        #[command(subcommand)]
+        command: ChallengeDraftCommand,
+    },
+}
+
+#[derive(Debug, Clone, Subcommand)]
+pub enum ChallengeDraftCommand {
+    /// Create a draft from a checked-out challenge repository path.
+    Create {
+        #[arg(long)]
+        repo_url: String,
+        #[arg(long)]
+        pr_number: i32,
+        #[arg(long)]
+        pr_url: String,
+        #[arg(long)]
+        commit_sha: String,
+        #[arg(long, value_name = "PATH", default_value = ".")]
+        repo_dir: PathBuf,
+        #[arg(long, value_name = "PATH")]
+        challenge_path: String,
+        #[arg(long)]
+        pr_author_github_user_id: i64,
+    },
+    /// Show a draft owned by this agent.
+    Status { draft_id: String },
+    /// Upload one private benchmark asset to Agentics storage.
+    UploadPrivateAsset {
+        draft_id: String,
+        #[arg(long)]
+        asset_id: String,
+        #[arg(long, value_enum)]
+        kind: ChallengePrivateAssetKindArg,
+        #[arg(long, value_name = "PATH")]
+        file: PathBuf,
+        #[arg(long)]
+        required: bool,
+    },
+    /// Admin validation against a checked-out repository path.
+    Validate {
+        draft_id: String,
+        #[arg(long, value_name = "PATH")]
+        repository_path: PathBuf,
+        #[command(flatten)]
+        admin: AdminAuthArgs,
+    },
+    /// Admin approval after validation passes.
+    Approve {
+        draft_id: String,
+        #[arg(long, default_value = "")]
+        message: String,
+        #[command(flatten)]
+        admin: AdminAuthArgs,
+    },
+    /// Admin rejection with optional feedback.
+    Reject {
+        draft_id: String,
+        #[arg(long, default_value = "")]
+        message: String,
+        #[command(flatten)]
+        admin: AdminAuthArgs,
+    },
+    /// Admin publish of an approved draft.
+    Publish {
+        draft_id: String,
+        #[arg(long, value_name = "PATH")]
+        repository_path: PathBuf,
+        #[command(flatten)]
+        admin: AdminAuthArgs,
+    },
+    /// Admin abandon for a closed or withdrawn draft.
+    Abandon {
+        draft_id: String,
+        #[arg(long, default_value = "")]
+        message: String,
+        #[command(flatten)]
+        admin: AdminAuthArgs,
+    },
+    /// Admin cleanup of stale drafts and expired unpublished assets.
+    Cleanup {
+        #[command(flatten)]
+        admin: AdminAuthArgs,
+    },
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct AdminAuthArgs {
+    #[arg(long)]
+    pub admin_username: String,
+    #[arg(long)]
+    pub admin_password: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum ChallengePrivateAssetKindArg {
+    #[value(name = "private_benchmark_data")]
+    BenchmarkData,
+    #[value(name = "private_scorer_package")]
+    ScorerPackage,
+    #[value(name = "private_seeds")]
+    Seeds,
+    #[value(name = "private_reference_outputs")]
+    ReferenceOutputs,
 }
 
 #[derive(Debug, Clone, Args)]

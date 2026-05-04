@@ -10,7 +10,9 @@ use anyhow::Result;
 use clap::Parser;
 
 use crate::api::ApiClient;
-use crate::cli::{AuthCommand, ChallengesCommand, Cli, Commands, ConfigCommand};
+use crate::cli::{
+    AuthCommand, ChallengeCreatorCommand, ChallengesCommand, Cli, Commands, ConfigCommand,
+};
 use crate::config::{ConfigStore, Environment, ResolvedSettings};
 
 pub async fn run_from_env() -> Result<()> {
@@ -60,6 +62,18 @@ pub async fn execute(cli: Cli, env: Environment) -> Result<String> {
                 }
             }
         }
+        Commands::ChallengeCreator(args) => match args.command {
+            ChallengeCreatorCommand::LinkGithub {
+                github_user_id,
+                github_login,
+            } => {
+                commands::link_github_identity(github_user_id, github_login, cli.output, &settings)
+                    .await
+            }
+            ChallengeCreatorCommand::Draft { command } => {
+                commands::challenge_draft(command, cli.output, &settings).await
+            }
+        },
         Commands::InitSolution(args) => {
             let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
             let challenge = client.get_challenge(&args.challenge_id).await?;
@@ -591,6 +605,218 @@ mod tests {
         assert_eq!(requests[0].url.path(), "/api/public/challenges/sample-sum");
     }
 
+    #[tokio::test]
+    async fn challenge_creator_links_github_identity() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/challenge-creator/github-identity"))
+            .and(header("authorization", "Bearer test-token"))
+            .and(body_json(json!({
+                "github_user_id": 1001,
+                "github_login": "creator"
+            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "agent_id": "agent-1",
+                "github_user_id": 1001,
+                "github_login": "creator"
+            })))
+            .mount(&server)
+            .await;
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let config_path = temp.path().join("config.toml");
+        let cli = Cli::parse_from([
+            "agentics",
+            "--config",
+            config_path.to_str().expect("utf8 path"),
+            "--api-base-url",
+            &server.uri(),
+            "--token",
+            "test-token",
+            "challenge-creator",
+            "link-github",
+            "--github-user-id",
+            "1001",
+            "--github-login",
+            "creator",
+        ]);
+
+        let output = execute(cli, Environment::default())
+            .await
+            .expect("link should succeed");
+
+        assert!(output.contains("linked_github_identity: creator"));
+    }
+
+    #[tokio::test]
+    async fn challenge_creator_creates_draft_from_repo_manifest() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/challenge-drafts"))
+            .and(header("authorization", "Bearer test-token"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(challenge_draft_json("draft")))
+            .mount(&server)
+            .await;
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let challenge_root = temp.path().join("challenges/sample-sum");
+        std::fs::create_dir_all(&challenge_root).expect("challenge root");
+        std::fs::write(
+            challenge_root.join("agentics.challenge.json"),
+            challenge_manifest_json().to_string(),
+        )
+        .expect("manifest");
+        let config_path = temp.path().join("config.toml");
+        let cli = Cli::parse_from([
+            "agentics",
+            "--config",
+            config_path.to_str().expect("utf8 path"),
+            "--api-base-url",
+            &server.uri(),
+            "--token",
+            "test-token",
+            "challenge-creator",
+            "draft",
+            "create",
+            "--repo-url",
+            "https://github.com/agentics-reifying/agentics-challenges",
+            "--pr-number",
+            "7",
+            "--pr-url",
+            "https://github.com/agentics-reifying/agentics-challenges/pull/7",
+            "--commit-sha",
+            "0123456789abcdef",
+            "--repo-dir",
+            temp.path().to_str().expect("utf8 path"),
+            "--challenge-path",
+            "challenges/sample-sum",
+            "--pr-author-github-user-id",
+            "1001",
+        ]);
+
+        let output = execute(cli, Environment::default())
+            .await
+            .expect("draft create should succeed");
+        let requests = server
+            .received_requests()
+            .await
+            .expect("requests should be recorded");
+        let body: serde_json::Value =
+            serde_json::from_slice(&requests[0].body).expect("request body");
+
+        assert!(output.contains("challenge_draft: draft-1"));
+        assert_eq!(body["manifest"]["request"], "new_challenge");
+        assert_eq!(body["challenge_path"], "challenges/sample-sum");
+    }
+
+    #[tokio::test]
+    async fn challenge_creator_uploads_private_asset_file() {
+        let server = MockServer::start().await;
+        let encoded_asset = {
+            use base64::{Engine as _, engine::general_purpose::STANDARD};
+            STANDARD.encode(b"private zip bytes")
+        };
+        Mock::given(method("POST"))
+            .and(path("/api/challenge-drafts/draft-1/private-assets"))
+            .and(header("authorization", "Bearer test-token"))
+            .and(body_json(json!({
+                "asset_id": "official-cases",
+                "kind": "private_benchmark_data",
+                "required": true,
+                "asset_base64": encoded_asset
+            })))
+            .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+                "id": "asset-row-1",
+                "draft_id": "draft-1",
+                "asset_id": "official-cases",
+                "kind": "private_benchmark_data",
+                "required": true,
+                "size_bytes": 17,
+                "sha256": "asset-sha",
+                "storage_uri": "storage/challenge-drafts/draft-1/private-assets/official-cases.bin",
+                "uploader_agent_id": "agent-1",
+                "created_at": "2026-05-01T00:00:00Z"
+            })))
+            .mount(&server)
+            .await;
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let config_path = temp.path().join("config.toml");
+        let asset_path = temp.path().join("official-cases.zip");
+        std::fs::write(&asset_path, b"private zip bytes").expect("asset file");
+        let cli = Cli::parse_from([
+            "agentics",
+            "--config",
+            config_path.to_str().expect("utf8 path"),
+            "--api-base-url",
+            &server.uri(),
+            "--token",
+            "test-token",
+            "challenge-creator",
+            "draft",
+            "upload-private-asset",
+            "draft-1",
+            "--asset-id",
+            "official-cases",
+            "--kind",
+            "private_benchmark_data",
+            "--file",
+            asset_path.to_str().expect("utf8 path"),
+            "--required",
+        ]);
+
+        let output = execute(cli, Environment::default())
+            .await
+            .expect("asset upload should succeed");
+
+        assert!(output.contains("private_asset: asset-row-1"));
+        assert!(output.contains("asset_id: official-cases"));
+    }
+
+    #[tokio::test]
+    async fn challenge_creator_validates_draft_with_admin_auth() {
+        let server = MockServer::start().await;
+        let admin_auth = format!("Basic {}", {
+            use base64::{Engine as _, engine::general_purpose::STANDARD};
+            STANDARD.encode("admin:secret")
+        });
+        Mock::given(method("POST"))
+            .and(path("/admin/challenge-drafts/draft-1/validate"))
+            .and(header("authorization", admin_auth))
+            .and(body_json(json!({ "repository_path": "/tmp/challenges" })))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(challenge_draft_json("validated")),
+            )
+            .mount(&server)
+            .await;
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let config_path = temp.path().join("config.toml");
+        let cli = Cli::parse_from([
+            "agentics",
+            "--config",
+            config_path.to_str().expect("utf8 path"),
+            "--api-base-url",
+            &server.uri(),
+            "challenge-creator",
+            "draft",
+            "validate",
+            "draft-1",
+            "--repository-path",
+            "/tmp/challenges",
+            "--admin-username",
+            "admin",
+            "--admin-password",
+            "secret",
+        ]);
+
+        let output = execute(cli, Environment::default())
+            .await
+            .expect("admin validation should succeed");
+
+        assert!(output.contains("status: validated"));
+    }
+
     fn challenge_detail_json(validation_enabled: bool) -> serde_json::Value {
         json!({
             "id": "sample-sum",
@@ -670,6 +896,51 @@ mod tests {
                 }
             },
             "statement_markdown": "# Sample Sum"
+        })
+    }
+
+    fn challenge_manifest_json() -> serde_json::Value {
+        json!({
+            "schema_version": 1,
+            "request": "new_challenge",
+            "challenge_id": "sample-sum",
+            "title": "Sample Sum",
+            "summary": "Add numbers",
+            "readme_path": "README.md",
+            "version": {
+                "version": "v1",
+                "bundle_path": "versions/v1"
+            },
+            "private_assets": [
+                {
+                    "asset_id": "official-cases",
+                    "kind": "private_benchmark_data",
+                    "required": true
+                }
+            ]
+        })
+    }
+
+    fn challenge_draft_json(status: &str) -> serde_json::Value {
+        json!({
+            "id": "draft-1",
+            "challenge_id": "sample-sum",
+            "request": "new_challenge",
+            "status": status,
+            "creator_agent_id": "agent-1",
+            "creator_github_user_id": 1001,
+            "creator_github_login": "creator",
+            "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
+            "pr_number": 7,
+            "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/7",
+            "commit_sha": "0123456789abcdef",
+            "challenge_path": "challenges/sample-sum",
+            "manifest_sha256": "abc123",
+            "manifest": challenge_manifest_json(),
+            "private_assets": [],
+            "validation_records": [],
+            "created_at": "2026-05-01T00:00:00Z",
+            "updated_at": "2026-05-01T00:00:00Z"
         })
     }
 }

@@ -1,12 +1,22 @@
 use std::time::{Duration, Instant};
 
+use std::path::Path;
+
 use anyhow::{Context, Result, bail};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use shared::models::challenge::{BenchmarkTargetSpec, ChallengeDetailResponse};
+use shared::models::challenge_creation::{
+    ChallengeCreationManifest, ChallengePrivateAssetKind, CreateChallengeDraftRequest,
+    LinkGithubIdentityRequest, ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest,
+    ValidateChallengeDraftRequest,
+};
 use shared::models::request::{CreateSolutionSubmissionRequest, RegisterAgentRequest};
 
 use crate::api::ApiClient;
-use crate::cli::{self, ConfigKey, RegisterArgs, SubmitArgs, ValidateArgs};
+use crate::cli::{
+    self, AdminAuthArgs, ChallengeDraftCommand, ChallengePrivateAssetKindArg, ConfigKey,
+    RegisterArgs, SubmitArgs, ValidateArgs,
+};
 use crate::config::{CliConfig, ConfigStore, ResolvedSettings, normalize_api_base_url};
 use crate::{output, package};
 
@@ -61,6 +71,239 @@ pub fn set_config(
     };
     store.save(&config)?;
     output::render_config_set(updated_key, settings, output_format)
+}
+
+pub async fn link_github_identity(
+    github_user_id: i64,
+    github_login: String,
+    output_format: cli::OutputFormat,
+    settings: &ResolvedSettings,
+) -> Result<String> {
+    let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
+    let response = client
+        .link_github_identity(&LinkGithubIdentityRequest {
+            github_user_id,
+            github_login,
+        })
+        .await?;
+    output::render_github_identity(&response, output_format)
+}
+
+pub async fn challenge_draft(
+    command: ChallengeDraftCommand,
+    output_format: cli::OutputFormat,
+    settings: &ResolvedSettings,
+) -> Result<String> {
+    let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
+    match command {
+        ChallengeDraftCommand::Create {
+            repo_url,
+            pr_number,
+            pr_url,
+            commit_sha,
+            repo_dir,
+            challenge_path,
+            pr_author_github_user_id,
+        } => {
+            let manifest = read_challenge_creation_manifest(&repo_dir, &challenge_path)?;
+            let response = client
+                .create_challenge_draft(&CreateChallengeDraftRequest {
+                    repo_url,
+                    pr_number,
+                    pr_url,
+                    commit_sha,
+                    challenge_path,
+                    pr_author_github_user_id,
+                    manifest,
+                })
+                .await?;
+            output::render_challenge_draft(&response, output_format)
+        }
+        ChallengeDraftCommand::Status { draft_id } => {
+            let response = client.get_challenge_draft(&draft_id).await?;
+            output::render_challenge_draft(&response, output_format)
+        }
+        ChallengeDraftCommand::UploadPrivateAsset {
+            draft_id,
+            asset_id,
+            kind,
+            file,
+            required,
+        } => {
+            let bytes = std::fs::read(&file)
+                .with_context(|| format!("failed to read private asset {}", file.display()))?;
+            let response = client
+                .upload_challenge_private_asset(
+                    &draft_id,
+                    &UploadChallengePrivateAssetRequest {
+                        asset_id,
+                        kind: kind.into(),
+                        required,
+                        asset_base64: STANDARD.encode(bytes),
+                    },
+                )
+                .await?;
+            output::render_challenge_private_asset(&response, output_format)
+        }
+        ChallengeDraftCommand::Validate {
+            draft_id,
+            repository_path,
+            admin,
+        } => {
+            let response = client
+                .validate_challenge_draft_admin(
+                    &draft_id,
+                    &ValidateChallengeDraftRequest {
+                        repository_path: repository_path.to_string_lossy().to_string(),
+                    },
+                    &admin.admin_username,
+                    &admin.admin_password,
+                )
+                .await?;
+            output::render_challenge_draft(&response, output_format)
+        }
+        ChallengeDraftCommand::Approve {
+            draft_id,
+            message,
+            admin,
+        } => {
+            review_draft(
+                &client,
+                output_format,
+                admin,
+                draft_id,
+                message,
+                DraftReviewAction::Approve,
+            )
+            .await
+        }
+        ChallengeDraftCommand::Reject {
+            draft_id,
+            message,
+            admin,
+        } => {
+            review_draft(
+                &client,
+                output_format,
+                admin,
+                draft_id,
+                message,
+                DraftReviewAction::Reject,
+            )
+            .await
+        }
+        ChallengeDraftCommand::Publish {
+            draft_id,
+            repository_path,
+            admin,
+        } => {
+            let response = client
+                .publish_challenge_draft_admin(
+                    &draft_id,
+                    &ValidateChallengeDraftRequest {
+                        repository_path: repository_path.to_string_lossy().to_string(),
+                    },
+                    &admin.admin_username,
+                    &admin.admin_password,
+                )
+                .await?;
+            output::render_challenge_draft(&response, output_format)
+        }
+        ChallengeDraftCommand::Abandon {
+            draft_id,
+            message,
+            admin,
+        } => {
+            review_draft(
+                &client,
+                output_format,
+                admin,
+                draft_id,
+                message,
+                DraftReviewAction::Abandon,
+            )
+            .await
+        }
+        ChallengeDraftCommand::Cleanup { admin } => {
+            let response = client
+                .cleanup_challenge_drafts_admin(&admin.admin_username, &admin.admin_password)
+                .await?;
+            output::render_challenge_draft_cleanup(&response, output_format)
+        }
+    }
+}
+
+enum DraftReviewAction {
+    Approve,
+    Reject,
+    Abandon,
+}
+
+async fn review_draft(
+    client: &ApiClient,
+    output_format: cli::OutputFormat,
+    admin: AdminAuthArgs,
+    draft_id: String,
+    message: String,
+    action: DraftReviewAction,
+) -> Result<String> {
+    let request = ReviewChallengeDraftRequest { message };
+    let response = match action {
+        DraftReviewAction::Approve => {
+            client
+                .approve_challenge_draft_admin(
+                    &draft_id,
+                    &request,
+                    &admin.admin_username,
+                    &admin.admin_password,
+                )
+                .await?
+        }
+        DraftReviewAction::Reject => {
+            client
+                .reject_challenge_draft_admin(
+                    &draft_id,
+                    &request,
+                    &admin.admin_username,
+                    &admin.admin_password,
+                )
+                .await?
+        }
+        DraftReviewAction::Abandon => {
+            client
+                .abandon_challenge_draft_admin(
+                    &draft_id,
+                    &request,
+                    &admin.admin_username,
+                    &admin.admin_password,
+                )
+                .await?
+        }
+    };
+    output::render_challenge_draft(&response, output_format)
+}
+
+fn read_challenge_creation_manifest(
+    repo_dir: &Path,
+    challenge_path: &str,
+) -> Result<ChallengeCreationManifest> {
+    let path = repo_dir
+        .join(challenge_path)
+        .join(shared::models::challenge_creation::AGENTICS_CHALLENGE_MANIFEST_FILE);
+    let raw = std::fs::read_to_string(&path)
+        .with_context(|| format!("failed to read {}", path.display()))?;
+    serde_json::from_str(&raw).with_context(|| format!("failed to parse {}", path.display()))
+}
+
+impl From<ChallengePrivateAssetKindArg> for ChallengePrivateAssetKind {
+    fn from(value: ChallengePrivateAssetKindArg) -> Self {
+        match value {
+            ChallengePrivateAssetKindArg::BenchmarkData => Self::PrivateBenchmarkData,
+            ChallengePrivateAssetKindArg::ScorerPackage => Self::PrivateScorerPackage,
+            ChallengePrivateAssetKindArg::Seeds => Self::PrivateSeeds,
+            ChallengePrivateAssetKindArg::ReferenceOutputs => Self::PrivateReferenceOutputs,
+        }
+    }
 }
 
 pub async fn submit(
