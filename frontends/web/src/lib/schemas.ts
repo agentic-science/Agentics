@@ -17,6 +17,8 @@ const metricValueSchema = z
   })
   .strict();
 const networkAccessSchema = z.enum(["disabled", "loopback", "enabled"]);
+const dockerPlatformSchema = z.enum(["linux/arm64", "linux/amd64"]);
+const benchmarkAcceleratorSchema = z.enum(["cpu", "gpu"]);
 const resourceProfileSchema = z
   .object({
     id: z.string().min(1),
@@ -39,6 +41,15 @@ const resourceProfileSchema = z
       })
       .strict()
       .optional(),
+  })
+  .strict();
+const benchmarkTargetSchema = z
+  .object({
+    id: z.string().min(1),
+    docker_platform: dockerPlatformSchema,
+    accelerator: benchmarkAcceleratorSchema,
+    validation_enabled: z.boolean(),
+    resource_profile: resourceProfileSchema,
   })
   .strict();
 
@@ -93,6 +104,7 @@ export const publicCaseResultSchema = z
 export const evaluationDtoSchema = z
   .object({
     id: z.string().min(1),
+    benchmark_target_id: z.string().min(1),
     status: z.enum(["queued", "running", "completed", "failed"]),
     eval_type: z.enum(["validation", "official"]),
     primary_score: scoreSchema.optional(),
@@ -128,7 +140,7 @@ export const challengeBundleSpecSchema = z
         result_file: z.string().min(1),
       })
       .strict(),
-    resource_profile: resourceProfileSchema,
+    benchmark_targets: z.array(benchmarkTargetSchema).min(1),
     execution: z
       .object({
         validation_runs: z.string().min(1).optional(),
@@ -141,7 +153,6 @@ export const challengeBundleSpecSchema = z
         private_benchmark_dir: z.string().min(1).optional(),
         public_policy: z.enum(["full", "score_only"]),
         private_benchmark_policy: z.literal("score_only"),
-        validation_enabled: z.boolean(),
         private_benchmark_enabled: z.boolean(),
       })
       .strict(),
@@ -199,6 +210,7 @@ export const publicSolutionSubmissionListItemDtoSchema = z
     id: idSchema,
     challenge_id: idSchema,
     challenge_version_id: idSchema,
+    benchmark_target_id: z.string().min(1),
     challenge_title: z.string().min(1),
     agent_id: idSchema,
     agent_name: z.string().min(1),
@@ -224,6 +236,7 @@ export const publicSolutionSubmissionListResponseSchema = z
 /** One public leaderboard row for a challenge. */
 export const leaderboardEntryDtoSchema = z
   .object({
+    benchmark_target_id: z.string().min(1),
     agent_id: idSchema,
     agent_name: z.string().min(1),
     best_solution_submission_id: idSchema,
@@ -238,7 +251,10 @@ export const leaderboardEntryDtoSchema = z
 
 /** Public leaderboard response. */
 export const leaderboardResponseSchema = z
-  .object({ items: z.array(leaderboardEntryDtoSchema) })
+  .object({
+    benchmark_target_id: z.string().min(1),
+    items: z.array(leaderboardEntryDtoSchema),
+  })
   .strict();
 
 /** One reply nested under a discussion thread. */
@@ -281,8 +297,7 @@ export const adminChallengeListItemSchema = z
     summary: z.string().min(1),
     status: z.string().min(1),
     current_version: currentVersionDtoSchema.optional(),
-    current_resource_profile: resourceProfileSchema.optional(),
-    validation_enabled: z.boolean().optional(),
+    current_benchmark_targets: z.array(benchmarkTargetSchema).optional(),
     private_benchmark_enabled: z.boolean().optional(),
     created_at: isoTimestampSchema,
     updated_at: isoTimestampSchema,
@@ -326,6 +341,7 @@ export const adminSolutionSubmissionListItemSchema = z
     id: idSchema,
     challenge_id: idSchema,
     challenge_title: z.string().min(1),
+    benchmark_target_id: z.string().min(1),
     agent_id: idSchema,
     agent_name: z.string().min(1),
     status: z.string().min(1),
@@ -351,6 +367,7 @@ export const evaluationJobResponseSchema = z
   .object({
     job_id: idSchema,
     solution_submission_id: idSchema,
+    benchmark_target_id: z.string().min(1),
     eval_type: z.string().min(1),
     status: z.string().min(1),
   })
@@ -435,6 +452,7 @@ export const solutionSubmissionArtifactResponseSchema = z
 export const evaluationJobDtoSchema = z
   .object({
     id: idSchema,
+    benchmark_target_id: z.string().min(1),
     status: z.enum(["queued", "running", "completed", "failed"]),
   })
   .strict();
@@ -446,6 +464,7 @@ export const solutionSubmissionResponseSchema = z
     challenge_id: idSchema,
     challenge_title: z.string().min(1).optional(),
     challenge_version_id: idSchema,
+    benchmark_target_id: z.string().min(1),
     agent_id: idSchema,
     agent_name: z.string().min(1).optional(),
     status: z.enum(["pending", "queued", "running", "completed", "failed"]),

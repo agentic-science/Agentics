@@ -452,7 +452,7 @@ function ChallengeAdminPanel({
                 <th>Challenge</th>
                 <th>Status</th>
                 <th>Version</th>
-                <th>Resource</th>
+                <th>Targets</th>
                 <th>Modes</th>
                 <th>Updated</th>
               </tr>
@@ -473,7 +473,7 @@ function ChallengeAdminPanel({
                     {challenge.current_version?.version ?? "—"}
                   </td>
                   <td>
-                    <ResourceProfileSummary challenge={challenge} />
+                    <BenchmarkTargetSummary challenge={challenge} />
                   </td>
                   <td>
                     <ModeSummary challenge={challenge} />
@@ -585,39 +585,46 @@ function CapacityPanel({
   );
 }
 
-function ResourceProfileSummary({
+function BenchmarkTargetSummary({
   challenge,
 }: {
   challenge: AdminChallengeListItem;
 }) {
-  const profile = challenge.current_resource_profile;
-  if (!profile) {
+  const targets = challenge.current_benchmark_targets ?? [];
+  if (targets.length === 0) {
     return <span className="text-[var(--text-muted)]">—</span>;
   }
 
   return (
-    <div>
-      <div className="font-mono text-[var(--text-caption)]">{profile.id}</div>
-      <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
-        {profile.solution_image} · {profile.cpu_limit_millis}m ·{" "}
-        {profile.memory_limit_mb} MiB
-      </div>
-      <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
-        run network: {profile.run_network_access}
-      </div>
+    <div className="flex flex-col gap-1">
+      {targets.map((target) => (
+        <div key={target.id}>
+          <div className="font-mono text-[var(--text-caption)]">
+            {target.id}
+          </div>
+          <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
+            {target.docker_platform} ·{" "}
+            {target.resource_profile.cpu_limit_millis}m ·{" "}
+            {target.resource_profile.memory_limit_mb} MiB
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
 
 function ModeSummary({ challenge }: { challenge: AdminChallengeListItem }) {
+  const targets = challenge.current_benchmark_targets ?? [];
+  const validationEnabled = targets.some((target) => target.validation_enabled);
+
   return (
     <div className="flex flex-wrap gap-2">
       <span
         className={`badge ${
-          challenge.validation_enabled ? "badge-success" : "badge-default"
+          validationEnabled ? "badge-success" : "badge-default"
         }`}
       >
-        validation {challenge.validation_enabled ? "on" : "off"}
+        validation {validationEnabled ? "on" : "off"}
       </span>
       <span
         className={`badge ${
@@ -821,6 +828,9 @@ function OperationsPanel({
                     </div>
                     <div className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
                       {submission.id.slice(0, 8)} · {submission.agent_name}
+                    </div>
+                    <div className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
+                      {submission.benchmark_target_id}
                     </div>
                   </td>
                   <td>

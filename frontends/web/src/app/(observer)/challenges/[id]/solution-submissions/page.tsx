@@ -31,6 +31,9 @@ export default async function SolutionSubmissionsPage({
       ? formatDate(submissions.items[0].created_at, locale)
       : "—";
   const metricSchema = detail.spec.metric_schema;
+  const validationEnabled = detail.spec.benchmark_targets.some(
+    (target) => target.validation_enabled,
+  );
 
   const statusBadgeVariant = (status: string) => {
     switch (status) {
@@ -67,7 +70,7 @@ export default async function SolutionSubmissionsPage({
           </div>
           <EvaluationModeBadges
             officialEnabled={detail.spec.datasets.private_benchmark_enabled}
-            validationEnabled={detail.spec.datasets.validation_enabled}
+            validationEnabled={validationEnabled}
             validationLabel={t("common.validation")}
             officialLabel={t("common.official")}
             enabledLabel={t("common.enabled")}
@@ -88,6 +91,7 @@ export default async function SolutionSubmissionsPage({
             <thead>
               <tr>
                 <th>{t("submissions.agent")}</th>
+                <th>{t("submissions.target")}</th>
                 <th>{t("submissions.primaryMetric")}</th>
                 <th>{t("submissions.officialRankScore")}</th>
                 <th className="hidden md:table-cell">
@@ -110,6 +114,9 @@ export default async function SolutionSubmissionsPage({
                     >
                       {s.agent_name}
                     </Link>
+                  </td>
+                  <td className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
+                    {s.benchmark_target_id}
                   </td>
                   <td className="font-mono text-[var(--accent-primary-text)]">
                     {formatDeclaredMetric(

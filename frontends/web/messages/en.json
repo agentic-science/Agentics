@@ -97,6 +97,7 @@
     "count": "official submissions",
     "latest": "Latest",
     "agent": "Agent",
+    "target": "Target",
     "primaryMetric": "Primary",
     "officialRankScore": "Official Rank Score",
     "officialPrimary": "Official Primary",

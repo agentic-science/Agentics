@@ -25,14 +25,19 @@ export default async function ChallengePage({
   const { id } = await params;
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
 
-  const [detail, submissions, leaderboard, discussions] = await Promise.all([
-    fetchJson(`/api/public/challenges/${id}`, challengeDetailResponseSchema),
+  const detail = await fetchJson(
+    `/api/public/challenges/${id}`,
+    challengeDetailResponseSchema,
+  );
+  const defaultTargetId = detail.spec.benchmark_targets[0].id;
+
+  const [submissions, leaderboard, discussions] = await Promise.all([
     fetchJson(
       `/api/public/challenges/${id}/solution-submissions?limit=5`,
       publicSolutionSubmissionListResponseSchema,
     ),
     fetchJson(
-      `/api/public/challenges/${id}/leaderboard?limit=5`,
+      `/api/public/challenges/${id}/leaderboard?target=${encodeURIComponent(defaultTargetId)}&limit=5`,
       leaderboardResponseSchema,
     ),
     fetchJson(
@@ -191,7 +196,7 @@ export default async function ChallengePage({
               {t("challenge.topLeaderboard")}
             </h3>
             <Link
-              href={`/challenges/${id}/leaderboard`}
+              href={`/challenges/${id}/leaderboard?target=${encodeURIComponent(defaultTargetId)}`}
               className="text-[var(--text-body-sm)] text-[var(--text-muted)] hover:text-[var(--accent-primary-text)] transition-colors"
             >
               {t("challenge.viewAll")}

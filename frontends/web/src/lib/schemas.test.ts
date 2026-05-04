@@ -8,6 +8,28 @@ import {
   solutionSubmissionResponseSchema,
 } from "./schemas";
 
+function benchmarkTarget(validationEnabled: boolean) {
+  return {
+    id: "cpu-linux-arm64",
+    docker_platform: "linux/arm64",
+    accelerator: "cpu",
+    validation_enabled: validationEnabled,
+    resource_profile: {
+      id: "python-cpu-small",
+      solution_image: "python:3.12-slim-bookworm",
+      scorer_image: "python:3.12-slim-bookworm",
+      timeout_sec: 30,
+      memory_limit_mb: 512,
+      cpu_limit_millis: 1000,
+      disk_limit_mb: 1024,
+      setup_network_access: "enabled",
+      build_network_access: "disabled",
+      run_network_access: "disabled",
+      scorer_network_access: "disabled",
+    },
+  };
+}
+
 describe("frontend API schemas", () => {
   it("accepts public challenge detail responses", () => {
     expect(() =>
@@ -31,19 +53,7 @@ describe("frontend API schemas", () => {
             command: ["python", "scorer/run.py"],
             result_file: "result.json",
           },
-          resource_profile: {
-            id: "python-cpu-small",
-            solution_image: "python:3.12-slim-bookworm",
-            scorer_image: "python:3.12-slim-bookworm",
-            timeout_sec: 30,
-            memory_limit_mb: 512,
-            cpu_limit_millis: 1000,
-            disk_limit_mb: 1024,
-            setup_network_access: "enabled",
-            build_network_access: "disabled",
-            run_network_access: "disabled",
-            scorer_network_access: "disabled",
-          },
+          benchmark_targets: [benchmarkTarget(true)],
           execution: {
             validation_runs: "public/runs.json",
             official_runs: "private-benchmark/runs.json",
@@ -53,7 +63,6 @@ describe("frontend API schemas", () => {
             private_benchmark_dir: "private-benchmark",
             public_policy: "full",
             private_benchmark_policy: "score_only",
-            validation_enabled: true,
             private_benchmark_enabled: true,
           },
           community: {
@@ -109,19 +118,7 @@ describe("frontend API schemas", () => {
           command: ["python", "scorer/run.py"],
           result_file: "result.json",
         },
-        resource_profile: {
-          id: "python-cpu-small",
-          solution_image: "python:3.12-slim-bookworm",
-          scorer_image: "python:3.12-slim-bookworm",
-          timeout_sec: 30,
-          memory_limit_mb: 512,
-          cpu_limit_millis: 1000,
-          disk_limit_mb: 1024,
-          setup_network_access: "enabled",
-          build_network_access: "disabled",
-          run_network_access: "disabled",
-          scorer_network_access: "disabled",
-        },
+        benchmark_targets: [benchmarkTarget(false)],
         execution: {
           validation_runs: "public/runs.json",
         },
@@ -129,7 +126,6 @@ describe("frontend API schemas", () => {
           public_dir: "public",
           public_policy: "full",
           private_benchmark_policy: "score_only",
-          validation_enabled: false,
           private_benchmark_enabled: false,
         },
         community: {
@@ -163,6 +159,7 @@ describe("frontend API schemas", () => {
         challenge_id: "sample-sum",
         challenge_title: "Sample Sum",
         challenge_version_id: "sample-sum:v1",
+        benchmark_target_id: "cpu-linux-arm64",
         agent_id: "agent-1",
         agent_name: "agent",
         status: "failed",
@@ -172,6 +169,7 @@ describe("frontend API schemas", () => {
         visible_after_eval: false,
         evaluation: {
           id: "eval-1",
+          benchmark_target_id: "cpu-linux-arm64",
           status: "failed",
           eval_type: "validation",
           aggregate_metrics: [],
@@ -180,6 +178,7 @@ describe("frontend API schemas", () => {
         },
         validation_evaluation: {
           id: "eval-1",
+          benchmark_target_id: "cpu-linux-arm64",
           status: "failed",
           eval_type: "validation",
           aggregate_metrics: [],
@@ -199,6 +198,7 @@ describe("frontend API schemas", () => {
         challenge_id: "sample-sum",
         challenge_title: "Sample Sum",
         challenge_version_id: "sample-sum:v1",
+        benchmark_target_id: "cpu-linux-arm64",
         agent_id: "agent-1",
         agent_name: "agent",
         status: "completed",
@@ -208,6 +208,7 @@ describe("frontend API schemas", () => {
         visible_after_eval: true,
         evaluation: {
           id: "eval-1",
+          benchmark_target_id: "cpu-linux-arm64",
           status: "completed",
           eval_type: "validation",
           primary_score: 1,
@@ -231,8 +232,10 @@ describe("frontend API schemas", () => {
   it("accepts structured leaderboard metrics", () => {
     expect(() =>
       leaderboardResponseSchema.parse({
+        benchmark_target_id: "cpu-linux-arm64",
         items: [
           {
+            benchmark_target_id: "cpu-linux-arm64",
             agent_id: "agent-1",
             agent_name: "solver",
             best_solution_submission_id: "solution_submission-1",
@@ -262,21 +265,15 @@ describe("frontend API schemas", () => {
             summary: "Add numbers",
             status: "active",
             current_version: { id: "sample-sum:v1", version: "v1" },
-            current_resource_profile: {
-              id: "python-cpu-small",
-              solution_image: "python:3.12-slim-bookworm",
-              scorer_image: "python:3.12-slim-bookworm",
-              timeout_sec: 30,
-              memory_limit_mb: 512,
-              cpu_limit_millis: 1000,
-              disk_limit_mb: 1024,
-              setup_network_access: "enabled",
-              build_network_access: "disabled",
-              run_network_access: "disabled",
-              scorer_network_access: "disabled",
-              hardware: { kind: "cpu" },
-            },
-            validation_enabled: true,
+            current_benchmark_targets: [
+              {
+                ...benchmarkTarget(true),
+                resource_profile: {
+                  ...benchmarkTarget(true).resource_profile,
+                  hardware: { kind: "cpu" },
+                },
+              },
+            ],
             private_benchmark_enabled: true,
             created_at: "2026-04-28T00:00:00Z",
             updated_at: "2026-04-28T00:00:00Z",

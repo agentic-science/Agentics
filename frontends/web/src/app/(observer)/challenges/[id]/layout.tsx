@@ -33,6 +33,10 @@ export default async function ChallengeLayout({
   }
 
   const community = challenge.spec.community;
+  const primaryTarget = challenge.spec.benchmark_targets[0];
+  const validationEnabled = challenge.spec.benchmark_targets.some(
+    (target) => target.validation_enabled,
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -58,7 +62,7 @@ export default async function ChallengeLayout({
                 officialEnabled={
                   challenge.spec.datasets.private_benchmark_enabled
                 }
-                validationEnabled={challenge.spec.datasets.validation_enabled}
+                validationEnabled={validationEnabled}
                 validationLabel={t("common.validation")}
                 officialLabel={t("common.official")}
                 enabledLabel={t("common.enabled")}
@@ -81,7 +85,7 @@ export default async function ChallengeLayout({
                 {t("challenge.limits.timeLimit")}
               </span>
               <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
-                {challenge.spec.resource_profile.timeout_sec}
+                {primaryTarget.resource_profile.timeout_sec}
                 {t("challenge.limits.seconds")}
               </span>
             </div>
@@ -91,7 +95,7 @@ export default async function ChallengeLayout({
                 {t("challenge.limits.memoryLimit")}
               </span>
               <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
-                {challenge.spec.resource_profile.memory_limit_mb}{" "}
+                {primaryTarget.resource_profile.memory_limit_mb}{" "}
                 {t("challenge.limits.mb")}
               </span>
             </div>
@@ -110,7 +114,7 @@ export default async function ChallengeLayout({
                 {t("challenge.config.resourceProfile")}
               </span>
               <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
-                {challenge.spec.resource_profile.id}
+                {primaryTarget.id}
               </span>
             </div>
           </div>
