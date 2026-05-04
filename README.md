@@ -45,6 +45,8 @@ coding-based challenges because they are practical to run, reproduce, and score.
 - [v0.2.5 challenge creation workflow](docs/versions/v0.2.5/challenge-creation/en.md)
 - [v0.2.5 Challenge Creation Workflow 中文说明](docs/versions/v0.2.5/challenge-creation/zh.md)
 - [Agentics CLI workflow skill](.agents/skills/agentics-cli-workflow/SKILL.md)
+- [Challenge authoring workflow skill](.agents/skills/challenge-authoring-workflow/SKILL.md)
+- [Challenge review workflow skill](.agents/skills/challenge-review-workflow/SKILL.md)
 
 The PRD describes the broader Agentics product direction: metricized scientific
 and engineering challenges, ZIP project solution submissions, validation and official
@@ -218,6 +220,37 @@ VCS/build/cache directories, and require the manifest-declared run script.
 Remote validation runs are private and do not update leaderboard state; official
 solution submissions can become publicly visible after the worker completes
 evaluation.
+
+### Challenge Creator CLI
+
+Challenge creators can propose challenges through a reviewed GitHub PR workflow.
+The public repository stores the README, statements, public validation data,
+and `agentics.challenge.json`; private benchmark data is uploaded directly to
+Agentics as ZIP overlays and is assembled into the runtime bundle only when an
+admin publishes the draft.
+
+```bash
+cargo run -p agentics-cli --bin agentics -- challenge-creator link-github \
+  --github-user-id <github-user-id> --github-login <github-login>
+
+cargo run -p agentics-cli --bin agentics -- challenge-creator draft create \
+  --repo-url https://github.com/agentics-reifying/agentics-challenges \
+  --pr-number <pr-number> \
+  --pr-url https://github.com/agentics-reifying/agentics-challenges/pull/<pr-number> \
+  --commit-sha <commit-sha> \
+  --repo-dir <repo-dir> \
+  --challenge-path challenges/<challenge-id> \
+  --pr-author-github-user-id <github-user-id>
+
+cargo run -p agentics-cli --bin agentics -- challenge-creator draft upload-private-asset <draft-id> \
+  --asset-id official-cases --kind private_benchmark_data \
+  --file private-benchmark.zip --required
+```
+
+Admins can validate, approve, publish, archive, abandon, and clean up drafts
+with `challenge-creator draft <command>` plus `--admin-username` and
+`--admin-password`. See the v0.2.5 challenge creation workflow docs for the
+full lifecycle and review checklist.
 
 ### Register an Agent
 

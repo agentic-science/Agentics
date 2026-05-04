@@ -528,17 +528,17 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 | `M0.2.5-CREATE-2: Add GitHub PR draft binding` | Implemented | Drafts bind repo URL, PR number, commit SHA, path, manifest hash, PR URL, and linked PR author id. |
 | `M0.2.5-CREATE-3: Add private benchmark asset upload and binding` | Implemented | Private asset upload stores digest, size, storage URI, uploader, and draft binding outside GitHub. |
 | `M0.2.5-CREATE-4: Add challenge draft validation and review lifecycle` | Implemented | Draft validation records, approval, rejection, publish transition, and audit events are implemented. |
-| `M0.2.5-CREATE-5: Add challenge version update and archive flows` | Planned | Covers current, superseded, active, and archived states. |
-| `M0.2.5-CREATE-6: Add stale draft cleanup and challenge creation quotas` | Planned | Protects storage and worker capacity. |
+| `M0.2.5-CREATE-5: Add challenge version update and archive flows` | Implemented | New-version publish assembles runtime bundles, makes the new version current, supersedes the previous current version, and archive drafts hide challenges while preserving direct records. |
+| `M0.2.5-CREATE-6: Add stale draft cleanup and challenge creation quotas` | Implemented | Active draft limits, private asset byte limits, validation-frequency limits, stale draft abandonment, and unpublished asset purge are implemented. |
 | `M0.2.5-DEMO-1: Decide official demo challenge set` | TODO | Requires further product discussion. |
 | `M0.2.5-DEMO-2: Package official demo challenges` | Planned | Blocked on demo challenge selection. |
 | `M0.2.5-DEPLOY-1: Add hosted deployment baseline` | Planned | Requires v0.2 deployment assumptions. |
 | `M0.2.5-OPS-1: Add public quota and abuse limits` | Planned | Protects hosted worker capacity. |
 | `M0.2.5-OPS-2: Add health checks, observability, and runbook` | Planned | Required before public demo. |
 | `M0.2.5-CLI-1: Validate hosted CLI onboarding` | Planned | Smoke path for agents and operators. |
-| `M0.2.5-CLI-2: Add challenge creator commands` | Planned | Creator CLI for draft lifecycle. |
-| `M0.2.5-SKILL-1: Add challenge authoring skill` | Planned | Teaches creator workflow. |
-| `M0.2.5-SKILL-2: Add challenge review skill` | Planned | Teaches reviewer workflow. |
+| `M0.2.5-CLI-2: Add challenge creator commands` | Implemented | CLI covers GitHub identity linking, draft creation/status, private asset upload, admin validation, review, publish, abandon, and cleanup. |
+| `M0.2.5-SKILL-1: Add challenge authoring skill` | Implemented | `.agents/skills/challenge-authoring-workflow/SKILL.md` documents creator workflow and private asset ZIP overlays. |
+| `M0.2.5-SKILL-2: Add challenge review skill` | Implemented | `.agents/skills/challenge-review-workflow/SKILL.md` documents reviewer checks and admin CLI flow. |
 | `M0.2.5-DOC-1: Document public MVP demo usage` | Planned | Should ship with hosted demo. |
 
 ## v0.3 - GitHub PR Solution Submission Protocol

@@ -528,17 +528,17 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 | `M0.2.5-CREATE-2：添加 GitHub PR draft binding` | 已实现 | Drafts 已绑定 repo URL、PR number、commit SHA、path、manifest hash、PR URL 和 linked PR author id。 |
 | `M0.2.5-CREATE-3：添加 private benchmark asset upload 和 binding` | 已实现 | Private asset upload 会在 GitHub 之外存储 digest、size、storage URI、uploader 和 draft binding。 |
 | `M0.2.5-CREATE-4：添加 challenge draft validation 和 review lifecycle` | 已实现 | 已实现 draft validation records、approval、rejection、publish transition 和 audit events。 |
-| `M0.2.5-CREATE-5：添加 challenge version update 和 archive flows` | 计划中 | 覆盖 current、superseded、active 和 archived states。 |
-| `M0.2.5-CREATE-6：添加 stale draft cleanup 和 challenge creation quotas` | 计划中 | 保护 storage 和 worker capacity。 |
+| `M0.2.5-CREATE-5：添加 challenge version update 和 archive flows` | 已实现 | New-version publish 会组装 runtime bundles、将新版本设为 current、将前一个 current version 标记为 superseded，并且 archive drafts 会隐藏 challenge 但保留 direct records。 |
+| `M0.2.5-CREATE-6：添加 stale draft cleanup 和 challenge creation quotas` | 已实现 | 已实现 active draft limits、private asset byte limits、validation-frequency limits、stale draft abandonment 和 unpublished asset purge。 |
 | `M0.2.5-DEMO-1：确定 official demo challenge set` | TODO | 需要后续产品讨论。 |
 | `M0.2.5-DEMO-2：打包 official demo challenges` | 计划中 | 被 demo challenge selection 阻塞。 |
 | `M0.2.5-DEPLOY-1：添加 hosted deployment baseline` | 计划中 | 需要 v0.2 deployment assumptions。 |
 | `M0.2.5-OPS-1：添加 public quota 和 abuse limits` | 计划中 | 保护 hosted worker capacity。 |
 | `M0.2.5-OPS-2：添加 health checks、observability 和 runbook` | 计划中 | 公开 demo 前必需。 |
 | `M0.2.5-CLI-1：验证 hosted CLI onboarding` | 计划中 | 面向 agents 和 operators 的 smoke path。 |
-| `M0.2.5-CLI-2：添加 challenge creator commands` | 计划中 | 面向 creators 的 draft lifecycle CLI。 |
-| `M0.2.5-SKILL-1：添加 challenge authoring skill` | 计划中 | 教授 creator workflow。 |
-| `M0.2.5-SKILL-2：添加 challenge review skill` | 计划中 | 教授 reviewer workflow。 |
+| `M0.2.5-CLI-2：添加 challenge creator commands` | 已实现 | CLI 覆盖 GitHub identity linking、draft creation/status、private asset upload、admin validation、review、publish、abandon 和 cleanup。 |
+| `M0.2.5-SKILL-1：添加 challenge authoring skill` | 已实现 | `.agents/skills/challenge-authoring-workflow/SKILL.md` 记录 creator workflow 和 private asset ZIP overlays。 |
+| `M0.2.5-SKILL-2：添加 challenge review skill` | 已实现 | `.agents/skills/challenge-review-workflow/SKILL.md` 记录 reviewer checks 和 admin CLI flow。 |
 | `M0.2.5-DOC-1：记录 public MVP demo usage` | 计划中 | 应与 hosted demo 一起交付。 |
 
 ## v0.3 - GitHub PR Solution Submission Protocol

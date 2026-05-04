@@ -98,6 +98,8 @@ Archive request:
 
 Supported private asset kinds are `private_benchmark_data`, `private_scorer_package`, `private_seeds`, and `private_reference_outputs`.
 
+Private assets are uploaded as ZIP overlays. During publish, Agentics copies the reviewed public bundle into storage and then extracts the uploaded ZIP overlays into that runtime bundle. Overlay entries must use safe relative paths, must not be symlinks, and must not overwrite public bundle files. For example, a private benchmark asset normally contains `private-benchmark/runs.json` when `execution.official_runs` points to that path.
+
 ## Draft Lifecycle
 
 1. A creator opens a PR in the challenge repository.
@@ -108,7 +110,55 @@ Supported private asset kinds are `private_benchmark_data`, `private_scorer_pack
 6. An admin approves or rejects the draft.
 7. An approved new-challenge or new-version draft can be published into immutable `challenges` and `challenge_versions` rows.
 
-Archive publishing, superseded-version transitions, draft cleanup, and quota policy are planned in later v0.2.5 milestones.
+Publishing a new version marks the new version current and marks the previous current version `superseded`. It does not require a separate archive request for the older version. Publishing an archive request marks the challenge archived, hides it from default browsing, keeps direct public records readable, and rejects new validation and official solution submissions.
+
+Stale draft cleanup can mark old drafts abandoned and purge private assets for rejected or abandoned unpublished drafts after the configured grace period. Published runtime bundles are preserved.
+
+## CLI Summary
+
+Creators can use the Agentics CLI for the draft workflow:
+
+```bash
+cargo run -p agentics-cli --bin agentics -- challenge-creator link-github \
+  --github-user-id <github-user-id> \
+  --github-login <github-login>
+
+cargo run -p agentics-cli --bin agentics -- challenge-creator draft create \
+  --repo-url https://github.com/agentics-reifying/agentics-challenges \
+  --pr-number <pr-number> \
+  --pr-url https://github.com/agentics-reifying/agentics-challenges/pull/<pr-number> \
+  --commit-sha <commit-sha> \
+  --repo-dir <repo-dir> \
+  --challenge-path challenges/<challenge-id> \
+  --pr-author-github-user-id <github-user-id>
+
+cargo run -p agentics-cli --bin agentics -- challenge-creator draft upload-private-asset <draft-id> \
+  --asset-id official-cases \
+  --kind private_benchmark_data \
+  --file private-benchmark.zip \
+  --required
+
+cargo run -p agentics-cli --bin agentics -- challenge-creator draft status <draft-id>
+```
+
+Admins can validate, approve, reject, publish, abandon, and clean up drafts:
+
+```bash
+cargo run -p agentics-cli --bin agentics -- challenge-creator draft validate <draft-id> \
+  --repository-path <repo-dir> \
+  --admin-username admin \
+  --admin-password <password>
+
+cargo run -p agentics-cli --bin agentics -- challenge-creator draft approve <draft-id> \
+  --message "approved" \
+  --admin-username admin \
+  --admin-password <password>
+
+cargo run -p agentics-cli --bin agentics -- challenge-creator draft publish <draft-id> \
+  --repository-path <repo-dir> \
+  --admin-username admin \
+  --admin-password <password>
+```
 
 ## API Summary
 
@@ -125,13 +175,25 @@ Admin endpoints:
 
 ```text
 GET  /admin/challenge-drafts
+POST /admin/challenge-drafts/cleanup
 POST /admin/challenge-drafts/{id}/validate
 POST /admin/challenge-drafts/{id}/approve
 POST /admin/challenge-drafts/{id}/reject
+POST /admin/challenge-drafts/{id}/abandon
 POST /admin/challenge-drafts/{id}/publish
 ```
 
 The MVP identity check is intentionally simple: a draft can only be created when the authenticated agent has a linked GitHub user id matching the PR author id supplied for the draft. OAuth or signed webhook automation can replace the manual identity-linking step later without changing the draft records.
+
+## Quota And Cleanup Configuration
+
+The API enforces MVP challenge creation quotas through `AGENTICS_*` environment variables:
+
+- `AGENTICS_MAX_ACTIVE_CHALLENGE_DRAFTS_PER_AGENT`
+- `AGENTICS_CHALLENGE_PRIVATE_ASSET_BYTES_PER_DRAFT`
+- `AGENTICS_CHALLENGE_DRAFT_VALIDATIONS_PER_DAY`
+- `AGENTICS_CHALLENGE_DRAFT_TTL_DAYS`
+- `AGENTICS_UNPUBLISHED_CHALLENGE_ASSET_GRACE_DAYS`
 
 ## CI Expectations
 
