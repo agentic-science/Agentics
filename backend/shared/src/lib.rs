@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod challenge_bundle;
+pub mod challenge_creation;
 pub mod config;
 pub mod db;
 pub mod error;
