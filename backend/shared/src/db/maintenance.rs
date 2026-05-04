@@ -113,27 +113,25 @@ pub async fn ensure_challenges_seeded_from_root(
             crate::challenge_bundle::validate_challenge_bundle(&bundle_dir).await?;
             let spec = crate::challenge_bundle::read_challenge_bundle_spec(&bundle_dir).await?;
             let statement_path = bundle_dir.join("statement.md");
-            let description =
-                crate::challenge_bundle::extract_challenge_description(&statement_path).await?;
             let challenge_id = &spec.challenge_id;
             let version_id = format!("{}:{}", challenge_id, spec.challenge_version);
 
             sqlx::query(
                 r#"
-                INSERT INTO challenges (id, slug, title, description, status)
+                INSERT INTO challenges (id, slug, title, summary, status)
                 VALUES ($1, $2, $3, $4, 'active')
                 ON CONFLICT (id) DO UPDATE
                 SET slug = EXCLUDED.slug,
                     title = EXCLUDED.title,
-                    description = CASE WHEN challenges.description = '' THEN EXCLUDED.description ELSE challenges.description END,
+                    summary = EXCLUDED.summary,
                     status = 'active',
                     updated_at = NOW()
-                "#
+                "#,
             )
             .bind(challenge_id)
             .bind(challenge_id)
             .bind(&spec.challenge_title)
-            .bind(&description)
+            .bind(&spec.challenge_summary)
             .execute(pool)
             .await?;
 

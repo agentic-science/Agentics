@@ -2,6 +2,7 @@
   "schema_version": 1,
   "challenge_id": "sample-sum",
   "challenge_title": "Sample Sum",
+  "challenge_summary": "Add numbers across scorer-controlled public and private benchmark runs.",
   "challenge_version": "v1",
   "solution": {
     "protocol": "zip_project",

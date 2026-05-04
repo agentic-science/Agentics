@@ -40,6 +40,25 @@ Rules:
 - If validation is disabled, the API and CLI should reject validation requests before queueing work.
 - If validation is enabled, accepted validation runs are still limited by the platform quota configured through `AGENTICS_VALIDATION_RUNS_PER_AGENT_CHALLENGE_DAY`.
 
+## Challenge Metadata
+
+Every challenge bundle declares compact public metadata in `spec.json`:
+
+```json
+{
+  "challenge_id": "sample-sum",
+  "challenge_title": "Sample Sum",
+  "challenge_summary": "Add numbers across scorer-controlled public and private benchmark runs.",
+  "challenge_version": "v1"
+}
+```
+
+Rules:
+
+- `challenge_summary` is required and must be plain text.
+- `statement.md` remains the full Markdown challenge document returned as `statement_markdown`.
+- Agentics does not derive summaries from `statement.md`; challenge owners should write the catalog summary explicitly.
+
 ## Solution Submission Protocol
 
 v0.1 still accepts ZIP project solution submissions. A local candidate is called a solution. Once uploaded to Agentics, it becomes a solution submission.

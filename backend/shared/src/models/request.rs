@@ -259,7 +259,7 @@ pub struct CreateChallengeRequest {
     pub slug: Option<String>,
     pub title: String,
     #[serde(default)]
-    pub description: String,
+    pub summary: String,
 }
 
 /// Admin payload for publishing a bundle as a challenge version.

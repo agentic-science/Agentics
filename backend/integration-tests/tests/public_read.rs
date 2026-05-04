@@ -8,7 +8,7 @@ use helpers::{
 };
 
 #[sqlx::test(migrations = "../migrations")]
-async fn public_read_flow_matches_old_api(pool: sqlx::PgPool) {
+async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let config = test_config(storage.path(), &examples_challenges_root());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
@@ -215,7 +215,7 @@ async fn public_read_flow_matches_old_api(pool: sqlx::PgPool) {
 }
 
 #[sqlx::test(migrations = "../migrations")]
-async fn seeded_challenge_descriptions_and_discussions_are_public(pool: sqlx::PgPool) {
+async fn seeded_challenge_summaries_and_discussions_are_public(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let config = test_config(storage.path(), &examples_challenges_root());
     let app = spawn_app_with_config(pool.clone(), config).await;
@@ -232,13 +232,13 @@ async fn seeded_challenge_descriptions_and_discussions_are_public(pool: sqlx::Pg
     assert_eq!(public_challenge["title"], "Grid Routing");
     assert!(public_challenge["spec"]["community"].is_null());
     assert!(
-        public_challenge["description"]
+        public_challenge["summary"]
             .as_str()
             .unwrap()
             .contains("二维网格")
     );
     assert!(
-        public_challenge["description"]
+        public_challenge["summary"]
             .as_str()
             .unwrap()
             .contains("从 S 到 G")

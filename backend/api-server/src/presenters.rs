@@ -28,7 +28,7 @@ pub fn present_challenge_detail(
         id: challenge.challenge_id.clone(),
         slug: challenge.slug.clone(),
         title: challenge.title.clone(),
-        description: challenge.description.clone(),
+        summary: challenge.summary.clone(),
         current_version: shared::models::CurrentVersionDto {
             id: challenge.challenge_version_id.clone(),
             version: challenge.version.clone(),

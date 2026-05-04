@@ -7,24 +7,12 @@
 
 use std::collections::HashSet;
 use std::path::Path;
-use std::sync::LazyLock;
-
-use regex::Regex;
 
 use crate::error::{AppError, Result};
 use crate::models::challenge::{
     ChallengeBundleSpec, ChallengeRunInputFile, ChallengeRunManifest, ChallengeRunSpec,
 };
 use crate::zip_project::{ZIP_PROJECT_MANIFEST_FILE, ZIP_PROJECT_PROTOCOL};
-
-static MARKDOWN_LINK_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\[([^\]]+)\]\([^)]+\)").expect("valid link regex"));
-static MARKDOWN_BOLD_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\*\*([^*]+)\*\*").expect("valid bold regex"));
-static MARKDOWN_ASTERISK_ITALIC_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\*([^*]+)\*").expect("valid italic regex"));
-static MARKDOWN_UNDERSCORE_ITALIC_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"_([^_]+)_").expect("valid italic regex"));
 
 /// Read `spec.json` from a bundle directory and validate its contract fields.
 pub async fn read_challenge_bundle_spec(bundle_dir: &Path) -> Result<ChallengeBundleSpec> {
@@ -128,77 +116,6 @@ async fn assert_path_type(path: &Path, kind: &str, label: &str) -> Result<()> {
     Ok(())
 }
 
-/// Extract the first prose paragraph from a Markdown challenge statement.
-///
-/// The result is used as a compact challenge-list description, so headings,
-/// lists, tables, block quotes, and fenced code are skipped.
-pub async fn extract_challenge_description(statement_path: &Path) -> Result<String> {
-    let content = tokio::fs::read_to_string(statement_path).await?;
-    let lines: Vec<&str> = content.lines().collect();
-    let mut paragraph: Vec<String> = Vec::new();
-    let mut in_code_block = false;
-
-    for raw_line in lines {
-        let line = raw_line.trim();
-
-        if line.starts_with("```") {
-            in_code_block = !in_code_block;
-            continue;
-        }
-
-        if in_code_block {
-            continue;
-        }
-
-        if line.is_empty() {
-            if !paragraph.is_empty() {
-                break;
-            }
-            continue;
-        }
-
-        if line.starts_with('#')
-            || line.starts_with('-')
-            || line.starts_with("* ")
-            || line.starts_with('>')
-            || line.starts_with('|')
-            || line
-                .chars()
-                .next()
-                .map(|c| c.is_ascii_digit())
-                .unwrap_or(false)
-                && line.contains(". ")
-        {
-            if !paragraph.is_empty() {
-                break;
-            }
-            continue;
-        }
-
-        paragraph.push(strip_markdown_inline(line));
-    }
-
-    Ok(paragraph.join(" ").trim().to_string())
-}
-
-fn strip_markdown_inline(value: &str) -> String {
-    let mut result = value.to_string();
-    while let Some(start) = result.find('`')
-        && let Some(end) = result[start + 1..].find('`')
-    {
-        let inner = result[start + 1..start + 1 + end].to_string();
-        result.replace_range(start..start + 1 + end + 1, &inner);
-    }
-
-    let result = MARKDOWN_LINK_RE.replace_all(&result, "$1");
-    let result = MARKDOWN_BOLD_RE.replace_all(&result, "$1");
-    let result = MARKDOWN_ASTERISK_ITALIC_RE.replace_all(&result, "$1");
-    MARKDOWN_UNDERSCORE_ITALIC_RE
-        .replace_all(&result, "$1")
-        .trim()
-        .to_string()
-}
-
 /// Return whether `value` can be safely joined under a bundle root.
 pub fn is_safe_relative_path(value: &str) -> bool {
     if value.starts_with('/') {
@@ -210,6 +127,7 @@ pub fn is_safe_relative_path(value: &str) -> bool {
 fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
     require_non_empty(&spec.challenge_id, "challenge_id")?;
     require_non_empty(&spec.challenge_title, "challenge_title")?;
+    require_non_empty(&spec.challenge_summary, "challenge_summary")?;
     require_non_empty(&spec.challenge_version, "challenge_version")?;
 
     if spec.schema_version != 1 {
@@ -617,6 +535,7 @@ mod tests {
             schema_version: 1,
             challenge_id: "sample-sum".to_string(),
             challenge_title: "Sample Sum".to_string(),
+            challenge_summary: "Add numbers from worker-managed runs.".to_string(),
             challenge_version: "v1".to_string(),
             solution: SolutionSpec {
                 protocol: "zip_project".to_string(),
@@ -665,6 +584,7 @@ mod tests {
             "schema_version": 1,
             "challenge_id": "sample-sum",
             "challenge_title": "Sample Sum",
+            "challenge_summary": "Add numbers from worker-managed runs.",
             "challenge_version": "v1",
             "solution": {
                 "protocol": "zip_project",
@@ -701,6 +621,15 @@ mod tests {
 
         assert!(!spec.datasets.validation_enabled);
         assert_eq!(spec.metric_schema.ranking.primary_metric_id, "score");
+    }
+
+    #[test]
+    fn challenge_summary_is_required() {
+        let mut spec = base_spec();
+        spec.challenge_summary.clear();
+
+        let error = validate_challenge_bundle_spec(&spec).expect_err("empty summary should fail");
+        assert!(error.to_string().contains("challenge_summary"));
     }
 
     #[test]

@@ -126,9 +126,10 @@ pub fn render_challenge_detail(
             };
 
             Ok(format!(
-                "{} ({})\nversion: {} ({})\nsolution_protocol: {} ({})\nresource_profile: {} / {} / {} sec / {} MB\ndatasets: public={}, validation={}, private_benchmark={}\nranking_metric: {}\n\n{}",
+                "{} ({})\nsummary: {}\nversion: {} ({})\nsolution_protocol: {} ({})\nresource_profile: {} / {} / {} sec / {} MB\ndatasets: public={}, validation={}, private_benchmark={}\nranking_metric: {}\n\n{}",
                 response.title,
                 response.id,
+                response.summary,
                 response.current_version.version,
                 response.current_version.id,
                 response.spec.solution.protocol,
@@ -391,7 +392,7 @@ mod tests {
                     id: "sample-sum".to_string(),
                     slug: "sum".to_string(),
                     title: "Sample Sum".to_string(),
-                    description: "Add numbers".to_string(),
+                    summary: "Add numbers".to_string(),
                     current_version: CurrentVersionDto {
                         id: "version-1".to_string(),
                         version: "v1".to_string(),
@@ -423,7 +424,7 @@ mod tests {
             id: "sample-sum".to_string(),
             slug: "sum".to_string(),
             title: "Sample Sum".to_string(),
-            description: "Add numbers".to_string(),
+            summary: "Add numbers".to_string(),
             current_version: CurrentVersionDto {
                 id: "version-1".to_string(),
                 version: "v1".to_string(),
@@ -432,6 +433,7 @@ mod tests {
                 schema_version: 1,
                 challenge_id: "sample-sum".to_string(),
                 challenge_title: "Sample Sum".to_string(),
+                challenge_summary: "Add numbers".to_string(),
                 challenge_version: "v1".to_string(),
                 solution: SolutionSpec {
                     protocol: "zip_project".to_string(),

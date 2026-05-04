@@ -11,6 +11,8 @@ pub struct ChallengeBundleSpec {
     pub schema_version: i32,
     pub challenge_id: String,
     pub challenge_title: String,
+    /// Plain-text summary used in compact challenge catalog surfaces.
+    pub challenge_summary: String,
     pub challenge_version: String,
     pub solution: SolutionSpec,
     pub scorer: ScorerSpec,
@@ -229,7 +231,7 @@ pub struct ChallengeListItemDto {
     pub id: String,
     pub slug: String,
     pub title: String,
-    pub description: String,
+    pub summary: String,
     pub current_version: CurrentVersionDto,
 }
 
@@ -245,7 +247,7 @@ pub struct ChallengeDetailResponse {
     pub id: String,
     pub slug: String,
     pub title: String,
-    pub description: String,
+    pub summary: String,
     pub current_version: CurrentVersionDto,
     pub spec: ChallengeBundleSpec,
     pub statement_markdown: String,
@@ -257,7 +259,7 @@ pub struct ChallengeAdminResponse {
     pub id: String,
     pub slug: String,
     pub title: String,
-    pub description: String,
+    pub summary: String,
     pub status: String,
     pub created_at: String,
     pub updated_at: String,
@@ -269,7 +271,7 @@ pub struct AdminChallengeListItemDto {
     pub id: String,
     pub slug: String,
     pub title: String,
-    pub description: String,
+    pub summary: String,
     pub status: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub current_version: Option<CurrentVersionDto>,

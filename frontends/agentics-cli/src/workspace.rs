@@ -264,7 +264,7 @@ mod tests {
             id: "sample-sum".to_string(),
             slug: "sum".to_string(),
             title: "Sample Sum".to_string(),
-            description: "Add numbers".to_string(),
+            summary: "Add numbers".to_string(),
             current_version: CurrentVersionDto {
                 id: "version-1".to_string(),
                 version: "v1".to_string(),
@@ -273,6 +273,7 @@ mod tests {
                 schema_version: 1,
                 challenge_id: "sample-sum".to_string(),
                 challenge_title: "Sample Sum".to_string(),
+                challenge_summary: "Add numbers".to_string(),
                 challenge_version: "v1".to_string(),
                 solution: SolutionSpec {
                     protocol: "zip_project".to_string(),

@@ -440,7 +440,7 @@ pub async fn create_challenge(
         .map(|s| s.trim().to_string())
         .unwrap_or_else(|| body.id.trim().to_string());
     let challenge =
-        db::create_or_update_challenge(&state.db, &body.id, &slug, &body.title, &body.description)
+        db::create_or_update_challenge(&state.db, &body.id, &slug, &body.title, &body.summary)
             .await
             .map_err(|e| match e {
                 AppError::Database(sqlx::Error::Database(db_err))
@@ -481,7 +481,6 @@ pub async fn publish_version(
     }
 
     let statement_path = std::path::Path::new(&bundle_path).join("statement.md");
-    let description = challenge_bundle::extract_challenge_description(&statement_path).await?;
 
     let version = db::publish_challenge_version(
         &state.db,
@@ -490,7 +489,7 @@ pub async fn publish_version(
         &statement_path.to_string_lossy(),
         &spec,
         &spec.challenge_title,
-        &description,
+        &spec.challenge_summary,
     )
     .await?;
 

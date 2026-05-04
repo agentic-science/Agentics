@@ -470,7 +470,7 @@ function ChallengeShellForm({
     id: "",
     slug: "",
     title: "",
-    description: "",
+    summary: "",
   });
 
   const submit = async (event: FormEvent) => {
@@ -480,7 +480,7 @@ function ChallengeShellForm({
         id: form.id.trim(),
         slug: form.slug.trim() || undefined,
         title: form.title.trim(),
-        description: form.description.trim(),
+        summary: form.summary.trim(),
       };
       const response = await adminFetchJson(
         "/admin/challenges",
@@ -524,13 +524,13 @@ function ChallengeShellForm({
       />
       <label className="flex flex-col gap-1">
         <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
-          Description
+          Summary
         </span>
         <textarea
           className="min-h-24 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 text-[var(--text-body-sm)] outline-none focus:border-[var(--accent-primary-500)]"
-          value={form.description}
+          value={form.summary}
           onChange={(event) =>
-            setForm({ ...form, description: event.target.value })
+            setForm({ ...form, summary: event.target.value })
           }
         />
       </label>

@@ -16,7 +16,7 @@ pub struct ChallengeVersionRecord {
     pub challenge_id: String,
     pub slug: String,
     pub title: String,
-    pub description: String,
+    pub summary: String,
     pub challenge_version_id: String,
     pub version: String,
     pub bundle_path: String,
@@ -30,25 +30,25 @@ pub async fn create_or_update_challenge(
     id: &str,
     slug: &str,
     title: &str,
-    description: &str,
+    summary: &str,
 ) -> Result<crate::models::challenge::ChallengeAdminResponse> {
     let row = sqlx::query(
         r#"
-        INSERT INTO challenges (id, slug, title, description, status)
+        INSERT INTO challenges (id, slug, title, summary, status)
         VALUES ($1, $2, $3, $4, 'active')
         ON CONFLICT (id) DO UPDATE
         SET slug = EXCLUDED.slug,
             title = EXCLUDED.title,
-            description = EXCLUDED.description,
+            summary = EXCLUDED.summary,
             status = 'active',
             updated_at = NOW()
-        RETURNING id, slug, title, description, status, created_at, updated_at
+        RETURNING id, slug, title, summary, status, created_at, updated_at
         "#,
     )
     .bind(id)
     .bind(slug)
     .bind(title)
-    .bind(description)
+    .bind(summary)
     .fetch_one(pool)
     .await?;
 
@@ -56,7 +56,7 @@ pub async fn create_or_update_challenge(
         id: row.try_get("id")?,
         slug: row.try_get("slug")?,
         title: row.try_get("title")?,
-        description: row.try_get("description")?,
+        summary: row.try_get("summary")?,
         status: row.try_get("status")?,
         created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
         updated_at: row.try_get::<DateTime<Utc>, _>("updated_at")?.to_rfc3339(),
@@ -71,7 +71,7 @@ pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeLi
             p.id,
             p.slug,
             p.title,
-            p.description,
+            p.summary,
             p.status,
             p.created_at,
             p.updated_at,
@@ -93,7 +93,7 @@ pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeLi
                 id: r.try_get("id")?,
                 slug: r.try_get("slug")?,
                 title: r.try_get("title")?,
-                description: r.try_get("description")?,
+                summary: r.try_get("summary")?,
                 status: r.try_get("status")?,
                 current_version: version_id
                     .zip(version)
@@ -113,7 +113,7 @@ pub async fn publish_challenge_version(
     statement_path: &str,
     spec: &ChallengeBundleSpec,
     title: &str,
-    description: &str,
+    summary: &str,
 ) -> Result<CreateChallengeVersionResponse> {
     let version_id = format!("{}:{}", challenge_id, spec.challenge_version);
     let spec_json = serde_json::to_value(spec).map_err(|e| AppError::Internal(e.to_string()))?;
@@ -134,7 +134,7 @@ pub async fn publish_challenge_version(
         )
             UPDATE challenges p
             SET title = $7,
-                description = CASE WHEN p.description = '' THEN $8 ELSE p.description END,
+                summary = $8,
                 status = 'active',
                 current_version_id = v.id,
                 updated_at = NOW()
@@ -157,7 +157,7 @@ pub async fn publish_challenge_version(
     .bind(statement_path)
     .bind(&spec_json)
     .bind(title)
-    .bind(description)
+    .bind(summary)
     .fetch_one(pool)
     .await?;
 
@@ -180,7 +180,7 @@ pub async fn list_published_challenges(pool: &PgPool) -> Result<Vec<ChallengeLis
             p.id AS challenge_id,
             p.slug,
             p.title,
-            p.description,
+            p.summary,
             pv.id AS version_id,
             pv.version
         FROM challenges p
@@ -199,7 +199,7 @@ pub async fn list_published_challenges(pool: &PgPool) -> Result<Vec<ChallengeLis
                 id: r.try_get("challenge_id")?,
                 slug: r.try_get("slug")?,
                 title: r.try_get("title")?,
-                description: r.try_get("description")?,
+                summary: r.try_get("summary")?,
                 current_version: crate::models::CurrentVersionDto {
                     id: r.try_get("version_id")?,
                     version: r.try_get("version")?,
@@ -220,7 +220,7 @@ pub async fn get_published_challenge(
             p.id AS challenge_id,
             p.slug,
             p.title,
-            p.description,
+            p.summary,
             pv.id AS version_id,
             pv.version,
             pv.bundle_path,
@@ -243,7 +243,7 @@ pub async fn get_published_challenge(
             challenge_id: r.try_get("challenge_id")?,
             slug: r.try_get("slug")?,
             title: r.try_get("title")?,
-            description: r.try_get("description")?,
+            summary: r.try_get("summary")?,
             challenge_version_id: r.try_get("version_id")?,
             version: r.try_get("version")?,
             bundle_path: r.try_get("bundle_path")?,

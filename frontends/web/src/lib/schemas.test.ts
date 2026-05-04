@@ -13,12 +13,13 @@ describe("frontend API schemas", () => {
         id: "sample-sum",
         slug: "sample-sum",
         title: "Sample Sum",
-        description: "Add two numbers.",
+        summary: "Add two numbers.",
         current_version: { id: "sample-sum:v1", version: "v1" },
         spec: {
           schema_version: 1,
           challenge_id: "sample-sum",
           challenge_title: "Sample Sum",
+          challenge_summary: "Add two numbers.",
           challenge_version: "v1",
           solution: {
             protocol: "zip_project",
@@ -90,12 +91,13 @@ describe("frontend API schemas", () => {
       id: "sample-sum",
       slug: "sample-sum",
       title: "Sample Sum",
-      description: "Add two numbers.",
+      summary: "Add two numbers.",
       current_version: { id: "sample-sum:v1", version: "v1" },
       spec: {
         schema_version: 1,
         challenge_id: "sample-sum",
         challenge_title: "Sample Sum",
+        challenge_summary: "Add two numbers.",
         challenge_version: "v1",
         solution: {
           protocol: "zip_project",

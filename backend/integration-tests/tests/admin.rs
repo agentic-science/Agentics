@@ -81,7 +81,7 @@ async fn create_challenge_and_publish_version(pool: sqlx::PgPool) {
             "id": "test-challenge",
             "slug": "test-challenge",
             "title": "Test Challenge",
-            "description": "A test challenge"
+            "summary": "A test challenge"
         }))
         .send()
         .await
@@ -131,7 +131,7 @@ async fn publishing_version_updates_explicit_current_version(pool: sqlx::PgPool)
             "id": "current-pointer",
             "slug": "current-pointer",
             "title": "Current Pointer",
-            "description": "Current pointer challenge"
+            "summary": "Current pointer challenge"
         }))
         .send()
         .await
@@ -165,6 +165,7 @@ async fn publishing_version_updates_explicit_current_version(pool: sqlx::PgPool)
         public_challenge["current_version"]["id"],
         "current-pointer:v2"
     );
+    assert_eq!(public_challenge["summary"], "Current pointer challenge v2");
 
     let current_version_id: String =
         sqlx::query_scalar("SELECT current_version_id FROM challenges WHERE id = $1")
@@ -183,6 +184,7 @@ fn write_current_pointer_bundle(target: &std::path::Path, version: &str) {
             .expect("failed to parse spec");
     spec["challenge_id"] = serde_json::json!("current-pointer");
     spec["challenge_title"] = serde_json::json!("Current Pointer");
+    spec["challenge_summary"] = serde_json::json!(format!("Current pointer challenge {version}"));
     spec["challenge_version"] = serde_json::json!(version);
     std::fs::write(
         &spec_path,

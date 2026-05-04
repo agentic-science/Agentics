@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS challenges (
   id TEXT PRIMARY KEY,
   slug TEXT NOT NULL UNIQUE,
   title TEXT NOT NULL,
-  description TEXT NOT NULL DEFAULT '',
+  summary TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'archived')),
   current_version_id TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

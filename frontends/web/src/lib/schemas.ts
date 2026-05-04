@@ -36,7 +36,7 @@ export const challengeListItemDtoSchema = z
     id: idSchema,
     slug: z.string().min(1),
     title: z.string().min(1),
-    description: z.string(),
+    summary: z.string().min(1),
     current_version: currentVersionDtoSchema,
   })
   .strict();
@@ -90,6 +90,7 @@ export const challengeBundleSpecSchema = z
     schema_version: z.literal(1),
     challenge_id: z.string().min(1),
     challenge_title: z.string().min(1),
+    challenge_summary: z.string().min(1),
     challenge_version: z.string().min(1),
     solution: z
       .object({
@@ -184,7 +185,7 @@ export const challengeDetailResponseSchema = z
     id: idSchema,
     slug: z.string().min(1),
     title: z.string().min(1),
-    description: z.string(),
+    summary: z.string().min(1),
     current_version: currentVersionDtoSchema,
     spec: challengeBundleSpecSchema,
     statement_markdown: z.string(),
@@ -276,7 +277,7 @@ export const adminChallengeListItemSchema = z
     id: idSchema,
     slug: z.string().min(1),
     title: z.string().min(1),
-    description: z.string(),
+    summary: z.string().min(1),
     status: z.string().min(1),
     current_version: currentVersionDtoSchema.optional(),
     created_at: isoTimestampSchema,
@@ -295,7 +296,7 @@ export const challengeAdminResponseSchema = z
     id: idSchema,
     slug: z.string().min(1),
     title: z.string().min(1),
-    description: z.string(),
+    summary: z.string().min(1),
     status: z.string().min(1),
     created_at: isoTimestampSchema,
     updated_at: isoTimestampSchema,

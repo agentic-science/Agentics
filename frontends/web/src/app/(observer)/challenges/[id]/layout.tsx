@@ -50,7 +50,7 @@ export default async function ChallengeLayout({
               {challenge.title}
             </h1>
             <p className="text-[var(--text-body)] text-[var(--text-secondary)] mt-3 leading-[var(--leading-body)] max-w-2xl">
-              {challenge.description}
+              {challenge.summary}
             </p>
 
             <div className="flex flex-wrap items-center gap-3 mt-4">

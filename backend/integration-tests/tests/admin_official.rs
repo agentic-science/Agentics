@@ -22,6 +22,7 @@ fn create_admin_bundle(root: &Path) -> std::path::PathBuf {
     .expect("failed to parse copied spec");
     spec["challenge_id"] = serde_json::json!("admin-sum");
     spec["challenge_title"] = serde_json::json!("Admin Sum");
+    spec["challenge_summary"] = serde_json::json!("Official flow test");
     std::fs::write(
         &spec_path,
         serde_json::to_string_pretty(&spec).expect("failed to serialize admin spec"),
@@ -62,7 +63,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         .json(&serde_json::json!({
             "id": "admin-sum",
             "title": "Admin Sum",
-            "description": "official flow test"
+            "summary": "official flow test"
         }))
         .send()
         .await

@@ -43,6 +43,7 @@ v0.0 supports schema version `1`:
   "schema_version": 1,
   "challenge_id": "sample-sum",
   "challenge_title": "Sample Sum",
+  "challenge_summary": "Read a JSON payload and print the requested sum.",
   "challenge_version": "v1",
   "solution": {
     "format": "python_zip_project",
@@ -71,7 +72,7 @@ v0.0 supports schema version `1`:
 Validation rules:
 
 - `schema_version` must be `1`.
-- `challenge_id`, `challenge_title`, and `challenge_version` must be non-empty.
+- `challenge_id`, `challenge_title`, `challenge_summary`, and `challenge_version` must be non-empty.
 - `solution.format` must be `python_zip_project`.
 - `solution.language` must be `python`.
 - `solution.entrypoint`, `scorer.entrypoint`, `scorer.result_file`, and dataset paths must be safe relative paths.
@@ -86,7 +87,8 @@ Safe relative paths cannot be absolute, cannot contain empty segments, and canno
 
 `statement.md` is returned in public challenge detail responses as `statement_markdown`.
 
-The API extracts the challenge list description from the first prose paragraph. Headings, lists, tables, block quotes, and fenced code blocks are skipped when extracting this short description.
+Compact challenge list and detail headers use the plain-text `challenge_summary`
+field from `spec.json`. The API does not derive summaries from Markdown content.
 
 ## Scorer Invocation
 

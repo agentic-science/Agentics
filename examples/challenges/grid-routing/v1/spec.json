@@ -2,6 +2,7 @@
   "schema_version": 1,
   "challenge_id": "grid-routing",
   "challenge_title": "Grid Routing",
+  "challenge_summary": "在二维网格中从 S 到 G 规划一条有效路径，并避开障碍物。",
   "challenge_version": "v1",
   "solution": {
     "protocol": "zip_project",

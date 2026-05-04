@@ -175,7 +175,7 @@ mod tests {
                         "id": "sample-sum",
                         "slug": "sum",
                         "title": "Sample Sum",
-                        "description": "Add numbers",
+                        "summary": "Add numbers",
                         "current_version": {
                             "id": "version-1",
                             "version": "v1"
@@ -217,7 +217,7 @@ mod tests {
                 "id": "sample-sum",
                 "slug": "sum",
                 "title": "Sample Sum",
-                "description": "Add numbers",
+                "summary": "Add numbers",
                 "current_version": {
                     "id": "version-1",
                     "version": "v1"
@@ -226,6 +226,7 @@ mod tests {
                     "schema_version": 1,
                     "challenge_id": "sample-sum",
                     "challenge_title": "Sample Sum",
+                    "challenge_summary": "Add numbers",
                     "challenge_version": "v1",
                     "solution": {
                         "protocol": "zip_project",
@@ -576,7 +577,7 @@ mod tests {
             "id": "sample-sum",
             "slug": "sample-sum",
             "title": "Sample Sum",
-            "description": "Add numbers",
+            "summary": "Add numbers",
             "current_version": {
                 "id": "version-1",
                 "version": "v1"
@@ -585,6 +586,7 @@ mod tests {
                 "schema_version": 1,
                 "challenge_id": "sample-sum",
                 "challenge_title": "Sample Sum",
+                "challenge_summary": "Add numbers",
                 "challenge_version": "v1",
                 "solution": {
                     "protocol": "zip_project",

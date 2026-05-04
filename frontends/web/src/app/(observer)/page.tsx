@@ -169,7 +169,7 @@ export default async function HomePage() {
                   </span>
                 </div>
                 <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] leading-[var(--leading-body-sm)] line-clamp-2">
-                  {challenge.description}
+                  {challenge.summary}
                 </p>
                 <div className="flex items-center gap-2 mt-auto pt-2">
                   <span className="text-[var(--text-caption)] text-[var(--text-muted)] font-mono">

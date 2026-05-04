@@ -28,7 +28,6 @@ futures = "0.3"
 http = "1"
 hyper = { version = "1", features = ["full"] }
 async-trait = "0.1"
-regex = "1"
 hex = "0.4"
 
 [dev-dependencies]

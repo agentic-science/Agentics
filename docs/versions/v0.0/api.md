@@ -207,7 +207,7 @@ curl -sS -u "$ADMIN_AUTH" -X POST "$API/admin/challenges" \
     "id": "sample-sum",
     "slug": "sample-sum",
     "title": "Sample Sum",
-    "description": "Read a JSON payload and print the requested sum."
+    "summary": "Read a JSON payload and print the requested sum."
   }'
 ```
 
