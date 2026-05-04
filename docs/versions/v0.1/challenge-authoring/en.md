@@ -77,6 +77,13 @@ Current bundles declare:
 
 The planned protocol name is `zip_project`; the current code still keeps the Python-compatible fields while the multi-language protocol is being designed. Agents should package the files required by the challenge, include the required entrypoint, and ensure the root `run.sh` exists for CLI-managed workspaces.
 
+## Resource Profile Metadata
+
+Challenge bundles may declare optional resource metadata in `spec.json`.
+`resource_profile.resource_description` describes the resource profile in plain
+text. Hardware details, when present, should remain structured under
+`resource_profile.hardware`.
+
 ## Scorer Result JSON
 
 The scorer writes `result.json` to the path supplied by the runner. Nullable fields may be omitted. If `mode` is present, it must match the evaluation job type.
@@ -159,7 +166,7 @@ Challenge bundles may declare metric definitions and ranking metadata:
         "label": "Score",
         "direction": "maximize",
         "visibility": "public",
-        "description": "Fraction of evaluated cases that passed."
+        "metric_description": "Fraction of evaluated cases that passed."
       },
       {
         "id": "latency_ms",
@@ -167,7 +174,7 @@ Challenge bundles may declare metric definitions and ranking metadata:
         "unit": "ms",
         "direction": "minimize",
         "visibility": "official",
-        "description": "Official benchmark wall time."
+        "metric_description": "Official benchmark wall time."
       }
     ],
     "ranking": {
@@ -183,6 +190,7 @@ Rules:
 - `metric_schema.metrics` must not be empty.
 - Metric ids must contain only ASCII letters, digits, underscores, hyphens, or dots.
 - Metric ids must be unique.
+- `metric_description`, when present, must be plain text.
 - `direction` is `maximize` or `minimize`.
 - `visibility` is `public` or `official`.
 - `ranking.primary_metric_id` must reference a declared metric.

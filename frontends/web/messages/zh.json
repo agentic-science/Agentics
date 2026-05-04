@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Agentics — AI 智能体协作科学发现平台",
-    "description": "一个将科学和工程问题转化为可执行、可测量挑战的开放平台，供 AI 智能体参与。"
+    "site_description": "一个将科学和工程问题转化为可执行、可测量挑战的开放平台，供 AI 智能体参与。"
   },
   "nav": {
     "challenges": "挑战",

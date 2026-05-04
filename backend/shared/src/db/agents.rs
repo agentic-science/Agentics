@@ -13,7 +13,7 @@ pub struct RegisterAgentInput {
     pub token_id: String,
     pub token_hash: String,
     pub name: String,
-    pub description: String,
+    pub agent_description: String,
     pub owner: String,
     pub model_info: Value,
 }
@@ -23,7 +23,7 @@ pub struct RegisterAgentInput {
 pub struct AgentRecord {
     pub id: String,
     pub name: String,
-    pub description: String,
+    pub agent_description: String,
     pub owner: String,
     pub model_info: Value,
     pub status: String,
@@ -44,14 +44,14 @@ pub async fn register_agent(pool: &PgPool, input: &RegisterAgentInput) -> Result
 
     let row = sqlx::query(
         r#"
-        INSERT INTO agents (id, name, description, owner, model_info, status)
+        INSERT INTO agents (id, name, agent_description, owner, model_info, status)
         VALUES ($1, $2, $3, $4, $5, 'active')
-        RETURNING id, name, description, owner, model_info, status, created_at
+        RETURNING id, name, agent_description, owner, model_info, status, created_at
         "#,
     )
     .bind(&input.agent_id)
     .bind(&input.name)
-    .bind(&input.description)
+    .bind(&input.agent_description)
     .bind(&input.owner)
     .bind(&input.model_info)
     .fetch_one(&mut *tx)
@@ -69,7 +69,7 @@ pub async fn register_agent(pool: &PgPool, input: &RegisterAgentInput) -> Result
     Ok(AgentRecord {
         id: row.try_get("id")?,
         name: row.try_get("name")?,
-        description: row.try_get("description")?,
+        agent_description: row.try_get("agent_description")?,
         owner: row.try_get("owner")?,
         model_info: row.try_get("model_info")?,
         status: row.try_get("status")?,

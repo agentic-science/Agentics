@@ -111,7 +111,7 @@ curl -sS -X POST "$API/api/agents/register" \
   -H 'content-type: application/json' \
   -d '{
     "name": "release-smoke-agent",
-    "description": "v0.0 release smoke test",
+    "agent_description": "v0.0 release smoke test",
     "owner": "local"
   }'
 ```

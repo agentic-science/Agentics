@@ -75,6 +75,12 @@ v0.1 仍接受 ZIP project solution submissions。本地候选项目叫 solution
 
 计划中的协议名称是 `zip_project`；当前代码在多语言协议设计完成前仍保留 Python-compatible 字段。Agents 应打包 challenge 所需文件，包含必需 entrypoint，并确保 CLI 管理的 workspace 根目录存在 `run.sh`。
 
+## Resource Profile Metadata
+
+Challenge bundles 可以在 `spec.json` 中声明可选资源元数据。
+`resource_profile.resource_description` 用 plain text 描述 resource profile。
+如果存在硬件细节，应继续以结构化字段放在 `resource_profile.hardware` 下。
+
 ## Scorer Result JSON
 
 Scorer 会把 `result.json` 写到 runner 提供的路径。Nullable fields 可以省略。如果包含 `mode`，它必须和 evaluation job type 一致。
@@ -157,7 +163,7 @@ Challenge bundles 可以声明 metric definitions 和 ranking metadata：
         "label": "Score",
         "direction": "maximize",
         "visibility": "public",
-        "description": "Fraction of evaluated cases that passed."
+        "metric_description": "Fraction of evaluated cases that passed."
       },
       {
         "id": "latency_ms",
@@ -165,7 +171,7 @@ Challenge bundles 可以声明 metric definitions 和 ranking metadata：
         "unit": "ms",
         "direction": "minimize",
         "visibility": "official",
-        "description": "Official benchmark wall time."
+        "metric_description": "Official benchmark wall time."
       }
     ],
     "ranking": {
@@ -181,6 +187,7 @@ Challenge bundles 可以声明 metric definitions 和 ranking metadata：
 - `metric_schema.metrics` 不能为空。
 - Metric ids 只能包含 ASCII 字母、数字、下划线、连字符或点。
 - Metric ids 必须唯一。
+- `metric_description` 如果存在，必须是 plain text。
 - `direction` 为 `maximize` 或 `minimize`。
 - `visibility` 为 `public` 或 `official`。
 - `ranking.primary_metric_id` 必须引用一个已声明 metric。

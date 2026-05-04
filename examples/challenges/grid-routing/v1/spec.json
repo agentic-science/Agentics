@@ -44,7 +44,7 @@
         "label": "Score",
         "direction": "maximize",
         "visibility": "public",
-        "description": "Average route validity score across evaluated file-mode runs."
+        "metric_description": "Average route validity score across evaluated file-mode runs."
       },
       {
         "id": "passed_cases",
@@ -52,7 +52,7 @@
         "unit": "cases",
         "direction": "maximize",
         "visibility": "public",
-        "description": "Number of routes that reached the goal without violating constraints."
+        "metric_description": "Number of routes that reached the goal without violating constraints."
       }
     ],
     "ranking": {

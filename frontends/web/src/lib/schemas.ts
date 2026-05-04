@@ -107,6 +107,7 @@ export const challengeBundleSpecSchema = z
     resource_profile: z
       .object({
         id: z.string().min(1),
+        resource_description: z.string().min(1).optional(),
         solution_image: z.string().min(1),
         solution_image_digest: z.string().min(1).optional(),
         scorer_image: z.string().min(1),
@@ -122,7 +123,6 @@ export const challengeBundleSpecSchema = z
         hardware: z
           .object({
             kind: z.string().min(1),
-            description: z.string().min(1).optional(),
           })
           .strict()
           .optional(),
@@ -164,7 +164,7 @@ export const challengeBundleSpecSchema = z
               unit: z.string().min(1).optional(),
               direction: z.enum(["maximize", "minimize"]),
               visibility: z.enum(["public", "official"]),
-              description: z.string().min(1).optional(),
+              metric_description: z.string().min(1).optional(),
             })
             .strict(),
         ),

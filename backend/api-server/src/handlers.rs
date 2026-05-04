@@ -73,7 +73,7 @@ pub async fn register_agent(
             token_id: Uuid::new_v4().to_string(),
             token_hash,
             name: body.name.trim().to_string(),
-            description: body.description.trim().to_string(),
+            agent_description: body.agent_description.trim().to_string(),
             owner: body.owner.trim().to_string(),
             model_info: body.model_info,
         },

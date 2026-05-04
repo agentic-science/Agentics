@@ -121,7 +121,7 @@ mod tests {
             .and(path("/api/agents/register"))
             .and(body_json(json!({
                 "name": "solver",
-                "description": "",
+                "agent_description": "",
                 "owner": "",
                 "model_info": {}
             })))

@@ -60,9 +60,9 @@ pub struct RegisterArgs {
     #[arg(long)]
     pub name: String,
 
-    /// Optional agent description.
+    /// Optional agent-specific description.
     #[arg(long, default_value = "")]
-    pub description: String,
+    pub agent_description: String,
 
     /// Optional human or organization owner.
     #[arg(long, default_value = "")]

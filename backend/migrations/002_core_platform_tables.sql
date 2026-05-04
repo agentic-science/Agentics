@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS agents (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
-  description TEXT NOT NULL DEFAULT '',
+  agent_description TEXT NOT NULL DEFAULT '',
   owner TEXT NOT NULL DEFAULT '',
   model_info JSONB NOT NULL DEFAULT '{}'::jsonb,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),

@@ -227,11 +227,14 @@ fn validate_resource_profile(spec: &ChallengeBundleSpec) -> Result<()> {
         "resource_profile.cpu_limit_millis",
     )?;
     validate_positive_u64(profile.disk_limit_mb, "resource_profile.disk_limit_mb")?;
+    if let Some(resource_description) = &profile.resource_description {
+        require_non_empty(
+            resource_description,
+            "resource_profile.resource_description",
+        )?;
+    }
     if let Some(hardware) = &profile.hardware {
         require_non_empty(&hardware.kind, "resource_profile.hardware.kind")?;
-        if let Some(description) = &hardware.description {
-            require_non_empty(description, "resource_profile.hardware.description")?;
-        }
     }
 
     Ok(())
@@ -419,8 +422,11 @@ fn validate_metric_schema(spec: &ChallengeBundleSpec) -> Result<()> {
         if let Some(unit) = &metric.unit {
             require_non_empty(unit, "metric_schema.metrics[].unit")?;
         }
-        if let Some(description) = &metric.description {
-            require_non_empty(description, "metric_schema.metrics[].description")?;
+        if let Some(metric_description) = &metric.metric_description {
+            require_non_empty(
+                metric_description,
+                "metric_schema.metrics[].metric_description",
+            )?;
         }
         if !ids.insert(metric.id.as_str()) {
             return Err(AppError::Validation(format!(
@@ -547,6 +553,7 @@ mod tests {
             },
             resource_profile: ResourceProfileSpec {
                 id: "python-cpu-small".to_string(),
+                resource_description: None,
                 solution_image: "python:3.12-slim-bookworm".to_string(),
                 solution_image_digest: None,
                 scorer_image: "python:3.12-slim-bookworm".to_string(),
@@ -679,7 +686,7 @@ mod tests {
                 unit: Some("ms".to_string()),
                 direction: MetricDirection::Minimize,
                 visibility: MetricVisibility::Public,
-                description: Some("Wall-clock runtime in milliseconds.".to_string()),
+                metric_description: Some("Wall-clock runtime in milliseconds.".to_string()),
             });
         spec.metric_schema
             .ranking

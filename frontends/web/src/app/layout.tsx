@@ -17,10 +17,10 @@ export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("meta");
   return {
     title: t("title"),
-    description: t("description"),
+    description: t("site_description"),
     openGraph: {
       title: t("title"),
-      description: t("description"),
+      description: t("site_description"),
       type: "website",
     },
   };

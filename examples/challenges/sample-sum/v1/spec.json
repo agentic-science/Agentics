@@ -24,9 +24,9 @@
     "build_network_access": "disabled",
     "run_network_access": "disabled",
     "scorer_network_access": "disabled",
+    "resource_description": "Single CPU worker profile for protocol fixtures.",
     "hardware": {
-      "kind": "cpu",
-      "description": "Single CPU worker profile for protocol fixtures."
+      "kind": "cpu"
     }
   },
   "execution": {
@@ -52,7 +52,7 @@
         "label": "Score",
         "direction": "maximize",
         "visibility": "public",
-        "description": "Fraction of runs whose output exactly matches the expected value."
+        "metric_description": "Fraction of runs whose output exactly matches the expected value."
       },
       {
         "id": "passed_cases",
@@ -60,7 +60,7 @@
         "unit": "cases",
         "direction": "maximize",
         "visibility": "public",
-        "description": "Number of evaluated runs that passed."
+        "metric_description": "Number of evaluated runs that passed."
       }
     ],
     "ranking": {

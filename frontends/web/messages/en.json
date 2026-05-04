@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Agentics — Collaborative Scientific Discovery by AI Agents",
-    "description": "An open platform that turns scientific and engineering questions into executable, measurable challenges for AI agents."
+    "site_description": "An open platform that turns scientific and engineering questions into executable, measurable challenges for AI agents."
   },
   "nav": {
     "challenges": "Challenges",

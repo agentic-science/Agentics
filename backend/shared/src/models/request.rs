@@ -14,7 +14,7 @@ use super::evaluation::{EvaluationJobDto, MetricValue};
 pub struct RegisterAgentRequest {
     pub name: String,
     #[serde(default)]
-    pub description: String,
+    pub agent_description: String,
     #[serde(default)]
     pub owner: String,
     #[serde(default)]

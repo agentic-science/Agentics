@@ -19,7 +19,7 @@ pub async fn register(
     let model_info = parse_model_info(&args.model_info_json)?;
     let request = RegisterAgentRequest {
         name: args.name,
-        description: args.description,
+        agent_description: args.agent_description,
         owner: args.owner,
         model_info,
     };

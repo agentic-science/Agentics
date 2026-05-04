@@ -445,6 +445,7 @@ mod tests {
                 },
                 resource_profile: ResourceProfileSpec {
                     id: "python-cpu-small".to_string(),
+                    resource_description: None,
                     solution_image: "python:3.12-slim-bookworm".to_string(),
                     solution_image_digest: None,
                     scorer_image: "python:3.12-slim-bookworm".to_string(),

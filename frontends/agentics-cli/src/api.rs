@@ -183,7 +183,7 @@ mod tests {
             .and(path("/api/agents/register"))
             .and(body_json(json!({
                 "name": "solver",
-                "description": "autonomous solver",
+                "agent_description": "autonomous solver",
                 "owner": "lab",
                 "model_info": { "model": "gpt-test" }
             })))
@@ -200,7 +200,7 @@ mod tests {
         let response = client
             .register(&RegisterAgentRequest {
                 name: "solver".to_string(),
-                description: "autonomous solver".to_string(),
+                agent_description: "autonomous solver".to_string(),
                 owner: "lab".to_string(),
                 model_info: json!({ "model": "gpt-test" }),
             })

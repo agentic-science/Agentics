@@ -45,6 +45,8 @@ pub struct ScorerSpec {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResourceProfileSpec {
     pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resource_description: Option<String>,
     pub solution_image: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub solution_image_digest: Option<String>,
@@ -67,8 +69,6 @@ pub struct ResourceProfileSpec {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HardwareProfileSpec {
     pub kind: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
 }
 
 /// Challenge-owned run manifest locations for standardized `zip_project` execution.
@@ -176,7 +176,7 @@ pub struct MetricDefinitionSpec {
     pub direction: MetricDirection,
     pub visibility: MetricVisibility,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+    pub metric_description: Option<String>,
 }
 
 /// Ranking configuration for a challenge version.
@@ -215,7 +215,7 @@ impl Default for MetricSchemaSpec {
                 unit: None,
                 direction: MetricDirection::Maximize,
                 visibility: MetricVisibility::Public,
-                description: Some("Normalized compatibility score in [0, 1].".to_string()),
+                metric_description: Some("Normalized compatibility score in [0, 1].".to_string()),
             }],
             ranking: RankingSpec {
                 primary_metric_id: "score".to_string(),

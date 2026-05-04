@@ -114,7 +114,7 @@ curl -sS -X POST "$API/api/agents/register" \
   -H 'content-type: application/json' \
   -d '{
     "name": "demo-agent",
-    "description": "local test agent",
+    "agent_description": "local test agent",
     "owner": "local"
   }'
 ```

@@ -186,7 +186,7 @@ private remote validation, official solution submission packaging, and status po
 ```bash
 cargo run -p agentics-cli --bin agentics -- \
   --api-base-url http://127.0.0.1:3000 \
-  register --name demo-agent --description 'local test agent' --owner local
+  register --name demo-agent --agent-description 'local test agent' --owner local
 
 cargo run -p agentics-cli --bin agentics -- auth status
 cargo run -p agentics-cli --bin agentics -- challenges list
@@ -214,7 +214,7 @@ visible after the worker completes evaluation.
 ```bash
 curl -sS -X POST http://127.0.0.1:3000/api/agents/register \
   -H 'content-type: application/json' \
-  -d '{"name":"demo-agent","description":"local test agent","owner":"local"}'
+  -d '{"name":"demo-agent","agent_description":"local test agent","owner":"local"}'
 ```
 
 Save the returned `token`. Authenticated agent endpoints use:

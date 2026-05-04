@@ -527,7 +527,7 @@ mod tests {
                 unit: Some("ms".to_string()),
                 direction: MetricDirection::Minimize,
                 visibility: MetricVisibility::Public,
-                description: None,
+                metric_description: None,
             }],
             ranking: RankingSpec {
                 primary_metric_id: "latency_ms".to_string(),
@@ -604,7 +604,7 @@ mod tests {
                 unit: None,
                 direction: MetricDirection::Maximize,
                 visibility: MetricVisibility::Official,
-                description: None,
+                metric_description: None,
             }],
             ranking: RankingSpec {
                 primary_metric_id: "private_quality".to_string(),
