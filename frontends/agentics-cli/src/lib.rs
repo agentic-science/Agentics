@@ -218,56 +218,7 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/api/public/challenges/sample-sum"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-                "id": "sample-sum",
-                "slug": "sum",
-                "title": "Sample Sum",
-                "summary": "Add numbers",
-                "current_version": {
-                    "id": "version-1",
-                    "version": "v1"
-                },
-                "spec": {
-                    "schema_version": 1,
-                    "challenge_id": "sample-sum",
-                    "challenge_title": "Sample Sum",
-                    "challenge_summary": "Add numbers",
-                    "challenge_version": "v1",
-                    "solution": {
-                        "protocol": "zip_project",
-                        "manifest_file": "agentics.solution.json"
-                    },
-                    "scorer": {
-                        "command": ["python", "scorer/run.py"],
-                        "result_file": "result.json"
-                    },
-                    "resource_profile": {
-                        "id": "python-cpu-small",
-                        "solution_image": "python:3.12-slim-bookworm",
-                        "scorer_image": "python:3.12-slim-bookworm",
-                        "timeout_sec": 30,
-                        "memory_limit_mb": 512,
-                        "cpu_limit_millis": 1000,
-                        "disk_limit_mb": 1024,
-                        "setup_network_access": "enabled",
-                        "build_network_access": "disabled",
-                        "run_network_access": "disabled",
-                        "scorer_network_access": "disabled"
-                    },
-                    "execution": {
-                        "validation_runs": "public/runs.json",
-                        "official_runs": "private-benchmark/runs.json"
-                    },
-                    "datasets": {
-                        "public_dir": "public",
-                        "private_benchmark_dir": "private-benchmark",
-                        "public_policy": "full",
-                        "private_benchmark_policy": "score_only",
-                        "private_benchmark_enabled": false
-                    }
-                },
-                "statement_markdown": "# Statement\n\nReturn the sum."
-            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(challenge_detail_json(true)))
             .mount(&server)
             .await;
 
@@ -300,6 +251,11 @@ mod tests {
     #[tokio::test]
     async fn submit_packages_workspace_and_posts_authenticated_request() {
         let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/public/challenges/sample-sum"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(challenge_detail_json(true)))
+            .mount(&server)
+            .await;
         Mock::given(method("POST"))
             .and(path("/api/solution-submissions"))
             .and(header("authorization", "Bearer test-token"))
@@ -308,6 +264,7 @@ mod tests {
                 "status": "queued",
                 "challenge_id": "sample-sum",
                 "challenge_version_id": "version-1",
+                "benchmark_target_id": "cpu-linux-arm64",
                 "artifact_path": "solution-submissions/solution_submission-1.zip",
                 "evaluation_job_id": "job-1",
                 "created_at": "2026-05-01T00:00:00Z"
@@ -339,6 +296,8 @@ mod tests {
             "test-token",
             "submit",
             "sample-sum",
+            "--target",
+            "cpu-linux-arm64",
             "--dir",
             workspace_dir.to_str().expect("utf8 path"),
             "--explanation",
@@ -352,13 +311,61 @@ mod tests {
             .received_requests()
             .await
             .expect("requests should be recorded");
+        let post = requests
+            .iter()
+            .find(|request| request.url.path() == "/api/solution-submissions")
+            .expect("solution submission create request should be recorded");
         let body: serde_json::Value =
-            serde_json::from_slice(&requests[0].body).expect("request body should be JSON");
+            serde_json::from_slice(&post.body).expect("request body should be JSON");
 
         assert!(output.contains("Submitted solution_submission-1"));
         assert_eq!(body["challenge_id"], "sample-sum");
+        assert_eq!(body["benchmark_target_id"], "cpu-linux-arm64");
         assert_eq!(body["explanation"], "first attempt");
         assert!(body["artifact_base64"].as_str().expect("artifact").len() > 20);
+    }
+
+    #[tokio::test]
+    async fn submit_rejects_unknown_target_before_packaging() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/public/challenges/sample-sum"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(challenge_detail_json(true)))
+            .mount(&server)
+            .await;
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let workspace_dir = temp.path().join("workspace");
+        std::fs::create_dir(&workspace_dir).expect("workspace dir");
+
+        let config_path = temp.path().join("config.toml");
+        let cli = Cli::parse_from([
+            "agentics",
+            "--config",
+            config_path.to_str().expect("utf8 path"),
+            "--api-base-url",
+            &server.uri(),
+            "--token",
+            "test-token",
+            "submit",
+            "sample-sum",
+            "--target",
+            "cpu-linux-ppc64le",
+            "--dir",
+            workspace_dir.to_str().expect("utf8 path"),
+        ]);
+
+        let error = execute(cli, Environment::default())
+            .await
+            .expect_err("unknown target should be rejected before packaging");
+        let requests = server
+            .received_requests()
+            .await
+            .expect("requests should be recorded");
+
+        assert!(error.to_string().contains("benchmark target"));
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].url.path(), "/api/public/challenges/sample-sum");
     }
 
     #[tokio::test]
@@ -372,6 +379,7 @@ mod tests {
                 "challenge_id": "sample-sum",
                 "challenge_title": "Sample Sum",
                 "challenge_version_id": "version-1",
+                "benchmark_target_id": "cpu-linux-arm64",
                 "agent_id": "agent-1",
                 "agent_name": "solver",
                 "status": "queued",
@@ -382,6 +390,7 @@ mod tests {
                 "artifact_path": "solution-submissions/solution_submission-1.zip",
                 "evaluation_job": {
                     "id": "job-1",
+                    "benchmark_target_id": "cpu-linux-arm64",
                     "status": "queued"
                 },
                 "created_at": "2026-05-01T00:00:00Z",
@@ -428,6 +437,7 @@ mod tests {
                 "status": "queued",
                 "challenge_id": "sample-sum",
                 "challenge_version_id": "version-1",
+                "benchmark_target_id": "cpu-linux-arm64",
                 "artifact_path": "solution-submissions/validation-1.zip",
                 "evaluation_job_id": "job-1",
                 "created_at": "2026-05-01T00:00:00Z"
@@ -442,6 +452,7 @@ mod tests {
                 "challenge_id": "sample-sum",
                 "challenge_title": "Sample Sum",
                 "challenge_version_id": "version-1",
+                "benchmark_target_id": "cpu-linux-arm64",
                 "agent_id": "agent-1",
                 "agent_name": "solver",
                 "status": "completed",
@@ -452,10 +463,12 @@ mod tests {
                 "artifact_path": "solution-submissions/validation-1.zip",
                 "evaluation_job": {
                     "id": "job-1",
+                    "benchmark_target_id": "cpu-linux-arm64",
                     "status": "completed"
                 },
                 "evaluation": {
                     "id": "eval-1",
+                    "benchmark_target_id": "cpu-linux-arm64",
                     "status": "completed",
                     "eval_type": "validation",
                     "primary_score": 1.0,
@@ -531,6 +544,7 @@ mod tests {
         assert!(output.contains("rank_score: 1"));
         assert!(output.contains("visible_after_eval: false"));
         assert_eq!(body["challenge_id"], "sample-sum");
+        assert_eq!(body["benchmark_target_id"], "cpu-linux-arm64");
         assert_eq!(body["explanation"], "quick check");
         assert!(body["artifact_base64"].as_str().expect("artifact").len() > 20);
     }
@@ -601,19 +615,27 @@ mod tests {
                     "command": ["python", "scorer/run.py"],
                     "result_file": "result.json"
                 },
-                "resource_profile": {
-                    "id": "python-cpu-small",
-                    "solution_image": "python:3.12-slim-bookworm",
-                    "scorer_image": "python:3.12-slim-bookworm",
-                    "timeout_sec": 30,
-                    "memory_limit_mb": 512,
-                    "cpu_limit_millis": 1000,
-                    "disk_limit_mb": 1024,
-                    "setup_network_access": "enabled",
-                    "build_network_access": "disabled",
-                    "run_network_access": "disabled",
-                    "scorer_network_access": "disabled"
-                },
+                "benchmark_targets": [
+                    {
+                        "id": "cpu-linux-arm64",
+                        "docker_platform": "linux/arm64",
+                        "accelerator": "cpu",
+                        "validation_enabled": validation_enabled,
+                        "resource_profile": {
+                            "id": "python-cpu-small",
+                            "solution_image": "python:3.12-slim-bookworm",
+                            "scorer_image": "python:3.12-slim-bookworm",
+                            "timeout_sec": 30,
+                            "memory_limit_mb": 512,
+                            "cpu_limit_millis": 1000,
+                            "disk_limit_mb": 1024,
+                            "setup_network_access": "enabled",
+                            "build_network_access": "disabled",
+                            "run_network_access": "disabled",
+                            "scorer_network_access": "disabled"
+                        }
+                    }
+                ],
                 "execution": {
                     "validation_runs": "public/runs.json",
                     "official_runs": "private-benchmark/runs.json"
@@ -623,7 +645,6 @@ mod tests {
                     "private_benchmark_dir": "private-benchmark",
                     "public_policy": "full",
                     "private_benchmark_policy": "score_only",
-                    "validation_enabled": validation_enabled,
                     "private_benchmark_enabled": true
                 },
                 "metric_schema": {

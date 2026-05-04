@@ -2,6 +2,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+use shared::models::challenge::{BenchmarkTargetSpec, ChallengeDetailResponse};
 use shared::models::request::{CreateSolutionSubmissionRequest, RegisterAgentRequest};
 
 use crate::api::ApiClient;
@@ -67,19 +68,30 @@ pub async fn submit(
     output_format: cli::OutputFormat,
     settings: &ResolvedSettings,
 ) -> Result<String> {
-    let package = package::package_solution_workspace(&args.dir)?;
-    let request = create_solution_submission_request(
-        args.challenge_id,
-        &package,
-        args.explanation,
-        args.parent_solution_submission_id,
-        args.credit_text,
-    );
-
     let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-    let response = client.create_solution_submission(&request).await?;
+    let challenge = client.get_challenge(&args.challenge_id).await?;
+    let target_ids = select_benchmark_targets(
+        &challenge,
+        args.target.as_deref(),
+        args.all_targets,
+        TargetSelectionMode::Official,
+    )?;
 
-    output::render_create_solution_submission(&response, &package, output_format)
+    let package = package::package_solution_workspace(&args.dir)?;
+    let mut responses = Vec::with_capacity(target_ids.len());
+    for target_id in target_ids {
+        let request = create_solution_submission_request(
+            args.challenge_id.clone(),
+            target_id,
+            &package,
+            args.explanation.clone(),
+            args.parent_solution_submission_id.clone(),
+            args.credit_text.clone(),
+        );
+        responses.push(client.create_solution_submission(&request).await?);
+    }
+
+    output::render_create_solution_submission_batch(&responses, &package, output_format)
 }
 
 pub async fn validate(
@@ -93,35 +105,43 @@ pub async fn validate(
 
     let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
     let challenge = client.get_challenge(&args.challenge_id).await?;
-    if !challenge.spec.datasets.validation_enabled {
-        bail!(
-            "validation pass is disabled for challenge `{}`; submit officially or ask the challenge owner to enable validation",
-            challenge.id
-        );
-    }
+    let target_ids = select_benchmark_targets(
+        &challenge,
+        args.target.as_deref(),
+        args.all_targets,
+        TargetSelectionMode::Validation,
+    )?;
 
     let package = package::package_solution_workspace(&args.dir)?;
-    let request = create_solution_submission_request(
-        args.challenge_id,
-        &package,
-        args.explanation,
-        args.parent_solution_submission_id,
-        args.credit_text,
-    );
-
-    let response = client.create_validation_run(&request).await?;
+    let mut responses = Vec::with_capacity(target_ids.len());
+    for target_id in target_ids {
+        let request = create_solution_submission_request(
+            args.challenge_id.clone(),
+            target_id,
+            &package,
+            args.explanation.clone(),
+            args.parent_solution_submission_id.clone(),
+            args.credit_text.clone(),
+        );
+        responses.push(client.create_validation_run(&request).await?);
+    }
     if args.no_wait {
-        return output::render_create_validation_run(&response, &package, output_format);
+        return output::render_create_validation_run_batch(&responses, &package, output_format);
     }
 
-    let final_response = poll_validation_run(
-        &client,
-        &response.id,
-        Duration::from_millis(args.poll_interval_ms.max(1)),
-        Duration::from_secs(args.timeout_sec),
-    )
-    .await?;
-    output::render_validation_run_status(&final_response, output_format)
+    let mut final_responses = Vec::with_capacity(responses.len());
+    for response in responses {
+        final_responses.push(
+            poll_validation_run(
+                &client,
+                &response.id,
+                Duration::from_millis(args.poll_interval_ms.max(1)),
+                Duration::from_secs(args.timeout_sec),
+            )
+            .await?,
+        );
+    }
+    output::render_validation_run_status_batch(&final_responses, output_format)
 }
 
 fn parse_model_info(raw: &str) -> Result<serde_json::Value> {
@@ -133,6 +153,7 @@ fn parse_model_info(raw: &str) -> Result<serde_json::Value> {
 
 fn create_solution_submission_request(
     challenge_id: String,
+    benchmark_target_id: String,
     package: &package::SolutionPackage,
     explanation: String,
     parent_solution_submission_id: Option<String>,
@@ -140,11 +161,92 @@ fn create_solution_submission_request(
 ) -> CreateSolutionSubmissionRequest {
     CreateSolutionSubmissionRequest {
         challenge_id,
+        benchmark_target_id,
         artifact_base64: STANDARD.encode(&package.bytes),
         explanation,
         parent_solution_submission_id,
         credit_text,
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TargetSelectionMode {
+    Official,
+    Validation,
+}
+
+fn select_benchmark_targets(
+    challenge: &ChallengeDetailResponse,
+    requested_target: Option<&str>,
+    all_targets: bool,
+    mode: TargetSelectionMode,
+) -> Result<Vec<String>> {
+    if all_targets {
+        let targets = challenge.spec.benchmark_targets.iter().collect::<Vec<_>>();
+        validate_selected_targets(challenge, &targets, mode)?;
+        return Ok(targets.iter().map(|target| target.id.clone()).collect());
+    }
+
+    if let Some(target_id) = requested_target
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        let target = challenge.spec.benchmark_target(target_id).ok_or_else(|| {
+            anyhow::anyhow!(
+                "challenge `{}` does not support benchmark target `{target_id}`",
+                challenge.id
+            )
+        })?;
+        validate_selected_targets(challenge, &[target], mode)?;
+        return Ok(vec![target.id.clone()]);
+    }
+
+    match challenge.spec.benchmark_targets.as_slice() {
+        [target] => {
+            validate_selected_targets(challenge, &[target], mode)?;
+            Ok(vec![target.id.clone()])
+        }
+        [] => bail!(
+            "challenge `{}` does not declare any benchmark targets",
+            challenge.id
+        ),
+        targets => {
+            let available = targets
+                .iter()
+                .map(|target| target.id.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            bail!(
+                "benchmark target is required for challenge `{}`; pass --target <target-id> or --all-targets. Available targets: {available}",
+                challenge.id
+            )
+        }
+    }
+}
+
+fn validate_selected_targets(
+    challenge: &ChallengeDetailResponse,
+    targets: &[&BenchmarkTargetSpec],
+    mode: TargetSelectionMode,
+) -> Result<()> {
+    if mode != TargetSelectionMode::Validation {
+        return Ok(());
+    }
+
+    let disabled = targets
+        .iter()
+        .filter(|target| !target.validation_enabled)
+        .map(|target| target.id.as_str())
+        .collect::<Vec<_>>();
+    if disabled.is_empty() {
+        return Ok(());
+    }
+
+    bail!(
+        "validation pass is disabled for challenge `{}` target(s): {}; submit officially or ask the challenge owner to enable validation",
+        challenge.id,
+        disabled.join(", ")
+    )
 }
 
 async fn poll_validation_run(

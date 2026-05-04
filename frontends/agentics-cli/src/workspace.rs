@@ -120,18 +120,36 @@ fn render_readme(
     interface: SolutionInterface,
 ) -> String {
     format!(
-        "# {}\n\nChallenge: `{}`\nVersion: `{}` (`{}`)\nRuntime profile: `{}`\nInterface: `{}`\nSolution image: `{}`\n\n{}\n\n## Workspace Contract\n\nThis workspace intentionally starts with only `README.md`, `{}`, and a Git repository.\n\nCreate a `run.sh` file at the repository root before committing. The generated pre-commit hook checks that `run.sh` and `{}` exist. Keep `run.sh` aligned with the generated manifest before packaging or submitting.\n",
+        "# {}\n\nChallenge: `{}`\nVersion: `{}` (`{}`)\nRuntime profile: `{}`\nInterface: `{}`\nBenchmark targets:\n{}\n\n{}\n\n## Workspace Contract\n\nThis workspace intentionally starts with only `README.md`, `{}`, and a Git repository.\n\nCreate a `run.sh` file at the repository root before committing. The generated pre-commit hook checks that `run.sh` and `{}` exist. Keep `run.sh` aligned with the generated manifest before packaging or submitting.\n",
         challenge.title.trim(),
         challenge.id,
         challenge.current_version.version,
         challenge.current_version.id,
         runtime_profile.manifest_value(),
         interface.manifest_value(),
-        challenge.spec.resource_profile.solution_image,
+        format_benchmark_targets(challenge),
         challenge.statement_markdown.trim(),
         ZIP_PROJECT_MANIFEST_FILE,
         ZIP_PROJECT_MANIFEST_FILE,
     )
+}
+
+fn format_benchmark_targets(challenge: &ChallengeDetailResponse) -> String {
+    challenge
+        .spec
+        .benchmark_targets
+        .iter()
+        .map(|target| {
+            format!(
+                "- `{}`: {} {}, image `{}`",
+                target.id,
+                target.docker_platform.as_str(),
+                target.accelerator.as_str(),
+                target.resource_profile.solution_image
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn render_manifest(
@@ -331,8 +349,9 @@ mod tests {
 
     use shared::models::CurrentVersionDto;
     use shared::models::challenge::{
-        ChallengeBundleSpec, ChallengeDetailResponse, ChallengeExecutionSpec, DatasetsSpec,
-        MetricSchemaSpec, ResourceProfileSpec, ScorerSpec, SolutionSpec,
+        BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengeDetailResponse,
+        ChallengeExecutionSpec, DatasetsSpec, DockerPlatform, MetricSchemaSpec,
+        ResourceProfileSpec, ScorerSpec, SolutionSpec,
     };
     use shared::models::evaluation::ScoreVisibility;
     use shared::zip_project::{
@@ -473,23 +492,29 @@ mod tests {
                     command: vec!["python".to_string(), "scorer/run.py".to_string()],
                     result_file: "result.json".to_string(),
                 },
-                resource_profile: ResourceProfileSpec {
-                    id: "python-cpu-small".to_string(),
-                    resource_description: None,
-                    solution_image: "python:3.12-slim-bookworm".to_string(),
-                    solution_image_digest: None,
-                    scorer_image: "python:3.12-slim-bookworm".to_string(),
-                    scorer_image_digest: None,
-                    timeout_sec: 30,
-                    memory_limit_mb: 512,
-                    cpu_limit_millis: 1000,
-                    disk_limit_mb: 1024,
-                    setup_network_access: ZipProjectNetworkAccess::Enabled,
-                    build_network_access: ZipProjectNetworkAccess::Disabled,
-                    run_network_access: ZipProjectNetworkAccess::Disabled,
-                    scorer_network_access: ZipProjectNetworkAccess::Disabled,
-                    hardware: None,
-                },
+                benchmark_targets: vec![BenchmarkTargetSpec {
+                    id: "cpu-linux-arm64".to_string(),
+                    docker_platform: DockerPlatform::LinuxArm64,
+                    accelerator: BenchmarkAccelerator::Cpu,
+                    validation_enabled: false,
+                    resource_profile: ResourceProfileSpec {
+                        id: "python-cpu-small".to_string(),
+                        resource_description: None,
+                        solution_image: "python:3.12-slim-bookworm".to_string(),
+                        solution_image_digest: None,
+                        scorer_image: "python:3.12-slim-bookworm".to_string(),
+                        scorer_image_digest: None,
+                        timeout_sec: 30,
+                        memory_limit_mb: 512,
+                        cpu_limit_millis: 1000,
+                        disk_limit_mb: 1024,
+                        setup_network_access: ZipProjectNetworkAccess::Enabled,
+                        build_network_access: ZipProjectNetworkAccess::Disabled,
+                        run_network_access: ZipProjectNetworkAccess::Disabled,
+                        scorer_network_access: ZipProjectNetworkAccess::Disabled,
+                        hardware: None,
+                    },
+                }],
                 execution: ChallengeExecutionSpec {
                     validation_runs: Some("public/runs.json".to_string()),
                     official_runs: Some("private-benchmark/runs.json".to_string()),
@@ -499,7 +524,6 @@ mod tests {
                     private_benchmark_dir: None,
                     public_policy: ScoreVisibility::Full,
                     private_benchmark_policy: "score_only".to_string(),
-                    validation_enabled: false,
                     private_benchmark_enabled: false,
                 },
                 community: None,

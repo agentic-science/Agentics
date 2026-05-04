@@ -172,6 +172,14 @@ pub struct SubmitArgs {
     /// Challenge id or slug to submit against.
     pub challenge_id: String,
 
+    /// Benchmark target id, for example cpu-linux-arm64.
+    #[arg(long, value_name = "TARGET_ID", conflicts_with = "all_targets")]
+    pub target: Option<String>,
+
+    /// Submit once per benchmark target declared by the challenge.
+    #[arg(long)]
+    pub all_targets: bool,
+
     /// Workspace directory to package. Defaults to the current directory.
     #[arg(long, value_name = "PATH", default_value = ".")]
     pub dir: PathBuf,
@@ -193,6 +201,14 @@ pub struct SubmitArgs {
 pub struct ValidateArgs {
     /// Challenge id or slug to validate against.
     pub challenge_id: String,
+
+    /// Benchmark target id, for example cpu-linux-arm64.
+    #[arg(long, value_name = "TARGET_ID", conflicts_with = "all_targets")]
+    pub target: Option<String>,
+
+    /// Create one validation run per benchmark target declared by the challenge.
+    #[arg(long)]
+    pub all_targets: bool,
 
     /// Use the remote Agentics validation API. Local validation is not implemented yet.
     #[arg(long)]

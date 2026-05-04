@@ -126,7 +126,7 @@ pub fn render_challenge_detail(
             };
 
             Ok(format!(
-                "{} ({})\nsummary: {}\nversion: {} ({})\nsolution_protocol: {} ({})\nresource_profile: {} / {} / {} sec / {} MB\ndatasets: public={}, validation={}, private_benchmark={}\nranking_metric: {}\n\n{}",
+                "{} ({})\nsummary: {}\nversion: {} ({})\nsolution_protocol: {} ({})\nbenchmark_targets:\n{}\ndatasets: public={}, private_benchmark={}\nranking_metric: {}\n\n{}",
                 response.title,
                 response.id,
                 response.summary,
@@ -134,16 +134,8 @@ pub fn render_challenge_detail(
                 response.current_version.id,
                 response.spec.solution.protocol,
                 response.spec.solution.manifest_file,
-                response.spec.resource_profile.id,
-                response.spec.resource_profile.solution_image,
-                response.spec.resource_profile.timeout_sec,
-                response.spec.resource_profile.memory_limit_mb,
+                format_benchmark_targets(&response.spec.benchmark_targets),
                 response.spec.datasets.public_dir,
-                if response.spec.datasets.validation_enabled {
-                    "enabled"
-                } else {
-                    "disabled"
-                },
                 private_benchmark,
                 response.spec.metric_schema.ranking.primary_metric_id,
                 response.statement_markdown.trim()
@@ -183,9 +175,10 @@ pub fn render_create_solution_submission(
             }
         })),
         OutputFormat::Table => Ok(format!(
-            "Submitted {}\nchallenge: {}\nstatus: {}\nevaluation_job: {}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}",
+            "Submitted {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}",
             response.id,
             response.challenge_id,
+            response.benchmark_target_id,
             response.status,
             response.evaluation_job_id,
             package.file_count,
@@ -193,6 +186,17 @@ pub fn render_create_solution_submission(
             package.bytes.len(),
             package.workspace_dir.display()
         )),
+    }
+}
+
+pub fn render_create_solution_submission_batch(
+    responses: &[CreateSolutionSubmissionResponse],
+    package: &SolutionPackage,
+    format: OutputFormat,
+) -> Result<String> {
+    match responses {
+        [response] => render_create_solution_submission(response, package, format),
+        _ => render_create_submission_batch("solution_submissions", responses, package, format),
     }
 }
 
@@ -212,9 +216,10 @@ pub fn render_create_validation_run(
             }
         })),
         OutputFormat::Table => Ok(format!(
-            "Created validation run {}\nchallenge: {}\nstatus: {}\nevaluation_job: {}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}",
+            "Created validation run {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}",
             response.id,
             response.challenge_id,
+            response.benchmark_target_id,
             response.status,
             response.evaluation_job_id,
             package.file_count,
@@ -222,6 +227,17 @@ pub fn render_create_validation_run(
             package.bytes.len(),
             package.workspace_dir.display()
         )),
+    }
+}
+
+pub fn render_create_validation_run_batch(
+    responses: &[CreateSolutionSubmissionResponse],
+    package: &SolutionPackage,
+    format: OutputFormat,
+) -> Result<String> {
+    match responses {
+        [response] => render_create_validation_run(response, package, format),
+        _ => render_create_submission_batch("validation_runs", responses, package, format),
     }
 }
 
@@ -255,9 +271,10 @@ pub fn render_solution_submission_status(
                 .unwrap_or_else(|| "none".to_string());
 
             Ok(format!(
-                "solution submission: {}\nchallenge: {}\nstatus: {}\nevaluation_job: {}\nvalidation_evaluation: {}\nofficial_evaluation: {}\nrank_score: {}\nvisible_after_eval: {}",
+                "solution submission: {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\nvalidation_evaluation: {}\nofficial_evaluation: {}\nrank_score: {}\nvisible_after_eval: {}",
                 response.id,
                 response.challenge_id,
+                response.benchmark_target_id,
                 response.status,
                 evaluation_job,
                 validation_eval,
@@ -298,9 +315,10 @@ pub fn render_validation_run_status(
                 .unwrap_or_else(|| "none".to_string());
 
             Ok(format!(
-                "validation_run: {}\nchallenge: {}\nstatus: {}\nevaluation_job: {}\nvalidation: {}\nprimary_score: {}\nrank_score: {}\nvisible_after_eval: {}",
+                "validation_run: {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\nvalidation: {}\nprimary_score: {}\nrank_score: {}\nvisible_after_eval: {}",
                 response.id,
                 response.challenge_id,
+                response.benchmark_target_id,
                 response.status,
                 evaluation_job,
                 validation_status,
@@ -310,6 +328,127 @@ pub fn render_validation_run_status(
             ))
         }
     }
+}
+
+pub fn render_validation_run_status_batch(
+    responses: &[SolutionSubmissionResponse],
+    format: OutputFormat,
+) -> Result<String> {
+    match responses {
+        [response] => render_validation_run_status(response, format),
+        _ => match format {
+            OutputFormat::Json => pretty_json(&json!({ "validation_runs": responses })),
+            OutputFormat::Table => {
+                let rows = responses
+                    .iter()
+                    .map(|response| {
+                        let evaluation_job = response
+                            .evaluation_job
+                            .as_ref()
+                            .map(|job| format!("{} ({})", job.id, status_label(&job.status)))
+                            .unwrap_or_else(|| "none".to_string());
+                        let validation_eval = response
+                            .evaluation
+                            .as_ref()
+                            .or(response.validation_evaluation.as_ref());
+                        let validation_status = validation_eval
+                            .map(|eval| status_label(&eval.status))
+                            .unwrap_or_else(|| "none".to_string());
+                        let rank_score = validation_eval
+                            .and_then(|eval| eval.rank_score)
+                            .map(format_score)
+                            .unwrap_or_else(|| "none".to_string());
+                        vec![
+                            response.benchmark_target_id.clone(),
+                            response.id.clone(),
+                            status_label(&response.status),
+                            evaluation_job,
+                            validation_status,
+                            rank_score,
+                        ]
+                    })
+                    .collect::<Vec<_>>();
+                Ok(render_table(
+                    &["TARGET", "ID", "STATUS", "JOB", "VALIDATION", "RANK_SCORE"],
+                    &rows,
+                ))
+            }
+        },
+    }
+}
+
+fn render_create_submission_batch(
+    response_key: &str,
+    responses: &[CreateSolutionSubmissionResponse],
+    package: &SolutionPackage,
+    format: OutputFormat,
+) -> Result<String> {
+    match format {
+        OutputFormat::Json => {
+            let mut value = json!({
+                "package": {
+                    "workspace_dir": package.workspace_dir,
+                    "file_count": package.file_count,
+                    "uncompressed_bytes": package.uncompressed_bytes,
+                    "zip_bytes": package.bytes.len(),
+                }
+            });
+            value
+                .as_object_mut()
+                .expect("static object must be an object")
+                .insert(response_key.to_string(), serde_json::to_value(responses)?);
+            pretty_json(&value)
+        }
+        OutputFormat::Table => {
+            let rows = responses
+                .iter()
+                .map(|response| {
+                    vec![
+                        response.benchmark_target_id.clone(),
+                        response.id.clone(),
+                        response.challenge_id.clone(),
+                        response.status.clone(),
+                        response.evaluation_job_id.clone(),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            Ok(format!(
+                "{}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}",
+                render_table(&["TARGET", "ID", "CHALLENGE", "STATUS", "JOB"], &rows),
+                package.file_count,
+                package.uncompressed_bytes,
+                package.bytes.len(),
+                package.workspace_dir.display()
+            ))
+        }
+    }
+}
+
+fn format_benchmark_targets(targets: &[shared::models::challenge::BenchmarkTargetSpec]) -> String {
+    if targets.is_empty() {
+        return "  <none>".to_string();
+    }
+
+    targets
+        .iter()
+        .map(|target| {
+            format!(
+                "  - {}: {} {}, image={}, timeout={} sec, memory={} MB, validation={}",
+                target.id,
+                target.docker_platform.as_str(),
+                target.accelerator.as_str(),
+                target.resource_profile.solution_image,
+                target.resource_profile.timeout_sec,
+                target.resource_profile.memory_limit_mb,
+                if target.validation_enabled {
+                    "enabled"
+                } else {
+                    "disabled"
+                }
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn pretty_json<T: Serialize>(value: &T) -> Result<String> {
@@ -377,9 +516,9 @@ mod tests {
     use serde_json::Value;
     use shared::models::CurrentVersionDto;
     use shared::models::challenge::{
-        ChallengeBundleSpec, ChallengeDetailResponse, ChallengeExecutionSpec, ChallengeListItemDto,
-        ChallengeListResponse, DatasetsSpec, MetricSchemaSpec, ResourceProfileSpec, ScorerSpec,
-        SolutionSpec,
+        BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengeDetailResponse,
+        ChallengeExecutionSpec, ChallengeListItemDto, ChallengeListResponse, DatasetsSpec,
+        DockerPlatform, MetricSchemaSpec, ResourceProfileSpec, ScorerSpec, SolutionSpec,
     };
     use shared::models::evaluation::ScoreVisibility;
     use shared::zip_project::ZipProjectNetworkAccess;
@@ -445,23 +584,29 @@ mod tests {
                     command: vec!["python".to_string(), "scorer/run.py".to_string()],
                     result_file: "result.json".to_string(),
                 },
-                resource_profile: ResourceProfileSpec {
-                    id: "python-cpu-small".to_string(),
-                    resource_description: None,
-                    solution_image: "python:3.12-slim-bookworm".to_string(),
-                    solution_image_digest: None,
-                    scorer_image: "python:3.12-slim-bookworm".to_string(),
-                    scorer_image_digest: None,
-                    timeout_sec: 30,
-                    memory_limit_mb: 512,
-                    cpu_limit_millis: 1000,
-                    disk_limit_mb: 1024,
-                    setup_network_access: ZipProjectNetworkAccess::Enabled,
-                    build_network_access: ZipProjectNetworkAccess::Disabled,
-                    run_network_access: ZipProjectNetworkAccess::Disabled,
-                    scorer_network_access: ZipProjectNetworkAccess::Disabled,
-                    hardware: None,
-                },
+                benchmark_targets: vec![BenchmarkTargetSpec {
+                    id: "cpu-linux-arm64".to_string(),
+                    docker_platform: DockerPlatform::LinuxArm64,
+                    accelerator: BenchmarkAccelerator::Cpu,
+                    validation_enabled: false,
+                    resource_profile: ResourceProfileSpec {
+                        id: "python-cpu-small".to_string(),
+                        resource_description: None,
+                        solution_image: "python:3.12-slim-bookworm".to_string(),
+                        solution_image_digest: None,
+                        scorer_image: "python:3.12-slim-bookworm".to_string(),
+                        scorer_image_digest: None,
+                        timeout_sec: 30,
+                        memory_limit_mb: 512,
+                        cpu_limit_millis: 1000,
+                        disk_limit_mb: 1024,
+                        setup_network_access: ZipProjectNetworkAccess::Enabled,
+                        build_network_access: ZipProjectNetworkAccess::Disabled,
+                        run_network_access: ZipProjectNetworkAccess::Disabled,
+                        scorer_network_access: ZipProjectNetworkAccess::Disabled,
+                        hardware: None,
+                    },
+                }],
                 execution: ChallengeExecutionSpec {
                     validation_runs: Some("public/runs.json".to_string()),
                     official_runs: Some("private-benchmark/runs.json".to_string()),
@@ -471,7 +616,6 @@ mod tests {
                     private_benchmark_dir: None,
                     public_policy: ScoreVisibility::Full,
                     private_benchmark_policy: "score_only".to_string(),
-                    validation_enabled: false,
                     private_benchmark_enabled: false,
                 },
                 community: None,
