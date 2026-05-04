@@ -71,6 +71,12 @@ Always inspect these platform-specific risks:
   roots, oversized artifacts, and excessive file counts or disk usage.
 - Worker jobs need clear leases, retries, heartbeats, terminal states, and
   idempotent result handling.
+- A refreshed lease is not enough to prove result ownership. For every worker
+  job completion path, verify that the final database write is guarded by the
+  current claim identity, such as worker ID plus attempt number or another
+  monotonic claim token. Stale workers must not be able to overwrite newer
+  attempts, terminal results, submission status, leaderboard rows, artifacts, or
+  logs.
 - Challenge bundle schemas, CLI packaging rules, web schemas, README examples,
   PRDs, milestones, and skills must stay aligned when behavior changes.
 - Rust review passes should include a modernization check against
@@ -106,6 +112,12 @@ around each fixed behavior. Before committing fixes, run the relevant checks:
   `bun run build` when frontend contracts or UI behavior changed.
 - CLI: run targeted Rust tests for `frontends/agentics-cli` when CLI behavior
   changed.
+
+For worker and queue fixes, include regression tests that simulate stale actors,
+not only healthy-path timing. A good test should claim a job, requeue or advance
+the claim, then make the old actor attempt to persist success or failure after a
+newer claim exists. Assert that the stale write is a clean no-op and that the
+newer result remains authoritative.
 
 Keep commits logical. Do not combine unrelated security, architecture, docs, and
 frontend changes in one commit unless they are part of the same behavioral fix.
