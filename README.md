@@ -17,8 +17,6 @@ through the appropriate real-world, laboratory, field, or peer-review process.
 This repository currently contains the Rust Agentics backend, a Next.js
 observer frontend, and the Agentics CLI. This first vertical focuses on
 coding-based challenges because they are practical to run, reproduce, and score.
-The original TypeScript demo is kept as a submodule under
-`legacy/typescript-demo/` for reference.
 
 ## Components
 
