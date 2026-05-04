@@ -45,6 +45,10 @@ Cover these lanes when the user asks for a complete review:
    - Auth and authorization, hostile-code execution, Docker isolation, private
      benchmark leakage, path traversal, symlink handling, CORS, request limits,
      resource exhaustion, token storage, SSRF, XSS, and insecure defaults.
+   - For Rust code that touches the operating system, treat memory safety as
+     only the baseline. Review filesystem races, permission windows, path
+     identity checks, Unix byte and UTF-8 assumptions, panic-based denial of
+     service, and silently dropped errors.
 4. Backend architecture
    - Domain boundaries, worker and API lifecycle, evaluation state machines,
      protocol ownership, database constraints, migrations, scaling limits, and
@@ -67,8 +71,12 @@ Always inspect these platform-specific risks:
 - Docker is not a sufficient hostile-code boundary by itself. Check container
   capabilities, users, PID limits, ulimits, read-only filesystems, network mode,
   bind mounts, log limits, and cleanup behavior.
-- ZIP and workspace handling must reject path traversal, symlinks that escape
-  roots, oversized artifacts, and excessive file counts or disk usage.
+- ZIP, artifact, and workspace handling must be reviewed as filesystem security
+  code. Reject path traversal, symlinks that escape roots, oversized artifacts,
+  and excessive file counts or disk usage. Also check repeated path operations
+  that can create TOCTOU windows, `File::create` where `create_new` is required,
+  create-then-`chmod` permission windows, lossy UTF-8 filename handling, and
+  ignored extraction, copy, cleanup, or log errors.
 - Worker jobs need clear leases, retries, heartbeats, terminal states, and
   idempotent result handling.
 - A refreshed lease is not enough to prove result ownership. For every worker
@@ -91,6 +99,16 @@ that subagent to read `docs/new-rust-features-apis/en.md` before reviewing code.
 The subagent should report places where newer Rust features or APIs simplify
 Agentics code without causing churn for its own sake.
 
+For Rust security review, also ask subagents to scan for CVE-prone tool patterns
+near untrusted input and OS boundaries. Use targeted `rg` searches as review
+starting points, then manually judge context:
+
+- `File::create|fs::metadata|fs::set_permissions|fs::remove_file`
+- `from_utf8_lossy|str::from_utf8|String::from_utf8`
+- `\.ok\(\)|unwrap_or_default|let _ =`
+- `unwrap\(|expect\(|panic!|\[[^\]]+\]`
+- `== Path::new|== "/"|PathBuf.*==`
+
 ## Severity Guidance
 
 - P0: Release blocker, likely security compromise, private data leak, destructive
@@ -108,6 +126,9 @@ around each fixed behavior. Before committing fixes, run the relevant checks:
 
 - Rust: `cargo fmt --all`, `cargo check`, targeted tests, and
   `cargo clippy --workspace --all-targets -- -D warnings`.
+  Production crates opt into workspace Clippy lints for `unwrap`, `expect`,
+  `panic`, indexing, and arithmetic side effects. Treat tests as the only
+  blanket exemption.
 - Web: from `frontends/web`, run `bun run lint`, `bun run test`, and
   `bun run build` when frontend contracts or UI behavior changed.
 - CLI: run targeted Rust tests for `frontends/agentics-cli` when CLI behavior
