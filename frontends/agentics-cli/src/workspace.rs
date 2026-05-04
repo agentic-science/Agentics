@@ -5,6 +5,13 @@ use std::process::Command;
 use anyhow::{Context, Result, bail};
 use serde::Serialize;
 use shared::models::challenge::ChallengeDetailResponse;
+use shared::zip_project::{
+    ZIP_PROJECT_MANIFEST_FILE, ZIP_PROJECT_PROTOCOL, ZIP_PROJECT_PROTOCOL_VERSION,
+    ZipProjectCommands, ZipProjectDependencies, ZipProjectDependencyPolicy, ZipProjectInterface,
+    ZipProjectInterfaceKind, ZipProjectManifest, ZipProjectPhases, ZipProjectRuntime,
+};
+
+use crate::cli::{SolutionInterface, SolutionRuntimeProfile};
 
 const PRE_COMMIT_HOOK: &str = r#"#!/usr/bin/env bash
 set -euo pipefail
@@ -26,11 +33,15 @@ pub struct InitSolutionSummary {
     pub challenge_id: String,
     pub challenge_title: String,
     pub challenge_version: String,
+    pub runtime_profile: String,
+    pub interface: String,
 }
 
 pub fn init_solution_workspace(
     challenge: &ChallengeDetailResponse,
     dir: Option<PathBuf>,
+    runtime_profile: SolutionRuntimeProfile,
+    interface: SolutionInterface,
 ) -> Result<InitSolutionSummary> {
     let workspace_dir = dir.unwrap_or_else(|| default_workspace_dir(&challenge.id));
     if fs::exists(&workspace_dir)
@@ -51,7 +62,7 @@ pub fn init_solution_workspace(
     fs::create_dir(&workspace_dir)
         .with_context(|| format!("failed to create workspace {}", workspace_dir.display()))?;
 
-    let result = write_workspace_files(challenge, &workspace_dir)
+    let result = write_workspace_files(challenge, &workspace_dir, runtime_profile, interface)
         .and_then(|_| initialize_git_repository(&workspace_dir))
         .and_then(|_| install_pre_commit_hook(&workspace_dir));
 
@@ -68,63 +79,94 @@ pub fn init_solution_workspace(
         challenge_id: challenge.id.clone(),
         challenge_title: challenge.title.clone(),
         challenge_version: challenge.current_version.version.clone(),
+        runtime_profile: runtime_profile.manifest_value().to_string(),
+        interface: interface.manifest_value().to_string(),
     })
 }
 
-fn write_workspace_files(challenge: &ChallengeDetailResponse, workspace_dir: &Path) -> Result<()> {
+fn write_workspace_files(
+    challenge: &ChallengeDetailResponse,
+    workspace_dir: &Path,
+    runtime_profile: SolutionRuntimeProfile,
+    interface: SolutionInterface,
+) -> Result<()> {
     let readme_path = workspace_dir.join("README.md");
-    fs::write(readme_path, render_readme(challenge)).with_context(|| {
+    fs::write(
+        readme_path,
+        render_readme(challenge, runtime_profile, interface),
+    )
+    .with_context(|| {
         format!(
             "failed to write README.md in workspace {}",
             workspace_dir.display()
         )
     })?;
     fs::write(
-        workspace_dir.join(shared::zip_project::ZIP_PROJECT_MANIFEST_FILE),
-        render_manifest(),
+        workspace_dir.join(ZIP_PROJECT_MANIFEST_FILE),
+        render_manifest(runtime_profile, interface)?,
     )
     .with_context(|| {
         format!(
             "failed to write {} in workspace {}",
-            shared::zip_project::ZIP_PROJECT_MANIFEST_FILE,
+            ZIP_PROJECT_MANIFEST_FILE,
             workspace_dir.display()
         )
     })
 }
 
-fn render_readme(challenge: &ChallengeDetailResponse) -> String {
+fn render_readme(
+    challenge: &ChallengeDetailResponse,
+    runtime_profile: SolutionRuntimeProfile,
+    interface: SolutionInterface,
+) -> String {
     format!(
-        "# {}\n\nChallenge: `{}`\nVersion: `{}` (`{}`)\n\n{}\n\n## Workspace Contract\n\nCreate a `run.sh` file at the repository root before committing. The generated pre-commit hook checks that this file exists.\n",
+        "# {}\n\nChallenge: `{}`\nVersion: `{}` (`{}`)\nRuntime profile: `{}`\nInterface: `{}`\nSolution image: `{}`\n\n{}\n\n## Workspace Contract\n\nThis workspace intentionally starts with only `README.md`, `{}`, and a Git repository.\n\nCreate a `run.sh` file at the repository root before committing. The generated pre-commit hook checks that `run.sh` and `{}` exist. Keep `run.sh` aligned with the generated manifest before packaging or submitting.\n",
         challenge.title.trim(),
         challenge.id,
         challenge.current_version.version,
         challenge.current_version.id,
-        challenge.statement_markdown.trim()
+        runtime_profile.manifest_value(),
+        interface.manifest_value(),
+        challenge.spec.resource_profile.solution_image,
+        challenge.statement_markdown.trim(),
+        ZIP_PROJECT_MANIFEST_FILE,
+        ZIP_PROJECT_MANIFEST_FILE,
     )
 }
 
-fn render_manifest() -> String {
-    serde_json::to_string_pretty(&serde_json::json!({
-        "protocol": "zip_project",
-        "protocol_version": 1,
-        "runtime": {
-            "language": "python",
-            "language_version": "3.12",
-            "runtime_profile": "python-cpu"
+fn render_manifest(
+    runtime_profile: SolutionRuntimeProfile,
+    interface: SolutionInterface,
+) -> Result<String> {
+    let profile = RuntimeProfileMetadata::for_profile(runtime_profile);
+    let manifest = ZipProjectManifest {
+        protocol: ZIP_PROJECT_PROTOCOL.to_string(),
+        protocol_version: ZIP_PROJECT_PROTOCOL_VERSION,
+        runtime: ZipProjectRuntime {
+            language: profile.language.to_string(),
+            language_version: profile.language_version.map(ToOwned::to_owned),
+            runtime_profile: Some(runtime_profile.manifest_value().to_string()),
         },
-        "commands": {
-            "run": "run.sh"
+        commands: ZipProjectCommands {
+            setup: None,
+            build: None,
+            run: "run.sh".to_string(),
         },
-        "interface": {
-            "kind": "stdio",
-            "input_contract": "Challenge-provided input on stdin.",
-            "output_contract": "Challenge-expected output on stdout or declared files."
+        phases: ZipProjectPhases::default(),
+        interface: ZipProjectInterface {
+            kind: interface.into(),
+            input_contract: Some(interface.input_contract().to_string()),
+            output_contract: Some(interface.output_contract().to_string()),
         },
-        "dependencies": {
-            "policy": "image_provided"
-        }
-    }))
-    .expect("static manifest should serialize")
+        dependencies: ZipProjectDependencies {
+            policy: ZipProjectDependencyPolicy::ImageProvided,
+            lockfiles: Vec::new(),
+            vendor_dirs: Vec::new(),
+            notes: profile.dependency_notes.map(ToOwned::to_owned),
+        },
+    };
+
+    Ok(serde_json::to_string_pretty(&manifest)?)
 }
 
 fn initialize_git_repository(workspace_dir: &Path) -> Result<()> {
@@ -193,6 +235,96 @@ fn sanitize_path_segment(value: &str) -> String {
     }
 }
 
+struct RuntimeProfileMetadata {
+    language: &'static str,
+    language_version: Option<&'static str>,
+    dependency_notes: Option<&'static str>,
+}
+
+impl RuntimeProfileMetadata {
+    fn for_profile(profile: SolutionRuntimeProfile) -> Self {
+        match profile {
+            SolutionRuntimeProfile::Python => Self {
+                language: "python",
+                language_version: Some("3.12"),
+                dependency_notes: Some(
+                    "Default generated manifest assumes dependencies are provided by the challenge image. Add setup/build scripts and lockfiles if your solution needs them.",
+                ),
+            },
+            SolutionRuntimeProfile::Rust => Self {
+                language: "rust",
+                language_version: None,
+                dependency_notes: Some(
+                    "Add setup/build scripts and lockfiles before submitting if the solution needs Cargo dependencies or compilation.",
+                ),
+            },
+            SolutionRuntimeProfile::Node => Self {
+                language: "javascript",
+                language_version: None,
+                dependency_notes: Some(
+                    "Add setup/build scripts and lockfiles before submitting if the solution needs package installation or bundling.",
+                ),
+            },
+            SolutionRuntimeProfile::Generic => Self {
+                language: "generic",
+                language_version: None,
+                dependency_notes: Some(
+                    "Replace runtime metadata with the concrete language and dependency policy used by this solution.",
+                ),
+            },
+        }
+    }
+}
+
+impl SolutionRuntimeProfile {
+    fn manifest_value(self) -> &'static str {
+        match self {
+            Self::Python => "python-cpu",
+            Self::Rust => "rust-cpu",
+            Self::Node => "node-cpu",
+            Self::Generic => "generic-cpu",
+        }
+    }
+}
+
+impl SolutionInterface {
+    fn manifest_value(self) -> &'static str {
+        match self {
+            Self::ChallengeDefined => "challenge_defined",
+            Self::Stdio => "stdio",
+            Self::FileSystem => "file_system",
+        }
+    }
+
+    fn input_contract(self) -> &'static str {
+        match self {
+            Self::ChallengeDefined => "Challenge-defined input prepared by the Agentics runner.",
+            Self::Stdio => "Input is provided on stdin for each runner invocation.",
+            Self::FileSystem => "Input files are provided under AGENTICS_INPUT_DIR.",
+        }
+    }
+
+    fn output_contract(self) -> &'static str {
+        match self {
+            Self::ChallengeDefined => {
+                "Write output in the format required by the challenge statement."
+            }
+            Self::Stdio => "Write the answer for each invocation to stdout.",
+            Self::FileSystem => "Write declared output files under AGENTICS_OUTPUT_DIR.",
+        }
+    }
+}
+
+impl From<SolutionInterface> for ZipProjectInterfaceKind {
+    fn from(value: SolutionInterface) -> Self {
+        match value {
+            SolutionInterface::ChallengeDefined => Self::ChallengeDefined,
+            SolutionInterface::Stdio => Self::Stdio,
+            SolutionInterface::FileSystem => Self::FileSystem,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -203,26 +335,50 @@ mod tests {
         MetricSchemaSpec, ResourceProfileSpec, ScorerSpec, SolutionSpec,
     };
     use shared::models::evaluation::ScoreVisibility;
-    use shared::zip_project::ZipProjectNetworkAccess;
+    use shared::zip_project::{
+        ZipProjectInterfaceKind, ZipProjectNetworkAccess, parse_zip_project_manifest,
+    };
 
     use super::{default_workspace_dir, init_solution_workspace};
+    use crate::cli::{SolutionInterface, SolutionRuntimeProfile};
 
     #[test]
     fn init_solution_creates_readme_manifest_git_repo_and_hook() {
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace_dir = temp.path().join("sample-sum-work");
 
-        let summary = init_solution_workspace(&challenge_detail(), Some(workspace_dir.clone()))
-            .expect("workspace should initialize");
+        let summary = init_solution_workspace(
+            &challenge_detail(),
+            Some(workspace_dir.clone()),
+            SolutionRuntimeProfile::Python,
+            SolutionInterface::ChallengeDefined,
+        )
+        .expect("workspace should initialize");
 
         let readme =
             fs::read_to_string(workspace_dir.join("README.md")).expect("README should be readable");
+        let manifest_raw = fs::read_to_string(workspace_dir.join("agentics.solution.json"))
+            .expect("manifest should be readable");
+        let manifest = parse_zip_project_manifest(&manifest_raw).expect("manifest should parse");
         let hook = fs::read_to_string(workspace_dir.join(".git/hooks/pre-commit"))
             .expect("hook should be readable");
 
         assert_eq!(summary.challenge_id, "sample-sum");
+        assert_eq!(summary.runtime_profile, "python-cpu");
+        assert_eq!(summary.interface, "challenge_defined");
         assert!(readme.contains("# Sample Sum"));
         assert!(readme.contains("Return the sum."));
+        assert!(readme.contains("Runtime profile: `python-cpu`"));
+        assert_eq!(manifest.runtime.language, "python");
+        assert_eq!(manifest.runtime.language_version.as_deref(), Some("3.12"));
+        assert_eq!(
+            manifest.runtime.runtime_profile.as_deref(),
+            Some("python-cpu")
+        );
+        assert_eq!(
+            manifest.interface.kind,
+            ZipProjectInterfaceKind::ChallengeDefined
+        );
         assert!(workspace_dir.join(".git").is_dir());
         assert!(hook.contains("run.sh must exist"));
         assert!(hook.contains("agentics.solution.json must exist"));
@@ -245,10 +401,44 @@ mod tests {
         let workspace_dir = temp.path().join("existing");
         fs::create_dir(&workspace_dir).expect("existing dir should be created");
 
-        let error = init_solution_workspace(&challenge_detail(), Some(workspace_dir))
-            .expect_err("existing dir must be rejected");
+        let error = init_solution_workspace(
+            &challenge_detail(),
+            Some(workspace_dir),
+            SolutionRuntimeProfile::Python,
+            SolutionInterface::ChallengeDefined,
+        )
+        .expect_err("existing dir must be rejected");
 
         assert!(error.to_string().contains("already exists"));
+    }
+
+    #[test]
+    fn init_solution_can_generate_non_python_manifest_profile() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let workspace_dir = temp.path().join("rust-work");
+
+        init_solution_workspace(
+            &challenge_detail(),
+            Some(workspace_dir.clone()),
+            SolutionRuntimeProfile::Rust,
+            SolutionInterface::Stdio,
+        )
+        .expect("workspace should initialize");
+
+        let manifest_raw = fs::read_to_string(workspace_dir.join("agentics.solution.json"))
+            .expect("manifest should be readable");
+        let manifest = parse_zip_project_manifest(&manifest_raw).expect("manifest should parse");
+
+        assert_eq!(manifest.runtime.language, "rust");
+        assert!(manifest.runtime.language_version.is_none());
+        assert_eq!(
+            manifest.runtime.runtime_profile.as_deref(),
+            Some("rust-cpu")
+        );
+        assert_eq!(manifest.interface.kind, ZipProjectInterfaceKind::Stdio);
+        assert_eq!(manifest.commands.run, "run.sh");
+        assert!(manifest.commands.setup.is_none());
+        assert!(manifest.commands.build.is_none());
     }
 
     #[test]

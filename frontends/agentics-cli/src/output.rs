@@ -156,11 +156,13 @@ pub fn render_init_solution(summary: &InitSolutionSummary, format: OutputFormat)
     match format {
         OutputFormat::Json => pretty_json(summary),
         OutputFormat::Table => Ok(format!(
-            "Initialized solution workspace: {}\nchallenge: {} ({})\nversion: {}",
+            "Initialized solution workspace: {}\nchallenge: {} ({})\nversion: {}\nruntime_profile: {}\ninterface: {}",
             summary.workspace_dir.display(),
             summary.challenge_title,
             summary.challenge_id,
-            summary.challenge_version
+            summary.challenge_version,
+            summary.runtime_profile,
+            summary.interface
         )),
     }
 }

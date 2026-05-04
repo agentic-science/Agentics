@@ -136,6 +136,35 @@ pub struct InitSolutionArgs {
     /// Target workspace directory. Defaults to <challenge-id>-solution.
     #[arg(long, value_name = "PATH")]
     pub dir: Option<PathBuf>,
+
+    /// Runtime metadata profile to write into agentics.solution.json.
+    #[arg(long, value_enum, default_value_t = SolutionRuntimeProfile::Python)]
+    pub runtime_profile: SolutionRuntimeProfile,
+
+    /// Solution interface metadata to write into agentics.solution.json.
+    #[arg(long, value_enum, default_value_t = SolutionInterface::ChallengeDefined)]
+    pub interface: SolutionInterface,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[clap(rename_all = "kebab-case")]
+pub enum SolutionRuntimeProfile {
+    #[value(name = "python-cpu")]
+    Python,
+    #[value(name = "rust-cpu")]
+    Rust,
+    #[value(name = "node-cpu")]
+    Node,
+    #[value(name = "generic-cpu")]
+    Generic,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[clap(rename_all = "kebab-case")]
+pub enum SolutionInterface {
+    ChallengeDefined,
+    Stdio,
+    FileSystem,
 }
 
 #[derive(Debug, Clone, Args)]

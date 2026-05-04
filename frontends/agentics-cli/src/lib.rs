@@ -63,7 +63,12 @@ pub async fn execute(cli: Cli, env: Environment) -> Result<String> {
         Commands::InitSolution(args) => {
             let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
             let challenge = client.get_challenge(&args.challenge_id).await?;
-            let summary = workspace::init_solution_workspace(&challenge, args.dir)?;
+            let summary = workspace::init_solution_workspace(
+                &challenge,
+                args.dir,
+                args.runtime_profile,
+                args.interface,
+            )?;
             output::render_init_solution(&summary, cli.output)
         }
         Commands::Submit(args) => commands::submit(args, cli.output, &settings).await,
