@@ -524,10 +524,10 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 | `M0.2.5-WEB-1: Revamp public web visual system and layout` | Planned | Public first impression blocker. |
 | `M0.2.5-WEB-2: Polish challenge browsing and challenge detail` | Planned | Depends on resource and community metadata. |
 | `M0.2.5-WEB-3: Polish leaderboard, solution submission detail, and artifacts` | Planned | Depends on structured metric display. |
-| `M0.2.5-CREATE-1: Define public challenge manifest and repository layout` | Planned | Foundation for GitHub challenge creation. |
-| `M0.2.5-CREATE-2: Add GitHub PR draft binding` | Planned | MVP stores PR author, explicit owners deferred. |
-| `M0.2.5-CREATE-3: Add private benchmark asset upload and binding` | Planned | Keeps private benchmark data outside GitHub. |
-| `M0.2.5-CREATE-4: Add challenge draft validation and review lifecycle` | Planned | Admin-reviewed publish path. |
+| `M0.2.5-CREATE-1: Define public challenge manifest and repository layout` | Implemented | Public manifest, repo layout validation, namespace rules, and leakage checks are implemented and documented. |
+| `M0.2.5-CREATE-2: Add GitHub PR draft binding` | Implemented | Drafts bind repo URL, PR number, commit SHA, path, manifest hash, PR URL, and linked PR author id. |
+| `M0.2.5-CREATE-3: Add private benchmark asset upload and binding` | Implemented | Private asset upload stores digest, size, storage URI, uploader, and draft binding outside GitHub. |
+| `M0.2.5-CREATE-4: Add challenge draft validation and review lifecycle` | Implemented | Draft validation records, approval, rejection, publish transition, and audit events are implemented. |
 | `M0.2.5-CREATE-5: Add challenge version update and archive flows` | Planned | Covers current, superseded, active, and archived states. |
 | `M0.2.5-CREATE-6: Add stale draft cleanup and challenge creation quotas` | Planned | Protects storage and worker capacity. |
 | `M0.2.5-DEMO-1: Decide official demo challenge set` | TODO | Requires further product discussion. |

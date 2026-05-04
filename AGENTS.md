@@ -24,6 +24,7 @@ For your information:
 - `docs/versions/v0.1/admin-web/en.md` and `docs/versions/v0.1/admin-web/zh.md` document the v0.1 admin web console surface, including authentication, challenge publishing, solution submission operations, and worker heartbeat inspection.
 - `docs/versions/v0.2/zip-project-protocol/en.md` and `docs/versions/v0.2/zip-project-protocol/zh.md` document the v0.2 `zip_project` solution manifest schema.
 - `docs/versions/v0.2/benchmark-targets/en.md` and `docs/versions/v0.2/benchmark-targets/zh.md` document the v0.2 benchmark target schema, target-specific submission APIs, CLI behavior, worker behavior, and leaderboard behavior.
+- `docs/versions/v0.2.5/challenge-creation/en.md` and `docs/versions/v0.2.5/challenge-creation/zh.md` document the GitHub-backed challenge creation draft workflow, public manifest, repository layout, private asset upload boundary, and admin review lifecycle.
 
 ### Requirements
 

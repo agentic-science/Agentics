@@ -42,6 +42,8 @@ coding-based challenges because they are practical to run, reproduce, and score.
 - [v0.2 ZIP project protocol 中文说明](docs/versions/v0.2/zip-project-protocol/zh.md)
 - [v0.2 benchmark targets](docs/versions/v0.2/benchmark-targets/en.md)
 - [v0.2 benchmark targets 中文说明](docs/versions/v0.2/benchmark-targets/zh.md)
+- [v0.2.5 challenge creation workflow](docs/versions/v0.2.5/challenge-creation/en.md)
+- [v0.2.5 Challenge Creation Workflow 中文说明](docs/versions/v0.2.5/challenge-creation/zh.md)
 - [Agentics CLI workflow skill](.agents/skills/agentics-cli-workflow/SKILL.md)
 
 The PRD describes the broader Agentics product direction: metricized scientific

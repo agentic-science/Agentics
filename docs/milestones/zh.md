@@ -524,10 +524,10 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 | `M0.2.5-WEB-1：改版 public web visual system 和 layout` | 计划中 | Public first impression blocker。 |
 | `M0.2.5-WEB-2：打磨 challenge browsing 和 challenge detail` | 计划中 | 依赖 resource 和 community metadata。 |
 | `M0.2.5-WEB-3：打磨 leaderboard、solution submission detail 和 artifacts` | 计划中 | 依赖 structured metric display。 |
-| `M0.2.5-CREATE-1：定义 public challenge manifest 和 repository layout` | 计划中 | GitHub challenge creation 的基础。 |
-| `M0.2.5-CREATE-2：添加 GitHub PR draft binding` | 计划中 | MVP 存储 PR author，显式 owners 推迟。 |
-| `M0.2.5-CREATE-3：添加 private benchmark asset upload 和 binding` | 计划中 | 将 private benchmark data 留在 GitHub 之外。 |
-| `M0.2.5-CREATE-4：添加 challenge draft validation 和 review lifecycle` | 计划中 | Admin-reviewed publish path。 |
+| `M0.2.5-CREATE-1：定义 public challenge manifest 和 repository layout` | 已实现 | 已实现并记录 public manifest、repo layout validation、namespace rules 和 leakage checks。 |
+| `M0.2.5-CREATE-2：添加 GitHub PR draft binding` | 已实现 | Drafts 已绑定 repo URL、PR number、commit SHA、path、manifest hash、PR URL 和 linked PR author id。 |
+| `M0.2.5-CREATE-3：添加 private benchmark asset upload 和 binding` | 已实现 | Private asset upload 会在 GitHub 之外存储 digest、size、storage URI、uploader 和 draft binding。 |
+| `M0.2.5-CREATE-4：添加 challenge draft validation 和 review lifecycle` | 已实现 | 已实现 draft validation records、approval、rejection、publish transition 和 audit events。 |
 | `M0.2.5-CREATE-5：添加 challenge version update 和 archive flows` | 计划中 | 覆盖 current、superseded、active 和 archived states。 |
 | `M0.2.5-CREATE-6：添加 stale draft cleanup 和 challenge creation quotas` | 计划中 | 保护 storage 和 worker capacity。 |
 | `M0.2.5-DEMO-1：确定 official demo challenge set` | TODO | 需要后续产品讨论。 |
