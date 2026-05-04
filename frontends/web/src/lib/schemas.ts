@@ -17,6 +17,30 @@ const metricValueSchema = z
   })
   .strict();
 const networkAccessSchema = z.enum(["disabled", "loopback", "enabled"]);
+const resourceProfileSchema = z
+  .object({
+    id: z.string().min(1),
+    resource_description: z.string().min(1).optional(),
+    solution_image: z.string().min(1),
+    solution_image_digest: z.string().min(1).optional(),
+    scorer_image: z.string().min(1),
+    scorer_image_digest: z.string().min(1).optional(),
+    timeout_sec: z.number().int().positive(),
+    memory_limit_mb: z.number().int().positive(),
+    cpu_limit_millis: z.number().int().positive(),
+    disk_limit_mb: z.number().int().positive(),
+    setup_network_access: networkAccessSchema,
+    build_network_access: networkAccessSchema,
+    run_network_access: networkAccessSchema,
+    scorer_network_access: networkAccessSchema,
+    hardware: z
+      .object({
+        kind: z.string().min(1),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
 
 const runMetricResultSchema = z
   .object({
@@ -104,30 +128,7 @@ export const challengeBundleSpecSchema = z
         result_file: z.string().min(1),
       })
       .strict(),
-    resource_profile: z
-      .object({
-        id: z.string().min(1),
-        resource_description: z.string().min(1).optional(),
-        solution_image: z.string().min(1),
-        solution_image_digest: z.string().min(1).optional(),
-        scorer_image: z.string().min(1),
-        scorer_image_digest: z.string().min(1).optional(),
-        timeout_sec: z.number().int().positive(),
-        memory_limit_mb: z.number().int().positive(),
-        cpu_limit_millis: z.number().int().positive(),
-        disk_limit_mb: z.number().int().positive(),
-        setup_network_access: networkAccessSchema,
-        build_network_access: networkAccessSchema,
-        run_network_access: networkAccessSchema,
-        scorer_network_access: networkAccessSchema,
-        hardware: z
-          .object({
-            kind: z.string().min(1),
-          })
-          .strict()
-          .optional(),
-      })
-      .strict(),
+    resource_profile: resourceProfileSchema,
     execution: z
       .object({
         validation_runs: z.string().min(1).optional(),
@@ -280,6 +281,9 @@ export const adminChallengeListItemSchema = z
     summary: z.string().min(1),
     status: z.string().min(1),
     current_version: currentVersionDtoSchema.optional(),
+    current_resource_profile: resourceProfileSchema.optional(),
+    validation_enabled: z.boolean().optional(),
+    private_benchmark_enabled: z.boolean().optional(),
     created_at: isoTimestampSchema,
     updated_at: isoTimestampSchema,
   })
@@ -382,6 +386,28 @@ export const adminServiceHeartbeatListResponseSchema = z
   .object({ items: z.array(adminServiceHeartbeatSchema) })
   .strict();
 
+/** Admin capacity response with configured quotas and live queue usage. */
+export const adminCapacityResponseSchema = z
+  .object({
+    quota_window_seconds: z.number().int().positive(),
+    quotas: z
+      .object({
+        validation_runs_per_agent_challenge_day: z.number().int().positive(),
+        official_runs_per_agent_challenge_day: z.number().int().positive(),
+        max_active_official_jobs: z.number().int().positive(),
+        max_active_agents: z.number().int().positive(),
+      })
+      .strict(),
+    usage: z
+      .object({
+        active_agents: z.number().int().min(0),
+        active_validation_jobs: z.number().int().min(0),
+        active_official_jobs: z.number().int().min(0),
+      })
+      .strict(),
+  })
+  .strict();
+
 /** One file entry extracted from a solution submission artifact archive. */
 export const solutionSubmissionArtifactFileDtoSchema = z
   .object({
@@ -469,3 +495,4 @@ export type AdminSolutionSubmissionListItem = z.infer<
 export type AdminServiceHeartbeatListResponse = z.infer<
   typeof adminServiceHeartbeatListResponseSchema
 >;
+export type AdminCapacityResponse = z.infer<typeof adminCapacityResponseSchema>;

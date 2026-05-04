@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  adminCapacityResponseSchema,
+  adminChallengeListResponseSchema,
   challengeDetailResponseSchema,
   leaderboardResponseSchema,
   solutionSubmissionResponseSchema,
@@ -245,6 +247,58 @@ describe("frontend API schemas", () => {
             updated_at: "2026-04-28T00:00:00Z",
           },
         ],
+      }),
+    ).not.toThrow();
+  });
+
+  it("accepts admin resource profile and capacity responses", () => {
+    expect(() =>
+      adminChallengeListResponseSchema.parse({
+        items: [
+          {
+            id: "sample-sum",
+            slug: "sample-sum",
+            title: "Sample Sum",
+            summary: "Add numbers",
+            status: "active",
+            current_version: { id: "sample-sum:v1", version: "v1" },
+            current_resource_profile: {
+              id: "python-cpu-small",
+              solution_image: "python:3.12-slim-bookworm",
+              scorer_image: "python:3.12-slim-bookworm",
+              timeout_sec: 30,
+              memory_limit_mb: 512,
+              cpu_limit_millis: 1000,
+              disk_limit_mb: 1024,
+              setup_network_access: "enabled",
+              build_network_access: "disabled",
+              run_network_access: "disabled",
+              scorer_network_access: "disabled",
+              hardware: { kind: "cpu" },
+            },
+            validation_enabled: true,
+            private_benchmark_enabled: true,
+            created_at: "2026-04-28T00:00:00Z",
+            updated_at: "2026-04-28T00:00:00Z",
+          },
+        ],
+      }),
+    ).not.toThrow();
+
+    expect(() =>
+      adminCapacityResponseSchema.parse({
+        quota_window_seconds: 86400,
+        quotas: {
+          validation_runs_per_agent_challenge_day: 20,
+          official_runs_per_agent_challenge_day: 5,
+          max_active_official_jobs: 20,
+          max_active_agents: 1000,
+        },
+        usage: {
+          active_agents: 2,
+          active_validation_jobs: 1,
+          active_official_jobs: 0,
+        },
       }),
     ).not.toThrow();
   });

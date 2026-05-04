@@ -6,6 +6,7 @@ import {
   Boxes,
   EyeOff,
   FlaskConical,
+  Gauge,
   KeyRound,
   Play,
   RefreshCw,
@@ -30,11 +31,13 @@ import {
 } from "@/lib/adminApi";
 import { formatDate, formatScore } from "@/lib/format";
 import {
+  type AdminCapacityResponse,
   type AdminChallengeListItem,
   type AdminChallengeListResponse,
   type AdminServiceHeartbeatListResponse,
   type AdminSolutionSubmissionListItem,
   type AdminSolutionSubmissionListResponse,
+  adminCapacityResponseSchema,
   adminChallengeListResponseSchema,
   adminServiceHeartbeatListResponseSchema,
   adminSolutionSubmissionListResponseSchema,
@@ -45,7 +48,7 @@ import {
   hideSolutionSubmissionResponseSchema,
 } from "@/lib/schemas";
 
-type AdminTab = "overview" | "challenges" | "operations";
+type AdminTab = "overview" | "challenges" | "capacity" | "operations";
 type RefreshOptions = { quiet?: boolean };
 type AdminRefresh = (options?: RefreshOptions) => Promise<void>;
 
@@ -53,12 +56,14 @@ interface AdminData {
   challenges: AdminChallengeListResponse;
   submissions: AdminSolutionSubmissionListResponse;
   heartbeats: AdminServiceHeartbeatListResponse;
+  capacity: AdminCapacityResponse | null;
 }
 
 const emptyData: AdminData = {
   challenges: { items: [] },
   submissions: { items: [] },
   heartbeats: { items: [] },
+  capacity: null,
 };
 
 const credentialStorageKey = "agentics-admin-credentials";
@@ -103,24 +108,31 @@ export function AdminConsole() {
     setLoading(true);
     setError(null);
     try {
-      const [challenges, submissions, heartbeats] = await Promise.all([
-        adminFetchJson(
-          "/admin/challenges",
-          adminChallengeListResponseSchema,
-          credentials,
-        ),
-        adminFetchJson(
-          "/admin/solution-submissions",
-          adminSolutionSubmissionListResponseSchema,
-          credentials,
-        ),
-        adminFetchJson(
-          "/admin/service-heartbeats",
-          adminServiceHeartbeatListResponseSchema,
-          credentials,
-        ),
-      ]);
-      setData({ challenges, submissions, heartbeats });
+      const [challenges, submissions, heartbeats, capacity] = await Promise.all(
+        [
+          adminFetchJson(
+            "/admin/challenges",
+            adminChallengeListResponseSchema,
+            credentials,
+          ),
+          adminFetchJson(
+            "/admin/solution-submissions",
+            adminSolutionSubmissionListResponseSchema,
+            credentials,
+          ),
+          adminFetchJson(
+            "/admin/service-heartbeats",
+            adminServiceHeartbeatListResponseSchema,
+            credentials,
+          ),
+          adminFetchJson(
+            "/admin/capacity",
+            adminCapacityResponseSchema,
+            credentials,
+          ),
+        ],
+      );
+      setData({ challenges, submissions, heartbeats, capacity });
       if (!options.quiet) {
         setMessage("Operator data refreshed.");
       }
@@ -193,6 +205,7 @@ export function AdminConsole() {
         {[
           ["overview", "Overview"],
           ["challenges", "Challenges"],
+          ["capacity", "Capacity"],
           ["operations", "Operations"],
         ].map(([id, label]) => (
           <button
@@ -218,6 +231,9 @@ export function AdminConsole() {
           onError={setError}
           onMessage={setMessage}
         />
+      ) : null}
+      {activeTab === "capacity" ? (
+        <CapacityPanel capacity={data.capacity} />
       ) : null}
       {activeTab === "operations" ? (
         <OperationsPanel
@@ -317,9 +333,10 @@ function OverviewPanel({
   const activeWorkers = data.heartbeats.items.length;
   const queued = statusCounts.queued ?? 0;
   const running = statusCounts.running ?? 0;
+  const activeOfficialJobs = data.capacity?.usage.active_official_jobs ?? 0;
 
   return (
-    <section className="grid grid-cols-1 md:grid-cols-4 gap-5">
+    <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-5">
       <StatCard
         icon={<FlaskConical className="w-5 h-5" />}
         label="Challenges"
@@ -336,6 +353,12 @@ function OverviewPanel({
         icon={<Activity className="w-5 h-5" />}
         label="Queued / Running"
         value={`${queued} / ${running}`}
+        tone="amber"
+      />
+      <StatCard
+        icon={<Gauge className="w-5 h-5" />}
+        label="Official capacity"
+        value={`${activeOfficialJobs}/${data.capacity?.quotas.max_active_official_jobs ?? "—"}`}
         tone="amber"
       />
       <StatCard
@@ -429,6 +452,8 @@ function ChallengeAdminPanel({
                 <th>Challenge</th>
                 <th>Status</th>
                 <th>Version</th>
+                <th>Resource</th>
+                <th>Modes</th>
                 <th>Updated</th>
               </tr>
             </thead>
@@ -447,6 +472,12 @@ function ChallengeAdminPanel({
                   <td className="font-mono">
                     {challenge.current_version?.version ?? "—"}
                   </td>
+                  <td>
+                    <ResourceProfileSummary challenge={challenge} />
+                  </td>
+                  <td>
+                    <ModeSummary challenge={challenge} />
+                  </td>
                   <td className="text-[var(--text-muted)]">
                     {formatDate(challenge.updated_at, locale)}
                   </td>
@@ -457,6 +488,147 @@ function ChallengeAdminPanel({
         )}
       </div>
     </section>
+  );
+}
+
+function CapacityPanel({
+  capacity,
+}: {
+  capacity: AdminCapacityResponse | null;
+}) {
+  if (!capacity) {
+    return (
+      <section className="card">
+        <div className="empty-state">
+          Load admin data to inspect resource profiles and quotas.
+        </div>
+      </section>
+    );
+  }
+
+  const quotaRows = [
+    [
+      "Validation per agent/challenge",
+      capacity.quotas.validation_runs_per_agent_challenge_day.toString(),
+    ],
+    [
+      "Official per agent/challenge",
+      capacity.quotas.official_runs_per_agent_challenge_day.toString(),
+    ],
+    [
+      "Active official jobs",
+      capacity.quotas.max_active_official_jobs.toString(),
+    ],
+    ["Active agents", capacity.quotas.max_active_agents.toString()],
+  ];
+  const usageRows = [
+    ["Agents", capacity.usage.active_agents.toString()],
+    ["Validation jobs", capacity.usage.active_validation_jobs.toString()],
+    ["Official jobs", capacity.usage.active_official_jobs.toString()],
+  ];
+
+  return (
+    <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div className="card overflow-x-auto">
+        <SectionTitle
+          icon={<Gauge className="w-4 h-4" />}
+          title="Resource profiles and quotas"
+        />
+        <p className="mt-2 mb-4 text-[var(--text-body-sm)] text-[var(--text-secondary)]">
+          Limits are loaded from backend configuration and enforced before
+          uploads consume storage or worker capacity.
+        </p>
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Quota</th>
+              <th>Limit</th>
+            </tr>
+          </thead>
+          <tbody>
+            {quotaRows.map(([label, value]) => (
+              <tr key={label}>
+                <td>{label}</td>
+                <td className="font-mono">{value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="card overflow-x-auto">
+        <SectionTitle
+          icon={<Activity className="w-4 h-4" />}
+          title="Current capacity usage"
+        />
+        <p className="mt-2 mb-4 text-[var(--text-body-sm)] text-[var(--text-secondary)]">
+          Rolling submission quotas use a {capacity.quota_window_seconds / 3600}
+          h window.
+        </p>
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Resource</th>
+              <th>Current usage</th>
+            </tr>
+          </thead>
+          <tbody>
+            {usageRows.map(([label, value]) => (
+              <tr key={label}>
+                <td>{label}</td>
+                <td className="font-mono">{value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function ResourceProfileSummary({
+  challenge,
+}: {
+  challenge: AdminChallengeListItem;
+}) {
+  const profile = challenge.current_resource_profile;
+  if (!profile) {
+    return <span className="text-[var(--text-muted)]">—</span>;
+  }
+
+  return (
+    <div>
+      <div className="font-mono text-[var(--text-caption)]">{profile.id}</div>
+      <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
+        {profile.solution_image} · {profile.cpu_limit_millis}m ·{" "}
+        {profile.memory_limit_mb} MiB
+      </div>
+      <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
+        run network: {profile.run_network_access}
+      </div>
+    </div>
+  );
+}
+
+function ModeSummary({ challenge }: { challenge: AdminChallengeListItem }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <span
+        className={`badge ${
+          challenge.validation_enabled ? "badge-success" : "badge-default"
+        }`}
+      >
+        validation {challenge.validation_enabled ? "on" : "off"}
+      </span>
+      <span
+        className={`badge ${
+          challenge.private_benchmark_enabled
+            ? "badge-official"
+            : "badge-default"
+        }`}
+      >
+        official {challenge.private_benchmark_enabled ? "on" : "off"}
+      </span>
+    </div>
   );
 }
 
