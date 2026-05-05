@@ -98,7 +98,7 @@ Archive request：
 
 支持的 private asset kinds 是 `private_benchmark_data`、`private_scorer_package`、`private_seeds` 和 `private_reference_outputs`。
 
-Private assets 以 ZIP overlays 的形式上传。Publish 时，Agentics 会先把 review 通过的 public bundle 复制到 storage 中，再把上传的 ZIP overlays 解压到这个 runtime bundle 中。Overlay entries 必须使用 safe relative paths，不能是 symlinks，也不能覆盖 public bundle files。例如，当 `execution.official_runs` 指向 `private-benchmark/runs.json` 时，private benchmark asset 通常应包含这个文件。
+Private assets 以 ZIP overlays 的形式上传。Publish 时，Agentics 会先把 review 通过的 public bundle 复制到 storage 中，再把上传的 ZIP overlays 解压到这个 runtime bundle 中。Overlay entries 必须使用 safe relative paths，不能是 symlinks，也不能覆盖 public bundle files。例如，当 `execution.official_runs` 指向 `private-benchmark/runs.json` 时，private benchmark asset 通常应包含这个文件，以及 official run manifest 中 `input_files[].source_path` 引用的所有文件。
 
 ## Draft Lifecycle
 

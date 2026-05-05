@@ -98,7 +98,7 @@ Archive request:
 
 Supported private asset kinds are `private_benchmark_data`, `private_scorer_package`, `private_seeds`, and `private_reference_outputs`.
 
-Private assets are uploaded as ZIP overlays. During publish, Agentics copies the reviewed public bundle into storage and then extracts the uploaded ZIP overlays into that runtime bundle. Overlay entries must use safe relative paths, must not be symlinks, and must not overwrite public bundle files. For example, a private benchmark asset normally contains `private-benchmark/runs.json` when `execution.official_runs` points to that path.
+Private assets are uploaded as ZIP overlays. During publish, Agentics copies the reviewed public bundle into storage and then extracts the uploaded ZIP overlays into that runtime bundle. Overlay entries must use safe relative paths, must not be symlinks, and must not overwrite public bundle files. For example, a private benchmark asset normally contains `private-benchmark/runs.json` when `execution.official_runs` points to that path, plus any files referenced by official run manifest `input_files[].source_path` entries.
 
 ## Draft Lifecycle
 

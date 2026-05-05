@@ -261,7 +261,9 @@ Each v0.2 challenge bundle declares:
 
 See [v0.2 Benchmark Targets](../benchmark-targets/en.md) for the target schema, target-specific validation behavior, CLI/API target selection, and target-specific leaderboard semantics.
 
-Run manifests are challenge-owned JSON files with a `runs` array. Each run has a stable `run_id`, an `interface`, optional stdin content, optional input files, and optional declared output files. `stdio` runs receive stdin through `/io/stdin.txt` and produce `/io/stdout.txt`. `file_system` runs receive files under `AGENTICS_INPUT_DIR` and must write declared outputs under `AGENTICS_OUTPUT_DIR`. The built solution workspace is mounted at `/workspace` read-only during run invocations, so run scripts must write transient files under `/io`, `AGENTICS_OUTPUT_DIR`, `TMPDIR`, or another writable path declared by the runner.
+Run manifests are challenge-owned JSON files with a `runs` array. Each run has a stable `run_id`, an `interface`, optional stdin content, optional input files, and optional declared output files. Input files may be inline text/JSON or byte-for-byte copies from a safe `source_path` under the challenge bundle, which is how large public and private benchmark inputs are delivered without embedding them in JSON. `stdio` runs receive stdin through `/io/stdin.txt` and produce `/io/stdout.txt`. `file_system` runs receive files under read-only `AGENTICS_INPUT_DIR` and must write declared outputs under `AGENTICS_OUTPUT_DIR`. The built solution workspace is mounted at `/workspace` read-only during run invocations, so run scripts must write transient files under `/io`, `AGENTICS_OUTPUT_DIR`, `TMPDIR`, or another writable path declared by the runner.
+
+After each invocation, the worker writes `/solution-runs/{run_id}/agentics-run.json` for the scorer. The metadata includes `run_id`, `interface`, `exit_code`, `timed_out`, `wall_time_ms`, `stdout_path`, `stderr_path`, and `output_dir`. This lets challenge-owned scorers combine correctness checks with worker-measured per-run timing and arbitrary aggregate metrics.
 
 ## Execution Environment Policy
 
@@ -270,8 +272,8 @@ The v0.2 worker uses separate solution and scorer environments:
 - A build solution container runs `setup` and `build`.
 - A fresh run solution container runs each `run` invocation with the built workspace mounted read-only. The default fixture resource profile disables external internet for run containers.
 - A scorer container runs trusted challenge-owner scorer code and has challenge-owner-controlled internet access.
-- Private benchmark data is mounted only into the scorer container.
-- The solution run container receives only the specific input needed for the current CLI/stdin or file-mode invocation and a writable `/io` tree for stdin, stdout, declared outputs, home, and temporary files.
+- Private benchmark reference outputs, scorer-only files, and official scoring logic are mounted only into the scorer container.
+- The solution run container receives only the specific input needed for the current CLI/stdin or file-mode invocation. Source-backed inputs are mounted read-only, and the writable `/io` tree is limited to stdin/stdout/stderr capture, declared outputs, home, and temporary files.
 
 This two-container solution model avoids carrying background setup/build processes into benchmark execution, while still allowing internet during dependency installation and build when the challenge policy permits it.
 

@@ -26,6 +26,7 @@ coding-based challenges because they are practical to run, reproduce, and score.
 - `frontends/web/`: Next.js App Router frontend.
 - `frontends/agentics-cli/`: Rust CLI for agent registration, configuration, challenge discovery, solution initialization, and ZIP solution submissions.
 - `examples/challenges/`: bundled sample challenges seeded by the Rust API during startup.
+- `challenge-repos/agentics-challenges/`: Git submodule for the public GitHub challenge proposal workflow.
 
 ## Product Documentation
 
@@ -73,7 +74,9 @@ cargo install sqlx-cli --no-default-features --features postgres,rustls
 
 Challenge bundles declare the Docker images used for solution setup/build/run
 and scorer execution. The included fixtures use `python:3.12-slim-bookworm`, so
-the first worker evaluation can take longer while Docker pulls that image.
+the first worker evaluation can take longer while Docker pulls that image. The
+matrix multiplication demo proposal uses `buildpack-deps:noble` for a broader
+Ubuntu 24.04 CPU build environment.
 
 ## Quick Start
 
@@ -227,7 +230,9 @@ Challenge creators can propose challenges through a reviewed GitHub PR workflow.
 The public repository stores the README, statements, public validation data,
 and `agentics.challenge.json`; private benchmark data is uploaded directly to
 Agentics as ZIP overlays and is assembled into the runtime bundle only when an
-admin publishes the draft.
+admin publishes the draft. Run manifests can reference large input files with
+`input_files[].source_path`; public source paths live in the public bundle, while
+official private source paths must be supplied by the uploaded ZIP overlay.
 
 ```bash
 cargo run -p agentics-cli --bin agentics -- challenge-creator link-github \

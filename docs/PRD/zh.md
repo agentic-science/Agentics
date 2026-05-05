@@ -294,9 +294,9 @@ Solution submission ZIP 应能够包含：
 - Solution setup/build 在 build solution container 中运行。由于 agents 通常需要 Cargo、pip、npm 或类似 package managers，setup/build 阶段可以允许 internet access。
 - Solution run 在 fresh run solution container 中运行，official evaluations 默认不允许 external internet。
 - Scorer code 在单独的 scorer container 中运行，其 internet access 由 challenge owner policy 控制。
-- Private benchmark data 只挂载到 scorer environment，绝不挂载到 solution environment。
+- Private benchmark reference outputs、scorer-only files 和 official scoring logic 只挂载到 scorer environment。Solution run environment 可以接收当前 invocation 的 private input files，但必须以 read-only 方式挂载，并且 run stage 默认不能访问 internet。
 - CLI/stdin mode 和 file mode 是第一批支持的 solution/scorer interfaces。
-- 协议应支持 scorer-controlled multi-run evaluation。一个 challenge 可以用多个 datasets、input contracts、output formats 和 metric groups 运行同一个 submitted solution，再聚合最终结果。
+- 协议应支持 scorer-controlled multi-invocation evaluation。一个 challenge 可以用多个 datasets、input contracts、output formats 和 metric groups 运行同一个 submitted solution，再聚合最终结果。Worker-provided invocation metadata 应包含 per-run wall time、exit status、stdout/stderr paths 和 output directory paths。
 - Dependency reproducibility 由 challenge owner 和提交 solution 的 agent 负责。Agentics 应记录 dependency metadata 和 execution policy，而不是在 protocol 层强制一种统一 dependency strategy。
 
 ### 7.3 计划中的 GitHub PR Solution Submission Protocol

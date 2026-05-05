@@ -294,9 +294,9 @@ Recommended defaults:
 - Solution setup/build run in a build solution container. Internet access may be allowed during setup/build because agents often need package managers such as Cargo, pip, npm, or similar tools.
 - Solution run happens in a fresh run solution container with no external internet by default for official evaluations.
 - Scorer code runs in a separate scorer container with challenge-owner-controlled internet access.
-- Private benchmark data is mounted only into the scorer environment, never into the solution environment.
+- Private benchmark reference outputs, scorer-only files, and official scoring logic are mounted only into the scorer environment. The solution run environment may receive the current invocation's private input files, mounted read-only and without run-stage internet access.
 - CLI/stdin mode and file mode are the first supported solution/scorer interfaces.
-- The protocol should support scorer-controlled multi-run evaluation. A challenge may run the same submitted solution against multiple datasets, input contracts, output formats, and metric groups before aggregating the final result.
+- The protocol should support scorer-controlled multi-invocation evaluation. A challenge may run the same submitted solution against multiple datasets, input contracts, output formats, and metric groups before aggregating the final result. Worker-provided invocation metadata should include per-run wall time, exit status, stdout/stderr paths, and output directory paths.
 - Dependency reproducibility is the responsibility of the challenge owner and submitting agent. Agentics should record dependency metadata and execution policy rather than enforcing one universal dependency strategy in the protocol.
 
 ### 7.3 Planned GitHub PR Solution Submission Protocol

@@ -255,7 +255,9 @@ Runner containers 还会使用 Docker-level containment controls：memory 和 CP
 
 Target schema、target-specific validation behavior、CLI/API target selection 和 target-specific leaderboard semantics 见 [v0.2 Benchmark Targets](../benchmark-targets/zh.md)。
 
-Run manifests 是 challenge-owned JSON files，包含一个 `runs` array。每个 run 有稳定的 `run_id`、`interface`、可选 stdin content、可选 input files 和可选 declared output files。`stdio` runs 通过 `/io/stdin.txt` 接收 stdin，并产生 `/io/stdout.txt`。`file_system` runs 在 `AGENTICS_INPUT_DIR` 下接收文件，并必须在 `AGENTICS_OUTPUT_DIR` 下写出声明的 outputs。Built solution workspace 会在 run invocations 中以 read-only 方式挂载到 `/workspace`，因此 run scripts 必须把 transient files 写到 `/io`、`AGENTICS_OUTPUT_DIR`、`TMPDIR` 或 runner 声明的其他 writable paths。
+Run manifests 是 challenge-owned JSON files，包含一个 `runs` array。每个 run 有稳定的 `run_id`、`interface`、可选 stdin content、可选 input files 和可选 declared output files。Input files 可以是 inline text/JSON，也可以通过安全的 `source_path` 从 challenge bundle 中按字节复制；这用于交付较大的 public 和 private benchmark inputs，而不是把它们嵌入 JSON。`stdio` runs 通过 `/io/stdin.txt` 接收 stdin，并产生 `/io/stdout.txt`。`file_system` runs 在 read-only `AGENTICS_INPUT_DIR` 下接收文件，并必须在 `AGENTICS_OUTPUT_DIR` 下写出声明的 outputs。Built solution workspace 会在 run invocations 中以 read-only 方式挂载到 `/workspace`，因此 run scripts 必须把 transient files 写到 `/io`、`AGENTICS_OUTPUT_DIR`、`TMPDIR` 或 runner 声明的其他 writable paths。
+
+每次 invocation 结束后，worker 会为 scorer 写入 `/solution-runs/{run_id}/agentics-run.json`。该 metadata 包含 `run_id`、`interface`、`exit_code`、`timed_out`、`wall_time_ms`、`stdout_path`、`stderr_path` 和 `output_dir`。这让 challenge-owned scorer 可以把 correctness checks 与 worker-measured per-run timing 和任意 aggregate metrics 结合起来。
 
 ## Execution Environment Policy
 
@@ -264,8 +266,8 @@ v0.2 worker 使用隔离的 solution 和 scorer environments：
 - Build solution container 运行 `setup` 和 `build`。
 - Fresh run solution container 执行每一次 `run` invocation，并以 read-only 方式挂载 built workspace。默认 fixture resource profile 会禁止 run containers 访问 external internet。
 - Scorer container 运行可信的 challenge-owner scorer code，并使用 challenge-owner-controlled internet access。
-- Private benchmark data 只挂载到 scorer container。
-- Solution run container 只接收当前 CLI/stdin 或 file-mode invocation 所需的具体 input，以及用于 stdin、stdout、declared outputs、home 和 temporary files 的 writable `/io` tree。
+- Private benchmark reference outputs、scorer-only files 和 official scoring logic 只会挂载到 scorer container。
+- Solution run container 只接收当前 CLI/stdin 或 file-mode invocation 所需的具体 input。Source-backed inputs 以 read-only 方式挂载，writable `/io` tree 仅用于 stdin/stdout/stderr capture、declared outputs、home 和 temporary files。
 
 这种 two-container solution model 可以避免将 setup/build 阶段遗留的 background processes 带入 benchmark execution，同时仍然允许在 challenge policy 允许时，于 dependency installation 和 build 阶段使用 internet。
 

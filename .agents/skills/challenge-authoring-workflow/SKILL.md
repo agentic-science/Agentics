@@ -21,7 +21,7 @@ Each proposal must live at:
 challenges/<challenge-id>/
   agentics.challenge.json
   README.md
-  versions/<version>/
+  <bundle-path>/
     spec.json
     statement.md
     public/
@@ -42,6 +42,8 @@ For an archive request, use `request: "archive_challenge"` and include `archive.
 
 If the bundle declares `datasets.private_benchmark_enabled: true`, declare a `private_benchmark_data` private asset and upload it before publish.
 
+Run manifests may use `input_files[].source_path` for large public or private input files. Public validation source paths must resolve inside the public bundle. Official source paths usually resolve inside the uploaded private benchmark overlay. Keep expected outputs and reference data scorer-owned; do not expose them to solution inputs unless the challenge intentionally makes them public.
+
 ## 3. Package Private Assets
 
 Upload private assets as ZIP overlays. ZIP entries are extracted onto the public bundle at publish time.
@@ -52,6 +54,7 @@ Rules:
 - Do not include symlinks.
 - Do not overwrite public bundle files.
 - Keep paths aligned with `spec.json`; for example, include `private-benchmark/runs.json` when `execution.official_runs` points there.
+- Include any private files referenced by official `input_files[].source_path` entries.
 
 ## 4. Use The CLI
 

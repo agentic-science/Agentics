@@ -39,6 +39,8 @@ Confirm:
 
 Private assets are ZIP overlays. They should add private paths such as `private-benchmark/runs.json` and must not overwrite public files.
 
+For source-backed run inputs, confirm every public validation `input_files[].source_path` exists in the public bundle and every official source path exists in the uploaded private overlay. Scorer-only reference outputs should stay out of solution inputs unless the challenge intentionally exposes public validation references.
+
 ## 3. Validate The Draft
 
 Run validation against a checked-out repository at the reviewed commit:

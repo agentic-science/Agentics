@@ -390,7 +390,7 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 | `M0.2-PROTO-3：添加 dependency policy validation` | 已推迟 | 作为 standalone milestone 废弃；dependency reproducibility 属于 challenge owners 和 submitting agents 的责任，Agentics 记录 metadata 和 execution policy。 |
 | `M0.2-TARGET-1：定义 benchmark target schema` | 已实现 | Challenge bundles 现在声明带有 ARM64 和 AMD64 CPU target ids、Docker platform、accelerator、validation flag 和 target-owned resource profile 的 `benchmark_targets`。GPU targets 在 schema 中保留，但在 scheduling 完成前会被拒绝。 |
 | `M0.2-TARGET-2：添加 target-specific evaluations 和 leaderboards` | 已实现 | Solution submissions、jobs、evaluations、quotas、workers、API DTOs 和 leaderboard rows 现在都携带 `benchmark_target_id`；HTTP submissions 会在 artifact decode 前校验 target。 |
-| `M0.2-WORKER-1：执行 multi-phase solution-submissions` | 已实现 | 在 build solution container 中运行 setup/build，在 fresh solution container 中运行每次 invocation，并将 scoring 隔离到单独 scorer container。 |
+| `M0.2-WORKER-1：执行 multi-phase solution-submissions` | 已实现 | 在 build solution container 中运行 setup/build，在 fresh solution container 中运行每次 invocation，支持 source-backed run inputs，记录 per-invocation metadata，并将 scoring 隔离到单独 scorer container。 |
 | `M0.2-WORKER-2：添加 resource profile enforcement` | 已实现 | 强制执行 challenge-declared Docker images、timeout、memory、CPU、disk、image digest validation 和 network policy。 |
 | `M0.2-WORKER-3：添加 GPU profile recording` | 计划中 | GPU metadata foundation。 |
 | `M0.2-WORKER-4：添加 GPU validation 和 official scheduling hooks` | 计划中 | 依赖 GPU metadata 和 worker capability flags。 |
@@ -403,7 +403,7 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 | `M0.2-WEB-1：展示 protocol 和 resource metadata` | 已实现 | Observer challenge pages 和 frontend schemas 展示 protocol、manifest、scorer command、benchmark targets 和 resource profile metadata。 |
 | `M0.2-WEB-2：展示 target-specific leaderboards` | 已实现 | Observer leaderboard 会获取并展示 selected target，并为 multi-target challenges 显示 target tabs。 |
 | `M0.2-ADMIN-1：管理 resource profiles 和 quotas` | 已实现 | Admin challenge rows 展示 current benchmark targets 和 mode flags；capacity tab 展示 configured quotas 和 active usage。GPU configuration 保留在跳过的 GPU lane 中。 |
-| `M0.2-EXAMPLE-1：添加 zip_project protocol fixture challenges 和 submissions` | 已实现 | 添加 sample-sum stdio 和 grid-routing file-mode fixtures、manifest-based solutions、scorer tests，以及覆盖 multi-run evaluation 和 run-stage no-egress behavior 的 worker integration tests。 |
+| `M0.2-EXAMPLE-1：添加 zip_project protocol fixture challenges 和 submissions` | 已实现 | 添加 sample-sum stdio、grid-routing file-mode 和 matrix-multiplication multi-invocation fixtures、manifest-based solutions、scorer tests，以及覆盖 timing metadata、private source-backed inputs 和 run-stage no-egress behavior 的 worker integration tests。 |
 | `M0.2-DOC-1：记录 multi-language challenge authoring` | 已实现 | 已记录 canonical protocol、generated CLI profiles、run manifests、resource profiles、execution isolation、dependency metadata、quota controls 和 admin capacity views。Local benchmark-image validation 保持为 `M0.2-CLI-2`。 |
 | `M0.2-DOC-2：记录 GPU benchmark expectations` | 计划中 | 应与 GPU profile implementation 一起交付。 |
 | `M0.2-DOC-3：记录 benchmark target authoring` | 已实现 | 新增双语 v0.2 benchmark target docs，覆盖 target ids、Docker platforms、validation flags、target-aware APIs、CLI behavior、worker behavior 和 leaderboards。 |
