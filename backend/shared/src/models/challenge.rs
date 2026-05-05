@@ -179,6 +179,8 @@ pub enum ChallengeRunInterface {
 pub struct ChallengeRunInputFile {
     pub path: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content_json: Option<serde_json::Value>,

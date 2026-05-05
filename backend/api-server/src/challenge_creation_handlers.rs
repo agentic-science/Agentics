@@ -519,6 +519,7 @@ pub async fn publish_challenge_draft(
             })?;
             let bundle_path =
                 assemble_runtime_bundle(&state, &draft, &proposal_root, &manifest, version).await?;
+            challenge_bundle::validate_challenge_bundle(&bundle_path).await?;
             let spec = challenge_bundle::read_challenge_bundle_spec(&bundle_path).await?;
             db::create_or_update_challenge(
                 &state.db,

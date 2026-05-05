@@ -2,11 +2,12 @@
 //!
 //! v0.2 uses one build solution container for setup/build, fresh no-egress run
 //! solution containers that mount the build workspace read-only for benchmark
-//! invocations, and a separate scorer container. Private benchmark data is only
-//! mounted into the scorer container.
+//! invocations, and a separate scorer container. Run containers receive only the
+//! current invocation's input files, while scorer-only reference data stays in
+//! the scorer container.
 
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use bollard::Docker;
 use bollard::container::LogOutput;
@@ -64,6 +65,7 @@ struct ContainerOutcome {
     exit_code: i64,
     logs: String,
     timed_out: bool,
+    wall_time_ms: u64,
 }
 
 #[derive(Clone, Copy)]
@@ -77,6 +79,7 @@ struct SolutionRunRequest<'a> {
     docker_platform: DockerPlatform,
     manifest: &'a ZipProjectManifest,
     run_manifest: &'a ChallengeRunManifest,
+    bundle_dir: &'a Path,
     build_root: &'a Path,
     runs_root: &'a Path,
 }
@@ -90,6 +93,18 @@ struct ScorerRequest<'a> {
     bundle_dir: &'a Path,
     runs_root: &'a Path,
     scorer_output_root: &'a Path,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct SolutionRunMetadata {
+    run_id: String,
+    interface: ChallengeRunInterface,
+    exit_code: i64,
+    timed_out: bool,
+    wall_time_ms: u64,
+    stdout_path: String,
+    stderr_path: String,
+    output_dir: String,
 }
 
 /// Execute one evaluation job in Docker and return the validated scorer result.
@@ -163,6 +178,7 @@ pub async fn execute_evaluation_job(
                 docker_platform: target.docker_platform,
                 manifest: &manifest,
                 run_manifest: &run_manifest,
+                bundle_dir,
                 build_root: &build_root,
                 runs_root: &runs_root,
             },
@@ -284,7 +300,7 @@ async fn run_solution_invocations(
         tokio::fs::create_dir_all(&input_dir).await?;
         tokio::fs::create_dir_all(&output_dir).await?;
         tokio::fs::create_dir_all(&tmp_dir).await?;
-        materialize_run_io(run, &io_root, &input_dir).await?;
+        materialize_run_io(run, request.bundle_dir, &io_root, &input_dir).await?;
 
         let limits = effective_phase_limits(request.profile, &run_phase);
         let outcome = run_container(
@@ -295,7 +311,7 @@ async fn run_solution_invocations(
                 cmd: vec![
                     "sh".to_string(),
                     "-c".to_string(),
-                    "mkdir -p /io/output /io/tmp; if [ -f /io/stdin.txt ]; then sh \"$1\" < /io/stdin.txt > /io/stdout.txt; else sh \"$1\" > /io/stdout.txt; fi"
+                    "mkdir -p /io/output /io/tmp; if [ -f /io/stdin.txt ]; then sh \"$1\" < /io/stdin.txt > /io/stdout.txt 2> /io/stderr.txt; else sh \"$1\" > /io/stdout.txt 2> /io/stderr.txt; fi"
                         .to_string(),
                     "agentics-run".to_string(),
                     format!("/workspace/{}", run_phase.command),
@@ -313,6 +329,7 @@ async fn run_solution_invocations(
                 mounts: vec![
                     bind_mount(request.build_root, "/workspace", true),
                     bind_mount(&io_root, "/io", false),
+                    bind_mount(&input_dir, "/io/input", true),
                 ],
                 working_dir: "/workspace".to_string(),
                 docker_platform: request.docker_platform,
@@ -321,6 +338,7 @@ async fn run_solution_invocations(
         )
         .await?;
         append_run_logs(logs, &run.run_id, &outcome.logs);
+        write_run_metadata(&io_root, run, &outcome).await?;
         ensure_container_succeeded(ZipProjectPhaseName::Run, &outcome)?;
         ensure_disk_limit(&io_root, limits.disk_limit_mb, ZipProjectPhaseName::Run).await?;
         ensure_declared_outputs_exist(run, &output_dir).await?;
@@ -492,6 +510,7 @@ async fn run_created_container(
         .start_container(container_id, None::<StartContainerOptions>)
         .await
         .map_err(|e| AppError::Docker(format!("start container failed: {e}")))?;
+    let started = Instant::now();
 
     let wait_opts = WaitContainerOptionsBuilder::default()
         .condition("not-running")
@@ -525,13 +544,20 @@ async fn run_created_container(
             (124, true)
         }
     };
+    let wall_time_ms = duration_millis(started.elapsed());
     let (logs, _logs_truncated) =
         collect_container_logs(docker, container_id, log_limit_bytes).await?;
     Ok(ContainerOutcome {
         exit_code,
         logs,
         timed_out,
+        wall_time_ms,
     })
+}
+
+fn duration_millis(duration: Duration) -> u64 {
+    let millis = duration.as_millis();
+    u64::try_from(millis).unwrap_or(u64::MAX)
 }
 
 async fn remove_container(docker: &Docker, container_id: &str) -> Result<()> {
@@ -773,6 +799,7 @@ fn bind_mount(path: &Path, target: &str, read_only: bool) -> Mount {
 
 async fn materialize_run_io(
     run: &ChallengeRunSpec,
+    bundle_dir: &Path,
     io_root: &Path,
     input_dir: &Path,
 ) -> Result<()> {
@@ -784,23 +811,59 @@ async fn materialize_run_io(
     };
     tokio::fs::write(io_root.join("stdin.txt"), stdin).await?;
     for input in &run.input_files {
-        write_run_input_file(input_dir, input).await?;
+        write_run_input_file(bundle_dir, input_dir, input).await?;
     }
     Ok(())
 }
 
-async fn write_run_input_file(input_dir: &Path, input: &ChallengeRunInputFile) -> Result<()> {
+async fn write_run_input_file(
+    bundle_dir: &Path,
+    input_dir: &Path,
+    input: &ChallengeRunInputFile,
+) -> Result<()> {
     let path = input_dir.join(&input.path);
     if let Some(parent) = path.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
-    let content = match (&input.content, &input.content_json) {
-        (Some(value), None) => value.clone(),
-        (None, Some(value)) => serde_json::to_string(value)
-            .map_err(|e| AppError::Internal(format!("serialize content_json failed: {e}")))?,
-        _ => String::new(),
+    if let Some(source_path) = &input.source_path {
+        tokio::fs::copy(bundle_dir.join(source_path), path)
+            .await
+            .map_err(|e| {
+                AppError::Runner(format!("copy run input source `{source_path}` failed: {e}"))
+            })?;
+        return Ok(());
+    }
+
+    let content = if let Some(value) = &input.content {
+        value.clone()
+    } else if let Some(value) = &input.content_json {
+        serde_json::to_string(value)
+            .map_err(|e| AppError::Internal(format!("serialize content_json failed: {e}")))?
+    } else {
+        String::new()
     };
     tokio::fs::write(path, content).await?;
+    Ok(())
+}
+
+async fn write_run_metadata(
+    io_root: &Path,
+    run: &ChallengeRunSpec,
+    outcome: &ContainerOutcome,
+) -> Result<()> {
+    let metadata = SolutionRunMetadata {
+        run_id: run.run_id.clone(),
+        interface: run.interface,
+        exit_code: outcome.exit_code,
+        timed_out: outcome.timed_out,
+        wall_time_ms: outcome.wall_time_ms,
+        stdout_path: format!("/solution-runs/{}/stdout.txt", run.run_id),
+        stderr_path: format!("/solution-runs/{}/stderr.txt", run.run_id),
+        output_dir: format!("/solution-runs/{}/output", run.run_id),
+    };
+    let bytes = serde_json::to_vec_pretty(&metadata)
+        .map_err(|e| AppError::Internal(format!("serialize run metadata failed: {e}")))?;
+    tokio::fs::write(io_root.join("agentics-run.json"), bytes).await?;
     Ok(())
 }
 

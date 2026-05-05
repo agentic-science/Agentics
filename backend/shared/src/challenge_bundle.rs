@@ -69,7 +69,8 @@ pub async fn validate_challenge_bundle(bundle_dir: &Path) -> Result<()> {
             "validation run manifest",
         )
         .await?;
-        read_challenge_run_manifest(bundle_dir, validation_runs).await?;
+        let manifest = read_challenge_run_manifest(bundle_dir, validation_runs).await?;
+        validate_challenge_run_manifest_sources(bundle_dir, &manifest).await?;
     }
 
     if spec.datasets.private_benchmark_enabled
@@ -93,7 +94,8 @@ pub async fn validate_challenge_bundle(bundle_dir: &Path) -> Result<()> {
             "official run manifest",
         )
         .await?;
-        read_challenge_run_manifest(bundle_dir, official_runs).await?;
+        let manifest = read_challenge_run_manifest(bundle_dir, official_runs).await?;
+        validate_challenge_run_manifest_sources(bundle_dir, &manifest).await?;
     }
 
     Ok(())
@@ -385,15 +387,61 @@ fn validate_challenge_run(run: &ChallengeRunSpec) -> Result<()> {
 
 fn validate_run_input_file(input: &ChallengeRunInputFile) -> Result<()> {
     require_safe_relative_path(&input.path, "runs[].input_files[].path")?;
-    if input.content.is_some() && input.content_json.is_some() {
+    if let Some(source_path) = &input.source_path {
+        require_safe_relative_path(source_path, "runs[].input_files[].source_path")?;
+    }
+    let source_count = [
+        input.source_path.is_some(),
+        input.content.is_some(),
+        input.content_json.is_some(),
+    ]
+    .into_iter()
+    .filter(|present| *present)
+    .count();
+    if source_count > 1 {
         return Err(AppError::Validation(
-            "runs[].input_files[].content and content_json cannot both be present".to_string(),
+            "runs[].input_files[] must declare only one of source_path, content, or content_json"
+                .to_string(),
         ));
     }
-    if input.content.is_none() && input.content_json.is_none() {
+    if source_count == 0 {
         return Err(AppError::Validation(
-            "runs[].input_files[] must declare content or content_json".to_string(),
+            "runs[].input_files[] must declare source_path, content, or content_json".to_string(),
         ));
+    }
+
+    Ok(())
+}
+
+/// Validate that source-backed run inputs exist under the bundle root.
+pub async fn validate_challenge_run_manifest_sources(
+    bundle_dir: &Path,
+    manifest: &ChallengeRunManifest,
+) -> Result<()> {
+    for run in &manifest.runs {
+        for input in &run.input_files {
+            if let Some(source_path) = &input.source_path {
+                let full_path = bundle_dir.join(source_path);
+                let meta = tokio::fs::symlink_metadata(&full_path).await.map_err(|_| {
+                    AppError::Validation(format!(
+                        "runs[].input_files[].source_path does not exist: {}",
+                        full_path.display()
+                    ))
+                })?;
+                if meta.file_type().is_symlink() {
+                    return Err(AppError::Validation(format!(
+                        "runs[].input_files[].source_path must not be a symlink: {}",
+                        full_path.display()
+                    )));
+                }
+                if !meta.is_file() {
+                    return Err(AppError::Validation(format!(
+                        "runs[].input_files[].source_path is not a file: {}",
+                        full_path.display()
+                    )));
+                }
+            }
+        }
     }
 
     Ok(())
@@ -819,6 +867,31 @@ mod tests {
         let _ = std::fs::remove_dir_all(root);
 
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn source_backed_run_inputs_must_exist_under_bundle_root() {
+        let root = std::env::temp_dir().join(format!(
+            "agentics-bundle-source-input-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let mut spec = base_spec();
+        spec.datasets.private_benchmark_enabled = false;
+        create_bundle(&root, &spec);
+        std::fs::write(
+            root.join("public/runs.json"),
+            r#"{"runs":[{"run_id":"public-1","interface":"file_system","input_files":[{"path":"input.txt","source_path":"public/input.txt"}],"output_files":["answer.txt"]}]}"#,
+        )
+        .expect("failed to write source-backed runs");
+
+        let missing_result = validate_challenge_bundle(&root).await;
+        std::fs::write(root.join("public/input.txt"), "payload\n")
+            .expect("failed to write source input");
+        let present_result = validate_challenge_bundle(&root).await;
+        let _ = std::fs::remove_dir_all(root);
+
+        assert!(missing_result.is_err());
+        assert!(present_result.is_ok());
     }
 
     #[tokio::test]

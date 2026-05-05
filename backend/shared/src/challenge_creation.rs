@@ -206,7 +206,9 @@ async fn validate_public_bundle(
             "execution.validation_runs",
         )
         .await?;
-        read_challenge_run_manifest(&bundle_dir, validation_runs).await?;
+        let manifest = read_challenge_run_manifest(&bundle_dir, validation_runs).await?;
+        crate::challenge_bundle::validate_challenge_run_manifest_sources(&bundle_dir, &manifest)
+            .await?;
     }
 
     Ok(())
