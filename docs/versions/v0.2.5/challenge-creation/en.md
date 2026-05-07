@@ -98,7 +98,9 @@ Archive request:
 
 Supported private asset kinds are `private_benchmark_data`, `private_scorer_package`, `private_seeds`, and `private_reference_outputs`.
 
-Private assets are uploaded as ZIP overlays. During publish, Agentics copies the reviewed public bundle into storage and then extracts the uploaded ZIP overlays into that runtime bundle. Overlay entries must use safe relative paths, must not be symlinks, and must not overwrite public bundle files. For example, a private benchmark asset normally contains `private-benchmark/runs.json` when `execution.official_runs` points to that path, plus any files referenced by official run manifest `input_files[].source_path` entries.
+Private assets are uploaded as ZIP overlays. During publish, Agentics copies the reviewed public bundle into storage and then extracts the uploaded ZIP overlays into that runtime bundle. Overlay entries must use safe relative paths, must not be symlinks, and must not overwrite public bundle files. For example, a static private benchmark asset normally contains `private-benchmark/runs.json` when `execution.official_runs` points to that path, plus any files referenced by official run manifest `input_files[].source_path` entries.
+
+For generated benchmarks, a challenge can instead declare `execution.official_prepare` in `spec.json` and require a smaller `private_seeds` asset, such as `private-benchmark/config.json`. The prepare command runs in the scorer image before solution invocations, writes generated inputs and a generated run manifest under `/prepared`, and the scorer receives `/prepared` read-only. Challenge owners are responsible for reproducibility and reliability of generated data or external downloads. Agentics records the prepare policy and metadata but does not cache prepare output in the MVP.
 
 ## Draft Lifecycle
 
@@ -133,9 +135,9 @@ cargo run -p agentics-cli --bin agentics -- challenge-creator draft create \
   --pr-author-github-user-id <github-user-id>
 
 cargo run -p agentics-cli --bin agentics -- challenge-creator draft upload-private-asset <draft-id> \
-  --asset-id official-cases \
-  --kind private_benchmark_data \
-  --file private-benchmark.zip \
+  --asset-id official-seed-config \
+  --kind private_seeds \
+  --file private-seeds.zip \
   --required
 
 cargo run -p agentics-cli --bin agentics -- challenge-creator draft status <draft-id>
@@ -205,4 +207,5 @@ Challenge repository CI should validate:
 - `README.md` exists.
 - Public bundle `spec.json` parses.
 - Public validation run manifests parse when validation is enabled.
+- Prepare specs parse when validation or official modes generate run manifests at evaluation time.
 - No private benchmark data, secrets, key material, or symlinks exist in the public repository.

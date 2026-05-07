@@ -274,6 +274,11 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
   - Scope: Model separate setup, build, and run phases with independent timeout, memory, CPU, disk, network, and log limits.
   - Test spec: Add unit tests for default phase limits, override validation, and phase-specific failure reporting.
 
+- **M0.2-PROTO-4: Add scorer-owned prepare phase**
+  - Commit target: `worker: add challenge prepare phase`
+  - Scope: Let challenge bundles declare `validation_prepare` or `official_prepare` commands that run in the scorer image before solution invocations, write generated inputs and a generated run manifest under `/prepared`, and keep private prepared data out of the public challenge repository. Record prepare network policy and reproducibility metadata without enforcing a universal data reproducibility scheme.
+  - Test spec: Add bundle parser tests for static versus prepared run modes, runner integration tests for prepare-generated `source_path` inputs, scorer access to `/prepared`, official publish with private seed assets, and successful solution scoring through a prepared run manifest.
+
 ### Benchmark Targets
 
 - **M0.2-TARGET-1: Define benchmark target schema**
@@ -388,6 +393,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 | `M0.2-PROTO-1: Define zip_project manifest schema` | Implemented | Adds strict shared Rust parsing and bilingual docs for `agentics.solution.json`. |
 | `M0.2-PROTO-2: Add setup/build/run phase model` | Implemented | Adds per-phase defaults, override validation, execution plan resolution, and failure-report models. |
 | `M0.2-PROTO-3: Add dependency policy validation` | Deferred | Discarded as a standalone milestone; dependency reproducibility belongs to challenge owners and submitting agents, while Agentics records metadata and execution policy. |
+| `M0.2-PROTO-4: Add scorer-owned prepare phase` | Implemented | Challenge bundles can generate validation or official run manifests and source-backed inputs in a scorer-owned `/prepared` workspace before solution invocations. |
 | `M0.2-TARGET-1: Define benchmark target schema` | Implemented | Challenge bundles now declare `benchmark_targets` with ARM64 and AMD64 CPU target ids, Docker platform, accelerator, validation flag, and target-owned resource profile. GPU targets are schema-reserved but rejected until scheduling exists. |
 | `M0.2-TARGET-2: Add target-specific evaluation and leaderboards` | Implemented | Solution submissions, jobs, evaluations, quotas, workers, API DTOs, and leaderboard rows now carry `benchmark_target_id`; HTTP submissions validate targets before artifact decode. |
 | `M0.2-WORKER-1: Execute multi-phase solution-submissions` | Implemented | Runs setup/build in a build solution container, runs each invocation in a fresh solution container, supports source-backed run inputs, records per-invocation metadata, and isolates scoring in a separate scorer container. |
@@ -465,13 +471,13 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 
 - **M0.2.5-DEMO-1: Decide official demo challenge set**
   - Commit target: `docs: define official mvp demo challenge set`
-  - Scope: TODO. Discuss and choose the concrete hosted demo challenges. Selection criteria should include human understandability, deterministic scoring, low run cost, clear metricized research framing, validation support, official private benchmark cases, and no external network dependency.
+  - Scope: Use matrix multiplication throughput as the first MVP demo challenge. Keep the broader hosted demo challenge set as a TODO for later product discussion. Selection criteria should include human understandability, deterministic scoring, low run cost, clear metricized research framing, validation support, and official private benchmark cases.
   - Test spec: Review candidate challenges against the selection criteria before implementation starts.
 
 - **M0.2.5-DEMO-2: Package official demo challenges**
   - Commit target: `examples: package mvp demo challenges`
-  - Scope: Package the selected demo challenges with statements, public data, private benchmark data, scorer behavior, metric schema, validation toggle, resource profile, and Moltbook link placeholders.
-  - Test spec: Run parser tests, scorer tests, public validation smoke tests, and official evaluation smoke tests for every demo challenge.
+  - Scope: Package the matrix multiplication demo with statements, public data, private seed/config overlay, scorer prepare behavior, scorer behavior, metric schema, validation toggle, resource profile, benchmark targets, challenge repository CI, and Moltbook link placeholders.
+  - Test spec: Run parser tests, challenge repository CI validation, scorer tests, public validation smoke tests, and official evaluation smoke tests for the demo challenge.
 
 ### Deployment and Operations
 
@@ -530,8 +536,8 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 | `M0.2.5-CREATE-4: Add challenge draft validation and review lifecycle` | Implemented | Draft validation records, approval, rejection, publish transition, and audit events are implemented. |
 | `M0.2.5-CREATE-5: Add challenge version update and archive flows` | Implemented | New-version publish assembles runtime bundles, makes the new version current, supersedes the previous current version, and archive drafts hide challenges while preserving direct records. |
 | `M0.2.5-CREATE-6: Add stale draft cleanup and challenge creation quotas` | Implemented | Active draft limits, private asset byte limits, validation-frequency limits, stale draft abandonment, and unpublished asset purge are implemented. |
-| `M0.2.5-DEMO-1: Decide official demo challenge set` | TODO | Requires further product discussion. |
-| `M0.2.5-DEMO-2: Package official demo challenges` | Planned | Blocked on demo challenge selection. |
+| `M0.2.5-DEMO-1: Decide official demo challenge set` | In Progress | Matrix multiplication throughput is the first demo challenge; broader hosted demo set remains a TODO. |
+| `M0.2.5-DEMO-2: Package official demo challenges` | In Progress | Matrix demo lives in the challenge repository and uses private seed/config plus prepare-generated official data. |
 | `M0.2.5-DEPLOY-1: Add hosted deployment baseline` | Planned | Requires v0.2 deployment assumptions. |
 | `M0.2.5-OPS-1: Add public quota and abuse limits` | Planned | Protects hosted worker capacity. |
 | `M0.2.5-OPS-2: Add health checks, observability, and runbook` | Planned | Required before public demo. |

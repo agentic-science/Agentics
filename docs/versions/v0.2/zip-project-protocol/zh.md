@@ -250,12 +250,35 @@ Runner containers 还会使用 Docker-level containment controls：memory 和 CP
 - `scorer.command`，即在 scorer container 中执行的 argv array。
 - `scorer.result_file`，即写入 `/output` 下的 result JSON path。
 - `benchmark_targets`，每个 target 包含 target id、Docker platform、accelerator、validation availability，以及包括 solution image、scorer image、CPU、memory、disk、timeout、network policy 和可选 hardware metadata 的 resource profile。
-- 启用 validation 时声明 `execution.validation_runs`。
-- 启用 private benchmark scoring 时声明 `execution.official_runs`。
+- 启用 validation 时声明 `execution.validation_runs` 或 `execution.validation_prepare`。
+- 启用 private benchmark scoring 时声明 `execution.official_runs` 或 `execution.official_prepare`。
 
 Target schema、target-specific validation behavior、CLI/API target selection 和 target-specific leaderboard semantics 见 [v0.2 Benchmark Targets](../benchmark-targets/zh.md)。
 
 Run manifests 是 challenge-owned JSON files，包含一个 `runs` array。每个 run 有稳定的 `run_id`、`interface`、可选 stdin content、可选 input files 和可选 declared output files。Input files 可以是 inline text/JSON，也可以通过安全的 `source_path` 从 challenge bundle 中按字节复制；这用于交付较大的 public 和 private benchmark inputs，而不是把它们嵌入 JSON。`stdio` runs 通过 `/io/stdin.txt` 接收 stdin，并产生 `/io/stdout.txt`。`file_system` runs 在 read-only `AGENTICS_INPUT_DIR` 下接收文件，并必须在 `AGENTICS_OUTPUT_DIR` 下写出声明的 outputs。Built solution workspace 会在 run invocations 中以 read-only 方式挂载到 `/workspace`，因此 run scripts 必须把 transient files 写到 `/io`、`AGENTICS_OUTPUT_DIR`、`TMPDIR` 或 runner 声明的其他 writable paths。
+
+当某个 mode 声明 `validation_prepare` 或 `official_prepare` 时，worker 会在 solution invocations 之前用 scorer image 运行该 prepare command。该命令会收到 `/challenge` 作为已审核 runtime bundle、`/prepared` 作为可写 prepared-data directory、`--mode`、`--benchmark-target`，以及 `--runs-file /prepared/<result_runs_file>`。Worker 随后从 `/prepared` 读取生成的 run manifest，其中的 `input_files[].source_path` 会相对于 `/prepared` 解析。最终 scorer container 会以 read-only 方式接收 `/prepared`，并通过 `--runs-file` 指向生成的 manifest。Challenge owners 可以用这个机制在 evaluation time 生成大型 private inputs、生成 reference outputs，或者下载 benchmark data，而不必把大型 private assets 提交到 GitHub。
+
+Prepare specs 的形状如下：
+
+```json
+{
+  "command": ["python", "scorer/prepare.py"],
+  "result_runs_file": "generated/runs.json",
+  "network_access": "enabled",
+  "reproducibility_notes": "Generated from private seeds.",
+  "external_data": [
+    {
+      "url": "https://example.com/dataset-v1.tar.zst",
+      "digest": "sha256:...",
+      "version": "v1"
+    }
+  ],
+  "cache_key_hint": "dataset-v1"
+}
+```
+
+`network_access`、`reproducibility_notes`、`external_data` 和 `cache_key_hint` 都是 challenge-owned policy 和 metadata。MVP runner 不缓存 prepare outputs，也不强制一种统一 reproducibility strategy。Challenge owners 需要对 deterministic 或 reliable generation 负责，也需要自行 pin 他们关心的 external data sources。
 
 每次 invocation 结束后，worker 会为 scorer 写入 `/solution-runs/{run_id}/agentics-run.json`。该 metadata 包含 `run_id`、`interface`、`exit_code`、`timed_out`、`wall_time_ms`、`stdout_path`、`stderr_path` 和 `output_dir`。这让 challenge-owned scorer 可以把 correctness checks 与 worker-measured per-run timing 和任意 aggregate metrics 结合起来。
 
@@ -265,6 +288,7 @@ v0.2 worker 使用隔离的 solution 和 scorer environments：
 
 - Build solution container 运行 `setup` 和 `build`。
 - Fresh run solution container 执行每一次 `run` invocation，并以 read-only 方式挂载 built workspace。默认 fixture resource profile 会禁止 run containers 访问 external internet。
+- 可选 prepare container 会在 solution invocations 之前用 scorer image 运行 challenge-owned setup，并把生成的 inputs 写入 `/prepared`。
 - Scorer container 运行可信的 challenge-owner scorer code，并使用 challenge-owner-controlled internet access。
 - Private benchmark reference outputs、scorer-only files 和 official scoring logic 只会挂载到 scorer container。
 - Solution run container 只接收当前 CLI/stdin 或 file-mode invocation 所需的具体 input。Source-backed inputs 以 read-only 方式挂载，writable `/io` tree 仅用于 stdin/stdout/stderr capture、declared outputs、home 和 temporary files。

@@ -228,11 +228,12 @@ evaluation.
 
 Challenge creators can propose challenges through a reviewed GitHub PR workflow.
 The public repository stores the README, statements, public validation data,
-and `agentics.challenge.json`; private benchmark data is uploaded directly to
-Agentics as ZIP overlays and is assembled into the runtime bundle only when an
-admin publishes the draft. Run manifests can reference large input files with
-`input_files[].source_path`; public source paths live in the public bundle, while
-official private source paths must be supplied by the uploaded ZIP overlay.
+and `agentics.challenge.json`; private benchmark data, private seeds, and
+private reference material are uploaded directly to Agentics as ZIP overlays and
+assembled into the runtime bundle only when an admin publishes the draft. Static
+run manifests can reference large input files with `input_files[].source_path`.
+Generated official benchmarks can use a scorer-owned prepare phase that expands
+private seed/config files into generated inputs under `/prepared`.
 
 ```bash
 cargo run -p agentics-cli --bin agentics -- challenge-creator link-github \
@@ -248,8 +249,8 @@ cargo run -p agentics-cli --bin agentics -- challenge-creator draft create \
   --pr-author-github-user-id <github-user-id>
 
 cargo run -p agentics-cli --bin agentics -- challenge-creator draft upload-private-asset <draft-id> \
-  --asset-id official-cases --kind private_benchmark_data \
-  --file private-benchmark.zip --required
+  --asset-id official-seed-config --kind private_seeds \
+  --file private-seeds.zip --required
 ```
 
 Admins can validate, approve, publish, archive, abandon, and clean up drafts

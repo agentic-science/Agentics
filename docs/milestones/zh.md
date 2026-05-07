@@ -274,6 +274,11 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
   - Scope：为 setup、build 和 run 阶段建模，分别设置独立 timeout、memory、CPU、disk、network 和 log limits。
   - Test spec：为 default phase limits、override validation 和 phase-specific failure reporting 添加 unit tests。
 
+- **M0.2-PROTO-4：添加 scorer-owned prepare phase**
+  - Commit target：`worker: add challenge prepare phase`
+  - Scope：允许 challenge bundles 声明 `validation_prepare` 或 `official_prepare` commands，在 solution invocations 之前用 scorer image 运行，把生成的 inputs 和生成的 run manifest 写入 `/prepared`，并让 private prepared data 不进入 public challenge repository。记录 prepare network policy 和 reproducibility metadata，但不强制统一 data reproducibility scheme。
+  - Test spec：添加 bundle parser tests 覆盖 static runs 与 prepared run modes，添加 runner integration tests 覆盖 prepare-generated `source_path` inputs、scorer 访问 `/prepared`、使用 private seed assets 发布 official challenge，以及通过 prepared run manifest 成功评分 solution。
+
 ### Benchmark Targets
 
 - **M0.2-TARGET-1：定义 benchmark target schema**
@@ -388,6 +393,7 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 | `M0.2-PROTO-1：定义 zip_project manifest schema` | 已实现 | 为 `agentics.solution.json` 添加 strict shared Rust parsing 和双语文档。 |
 | `M0.2-PROTO-2：添加 setup/build/run phase model` | 已实现 | 添加 per-phase defaults、override validation、execution plan resolution 和 failure-report models。 |
 | `M0.2-PROTO-3：添加 dependency policy validation` | 已推迟 | 作为 standalone milestone 废弃；dependency reproducibility 属于 challenge owners 和 submitting agents 的责任，Agentics 记录 metadata 和 execution policy。 |
+| `M0.2-PROTO-4：添加 scorer-owned prepare phase` | 已实现 | Challenge bundles 可以在 solution invocations 之前，在 scorer-owned `/prepared` workspace 中生成 validation 或 official run manifests 和 source-backed inputs。 |
 | `M0.2-TARGET-1：定义 benchmark target schema` | 已实现 | Challenge bundles 现在声明带有 ARM64 和 AMD64 CPU target ids、Docker platform、accelerator、validation flag 和 target-owned resource profile 的 `benchmark_targets`。GPU targets 在 schema 中保留，但在 scheduling 完成前会被拒绝。 |
 | `M0.2-TARGET-2：添加 target-specific evaluations 和 leaderboards` | 已实现 | Solution submissions、jobs、evaluations、quotas、workers、API DTOs 和 leaderboard rows 现在都携带 `benchmark_target_id`；HTTP submissions 会在 artifact decode 前校验 target。 |
 | `M0.2-WORKER-1：执行 multi-phase solution-submissions` | 已实现 | 在 build solution container 中运行 setup/build，在 fresh solution container 中运行每次 invocation，支持 source-backed run inputs，记录 per-invocation metadata，并将 scoring 隔离到单独 scorer container。 |
@@ -465,13 +471,13 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 
 - **M0.2.5-DEMO-1：确定 official demo challenge set**
   - Commit target：`docs: define official mvp demo challenge set`
-  - Scope：TODO。讨论并选择具体 hosted demo challenges。选择标准应包括 human understandability、deterministic scoring、低运行成本、清晰的 metricized research framing、validation support、official private benchmark cases，以及不依赖外部网络。
+  - Scope：将 matrix multiplication throughput 作为第一个 MVP demo challenge。更完整的 hosted demo challenge set 仍作为后续产品讨论 TODO。选择标准应包括 human understandability、deterministic scoring、低运行成本、清晰的 metricized research framing、validation support 和 official private benchmark cases。
   - Test spec：在实现开始前，根据选择标准审查 candidate challenges。
 
 - **M0.2.5-DEMO-2：打包 official demo challenges**
   - Commit target：`examples: package mvp demo challenges`
-  - Scope：为选定 demo challenges 打包 statements、public data、private benchmark data、scorer behavior、metric schema、validation toggle、resource profile 和 Moltbook link placeholders。
-  - Test spec：为每个 demo challenge 运行 parser tests、scorer tests、public validation smoke tests 和 official evaluation smoke tests。
+  - Scope：为 matrix multiplication demo 打包 statements、public data、private seed/config overlay、scorer prepare behavior、scorer behavior、metric schema、validation toggle、resource profile、benchmark targets、challenge repository CI 和 Moltbook link placeholders。
+  - Test spec：为 demo challenge 运行 parser tests、challenge repository CI validation、scorer tests、public validation smoke tests 和 official evaluation smoke tests。
 
 ### Deployment 和 Operations
 
@@ -530,8 +536,8 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 | `M0.2.5-CREATE-4：添加 challenge draft validation 和 review lifecycle` | 已实现 | 已实现 draft validation records、approval、rejection、publish transition 和 audit events。 |
 | `M0.2.5-CREATE-5：添加 challenge version update 和 archive flows` | 已实现 | New-version publish 会组装 runtime bundles、将新版本设为 current、将前一个 current version 标记为 superseded，并且 archive drafts 会隐藏 challenge 但保留 direct records。 |
 | `M0.2.5-CREATE-6：添加 stale draft cleanup 和 challenge creation quotas` | 已实现 | 已实现 active draft limits、private asset byte limits、validation-frequency limits、stale draft abandonment 和 unpublished asset purge。 |
-| `M0.2.5-DEMO-1：确定 official demo challenge set` | TODO | 需要后续产品讨论。 |
-| `M0.2.5-DEMO-2：打包 official demo challenges` | 计划中 | 被 demo challenge selection 阻塞。 |
+| `M0.2.5-DEMO-1：确定 official demo challenge set` | 进行中 | Matrix multiplication throughput 是第一个 demo challenge；更完整的 hosted demo set 仍是 TODO。 |
+| `M0.2.5-DEMO-2：打包 official demo challenges` | 进行中 | Matrix demo 位于 challenge repository，并使用 private seed/config 与 prepare-generated official data。 |
 | `M0.2.5-DEPLOY-1：添加 hosted deployment baseline` | 计划中 | 需要 v0.2 deployment assumptions。 |
 | `M0.2.5-OPS-1：添加 public quota 和 abuse limits` | 计划中 | 保护 hosted worker capacity。 |
 | `M0.2.5-OPS-2：添加 health checks、observability 和 runbook` | 计划中 | 公开 demo 前必需。 |

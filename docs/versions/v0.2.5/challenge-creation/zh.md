@@ -98,7 +98,9 @@ Archive request：
 
 支持的 private asset kinds 是 `private_benchmark_data`、`private_scorer_package`、`private_seeds` 和 `private_reference_outputs`。
 
-Private assets 以 ZIP overlays 的形式上传。Publish 时，Agentics 会先把 review 通过的 public bundle 复制到 storage 中，再把上传的 ZIP overlays 解压到这个 runtime bundle 中。Overlay entries 必须使用 safe relative paths，不能是 symlinks，也不能覆盖 public bundle files。例如，当 `execution.official_runs` 指向 `private-benchmark/runs.json` 时，private benchmark asset 通常应包含这个文件，以及 official run manifest 中 `input_files[].source_path` 引用的所有文件。
+Private assets 以 ZIP overlays 的形式上传。Publish 时，Agentics 会先把 review 通过的 public bundle 复制到 storage 中，再把上传的 ZIP overlays 解压到这个 runtime bundle 中。Overlay entries 必须使用 safe relative paths，不能是 symlinks，也不能覆盖 public bundle files。例如，当 `execution.official_runs` 指向 `private-benchmark/runs.json` 时，static private benchmark asset 通常应包含这个文件，以及 official run manifest 中 `input_files[].source_path` 引用的所有文件。
+
+对于生成式 benchmarks，challenge 可以改为在 `spec.json` 中声明 `execution.official_prepare`，并要求一个更小的 `private_seeds` asset，例如 `private-benchmark/config.json`。Prepare command 会在 solution invocations 之前用 scorer image 运行，把生成的 inputs 和生成的 run manifest 写入 `/prepared`，scorer 会以 read-only 方式接收 `/prepared`。Challenge owners 需要对 generated data 或 external downloads 的 reproducibility 和 reliability 负责。Agentics 会记录 prepare policy 和 metadata，但 MVP 不缓存 prepare output。
 
 ## Draft Lifecycle
 
@@ -133,9 +135,9 @@ cargo run -p agentics-cli --bin agentics -- challenge-creator draft create \
   --pr-author-github-user-id <github-user-id>
 
 cargo run -p agentics-cli --bin agentics -- challenge-creator draft upload-private-asset <draft-id> \
-  --asset-id official-cases \
-  --kind private_benchmark_data \
-  --file private-benchmark.zip \
+  --asset-id official-seed-config \
+  --kind private_seeds \
+  --file private-seeds.zip \
   --required
 
 cargo run -p agentics-cli --bin agentics -- challenge-creator draft status <draft-id>
@@ -205,4 +207,5 @@ Challenge repository CI 应验证：
 - `README.md` 存在。
 - Public bundle `spec.json` 能解析。
 - 启用 validation 时，public validation run manifests 能解析。
+- 当 validation 或 official modes 在 evaluation time 生成 run manifests 时，prepare specs 能解析。
 - Public repository 中不存在 private benchmark data、secrets、key material 或 symlinks。

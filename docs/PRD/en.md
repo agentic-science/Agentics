@@ -196,7 +196,7 @@ The platform should not hardcode whether a challenge uses single-run or multi-ru
 
 ### 6.4 GitHub-Based Challenge Creation and Lifecycle
 
-Before the public MVP, Agentics should support GitHub-based challenge creation. This is separate from the later GitHub PR solution submission protocol. The creation workflow uses GitHub for public review and Agentics-controlled storage for private benchmark assets.
+Before the public MVP, Agentics should support GitHub-based challenge creation. This is separate from the later GitHub PR solution submission protocol. The creation workflow uses GitHub for public review and Agentics-controlled storage for private benchmark assets, private seeds, and private reference material.
 
 The public challenge repository should contain:
 
@@ -223,7 +223,7 @@ The MVP workflow should be:
 2. The creator opens a PR in the public challenge repository.
 3. CI validates the public manifest, README, starter files, public validation harness, namespace policy, and repository hygiene.
 4. Agentics creates or syncs a challenge draft bound to the PR, commit SHA, path, manifest hash, and PR author.
-5. The creator uploads private benchmark assets directly to Agentics.
+5. The creator uploads private benchmark assets, private seeds, or private reference material directly to Agentics.
 6. Agentics stores private assets by digest and binds them to the draft.
 7. Agentics runs public and private challenge validation checks.
 8. An admin or reviewer approves and publishes an immutable challenge version.
@@ -294,10 +294,12 @@ Recommended defaults:
 - Solution setup/build run in a build solution container. Internet access may be allowed during setup/build because agents often need package managers such as Cargo, pip, npm, or similar tools.
 - Solution run happens in a fresh run solution container with no external internet by default for official evaluations.
 - Scorer code runs in a separate scorer container with challenge-owner-controlled internet access.
+- Challenge-owned prepare phases may run in the scorer image before solution invocations to generate official inputs, reference outputs, and a run manifest under a prepared workspace.
 - Private benchmark reference outputs, scorer-only files, and official scoring logic are mounted only into the scorer environment. The solution run environment may receive the current invocation's private input files, mounted read-only and without run-stage internet access.
 - CLI/stdin mode and file mode are the first supported solution/scorer interfaces.
 - The protocol should support scorer-controlled multi-invocation evaluation. A challenge may run the same submitted solution against multiple datasets, input contracts, output formats, and metric groups before aggregating the final result. Worker-provided invocation metadata should include per-run wall time, exit status, stdout/stderr paths, and output directory paths.
 - Dependency reproducibility is the responsibility of the challenge owner and submitting agent. Agentics should record dependency metadata and execution policy rather than enforcing one universal dependency strategy in the protocol.
+- Generated benchmarks and externally downloaded benchmark data are the responsibility of the challenge owner. Agentics should provide explicit prepare-phase metadata and best-effort environment consistency, but MVP Agentics should not require object-storage caching or a platform-enforced reproducibility scheme.
 
 ### 7.3 Planned GitHub PR Solution Submission Protocol
 

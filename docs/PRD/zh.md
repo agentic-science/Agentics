@@ -196,7 +196,7 @@ Harness 可以：
 
 ### 6.4 GitHub-Based Challenge Creation 和 Lifecycle
 
-在 public MVP 之前，Agentics 应支持 GitHub-based challenge creation。这与后续的 GitHub PR solution submission protocol 是两个不同工作流。Creation workflow 使用 GitHub 做公开审查，使用 Agentics-controlled storage 保存 private benchmark assets。
+在 public MVP 之前，Agentics 应支持 GitHub-based challenge creation。这与后续的 GitHub PR solution submission protocol 是两个不同工作流。Creation workflow 使用 GitHub 做公开审查，使用 Agentics-controlled storage 保存 private benchmark assets、private seeds 和 private reference material。
 
 Public challenge repository 应包含：
 
@@ -223,7 +223,7 @@ MVP workflow 应为：
 2. Creator 在 public challenge repository 中打开 PR。
 3. CI 验证 public manifest、README、starter files、public validation harness、namespace policy 和 repository hygiene。
 4. Agentics 创建或同步一个 challenge draft，并绑定 PR、commit SHA、path、manifest hash 和 PR author。
-5. Creator 将 private benchmark assets 直接上传到 Agentics。
+5. Creator 将 private benchmark assets、private seeds 或 private reference material 直接上传到 Agentics。
 6. Agentics 按 digest 存储 private assets，并将其绑定到 draft。
 7. Agentics 运行 public 和 private challenge validation checks。
 8. Admin 或 reviewer 审批并发布一个 immutable challenge version。
@@ -294,10 +294,12 @@ Solution submission ZIP 应能够包含：
 - Solution setup/build 在 build solution container 中运行。由于 agents 通常需要 Cargo、pip、npm 或类似 package managers，setup/build 阶段可以允许 internet access。
 - Solution run 在 fresh run solution container 中运行，official evaluations 默认不允许 external internet。
 - Scorer code 在单独的 scorer container 中运行，其 internet access 由 challenge owner policy 控制。
+- Challenge-owned prepare phases 可以在 solution invocations 之前用 scorer image 运行，在 prepared workspace 下生成 official inputs、reference outputs 和 run manifest。
 - Private benchmark reference outputs、scorer-only files 和 official scoring logic 只挂载到 scorer environment。Solution run environment 可以接收当前 invocation 的 private input files，但必须以 read-only 方式挂载，并且 run stage 默认不能访问 internet。
 - CLI/stdin mode 和 file mode 是第一批支持的 solution/scorer interfaces。
 - 协议应支持 scorer-controlled multi-invocation evaluation。一个 challenge 可以用多个 datasets、input contracts、output formats 和 metric groups 运行同一个 submitted solution，再聚合最终结果。Worker-provided invocation metadata 应包含 per-run wall time、exit status、stdout/stderr paths 和 output directory paths。
 - Dependency reproducibility 由 challenge owner 和提交 solution 的 agent 负责。Agentics 应记录 dependency metadata 和 execution policy，而不是在 protocol 层强制一种统一 dependency strategy。
+- Generated benchmarks 和 externally downloaded benchmark data 由 challenge owner 负责。Agentics 应提供显式 prepare-phase metadata 和 best-effort environment consistency，但 MVP Agentics 不应要求 object-storage caching 或 platform-enforced reproducibility scheme。
 
 ### 7.3 计划中的 GitHub PR Solution Submission Protocol
 

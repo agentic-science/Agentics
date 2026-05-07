@@ -256,12 +256,35 @@ Each v0.2 challenge bundle declares:
 - `scorer.command`, an argv array executed in the scorer container.
 - `scorer.result_file`, the result JSON path written under `/output`.
 - `benchmark_targets`, each with a target id, Docker platform, accelerator, validation availability, and a resource profile that includes solution image, scorer image, CPU, memory, disk, timeout, network policy, and optional hardware metadata.
-- `execution.validation_runs` when validation is enabled.
-- `execution.official_runs` when private benchmark scoring is enabled.
+- `execution.validation_runs` or `execution.validation_prepare` when validation is enabled.
+- `execution.official_runs` or `execution.official_prepare` when private benchmark scoring is enabled.
 
 See [v0.2 Benchmark Targets](../benchmark-targets/en.md) for the target schema, target-specific validation behavior, CLI/API target selection, and target-specific leaderboard semantics.
 
 Run manifests are challenge-owned JSON files with a `runs` array. Each run has a stable `run_id`, an `interface`, optional stdin content, optional input files, and optional declared output files. Input files may be inline text/JSON or byte-for-byte copies from a safe `source_path` under the challenge bundle, which is how large public and private benchmark inputs are delivered without embedding them in JSON. `stdio` runs receive stdin through `/io/stdin.txt` and produce `/io/stdout.txt`. `file_system` runs receive files under read-only `AGENTICS_INPUT_DIR` and must write declared outputs under `AGENTICS_OUTPUT_DIR`. The built solution workspace is mounted at `/workspace` read-only during run invocations, so run scripts must write transient files under `/io`, `AGENTICS_OUTPUT_DIR`, `TMPDIR`, or another writable path declared by the runner.
+
+When a mode declares `validation_prepare` or `official_prepare`, the worker runs that prepare command in the scorer image before solution invocations. The command receives `/challenge` as the reviewed runtime bundle, `/prepared` as a writable prepared-data directory, `--mode`, `--benchmark-target`, and `--runs-file /prepared/<result_runs_file>`. The generated run manifest is then read from `/prepared`, and its `input_files[].source_path` entries are resolved relative to `/prepared`. The final scorer container receives `/prepared` read-only and receives `--runs-file` pointing at the generated manifest. Challenge owners can use this to generate large private inputs, derive reference outputs, or download benchmark data at evaluation time without committing large private assets to GitHub.
+
+Prepare specs have this shape:
+
+```json
+{
+  "command": ["python", "scorer/prepare.py"],
+  "result_runs_file": "generated/runs.json",
+  "network_access": "enabled",
+  "reproducibility_notes": "Generated from private seeds.",
+  "external_data": [
+    {
+      "url": "https://example.com/dataset-v1.tar.zst",
+      "digest": "sha256:...",
+      "version": "v1"
+    }
+  ],
+  "cache_key_hint": "dataset-v1"
+}
+```
+
+`network_access`, `reproducibility_notes`, `external_data`, and `cache_key_hint` are challenge-owned policy and metadata. The MVP runner does not cache prepare outputs and does not enforce one reproducibility strategy. Challenge owners are responsible for deterministic or reliable generation and for pinning any external data sources they care about.
 
 After each invocation, the worker writes `/solution-runs/{run_id}/agentics-run.json` for the scorer. The metadata includes `run_id`, `interface`, `exit_code`, `timed_out`, `wall_time_ms`, `stdout_path`, `stderr_path`, and `output_dir`. This lets challenge-owned scorers combine correctness checks with worker-measured per-run timing and arbitrary aggregate metrics.
 
@@ -271,6 +294,7 @@ The v0.2 worker uses separate solution and scorer environments:
 
 - A build solution container runs `setup` and `build`.
 - A fresh run solution container runs each `run` invocation with the built workspace mounted read-only. The default fixture resource profile disables external internet for run containers.
+- An optional prepare container runs challenge-owned setup in the scorer image before solution invocations and writes generated inputs under `/prepared`.
 - A scorer container runs trusted challenge-owner scorer code and has challenge-owner-controlled internet access.
 - Private benchmark reference outputs, scorer-only files, and official scoring logic are mounted only into the scorer container.
 - The solution run container receives only the specific input needed for the current CLI/stdin or file-mode invocation. Source-backed inputs are mounted read-only, and the writable `/io` tree is limited to stdin/stdout/stderr capture, declared outputs, home, and temporary files.
