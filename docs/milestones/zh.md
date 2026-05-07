@@ -496,6 +496,21 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
   - Scope：添加 health checks、worker status visibility、log retention guidance、backup guidance、operational alerts，以及常见失败模式的 operator runbook。
   - Test spec：在 staging 中手动验证 health endpoints 和 runbook commands；在当前 stack 支持的位置添加 automated checks。
 
+- **M0.2.5-DGX-1：盘点 DGX Spark host 和 container runtime**
+  - Commit target：`ops: document dgx spark host inventory`
+  - Scope：在把 MVP 迁移到 DGX Spark 前，记录 OS image、architecture、Docker version、Docker storage driver、NVIDIA driver、CUDA visibility、NVIDIA container runtime、persistent storage mount、ingress path 和 operator access model。
+  - Test spec：在 DGX Spark host 上采集 `uname -a`、`docker info`、`nvidia-smi` 和 NVIDIA container runtime Docker smoke command 的输出，并将结果附到 deployment checklist。
+
+- **M0.2.5-DGX-2：添加 DGX Spark deployment profile**
+  - Commit target：`deploy: add dgx spark mvp profile`
+  - Scope：定义 DGX-specific environment values、persistent storage layout、reverse proxy 和 TLS assumptions、Docker runtime settings、service supervision、backup locations 和 release artifact paths。在 GPU milestone lane 实现之前，保持 GPU solution execution 禁用。
+  - Test spec：在 DGX Spark 上使用 persistent storage 和非默认 admin credentials dry-run migrations、API startup、worker startup、web startup 和 health checks。
+
+- **M0.2.5-DGX-3：运行 DGX Spark end-to-end smoke 和 benchmark calibration**
+  - Commit target：`ops: add dgx spark smoke checklist`
+  - Scope：在 DGX Spark 上运行 hosted CLI onboarding、matrix official submission on supported CPU targets、no-egress runner smoke、worker heartbeat inspection、capacity inspection 和初始 runtime calibration。记录 `linux/amd64` emulation 是否可接受，或 hosted MVP 是否应按 host capability 限制 targets。
+  - Test spec：采集 sample official submission 的 terminal status、`/admin/capacity`、`/admin/service-heartbeats`、runner logs 和 matrix benchmark timing baselines。
+
 ### CLI 和 Documentation
 
 - **M0.2.5-CLI-1：验证 hosted CLI onboarding**
@@ -538,10 +553,13 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 | `M0.2.5-CREATE-6：添加 stale draft cleanup 和 challenge creation quotas` | 已实现 | 已实现 active draft limits、private asset byte limits、validation-frequency limits、stale draft abandonment 和 unpublished asset purge。 |
 | `M0.2.5-DEMO-1：确定 official demo challenge set` | 进行中 | Matrix multiplication throughput 是第一个 demo challenge；更完整的 hosted demo set 仍是 TODO。 |
 | `M0.2.5-DEMO-2：打包 official demo challenges` | 进行中 | Matrix demo 位于 challenge repository，并使用 private seed/config 与 prepare-generated official data。 |
-| `M0.2.5-DEPLOY-1：添加 hosted deployment baseline` | 计划中 | 需要 v0.2 deployment assumptions。 |
-| `M0.2.5-OPS-1：添加 public quota 和 abuse limits` | 计划中 | 保护 hosted worker capacity。 |
-| `M0.2.5-OPS-2：添加 health checks、observability 和 runbook` | 计划中 | 公开 demo 前必需。 |
-| `M0.2.5-CLI-1：验证 hosted CLI onboarding` | 计划中 | 面向 agents 和 operators 的 smoke path。 |
+| `M0.2.5-DEPLOY-1：添加 hosted deployment baseline` | 已实现 | 已文档化 Mac-local MVP deployment rehearsal；DGX Spark hosted profile 仍为计划中。 |
+| `M0.2.5-OPS-1：添加 public quota 和 abuse limits` | 已实现 | 已记录 backend-enforced quotas、推荐 Mac-local MVP 数值和 reverse-proxy requirements。 |
+| `M0.2.5-OPS-2：添加 health checks、observability 和 runbook` | 已实现 | Operations runbook 和 `scripts/ops/check-local-mvp.sh` 覆盖 health、capacity、heartbeat、logs、failures 和 backups。 |
+| `M0.2.5-DGX-1：盘点 DGX Spark host 和 container runtime` | 计划中 | 等 hosted MVP target 可访问后执行。 |
+| `M0.2.5-DGX-2：添加 DGX Spark deployment profile` | 计划中 | 依赖 DGX host inventory 和 storage/ingress decisions。 |
+| `M0.2.5-DGX-3：运行 DGX Spark end-to-end smoke 和 benchmark calibration` | 计划中 | 依赖 DGX deployment profile 和 published matrix demo。 |
+| `M0.2.5-CLI-1：验证 hosted CLI onboarding` | 已实现 | 已记录 registration、challenge inspection、workspace initialization、validation、official submission 和 polling 的 hosted CLI smoke path。 |
 | `M0.2.5-CLI-2：添加 challenge creator commands` | 已实现 | CLI 覆盖 GitHub identity linking、draft creation/status、private asset upload、admin validation、review、publish、abandon 和 cleanup。 |
 | `M0.2.5-SKILL-1：添加 challenge authoring skill` | 已实现 | `.agents/skills/challenge-authoring-workflow/SKILL.md` 记录 creator workflow 和 private asset ZIP overlays。 |
 | `M0.2.5-SKILL-2：添加 challenge review skill` | 已实现 | `.agents/skills/challenge-review-workflow/SKILL.md` 记录 reviewer checks 和 admin CLI flow。 |

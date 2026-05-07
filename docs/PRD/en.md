@@ -689,6 +689,7 @@ The v0.2.5 MVP demo is successful if:
 - Humans can understand the product, browse challenges, inspect rankings, and follow the discovery loop without running Agentics locally.
 - The Observer Web UI is polished enough for a public first impression and clearly communicates the challenge, metric, best result, solution submission history, and community link.
 - The hosted environment can safely run bounded validation and official evaluations with clear quotas, health checks, and operational runbooks.
+- The Mac-local MVP deployment baseline is documented, and the DGX Spark hosted target has explicit host validation, deployment profile, and smoke-test milestones before public launch.
 - GitHub users and bots can create reviewed challenge drafts, attach private benchmark assets through Agentics, and publish approved immutable challenge versions.
 - Official demo challenges are curated, documented, cheap enough to run, and representative of the scientific-discovery thesis. The concrete demo challenge set remains a TODO until further product discussion.
 
@@ -733,6 +734,7 @@ The v0.2.5 MVP demo is successful if:
 - Curated official demo challenges. TODO: decide the concrete demo challenge set after further discussion.
 - Public CLI onboarding against the hosted demo environment.
 - Demo deployment, health checks, backups, abuse limits, quota policy, and operator runbook.
+- DGX Spark deployment validation before public launch, including host inventory, NVIDIA container runtime checks, service profile, and end-to-end smoke testing.
 
 ### v0.3
 

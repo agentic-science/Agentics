@@ -496,6 +496,21 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
   - Scope: Add health checks, worker status visibility, log retention guidance, backup guidance, operational alerts, and an operator runbook for common failure modes.
   - Test spec: Manually verify health endpoints and runbook commands in staging; add automated checks where the current stack supports them.
 
+- **M0.2.5-DGX-1: Inventory DGX Spark host and container runtime**
+  - Commit target: `ops: document dgx spark host inventory`
+  - Scope: Before moving the MVP to DGX Spark, record OS image, architecture, Docker version, Docker storage driver, NVIDIA driver, CUDA visibility, NVIDIA container runtime, persistent storage mount, ingress path, and operator access model.
+  - Test spec: On the DGX Spark host, capture `uname -a`, `docker info`, `nvidia-smi`, and an NVIDIA container runtime Docker smoke command, then attach the results to the deployment checklist.
+
+- **M0.2.5-DGX-2: Add DGX Spark deployment profile**
+  - Commit target: `deploy: add dgx spark mvp profile`
+  - Scope: Define DGX-specific environment values, persistent storage layout, reverse proxy and TLS assumptions, Docker runtime settings, service supervision, backup locations, and release artifact paths. Keep GPU solution execution disabled until the GPU milestone lane is implemented.
+  - Test spec: Dry-run migrations, API startup, worker startup, web startup, and health checks on DGX Spark with persistent storage and non-default admin credentials.
+
+- **M0.2.5-DGX-3: Run DGX Spark end-to-end smoke and benchmark calibration**
+  - Commit target: `ops: add dgx spark smoke checklist`
+  - Scope: Run hosted CLI onboarding, matrix official submission on supported CPU targets, no-egress runner smoke, worker heartbeat inspection, capacity inspection, and initial runtime calibration on DGX Spark. Record whether `linux/amd64` emulation is acceptable or whether hosted MVP should restrict targets by host capability.
+  - Test spec: Capture terminal status for a sample official submission, `/admin/capacity`, `/admin/service-heartbeats`, runner logs, and matrix benchmark timing baselines.
+
 ### CLI and Documentation
 
 - **M0.2.5-CLI-1: Validate hosted CLI onboarding**
@@ -538,10 +553,13 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 | `M0.2.5-CREATE-6: Add stale draft cleanup and challenge creation quotas` | Implemented | Active draft limits, private asset byte limits, validation-frequency limits, stale draft abandonment, and unpublished asset purge are implemented. |
 | `M0.2.5-DEMO-1: Decide official demo challenge set` | In Progress | Matrix multiplication throughput is the first demo challenge; broader hosted demo set remains a TODO. |
 | `M0.2.5-DEMO-2: Package official demo challenges` | In Progress | Matrix demo lives in the challenge repository and uses private seed/config plus prepare-generated official data. |
-| `M0.2.5-DEPLOY-1: Add hosted deployment baseline` | Planned | Requires v0.2 deployment assumptions. |
-| `M0.2.5-OPS-1: Add public quota and abuse limits` | Planned | Protects hosted worker capacity. |
-| `M0.2.5-OPS-2: Add health checks, observability, and runbook` | Planned | Required before public demo. |
-| `M0.2.5-CLI-1: Validate hosted CLI onboarding` | Planned | Smoke path for agents and operators. |
+| `M0.2.5-DEPLOY-1: Add hosted deployment baseline` | Implemented | Mac-local MVP deployment rehearsal is documented; DGX Spark hosted profile remains planned. |
+| `M0.2.5-OPS-1: Add public quota and abuse limits` | Implemented | Backend-enforced quotas are documented with recommended Mac-local MVP values and reverse-proxy requirements. |
+| `M0.2.5-OPS-2: Add health checks, observability, and runbook` | Implemented | Operations runbook and `scripts/ops/check-local-mvp.sh` cover health, capacity, heartbeat, logs, failures, and backups. |
+| `M0.2.5-DGX-1: Inventory DGX Spark host and container runtime` | Planned | Required once the hosted MVP target is accessible. |
+| `M0.2.5-DGX-2: Add DGX Spark deployment profile` | Planned | Depends on DGX host inventory and storage/ingress decisions. |
+| `M0.2.5-DGX-3: Run DGX Spark end-to-end smoke and benchmark calibration` | Planned | Depends on DGX deployment profile and published matrix demo. |
+| `M0.2.5-CLI-1: Validate hosted CLI onboarding` | Implemented | Hosted CLI smoke path is documented for registration, challenge inspection, workspace initialization, validation, official submission, and polling. |
 | `M0.2.5-CLI-2: Add challenge creator commands` | Implemented | CLI covers GitHub identity linking, draft creation/status, private asset upload, admin validation, review, publish, abandon, and cleanup. |
 | `M0.2.5-SKILL-1: Add challenge authoring skill` | Implemented | `.agents/skills/challenge-authoring-workflow/SKILL.md` documents creator workflow and private asset ZIP overlays. |
 | `M0.2.5-SKILL-2: Add challenge review skill` | Implemented | `.agents/skills/challenge-review-workflow/SKILL.md` documents reviewer checks and admin CLI flow. |
