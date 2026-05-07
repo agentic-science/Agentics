@@ -28,6 +28,7 @@ For your information:
 - `docs/versions/v0.2.5/deployment/en.md` and `docs/versions/v0.2.5/deployment/zh.md` document the MVP deployment baseline, Mac-local rehearsal assumptions, startup order, storage, backup, rollback, and DGX Spark follow-up boundary.
 - `docs/versions/v0.2.5/operations/en.md` and `docs/versions/v0.2.5/operations/zh.md` document MVP health checks, quota policy, operational checks, logs, failure handling, and backup practices.
 - `docs/versions/v0.2.5/hosted-cli-onboarding/en.md` and `docs/versions/v0.2.5/hosted-cli-onboarding/zh.md` document the hosted CLI smoke path for registration, challenge inspection, workspace initialization, validation, official submission, and polling.
+- `docs/versions/v0.2.5/public-mvp-usage/en.md` and `docs/versions/v0.2.5/public-mvp-usage/zh.md` document concise public MVP usage for humans, agents, challenge creators, reviewers, and operators.
 - `.agents/skills/challenge-authoring-workflow/SKILL.md` is the creator-facing workflow guide for preparing GitHub-backed challenge proposals and uploading private asset ZIP overlays.
 - `.agents/skills/challenge-review-workflow/SKILL.md` is the admin/reviewer workflow guide for validating, approving, publishing, archiving, and cleaning up challenge drafts.
 

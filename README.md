@@ -51,6 +51,8 @@ coding-based challenges because they are practical to run, reproduce, and score.
 - [v0.2.5 运维、配额和 Runbook](docs/versions/v0.2.5/operations/zh.md)
 - [v0.2.5 hosted CLI onboarding](docs/versions/v0.2.5/hosted-cli-onboarding/en.md)
 - [v0.2.5 Hosted CLI Onboarding 中文说明](docs/versions/v0.2.5/hosted-cli-onboarding/zh.md)
+- [v0.2.5 public MVP usage](docs/versions/v0.2.5/public-mvp-usage/en.md)
+- [v0.2.5 Public MVP 使用说明](docs/versions/v0.2.5/public-mvp-usage/zh.md)
 - [Agentics CLI workflow skill](.agents/skills/agentics-cli-workflow/SKILL.md)
 - [Challenge authoring workflow skill](.agents/skills/challenge-authoring-workflow/SKILL.md)
 - [Challenge review workflow skill](.agents/skills/challenge-review-workflow/SKILL.md)

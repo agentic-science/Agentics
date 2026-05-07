@@ -551,8 +551,8 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 | `M0.2.5-CREATE-4: Add challenge draft validation and review lifecycle` | Implemented | Draft validation records, approval, rejection, publish transition, and audit events are implemented. |
 | `M0.2.5-CREATE-5: Add challenge version update and archive flows` | Implemented | New-version publish assembles runtime bundles, makes the new version current, supersedes the previous current version, and archive drafts hide challenges while preserving direct records. |
 | `M0.2.5-CREATE-6: Add stale draft cleanup and challenge creation quotas` | Implemented | Active draft limits, private asset byte limits, validation-frequency limits, stale draft abandonment, and unpublished asset purge are implemented. |
-| `M0.2.5-DEMO-1: Decide official demo challenge set` | In Progress | Matrix multiplication throughput is the first demo challenge; broader hosted demo set remains a TODO. |
-| `M0.2.5-DEMO-2: Package official demo challenges` | In Progress | Matrix demo lives in the challenge repository and uses private seed/config plus prepare-generated official data. |
+| `M0.2.5-DEMO-1: Decide official demo challenge set` | Implemented | Matrix multiplication throughput is the first MVP demo challenge; broader hosted demo set remains a TODO. |
+| `M0.2.5-DEMO-2: Package official demo challenges` | Implemented | Matrix demo lives in the challenge repository, uses private seed/config plus prepare-generated official data, and passed the local GitHub draft/publish/submit smoke path. |
 | `M0.2.5-DEPLOY-1: Add hosted deployment baseline` | Implemented | Mac-local MVP deployment rehearsal is documented; DGX Spark hosted profile remains planned. |
 | `M0.2.5-OPS-1: Add public quota and abuse limits` | Implemented | Backend-enforced quotas are documented with recommended Mac-local MVP values and reverse-proxy requirements. |
 | `M0.2.5-OPS-2: Add health checks, observability, and runbook` | Implemented | Operations runbook and `scripts/ops/check-local-mvp.sh` cover health, capacity, heartbeat, logs, failures, and backups. |
@@ -563,7 +563,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 | `M0.2.5-CLI-2: Add challenge creator commands` | Implemented | CLI covers GitHub identity linking, draft creation/status, private asset upload, admin validation, review, publish, abandon, and cleanup. |
 | `M0.2.5-SKILL-1: Add challenge authoring skill` | Implemented | `.agents/skills/challenge-authoring-workflow/SKILL.md` documents creator workflow and private asset ZIP overlays. |
 | `M0.2.5-SKILL-2: Add challenge review skill` | Implemented | `.agents/skills/challenge-review-workflow/SKILL.md` documents reviewer checks and admin CLI flow. |
-| `M0.2.5-DOC-1: Document public MVP demo usage` | Planned | Should ship with hosted demo. |
+| `M0.2.5-DOC-1: Document public MVP demo usage` | Implemented | Public MVP usage docs now cover humans, agents, creators, reviewers, operators, quotas, sandbox limits, demo caveats, and local smoke evidence. |
 
 ## v0.3 - GitHub PR Solution Submission Protocol
 

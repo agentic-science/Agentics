@@ -551,8 +551,8 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 | `M0.2.5-CREATE-4：添加 challenge draft validation 和 review lifecycle` | 已实现 | 已实现 draft validation records、approval、rejection、publish transition 和 audit events。 |
 | `M0.2.5-CREATE-5：添加 challenge version update 和 archive flows` | 已实现 | New-version publish 会组装 runtime bundles、将新版本设为 current、将前一个 current version 标记为 superseded，并且 archive drafts 会隐藏 challenge 但保留 direct records。 |
 | `M0.2.5-CREATE-6：添加 stale draft cleanup 和 challenge creation quotas` | 已实现 | 已实现 active draft limits、private asset byte limits、validation-frequency limits、stale draft abandonment 和 unpublished asset purge。 |
-| `M0.2.5-DEMO-1：确定 official demo challenge set` | 进行中 | Matrix multiplication throughput 是第一个 demo challenge；更完整的 hosted demo set 仍是 TODO。 |
-| `M0.2.5-DEMO-2：打包 official demo challenges` | 进行中 | Matrix demo 位于 challenge repository，并使用 private seed/config 与 prepare-generated official data。 |
+| `M0.2.5-DEMO-1：确定 official demo challenge set` | 已实现 | Matrix multiplication throughput 是第一个 MVP demo challenge；更完整的 hosted demo set 仍是 TODO。 |
+| `M0.2.5-DEMO-2：打包 official demo challenges` | 已实现 | Matrix demo 位于 challenge repository，使用 private seed/config 和 prepare-generated official data，并已通过 local GitHub draft/publish/submit smoke path。 |
 | `M0.2.5-DEPLOY-1：添加 hosted deployment baseline` | 已实现 | 已文档化 Mac-local MVP deployment rehearsal；DGX Spark hosted profile 仍为计划中。 |
 | `M0.2.5-OPS-1：添加 public quota 和 abuse limits` | 已实现 | 已记录 backend-enforced quotas、推荐 Mac-local MVP 数值和 reverse-proxy requirements。 |
 | `M0.2.5-OPS-2：添加 health checks、observability 和 runbook` | 已实现 | Operations runbook 和 `scripts/ops/check-local-mvp.sh` 覆盖 health、capacity、heartbeat、logs、failures 和 backups。 |
@@ -563,7 +563,7 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 | `M0.2.5-CLI-2：添加 challenge creator commands` | 已实现 | CLI 覆盖 GitHub identity linking、draft creation/status、private asset upload、admin validation、review、publish、abandon 和 cleanup。 |
 | `M0.2.5-SKILL-1：添加 challenge authoring skill` | 已实现 | `.agents/skills/challenge-authoring-workflow/SKILL.md` 记录 creator workflow 和 private asset ZIP overlays。 |
 | `M0.2.5-SKILL-2：添加 challenge review skill` | 已实现 | `.agents/skills/challenge-review-workflow/SKILL.md` 记录 reviewer checks 和 admin CLI flow。 |
-| `M0.2.5-DOC-1：记录 public MVP demo usage` | 计划中 | 应与 hosted demo 一起交付。 |
+| `M0.2.5-DOC-1：记录 public MVP demo usage` | 已实现 | Public MVP usage docs 已覆盖 humans、agents、creators、reviewers、operators、quotas、sandbox limits、demo caveats 和 local smoke evidence。 |
 
 ## v0.3 - GitHub PR Solution Submission Protocol
 
