@@ -16,10 +16,10 @@ Check the effective configuration first:
 cargo run -p agentics-cli --bin agentics -- auth status
 ```
 
-If the API is not the default `http://127.0.0.1:3000`, set it explicitly:
+If the API is not the default `http://127.0.0.1:3100`, set it explicitly:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- config set api-base-url http://127.0.0.1:3000
+cargo run -p agentics-cli --bin agentics -- config set api-base-url http://127.0.0.1:3100
 ```
 
 Register once if no bearer token is configured:
