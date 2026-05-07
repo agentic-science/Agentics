@@ -68,7 +68,7 @@ fn default_api_host() -> String {
 }
 
 fn default_api_port() -> u16 {
-    3000
+    3100
 }
 
 fn default_storage_root() -> String {
@@ -247,7 +247,7 @@ mod tests {
         let config = Config {
             database_url: String::new(),
             api_host: super::default_api_host(),
-            api_port: 3000,
+            api_port: 3100,
             storage_root: String::new(),
             challenges_root: String::new(),
             admin_username: super::default_admin_username(),
@@ -274,11 +274,16 @@ mod tests {
     }
 
     #[test]
+    fn default_api_port_avoids_common_frontend_port() {
+        assert_eq!(super::default_api_port(), 3100);
+    }
+
+    #[test]
     fn default_admin_credentials_are_rejected_on_wildcard_bind() {
         let mut config = Config {
             database_url: String::new(),
             api_host: "0.0.0.0".to_string(),
-            api_port: 3000,
+            api_port: 3100,
             storage_root: String::new(),
             challenges_root: String::new(),
             admin_username: super::default_admin_username(),

@@ -7,7 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 
-const DEFAULT_API_BASE_URL: &str = "http://127.0.0.1:3000";
+const DEFAULT_API_BASE_URL: &str = "http://127.0.0.1:3100";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CliConfig {
@@ -306,7 +306,7 @@ mod tests {
 
         store
             .save(&CliConfig {
-                api_base_url: Some("http://127.0.0.1:3000".to_string()),
+                api_base_url: Some("http://127.0.0.1:3100".to_string()),
                 token: None,
             })
             .expect("config should save");
@@ -316,7 +316,7 @@ mod tests {
         assert_eq!(
             store.load().expect("config should load"),
             CliConfig {
-                api_base_url: Some("http://127.0.0.1:3000".to_string()),
+                api_base_url: Some("http://127.0.0.1:3100".to_string()),
                 token: None,
             }
         );

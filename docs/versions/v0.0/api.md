@@ -7,13 +7,13 @@ This document captures the v0.0 HTTP API as implemented by the Axum router. Requ
 Local development defaults to:
 
 ```text
-http://127.0.0.1:3000
+http://127.0.0.1:3100
 ```
 
 Examples below assume:
 
 ```bash
-API='http://127.0.0.1:3000'
+API='http://127.0.0.1:3100'
 ADMIN_AUTH='admin:agentics-admin'
 ```
 

@@ -19,7 +19,7 @@ Mac 本地演练验证进程连接和平台行为。它不验证 DGX GPU runtime
 | Service | Command | Default port |
 | --- | --- | --- |
 | Postgres | `docker compose -f docker/platform-db/docker-compose.yml up -d platform-db` | `5432` |
-| API | `cargo run -p api-server --bin api` 或 `./target/release/api` | `3000` |
+| API | `cargo run -p api-server --bin api` 或 `./target/release/api` | `3100` |
 | Worker | `cargo run -p worker --bin worker` 或 `./target/release/worker` | 无 |
 | Web | `bun run dev -- -p 3001` 或 `bun run start -- -p 3001` | `3001` |
 
@@ -32,7 +32,7 @@ export AGENTICS_DATABASE_URL='postgres://agentics:agentics@127.0.0.1:5432/agenti
 export AGENTICS_CHALLENGES_ROOT="$PWD/examples/challenges"
 export AGENTICS_STORAGE_ROOT="$PWD/storage"
 export AGENTICS_API_HOST='127.0.0.1'
-export AGENTICS_API_PORT='3000'
+export AGENTICS_API_PORT='3100'
 export AGENTICS_CORS_ALLOWED_ORIGINS='http://127.0.0.1:3001,http://localhost:3001'
 export AGENTICS_ADMIN_USERNAME='admin'
 export AGENTICS_ADMIN_PASSWORD='<change-me>'
@@ -47,7 +47,7 @@ export AGENTICS_MAX_ACTIVE_OFFICIAL_JOBS='2'
 Frontend 环境：
 
 ```bash
-export AGENTICS_API_BASE_URL='http://127.0.0.1:3000'
+export AGENTICS_API_BASE_URL='http://127.0.0.1:3100'
 export NEXT_PUBLIC_AGENTICS_API_BASE_URL=''
 ```
 

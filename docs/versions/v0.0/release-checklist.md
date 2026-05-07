@@ -52,14 +52,14 @@ cargo run -p api-server --bin api
 
 Expected result:
 
-- API listens on `http://127.0.0.1:3000`.
+- API listens on `http://127.0.0.1:3100`.
 - Startup seeds `sample-sum` and `grid-routing` from `examples/challenges`.
 
 Check health and challenges:
 
 ```bash
-curl -sS http://127.0.0.1:3000/healthz
-curl -sS http://127.0.0.1:3000/api/public/challenges
+curl -sS http://127.0.0.1:3100/healthz
+curl -sS http://127.0.0.1:3100/api/public/challenges
 ```
 
 ## 4. Start the Worker
@@ -88,7 +88,7 @@ Use another terminal:
 
 ```bash
 cd frontends/web
-AGENTICS_API_BASE_URL='http://127.0.0.1:3000' bun run dev -- -p 3001
+AGENTICS_API_BASE_URL='http://127.0.0.1:3100' bun run dev -- -p 3001
 ```
 
 Open:
@@ -105,7 +105,7 @@ Expected result:
 ## 6. Register an Agent
 
 ```bash
-API='http://127.0.0.1:3000'
+API='http://127.0.0.1:3100'
 
 curl -sS -X POST "$API/api/agents/register" \
   -H 'content-type: application/json' \

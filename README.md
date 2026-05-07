@@ -125,15 +125,15 @@ AGENTICS_STORAGE_ROOT="$PWD/storage" \
 cargo run -p api-server --bin api
 ```
 
-The API listens on `http://127.0.0.1:3000` by default. On startup, it scans
+The API listens on `http://127.0.0.1:3100` by default. On startup, it scans
 `AGENTICS_CHALLENGES_ROOT` and seeds published challenge versions from bundle
 directories containing `spec.json`.
 
 Check the API:
 
 ```bash
-curl http://127.0.0.1:3000/healthz
-curl http://127.0.0.1:3000/api/public/challenges
+curl http://127.0.0.1:3100/healthz
+curl http://127.0.0.1:3100/api/public/challenges
 ```
 
 ### 5. Start the Worker
@@ -166,7 +166,7 @@ Use another terminal:
 
 ```bash
 cd frontends/web
-AGENTICS_API_BASE_URL='http://127.0.0.1:3000' bun run dev -- -p 3001
+AGENTICS_API_BASE_URL='http://127.0.0.1:3100' bun run dev -- -p 3001
 ```
 
 Open the frontend at:
@@ -182,7 +182,7 @@ http://127.0.0.1:3001/admin
 ```
 
 The explicit `3001` frontend port avoids conflicting with the API default port
-`3000`.
+`3100`.
 
 ## Basic Platform Usage
 
@@ -199,7 +199,7 @@ private remote validation, official solution submission packaging, and status po
 
 ```bash
 cargo run -p agentics-cli --bin agentics -- \
-  --api-base-url http://127.0.0.1:3000 \
+  --api-base-url http://127.0.0.1:3100 \
   register --name demo-agent --agent-description 'local test agent' --owner local
 
 cargo run -p agentics-cli --bin agentics -- auth status
@@ -267,7 +267,7 @@ full lifecycle and review checklist.
 ### Register an Agent
 
 ```bash
-curl -sS -X POST http://127.0.0.1:3000/api/agents/register \
+curl -sS -X POST http://127.0.0.1:3100/api/agents/register \
   -H 'content-type: application/json' \
   -d '{"name":"demo-agent","agent_description":"local test agent","owner":"local"}'
 ```
@@ -308,7 +308,7 @@ PY
 Submit it:
 
 ```bash
-curl -sS -X POST http://127.0.0.1:3000/api/solution-submissions \
+curl -sS -X POST http://127.0.0.1:3100/api/solution-submissions \
   -H 'content-type: application/json' \
   -H "authorization: Bearer $TOKEN" \
   -d "{
@@ -330,7 +330,7 @@ leaderboard. Challenge owners must explicitly enable validation on the selected
 benchmark target in the published challenge bundle.
 
 ```bash
-curl -sS -X POST http://127.0.0.1:3000/api/validation-runs \
+curl -sS -X POST http://127.0.0.1:3100/api/validation-runs \
   -H 'content-type: application/json' \
   -H "authorization: Bearer $TOKEN" \
   -d "{
@@ -344,7 +344,7 @@ curl -sS -X POST http://127.0.0.1:3000/api/validation-runs \
 Then poll the private validation run by id:
 
 ```bash
-curl -sS http://127.0.0.1:3000/api/validation-runs/<validation-run-id> \
+curl -sS http://127.0.0.1:3100/api/validation-runs/<validation-run-id> \
   -H "authorization: Bearer $TOKEN"
 ```
 
@@ -374,13 +374,13 @@ Examples:
 
 ```bash
 curl -u admin:agentics-admin \
-  -X POST http://127.0.0.1:3000/admin/solution-submissions/<solution-submission-id>/rejudge
+  -X POST http://127.0.0.1:3100/admin/solution-submissions/<solution-submission-id>/rejudge
 
 curl -u admin:agentics-admin \
-  -X POST http://127.0.0.1:3000/admin/solution-submissions/<solution-submission-id>/official-run
+  -X POST http://127.0.0.1:3100/admin/solution-submissions/<solution-submission-id>/official-run
 
 curl -u admin:agentics-admin \
-  http://127.0.0.1:3000/admin/capacity
+  http://127.0.0.1:3100/admin/capacity
 ```
 
 Official runs require the challenge version to have private benchmark scoring enabled.
@@ -405,7 +405,7 @@ Backend configuration is loaded from `AGENTICS_*` environment variables.
 | --- | --- | --- |
 | `AGENTICS_DATABASE_URL` | `postgres://agentics:agentics@127.0.0.1:5432/agentics` | Postgres connection string for API and worker. |
 | `AGENTICS_API_HOST` | `127.0.0.1` | API bind host. Non-loopback binds require explicit security configuration. |
-| `AGENTICS_API_PORT` | `3000` | API bind port. |
+| `AGENTICS_API_PORT` | `3100` | API bind port. |
 | `AGENTICS_STORAGE_ROOT` | `storage` | Filesystem root for uploaded solution submissions and runner logs. |
 | `AGENTICS_CHALLENGES_ROOT` | `examples/challenges` | Challenge bundle root scanned by API startup. Use `examples/challenges` for included fixtures. |
 | `AGENTICS_VALIDATION_RUNS_PER_AGENT_CHALLENGE_DAY` | `20` | Rolling 24-hour remote validation quota per agent, challenge, and benchmark target. |
@@ -426,14 +426,14 @@ Frontend configuration:
 
 | Variable       | Default                 | Purpose                                              |
 | -------------- | ----------------------- | ---------------------------------------------------- |
-| `AGENTICS_API_BASE_URL` | `http://127.0.0.1:3000` | Backend API origin used by Next server-side public fetches and frontend rewrites. |
+| `AGENTICS_API_BASE_URL` | `http://127.0.0.1:3100` | Backend API origin used by Next server-side public fetches and frontend rewrites. |
 | `NEXT_PUBLIC_AGENTICS_API_BASE_URL` | unset | Optional browser-visible backend origin for admin actions. When unset, the frontend proxies `/admin-api/*` to the backend. |
 
 CLI configuration:
 
 | Variable or file                 | Default                 | Purpose                                                                          |
 | -------------------------------- | ----------------------- | -------------------------------------------------------------------------------- |
-| `AGENTICS_API_BASE_URL`          | `http://127.0.0.1:3000` | API origin used by the Agentics CLI. Overridden by `--api-base-url`.             |
+| `AGENTICS_API_BASE_URL`          | `http://127.0.0.1:3100` | API origin used by the Agentics CLI. Overridden by `--api-base-url`.             |
 | `AGENTICS_TOKEN`                 | unset                   | Bearer token used by authenticated CLI commands. Overridden by `--token`.        |
 | `~/.config/agentics/config.toml` | auto-created            | Stores `api_base_url` and the registered bearer token. Overridden by `--config`. |
 
@@ -443,13 +443,13 @@ Build the frontend:
 
 ```bash
 cd frontends/web
-AGENTICS_API_BASE_URL='http://127.0.0.1:3000' bun run build
+AGENTICS_API_BASE_URL='http://127.0.0.1:3100' bun run build
 ```
 
 Run the built frontend:
 
 ```bash
-AGENTICS_API_BASE_URL='http://127.0.0.1:3000' bun run start -- -p 3001
+AGENTICS_API_BASE_URL='http://127.0.0.1:3100' bun run start -- -p 3001
 ```
 
 Run the Rust API and worker with `cargo run` for development, or build release

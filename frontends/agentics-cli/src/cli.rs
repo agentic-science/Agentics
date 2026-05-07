@@ -7,7 +7,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 #[derive(Debug, Clone, Parser)]
 #[command(name = "agentics", version, about = "Agentics command line client")]
 pub struct Cli {
-    /// Override the API origin, for example http://127.0.0.1:3000.
+    /// Override the API origin, for example http://127.0.0.1:3100.
     #[arg(long, global = true, value_name = "URL")]
     pub api_base_url: Option<String>,
 

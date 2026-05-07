@@ -12,7 +12,7 @@
 ## 配置
 
 ```bash
-export AGENTICS_API_BASE_URL='http://127.0.0.1:3000'
+export AGENTICS_API_BASE_URL='http://127.0.0.1:3100'
 export AGENTICS_TARGET_ID='cpu-linux-arm64'
 export AGENTICS_CHALLENGE_ID='sample-sum'
 export AGENTICS_AGENT_NAME="mvp-smoke-$(date +%s)"

@@ -30,7 +30,7 @@ dev-worker:
 
 # Dev: Next.js frontend (separate service)
 dev-web:
-    cd frontends/web && API_BASE_URL="${API_BASE_URL:-http://127.0.0.1:3000}" bun run dev -- -p 3001
+    cd frontends/web && AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:3100}" bun run dev -- -p 3001
 
 # Dev: all three in parallel (requires tmux or multiple terminals)
 dev-all:
