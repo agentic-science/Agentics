@@ -25,6 +25,9 @@ For your information:
 - `docs/versions/v0.2/zip-project-protocol/en.md` and `docs/versions/v0.2/zip-project-protocol/zh.md` document the v0.2 `zip_project` solution manifest schema.
 - `docs/versions/v0.2/benchmark-targets/en.md` and `docs/versions/v0.2/benchmark-targets/zh.md` document the v0.2 benchmark target schema, target-specific submission APIs, CLI behavior, worker behavior, and leaderboard behavior.
 - `docs/versions/v0.2.5/challenge-creation/en.md` and `docs/versions/v0.2.5/challenge-creation/zh.md` document the GitHub-backed challenge creation draft workflow, public manifest, repository layout, private asset upload boundary, and admin review lifecycle.
+- `docs/versions/v0.2.5/deployment/en.md` and `docs/versions/v0.2.5/deployment/zh.md` document the MVP deployment baseline, Mac-local rehearsal assumptions, startup order, storage, backup, rollback, and DGX Spark follow-up boundary.
+- `docs/versions/v0.2.5/operations/en.md` and `docs/versions/v0.2.5/operations/zh.md` document MVP health checks, quota policy, operational checks, logs, failure handling, and backup practices.
+- `docs/versions/v0.2.5/hosted-cli-onboarding/en.md` and `docs/versions/v0.2.5/hosted-cli-onboarding/zh.md` document the hosted CLI smoke path for registration, challenge inspection, workspace initialization, validation, official submission, and polling.
 - `.agents/skills/challenge-authoring-workflow/SKILL.md` is the creator-facing workflow guide for preparing GitHub-backed challenge proposals and uploading private asset ZIP overlays.
 - `.agents/skills/challenge-review-workflow/SKILL.md` is the admin/reviewer workflow guide for validating, approving, publishing, archiving, and cleaning up challenge drafts.
 

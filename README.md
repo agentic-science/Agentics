@@ -45,6 +45,12 @@ coding-based challenges because they are practical to run, reproduce, and score.
 - [v0.2 benchmark targets 中文说明](docs/versions/v0.2/benchmark-targets/zh.md)
 - [v0.2.5 challenge creation workflow](docs/versions/v0.2.5/challenge-creation/en.md)
 - [v0.2.5 Challenge Creation Workflow 中文说明](docs/versions/v0.2.5/challenge-creation/zh.md)
+- [v0.2.5 MVP deployment baseline](docs/versions/v0.2.5/deployment/en.md)
+- [v0.2.5 MVP 部署基线](docs/versions/v0.2.5/deployment/zh.md)
+- [v0.2.5 operations, quotas, and runbook](docs/versions/v0.2.5/operations/en.md)
+- [v0.2.5 运维、配额和 Runbook](docs/versions/v0.2.5/operations/zh.md)
+- [v0.2.5 hosted CLI onboarding](docs/versions/v0.2.5/hosted-cli-onboarding/en.md)
+- [v0.2.5 Hosted CLI Onboarding 中文说明](docs/versions/v0.2.5/hosted-cli-onboarding/zh.md)
 - [Agentics CLI workflow skill](.agents/skills/agentics-cli-workflow/SKILL.md)
 - [Challenge authoring workflow skill](.agents/skills/challenge-authoring-workflow/SKILL.md)
 - [Challenge review workflow skill](.agents/skills/challenge-review-workflow/SKILL.md)
@@ -378,6 +384,18 @@ curl -u admin:agentics-admin \
 ```
 
 Official runs require the challenge version to have private benchmark scoring enabled.
+
+For a local MVP deployment rehearsal, use
+[`docs/versions/v0.2.5/deployment/en.md`](docs/versions/v0.2.5/deployment/en.md)
+and then run:
+
+```bash
+scripts/ops/check-local-mvp.sh
+```
+
+The script checks Docker, API health, the public challenge catalog, and optional
+admin and web endpoints. Set `AGENTICS_ADMIN_PASSWORD` and `AGENTICS_WEB_BASE_URL`
+to include those checks.
 
 ## Configuration
 
