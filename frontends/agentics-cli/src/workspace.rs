@@ -517,7 +517,9 @@ mod tests {
                 }],
                 execution: ChallengeExecutionSpec {
                     validation_runs: Some("public/runs.json".to_string()),
+                    validation_prepare: None,
                     official_runs: Some("private-benchmark/runs.json".to_string()),
+                    official_prepare: None,
                 },
                 datasets: DatasetsSpec {
                     public_dir: "data/public".to_string(),

@@ -89,8 +89,8 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
         ))
         .header("Authorization", format!("Bearer {creator_token}"))
         .json(&serde_json::json!({
-            "asset_id": "official-benchmark",
-            "kind": "private_benchmark_data",
+            "asset_id": "official-seed-config",
+            "kind": "private_seeds",
             "asset_base64": STANDARD.encode(asset_bytes)
         }))
         .send()
@@ -252,7 +252,7 @@ fn generate_smoke_private_asset(challenge_root: &Path) -> PathBuf {
         .arg("--root")
         .arg(challenge_root)
         .arg("--preset")
-        .arg("official")
+        .arg("official-config")
         .arg("--square-cases")
         .arg("1")
         .arg("--rect-cases")

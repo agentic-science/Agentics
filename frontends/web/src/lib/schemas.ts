@@ -53,6 +53,27 @@ const benchmarkTargetSchema = z
   })
   .strict();
 
+const challengePrepareSchema = z
+  .object({
+    command: z.array(z.string().min(1)).min(1),
+    result_runs_file: z.string().min(1),
+    network_access: networkAccessSchema,
+    reproducibility_notes: z.string().min(1).optional(),
+    external_data: z
+      .array(
+        z
+          .object({
+            url: z.string().min(1),
+            digest: z.string().min(1).optional(),
+            version: z.string().min(1).optional(),
+          })
+          .strict(),
+      )
+      .optional(),
+    cache_key_hint: z.string().min(1).optional(),
+  })
+  .strict();
+
 const runMetricResultSchema = z
   .object({
     run_id: z.string().min(1),
@@ -144,7 +165,9 @@ export const challengeBundleSpecSchema = z
     execution: z
       .object({
         validation_runs: z.string().min(1).optional(),
+        validation_prepare: challengePrepareSchema.optional(),
         official_runs: z.string().min(1).optional(),
+        official_prepare: challengePrepareSchema.optional(),
       })
       .strict(),
     datasets: z

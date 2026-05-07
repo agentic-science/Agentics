@@ -141,7 +141,39 @@ pub struct ChallengeExecutionSpec {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub validation_runs: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub validation_prepare: Option<ChallengePrepareSpec>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub official_runs: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub official_prepare: Option<ChallengePrepareSpec>,
+}
+
+/// Optional scorer-image command that prepares generated benchmark inputs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChallengePrepareSpec {
+    pub command: Vec<String>,
+    /// Relative path, under the prepared workspace, to the generated run manifest.
+    pub result_runs_file: String,
+    pub network_access: ZipProjectNetworkAccess,
+    /// Challenge-owner notes about seeds, versions, or external data provenance.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reproducibility_notes: Option<String>,
+    /// Informational list of external resources the prepare phase may use.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub external_data: Vec<ChallengePrepareExternalDataSpec>,
+    /// Future cache metadata. The v0.2.5 MVP does not cache prepare output.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_key_hint: Option<String>,
+}
+
+/// Informational external data metadata for challenge-owned prepare commands.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChallengePrepareExternalDataSpec {
+    pub url: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub digest: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
 }
 
 /// Challenge-owned list of scorer-controlled solution invocations.
@@ -191,7 +223,7 @@ pub struct ChallengeRunInputFile {
 pub struct DatasetsSpec {
     /// Directory containing data that agents may inspect and use for validation.
     pub public_dir: String,
-    /// Directory containing private benchmark data used only by official runs.
+    /// Directory containing private benchmark data or private prepare config used by official runs.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub private_benchmark_dir: Option<String>,
     /// Visibility policy for public validation case results.

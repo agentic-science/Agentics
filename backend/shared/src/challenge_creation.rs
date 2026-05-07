@@ -195,12 +195,8 @@ async fn validate_public_bundle(
         .benchmark_targets
         .iter()
         .any(|target| target.validation_enabled)
+        && let Some(validation_runs) = spec.execution.validation_runs.as_deref()
     {
-        let validation_runs = spec.execution.validation_runs.as_deref().ok_or_else(|| {
-            AppError::Validation(
-                "execution.validation_runs is required when validation is enabled".to_string(),
-            )
-        })?;
         assert_public_file_exists(
             bundle_dir.join(validation_runs),
             "execution.validation_runs",

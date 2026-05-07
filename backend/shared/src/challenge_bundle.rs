@@ -10,8 +10,9 @@ use std::path::Path;
 
 use crate::error::{AppError, Result};
 use crate::models::challenge::{
-    BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengeRunInputFile,
-    ChallengeRunManifest, ChallengeRunSpec, DockerPlatform, ResourceProfileSpec,
+    BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengePrepareSpec,
+    ChallengeRunInputFile, ChallengeRunManifest, ChallengeRunSpec, DockerPlatform,
+    ResourceProfileSpec,
 };
 use crate::zip_project::{ZIP_PROJECT_MANIFEST_FILE, ZIP_PROJECT_PROTOCOL};
 
@@ -31,9 +32,21 @@ pub async fn read_challenge_run_manifest(
     manifest_path: &str,
 ) -> Result<ChallengeRunManifest> {
     require_safe_relative_path(manifest_path, "execution run manifest")?;
-    let raw = tokio::fs::read_to_string(bundle_dir.join(manifest_path)).await?;
+    read_challenge_run_manifest_file(
+        &bundle_dir.join(manifest_path),
+        &format!("run manifest {manifest_path}"),
+    )
+    .await
+}
+
+/// Read and validate a challenge-owned run manifest from an already resolved path.
+pub async fn read_challenge_run_manifest_file(
+    manifest_file: &Path,
+    label: &str,
+) -> Result<ChallengeRunManifest> {
+    let raw = tokio::fs::read_to_string(manifest_file).await?;
     let manifest: ChallengeRunManifest = serde_json::from_str(&raw)
-        .map_err(|e| AppError::Validation(format!("invalid run manifest {manifest_path}: {e}")))?;
+        .map_err(|e| AppError::Validation(format!("invalid {label}: {e}")))?;
     validate_challenge_run_manifest(&manifest)?;
     Ok(manifest)
 }
@@ -50,19 +63,30 @@ pub async fn validate_challenge_bundle(bundle_dir: &Path) -> Result<()> {
     if let Some(script_path) = declared_scorer_script(&spec.scorer.command) {
         assert_path_type(&bundle_dir.join(script_path), "file", "scorer script").await?;
     }
+    for (label, prepare) in [
+        (
+            "validation prepare script",
+            spec.execution.validation_prepare.as_ref(),
+        ),
+        (
+            "official prepare script",
+            spec.execution.official_prepare.as_ref(),
+        ),
+    ] {
+        if let Some(prepare) = prepare
+            && let Some(script_path) = declared_scorer_script(&prepare.command)
+        {
+            assert_path_type(&bundle_dir.join(script_path), "file", label).await?;
+        }
+    }
     assert_path_type(&public_dir, "directory", "public data dir").await?;
 
     if spec
         .benchmark_targets
         .iter()
         .any(|target| target.validation_enabled)
+        && let Some(validation_runs) = spec.execution.validation_runs.as_deref()
     {
-        let validation_runs = spec.execution.validation_runs.as_deref().ok_or_else(|| {
-            AppError::Validation(
-                "execution.validation_runs is required when any benchmark target has validation_enabled true"
-                    .to_string(),
-            )
-        })?;
         assert_path_type(
             &bundle_dir.join(validation_runs),
             "file",
@@ -73,29 +97,25 @@ pub async fn validate_challenge_bundle(bundle_dir: &Path) -> Result<()> {
         validate_challenge_run_manifest_sources(bundle_dir, &manifest).await?;
     }
 
-    if spec.datasets.private_benchmark_enabled
-        && let Some(ref private_benchmark_dir) = spec.datasets.private_benchmark_dir
-    {
-        assert_path_type(
-            &bundle_dir.join(private_benchmark_dir),
-            "directory",
-            "private benchmark data dir",
-        )
-        .await?;
-        let official_runs = spec.execution.official_runs.as_deref().ok_or_else(|| {
-            AppError::Validation(
-                "execution.official_runs is required when private_benchmark_enabled is true"
-                    .to_string(),
+    if spec.datasets.private_benchmark_enabled {
+        if let Some(ref private_benchmark_dir) = spec.datasets.private_benchmark_dir {
+            assert_path_type(
+                &bundle_dir.join(private_benchmark_dir),
+                "directory",
+                "private benchmark data dir",
             )
-        })?;
-        assert_path_type(
-            &bundle_dir.join(official_runs),
-            "file",
-            "official run manifest",
-        )
-        .await?;
-        let manifest = read_challenge_run_manifest(bundle_dir, official_runs).await?;
-        validate_challenge_run_manifest_sources(bundle_dir, &manifest).await?;
+            .await?;
+        }
+        if let Some(official_runs) = spec.execution.official_runs.as_deref() {
+            assert_path_type(
+                &bundle_dir.join(official_runs),
+                "file",
+                "official run manifest",
+            )
+            .await?;
+            let manifest = read_challenge_run_manifest(bundle_dir, official_runs).await?;
+            validate_challenge_run_manifest_sources(bundle_dir, &manifest).await?;
+        }
     }
 
     Ok(())
@@ -165,21 +185,27 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
     }
 
     // Challenge authors may stage private benchmark data before enabling
-    // official runs. The directory is required only when the private benchmark
-    // switch is on, but any declared path must still be safe.
+    // official runs. Static official run manifests need a private directory,
+    // while prepare-generated official runs may only need private seeds.
     match (
         spec.datasets.private_benchmark_enabled,
         spec.datasets.private_benchmark_dir.as_deref(),
+        spec.execution.official_runs.is_some(),
     ) {
-        (true, Some(path)) => require_safe_relative_path(path, "datasets.private_benchmark_dir")?,
-        (true, None) => {
+        (true, Some(path), _) => {
+            require_safe_relative_path(path, "datasets.private_benchmark_dir")?
+        }
+        (true, None, true) => {
             return Err(AppError::Validation(
-                "datasets.private_benchmark_dir is required when private_benchmark_enabled is true"
+                "datasets.private_benchmark_dir is required when private_benchmark_enabled uses static official_runs"
                     .to_string(),
             ));
         }
-        (false, Some(path)) => require_safe_relative_path(path, "datasets.private_benchmark_dir")?,
-        (false, None) => {}
+        (true, None, false) => {}
+        (false, Some(path), _) => {
+            require_safe_relative_path(path, "datasets.private_benchmark_dir")?
+        }
+        (false, None, _) => {}
     }
 
     validate_metric_schema(spec)?;
@@ -199,6 +225,22 @@ fn validate_scorer_command(command: &[String]) -> Result<()> {
         if part.contains('\0') {
             return Err(AppError::Validation(format!(
                 "scorer.command[{index}] must not contain NUL bytes"
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_prepare_command(command: &[String], field: &str) -> Result<()> {
+    if command.is_empty() {
+        return Err(AppError::Validation(format!("{field} must not be empty")));
+    }
+    for (index, part) in command.iter().enumerate() {
+        require_non_empty(part, &format!("{field}[{index}]"))?;
+        if part.contains('\0') {
+            return Err(AppError::Validation(format!(
+                "{field}[{index}] must not contain NUL bytes"
             )));
         }
     }
@@ -317,25 +359,80 @@ fn validate_execution(spec: &ChallengeBundleSpec) -> Result<()> {
     if let Some(path) = &spec.execution.validation_runs {
         require_safe_relative_path(path, "execution.validation_runs")?;
     }
+    if let Some(prepare) = &spec.execution.validation_prepare {
+        validate_prepare_spec(prepare, "execution.validation_prepare")?;
+    }
     if let Some(path) = &spec.execution.official_runs {
         require_safe_relative_path(path, "execution.official_runs")?;
+    }
+    if let Some(prepare) = &spec.execution.official_prepare {
+        validate_prepare_spec(prepare, "execution.official_prepare")?;
+    }
+    if spec.execution.validation_runs.is_some() && spec.execution.validation_prepare.is_some() {
+        return Err(AppError::Validation(
+            "execution must not declare both validation_runs and validation_prepare".to_string(),
+        ));
+    }
+    if spec.execution.official_runs.is_some() && spec.execution.official_prepare.is_some() {
+        return Err(AppError::Validation(
+            "execution must not declare both official_runs and official_prepare".to_string(),
+        ));
     }
     if spec
         .benchmark_targets
         .iter()
         .any(|target| target.validation_enabled)
         && spec.execution.validation_runs.is_none()
+        && spec.execution.validation_prepare.is_none()
     {
         return Err(AppError::Validation(
-            "execution.validation_runs is required when any benchmark target has validation_enabled true"
+            "execution.validation_runs or execution.validation_prepare is required when any benchmark target has validation_enabled true"
                 .to_string(),
         ));
     }
-    if spec.datasets.private_benchmark_enabled && spec.execution.official_runs.is_none() {
+    if spec.datasets.private_benchmark_enabled
+        && spec.execution.official_runs.is_none()
+        && spec.execution.official_prepare.is_none()
+    {
         return Err(AppError::Validation(
-            "execution.official_runs is required when private_benchmark_enabled is true"
+            "execution.official_runs or execution.official_prepare is required when private_benchmark_enabled is true"
                 .to_string(),
         ));
+    }
+
+    Ok(())
+}
+
+fn validate_prepare_spec(prepare: &ChallengePrepareSpec, field: &str) -> Result<()> {
+    validate_prepare_command(&prepare.command, &format!("{field}.command"))?;
+    require_safe_relative_path(
+        &prepare.result_runs_file,
+        &format!("{field}.result_runs_file"),
+    )?;
+    if let Some(notes) = &prepare.reproducibility_notes {
+        require_non_empty(notes, &format!("{field}.reproducibility_notes"))?;
+    }
+    for (index, data) in prepare.external_data.iter().enumerate() {
+        let data_field = format!("{field}.external_data[{index}]");
+        require_non_empty(&data.url, &format!("{data_field}.url"))?;
+        if data
+            .url
+            .chars()
+            .any(|c| c.is_whitespace() || c.is_control())
+        {
+            return Err(AppError::Validation(format!(
+                "{data_field}.url must not contain whitespace or control characters"
+            )));
+        }
+        if let Some(digest) = &data.digest {
+            require_non_empty(digest, &format!("{data_field}.digest"))?;
+        }
+        if let Some(version) = &data.version {
+            require_non_empty(version, &format!("{data_field}.version"))?;
+        }
+    }
+    if let Some(cache_key_hint) = &prepare.cache_key_hint {
+        require_non_empty(cache_key_hint, &format!("{field}.cache_key_hint"))?;
     }
 
     Ok(())
@@ -635,8 +732,8 @@ mod tests {
 
     use crate::models::challenge::{
         BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengeExecutionSpec,
-        CommunitySpec, DatasetsSpec, DockerPlatform, MetricDirection, MetricSchemaSpec,
-        MetricVisibility, ResourceProfileSpec, ScorerSpec, SolutionSpec,
+        ChallengePrepareSpec, CommunitySpec, DatasetsSpec, DockerPlatform, MetricDirection,
+        MetricSchemaSpec, MetricVisibility, ResourceProfileSpec, ScorerSpec, SolutionSpec,
     };
     use crate::models::evaluation::ScoreVisibility;
     use crate::zip_project::ZipProjectNetworkAccess;
@@ -683,7 +780,9 @@ mod tests {
             }],
             execution: ChallengeExecutionSpec {
                 validation_runs: Some("public/runs.json".to_string()),
+                validation_prepare: None,
                 official_runs: Some("private-benchmark/runs.json".to_string()),
+                official_prepare: None,
             },
             datasets: DatasetsSpec {
                 public_dir: "public".to_string(),
@@ -755,6 +854,44 @@ mod tests {
         let error = validate_challenge_bundle_spec(&spec)
             .expect_err("target validation should require run manifest");
         assert!(error.to_string().contains("execution.validation_runs"));
+    }
+
+    #[test]
+    fn validation_prepare_satisfies_validation_enabled_target() {
+        let mut spec = base_spec();
+        spec.execution.validation_runs = None;
+        spec.execution.validation_prepare = Some(prepare_spec());
+
+        assert!(validate_challenge_bundle_spec(&spec).is_ok());
+    }
+
+    #[test]
+    fn official_prepare_satisfies_private_benchmark_execution() {
+        let mut spec = base_spec();
+        spec.execution.official_runs = None;
+        spec.execution.official_prepare = Some(prepare_spec());
+
+        assert!(validate_challenge_bundle_spec(&spec).is_ok());
+    }
+
+    #[test]
+    fn official_prepare_may_omit_private_benchmark_directory() {
+        let mut spec = base_spec();
+        spec.execution.official_runs = None;
+        spec.execution.official_prepare = Some(prepare_spec());
+        spec.datasets.private_benchmark_dir = None;
+
+        assert!(validate_challenge_bundle_spec(&spec).is_ok());
+    }
+
+    #[test]
+    fn prepare_and_static_runs_are_mutually_exclusive_per_mode() {
+        let mut spec = base_spec();
+        spec.execution.official_prepare = Some(prepare_spec());
+
+        let error = validate_challenge_bundle_spec(&spec)
+            .expect_err("official prepare and official runs should conflict");
+        assert!(error.to_string().contains("official_runs"));
     }
 
     #[test]
@@ -850,6 +987,17 @@ mod tests {
             .expect("failed to write statement");
         std::fs::write(root.join("scorer/run.py"), "print('ok')\n")
             .expect("failed to write scorer");
+    }
+
+    fn prepare_spec() -> ChallengePrepareSpec {
+        ChallengePrepareSpec {
+            command: vec!["python".to_string(), "scorer/prepare.py".to_string()],
+            result_runs_file: "generated/runs.json".to_string(),
+            network_access: ZipProjectNetworkAccess::Disabled,
+            reproducibility_notes: Some("Generated from deterministic private seeds.".to_string()),
+            external_data: Vec::new(),
+            cache_key_hint: None,
+        }
     }
 
     #[tokio::test]

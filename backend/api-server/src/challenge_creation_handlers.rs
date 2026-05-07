@@ -718,13 +718,16 @@ fn validate_private_assets_for_publish(
         }
     }
 
+    let uses_static_private_benchmark = spec.datasets.private_benchmark_enabled
+        && spec.execution.official_runs.is_some()
+        && spec.execution.official_prepare.is_none();
     let private_benchmark_uploaded = draft
         .private_assets
         .iter()
         .any(|asset| asset.kind == ChallengePrivateAssetKind::PrivateBenchmarkData);
-    if spec.datasets.private_benchmark_enabled && !private_benchmark_uploaded {
+    if uses_static_private_benchmark && !private_benchmark_uploaded {
         return Err(AppError::BadRequest(
-            "private_benchmark_enabled challenges must upload a private_benchmark_data asset"
+            "static official_runs challenges must upload a private_benchmark_data asset"
                 .to_string(),
         ));
     }

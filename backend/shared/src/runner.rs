@@ -24,8 +24,8 @@ use tokio::time::timeout;
 use crate::config::Config;
 use crate::error::{AppError, Result};
 use crate::models::challenge::{
-    ChallengeBundleSpec, ChallengeRunInputFile, ChallengeRunInterface, ChallengeRunManifest,
-    ChallengeRunSpec, DockerPlatform, MetricSchemaSpec, ResourceProfileSpec,
+    ChallengeBundleSpec, ChallengePrepareSpec, ChallengeRunInputFile, ChallengeRunInterface,
+    ChallengeRunManifest, ChallengeRunSpec, DockerPlatform, MetricSchemaSpec, ResourceProfileSpec,
 };
 use crate::models::evaluation::{EvaluationJobPayload, ScorerRunResult, ScoringMode};
 use crate::storage::Storage;
@@ -79,7 +79,7 @@ struct SolutionRunRequest<'a> {
     docker_platform: DockerPlatform,
     manifest: &'a ZipProjectManifest,
     run_manifest: &'a ChallengeRunManifest,
-    bundle_dir: &'a Path,
+    input_source_root: &'a Path,
     build_root: &'a Path,
     runs_root: &'a Path,
 }
@@ -89,10 +89,40 @@ struct ScorerRequest<'a> {
     spec: &'a ChallengeBundleSpec,
     profile: &'a ResourceProfileSpec,
     docker_platform: DockerPlatform,
-    run_manifest_path: &'a str,
+    run_manifest_container_path: &'a str,
     bundle_dir: &'a Path,
+    prepared_root: Option<&'a Path>,
     runs_root: &'a Path,
     scorer_output_root: &'a Path,
+}
+
+struct ResolvedRunPlan {
+    manifest: ChallengeRunManifest,
+    input_source_root: PathBuf,
+    run_manifest_container_path: String,
+    prepared_root: Option<PathBuf>,
+}
+
+struct RunPlanRequest<'a> {
+    runner: RunnerContext<'a>,
+    spec: &'a ChallengeBundleSpec,
+    profile: &'a ResourceProfileSpec,
+    docker_platform: DockerPlatform,
+    benchmark_target_id: &'a str,
+    eval_type: ScoringMode,
+    bundle_dir: &'a Path,
+    prepared_root: &'a Path,
+}
+
+struct PrepareRequest<'a> {
+    runner: RunnerContext<'a>,
+    profile: &'a ResourceProfileSpec,
+    docker_platform: DockerPlatform,
+    benchmark_target_id: &'a str,
+    eval_type: ScoringMode,
+    prepare: &'a ChallengePrepareSpec,
+    bundle_dir: &'a Path,
+    prepared_root: &'a Path,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -125,6 +155,7 @@ pub async fn execute_evaluation_job(
         .join("source");
     let build_root = working_root.join("build-workspace");
     let runs_root = working_root.join("solution-runs");
+    let prepared_root = working_root.join("prepared");
     let scorer_output_root = working_root.join("scorer-output");
     let log_path_rel = format!("eval-artifacts/{job_id}/runner.log");
 
@@ -167,18 +198,28 @@ pub async fn execute_evaluation_job(
         )
         .await?;
 
-        let run_manifest_path = run_manifest_path(&spec, eval_type)?;
-        let run_manifest =
-            crate::challenge_bundle::read_challenge_run_manifest(bundle_dir, run_manifest_path)
-                .await?;
+        let run_plan = resolve_run_plan(
+            RunPlanRequest {
+                runner: runner_context,
+                spec: &spec,
+                profile,
+                docker_platform: target.docker_platform,
+                benchmark_target_id: target.id.as_str(),
+                eval_type,
+                bundle_dir,
+                prepared_root: &prepared_root,
+            },
+            &mut logs,
+        )
+        .await?;
         run_solution_invocations(
             runner_context,
             SolutionRunRequest {
                 profile,
                 docker_platform: target.docker_platform,
                 manifest: &manifest,
-                run_manifest: &run_manifest,
-                bundle_dir,
+                run_manifest: &run_plan.manifest,
+                input_source_root: &run_plan.input_source_root,
                 build_root: &build_root,
                 runs_root: &runs_root,
             },
@@ -193,8 +234,9 @@ pub async fn execute_evaluation_job(
                 spec: &spec,
                 profile,
                 docker_platform: target.docker_platform,
-                run_manifest_path,
+                run_manifest_container_path: &run_plan.run_manifest_container_path,
                 bundle_dir,
+                prepared_root: run_plan.prepared_root.as_deref(),
                 runs_root: &runs_root,
                 scorer_output_root: &scorer_output_root,
             },
@@ -300,7 +342,7 @@ async fn run_solution_invocations(
         tokio::fs::create_dir_all(&input_dir).await?;
         tokio::fs::create_dir_all(&output_dir).await?;
         tokio::fs::create_dir_all(&tmp_dir).await?;
-        materialize_run_io(run, request.bundle_dir, &io_root, &input_dir).await?;
+        materialize_run_io(run, request.input_source_root, &io_root, &input_dir).await?;
 
         let limits = effective_phase_limits(request.profile, &run_phase);
         let outcome = run_container(
@@ -363,10 +405,18 @@ async fn run_scorer(
         "--mode".to_string(),
         request.eval_type.scorer_mode_arg().to_string(),
         "--runs-file".to_string(),
-        format!("/challenge/{}", request.run_manifest_path),
+        request.run_manifest_container_path.to_string(),
     ]);
 
     let limits = scorer_limits(request.profile);
+    let mut mounts = vec![
+        bind_mount(request.bundle_dir, "/challenge", true),
+        bind_mount(request.runs_root, "/solution-runs", true),
+        bind_mount(request.scorer_output_root, "/output", false),
+    ];
+    if let Some(prepared_root) = request.prepared_root {
+        mounts.push(bind_mount(prepared_root, "/prepared", true));
+    }
     let outcome = run_container(
         runner.docker,
         ContainerRequest {
@@ -374,11 +424,7 @@ async fn run_scorer(
             image: request.profile.scorer_image.clone(),
             cmd,
             env: vec!["AGENTICS_PHASE=scorer".to_string()],
-            mounts: vec![
-                bind_mount(request.bundle_dir, "/challenge", true),
-                bind_mount(request.runs_root, "/solution-runs", true),
-                bind_mount(request.scorer_output_root, "/output", false),
-            ],
+            mounts,
             working_dir: "/challenge".to_string(),
             docker_platform: request.docker_platform,
             limits,
@@ -746,14 +792,143 @@ pub async fn pre_pull_image(
     Ok(())
 }
 
-fn run_manifest_path(spec: &ChallengeBundleSpec, eval_type: ScoringMode) -> Result<&str> {
+enum RunManifestSource<'a> {
+    Static(&'a str),
+    Prepared(&'a ChallengePrepareSpec),
+}
+
+async fn resolve_run_plan(
+    request: RunPlanRequest<'_>,
+    logs: &mut String,
+) -> Result<ResolvedRunPlan> {
+    match run_manifest_source(request.spec, request.eval_type)? {
+        RunManifestSource::Static(manifest_path) => {
+            let manifest = crate::challenge_bundle::read_challenge_run_manifest(
+                request.bundle_dir,
+                manifest_path,
+            )
+            .await?;
+            Ok(ResolvedRunPlan {
+                manifest,
+                input_source_root: request.bundle_dir.to_path_buf(),
+                run_manifest_container_path: format!("/challenge/{manifest_path}"),
+                prepared_root: None,
+            })
+        }
+        RunManifestSource::Prepared(prepare) => {
+            run_prepare_phase(
+                PrepareRequest {
+                    runner: request.runner,
+                    profile: request.profile,
+                    docker_platform: request.docker_platform,
+                    benchmark_target_id: request.benchmark_target_id,
+                    eval_type: request.eval_type,
+                    prepare,
+                    bundle_dir: request.bundle_dir,
+                    prepared_root: request.prepared_root,
+                },
+                logs,
+            )
+            .await?;
+            let manifest_path = request.prepared_root.join(&prepare.result_runs_file);
+            let manifest = crate::challenge_bundle::read_challenge_run_manifest_file(
+                &manifest_path,
+                &format!("prepared run manifest {}", manifest_path.display()),
+            )
+            .await?;
+            crate::challenge_bundle::validate_challenge_run_manifest_sources(
+                request.prepared_root,
+                &manifest,
+            )
+            .await?;
+            Ok(ResolvedRunPlan {
+                manifest,
+                input_source_root: request.prepared_root.to_path_buf(),
+                run_manifest_container_path: format!("/prepared/{}", prepare.result_runs_file),
+                prepared_root: Some(request.prepared_root.to_path_buf()),
+            })
+        }
+    }
+}
+
+async fn run_prepare_phase(request: PrepareRequest<'_>, logs: &mut String) -> Result<()> {
+    tokio::fs::create_dir_all(request.prepared_root).await?;
+    let mut cmd = request.prepare.command.clone();
+    cmd.extend([
+        "--challenge-dir".to_string(),
+        "/challenge".to_string(),
+        "--prepared-dir".to_string(),
+        "/prepared".to_string(),
+        "--mode".to_string(),
+        request.eval_type.scorer_mode_arg().to_string(),
+        "--benchmark-target".to_string(),
+        request.benchmark_target_id.to_string(),
+        "--runs-file".to_string(),
+        format!("/prepared/{}", request.prepare.result_runs_file),
+    ]);
+
+    let limits = prepare_limits(request.profile, request.prepare);
+    let outcome = run_container(
+        request.runner.docker,
+        ContainerRequest {
+            name: container_name(
+                request.runner.job_id,
+                &format!("prepare-{}", request.eval_type.scorer_mode_arg()),
+            ),
+            image: request.profile.scorer_image.clone(),
+            cmd,
+            env: vec![
+                "AGENTICS_PHASE=prepare".to_string(),
+                format!("AGENTICS_MODE={}", request.eval_type.scorer_mode_arg()),
+            ],
+            mounts: vec![
+                bind_mount(request.bundle_dir, "/challenge", true),
+                bind_mount(request.prepared_root, "/prepared", false),
+            ],
+            working_dir: "/challenge".to_string(),
+            docker_platform: request.docker_platform,
+            limits: limits.clone(),
+        },
+    )
+    .await?;
+    append_named_logs(
+        logs,
+        &format!("prepare-{}", request.eval_type.scorer_mode_arg()),
+        &outcome.logs,
+    );
+    ensure_prepare_succeeded(&outcome)?;
+    ensure_prepare_disk_limit(request.prepared_root, limits.disk_limit_mb).await?;
+
+    Ok(())
+}
+
+fn run_manifest_source(
+    spec: &ChallengeBundleSpec,
+    eval_type: ScoringMode,
+) -> Result<RunManifestSource<'_>> {
     match eval_type {
-        ScoringMode::Validation => spec.execution.validation_runs.as_deref().ok_or_else(|| {
-            AppError::Runner("challenge does not declare validation runs".to_string())
-        }),
-        ScoringMode::Official => spec.execution.official_runs.as_deref().ok_or_else(|| {
-            AppError::Runner("challenge does not declare official runs".to_string())
-        }),
+        ScoringMode::Validation => {
+            if let Some(path) = spec.execution.validation_runs.as_deref() {
+                Ok(RunManifestSource::Static(path))
+            } else if let Some(prepare) = spec.execution.validation_prepare.as_ref() {
+                Ok(RunManifestSource::Prepared(prepare))
+            } else {
+                Err(AppError::Runner(
+                    "challenge does not declare validation runs or validation prepare".to_string(),
+                ))
+            }
+        }
+        ScoringMode::Official => {
+            if let Some(path) = spec.execution.official_runs.as_deref() {
+                Ok(RunManifestSource::Static(path))
+            } else if let Some(prepare) = spec.execution.official_prepare.as_ref() {
+                Ok(RunManifestSource::Prepared(prepare))
+            } else {
+                Err(AppError::Runner(
+                    "challenge does not declare official runs or official prepare".to_string(),
+                ))
+            }
+        }
     }
 }
 
@@ -787,6 +962,20 @@ fn scorer_limits(profile: &ResourceProfileSpec) -> ZipProjectPhaseLimits {
     }
 }
 
+fn prepare_limits(
+    profile: &ResourceProfileSpec,
+    prepare: &ChallengePrepareSpec,
+) -> ZipProjectPhaseLimits {
+    ZipProjectPhaseLimits {
+        timeout_sec: profile.timeout_sec,
+        memory_limit_mb: profile.memory_limit_mb,
+        cpu_limit_millis: profile.cpu_limit_millis,
+        disk_limit_mb: profile.disk_limit_mb,
+        network_access: prepare.network_access,
+        log_limit_bytes: 1024 * 1024,
+    }
+}
+
 fn bind_mount(path: &Path, target: &str, read_only: bool) -> Mount {
     Mount {
         target: Some(target.to_string()),
@@ -799,7 +988,7 @@ fn bind_mount(path: &Path, target: &str, read_only: bool) -> Mount {
 
 async fn materialize_run_io(
     run: &ChallengeRunSpec,
-    bundle_dir: &Path,
+    input_source_root: &Path,
     io_root: &Path,
     input_dir: &Path,
 ) -> Result<()> {
@@ -811,13 +1000,13 @@ async fn materialize_run_io(
     };
     tokio::fs::write(io_root.join("stdin.txt"), stdin).await?;
     for input in &run.input_files {
-        write_run_input_file(bundle_dir, input_dir, input).await?;
+        write_run_input_file(input_source_root, input_dir, input).await?;
     }
     Ok(())
 }
 
 async fn write_run_input_file(
-    bundle_dir: &Path,
+    input_source_root: &Path,
     input_dir: &Path,
     input: &ChallengeRunInputFile,
 ) -> Result<()> {
@@ -826,7 +1015,7 @@ async fn write_run_input_file(
         tokio::fs::create_dir_all(parent).await?;
     }
     if let Some(source_path) = &input.source_path {
-        tokio::fs::copy(bundle_dir.join(source_path), path)
+        tokio::fs::copy(input_source_root.join(source_path), path)
             .await
             .map_err(|e| {
                 AppError::Runner(format!("copy run input source `{source_path}` failed: {e}"))
@@ -912,6 +1101,22 @@ fn ensure_container_succeeded(
     Ok(())
 }
 
+fn ensure_prepare_succeeded(outcome: &ContainerOutcome) -> Result<()> {
+    if outcome.timed_out {
+        return Err(AppError::Runner(append_log_excerpt(
+            "prepare phase timed out",
+            &outcome.logs,
+        )));
+    }
+    if outcome.exit_code != 0 {
+        return Err(AppError::Runner(append_log_excerpt(
+            &format!("prepare phase exited with status {}", outcome.exit_code),
+            &outcome.logs,
+        )));
+    }
+    Ok(())
+}
+
 fn append_log_excerpt(message: &str, logs: &str) -> String {
     let trimmed = logs.trim();
     if trimmed.is_empty() {
@@ -960,6 +1165,22 @@ async fn ensure_disk_limit(
             format!("phase exceeded disk limit: {bytes} > {limit_bytes} bytes"),
             None,
         ));
+    }
+    Ok(())
+}
+
+async fn ensure_prepare_disk_limit(path: &Path, disk_limit_mb: u64) -> Result<()> {
+    let path = path.to_path_buf();
+    let bytes = tokio::task::spawn_blocking(move || directory_size(&path))
+        .await
+        .map_err(|e| AppError::Internal(format!("prepare disk usage task failed: {e}")))??;
+    let limit_bytes = disk_limit_mb
+        .checked_mul(1024 * 1024)
+        .ok_or_else(|| AppError::Runner("prepare disk limit overflow".to_string()))?;
+    if bytes > limit_bytes {
+        return Err(AppError::Runner(format!(
+            "prepare phase exceeded disk limit: {bytes} > {limit_bytes} bytes"
+        )));
     }
     Ok(())
 }
