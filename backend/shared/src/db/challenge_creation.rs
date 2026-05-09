@@ -8,16 +8,8 @@ use crate::error::{AppError, Result};
 use crate::models::challenge_creation::{
     ChallengeCreationManifest, ChallengeCreationRequestKind, ChallengeDraftResponse,
     ChallengeDraftStatus, ChallengeDraftValidationRecordResponse, ChallengeDraftValidationStatus,
-    ChallengePrivateAssetKind, ChallengePrivateAssetResponse, GithubIdentityResponse,
+    ChallengePrivateAssetKind, ChallengePrivateAssetResponse,
 };
-
-/// Input for linking an agent to a manually verified GitHub account.
-#[derive(Debug, Clone)]
-pub struct LinkGithubIdentityInput {
-    pub agent_id: String,
-    pub github_user_id: i64,
-    pub github_login: String,
-}
 
 /// Input for inserting one GitHub PR-backed challenge draft.
 #[derive(Debug, Clone)]
@@ -59,63 +51,6 @@ pub struct CreateChallengeDraftAuditEventInput {
     pub action: String,
     pub message: String,
     pub metadata: Value,
-}
-
-/// Persist a GitHub identity link on an existing agent.
-pub async fn link_agent_github_identity(
-    pool: &PgPool,
-    input: &LinkGithubIdentityInput,
-) -> Result<GithubIdentityResponse> {
-    let row = sqlx::query(
-        r#"
-        UPDATE agents
-        SET github_user_id = $2,
-            github_login = $3
-        WHERE id = $1
-        RETURNING id, github_user_id, github_login
-        "#,
-    )
-    .bind(&input.agent_id)
-    .bind(input.github_user_id)
-    .bind(input.github_login.trim())
-    .fetch_optional(pool)
-    .await?;
-
-    let row = row.ok_or(AppError::NotFound)?;
-    Ok(GithubIdentityResponse {
-        agent_id: row.try_get("id")?,
-        github_user_id: row.try_get("github_user_id")?,
-        github_login: row.try_get("github_login")?,
-    })
-}
-
-/// Fetch a linked GitHub identity for one agent.
-pub async fn get_agent_github_identity(
-    pool: &PgPool,
-    agent_id: &str,
-) -> Result<Option<GithubIdentityResponse>> {
-    let row = sqlx::query(
-        r#"
-        SELECT id, github_user_id, github_login
-        FROM agents
-        WHERE id = $1
-          AND github_user_id IS NOT NULL
-        "#,
-    )
-    .bind(agent_id)
-    .fetch_optional(pool)
-    .await?;
-
-    row.map(|row| {
-        Ok(GithubIdentityResponse {
-            agent_id: row.try_get("id")?,
-            github_user_id: row.try_get("github_user_id")?,
-            github_login: row
-                .try_get::<Option<String>, _>("github_login")?
-                .unwrap_or_default(),
-        })
-    })
-    .transpose()
 }
 
 /// Insert a new challenge draft bound to a GitHub PR.

@@ -7,8 +7,7 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 use shared::models::challenge::{BenchmarkTargetSpec, ChallengeDetailResponse};
 use shared::models::challenge_creation::{
     ChallengeCreationManifest, ChallengePrivateAssetKind, CreateChallengeDraftRequest,
-    LinkGithubIdentityRequest, ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest,
-    ValidateChallengeDraftRequest,
+    ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest, ValidateChallengeDraftRequest,
 };
 use shared::models::request::{CreateSolutionSubmissionRequest, RegisterAgentRequest};
 
@@ -71,22 +70,6 @@ pub fn set_config(
     };
     store.save(&config)?;
     output::render_config_set(updated_key, settings, output_format)
-}
-
-pub async fn link_github_identity(
-    github_user_id: i64,
-    github_login: String,
-    output_format: cli::OutputFormat,
-    settings: &ResolvedSettings,
-) -> Result<String> {
-    let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-    let response = client
-        .link_github_identity(&LinkGithubIdentityRequest {
-            github_user_id,
-            github_login,
-        })
-        .await?;
-    output::render_github_identity(&response, output_format)
 }
 
 pub async fn challenge_draft(

@@ -1,5 +1,6 @@
 //! Shared API model types used by backend crates and mirrored by the frontend schemas.
 
+pub mod auth;
 pub mod challenge;
 pub mod challenge_creation;
 pub mod evaluation;

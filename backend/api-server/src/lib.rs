@@ -9,6 +9,7 @@
     )
 )]
 
+pub mod auth_handlers;
 pub mod challenge_creation_handlers;
 pub mod extractors;
 pub mod handlers;

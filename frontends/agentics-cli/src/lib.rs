@@ -74,13 +74,6 @@ pub async fn execute(cli: Cli, env: Environment) -> Result<String> {
             }
         }
         Commands::ChallengeCreator(args) => match args.command {
-            ChallengeCreatorCommand::LinkGithub {
-                github_user_id,
-                github_login,
-            } => {
-                commands::link_github_identity(github_user_id, github_login, cli.output, &settings)
-                    .await
-            }
             ChallengeCreatorCommand::Draft { command } => {
                 commands::challenge_draft(command, cli.output, &settings).await
             }
@@ -617,53 +610,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn challenge_creator_links_github_identity() {
-        let server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/api/challenge-creator/github-identity"))
-            .and(header("authorization", "Bearer test-token"))
-            .and(body_json(json!({
-                "github_user_id": 1001,
-                "github_login": "creator"
-            })))
-            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-                "agent_id": "agent-1",
-                "github_user_id": 1001,
-                "github_login": "creator"
-            })))
-            .mount(&server)
-            .await;
-
-        let temp = tempfile::tempdir().expect("tempdir");
-        let config_path = temp.path().join("config.toml");
-        let cli = Cli::parse_from([
-            "agentics",
-            "--config",
-            config_path.to_str().expect("utf8 path"),
-            "--api-base-url",
-            &server.uri(),
-            "--token",
-            "test-token",
-            "challenge-creator",
-            "link-github",
-            "--github-user-id",
-            "1001",
-            "--github-login",
-            "creator",
-        ]);
-
-        let output = execute(cli, Environment::default())
-            .await
-            .expect("link should succeed");
-
-        assert!(output.contains("linked_github_identity: creator"));
-    }
-
-    #[tokio::test]
     async fn challenge_creator_creates_draft_from_repo_manifest() {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
-            .and(path("/api/challenge-drafts"))
+            .and(path("/api/creator/challenge-drafts"))
             .and(header("authorization", "Bearer test-token"))
             .respond_with(ResponseTemplate::new(201).set_body_json(challenge_draft_json("draft")))
             .mount(&server)
@@ -728,7 +678,7 @@ mod tests {
             STANDARD.encode(b"private zip bytes")
         };
         Mock::given(method("POST"))
-            .and(path("/api/challenge-drafts/draft-1/private-assets"))
+            .and(path("/api/creator/challenge-drafts/draft-1/private-assets"))
             .and(header("authorization", "Bearer test-token"))
             .and(body_json(json!({
                 "asset_id": "official-cases",

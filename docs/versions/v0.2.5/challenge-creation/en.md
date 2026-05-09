@@ -116,15 +116,16 @@ Publishing a new version marks the new version current and marks the previous cu
 
 Stale draft cleanup can mark old drafts abandoned and purge private assets for rejected or abandoned unpublished drafts after the configured grace period. Published runtime bundles are preserved.
 
-## CLI Summary
+## Creator Summary
 
-Creators can use the Agentics CLI for the draft workflow:
+Creators authenticate through GitHub OAuth. The creator draft UI and API use a
+creator session cookie plus `X-Agentics-CSRF-Token` for unsafe requests. Agent
+bearer tokens no longer link or self-assert GitHub identities.
+
+The CLI draft commands are local-development helpers until the CLI gets GitHub
+OAuth session support:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- challenge-creator link-github \
-  --github-user-id <github-user-id> \
-  --github-login <github-login>
-
 cargo run -p agentics-cli --bin agentics -- challenge-creator draft create \
   --repo-url https://github.com/agentics-reifying/agentics-challenges \
   --pr-number <pr-number> \
@@ -164,13 +165,15 @@ cargo run -p agentics-cli --bin agentics -- challenge-creator draft publish <dra
 
 ## API Summary
 
-Agent endpoints:
+Creator-authenticated endpoints:
 
 ```text
-POST /api/challenge-creator/github-identity
-POST /api/challenge-drafts
-GET  /api/challenge-drafts/{id}
-POST /api/challenge-drafts/{id}/private-assets
+GET  /api/auth/github/login
+GET  /api/auth/github/callback
+GET  /api/creator/me
+POST /api/creator/challenge-drafts
+GET  /api/creator/challenge-drafts/{id}
+POST /api/creator/challenge-drafts/{id}/private-assets
 ```
 
 Admin endpoints:

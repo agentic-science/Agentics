@@ -11,6 +11,7 @@ mod json;
 pub mod leaderboard;
 pub mod maintenance;
 pub mod pool;
+pub mod sessions;
 pub mod solution_submissions;
 pub mod validation_quotas;
 
@@ -24,5 +25,6 @@ pub use evaluations::*;
 pub use leaderboard::*;
 pub use maintenance::*;
 pub use pool::*;
+pub use sessions::*;
 pub use solution_submissions::*;
 pub use validation_quotas::*;

@@ -1,15 +1,15 @@
 use axum::{
     Json,
     extract::{FromRequest, FromRequestParts, Request},
-    http::{StatusCode, header, request::Parts},
+    http::{Method, StatusCode, header, request::Parts},
 };
 use serde::de::DeserializeOwned;
 
 use shared::auth;
-use shared::db::authenticate_agent_token;
+use shared::db::{authenticate_agent_token, authenticate_creator_session};
 use shared::models::challenge_creation::{
-    CreateChallengeDraftRequest, LinkGithubIdentityRequest, ReviewChallengeDraftRequest,
-    UploadChallengePrivateAssetRequest, ValidateChallengeDraftRequest,
+    CreateChallengeDraftRequest, ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest,
+    ValidateChallengeDraftRequest,
 };
 use shared::models::request::{
     CreateChallengeRequest, CreateChallengeVersionRequest, CreateDiscussionReplyRequest,
@@ -92,6 +92,57 @@ impl FromRequestParts<AppState> for AdminAuth {
     }
 }
 
+/// GitHub OAuth-authenticated challenge creator context from a web session.
+#[derive(Debug, Clone)]
+pub struct CreatorAuth {
+    pub session_id: String,
+    pub agent_id: String,
+    pub github_user_id: i64,
+    pub github_login: String,
+}
+
+impl FromRequestParts<AppState> for CreatorAuth {
+    type Rejection = (StatusCode, axum::Json<shared::models::ErrorResponse>);
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let session_token = cookie_value(
+            parts
+                .headers
+                .get(header::COOKIE)
+                .and_then(|h| h.to_str().ok()),
+            &state.config.web_session_cookie_name,
+        )
+        .ok_or_else(|| unauthorized("需要有效的 creator session"))?;
+
+        let session = authenticate_creator_session(&state.db, &session_token)
+            .await
+            .map_err(|_| unauthorized("creator session 无效或已过期"))?
+            .ok_or_else(|| unauthorized("creator session 无效或已过期"))?;
+
+        if requires_csrf(&parts.method) {
+            let csrf_token = parts
+                .headers
+                .get("x-agentics-csrf-token")
+                .and_then(|h| h.to_str().ok())
+                .ok_or_else(|| forbidden("缺少有效的 CSRF token"))?;
+            let csrf_hash = auth::hash_opaque_token(csrf_token);
+            if csrf_hash != session.csrf_token_hash {
+                return Err(forbidden("缺少有效的 CSRF token"));
+            }
+        }
+
+        Ok(CreatorAuth {
+            session_id: session.session_id,
+            agent_id: session.agent_id,
+            github_user_id: session.github_user_id,
+            github_login: session.github_login,
+        })
+    }
+}
+
 fn unauthorized(message: &str) -> (StatusCode, axum::Json<shared::models::ErrorResponse>) {
     (
         StatusCode::UNAUTHORIZED,
@@ -100,6 +151,32 @@ fn unauthorized(message: &str) -> (StatusCode, axum::Json<shared::models::ErrorR
             message: message.to_string(),
         }),
     )
+}
+
+fn forbidden(message: &str) -> (StatusCode, axum::Json<shared::models::ErrorResponse>) {
+    (
+        StatusCode::FORBIDDEN,
+        axum::Json(shared::models::ErrorResponse {
+            error: "forbidden".to_string(),
+            message: message.to_string(),
+        }),
+    )
+}
+
+fn requires_csrf(method: &Method) -> bool {
+    !(method == Method::GET || method == Method::HEAD || method == Method::OPTIONS)
+}
+
+fn cookie_value(cookie_header: Option<&str>, name: &str) -> Option<String> {
+    let cookie_header = cookie_header?;
+    for pair in cookie_header.split(';') {
+        if let Some((candidate_name, value)) = pair.trim().split_once('=')
+            && candidate_name == name
+        {
+            return Some(value.to_string());
+        }
+    }
+    None
 }
 
 /// Request-body validation hook used after JSON deserialization succeeds.
@@ -153,15 +230,6 @@ fn require_non_empty(value: &str, field: &str) -> Result<(), String> {
 impl ValidateRequest for RegisterAgentRequest {
     fn validate(&self) -> Result<(), String> {
         require_non_empty(&self.name, "name")
-    }
-}
-
-impl ValidateRequest for LinkGithubIdentityRequest {
-    fn validate(&self) -> Result<(), String> {
-        if self.github_user_id <= 0 {
-            return Err("github_user_id must be greater than zero".to_string());
-        }
-        require_non_empty(&self.github_login, "github_login")
     }
 }
 

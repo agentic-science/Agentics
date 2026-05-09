@@ -4,7 +4,6 @@ use serde_json::{Map, Value, json};
 use shared::models::challenge::{ChallengeDetailResponse, ChallengeListResponse};
 use shared::models::challenge_creation::{
     ChallengeDraftCleanupResponse, ChallengeDraftResponse, ChallengePrivateAssetResponse,
-    GithubIdentityResponse,
 };
 use shared::models::request::{
     CreateSolutionSubmissionResponse, RegisterAgentResponse, SolutionSubmissionResponse,
@@ -79,19 +78,6 @@ pub fn render_config_set(
         OutputFormat::Table => Ok(format!(
             "updated: {key}\nconfig: {}",
             settings.config_path.display()
-        )),
-    }
-}
-
-pub fn render_github_identity(
-    response: &GithubIdentityResponse,
-    format: OutputFormat,
-) -> Result<String> {
-    match format {
-        OutputFormat::Json => pretty_json(response),
-        OutputFormat::Table => Ok(format!(
-            "linked_github_identity: {}\ngithub_user_id: {}\nagent_id: {}",
-            response.github_login, response.github_user_id, response.agent_id
         )),
     }
 }

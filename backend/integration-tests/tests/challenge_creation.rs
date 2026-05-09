@@ -6,10 +6,19 @@ use std::path::Path;
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use helpers::{
-    api_url, basic_auth_header, sample_sum_solution, solution_zip_base64, spawn_app_with_config,
-    test_config, zip_project_zip_base64,
+    TestCreatorSession, api_url, basic_auth_header, create_creator_session, sample_sum_solution,
+    solution_zip_base64, spawn_app_with_config, test_config, zip_project_zip_base64,
 };
 use serde_json::json;
+
+fn creator_auth(
+    request: reqwest::RequestBuilder,
+    creator: &TestCreatorSession,
+) -> reqwest::RequestBuilder {
+    request
+        .header("Cookie", &creator.cookie_header)
+        .header("X-Agentics-CSRF-Token", &creator.csrf_token)
+}
 
 #[sqlx::test(migrations = "../migrations")]
 async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgPool) {
@@ -21,66 +30,54 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
     let config = test_config(storage.path(), seeded_challenges.path());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
-    let token = register_agent(&pool, "creator-agent").await;
-    let bearer = format!("Bearer {token}");
+    let creator = create_creator_session(&pool, 1001, "creator").await;
     let admin_auth = basic_auth_header(&config.admin_username, &config.admin_password);
 
-    client
-        .post(api_url(&app, "/api/challenge-creator/github-identity"))
-        .header("Authorization", &bearer)
-        .json(&json!({
-            "github_user_id": 1001,
-            "github_login": "creator"
-        }))
-        .send()
-        .await
-        .expect("identity request")
-        .error_for_status()
-        .expect("identity should link");
-
-    let draft: serde_json::Value = client
-        .post(api_url(&app, "/api/challenge-drafts"))
-        .header("Authorization", &bearer)
-        .json(&json!({
-            "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
-            "pr_number": 7,
-            "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/7",
-            "commit_sha": "0123456789abcdef",
-            "challenge_path": "challenges/sample-sum",
-            "pr_author_github_user_id": 1001,
-            "manifest": manifest_json("new_challenge", "v1", None)
-        }))
-        .send()
-        .await
-        .expect("draft request")
-        .error_for_status()
-        .expect("draft should create")
-        .json()
-        .await
-        .expect("draft json");
+    let draft: serde_json::Value = creator_auth(
+        client.post(api_url(&app, "/api/creator/challenge-drafts")),
+        &creator,
+    )
+    .json(&json!({
+        "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
+        "pr_number": 7,
+        "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/7",
+        "commit_sha": "0123456789abcdef",
+        "challenge_path": "challenges/sample-sum",
+        "pr_author_github_user_id": 1001,
+        "manifest": manifest_json("new_challenge", "v1", None)
+    }))
+    .send()
+    .await
+    .expect("draft request")
+    .error_for_status()
+    .expect("draft should create")
+    .json()
+    .await
+    .expect("draft json");
     assert_eq!(draft["status"], "draft");
     let draft_id = draft["id"].as_str().expect("draft id");
 
-    let asset: serde_json::Value = client
-        .post(api_url(
+    let asset: serde_json::Value = creator_auth(
+        client.post(api_url(
             &app,
-            &format!("/api/challenge-drafts/{draft_id}/private-assets"),
-        ))
-        .header("Authorization", &bearer)
-        .json(&json!({
-            "asset_id": "official-cases",
-            "kind": "private_benchmark_data",
-            "required": false,
-            "asset_base64": private_benchmark_asset_zip_base64()
-        }))
-        .send()
-        .await
-        .expect("asset request")
-        .error_for_status()
-        .expect("asset should upload")
-        .json()
-        .await
-        .expect("asset json");
+            &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+        )),
+        &creator,
+    )
+    .json(&json!({
+        "asset_id": "official-cases",
+        "kind": "private_benchmark_data",
+        "required": false,
+        "asset_base64": private_benchmark_asset_zip_base64()
+    }))
+    .send()
+    .await
+    .expect("asset request")
+    .error_for_status()
+    .expect("asset should upload")
+    .json()
+    .await
+    .expect("asset json");
     assert_eq!(asset["required"], true);
     assert!(asset["size_bytes"].as_i64().expect("asset size") > 2);
 
@@ -171,15 +168,13 @@ async fn new_version_publish_supersedes_previous_current_version(pool: sqlx::PgP
     let config = test_config(storage.path(), seeded_challenges.path());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
-    let token = register_agent(&pool, "creator-agent").await;
-    let bearer = format!("Bearer {token}");
+    let creator = create_creator_session(&pool, 1001, "creator").await;
     let admin_auth = basic_auth_header(&config.admin_username, &config.admin_password);
 
-    link_creator_identity(&client, &app, &bearer).await;
     create_validate_approve_publish_draft(
         &client,
         &app,
-        &bearer,
+        &creator,
         &admin_auth,
         public_repo.path(),
         21,
@@ -191,7 +186,7 @@ async fn new_version_publish_supersedes_previous_current_version(pool: sqlx::PgP
     let published_v2 = create_validate_approve_publish_draft(
         &client,
         &app,
-        &bearer,
+        &creator,
         &admin_auth,
         public_repo.path(),
         22,
@@ -238,17 +233,15 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
     let config = test_config(storage.path(), seeded_challenges.path());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
-    let creator_token = register_agent(&pool, "creator-agent").await;
+    let creator = create_creator_session(&pool, 1001, "creator").await;
     let participant_token = register_agent(&pool, "participant-agent").await;
-    let creator_bearer = format!("Bearer {creator_token}");
     let participant_bearer = format!("Bearer {participant_token}");
     let admin_auth = basic_auth_header(&config.admin_username, &config.admin_password);
 
-    link_creator_identity(&client, &app, &creator_bearer).await;
     create_validate_approve_publish_draft(
         &client,
         &app,
-        &creator_bearer,
+        &creator,
         &admin_auth,
         public_repo.path(),
         31,
@@ -260,7 +253,7 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
     create_validate_approve_publish_draft(
         &client,
         &app,
-        &creator_bearer,
+        &creator,
         &admin_auth,
         public_repo.path(),
         32,
@@ -315,28 +308,81 @@ async fn challenge_draft_rejects_mismatched_pr_author(pool: sqlx::PgPool) {
     let config = test_config(storage.path(), seeded_challenges.path());
     let app = spawn_app_with_config(pool.clone(), config).await;
     let client = reqwest::Client::new();
-    let token = register_agent(&pool, "creator-agent").await;
-    let bearer = format!("Bearer {token}");
+    let creator = create_creator_session(&pool, 1001, "creator").await;
 
-    link_creator_identity(&client, &app, &bearer).await;
+    let response = creator_auth(
+        client.post(api_url(&app, "/api/creator/challenge-drafts")),
+        &creator,
+    )
+    .json(&json!({
+        "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
+        "pr_number": 8,
+        "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/8",
+        "commit_sha": "0123456789abcdef",
+        "challenge_path": "challenges/sample-sum",
+        "pr_author_github_user_id": 2002,
+        "manifest": manifest_json("new_challenge", "v1", None)
+    }))
+    .send()
+    .await
+    .expect("draft request");
 
-    let response = client
-        .post(api_url(&app, "/api/challenge-drafts"))
-        .header("Authorization", &bearer)
+    assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn challenge_creator_routes_require_oauth_session_and_csrf(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("storage tempdir");
+    let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
+    let config = test_config(storage.path(), seeded_challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+    let creator = create_creator_session(&pool, 1001, "creator").await;
+
+    let unauthenticated = client
+        .post(api_url(&app, "/api/creator/challenge-drafts"))
         .json(&json!({
             "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
             "pr_number": 8,
             "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/8",
             "commit_sha": "0123456789abcdef",
             "challenge_path": "challenges/sample-sum",
-            "pr_author_github_user_id": 2002,
+            "pr_author_github_user_id": 1001,
             "manifest": manifest_json("new_challenge", "v1", None)
         }))
         .send()
         .await
-        .expect("draft request");
+        .expect("draft request without session");
+    assert_eq!(unauthenticated.status(), reqwest::StatusCode::UNAUTHORIZED);
 
-    assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+    let missing_csrf = client
+        .post(api_url(&app, "/api/creator/challenge-drafts"))
+        .header("Cookie", &creator.cookie_header)
+        .json(&json!({
+            "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
+            "pr_number": 8,
+            "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/8",
+            "commit_sha": "0123456789abcdef",
+            "challenge_path": "challenges/sample-sum",
+            "pr_author_github_user_id": 1001,
+            "manifest": manifest_json("new_challenge", "v1", None)
+        }))
+        .send()
+        .await
+        .expect("draft request without csrf");
+    assert_eq!(missing_csrf.status(), reqwest::StatusCode::FORBIDDEN);
+
+    let old_self_link_route = client
+        .post(api_url(&app, "/api/challenge-creator/github-identity"))
+        .header("Authorization", "Bearer self-asserted-token")
+        .json(&json!({
+            "github_user_id": 1001,
+            "github_login": "creator"
+        }))
+        .send()
+        .await
+        .expect("old identity link request");
+    assert_eq!(old_self_link_route.status(), reqwest::StatusCode::NOT_FOUND);
 }
 
 #[sqlx::test(migrations = "../migrations")]
@@ -346,47 +392,47 @@ async fn private_asset_upload_rejects_duplicate_asset_id(pool: sqlx::PgPool) {
     let config = test_config(storage.path(), seeded_challenges.path());
     let app = spawn_app_with_config(pool.clone(), config).await;
     let client = reqwest::Client::new();
-    let token = register_agent(&pool, "creator-agent").await;
-    let bearer = format!("Bearer {token}");
+    let creator = create_creator_session(&pool, 1001, "creator").await;
 
-    link_creator_identity(&client, &app, &bearer).await;
-    let draft: serde_json::Value = client
-        .post(api_url(&app, "/api/challenge-drafts"))
-        .header("Authorization", &bearer)
-        .json(&json!({
-            "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
-            "pr_number": 9,
-            "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/9",
-            "commit_sha": "0123456789abcdef",
-            "challenge_path": "challenges/sample-sum",
-            "pr_author_github_user_id": 1001,
-            "manifest": manifest_json("new_challenge", "v1", None)
-        }))
-        .send()
-        .await
-        .expect("draft request")
-        .error_for_status()
-        .expect("draft should create")
-        .json()
-        .await
-        .expect("draft json");
+    let draft: serde_json::Value = creator_auth(
+        client.post(api_url(&app, "/api/creator/challenge-drafts")),
+        &creator,
+    )
+    .json(&json!({
+        "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
+        "pr_number": 9,
+        "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/9",
+        "commit_sha": "0123456789abcdef",
+        "challenge_path": "challenges/sample-sum",
+        "pr_author_github_user_id": 1001,
+        "manifest": manifest_json("new_challenge", "v1", None)
+    }))
+    .send()
+    .await
+    .expect("draft request")
+    .error_for_status()
+    .expect("draft should create")
+    .json()
+    .await
+    .expect("draft json");
     let draft_id = draft["id"].as_str().expect("draft id");
 
     for expected_status in [reqwest::StatusCode::CREATED, reqwest::StatusCode::CONFLICT] {
-        let response = client
-            .post(api_url(
+        let response = creator_auth(
+            client.post(api_url(
                 &app,
-                &format!("/api/challenge-drafts/{draft_id}/private-assets"),
-            ))
-            .header("Authorization", &bearer)
-            .json(&json!({
-                "asset_id": "official-cases",
-                "kind": "private_benchmark_data",
-                "asset_base64": STANDARD.encode(b"[]")
-            }))
-            .send()
-            .await
-            .expect("asset request");
+                &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+            )),
+            &creator,
+        )
+        .json(&json!({
+            "asset_id": "official-cases",
+            "kind": "private_benchmark_data",
+            "asset_base64": STANDARD.encode(b"[]")
+        }))
+        .send()
+        .await
+        .expect("asset request");
         assert_eq!(response.status(), expected_status);
     }
 }
@@ -404,55 +450,55 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
     config.challenge_private_asset_bytes_per_draft = 1;
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
-    let token = register_agent(&pool, "quota-creator").await;
-    let bearer = format!("Bearer {token}");
+    let creator = create_creator_session(&pool, 1001, "creator").await;
     let admin_auth = basic_auth_header(&config.admin_username, &config.admin_password);
 
-    link_creator_identity(&client, &app, &bearer).await;
     let draft: serde_json::Value = create_draft(
         &client,
         &app,
-        &bearer,
+        &creator,
         41,
         manifest_json("new_challenge", "v1", None),
     )
     .await;
     let draft_id = draft["id"].as_str().expect("draft id");
 
-    let quota_response = client
-        .post(api_url(&app, "/api/challenge-drafts"))
-        .header("Authorization", &bearer)
-        .json(&json!({
-            "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
-            "pr_number": 42,
-            "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/42",
-            "commit_sha": "0123456789abcde42",
-            "challenge_path": "challenges/sample-sum",
-            "pr_author_github_user_id": 1001,
-            "manifest": manifest_json("new_challenge", "v1", None)
-        }))
-        .send()
-        .await
-        .expect("draft quota request");
+    let quota_response = creator_auth(
+        client.post(api_url(&app, "/api/creator/challenge-drafts")),
+        &creator,
+    )
+    .json(&json!({
+        "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
+        "pr_number": 42,
+        "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/42",
+        "commit_sha": "0123456789abcde42",
+        "challenge_path": "challenges/sample-sum",
+        "pr_author_github_user_id": 1001,
+        "manifest": manifest_json("new_challenge", "v1", None)
+    }))
+    .send()
+    .await
+    .expect("draft quota request");
     assert_eq!(
         quota_response.status(),
         reqwest::StatusCode::TOO_MANY_REQUESTS
     );
 
-    let asset_response = client
-        .post(api_url(
+    let asset_response = creator_auth(
+        client.post(api_url(
             &app,
-            &format!("/api/challenge-drafts/{draft_id}/private-assets"),
-        ))
-        .header("Authorization", &bearer)
-        .json(&json!({
-            "asset_id": "official-cases",
-            "kind": "private_benchmark_data",
-            "asset_base64": STANDARD.encode(b"[]")
-        }))
-        .send()
-        .await
-        .expect("asset quota request");
+            &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+        )),
+        &creator,
+    )
+    .json(&json!({
+        "asset_id": "official-cases",
+        "kind": "private_benchmark_data",
+        "asset_base64": STANDARD.encode(b"[]")
+    }))
+    .send()
+    .await
+    .expect("asset quota request");
     assert_eq!(asset_response.status(), reqwest::StatusCode::BAD_REQUEST);
 
     client
@@ -491,40 +537,39 @@ async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
     config.unpublished_challenge_asset_grace_days = 1;
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
-    let token = register_agent(&pool, "cleanup-creator").await;
-    let bearer = format!("Bearer {token}");
+    let creator = create_creator_session(&pool, 1001, "creator").await;
     let admin_auth = basic_auth_header(&config.admin_username, &config.admin_password);
 
-    link_creator_identity(&client, &app, &bearer).await;
     let draft = create_draft(
         &client,
         &app,
-        &bearer,
+        &creator,
         51,
         manifest_json("new_challenge", "v1", None),
     )
     .await;
     let draft_id = draft["id"].as_str().expect("draft id");
 
-    let asset: serde_json::Value = client
-        .post(api_url(
+    let asset: serde_json::Value = creator_auth(
+        client.post(api_url(
             &app,
-            &format!("/api/challenge-drafts/{draft_id}/private-assets"),
-        ))
-        .header("Authorization", &bearer)
-        .json(&json!({
-            "asset_id": "official-cases",
-            "kind": "private_benchmark_data",
-            "asset_base64": STANDARD.encode(b"private")
-        }))
-        .send()
-        .await
-        .expect("asset upload")
-        .error_for_status()
-        .expect("asset should upload")
-        .json()
-        .await
-        .expect("asset json");
+            &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+        )),
+        &creator,
+    )
+    .json(&json!({
+        "asset_id": "official-cases",
+        "kind": "private_benchmark_data",
+        "asset_base64": STANDARD.encode(b"private")
+    }))
+    .send()
+    .await
+    .expect("asset upload")
+    .error_for_status()
+    .expect("asset should upload")
+    .json()
+    .await
+    .expect("asset json");
     let storage_uri = asset["storage_uri"]
         .as_str()
         .expect("storage uri")
@@ -564,49 +609,35 @@ async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
     assert!(!std::path::Path::new(&storage_uri).exists());
 }
 
-async fn link_creator_identity(client: &reqwest::Client, app: &helpers::TestApp, bearer: &str) {
-    client
-        .post(api_url(app, "/api/challenge-creator/github-identity"))
-        .header("Authorization", bearer)
-        .json(&json!({
-            "github_user_id": 1001,
-            "github_login": "creator"
-        }))
-        .send()
-        .await
-        .expect("identity request")
-        .error_for_status()
-        .expect("identity should link");
-}
-
 async fn create_validate_approve_publish_draft(
     client: &reqwest::Client,
     app: &helpers::TestApp,
-    bearer: &str,
+    creator: &TestCreatorSession,
     admin_auth: &str,
     public_repo: &Path,
     pr_number: i32,
     manifest: serde_json::Value,
 ) -> serde_json::Value {
-    let draft = create_draft(client, app, bearer, pr_number, manifest).await;
+    let draft = create_draft(client, app, creator, pr_number, manifest).await;
     let draft_id = draft["id"].as_str().expect("draft id");
     if draft["request"] != "archive_challenge" {
-        client
-            .post(api_url(
+        creator_auth(
+            client.post(api_url(
                 app,
-                &format!("/api/challenge-drafts/{draft_id}/private-assets"),
-            ))
-            .header("Authorization", bearer)
-            .json(&json!({
-                "asset_id": "official-cases",
-                "kind": "private_benchmark_data",
-                "asset_base64": private_benchmark_asset_zip_base64()
-            }))
-            .send()
-            .await
-            .expect("private asset request")
-            .error_for_status()
-            .expect("private asset should upload");
+                &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+            )),
+            creator,
+        )
+        .json(&json!({
+            "asset_id": "official-cases",
+            "kind": "private_benchmark_data",
+            "asset_base64": private_benchmark_asset_zip_base64()
+        }))
+        .send()
+        .await
+        .expect("private asset request")
+        .error_for_status()
+        .expect("private asset should upload");
     }
 
     client
@@ -653,13 +684,14 @@ async fn create_validate_approve_publish_draft(
 async fn create_draft(
     client: &reqwest::Client,
     app: &helpers::TestApp,
-    bearer: &str,
+    creator: &TestCreatorSession,
     pr_number: i32,
     manifest: serde_json::Value,
 ) -> serde_json::Value {
-    client
-        .post(api_url(app, "/api/challenge-drafts"))
-        .header("Authorization", bearer)
+    creator_auth(
+        client.post(api_url(app, "/api/creator/challenge-drafts")),
+        creator,
+    )
         .json(&json!({
             "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
             "pr_number": pr_number,

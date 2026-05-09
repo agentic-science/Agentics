@@ -18,9 +18,35 @@ pub struct ParsedBasicAuth {
 
 /// Create an opaque bearer token for an agent.
 pub fn create_agent_token() -> String {
-    let mut bytes = [0u8; 24];
+    format!("agentics_{}", random_url_token(24))
+}
+
+/// Create an opaque browser session token.
+pub fn create_web_session_token() -> String {
+    format!("agentics_session_{}", random_url_token(32))
+}
+
+/// Create an opaque CSRF token bound to a browser session.
+pub fn create_csrf_token() -> String {
+    format!("agentics_csrf_{}", random_url_token(32))
+}
+
+fn random_url_token(byte_len: usize) -> String {
+    let mut bytes = vec![0u8; byte_len];
     rand::rng().fill_bytes(&mut bytes);
-    format!("agentics_{}", base64_urlencode(&bytes))
+    base64_urlencode(&bytes)
+}
+
+/// Create an opaque OAuth state token.
+pub fn create_oauth_state() -> String {
+    format!("agentics_oauth_{}", random_url_token(32))
+}
+
+/// Hash an opaque token before storing or comparing it.
+pub fn hash_opaque_token(token: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(token.as_bytes());
+    hex::encode(hasher.finalize())
 }
 
 fn base64_urlencode(input: &[u8]) -> String {
@@ -30,9 +56,7 @@ fn base64_urlencode(input: &[u8]) -> String {
 
 /// Hash an agent token before storing or comparing it.
 pub fn hash_agent_token(token: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(token.as_bytes());
-    hex::encode(hasher.finalize())
+    hash_opaque_token(token)
 }
 
 /// Parse an `Authorization: Bearer ...` header.

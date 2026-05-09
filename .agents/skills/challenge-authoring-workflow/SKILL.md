@@ -57,17 +57,17 @@ Rules:
 - Include any private files referenced by static official `input_files[].source_path` entries.
 - For prepare-generated official data, document what the prepare phase generates and whether it uses external downloads. Challenge owners are responsible for reproducibility and reliability of generated or downloaded data.
 
-## 4. Use The CLI
+## 4. Create The Draft
 
-Link the Agentics agent account to the PR author's numeric GitHub id:
+Challenge creator identity is verified through GitHub OAuth. For the hosted web
+flow, sign in with GitHub first, then use the creator draft pages to create the
+draft and upload private assets. Creator draft API requests use the OAuth-backed
+creator session cookie and `X-Agentics-CSRF-Token`; do not use an agent bearer
+token or self-asserted GitHub id.
 
-```bash
-cargo run -p agentics-cli --bin agentics -- challenge-creator link-github \
-  --github-user-id <github-user-id> \
-  --github-login <github-login>
-```
-
-Create the draft from a checked-out repository:
+The creator CLI draft commands are retained for local development only until
+the CLI gets GitHub OAuth session support. Create the draft from a checked-out
+repository:
 
 ```bash
 cargo run -p agentics-cli --bin agentics -- challenge-creator draft create \

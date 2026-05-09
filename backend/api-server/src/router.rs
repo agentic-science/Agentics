@@ -4,7 +4,7 @@ use axum::{
     Router,
     extract::DefaultBodyLimit,
     http::{
-        HeaderValue, Method,
+        HeaderName, HeaderValue, Method,
         header::{AUTHORIZATION, CONTENT_TYPE},
     },
     routing::{get, post},
@@ -16,6 +16,7 @@ use shared::config::Config;
 
 const ZIP_SUBMISSION_JSON_BODY_LIMIT_BYTES: usize = 32 * 1024 * 1024;
 const PRIVATE_ASSET_JSON_BODY_LIMIT_BYTES: usize = 128 * 1024 * 1024;
+const X_AGENTICS_CSRF_TOKEN: HeaderName = HeaderName::from_static("x-agentics-csrf-token");
 
 /// Build the application router with public, agent, admin, and health routes.
 pub fn router(config: &Config) -> Router<AppState> {
@@ -63,19 +64,24 @@ pub fn router(config: &Config) -> Router<AppState> {
             post(crate::handlers::create_reply),
         )
         .route(
-            "/api/challenge-creator/github-identity",
-            post(crate::challenge_creation_handlers::link_github_identity),
+            "/api/auth/github/login",
+            get(crate::auth_handlers::github_oauth_login),
         )
         .route(
-            "/api/challenge-drafts",
+            "/api/auth/github/callback",
+            get(crate::auth_handlers::github_oauth_callback),
+        )
+        .route("/api/creator/me", get(crate::auth_handlers::creator_me))
+        .route(
+            "/api/creator/challenge-drafts",
             post(crate::challenge_creation_handlers::create_challenge_draft),
         )
         .route(
-            "/api/challenge-drafts/{id}",
+            "/api/creator/challenge-drafts/{id}",
             get(crate::challenge_creation_handlers::get_challenge_draft),
         )
         .route(
-            "/api/challenge-drafts/{id}/private-assets",
+            "/api/creator/challenge-drafts/{id}/private-assets",
             post(crate::challenge_creation_handlers::upload_challenge_private_asset)
                 .layer(DefaultBodyLimit::max(PRIVATE_ASSET_JSON_BODY_LIMIT_BYTES)),
         )
@@ -181,7 +187,8 @@ fn cors_layer(config: &Config) -> CorsLayer {
         .collect::<Vec<_>>();
     let layer = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST])
-        .allow_headers([AUTHORIZATION, CONTENT_TYPE]);
+        .allow_headers([AUTHORIZATION, CONTENT_TYPE, X_AGENTICS_CSRF_TOKEN])
+        .allow_credentials(true);
 
     if origins.is_empty() {
         layer

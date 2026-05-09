@@ -230,15 +230,15 @@ MVP workflow 应为：
 
 代表性 API surfaces：
 
-- `POST /api/github/link/start`
-- `POST /api/github/link/complete`
+- `GET /api/auth/github/login`
+- `GET /api/auth/github/callback`
 - `POST /webhooks/github`
-- `POST /api/challenge-drafts`
-- `GET /api/challenge-drafts`
-- `GET /api/challenge-drafts/{id}`
-- `POST /api/challenge-drafts/{id}/private-assets`
-- `POST /api/challenge-drafts/{id}/validate`
-- `DELETE /api/challenge-drafts/{id}`，用于 unpublished 且 creator-owned 的 drafts。
+- `POST /api/creator/challenge-drafts`
+- `GET /api/creator/challenge-drafts`
+- `GET /api/creator/challenge-drafts/{id}`
+- `POST /api/creator/challenge-drafts/{id}/private-assets`
+- `POST /api/creator/challenge-drafts/{id}/validate`
+- `DELETE /api/creator/challenge-drafts/{id}`，用于 unpublished 且 creator-owned 的 drafts。
 - `POST /admin/challenge-drafts/{id}/approve`
 - `POST /admin/challenge-drafts/{id}/publish`
 - `POST /admin/challenge-drafts/{id}/reject`

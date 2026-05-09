@@ -6,9 +6,19 @@ use std::path::{Path, PathBuf};
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use helpers::{
-    api_url, basic_auth_header, challenge_repo_root, copy_dir_all,
-    matrix_multiplication_solution_zip_base64, run_worker_once, spawn_app_with_config, test_config,
+    TestCreatorSession, api_url, basic_auth_header, challenge_repo_root, copy_dir_all,
+    create_creator_session, matrix_multiplication_solution_zip_base64, run_worker_once,
+    spawn_app_with_config, test_config,
 };
+
+fn creator_auth(
+    request: reqwest::RequestBuilder,
+    creator: &TestCreatorSession,
+) -> reqwest::RequestBuilder {
+    request
+        .header("Cookie", &creator.cookie_header)
+        .header("X-Agentics-CSRF-Token", &creator.csrf_token)
+}
 
 #[sqlx::test(migrations = "../migrations")]
 async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
@@ -26,32 +36,7 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
     let client = reqwest::Client::new();
     let admin_auth = basic_auth_header(&config.admin_username, &config.admin_password);
     let target_id = native_cpu_target();
-
-    let creator_register: serde_json::Value = client
-        .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "matrix-creator" }))
-        .send()
-        .await
-        .expect("failed to register creator")
-        .json()
-        .await
-        .expect("failed to decode creator registration");
-    let creator_token = creator_register["token"]
-        .as_str()
-        .expect("missing creator token");
-
-    client
-        .post(api_url(&app, "/api/challenge-creator/github-identity"))
-        .header("Authorization", format!("Bearer {creator_token}"))
-        .json(&serde_json::json!({
-            "github_user_id": 42,
-            "github_login": "matrix-creator"
-        }))
-        .send()
-        .await
-        .expect("failed to link GitHub identity")
-        .error_for_status()
-        .expect("GitHub identity link should succeed");
+    let creator = create_creator_session(&pool, 42, "matrix-creator").await;
 
     let manifest_path = challenge_root.join("agentics.challenge.json");
     let manifest: serde_json::Value = serde_json::from_str(
@@ -59,45 +44,47 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
     )
     .expect("failed to parse matrix manifest");
 
-    let draft: serde_json::Value = client
-        .post(api_url(&app, "/api/challenge-drafts"))
-        .header("Authorization", format!("Bearer {creator_token}"))
-        .json(&serde_json::json!({
-            "repo_url": "git@github.com:agentics-reifying/agentics-challenges.git",
-            "pr_number": 1,
-            "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/1",
-            "commit_sha": "abcdef1234567890",
-            "challenge_path": "challenges/matrix-multiplication",
-            "pr_author_github_user_id": 42,
-            "manifest": manifest
-        }))
-        .send()
-        .await
-        .expect("failed to create matrix draft")
-        .error_for_status()
-        .expect("matrix draft should create")
-        .json()
-        .await
-        .expect("failed to decode matrix draft");
+    let draft: serde_json::Value = creator_auth(
+        client.post(api_url(&app, "/api/creator/challenge-drafts")),
+        &creator,
+    )
+    .json(&serde_json::json!({
+        "repo_url": "git@github.com:agentics-reifying/agentics-challenges.git",
+        "pr_number": 1,
+        "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/1",
+        "commit_sha": "abcdef1234567890",
+        "challenge_path": "challenges/matrix-multiplication",
+        "pr_author_github_user_id": 42,
+        "manifest": manifest
+    }))
+    .send()
+    .await
+    .expect("failed to create matrix draft")
+    .error_for_status()
+    .expect("matrix draft should create")
+    .json()
+    .await
+    .expect("failed to decode matrix draft");
     let draft_id = draft["id"].as_str().expect("missing draft id");
 
     let asset_bytes = std::fs::read(&private_asset_zip).expect("failed to read private asset zip");
-    client
-        .post(api_url(
+    creator_auth(
+        client.post(api_url(
             &app,
-            &format!("/api/challenge-drafts/{draft_id}/private-assets"),
-        ))
-        .header("Authorization", format!("Bearer {creator_token}"))
-        .json(&serde_json::json!({
-            "asset_id": "official-seed-config",
-            "kind": "private_seeds",
-            "asset_base64": STANDARD.encode(asset_bytes)
-        }))
-        .send()
-        .await
-        .expect("failed to upload private matrix asset")
-        .error_for_status()
-        .expect("private asset upload should succeed");
+            &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+        )),
+        &creator,
+    )
+    .json(&serde_json::json!({
+        "asset_id": "official-seed-config",
+        "kind": "private_seeds",
+        "asset_base64": STANDARD.encode(asset_bytes)
+    }))
+    .send()
+    .await
+    .expect("failed to upload private matrix asset")
+    .error_for_status()
+    .expect("private asset upload should succeed");
 
     client
         .post(api_url(

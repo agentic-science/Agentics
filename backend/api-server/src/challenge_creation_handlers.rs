@@ -18,63 +18,35 @@ use shared::models::challenge_creation::{
     ChallengeCreationManifest, ChallengeCreationRequestKind, ChallengeCreationVersionSpec,
     ChallengeDraftCleanupResponse, ChallengeDraftListResponse, ChallengeDraftResponse,
     ChallengeDraftStatus, ChallengeDraftValidationStatus, ChallengePrivateAssetKind,
-    ChallengePrivateAssetResponse, CreateChallengeDraftRequest, GithubIdentityResponse,
-    LinkGithubIdentityRequest, ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest,
-    ValidateChallengeDraftRequest,
+    ChallengePrivateAssetResponse, CreateChallengeDraftRequest, ReviewChallengeDraftRequest,
+    UploadChallengePrivateAssetRequest, ValidateChallengeDraftRequest,
 };
 use shared::{challenge_bundle, challenge_creation, db};
 
-use crate::extractors::{AdminAuth, AgentAuth, ValidatedJson};
+use crate::extractors::{AdminAuth, CreatorAuth, ValidatedJson};
 use crate::state::AppState;
 
 const CHALLENGE_DRAFT_QUOTA_WINDOW_SECONDS: i64 = 24 * 60 * 60;
 const MAX_PRIVATE_ASSET_FILE_COUNT: usize = 1024;
 
-/// Link the authenticated agent to a GitHub identity that admins have verified.
-pub async fn link_github_identity(
-    State(state): State<AppState>,
-    agent: AgentAuth,
-    ValidatedJson(body): ValidatedJson<LinkGithubIdentityRequest>,
-) -> Result<Json<GithubIdentityResponse>> {
-    let identity = db::link_agent_github_identity(
-        &state.db,
-        &db::LinkGithubIdentityInput {
-            agent_id: agent.agent_id,
-            github_user_id: body.github_user_id,
-            github_login: body.github_login.trim().to_string(),
-        },
-    )
-    .await
-    .map_err(map_unique_conflict)?;
-
-    Ok(Json(identity))
-}
-
 /// Create a challenge draft bound to a public GitHub PR and manifest.
 pub async fn create_challenge_draft(
     State(state): State<AppState>,
-    agent: AgentAuth,
+    creator: CreatorAuth,
     ValidatedJson(body): ValidatedJson<CreateChallengeDraftRequest>,
 ) -> Result<(StatusCode, Json<ChallengeDraftResponse>)> {
     validate_github_pr_metadata(&body)?;
     challenge_creation::validate_challenge_creation_manifest(&body.manifest)?;
     validate_challenge_draft_path(&body.challenge_path, &body.manifest.challenge_id)?;
 
-    let identity = db::get_agent_github_identity(&state.db, &agent.agent_id)
-        .await?
-        .ok_or_else(|| {
-            AppError::BadRequest(
-                "agent must link a GitHub identity before creating challenge drafts".to_string(),
-            )
-        })?;
-    if identity.github_user_id != body.pr_author_github_user_id {
+    if creator.github_user_id != body.pr_author_github_user_id {
         return Err(AppError::BadRequest(format!(
-            "PR author GitHub user id {} does not match linked agent GitHub user id {}",
-            body.pr_author_github_user_id, identity.github_user_id
+            "PR author GitHub user id {} does not match authenticated creator GitHub user id {}",
+            body.pr_author_github_user_id, creator.github_user_id
         )));
     }
     let active_drafts =
-        db::count_active_challenge_drafts_for_agent(&state.db, &agent.agent_id).await?;
+        db::count_active_challenge_drafts_for_agent(&state.db, &creator.agent_id).await?;
     let max_active_drafts = i64::from(state.config.max_active_challenge_drafts_per_agent);
     if active_drafts >= max_active_drafts {
         return Err(AppError::TooManyRequests(format!(
@@ -87,9 +59,9 @@ pub async fn create_challenge_draft(
         &state.db,
         &db::CreateChallengeDraftInput {
             draft_id: Uuid::new_v4().to_string(),
-            creator_agent_id: agent.agent_id.clone(),
-            creator_github_user_id: identity.github_user_id,
-            creator_github_login: identity.github_login,
+            creator_agent_id: creator.agent_id.clone(),
+            creator_github_user_id: creator.github_user_id,
+            creator_github_login: creator.github_login.clone(),
             repo_url: body.repo_url.trim().to_string(),
             pr_number: body.pr_number,
             pr_url: body.pr_url.trim().to_string(),
@@ -107,7 +79,7 @@ pub async fn create_challenge_draft(
         &db::CreateChallengeDraftAuditEventInput {
             event_id: Uuid::new_v4().to_string(),
             draft_id: draft.id.clone(),
-            actor_agent_id: Some(agent.agent_id.clone()),
+            actor_agent_id: Some(creator.agent_id.clone()),
             actor_admin_username: None,
             action: "draft_created".to_string(),
             message: "challenge draft created from GitHub PR".to_string(),
@@ -126,13 +98,13 @@ pub async fn create_challenge_draft(
 /// Fetch a challenge draft owned by the authenticated agent.
 pub async fn get_challenge_draft(
     State(state): State<AppState>,
-    agent: AgentAuth,
+    creator: CreatorAuth,
     AxumPath(draft_id): AxumPath<String>,
 ) -> Result<Json<ChallengeDraftResponse>> {
     let draft = db::get_challenge_draft(&state.db, &draft_id)
         .await?
         .ok_or(AppError::NotFound)?;
-    if draft.creator_agent_id != agent.agent_id {
+    if draft.creator_agent_id != creator.agent_id {
         return Err(AppError::NotFound);
     }
     Ok(Json(draft))
@@ -141,7 +113,7 @@ pub async fn get_challenge_draft(
 /// Upload a private benchmark asset for a draft owned by the authenticated agent.
 pub async fn upload_challenge_private_asset(
     State(state): State<AppState>,
-    agent: AgentAuth,
+    creator: CreatorAuth,
     AxumPath(draft_id): AxumPath<String>,
     ValidatedJson(body): ValidatedJson<UploadChallengePrivateAssetRequest>,
 ) -> Result<(StatusCode, Json<ChallengePrivateAssetResponse>)> {
@@ -150,7 +122,7 @@ pub async fn upload_challenge_private_asset(
     let draft = db::get_challenge_draft(&state.db, &draft_id)
         .await?
         .ok_or(AppError::NotFound)?;
-    if draft.creator_agent_id != agent.agent_id {
+    if draft.creator_agent_id != creator.agent_id {
         return Err(AppError::NotFound);
     }
     if matches!(
@@ -214,7 +186,7 @@ pub async fn upload_challenge_private_asset(
             size_bytes: asset_bytes.len() as i64,
             sha256,
             storage_uri,
-            uploader_agent_id: agent.agent_id.clone(),
+            uploader_agent_id: creator.agent_id.clone(),
         },
     )
     .await;
@@ -232,7 +204,7 @@ pub async fn upload_challenge_private_asset(
         &db::CreateChallengeDraftAuditEventInput {
             event_id: Uuid::new_v4().to_string(),
             draft_id: draft.id.clone(),
-            actor_agent_id: Some(agent.agent_id.clone()),
+            actor_agent_id: Some(creator.agent_id.clone()),
             actor_admin_username: None,
             action: "private_asset_uploaded".to_string(),
             message: "private benchmark asset uploaded".to_string(),

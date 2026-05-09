@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use api_server::router;
 use api_server::state::AppState;
+use chrono::{Duration, Utc};
 use shared::config::Config;
 use shared::runner::connect_docker;
 use shared::storage::{LocalStorage, Storage};
@@ -16,6 +17,13 @@ use sqlx::PgPool;
 pub struct TestApp {
     pub addr: SocketAddr,
     pub _client: reqwest::Client,
+}
+
+/// Creator session material used by tests instead of a live GitHub OAuth round trip.
+pub struct TestCreatorSession {
+    pub agent_id: String,
+    pub cookie_header: String,
+    pub csrf_token: String,
 }
 
 /// Spawn the API server with environment-derived config.
@@ -88,6 +96,16 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
         challenge_draft_validations_per_day: 10,
         challenge_draft_ttl_days: 14,
         unpublished_challenge_asset_grace_days: 7,
+        github_oauth_client_id: Some("test-client-id".to_string()),
+        github_oauth_client_secret: Some("test-client-secret".to_string()),
+        github_oauth_redirect_url: Some("http://127.0.0.1/auth/github/callback".to_string()),
+        github_oauth_authorize_url: "https://github.com/login/oauth/authorize".to_string(),
+        github_oauth_token_url: "https://github.com/login/oauth/access_token".to_string(),
+        github_api_user_url: "https://api.github.com/user".to_string(),
+        web_session_cookie_name: "agentics_session".to_string(),
+        web_csrf_cookie_name: "agentics_csrf".to_string(),
+        web_session_ttl_hours: 24,
+        web_session_cookie_secure: false,
         allow_public_agent_registration_on_non_loopback: false,
         docker_host: None,
         log_level: "error".to_string(),
@@ -120,6 +138,47 @@ pub fn basic_auth_header(username: &str, password: &str) -> String {
     use base64::{Engine as _, engine::general_purpose::STANDARD};
     let creds = format!("{}:{}", username, password);
     format!("Basic {}", STANDARD.encode(creds))
+}
+
+/// Insert a GitHub OAuth-equivalent creator session for integration tests.
+pub async fn create_creator_session(
+    pool: &PgPool,
+    github_user_id: i64,
+    github_login: &str,
+) -> TestCreatorSession {
+    let fallback_agent_id = uuid::Uuid::new_v4().to_string();
+    let agent_id = shared::db::upsert_github_creator_agent(
+        pool,
+        &fallback_agent_id,
+        github_user_id,
+        github_login,
+    )
+    .await
+    .expect("creator account should upsert");
+    let session_token = shared::auth::create_web_session_token();
+    let csrf_token = shared::auth::create_csrf_token();
+    shared::db::create_creator_session(
+        pool,
+        &shared::db::CreateCreatorSessionInput {
+            session_id: uuid::Uuid::new_v4().to_string(),
+            session_token_hash: shared::auth::hash_opaque_token(&session_token),
+            csrf_token_hash: shared::auth::hash_opaque_token(&csrf_token),
+            agent_id: agent_id.clone(),
+            github_user_id,
+            github_login: github_login.to_string(),
+            expires_at: Utc::now()
+                .checked_add_signed(Duration::hours(24))
+                .expect("test creator session TTL should not overflow"),
+        },
+    )
+    .await
+    .expect("creator session should insert");
+
+    TestCreatorSession {
+        agent_id,
+        cookie_header: format!("agentics_session={session_token}"),
+        csrf_token,
+    }
 }
 
 /// Create a base64 ZIP containing a manifest-based `zip_project` solution.

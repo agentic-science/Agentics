@@ -6,8 +6,8 @@ use shared::models::ErrorResponse;
 use shared::models::challenge::{ChallengeDetailResponse, ChallengeListResponse};
 use shared::models::challenge_creation::{
     ChallengeDraftCleanupResponse, ChallengeDraftResponse, ChallengePrivateAssetResponse,
-    CreateChallengeDraftRequest, GithubIdentityResponse, LinkGithubIdentityRequest,
-    ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest, ValidateChallengeDraftRequest,
+    CreateChallengeDraftRequest, ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest,
+    ValidateChallengeDraftRequest,
 };
 use shared::models::request::{
     CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse, RegisterAgentRequest,
@@ -74,23 +74,16 @@ impl ApiClient {
         self.get_json(&path, true).await
     }
 
-    pub async fn link_github_identity(
-        &self,
-        request: &LinkGithubIdentityRequest,
-    ) -> Result<GithubIdentityResponse> {
-        self.post_json("/api/challenge-creator/github-identity", request, true)
-            .await
-    }
-
     pub async fn create_challenge_draft(
         &self,
         request: &CreateChallengeDraftRequest,
     ) -> Result<ChallengeDraftResponse> {
-        self.post_json("/api/challenge-drafts", request, true).await
+        self.post_json("/api/creator/challenge-drafts", request, true)
+            .await
     }
 
     pub async fn get_challenge_draft(&self, draft_id: &str) -> Result<ChallengeDraftResponse> {
-        let path = format!("/api/challenge-drafts/{draft_id}");
+        let path = format!("/api/creator/challenge-drafts/{draft_id}");
         self.get_json(&path, true).await
     }
 
@@ -99,7 +92,7 @@ impl ApiClient {
         draft_id: &str,
         request: &UploadChallengePrivateAssetRequest,
     ) -> Result<ChallengePrivateAssetResponse> {
-        let path = format!("/api/challenge-drafts/{draft_id}/private-assets");
+        let path = format!("/api/creator/challenge-drafts/{draft_id}/private-assets");
         self.post_json(&path, request, true).await
     }
 

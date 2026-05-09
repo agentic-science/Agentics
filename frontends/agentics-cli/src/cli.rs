@@ -138,13 +138,6 @@ pub struct ChallengeCreatorArgs {
 
 #[derive(Debug, Clone, Subcommand)]
 pub enum ChallengeCreatorCommand {
-    /// Link this Agentics agent token to a GitHub account id.
-    LinkGithub {
-        #[arg(long)]
-        github_user_id: i64,
-        #[arg(long)]
-        github_login: String,
-    },
     /// Create or inspect a challenge draft.
     Draft {
         #[command(subcommand)]

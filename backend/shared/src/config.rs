@@ -51,6 +51,26 @@ pub struct Config {
     #[serde(default = "default_unpublished_challenge_asset_grace_days")]
     pub unpublished_challenge_asset_grace_days: i64,
     #[serde(default)]
+    pub github_oauth_client_id: Option<String>,
+    #[serde(default)]
+    pub github_oauth_client_secret: Option<String>,
+    #[serde(default)]
+    pub github_oauth_redirect_url: Option<String>,
+    #[serde(default = "default_github_oauth_authorize_url")]
+    pub github_oauth_authorize_url: String,
+    #[serde(default = "default_github_oauth_token_url")]
+    pub github_oauth_token_url: String,
+    #[serde(default = "default_github_api_user_url")]
+    pub github_api_user_url: String,
+    #[serde(default = "default_web_session_cookie_name")]
+    pub web_session_cookie_name: String,
+    #[serde(default = "default_web_csrf_cookie_name")]
+    pub web_csrf_cookie_name: String,
+    #[serde(default = "default_web_session_ttl_hours")]
+    pub web_session_ttl_hours: i64,
+    #[serde(default)]
+    pub web_session_cookie_secure: bool,
+    #[serde(default)]
     pub allow_public_agent_registration_on_non_loopback: bool,
     /// Optional Docker host URI used by CI or remote Docker setups.
     #[serde(default)]
@@ -135,6 +155,30 @@ fn default_unpublished_challenge_asset_grace_days() -> i64 {
     7
 }
 
+fn default_github_oauth_authorize_url() -> String {
+    "https://github.com/login/oauth/authorize".to_string()
+}
+
+fn default_github_oauth_token_url() -> String {
+    "https://github.com/login/oauth/access_token".to_string()
+}
+
+fn default_github_api_user_url() -> String {
+    "https://api.github.com/user".to_string()
+}
+
+fn default_web_session_cookie_name() -> String {
+    "agentics_session".to_string()
+}
+
+fn default_web_csrf_cookie_name() -> String {
+    "agentics_csrf".to_string()
+}
+
+fn default_web_session_ttl_hours() -> i64 {
+    24
+}
+
 fn default_log_level() -> String {
     "info".to_string()
 }
@@ -202,6 +246,41 @@ impl Config {
                 "AGENTICS_UNPUBLISHED_CHALLENGE_ASSET_GRACE_DAYS must be greater than zero"
             );
         }
+        if self.web_session_ttl_hours <= 0 {
+            anyhow::bail!("AGENTICS_WEB_SESSION_TTL_HOURS must be greater than zero");
+        }
+        validate_cookie_name(
+            &self.web_session_cookie_name,
+            "AGENTICS_WEB_SESSION_COOKIE_NAME",
+        )?;
+        validate_cookie_name(&self.web_csrf_cookie_name, "AGENTICS_WEB_CSRF_COOKIE_NAME")?;
+        if self.web_session_cookie_name == self.web_csrf_cookie_name {
+            anyhow::bail!(
+                "AGENTICS_WEB_SESSION_COOKIE_NAME and AGENTICS_WEB_CSRF_COOKIE_NAME must differ"
+            );
+        }
+        if !is_loopback_host(&self.api_host) && !self.web_session_cookie_secure {
+            anyhow::bail!(
+                "AGENTICS_WEB_SESSION_COOKIE_SECURE must be true when the API is reachable from another machine"
+            );
+        }
+        if self.github_oauth_client_id.is_some()
+            || self.github_oauth_client_secret.is_some()
+            || self.github_oauth_redirect_url.is_some()
+        {
+            validate_required_trimmed(
+                self.github_oauth_client_id.as_deref(),
+                "AGENTICS_GITHUB_OAUTH_CLIENT_ID",
+            )?;
+            validate_required_trimmed(
+                self.github_oauth_client_secret.as_deref(),
+                "AGENTICS_GITHUB_OAUTH_CLIENT_SECRET",
+            )?;
+            validate_required_trimmed(
+                self.github_oauth_redirect_url.as_deref(),
+                "AGENTICS_GITHUB_OAUTH_REDIRECT_URL",
+            )?;
+        }
 
         Ok(())
     }
@@ -220,6 +299,21 @@ impl Config {
         self.admin_username == DEFAULT_ADMIN_USERNAME
             && self.admin_password == DEFAULT_ADMIN_PASSWORD
     }
+
+    /// Return whether GitHub OAuth is fully configured for creator login.
+    pub fn github_oauth_enabled(&self) -> bool {
+        self.github_oauth_client_id
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty())
+            && self
+                .github_oauth_client_secret
+                .as_deref()
+                .is_some_and(|value| !value.trim().is_empty())
+            && self
+                .github_oauth_redirect_url
+                .as_deref()
+                .is_some_and(|value| !value.trim().is_empty())
+    }
 }
 
 fn is_loopback_host(host: &str) -> bool {
@@ -231,6 +325,27 @@ fn is_loopback_host(host: &str) -> bool {
     host.parse::<std::net::IpAddr>()
         .map(|addr| addr.is_loopback())
         .unwrap_or(false)
+}
+
+fn validate_required_trimmed(value: Option<&str>, field: &str) -> anyhow::Result<()> {
+    if value.is_none_or(|value| value.trim().is_empty()) {
+        anyhow::bail!("{field} must be set when GitHub OAuth is configured");
+    }
+    Ok(())
+}
+
+fn validate_cookie_name(value: &str, field: &str) -> anyhow::Result<()> {
+    let value = value.trim();
+    if value.is_empty() {
+        anyhow::bail!("{field} must not be empty");
+    }
+    if !value
+        .bytes()
+        .all(|byte| matches!(byte, b'!' | b'#'..=b'\'' | b'*' | b'+' | b'-' | b'.' | b'0'..=b'9' | b'A'..=b'Z' | b'^' | b'_' | b'`' | b'a'..=b'z' | b'|' | b'~'))
+    {
+        anyhow::bail!("{field} contains characters that are not valid in a cookie name");
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -265,6 +380,16 @@ mod tests {
             challenge_draft_validations_per_day: 10,
             challenge_draft_ttl_days: 14,
             unpublished_challenge_asset_grace_days: 7,
+            github_oauth_client_id: None,
+            github_oauth_client_secret: None,
+            github_oauth_redirect_url: None,
+            github_oauth_authorize_url: super::default_github_oauth_authorize_url(),
+            github_oauth_token_url: super::default_github_oauth_token_url(),
+            github_api_user_url: super::default_github_api_user_url(),
+            web_session_cookie_name: super::default_web_session_cookie_name(),
+            web_csrf_cookie_name: super::default_web_csrf_cookie_name(),
+            web_session_ttl_hours: super::default_web_session_ttl_hours(),
+            web_session_cookie_secure: false,
             allow_public_agent_registration_on_non_loopback: false,
             docker_host: None,
             log_level: "info".to_string(),
@@ -301,6 +426,16 @@ mod tests {
             challenge_draft_validations_per_day: 10,
             challenge_draft_ttl_days: 14,
             unpublished_challenge_asset_grace_days: 7,
+            github_oauth_client_id: None,
+            github_oauth_client_secret: None,
+            github_oauth_redirect_url: None,
+            github_oauth_authorize_url: super::default_github_oauth_authorize_url(),
+            github_oauth_token_url: super::default_github_oauth_token_url(),
+            github_api_user_url: super::default_github_api_user_url(),
+            web_session_cookie_name: super::default_web_session_cookie_name(),
+            web_csrf_cookie_name: super::default_web_csrf_cookie_name(),
+            web_session_ttl_hours: super::default_web_session_ttl_hours(),
+            web_session_cookie_secure: false,
             allow_public_agent_registration_on_non_loopback: false,
             docker_host: None,
             log_level: "info".to_string(),
@@ -312,6 +447,7 @@ mod tests {
         assert!(config.validate_api_security().is_err());
 
         config.allow_public_agent_registration_on_non_loopback = true;
+        config.web_session_cookie_secure = true;
         assert!(config.validate_api_security().is_ok());
     }
 }

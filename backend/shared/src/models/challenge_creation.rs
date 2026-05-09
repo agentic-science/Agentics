@@ -99,23 +99,7 @@ fn default_required() -> bool {
     true
 }
 
-/// GitHub identity link stored on an Agentics agent account.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GithubIdentityResponse {
-    pub agent_id: String,
-    pub github_user_id: i64,
-    pub github_login: String,
-}
-
-/// Payload for linking an authenticated agent to a manually verified GitHub identity.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct LinkGithubIdentityRequest {
-    pub github_user_id: i64,
-    pub github_login: String,
-}
-
-/// Agent-authenticated request for binding a public GitHub PR to a draft.
+/// Creator-authenticated request for binding a public GitHub PR to a draft.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CreateChallengeDraftRequest {
