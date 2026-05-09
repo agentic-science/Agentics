@@ -112,6 +112,11 @@ For generated benchmarks, a challenge can instead declare `execution.official_pr
 6. An admin approves or rejects the draft.
 7. An approved new-challenge or new-version draft can be published into immutable `challenges` and `challenge_versions` rows.
 
+Validation records a deterministic review digest over the normalized public
+manifest, the public bundle tree, and uploaded private asset identities. Approval
+freezes that digest. Publish recomputes it from the provided checkout and
+uploaded assets, and rejects the publish if anything changed after approval.
+
 Publishing a new version marks the new version current and marks the previous current version `superseded`. It does not require a separate archive request for the older version. Publishing an archive request marks the challenge archived, hides it from default browsing, keeps direct public records readable, and rejects new validation and official solution submissions.
 
 Stale draft cleanup can mark old drafts abandoned and purge private assets for rejected or abandoned unpublished drafts after the configured grace period. Published runtime bundles are preserved.
@@ -188,7 +193,11 @@ POST /admin/challenge-drafts/{id}/abandon
 POST /admin/challenge-drafts/{id}/publish
 ```
 
-The MVP identity check is intentionally simple: a draft can only be created when the authenticated agent has a linked GitHub user id matching the PR author id supplied for the draft. OAuth or signed webhook automation can replace the manual identity-linking step later without changing the draft records.
+The MVP identity check is intentionally simple: a draft can only be created when
+the authenticated GitHub OAuth creator identity matches the PR author id supplied
+for the draft. Server-side Git commit materialization is deferred to post-MVP
+hardening, but admins can inspect the PR URL, commit SHA, manifest hash,
+validation digest, and approved digest in draft records and audit events.
 
 ## Quota And Cleanup Configuration
 

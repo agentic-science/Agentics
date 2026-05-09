@@ -180,6 +180,8 @@ pub struct ChallengeDraftValidationRecordResponse {
     pub message: String,
     pub repository_path: String,
     pub manifest_sha256: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bundle_sha256: Option<String>,
     pub created_at: String,
 }
 
@@ -200,6 +202,10 @@ pub struct ChallengeDraftResponse {
     pub challenge_path: String,
     pub manifest_sha256: String,
     pub manifest: ChallengeCreationManifest,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub validation_bundle_sha256: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub approved_bundle_sha256: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub validation_message: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

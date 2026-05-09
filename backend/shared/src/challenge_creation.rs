@@ -11,7 +11,7 @@ use crate::challenge_bundle::{
 use crate::error::{AppError, Result};
 use crate::models::challenge_creation::{
     AGENTICS_CHALLENGE_MANIFEST_FILE, ChallengeCreationManifest, ChallengeCreationRequestKind,
-    ChallengeCreationVersionSpec, ChallengePrivateAssetRequirement,
+    ChallengeCreationVersionSpec, ChallengePrivateAssetRequirement, ChallengePrivateAssetResponse,
 };
 
 /// Read `agentics.challenge.json` from a proposal root.
@@ -106,11 +106,130 @@ pub fn normalized_manifest_sha256(manifest: &ChallengeCreationManifest) -> Resul
     Ok(sha256_hex(&bytes))
 }
 
+/// Return a deterministic digest for the draft content a reviewer validated.
+///
+/// The digest covers the normalized public manifest, the public bundle tree for
+/// publishable requests, and the uploaded private asset identities. It is not a
+/// replacement for a future server-side Git checkout at `commit_sha`, but it
+/// gives validation, approval, and publish an exact content identity to compare
+/// within the MVP trust boundary.
+pub async fn draft_review_bundle_sha256(
+    proposal_root: &Path,
+    manifest: &ChallengeCreationManifest,
+    private_assets: &[ChallengePrivateAssetResponse],
+) -> Result<String> {
+    let proposal_root = proposal_root.to_path_buf();
+    let manifest = manifest.clone();
+    let private_assets = private_assets.to_vec();
+    tokio::task::spawn_blocking(move || {
+        draft_review_bundle_sha256_blocking(&proposal_root, &manifest, &private_assets)
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("draft digest task failed: {e}")))?
+}
+
 /// Return the hex SHA-256 digest of arbitrary bytes.
 pub fn sha256_hex(bytes: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
     hex::encode(hasher.finalize())
+}
+
+fn draft_review_bundle_sha256_blocking(
+    proposal_root: &Path,
+    manifest: &ChallengeCreationManifest,
+    private_assets: &[ChallengePrivateAssetResponse],
+) -> Result<String> {
+    let mut hasher = Sha256::new();
+    hash_field(&mut hasher, "format", b"agentics-draft-review-v1");
+
+    let manifest_bytes =
+        serde_json::to_vec(manifest).map_err(|e| AppError::Internal(e.to_string()))?;
+    hash_field(&mut hasher, "manifest", &manifest_bytes);
+
+    if let Some(version) = &manifest.version {
+        let bundle_root = proposal_root.join(&version.bundle_path);
+        hash_public_tree(&mut hasher, &bundle_root)?;
+    }
+
+    let mut assets = private_assets.to_vec();
+    assets.sort_by(|left, right| left.asset_id.cmp(&right.asset_id));
+    for asset in assets {
+        hash_field(&mut hasher, "asset_id", asset.asset_id.as_bytes());
+        hash_field(&mut hasher, "asset_kind", asset.kind.as_str().as_bytes());
+        hash_field(&mut hasher, "asset_required", &[u8::from(asset.required)]);
+        hash_field(&mut hasher, "asset_size", &asset.size_bytes.to_be_bytes());
+        hash_field(&mut hasher, "asset_sha256", asset.sha256.as_bytes());
+    }
+
+    Ok(hex::encode(hasher.finalize()))
+}
+
+fn hash_public_tree(hasher: &mut Sha256, bundle_root: &Path) -> Result<()> {
+    let mut stack = vec![bundle_root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let mut entries = std::fs::read_dir(&dir)?.collect::<std::io::Result<Vec<_>>>()?;
+        entries.sort_by_key(|entry| entry.path());
+
+        for entry in entries {
+            let path = entry.path();
+            let metadata = std::fs::symlink_metadata(&path)?;
+            let relative_path = path
+                .strip_prefix(bundle_root)
+                .map_err(|e| AppError::Internal(format!("failed to build review digest: {e}")))?;
+            let relative_path = relative_path.to_str().ok_or_else(|| {
+                AppError::Validation(format!(
+                    "public bundle path must be UTF-8 for review digest: {}",
+                    path.display()
+                ))
+            })?;
+
+            if metadata.file_type().is_symlink() {
+                return Err(AppError::Validation(format!(
+                    "public bundle must not contain symlinks: {}",
+                    path.display()
+                )));
+            }
+            if metadata.is_dir() {
+                hash_field(hasher, "dir", relative_path.as_bytes());
+                stack.push(path);
+            } else if metadata.is_file() {
+                hash_field(hasher, "file", relative_path.as_bytes());
+                hash_file(hasher, &path)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn hash_file(hasher: &mut Sha256, path: &Path) -> Result<()> {
+    use std::io::Read;
+
+    let mut file = std::fs::File::open(path)?;
+    let size = file.metadata()?.len();
+    hash_field(hasher, "file_size", &size.to_be_bytes());
+
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let bytes_read = file.read(&mut buffer)?;
+        if bytes_read == 0 {
+            break;
+        }
+        let chunk = buffer.get(..bytes_read).ok_or_else(|| {
+            AppError::Internal("file read exceeded digest buffer bounds".to_string())
+        })?;
+        hasher.update(chunk);
+    }
+
+    Ok(())
+}
+
+fn hash_field(hasher: &mut Sha256, label: &str, bytes: &[u8]) {
+    hasher.update((label.len() as u64).to_be_bytes());
+    hasher.update(label.as_bytes());
+    hasher.update((bytes.len() as u64).to_be_bytes());
+    hasher.update(bytes);
 }
 
 /// Check whether a challenge id is valid in the public repository namespace.

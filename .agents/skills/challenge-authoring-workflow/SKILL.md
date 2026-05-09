@@ -107,3 +107,8 @@ Creators should provide:
 - Private asset ids and what each ZIP overlay contains.
 - Expected public validation behavior.
 - Expected official ranking metric and target ids.
+
+Do not change the checked-out proposal or private asset set after approval. The
+platform records a review digest during validation, freezes it during approval,
+and rejects publish if the public bundle or uploaded private asset identities no
+longer match that approved digest.

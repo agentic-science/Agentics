@@ -53,6 +53,18 @@ pub struct CreateChallengeDraftAuditEventInput {
     pub metadata: Value,
 }
 
+/// Input for recording one admin validation attempt against a draft.
+#[derive(Debug, Clone)]
+pub struct RecordChallengeDraftValidationInput {
+    pub validation_record_id: String,
+    pub draft_id: String,
+    pub status: ChallengeDraftValidationStatus,
+    pub message: String,
+    pub repository_path: String,
+    pub manifest_sha256: String,
+    pub bundle_sha256: Option<String>,
+}
+
 /// Insert a new challenge draft bound to a GitHub PR.
 pub async fn create_challenge_draft(
     pool: &PgPool,
@@ -242,34 +254,30 @@ pub async fn create_challenge_private_asset(
 /// Record a validation outcome and move draft status accordingly.
 pub async fn record_challenge_draft_validation(
     pool: &PgPool,
-    validation_record_id: &str,
-    draft_id: &str,
-    status: ChallengeDraftValidationStatus,
-    message: &str,
-    repository_path: &str,
-    manifest_sha256: &str,
+    input: &RecordChallengeDraftValidationInput,
 ) -> Result<ChallengeDraftValidationRecordResponse> {
     let mut tx = pool.begin().await?;
 
     let row = sqlx::query(
         r#"
         INSERT INTO challenge_draft_validation_records (
-            id, draft_id, status, message, repository_path, manifest_sha256
+            id, draft_id, status, message, repository_path, manifest_sha256, bundle_sha256
         )
-        VALUES ($1, $2, $3, $4, $5, $6)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         RETURNING *
         "#,
     )
-    .bind(validation_record_id)
-    .bind(draft_id)
-    .bind(status.as_str())
-    .bind(message)
-    .bind(repository_path)
-    .bind(manifest_sha256)
+    .bind(&input.validation_record_id)
+    .bind(&input.draft_id)
+    .bind(input.status.as_str())
+    .bind(&input.message)
+    .bind(&input.repository_path)
+    .bind(&input.manifest_sha256)
+    .bind(&input.bundle_sha256)
     .fetch_one(&mut *tx)
     .await?;
 
-    let next_status = match status {
+    let next_status = match input.status {
         ChallengeDraftValidationStatus::Passed => ChallengeDraftStatus::Validated,
         ChallengeDraftValidationStatus::Failed => ChallengeDraftStatus::Draft,
     };
@@ -279,21 +287,52 @@ pub async fn record_challenge_draft_validation(
         SET status = $2,
             validation_message = $3,
             validation_repository_path = $4,
+            validation_bundle_sha256 = $5,
             updated_at = NOW()
         WHERE id = $1
           AND status IN ('draft', 'validated')
         "#,
     )
-    .bind(draft_id)
+    .bind(&input.draft_id)
     .bind(next_status.as_str())
-    .bind(message)
-    .bind(repository_path)
+    .bind(&input.message)
+    .bind(&input.repository_path)
+    .bind(&input.bundle_sha256)
     .execute(&mut *tx)
     .await?;
 
     tx.commit().await?;
 
     row_to_validation_record_response(row)
+}
+
+/// Approve the latest validated draft content and freeze its review digest.
+pub async fn approve_validated_challenge_draft(
+    pool: &PgPool,
+    draft_id: &str,
+    message: Option<&str>,
+) -> Result<()> {
+    let result = sqlx::query(
+        r#"
+        UPDATE challenge_drafts
+        SET status = 'approved',
+            validation_message = COALESCE($2, validation_message),
+            approved_bundle_sha256 = validation_bundle_sha256,
+            updated_at = NOW()
+        WHERE id = $1
+          AND status = 'validated'
+          AND validation_bundle_sha256 IS NOT NULL
+        "#,
+    )
+    .bind(draft_id)
+    .bind(message)
+    .execute(pool)
+    .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::Conflict);
+    }
+    Ok(())
 }
 
 /// Move a draft to a review status.
@@ -417,6 +456,7 @@ pub async fn mark_challenge_draft_published(
             published_challenge_version_id = $2,
             updated_at = NOW()
         WHERE id = $1
+          AND status = 'approved'
         "#,
     )
     .bind(draft_id)
@@ -425,7 +465,7 @@ pub async fn mark_challenge_draft_published(
     .await?;
 
     if result.rows_affected() == 0 {
-        return Err(AppError::NotFound);
+        return Err(AppError::Conflict);
     }
     Ok(())
 }
@@ -522,6 +562,8 @@ fn row_to_draft_response(
         challenge_path: row.try_get("challenge_path")?,
         manifest_sha256: row.try_get("manifest_sha256")?,
         manifest,
+        validation_bundle_sha256: row.try_get("validation_bundle_sha256")?,
+        approved_bundle_sha256: row.try_get("approved_bundle_sha256")?,
         validation_message: row.try_get("validation_message")?,
         validation_repository_path: row.try_get("validation_repository_path")?,
         published_challenge_version_id: row.try_get("published_challenge_version_id")?,
@@ -559,6 +601,7 @@ fn row_to_validation_record_response(
         message: row.try_get("message")?,
         repository_path: row.try_get("repository_path")?,
         manifest_sha256: row.try_get("manifest_sha256")?,
+        bundle_sha256: row.try_get("bundle_sha256")?,
         created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
     })
 }

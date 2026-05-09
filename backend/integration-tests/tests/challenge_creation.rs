@@ -98,11 +98,25 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
         .expect("validated json");
     assert_eq!(validated["status"], "validated");
     assert_eq!(
+        validated["validation_bundle_sha256"]
+            .as_str()
+            .expect("validation digest")
+            .len(),
+        64
+    );
+    assert_eq!(
         validated["validation_records"][0]["status"], "passed",
         "validation record should be persisted"
     );
+    assert_eq!(
+        validated["validation_records"][0]["bundle_sha256"]
+            .as_str()
+            .expect("validation record digest")
+            .len(),
+        64
+    );
 
-    client
+    let approved: serde_json::Value = client
         .post(api_url(
             &app,
             &format!("/admin/challenge-drafts/{draft_id}/approve"),
@@ -113,7 +127,14 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
         .await
         .expect("approve request")
         .error_for_status()
-        .expect("draft should approve");
+        .expect("draft should approve")
+        .json()
+        .await
+        .expect("approve json");
+    assert_eq!(
+        approved["approved_bundle_sha256"],
+        validated["validation_bundle_sha256"]
+    );
 
     let upload_after_approval = creator_auth(
         client.post(api_url(
@@ -192,6 +213,100 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
         .await
         .expect("public challenge json");
     assert_eq!(public_challenge["current_version"]["version"], "v1");
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("storage tempdir");
+    let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
+    let public_repo = tempfile::tempdir().expect("public repo tempdir");
+    write_public_challenge(public_repo.path(), "new_challenge", "v1", None);
+
+    let config = test_config(storage.path(), seeded_challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let client = reqwest::Client::new();
+    let creator = create_creator_session(&pool, 1001, "creator").await;
+    let admin_auth = basic_auth_header(&config.admin_username, &config.admin_password);
+
+    let draft = create_draft(
+        &client,
+        &app,
+        &creator,
+        17,
+        manifest_json("new_challenge", "v1", None),
+    )
+    .await;
+    let draft_id = draft["id"].as_str().expect("draft id");
+
+    creator_auth(
+        client.post(api_url(
+            &app,
+            &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+        )),
+        &creator,
+    )
+    .json(&json!({
+        "asset_id": "official-cases",
+        "kind": "private_benchmark_data",
+        "asset_base64": private_benchmark_asset_zip_base64()
+    }))
+    .send()
+    .await
+    .expect("private asset request")
+    .error_for_status()
+    .expect("private asset should upload");
+
+    client
+        .post(api_url(
+            &app,
+            &format!("/admin/challenge-drafts/{draft_id}/validate"),
+        ))
+        .header("Authorization", &admin_auth)
+        .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
+        .send()
+        .await
+        .expect("validate request")
+        .error_for_status()
+        .expect("draft should validate");
+    client
+        .post(api_url(
+            &app,
+            &format!("/admin/challenge-drafts/{draft_id}/approve"),
+        ))
+        .header("Authorization", &admin_auth)
+        .json(&json!({ "message": "approved" }))
+        .send()
+        .await
+        .expect("approve request")
+        .error_for_status()
+        .expect("draft should approve");
+
+    write_file(
+        &public_repo
+            .path()
+            .join("challenges/sample-sum/versions/v1/statement.md"),
+        "# Sample Sum\n\nChanged after approval.\n",
+    );
+
+    let publish_response = client
+        .post(api_url(
+            &app,
+            &format!("/admin/challenge-drafts/{draft_id}/publish"),
+        ))
+        .header("Authorization", &admin_auth)
+        .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
+        .send()
+        .await
+        .expect("publish request");
+    assert_eq!(publish_response.status(), reqwest::StatusCode::BAD_REQUEST);
+
+    let version_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*)::BIGINT FROM challenge_versions WHERE id = $1")
+            .bind("sample-sum:v1")
+            .fetch_one(&pool)
+            .await
+            .expect("version count");
+    assert_eq!(version_count, 0);
 }
 
 #[sqlx::test(migrations = "../migrations")]

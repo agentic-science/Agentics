@@ -264,15 +264,19 @@ pub async fn validate_challenge_draft(
     let validation = validate_draft_repository(&draft, repository_path).await;
 
     match validation {
-        Ok(message) => {
+        Ok((_, bundle_sha256)) => {
+            let message = "challenge draft validation passed".to_string();
             db::record_challenge_draft_validation(
                 &state.db,
-                &Uuid::new_v4().to_string(),
-                &draft.id,
-                ChallengeDraftValidationStatus::Passed,
-                &message,
-                repository_path,
-                &draft.manifest_sha256,
+                &db::RecordChallengeDraftValidationInput {
+                    validation_record_id: Uuid::new_v4().to_string(),
+                    draft_id: draft.id.clone(),
+                    status: ChallengeDraftValidationStatus::Passed,
+                    message: message.clone(),
+                    repository_path: repository_path.to_string(),
+                    manifest_sha256: draft.manifest_sha256.clone(),
+                    bundle_sha256: Some(bundle_sha256.clone()),
+                },
             )
             .await?;
             db::create_challenge_draft_audit_event(
@@ -284,7 +288,10 @@ pub async fn validate_challenge_draft(
                     actor_admin_username: Some(admin.username.clone()),
                     action: "draft_validated".to_string(),
                     message: message.clone(),
-                    metadata: serde_json::json!({ "repository_path": repository_path }),
+                    metadata: serde_json::json!({
+                        "repository_path": repository_path,
+                        "bundle_sha256": &bundle_sha256
+                    }),
                 },
             )
             .await?;
@@ -297,12 +304,15 @@ pub async fn validate_challenge_draft(
             let message = error.to_string();
             db::record_challenge_draft_validation(
                 &state.db,
-                &Uuid::new_v4().to_string(),
-                &draft.id,
-                ChallengeDraftValidationStatus::Failed,
-                &message,
-                repository_path,
-                &draft.manifest_sha256,
+                &db::RecordChallengeDraftValidationInput {
+                    validation_record_id: Uuid::new_v4().to_string(),
+                    draft_id: draft.id.clone(),
+                    status: ChallengeDraftValidationStatus::Failed,
+                    message: message.clone(),
+                    repository_path: repository_path.to_string(),
+                    manifest_sha256: draft.manifest_sha256.clone(),
+                    bundle_sha256: None,
+                },
             )
             .await?;
             db::create_challenge_draft_audit_event(
@@ -396,13 +406,9 @@ pub async fn approve_challenge_draft(
     if draft.status != ChallengeDraftStatus::Validated {
         return Err(AppError::Conflict);
     }
-    db::update_challenge_draft_status(
-        &state.db,
-        &draft.id,
-        ChallengeDraftStatus::Approved,
-        non_empty_message(&body.message),
-    )
-    .await?;
+    db::approve_validated_challenge_draft(&state.db, &draft.id, non_empty_message(&body.message))
+        .await?;
+    let approved_bundle_sha256 = draft.validation_bundle_sha256.clone();
     db::create_challenge_draft_audit_event(
         &state.db,
         &db::CreateChallengeDraftAuditEventInput {
@@ -412,7 +418,7 @@ pub async fn approve_challenge_draft(
             actor_admin_username: Some(admin.username),
             action: "draft_approved".to_string(),
             message: body.message.trim().to_string(),
-            metadata: serde_json::json!({}),
+            metadata: serde_json::json!({ "approved_bundle_sha256": approved_bundle_sha256 }),
         },
     )
     .await?;
@@ -481,9 +487,18 @@ pub async fn publish_challenge_draft(
     }
 
     let repository_path = body.repository_path.trim();
-    validate_draft_repository(&draft, repository_path).await?;
+    let (manifest, bundle_sha256) = validate_draft_repository(&draft, repository_path).await?;
+    let approved_bundle_sha256 = draft
+        .approved_bundle_sha256
+        .as_deref()
+        .ok_or_else(|| AppError::Conflict)?;
+    if approved_bundle_sha256 != bundle_sha256 {
+        return Err(AppError::Validation(
+            "challenge draft content changed after approval; validate and approve the draft again before publishing"
+                .to_string(),
+        ));
+    }
     let proposal_root = Path::new(repository_path).join(&draft.challenge_path);
-    let manifest = challenge_creation::read_challenge_creation_manifest(&proposal_root).await?;
     let published_version_id = match manifest.request {
         ChallengeCreationRequestKind::ArchiveChallenge => {
             db::archive_challenge(&state.db, &manifest.challenge_id).await?;
@@ -533,7 +548,8 @@ pub async fn publish_challenge_draft(
             metadata: serde_json::json!({
                 "challenge_id": &manifest.challenge_id,
                 "version_id": &published_version_id,
-                "repository_path": repository_path
+                "repository_path": repository_path,
+                "bundle_sha256": &bundle_sha256
             }),
         },
     )
@@ -623,7 +639,7 @@ fn validate_private_asset_id(value: &str) -> Result<()> {
 async fn validate_draft_repository(
     draft: &ChallengeDraftResponse,
     repository_path: &str,
-) -> Result<String> {
+) -> Result<(ChallengeCreationManifest, String)> {
     let proposal_root = Path::new(repository_path).join(&draft.challenge_path);
     let manifest =
         challenge_creation::validate_challenge_creation_repository(&proposal_root).await?;
@@ -640,7 +656,13 @@ async fn validate_draft_repository(
             draft.challenge_id, manifest.challenge_id
         )));
     }
-    Ok("challenge draft validation passed".to_string())
+    let bundle_sha256 = challenge_creation::draft_review_bundle_sha256(
+        &proposal_root,
+        &manifest,
+        &draft.private_assets,
+    )
+    .await?;
+    Ok((manifest, bundle_sha256))
 }
 
 async fn assemble_runtime_bundle(
