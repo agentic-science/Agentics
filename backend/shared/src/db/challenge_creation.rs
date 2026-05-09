@@ -281,7 +281,7 @@ pub async fn record_challenge_draft_validation(
             validation_repository_path = $4,
             updated_at = NOW()
         WHERE id = $1
-          AND status IN ('draft', 'validated', 'approved')
+          AND status IN ('draft', 'validated')
         "#,
     )
     .bind(draft_id)

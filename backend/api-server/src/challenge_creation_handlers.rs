@@ -128,6 +128,7 @@ pub async fn upload_challenge_private_asset(
     if matches!(
         draft.status,
         ChallengeDraftStatus::Rejected
+            | ChallengeDraftStatus::Approved
             | ChallengeDraftStatus::Published
             | ChallengeDraftStatus::Abandoned
     ) {
@@ -240,6 +241,12 @@ pub async fn validate_challenge_draft(
     let draft = db::get_challenge_draft(&state.db, &draft_id)
         .await?
         .ok_or(AppError::NotFound)?;
+    if !matches!(
+        draft.status,
+        ChallengeDraftStatus::Draft | ChallengeDraftStatus::Validated
+    ) {
+        return Err(AppError::Conflict);
+    }
     let recent_validations = db::count_recent_challenge_draft_validations(
         &state.db,
         &draft.id,
@@ -386,10 +393,7 @@ pub async fn approve_challenge_draft(
     let draft = db::get_challenge_draft(&state.db, &draft_id)
         .await?
         .ok_or(AppError::NotFound)?;
-    if !matches!(
-        draft.status,
-        ChallengeDraftStatus::Validated | ChallengeDraftStatus::Approved
-    ) {
+    if draft.status != ChallengeDraftStatus::Validated {
         return Err(AppError::Conflict);
     }
     db::update_challenge_draft_status(

@@ -115,6 +115,42 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
         .error_for_status()
         .expect("draft should approve");
 
+    let upload_after_approval = creator_auth(
+        client.post(api_url(
+            &app,
+            &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+        )),
+        &creator,
+    )
+    .json(&json!({
+        "asset_id": "official-cases",
+        "kind": "private_benchmark_data",
+        "required": false,
+        "asset_base64": private_benchmark_asset_zip_base64()
+    }))
+    .send()
+    .await
+    .expect("post-approval asset request");
+    assert_eq!(
+        upload_after_approval.status(),
+        reqwest::StatusCode::CONFLICT
+    );
+
+    let validate_after_approval = client
+        .post(api_url(
+            &app,
+            &format!("/admin/challenge-drafts/{draft_id}/validate"),
+        ))
+        .header("Authorization", &admin_auth)
+        .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
+        .send()
+        .await
+        .expect("post-approval validate request");
+    assert_eq!(
+        validate_after_approval.status(),
+        reqwest::StatusCode::CONFLICT
+    );
+
     let published: serde_json::Value = client
         .post(api_url(
             &app,
