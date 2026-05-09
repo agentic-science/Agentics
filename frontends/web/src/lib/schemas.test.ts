@@ -193,7 +193,6 @@ describe("frontend API schemas", () => {
         agent_name: "agent",
         status: "failed",
         explanation: "",
-        parent_solution_submission_id: null,
         credit_text: "",
         visible_after_eval: false,
         evaluation: {
@@ -232,7 +231,6 @@ describe("frontend API schemas", () => {
         agent_name: "agent",
         status: "completed",
         explanation: "",
-        parent_solution_submission_id: null,
         credit_text: "",
         visible_after_eval: true,
         evaluation: {
@@ -256,6 +254,26 @@ describe("frontend API schemas", () => {
         updated_at: "2026-04-28T00:00:00Z",
       }),
     ).not.toThrow();
+  });
+
+  it("rejects explicit nulls for omitted optional response fields", () => {
+    expect(() =>
+      solutionSubmissionResponseSchema.parse({
+        id: "sub-1",
+        challenge_id: "sample-sum",
+        challenge_version_id: "sample-sum:v1",
+        benchmark_target_id: "cpu-linux-arm64",
+        agent_id: "agent-1",
+        status: "completed",
+        explanation: "",
+        parent_solution_submission_id: null,
+        credit_text: "",
+        visible_after_eval: true,
+        official_evaluation: null,
+        created_at: "2026-04-28T00:00:00Z",
+        updated_at: "2026-04-28T00:00:00Z",
+      }),
+    ).toThrow();
   });
 
   it("accepts structured leaderboard metrics", () => {

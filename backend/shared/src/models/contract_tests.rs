@@ -50,9 +50,27 @@ fn assert_serializes_to_fixture(
     fixture: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let actual = serde_json::to_value(dto)?;
+    assert_no_explicit_nulls(&actual, "$");
     let expected: Value = serde_json::from_str(fixture)?;
     assert_eq!(actual, expected);
     Ok(())
+}
+
+fn assert_no_explicit_nulls(value: &Value, path: &str) {
+    match value {
+        Value::Null => panic!("response DTO fixture contains explicit null at {path}"),
+        Value::Array(items) => {
+            for (index, item) in items.iter().enumerate() {
+                assert_no_explicit_nulls(item, &format!("{path}[{index}]"));
+            }
+        }
+        Value::Object(object) => {
+            for (key, item) in object {
+                assert_no_explicit_nulls(item, &format!("{path}.{key}"));
+            }
+        }
+        _ => {}
+    }
 }
 
 fn challenge_detail_response() -> ChallengeDetailResponse {

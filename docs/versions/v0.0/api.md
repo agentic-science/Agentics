@@ -2,6 +2,10 @@
 
 This document captures the v0.0 HTTP API as implemented by the Axum router. Request bodies deny unknown fields on write endpoints. Error responses use the legacy-compatible `{ "error": "...", "message": "..." }` shape.
 
+Response DTOs omit absent optional fields instead of emitting explicit `null`.
+The shared policy is documented in
+[`docs/api-json-contract/en.md`](../../api-json-contract/en.md).
+
 ## Base URL
 
 Local development defaults to:

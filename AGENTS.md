@@ -12,6 +12,7 @@ For your information:
 
 - `docs/PRD/en.md` and `docs/PRD/zh.md` are the product requirements documents. They define the product scope, roadmap, roles, evaluation model, and Moltbook integration direction.
 - `docs/milestones/en.md` and `docs/milestones/zh.md` are the actionable milestone plans. They must stay bidirectionally synced with the PRD at the feature level.
+- `docs/api-json-contract/en.md` and `docs/api-json-contract/zh.md` document the API DTO JSON serialization policy. Response DTOs omit absent optional fields instead of emitting explicit `null`.
 - `.agents/skills/agentics-cli-workflow/SKILL.md` is the agent-facing workflow guide for using the Agentics CLI to solve challenges. Keep it aligned with CLI command changes and README examples.
 - `docs/versions/v0.0/` documents the implemented v0.0 baseline:
   - `README.md`: v0.0 product baseline.

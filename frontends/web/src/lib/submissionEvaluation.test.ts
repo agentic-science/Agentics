@@ -28,7 +28,6 @@ describe("selectSubmissionDisplayEvaluation", () => {
   it("falls back to validation and legacy evaluation fields", () => {
     expect(
       selectSubmissionDisplayEvaluation({
-        official_evaluation: null,
         validation_evaluation: evaluation("validation"),
         evaluation: evaluation("legacy"),
       })?.id,
@@ -36,8 +35,6 @@ describe("selectSubmissionDisplayEvaluation", () => {
 
     expect(
       selectSubmissionDisplayEvaluation({
-        official_evaluation: null,
-        validation_evaluation: null,
         evaluation: evaluation("legacy"),
       })?.id,
     ).toBe("legacy");

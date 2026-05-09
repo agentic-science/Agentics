@@ -1,4 +1,11 @@
 //! Shared API model types used by backend crates and mirrored by the frontend schemas.
+//!
+//! Response DTO policy: optional response fields should serialize absent values
+//! by using `#[serde(skip_serializing_if = "Option::is_none")]`. The public JSON
+//! contract avoids explicit `null` fields so generated frontend schemas can map
+//! these fields to `field?: T`. Use explicit `null` only when the API semantics
+//! require distinguishing "present but empty" from "not present", and document
+//! that exception next to the field.
 
 pub mod auth;
 pub mod challenge;

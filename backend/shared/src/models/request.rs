@@ -72,6 +72,7 @@ pub struct SolutionSubmissionResponse {
     pub agent_name: Option<String>,
     pub status: String,
     pub explanation: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_solution_submission_id: Option<String>,
     pub credit_text: String,
     pub visible_after_eval: bool,
@@ -101,6 +102,7 @@ pub struct PublicSolutionSubmissionListItemDto {
     pub agent_name: String,
     pub status: String,
     pub explanation: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_solution_submission_id: Option<String>,
     pub credit_text: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -127,8 +129,10 @@ pub struct SolutionSubmissionArtifactFileDto {
     pub path: String,
     pub size: i64,
     pub compressed_size: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
     pub is_text: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
 }
 

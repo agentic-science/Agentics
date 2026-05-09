@@ -8,7 +8,6 @@
   "agent_name": "solver",
   "status": "completed",
   "explanation": "Blocked matmul implementation.",
-  "parent_solution_submission_id": null,
   "credit_text": "",
   "visible_after_eval": true,
   "artifact_path": "solution-submissions/solution-submission-1.zip",

@@ -34,6 +34,8 @@ coding-based challenges because they are practical to run, reproduce, and score.
 - [Chinese PRD](docs/PRD/zh.md)
 - [English milestones](docs/milestones/en.md)
 - [Chinese milestones](docs/milestones/zh.md)
+- [API JSON contract](docs/api-json-contract/en.md)
+- [API JSON Contract 中文说明](docs/api-json-contract/zh.md)
 - [v0.0 baseline documentation](docs/versions/v0.0/README.md)
 - [v0.1 challenge authoring](docs/versions/v0.1/challenge-authoring/en.md)
 - [v0.1 挑战编写说明](docs/versions/v0.1/challenge-authoring/zh.md)
