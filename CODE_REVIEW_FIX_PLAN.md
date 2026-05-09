@@ -22,6 +22,29 @@ requires a small paired frontend/backend change.
   bundle digest, but exact server-side commit materialization can be deferred to
   post-MVP hardening.
 
+## Implementation Status
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| 1. Verified creator GitHub identity | Fixed | `36fc9ba feat: require GitHub OAuth for creator drafts` |
+| 2. Reviewer-visible commit and bundle identity | Fixed for MVP, exact server-side commit materialization deferred | `70a643d fix: freeze challenge draft review digest`; post-MVP hardening tracked in [GitHub issue #4](https://github.com/ifsheldon/Agentics/issues/4) |
+| 3. Immutable published challenge versions | Fixed | `a1bf7df fix: make published challenge versions immutable` |
+| 4. Freeze approved draft inputs | Fixed | `064aa11 fix: freeze approved challenge draft inputs`; `70a643d fix: freeze challenge draft review digest` |
+| 5. Transactional quota admission | Fixed for solution submissions | `4757d72 fix: serialize solution submission quota admission`; alternatives tracked in [GitHub issue #3](https://github.com/ifsheldon/Agentics/issues/3) |
+| 6. Declared output symlink rejection | Fixed | `f96fb89 fix: reject symlinked solution outputs` |
+| 7. Leaderboard losing rerun metadata | Fixed | `ce1eeeb fix: keep leaderboard official metadata tied to best run` |
+| 8. Relative LocalStorage keys | Fixed | `f498fe7 fix: keep local storage keys relative` |
+| 9. Browser admin credential persistence | Fixed | `5aa3e6d fix: use admin session cookies in web console` |
+| 10. Official solution submission rendering | Fixed | `77df149 fix: show official submission detail results` |
+| 11. CLI package size preflight | Fixed | `f9b27ed fix: preflight CLI solution package limits` |
+| 12. CLI validation-run status | Fixed | `1a30799 fix: support validation run status in CLI` |
+| 13. Digest-pinned runner image policy | Fixed behind explicit hosted policy flag | `a3d991f fix: enforce optional digest-pinned images` |
+| 14. Managed immutable admin bundles | Fixed | `85f60d1 fix: copy admin bundles into managed storage` |
+| 15. Globally unique worker instance ids | Fixed | `b223d8e fix: use UUID worker instance identifiers` |
+| 16. Runner module split | Fixed | `e54ff7e refactor: split runner support modules` |
+| 17. Web DTO contract fixtures | Fixed | `f1b0994 test: add web dto contract fixtures` |
+| Docker writable-layer quota | Deferred operational hardening | Tracked in [GitHub issue #2](https://github.com/ifsheldon/Agentics/issues/2) |
+
 ## Recommended Fix Order
 
 1. Add GitHub OAuth for challenge creators and remove self-asserted identity.
