@@ -1058,12 +1058,37 @@ async fn write_run_metadata(
 
 async fn ensure_declared_outputs_exist(run: &ChallengeRunSpec, output_dir: &Path) -> Result<()> {
     for output in &run.output_files {
-        if !output_dir.join(output).is_file() {
+        let output_path = output_dir.join(output);
+        let metadata = tokio::fs::symlink_metadata(&output_path)
+            .await
+            .map_err(|_| {
+                phase_error(
+                    ZipProjectPhaseName::Run,
+                    ZipProjectPhaseFailureReason::RunnerError,
+                    format!(
+                        "run `{}` did not produce declared output file `{output}`",
+                        run.run_id
+                    ),
+                    None,
+                )
+            })?;
+        if metadata.file_type().is_symlink() {
             return Err(phase_error(
                 ZipProjectPhaseName::Run,
                 ZipProjectPhaseFailureReason::RunnerError,
                 format!(
-                    "run `{}` did not produce declared output file `{output}`",
+                    "run `{}` declared output file `{output}` is a symlink",
+                    run.run_id
+                ),
+                None,
+            ));
+        }
+        if !metadata.is_file() {
+            return Err(phase_error(
+                ZipProjectPhaseName::Run,
+                ZipProjectPhaseFailureReason::RunnerError,
+                format!(
+                    "run `{}` declared output path `{output}` is not a regular file",
                     run.run_id
                 ),
                 None,

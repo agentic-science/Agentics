@@ -7,7 +7,7 @@ use std::path::Path;
 use helpers::{
     api_url, copy_dir_all, examples_challenges_root, grid_routing_solution_zip_base64,
     run_worker_once, sample_sum_solution, solution_zip_base64, solution_zip_base64_with_scripts,
-    spawn_app_with_config, test_config,
+    spawn_app_with_config, test_config, zip_project_zip_base64,
 };
 
 fn create_validation_disabled_challenge(root: &Path) {
@@ -331,6 +331,70 @@ async fn worker_completes_file_mode_validation_run(pool: sqlx::PgPool) {
             "metrics": [{ "metric_id": "score", "value": 1.0 }]
         })
     );
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn worker_rejects_symlink_declared_output(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = test_config(storage.path(), &examples_challenges_root());
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "name": "symlink-output-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+
+    let create_response: serde_json::Value = client
+        .post(api_url(&app, "/api/validation-runs"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "challenge_id": "grid-routing",
+            "benchmark_target_id": "cpu-linux-arm64",
+            "artifact_base64": grid_routing_symlink_solution_zip_base64(),
+            "explanation": "symlink output should fail before scorer"
+        }))
+        .send()
+        .await
+        .expect("failed to create validation run")
+        .json()
+        .await
+        .expect("failed to decode create validation response");
+    let validation_id = create_response["id"]
+        .as_str()
+        .expect("missing validation id");
+
+    run_worker_once(&pool, &config).await;
+
+    let validation: serde_json::Value = client
+        .get(api_url(
+            &app,
+            &format!("/api/validation-runs/{validation_id}"),
+        ))
+        .header("Authorization", format!("Bearer {token}"))
+        .send()
+        .await
+        .expect("failed to get validation run")
+        .json()
+        .await
+        .expect("failed to decode validation response");
+    assert_eq!(validation["status"], "failed");
+    assert_eq!(validation["evaluation"]["status"], "failed");
+
+    let last_error: String = sqlx::query_scalar(
+        "SELECT last_error FROM evaluation_jobs WHERE solution_submission_id = $1",
+    )
+    .bind(validation_id)
+    .fetch_one(&pool)
+    .await
+    .expect("failed to query failed job");
+    assert!(last_error.contains("declared output file `path.txt` is a symlink"));
 }
 
 #[sqlx::test(migrations = "../migrations")]
@@ -902,6 +966,41 @@ async fn register_agent_token(
         .as_str()
         .expect("missing token")
         .to_string()
+}
+
+fn grid_routing_symlink_solution_zip_base64() -> String {
+    zip_project_zip_base64(vec![
+        (
+            "agentics.solution.json",
+            serde_json::json!({
+                "protocol": "zip_project",
+                "protocol_version": 1,
+                "runtime": {
+                    "language": "shell",
+                    "language_version": "posix",
+                    "runtime_profile": "python-cpu"
+                },
+                "commands": {
+                    "run": "run.sh"
+                },
+                "phases": {
+                    "run": { "timeout_sec": 20, "network_access": "disabled" }
+                },
+                "interface": {
+                    "kind": "file_system",
+                    "input_contract": "case.json in AGENTICS_INPUT_DIR",
+                    "output_contract": "path.txt in AGENTICS_OUTPUT_DIR"
+                },
+                "dependencies": { "policy": "image_provided" }
+            })
+            .to_string(),
+        ),
+        (
+            "run.sh",
+            "#!/usr/bin/env sh\nset -eu\nln -sf /etc/passwd \"$AGENTICS_OUTPUT_DIR/path.txt\"\n"
+                .to_string(),
+        ),
+    ])
 }
 
 #[sqlx::test(migrations = "../migrations")]
