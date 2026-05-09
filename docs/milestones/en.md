@@ -132,7 +132,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 
 - **M0.1-CLI-4: Solution Submission packaging and official submit**
   - Commit target: `cli: add zip solution submission workflow`
-  - Scope: Implement ZIP packaging that respects `.gitignore`, archive validation, `agentics submit`, `agentics status <solution-submission-id>`, and result display.
+  - Scope: Implement ZIP packaging that respects `.gitignore`, archive validation, `agentics submit`, `agentics status <solution-submission-or-validation-run-id>`, and result display.
   - Test spec: Add tests for `.gitignore` behavior, missing or ignored `run.sh`, generated ZIP layout, mocked solution submission creation, authenticated status reads, and output rendering.
 
 - **M0.1-CLI-5: Remote validation commands**

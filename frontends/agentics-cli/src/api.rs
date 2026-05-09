@@ -1,5 +1,5 @@
 use anyhow::{Context, Result, bail};
-use reqwest::{Client, Method, Url};
+use reqwest::{Client, Method, StatusCode, Url};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use shared::models::ErrorResponse;
@@ -13,6 +13,30 @@ use shared::models::request::{
     CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse, RegisterAgentRequest,
     RegisterAgentResponse, SolutionSubmissionResponse,
 };
+
+#[derive(Debug)]
+pub struct ApiStatusError {
+    status: StatusCode,
+    message: String,
+}
+
+impl ApiStatusError {
+    fn new(status: StatusCode, message: String) -> Self {
+        Self { status, message }
+    }
+
+    pub fn status(&self) -> StatusCode {
+        self.status
+    }
+}
+
+impl std::fmt::Display for ApiStatusError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl std::error::Error for ApiStatusError {}
 
 #[derive(Debug, Clone)]
 pub struct ApiClient {
@@ -264,13 +288,17 @@ where
     }
 
     if let Ok(error) = serde_json::from_str::<ErrorResponse>(&body) {
-        bail!(
-            "Agentics API returned {} {}: {} ({})",
-            status.as_u16(),
-            status.canonical_reason().unwrap_or("error"),
-            error.message,
-            error.error
-        );
+        return Err(ApiStatusError::new(
+            status,
+            format!(
+                "Agentics API returned {} {}: {} ({})",
+                status.as_u16(),
+                status.canonical_reason().unwrap_or("error"),
+                error.message,
+                error.error
+            ),
+        )
+        .into());
     }
 
     let message = if body.trim().is_empty() {
@@ -278,12 +306,16 @@ where
     } else {
         body
     };
-    bail!(
-        "Agentics API returned {} {}: {}",
-        status.as_u16(),
-        status.canonical_reason().unwrap_or("error"),
-        message
-    );
+    Err(ApiStatusError::new(
+        status,
+        format!(
+            "Agentics API returned {} {}: {}",
+            status.as_u16(),
+            status.canonical_reason().unwrap_or("error"),
+            message
+        ),
+    )
+    .into())
 }
 
 #[cfg(test)]

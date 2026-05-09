@@ -105,7 +105,11 @@ cargo run -p agentics-cli --bin agentics -- \
   status "$SUBMISSION_ID"
 ```
 
-Poll until the status is `completed` or `failed`. A completed official submission should have an evaluation payload, a target id, and a rank score.
+Poll until the status is `completed` or `failed`. The same `status` command can
+poll validation run ids returned by `validate --remote --no-wait`; use
+`--kind validation-run` when a script should skip auto-detection. A completed
+official submission should have an evaluation payload, a target id, and a rank
+score.
 
 ## Acceptance Criteria
 

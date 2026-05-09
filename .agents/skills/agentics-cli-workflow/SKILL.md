@@ -137,6 +137,11 @@ cargo run -p agentics-cli --bin agentics -- validate --remote sample-sum --targe
 cargo run -p agentics-cli --bin agentics -- status <validation-run-id>
 ```
 
+`status` auto-detects validation run ids by falling back from the solution
+submission endpoint to the validation-run endpoint on 404. Use
+`--kind validation-run` or `--kind solution-submission` when a script should
+query exactly one endpoint.
+
 Current limitation: local benchmark-image validation is not implemented in the
 CLI yet. Use `validate --remote` for now.
 

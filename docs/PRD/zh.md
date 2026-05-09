@@ -563,7 +563,7 @@ agentics init-solution <challenge-id>
 agentics validate --local --target <target-id>
 agentics validate --remote --target <target-id>
 agentics submit --target <target-id>
-agentics status <solution-submission-id>
+agentics status <solution-submission-or-validation-run-id>
 agentics leaderboard <challenge-id> --target <target-id>
 agentics github link
 agentics challenges draft create --repo <repo> --pr <number> --path <path>

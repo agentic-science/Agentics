@@ -213,7 +213,7 @@ cargo run -p agentics-cli --bin agentics -- validate --remote sample-sum \
   --target cpu-linux-arm64 --dir sample-sum-solution
 cargo run -p agentics-cli --bin agentics -- submit sample-sum \
   --target cpu-linux-arm64 --dir sample-sum-solution
-cargo run -p agentics-cli --bin agentics -- status <solution-submission-id>
+cargo run -p agentics-cli --bin agentics -- status <solution-submission-or-validation-run-id>
 ```
 
 Registration stores the returned bearer token in the CLI config file by
@@ -228,6 +228,9 @@ packaging, reject unsupported benchmark targets locally, and require
 targets. Remote validation also checks the selected target's validation flag.
 Both commands package the workspace as a ZIP, respect `.gitignore`, skip local
 VCS/build/cache directories, and require the manifest-declared run script.
+`status` auto-detects solution submissions and validation runs. Use
+`--kind solution-submission` or `--kind validation-run` when automation should
+avoid the auto-detection fallback.
 Remote validation runs are private and do not update leaderboard state; official
 solution submissions can become publicly visible after the worker completes
 evaluation.

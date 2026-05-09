@@ -20,9 +20,10 @@ mod workspace;
 use anyhow::Result;
 use clap::Parser;
 
-use crate::api::ApiClient;
+use crate::api::{ApiClient, ApiStatusError};
 use crate::cli::{
     AuthCommand, ChallengeCreatorCommand, ChallengesCommand, Cli, Commands, ConfigCommand,
+    StatusKind,
 };
 use crate::config::{ConfigStore, Environment, ResolvedSettings};
 
@@ -93,12 +94,34 @@ pub async fn execute(cli: Cli, env: Environment) -> Result<String> {
         Commands::Validate(args) => commands::validate(args, cli.output, &settings).await,
         Commands::Status(args) => {
             let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-            let response = client
-                .get_solution_submission(&args.solution_submission_id)
-                .await?;
-            output::render_solution_submission_status(&response, cli.output)
+            match args.kind {
+                StatusKind::SolutionSubmission => {
+                    let response = client.get_solution_submission(&args.id).await?;
+                    output::render_solution_submission_status(&response, cli.output)
+                }
+                StatusKind::ValidationRun => {
+                    let response = client.get_validation_run(&args.id).await?;
+                    output::render_validation_run_status(&response, cli.output)
+                }
+                StatusKind::Auto => match client.get_solution_submission(&args.id).await {
+                    Ok(response) => {
+                        output::render_solution_submission_status(&response, cli.output)
+                    }
+                    Err(error) if is_not_found(&error) => {
+                        let response = client.get_validation_run(&args.id).await?;
+                        output::render_validation_run_status(&response, cli.output)
+                    }
+                    Err(error) => Err(error),
+                },
+            }
         }
     }
+}
+
+fn is_not_found(error: &anyhow::Error) -> bool {
+    error
+        .downcast_ref::<ApiStatusError>()
+        .is_some_and(|api_error| api_error.status() == reqwest::StatusCode::NOT_FOUND)
 }
 
 fn config_path(cli: &Cli) -> Result<std::path::PathBuf> {
@@ -437,6 +460,93 @@ mod tests {
 
         assert!(output.contains("solution submission: solution_submission-1"));
         assert!(output.contains("evaluation_job: job-1 (queued)"));
+    }
+
+    #[tokio::test]
+    async fn status_falls_back_to_validation_run() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/solution-submissions/validation-1"))
+            .and(header("authorization", "Bearer test-token"))
+            .respond_with(ResponseTemplate::new(404).set_body_json(json!({
+                "error": "not_found",
+                "message": "solution submission not found"
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/api/validation-runs/validation-1"))
+            .and(header("authorization", "Bearer test-token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "validation-1",
+                "challenge_id": "sample-sum",
+                "challenge_title": "Sample Sum",
+                "challenge_version_id": "version-1",
+                "benchmark_target_id": "cpu-linux-arm64",
+                "agent_id": "agent-1",
+                "agent_name": "solver",
+                "status": "completed",
+                "explanation": "quick check",
+                "parent_solution_submission_id": null,
+                "credit_text": "",
+                "visible_after_eval": false,
+                "artifact_path": "solution-submissions/validation-1.zip",
+                "evaluation_job": {
+                    "id": "job-1",
+                    "benchmark_target_id": "cpu-linux-arm64",
+                    "status": "completed"
+                },
+                "evaluation": {
+                    "id": "eval-1",
+                    "benchmark_target_id": "cpu-linux-arm64",
+                    "status": "completed",
+                    "eval_type": "validation",
+                    "primary_score": 1.0,
+                    "rank_score": 1.0,
+                    "aggregate_metrics": [],
+                    "run_metrics": [],
+                    "public_results": []
+                },
+                "created_at": "2026-05-01T00:00:00Z",
+                "updated_at": "2026-05-01T00:00:01Z"
+            })))
+            .mount(&server)
+            .await;
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let config_path = temp.path().join("config.toml");
+        let cli = Cli::parse_from([
+            "agentics",
+            "--config",
+            config_path.to_str().expect("utf8 path"),
+            "--api-base-url",
+            &server.uri(),
+            "--token",
+            "test-token",
+            "status",
+            "validation-1",
+        ]);
+
+        let output = execute(cli, Environment::default())
+            .await
+            .expect("status should succeed");
+        let requests = server
+            .received_requests()
+            .await
+            .expect("requests should be recorded");
+
+        assert!(output.contains("validation_run: validation-1"));
+        assert!(output.contains("validation: completed"));
+        assert!(
+            requests
+                .iter()
+                .any(|request| request.url.path() == "/api/solution-submissions/validation-1")
+        );
+        assert!(
+            requests
+                .iter()
+                .any(|request| request.url.path() == "/api/validation-runs/validation-1")
+        );
     }
 
     #[tokio::test]

@@ -363,5 +363,17 @@ pub struct ValidateArgs {
 #[derive(Debug, Clone, Args)]
 pub struct StatusArgs {
     /// Solution submission or validation run id returned by `agentics submit` or `agentics validate`.
-    pub solution_submission_id: String,
+    pub id: String,
+
+    /// Which status endpoint to query. Auto tries a solution submission first, then a validation run on 404.
+    #[arg(long, value_enum, default_value_t = StatusKind::Auto)]
+    pub kind: StatusKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[clap(rename_all = "kebab-case")]
+pub enum StatusKind {
+    Auto,
+    SolutionSubmission,
+    ValidationRun,
 }
