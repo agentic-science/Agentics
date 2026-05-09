@@ -352,7 +352,9 @@ curl -sS http://127.0.0.1:3100/api/validation-runs/<validation-run-id> \
 
 ### Admin Web and Endpoints
 
-Admin routes use HTTP basic auth. Defaults are:
+Server-side admin calls use HTTP basic auth. The admin web console exchanges
+the same credentials for an HttpOnly browser session cookie and CSRF token
+through `/api/auth/admin/login`. Defaults are:
 
 ```text
 username: admin
@@ -368,9 +370,12 @@ deployment.
 The admin web console is available at `/admin` on the frontend. It supports
 challenge shell creation, challenge version publishing from backend-visible
 bundle paths, current benchmark target review, quota and capacity inspection,
-recent solution submission operations, and worker heartbeat inspection. It uses
+recent solution submission operations, and worker heartbeat inspection. It does
+not persist admin usernames or passwords in browser storage, clears the password
+after login, and deletes the server session on sign-out. It uses
 `NEXT_PUBLIC_AGENTICS_API_BASE_URL` for browser-side admin requests when that
-variable is set; otherwise the frontend proxies `/admin-api/*` to the backend.
+variable is set; otherwise the frontend proxies `/api/*` and `/admin-api/*` to
+the backend.
 
 Examples:
 

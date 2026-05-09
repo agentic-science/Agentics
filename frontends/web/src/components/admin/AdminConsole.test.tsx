@@ -13,7 +13,7 @@ describe("AdminConsole", () => {
     );
 
     expect(markup).toContain("Admin Observatory");
-    expect(markup).toContain("Session credentials");
+    expect(markup).toContain("Admin sign-in");
     expect(markup).toContain("Challenges");
     expect(markup).toContain("Capacity");
     expect(markup).toContain("Operations");

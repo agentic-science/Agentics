@@ -340,6 +340,127 @@ async fn admin_routes_require_auth(pool: sqlx::PgPool) {
 }
 
 #[sqlx::test(migrations = "../migrations")]
+async fn admin_session_cookie_authenticates_admin_routes(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = test_config(storage.path(), &examples_challenges_root());
+    let app = spawn_app_with_config(pool, config.clone()).await;
+    let client = reqwest::Client::new();
+
+    let login_response = client
+        .post(api_url(&app, "/api/auth/admin/login"))
+        .json(&serde_json::json!({
+            "username": config.admin_username,
+            "password": config.admin_password
+        }))
+        .send()
+        .await
+        .expect("failed to login as admin");
+    assert_eq!(login_response.status(), reqwest::StatusCode::OK);
+
+    let set_cookies = login_response
+        .headers()
+        .get_all(reqwest::header::SET_COOKIE)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    assert!(
+        set_cookies.iter().any(|value| {
+            value.starts_with(&format!("{}=", config.web_session_cookie_name))
+                && value.contains("HttpOnly")
+        }),
+        "admin login should set an HttpOnly session cookie"
+    );
+    let session_cookie = set_cookies
+        .iter()
+        .find_map(|value| {
+            value
+                .strip_prefix(&format!("{}=", config.web_session_cookie_name))
+                .map(|_| value.split(';').next().expect("cookie pair").to_string())
+        })
+        .expect("admin login should set the session cookie");
+    let login_body: serde_json::Value = login_response
+        .json()
+        .await
+        .expect("failed to decode admin login response");
+    let csrf_token = login_body["csrf_token"]
+        .as_str()
+        .expect("admin login should return csrf token");
+
+    let list_response = client
+        .get(api_url(&app, "/admin/challenges"))
+        .header(reqwest::header::COOKIE, &session_cookie)
+        .send()
+        .await
+        .expect("failed to list admin challenges");
+    assert_eq!(list_response.status(), reqwest::StatusCode::OK);
+
+    let missing_csrf_response = client
+        .post(api_url(&app, "/admin/challenges"))
+        .header(reqwest::header::COOKIE, &session_cookie)
+        .json(&serde_json::json!({
+            "id": "session-admin-missing-csrf",
+            "slug": "session-admin-missing-csrf",
+            "title": "Session Admin Missing CSRF",
+            "summary": "Session admin challenge"
+        }))
+        .send()
+        .await
+        .expect("failed to create challenge without csrf");
+    assert_eq!(
+        missing_csrf_response.status(),
+        reqwest::StatusCode::FORBIDDEN
+    );
+
+    let create_response = client
+        .post(api_url(&app, "/admin/challenges"))
+        .header(reqwest::header::COOKIE, &session_cookie)
+        .header("x-agentics-csrf-token", csrf_token)
+        .json(&serde_json::json!({
+            "id": "session-admin",
+            "slug": "session-admin",
+            "title": "Session Admin",
+            "summary": "Session admin challenge"
+        }))
+        .send()
+        .await
+        .expect("failed to create challenge with session auth");
+    assert_eq!(create_response.status(), reqwest::StatusCode::CREATED);
+
+    let logout_response = client
+        .post(api_url(&app, "/api/auth/admin/logout"))
+        .header(reqwest::header::COOKIE, &session_cookie)
+        .header("x-agentics-csrf-token", csrf_token)
+        .send()
+        .await
+        .expect("failed to logout admin session");
+    assert_eq!(logout_response.status(), reqwest::StatusCode::NO_CONTENT);
+    assert!(
+        logout_response
+            .headers()
+            .get_all(reqwest::header::SET_COOKIE)
+            .iter()
+            .filter_map(|value| value.to_str().ok())
+            .any(|value| {
+                value.starts_with(&format!("{}=", config.web_session_cookie_name))
+                    && value.contains("Max-Age=0")
+            }),
+        "admin logout should expire the session cookie"
+    );
+
+    let after_logout_response = client
+        .get(api_url(&app, "/admin/challenges"))
+        .header(reqwest::header::COOKIE, &session_cookie)
+        .send()
+        .await
+        .expect("failed to list admin challenges after logout");
+    assert_eq!(
+        after_logout_response.status(),
+        reqwest::StatusCode::UNAUTHORIZED
+    );
+}
+
+#[sqlx::test(migrations = "../migrations")]
 async fn admin_official_run_bypasses_public_official_queue_limit(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let mut config = test_config(storage.path(), &examples_challenges_root());

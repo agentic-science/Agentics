@@ -32,6 +32,14 @@ pub struct AuthenticatedCreatorSession {
     pub csrf_token_hash: String,
 }
 
+/// Persisted admin identity resolved from a browser session.
+#[derive(Debug, Clone)]
+pub struct AuthenticatedAdminSession {
+    pub session_id: String,
+    pub admin_username: String,
+    pub csrf_token_hash: String,
+}
+
 /// Input for inserting a browser session.
 #[derive(Debug, Clone)]
 pub struct CreateCreatorSessionInput {
@@ -41,6 +49,16 @@ pub struct CreateCreatorSessionInput {
     pub agent_id: String,
     pub github_user_id: i64,
     pub github_login: String,
+    pub expires_at: DateTime<Utc>,
+}
+
+/// Input for inserting an admin browser session.
+#[derive(Debug, Clone)]
+pub struct CreateAdminSessionInput {
+    pub session_id: String,
+    pub session_token_hash: String,
+    pub csrf_token_hash: String,
+    pub admin_username: String,
     pub expires_at: DateTime<Utc>,
 }
 
@@ -161,6 +179,32 @@ pub async fn create_creator_session(
     Ok(())
 }
 
+/// Create a browser session for an administrator.
+pub async fn create_admin_session(pool: &PgPool, input: &CreateAdminSessionInput) -> Result<()> {
+    sqlx::query(
+        r#"
+        INSERT INTO web_sessions (
+            id,
+            role,
+            session_token_hash,
+            csrf_token_hash,
+            admin_username,
+            expires_at
+        )
+        VALUES ($1, 'admin', $2, $3, $4, $5)
+        "#,
+    )
+    .bind(&input.session_id)
+    .bind(&input.session_token_hash)
+    .bind(&input.csrf_token_hash)
+    .bind(input.admin_username.trim())
+    .bind(input.expires_at)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
 /// Authenticate a creator session token and refresh its last-used timestamp.
 pub async fn authenticate_creator_session(
     pool: &PgPool,
@@ -204,6 +248,55 @@ pub async fn authenticate_creator_session(
         github_login: row.try_get("github_login")?,
         csrf_token_hash: row.try_get("csrf_token_hash")?,
     }))
+}
+
+/// Authenticate an admin session token and refresh its last-used timestamp.
+pub async fn authenticate_admin_session(
+    pool: &PgPool,
+    session_token: &str,
+) -> Result<Option<AuthenticatedAdminSession>> {
+    let session_token_hash = crate::auth::hash_opaque_token(session_token);
+    let row = sqlx::query(
+        r#"
+        SELECT id, admin_username, csrf_token_hash
+        FROM web_sessions
+        WHERE session_token_hash = $1
+          AND role = 'admin'
+          AND expires_at > NOW()
+        LIMIT 1
+        "#,
+    )
+    .bind(&session_token_hash)
+    .fetch_optional(pool)
+    .await?;
+
+    let Some(row) = row else {
+        return Ok(None);
+    };
+
+    let session_id: String = row.try_get("id")?;
+    sqlx::query("UPDATE web_sessions SET last_used_at = NOW() WHERE id = $1")
+        .bind(&session_id)
+        .execute(pool)
+        .await?;
+
+    Ok(Some(AuthenticatedAdminSession {
+        session_id,
+        admin_username: row
+            .try_get::<Option<String>, _>("admin_username")?
+            .ok_or_else(|| AppError::Internal("admin session missing username".to_string()))?,
+        csrf_token_hash: row.try_get("csrf_token_hash")?,
+    }))
+}
+
+/// Delete a browser session by the bearer cookie token.
+pub async fn delete_web_session_by_token(pool: &PgPool, session_token: &str) -> Result<()> {
+    let session_token_hash = crate::auth::hash_opaque_token(session_token);
+    sqlx::query("DELETE FROM web_sessions WHERE session_token_hash = $1")
+        .bind(session_token_hash)
+        .execute(pool)
+        .await?;
+    Ok(())
 }
 
 /// Delete expired transient auth rows.

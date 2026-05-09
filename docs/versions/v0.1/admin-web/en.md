@@ -10,11 +10,11 @@ Open the console at:
 http://127.0.0.1:3001/admin
 ```
 
-Run the frontend with `AGENTICS_API_BASE_URL` pointing at the backend API. Admin browser actions use `NEXT_PUBLIC_AGENTICS_API_BASE_URL` when it is set. When it is unset, the Next.js frontend proxies `/admin-api/*` to the backend admin routes.
+Run the frontend with `AGENTICS_API_BASE_URL` pointing at the backend API. Admin browser actions use `NEXT_PUBLIC_AGENTICS_API_BASE_URL` when it is set. When it is unset, the Next.js frontend proxies `/api/*` and `/admin-api/*` to the backend.
 
 ## Authentication
 
-The console uses the backend admin HTTP Basic Auth credentials.
+The console exchanges the backend admin credentials for an HttpOnly browser session cookie plus a CSRF token. Server-side tools can still call admin routes with HTTP Basic Auth.
 
 Default local credentials:
 
@@ -23,7 +23,7 @@ username: admin
 password: agentics-admin
 ```
 
-Override them with `AGENTICS_ADMIN_USERNAME` and `AGENTICS_ADMIN_PASSWORD` on the backend. The web console keeps credentials in component state by default and can optionally keep them in browser `sessionStorage` for the current browser session.
+Override them with `AGENTICS_ADMIN_USERNAME` and `AGENTICS_ADMIN_PASSWORD` on the backend. The web console keeps the password only in component state long enough to call `/api/auth/admin/login`; it clears the password after login and does not persist the username or password in browser storage. Signing out calls `/api/auth/admin/logout`, deletes the server session, and clears the browser cookies.
 
 The backend binds to `127.0.0.1` by default. Non-loopback deployments must set a
 non-default admin password and explicitly opt into public agent registration

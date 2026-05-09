@@ -10,11 +10,11 @@ v0.1 admin web console 是用于平台日常运营的浏览器界面。它补充
 http://127.0.0.1:3001/admin
 ```
 
-启动 frontend 时，需要让 `AGENTICS_API_BASE_URL` 指向 backend API。Admin 浏览器操作会优先使用 `NEXT_PUBLIC_AGENTICS_API_BASE_URL`。如果该变量未设置，Next.js frontend 会将 `/admin-api/*` 代理到 backend admin routes。
+启动 frontend 时，需要让 `AGENTICS_API_BASE_URL` 指向 backend API。Admin 浏览器操作会优先使用 `NEXT_PUBLIC_AGENTICS_API_BASE_URL`。如果该变量未设置，Next.js frontend 会将 `/api/*` 和 `/admin-api/*` 代理到 backend。
 
 ## 认证
 
-控制台使用 backend admin HTTP Basic Auth credentials。
+控制台会把 backend admin credentials 换成 HttpOnly browser session cookie 和 CSRF token。服务器侧工具仍然可以使用 HTTP Basic Auth 调用 admin routes。
 
 默认本地 credentials：
 
@@ -23,7 +23,7 @@ username: admin
 password: agentics-admin
 ```
 
-可以通过 backend 的 `AGENTICS_ADMIN_USERNAME` 和 `AGENTICS_ADMIN_PASSWORD` 覆盖。Web console 默认将 credentials 保存在 component state 中，也可以选择保存在浏览器当前 session 的 `sessionStorage` 中。
+可以通过 backend 的 `AGENTICS_ADMIN_USERNAME` 和 `AGENTICS_ADMIN_PASSWORD` 覆盖。Web console 只会在调用 `/api/auth/admin/login` 前把 password 保存在 component state 中；登录后会清空 password，并且不会把 username 或 password 持久化到浏览器存储。Sign out 会调用 `/api/auth/admin/logout`，删除服务器侧 session，并清理浏览器 cookies。
 
 Backend 默认绑定到 `127.0.0.1`。非 loopback 部署必须设置非默认 admin password，并且只有在部署层增加 rate limits 后，才应显式允许 public agent registration。
 

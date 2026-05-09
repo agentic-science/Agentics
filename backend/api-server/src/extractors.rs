@@ -6,7 +6,10 @@ use axum::{
 use serde::de::DeserializeOwned;
 
 use shared::auth;
-use shared::db::{authenticate_agent_token, authenticate_creator_session};
+use shared::db::{
+    AuthenticatedAdminSession, authenticate_admin_session, authenticate_agent_token,
+    authenticate_creator_session,
+};
 use shared::models::challenge_creation::{
     CreateChallengeDraftRequest, ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest,
     ValidateChallengeDraftRequest,
@@ -59,7 +62,11 @@ impl FromRequestParts<AppState> for AgentAuth {
     }
 }
 
-/// Marker extractor for routes that require administrator basic auth.
+/// Marker extractor for routes that require administrator authentication.
+///
+/// Server-side tools can continue to use Basic auth. Browser routes should use
+/// the session-cookie path issued by `/api/auth/admin/login`, which keeps the
+/// reusable admin password out of browser storage and request logs.
 #[derive(Debug, Clone)]
 pub struct AdminAuth {
     pub username: String,
@@ -77,17 +84,35 @@ impl FromRequestParts<AppState> for AdminAuth {
             .get(header::AUTHORIZATION)
             .and_then(|h| h.to_str().ok());
 
-        let parsed = auth::parse_basic_auth(auth_header)
-            .ok_or_else(|| unauthorized("需要有效的 admin basic auth"))?;
-
-        if parsed.username != state.config.admin_username
-            || parsed.password != state.config.admin_password
-        {
+        if let Some(parsed) = auth::parse_basic_auth(auth_header) {
+            if parsed.username == state.config.admin_username
+                && parsed.password == state.config.admin_password
+            {
+                return Ok(AdminAuth {
+                    username: parsed.username,
+                });
+            }
             return Err(unauthorized("需要有效的 admin basic auth"));
         }
 
+        let session_token = cookie_value(
+            parts
+                .headers
+                .get(header::COOKIE)
+                .and_then(|h| h.to_str().ok()),
+            &state.config.web_session_cookie_name,
+        )
+        .ok_or_else(|| unauthorized("需要有效的 admin session 或 basic auth"))?;
+
+        let session = authenticate_admin_session(&state.db, &session_token)
+            .await
+            .map_err(|_| unauthorized("admin session 无效或已过期"))?
+            .ok_or_else(|| unauthorized("admin session 无效或已过期"))?;
+
+        require_session_csrf(parts, &session)?;
+
         Ok(AdminAuth {
-            username: parsed.username,
+            username: session.admin_username,
         })
     }
 }
@@ -122,17 +147,7 @@ impl FromRequestParts<AppState> for CreatorAuth {
             .map_err(|_| unauthorized("creator session 无效或已过期"))?
             .ok_or_else(|| unauthorized("creator session 无效或已过期"))?;
 
-        if requires_csrf(&parts.method) {
-            let csrf_token = parts
-                .headers
-                .get("x-agentics-csrf-token")
-                .and_then(|h| h.to_str().ok())
-                .ok_or_else(|| forbidden("缺少有效的 CSRF token"))?;
-            let csrf_hash = auth::hash_opaque_token(csrf_token);
-            if csrf_hash != session.csrf_token_hash {
-                return Err(forbidden("缺少有效的 CSRF token"));
-            }
-        }
+        require_session_csrf(parts, &session)?;
 
         Ok(CreatorAuth {
             session_id: session.session_id,
@@ -141,6 +156,41 @@ impl FromRequestParts<AppState> for CreatorAuth {
             github_login: session.github_login,
         })
     }
+}
+
+trait WebSessionCsrf {
+    fn csrf_token_hash(&self) -> &str;
+}
+
+impl WebSessionCsrf for AuthenticatedAdminSession {
+    fn csrf_token_hash(&self) -> &str {
+        &self.csrf_token_hash
+    }
+}
+
+impl WebSessionCsrf for shared::db::AuthenticatedCreatorSession {
+    fn csrf_token_hash(&self) -> &str {
+        &self.csrf_token_hash
+    }
+}
+
+fn require_session_csrf<S: WebSessionCsrf>(
+    parts: &Parts,
+    session: &S,
+) -> Result<(), (StatusCode, axum::Json<shared::models::ErrorResponse>)> {
+    if !requires_csrf(&parts.method) {
+        return Ok(());
+    }
+    let csrf_token = parts
+        .headers
+        .get("x-agentics-csrf-token")
+        .and_then(|h| h.to_str().ok())
+        .ok_or_else(|| forbidden("缺少有效的 CSRF token"))?;
+    let csrf_hash = auth::hash_opaque_token(csrf_token);
+    if csrf_hash != session.csrf_token_hash() {
+        return Err(forbidden("缺少有效的 CSRF token"));
+    }
+    Ok(())
 }
 
 fn unauthorized(message: &str) -> (StatusCode, axum::Json<shared::models::ErrorResponse>) {

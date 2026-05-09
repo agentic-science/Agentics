@@ -2,6 +2,22 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Browser-submitted admin login credentials.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AdminLoginRequest {
+    pub username: String,
+    pub password: String,
+}
+
+/// Admin session material returned after a successful login.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdminSessionResponse {
+    pub username: String,
+    pub csrf_token: String,
+    pub expires_at: String,
+}
+
 /// URL returned to a browser or CLI so it can start GitHub OAuth.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GithubOauthLoginResponse {

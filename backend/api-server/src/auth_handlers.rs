@@ -3,7 +3,7 @@
 use axum::{
     Json,
     extract::{Query, State},
-    http::{HeaderName, StatusCode, header},
+    http::{HeaderMap, HeaderName, StatusCode, header},
     response::AppendHeaders,
 };
 use chrono::{Duration, Utc};
@@ -15,10 +15,11 @@ use shared::auth;
 use shared::db;
 use shared::error::{AppError, Result};
 use shared::models::auth::{
-    CreatorMeResponse, CreatorSessionResponse, GithubOauthCallbackQuery, GithubOauthLoginResponse,
+    AdminLoginRequest, AdminSessionResponse, CreatorMeResponse, CreatorSessionResponse,
+    GithubOauthCallbackQuery, GithubOauthLoginResponse,
 };
 
-use crate::extractors::CreatorAuth;
+use crate::extractors::{AdminAuth, CreatorAuth};
 use crate::state::AppState;
 
 const OAUTH_STATE_TTL_MINUTES: i64 = 10;
@@ -35,6 +36,79 @@ struct GithubAccessTokenResponse {
 struct GithubUserResponse {
     id: i64,
     login: String,
+}
+
+/// Authenticate an administrator and issue a browser session.
+pub async fn admin_login(
+    State(state): State<AppState>,
+    Json(request): Json<AdminLoginRequest>,
+) -> Result<(
+    StatusCode,
+    AppendHeaders<[(HeaderName, String); 2]>,
+    Json<AdminSessionResponse>,
+)> {
+    if request.username.trim().is_empty() || request.password.is_empty() {
+        return Err(AppError::Unauthorized);
+    }
+    if request.username != state.config.admin_username
+        || request.password != state.config.admin_password
+    {
+        return Err(AppError::Unauthorized);
+    }
+    let username = request.username.trim().to_string();
+
+    let session_token = auth::create_web_session_token();
+    let csrf_token = auth::create_csrf_token();
+    let ttl_seconds = session_ttl_seconds(&state)?;
+    let expires_at = session_expires_at(ttl_seconds)?;
+    db::delete_expired_web_auth_rows(&state.db).await?;
+    db::create_admin_session(
+        &state.db,
+        &db::CreateAdminSessionInput {
+            session_id: Uuid::new_v4().to_string(),
+            session_token_hash: auth::hash_opaque_token(&session_token),
+            csrf_token_hash: auth::hash_opaque_token(&csrf_token),
+            admin_username: username.clone(),
+            expires_at,
+        },
+    )
+    .await?;
+
+    let headers = AppendHeaders(session_cookies(
+        &state,
+        &session_token,
+        &csrf_token,
+        ttl_seconds,
+    ));
+
+    Ok((
+        StatusCode::OK,
+        headers,
+        Json(AdminSessionResponse {
+            username,
+            csrf_token,
+            expires_at: expires_at.to_rfc3339(),
+        }),
+    ))
+}
+
+/// End an administrator browser session and clear auth cookies.
+pub async fn admin_logout(
+    _admin: AdminAuth,
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<(StatusCode, AppendHeaders<[(HeaderName, String); 2]>)> {
+    if let Some(session_token) = cookie_value(
+        headers.get(header::COOKIE).and_then(|h| h.to_str().ok()),
+        &state.config.web_session_cookie_name,
+    ) {
+        db::delete_web_session_by_token(&state.db, &session_token).await?;
+    }
+
+    Ok((
+        StatusCode::NO_CONTENT,
+        AppendHeaders(expired_session_cookies(&state)),
+    ))
 }
 
 /// Start a GitHub OAuth login for challenge creators.
@@ -111,14 +185,8 @@ pub async fn github_oauth_callback(
 
     let session_token = auth::create_web_session_token();
     let csrf_token = auth::create_csrf_token();
-    let ttl_seconds = state
-        .config
-        .web_session_ttl_hours
-        .checked_mul(60 * 60)
-        .ok_or_else(|| AppError::Internal("web session TTL overflow".to_string()))?;
-    let expires_at = Utc::now()
-        .checked_add_signed(Duration::seconds(ttl_seconds))
-        .ok_or_else(|| AppError::Internal("web session TTL overflow".to_string()))?;
+    let ttl_seconds = session_ttl_seconds(&state)?;
+    let expires_at = session_expires_at(ttl_seconds)?;
     db::create_creator_session(
         &state.db,
         &db::CreateCreatorSessionInput {
@@ -133,28 +201,12 @@ pub async fn github_oauth_callback(
     )
     .await?;
 
-    let headers = AppendHeaders([
-        (
-            header::SET_COOKIE,
-            build_cookie(
-                &state.config.web_session_cookie_name,
-                &session_token,
-                ttl_seconds,
-                true,
-                state.config.web_session_cookie_secure,
-            ),
-        ),
-        (
-            header::SET_COOKIE,
-            build_cookie(
-                &state.config.web_csrf_cookie_name,
-                &csrf_token,
-                ttl_seconds,
-                false,
-                state.config.web_session_cookie_secure,
-            ),
-        ),
-    ]);
+    let headers = AppendHeaders(session_cookies(
+        &state,
+        &session_token,
+        &csrf_token,
+        ttl_seconds,
+    ));
 
     Ok((
         StatusCode::OK,
@@ -275,6 +327,75 @@ fn form_urlencoded(values: &[(&str, &str)]) -> Result<String> {
         .ok_or_else(|| AppError::Internal("failed to encode OAuth token request".to_string()))
 }
 
+fn session_ttl_seconds(state: &AppState) -> Result<i64> {
+    state
+        .config
+        .web_session_ttl_hours
+        .checked_mul(60 * 60)
+        .ok_or_else(|| AppError::Internal("web session TTL overflow".to_string()))
+}
+
+fn session_expires_at(ttl_seconds: i64) -> Result<chrono::DateTime<Utc>> {
+    Utc::now()
+        .checked_add_signed(Duration::seconds(ttl_seconds))
+        .ok_or_else(|| AppError::Internal("web session TTL overflow".to_string()))
+}
+
+fn session_cookies(
+    state: &AppState,
+    session_token: &str,
+    csrf_token: &str,
+    ttl_seconds: i64,
+) -> [(HeaderName, String); 2] {
+    [
+        (
+            header::SET_COOKIE,
+            build_cookie(
+                &state.config.web_session_cookie_name,
+                session_token,
+                ttl_seconds,
+                true,
+                state.config.web_session_cookie_secure,
+            ),
+        ),
+        (
+            header::SET_COOKIE,
+            build_cookie(
+                &state.config.web_csrf_cookie_name,
+                csrf_token,
+                ttl_seconds,
+                false,
+                state.config.web_session_cookie_secure,
+            ),
+        ),
+    ]
+}
+
+fn expired_session_cookies(state: &AppState) -> [(HeaderName, String); 2] {
+    [
+        (
+            header::SET_COOKIE,
+            build_cookie(
+                &state.config.web_session_cookie_name,
+                "",
+                0,
+                true,
+                state.config.web_session_cookie_secure,
+            ),
+        ),
+        (
+            header::SET_COOKIE,
+            build_cookie(
+                &state.config.web_csrf_cookie_name,
+                "",
+                0,
+                false,
+                state.config.web_session_cookie_secure,
+            ),
+        ),
+    ]
+}
+
 fn build_cookie(
     name: &str,
     value: &str,
@@ -290,4 +411,16 @@ fn build_cookie(
         cookie.push_str("; Secure");
     }
     cookie
+}
+
+fn cookie_value(cookie_header: Option<&str>, name: &str) -> Option<String> {
+    let cookie_header = cookie_header?;
+    for pair in cookie_header.split(';') {
+        if let Some((candidate_name, value)) = pair.trim().split_once('=')
+            && candidate_name == name
+        {
+            return Some(value.to_string());
+        }
+    }
+    None
 }

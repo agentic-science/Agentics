@@ -16,18 +16,13 @@ import {
   UploadCloud,
 } from "lucide-react";
 import { useLocale } from "next-intl";
-import {
-  type FormEvent,
-  type ReactNode,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { type FormEvent, type ReactNode, useMemo, useState } from "react";
 import {
   AdminApiError,
   type AdminCredentials,
   adminFetchJson,
-  parseAdminCredentials,
+  adminLogin,
+  adminLogout,
 } from "@/lib/adminApi";
 import { formatDate, formatScore } from "@/lib/format";
 import {
@@ -66,40 +61,46 @@ const emptyData: AdminData = {
   capacity: null,
 };
 
-const credentialStorageKey = "agentics-admin-credentials";
-
 export function AdminConsole() {
   const locale = useLocale();
   const [credentials, setCredentials] = useState<AdminCredentials>({
     username: "admin",
     password: "",
   });
-  const [remember, setRemember] = useState(false);
+  const [csrfToken, setCsrfToken] = useState("");
+  const [sessionUsername, setSessionUsername] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
   const [data, setData] = useState<AdminData>(emptyData);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const stored = sessionStorage.getItem(credentialStorageKey);
-    if (!stored) return;
-    try {
-      const parsed = parseAdminCredentials(JSON.parse(stored));
-      if (!parsed) {
-        sessionStorage.removeItem(credentialStorageKey);
-        return;
-      }
-      setCredentials(parsed);
-      setRemember(true);
-    } catch {
-      sessionStorage.removeItem(credentialStorageKey);
-    }
-  }, []);
-
   const isConfigured = credentials.username.trim() && credentials.password;
 
-  const refresh: AdminRefresh = async (options = {}) => {
+  const fetchAdminData = async (token: string): Promise<AdminData> => {
+    const [challenges, submissions, heartbeats, capacity] = await Promise.all([
+      adminFetchJson(
+        "/admin/challenges",
+        adminChallengeListResponseSchema,
+        token,
+      ),
+      adminFetchJson(
+        "/admin/solution-submissions",
+        adminSolutionSubmissionListResponseSchema,
+        token,
+      ),
+      adminFetchJson(
+        "/admin/service-heartbeats",
+        adminServiceHeartbeatListResponseSchema,
+        token,
+      ),
+      adminFetchJson("/admin/capacity", adminCapacityResponseSchema, token),
+    ]);
+
+    return { challenges, submissions, heartbeats, capacity };
+  };
+
+  const loginAndRefresh: AdminRefresh = async (options = {}) => {
     if (!isConfigured) {
       setError("Enter admin credentials before loading operator data.");
       return;
@@ -108,39 +109,55 @@ export function AdminConsole() {
     setLoading(true);
     setError(null);
     try {
-      const [challenges, submissions, heartbeats, capacity] = await Promise.all(
-        [
-          adminFetchJson(
-            "/admin/challenges",
-            adminChallengeListResponseSchema,
-            credentials,
-          ),
-          adminFetchJson(
-            "/admin/solution-submissions",
-            adminSolutionSubmissionListResponseSchema,
-            credentials,
-          ),
-          adminFetchJson(
-            "/admin/service-heartbeats",
-            adminServiceHeartbeatListResponseSchema,
-            credentials,
-          ),
-          adminFetchJson(
-            "/admin/capacity",
-            adminCapacityResponseSchema,
-            credentials,
-          ),
-        ],
-      );
-      setData({ challenges, submissions, heartbeats, capacity });
+      const session = await adminLogin(credentials);
+      setCsrfToken(session.csrf_token);
+      setSessionUsername(session.username);
+      setCredentials({ username: session.username, password: "" });
+      setData(await fetchAdminData(session.csrf_token));
+      if (!options.quiet) {
+        setMessage("Admin session started and operator data refreshed.");
+      }
+    } catch (e) {
+      setError(adminErrorMessage(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signOut = async () => {
+    if (!csrfToken) {
+      setSessionUsername(null);
+      setData(emptyData);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      await adminLogout(csrfToken);
+      setCsrfToken("");
+      setSessionUsername(null);
+      setData(emptyData);
+      setMessage("Admin session ended.");
+    } catch (e) {
+      setError(adminErrorMessage(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const refresh: AdminRefresh = async (options = {}) => {
+    if (!csrfToken) {
+      setError("Sign in before refreshing operator data.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      setData(await fetchAdminData(csrfToken));
       if (!options.quiet) {
         setMessage("Operator data refreshed.");
-      }
-      if (remember) {
-        sessionStorage.setItem(
-          credentialStorageKey,
-          JSON.stringify(credentials),
-        );
       }
     } catch (e) {
       setError(adminErrorMessage(e));
@@ -181,10 +198,10 @@ export function AdminConsole() {
           </div>
           <CredentialPanel
             credentials={credentials}
-            remember={remember}
+            sessionUsername={sessionUsername}
             onChange={setCredentials}
-            onRememberChange={setRemember}
-            onRefresh={refresh}
+            onLogin={loginAndRefresh}
+            onLogout={signOut}
             loading={loading}
           />
         </div>
@@ -224,7 +241,7 @@ export function AdminConsole() {
       ) : null}
       {activeTab === "challenges" ? (
         <ChallengeAdminPanel
-          credentials={credentials}
+          csrfToken={csrfToken}
           challenges={data.challenges.items}
           locale={locale}
           onRefresh={refresh}
@@ -237,7 +254,7 @@ export function AdminConsole() {
       ) : null}
       {activeTab === "operations" ? (
         <OperationsPanel
-          credentials={credentials}
+          csrfToken={csrfToken}
           submissions={data.submissions.items}
           heartbeats={data.heartbeats.items}
           locale={locale}
@@ -252,26 +269,24 @@ export function AdminConsole() {
 
 function CredentialPanel({
   credentials,
-  remember,
+  sessionUsername,
   onChange,
-  onRememberChange,
-  onRefresh,
+  onLogin,
+  onLogout,
   loading,
 }: {
   credentials: AdminCredentials;
-  remember: boolean;
+  sessionUsername: string | null;
   onChange: (credentials: AdminCredentials) => void;
-  onRememberChange: (remember: boolean) => void;
-  onRefresh: AdminRefresh;
+  onLogin: AdminRefresh;
+  onLogout: () => Promise<void>;
   loading: boolean;
 }) {
   return (
     <div className="card min-w-full lg:min-w-[360px] lg:max-w-[420px]">
       <div className="flex items-center gap-2 mb-4">
         <KeyRound className="w-4 h-4 text-[var(--accent-primary-text)]" />
-        <h2 className="text-[var(--text-h3)] font-semibold">
-          Session credentials
-        </h2>
+        <h2 className="text-[var(--text-h3)] font-semibold">Admin sign-in</h2>
       </div>
       <div className="grid grid-cols-1 gap-3">
         <label className="flex flex-col gap-1">
@@ -301,23 +316,32 @@ function CredentialPanel({
         </label>
       </div>
       <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <label className="inline-flex items-center gap-2 text-[var(--text-caption)] text-[var(--text-muted)]">
-          <input
-            type="checkbox"
-            checked={remember}
-            onChange={(event) => onRememberChange(event.target.checked)}
-          />
-          Remember for this browser session
-        </label>
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={() => void onRefresh()}
-          disabled={loading}
-        >
-          <RefreshCw className="w-4 h-4" />
-          {loading ? "Loading" : "Load"}
-        </button>
+        <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
+          {sessionUsername
+            ? `Signed in as ${sessionUsername}`
+            : "Password is exchanged for an HttpOnly session cookie."}
+        </span>
+        <div className="flex gap-2">
+          {sessionUsername ? (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => void onLogout()}
+              disabled={loading}
+            >
+              Sign out
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => void onLogin()}
+            disabled={loading}
+          >
+            <RefreshCw className="w-4 h-4" />
+            {loading ? "Loading" : "Sign in"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -404,14 +428,14 @@ function StatCard({
 }
 
 function ChallengeAdminPanel({
-  credentials,
+  csrfToken,
   challenges,
   locale,
   onRefresh,
   onError,
   onMessage,
 }: {
-  credentials: AdminCredentials;
+  csrfToken: string;
   challenges: AdminChallengeListItem[];
   locale: string;
   onRefresh: AdminRefresh;
@@ -422,13 +446,13 @@ function ChallengeAdminPanel({
     <section className="grid grid-cols-1 xl:grid-cols-[420px_1fr] gap-6">
       <div className="flex flex-col gap-5">
         <ChallengeShellForm
-          credentials={credentials}
+          csrfToken={csrfToken}
           onRefresh={onRefresh}
           onError={onError}
           onMessage={onMessage}
         />
         <PublishVersionForm
-          credentials={credentials}
+          csrfToken={csrfToken}
           onRefresh={onRefresh}
           onError={onError}
           onMessage={onMessage}
@@ -640,7 +664,7 @@ function ModeSummary({ challenge }: { challenge: AdminChallengeListItem }) {
 }
 
 function ChallengeShellForm({
-  credentials,
+  csrfToken,
   onRefresh,
   onError,
   onMessage,
@@ -664,7 +688,7 @@ function ChallengeShellForm({
       const response = await adminFetchJson(
         "/admin/challenges",
         challengeAdminResponseSchema,
-        credentials,
+        csrfToken,
         {
           method: "POST",
           body: JSON.stringify(body),
@@ -721,7 +745,7 @@ function ChallengeShellForm({
 }
 
 function PublishVersionForm({
-  credentials,
+  csrfToken,
   onRefresh,
   onError,
   onMessage,
@@ -734,7 +758,7 @@ function PublishVersionForm({
       const response = await adminFetchJson(
         `/admin/challenges/${encodeURIComponent(form.challengeId.trim())}/versions`,
         createChallengeVersionResponseSchema,
-        credentials,
+        csrfToken,
         {
           method: "POST",
           body: JSON.stringify({ bundle_path: form.bundlePath.trim() }),
@@ -777,7 +801,7 @@ function PublishVersionForm({
 }
 
 function OperationsPanel({
-  credentials,
+  csrfToken,
   submissions,
   heartbeats,
   locale,
@@ -785,7 +809,7 @@ function OperationsPanel({
   onError,
   onMessage,
 }: {
-  credentials: AdminCredentials;
+  csrfToken: string;
   submissions: AdminSolutionSubmissionListItem[];
   heartbeats: AdminServiceHeartbeatListResponse["items"];
   locale: string;
@@ -853,7 +877,7 @@ function OperationsPanel({
                   </td>
                   <td>
                     <SubmissionActions
-                      credentials={credentials}
+                      csrfToken={csrfToken}
                       submission={submission}
                       onRefresh={onRefresh}
                       onError={onError}
@@ -913,13 +937,13 @@ function OperationsPanel({
 }
 
 function SubmissionActions({
-  credentials,
+  csrfToken,
   submission,
   onRefresh,
   onError,
   onMessage,
 }: {
-  credentials: AdminCredentials;
+  csrfToken: string;
   submission: AdminSolutionSubmissionListItem;
   onRefresh: AdminRefresh;
   onError: (message: string | null) => void;
@@ -934,7 +958,7 @@ function SubmissionActions({
         await adminFetchJson(
           `/admin/agents/${encodeURIComponent(submission.agent_id)}/disable`,
           disableAgentResponseSchema,
-          credentials,
+          csrfToken,
           { method: "POST" },
         );
         onMessage(`Disabled agent ${submission.agent_name}.`);
@@ -942,7 +966,7 @@ function SubmissionActions({
         await adminFetchJson(
           `/admin/solution-submissions/${encodeURIComponent(submission.id)}/hide`,
           hideSolutionSubmissionResponseSchema,
-          credentials,
+          csrfToken,
           { method: "POST" },
         );
         onMessage(`Hidden submission ${submission.id.slice(0, 8)}.`);
@@ -950,7 +974,7 @@ function SubmissionActions({
         const response = await adminFetchJson(
           `/admin/solution-submissions/${encodeURIComponent(submission.id)}/${action}`,
           evaluationJobResponseSchema,
-          credentials,
+          csrfToken,
           { method: "POST" },
         );
         onMessage(`Queued ${response.eval_type} job ${response.job_id}.`);
@@ -1001,7 +1025,7 @@ function SubmissionActions({
 }
 
 interface ActionProps {
-  credentials: AdminCredentials;
+  csrfToken: string;
   onRefresh: AdminRefresh;
   onError: (message: string | null) => void;
   onMessage: (message: string | null) => void;

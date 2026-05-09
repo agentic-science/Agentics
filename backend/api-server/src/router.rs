@@ -71,6 +71,14 @@ pub fn router(config: &Config) -> Router<AppState> {
             "/api/auth/github/callback",
             get(crate::auth_handlers::github_oauth_callback),
         )
+        .route(
+            "/api/auth/admin/login",
+            post(crate::auth_handlers::admin_login),
+        )
+        .route(
+            "/api/auth/admin/logout",
+            post(crate::auth_handlers::admin_logout),
+        )
         .route("/api/creator/me", get(crate::auth_handlers::creator_me))
         .route(
             "/api/creator/challenge-drafts",

@@ -9,17 +9,15 @@ export interface AdminCredentials {
   password: string;
 }
 
-const adminCredentialsSchema = z
+const adminSessionResponseSchema = z
   .object({
     username: z.string(),
-    password: z.string(),
+    csrf_token: z.string(),
+    expires_at: z.string(),
   })
   .strict();
 
-export function parseAdminCredentials(value: unknown): AdminCredentials | null {
-  const parsed = adminCredentialsSchema.safeParse(value);
-  return parsed.success ? parsed.data : null;
-}
+export type AdminSessionResponse = z.infer<typeof adminSessionResponseSchema>;
 
 export class AdminApiError extends Error {
   readonly status: number;
@@ -33,14 +31,15 @@ export class AdminApiError extends Error {
 export async function adminFetchJson<T>(
   path: string,
   schema: ZodType<T>,
-  credentials: AdminCredentials,
+  csrfToken: string,
   init: RequestInit = {},
 ): Promise<T> {
   const response = await fetch(adminEndpoint(path), {
     ...init,
+    credentials: "include",
     headers: {
       "content-type": "application/json",
-      Authorization: `Basic ${encodeBasicAuth(credentials)}`,
+      "x-agentics-csrf-token": csrfToken,
       ...init.headers,
     },
   });
@@ -59,18 +58,57 @@ export async function adminFetchJson<T>(
   return schema.parse(await response.json());
 }
 
+export async function adminLogin(
+  credentials: AdminCredentials,
+): Promise<AdminSessionResponse> {
+  const response = await fetch(adminEndpoint("/api/auth/admin/login"), {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(credentials),
+  });
+
+  if (!response.ok) {
+    let message = response.statusText;
+    try {
+      const body = (await response.json()) as { message?: string };
+      message = body.message ?? message;
+    } catch {
+      // Non-JSON error responses still surface the status text.
+    }
+    throw new AdminApiError(response.status, message);
+  }
+
+  return adminSessionResponseSchema.parse(await response.json());
+}
+
+export async function adminLogout(csrfToken: string): Promise<void> {
+  const response = await fetch(adminEndpoint("/api/auth/admin/logout"), {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "x-agentics-csrf-token": csrfToken,
+    },
+  });
+
+  if (!response.ok) {
+    let message = response.statusText;
+    try {
+      const body = (await response.json()) as { message?: string };
+      message = body.message ?? message;
+    } catch {
+      // Non-JSON error responses still surface the status text.
+    }
+    throw new AdminApiError(response.status, message);
+  }
+}
+
 function adminEndpoint(path: string): string {
   if (ADMIN_API_BASE_URL) {
     return `${ADMIN_API_BASE_URL}${path}`;
   }
 
   return path.replace(/^\/admin(\/|$)/, "/admin-api$1");
-}
-
-function encodeBasicAuth(credentials: AdminCredentials): string {
-  const raw = `${credentials.username}:${credentials.password}`;
-  if (typeof btoa === "function") {
-    return btoa(raw);
-  }
-  throw new Error("Basic auth encoding is unavailable in this browser");
 }
