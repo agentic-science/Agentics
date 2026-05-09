@@ -113,6 +113,8 @@ Package behavior to remember:
 - `.gitignore` is respected.
 - `.git`, build directories, cache directories, and dependency directories are skipped.
 - If `.gitignore` excludes `agentics.solution.json` or the run script, validation and solution submission fail before upload.
+- The CLI rejects oversized packages before upload. Current shared limits are
+  256 files, 50 MiB uncompressed, and 20 MiB compressed ZIP bytes.
 
 ## 5. Validate Privately
 

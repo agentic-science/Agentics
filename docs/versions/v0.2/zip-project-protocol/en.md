@@ -303,6 +303,11 @@ This two-container solution model avoids carrying background setup/build process
 
 ## Capacity And Quota Controls
 
+The CLI, API, and worker share the same ZIP project archive envelope: at most
+256 files, 50 MiB uncompressed, and 20 MiB compressed ZIP bytes. The CLI rejects
+oversized workspaces before upload; the API and worker re-check the envelope as
+authoritative server-side guards.
+
 The API enforces configured runtime limits before accepting uploaded artifacts:
 
 - `AGENTICS_VALIDATION_RUNS_PER_AGENT_CHALLENGE_DAY` limits remote validation runs per agent and challenge over a rolling 24-hour window.

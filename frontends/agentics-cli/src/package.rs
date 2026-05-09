@@ -1,9 +1,12 @@
 use std::fs::{self, File};
-use std::io::{Cursor, Read, Seek, Write};
+use std::io::{Cursor, Seek, Write};
 use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use ignore::{DirEntry, WalkBuilder};
+use shared::zip_project::{
+    MAX_ZIP_PROJECT_ARTIFACT_BYTES, MAX_ZIP_PROJECT_FILE_COUNT, MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES,
+};
 use zip::CompressionMethod;
 use zip::write::SimpleFileOptions;
 
@@ -21,11 +24,38 @@ pub struct SolutionPackage {
 struct PackageFile {
     path: PathBuf,
     archive_name: String,
-    size: u64,
     unix_permissions: u32,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct PackageLimits {
+    max_zip_bytes: u64,
+    max_file_count: usize,
+    max_uncompressed_bytes: u64,
+}
+
+impl PackageLimits {
+    const DEFAULT: Self = Self {
+        max_zip_bytes: MAX_ZIP_PROJECT_ARTIFACT_BYTES,
+        max_file_count: MAX_ZIP_PROJECT_FILE_COUNT,
+        max_uncompressed_bytes: MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES,
+    };
+}
+
+#[derive(Debug)]
+struct CollectedPackageFiles {
+    files: Vec<PackageFile>,
+    uncompressed_bytes: u64,
+}
+
 pub fn package_solution_workspace(workspace_dir: &Path) -> Result<SolutionPackage> {
+    package_solution_workspace_with_limits(workspace_dir, PackageLimits::DEFAULT)
+}
+
+fn package_solution_workspace_with_limits(
+    workspace_dir: &Path,
+    limits: PackageLimits,
+) -> Result<SolutionPackage> {
     let workspace_dir = workspace_dir
         .canonicalize()
         .with_context(|| format!("failed to resolve workspace {}", workspace_dir.display()))?;
@@ -61,7 +91,8 @@ pub fn package_solution_workspace(workspace_dir: &Path) -> Result<SolutionPackag
         bail!("{} must be a file", manifest.commands.run);
     }
 
-    let files = collect_package_files(&workspace_dir)?;
+    let collected = collect_package_files(&workspace_dir, limits)?;
+    let files = collected.files;
     if !files
         .iter()
         .any(|file| file.archive_name == REQUIRED_MANIFEST)
@@ -81,18 +112,26 @@ pub fn package_solution_workspace(workspace_dir: &Path) -> Result<SolutionPackag
         bail!("workspace contains no packageable files");
     }
 
-    let uncompressed_bytes = files.iter().map(|file| file.size).sum();
-    let bytes = write_zip_archive(&files)?;
+    let bytes = write_zip_archive(&files, limits)?;
+    if bytes.len() as u64 > limits.max_zip_bytes {
+        bail!(
+            "solution archive must be at most {} bytes after compression",
+            limits.max_zip_bytes
+        );
+    }
 
     Ok(SolutionPackage {
         workspace_dir,
         bytes,
         file_count: files.len(),
-        uncompressed_bytes,
+        uncompressed_bytes: collected.uncompressed_bytes,
     })
 }
 
-fn collect_package_files(workspace_dir: &Path) -> Result<Vec<PackageFile>> {
+fn collect_package_files(
+    workspace_dir: &Path,
+    limits: PackageLimits,
+) -> Result<CollectedPackageFiles> {
     let mut builder = WalkBuilder::new(workspace_dir);
     builder
         .git_ignore(true)
@@ -104,6 +143,7 @@ fn collect_package_files(workspace_dir: &Path) -> Result<Vec<PackageFile>> {
         .filter_entry(should_descend);
 
     let mut files = Vec::new();
+    let mut uncompressed_bytes = 0u64;
     for entry in builder.build() {
         let entry = entry.with_context(|| {
             format!(
@@ -125,17 +165,34 @@ fn collect_package_files(workspace_dir: &Path) -> Result<Vec<PackageFile>> {
         let metadata = entry
             .metadata()
             .with_context(|| format!("failed to stat {}", entry.path().display()))?;
+        if files.len() >= limits.max_file_count {
+            bail!(
+                "solution workspace must contain at most {} packageable files",
+                limits.max_file_count
+            );
+        }
+        uncompressed_bytes = uncompressed_bytes
+            .checked_add(metadata.len())
+            .context("solution workspace is too large")?;
+        if uncompressed_bytes > limits.max_uncompressed_bytes {
+            bail!(
+                "solution workspace must contain at most {} bytes before compression",
+                limits.max_uncompressed_bytes
+            );
+        }
 
         files.push(PackageFile {
             path: entry.path().to_path_buf(),
             archive_name,
-            size: metadata.len(),
             unix_permissions: unix_permissions(&metadata),
         });
     }
 
     files.sort_by(|a, b| a.archive_name.cmp(&b.archive_name));
-    Ok(files)
+    Ok(CollectedPackageFiles {
+        files,
+        uncompressed_bytes,
+    })
 }
 
 fn should_descend(entry: &DirEntry) -> bool {
@@ -159,7 +216,7 @@ fn should_descend(entry: &DirEntry) -> bool {
     )
 }
 
-fn write_zip_archive(files: &[PackageFile]) -> Result<Vec<u8>> {
+fn write_zip_archive(files: &[PackageFile], limits: PackageLimits) -> Result<Vec<u8>> {
     let cursor = Cursor::new(Vec::new());
     let mut archive = zip::ZipWriter::new(cursor);
 
@@ -171,9 +228,22 @@ fn write_zip_archive(files: &[PackageFile]) -> Result<Vec<u8>> {
             .start_file(&file.archive_name, options)
             .with_context(|| format!("failed to add {} to zip", file.archive_name))?;
         copy_file_to_archive(file, &mut archive)?;
+        if current_archive_len(&archive)? > limits.max_zip_bytes {
+            bail!(
+                "solution archive must be at most {} bytes after compression",
+                limits.max_zip_bytes
+            );
+        }
     }
 
     Ok(archive.finish()?.into_inner())
+}
+
+fn current_archive_len(archive: &zip::ZipWriter<Cursor<Vec<u8>>>) -> Result<u64> {
+    let cursor = archive
+        .get_ref()
+        .context("zip writer closed before package finalization")?;
+    Ok(cursor.get_ref().len() as u64)
 }
 
 fn copy_file_to_archive<W>(file: &PackageFile, archive: &mut zip::ZipWriter<W>) -> Result<()>
@@ -182,13 +252,9 @@ where
 {
     let mut input = File::open(&file.path)
         .with_context(|| format!("failed to open {}", file.path.display()))?;
-    let mut buffer = Vec::new();
-    input
-        .read_to_end(&mut buffer)
-        .with_context(|| format!("failed to read {}", file.path.display()))?;
-    archive
-        .write_all(&buffer)
+    std::io::copy(&mut input, archive)
         .with_context(|| format!("failed to write {} to zip", file.archive_name))
+        .map(|_| ())
 }
 
 fn archive_name(path: &Path) -> Result<String> {
@@ -233,7 +299,9 @@ mod tests {
     use std::fs;
     use std::io::Read;
 
-    use super::package_solution_workspace;
+    use super::{
+        PackageLimits, package_solution_workspace, package_solution_workspace_with_limits,
+    };
 
     fn write_manifest(root: &std::path::Path) {
         fs::write(
@@ -299,6 +367,70 @@ mod tests {
             package_solution_workspace(temp.path()).expect_err("ignored run.sh should fail");
 
         assert!(error.to_string().contains("run.sh is excluded"));
+    }
+
+    #[test]
+    fn package_rejects_too_many_files_before_zip_creation() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        write_manifest(temp.path());
+        fs::write(temp.path().join("run.sh"), "#!/usr/bin/env bash\n").expect("run.sh");
+        fs::write(temp.path().join("main.py"), "print('ok')\n").expect("main.py");
+
+        let error = package_solution_workspace_with_limits(
+            temp.path(),
+            PackageLimits {
+                max_file_count: 2,
+                ..PackageLimits::DEFAULT
+            },
+        )
+        .expect_err("file count limit should reject the workspace");
+
+        assert!(error.to_string().contains("at most 2 packageable files"));
+    }
+
+    #[test]
+    fn package_rejects_too_many_uncompressed_bytes_before_zip_creation() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        write_manifest(temp.path());
+        fs::write(temp.path().join("run.sh"), "#!/usr/bin/env bash\n").expect("run.sh");
+        fs::write(temp.path().join("main.py"), "print('ok')\n").expect("main.py");
+
+        let error = package_solution_workspace_with_limits(
+            temp.path(),
+            PackageLimits {
+                max_uncompressed_bytes: 16,
+                ..PackageLimits::DEFAULT
+            },
+        )
+        .expect_err("uncompressed size limit should reject the workspace");
+
+        assert!(
+            error
+                .to_string()
+                .contains("at most 16 bytes before compression")
+        );
+    }
+
+    #[test]
+    fn package_rejects_too_many_zip_bytes() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        write_manifest(temp.path());
+        fs::write(temp.path().join("run.sh"), "#!/usr/bin/env bash\n").expect("run.sh");
+
+        let error = package_solution_workspace_with_limits(
+            temp.path(),
+            PackageLimits {
+                max_zip_bytes: 1,
+                ..PackageLimits::DEFAULT
+            },
+        )
+        .expect_err("zip size limit should reject the workspace");
+
+        assert!(
+            error
+                .to_string()
+                .contains("at most 1 bytes after compression")
+        );
     }
 
     fn zip_file_names(bytes: &[u8]) -> Vec<String> {

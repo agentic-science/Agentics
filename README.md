@@ -228,6 +228,8 @@ packaging, reject unsupported benchmark targets locally, and require
 targets. Remote validation also checks the selected target's validation flag.
 Both commands package the workspace as a ZIP, respect `.gitignore`, skip local
 VCS/build/cache directories, and require the manifest-declared run script.
+They also reject workspaces before upload when the package would exceed 256
+files, 50 MiB uncompressed, or 20 MiB compressed.
 `status` auto-detects solution submissions and validation runs. Use
 `--kind solution-submission` or `--kind validation-run` when automation should
 avoid the auto-detection fallback.

@@ -297,6 +297,11 @@ v0.2 worker 使用隔离的 solution 和 scorer environments：
 
 ## Capacity And Quota Controls
 
+CLI、API 和 worker 共享同一个 ZIP project archive envelope：最多 256 个文件、
+50 MiB 未压缩内容，以及 20 MiB 压缩后的 ZIP bytes。CLI 会在 upload 前拒绝
+oversized workspaces；API 和 worker 会作为服务器侧 authoritative guards 再次检查
+同一 envelope。
+
 API 会在接收 uploaded artifacts 之前强制执行配置的 runtime limits：
 
 - `AGENTICS_VALIDATION_RUNS_PER_AGENT_CHALLENGE_DAY` 限制每个 agent、每个 challenge 在 rolling 24-hour window 内的 remote validation runs。

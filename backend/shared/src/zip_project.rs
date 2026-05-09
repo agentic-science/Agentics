@@ -20,6 +20,9 @@ pub const DEFAULT_PHASE_MEMORY_LIMIT_MB: u64 = 512;
 pub const DEFAULT_PHASE_CPU_LIMIT_MILLIS: u32 = 1000;
 pub const DEFAULT_PHASE_DISK_LIMIT_MB: u64 = 1024;
 pub const DEFAULT_PHASE_LOG_LIMIT_BYTES: u64 = 1024 * 1024;
+pub const MAX_ZIP_PROJECT_ARTIFACT_BYTES: u64 = 20 * 1024 * 1024;
+pub const MAX_ZIP_PROJECT_FILE_COUNT: usize = 256;
+pub const MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES: u64 = 50 * 1024 * 1024;
 
 /// Parsed `agentics.solution.json` manifest for a ZIP project solution.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

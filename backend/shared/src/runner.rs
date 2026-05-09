@@ -30,14 +30,11 @@ use crate::models::challenge::{
 use crate::models::evaluation::{EvaluationJobPayload, ScorerRunResult, ScoringMode};
 use crate::storage::Storage;
 use crate::zip_project::{
+    MAX_ZIP_PROJECT_ARTIFACT_BYTES, MAX_ZIP_PROJECT_FILE_COUNT, MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES,
     ZIP_PROJECT_MANIFEST_FILE, ZipProjectManifest, ZipProjectPhaseFailureReason,
     ZipProjectPhaseLimits, ZipProjectPhaseName, ZipProjectResolvedPhase,
     parse_zip_project_manifest,
 };
-
-const MAX_RUNNER_ARTIFACT_BYTES: u64 = 20 * 1024 * 1024;
-const MAX_RUNNER_FILE_COUNT: usize = 256;
-const MAX_RUNNER_UNCOMPRESSED_BYTES: u64 = 50 * 1024 * 1024;
 
 /// Validated scorer result plus the persisted runner log location.
 #[derive(Debug, Clone)]
@@ -711,10 +708,10 @@ fn append_bounded_log_bytes(
 
 async fn extract_zip_safe(artifact_path: &Path, target_dir: &Path) -> Result<()> {
     let artifact_size = tokio::fs::metadata(artifact_path).await?.len();
-    if artifact_size > MAX_RUNNER_ARTIFACT_BYTES {
+    if artifact_size > MAX_ZIP_PROJECT_ARTIFACT_BYTES {
         return Err(AppError::Validation(format!(
             "solution archive must be at most {} bytes",
-            MAX_RUNNER_ARTIFACT_BYTES
+            MAX_ZIP_PROJECT_ARTIFACT_BYTES
         )));
     }
 
@@ -728,10 +725,10 @@ async fn extract_zip_safe(artifact_path: &Path, target_dir: &Path) -> Result<()>
 fn extract_zip_safe_blocking(artifact_path: &Path, target_dir: &Path) -> Result<()> {
     let reader = std::fs::File::open(artifact_path)?;
     let mut archive = zip::ZipArchive::new(reader)?;
-    if archive.len() > MAX_RUNNER_FILE_COUNT {
+    if archive.len() > MAX_ZIP_PROJECT_FILE_COUNT {
         return Err(AppError::Validation(format!(
             "solution archive must contain at most {} entries",
-            MAX_RUNNER_FILE_COUNT
+            MAX_ZIP_PROJECT_FILE_COUNT
         )));
     }
 
@@ -746,10 +743,10 @@ fn extract_zip_safe_blocking(artifact_path: &Path, target_dir: &Path) -> Result<
         total_uncompressed_size = total_uncompressed_size
             .checked_add(file.size())
             .ok_or_else(|| AppError::Validation("solution archive is too large".to_string()))?;
-        if total_uncompressed_size > MAX_RUNNER_UNCOMPRESSED_BYTES {
+        if total_uncompressed_size > MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES {
             return Err(AppError::Validation(format!(
                 "solution archive must expand to at most {} bytes",
-                MAX_RUNNER_UNCOMPRESSED_BYTES
+                MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES
             )));
         }
 
@@ -1379,7 +1376,7 @@ mod tests {
         let zip_path = temp_path("too-many.zip");
         let target_dir = temp_path("too-many-target");
         std::fs::create_dir_all(&target_dir).expect("failed to create target dir");
-        let entries = (0..=MAX_RUNNER_FILE_COUNT)
+        let entries = (0..=MAX_ZIP_PROJECT_FILE_COUNT)
             .map(|i| (format!("file-{i}.txt"), Vec::new()))
             .collect();
         write_zip(&zip_path, entries);

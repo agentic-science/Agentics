@@ -15,14 +15,14 @@ use shared::error::{AppError, Result};
 use shared::models::challenge::CreateChallengeVersionResponse;
 use shared::models::evaluation::ScoringMode;
 use shared::models::request::*;
+use shared::zip_project::{
+    MAX_ZIP_PROJECT_ARTIFACT_BYTES, MAX_ZIP_PROJECT_FILE_COUNT, MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES,
+};
 
 use crate::extractors::{AdminAuth, AgentAuth, ValidatedJson};
 use crate::presenters;
 use crate::state::AppState;
 
-const MAX_ARTIFACT_BYTES: u64 = 20 * 1024 * 1024;
-const MAX_ARTIFACT_FILE_COUNT: usize = 256;
-const MAX_ARTIFACT_UNCOMPRESSED_BYTES: u64 = 50 * 1024 * 1024;
 const MAX_INLINE_TEXT_BYTES: u64 = 200_000;
 const MAX_TOTAL_INLINE_TEXT_BYTES: u64 = 1_000_000;
 const SUBMISSION_QUOTA_WINDOW_SECONDS: i64 = 24 * 60 * 60;
@@ -183,10 +183,10 @@ async fn create_solution_submission_for_mode(
     .await?;
 
     let artifact_bytes = base64_decode(&body.artifact_base64).ok_or(AppError::Base64)?;
-    if artifact_bytes.len() as u64 > MAX_ARTIFACT_BYTES {
+    if artifact_bytes.len() as u64 > MAX_ZIP_PROJECT_ARTIFACT_BYTES {
         return Err(AppError::BadRequest(format!(
             "artifact zip must be at most {} bytes",
-            MAX_ARTIFACT_BYTES
+            MAX_ZIP_PROJECT_ARTIFACT_BYTES
         )));
     }
 
@@ -749,10 +749,10 @@ pub async fn read_solution_submission_artifact_summary(
     artifact_bytes: Vec<u8>,
 ) -> Result<SolutionSubmissionArtifactResponse> {
     let archive_size = artifact_bytes.len() as u64;
-    if archive_size > MAX_ARTIFACT_BYTES {
+    if archive_size > MAX_ZIP_PROJECT_ARTIFACT_BYTES {
         return Err(AppError::BadRequest(format!(
             "artifact zip must be at most {} bytes",
-            MAX_ARTIFACT_BYTES
+            MAX_ZIP_PROJECT_ARTIFACT_BYTES
         )));
     }
 
@@ -772,10 +772,10 @@ fn read_solution_submission_artifact_summary_blocking(
     let reader = std::io::Cursor::new(artifact_bytes);
     let mut archive = zip::ZipArchive::new(reader)?;
 
-    if archive.len() > MAX_ARTIFACT_FILE_COUNT {
+    if archive.len() > MAX_ZIP_PROJECT_FILE_COUNT {
         return Err(AppError::BadRequest(format!(
             "artifact zip must contain at most {} entries",
-            MAX_ARTIFACT_FILE_COUNT
+            MAX_ZIP_PROJECT_FILE_COUNT
         )));
     }
 
@@ -800,10 +800,10 @@ fn read_solution_submission_artifact_summary_blocking(
         total_uncompressed_size = total_uncompressed_size
             .checked_add(size)
             .ok_or_else(|| AppError::BadRequest("artifact zip is too large".to_string()))?;
-        if total_uncompressed_size > MAX_ARTIFACT_UNCOMPRESSED_BYTES {
+        if total_uncompressed_size > MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES {
             return Err(AppError::BadRequest(format!(
                 "artifact zip must expand to at most {} bytes",
-                MAX_ARTIFACT_UNCOMPRESSED_BYTES
+                MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES
             )));
         }
 
@@ -947,7 +947,7 @@ mod tests {
     #[tokio::test]
     async fn artifact_summary_rejects_too_many_entries() {
         let path = temp_zip_path("too-many");
-        let entries = (0..=MAX_ARTIFACT_FILE_COUNT)
+        let entries = (0..=MAX_ZIP_PROJECT_FILE_COUNT)
             .map(|i| (format!("file-{i}.txt"), Vec::new()))
             .collect();
         write_zip(&path, entries);
