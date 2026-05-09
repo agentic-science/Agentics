@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde_json::Value;
-use sqlx::{PgPool, Row};
+use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use crate::error::{AppError, Result};
 use crate::models::challenge::ChallengeBundleSpec;
@@ -29,6 +29,15 @@ pub struct CreateSolutionSubmissionInput {
     pub explanation: String,
     pub parent_solution_submission_id: Option<String>,
     pub credit_text: String,
+    pub quota_admission: SolutionSubmissionQuotaAdmission,
+}
+
+/// Authoritative quota limits applied inside the submission/job transaction.
+#[derive(Debug, Clone, Copy)]
+pub struct SolutionSubmissionQuotaAdmission {
+    pub window_seconds: i64,
+    pub per_agent_challenge_limit: i64,
+    pub max_active_official_jobs: Option<i64>,
 }
 
 /// Solution submission row with optional joined evaluation and job metadata.
@@ -70,6 +79,7 @@ pub async fn create_solution_submission_with_job(
     ensure_challenge_supports_eval_type(&spec, &input.benchmark_target_id, input.eval_type)?;
 
     let mut tx = pool.begin().await?;
+    enforce_quota_admission(&mut tx, input).await?;
 
     let row = sqlx::query(
         r#"
@@ -157,6 +167,135 @@ pub async fn create_solution_submission_with_job(
         validation_evaluation: None,
         official_evaluation: None,
     })
+}
+
+async fn enforce_quota_admission(
+    tx: &mut Transaction<'_, Postgres>,
+    input: &CreateSolutionSubmissionInput,
+) -> Result<()> {
+    let mut scopes = vec![format!(
+        "agent:{}:challenge:{}:target:{}:mode:{}:daily",
+        input.agent_id,
+        input.challenge_id,
+        input.benchmark_target_id,
+        input.eval_type.as_str()
+    )];
+    if input.eval_type == ScoringMode::Official {
+        scopes.push("global:official-active".to_string());
+    }
+    scopes.sort();
+
+    for scope in scopes {
+        lock_quota_scope(tx, &scope).await?;
+    }
+
+    let used = count_recent_runs_for_agent_challenge_tx(
+        tx,
+        &input.agent_id,
+        &input.challenge_id,
+        &input.benchmark_target_id,
+        input.eval_type,
+        input.quota_admission.window_seconds,
+    )
+    .await?;
+    let limit = input.quota_admission.per_agent_challenge_limit;
+    if used >= limit {
+        return Err(AppError::TooManyRequests(format!(
+            "{} quota exceeded for challenge `{}`: {} of {} runs used in the last 24 hours",
+            input.eval_type.as_str(),
+            input.challenge_id,
+            used,
+            limit
+        )));
+    }
+
+    if let Some(max_active) = input.quota_admission.max_active_official_jobs {
+        let active = count_active_evaluation_jobs_tx(tx, ScoringMode::Official).await?;
+        if active >= max_active {
+            return Err(AppError::TooManyRequests(format!(
+                "official evaluation queue is full: {active} of {max_active} official jobs are queued or running"
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+async fn lock_quota_scope(tx: &mut Transaction<'_, Postgres>, scope: &str) -> Result<()> {
+    sqlx::query(
+        r#"
+        INSERT INTO quota_admission_locks (scope)
+        VALUES ($1)
+        ON CONFLICT (scope) DO NOTHING
+        "#,
+    )
+    .bind(scope)
+    .execute(&mut **tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        SELECT scope
+        FROM quota_admission_locks
+        WHERE scope = $1
+        FOR UPDATE
+        "#,
+    )
+    .bind(scope)
+    .fetch_one(&mut **tx)
+    .await?;
+
+    Ok(())
+}
+
+async fn count_recent_runs_for_agent_challenge_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    agent_id: &str,
+    challenge_id: &str,
+    benchmark_target_id: &str,
+    eval_type: ScoringMode,
+    window_seconds: i64,
+) -> Result<i64> {
+    let count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)::BIGINT
+        FROM solution_submissions s
+        JOIN evaluation_jobs j ON j.solution_submission_id = s.id
+        WHERE s.agent_id = $1
+          AND s.challenge_id = $2
+          AND s.benchmark_target_id = $3
+          AND j.eval_type = $4
+          AND s.created_at >= NOW() - ($5::DOUBLE PRECISION * INTERVAL '1 second')
+        "#,
+    )
+    .bind(agent_id)
+    .bind(challenge_id)
+    .bind(benchmark_target_id)
+    .bind(eval_type.as_str())
+    .bind(window_seconds)
+    .fetch_one(&mut **tx)
+    .await?;
+
+    Ok(count)
+}
+
+async fn count_active_evaluation_jobs_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    eval_type: ScoringMode,
+) -> Result<i64> {
+    let count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)::BIGINT
+        FROM evaluation_jobs
+        WHERE eval_type = $1
+          AND status IN ('queued', 'running')
+        "#,
+    )
+    .bind(eval_type.as_str())
+    .fetch_one(&mut **tx)
+    .await?;
+
+    Ok(count)
 }
 
 /// Fetch one solution submission with latest job state and validation/official evaluations.

@@ -830,6 +830,81 @@ async fn official_active_queue_limit_rejects_before_artifact_decode(pool: sqlx::
 }
 
 #[sqlx::test(migrations = "../migrations")]
+async fn concurrent_official_admission_locks_admit_only_one(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let mut config = test_config(storage.path(), &examples_challenges_root());
+    config.official_runs_per_agent_challenge_day = 1;
+    config.max_active_official_jobs = 1;
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+    let token = register_agent_token(&client, &app, "concurrent-official-quota-agent").await;
+
+    let artifact_a = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
+    let artifact_b = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
+
+    let request_a = client
+        .post(api_url(&app, "/api/solution-submissions"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "challenge_id": "sample-sum",
+            "benchmark_target_id": "cpu-linux-arm64",
+            "artifact_base64": artifact_a,
+            "explanation": "concurrent official run A"
+        }))
+        .send();
+    let request_b = client
+        .post(api_url(&app, "/api/solution-submissions"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "challenge_id": "sample-sum",
+            "benchmark_target_id": "cpu-linux-arm64",
+            "artifact_base64": artifact_b,
+            "explanation": "concurrent official run B"
+        }))
+        .send();
+
+    let (response_a, response_b) = tokio::join!(request_a, request_b);
+    let mut statuses = [
+        response_a.expect("official request A").status().as_u16(),
+        response_b.expect("official request B").status().as_u16(),
+    ];
+    statuses.sort();
+    assert_eq!(statuses, [201, 429]);
+
+    let solution_submission_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*)::BIGINT FROM solution_submissions")
+            .fetch_one(&pool)
+            .await
+            .expect("failed to query solution submission count");
+    let job_count: i64 = sqlx::query_scalar("SELECT COUNT(*)::BIGINT FROM evaluation_jobs")
+        .fetch_one(&pool)
+        .await
+        .expect("failed to query job count");
+    assert_eq!(solution_submission_count, 1);
+    assert_eq!(job_count, 1);
+}
+
+async fn register_agent_token(
+    client: &reqwest::Client,
+    app: &helpers::TestApp,
+    name: &str,
+) -> String {
+    let register_response: serde_json::Value = client
+        .post(api_url(app, "/api/agents/register"))
+        .json(&serde_json::json!({ "name": name }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    register_response["token"]
+        .as_str()
+        .expect("missing token")
+        .to_string()
+}
+
+#[sqlx::test(migrations = "../migrations")]
 async fn worker_marks_solution_submission_failed_when_artifact_is_missing(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let config = test_config(storage.path(), &examples_challenges_root());

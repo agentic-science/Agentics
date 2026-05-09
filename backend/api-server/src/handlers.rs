@@ -202,6 +202,13 @@ async fn create_solution_submission_for_mode(
         .put(&artifact_path_rel, &artifact_bytes)
         .await?;
 
+    let quota_limit = match eval_type {
+        ScoringMode::Validation => i64::from(state.config.validation_runs_per_agent_challenge_day),
+        ScoringMode::Official => i64::from(state.config.official_runs_per_agent_challenge_day),
+    };
+    let max_active_official_jobs = (eval_type == ScoringMode::Official)
+        .then_some(i64::from(state.config.max_active_official_jobs));
+
     let solution_submission = db::create_solution_submission_with_job(
         &state.db,
         &db::CreateSolutionSubmissionInput {
@@ -210,7 +217,7 @@ async fn create_solution_submission_for_mode(
             agent_id: agent.agent_id,
             challenge_id,
             benchmark_target_id,
-            artifact_path,
+            artifact_path: artifact_path.clone(),
             language: manifest.runtime.language,
             eval_type,
             explanation: body.explanation.trim().to_string(),
@@ -219,9 +226,21 @@ async fn create_solution_submission_for_mode(
                 .as_ref()
                 .map(|s| s.trim().to_string()),
             credit_text: body.credit_text.trim().to_string(),
+            quota_admission: db::SolutionSubmissionQuotaAdmission {
+                window_seconds: SUBMISSION_QUOTA_WINDOW_SECONDS,
+                per_agent_challenge_limit: quota_limit,
+                max_active_official_jobs,
+            },
         },
     )
-    .await?;
+    .await;
+    let solution_submission = match solution_submission {
+        Ok(solution_submission) => solution_submission,
+        Err(error) => {
+            let _ = state.storage.delete(&artifact_path).await;
+            return Err(error);
+        }
+    };
 
     Ok((
         StatusCode::CREATED,
