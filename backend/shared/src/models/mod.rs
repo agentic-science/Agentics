@@ -19,14 +19,14 @@ mod contract_tests;
 use serde::{Deserialize, Serialize};
 
 /// Standard error response shape used by all API extractors and handlers.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ErrorResponse {
     pub error: String,
     pub message: String,
 }
 
 /// Health-check response returned by the API server.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct HealthResponse {
     pub status: String,
     pub service: String,
@@ -35,20 +35,20 @@ pub struct HealthResponse {
 }
 
 /// Database portion of the health-check response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct DatabaseHealth {
     pub connected: bool,
     pub current_time: String,
 }
 
 /// Generic response for endpoints that only need to return an id.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct IdOnlyResponse {
     pub id: String,
 }
 
 /// Current published version summary embedded in challenge DTOs.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct CurrentVersionDto {
     pub id: String,
     pub version: String,

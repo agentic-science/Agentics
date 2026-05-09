@@ -505,6 +505,7 @@ Frontend:
 
 ```bash
 cd frontends/web
+bun run generate:schemas
 bun run format
 bun run test
 bun run build

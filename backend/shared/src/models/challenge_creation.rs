@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 pub const AGENTICS_CHALLENGE_MANIFEST_FILE: &str = "agentics.challenge.json";
 
 /// Public manifest submitted through the reviewed challenge repository.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ChallengeCreationManifest {
     pub schema_version: i32,
@@ -26,7 +26,7 @@ pub struct ChallengeCreationManifest {
 }
 
 /// Lifecycle request represented by a public manifest.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ChallengeCreationRequestKind {
     NewChallenge,
@@ -35,7 +35,7 @@ pub enum ChallengeCreationRequestKind {
 }
 
 /// Version metadata for new-challenge and new-version requests.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ChallengeCreationVersionSpec {
     pub version: String,
@@ -45,14 +45,14 @@ pub struct ChallengeCreationVersionSpec {
 }
 
 /// Public archive request metadata.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ChallengeArchiveRequestSpec {
     pub reason: String,
 }
 
 /// Private asset that must be uploaded directly to Agentics for a draft.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ChallengePrivateAssetRequirement {
     pub asset_id: String,
@@ -64,7 +64,7 @@ pub struct ChallengePrivateAssetRequirement {
 }
 
 /// Supported private asset classes for challenge creation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ChallengePrivateAssetKind {
     PrivateBenchmarkData,
@@ -74,7 +74,7 @@ pub enum ChallengePrivateAssetKind {
 }
 
 /// CI expectations for the public challenge repository.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ChallengeCreationCiSpec {
     #[serde(default = "default_required")]
@@ -100,7 +100,7 @@ fn default_required() -> bool {
 }
 
 /// Creator-authenticated request for binding a public GitHub PR to a draft.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateChallengeDraftRequest {
     pub repo_url: String,
@@ -113,7 +113,7 @@ pub struct CreateChallengeDraftRequest {
 }
 
 /// Draft status used by the review lifecycle.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ChallengeDraftStatus {
     Draft,
@@ -139,7 +139,7 @@ impl ChallengeDraftStatus {
 }
 
 /// Validation record status for a challenge draft.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ChallengeDraftValidationStatus {
     Passed,
@@ -157,7 +157,7 @@ impl ChallengeDraftValidationStatus {
 }
 
 /// API response for one private benchmark asset bound to a draft.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengePrivateAssetResponse {
     pub id: String,
     pub draft_id: String,
@@ -172,7 +172,7 @@ pub struct ChallengePrivateAssetResponse {
 }
 
 /// API response for one validation record.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeDraftValidationRecordResponse {
     pub id: String,
     pub draft_id: String,
@@ -186,7 +186,7 @@ pub struct ChallengeDraftValidationRecordResponse {
 }
 
 /// API response for one challenge draft.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeDraftResponse {
     pub id: String,
     pub challenge_id: String,
@@ -221,13 +221,13 @@ pub struct ChallengeDraftResponse {
 }
 
 /// List response for admin challenge draft review.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeDraftListResponse {
     pub items: Vec<ChallengeDraftResponse>,
 }
 
 /// Payload for uploading a private benchmark asset to Agentics storage.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UploadChallengePrivateAssetRequest {
     pub asset_id: String,
@@ -238,14 +238,14 @@ pub struct UploadChallengePrivateAssetRequest {
 }
 
 /// Admin payload for validating a draft against a checked-out repository path.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ValidateChallengeDraftRequest {
     pub repository_path: String,
 }
 
 /// Admin payload for accepting or rejecting a challenge draft.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ReviewChallengeDraftRequest {
     #[serde(default)]
@@ -254,7 +254,7 @@ pub struct ReviewChallengeDraftRequest {
 
 /// Admin response returned after abandoning stale drafts and deleting expired
 /// unpublished private asset records.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeDraftCleanupResponse {
     pub abandoned_drafts: i64,
     pub purged_private_assets: i64,

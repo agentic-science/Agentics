@@ -33,7 +33,10 @@ http://127.0.0.1:3001
 
 ## Data Contract
 
-The frontend validates API responses with Zod schemas in `frontends/web/src/lib/schemas.ts`.
+The frontend validates API responses with Zod schemas generated from Rust DTOs.
+Run `bun run generate:schemas` in `frontends/web/` after changing shared Rust
+response DTOs. The stable frontend import surface remains
+`frontends/web/src/lib/schemas.ts`, which re-exports the generated module.
 
 Important v0.0 schemas:
 

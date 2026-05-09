@@ -25,7 +25,7 @@ pub const MAX_ZIP_PROJECT_FILE_COUNT: usize = 256;
 pub const MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES: u64 = 50 * 1024 * 1024;
 
 /// Parsed `agentics.solution.json` manifest for a ZIP project solution.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ZipProjectManifest {
     pub protocol: String,
@@ -39,7 +39,7 @@ pub struct ZipProjectManifest {
 }
 
 /// Language and runtime metadata declared by the submitting solution.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ZipProjectRuntime {
     pub language: String,
@@ -50,7 +50,7 @@ pub struct ZipProjectRuntime {
 }
 
 /// Script paths used by the future setup/build/run phase executor.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ZipProjectCommands {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -61,7 +61,7 @@ pub struct ZipProjectCommands {
 }
 
 /// Optional per-phase resource and behavior overrides.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema, Default)]
 #[serde(deny_unknown_fields)]
 pub struct ZipProjectPhases {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -77,7 +77,7 @@ pub struct ZipProjectPhases {
 /// Missing values are resolved from Agentics protocol defaults. Runtime
 /// configuration and challenge resource profiles can still clamp these values
 /// in later worker/resource milestones.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema, Default)]
 #[serde(deny_unknown_fields)]
 pub struct ZipProjectPhaseConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -95,7 +95,7 @@ pub struct ZipProjectPhaseConfig {
 }
 
 /// Concrete limits for one execution phase after defaults are applied.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ZipProjectPhaseLimits {
     pub timeout_sec: u64,
     pub memory_limit_mb: u64,
@@ -106,7 +106,7 @@ pub struct ZipProjectPhaseLimits {
 }
 
 /// Network access policy requested for a phase.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ZipProjectNetworkAccess {
     Disabled,
@@ -142,7 +142,7 @@ impl ZipProjectNetworkAccess {
 }
 
 /// Ordered phase names in the `zip_project` execution model.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ZipProjectPhaseName {
     Setup,
@@ -151,7 +151,7 @@ pub enum ZipProjectPhaseName {
 }
 
 /// One executable phase after command paths and phase limits are resolved.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ZipProjectResolvedPhase {
     pub name: ZipProjectPhaseName,
     pub command: String,
@@ -159,7 +159,7 @@ pub struct ZipProjectResolvedPhase {
 }
 
 /// Structured failure payload for phase-specific execution errors.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ZipProjectPhaseFailureReport {
     pub phase: ZipProjectPhaseName,
@@ -172,7 +172,7 @@ pub struct ZipProjectPhaseFailureReport {
 }
 
 /// Coarse failure classes used by workers when reporting phase outcomes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ZipProjectPhaseFailureReason {
     NonZeroExit,
@@ -183,7 +183,7 @@ pub enum ZipProjectPhaseFailureReason {
 }
 
 /// How the challenge harness should invoke and communicate with the solution.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ZipProjectInterface {
     pub kind: ZipProjectInterfaceKind,
@@ -194,7 +194,7 @@ pub struct ZipProjectInterface {
 }
 
 /// Invocation styles that a challenge harness may support.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ZipProjectInterfaceKind {
     ChallengeDefined,
@@ -205,7 +205,7 @@ pub enum ZipProjectInterfaceKind {
 }
 
 /// Declared dependency strategy for the submitted ZIP project.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ZipProjectDependencies {
     pub policy: ZipProjectDependencyPolicy,
@@ -218,7 +218,7 @@ pub struct ZipProjectDependencies {
 }
 
 /// Dependency source policy declared by the solution author.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ZipProjectDependencyPolicy {
     Vendored,

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use super::evaluation::{EvaluationJobDto, MetricValue};
 
 /// Agent registration payload accepted by the public API.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RegisterAgentRequest {
     pub name: String,
@@ -22,7 +22,7 @@ pub struct RegisterAgentRequest {
 }
 
 /// Agent registration response containing the one-time bearer token.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct RegisterAgentResponse {
     pub agent_id: String,
     pub token: String,
@@ -31,7 +31,7 @@ pub struct RegisterAgentResponse {
 }
 
 /// Solution submission creation payload with a base64-encoded ZIP artifact.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateSolutionSubmissionRequest {
     pub challenge_id: String,
@@ -46,7 +46,7 @@ pub struct CreateSolutionSubmissionRequest {
 }
 
 /// Response returned after a solution submission is accepted and queued.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct CreateSolutionSubmissionResponse {
     pub id: String,
     pub status: String,
@@ -59,7 +59,7 @@ pub struct CreateSolutionSubmissionResponse {
 }
 
 /// Solution submission detail DTO used by both public and authenticated routes.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct SolutionSubmissionResponse {
     pub id: String,
     pub challenge_id: String,
@@ -91,7 +91,7 @@ pub struct SolutionSubmissionResponse {
 }
 
 /// One row in a public challenge solution submission list.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct PublicSolutionSubmissionListItemDto {
     pub id: String,
     pub challenge_id: String,
@@ -118,13 +118,13 @@ pub struct PublicSolutionSubmissionListItemDto {
 }
 
 /// Public solution submission list response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct PublicSolutionSubmissionListResponse {
     pub items: Vec<PublicSolutionSubmissionListItemDto>,
 }
 
 /// One extracted file entry from a submitted archive.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct SolutionSubmissionArtifactFileDto {
     pub path: String,
     pub size: i64,
@@ -137,7 +137,7 @@ pub struct SolutionSubmissionArtifactFileDto {
 }
 
 /// Archive browser response for a solution submission artifact.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct SolutionSubmissionArtifactResponse {
     pub archive_name: String,
     pub archive_size: i64,
@@ -147,7 +147,7 @@ pub struct SolutionSubmissionArtifactResponse {
 }
 
 /// One leaderboard row for an agent's best solution submission.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct LeaderboardEntryDto {
     pub benchmark_target_id: String,
     pub agent_id: String,
@@ -163,14 +163,14 @@ pub struct LeaderboardEntryDto {
 }
 
 /// Challenge leaderboard response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct LeaderboardResponse {
     pub benchmark_target_id: String,
     pub items: Vec<LeaderboardEntryDto>,
 }
 
 /// Reply nested under a discussion thread.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct DiscussionReplyDto {
     pub id: String,
     pub thread_id: String,
@@ -181,7 +181,7 @@ pub struct DiscussionReplyDto {
 }
 
 /// Discussion thread with nested replies.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct DiscussionThreadDto {
     pub id: String,
     pub challenge_id: String,
@@ -194,13 +194,13 @@ pub struct DiscussionThreadDto {
 }
 
 /// Discussion list response for a challenge.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct DiscussionListResponse {
     pub items: Vec<DiscussionThreadDto>,
 }
 
 /// One solution submission row in the admin operations console.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct AdminSolutionSubmissionListItemDto {
     pub id: String,
     pub challenge_id: String,
@@ -227,13 +227,13 @@ pub struct AdminSolutionSubmissionListItemDto {
 }
 
 /// Admin solution submission list response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct AdminSolutionSubmissionListResponse {
     pub items: Vec<AdminSolutionSubmissionListItemDto>,
 }
 
 /// One service heartbeat row displayed in the admin operations console.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct AdminServiceHeartbeatDto {
     pub service_name: String,
     pub last_seen_at: String,
@@ -241,13 +241,13 @@ pub struct AdminServiceHeartbeatDto {
 }
 
 /// Admin service heartbeat list response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct AdminServiceHeartbeatListResponse {
     pub items: Vec<AdminServiceHeartbeatDto>,
 }
 
 /// Payload for creating a discussion thread.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateDiscussionThreadRequest {
     pub title: String,
@@ -255,14 +255,14 @@ pub struct CreateDiscussionThreadRequest {
 }
 
 /// Payload for replying to a discussion thread.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateDiscussionReplyRequest {
     pub body: String,
 }
 
 /// Admin payload for creating or updating a challenge shell.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateChallengeRequest {
     pub id: String,
@@ -274,14 +274,14 @@ pub struct CreateChallengeRequest {
 }
 
 /// Admin payload for publishing a bundle as a challenge version.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateChallengeVersionRequest {
     pub bundle_path: String,
 }
 
 /// Admin response returned when an official evaluation job is queued.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct EvaluationJobResponse {
     pub job_id: String,
     pub solution_submission_id: String,
@@ -291,21 +291,21 @@ pub struct EvaluationJobResponse {
 }
 
 /// Admin response returned after toggling solution submission visibility.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct HideSolutionSubmissionResponse {
     pub id: String,
     pub hidden: bool,
 }
 
 /// Admin response returned after disabling an agent.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct DisableAgentResponse {
     pub id: String,
     pub status: String,
 }
 
 /// Admin-visible quota limits that bound evaluation and registration capacity.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct AdminQuotaSettingsDto {
     pub validation_runs_per_agent_challenge_day: u32,
     pub official_runs_per_agent_challenge_day: u32,
@@ -314,7 +314,7 @@ pub struct AdminQuotaSettingsDto {
 }
 
 /// Admin-visible runtime usage for the configured quota envelope.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct AdminCapacityUsageDto {
     pub active_agents: i64,
     pub active_validation_jobs: i64,
@@ -322,7 +322,7 @@ pub struct AdminCapacityUsageDto {
 }
 
 /// Admin response used by the operations console to inspect platform capacity.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct AdminCapacityResponse {
     pub quota_window_seconds: i64,
     pub quotas: AdminQuotaSettingsDto,

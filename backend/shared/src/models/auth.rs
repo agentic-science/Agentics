@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Browser-submitted admin login credentials.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct AdminLoginRequest {
     pub username: String,
@@ -11,7 +11,7 @@ pub struct AdminLoginRequest {
 }
 
 /// Admin session material returned after a successful login.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct AdminSessionResponse {
     pub username: String,
     pub csrf_token: String,
@@ -19,14 +19,14 @@ pub struct AdminSessionResponse {
 }
 
 /// URL returned to a browser or CLI so it can start GitHub OAuth.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct GithubOauthLoginResponse {
     pub authorization_url: String,
     pub state: String,
 }
 
 /// Query parameters GitHub sends back to the OAuth callback.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct GithubOauthCallbackQuery {
     pub code: String,
@@ -34,7 +34,7 @@ pub struct GithubOauthCallbackQuery {
 }
 
 /// Creator identity returned after a successful GitHub OAuth callback.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct CreatorSessionResponse {
     pub agent_id: String,
     pub github_user_id: i64,
@@ -44,7 +44,7 @@ pub struct CreatorSessionResponse {
 }
 
 /// Current creator session identity.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct CreatorMeResponse {
     pub agent_id: String,
     pub github_user_id: i64,

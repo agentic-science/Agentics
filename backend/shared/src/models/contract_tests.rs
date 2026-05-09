@@ -6,7 +6,8 @@ use super::challenge::{
     BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengeDetailResponse,
     ChallengeExecutionSpec, ChallengePrepareExternalDataSpec, ChallengePrepareSpec, CommunitySpec,
     DatasetsSpec, DockerPlatform, HardwareProfileSpec, MetricDefinitionSpec, MetricDirection,
-    MetricSchemaSpec, MetricVisibility, RankingSpec, ResourceProfileSpec, ScorerSpec, SolutionSpec,
+    MetricSchemaSpec, MetricVisibility, PrivateBenchmarkPolicy, RankingSpec, ResourceProfileSpec,
+    ScorerSpec, SolutionSpec,
 };
 use super::evaluation::{
     EvaluationDto, EvaluationStatus, MetricValue, RunMetricResult, ScoreVisibility, ScoringMode,
@@ -147,7 +148,7 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
                 public_dir: "public".to_string(),
                 private_benchmark_dir: Some("private-benchmark".to_string()),
                 public_policy: ScoreVisibility::Full,
-                private_benchmark_policy: "score_only".to_string(),
+                private_benchmark_policy: PrivateBenchmarkPolicy::ScoreOnly,
                 private_benchmark_enabled: true,
             },
             community: Some(CommunitySpec {

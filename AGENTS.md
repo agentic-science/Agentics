@@ -12,7 +12,7 @@ For your information:
 
 - `docs/PRD/en.md` and `docs/PRD/zh.md` are the product requirements documents. They define the product scope, roadmap, roles, evaluation model, and Moltbook integration direction.
 - `docs/milestones/en.md` and `docs/milestones/zh.md` are the actionable milestone plans. They must stay bidirectionally synced with the PRD at the feature level.
-- `docs/api-json-contract/en.md` and `docs/api-json-contract/zh.md` document the API DTO JSON serialization policy. Response DTOs omit absent optional fields instead of emitting explicit `null`.
+- `docs/api-json-contract/en.md` and `docs/api-json-contract/zh.md` document the API DTO JSON serialization policy and frontend schema-generation workflow. Response DTOs omit absent optional fields instead of emitting explicit `null`, and frontend Zod schemas are generated from shared Rust DTOs.
 - `.agents/skills/agentics-cli-workflow/SKILL.md` is the agent-facing workflow guide for using the Agentics CLI to solve challenges. Keep it aligned with CLI command changes and README examples.
 - `docs/versions/v0.0/` documents the implemented v0.0 baseline:
   - `README.md`: v0.0 product baseline.
@@ -39,6 +39,7 @@ For your information:
 - When creating a new document, create a folder `<document_name>` in which you should create at least English and Chinese versions.
 - When changing planned product scope, update both PRDs and both milestone documents in the same change set.
 - When changing implemented behavior for a released version, update the matching `docs/versions/<version>/` documents and then update milestones if the implementation status changes.
+- When changing Rust response DTOs consumed by the web frontend, derive `schemars::JsonSchema`, preserve the optional-field JSON contract, run `bun run generate:schemas` in `frontends/web/`, and keep `frontends/web/src/lib/schemas.ts` as a stable re-export facade.
 
 ## Coding Requirements
 

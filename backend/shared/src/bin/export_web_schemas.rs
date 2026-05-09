@@ -1,0 +1,212 @@
+use std::collections::BTreeMap;
+use std::io;
+
+use schemars::{JsonSchema, schema_for};
+use serde_json::{Map, Value};
+use shared::models::auth::{AdminSessionResponse, CreatorMeResponse, CreatorSessionResponse};
+use shared::models::challenge::{
+    AdminChallengeListResponse, ChallengeAdminResponse, ChallengeDetailResponse,
+    ChallengeListResponse, CreateChallengeVersionResponse,
+};
+use shared::models::request::DiscussionListResponse;
+use shared::models::request::{
+    AdminCapacityResponse, AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse,
+    DisableAgentResponse, EvaluationJobResponse, HideSolutionSubmissionResponse,
+    LeaderboardResponse, PublicSolutionSubmissionListResponse, SolutionSubmissionArtifactResponse,
+    SolutionSubmissionResponse,
+};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut schemas = BTreeMap::new();
+
+    insert_schema::<AdminCapacityResponse>(&mut schemas, "adminCapacityResponseSchema")?;
+    insert_schema::<AdminChallengeListResponse>(&mut schemas, "adminChallengeListResponseSchema")?;
+    insert_schema::<AdminServiceHeartbeatListResponse>(
+        &mut schemas,
+        "adminServiceHeartbeatListResponseSchema",
+    )?;
+    insert_schema::<AdminSessionResponse>(&mut schemas, "adminSessionResponseSchema")?;
+    insert_schema::<AdminSolutionSubmissionListResponse>(
+        &mut schemas,
+        "adminSolutionSubmissionListResponseSchema",
+    )?;
+    insert_schema::<ChallengeAdminResponse>(&mut schemas, "challengeAdminResponseSchema")?;
+    insert_schema::<ChallengeDetailResponse>(&mut schemas, "challengeDetailResponseSchema")?;
+    insert_schema::<ChallengeListResponse>(&mut schemas, "challengeListResponseSchema")?;
+    insert_schema::<CreateChallengeVersionResponse>(
+        &mut schemas,
+        "createChallengeVersionResponseSchema",
+    )?;
+    insert_schema::<CreatorMeResponse>(&mut schemas, "creatorMeResponseSchema")?;
+    insert_schema::<CreatorSessionResponse>(&mut schemas, "creatorSessionResponseSchema")?;
+    insert_schema::<DisableAgentResponse>(&mut schemas, "disableAgentResponseSchema")?;
+    insert_schema::<DiscussionListResponse>(&mut schemas, "discussionListResponseSchema")?;
+    insert_schema::<EvaluationJobResponse>(&mut schemas, "evaluationJobResponseSchema")?;
+    insert_schema::<HideSolutionSubmissionResponse>(
+        &mut schemas,
+        "hideSolutionSubmissionResponseSchema",
+    )?;
+    insert_schema::<LeaderboardResponse>(&mut schemas, "leaderboardResponseSchema")?;
+    insert_schema::<PublicSolutionSubmissionListResponse>(
+        &mut schemas,
+        "publicSolutionSubmissionListResponseSchema",
+    )?;
+    insert_schema::<SolutionSubmissionArtifactResponse>(
+        &mut schemas,
+        "solutionSubmissionArtifactResponseSchema",
+    )?;
+    insert_schema::<SolutionSubmissionResponse>(&mut schemas, "solutionSubmissionResponseSchema")?;
+
+    serde_json::to_writer_pretty(io::stdout().lock(), &schemas)?;
+    println!();
+    Ok(())
+}
+
+fn insert_schema<T: JsonSchema>(
+    schemas: &mut BTreeMap<String, Value>,
+    export_name: &str,
+) -> Result<(), serde_json::Error> {
+    let mut schema = serde_json::to_value(schema_for!(T))?;
+    normalize_response_schema(&mut schema);
+    schemas.insert(export_name.to_string(), schema);
+    Ok(())
+}
+
+fn normalize_response_schema(value: &mut Value) {
+    match value {
+        Value::Array(items) => {
+            for item in items {
+                normalize_response_schema(item);
+            }
+        }
+        Value::Object(object) => normalize_schema_object(object),
+        _ => {}
+    }
+}
+
+fn normalize_schema_object(object: &mut Map<String, Value>) {
+    require_default_serialized_properties(object);
+    object.remove("default");
+    remove_null_type(object, "anyOf");
+    remove_null_type(object, "oneOf");
+    remove_null_from_type_array(object);
+    collapse_string_const_union(object, "anyOf");
+    collapse_string_const_union(object, "oneOf");
+
+    for value in object.values_mut() {
+        normalize_response_schema(value);
+    }
+
+    if matches!(object.get("type"), Some(Value::String(value)) if value == "object")
+        && !object.contains_key("additionalProperties")
+    {
+        object.insert("additionalProperties".to_string(), Value::Bool(false));
+    }
+}
+
+fn require_default_serialized_properties(object: &mut Map<String, Value>) {
+    let Some(Value::Object(properties)) = object.get("properties") else {
+        return;
+    };
+
+    let mut defaulted_properties = Vec::new();
+    for (name, schema) in properties {
+        let Value::Object(property_object) = schema else {
+            continue;
+        };
+        if property_object.contains_key("default")
+            && !matches!(property_object.get("default"), Some(Value::Null))
+        {
+            defaulted_properties.push(Value::String(name.clone()));
+        }
+    }
+
+    if defaulted_properties.is_empty() {
+        return;
+    }
+
+    let required = object
+        .entry("required")
+        .or_insert_with(|| Value::Array(Vec::new()));
+    let Value::Array(required) = required else {
+        return;
+    };
+    for property in defaulted_properties {
+        if !required.contains(&property) {
+            required.push(property);
+        }
+    }
+}
+
+fn remove_null_type(object: &mut Map<String, Value>, key: &str) {
+    let Some(Value::Array(items)) = object.get_mut(key) else {
+        return;
+    };
+
+    items.retain(|item| !is_null_schema(item));
+    if items.len() == 1 {
+        let only = items.remove(0);
+        object.remove(key);
+        merge_schema_object(object, only);
+    }
+}
+
+fn remove_null_from_type_array(object: &mut Map<String, Value>) {
+    let Some(Value::Array(types)) = object.get_mut("type") else {
+        return;
+    };
+
+    types.retain(|item| !matches!(item, Value::String(value) if value == "null"));
+    if types.len() == 1 {
+        let only = types.remove(0);
+        object.insert("type".to_string(), only);
+    }
+}
+
+fn collapse_string_const_union(object: &mut Map<String, Value>, key: &str) {
+    let Some(Value::Array(items)) = object.get(key) else {
+        return;
+    };
+
+    let mut variants = Vec::new();
+    for item in items {
+        let Value::Object(item_object) = item else {
+            return;
+        };
+        let Some(Value::String(value)) = item_object.get("const") else {
+            return;
+        };
+        variants.push(Value::String(value.clone()));
+    }
+
+    if variants.is_empty() {
+        return;
+    }
+
+    object.remove(key);
+    object
+        .entry("type")
+        .or_insert_with(|| Value::String("string".to_string()));
+    object.insert("enum".to_string(), Value::Array(variants));
+}
+
+fn merge_schema_object(target: &mut Map<String, Value>, source: Value) {
+    match source {
+        Value::Object(source_object) => {
+            for (key, value) in source_object {
+                target.entry(key).or_insert(value);
+            }
+        }
+        other => {
+            target.insert("const".to_string(), other);
+        }
+    }
+}
+
+fn is_null_schema(value: &Value) -> bool {
+    matches!(
+        value,
+        Value::Object(object)
+            if matches!(object.get("type"), Some(Value::String(schema_type)) if schema_type == "null")
+    )
+}

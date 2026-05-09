@@ -38,3 +38,4 @@ axum = "0.8"
 base64 = "0.22"
 zip = "8"
 ignore = "0.4"
+schemars = { version = "1.2", features = ["preserve_order"] }

@@ -19,8 +19,8 @@ field?: T
 ```
 
 Response DTOs should not emit explicit `null` for absent values. This keeps the
-wire format compact, matches the relaxed JSON contract, and reduces ambiguity
-when generated schemas are introduced.
+wire format compact, matches the relaxed JSON contract, and reduces ambiguity in
+generated schemas.
 
 ## Exceptions
 
@@ -37,13 +37,27 @@ serialization rules.
 
 ## Schema Generation
 
-When Agentics adopts generated TypeScript or Zod schemas, the generator must
-preserve this mapping:
+Frontend runtime schemas are generated from Rust DTOs:
+
+```bash
+cd frontends/web
+bun run generate:schemas
+```
+
+The command runs `backend/shared`'s `export_web_schemas` binary, converts the
+JSON Schemas into Zod, and writes
+`frontends/web/src/lib/generated/schemas.ts`. The hand-written
+`frontends/web/src/lib/schemas.ts` module is only a stable re-export facade for
+frontend imports.
+
+The generator must preserve this mapping:
 
 - `Option<T>` with `skip_serializing_if = "Option::is_none"` becomes
   `field?: T`.
 - Explicit-null fields, if any are intentionally introduced, become
   `field: T | null` and require documentation.
 
-Until schema generation is adopted, shared Rust and frontend contract fixtures
-must cover representative response DTOs.
+When changing Rust response DTOs, update derives and serde attributes first,
+regenerate the frontend schemas, then update contract fixtures or rendering code
+only if the API contract intentionally changed. Shared Rust and frontend
+contract fixtures must cover representative response DTOs.

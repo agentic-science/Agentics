@@ -19,7 +19,7 @@ field?: T
 ```
 
 Response DTOs 不应为缺失值输出显式 `null`。这样可以保持 wire format
-紧凑，符合 relaxed JSON contract，并减少未来引入 generated schemas 时的歧义。
+紧凑，符合 relaxed JSON contract，并减少 generated schemas 中的歧义。
 
 ## Exceptions
 
@@ -34,13 +34,26 @@ Request deserialization rules 与 response serialization rules 分开处理。
 
 ## Schema Generation
 
-当 Agentics 引入 generated TypeScript 或 Zod schemas 时，generator 必须保留
-以下映射：
+Frontend runtime schemas 从 Rust DTOs 生成：
+
+```bash
+cd frontends/web
+bun run generate:schemas
+```
+
+该命令会运行 `backend/shared` 的 `export_web_schemas` binary，将 JSON
+Schemas 转成 Zod，并写入 `frontends/web/src/lib/generated/schemas.ts`。
+手写的 `frontends/web/src/lib/schemas.ts` 只作为 frontend imports 的稳定
+re-export facade。
+
+Generator 必须保留以下映射：
 
 - 带有 `skip_serializing_if = "Option::is_none"` 的 `Option<T>` 映射为
   `field?: T`。
 - 如果未来有意引入 explicit-null fields，则映射为 `field: T | null`，
   并且必须有文档说明。
 
-在引入 schema generation 之前，shared Rust 与 frontend contract fixtures
-必须覆盖有代表性的 response DTOs。
+修改 Rust response DTOs 时，应先更新 derives 和 serde attributes，再重新生成
+frontend schemas。只有 API contract 有意变化时，才更新 contract fixtures 或
+rendering code。shared Rust 与 frontend contract fixtures 必须覆盖有代表性的
+response DTOs。

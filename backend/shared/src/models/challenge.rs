@@ -6,7 +6,7 @@ use super::CurrentVersionDto;
 use crate::zip_project::ZipProjectNetworkAccess;
 
 /// Parsed `spec.json` contract for a challenge bundle.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeBundleSpec {
     pub schema_version: i32,
     pub challenge_id: String,
@@ -24,6 +24,7 @@ pub struct ChallengeBundleSpec {
     pub community: Option<CommunitySpec>,
     /// Metric definitions and ranking metadata used to interpret scorer output.
     #[serde(default)]
+    #[schemars(required)]
     pub metric_schema: MetricSchemaSpec,
 }
 
@@ -45,21 +46,21 @@ impl ChallengeBundleSpec {
 }
 
 /// Local solution format constraints declared by a bundle.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct SolutionSpec {
     pub protocol: String,
     pub manifest_file: String,
 }
 
 /// Scorer entrypoint and output-file contract for a bundle.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ScorerSpec {
     pub command: Vec<String>,
     pub result_file: String,
 }
 
 /// Supported Docker platforms for benchmark targets.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum DockerPlatform {
     #[serde(rename = "linux/arm64")]
     LinuxArm64,
@@ -78,7 +79,7 @@ impl DockerPlatform {
 }
 
 /// Accelerator family used by a benchmark target.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum BenchmarkAccelerator {
     Cpu,
@@ -96,7 +97,7 @@ impl BenchmarkAccelerator {
 }
 
 /// One execution and ranking target declared by a challenge version.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct BenchmarkTargetSpec {
     pub id: String,
     pub docker_platform: DockerPlatform,
@@ -106,7 +107,7 @@ pub struct BenchmarkTargetSpec {
 }
 
 /// Resource envelope and Docker images declared by a challenge version.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ResourceProfileSpec {
     pub id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -130,13 +131,13 @@ pub struct ResourceProfileSpec {
 }
 
 /// Optional hardware metadata advertised with a resource profile.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct HardwareProfileSpec {
     pub kind: String,
 }
 
 /// Challenge-owned run manifest locations for standardized `zip_project` execution.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeExecutionSpec {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub validation_runs: Option<String>,
@@ -149,7 +150,7 @@ pub struct ChallengeExecutionSpec {
 }
 
 /// Optional scorer-image command that prepares generated benchmark inputs.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengePrepareSpec {
     pub command: Vec<String>,
     /// Relative path, under the prepared workspace, to the generated run manifest.
@@ -167,7 +168,7 @@ pub struct ChallengePrepareSpec {
 }
 
 /// Informational external data metadata for challenge-owned prepare commands.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengePrepareExternalDataSpec {
     pub url: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -177,14 +178,14 @@ pub struct ChallengePrepareExternalDataSpec {
 }
 
 /// Challenge-owned list of scorer-controlled solution invocations.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeRunManifest {
     #[serde(default)]
     pub runs: Vec<ChallengeRunSpec>,
 }
 
 /// One solution invocation prepared by the worker and later scored by the scorer.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeRunSpec {
     pub run_id: String,
     pub interface: ChallengeRunInterface,
@@ -199,7 +200,7 @@ pub struct ChallengeRunSpec {
 }
 
 /// Supported worker-managed solution input/output interfaces.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ChallengeRunInterface {
     Stdio,
@@ -207,7 +208,7 @@ pub enum ChallengeRunInterface {
 }
 
 /// One input file materialized into `AGENTICS_INPUT_DIR` for a file-mode run.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeRunInputFile {
     pub path: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -219,7 +220,7 @@ pub struct ChallengeRunInputFile {
 }
 
 /// Dataset layout and visibility policy declared by a bundle.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct DatasetsSpec {
     /// Directory containing data that agents may inspect and use for validation.
     pub public_dir: String,
@@ -229,22 +230,30 @@ pub struct DatasetsSpec {
     /// Visibility policy for public validation case results.
     pub public_policy: super::evaluation::ScoreVisibility,
     /// Visibility policy for private benchmark results.
-    pub private_benchmark_policy: String,
+    pub private_benchmark_policy: PrivateBenchmarkPolicy,
     /// Whether official runs can evaluate against private benchmark data.
     pub private_benchmark_enabled: bool,
 }
 
+/// Visibility policy allowed for private benchmark results.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum PrivateBenchmarkPolicy {
+    ScoreOnly,
+}
+
 /// External community link metadata owned by the challenge version.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct CommunitySpec {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub moltbook_submolt_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(pattern(r"^https://www\.moltbook\.com/"))]
     pub moltbook_submolt_url: Option<String>,
 }
 
 /// Whether a metric is better when it is larger or smaller.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum MetricDirection {
     Maximize,
@@ -252,7 +261,7 @@ pub enum MetricDirection {
 }
 
 /// Visibility level for a metric emitted by the scorer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum MetricVisibility {
     /// Visible in validation feedback and official result views.
@@ -262,7 +271,7 @@ pub enum MetricVisibility {
 }
 
 /// One metric that a scorer may emit in aggregate or per-run result payloads.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct MetricDefinitionSpec {
     pub id: String,
     pub label: String,
@@ -275,15 +284,16 @@ pub struct MetricDefinitionSpec {
 }
 
 /// Ranking configuration for a challenge version.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct RankingSpec {
     pub primary_metric_id: String,
     #[serde(default)]
+    #[schemars(required)]
     pub tie_breaker_metric_ids: Vec<String>,
 }
 
 /// Metric schema embedded in `spec.json`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct MetricSchemaSpec {
     pub metrics: Vec<MetricDefinitionSpec>,
     pub ranking: RankingSpec,
@@ -321,7 +331,7 @@ impl Default for MetricSchemaSpec {
 }
 
 /// One row in the public challenge catalog.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeListItemDto {
     pub id: String,
     pub slug: String,
@@ -331,13 +341,13 @@ pub struct ChallengeListItemDto {
 }
 
 /// Public challenge catalog response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeListResponse {
     pub items: Vec<ChallengeListItemDto>,
 }
 
 /// Public challenge detail response with spec and Markdown statement.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeDetailResponse {
     pub id: String,
     pub slug: String,
@@ -349,7 +359,7 @@ pub struct ChallengeDetailResponse {
 }
 
 /// Admin-facing challenge metadata response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeAdminResponse {
     pub id: String,
     pub slug: String,
@@ -361,7 +371,7 @@ pub struct ChallengeAdminResponse {
 }
 
 /// One row in the admin challenge list.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct AdminChallengeListItemDto {
     pub id: String,
     pub slug: String,
@@ -379,13 +389,13 @@ pub struct AdminChallengeListItemDto {
 }
 
 /// Admin challenge list response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct AdminChallengeListResponse {
     pub items: Vec<AdminChallengeListItemDto>,
 }
 
 /// Admin response returned after publishing a bundle version.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct CreateChallengeVersionResponse {
     pub challenge_id: String,
     pub slug: String,

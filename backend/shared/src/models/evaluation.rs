@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use super::challenge::{MetricDirection, MetricSchemaSpec, MetricVisibility};
 
 /// Evaluation surface requested for a solution submission.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum ScoringMode {
     /// Private validation scoring, backed by public challenge data.
     #[serde(rename = "validation")]
@@ -43,7 +43,7 @@ impl ScoringMode {
 }
 
 /// Controls how much per-case detail a dataset may expose.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ScoreVisibility {
     Full,
@@ -51,7 +51,7 @@ pub enum ScoreVisibility {
 }
 
 /// Per-case scorer outcome for public validation tests.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ScorerCaseStatus {
     Passed,
@@ -60,7 +60,7 @@ pub enum ScorerCaseStatus {
 }
 
 /// Overall scorer outcome emitted by `result.json`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ScorerRunStatus {
     Passed,
@@ -69,7 +69,7 @@ pub enum ScorerRunStatus {
 }
 
 /// Persistent lifecycle state for an evaluation job/result.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum EvaluationStatus {
     Queued,
@@ -79,7 +79,7 @@ pub enum EvaluationStatus {
 }
 
 /// Aggregate score summary for validation or official datasets.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ScoreSummary {
     /// Normalized score in the inclusive range `[0, 1]`.
     pub score: f64,
@@ -90,7 +90,7 @@ pub struct ScoreSummary {
 }
 
 /// Public per-case result exposed for validation feedback.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct PublicCaseResult {
     pub case_id: String,
     pub status: ScorerCaseStatus,
@@ -100,22 +100,23 @@ pub struct PublicCaseResult {
 }
 
 /// Numeric value for one declared metric.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct MetricValue {
     pub metric_id: String,
     pub value: f64,
 }
 
 /// Metric values for one scorer-defined run, case, seed, shard, or scenario.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct RunMetricResult {
     pub run_id: String,
     #[serde(default)]
+    #[schemars(required)]
     pub metrics: Vec<MetricValue>,
 }
 
 /// API DTO for a persisted evaluation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct EvaluationDto {
     pub id: String,
     pub benchmark_target_id: String,
@@ -145,7 +146,7 @@ pub struct EvaluationDto {
 /// Optional fields match the relaxed JSON contract used by the rewrite:
 /// absent nullable fields are accepted, but numeric scores and mode-specific
 /// summaries are validated before the result is persisted.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ScorerRunResult {
     pub status: ScorerRunStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -627,7 +628,7 @@ mod tests {
 }
 
 /// Minimal job DTO returned when a solution submission queues an evaluation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct EvaluationJobDto {
     pub id: String,
     pub benchmark_target_id: String,
@@ -635,7 +636,7 @@ pub struct EvaluationJobDto {
 }
 
 /// Runner payload persisted on an evaluation job.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct EvaluationJobPayload {
     pub artifact_path: String,
     pub bundle_path: String,

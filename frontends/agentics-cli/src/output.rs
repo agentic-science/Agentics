@@ -579,7 +579,8 @@ mod tests {
     use shared::models::challenge::{
         BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengeDetailResponse,
         ChallengeExecutionSpec, ChallengeListItemDto, ChallengeListResponse, DatasetsSpec,
-        DockerPlatform, MetricSchemaSpec, ResourceProfileSpec, ScorerSpec, SolutionSpec,
+        DockerPlatform, MetricSchemaSpec, PrivateBenchmarkPolicy, ResourceProfileSpec, ScorerSpec,
+        SolutionSpec,
     };
     use shared::models::evaluation::ScoreVisibility;
     use shared::zip_project::ZipProjectNetworkAccess;
@@ -678,7 +679,7 @@ mod tests {
                     public_dir: "data/public".to_string(),
                     private_benchmark_dir: None,
                     public_policy: ScoreVisibility::Full,
-                    private_benchmark_policy: "score_only".to_string(),
+                    private_benchmark_policy: PrivateBenchmarkPolicy::ScoreOnly,
                     private_benchmark_enabled: false,
                 },
                 community: None,

@@ -1,5 +1,8 @@
 import type { ZodType } from "zod";
-import { z } from "zod";
+import {
+  type AdminSessionResponse,
+  adminSessionResponseSchema,
+} from "@/lib/schemas";
 
 const ADMIN_API_BASE_URL =
   process.env.NEXT_PUBLIC_AGENTICS_API_BASE_URL?.replace(/\/$/, "") ?? "";
@@ -8,16 +11,6 @@ export interface AdminCredentials {
   username: string;
   password: string;
 }
-
-const adminSessionResponseSchema = z
-  .object({
-    username: z.string(),
-    csrf_token: z.string(),
-    expires_at: z.string(),
-  })
-  .strict();
-
-export type AdminSessionResponse = z.infer<typeof adminSessionResponseSchema>;
 
 export class AdminApiError extends Error {
   readonly status: number;

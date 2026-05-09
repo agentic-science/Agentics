@@ -14,7 +14,7 @@ use crate::error::{AppError, Result};
 use crate::models::challenge::{
     BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengePrepareSpec,
     ChallengeRunInputFile, ChallengeRunManifest, ChallengeRunSpec, DockerPlatform,
-    ResourceProfileSpec,
+    PrivateBenchmarkPolicy, ResourceProfileSpec,
 };
 use crate::zip_project::{ZIP_PROJECT_MANIFEST_FILE, ZIP_PROJECT_PROTOCOL};
 
@@ -323,7 +323,7 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
     validate_execution(spec)?;
 
     require_safe_relative_path(&spec.datasets.public_dir, "datasets.public_dir")?;
-    if spec.datasets.private_benchmark_policy != "score_only" {
+    if spec.datasets.private_benchmark_policy != PrivateBenchmarkPolicy::ScoreOnly {
         return Err(AppError::Validation(
             "datasets.private_benchmark_policy must be score_only".to_string(),
         ));
@@ -936,7 +936,8 @@ mod tests {
     use crate::models::challenge::{
         BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengeExecutionSpec,
         ChallengePrepareSpec, CommunitySpec, DatasetsSpec, DockerPlatform, MetricDirection,
-        MetricSchemaSpec, MetricVisibility, ResourceProfileSpec, ScorerSpec, SolutionSpec,
+        MetricSchemaSpec, MetricVisibility, PrivateBenchmarkPolicy, ResourceProfileSpec,
+        ScorerSpec, SolutionSpec,
     };
     use crate::models::evaluation::ScoreVisibility;
     use crate::zip_project::ZipProjectNetworkAccess;
@@ -997,7 +998,7 @@ mod tests {
                 public_dir: "public".to_string(),
                 private_benchmark_dir: Some("private-benchmark".to_string()),
                 public_policy: ScoreVisibility::Full,
-                private_benchmark_policy: "score_only".to_string(),
+                private_benchmark_policy: PrivateBenchmarkPolicy::ScoreOnly,
                 private_benchmark_enabled: true,
             },
             community: None,
