@@ -169,7 +169,7 @@ pub async fn mark_evaluation_finished(
             if result.status == EvaluationStatus::Completed
                 && let Some(rank_score) = result.rank_score
             {
-                upsert_leaderboard_entry_for_solution_submission_tx(
+                let became_best = upsert_leaderboard_entry_for_solution_submission_tx(
                     &mut tx,
                     &result.solution_submission_id,
                     &result.benchmark_target_id,
@@ -178,14 +178,16 @@ pub async fn mark_evaluation_finished(
                     &result.aggregate_metrics,
                 )
                 .await?;
-                update_official_score_for_solution_submission_tx(
-                    &mut tx,
-                    &result.solution_submission_id,
-                    &result.benchmark_target_id,
-                    rank_score,
-                    &result.aggregate_metrics,
-                )
-                .await?;
+                if became_best {
+                    update_official_score_for_solution_submission_tx(
+                        &mut tx,
+                        &result.solution_submission_id,
+                        &result.benchmark_target_id,
+                        rank_score,
+                        &result.aggregate_metrics,
+                    )
+                    .await?;
+                }
             }
         }
     }

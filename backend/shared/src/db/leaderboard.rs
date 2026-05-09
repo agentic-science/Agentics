@@ -222,7 +222,7 @@ pub(super) async fn upsert_leaderboard_entry_for_solution_submission_tx<'a>(
     rank_score: f64,
     public_results: &[PublicCaseResult],
     aggregate_metrics: &[MetricValue],
-) -> Result<()> {
+) -> Result<bool> {
     let row: Option<(String, String, Value)> = sqlx::query_as(
         r#"
         SELECT s.challenge_id, s.agent_id, pv.spec_json
@@ -237,7 +237,7 @@ pub(super) async fn upsert_leaderboard_entry_for_solution_submission_tx<'a>(
     .await?;
 
     let Some((challenge_id, agent_id, spec_json)) = row else {
-        return Ok(());
+        return Ok(false);
     };
     let spec = serde_json::from_value::<ChallengeBundleSpec>(spec_json).ok();
 
@@ -258,7 +258,7 @@ pub(super) async fn upsert_leaderboard_entry_for_solution_submission_tx<'a>(
 
     if !candidate_replaces_leaderboard_entry(spec.as_ref(), current, rank_score, aggregate_metrics)
     {
-        return Ok(());
+        return Ok(false);
     }
 
     let public_results_json =
@@ -291,7 +291,7 @@ pub(super) async fn upsert_leaderboard_entry_for_solution_submission_tx<'a>(
     .execute(&mut **tx)
     .await?;
 
-    Ok(())
+    Ok(true)
 }
 
 pub(super) async fn update_official_score_for_solution_submission_tx<'a>(

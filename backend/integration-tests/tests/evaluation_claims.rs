@@ -315,6 +315,126 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
     );
 }
 
+#[sqlx::test(migrations = "../migrations")]
+async fn losing_official_submission_does_not_overwrite_leaderboard_best_metadata(
+    pool: sqlx::PgPool,
+) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = test_config(storage.path(), &examples_challenges_root());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "name": "leaderboard-rerun-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+
+    let winning_submission_id = create_official_submission(&client, &app, token, "winner").await;
+    finish_next_job_with_score(&pool, &winning_submission_id, "worker-winner", 1.0).await;
+
+    let losing_submission_id = create_official_submission(&client, &app, token, "loser").await;
+    finish_next_job_with_score(&pool, &losing_submission_id, "worker-loser", 0.25).await;
+
+    let row: (String, f64, Option<f64>, serde_json::Value) = sqlx::query_as(
+        r#"
+        SELECT best_solution_submission_id, best_rank_score, official_score, official_metrics_json
+        FROM leaderboard_entries
+        WHERE challenge_id = 'sample-sum'
+          AND benchmark_target_id = 'cpu-linux-arm64'
+          AND agent_id = $1
+        "#,
+    )
+    .bind(
+        register_response["agent_id"]
+            .as_str()
+            .expect("missing agent id"),
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("failed to query leaderboard entry");
+
+    assert_eq!(row.0, winning_submission_id);
+    assert_eq!(row.1, 1.0);
+    assert_eq!(row.2, Some(1.0));
+    assert_eq!(
+        row.3,
+        serde_json::json!([{ "metric_id": "score", "value": 1.0 }])
+    );
+}
+
+async fn create_official_submission(
+    client: &reqwest::Client,
+    app: &helpers::TestApp,
+    token: &str,
+    explanation: &str,
+) -> String {
+    let artifact_base64 = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
+    let create_response: serde_json::Value = client
+        .post(api_url(app, "/api/solution-submissions"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "challenge_id": "sample-sum",
+            "benchmark_target_id": "cpu-linux-arm64",
+            "artifact_base64": artifact_base64,
+            "explanation": explanation
+        }))
+        .send()
+        .await
+        .expect("failed to create solution submission")
+        .json()
+        .await
+        .expect("failed to decode create solution submission response");
+    create_response["id"]
+        .as_str()
+        .expect("missing solution submission id")
+        .to_string()
+}
+
+async fn finish_next_job_with_score(
+    pool: &sqlx::PgPool,
+    solution_submission_id: &str,
+    worker_id: &str,
+    score: f64,
+) {
+    let claim = shared::db::claim_next_evaluation_job(pool, worker_id)
+        .await
+        .expect("failed to claim job")
+        .expect("missing queued job");
+    assert_eq!(claim.solution_submission_id, solution_submission_id);
+    assert!(
+        shared::db::mark_evaluation_started(
+            pool,
+            &MarkEvaluationStartedInput {
+                evaluation_id: uuid::Uuid::new_v4().to_string(),
+                solution_submission_id: solution_submission_id.to_string(),
+                job_id: claim.id.clone(),
+                benchmark_target_id: claim.benchmark_target_id.clone(),
+                eval_type: claim.eval_type,
+            },
+        )
+        .await
+        .expect("failed to mark evaluation started")
+    );
+    let result = persisted_result(
+        &claim,
+        worker_id,
+        solution_submission_id,
+        EvaluationStatus::Completed,
+        Some(score),
+    );
+    assert!(
+        shared::db::mark_evaluation_finished(pool, &result)
+            .await
+            .expect("failed to finish evaluation")
+    );
+}
+
 fn persisted_result(
     job: &shared::db::EvaluationJobRecord,
     worker_id: &str,
