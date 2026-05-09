@@ -602,6 +602,13 @@ and scorer result normalization.
 - Move tests with the code they exercise.
 - Do this after security fixes unless a fix becomes easier with a local split.
 
+**Implemented**
+
+- Split Docker execution, filesystem/archive checks, log helpers, and phase
+  error helpers into `backend/shared/src/runner/` submodules.
+- Kept `runner.rs` focused on orchestration and reduced it below the 1200-line
+  refactor threshold.
+
 ### 17. Replace manually mirrored web schemas
 
 **Why**

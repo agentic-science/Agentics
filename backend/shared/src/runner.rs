@@ -7,19 +7,8 @@
 //! the scorer container.
 
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
 
 use bollard::Docker;
-use bollard::container::LogOutput;
-use bollard::models::{
-    ContainerCreateBody, HostConfig, HostConfigLogConfig, Mount, MountTypeEnum, ResourcesUlimits,
-};
-use bollard::query_parameters::{
-    CreateContainerOptionsBuilder, KillContainerOptionsBuilder, LogsOptionsBuilder,
-    RemoveContainerOptionsBuilder, StartContainerOptions, WaitContainerOptionsBuilder,
-};
-use futures::StreamExt;
-use tokio::time::timeout;
 
 use crate::config::Config;
 use crate::error::{AppError, Result};
@@ -30,11 +19,24 @@ use crate::models::challenge::{
 use crate::models::evaluation::{EvaluationJobPayload, ScorerRunResult, ScoringMode};
 use crate::storage::Storage;
 use crate::zip_project::{
-    MAX_ZIP_PROJECT_ARTIFACT_BYTES, MAX_ZIP_PROJECT_FILE_COUNT, MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES,
     ZIP_PROJECT_MANIFEST_FILE, ZipProjectManifest, ZipProjectPhaseFailureReason,
     ZipProjectPhaseLimits, ZipProjectPhaseName, ZipProjectResolvedPhase,
     parse_zip_project_manifest,
 };
+
+mod docker;
+mod errors;
+mod filesystem;
+mod logs;
+
+pub use docker::connect_docker;
+
+use docker::{ContainerOutcome, ContainerRequest, bind_mount, pre_pull_image, run_container};
+use errors::{ensure_container_succeeded, ensure_prepare_succeeded, phase_error};
+use filesystem::{
+    cleanup_paths, copy_dir_all, ensure_disk_limit, ensure_prepare_disk_limit, extract_zip_safe,
+};
+use logs::{append_named_logs, append_phase_logs, append_run_logs, phase_name};
 
 /// Validated scorer result plus the persisted runner log location.
 #[derive(Debug, Clone)]
@@ -43,26 +45,6 @@ pub struct ExecutionResult {
     pub result: ScorerRunResult,
     /// Storage-relative path to stdout and stderr captured from runner containers.
     pub log_path: String,
-}
-
-#[derive(Debug)]
-struct ContainerRequest {
-    name: String,
-    image: String,
-    cmd: Vec<String>,
-    env: Vec<String>,
-    mounts: Vec<Mount>,
-    working_dir: String,
-    docker_platform: DockerPlatform,
-    limits: ZipProjectPhaseLimits,
-}
-
-#[derive(Debug)]
-struct ContainerOutcome {
-    exit_code: i64,
-    logs: String,
-    timed_out: bool,
-    wall_time_ms: u64,
 }
 
 #[derive(Clone, Copy)]
@@ -460,341 +442,6 @@ fn validate_scorer_result(
     Ok(())
 }
 
-async fn run_container(docker: &Docker, request: ContainerRequest) -> Result<ContainerOutcome> {
-    let memory_bytes = request
-        .limits
-        .memory_limit_mb
-        .checked_mul(1024 * 1024)
-        .ok_or_else(|| AppError::Runner("memory limit overflow".to_string()))?;
-    let memory = i64::try_from(memory_bytes)
-        .map_err(|_| AppError::Runner("memory limit exceeds Docker API range".to_string()))?;
-    let nano_cpus = i64::from(request.limits.cpu_limit_millis)
-        .checked_mul(1_000_000)
-        .ok_or_else(|| AppError::Runner("CPU limit overflow".to_string()))?;
-    let log_limit_bytes = request.limits.log_limit_bytes;
-    let host_config = HostConfig {
-        network_mode: Some(
-            request
-                .limits
-                .network_access
-                .docker_network_mode()
-                .to_string(),
-        ),
-        mounts: Some(request.mounts),
-        auto_remove: Some(false),
-        memory: Some(memory),
-        memory_swap: Some(memory),
-        nano_cpus: Some(nano_cpus),
-        pids_limit: Some(256),
-        ulimits: Some(vec![
-            ResourcesUlimits {
-                name: Some("nofile".to_string()),
-                soft: Some(1024),
-                hard: Some(1024),
-            },
-            ResourcesUlimits {
-                name: Some("nproc".to_string()),
-                soft: Some(256),
-                hard: Some(256),
-            },
-        ]),
-        cap_drop: Some(vec!["ALL".to_string()]),
-        security_opt: Some(vec!["no-new-privileges:true".to_string()]),
-        privileged: Some(false),
-        publish_all_ports: Some(false),
-        init: Some(true),
-        oom_kill_disable: Some(false),
-        log_config: Some(docker_log_config(log_limit_bytes)),
-        ..Default::default()
-    };
-    let container_config = ContainerCreateBody {
-        image: Some(request.image),
-        cmd: Some(request.cmd),
-        env: Some(request.env),
-        working_dir: Some(request.working_dir),
-        host_config: Some(host_config),
-        labels: Some({
-            let mut labels = std::collections::HashMap::new();
-            labels.insert("agentics.runner".to_string(), "zip_project".to_string());
-            labels
-        }),
-        ..Default::default()
-    };
-
-    let create_opts = CreateContainerOptionsBuilder::default()
-        .name(&request.name)
-        .platform(request.docker_platform.as_str())
-        .build();
-    let create_resp = docker
-        .create_container(Some(create_opts), container_config)
-        .await
-        .map_err(|e| AppError::Docker(format!("create container failed: {e}")))?;
-    let container_id = create_resp.id;
-
-    let run_result = run_created_container(
-        docker,
-        &container_id,
-        request.limits.timeout_sec,
-        log_limit_bytes,
-    )
-    .await;
-    let remove_result = remove_container(docker, &container_id).await;
-    match (run_result, remove_result) {
-        (Ok(result), Ok(())) => Ok(result),
-        (Ok(_), Err(cleanup_err)) => Err(cleanup_err),
-        (Err(run_err), Ok(())) => Err(run_err),
-        (Err(run_err), Err(cleanup_err)) => Err(AppError::Docker(format!(
-            "{run_err}; additionally failed to remove runner container: {cleanup_err}"
-        ))),
-    }
-}
-
-async fn run_created_container(
-    docker: &Docker,
-    container_id: &str,
-    timeout_sec: u64,
-    log_limit_bytes: u64,
-) -> Result<ContainerOutcome> {
-    docker
-        .start_container(container_id, None::<StartContainerOptions>)
-        .await
-        .map_err(|e| AppError::Docker(format!("start container failed: {e}")))?;
-    let started = Instant::now();
-
-    let wait_opts = WaitContainerOptionsBuilder::default()
-        .condition("not-running")
-        .build();
-    let wait_result = timeout(
-        Duration::from_secs(timeout_sec),
-        docker
-            .wait_container(container_id, Some(wait_opts))
-            .collect::<Vec<_>>(),
-    )
-    .await;
-
-    let (exit_code, timed_out) = match wait_result {
-        Ok(results) => {
-            let exit_code = results
-                .into_iter()
-                .flatten()
-                .last()
-                .map(|status| status.status_code)
-                .unwrap_or(1);
-            (exit_code, false)
-        }
-        Err(_) => {
-            let kill_opts = KillContainerOptionsBuilder::default()
-                .signal("SIGKILL")
-                .build();
-            docker
-                .kill_container(container_id, Some(kill_opts))
-                .await
-                .map_err(|e| AppError::Docker(format!("kill timed out container failed: {e}")))?;
-            (124, true)
-        }
-    };
-    let wall_time_ms = duration_millis(started.elapsed());
-    let (logs, _logs_truncated) =
-        collect_container_logs(docker, container_id, log_limit_bytes).await?;
-    Ok(ContainerOutcome {
-        exit_code,
-        logs,
-        timed_out,
-        wall_time_ms,
-    })
-}
-
-fn duration_millis(duration: Duration) -> u64 {
-    let millis = duration.as_millis();
-    u64::try_from(millis).unwrap_or(u64::MAX)
-}
-
-async fn remove_container(docker: &Docker, container_id: &str) -> Result<()> {
-    let remove_opts = RemoveContainerOptionsBuilder::default().force(true).build();
-    docker
-        .remove_container(container_id, Some(remove_opts))
-        .await
-        .map_err(|e| AppError::Docker(format!("remove runner container failed: {e}")))?;
-    Ok(())
-}
-
-fn docker_log_config(limit_bytes: u64) -> HostConfigLogConfig {
-    let mut config = std::collections::HashMap::new();
-    config.insert("max-size".to_string(), format!("{}b", limit_bytes.max(1)));
-    config.insert("max-file".to_string(), "1".to_string());
-
-    HostConfigLogConfig {
-        typ: Some("json-file".to_string()),
-        config: Some(config),
-    }
-}
-
-/// Connect to Docker using `AGENTICS_DOCKER_HOST` when configured, otherwise the local default.
-pub fn connect_docker(config: &Config) -> Result<Docker> {
-    match config
-        .docker_host
-        .as_deref()
-        .map(str::trim)
-        .filter(|host| !host.is_empty())
-    {
-        Some(host) => Docker::connect_with_host(host)
-            .map_err(|e| AppError::Docker(format!("failed to connect to Docker host {host}: {e}"))),
-        None => Docker::connect_with_defaults()
-            .map_err(|e| AppError::Docker(format!("failed to connect to Docker: {e}"))),
-    }
-}
-
-async fn collect_container_logs(
-    docker: &Docker,
-    container_id: &str,
-    limit_bytes: u64,
-) -> Result<(String, bool)> {
-    let opts = LogsOptionsBuilder::default()
-        .stdout(true)
-        .stderr(true)
-        .tail("all")
-        .build();
-    let mut logs = docker.logs(container_id, Some(opts));
-    let mut output = Vec::new();
-    let mut truncated = false;
-    let limit = usize::try_from(limit_bytes).unwrap_or(usize::MAX);
-
-    while let Some(chunk) = logs.next().await {
-        match chunk {
-            Ok(LogOutput::StdOut { message })
-            | Ok(LogOutput::StdErr { message })
-            | Ok(LogOutput::Console { message }) => {
-                append_bounded_log_bytes(&mut output, &message, limit, &mut truncated);
-                if output.len() >= limit {
-                    truncated = true;
-                    break;
-                }
-            }
-            Err(e) => {
-                return Err(AppError::Docker(format!(
-                    "collect container logs failed: {e}"
-                )));
-            }
-            _ => {}
-        }
-    }
-
-    let mut output = String::from_utf8_lossy(&output).into_owned();
-    if truncated {
-        output.push_str(&format!(
-            "\n[agentics] container logs truncated at {limit_bytes} bytes\n"
-        ));
-    }
-
-    Ok((output, truncated))
-}
-
-fn append_bounded_log_bytes(
-    output: &mut Vec<u8>,
-    chunk: &[u8],
-    limit: usize,
-    truncated: &mut bool,
-) {
-    if output.len() >= limit {
-        *truncated = !chunk.is_empty();
-        return;
-    }
-
-    let remaining = limit.saturating_sub(output.len());
-    if chunk.len() > remaining {
-        output.extend(chunk.iter().take(remaining).copied());
-        *truncated = true;
-    } else {
-        output.extend_from_slice(chunk);
-    }
-}
-
-async fn extract_zip_safe(artifact_path: &Path, target_dir: &Path) -> Result<()> {
-    let artifact_size = tokio::fs::metadata(artifact_path).await?.len();
-    if artifact_size > MAX_ZIP_PROJECT_ARTIFACT_BYTES {
-        return Err(AppError::Validation(format!(
-            "solution archive must be at most {} bytes",
-            MAX_ZIP_PROJECT_ARTIFACT_BYTES
-        )));
-    }
-
-    let artifact_path = artifact_path.to_path_buf();
-    let target_dir = target_dir.to_path_buf();
-    tokio::task::spawn_blocking(move || extract_zip_safe_blocking(&artifact_path, &target_dir))
-        .await
-        .map_err(|e| AppError::Internal(format!("zip extraction task failed: {e}")))?
-}
-
-fn extract_zip_safe_blocking(artifact_path: &Path, target_dir: &Path) -> Result<()> {
-    let reader = std::fs::File::open(artifact_path)?;
-    let mut archive = zip::ZipArchive::new(reader)?;
-    if archive.len() > MAX_ZIP_PROJECT_FILE_COUNT {
-        return Err(AppError::Validation(format!(
-            "solution archive must contain at most {} entries",
-            MAX_ZIP_PROJECT_FILE_COUNT
-        )));
-    }
-
-    let mut total_uncompressed_size = 0u64;
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i)?;
-        let outpath = match file.enclosed_name() {
-            Some(path) => target_dir.join(path),
-            None => continue,
-        };
-
-        total_uncompressed_size = total_uncompressed_size
-            .checked_add(file.size())
-            .ok_or_else(|| AppError::Validation("solution archive is too large".to_string()))?;
-        if total_uncompressed_size > MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES {
-            return Err(AppError::Validation(format!(
-                "solution archive must expand to at most {} bytes",
-                MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES
-            )));
-        }
-
-        if file.is_dir() {
-            std::fs::create_dir_all(&outpath)?;
-        } else {
-            if let Some(parent) = outpath.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            let mut outfile = std::fs::File::create(&outpath)?;
-            std::io::copy(&mut file, &mut outfile)?;
-        }
-    }
-
-    Ok(())
-}
-
-/// Pull an image before creating a runner container.
-pub async fn pre_pull_image(
-    docker: &Docker,
-    image: &str,
-    docker_platform: DockerPlatform,
-) -> Result<()> {
-    use bollard::query_parameters::CreateImageOptionsBuilder;
-
-    if docker.inspect_image(image).await.is_ok() {
-        return Ok(());
-    }
-
-    let opts = CreateImageOptionsBuilder::default()
-        .from_image(image)
-        .platform(docker_platform.as_str())
-        .build();
-    let mut stream = docker.create_image(Some(opts), None, None);
-    while let Some(item) = stream.next().await {
-        if let Err(e) = item {
-            return Err(AppError::Docker(format!(
-                "failed to pull image {image}: {e}"
-            )));
-        }
-    }
-
-    Ok(())
-}
-
 enum RunManifestSource<'a> {
     Static(&'a str),
     Prepared(&'a ChallengePrepareSpec),
@@ -979,16 +626,6 @@ fn prepare_limits(
     }
 }
 
-fn bind_mount(path: &Path, target: &str, read_only: bool) -> Mount {
-    Mount {
-        target: Some(target.to_string()),
-        source: Some(path.to_string_lossy().to_string()),
-        typ: Some(MountTypeEnum::BIND),
-        read_only: Some(read_only),
-        ..Default::default()
-    }
-}
-
 async fn materialize_run_io(
     run: &ChallengeRunSpec,
     input_source_root: &Path,
@@ -1101,198 +738,6 @@ async fn ensure_declared_outputs_exist(run: &ChallengeRunSpec, output_dir: &Path
     Ok(())
 }
 
-fn ensure_container_succeeded(
-    phase: ZipProjectPhaseName,
-    outcome: &ContainerOutcome,
-) -> Result<()> {
-    if outcome.timed_out {
-        let message = append_log_excerpt("phase timed out", &outcome.logs);
-        return Err(phase_error(
-            phase,
-            ZipProjectPhaseFailureReason::TimedOut,
-            message,
-            None,
-        ));
-    }
-    if outcome.exit_code != 0 {
-        let message = append_log_excerpt(
-            &format!("phase exited with status {}", outcome.exit_code),
-            &outcome.logs,
-        );
-        return Err(phase_error(
-            phase,
-            ZipProjectPhaseFailureReason::NonZeroExit,
-            message,
-            Some(outcome.exit_code as i32),
-        ));
-    }
-    Ok(())
-}
-
-fn ensure_prepare_succeeded(outcome: &ContainerOutcome) -> Result<()> {
-    if outcome.timed_out {
-        return Err(AppError::Runner(append_log_excerpt(
-            "prepare phase timed out",
-            &outcome.logs,
-        )));
-    }
-    if outcome.exit_code != 0 {
-        return Err(AppError::Runner(append_log_excerpt(
-            &format!("prepare phase exited with status {}", outcome.exit_code),
-            &outcome.logs,
-        )));
-    }
-    Ok(())
-}
-
-fn append_log_excerpt(message: &str, logs: &str) -> String {
-    let trimmed = logs.trim();
-    if trimmed.is_empty() {
-        return message.to_string();
-    }
-    let excerpt: String = trimmed.chars().take(500).collect();
-    format!("{message}; logs: {excerpt}")
-}
-
-fn phase_error(
-    phase: ZipProjectPhaseName,
-    reason: ZipProjectPhaseFailureReason,
-    message: String,
-    exit_code: Option<i32>,
-) -> AppError {
-    let report = crate::zip_project::ZipProjectPhaseFailureReport {
-        phase,
-        reason,
-        message,
-        exit_code,
-        log_path: None,
-    };
-    AppError::Runner(format!(
-        "zip_project phase failed: {}",
-        serde_json::to_string(&report)
-            .unwrap_or_else(|_| "unserializable phase failure".to_string())
-    ))
-}
-
-async fn ensure_disk_limit(
-    path: &Path,
-    disk_limit_mb: u64,
-    phase: ZipProjectPhaseName,
-) -> Result<()> {
-    let path = path.to_path_buf();
-    let bytes = tokio::task::spawn_blocking(move || directory_size(&path))
-        .await
-        .map_err(|e| AppError::Internal(format!("disk usage task failed: {e}")))??;
-    let limit_bytes = disk_limit_mb
-        .checked_mul(1024 * 1024)
-        .ok_or_else(|| AppError::Runner("disk limit overflow".to_string()))?;
-    if bytes > limit_bytes {
-        return Err(phase_error(
-            phase,
-            ZipProjectPhaseFailureReason::ResourceLimit,
-            format!("phase exceeded disk limit: {bytes} > {limit_bytes} bytes"),
-            None,
-        ));
-    }
-    Ok(())
-}
-
-async fn ensure_prepare_disk_limit(path: &Path, disk_limit_mb: u64) -> Result<()> {
-    let path = path.to_path_buf();
-    let bytes = tokio::task::spawn_blocking(move || directory_size(&path))
-        .await
-        .map_err(|e| AppError::Internal(format!("prepare disk usage task failed: {e}")))??;
-    let limit_bytes = disk_limit_mb
-        .checked_mul(1024 * 1024)
-        .ok_or_else(|| AppError::Runner("prepare disk limit overflow".to_string()))?;
-    if bytes > limit_bytes {
-        return Err(AppError::Runner(format!(
-            "prepare phase exceeded disk limit: {bytes} > {limit_bytes} bytes"
-        )));
-    }
-    Ok(())
-}
-
-fn directory_size(path: &Path) -> Result<u64> {
-    let mut total = 0u64;
-    for entry in std::fs::read_dir(path)? {
-        let entry = entry?;
-        let metadata = entry.path().symlink_metadata()?;
-        let file_type = metadata.file_type();
-        if file_type.is_dir() {
-            total = total
-                .checked_add(directory_size(&entry.path())?)
-                .ok_or_else(|| AppError::Runner("directory size overflow".to_string()))?;
-        } else {
-            // Count symlink directory entries as links, never as their host targets.
-            total = total
-                .checked_add(metadata.len())
-                .ok_or_else(|| AppError::Runner("directory size overflow".to_string()))?;
-        }
-    }
-    Ok(total)
-}
-
-async fn copy_dir_all(source: &Path, destination: &Path) -> Result<()> {
-    let source = source.to_path_buf();
-    let destination = destination.to_path_buf();
-    tokio::task::spawn_blocking(move || copy_dir_all_blocking(&source, &destination))
-        .await
-        .map_err(|e| AppError::Internal(format!("copy task failed: {e}")))?
-}
-
-fn copy_dir_all_blocking(source: &Path, destination: &Path) -> Result<()> {
-    std::fs::create_dir_all(destination)?;
-    for entry in std::fs::read_dir(source)? {
-        let entry = entry?;
-        let target = destination.join(entry.file_name());
-        let file_type = entry.file_type()?;
-        if file_type.is_dir() {
-            copy_dir_all_blocking(&entry.path(), &target)?;
-        } else if file_type.is_file() {
-            std::fs::copy(entry.path(), target)?;
-        }
-    }
-    Ok(())
-}
-
-async fn cleanup_paths<const N: usize>(paths: [PathBuf; N]) -> Result<()> {
-    for path in paths {
-        match tokio::fs::remove_dir_all(path).await {
-            Ok(()) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(AppError::Io(e)),
-        }
-    }
-    Ok(())
-}
-
-fn append_phase_logs(logs: &mut String, phase: ZipProjectPhaseName, content: &str) {
-    append_named_logs(logs, &format!("phase:{}", phase_name(&phase)), content);
-}
-
-fn append_run_logs(logs: &mut String, run_id: &str, content: &str) {
-    append_named_logs(logs, &format!("run:{run_id}"), content);
-}
-
-fn append_named_logs(logs: &mut String, name: &str, content: &str) {
-    logs.push_str("\n===== ");
-    logs.push_str(name);
-    logs.push_str(" =====\n");
-    logs.push_str(content);
-    if !content.ends_with('\n') {
-        logs.push('\n');
-    }
-}
-
-fn phase_name(phase: &ZipProjectPhaseName) -> &'static str {
-    match phase {
-        ZipProjectPhaseName::Setup => "setup",
-        ZipProjectPhaseName::Build => "build",
-        ZipProjectPhaseName::Run => "run",
-    }
-}
-
 fn run_interface(interface: ChallengeRunInterface) -> &'static str {
     match interface {
         ChallengeRunInterface::Stdio => "stdio",
@@ -1316,83 +761,7 @@ fn container_name(job_id: &str, suffix: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Write;
-    use std::path::{Path, PathBuf};
-
-    use super::*;
     use crate::zip_project::ZipProjectNetworkAccess;
-
-    fn temp_path(name: &str) -> PathBuf {
-        std::env::temp_dir().join(format!("agentics-runner-{name}-{}", uuid::Uuid::new_v4()))
-    }
-
-    fn write_zip(path: &Path, entries: Vec<(String, Vec<u8>)>) {
-        let file = std::fs::File::create(path).expect("failed to create test zip");
-        let mut archive = zip::ZipWriter::new(file);
-        let options = zip::write::SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored);
-
-        for (name, bytes) in entries {
-            archive
-                .start_file(name, options)
-                .expect("failed to start zip entry");
-            archive
-                .write_all(&bytes)
-                .expect("failed to write zip entry");
-        }
-
-        archive.finish().expect("failed to finish test zip");
-    }
-
-    #[tokio::test]
-    async fn extract_zip_safe_skips_unsafe_entry_names() {
-        let zip_path = temp_path("unsafe-entry.zip");
-        let target_dir = temp_path("unsafe-target");
-        std::fs::create_dir_all(&target_dir).expect("failed to create target dir");
-        write_zip(
-            &zip_path,
-            vec![
-                ("../escape.py".to_string(), b"print('bad')\n".to_vec()),
-                ("main.py".to_string(), b"print('ok')\n".to_vec()),
-                ("scripts/setup.sh".to_string(), b"true\n".to_vec()),
-            ],
-        );
-
-        extract_zip_safe(&zip_path, &target_dir)
-            .await
-            .expect("extraction should succeed");
-
-        let extracted_files = std::fs::read_dir(&target_dir)
-            .expect("failed to read target dir")
-            .collect::<std::result::Result<Vec<_>, _>>()
-            .expect("failed to collect target dir entries");
-        assert_eq!(extracted_files.len(), 2);
-        assert!(target_dir.join("main.py").is_file());
-        assert!(target_dir.join("scripts/setup.sh").is_file());
-
-        let _ = std::fs::remove_file(zip_path);
-        let _ = std::fs::remove_dir_all(target_dir);
-    }
-
-    #[tokio::test]
-    async fn extract_zip_safe_rejects_too_many_entries() {
-        let zip_path = temp_path("too-many.zip");
-        let target_dir = temp_path("too-many-target");
-        std::fs::create_dir_all(&target_dir).expect("failed to create target dir");
-        let entries = (0..=MAX_ZIP_PROJECT_FILE_COUNT)
-            .map(|i| (format!("file-{i}.txt"), Vec::new()))
-            .collect();
-        write_zip(&zip_path, entries);
-
-        let result = extract_zip_safe(&zip_path, &target_dir).await;
-
-        assert!(
-            matches!(result, Err(AppError::Validation(message)) if message.contains("at most"))
-        );
-
-        let _ = std::fs::remove_file(zip_path);
-        let _ = std::fs::remove_dir_all(target_dir);
-    }
 
     #[test]
     fn network_policy_clamps_to_resource_profile() {
@@ -1404,37 +773,5 @@ mod tests {
             ZipProjectNetworkAccess::Loopback.docker_network_mode(),
             "none"
         );
-    }
-
-    #[test]
-    fn bounded_log_append_truncates_by_byte_limit() {
-        let mut output = Vec::new();
-        let mut truncated = false;
-
-        append_bounded_log_bytes(&mut output, b"abcdef", 4, &mut truncated);
-
-        assert_eq!(output, b"abcd");
-        assert!(truncated);
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn directory_size_does_not_follow_symlinks() {
-        let root = temp_path("symlink-size-root");
-        let outside = temp_path("symlink-size-outside.txt");
-        std::fs::create_dir_all(&root).expect("failed to create root");
-        std::fs::write(&outside, vec![b'x'; 1024 * 1024]).expect("failed to write outside file");
-        std::os::unix::fs::symlink(&outside, root.join("outside-link"))
-            .expect("failed to create symlink");
-
-        let bytes = directory_size(&root).expect("directory size should succeed");
-
-        assert!(
-            bytes < 1024 * 1024,
-            "symlink target should not be counted: {bytes}"
-        );
-
-        let _ = std::fs::remove_file(outside);
-        let _ = std::fs::remove_dir_all(root);
     }
 }
