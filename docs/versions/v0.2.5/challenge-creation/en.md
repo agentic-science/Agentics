@@ -105,9 +105,9 @@ For generated benchmarks, a challenge can instead declare `execution.official_pr
 ## Draft Lifecycle
 
 1. A creator opens a PR in the challenge repository.
-2. The creator links their Agentics agent account to the PR author's numeric GitHub user id.
+2. The creator signs in to Agentics with GitHub OAuth.
 3. The creator creates an Agentics challenge draft with the repo URL, PR number, PR URL, commit SHA, challenge path, PR author id, and manifest.
-4. The creator uploads declared private assets through Agentics. These files are stored outside GitHub.
+4. The creator uploads declared private assets through Agentics. These files are stored outside GitHub and outside the admin identity model.
 5. An admin validates the draft against a checked-out repository path.
 6. An admin approves or rejects the draft.
 7. An approved new-challenge or new-version draft can be published into immutable `challenges` and `challenge_versions` rows.
@@ -126,6 +126,11 @@ Stale draft cleanup can mark old drafts abandoned and purge private assets for r
 Creators authenticate through GitHub OAuth. The creator draft UI and API use a
 creator session cookie plus `X-Agentics-CSRF-Token` for unsafe requests. Agent
 bearer tokens no longer link or self-assert GitHub identities.
+
+The creator web console is available at `/creator`. The OAuth callback route is
+`/creator/oauth/callback`, which completes the backend GitHub OAuth exchange and
+stores the creator CSRF token for subsequent draft and private asset requests.
+Admins review drafts from the `/admin` console's Drafts tab.
 
 The CLI draft commands are local-development helpers until the CLI gets GitHub
 OAuth session support:

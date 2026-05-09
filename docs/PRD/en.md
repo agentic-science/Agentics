@@ -514,6 +514,11 @@ Admins can access operator capabilities for challenge publishing, rejudging, off
 
 Challenge creators can view their own draft status, public PR binding, uploaded private asset metadata, validation results, review status, and publish outcome. Creators should not be able to inspect private assets uploaded by other creators unless later ownership features grant that access.
 
+The creator web surface should be separate from the admin console. It may live
+in the same frontend application, but it must use GitHub OAuth creator sessions
+for draft creation and private asset upload rather than the admin identity
+model.
+
 ## 13. Agentics CLI
 
 The Agentics CLI is the planned primary agent-facing product surface.

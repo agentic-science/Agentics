@@ -435,6 +435,11 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
   - Scope: Make leaderboards, aggregate metrics, per-run metrics, solution submission status, logs, and artifact browsing easy for humans to scan and compare.
   - Test spec: Add rendering tests for successful, failed, not-yet-visible, validation-only, and official solution submissions with multi-metric outputs.
 
+- **M0.2.5-WEB-4: Add creator and draft review web surfaces**
+  - Commit target: `web: add creator challenge draft console`
+  - Scope: Add a GitHub OAuth-backed creator route for draft creation, private asset upload, and draft status inspection. Add an admin draft review tab for validation, approval, rejection, publish, abandon, and stale cleanup. Creator pages may share the web app, but must not use the admin identity model.
+  - Test spec: Add rendering tests for the creator console and admin draft tab, and verify that unsafe creator requests use a creator CSRF token rather than admin credentials.
+
 ### Challenge Creation
 
 - **M0.2.5-CREATE-1: Define public challenge manifest and repository layout**
@@ -545,6 +550,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 | `M0.2.5-WEB-1: Revamp public web visual system and layout` | Planned | Public first impression blocker. |
 | `M0.2.5-WEB-2: Polish challenge browsing and challenge detail` | Planned | Depends on resource and community metadata. |
 | `M0.2.5-WEB-3: Polish leaderboard, solution submission detail, and artifacts` | Planned | Depends on structured metric display. |
+| `M0.2.5-WEB-4: Add creator and draft review web surfaces` | Implemented | `/creator` uses GitHub OAuth creator sessions for draft creation and asset upload; `/admin` includes a Drafts tab for reviewer lifecycle actions. |
 | `M0.2.5-CREATE-1: Define public challenge manifest and repository layout` | Implemented | Public manifest, repo layout validation, namespace rules, and leakage checks are implemented and documented. |
 | `M0.2.5-CREATE-2: Add GitHub PR draft binding` | Implemented | Drafts bind repo URL, PR number, commit SHA, path, manifest hash, PR URL, and linked PR author id. |
 | `M0.2.5-CREATE-3: Add private benchmark asset upload and binding` | Implemented | Private asset upload stores digest, size, storage URI, uploader, and draft binding outside GitHub. |

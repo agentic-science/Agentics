@@ -473,6 +473,313 @@ export const challengeDetailResponseSchema = z
     "Public challenge detail response with spec and Markdown statement.",
   );
 
+export const challengeDraftCleanupResponseSchema = z
+  .object({
+    abandoned_drafts: z.number().int(),
+    purged_private_assets: z.number().int(),
+  })
+  .strict()
+  .describe(
+    "Admin response returned after abandoning stale drafts and deleting expired\nunpublished private asset records.",
+  );
+
+export const challengeDraftListResponseSchema = z
+  .object({
+    items: z.array(
+      z
+        .object({
+          id: z.string(),
+          challenge_id: z.string(),
+          request: z
+            .enum(["new_challenge", "new_version", "archive_challenge"])
+            .describe("Lifecycle request represented by a public manifest."),
+          status: z
+            .enum([
+              "draft",
+              "validated",
+              "approved",
+              "rejected",
+              "published",
+              "abandoned",
+            ])
+            .describe("Draft status used by the review lifecycle."),
+          creator_agent_id: z.string(),
+          creator_github_user_id: z.number().int(),
+          creator_github_login: z.string(),
+          repo_url: z.string(),
+          pr_number: z.number().int(),
+          pr_url: z.string(),
+          commit_sha: z.string(),
+          challenge_path: z.string(),
+          manifest_sha256: z.string(),
+          manifest: z
+            .object({
+              schema_version: z.number().int(),
+              request: z
+                .enum(["new_challenge", "new_version", "archive_challenge"])
+                .describe(
+                  "Lifecycle request represented by a public manifest.",
+                ),
+              challenge_id: z.string(),
+              title: z.string(),
+              summary: z.string(),
+              readme_path: z.string(),
+              version: z
+                .object({
+                  version: z.string(),
+                  bundle_path: z.string(),
+                  supersedes_version: z.string().optional(),
+                })
+                .strict()
+                .describe(
+                  "Version metadata for new-challenge and new-version requests.",
+                )
+                .optional(),
+              archive: z
+                .object({ reason: z.string() })
+                .strict()
+                .describe("Public archive request metadata.")
+                .optional(),
+              private_assets: z.array(
+                z
+                  .object({
+                    asset_id: z.string(),
+                    kind: z
+                      .enum([
+                        "private_benchmark_data",
+                        "private_scorer_package",
+                        "private_seeds",
+                        "private_reference_outputs",
+                      ])
+                      .describe(
+                        "Supported private asset classes for challenge creation.",
+                      ),
+                    required: z.boolean(),
+                    asset_note: z.string().optional(),
+                  })
+                  .strict()
+                  .describe(
+                    "Private asset that must be uploaded directly to Agentics for a draft.",
+                  ),
+              ),
+              ci: z
+                .object({
+                  validate_manifest: z.boolean(),
+                  validate_public_bundle: z.boolean(),
+                  smoke_test_public_validation: z.boolean(),
+                })
+                .strict()
+                .describe(
+                  "CI expectations for the public challenge repository.",
+                ),
+            })
+            .strict()
+            .describe(
+              "Public manifest submitted through the reviewed challenge repository.",
+            ),
+          validation_bundle_sha256: z.string().optional(),
+          approved_bundle_sha256: z.string().optional(),
+          validation_message: z.string().optional(),
+          validation_repository_path: z.string().optional(),
+          published_challenge_version_id: z.string().optional(),
+          private_assets: z.array(
+            z
+              .object({
+                id: z.string(),
+                draft_id: z.string(),
+                asset_id: z.string(),
+                kind: z
+                  .enum([
+                    "private_benchmark_data",
+                    "private_scorer_package",
+                    "private_seeds",
+                    "private_reference_outputs",
+                  ])
+                  .describe(
+                    "Supported private asset classes for challenge creation.",
+                  ),
+                required: z.boolean(),
+                size_bytes: z.number().int(),
+                sha256: z.string(),
+                storage_uri: z.string(),
+                uploader_agent_id: z.string(),
+                created_at: z.string(),
+              })
+              .strict()
+              .describe(
+                "API response for one private benchmark asset bound to a draft.",
+              ),
+          ),
+          validation_records: z.array(
+            z
+              .object({
+                id: z.string(),
+                draft_id: z.string(),
+                status: z
+                  .enum(["passed", "failed"])
+                  .describe("Validation record status for a challenge draft."),
+                message: z.string(),
+                repository_path: z.string(),
+                manifest_sha256: z.string(),
+                bundle_sha256: z.string().optional(),
+                created_at: z.string(),
+              })
+              .strict()
+              .describe("API response for one validation record."),
+          ),
+          created_at: z.string(),
+          updated_at: z.string(),
+        })
+        .strict()
+        .describe("API response for one challenge draft."),
+    ),
+  })
+  .strict()
+  .describe("List response for admin challenge draft review.");
+
+export const challengeDraftResponseSchema = z
+  .object({
+    id: z.string(),
+    challenge_id: z.string(),
+    request: z
+      .enum(["new_challenge", "new_version", "archive_challenge"])
+      .describe("Lifecycle request represented by a public manifest."),
+    status: z
+      .enum([
+        "draft",
+        "validated",
+        "approved",
+        "rejected",
+        "published",
+        "abandoned",
+      ])
+      .describe("Draft status used by the review lifecycle."),
+    creator_agent_id: z.string(),
+    creator_github_user_id: z.number().int(),
+    creator_github_login: z.string(),
+    repo_url: z.string(),
+    pr_number: z.number().int(),
+    pr_url: z.string(),
+    commit_sha: z.string(),
+    challenge_path: z.string(),
+    manifest_sha256: z.string(),
+    manifest: z
+      .object({
+        schema_version: z.number().int(),
+        request: z
+          .enum(["new_challenge", "new_version", "archive_challenge"])
+          .describe("Lifecycle request represented by a public manifest."),
+        challenge_id: z.string(),
+        title: z.string(),
+        summary: z.string(),
+        readme_path: z.string(),
+        version: z
+          .object({
+            version: z.string(),
+            bundle_path: z.string(),
+            supersedes_version: z.string().optional(),
+          })
+          .strict()
+          .describe(
+            "Version metadata for new-challenge and new-version requests.",
+          )
+          .optional(),
+        archive: z
+          .object({ reason: z.string() })
+          .strict()
+          .describe("Public archive request metadata.")
+          .optional(),
+        private_assets: z.array(
+          z
+            .object({
+              asset_id: z.string(),
+              kind: z
+                .enum([
+                  "private_benchmark_data",
+                  "private_scorer_package",
+                  "private_seeds",
+                  "private_reference_outputs",
+                ])
+                .describe(
+                  "Supported private asset classes for challenge creation.",
+                ),
+              required: z.boolean(),
+              asset_note: z.string().optional(),
+            })
+            .strict()
+            .describe(
+              "Private asset that must be uploaded directly to Agentics for a draft.",
+            ),
+        ),
+        ci: z
+          .object({
+            validate_manifest: z.boolean(),
+            validate_public_bundle: z.boolean(),
+            smoke_test_public_validation: z.boolean(),
+          })
+          .strict()
+          .describe("CI expectations for the public challenge repository."),
+      })
+      .strict()
+      .describe(
+        "Public manifest submitted through the reviewed challenge repository.",
+      ),
+    validation_bundle_sha256: z.string().optional(),
+    approved_bundle_sha256: z.string().optional(),
+    validation_message: z.string().optional(),
+    validation_repository_path: z.string().optional(),
+    published_challenge_version_id: z.string().optional(),
+    private_assets: z.array(
+      z
+        .object({
+          id: z.string(),
+          draft_id: z.string(),
+          asset_id: z.string(),
+          kind: z
+            .enum([
+              "private_benchmark_data",
+              "private_scorer_package",
+              "private_seeds",
+              "private_reference_outputs",
+            ])
+            .describe(
+              "Supported private asset classes for challenge creation.",
+            ),
+          required: z.boolean(),
+          size_bytes: z.number().int(),
+          sha256: z.string(),
+          storage_uri: z.string(),
+          uploader_agent_id: z.string(),
+          created_at: z.string(),
+        })
+        .strict()
+        .describe(
+          "API response for one private benchmark asset bound to a draft.",
+        ),
+    ),
+    validation_records: z.array(
+      z
+        .object({
+          id: z.string(),
+          draft_id: z.string(),
+          status: z
+            .enum(["passed", "failed"])
+            .describe("Validation record status for a challenge draft."),
+          message: z.string(),
+          repository_path: z.string(),
+          manifest_sha256: z.string(),
+          bundle_sha256: z.string().optional(),
+          created_at: z.string(),
+        })
+        .strict()
+        .describe("API response for one validation record."),
+    ),
+    created_at: z.string(),
+    updated_at: z.string(),
+  })
+  .strict()
+  .describe("API response for one challenge draft.");
+
 export const challengeListResponseSchema = z
   .object({
     items: z.array(
@@ -495,6 +802,29 @@ export const challengeListResponseSchema = z
   })
   .strict()
   .describe("Public challenge catalog response.");
+
+export const challengePrivateAssetResponseSchema = z
+  .object({
+    id: z.string(),
+    draft_id: z.string(),
+    asset_id: z.string(),
+    kind: z
+      .enum([
+        "private_benchmark_data",
+        "private_scorer_package",
+        "private_seeds",
+        "private_reference_outputs",
+      ])
+      .describe("Supported private asset classes for challenge creation."),
+    required: z.boolean(),
+    size_bytes: z.number().int(),
+    sha256: z.string(),
+    storage_uri: z.string(),
+    uploader_agent_id: z.string(),
+    created_at: z.string(),
+  })
+  .strict()
+  .describe("API response for one private benchmark asset bound to a draft.");
 
 export const createChallengeVersionResponseSchema = z
   .object({
@@ -581,6 +911,11 @@ export const evaluationJobResponseSchema = z
   .describe(
     "Admin response returned when an official evaluation job is queued.",
   );
+
+export const githubOauthLoginResponseSchema = z
+  .object({ authorization_url: z.string(), state: z.string() })
+  .strict()
+  .describe("URL returned to a browser or CLI so it can start GitHub OAuth.");
 
 export const hideSolutionSubmissionResponseSchema = z
   .object({ id: z.string(), hidden: z.boolean() })
@@ -1027,13 +1362,28 @@ export type AdminSolutionSubmissionListResponse = z.infer<
 export type ChallengeDetailResponse = z.infer<
   typeof challengeDetailResponseSchema
 >;
+export type ChallengeDraftCleanupResponse = z.infer<
+  typeof challengeDraftCleanupResponseSchema
+>;
+export type ChallengeDraftListResponse = z.infer<
+  typeof challengeDraftListResponseSchema
+>;
+export type ChallengeDraftResponse = z.infer<
+  typeof challengeDraftResponseSchema
+>;
 export type ChallengeListResponse = z.infer<typeof challengeListResponseSchema>;
+export type ChallengePrivateAssetResponse = z.infer<
+  typeof challengePrivateAssetResponseSchema
+>;
 export type CreatorMeResponse = z.infer<typeof creatorMeResponseSchema>;
 export type CreatorSessionResponse = z.infer<
   typeof creatorSessionResponseSchema
 >;
 export type DiscussionListResponse = z.infer<
   typeof discussionListResponseSchema
+>;
+export type GithubOauthLoginResponse = z.infer<
+  typeof githubOauthLoginResponseSchema
 >;
 export type LeaderboardResponse = z.infer<typeof leaderboardResponseSchema>;
 export type PublicSolutionSubmissionListResponse = z.infer<
@@ -1047,5 +1397,7 @@ export type SolutionSubmissionResponse = z.infer<
 >;
 export type AdminChallengeListItem =
   AdminChallengeListResponse["items"][number];
+export type ChallengeDraftListItem =
+  ChallengeDraftListResponse["items"][number];
 export type AdminSolutionSubmissionListItem =
   AdminSolutionSubmissionListResponse["items"][number];

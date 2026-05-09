@@ -29,10 +29,15 @@ const typeAliases = new Map([
     "AdminSolutionSubmissionListResponse",
   ],
   ["challengeDetailResponseSchema", "ChallengeDetailResponse"],
+  ["challengeDraftCleanupResponseSchema", "ChallengeDraftCleanupResponse"],
+  ["challengeDraftListResponseSchema", "ChallengeDraftListResponse"],
+  ["challengeDraftResponseSchema", "ChallengeDraftResponse"],
   ["challengeListResponseSchema", "ChallengeListResponse"],
+  ["challengePrivateAssetResponseSchema", "ChallengePrivateAssetResponse"],
   ["creatorMeResponseSchema", "CreatorMeResponse"],
   ["creatorSessionResponseSchema", "CreatorSessionResponse"],
   ["discussionListResponseSchema", "DiscussionListResponse"],
+  ["githubOauthLoginResponseSchema", "GithubOauthLoginResponse"],
   ["leaderboardResponseSchema", "LeaderboardResponse"],
   [
     "publicSolutionSubmissionListResponseSchema",
@@ -63,6 +68,7 @@ for (const [schemaName, typeName] of typeAliases) {
   output += `export type ${typeName} = z.infer<typeof ${schemaName}>;\n`;
 }
 output += `export type AdminChallengeListItem = AdminChallengeListResponse["items"][number];\n`;
+output += `export type ChallengeDraftListItem = ChallengeDraftListResponse["items"][number];\n`;
 output += `export type AdminSolutionSubmissionListItem = AdminSolutionSubmissionListResponse["items"][number];\n`;
 output = replaceRegexConstructors(output);
 

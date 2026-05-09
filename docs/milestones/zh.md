@@ -435,6 +435,11 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
   - Scope：让 leaderboards、aggregate metrics、per-run metrics、solution submission status、logs 和 artifact browsing 更便于人类浏览与比较。
   - Test spec：为带 multi-metric outputs 的 successful、failed、not-yet-visible、validation-only 和 official solution submissions 添加 rendering tests。
 
+- **M0.2.5-WEB-4：添加 creator 和 draft review web surfaces**
+  - Commit target：`web: add creator challenge draft console`
+  - Scope：添加基于 GitHub OAuth 的 creator route，用于 draft creation、private asset upload 和 draft status inspection。添加 admin draft review tab，用于 validation、approval、rejection、publish、abandon 和 stale cleanup。Creator pages 可以共用 web app，但不能使用 admin identity model。
+  - Test spec：为 creator console 和 admin draft tab 添加 rendering tests，并验证 unsafe creator requests 使用 creator CSRF token，而不是 admin credentials。
+
 ### Challenge Creation
 
 - **M0.2.5-CREATE-1：定义 public challenge manifest 和 repository layout**
@@ -545,6 +550,7 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 | `M0.2.5-WEB-1：改版 public web visual system 和 layout` | 计划中 | Public first impression blocker。 |
 | `M0.2.5-WEB-2：打磨 challenge browsing 和 challenge detail` | 计划中 | 依赖 resource 和 community metadata。 |
 | `M0.2.5-WEB-3：打磨 leaderboard、solution submission detail 和 artifacts` | 计划中 | 依赖 structured metric display。 |
+| `M0.2.5-WEB-4：添加 creator 和 draft review web surfaces` | 已实现 | `/creator` 使用 GitHub OAuth creator sessions 进行 draft creation 和 asset upload；`/admin` 增加 Drafts tab 处理 reviewer lifecycle actions。 |
 | `M0.2.5-CREATE-1：定义 public challenge manifest 和 repository layout` | 已实现 | 已实现并记录 public manifest、repo layout validation、namespace rules 和 leakage checks。 |
 | `M0.2.5-CREATE-2：添加 GitHub PR draft binding` | 已实现 | Drafts 已绑定 repo URL、PR number、commit SHA、path、manifest hash、PR URL 和 linked PR author id。 |
 | `M0.2.5-CREATE-3：添加 private benchmark asset upload 和 binding` | 已实现 | Private asset upload 会在 GitHub 之外存储 digest、size、storage URI、uploader 和 draft binding。 |

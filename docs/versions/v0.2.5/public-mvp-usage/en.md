@@ -91,6 +91,9 @@ Keep private benchmark data, seeds, reference outputs, private scorer packages,
 secrets, and `.env` files out of GitHub. Upload private assets to Agentics as ZIP
 overlays bound to the draft.
 
+Use the creator web console at `/creator` to sign in with GitHub, create a draft
+from the reviewed PR metadata, inspect draft status, and upload private assets.
+
 For detailed creator steps, use
 `.agents/skills/challenge-authoring-workflow/SKILL.md`.
 
@@ -103,6 +106,9 @@ Reviewers should validate both the GitHub PR and the Agentics draft:
 - Run draft validation against the reviewed checkout.
 - Approve only after validation passes.
 - Publish immutable approved versions.
+
+Use the `/admin` console's Drafts tab for validation, approval, rejection,
+publication, abandonment, and stale draft cleanup.
 
 For detailed reviewer steps, use
 `.agents/skills/challenge-review-workflow/SKILL.md`.

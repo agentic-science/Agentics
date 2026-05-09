@@ -7,6 +7,7 @@ import {
   EyeOff,
   FlaskConical,
   Gauge,
+  GitPullRequest,
   KeyRound,
   Play,
   RefreshCw,
@@ -17,6 +18,7 @@ import {
 } from "lucide-react";
 import { useLocale } from "next-intl";
 import { type FormEvent, type ReactNode, useMemo, useState } from "react";
+import { ChallengeDraftReviewPanel } from "@/components/admin/ChallengeDraftReviewPanel";
 import {
   AdminApiError,
   type AdminCredentials,
@@ -36,19 +38,27 @@ import {
   adminChallengeListResponseSchema,
   adminServiceHeartbeatListResponseSchema,
   adminSolutionSubmissionListResponseSchema,
+  type ChallengeDraftListResponse,
   challengeAdminResponseSchema,
+  challengeDraftListResponseSchema,
   createChallengeVersionResponseSchema,
   disableAgentResponseSchema,
   evaluationJobResponseSchema,
   hideSolutionSubmissionResponseSchema,
 } from "@/lib/schemas";
 
-type AdminTab = "overview" | "challenges" | "capacity" | "operations";
+type AdminTab =
+  | "overview"
+  | "challenges"
+  | "drafts"
+  | "capacity"
+  | "operations";
 type RefreshOptions = { quiet?: boolean };
 type AdminRefresh = (options?: RefreshOptions) => Promise<void>;
 
 interface AdminData {
   challenges: AdminChallengeListResponse;
+  drafts: ChallengeDraftListResponse;
   submissions: AdminSolutionSubmissionListResponse;
   heartbeats: AdminServiceHeartbeatListResponse;
   capacity: AdminCapacityResponse | null;
@@ -56,6 +66,7 @@ interface AdminData {
 
 const emptyData: AdminData = {
   challenges: { items: [] },
+  drafts: { items: [] },
   submissions: { items: [] },
   heartbeats: { items: [] },
   capacity: null,
@@ -78,26 +89,32 @@ export function AdminConsole() {
   const isConfigured = credentials.username.trim() && credentials.password;
 
   const fetchAdminData = async (token: string): Promise<AdminData> => {
-    const [challenges, submissions, heartbeats, capacity] = await Promise.all([
-      adminFetchJson(
-        "/admin/challenges",
-        adminChallengeListResponseSchema,
-        token,
-      ),
-      adminFetchJson(
-        "/admin/solution-submissions",
-        adminSolutionSubmissionListResponseSchema,
-        token,
-      ),
-      adminFetchJson(
-        "/admin/service-heartbeats",
-        adminServiceHeartbeatListResponseSchema,
-        token,
-      ),
-      adminFetchJson("/admin/capacity", adminCapacityResponseSchema, token),
-    ]);
+    const [challenges, drafts, submissions, heartbeats, capacity] =
+      await Promise.all([
+        adminFetchJson(
+          "/admin/challenges",
+          adminChallengeListResponseSchema,
+          token,
+        ),
+        adminFetchJson(
+          "/admin/challenge-drafts",
+          challengeDraftListResponseSchema,
+          token,
+        ),
+        adminFetchJson(
+          "/admin/solution-submissions",
+          adminSolutionSubmissionListResponseSchema,
+          token,
+        ),
+        adminFetchJson(
+          "/admin/service-heartbeats",
+          adminServiceHeartbeatListResponseSchema,
+          token,
+        ),
+        adminFetchJson("/admin/capacity", adminCapacityResponseSchema, token),
+      ]);
 
-    return { challenges, submissions, heartbeats, capacity };
+    return { challenges, drafts, submissions, heartbeats, capacity };
   };
 
   const loginAndRefresh: AdminRefresh = async (options = {}) => {
@@ -222,6 +239,7 @@ export function AdminConsole() {
         {[
           ["overview", "Overview"],
           ["challenges", "Challenges"],
+          ["drafts", "Drafts"],
           ["capacity", "Capacity"],
           ["operations", "Operations"],
         ].map(([id, label]) => (
@@ -243,6 +261,16 @@ export function AdminConsole() {
         <ChallengeAdminPanel
           csrfToken={csrfToken}
           challenges={data.challenges.items}
+          locale={locale}
+          onRefresh={refresh}
+          onError={setError}
+          onMessage={setMessage}
+        />
+      ) : null}
+      {activeTab === "drafts" ? (
+        <ChallengeDraftReviewPanel
+          csrfToken={csrfToken}
+          drafts={data.drafts.items}
           locale={locale}
           onRefresh={refresh}
           onError={setError}
@@ -360,11 +388,17 @@ function OverviewPanel({
   const activeOfficialJobs = data.capacity?.usage.active_official_jobs ?? 0;
 
   return (
-    <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-5">
+    <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-5">
       <StatCard
         icon={<FlaskConical className="w-5 h-5" />}
         label="Challenges"
         value={data.challenges.items.length.toString()}
+        tone="teal"
+      />
+      <StatCard
+        icon={<GitPullRequest className="w-5 h-5" />}
+        label="Drafts"
+        value={data.drafts.items.length.toString()}
         tone="teal"
       />
       <StatCard

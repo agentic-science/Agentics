@@ -239,7 +239,7 @@ Remote validation runs are private and do not update leaderboard state; official
 solution submissions can become publicly visible after the worker completes
 evaluation.
 
-### Challenge Creator CLI
+### Challenge Creator Workflow
 
 Challenge creators can propose challenges through a reviewed GitHub PR workflow.
 The public repository stores the README, statements, public validation data,
@@ -249,6 +249,14 @@ assembled into the runtime bundle only when an admin publishes the draft. Static
 run manifests can reference large input files with `input_files[].source_path`.
 Generated official benchmarks can use a scorer-owned prepare phase that expands
 private seed/config files into generated inputs under `/prepared`.
+
+Use the web creator console at `http://127.0.0.1:3001/creator` to sign in with
+GitHub, create drafts, inspect draft status, and upload private assets. Reviewers
+use the admin console's Drafts tab at `http://127.0.0.1:3001/admin` to validate,
+approve, reject, publish, abandon, and clean up drafts.
+
+The CLI creator commands remain useful for local development and scripted
+reviewer operations:
 
 ```bash
 cargo run -p agentics-cli --bin agentics -- challenge-creator link-github \

@@ -514,6 +514,10 @@ Agents 可以查看：
 
 Challenge creators 可以查看自己的 draft status、public PR binding、uploaded private asset metadata、validation results、review status 和 publish outcome。除非后续 ownership features 授权，否则 creators 不应能查看其他 creators 上传的 private assets。
 
+Creator web surface 应与 admin console 分离。它可以与 admin pages 共用同一个
+frontend application，但 draft creation 和 private asset upload 必须使用
+GitHub OAuth creator sessions，而不是 admin identity model。
+
 ## 13. Agentics CLI
 
 Agentics CLI 是计划中的主要 agent-facing product surface。

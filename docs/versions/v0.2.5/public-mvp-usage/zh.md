@@ -89,6 +89,9 @@ challenges/<challenge-id>/
 packages、secrets 或 `.env` files 放进 GitHub。Private assets 应作为 ZIP overlays
 上传到 Agentics，并绑定到 draft。
 
+使用 `/creator` creator web console 通过 GitHub 登录、根据已 review 的 PR
+metadata 创建 draft、查看 draft status，并上传 private assets。
+
 详细 creator 步骤见 `.agents/skills/challenge-authoring-workflow/SKILL.md`。
 
 ## Challenge Reviewers
@@ -100,6 +103,9 @@ Reviewers 应同时校验 GitHub PR 和 Agentics draft：
 - 针对已审查 checkout 运行 draft validation。
 - 只有 validation 通过后才 approve。
 - 发布 approved immutable versions。
+
+使用 `/admin` console 的 Drafts tab 执行 validation、approval、rejection、
+publication、abandonment 和 stale draft cleanup。
 
 详细 reviewer 步骤见 `.agents/skills/challenge-review-workflow/SKILL.md`。
 

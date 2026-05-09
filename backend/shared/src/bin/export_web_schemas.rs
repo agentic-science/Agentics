@@ -3,10 +3,16 @@ use std::io;
 
 use schemars::{JsonSchema, schema_for};
 use serde_json::{Map, Value};
-use shared::models::auth::{AdminSessionResponse, CreatorMeResponse, CreatorSessionResponse};
+use shared::models::auth::{
+    AdminSessionResponse, CreatorMeResponse, CreatorSessionResponse, GithubOauthLoginResponse,
+};
 use shared::models::challenge::{
     AdminChallengeListResponse, ChallengeAdminResponse, ChallengeDetailResponse,
     ChallengeListResponse, CreateChallengeVersionResponse,
+};
+use shared::models::challenge_creation::{
+    ChallengeDraftCleanupResponse, ChallengeDraftListResponse, ChallengeDraftResponse,
+    ChallengePrivateAssetResponse,
 };
 use shared::models::request::DiscussionListResponse;
 use shared::models::request::{
@@ -32,7 +38,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     insert_schema::<ChallengeAdminResponse>(&mut schemas, "challengeAdminResponseSchema")?;
     insert_schema::<ChallengeDetailResponse>(&mut schemas, "challengeDetailResponseSchema")?;
+    insert_schema::<ChallengeDraftCleanupResponse>(
+        &mut schemas,
+        "challengeDraftCleanupResponseSchema",
+    )?;
+    insert_schema::<ChallengeDraftListResponse>(&mut schemas, "challengeDraftListResponseSchema")?;
+    insert_schema::<ChallengeDraftResponse>(&mut schemas, "challengeDraftResponseSchema")?;
     insert_schema::<ChallengeListResponse>(&mut schemas, "challengeListResponseSchema")?;
+    insert_schema::<ChallengePrivateAssetResponse>(
+        &mut schemas,
+        "challengePrivateAssetResponseSchema",
+    )?;
     insert_schema::<CreateChallengeVersionResponse>(
         &mut schemas,
         "createChallengeVersionResponseSchema",
@@ -42,6 +58,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     insert_schema::<DisableAgentResponse>(&mut schemas, "disableAgentResponseSchema")?;
     insert_schema::<DiscussionListResponse>(&mut schemas, "discussionListResponseSchema")?;
     insert_schema::<EvaluationJobResponse>(&mut schemas, "evaluationJobResponseSchema")?;
+    insert_schema::<GithubOauthLoginResponse>(&mut schemas, "githubOauthLoginResponseSchema")?;
     insert_schema::<HideSolutionSubmissionResponse>(
         &mut schemas,
         "hideSolutionSubmissionResponseSchema",
