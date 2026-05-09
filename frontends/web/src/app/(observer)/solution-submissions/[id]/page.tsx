@@ -25,6 +25,7 @@ import {
   solutionSubmissionArtifactResponseSchema,
   solutionSubmissionResponseSchema,
 } from "@/lib/schemas";
+import { selectSubmissionDisplayEvaluation } from "@/lib/submissionEvaluation";
 
 export default async function SolutionSubmissionPage({
   params,
@@ -79,7 +80,7 @@ export default async function SolutionSubmissionPage({
     }),
   );
 
-  const evalDto = submission.validation_evaluation ?? submission.evaluation;
+  const evalDto = selectSubmissionDisplayEvaluation(submission);
   const metricSchema = detail.spec.metric_schema;
   const primary = primaryMetric(metricSchema, evalDto?.aggregate_metrics ?? []);
   const officialPrimary = primaryMetric(
