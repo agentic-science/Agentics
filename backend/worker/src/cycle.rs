@@ -11,6 +11,7 @@ use bollard::Docker;
 use tokio::sync::watch;
 use tokio::time::interval;
 use tracing::{error, info, warn};
+use uuid::Uuid;
 
 use shared::config::Config;
 use shared::db::pool::create_pool;
@@ -39,7 +40,7 @@ impl Worker {
         let docker = connect_docker(&config)?;
         let storage: Arc<dyn shared::storage::Storage> =
             Arc::new(LocalStorage::new(&config.storage_root));
-        let worker_id = format!("agentics-worker-{}", std::process::id());
+        let worker_id = worker_instance_id();
 
         Ok(Self {
             config,
@@ -82,6 +83,37 @@ impl Worker {
         )
         .await
     }
+}
+
+fn worker_instance_id() -> String {
+    match host_label() {
+        Some(host) => format!("agentics-worker-{host}-{}", Uuid::new_v4()),
+        None => format!("agentics-worker-{}", Uuid::new_v4()),
+    }
+}
+
+fn host_label() -> Option<String> {
+    std::env::var("HOSTNAME")
+        .or_else(|_| std::env::var("COMPUTERNAME"))
+        .ok()
+        .map(|value| sanitize_worker_label(&value))
+        .filter(|value| !value.is_empty())
+}
+
+fn sanitize_worker_label(value: &str) -> String {
+    value
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.') {
+                ch
+            } else {
+                '-'
+            }
+        })
+        .take(64)
+        .collect::<String>()
+        .trim_matches('-')
+        .to_string()
 }
 
 /// Run one worker poll iteration.
@@ -363,5 +395,28 @@ async fn refresh_claim_until_stopped(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{sanitize_worker_label, worker_instance_id};
+
+    #[test]
+    fn worker_instance_ids_are_unique() {
+        let first = worker_instance_id();
+        let second = worker_instance_id();
+
+        assert_ne!(first, second);
+        assert!(first.starts_with("agentics-worker-"));
+        assert!(second.starts_with("agentics-worker-"));
+    }
+
+    #[test]
+    fn worker_host_label_is_log_safe() {
+        assert_eq!(
+            sanitize_worker_label("dgx spark/slot 1"),
+            "dgx-spark-slot-1"
+        );
     }
 }

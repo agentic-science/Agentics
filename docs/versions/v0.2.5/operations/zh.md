@@ -38,7 +38,7 @@ curl -fsS -u "$AGENTICS_ADMIN_USERNAME:$AGENTICS_ADMIN_PASSWORD" \
   "$AGENTICS_API_BASE_URL/admin/service-heartbeats"
 ```
 
-Worker heartbeat 是判断 worker loop 是否存活的主要信号。Idle worker 应刷新 `status: "idle"` heartbeat。Running worker 应显示 claimed job id 和 solution submission id。
+Worker heartbeat 是判断 worker loop 是否存活的主要信号。每个 worker process 都使用 UUID-backed instance id，并可选带上 host label 方便阅读，因此 heartbeat 和 job claim 不会在重启或跨机器时混淆。Idle worker 应刷新 `status: "idle"` heartbeat。Running worker 应显示 claimed job id 和 solution submission id。
 
 ## Public Demo Quota Policy
 

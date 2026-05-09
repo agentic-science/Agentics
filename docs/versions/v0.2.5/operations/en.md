@@ -38,7 +38,7 @@ curl -fsS -u "$AGENTICS_ADMIN_USERNAME:$AGENTICS_ADMIN_PASSWORD" \
   "$AGENTICS_API_BASE_URL/admin/service-heartbeats"
 ```
 
-The worker heartbeat is the main signal that a worker loop is alive. An idle worker should refresh a heartbeat with `status: "idle"`. A running worker should show the claimed job id and solution submission id.
+The worker heartbeat is the main signal that a worker loop is alive. Each worker process uses a UUID-backed instance id, optionally prefixed with a host label for readability, so heartbeats and job claims are not ambiguous across restarts. An idle worker should refresh a heartbeat with `status: "idle"`. A running worker should show the claimed job id and solution submission id.
 
 ## Public Demo Quota Policy
 
