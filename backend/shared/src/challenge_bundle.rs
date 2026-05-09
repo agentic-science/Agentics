@@ -8,6 +8,8 @@
 use std::collections::HashSet;
 use std::path::Path;
 
+use sha2::{Digest, Sha256};
+
 use crate::error::{AppError, Result};
 use crate::models::challenge::{
     BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengePrepareSpec,
@@ -150,6 +152,149 @@ pub fn is_safe_relative_path(value: &str) -> bool {
         return false;
     }
     value.split(['/', '\\']).all(|s| !s.is_empty() && s != "..")
+}
+
+/// Return a deterministic SHA-256 digest of all files in a bundle tree.
+pub async fn challenge_bundle_tree_sha256(bundle_root: &Path) -> Result<String> {
+    let bundle_root = bundle_root.to_path_buf();
+    tokio::task::spawn_blocking(move || challenge_bundle_tree_sha256_blocking(&bundle_root))
+        .await
+        .map_err(|e| AppError::Internal(format!("bundle digest task failed: {e}")))?
+}
+
+/// Copy a challenge bundle directory while rejecting symlinks.
+pub async fn copy_challenge_bundle_dir(
+    source: &Path,
+    target: &Path,
+    replace_existing: bool,
+) -> Result<()> {
+    let source = source.to_path_buf();
+    let target = target.to_path_buf();
+    tokio::task::spawn_blocking(move || {
+        copy_challenge_bundle_dir_blocking(&source, &target, replace_existing)
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("bundle copy task failed: {e}")))?
+}
+
+fn challenge_bundle_tree_sha256_blocking(bundle_root: &Path) -> Result<String> {
+    let mut hasher = Sha256::new();
+    hash_bundle_tree(&mut hasher, bundle_root)?;
+    Ok(hex::encode(hasher.finalize()))
+}
+
+fn hash_bundle_tree(hasher: &mut Sha256, bundle_root: &Path) -> Result<()> {
+    let mut stack = vec![bundle_root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let mut entries = std::fs::read_dir(&dir)?.collect::<std::io::Result<Vec<_>>>()?;
+        entries.sort_by_key(|entry| entry.path());
+
+        for entry in entries {
+            let path = entry.path();
+            let metadata = std::fs::symlink_metadata(&path)?;
+            let relative_path = path
+                .strip_prefix(bundle_root)
+                .map_err(|e| AppError::Internal(format!("failed to build bundle digest: {e}")))?;
+            let relative_path = relative_path.to_str().ok_or_else(|| {
+                AppError::Validation(format!(
+                    "bundle path must be UTF-8 for digesting: {}",
+                    path.display()
+                ))
+            })?;
+
+            if metadata.file_type().is_symlink() {
+                return Err(AppError::Validation(format!(
+                    "challenge bundle must not contain symlinks: {}",
+                    path.display()
+                )));
+            }
+            if metadata.is_dir() {
+                hash_field(hasher, "dir", relative_path.as_bytes());
+                stack.push(path);
+            } else if metadata.is_file() {
+                hash_field(hasher, "file", relative_path.as_bytes());
+                hash_file(hasher, &path)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn hash_file(hasher: &mut Sha256, path: &Path) -> Result<()> {
+    use std::io::Read;
+
+    let mut file = std::fs::File::open(path)?;
+    let size = file.metadata()?.len();
+    hash_field(hasher, "file_size", &size.to_be_bytes());
+
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let bytes_read = file.read(&mut buffer)?;
+        if bytes_read == 0 {
+            break;
+        }
+        let chunk = buffer.get(..bytes_read).ok_or_else(|| {
+            AppError::Internal("file read exceeded digest buffer bounds".to_string())
+        })?;
+        hasher.update(chunk);
+    }
+
+    Ok(())
+}
+
+fn hash_field(hasher: &mut Sha256, label: &str, bytes: &[u8]) {
+    hasher.update((label.len() as u64).to_be_bytes());
+    hasher.update(label.as_bytes());
+    hasher.update((bytes.len() as u64).to_be_bytes());
+    hasher.update(bytes);
+}
+
+fn copy_challenge_bundle_dir_blocking(
+    source: &Path,
+    target: &Path,
+    replace_existing: bool,
+) -> Result<()> {
+    if target.exists() {
+        if !replace_existing {
+            if target.is_dir() {
+                return Ok(());
+            }
+            return Err(AppError::Validation(format!(
+                "managed bundle target exists and is not a directory: {}",
+                target.display()
+            )));
+        }
+        std::fs::remove_dir_all(target)?;
+    }
+    std::fs::create_dir_all(target)?;
+
+    let mut stack = vec![(source.to_path_buf(), target.to_path_buf())];
+    while let Some((current_source, current_target)) = stack.pop() {
+        for entry in std::fs::read_dir(&current_source)? {
+            let entry = entry?;
+            let source_path = entry.path();
+            let target_path = current_target.join(entry.file_name());
+            let meta = std::fs::symlink_metadata(&source_path)?;
+            if meta.file_type().is_symlink() {
+                return Err(AppError::Validation(format!(
+                    "challenge bundle must not contain symlinks: {}",
+                    source_path.display()
+                )));
+            }
+            if meta.is_dir() {
+                std::fs::create_dir_all(&target_path)?;
+                stack.push((source_path, target_path));
+            } else if meta.is_file() {
+                if let Some(parent) = target_path.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+                std::fs::copy(&source_path, &target_path)?;
+            }
+        }
+    }
+
+    Ok(())
 }
 
 fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {

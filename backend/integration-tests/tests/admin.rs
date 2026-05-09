@@ -285,8 +285,19 @@ async fn publishing_existing_version_is_rejected_without_mutating_version(pool: 
             .await
             .expect("failed to query published version");
 
-    assert_eq!(row.0, original_bundle.to_string_lossy());
+    assert_ne!(row.0, original_bundle.to_string_lossy());
+    assert!(
+        std::path::Path::new(&row.0).starts_with(storage.path()),
+        "admin publish should copy bundles into managed storage"
+    );
     assert_eq!(row.1["challenge_summary"], "Original summary");
+
+    let managed_spec: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(std::path::Path::new(&row.0).join("spec.json"))
+            .expect("failed to read managed spec"),
+    )
+    .expect("failed to decode managed spec");
+    assert_eq!(managed_spec["challenge_summary"], "Original summary");
 }
 
 #[sqlx::test(migrations = "../migrations")]

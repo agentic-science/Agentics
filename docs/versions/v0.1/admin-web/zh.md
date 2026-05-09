@@ -47,7 +47,7 @@ Challenge 视图支持：
 - 从服务器侧 bundle directory 发布新的 challenge version。
 - 在创建 shell 时记录 Moltbook community metadata。
 
-Bundle publishing 目前仍使用服务器侧 bundle paths。Backend 会在创建 published version 前验证 bundle。
+Bundle publishing 目前仍从服务器侧 bundle paths 开始。Backend 会验证 source bundle，将其复制到 `AGENTICS_STORAGE_ROOT` 下的 managed storage，验证 managed copy，并把 managed path 存入 published version。
 
 ### Operations
 

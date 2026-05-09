@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 use shared::auth;
 use shared::challenge_bundle;
+use shared::config::Config;
 use shared::db::{self, QueueEvaluationJobInput};
 use shared::error::{AppError, Result};
 use shared::models::challenge::CreateChallengeVersionResponse;
@@ -584,12 +585,15 @@ pub async fn publish_version(
         )));
     }
 
-    let statement_path = std::path::Path::new(&bundle_path).join("statement.md");
+    let managed_bundle_path =
+        copy_admin_bundle_to_managed_storage(&state.config, std::path::Path::new(&bundle_path))
+            .await?;
+    let statement_path = managed_bundle_path.join("statement.md");
 
     let version = db::publish_challenge_version(
         &state.db,
         &challenge_id,
-        &bundle_path,
+        &managed_bundle_path.to_string_lossy(),
         &statement_path.to_string_lossy(),
         &spec,
         &spec.challenge_title,
@@ -598,6 +602,47 @@ pub async fn publish_version(
     .await?;
 
     Ok((StatusCode::CREATED, Json(version)))
+}
+
+async fn copy_admin_bundle_to_managed_storage(
+    config: &Config,
+    source: &std::path::Path,
+) -> Result<std::path::PathBuf> {
+    let source_digest = challenge_bundle::challenge_bundle_tree_sha256(source).await?;
+    let target = std::path::Path::new(&config.storage_root)
+        .join("challenge-bundles")
+        .join("admin")
+        .join(&source_digest);
+    if !tokio::fs::try_exists(&target).await? {
+        let temp_target = target.with_extension(format!("tmp-{}", Uuid::new_v4()));
+        if tokio::fs::try_exists(&temp_target).await? {
+            tokio::fs::remove_dir_all(&temp_target).await?;
+        }
+        challenge_bundle::copy_challenge_bundle_dir(source, &temp_target, true).await?;
+        match tokio::fs::rename(&temp_target, &target).await {
+            Ok(()) => {}
+            Err(error) if tokio::fs::try_exists(&target).await? => {
+                tokio::fs::remove_dir_all(&temp_target).await.ok();
+                tracing::debug!(
+                    target = %target.display(),
+                    error = %error,
+                    "managed bundle target already exists after concurrent copy"
+                );
+            }
+            Err(error) => return Err(error.into()),
+        }
+    }
+
+    challenge_bundle::validate_challenge_bundle(&target).await?;
+    let managed_digest = challenge_bundle::challenge_bundle_tree_sha256(&target).await?;
+    if managed_digest != source_digest {
+        return Err(AppError::Validation(format!(
+            "managed bundle copy digest mismatch for {}",
+            target.display()
+        )));
+    }
+
+    Ok(target)
 }
 
 /// List recent solution submissions for admin operations.

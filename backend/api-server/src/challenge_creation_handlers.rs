@@ -684,7 +684,8 @@ async fn assemble_runtime_bundle(
         .join(&manifest.challenge_id)
         .join(&version.version)
         .join(&draft.id);
-    copy_public_bundle_dir(&public_bundle_path, &runtime_bundle_path).await?;
+    challenge_bundle::copy_challenge_bundle_dir(&public_bundle_path, &runtime_bundle_path, true)
+        .await?;
 
     for asset in &draft.private_assets {
         let bytes = state.storage.get(&asset.storage_uri).await?;
@@ -731,48 +732,6 @@ fn validate_private_assets_for_publish(
             "static official_runs challenges must upload a private_benchmark_data asset"
                 .to_string(),
         ));
-    }
-
-    Ok(())
-}
-
-async fn copy_public_bundle_dir(source: &Path, target: &Path) -> Result<()> {
-    let source = source.to_path_buf();
-    let target = target.to_path_buf();
-    tokio::task::spawn_blocking(move || copy_public_bundle_dir_blocking(&source, &target))
-        .await
-        .map_err(|e| AppError::Internal(format!("bundle copy task failed: {e}")))?
-}
-
-fn copy_public_bundle_dir_blocking(source: &Path, target: &Path) -> Result<()> {
-    if target.exists() {
-        std::fs::remove_dir_all(target)?;
-    }
-    std::fs::create_dir_all(target)?;
-
-    let mut stack = vec![(source.to_path_buf(), target.to_path_buf())];
-    while let Some((current_source, current_target)) = stack.pop() {
-        for entry in std::fs::read_dir(&current_source)? {
-            let entry = entry?;
-            let source_path = entry.path();
-            let target_path = current_target.join(entry.file_name());
-            let meta = std::fs::symlink_metadata(&source_path)?;
-            if meta.file_type().is_symlink() {
-                return Err(AppError::Validation(format!(
-                    "public bundle must not contain symlinks: {}",
-                    source_path.display()
-                )));
-            }
-            if meta.is_dir() {
-                std::fs::create_dir_all(&target_path)?;
-                stack.push((source_path, target_path));
-            } else if meta.is_file() {
-                if let Some(parent) = target_path.parent() {
-                    std::fs::create_dir_all(parent)?;
-                }
-                std::fs::copy(&source_path, &target_path)?;
-            }
-        }
     }
 
     Ok(())

@@ -375,7 +375,9 @@ deployment.
 The admin web console is available at `/admin` on the frontend. It supports
 challenge shell creation, challenge version publishing from backend-visible
 bundle paths, current benchmark target review, quota and capacity inspection,
-recent solution submission operations, and worker heartbeat inspection. It does
+recent solution submission operations, and worker heartbeat inspection. Published
+admin bundles are copied into managed storage before the version row is created,
+so later edits to the source directory do not affect historical evaluations. It does
 not persist admin usernames or passwords in browser storage, clears the password
 after login, and deletes the server session on sign-out. It uses
 `NEXT_PUBLIC_AGENTICS_API_BASE_URL` for browser-side admin requests when that

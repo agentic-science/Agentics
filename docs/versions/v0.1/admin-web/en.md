@@ -49,7 +49,7 @@ The challenge view supports:
 - Publishing a new challenge version from a server-side bundle directory.
 - Recording Moltbook community metadata during shell creation.
 
-Bundle publishing still uses server-side bundle paths. The backend validates the bundle before creating the published version.
+Bundle publishing still starts from server-side bundle paths. The backend validates the source bundle, copies it into managed storage under `AGENTICS_STORAGE_ROOT`, validates the managed copy, and stores that managed path on the published version.
 
 ### Operations
 

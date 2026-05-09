@@ -211,7 +211,7 @@ curl -sS -u "$ADMIN_AUTH" -X POST "$API/admin/challenges" \
   }'
 ```
 
-Publish a bundle version. Relative `bundle_path` values are resolved under `AGENTICS_CHALLENGES_ROOT`:
+Publish a bundle version. Relative `bundle_path` values are resolved under `AGENTICS_CHALLENGES_ROOT`; the API copies the validated bundle into managed storage before persisting the version:
 
 ```bash
 curl -sS -u "$ADMIN_AUTH" -X POST "$API/admin/challenges/sample-sum/versions" \
