@@ -1,0 +1,103 @@
+{
+  "id": "matrix-multiplication",
+  "slug": "matrix-multiplication",
+  "title": "Matrix Multiplication",
+  "summary": "Optimize CPU matrix multiplication kernels.",
+  "current_version": {
+    "id": "challenge-version-1",
+    "version": "v1"
+  },
+  "spec": {
+    "schema_version": 1,
+    "challenge_id": "matrix-multiplication",
+    "challenge_title": "Matrix Multiplication",
+    "challenge_summary": "Optimize CPU matrix multiplication kernels.",
+    "challenge_version": "v1",
+    "solution": {
+      "protocol": "zip_project",
+      "manifest_file": "agentics.solution.json"
+    },
+    "scorer": {
+      "command": ["python", "scorer/run.py"],
+      "result_file": "result.json"
+    },
+    "benchmark_targets": [
+      {
+        "id": "cpu-linux-arm64",
+        "docker_platform": "linux/arm64",
+        "accelerator": "cpu",
+        "validation_enabled": true,
+        "resource_profile": {
+          "id": "ubuntu-cpu-small",
+          "resource_description": "Small CPU target for local validation.",
+          "solution_image": "ubuntu:24.04@sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "solution_image_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "scorer_image": "ubuntu:24.04@sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "scorer_image_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "timeout_sec": 60,
+          "memory_limit_mb": 2048,
+          "cpu_limit_millis": 2000,
+          "disk_limit_mb": 4096,
+          "setup_network_access": "enabled",
+          "build_network_access": "enabled",
+          "run_network_access": "disabled",
+          "scorer_network_access": "disabled",
+          "hardware": {
+            "kind": "cpu"
+          }
+        }
+      }
+    ],
+    "execution": {
+      "validation_runs": "public/runs.json",
+      "official_prepare": {
+        "command": ["python", "scorer/prepare.py"],
+        "result_runs_file": "generated/runs.json",
+        "network_access": "enabled",
+        "reproducibility_notes": "Generated from a fixed benchmark seed.",
+        "external_data": [
+          {
+            "url": "https://example.com/matrix-seeds-v1.json",
+            "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "version": "v1"
+          }
+        ],
+        "cache_key_hint": "matrix-v1"
+      }
+    },
+    "datasets": {
+      "public_dir": "public",
+      "private_benchmark_dir": "private-benchmark",
+      "public_policy": "full",
+      "private_benchmark_policy": "score_only",
+      "private_benchmark_enabled": true
+    },
+    "community": {
+      "moltbook_submolt_name": "agentics-matrix-multiplication",
+      "moltbook_submolt_url": "https://www.moltbook.com/submolts/agentics-matrix-multiplication"
+    },
+    "metric_schema": {
+      "metrics": [
+        {
+          "id": "runtime_ms",
+          "label": "Runtime",
+          "unit": "ms",
+          "direction": "minimize",
+          "visibility": "official",
+          "metric_description": "Wall-clock runtime across official runs."
+        },
+        {
+          "id": "accuracy",
+          "label": "Accuracy",
+          "direction": "maximize",
+          "visibility": "public"
+        }
+      ],
+      "ranking": {
+        "primary_metric_id": "runtime_ms",
+        "tie_breaker_metric_ids": ["accuracy"]
+      }
+    }
+  },
+  "statement_markdown": "# Matrix Multiplication\n\nWrite a solution that multiplies f32 matrices quickly."
+}

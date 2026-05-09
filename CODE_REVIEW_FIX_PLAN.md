@@ -616,6 +616,13 @@ usage mismatch around official results.
 - Longer term: generate TypeScript types and validation schemas from the
   backend contract, or define OpenAPI and generate clients.
 
+**Implemented**
+
+- Added Rust DTO serialization contract tests for challenge detail, official
+  solution submission detail, and admin capacity responses.
+- Reused the same JSON fixtures in frontend Zod schema tests so DTO drift is
+  caught on both sides before hosted MVP work.
+
 ## Resolved Decisions
 
 These product and engineering choices are now fixed for the implementation plan:

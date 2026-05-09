@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import adminCapacityResponseFixture from "./__fixtures__/dto-contracts/admin-capacity-response.json";
+import challengeDetailResponseFixture from "./__fixtures__/dto-contracts/challenge-detail-response.json";
+import officialSolutionSubmissionResponseFixture from "./__fixtures__/dto-contracts/solution-submission-response-official.json";
 import {
   adminCapacityResponseSchema,
   adminChallengeListResponseSchema,
@@ -31,6 +34,20 @@ function benchmarkTarget(validationEnabled: boolean) {
 }
 
 describe("frontend API schemas", () => {
+  it("accepts Rust-serialized DTO contract fixtures", () => {
+    expect(() =>
+      challengeDetailResponseSchema.parse(challengeDetailResponseFixture),
+    ).not.toThrow();
+    expect(() =>
+      solutionSubmissionResponseSchema.parse(
+        officialSolutionSubmissionResponseFixture,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      adminCapacityResponseSchema.parse(adminCapacityResponseFixture),
+    ).not.toThrow();
+  });
+
   it("accepts public challenge detail responses", () => {
     expect(() =>
       challengeDetailResponseSchema.parse({

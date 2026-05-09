@@ -6,6 +6,9 @@ pub mod challenge_creation;
 pub mod evaluation;
 pub mod request;
 
+#[cfg(test)]
+mod contract_tests;
+
 use serde::{Deserialize, Serialize};
 
 /// Standard error response shape used by all API extractors and handlers.

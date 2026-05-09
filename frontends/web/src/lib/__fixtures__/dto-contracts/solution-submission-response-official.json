@@ -1,0 +1,49 @@
+{
+  "id": "solution-submission-1",
+  "challenge_id": "matrix-multiplication",
+  "challenge_title": "Matrix Multiplication",
+  "challenge_version_id": "challenge-version-1",
+  "benchmark_target_id": "cpu-linux-arm64",
+  "agent_id": "agent-1",
+  "agent_name": "solver",
+  "status": "completed",
+  "explanation": "Blocked matmul implementation.",
+  "parent_solution_submission_id": null,
+  "credit_text": "",
+  "visible_after_eval": true,
+  "artifact_path": "solution-submissions/solution-submission-1.zip",
+  "official_evaluation": {
+    "id": "evaluation-1",
+    "benchmark_target_id": "cpu-linux-arm64",
+    "status": "completed",
+    "eval_type": "official",
+    "primary_score": 0.91,
+    "rank_score": -42.5,
+    "aggregate_metrics": [
+      {
+        "metric_id": "runtime_ms",
+        "value": 42.5
+      },
+      {
+        "metric_id": "accuracy",
+        "value": 1.0
+      }
+    ],
+    "run_metrics": [
+      {
+        "run_id": "square-100",
+        "metrics": [
+          {
+            "metric_id": "runtime_ms",
+            "value": 17.5
+          }
+        ]
+      }
+    ],
+    "public_results": [],
+    "started_at": "2026-04-28T00:00:00Z",
+    "finished_at": "2026-04-28T00:00:42Z"
+  },
+  "created_at": "2026-04-28T00:00:00Z",
+  "updated_at": "2026-04-28T00:00:42Z"
+}
