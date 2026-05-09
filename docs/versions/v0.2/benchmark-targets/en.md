@@ -50,7 +50,7 @@ Rules:
 - `cpu-linux-arm64` must use Docker platform `linux/arm64`.
 - `cpu-linux-amd64` must use Docker platform `linux/amd64`.
 - `validation_enabled` is target-specific. Validation can be enabled for one target and disabled for another.
-- `resource_profile` contains the Docker images, hard resource limits, network policy, optional image digests, optional resource description, and optional hardware metadata for that target.
+- `resource_profile` contains the Docker images, hard resource limits, network policy, optional image digests, optional resource description, and optional hardware metadata for that target. Hosted deployments should enable `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`, which requires solution and scorer images to use immutable `@sha256:<digest>` references.
 - If any target has `validation_enabled: true`, the bundle must declare `execution.validation_runs`.
 - If private benchmark scoring is enabled, the bundle must declare `execution.official_runs`.
 

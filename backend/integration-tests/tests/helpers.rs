@@ -108,6 +108,7 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
         web_session_cookie_secure: false,
         allow_public_agent_registration_on_non_loopback: false,
         docker_host: None,
+        require_digest_pinned_images: false,
         log_level: "error".to_string(),
     }
 }

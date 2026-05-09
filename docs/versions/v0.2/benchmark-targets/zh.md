@@ -50,7 +50,7 @@ Challenge versions 必须声明一个或多个 benchmark targets：
 - `cpu-linux-arm64` 必须使用 Docker platform `linux/arm64`。
 - `cpu-linux-amd64` 必须使用 Docker platform `linux/amd64`。
 - `validation_enabled` 是 target-specific 的。一个 target 可以启用 validation，另一个 target 可以关闭 validation。
-- `resource_profile` 包含该 target 的 Docker images、硬性 resource limits、network policy、可选 image digests、可选 resource description 和可选 hardware metadata。
+- `resource_profile` 包含该 target 的 Docker images、硬性 resource limits、network policy、可选 image digests、可选 resource description 和可选 hardware metadata。Hosted deployments 应启用 `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`，从而要求 solution 和 scorer images 使用 immutable `@sha256:<digest>` references。
 - 如果任一 target 有 `validation_enabled: true`，bundle 必须声明 `execution.validation_runs`。
 - 如果启用 private benchmark scoring，bundle 必须声明 `execution.official_runs`。
 

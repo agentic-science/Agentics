@@ -214,6 +214,23 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
     Ok(())
 }
 
+/// Require immutable Docker image references for hosted or audited execution.
+pub fn validate_digest_pinned_images(spec: &ChallengeBundleSpec) -> Result<()> {
+    for (index, target) in spec.benchmark_targets.iter().enumerate() {
+        let field = format!("benchmark_targets[{index}].resource_profile");
+        require_image_digest_reference(
+            &target.resource_profile.solution_image,
+            &format!("{field}.solution_image"),
+        )?;
+        require_image_digest_reference(
+            &target.resource_profile.scorer_image,
+            &format!("{field}.scorer_image"),
+        )?;
+    }
+
+    Ok(())
+}
+
 fn validate_scorer_command(command: &[String]) -> Result<()> {
     if command.is_empty() {
         return Err(AppError::Validation(
@@ -306,13 +323,19 @@ fn validate_resource_profile(profile: &ResourceProfileSpec, field: &str) -> Resu
     require_non_empty(&profile.id, &format!("{field}.id"))?;
     require_non_empty(&profile.solution_image, &format!("{field}.solution_image"))?;
     require_non_empty(&profile.scorer_image, &format!("{field}.scorer_image"))?;
-    validate_image_digest(
+    let solution_reference_digest = validate_image_reference_digest(
         &profile.solution_image,
+        &format!("{field}.solution_image"),
+    )?;
+    let scorer_reference_digest =
+        validate_image_reference_digest(&profile.scorer_image, &format!("{field}.scorer_image"))?;
+    validate_image_digest(
+        solution_reference_digest,
         profile.solution_image_digest.as_deref(),
         &format!("{field}.solution_image_digest"),
     )?;
     validate_image_digest(
-        &profile.scorer_image,
+        scorer_reference_digest,
         profile.scorer_image_digest.as_deref(),
         &format!("{field}.scorer_image_digest"),
     )?;
@@ -336,19 +359,54 @@ fn validate_resource_profile(profile: &ResourceProfileSpec, field: &str) -> Resu
     Ok(())
 }
 
-fn validate_image_digest(image: &str, digest: Option<&str>, field: &str) -> Result<()> {
+fn require_image_digest_reference(image: &str, field: &str) -> Result<()> {
+    if validate_image_reference_digest(image, field)?.is_none() {
+        return Err(AppError::Validation(format!(
+            "{field} must include an immutable @sha256:<digest> reference"
+        )));
+    }
+
+    Ok(())
+}
+
+fn validate_image_reference_digest<'a>(image: &'a str, field: &str) -> Result<Option<&'a str>> {
+    let Some((_, digest)) = image.rsplit_once('@') else {
+        return Ok(None);
+    };
+    validate_sha256_digest(digest, &format!("{field} digest"))?;
+    Ok(Some(digest))
+}
+
+fn validate_image_digest(
+    image_reference_digest: Option<&str>,
+    digest: Option<&str>,
+    field: &str,
+) -> Result<()> {
     let Some(digest) = digest else {
         return Ok(());
     };
     require_non_empty(digest, field)?;
-    if !digest.starts_with("sha256:") {
+    validate_sha256_digest(digest, field)?;
+    if image_reference_digest != Some(digest) {
+        return Err(AppError::Validation(format!(
+            "{field} must match the digest pinned in the image reference"
+        )));
+    }
+
+    Ok(())
+}
+
+fn validate_sha256_digest(digest: &str, field: &str) -> Result<()> {
+    const PREFIX: &str = "sha256:";
+    if !digest.starts_with(PREFIX) {
         return Err(AppError::Validation(format!(
             "{field} must start with sha256:"
         )));
     }
-    if !image.contains(&format!("@{digest}")) {
+    let hex = &digest[PREFIX.len()..];
+    if hex.len() != 64 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return Err(AppError::Validation(format!(
-            "{field} must match the digest pinned in the image reference"
+            "{field} must be sha256: followed by 64 hexadecimal characters"
         )));
     }
 
@@ -738,7 +796,13 @@ mod tests {
     use crate::models::evaluation::ScoreVisibility;
     use crate::zip_project::ZipProjectNetworkAccess;
 
-    use super::{validate_challenge_bundle, validate_challenge_bundle_spec};
+    use super::{
+        validate_challenge_bundle, validate_challenge_bundle_spec, validate_digest_pinned_images,
+    };
+
+    fn test_digest() -> String {
+        format!("sha256:{}", "a".repeat(64))
+    }
 
     fn base_spec() -> ChallengeBundleSpec {
         ChallengeBundleSpec {
@@ -796,6 +860,16 @@ mod tests {
         }
     }
 
+    fn pin_images(spec: &mut ChallengeBundleSpec) {
+        let digest = test_digest();
+        for target in &mut spec.benchmark_targets {
+            target.resource_profile.solution_image = format!("python:3.12-slim-bookworm@{digest}");
+            target.resource_profile.solution_image_digest = Some(digest.clone());
+            target.resource_profile.scorer_image = format!("python:3.12-slim-bookworm@{digest}");
+            target.resource_profile.scorer_image_digest = Some(digest.clone());
+        }
+    }
+
     #[test]
     fn benchmark_targets_are_required() {
         let mut spec = base_spec();
@@ -813,6 +887,39 @@ mod tests {
         let error =
             validate_challenge_bundle_spec(&spec).expect_err("mismatched target should fail");
         assert!(error.to_string().contains("docker_platform"));
+    }
+
+    #[test]
+    fn digest_pinned_image_policy_rejects_tag_only_images() {
+        let spec = base_spec();
+
+        let error =
+            validate_digest_pinned_images(&spec).expect_err("tag-only images should fail policy");
+
+        assert!(error.to_string().contains("@sha256:<digest>"));
+    }
+
+    #[test]
+    fn digest_pinned_image_policy_accepts_immutable_references() {
+        let mut spec = base_spec();
+        pin_images(&mut spec);
+
+        validate_challenge_bundle_spec(&spec).expect("pinned spec should validate");
+        validate_digest_pinned_images(&spec).expect("pinned images should satisfy policy");
+    }
+
+    #[test]
+    fn image_digest_field_must_match_image_reference() {
+        let mut spec = base_spec();
+        pin_images(&mut spec);
+        spec.benchmark_targets[0]
+            .resource_profile
+            .solution_image_digest = Some(format!("sha256:{}", "b".repeat(64)));
+
+        let error =
+            validate_challenge_bundle_spec(&spec).expect_err("mismatched digest should fail");
+
+        assert!(error.to_string().contains("must match"));
     }
 
     #[test]

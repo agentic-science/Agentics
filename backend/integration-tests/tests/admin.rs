@@ -289,6 +289,34 @@ async fn publishing_existing_version_is_rejected_without_mutating_version(pool: 
     assert_eq!(row.1["challenge_summary"], "Original summary");
 }
 
+#[sqlx::test(migrations = "../migrations")]
+async fn publish_rejects_tag_only_images_when_digest_policy_is_enabled(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let mut config = test_config(storage.path(), &examples_challenges_root());
+    config.require_digest_pinned_images = true;
+    let app = spawn_app_with_config(pool, config.clone()).await;
+    let auth = helpers::basic_auth_header(&config.admin_username, &config.admin_password);
+
+    let response = reqwest::Client::new()
+        .post(api_url(&app, "/admin/challenges/sample-sum/versions"))
+        .header("Authorization", auth)
+        .json(&serde_json::json!({ "bundle_path": "sample-sum/v1" }))
+        .send()
+        .await
+        .expect("failed to publish tag-only bundle");
+    assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = response
+        .json()
+        .await
+        .expect("failed to decode digest policy error");
+    assert!(
+        body["message"]
+            .as_str()
+            .expect("message")
+            .contains("@sha256:<digest>")
+    );
+}
+
 fn write_current_pointer_bundle(target: &std::path::Path, version: &str) {
     write_admin_publish_bundle(
         target,

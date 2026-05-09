@@ -573,6 +573,9 @@ pub async fn publish_version(
     challenge_bundle::validate_challenge_bundle(std::path::Path::new(&bundle_path)).await?;
     let spec =
         challenge_bundle::read_challenge_bundle_spec(std::path::Path::new(&bundle_path)).await?;
+    if state.config.require_digest_pinned_images {
+        challenge_bundle::validate_digest_pinned_images(&spec)?;
+    }
 
     if spec.challenge_id != challenge_id {
         return Err(AppError::BadRequest(format!(

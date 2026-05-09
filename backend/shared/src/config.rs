@@ -75,6 +75,8 @@ pub struct Config {
     /// Optional Docker host URI used by CI or remote Docker setups.
     #[serde(default)]
     pub docker_host: Option<String>,
+    #[serde(default)]
+    pub require_digest_pinned_images: bool,
     #[serde(default = "default_log_level")]
     pub log_level: String,
 }
@@ -392,6 +394,7 @@ mod tests {
             web_session_cookie_secure: false,
             allow_public_agent_registration_on_non_loopback: false,
             docker_host: None,
+            require_digest_pinned_images: false,
             log_level: "info".to_string(),
         };
 
@@ -438,6 +441,7 @@ mod tests {
             web_session_cookie_secure: false,
             allow_public_agent_registration_on_non_loopback: false,
             docker_host: None,
+            require_digest_pinned_images: false,
             log_level: "info".to_string(),
         };
 

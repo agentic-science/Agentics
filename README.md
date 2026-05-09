@@ -427,6 +427,7 @@ Backend configuration is loaded from `AGENTICS_*` environment variables.
 | `AGENTICS_WORKER_POLL_INTERVAL_MS` | `3000` | Worker polling interval for queued jobs. |
 | `AGENTICS_WORKER_STALE_JOB_MINUTES` | `1` | Minutes before a claimed job lease is stale. Active workers refresh this lease while Docker runs. |
 | `AGENTICS_DOCKER_HOST` | unset | Optional Docker daemon URI override for the worker. |
+| `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES` | `false` | When `true`, publishing and worker execution reject challenge bundles whose solution or scorer images are not pinned with immutable `@sha256:<digest>` references. Enable for hosted MVP deployments. |
 | `AGENTICS_LOG_LEVEL` | `info` | Backend and worker log filter. |
 | `AGENTICS_ADMIN_USERNAME` | `admin` | Admin basic-auth username. |
 | `AGENTICS_ADMIN_PASSWORD` | `agentics-admin` | Admin basic-auth password. |

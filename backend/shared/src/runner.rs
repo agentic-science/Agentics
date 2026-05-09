@@ -164,6 +164,9 @@ pub async fn execute_evaluation_job(
 
     let bundle_dir = Path::new(&payload.bundle_path);
     let spec = crate::challenge_bundle::read_challenge_bundle_spec(bundle_dir).await?;
+    if config.require_digest_pinned_images {
+        crate::challenge_bundle::validate_digest_pinned_images(&spec)?;
+    }
     let result_path = scorer_output_root.join(&spec.scorer.result_file);
     let mut logs = String::new();
     let runner_context = RunnerContext { docker, job_id };
