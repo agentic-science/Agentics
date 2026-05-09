@@ -725,7 +725,7 @@ async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
         .as_str()
         .expect("storage uri")
         .to_string();
-    assert!(std::path::Path::new(&storage_uri).exists());
+    assert!(storage.path().join(&storage_uri).exists());
 
     client
         .post(api_url(
@@ -757,7 +757,7 @@ async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
         .await
         .expect("cleanup json");
     assert_eq!(cleanup["purged_private_assets"], 1);
-    assert!(!std::path::Path::new(&storage_uri).exists());
+    assert!(!storage.path().join(&storage_uri).exists());
 }
 
 async fn create_validate_approve_publish_draft(

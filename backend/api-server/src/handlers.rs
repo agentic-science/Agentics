@@ -413,8 +413,15 @@ pub async fn get_public_artifact(
         return Err(AppError::NotFound);
     }
 
-    let artifact =
-        read_solution_submission_artifact_summary(&solution_submission.artifact_path).await?;
+    let artifact_bytes = state
+        .storage
+        .get(&solution_submission.artifact_path)
+        .await?;
+    let artifact = read_solution_submission_artifact_summary(
+        &solution_submission.artifact_path,
+        artifact_bytes,
+    )
+    .await?;
     Ok(Json(artifact))
 }
 
@@ -738,9 +745,10 @@ fn is_likely_zip(bytes: &[u8]) -> bool {
 
 /// Summarize a solution submission ZIP for safe public code browsing.
 pub async fn read_solution_submission_artifact_summary(
-    artifact_path: &str,
+    artifact_key: &str,
+    artifact_bytes: Vec<u8>,
 ) -> Result<SolutionSubmissionArtifactResponse> {
-    let archive_size = tokio::fs::metadata(artifact_path).await?.len();
+    let archive_size = artifact_bytes.len() as u64;
     if archive_size > MAX_ARTIFACT_BYTES {
         return Err(AppError::BadRequest(format!(
             "artifact zip must be at most {} bytes",
@@ -748,19 +756,20 @@ pub async fn read_solution_submission_artifact_summary(
         )));
     }
 
-    let artifact_path = artifact_path.to_string();
+    let artifact_key = artifact_key.to_string();
     tokio::task::spawn_blocking(move || {
-        read_solution_submission_artifact_summary_blocking(&artifact_path)
+        read_solution_submission_artifact_summary_blocking(&artifact_key, artifact_bytes)
     })
     .await
     .map_err(|e| AppError::Internal(format!("artifact summary task failed: {e}")))?
 }
 
 fn read_solution_submission_artifact_summary_blocking(
-    artifact_path: &str,
+    artifact_key: &str,
+    artifact_bytes: Vec<u8>,
 ) -> Result<SolutionSubmissionArtifactResponse> {
-    let archive_size = std::fs::metadata(artifact_path)?.len();
-    let reader = std::fs::File::open(artifact_path)?;
+    let archive_size = artifact_bytes.len();
+    let reader = std::io::Cursor::new(artifact_bytes);
     let mut archive = zip::ZipArchive::new(reader)?;
 
     if archive.len() > MAX_ARTIFACT_FILE_COUNT {
@@ -839,7 +848,7 @@ fn read_solution_submission_artifact_summary_blocking(
     files.sort_by(|a, b| a.path.cmp(&b.path));
 
     Ok(SolutionSubmissionArtifactResponse {
-        archive_name: std::path::Path::new(artifact_path)
+        archive_name: std::path::Path::new(artifact_key)
             .file_name()
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_default(),
@@ -925,7 +934,8 @@ mod tests {
             ],
         );
 
-        let summary = read_solution_submission_artifact_summary(&path.to_string_lossy())
+        let bytes = std::fs::read(&path).expect("failed to read test zip");
+        let summary = read_solution_submission_artifact_summary(&path.to_string_lossy(), bytes)
             .await
             .expect("summary should succeed");
         let _ = std::fs::remove_file(path);
@@ -942,7 +952,9 @@ mod tests {
             .collect();
         write_zip(&path, entries);
 
-        let result = read_solution_submission_artifact_summary(&path.to_string_lossy()).await;
+        let bytes = std::fs::read(&path).expect("failed to read test zip");
+        let result =
+            read_solution_submission_artifact_summary(&path.to_string_lossy(), bytes).await;
         let _ = std::fs::remove_file(path);
 
         assert!(
@@ -961,7 +973,8 @@ mod tests {
             )],
         );
 
-        let summary = read_solution_submission_artifact_summary(&path.to_string_lossy())
+        let bytes = std::fs::read(&path).expect("failed to read test zip");
+        let summary = read_solution_submission_artifact_summary(&path.to_string_lossy(), bytes)
             .await
             .expect("summary should succeed");
         let _ = std::fs::remove_file(path);

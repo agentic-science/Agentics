@@ -184,7 +184,10 @@ pub async fn execute_evaluation_job(
         pre_pull_image(docker, &profile.solution_image, target.docker_platform).await?;
         pre_pull_image(docker, &profile.scorer_image, target.docker_platform).await?;
 
-        extract_zip_safe(&payload.artifact_path, &source_root).await?;
+        let artifact_bytes = storage.get(&payload.artifact_path).await?;
+        let artifact_path = working_root.join("solution.zip");
+        tokio::fs::write(&artifact_path, artifact_bytes).await?;
+        extract_zip_safe(&artifact_path, &source_root).await?;
         let manifest = read_solution_manifest(&source_root, &spec).await?;
         copy_dir_all(&source_root, &build_root).await?;
 
@@ -706,7 +709,7 @@ fn append_bounded_log_bytes(
     }
 }
 
-async fn extract_zip_safe(artifact_path: &str, target_dir: &Path) -> Result<()> {
+async fn extract_zip_safe(artifact_path: &Path, target_dir: &Path) -> Result<()> {
     let artifact_size = tokio::fs::metadata(artifact_path).await?.len();
     if artifact_size > MAX_RUNNER_ARTIFACT_BYTES {
         return Err(AppError::Validation(format!(
@@ -715,14 +718,14 @@ async fn extract_zip_safe(artifact_path: &str, target_dir: &Path) -> Result<()> 
         )));
     }
 
-    let artifact_path = artifact_path.to_string();
+    let artifact_path = artifact_path.to_path_buf();
     let target_dir = target_dir.to_path_buf();
     tokio::task::spawn_blocking(move || extract_zip_safe_blocking(&artifact_path, &target_dir))
         .await
         .map_err(|e| AppError::Internal(format!("zip extraction task failed: {e}")))?
 }
 
-fn extract_zip_safe_blocking(artifact_path: &str, target_dir: &Path) -> Result<()> {
+fn extract_zip_safe_blocking(artifact_path: &Path, target_dir: &Path) -> Result<()> {
     let reader = std::fs::File::open(artifact_path)?;
     let mut archive = zip::ZipArchive::new(reader)?;
     if archive.len() > MAX_RUNNER_FILE_COUNT {
@@ -1355,7 +1358,7 @@ mod tests {
             ],
         );
 
-        extract_zip_safe(&zip_path.to_string_lossy(), &target_dir)
+        extract_zip_safe(&zip_path, &target_dir)
             .await
             .expect("extraction should succeed");
 
@@ -1381,7 +1384,7 @@ mod tests {
             .collect();
         write_zip(&zip_path, entries);
 
-        let result = extract_zip_safe(&zip_path.to_string_lossy(), &target_dir).await;
+        let result = extract_zip_safe(&zip_path, &target_dir).await;
 
         assert!(
             matches!(result, Err(AppError::Validation(message)) if message.contains("at most"))
