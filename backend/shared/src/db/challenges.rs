@@ -152,16 +152,11 @@ pub async fn publish_challenge_version(
 
     let row = sqlx::query(
         r#"
-        WITH upserted_version AS (
+        WITH inserted_version AS (
             INSERT INTO challenge_versions (
                 id, challenge_id, version, bundle_path, statement_path, spec_json, status
             )
             VALUES ($1, $2, $3, $4, $5, $6, 'published')
-            ON CONFLICT (challenge_id, version) DO UPDATE
-            SET bundle_path = EXCLUDED.bundle_path,
-                statement_path = EXCLUDED.statement_path,
-                spec_json = EXCLUDED.spec_json,
-                status = 'published'
             RETURNING id, challenge_id, version, bundle_path, statement_path
         )
             UPDATE challenges p
@@ -170,7 +165,7 @@ pub async fn publish_challenge_version(
                 status = 'active',
                 current_version_id = v.id,
                 updated_at = NOW()
-            FROM upserted_version v
+            FROM inserted_version v
         WHERE p.id = v.challenge_id
         RETURNING
             p.id AS challenge_id,
@@ -191,7 +186,11 @@ pub async fn publish_challenge_version(
     .bind(title)
     .bind(summary)
     .fetch_one(&mut *tx)
-    .await?;
+    .await
+    .map_err(|error| match error {
+        sqlx::Error::Database(db_error) if db_error.is_unique_violation() => AppError::Conflict,
+        error => AppError::Database(error),
+    })?;
 
     tx.commit().await?;
 

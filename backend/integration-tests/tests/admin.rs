@@ -212,15 +212,108 @@ async fn publishing_version_updates_explicit_current_version(pool: sqlx::PgPool)
     assert_eq!(current_version_id, "current-pointer:v2");
 }
 
+#[sqlx::test(migrations = "../migrations")]
+async fn publishing_existing_version_is_rejected_without_mutating_version(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let challenges = tempfile::tempdir().expect("failed to create challenge tempdir");
+    let config = test_config(storage.path(), challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let auth = helpers::basic_auth_header(&config.admin_username, &config.admin_password);
+    let client = reqwest::Client::new();
+
+    let original_bundle = challenges.path().join("immutable-version/original");
+    let replacement_bundle = challenges.path().join("immutable-version/replacement");
+    write_admin_publish_bundle(
+        &original_bundle,
+        "immutable-version",
+        "Immutable Version",
+        "Original summary",
+        "v1",
+    );
+    write_admin_publish_bundle(
+        &replacement_bundle,
+        "immutable-version",
+        "Immutable Version",
+        "Replacement summary",
+        "v1",
+    );
+
+    client
+        .post(api_url(&app, "/admin/challenges"))
+        .header("Authorization", &auth)
+        .json(&serde_json::json!({
+            "id": "immutable-version",
+            "slug": "immutable-version",
+            "title": "Immutable Version",
+            "summary": "Immutable version challenge"
+        }))
+        .send()
+        .await
+        .expect("failed to create challenge")
+        .error_for_status()
+        .expect("challenge create should succeed");
+
+    client
+        .post(api_url(
+            &app,
+            "/admin/challenges/immutable-version/versions",
+        ))
+        .header("Authorization", &auth)
+        .json(&serde_json::json!({ "bundle_path": original_bundle.to_string_lossy() }))
+        .send()
+        .await
+        .expect("failed to publish original version")
+        .error_for_status()
+        .expect("original publish should succeed");
+
+    let duplicate_response = client
+        .post(api_url(
+            &app,
+            "/admin/challenges/immutable-version/versions",
+        ))
+        .header("Authorization", &auth)
+        .json(&serde_json::json!({ "bundle_path": replacement_bundle.to_string_lossy() }))
+        .send()
+        .await
+        .expect("failed to publish duplicate version");
+    assert_eq!(duplicate_response.status(), reqwest::StatusCode::CONFLICT);
+
+    let row: (String, serde_json::Value) =
+        sqlx::query_as("SELECT bundle_path, spec_json FROM challenge_versions WHERE id = $1")
+            .bind("immutable-version:v1")
+            .fetch_one(&pool)
+            .await
+            .expect("failed to query published version");
+
+    assert_eq!(row.0, original_bundle.to_string_lossy());
+    assert_eq!(row.1["challenge_summary"], "Original summary");
+}
+
 fn write_current_pointer_bundle(target: &std::path::Path, version: &str) {
+    write_admin_publish_bundle(
+        target,
+        "current-pointer",
+        "Current Pointer",
+        &format!("Current pointer challenge {version}"),
+        version,
+    );
+}
+
+fn write_admin_publish_bundle(
+    target: &std::path::Path,
+    challenge_id: &str,
+    challenge_title: &str,
+    challenge_summary: &str,
+    version: &str,
+) {
     copy_dir_all(&examples_challenges_root().join("sample-sum/v1"), target);
     let spec_path = target.join("spec.json");
     let mut spec: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&spec_path).expect("failed to read spec"))
             .expect("failed to parse spec");
-    spec["challenge_id"] = serde_json::json!("current-pointer");
-    spec["challenge_title"] = serde_json::json!("Current Pointer");
-    spec["challenge_summary"] = serde_json::json!(format!("Current pointer challenge {version}"));
+    spec["challenge_id"] = serde_json::json!(challenge_id);
+    spec["challenge_title"] = serde_json::json!(challenge_title);
+    spec["challenge_summary"] = serde_json::json!(challenge_summary);
     spec["challenge_version"] = serde_json::json!(version);
     std::fs::write(
         &spec_path,
