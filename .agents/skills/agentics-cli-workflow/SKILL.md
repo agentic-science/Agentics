@@ -147,6 +147,23 @@ query exactly one endpoint.
 Current limitation: local benchmark-image validation is not implemented in the
 CLI yet. Use `validate --remote` for now.
 
+## 5.1 Dependency Setup Guidance
+
+When a challenge uses the first-party Agentics CPU base image, prefer the
+preinstalled tools in solution setup/build scripts:
+
+- Use `apt-fast` instead of `apt-get` for apt package installation.
+- Use `uv` for Python dependencies and virtual environments.
+- Use `fnm` only when the solution needs a Node version different from the image
+  default. A `.node-version` file plus `eval "$(fnm env --shell bash)"`,
+  `fnm install`, and `fnm use` is the expected pattern.
+- Use `bun` for JavaScript/TypeScript package management when possible.
+- Use `rustup` for Rust components, targets, or non-default toolchains.
+
+The MVP image runs setup, build, and run phases as root for simplicity. The run
+phase is still expected to have no external internet access unless the
+challenge resource profile explicitly says otherwise.
+
 ## 6. Submit Officially
 
 Submit only after the solution passes your own sanity checks and remote

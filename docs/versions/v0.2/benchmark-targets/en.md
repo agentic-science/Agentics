@@ -13,6 +13,12 @@ The initial supported CPU targets are:
 
 GPU targets are reserved for future work. v0.2 records an extensible accelerator field, but the bundle validator rejects GPU targets until GPU scheduling and worker capability checks are implemented.
 
+Agentics defines a first-party CPU base image in `docker/images/cpu-base` for
+future published CPU challenges. It targets Ubuntu 26.04 on `linux/arm64` and
+`linux/amd64` and can be used for both solution and scorer containers after it
+is published and digest-pinned. Active challenge specs should stay on currently
+pullable images until that release digest exists.
+
 ## Schema
 
 Challenge versions must declare one or more benchmark targets:
@@ -51,6 +57,7 @@ Rules:
 - `cpu-linux-amd64` must use Docker platform `linux/amd64`.
 - `validation_enabled` is target-specific. Validation can be enabled for one target and disabled for another.
 - `resource_profile` contains the Docker images, hard resource limits, network policy, optional image digests, optional resource description, and optional hardware metadata for that target. Hosted deployments should enable `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`, which requires solution and scorer images to use immutable `@sha256:<digest>` references.
+- For CPU-only challenges, prefer the first-party Agentics CPU base image once it is published. Its participant-facing setup guidance is to use `apt-fast` for apt packages, `uv` for Python dependencies, `fnm` for Node version changes, Bun for JavaScript/TypeScript package management, and rustup for Rust toolchain components.
 - If any target has `validation_enabled: true`, the bundle must declare `execution.validation_runs`.
 - If private benchmark scoring is enabled, the bundle must declare `execution.official_runs`.
 

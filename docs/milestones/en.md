@@ -291,6 +291,13 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
   - Scope: Persist the selected benchmark target on validation runs, official evaluations, solution submissions, and leaderboard rows. The worker should use the selected target's Docker platform and resource profile. Official submissions should be able to target one supported benchmark target or all supported targets. Each target should produce independent official results and leaderboard entries.
   - Test spec: Add integration tests proving unsupported targets are rejected before artifact upload, target-specific validation disablement is enforced, Docker receives the selected platform, two CPU targets produce separate official results, leaderboard rows are scoped by target, and hidden or rejudged submissions repair only the affected target leaderboard.
 
+### Base Images
+
+- **M0.2-IMAGE-1: Define first-party CPU base image**
+  - Commit target: `docker: add agentics cpu base image`
+  - Scope: Add a source-defined Agentics CPU base image for solution and scorer containers on `linux/arm64` and `linux/amd64`. Use Ubuntu 26.04, run setup/build/run as root for MVP simplicity, install shell/core utilities, network tools, build tools, `apt-fast` with `aria2`, `uv`, `fnm`, Node, Bun, rustup, `jq`, `file`, editor/debugging basics, `time`, and `tini`. Add image metadata, a smoke script, local build instructions, and participant guidance. Do not publish or switch active challenge specs until a release digest exists.
+  - Test spec: Run shell syntax checks for image scripts and, when network is stable, build both platforms with Docker Buildx and run `/opt/agentics/smoke.sh` on each supported platform.
+
 ### Worker and Resource Profiles
 
 - **M0.2-WORKER-1: Execute multi-phase solution submissions**
@@ -396,6 +403,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 | `M0.2-PROTO-4: Add scorer-owned prepare phase` | Implemented | Challenge bundles can generate validation or official run manifests and source-backed inputs in a scorer-owned `/prepared` workspace before solution invocations. |
 | `M0.2-TARGET-1: Define benchmark target schema` | Implemented | Challenge bundles now declare `benchmark_targets` with ARM64 and AMD64 CPU target ids, Docker platform, accelerator, validation flag, and target-owned resource profile. GPU targets are schema-reserved but rejected until scheduling exists. |
 | `M0.2-TARGET-2: Add target-specific evaluation and leaderboards` | Implemented | Solution submissions, jobs, evaluations, quotas, workers, API DTOs, and leaderboard rows now carry `benchmark_target_id`; HTTP submissions validate targets before artifact decode. |
+| `M0.2-IMAGE-1: Define first-party CPU base image` | Implemented | Adds source-defined Ubuntu 26.04 CPU base image files, smoke checks, local build docs, and participant guidance. Publishing and digest rollout are intentionally deferred. |
 | `M0.2-WORKER-1: Execute multi-phase solution-submissions` | Implemented | Runs setup/build in a build solution container, runs each invocation in a fresh solution container, supports source-backed run inputs, records per-invocation metadata, and isolates scoring in a separate scorer container. |
 | `M0.2-WORKER-2: Add resource profile enforcement` | Implemented | Enforces challenge-declared Docker images, timeout, memory, CPU, disk, image digest validation, and network policy. |
 | `M0.2-WORKER-3: Add GPU profile recording` | Planned | GPU metadata foundation. |

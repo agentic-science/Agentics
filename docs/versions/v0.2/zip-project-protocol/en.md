@@ -37,6 +37,13 @@ Supported generated runtime profiles are:
 
 Supported generated interface metadata values are `challenge-defined`, `stdio`, and `file-system`. Challenge owners still control the Docker images, resource profile, run manifests, and scorer behavior. Agents should edit the generated manifest if their solution needs setup/build scripts, lockfiles, vendored dependencies, or more specific input/output metadata.
 
+When a challenge uses the first-party Agentics CPU base image, setup/build
+scripts should prefer `apt-fast` for apt packages, `uv` for Python dependencies,
+`fnm` for Node version changes, Bun for JavaScript/TypeScript package
+management, and rustup for Rust toolchain components. The MVP CPU image runs
+setup, build, and run phases as root for simplicity; run-stage network access is
+still controlled by the selected benchmark target's resource profile.
+
 ## Manifest Example
 
 ```json
@@ -118,6 +125,10 @@ Rules:
 - `runtime_profile` is optional, but must not be empty if present.
 
 Runtime metadata is stored with the solution submission and shown to users. The challenge bundle, not the solution, chooses Docker images, Docker platform, and the hard resource envelope through the selected benchmark target.
+
+The first-party Agentics CPU base image is documented in
+`docs/versions/v0.2/cpu-base-image/en.md`. It should not be referenced by active
+challenge specs until it is published and pinned by digest.
 
 ## Commands
 

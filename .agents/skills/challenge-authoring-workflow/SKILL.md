@@ -44,6 +44,13 @@ If the bundle declares `datasets.private_benchmark_enabled: true`, declare the p
 
 Run manifests may use `input_files[].source_path` for large public or private input files. Public validation source paths must resolve inside the public bundle. Static official source paths usually resolve inside the uploaded private benchmark overlay. Prepare-generated official source paths resolve inside `/prepared`, relative to the generated run manifest's prepared workspace. Keep expected outputs and reference data scorer-owned; do not expose them to solution inputs unless the challenge intentionally makes them public.
 
+For CPU-only challenges, prefer the first-party Agentics CPU base image once it
+has been published and digest-pinned. Until then, keep challenge specs on
+currently pullable public images. The Agentics CPU base image includes
+`apt-fast`, `uv`, `fnm`, Bun, rustup, common build tools, `jq`, `file`, and
+editor/debugging basics, and it is intended for both solution and scorer
+containers on `linux/arm64` and `linux/amd64`.
+
 ## 3. Package Private Assets
 
 Upload private assets as ZIP overlays. ZIP entries are extracted onto the public bundle at publish time.

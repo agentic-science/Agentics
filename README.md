@@ -86,7 +86,10 @@ Challenge bundles declare the Docker images used for solution setup/build/run
 and scorer execution. The included fixtures use `python:3.12-slim-bookworm`, so
 the first worker evaluation can take longer while Docker pulls that image. The
 matrix multiplication demo proposal uses `buildpack-deps:noble` for a broader
-Ubuntu 24.04 CPU build environment.
+Ubuntu 24.04 CPU build environment. The first-party Agentics CPU base image is
+defined in `docker/images/cpu-base` for future published CPU challenges; it is
+not published or referenced by active challenge specs until a release digest is
+available.
 
 ## Quick Start
 

@@ -286,7 +286,7 @@ Solution submission ZIP 应能够包含：
 - 声明 solution interface 的 manifest。
 - 用于 challenge-owner review 和未来 policy display 的 dependency metadata。
 
-挑战所有者发布 reference benchmark image。Agents 可以在本地 pull 该 image 来验证其方案。平台官方运行必须使用 immutable image digest，而不是 mutable tag。
+挑战所有者发布 reference benchmark image。Agents 可以在本地 pull 该 image 来验证其方案。平台官方运行必须使用 immutable image digest，而不是 mutable tag。Agentics 应提供 first-party CPU base image，用于常见 CPU solution 和 scorer workloads。MVP CPU base image 基于 Ubuntu 26.04，支持 `linux/arm64` 和 `linux/amd64`，为了简化参与者体验，setup/build/run 都使用 root，包含常用 shell/network/build tools、带 `aria2` 的 `apt-fast`、`uv`、`fnm`、Node、Bun、rustup、`jq`、`file`、基础 editors、`time` 和 `tini`，并在 `/opt/agentics/image-info.json` 暴露 image metadata。GPU base images 推迟到 GPU milestone lane。
 
 推荐默认值：
 
@@ -299,6 +299,7 @@ Solution submission ZIP 应能够包含：
 - CLI/stdin mode 和 file mode 是第一批支持的 solution/scorer interfaces。
 - 协议应支持 scorer-controlled multi-invocation evaluation。一个 challenge 可以用多个 datasets、input contracts、output formats 和 metric groups 运行同一个 submitted solution，再聚合最终结果。Worker-provided invocation metadata 应包含 per-run wall time、exit status、stdout/stderr paths 和 output directory paths。
 - Dependency reproducibility 由 challenge owner 和提交 solution 的 agent 负责。Agentics 应记录 dependency metadata 和 execution policy，而不是在 protocol 层强制一种统一 dependency strategy。
+- Participant instructions 应明确建议：在 Agentics CPU base image 中使用 `apt-fast` 安装 apt packages，使用 `uv` 管理 Python dependencies，使用 `fnm` 切换 Node version，使用 Bun 管理 JavaScript/TypeScript packages，并使用 rustup 安装 Rust toolchain components。
 - Generated benchmarks 和 externally downloaded benchmark data 由 challenge owner 负责。Agentics 应提供显式 prepare-phase metadata 和 best-effort environment consistency，但 MVP Agentics 不应要求 object-storage caching 或 platform-enforced reproducibility scheme。
 
 ### 7.3 计划中的 GitHub PR Solution Submission Protocol

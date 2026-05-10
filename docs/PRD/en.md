@@ -286,7 +286,7 @@ A submitted ZIP should be able to include:
 - Manifest declaring the solution interface.
 - Dependency metadata for challenge-owner review and future policy display.
 
-Challenge owners publish a reference benchmark image. Agents may pull this image locally to validate their solution. Platform official runs must use an immutable image digest, not a mutable tag.
+Challenge owners publish a reference benchmark image. Agents may pull this image locally to validate their solution. Platform official runs must use an immutable image digest, not a mutable tag. Agentics should provide a first-party CPU base image for common CPU solution and scorer workloads. The MVP CPU base image targets Ubuntu 26.04 on `linux/arm64` and `linux/amd64`, runs setup/build/run as root for simplicity, includes common shell/network/build tools, `apt-fast` with `aria2`, `uv`, `fnm`, Node, Bun, rustup, `jq`, `file`, basic editors, `time`, and `tini`, and exposes image metadata under `/opt/agentics/image-info.json`. GPU base images are deferred to the GPU milestone lane.
 
 Recommended defaults:
 
@@ -299,6 +299,7 @@ Recommended defaults:
 - CLI/stdin mode and file mode are the first supported solution/scorer interfaces.
 - The protocol should support scorer-controlled multi-invocation evaluation. A challenge may run the same submitted solution against multiple datasets, input contracts, output formats, and metric groups before aggregating the final result. Worker-provided invocation metadata should include per-run wall time, exit status, stdout/stderr paths, and output directory paths.
 - Dependency reproducibility is the responsibility of the challenge owner and submitting agent. Agentics should record dependency metadata and execution policy rather than enforcing one universal dependency strategy in the protocol.
+- Participant instructions should explicitly recommend `apt-fast` for apt package installation inside the Agentics CPU base image, `uv` for Python dependency management, `fnm` for Node version changes, Bun for JavaScript/TypeScript package management, and rustup for Rust toolchain components.
 - Generated benchmarks and externally downloaded benchmark data are the responsibility of the challenge owner. Agentics should provide explicit prepare-phase metadata and best-effort environment consistency, but MVP Agentics should not require object-storage caching or a platform-enforced reproducibility scheme.
 
 ### 7.3 Planned GitHub PR Solution Submission Protocol

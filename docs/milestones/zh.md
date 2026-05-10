@@ -291,6 +291,13 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
   - Scope：在 validation runs、official evaluations、solution submissions 和 leaderboard rows 中持久化 selected benchmark target。Worker 应使用所选 target 的 Docker platform 和 resource profile。Official submissions 应能够指定一个 supported benchmark target，或请求所有 supported targets。每个 target 应产生独立 official results 和 leaderboard entries。
   - Test spec：添加 integration tests，证明 unsupported targets 会在 artifact upload 前被拒绝、target-specific validation disablement 会被执行、Docker 收到所选 platform、两个 CPU targets 会产生独立 official results、leaderboard rows 按 target 隔离，并且 hidden 或 rejudged submissions 只修复受影响 target 的 leaderboard。
 
+### Base Images
+
+- **M0.2-IMAGE-1：定义 first-party CPU base image**
+  - Commit target：`docker: add agentics cpu base image`
+  - Scope：添加 source-defined Agentics CPU base image，用于 `linux/arm64` 和 `linux/amd64` 上的 solution 与 scorer containers。使用 Ubuntu 26.04；为了 MVP 简洁性，setup/build/run 都使用 root；安装 shell/core utilities、network tools、build tools、带 `aria2` 的 `apt-fast`、`uv`、`fnm`、Node、Bun、rustup、`jq`、`file`、基础 editor/debugging tools、`time` 和 `tini`。添加 image metadata、smoke script、local build instructions 和 participant guidance。发布 release digest 之前，不发布该 image，也不切换 active challenge specs。
+  - Test spec：对 image scripts 运行 shell syntax checks；网络稳定后，用 Docker Buildx 构建两个 platforms，并在每个 supported platform 上运行 `/opt/agentics/smoke.sh`。
+
 ### Worker 和 Resource Profiles
 
 - **M0.2-WORKER-1：执行 multi-phase solution submissions**
@@ -396,6 +403,7 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 | `M0.2-PROTO-4：添加 scorer-owned prepare phase` | 已实现 | Challenge bundles 可以在 solution invocations 之前，在 scorer-owned `/prepared` workspace 中生成 validation 或 official run manifests 和 source-backed inputs。 |
 | `M0.2-TARGET-1：定义 benchmark target schema` | 已实现 | Challenge bundles 现在声明带有 ARM64 和 AMD64 CPU target ids、Docker platform、accelerator、validation flag 和 target-owned resource profile 的 `benchmark_targets`。GPU targets 在 schema 中保留，但在 scheduling 完成前会被拒绝。 |
 | `M0.2-TARGET-2：添加 target-specific evaluations 和 leaderboards` | 已实现 | Solution submissions、jobs、evaluations、quotas、workers、API DTOs 和 leaderboard rows 现在都携带 `benchmark_target_id`；HTTP submissions 会在 artifact decode 前校验 target。 |
+| `M0.2-IMAGE-1：定义 first-party CPU base image` | 已实现 | 添加 source-defined Ubuntu 26.04 CPU base image files、smoke checks、local build docs 和 participant guidance。发布和 digest rollout 已有意推迟。 |
 | `M0.2-WORKER-1：执行 multi-phase solution-submissions` | 已实现 | 在 build solution container 中运行 setup/build，在 fresh solution container 中运行每次 invocation，支持 source-backed run inputs，记录 per-invocation metadata，并将 scoring 隔离到单独 scorer container。 |
 | `M0.2-WORKER-2：添加 resource profile enforcement` | 已实现 | 强制执行 challenge-declared Docker images、timeout、memory、CPU、disk、image digest validation 和 network policy。 |
 | `M0.2-WORKER-3：添加 GPU profile recording` | 计划中 | GPU metadata foundation。 |

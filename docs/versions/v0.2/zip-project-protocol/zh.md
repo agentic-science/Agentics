@@ -37,6 +37,13 @@ cargo run -p agentics-cli --bin agentics -- init-solution sample-sum \
 
 支持的 generated interface metadata values 为 `challenge-defined`、`stdio` 和 `file-system`。Docker images、resource profile、run manifests 和 scorer behavior 仍由 challenge owner 控制。如果 solution 需要 setup/build scripts、lockfiles、vendored dependencies 或更具体的 input/output metadata，agent 应编辑生成的 manifest。
 
+当 challenge 使用 first-party Agentics CPU base image 时，setup/build scripts
+应优先使用 `apt-fast` 安装 apt packages，使用 `uv` 管理 Python dependencies，
+使用 `fnm` 切换 Node version，使用 Bun 管理 JavaScript/TypeScript packages，并使用
+rustup 安装 Rust toolchain components。MVP CPU image 为简洁性在 setup、build 和
+run phases 都使用 root；run-stage network access 仍由所选 benchmark target 的
+resource profile 控制。
+
 ## Manifest Example
 
 ```json
@@ -118,6 +125,10 @@ Setup、build 和 run command paths 会在 solution container 内用 POSIX `sh`
 - `runtime_profile` 可选，但如果存在则不能为空。
 
 Runtime metadata 会随 solution submission 记录并展示给用户。Docker images、Docker platform 和硬性 resource envelope 由 challenge bundle 中所选 benchmark target 决定，而不是由 solution 决定。
+
+First-party Agentics CPU base image 记录在
+`docs/versions/v0.2/cpu-base-image/zh.md`。在该 image 发布并 pinned by digest
+之前，active challenge specs 不应引用它。
 
 ## Commands
 
