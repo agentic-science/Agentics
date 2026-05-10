@@ -503,18 +503,18 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 
 - **M0.2.5-DGX-1: Inventory DGX Spark host and container runtime**
   - Commit target: `ops: document dgx spark host inventory`
-  - Scope: Before moving the MVP to DGX Spark, record OS image, architecture, Docker version, Docker storage driver, NVIDIA driver, CUDA visibility, NVIDIA container runtime, persistent storage mount, ingress path, and operator access model.
-  - Test spec: On the DGX Spark host, capture `uname -a`, `docker info`, `nvidia-smi`, and an NVIDIA container runtime Docker smoke command, then attach the results to the deployment checklist.
+  - Scope: Before moving the MVP to DGX Spark, record OS image, architecture, Docker version, Docker storage driver, loopback XFS and project-quota support, NVIDIA driver, CUDA visibility, NVIDIA container runtime, persistent storage mount, ingress path, and operator access model. Decide the Agentics-owned Docker daemon socket and data-root location.
+  - Test spec: On the DGX Spark host, capture `uname -a`, `docker info`, `findmnt` or equivalent mount evidence for the loopback XFS image, `nvidia-smi`, and an NVIDIA container runtime Docker smoke command, then attach the results to the deployment checklist.
 
 - **M0.2.5-DGX-2: Add DGX Spark deployment profile**
   - Commit target: `deploy: add dgx spark mvp profile`
-  - Scope: Define DGX-specific environment values, persistent storage layout, reverse proxy and TLS assumptions, Docker runtime settings, service supervision, backup locations, and release artifact paths. Keep GPU solution execution disabled until the GPU milestone lane is implemented.
-  - Test spec: Dry-run migrations, API startup, worker startup, web startup, and health checks on DGX Spark with persistent storage and non-default admin credentials.
+  - Scope: Define DGX-specific environment values, persistent storage layout, reverse proxy and TLS assumptions, Docker runtime settings, service supervision, backup locations, and release artifact paths. Include an Agentics-owned Docker daemon backed by a loopback XFS data-root image with project quotas, `AGENTICS_HOST_PROBE_MODE=require`, Docker writable-layer quota probes, and per-phase loopback filesystem images for all solution setup/build/run writable mounts and scorer prepare/score writable mounts. Keep GPU solution execution disabled until the GPU milestone lane is implemented.
+  - Test spec: Dry-run migrations, API startup, worker startup, web startup, health checks, Docker writable-layer quota probe, and per-phase loop-image writable-mount probe on DGX Spark with persistent storage and non-default admin credentials.
 
 - **M0.2.5-DGX-3: Run DGX Spark end-to-end smoke and benchmark calibration**
   - Commit target: `ops: add dgx spark smoke checklist`
-  - Scope: Run hosted CLI onboarding, matrix official submission on supported CPU targets, no-egress runner smoke, worker heartbeat inspection, capacity inspection, and initial runtime calibration on DGX Spark. Record whether `linux/amd64` emulation is acceptable or whether hosted MVP should restrict targets by host capability.
-  - Test spec: Capture terminal status for a sample official submission, `/admin/capacity`, `/admin/service-heartbeats`, runner logs, and matrix benchmark timing baselines.
+  - Scope: Run hosted CLI onboarding, matrix official submission on supported CPU targets, no-egress runner smoke, storage-quota escape smoke, worker heartbeat inspection, capacity inspection, and initial runtime calibration on DGX Spark. Record whether `linux/amd64` emulation is acceptable or whether hosted MVP should restrict targets by host capability.
+  - Test spec: Capture terminal status for a sample official submission, `/admin/capacity`, `/admin/service-heartbeats`, runner logs, matrix benchmark timing baselines, and proof that a job writing beyond Docker writable-layer or writable-mount limits fails without exhausting host disk.
 
 ### CLI and Documentation
 
@@ -562,9 +562,9 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 | `M0.2.5-DEPLOY-1: Add hosted deployment baseline` | Implemented | Mac-local MVP deployment rehearsal is documented; DGX Spark hosted profile remains planned. |
 | `M0.2.5-OPS-1: Add public quota and abuse limits` | Implemented | Backend-enforced quotas are documented with recommended Mac-local MVP values and reverse-proxy requirements. |
 | `M0.2.5-OPS-2: Add health checks, observability, and runbook` | Implemented | Operations runbook and `scripts/ops/check-local-mvp.sh` cover health, capacity, heartbeat, logs, failures, and backups. |
-| `M0.2.5-DGX-1: Inventory DGX Spark host and container runtime` | Planned | Required once the hosted MVP target is accessible. |
-| `M0.2.5-DGX-2: Add DGX Spark deployment profile` | Planned | Depends on DGX host inventory and storage/ingress decisions. |
-| `M0.2.5-DGX-3: Run DGX Spark end-to-end smoke and benchmark calibration` | Planned | Depends on DGX deployment profile and published matrix demo. |
+| `M0.2.5-DGX-1: Inventory DGX Spark host and container runtime` | Planned | Required once the hosted MVP target is accessible; storage inventory must include loopback XFS project-quota support. |
+| `M0.2.5-DGX-2: Add DGX Spark deployment profile` | Planned | Storage decision: Agentics-owned Docker daemon on loopback XFS plus per-phase loop images. Still depends on DGX host inventory and ingress decisions. |
+| `M0.2.5-DGX-3: Run DGX Spark end-to-end smoke and benchmark calibration` | Planned | Depends on DGX deployment profile and published matrix demo; must include storage-quota escape smoke. |
 | `M0.2.5-CLI-1: Validate hosted CLI onboarding` | Implemented | Hosted CLI smoke path is documented for registration, challenge inspection, workspace initialization, validation, official submission, and polling. |
 | `M0.2.5-CLI-2: Add challenge creator commands` | Implemented | CLI covers GitHub identity linking, draft creation/status, private asset upload, admin validation, review, publish, abandon, and cleanup. |
 | `M0.2.5-SKILL-1: Add challenge authoring skill` | Implemented | `.agents/skills/challenge-authoring-workflow/SKILL.md` documents creator workflow and private asset ZIP overlays. |

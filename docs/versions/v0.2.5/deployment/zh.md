@@ -102,6 +102,26 @@ Reverse proxy 应该：
 - 保持 published challenge runtime bundles 不可变。
 - 使用 stale draft cleanup 清理 unpublished private assets，不要手动删除文件系统内容。
 
+## Hosted Runner Disk Isolation 决策
+
+Hosted MVP 在接受 public evaluation jobs 前，应使用 Linux-only storage
+profile：
+
+- 运行 Agentics-owned Docker daemon，而不是 operator 的 default Docker daemon。
+- 将该 daemon 的 Docker data root 放在启用 project quotas 的 loopback XFS
+  image 上。这样不需要重新分区或格式化 DGX Spark 的主硬盘，同时仍然可以验证
+  Docker `storage_opt.size`。
+- 使用 Docker writable-layer quotas 约束写入 container layer 的内容。
+- 为 writable mounts 使用独立的 per-phase loopback filesystem images。该策略
+  覆盖 solution 的 `setup`、`build` 和 `run` phases，也覆盖 scorer 的
+  `prepare` 和 `score` phases。
+- 用未来的 Agentics-specific flag 控制 strict probes，例如
+  `AGENTICS_HOST_PROBE_MODE=off|warn|require`，不要使用 generic `CI` variable。
+- Mac-local development 保持宽松；strict storage probe 属于 hosted Linux
+  staging 和 DGX-hosted workers。
+
+选择这个组合的原因是 Docker writable-layer quotas 和 bounded mounts 保护的是不同路径。`storage_opt.size` 覆盖 package caches 或意外写入非挂载路径等 container-layer writes。独立 loop images 覆盖 runner-owned writable mounts，例如 workspaces、`/io`、`/prepared`、`/output`、home 和 temporary directories。二者共同覆盖所有 runner phases 的 hard writable disk boundary。
+
 ## 回滚
 
 安全回滚路径：

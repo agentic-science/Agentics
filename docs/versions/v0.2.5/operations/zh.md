@@ -75,6 +75,17 @@ export AGENTICS_CHALLENGE_DRAFT_VALIDATIONS_PER_DAY=10
 
 DGX Spark 数值应在 benchmark calibration 后重新评估。
 
+## Hosted Storage Probe Policy
+
+Hosted DGX profile 应在 public workers 接受 jobs 前添加 strict storage probes。
+这是计划中的 operational hardening，不属于当前 Mac-local runbook。
+
+使用明确的 Agentics flag，例如 `AGENTICS_HOST_PROBE_MODE=off|warn|require`，
+不要从 `CI=true` 推断 strictness，因为 CI 可能运行在无法证明 Docker/XFS quota
+behavior 的 hosts 上。在 `require` mode 下，worker startup 应验证 Agentics-owned
+Docker daemon 上的 Docker writable-layer quota enforcement，并验证 runner-owned
+writable mounts 由有界的 per-phase loop images 支撑。
+
 ## Operational Checks
 
 运行：

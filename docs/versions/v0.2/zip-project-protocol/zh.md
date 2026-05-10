@@ -191,6 +191,17 @@ Parser 会暴露带有 concrete limits 的 ordered phase execution plan。Worker
 
 Runner containers 还会使用 Docker-level containment controls：memory 和 CPU limits、swap 限制到 memory limit、PID 和 process ulimits、drop all capabilities、`no-new-privileges`、不发布端口，以及 bounded Docker log files。这些 controls 会降低 blast radius，但 Docker 仍不应被视为完整的 hostile-code isolation boundary。
 
+Hosted workers 应将 `disk_limit_mb` 视为硬性的 operational contract，而不只是
+post-run accounting check。计划中的 hosted design 有两层：第一层是
+Agentics-owned Docker daemon，其 data root 位于启用 project quotas 的 loopback
+XFS image 上，用 Docker writable-layer quotas 约束 container layer；第二层是为
+setup/build workspace scratch、run `/io`、prepare `/prepared`、scorer
+`/output`、home 和 temporary paths 等 writable mounts 分配独立的 per-phase
+loopback filesystem images。这会覆盖 solution 的三个 phases 和 scorer 的两个
+phases。Strict deployment probes 应由 Agentics-specific flag 控制，例如
+`AGENTICS_HOST_PROBE_MODE=off|warn|require`；Mac-local development 可以跳过，
+hosted workers 在接受 jobs 前应强制通过。
+
 ## Interface
 
 ```json
@@ -292,6 +303,8 @@ v0.2 worker 使用隔离的 solution 和 scorer environments：
 - Scorer container 运行可信的 challenge-owner scorer code，并使用 challenge-owner-controlled internet access。
 - Private benchmark reference outputs、scorer-only files 和 official scoring logic 只会挂载到 scorer container。
 - Solution run container 只接收当前 CLI/stdin 或 file-mode invocation 所需的具体 input。Source-backed inputs 以 read-only 方式挂载，writable `/io` tree 仅用于 stdin/stdout/stderr capture、declared outputs、home 和 temporary files。
+- Hosted deployments 应用 bounded loopback filesystem image 支撑这些 phases
+  中的每个 writable path，而不是使用无硬上界的 host bind mount。
 
 这种 two-container solution model 可以避免将 setup/build 阶段遗留的 background processes 带入 benchmark execution，同时仍然允许在 challenge policy 允许时，于 dependency installation 和 build 阶段使用 internet。
 

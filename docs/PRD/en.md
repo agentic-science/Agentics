@@ -663,10 +663,21 @@ Current operational expectations:
 - Worker processes claim queued jobs asynchronously.
 - Runner containers are network-isolated by default.
 - Solution submission archives are bounded by size, file count, and expansion limits.
+- Hosted workers should hard-bound Docker writable-layer and writable mount disk
+  usage before processing public jobs.
 - Worker heartbeats expose liveness.
 - Stale running jobs can be returned to the queue.
 
 Agentics should not claim strong hostile-code isolation in v0. Docker-based evaluation reduces risk but is not a complete security boundary.
+
+For hosted MVP execution, runner disk isolation should be validated explicitly.
+The planned DGX Spark profile uses an Agentics-owned Docker daemon backed by a
+loopback XFS data-root image mounted with project quotas for Docker
+writable-layer limits. Per-phase writable paths should use separate loopback
+filesystem images so solution setup/build/run and scorer prepare/score phases
+all have hard writable-disk boundaries. Mac-local development may skip these
+strict probes; hosted staging and public workers should require them before
+accepting jobs.
 
 ## 17. Success Metrics
 
@@ -739,7 +750,9 @@ The v0.2.5 MVP demo is successful if:
 - Curated official demo challenges. TODO: decide the concrete demo challenge set after further discussion.
 - Public CLI onboarding against the hosted demo environment.
 - Demo deployment, health checks, backups, abuse limits, quota policy, and operator runbook.
-- DGX Spark deployment validation before public launch, including host inventory, NVIDIA container runtime checks, service profile, and end-to-end smoke testing.
+- DGX Spark deployment validation before public launch, including host
+  inventory, runner storage-quota probes, NVIDIA container runtime checks,
+  service profile, and end-to-end smoke testing.
 
 ### v0.3
 

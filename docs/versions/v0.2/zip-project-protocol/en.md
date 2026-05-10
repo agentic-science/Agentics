@@ -197,6 +197,17 @@ capabilities dropped, `no-new-privileges`, no published ports, and bounded Docke
 log files. These controls reduce blast radius, but Docker should still not be
 treated as a complete hostile-code isolation boundary.
 
+Hosted workers should treat `disk_limit_mb` as a hard operational contract, not
+only a post-run accounting check. The planned hosted design has two layers:
+Docker writable-layer quotas from an Agentics-owned Docker daemon whose data root
+lives on a loopback XFS image mounted with project quotas, and separate
+per-phase loopback filesystem images for writable mounts such as setup/build
+workspace scratch, run `/io`, prepare `/prepared`, scorer `/output`, home, and
+temporary paths. This covers all three solution phases and both scorer phases.
+Strict deployment probes should be controlled by an Agentics-specific flag such
+as `AGENTICS_HOST_PROBE_MODE=off|warn|require`; Mac-local development can skip
+them, while hosted workers should require them before accepting jobs.
+
 ## Interface
 
 ```json
@@ -298,6 +309,8 @@ The v0.2 worker uses separate solution and scorer environments:
 - A scorer container runs trusted challenge-owner scorer code and has challenge-owner-controlled internet access.
 - Private benchmark reference outputs, scorer-only files, and official scoring logic are mounted only into the scorer container.
 - The solution run container receives only the specific input needed for the current CLI/stdin or file-mode invocation. Source-backed inputs are mounted read-only, and the writable `/io` tree is limited to stdin/stdout/stderr capture, declared outputs, home, and temporary files.
+- Hosted deployments should back every writable path in these phases with a
+  bounded loopback filesystem image rather than an unbounded host bind mount.
 
 This two-container solution model avoids carrying background setup/build processes into benchmark execution, while still allowing internet during dependency installation and build when the challenge policy permits it.
 

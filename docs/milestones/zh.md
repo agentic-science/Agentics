@@ -503,18 +503,18 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 
 - **M0.2.5-DGX-1：盘点 DGX Spark host 和 container runtime**
   - Commit target：`ops: document dgx spark host inventory`
-  - Scope：在把 MVP 迁移到 DGX Spark 前，记录 OS image、architecture、Docker version、Docker storage driver、NVIDIA driver、CUDA visibility、NVIDIA container runtime、persistent storage mount、ingress path 和 operator access model。
-  - Test spec：在 DGX Spark host 上采集 `uname -a`、`docker info`、`nvidia-smi` 和 NVIDIA container runtime Docker smoke command 的输出，并将结果附到 deployment checklist。
+  - Scope：在把 MVP 迁移到 DGX Spark 前，记录 OS image、architecture、Docker version、Docker storage driver、loopback XFS 和 project-quota support、NVIDIA driver、CUDA visibility、NVIDIA container runtime、persistent storage mount、ingress path 和 operator access model。确定 Agentics-owned Docker daemon socket 和 data-root location。
+  - Test spec：在 DGX Spark host 上采集 `uname -a`、`docker info`、loopback XFS image 的 `findmnt` 或等价 mount evidence、`nvidia-smi` 和 NVIDIA container runtime Docker smoke command 的输出，并将结果附到 deployment checklist。
 
 - **M0.2.5-DGX-2：添加 DGX Spark deployment profile**
   - Commit target：`deploy: add dgx spark mvp profile`
-  - Scope：定义 DGX-specific environment values、persistent storage layout、reverse proxy 和 TLS assumptions、Docker runtime settings、service supervision、backup locations 和 release artifact paths。在 GPU milestone lane 实现之前，保持 GPU solution execution 禁用。
-  - Test spec：在 DGX Spark 上使用 persistent storage 和非默认 admin credentials dry-run migrations、API startup、worker startup、web startup 和 health checks。
+  - Scope：定义 DGX-specific environment values、persistent storage layout、reverse proxy 和 TLS assumptions、Docker runtime settings、service supervision、backup locations 和 release artifact paths。包括一个由 loopback XFS data-root image 和 project quotas 支撑的 Agentics-owned Docker daemon、`AGENTICS_HOST_PROBE_MODE=require`、Docker writable-layer quota probes，以及为所有 solution setup/build/run writable mounts 和 scorer prepare/score writable mounts 准备的 per-phase loopback filesystem images。在 GPU milestone lane 实现之前，保持 GPU solution execution 禁用。
+  - Test spec：在 DGX Spark 上使用 persistent storage 和非默认 admin credentials dry-run migrations、API startup、worker startup、web startup、health checks、Docker writable-layer quota probe，以及 per-phase loop-image writable-mount probe。
 
 - **M0.2.5-DGX-3：运行 DGX Spark end-to-end smoke 和 benchmark calibration**
   - Commit target：`ops: add dgx spark smoke checklist`
-  - Scope：在 DGX Spark 上运行 hosted CLI onboarding、matrix official submission on supported CPU targets、no-egress runner smoke、worker heartbeat inspection、capacity inspection 和初始 runtime calibration。记录 `linux/amd64` emulation 是否可接受，或 hosted MVP 是否应按 host capability 限制 targets。
-  - Test spec：采集 sample official submission 的 terminal status、`/admin/capacity`、`/admin/service-heartbeats`、runner logs 和 matrix benchmark timing baselines。
+  - Scope：在 DGX Spark 上运行 hosted CLI onboarding、matrix official submission on supported CPU targets、no-egress runner smoke、storage-quota escape smoke、worker heartbeat inspection、capacity inspection 和初始 runtime calibration。记录 `linux/amd64` emulation 是否可接受，或 hosted MVP 是否应按 host capability 限制 targets。
+  - Test spec：采集 sample official submission 的 terminal status、`/admin/capacity`、`/admin/service-heartbeats`、runner logs、matrix benchmark timing baselines，以及证明 job 写超 Docker writable-layer 或 writable-mount limits 时会失败且不会耗尽 host disk 的证据。
 
 ### CLI 和 Documentation
 
@@ -562,9 +562,9 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 | `M0.2.5-DEPLOY-1：添加 hosted deployment baseline` | 已实现 | 已文档化 Mac-local MVP deployment rehearsal；DGX Spark hosted profile 仍为计划中。 |
 | `M0.2.5-OPS-1：添加 public quota 和 abuse limits` | 已实现 | 已记录 backend-enforced quotas、推荐 Mac-local MVP 数值和 reverse-proxy requirements。 |
 | `M0.2.5-OPS-2：添加 health checks、observability 和 runbook` | 已实现 | Operations runbook 和 `scripts/ops/check-local-mvp.sh` 覆盖 health、capacity、heartbeat、logs、failures 和 backups。 |
-| `M0.2.5-DGX-1：盘点 DGX Spark host 和 container runtime` | 计划中 | 等 hosted MVP target 可访问后执行。 |
-| `M0.2.5-DGX-2：添加 DGX Spark deployment profile` | 计划中 | 依赖 DGX host inventory 和 storage/ingress decisions。 |
-| `M0.2.5-DGX-3：运行 DGX Spark end-to-end smoke 和 benchmark calibration` | 计划中 | 依赖 DGX deployment profile 和 published matrix demo。 |
+| `M0.2.5-DGX-1：盘点 DGX Spark host 和 container runtime` | 计划中 | 等 hosted MVP target 可访问后执行；storage inventory 必须包含 loopback XFS project-quota support。 |
+| `M0.2.5-DGX-2：添加 DGX Spark deployment profile` | 计划中 | Storage 决策：Agentics-owned Docker daemon 使用 loopback XFS，并为每个 phase 使用 loop images；仍依赖 DGX host inventory 和 ingress decisions。 |
+| `M0.2.5-DGX-3：运行 DGX Spark end-to-end smoke 和 benchmark calibration` | 计划中 | 依赖 DGX deployment profile 和 published matrix demo；必须包含 storage-quota escape smoke。 |
 | `M0.2.5-CLI-1：验证 hosted CLI onboarding` | 已实现 | 已记录 registration、challenge inspection、workspace initialization、validation、official submission 和 polling 的 hosted CLI smoke path。 |
 | `M0.2.5-CLI-2：添加 challenge creator commands` | 已实现 | CLI 覆盖 GitHub identity linking、draft creation/status、private asset upload、admin validation、review、publish、abandon 和 cleanup。 |
 | `M0.2.5-SKILL-1：添加 challenge authoring skill` | 已实现 | `.agents/skills/challenge-authoring-workflow/SKILL.md` 记录 creator workflow 和 private asset ZIP overlays。 |

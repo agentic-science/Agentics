@@ -102,6 +102,32 @@ Before public MVP:
 - Keep published challenge runtime bundles immutable.
 - Use stale draft cleanup for unpublished private assets, not manual filesystem deletion.
 
+## Hosted Runner Disk Isolation Decision
+
+The hosted MVP should use a Linux-only storage profile before accepting public
+evaluation jobs:
+
+- Run an Agentics-owned Docker daemon instead of the operator's default Docker
+  daemon.
+- Put that daemon's Docker data root on a loopback XFS image mounted with
+  project quotas. This avoids repartitioning or formatting the DGX Spark's
+  primary drive while still enabling Docker `storage_opt.size` probes.
+- Use Docker writable-layer quotas for writes that land in the container layer.
+- Use separate per-phase loopback filesystem images for writable mounts. This
+  applies to solution `setup`, `build`, and `run` phases, and to scorer
+  `prepare` and `score` phases.
+- Gate strict probes with a future Agentics-specific flag such as
+  `AGENTICS_HOST_PROBE_MODE=off|warn|require`, not the generic `CI` variable.
+- Keep Mac-local development permissive. The strict storage probe belongs to
+  hosted Linux staging and DGX-hosted workers.
+
+This combination is chosen because Docker writable-layer quotas and bounded
+mounts protect different paths. `storage_opt.size` covers container-layer writes
+such as package caches or accidental writes outside mounts. Separate loop images
+cover runner-owned writable mounts such as workspaces, `/io`, `/prepared`,
+`/output`, home, and temporary directories. Both are needed for a hard writable
+disk boundary across all runner phases.
+
 ## Rollback
 
 The safe rollback path is:

@@ -659,10 +659,21 @@ Agentics 应可复现，并且实际可本地运行。
 - Worker processes 异步 claim queued jobs。
 - Runner containers 默认 network-isolated。
 - Solution submission archives 受 size、file count 和 expansion limits 限制。
+- Hosted workers 在处理 public jobs 前，应对 Docker writable-layer 和
+  writable mounts 的 disk usage 提供硬上界。
 - Worker heartbeats 暴露 liveness。
 - Stale running jobs 可以被返回队列。
 
 Agentics 不应在 v0 声称拥有强 hostile-code isolation。基于 Docker 的评测会降低风险，但不是完整安全边界。
+
+对于 hosted MVP execution，runner disk isolation 必须显式验证。计划中的
+DGX Spark profile 会使用 Agentics-owned Docker daemon，其 Docker data-root
+位于启用 project quotas 的 loopback XFS image 上，用于约束 Docker
+writable-layer。每个 phase 的 writable paths 应使用独立的 loopback
+filesystem images，因此 solution setup/build/run 和 scorer prepare/score
+phases 都有硬性的 writable-disk 边界。Mac-local development 可以跳过这些
+strict probes；hosted staging 和 public workers 在接受 jobs 前应强制通过这些
+probes。
 
 ## 17. 成功指标
 
@@ -735,7 +746,7 @@ v0.2.5 MVP demo 成功的条件是：
 - 策划 official demo challenges。TODO：在后续讨论中确定具体 demo challenge set。
 - 面向 hosted demo environment 的 public CLI onboarding。
 - Demo deployment、health checks、backups、abuse limits、quota policy 和 operator runbook。
-- 公开发布前完成 DGX Spark deployment validation，包括 host inventory、NVIDIA container runtime checks、service profile 和 end-to-end smoke testing。
+- 公开发布前完成 DGX Spark deployment validation，包括 host inventory、runner storage-quota probes、NVIDIA container runtime checks、service profile 和 end-to-end smoke testing。
 
 ### v0.3
 
