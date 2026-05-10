@@ -8,7 +8,7 @@ use shared::config::Config;
 use shared::storage::Storage;
 
 /// Cloneable state passed to every API handler.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct AppState {
     pub db: PgPool,
     pub config: Arc<Config>,

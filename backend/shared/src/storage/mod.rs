@@ -10,7 +10,7 @@ pub type Result<T> = std::result::Result<T, AppError>;
 
 /// Minimal object-storage interface used by handlers and workers.
 #[async_trait]
-pub trait Storage: Send + Sync {
+pub trait Storage: std::fmt::Debug + Send + Sync {
     /// Store content at a storage-relative key and return that opaque key.
     async fn put(&self, path: &str, content: &[u8]) -> Result<String>;
     /// Read content from a storage-relative key.

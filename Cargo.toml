@@ -14,6 +14,7 @@ edition = "2024"
 
 [workspace.lints.rust]
 let_underscore_drop = "warn"
+missing_debug_implementations = "warn"
 unsafe_code = "deny"
 unreachable_pub = "warn"
 
@@ -27,6 +28,7 @@ clone_on_ref_ptr = "warn"
 dbg_macro = "warn"
 enum_glob_use = "warn"
 expect_used = "warn"
+future_not_send = "warn"
 indexing_slicing = "warn"
 panic = "warn"
 panic_in_result_fn = "warn"

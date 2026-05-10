@@ -213,7 +213,7 @@ impl ApiClient {
 
     async fn post_json<B, T>(&self, path: &str, body: &B, authenticated: bool) -> Result<T>
     where
-        B: Serialize + ?Sized,
+        B: Serialize + Sync + ?Sized,
         T: DeserializeOwned,
     {
         let request = self.request(Method::POST, path, authenticated)?.json(body);
@@ -228,7 +228,7 @@ impl ApiClient {
         password: &str,
     ) -> Result<T>
     where
-        B: Serialize + ?Sized,
+        B: Serialize + Sync + ?Sized,
         T: DeserializeOwned,
     {
         let request = self

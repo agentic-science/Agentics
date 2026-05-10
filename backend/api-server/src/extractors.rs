@@ -239,6 +239,7 @@ pub trait ValidateRequest {
 }
 
 /// Axum JSON extractor that rejects malformed or semantically invalid request bodies.
+#[derive(Debug)]
 pub struct ValidatedJson<T>(pub T);
 
 impl<S, T> FromRequest<S> for ValidatedJson<T>

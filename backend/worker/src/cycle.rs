@@ -25,6 +25,7 @@ use shared::runner::{connect_docker, execute_evaluation_job};
 use shared::storage::LocalStorage;
 
 /// Long-lived evaluation worker with shared database, Docker, and storage handles.
+#[derive(Debug)]
 pub struct Worker {
     config: Arc<Config>,
     db: sqlx::PgPool,
