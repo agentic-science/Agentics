@@ -6,7 +6,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 /// solution submission workflows.
 #[derive(Debug, Clone, Parser)]
 #[command(name = "agentics", version, about = "Agentics command line client")]
-pub struct Cli {
+pub(crate) struct Cli {
     /// Override the API origin, for example http://127.0.0.1:3100.
     #[arg(long, global = true, value_name = "URL")]
     pub api_base_url: Option<String>,
@@ -29,13 +29,13 @@ pub struct Cli {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 #[clap(rename_all = "kebab-case")]
-pub enum OutputFormat {
+pub(crate) enum OutputFormat {
     Table,
     Json,
 }
 
 #[derive(Debug, Clone, Subcommand)]
-pub enum Commands {
+pub(crate) enum Commands {
     /// Register a new agent and store its bearer token by default.
     Register(RegisterArgs),
     /// Inspect or configure authentication state.
@@ -57,7 +57,7 @@ pub enum Commands {
 }
 
 #[derive(Debug, Clone, Args)]
-pub struct RegisterArgs {
+pub(crate) struct RegisterArgs {
     /// Agent display name.
     #[arg(long)]
     pub name: String,
@@ -80,25 +80,25 @@ pub struct RegisterArgs {
 }
 
 #[derive(Debug, Clone, Args)]
-pub struct AuthArgs {
+pub(crate) struct AuthArgs {
     #[command(subcommand)]
     pub command: AuthCommand,
 }
 
 #[derive(Debug, Clone, Subcommand)]
-pub enum AuthCommand {
+pub(crate) enum AuthCommand {
     /// Show whether this CLI has a configured bearer token.
     Status,
 }
 
 #[derive(Debug, Clone, Args)]
-pub struct ConfigArgs {
+pub(crate) struct ConfigArgs {
     #[command(subcommand)]
     pub command: ConfigCommand,
 }
 
 #[derive(Debug, Clone, Subcommand)]
-pub enum ConfigCommand {
+pub(crate) enum ConfigCommand {
     /// Show the effective config after file, environment, and flag overrides.
     Show,
     /// Persist a config value to the selected config file.
@@ -111,19 +111,19 @@ pub enum ConfigCommand {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 #[clap(rename_all = "kebab-case")]
-pub enum ConfigKey {
+pub(crate) enum ConfigKey {
     ApiBaseUrl,
     Token,
 }
 
 #[derive(Debug, Clone, Args)]
-pub struct ChallengesArgs {
+pub(crate) struct ChallengesArgs {
     #[command(subcommand)]
     pub command: ChallengesCommand,
 }
 
 #[derive(Debug, Clone, Subcommand)]
-pub enum ChallengesCommand {
+pub(crate) enum ChallengesCommand {
     /// List published challenges.
     List,
     /// Show challenge metadata and statement.
@@ -131,13 +131,13 @@ pub enum ChallengesCommand {
 }
 
 #[derive(Debug, Clone, Args)]
-pub struct ChallengeCreatorArgs {
+pub(crate) struct ChallengeCreatorArgs {
     #[command(subcommand)]
     pub command: ChallengeCreatorCommand,
 }
 
 #[derive(Debug, Clone, Subcommand)]
-pub enum ChallengeCreatorCommand {
+pub(crate) enum ChallengeCreatorCommand {
     /// Create or inspect a challenge draft.
     Draft {
         #[command(subcommand)]
@@ -146,7 +146,7 @@ pub enum ChallengeCreatorCommand {
 }
 
 #[derive(Debug, Clone, Subcommand)]
-pub enum ChallengeDraftCommand {
+pub(crate) enum ChallengeDraftCommand {
     /// Create a draft from a checked-out challenge repository path.
     Create {
         #[arg(long)]
@@ -226,7 +226,7 @@ pub enum ChallengeDraftCommand {
 }
 
 #[derive(Debug, Clone, Args)]
-pub struct AdminAuthArgs {
+pub(crate) struct AdminAuthArgs {
     #[arg(long)]
     pub admin_username: String,
     #[arg(long)]
@@ -234,7 +234,7 @@ pub struct AdminAuthArgs {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-pub enum ChallengePrivateAssetKindArg {
+pub(crate) enum ChallengePrivateAssetKindArg {
     #[value(name = "private_benchmark_data")]
     BenchmarkData,
     #[value(name = "private_scorer_package")]
@@ -246,7 +246,7 @@ pub enum ChallengePrivateAssetKindArg {
 }
 
 #[derive(Debug, Clone, Args)]
-pub struct InitSolutionArgs {
+pub(crate) struct InitSolutionArgs {
     /// Challenge id or slug to initialize a solution for.
     pub challenge_id: String,
 
@@ -265,7 +265,7 @@ pub struct InitSolutionArgs {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 #[clap(rename_all = "kebab-case")]
-pub enum SolutionRuntimeProfile {
+pub(crate) enum SolutionRuntimeProfile {
     #[value(name = "python-cpu")]
     Python,
     #[value(name = "rust-cpu")]
@@ -278,14 +278,14 @@ pub enum SolutionRuntimeProfile {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 #[clap(rename_all = "kebab-case")]
-pub enum SolutionInterface {
+pub(crate) enum SolutionInterface {
     ChallengeDefined,
     Stdio,
     FileSystem,
 }
 
 #[derive(Debug, Clone, Args)]
-pub struct SubmitArgs {
+pub(crate) struct SubmitArgs {
     /// Challenge id or slug to submit against.
     pub challenge_id: String,
 
@@ -315,7 +315,7 @@ pub struct SubmitArgs {
 }
 
 #[derive(Debug, Clone, Args)]
-pub struct ValidateArgs {
+pub(crate) struct ValidateArgs {
     /// Challenge id or slug to validate against.
     pub challenge_id: String,
 
@@ -361,7 +361,7 @@ pub struct ValidateArgs {
 }
 
 #[derive(Debug, Clone, Args)]
-pub struct StatusArgs {
+pub(crate) struct StatusArgs {
     /// Solution submission or validation run id returned by `agentics submit` or `agentics validate`.
     pub id: String,
 
@@ -372,7 +372,7 @@ pub struct StatusArgs {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 #[clap(rename_all = "kebab-case")]
-pub enum StatusKind {
+pub(crate) enum StatusKind {
     Auto,
     SolutionSubmission,
     ValidationRun,

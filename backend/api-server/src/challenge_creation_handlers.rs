@@ -186,7 +186,7 @@ pub async fn upload_challenge_private_asset(
     let asset = match asset {
         Ok(asset) => asset,
         Err(error) => {
-            let _ = state.storage.delete(&storage_path).await;
+            drop(state.storage.delete(&storage_path).await);
             return Err(map_unique_conflict(error));
         }
     };

@@ -19,7 +19,7 @@ use crate::cli::{
 use crate::config::{CliConfig, ConfigStore, ResolvedSettings, normalize_api_base_url};
 use crate::{output, package};
 
-pub async fn register(
+pub(crate) async fn register(
     args: RegisterArgs,
     output_format: cli::OutputFormat,
     store: &ConfigStore,
@@ -46,7 +46,7 @@ pub async fn register(
     output::render_register_agent(&response, saved_token, settings, output_format)
 }
 
-pub fn set_config(
+pub(crate) fn set_config(
     key: ConfigKey,
     value: &str,
     output_format: cli::OutputFormat,
@@ -72,7 +72,7 @@ pub fn set_config(
     output::render_config_set(updated_key, settings, output_format)
 }
 
-pub async fn challenge_draft(
+pub(crate) async fn challenge_draft(
     command: ChallengeDraftCommand,
     output_format: cli::OutputFormat,
     settings: &ResolvedSettings,
@@ -289,7 +289,7 @@ impl From<ChallengePrivateAssetKindArg> for ChallengePrivateAssetKind {
     }
 }
 
-pub async fn submit(
+pub(crate) async fn submit(
     args: SubmitArgs,
     output_format: cli::OutputFormat,
     settings: &ResolvedSettings,
@@ -320,7 +320,7 @@ pub async fn submit(
     output::render_create_solution_submission_batch(&responses, &package, output_format)
 }
 
-pub async fn validate(
+pub(crate) async fn validate(
     args: ValidateArgs,
     output_format: cli::OutputFormat,
     settings: &ResolvedSettings,

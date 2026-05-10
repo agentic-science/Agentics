@@ -169,7 +169,7 @@ mod tests {
             b"hello"
         );
         assert!(root.join("objects/a.txt").is_file());
-        let _ = std::fs::remove_dir_all(root);
+        drop(std::fs::remove_dir_all(root));
     }
 
     #[tokio::test]
@@ -181,7 +181,7 @@ mod tests {
             let result = storage.put(key, b"bad").await;
             assert!(matches!(result, Err(AppError::BadRequest(_))));
         }
-        let _ = std::fs::remove_dir_all(root);
+        drop(std::fs::remove_dir_all(root));
     }
 
     #[cfg(unix)]
@@ -196,8 +196,8 @@ mod tests {
 
         assert!(matches!(result, Err(AppError::BadRequest(_))));
         assert!(!outside.join("escape.txt").exists());
-        let _ = std::fs::remove_dir_all(root);
-        let _ = std::fs::remove_dir_all(outside);
+        drop(std::fs::remove_dir_all(root));
+        drop(std::fs::remove_dir_all(outside));
     }
 
     fn temp_storage_root(label: &str) -> PathBuf {

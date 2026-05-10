@@ -15,7 +15,7 @@ use shared::models::request::{
 };
 
 #[derive(Debug)]
-pub struct ApiStatusError {
+pub(crate) struct ApiStatusError {
     status: StatusCode,
     message: String,
 }
@@ -25,7 +25,7 @@ impl ApiStatusError {
         Self { status, message }
     }
 
-    pub fn status(&self) -> StatusCode {
+    pub(crate) fn status(&self) -> StatusCode {
         self.status
     }
 }
@@ -39,14 +39,14 @@ impl std::fmt::Display for ApiStatusError {
 impl std::error::Error for ApiStatusError {}
 
 #[derive(Debug, Clone)]
-pub struct ApiClient {
+pub(crate) struct ApiClient {
     http: Client,
     base_url: Url,
     token: Option<String>,
 }
 
 impl ApiClient {
-    pub fn new(api_base_url: &str, token: Option<String>) -> Result<Self> {
+    pub(crate) fn new(api_base_url: &str, token: Option<String>) -> Result<Self> {
         Ok(Self {
             http: Client::new(),
             base_url: parse_base_url(api_base_url)?,
@@ -54,20 +54,26 @@ impl ApiClient {
         })
     }
 
-    pub async fn register(&self, request: &RegisterAgentRequest) -> Result<RegisterAgentResponse> {
+    pub(crate) async fn register(
+        &self,
+        request: &RegisterAgentRequest,
+    ) -> Result<RegisterAgentResponse> {
         self.post_json("/api/agents/register", request, false).await
     }
 
-    pub async fn list_challenges(&self) -> Result<ChallengeListResponse> {
+    pub(crate) async fn list_challenges(&self) -> Result<ChallengeListResponse> {
         self.get_json("/api/public/challenges", false).await
     }
 
-    pub async fn get_challenge(&self, challenge_id: &str) -> Result<ChallengeDetailResponse> {
+    pub(crate) async fn get_challenge(
+        &self,
+        challenge_id: &str,
+    ) -> Result<ChallengeDetailResponse> {
         let path = format!("/api/public/challenges/{challenge_id}");
         self.get_json(&path, false).await
     }
 
-    pub async fn create_solution_submission(
+    pub(crate) async fn create_solution_submission(
         &self,
         request: &CreateSolutionSubmissionRequest,
     ) -> Result<CreateSolutionSubmissionResponse> {
@@ -75,14 +81,14 @@ impl ApiClient {
             .await
     }
 
-    pub async fn create_validation_run(
+    pub(crate) async fn create_validation_run(
         &self,
         request: &CreateSolutionSubmissionRequest,
     ) -> Result<CreateSolutionSubmissionResponse> {
         self.post_json("/api/validation-runs", request, true).await
     }
 
-    pub async fn get_solution_submission(
+    pub(crate) async fn get_solution_submission(
         &self,
         solution_submission_id: &str,
     ) -> Result<SolutionSubmissionResponse> {
@@ -90,7 +96,7 @@ impl ApiClient {
         self.get_json(&path, true).await
     }
 
-    pub async fn get_validation_run(
+    pub(crate) async fn get_validation_run(
         &self,
         validation_run_id: &str,
     ) -> Result<SolutionSubmissionResponse> {
@@ -98,7 +104,7 @@ impl ApiClient {
         self.get_json(&path, true).await
     }
 
-    pub async fn create_challenge_draft(
+    pub(crate) async fn create_challenge_draft(
         &self,
         request: &CreateChallengeDraftRequest,
     ) -> Result<ChallengeDraftResponse> {
@@ -106,12 +112,15 @@ impl ApiClient {
             .await
     }
 
-    pub async fn get_challenge_draft(&self, draft_id: &str) -> Result<ChallengeDraftResponse> {
+    pub(crate) async fn get_challenge_draft(
+        &self,
+        draft_id: &str,
+    ) -> Result<ChallengeDraftResponse> {
         let path = format!("/api/creator/challenge-drafts/{draft_id}");
         self.get_json(&path, true).await
     }
 
-    pub async fn upload_challenge_private_asset(
+    pub(crate) async fn upload_challenge_private_asset(
         &self,
         draft_id: &str,
         request: &UploadChallengePrivateAssetRequest,
@@ -120,7 +129,7 @@ impl ApiClient {
         self.post_json(&path, request, true).await
     }
 
-    pub async fn validate_challenge_draft_admin(
+    pub(crate) async fn validate_challenge_draft_admin(
         &self,
         draft_id: &str,
         request: &ValidateChallengeDraftRequest,
@@ -132,7 +141,7 @@ impl ApiClient {
             .await
     }
 
-    pub async fn approve_challenge_draft_admin(
+    pub(crate) async fn approve_challenge_draft_admin(
         &self,
         draft_id: &str,
         request: &ReviewChallengeDraftRequest,
@@ -144,7 +153,7 @@ impl ApiClient {
             .await
     }
 
-    pub async fn reject_challenge_draft_admin(
+    pub(crate) async fn reject_challenge_draft_admin(
         &self,
         draft_id: &str,
         request: &ReviewChallengeDraftRequest,
@@ -156,7 +165,7 @@ impl ApiClient {
             .await
     }
 
-    pub async fn publish_challenge_draft_admin(
+    pub(crate) async fn publish_challenge_draft_admin(
         &self,
         draft_id: &str,
         request: &ValidateChallengeDraftRequest,
@@ -168,7 +177,7 @@ impl ApiClient {
             .await
     }
 
-    pub async fn abandon_challenge_draft_admin(
+    pub(crate) async fn abandon_challenge_draft_admin(
         &self,
         draft_id: &str,
         request: &ReviewChallengeDraftRequest,
@@ -180,7 +189,7 @@ impl ApiClient {
             .await
     }
 
-    pub async fn cleanup_challenge_drafts_admin(
+    pub(crate) async fn cleanup_challenge_drafts_admin(
         &self,
         username: &str,
         password: &str,

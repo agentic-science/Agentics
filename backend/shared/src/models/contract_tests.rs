@@ -51,27 +51,38 @@ fn assert_serializes_to_fixture(
     fixture: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let actual = serde_json::to_value(dto)?;
-    assert_no_explicit_nulls(&actual, "$");
+    ensure_no_explicit_nulls(&actual, "$")?;
     let expected: Value = serde_json::from_str(fixture)?;
-    assert_eq!(actual, expected);
+    if actual != expected {
+        return Err(std::io::Error::other(format!(
+            "serialized DTO did not match fixture\nactual: {actual:#}\nexpected: {expected:#}"
+        ))
+        .into());
+    }
     Ok(())
 }
 
-fn assert_no_explicit_nulls(value: &Value, path: &str) {
+fn ensure_no_explicit_nulls(value: &Value, path: &str) -> Result<(), Box<dyn std::error::Error>> {
     match value {
-        Value::Null => panic!("response DTO fixture contains explicit null at {path}"),
+        Value::Null => {
+            return Err(std::io::Error::other(format!(
+                "response DTO fixture contains explicit null at {path}"
+            ))
+            .into());
+        }
         Value::Array(items) => {
             for (index, item) in items.iter().enumerate() {
-                assert_no_explicit_nulls(item, &format!("{path}[{index}]"));
+                ensure_no_explicit_nulls(item, &format!("{path}[{index}]"))?;
             }
         }
         Value::Object(object) => {
             for (key, item) in object {
-                assert_no_explicit_nulls(item, &format!("{path}.{key}"));
+                ensure_no_explicit_nulls(item, &format!("{path}.{key}"))?;
             }
         }
         _ => {}
     }
+    Ok(())
 }
 
 fn challenge_detail_response() -> ChallengeDetailResponse {

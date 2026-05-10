@@ -145,7 +145,7 @@ pub fn connect_docker(config: &Config) -> Result<Docker> {
 }
 
 /// Pull an image before creating a runner container.
-pub async fn pre_pull_image(
+pub(super) async fn pre_pull_image(
     docker: &Docker,
     image: &str,
     docker_platform: DockerPlatform,

@@ -1265,7 +1265,7 @@ mod tests {
         create_bundle(&root, &spec);
 
         let result = validate_challenge_bundle(&root).await;
-        let _ = std::fs::remove_dir_all(root);
+        drop(std::fs::remove_dir_all(root));
 
         assert!(result.is_ok());
     }
@@ -1289,7 +1289,7 @@ mod tests {
         std::fs::write(root.join("public/input.txt"), "payload\n")
             .expect("failed to write source input");
         let present_result = validate_challenge_bundle(&root).await;
-        let _ = std::fs::remove_dir_all(root);
+        drop(std::fs::remove_dir_all(root));
 
         assert!(missing_result.is_err());
         assert!(present_result.is_ok());
@@ -1307,7 +1307,7 @@ mod tests {
         create_bundle(&root, &spec);
 
         let result = validate_challenge_bundle(&root).await;
-        let _ = std::fs::remove_dir_all(root);
+        drop(std::fs::remove_dir_all(root));
 
         assert!(result.is_err());
     }

@@ -645,7 +645,7 @@ mod tests {
     }
 
     fn cleanup(path: &Path) {
-        let _ = std::fs::remove_dir_all(path);
+        drop(std::fs::remove_dir_all(path));
     }
 
     fn write_valid_public_challenge(

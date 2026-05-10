@@ -214,8 +214,8 @@ mod tests {
         assert!(target_dir.join("main.py").is_file());
         assert!(target_dir.join("scripts/setup.sh").is_file());
 
-        let _ = std::fs::remove_file(zip_path);
-        let _ = std::fs::remove_dir_all(target_dir);
+        drop(std::fs::remove_file(zip_path));
+        drop(std::fs::remove_dir_all(target_dir));
     }
 
     #[tokio::test]
@@ -234,8 +234,8 @@ mod tests {
             matches!(result, Err(AppError::Validation(message)) if message.contains("at most"))
         );
 
-        let _ = std::fs::remove_file(zip_path);
-        let _ = std::fs::remove_dir_all(target_dir);
+        drop(std::fs::remove_file(zip_path));
+        drop(std::fs::remove_dir_all(target_dir));
     }
 
     #[cfg(unix)]
@@ -255,7 +255,7 @@ mod tests {
             "symlink target should not be counted: {bytes}"
         );
 
-        let _ = std::fs::remove_file(outside);
-        let _ = std::fs::remove_dir_all(root);
+        drop(std::fs::remove_file(outside));
+        drop(std::fs::remove_dir_all(root));
     }
 }

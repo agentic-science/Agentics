@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 const DEFAULT_API_BASE_URL: &str = "http://127.0.0.1:3100";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CliConfig {
+pub(crate) struct CliConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub api_base_url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -18,13 +18,13 @@ pub struct CliConfig {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Environment {
+pub(crate) struct Environment {
     pub api_base_url: Option<String>,
     pub token: Option<String>,
 }
 
 impl Environment {
-    pub fn from_process() -> Self {
+    pub(crate) fn from_process() -> Self {
         Self {
             api_base_url: read_non_empty_env("AGENTICS_API_BASE_URL"),
             token: read_non_empty_env("AGENTICS_TOKEN"),
@@ -33,7 +33,7 @@ impl Environment {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SettingSource {
+pub(crate) enum SettingSource {
     Flag,
     Environment,
     ConfigFile,
@@ -55,7 +55,7 @@ impl fmt::Display for SettingSource {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ResolvedSettings {
+pub(crate) struct ResolvedSettings {
     pub api_base_url: String,
     pub api_base_url_source: SettingSource,
     pub token: Option<String>,
@@ -64,7 +64,7 @@ pub struct ResolvedSettings {
 }
 
 impl ResolvedSettings {
-    pub fn resolve(
+    pub(crate) fn resolve(
         flag_api_base_url: Option<&str>,
         flag_token: Option<&str>,
         env: &Environment,
@@ -89,32 +89,32 @@ impl ResolvedSettings {
         })
     }
 
-    pub fn token_configured(&self) -> bool {
+    pub(crate) fn token_configured(&self) -> bool {
         self.token.is_some()
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct ConfigStore {
+pub(crate) struct ConfigStore {
     path: PathBuf,
 }
 
 impl ConfigStore {
-    pub fn new(path: PathBuf) -> Self {
+    pub(crate) fn new(path: PathBuf) -> Self {
         Self { path }
     }
 
-    pub fn default_path() -> Result<PathBuf> {
+    pub(crate) fn default_path() -> Result<PathBuf> {
         let config_dir = dirs::config_dir()
             .ok_or_else(|| anyhow!("could not determine a user config directory"))?;
         Ok(config_dir.join("agentics").join("config.toml"))
     }
 
-    pub fn path(&self) -> &Path {
+    pub(crate) fn path(&self) -> &Path {
         &self.path
     }
 
-    pub fn load(&self) -> Result<CliConfig> {
+    pub(crate) fn load(&self) -> Result<CliConfig> {
         if !fs::exists(&self.path)
             .with_context(|| format!("failed to inspect config file {}", self.path.display()))?
         {
@@ -127,7 +127,7 @@ impl ConfigStore {
             .with_context(|| format!("failed to parse config file {}", self.path.display()))
     }
 
-    pub fn save(&self, config: &CliConfig) -> Result<()> {
+    pub(crate) fn save(&self, config: &CliConfig) -> Result<()> {
         if let Some(parent) = self.path.parent() {
             fs::create_dir_all(parent).with_context(|| {
                 format!("failed to create config directory {}", parent.display())
@@ -140,7 +140,7 @@ impl ConfigStore {
     }
 }
 
-pub fn normalize_api_base_url(value: &str) -> Result<String> {
+pub(crate) fn normalize_api_base_url(value: &str) -> Result<String> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
         bail!("API base URL must not be empty");
@@ -212,7 +212,7 @@ fn write_private_file(path: &Path, bytes: &[u8]) -> io::Result<()> {
         .and_then(|()| set_private_file_permissions(path));
 
     if write_result.is_err() {
-        let _ = fs::remove_file(&temp_path);
+        drop(fs::remove_file(&temp_path));
     }
 
     write_result

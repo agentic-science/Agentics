@@ -13,7 +13,7 @@ use zip::write::SimpleFileOptions;
 const REQUIRED_MANIFEST: &str = shared::zip_project::ZIP_PROJECT_MANIFEST_FILE;
 
 #[derive(Debug, Clone)]
-pub struct SolutionPackage {
+pub(crate) struct SolutionPackage {
     pub workspace_dir: PathBuf,
     pub bytes: Vec<u8>,
     pub file_count: usize,
@@ -48,7 +48,7 @@ struct CollectedPackageFiles {
     uncompressed_bytes: u64,
 }
 
-pub fn package_solution_workspace(workspace_dir: &Path) -> Result<SolutionPackage> {
+pub(crate) fn package_solution_workspace(workspace_dir: &Path) -> Result<SolutionPackage> {
     package_solution_workspace_with_limits(workspace_dir, PackageLimits::DEFAULT)
 }
 

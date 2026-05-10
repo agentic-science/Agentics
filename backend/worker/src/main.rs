@@ -23,7 +23,7 @@ async fn main() -> anyhow::Result<()> {
     let config = Arc::new(Config::from_env()?);
     info!("starting worker");
 
-    let worker = Worker::new(config.clone()).await?;
+    let worker = Worker::new(Arc::clone(&config)).await?;
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 

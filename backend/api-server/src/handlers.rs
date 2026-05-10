@@ -238,7 +238,7 @@ async fn create_solution_submission_for_mode(
     let solution_submission = match solution_submission {
         Ok(solution_submission) => solution_submission,
         Err(error) => {
-            let _ = state.storage.delete(&artifact_path).await;
+            drop(state.storage.delete(&artifact_path).await);
             return Err(error);
         }
     };
@@ -986,7 +986,7 @@ mod tests {
         let summary = read_solution_submission_artifact_summary(&path.to_string_lossy(), bytes)
             .await
             .expect("summary should succeed");
-        let _ = std::fs::remove_file(path);
+        drop(std::fs::remove_file(path));
 
         assert_eq!(summary.file_count, 1);
         assert_eq!(summary.files[0].path, "main.py");
@@ -1003,7 +1003,7 @@ mod tests {
         let bytes = std::fs::read(&path).expect("failed to read test zip");
         let result =
             read_solution_submission_artifact_summary(&path.to_string_lossy(), bytes).await;
-        let _ = std::fs::remove_file(path);
+        drop(std::fs::remove_file(path));
 
         assert!(
             matches!(result, Err(AppError::BadRequest(message)) if message.contains("at most"))
@@ -1025,7 +1025,7 @@ mod tests {
         let summary = read_solution_submission_artifact_summary(&path.to_string_lossy(), bytes)
             .await
             .expect("summary should succeed");
-        let _ = std::fs::remove_file(path);
+        drop(std::fs::remove_file(path));
 
         assert_eq!(summary.file_count, 1);
         assert_eq!(summary.files[0].path, "main.py");

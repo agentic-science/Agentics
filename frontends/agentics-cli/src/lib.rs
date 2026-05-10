@@ -37,7 +37,7 @@ pub async fn run_from_env() -> Result<()> {
     Ok(())
 }
 
-pub async fn execute(cli: Cli, env: Environment) -> Result<String> {
+pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
     let store = ConfigStore::new(config_path(&cli)?);
     let file_config = store.load()?;
     let settings = ResolvedSettings::resolve(

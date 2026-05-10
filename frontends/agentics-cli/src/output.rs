@@ -14,7 +14,7 @@ use crate::config::ResolvedSettings;
 use crate::package::SolutionPackage;
 use crate::workspace::InitSolutionSummary;
 
-pub fn render_register_agent(
+pub(crate) fn render_register_agent(
     response: &RegisterAgentResponse,
     saved_token: bool,
     settings: &ResolvedSettings,
@@ -41,7 +41,10 @@ pub fn render_register_agent(
     }
 }
 
-pub fn render_auth_status(settings: &ResolvedSettings, format: OutputFormat) -> Result<String> {
+pub(crate) fn render_auth_status(
+    settings: &ResolvedSettings,
+    format: OutputFormat,
+) -> Result<String> {
     match format {
         OutputFormat::Json => pretty_json(&json!({
             "api_base_url": settings.api_base_url,
@@ -65,7 +68,7 @@ pub fn render_auth_status(settings: &ResolvedSettings, format: OutputFormat) -> 
     }
 }
 
-pub fn render_config_set(
+pub(crate) fn render_config_set(
     key: &str,
     settings: &ResolvedSettings,
     format: OutputFormat,
@@ -82,7 +85,7 @@ pub fn render_config_set(
     }
 }
 
-pub fn render_challenge_draft(
+pub(crate) fn render_challenge_draft(
     response: &ChallengeDraftResponse,
     format: OutputFormat,
 ) -> Result<String> {
@@ -109,7 +112,7 @@ pub fn render_challenge_draft(
     }
 }
 
-pub fn render_challenge_private_asset(
+pub(crate) fn render_challenge_private_asset(
     response: &ChallengePrivateAssetResponse,
     format: OutputFormat,
 ) -> Result<String> {
@@ -128,7 +131,7 @@ pub fn render_challenge_private_asset(
     }
 }
 
-pub fn render_challenge_draft_cleanup(
+pub(crate) fn render_challenge_draft_cleanup(
     response: &ChallengeDraftCleanupResponse,
     format: OutputFormat,
 ) -> Result<String> {
@@ -141,7 +144,7 @@ pub fn render_challenge_draft_cleanup(
     }
 }
 
-pub fn render_challenge_list(
+pub(crate) fn render_challenge_list(
     response: &ChallengeListResponse,
     format: OutputFormat,
 ) -> Result<String> {
@@ -169,7 +172,7 @@ pub fn render_challenge_list(
     }
 }
 
-pub fn render_challenge_detail(
+pub(crate) fn render_challenge_detail(
     response: &ChallengeDetailResponse,
     format: OutputFormat,
 ) -> Result<String> {
@@ -206,7 +209,10 @@ pub fn render_challenge_detail(
     }
 }
 
-pub fn render_init_solution(summary: &InitSolutionSummary, format: OutputFormat) -> Result<String> {
+pub(crate) fn render_init_solution(
+    summary: &InitSolutionSummary,
+    format: OutputFormat,
+) -> Result<String> {
     match format {
         OutputFormat::Json => pretty_json(summary),
         OutputFormat::Table => Ok(format!(
@@ -221,7 +227,7 @@ pub fn render_init_solution(summary: &InitSolutionSummary, format: OutputFormat)
     }
 }
 
-pub fn render_create_solution_submission(
+pub(crate) fn render_create_solution_submission(
     response: &CreateSolutionSubmissionResponse,
     package: &SolutionPackage,
     format: OutputFormat,
@@ -251,7 +257,7 @@ pub fn render_create_solution_submission(
     }
 }
 
-pub fn render_create_solution_submission_batch(
+pub(crate) fn render_create_solution_submission_batch(
     responses: &[CreateSolutionSubmissionResponse],
     package: &SolutionPackage,
     format: OutputFormat,
@@ -262,7 +268,7 @@ pub fn render_create_solution_submission_batch(
     }
 }
 
-pub fn render_create_validation_run(
+pub(crate) fn render_create_validation_run(
     response: &CreateSolutionSubmissionResponse,
     package: &SolutionPackage,
     format: OutputFormat,
@@ -292,7 +298,7 @@ pub fn render_create_validation_run(
     }
 }
 
-pub fn render_create_validation_run_batch(
+pub(crate) fn render_create_validation_run_batch(
     responses: &[CreateSolutionSubmissionResponse],
     package: &SolutionPackage,
     format: OutputFormat,
@@ -303,7 +309,7 @@ pub fn render_create_validation_run_batch(
     }
 }
 
-pub fn render_solution_submission_status(
+pub(crate) fn render_solution_submission_status(
     response: &SolutionSubmissionResponse,
     format: OutputFormat,
 ) -> Result<String> {
@@ -348,7 +354,7 @@ pub fn render_solution_submission_status(
     }
 }
 
-pub fn render_validation_run_status(
+pub(crate) fn render_validation_run_status(
     response: &SolutionSubmissionResponse,
     format: OutputFormat,
 ) -> Result<String> {
@@ -392,7 +398,7 @@ pub fn render_validation_run_status(
     }
 }
 
-pub fn render_validation_run_status_batch(
+pub(crate) fn render_validation_run_status_batch(
     responses: &[SolutionSubmissionResponse],
     format: OutputFormat,
 ) -> Result<String> {

@@ -28,7 +28,7 @@ fi
 "#;
 
 #[derive(Debug, Clone, Serialize)]
-pub struct InitSolutionSummary {
+pub(crate) struct InitSolutionSummary {
     pub workspace_dir: PathBuf,
     pub challenge_id: String,
     pub challenge_title: String,
@@ -37,7 +37,7 @@ pub struct InitSolutionSummary {
     pub interface: String,
 }
 
-pub fn init_solution_workspace(
+pub(crate) fn init_solution_workspace(
     challenge: &ChallengeDetailResponse,
     dir: Option<PathBuf>,
     runtime_profile: SolutionRuntimeProfile,
@@ -67,7 +67,7 @@ pub fn init_solution_workspace(
         .and_then(|_| install_pre_commit_hook(&workspace_dir));
 
     if let Err(error) = result {
-        let _ = fs::remove_dir_all(&workspace_dir);
+        drop(fs::remove_dir_all(&workspace_dir));
         return Err(error);
     }
 
