@@ -10,6 +10,7 @@ use helpers::{
     solution_zip_base64, spawn_app_with_config, test_config, zip_project_zip_base64,
 };
 use serde_json::json;
+use shared::{db, error::AppError, models::challenge_creation::ChallengePrivateAssetKind};
 
 fn creator_auth(
     request: reqwest::RequestBuilder,
@@ -586,6 +587,114 @@ async fn private_asset_upload_rejects_duplicate_asset_id(pool: sqlx::PgPool) {
         .expect("asset request");
         assert_eq!(response.status(), expected_status);
     }
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("storage tempdir");
+    let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
+    let config = test_config(storage.path(), seeded_challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+    let creator = create_creator_session(&pool, 1001, "creator").await;
+
+    let mut manifest = manifest_json("new_challenge", "v1", None);
+    manifest["private_assets"] = json!([
+        {
+            "asset_id": "official-cases-a",
+            "kind": "private_benchmark_data",
+            "required": false
+        },
+        {
+            "asset_id": "official-cases-b",
+            "kind": "private_benchmark_data",
+            "required": false
+        }
+    ]);
+    let draft: serde_json::Value = creator_auth(
+        client.post(api_url(&app, "/api/creator/challenge-drafts")),
+        &creator,
+    )
+    .json(&json!({
+        "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
+        "pr_number": 10,
+        "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/10",
+        "commit_sha": "0123456789abcdef",
+        "challenge_path": "challenges/sample-sum",
+        "pr_author_github_user_id": 1001,
+        "manifest": manifest
+    }))
+    .send()
+    .await
+    .expect("draft request")
+    .error_for_status()
+    .expect("draft should create")
+    .json()
+    .await
+    .expect("draft json");
+    let draft_id = draft["id"].as_str().expect("draft id").to_string();
+
+    let input_a = db::CreateChallengePrivateAssetInput {
+        asset_id_row: uuid::Uuid::new_v4().to_string(),
+        draft_id: draft_id.clone(),
+        asset_id: "official-cases-a".to_string(),
+        kind: ChallengePrivateAssetKind::PrivateBenchmarkData,
+        required: false,
+        size_bytes: 8,
+        sha256: "a".repeat(64),
+        storage_uri: "challenge-drafts/test/private-assets/a.bin".to_string(),
+        uploader_agent_id: creator.agent_id.clone(),
+    };
+    let input_b = db::CreateChallengePrivateAssetInput {
+        asset_id_row: uuid::Uuid::new_v4().to_string(),
+        draft_id: draft_id.clone(),
+        asset_id: "official-cases-b".to_string(),
+        kind: ChallengePrivateAssetKind::PrivateBenchmarkData,
+        required: false,
+        size_bytes: 8,
+        sha256: "b".repeat(64),
+        storage_uri: "challenge-drafts/test/private-assets/b.bin".to_string(),
+        uploader_agent_id: creator.agent_id.clone(),
+    };
+
+    let create_a = db::create_challenge_private_asset(&pool, &input_a, 12);
+    let create_b = db::create_challenge_private_asset(&pool, &input_b, 12);
+    let (result_a, result_b) = tokio::join!(create_a, create_b);
+
+    let mut created = 0;
+    let mut rejected = 0;
+    for result in [result_a, result_b] {
+        match result {
+            Ok(_) => created += 1,
+            Err(AppError::TooManyRequests(message)) => {
+                assert!(
+                    message.contains("private asset quota exceeded"),
+                    "unexpected quota message: {message}"
+                );
+                rejected += 1;
+            }
+            Err(error) => panic!("unexpected private asset admission error: {error:?}"),
+        }
+    }
+    assert_eq!(created, 1);
+    assert_eq!(rejected, 1);
+
+    let stored_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::BIGINT FROM challenge_private_assets WHERE draft_id = $1",
+    )
+    .bind(&draft_id)
+    .fetch_one(&pool)
+    .await
+    .expect("asset count query");
+    let stored_bytes: i64 = sqlx::query_scalar(
+        "SELECT COALESCE(SUM(size_bytes), 0)::BIGINT FROM challenge_private_assets WHERE draft_id = $1",
+    )
+    .bind(&draft_id)
+    .fetch_one(&pool)
+    .await
+    .expect("asset byte query");
+    assert_eq!(stored_count, 1);
+    assert_eq!(stored_bytes, 8);
 }
 
 #[sqlx::test(migrations = "../migrations")]

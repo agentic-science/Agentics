@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use serde_json::Value;
-use sqlx::{PgPool, Row};
+use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use crate::error::{AppError, Result};
 use crate::models::challenge_creation::{
@@ -198,27 +198,30 @@ pub async fn count_recent_challenge_draft_validations(
     Ok(count)
 }
 
-/// Sum private asset bytes already attached to a draft.
-pub async fn sum_private_asset_bytes_for_draft(pool: &PgPool, draft_id: &str) -> Result<i64> {
-    let bytes = sqlx::query_scalar::<_, i64>(
-        r#"
-        SELECT COALESCE(SUM(size_bytes), 0)::BIGINT
-        FROM challenge_private_assets
-        WHERE draft_id = $1
-        "#,
-    )
-    .bind(draft_id)
-    .fetch_one(pool)
-    .await?;
-
-    Ok(bytes)
-}
-
 /// Insert a private benchmark asset record for a draft.
 pub async fn create_challenge_private_asset(
     pool: &PgPool,
     input: &CreateChallengePrivateAssetInput,
+    max_bytes_per_draft: u64,
 ) -> Result<ChallengePrivateAssetResponse> {
+    let max_bytes_per_draft = i64::try_from(max_bytes_per_draft).map_err(|_| {
+        AppError::Internal("private asset quota limit exceeds supported range".to_string())
+    })?;
+    let mut tx = pool.begin().await?;
+    let scope = format!("challenge-draft:{}:private-assets", input.draft_id);
+    lock_quota_scope(&mut tx, &scope).await?;
+
+    let existing_bytes = sum_private_asset_bytes_for_draft_tx(&mut tx, &input.draft_id).await?;
+    let next_total = existing_bytes
+        .checked_add(input.size_bytes)
+        .ok_or_else(|| AppError::BadRequest("private asset size overflow".to_string()))?;
+    if next_total > max_bytes_per_draft {
+        return Err(AppError::TooManyRequests(format!(
+            "private asset quota exceeded for draft `{}`: {} of {} bytes would be used",
+            input.draft_id, next_total, max_bytes_per_draft
+        )));
+    }
+
     let row = sqlx::query(
         r#"
         INSERT INTO challenge_private_assets (
@@ -245,10 +248,57 @@ pub async fn create_challenge_private_asset(
     .bind(&input.sha256)
     .bind(&input.storage_uri)
     .bind(&input.uploader_agent_id)
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await?;
 
-    row_to_private_asset_response(row)
+    let response = row_to_private_asset_response(row)?;
+    tx.commit().await?;
+    Ok(response)
+}
+
+async fn sum_private_asset_bytes_for_draft_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    draft_id: &str,
+) -> Result<i64> {
+    let bytes = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COALESCE(SUM(size_bytes), 0)::BIGINT
+        FROM challenge_private_assets
+        WHERE draft_id = $1
+        "#,
+    )
+    .bind(draft_id)
+    .fetch_one(&mut **tx)
+    .await?;
+
+    Ok(bytes)
+}
+
+async fn lock_quota_scope(tx: &mut Transaction<'_, Postgres>, scope: &str) -> Result<()> {
+    sqlx::query(
+        r#"
+        INSERT INTO quota_admission_locks (scope)
+        VALUES ($1)
+        ON CONFLICT (scope) DO NOTHING
+        "#,
+    )
+    .bind(scope)
+    .execute(&mut **tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        SELECT scope
+        FROM quota_admission_locks
+        WHERE scope = $1
+        FOR UPDATE
+        "#,
+    )
+    .bind(scope)
+    .fetch_one(&mut **tx)
+    .await?;
+
+    Ok(())
 }
 
 /// Record a validation outcome and move draft status accordingly.

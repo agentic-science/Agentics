@@ -160,16 +160,6 @@ pub async fn upload_challenge_private_asset(
             state.config.challenge_private_asset_bytes_per_draft
         )));
     }
-    let existing_bytes = db::sum_private_asset_bytes_for_draft(&state.db, &draft.id).await?;
-    let next_total = existing_bytes
-        .checked_add(asset_bytes.len() as i64)
-        .ok_or_else(|| AppError::BadRequest("private asset size overflow".to_string()))?;
-    if next_total as u64 > state.config.challenge_private_asset_bytes_per_draft {
-        return Err(AppError::TooManyRequests(format!(
-            "private asset quota exceeded for draft `{}`: {} of {} bytes would be used",
-            draft.id, next_total, state.config.challenge_private_asset_bytes_per_draft
-        )));
-    }
     let sha256 = challenge_creation::sha256_hex(&asset_bytes);
     let storage_path = format!(
         "challenge-drafts/{}/private-assets/{}-{}.bin",
@@ -189,6 +179,7 @@ pub async fn upload_challenge_private_asset(
             storage_uri,
             uploader_agent_id: creator.agent_id.clone(),
         },
+        state.config.challenge_private_asset_bytes_per_draft,
     )
     .await;
 

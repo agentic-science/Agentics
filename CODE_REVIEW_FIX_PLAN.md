@@ -30,7 +30,7 @@ requires a small paired frontend/backend change.
 | 2. Reviewer-visible commit and bundle identity | Fixed for MVP, exact server-side commit materialization deferred | `70a643d fix: freeze challenge draft review digest`; post-MVP hardening tracked in [GitHub issue #4](https://github.com/ifsheldon/Agentics/issues/4) |
 | 3. Immutable published challenge versions | Fixed | `a1bf7df fix: make published challenge versions immutable` |
 | 4. Freeze approved draft inputs | Fixed | `064aa11 fix: freeze approved challenge draft inputs`; `70a643d fix: freeze challenge draft review digest` |
-| 5. Transactional quota admission | Fixed for solution submissions | `4757d72 fix: serialize solution submission quota admission`; alternatives tracked in [GitHub issue #3](https://github.com/ifsheldon/Agentics/issues/3) |
+| 5. Transactional quota admission | Fixed | `4757d72 fix: serialize solution submission quota admission`; private asset admission fixed in working tree pending commit; alternatives tracked in [GitHub issue #3](https://github.com/ifsheldon/Agentics/issues/3) |
 | 6. Declared output symlink rejection | Fixed | `f96fb89 fix: reject symlinked solution outputs` |
 | 7. Leaderboard losing rerun metadata | Fixed | `ce1eeeb fix: keep leaderboard official metadata tied to best run` |
 | 8. Relative LocalStorage keys | Fixed | `f498fe7 fix: keep local storage keys relative` |
@@ -43,7 +43,7 @@ requires a small paired frontend/backend change.
 | 15. Globally unique worker instance ids | Fixed | `b223d8e fix: use UUID worker instance identifiers` |
 | 16. Runner module split | Fixed | `e54ff7e refactor: split runner support modules` |
 | 17. Web DTO contract fixtures | Fixed | `f1b0994 test: add web dto contract fixtures` |
-| Docker writable-layer quota | Deferred operational hardening | Tracked in [GitHub issue #2](https://github.com/ifsheldon/Agentics/issues/2) |
+| Docker writable-layer quota | Deferred operational hardening; hosted design decided | Tracked in [GitHub issue #2](https://github.com/ifsheldon/Agentics/issues/2) |
 
 ## Recommended Fix Order
 
@@ -283,8 +283,7 @@ capacity.
     transaction.
 - Keep PostgreSQL advisory locks, serializable transactions with retry, and
   counter/ledger tables as documented alternatives in GitHub issue #3.
-- Apply the same design to private asset upload quotas if those quotas remain
-  count-based.
+- Apply the same design to private asset upload quotas.
 - Keep artifact storage ordering safe:
   - If the artifact must be stored before DB insert, write to a temporary key and
     promote after transactional admission.
@@ -307,13 +306,25 @@ capacity.
 - Concurrent active queue admissions over the limit result in exactly the
   allowed count being queued.
 - Rejected submissions do not leave durable artifacts or jobs.
-- Private asset upload quota has a similar concurrent test if implemented now.
+- Private asset upload quota has a concurrent regression test that starts two
+  uploads below the per-asset limit but above the combined per-draft limit and
+  asserts that exactly one succeeds.
 
 **Commit shape**
 
 - Commit 1: official submission transactional quota admission.
-- Commit 2: private asset quota admission, if still needed.
+- Commit 2: private asset quota admission.
 - Commit 3: cleanup and operational docs.
+
+**Implemented**
+
+- Solution submission quota admission uses explicit lock rows and performs
+  quota checks inside the transaction that creates the submission and job.
+- Private asset quota admission now uses the same explicit lock-row pattern for
+  each draft's private assets, so the byte sum and asset-row insert are
+  serialized.
+- Concurrent private asset upload regression coverage asserts that exactly one
+  of two racing uploads can fit under the combined per-draft byte quota.
 
 ### 6. Reject declared output symlinks
 
@@ -652,6 +663,11 @@ usage mismatch around official results.
   solution submission detail, and admin capacity responses.
 - Reused the same JSON fixtures in frontend Zod schema tests so DTO drift is
   caught on both sides before hosted MVP work.
+- Added Rust `schemars` JSON Schema export for API DTOs and a frontend
+  `bun run generate:schemas` pipeline that converts those schemas into generated
+  Zod validators and TypeScript types. Frontend API clients now import generated
+  schemas from `frontends/web/src/lib/generated/schemas.ts` through the local
+  schema barrel.
 
 ## Resolved Decisions
 
@@ -668,3 +684,13 @@ These product and engineering choices are now fixed for the implementation plan:
 6. Exact server-side Git commit materialization is post-MVP hardening. For MVP,
    verified creator identity plus visible PR/commit/digest metadata is the trust
    boundary.
+7. Hosted runner disk isolation should use an Agentics-owned Docker daemon whose
+   data root lives on a loopback XFS image mounted with project quotas. Docker
+   writable-layer quotas should be enforced through `storage_opt.size` and
+   verified by a startup probe. Separately, solution setup, build, and run
+   phases, plus scorer prepare and score phases, should receive their writable
+   paths through per-phase loopback filesystem images so bind-mounted scratch
+   paths have hard limits as well.
+8. Strict host capability checks should use an explicit Agentics flag such as
+   `AGENTICS_HOST_PROBE_MODE=off|warn|require`, not the generic `CI` variable.
+   Mac-local development defaults to `off`; hosted DGX/staging uses `require`.
