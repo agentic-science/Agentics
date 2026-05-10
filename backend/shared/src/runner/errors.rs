@@ -20,6 +20,12 @@ pub(super) fn ensure_container_succeeded(
         ));
     }
     if outcome.exit_code != 0 {
+        let exit_code = i32::try_from(outcome.exit_code).map_err(|_| {
+            AppError::Internal(format!(
+                "container exit code {} is outside the supported i32 range",
+                outcome.exit_code
+            ))
+        })?;
         let message = append_log_excerpt(
             &format!("phase exited with status {}", outcome.exit_code),
             &outcome.logs,
@@ -28,7 +34,7 @@ pub(super) fn ensure_container_succeeded(
             phase,
             ZipProjectPhaseFailureReason::NonZeroExit,
             message,
-            Some(outcome.exit_code as i32),
+            Some(exit_code),
         ));
     }
     Ok(())

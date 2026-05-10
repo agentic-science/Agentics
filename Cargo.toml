@@ -18,9 +18,14 @@ unsafe_code = "deny"
 unreachable_pub = "warn"
 
 [workspace.lints.clippy]
+allow_attributes_without_reason = "warn"
 arithmetic_side_effects = "warn"
+cast_possible_truncation = "warn"
+cast_possible_wrap = "warn"
+cast_sign_loss = "warn"
 clone_on_ref_ptr = "warn"
 dbg_macro = "warn"
+enum_glob_use = "warn"
 expect_used = "warn"
 indexing_slicing = "warn"
 panic = "warn"
@@ -29,6 +34,7 @@ todo = "warn"
 unimplemented = "warn"
 unused_async = "warn"
 unwrap_used = "warn"
+wildcard_imports = "warn"
 
 [workspace.dependencies]
 shared = { path = "backend/shared" }

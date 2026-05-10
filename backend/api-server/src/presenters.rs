@@ -2,9 +2,11 @@
 
 use shared::db::{AgentRecord, ChallengeVersionRecord, SolutionSubmissionRecord};
 use shared::error::{AppError, Result};
-use shared::models::challenge::*;
+use shared::models::challenge::{ChallengeBundleSpec, ChallengeDetailResponse};
 use shared::models::evaluation::{EvaluationDto, ScoringMode};
-use shared::models::request::*;
+use shared::models::request::{
+    CreateSolutionSubmissionResponse, RegisterAgentResponse, SolutionSubmissionResponse,
+};
 
 /// Present a newly registered agent together with its one-time bearer token.
 pub fn present_register_agent(agent: &AgentRecord, token: &str) -> RegisterAgentResponse {

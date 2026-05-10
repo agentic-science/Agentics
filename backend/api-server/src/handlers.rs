@@ -15,7 +15,16 @@ use shared::db::{self, QueueEvaluationJobInput};
 use shared::error::{AppError, Result};
 use shared::models::challenge::CreateChallengeVersionResponse;
 use shared::models::evaluation::ScoringMode;
-use shared::models::request::*;
+use shared::models::request::{
+    AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto,
+    AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse, CreateChallengeRequest,
+    CreateChallengeVersionRequest, CreateDiscussionReplyRequest, CreateDiscussionThreadRequest,
+    CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse, DisableAgentResponse,
+    DiscussionListResponse, EvaluationJobResponse, HideSolutionSubmissionResponse,
+    LeaderboardResponse, PublicSolutionSubmissionListResponse, RegisterAgentRequest,
+    RegisterAgentResponse, SolutionSubmissionArtifactFileDto, SolutionSubmissionArtifactResponse,
+    SolutionSubmissionResponse,
+};
 use shared::zip_project::{
     MAX_ZIP_PROJECT_ARTIFACT_BYTES, MAX_ZIP_PROJECT_FILE_COUNT, MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES,
 };
@@ -856,7 +865,11 @@ fn read_solution_submission_artifact_summary_blocking(
         }
 
         let mut buf = Vec::new();
-        let compressed_size = file.compressed_size() as i64;
+        let compressed_size = i64::try_from(file.compressed_size()).map_err(|_| {
+            AppError::BadRequest(
+                "artifact ZIP entry compressed size exceeds supported range".to_string(),
+            )
+        })?;
         let projected_inline_text_bytes = total_inline_text_bytes.checked_add(size);
         let should_try_inline = size <= MAX_INLINE_TEXT_BYTES
             && projected_inline_text_bytes
@@ -874,7 +887,11 @@ fn read_solution_submission_artifact_summary_blocking(
 
         let content = if let Some(text) = inline_text {
             total_inline_text_bytes = total_inline_text_bytes
-                .checked_add(buf.len() as u64)
+                .checked_add(u64::try_from(buf.len()).map_err(|_| {
+                    AppError::BadRequest(
+                        "artifact inline text size exceeds supported range".to_string(),
+                    )
+                })?)
                 .ok_or_else(|| {
                     AppError::BadRequest("artifact inline text budget overflow".to_string())
                 })?;
@@ -885,7 +902,9 @@ fn read_solution_submission_artifact_summary_blocking(
 
         files.push(SolutionSubmissionArtifactFileDto {
             path: entry_path.clone(),
-            size: size as i64,
+            size: i64::try_from(size).map_err(|_| {
+                AppError::BadRequest("artifact ZIP entry size exceeds supported range".to_string())
+            })?,
             compressed_size,
             language: Some(infer_language(&entry_path)),
             is_text,
@@ -900,9 +919,15 @@ fn read_solution_submission_artifact_summary_blocking(
             .file_name()
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_default(),
-        archive_size: archive_size as i64,
-        file_count: files.len() as i64,
-        total_uncompressed_size: total_uncompressed_size as i64,
+        archive_size: i64::try_from(archive_size).map_err(|_| {
+            AppError::BadRequest("artifact ZIP size exceeds supported range".to_string())
+        })?,
+        file_count: i64::try_from(files.len()).map_err(|_| {
+            AppError::BadRequest("artifact ZIP file count exceeds supported range".to_string())
+        })?,
+        total_uncompressed_size: i64::try_from(total_uncompressed_size).map_err(|_| {
+            AppError::BadRequest("artifact ZIP expanded size exceeds supported range".to_string())
+        })?,
         files,
     })
 }

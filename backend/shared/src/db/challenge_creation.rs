@@ -456,7 +456,9 @@ pub async fn abandon_stale_challenge_drafts(pool: &PgPool, ttl_days: i64) -> Res
     .execute(pool)
     .await?;
 
-    Ok(result.rows_affected() as i64)
+    i64::try_from(result.rows_affected()).map_err(|_| {
+        AppError::Internal("abandoned draft count exceeds supported range".to_string())
+    })
 }
 
 /// List private assets eligible for cleanup because their draft did not publish.

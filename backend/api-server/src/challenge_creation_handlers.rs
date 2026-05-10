@@ -154,12 +154,18 @@ pub async fn upload_challenge_private_asset(
     }
 
     let asset_bytes = base64_decode(&body.asset_base64).ok_or(AppError::Base64)?;
-    if asset_bytes.len() as u64 > state.config.challenge_private_asset_bytes_per_draft {
+    let asset_size_bytes = u64::try_from(asset_bytes.len()).map_err(|_| {
+        AppError::BadRequest("private asset size exceeds supported range".to_string())
+    })?;
+    if asset_size_bytes > state.config.challenge_private_asset_bytes_per_draft {
         return Err(AppError::BadRequest(format!(
             "private asset must be at most {} bytes",
             state.config.challenge_private_asset_bytes_per_draft
         )));
     }
+    let asset_size_bytes_i64 = i64::try_from(asset_size_bytes).map_err(|_| {
+        AppError::BadRequest("private asset size exceeds supported database range".to_string())
+    })?;
     let sha256 = challenge_creation::sha256_hex(&asset_bytes);
     let storage_path = format!(
         "challenge-drafts/{}/private-assets/{}-{}.bin",
@@ -174,7 +180,7 @@ pub async fn upload_challenge_private_asset(
             asset_id: body.asset_id,
             kind: body.kind,
             required: requirement.required,
-            size_bytes: asset_bytes.len() as i64,
+            size_bytes: asset_size_bytes_i64,
             sha256,
             storage_uri,
             uploader_agent_id: creator.agent_id.clone(),
