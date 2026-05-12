@@ -365,15 +365,14 @@ pub(crate) struct StatusArgs {
     /// Solution submission or validation run id returned by `agentics submit` or `agentics validate`.
     pub id: String,
 
-    /// Which status endpoint to query. Auto tries a solution submission first, then a validation run on 404.
-    #[arg(long, value_enum, default_value_t = StatusKind::Auto)]
+    /// Which status endpoint to query.
+    #[arg(long, value_enum, required = true)]
     pub kind: StatusKind,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 #[clap(rename_all = "kebab-case")]
 pub(crate) enum StatusKind {
-    Auto,
     SolutionSubmission,
     ValidationRun,
 }

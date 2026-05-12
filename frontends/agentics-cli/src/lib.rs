@@ -26,7 +26,7 @@ mod workspace;
 use anyhow::Result;
 use clap::Parser;
 
-use crate::api::{ApiClient, ApiStatusError};
+use crate::api::ApiClient;
 use crate::cli::{
     AuthCommand, ChallengeCreatorCommand, ChallengesCommand, Cli, Commands, ConfigCommand,
     StatusKind,
@@ -109,25 +109,9 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
                     let response = client.get_validation_run(&args.id).await?;
                     output::render_validation_run_status(&response, cli.output)
                 }
-                StatusKind::Auto => match client.get_solution_submission(&args.id).await {
-                    Ok(response) => {
-                        output::render_solution_submission_status(&response, cli.output)
-                    }
-                    Err(error) if is_not_found(&error) => {
-                        let response = client.get_validation_run(&args.id).await?;
-                        output::render_validation_run_status(&response, cli.output)
-                    }
-                    Err(error) => Err(error),
-                },
             }
         }
     }
-}
-
-fn is_not_found(error: &anyhow::Error) -> bool {
-    error
-        .downcast_ref::<ApiStatusError>()
-        .is_some_and(|api_error| api_error.status() == reqwest::StatusCode::NOT_FOUND)
 }
 
 fn config_path(cli: &Cli) -> Result<std::path::PathBuf> {
@@ -458,6 +442,8 @@ mod tests {
             "test-token",
             "status",
             "solution_submission-1",
+            "--kind",
+            "solution-submission",
         ]);
 
         let output = execute(cli, Environment::default())
@@ -469,17 +455,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn status_falls_back_to_validation_run() {
+    async fn status_fetches_explicit_validation_run() {
         let server = MockServer::start().await;
-        Mock::given(method("GET"))
-            .and(path("/api/solution-submissions/validation-1"))
-            .and(header("authorization", "Bearer test-token"))
-            .respond_with(ResponseTemplate::new(404).set_body_json(json!({
-                "error": "not_found",
-                "message": "solution submission not found"
-            })))
-            .mount(&server)
-            .await;
         Mock::given(method("GET"))
             .and(path("/api/validation-runs/validation-1"))
             .and(header("authorization", "Bearer test-token"))
@@ -531,6 +508,8 @@ mod tests {
             "test-token",
             "status",
             "validation-1",
+            "--kind",
+            "validation-run",
         ]);
 
         let output = execute(cli, Environment::default())
@@ -546,13 +525,20 @@ mod tests {
         assert!(
             requests
                 .iter()
-                .any(|request| request.url.path() == "/api/solution-submissions/validation-1")
+                .any(|request| request.url.path() == "/api/validation-runs/validation-1")
         );
         assert!(
             requests
                 .iter()
-                .any(|request| request.url.path() == "/api/validation-runs/validation-1")
+                .all(|request| request.url.path() != "/api/solution-submissions/validation-1")
         );
+    }
+
+    #[test]
+    fn status_requires_explicit_kind() {
+        let result = Cli::try_parse_from(["agentics", "status", "submission-1"]);
+
+        assert!(result.is_err());
     }
 
     #[tokio::test]

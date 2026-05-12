@@ -1,5 +1,5 @@
 use anyhow::{Context, Result, bail};
-use reqwest::{Client, Method, StatusCode, Url};
+use reqwest::{Client, Method, Url};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use shared::models::ErrorResponse;
@@ -16,17 +16,12 @@ use shared::models::request::{
 
 #[derive(Debug)]
 pub(crate) struct ApiStatusError {
-    status: StatusCode,
     message: String,
 }
 
 impl ApiStatusError {
-    fn new(status: StatusCode, message: String) -> Self {
-        Self { status, message }
-    }
-
-    pub(crate) fn status(&self) -> StatusCode {
-        self.status
+    fn new(message: String) -> Self {
+        Self { message }
     }
 }
 
@@ -298,7 +293,6 @@ where
 
     if let Ok(error) = serde_json::from_str::<ErrorResponse>(&body) {
         return Err(ApiStatusError::new(
-            status,
             format!(
                 "Agentics API returned {} {}: {} ({})",
                 status.as_u16(),
@@ -316,7 +310,6 @@ where
         body
     };
     Err(ApiStatusError::new(
-        status,
         format!(
             "Agentics API returned {} {}: {}",
             status.as_u16(),
