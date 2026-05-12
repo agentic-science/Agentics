@@ -105,6 +105,15 @@ The script checks:
 - Worker heartbeat when credentials are available.
 - Frontend reachability when `AGENTICS_WEB_BASE_URL` is set.
 
+For DGX Spark host inventory, run the Linux-gated check:
+
+```bash
+scripts/ops/check-dgx-spark-host.sh
+```
+
+Set `AGENTICS_DGX_RUN_DOCKER_SMOKE=1` only from an operator account that can
+access the intended Docker daemon.
+
 ## Logs
 
 Current logging is process stdout/stderr. For hosted rehearsal, run each service under a supervisor that captures logs, for example `systemd`, `tmux` with file logging, or a container runtime. Worker evaluation logs are written under `AGENTICS_STORAGE_ROOT/eval-artifacts/<job-id>/runner.log`.

@@ -570,8 +570,8 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 | `M0.2.5-DEPLOY-1：添加 hosted deployment baseline` | 已实现 | 已文档化 Mac-local MVP deployment rehearsal；DGX Spark hosted profile 仍为计划中。 |
 | `M0.2.5-OPS-1：添加 public quota 和 abuse limits` | 已实现 | 已记录 backend-enforced quotas、推荐 Mac-local MVP 数值和 reverse-proxy requirements。 |
 | `M0.2.5-OPS-2：添加 health checks、observability 和 runbook` | 已实现 | Operations runbook 和 `scripts/ops/check-local-mvp.sh` 覆盖 health、capacity、heartbeat、logs、failures 和 backups。 |
-| `M0.2.5-DGX-1：盘点 DGX Spark host 和 container runtime` | 计划中 | 等 hosted MVP target 可访问后执行；storage inventory 必须包含 loopback XFS project-quota support。 |
-| `M0.2.5-DGX-2：添加 DGX Spark deployment profile` | 计划中 | Storage 决策：Agentics-owned Docker daemon 使用 loopback XFS，并为每个 phase 使用 loop images；仍依赖 DGX host inventory 和 ingress decisions。 |
+| `M0.2.5-DGX-1：盘点 DGX Spark host 和 container runtime` | 阻塞中 | Linux host、GPU、NVIDIA toolkit、storage、XFS tooling 和 loopback tooling inventory 已记录在 `docs/versions/v0.2.5/dgx-spark-inventory/zh.md`；Docker server/storage driver 和 NVIDIA Docker smoke evidence 需要 Docker daemon access。 |
+| `M0.2.5-DGX-2：添加 DGX Spark deployment profile` | 计划中 | Storage 决策：Agentics-owned Docker daemon 使用 loopback XFS，并为每个 phase 使用 loop images；依赖 Docker daemon access、DGX inventory 完成和 ingress decisions。 |
 | `M0.2.5-DGX-3：运行 DGX Spark end-to-end smoke 和 benchmark calibration` | 计划中 | 依赖 DGX deployment profile 和 published matrix demo；必须包含 storage-quota escape smoke。 |
 | `M0.2.5-CLI-1：验证 hosted CLI onboarding` | 已实现 | 已记录 registration、challenge inspection、workspace initialization、validation、official submission 和 polling 的 hosted CLI smoke path。 |
 | `M0.2.5-CLI-2：添加 challenge draft reviewer commands` | 已实现 | CLI 覆盖 admin validation、review、publish、abandon 和 cleanup helpers；creator-side GitHub OAuth CLI support 已推迟，当前使用 `/creator` web flow。 |

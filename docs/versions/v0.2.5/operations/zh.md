@@ -103,6 +103,15 @@ scripts/ops/check-local-mvp.sh
 - 如果提供 credentials，则检查 worker heartbeat。
 - 如果设置 `AGENTICS_WEB_BASE_URL`，则检查 frontend 是否可访问。
 
+DGX Spark host inventory 使用带 Linux gate 的检查：
+
+```bash
+scripts/ops/check-dgx-spark-host.sh
+```
+
+仅在 operator account 能访问目标 Docker daemon 时，才设置
+`AGENTICS_DGX_RUN_DOCKER_SMOKE=1`。
+
 ## Logs
 
 当前日志输出到进程 stdout/stderr。Hosted rehearsal 应使用 supervisor 捕获每个服务的日志，例如 `systemd`、带文件日志的 `tmux`，或 container runtime。Worker evaluation logs 会写入 `AGENTICS_STORAGE_ROOT/eval-artifacts/<job-id>/runner.log`。

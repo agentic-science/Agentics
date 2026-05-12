@@ -148,6 +148,19 @@ scripts/ops/check-local-mvp.sh
 
 DGX Spark hosted deployment 必须单独验证，因为它加入了 ARM64、NVIDIA container runtime、GPU device access 和 DGX OS lifecycle assumptions。见 `docs/milestones/zh.md` 中的 DGX Spark 里程碑。
 
+第一轮 host inventory 记录在 `docs/versions/v0.2.5/dgx-spark-inventory/zh.md`。
+可重复检查命令为：
+
+```bash
+scripts/ops/check-dgx-spark-host.sh
+```
+
+该检查带 Linux gate，会报告 Docker/NVIDIA runtime blockers，且不会修改 host
+state。当前 inventory 已确认 OS、GPU、NVIDIA toolkit、storage、XFS tooling 和
+loopback tooling，但 Docker server access 和 NVIDIA Docker smoke command 仍被阻塞，
+需要 operator 授权访问 Docker daemon，或创建 DGX-2 计划中的 Agentics-owned
+Docker daemon。
+
 DGX Spark 运维应以 NVIDIA 官方文档为准：
 
 - [NVIDIA DGX Spark product page](https://marketplace.nvidia.com/en-us/enterprise/personal-ai-supercomputers/dgx-spark/)

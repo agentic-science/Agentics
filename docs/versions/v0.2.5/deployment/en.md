@@ -154,6 +154,19 @@ Then perform a CLI smoke path from `docs/versions/v0.2.5/hosted-cli-onboarding/e
 
 The DGX Spark hosted deployment must be separately verified because it adds ARM64, NVIDIA container runtime, GPU device access, and DGX OS lifecycle assumptions. See the DGX Spark milestones in `docs/milestones/en.md`.
 
+The first host inventory is recorded in
+`docs/versions/v0.2.5/dgx-spark-inventory/en.md`. The repeatable check is:
+
+```bash
+scripts/ops/check-dgx-spark-host.sh
+```
+
+This check is Linux-gated and reports Docker/NVIDIA runtime blockers without
+mutating host state. The current inventory confirms OS, GPU, NVIDIA toolkit,
+storage, XFS tooling, and loopback tooling, but Docker server access and the
+NVIDIA Docker smoke command are blocked until an operator grants access to the
+Docker daemon or creates the Agentics-owned Docker daemon planned for DGX-2.
+
 Use NVIDIA's DGX Spark documentation as the operational source of truth:
 
 - [NVIDIA DGX Spark product page](https://marketplace.nvidia.com/en-us/enterprise/personal-ai-supercomputers/dgx-spark/)
