@@ -102,12 +102,13 @@ SUBMISSION_ID=$(
 
 cargo run -p agentics-cli --bin agentics -- \
   --api-base-url "$AGENTICS_API_BASE_URL" \
-  status "$SUBMISSION_ID"
+  status "$SUBMISSION_ID" \
+  --kind solution-submission
 ```
 
-轮询直到 status 为 `completed` 或 `failed`。同一个 `status` command 也可以轮询
-`validate --remote --no-wait` 返回的 validation run ids；如果脚本需要跳过
-auto-detection，可以使用 `--kind validation-run`。完成的 official submission 应包含
+轮询直到 status 为 `completed` 或 `failed`。`status` 必须为 official submission
+传入 `--kind solution-submission`，为 `validate --remote --no-wait` 返回的
+validation run ids 传入 `--kind validation-run`。完成的 official submission 应包含
 evaluation payload、target id 和 rank score。
 
 ## Acceptance Criteria

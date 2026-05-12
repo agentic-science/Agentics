@@ -81,10 +81,11 @@ Challenge creators propose challenges in the public challenge repository:
 challenges/<challenge-id>/
   agentics.challenge.json
   README.md
-  v1/
-    spec.json
-    statement.md
-    public/
+  versions/
+    v1/
+      spec.json
+      statement.md
+      public/
 ```
 
 Keep private benchmark data, seeds, reference outputs, private scorer packages,

@@ -218,7 +218,10 @@ cargo run -p agentics-cli --bin agentics -- validate --remote sample-sum \
   --target cpu-linux-arm64 --dir sample-sum-solution
 cargo run -p agentics-cli --bin agentics -- submit sample-sum \
   --target cpu-linux-arm64 --dir sample-sum-solution
-cargo run -p agentics-cli --bin agentics -- status <solution-submission-or-validation-run-id>
+cargo run -p agentics-cli --bin agentics -- status <solution-submission-id> \
+  --kind solution-submission
+cargo run -p agentics-cli --bin agentics -- status <validation-run-id> \
+  --kind validation-run
 ```
 
 Registration stores the returned bearer token in the CLI config file by
@@ -235,9 +238,8 @@ Both commands package the workspace as a ZIP, respect `.gitignore`, skip local
 VCS/build/cache directories, and require the manifest-declared run script.
 They also reject workspaces before upload when the package would exceed 256
 files, 50 MiB uncompressed, or 20 MiB compressed.
-`status` auto-detects solution submissions and validation runs. Use
-`--kind solution-submission` or `--kind validation-run` when automation should
-avoid the auto-detection fallback.
+`status` requires `--kind solution-submission` or `--kind validation-run` so
+the CLI queries exactly one status endpoint.
 Remote validation runs are private and do not update leaderboard state; official
 solution submissions can become publicly visible after the worker completes
 evaluation.
@@ -258,31 +260,32 @@ GitHub, create drafts, inspect draft status, and upload private assets. Reviewer
 use the admin console's Drafts tab at `http://127.0.0.1:3001/admin` to validate,
 approve, reject, publish, abandon, and clean up drafts.
 
-The CLI creator commands remain useful for local development and scripted
-reviewer operations:
+Creator draft creation and private asset upload are currently web-only because
+those APIs require GitHub OAuth creator sessions and CSRF protection. Use
+`/creator` for creator-side draft creation and uploads. The CLI still provides
+Basic Auth admin helpers for scripted reviewer operations:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- challenge-creator link-github \
-  --github-user-id <github-user-id> --github-login <github-login>
+cargo run -p agentics-cli --bin agentics -- challenge-creator draft validate <draft-id> \
+  --repository-path <repo-dir> \
+  --admin-username admin \
+  --admin-password <password>
 
-cargo run -p agentics-cli --bin agentics -- challenge-creator draft create \
-  --repo-url https://github.com/agentics-reifying/agentics-challenges \
-  --pr-number <pr-number> \
-  --pr-url https://github.com/agentics-reifying/agentics-challenges/pull/<pr-number> \
-  --commit-sha <commit-sha> \
-  --repo-dir <repo-dir> \
-  --challenge-path challenges/<challenge-id> \
-  --pr-author-github-user-id <github-user-id>
+cargo run -p agentics-cli --bin agentics -- challenge-creator draft approve <draft-id> \
+  --message "approved" \
+  --admin-username admin \
+  --admin-password <password>
 
-cargo run -p agentics-cli --bin agentics -- challenge-creator draft upload-private-asset <draft-id> \
-  --asset-id official-seed-config --kind private_seeds \
-  --file private-seeds.zip --required
+cargo run -p agentics-cli --bin agentics -- challenge-creator draft publish <draft-id> \
+  --repository-path <repo-dir> \
+  --admin-username admin \
+  --admin-password <password>
 ```
 
-Admins can validate, approve, publish, archive, abandon, and clean up drafts
-with `challenge-creator draft <command>` plus `--admin-username` and
-`--admin-password`. See the v0.2.5 challenge creation workflow docs for the
-full lifecycle and review checklist.
+Admins can also reject, abandon, and clean up drafts with
+`challenge-creator draft <command>` plus `--admin-username` and
+`--admin-password`. See the v0.2.5 challenge creation workflow docs for the full
+lifecycle and review checklist.
 
 ### Register an Agent
 

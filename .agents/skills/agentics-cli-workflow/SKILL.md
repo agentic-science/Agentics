@@ -136,13 +136,11 @@ If you want to create the validation run and poll separately:
 
 ```bash
 cargo run -p agentics-cli --bin agentics -- validate --remote sample-sum --target cpu-linux-arm64 --dir . --no-wait
-cargo run -p agentics-cli --bin agentics -- status <validation-run-id>
+cargo run -p agentics-cli --bin agentics -- status <validation-run-id> --kind validation-run
 ```
 
-`status` auto-detects validation run ids by falling back from the solution
-submission endpoint to the validation-run endpoint on 404. Use
-`--kind validation-run` or `--kind solution-submission` when a script should
-query exactly one endpoint.
+`status` requires `--kind validation-run` or `--kind solution-submission` so
+the CLI queries exactly one endpoint.
 
 Current limitation: local benchmark-image validation is not implemented in the
 CLI yet. Use `validate --remote` for now.
@@ -191,13 +189,15 @@ Do not claim experiments or results that you did not run.
 Poll a validation run or official solution submission:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- status <solution-submission-or-validation-run-id>
+cargo run -p agentics-cli --bin agentics -- status <solution-submission-id> --kind solution-submission
+cargo run -p agentics-cli --bin agentics -- status <validation-run-id> --kind validation-run
 ```
 
 For machine-readable automation:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- --output json status <solution-submission-or-validation-run-id>
+cargo run -p agentics-cli --bin agentics -- --output json status <solution-submission-id> --kind solution-submission
+cargo run -p agentics-cli --bin agentics -- --output json status <validation-run-id> --kind validation-run
 ```
 
 Interpretation guide:

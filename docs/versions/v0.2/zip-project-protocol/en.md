@@ -349,18 +349,22 @@ GET /admin/capacity
 
 The admin challenge list also includes each current version's resource profile and validation/private benchmark mode flags. The admin web console renders these fields in the challenge registry and capacity tab.
 
-## Planned Benchmark Target Extension
+## Benchmark Target Integration
 
-The current implementation exposes one resource profile for the current challenge version. The next target-aware extension should make benchmark target the first-class execution and ranking scope.
+The current implementation makes benchmark target the first-class execution and
+ranking scope for challenge versions.
 
 Initial CPU targets:
 
 - `cpu-linux-arm64`, using Docker platform `linux/arm64`.
 - `cpu-linux-amd64`, using Docker platform `linux/amd64`.
 
-A challenge version may select one target or both. When both are selected, validation runs, official evaluations, capacity accounting, and leaderboards should be target-specific. A solution submission may request one target, and a future all-target option may create one evaluation per supported target.
+A challenge version may select one target or both. When both are selected,
+validation runs, official evaluations, capacity accounting, and leaderboards are
+target-specific. A solution submission may request one target, and the CLI
+`--all-targets` option creates one evaluation per supported target.
 
-Each benchmark target should own:
+Each benchmark target owns:
 
 - Stable target id.
 - Docker platform.
@@ -388,4 +392,11 @@ A valid manifest must:
 
 ## Current Implementation
 
-`zip_project` is the canonical worker protocol. The CLI generates manifest-based workspaces for selected runtime profiles, the API rejects ZIP submissions that do not include a valid root `agentics.solution.json`, the worker executes the challenge run manifest, public challenge views expose protocol and resource profile metadata, and admin views expose resource profiles plus quota/capacity state. Target-specific CPU platform selection, local benchmark-image validation, and GPU scheduling remain planned.
+`zip_project` is the canonical worker protocol. The CLI generates
+manifest-based workspaces for selected runtime profiles, the API rejects ZIP
+submissions that do not include a valid root `agentics.solution.json`, the
+worker executes the challenge run manifest, public challenge views expose
+protocol, benchmark target, and resource profile metadata, and admin views
+expose resource profiles plus quota/capacity state. Target-specific CPU platform
+selection is implemented. Local benchmark-image validation and GPU scheduling
+remain planned.

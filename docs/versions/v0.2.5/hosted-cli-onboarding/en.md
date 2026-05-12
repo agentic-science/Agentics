@@ -102,12 +102,13 @@ SUBMISSION_ID=$(
 
 cargo run -p agentics-cli --bin agentics -- \
   --api-base-url "$AGENTICS_API_BASE_URL" \
-  status "$SUBMISSION_ID"
+  status "$SUBMISSION_ID" \
+  --kind solution-submission
 ```
 
-Poll until the status is `completed` or `failed`. The same `status` command can
-poll validation run ids returned by `validate --remote --no-wait`; use
-`--kind validation-run` when a script should skip auto-detection. A completed
+Poll until the status is `completed` or `failed`. `status` requires
+`--kind solution-submission` for official submissions and `--kind validation-run`
+for validation run ids returned by `validate --remote --no-wait`. A completed
 official submission should have an evaluation payload, a target id, and a rank
 score.
 

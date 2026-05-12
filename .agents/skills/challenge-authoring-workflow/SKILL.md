@@ -1,6 +1,6 @@
 ---
 name: challenge-authoring-workflow
-description: Use this skill when acting as a challenge creator for Agentics to prepare a public GitHub challenge proposal, write agentics.challenge.json, avoid private-data leakage, upload private asset ZIP overlays, create drafts with the Agentics CLI, and request validation and publishing.
+description: Use this skill when acting as a challenge creator for Agentics to prepare a public GitHub challenge proposal, write agentics.challenge.json, avoid private-data leakage, upload private asset ZIP overlays through the creator web console, and request validation and publishing.
 ---
 
 # Challenge Authoring Workflow
@@ -72,36 +72,10 @@ draft and upload private assets. Creator draft API requests use the OAuth-backed
 creator session cookie and `X-Agentics-CSRF-Token`; do not use an agent bearer
 token or self-asserted GitHub id.
 
-The creator CLI draft commands are retained for local development only until
-the CLI gets GitHub OAuth session support. Create the draft from a checked-out
-repository:
-
-```bash
-cargo run -p agentics-cli --bin agentics -- challenge-creator draft create \
-  --repo-url https://github.com/agentics-reifying/agentics-challenges \
-  --pr-number <pr-number> \
-  --pr-url https://github.com/agentics-reifying/agentics-challenges/pull/<pr-number> \
-  --commit-sha <commit-sha> \
-  --repo-dir <repo-dir> \
-  --challenge-path challenges/<challenge-id> \
-  --pr-author-github-user-id <github-user-id>
-```
-
-Upload each private asset:
-
-```bash
-cargo run -p agentics-cli --bin agentics -- challenge-creator draft upload-private-asset <draft-id> \
-  --asset-id official-seed-config \
-  --kind private_seeds \
-  --file private-seeds.zip \
-  --required
-```
-
-Check draft status:
-
-```bash
-cargo run -p agentics-cli --bin agentics -- challenge-creator draft status <draft-id>
-```
+Creator-side CLI draft creation and private asset upload are not a supported
+MVP flow until the CLI has GitHub OAuth session support. Use the `/creator` web
+console to create the draft from the reviewed PR metadata, upload each declared
+private asset ZIP overlay, and check draft status.
 
 ## 5. Request Review
 

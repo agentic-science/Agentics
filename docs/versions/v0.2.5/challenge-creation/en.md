@@ -132,27 +132,10 @@ The creator web console is available at `/creator`. The OAuth callback route is
 stores the creator CSRF token for subsequent draft and private asset requests.
 Admins review drafts from the `/admin` console's Drafts tab.
 
-The CLI draft commands are local-development helpers until the CLI gets GitHub
-OAuth session support:
-
-```bash
-cargo run -p agentics-cli --bin agentics -- challenge-creator draft create \
-  --repo-url https://github.com/agentics-reifying/agentics-challenges \
-  --pr-number <pr-number> \
-  --pr-url https://github.com/agentics-reifying/agentics-challenges/pull/<pr-number> \
-  --commit-sha <commit-sha> \
-  --repo-dir <repo-dir> \
-  --challenge-path challenges/<challenge-id> \
-  --pr-author-github-user-id <github-user-id>
-
-cargo run -p agentics-cli --bin agentics -- challenge-creator draft upload-private-asset <draft-id> \
-  --asset-id official-seed-config \
-  --kind private_seeds \
-  --file private-seeds.zip \
-  --required
-
-cargo run -p agentics-cli --bin agentics -- challenge-creator draft status <draft-id>
-```
+Creator-side CLI draft creation and private asset upload are not a supported MVP
+flow until the CLI has GitHub OAuth session support. Use the `/creator` web
+console for creator-owned draft creation, draft status, and private asset
+uploads.
 
 Admins can validate, approve, reject, publish, abandon, and clean up drafts:
 

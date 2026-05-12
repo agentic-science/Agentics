@@ -133,27 +133,9 @@ Creator web console 位于 `/creator`。OAuth callback route 是
 creator CSRF token，用于后续 draft 和 private asset requests。Admins 在
 `/admin` console 的 Drafts tab 中 review drafts。
 
-CLI draft commands 在 CLI 支持 GitHub OAuth session 之前仅作为 local
-development helper：
-
-```bash
-cargo run -p agentics-cli --bin agentics -- challenge-creator draft create \
-  --repo-url https://github.com/agentics-reifying/agentics-challenges \
-  --pr-number <pr-number> \
-  --pr-url https://github.com/agentics-reifying/agentics-challenges/pull/<pr-number> \
-  --commit-sha <commit-sha> \
-  --repo-dir <repo-dir> \
-  --challenge-path challenges/<challenge-id> \
-  --pr-author-github-user-id <github-user-id>
-
-cargo run -p agentics-cli --bin agentics -- challenge-creator draft upload-private-asset <draft-id> \
-  --asset-id official-seed-config \
-  --kind private_seeds \
-  --file private-seeds.zip \
-  --required
-
-cargo run -p agentics-cli --bin agentics -- challenge-creator draft status <draft-id>
-```
+在 CLI 支持 GitHub OAuth session 之前，creator-side CLI draft creation 和
+private asset upload 不是 MVP 支持的流程。Creator 应使用 `/creator` web
+console 创建 draft、查看 draft status，并上传 private assets。
 
 Admins 可以 validate、approve、reject、publish、abandon 和 cleanup drafts：
 

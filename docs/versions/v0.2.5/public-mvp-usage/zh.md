@@ -79,10 +79,11 @@ Challenge creators 在 public challenge repository 中提出 challenges：
 challenges/<challenge-id>/
   agentics.challenge.json
   README.md
-  v1/
-    spec.json
-    statement.md
-    public/
+  versions/
+    v1/
+      spec.json
+      statement.md
+      public/
 ```
 
 不要把 private benchmark data、seeds、reference outputs、private scorer

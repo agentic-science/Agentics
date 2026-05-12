@@ -30,7 +30,7 @@ requires a small paired frontend/backend change.
 | 2. Reviewer-visible commit and bundle identity | Fixed for MVP, exact server-side commit materialization deferred | `70a643d fix: freeze challenge draft review digest`; post-MVP hardening tracked in [GitHub issue #4](https://github.com/ifsheldon/Agentics/issues/4) |
 | 3. Immutable published challenge versions | Fixed | `a1bf7df fix: make published challenge versions immutable` |
 | 4. Freeze approved draft inputs | Fixed | `064aa11 fix: freeze approved challenge draft inputs`; `70a643d fix: freeze challenge draft review digest` |
-| 5. Transactional quota admission | Fixed | `4757d72 fix: serialize solution submission quota admission`; private asset admission fixed in working tree pending commit; alternatives tracked in [GitHub issue #3](https://github.com/ifsheldon/Agentics/issues/3) |
+| 5. Transactional quota admission | Fixed | `4757d72 fix: serialize solution submission quota admission`; `dc03b7e fix: serialize private asset quota admission`; alternatives tracked in [GitHub issue #3](https://github.com/ifsheldon/Agentics/issues/3) |
 | 6. Declared output symlink rejection | Fixed | `f96fb89 fix: reject symlinked solution outputs` |
 | 7. Leaderboard losing rerun metadata | Fixed | `ce1eeeb fix: keep leaderboard official metadata tied to best run` |
 | 8. Relative LocalStorage keys | Fixed | `f498fe7 fix: keep local storage keys relative` |
@@ -547,11 +547,9 @@ returns validation run ids and the client already has a validation-run fetcher.
 
 **Fix design**
 
-- Add an explicit command shape, for example:
-  - `agentics status solution-submission <id>`
-  - `agentics status validation-run <id>`
-- Remove or deprecate ambiguous `agentics status <id>` before MVP. Explicit
-  subcommands are easier to reason about and document.
+- Require `agentics status <id> --kind solution-submission|validation-run`.
+- Route directly to the selected status endpoint and remove ambiguous id
+  probing.
 - Reuse `render_validation_run_status`.
 
 **Likely code targets**
@@ -564,9 +562,9 @@ returns validation run ids and the client already has a validation-run fetcher.
 
 **Tests**
 
-- `status validation-run <id>` renders validation status.
-- `status solution-submission <id>` renders official submission status.
-- Old ambiguous command behavior is removed or errors with migration guidance.
+- `status <id> --kind validation-run` renders validation status.
+- `status <id> --kind solution-submission` renders official submission status.
+- `status <id>` without `--kind` errors before making an API request.
 
 **Commit shape**
 
@@ -680,7 +678,8 @@ These product and engineering choices are now fixed for the implementation plan:
    browser-stored Basic credentials.
 4. Quota admission uses explicit database lock rows for MVP. Alternatives and
    tradeoffs are tracked in GitHub issue #3.
-5. CLI status uses explicit subcommands instead of ambiguous ID detection.
+5. CLI status requires `--kind solution-submission|validation-run` and never
+   probes multiple endpoints to infer the id type.
 6. Exact server-side Git commit materialization is post-MVP hardening. For MVP,
    verified creator identity plus visible PR/commit/digest metadata is the trust
    boundary.

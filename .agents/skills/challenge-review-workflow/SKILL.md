@@ -24,10 +24,12 @@ Reviewer checklist:
 
 ## 2. Check The Draft
 
-List or inspect drafts:
+List or inspect drafts in the `/admin` web console's Drafts tab. For scripted
+local checks, use the admin list endpoint:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- challenge-creator draft status <draft-id>
+curl -fsS -u "<admin-username>:<admin-password>" \
+  "$AGENTICS_API_BASE_URL/admin/challenge-drafts"
 ```
 
 Confirm:

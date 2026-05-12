@@ -132,7 +132,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 
 - **M0.1-CLI-4: Solution Submission packaging and official submit**
   - Commit target: `cli: add zip solution submission workflow`
-  - Scope: Implement ZIP packaging that respects `.gitignore`, archive validation, `agentics submit`, `agentics status <solution-submission-or-validation-run-id>`, and result display.
+- Scope: Implement ZIP packaging that respects `.gitignore`, archive validation, `agentics submit`, `agentics status <id> --kind solution-submission|validation-run`, and result display.
   - Test spec: Add tests for `.gitignore` behavior, missing or ignored `run.sh`, generated ZIP layout, mocked solution submission creation, authenticated status reads, and output rendering.
 
 - **M0.1-CLI-5: Remote validation commands**
@@ -531,10 +531,10 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
   - Scope: Ensure an agent or operator can configure the CLI against the hosted demo, register, inspect a challenge, initialize a workspace, validate if enabled, submit officially, and poll status.
   - Test spec: Add command-level tests for hosted configuration examples and run one end-to-end smoke test against staging.
 
-- **M0.2.5-CLI-2: Add challenge creator commands**
-  - Commit target: `cli: add challenge creator workflow`
-  - Scope: Add CLI commands for GitHub link, draft creation from repo PR path, private asset upload, draft validation, draft status, new-version drafts, and archive requests.
-  - Test spec: Add command parser tests, mocked API tests, asset upload fixture tests, and golden output for draft status and validation failure responses.
+- **M0.2.5-CLI-2: Add challenge draft reviewer commands**
+  - Commit target: `cli: add challenge draft reviewer workflow`
+  - Scope: Add CLI helpers for admin validation, approval, rejection, publish, abandon, and cleanup using Basic Auth. Creator-side draft creation, draft status, and private asset upload remain web-only until the CLI supports GitHub OAuth creator sessions.
+  - Test spec: Add command parser tests, mocked admin API tests, and golden output for validation failure responses.
 
 - **M0.2.5-SKILL-1: Add challenge authoring skill**
   - Commit target: `skill: add challenge authoring workflow`
@@ -574,9 +574,9 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 | `M0.2.5-DGX-2: Add DGX Spark deployment profile` | Planned | Storage decision: Agentics-owned Docker daemon on loopback XFS plus per-phase loop images. Still depends on DGX host inventory and ingress decisions. |
 | `M0.2.5-DGX-3: Run DGX Spark end-to-end smoke and benchmark calibration` | Planned | Depends on DGX deployment profile and published matrix demo; must include storage-quota escape smoke. |
 | `M0.2.5-CLI-1: Validate hosted CLI onboarding` | Implemented | Hosted CLI smoke path is documented for registration, challenge inspection, workspace initialization, validation, official submission, and polling. |
-| `M0.2.5-CLI-2: Add challenge creator commands` | Implemented | CLI covers GitHub identity linking, draft creation/status, private asset upload, admin validation, review, publish, abandon, and cleanup. |
-| `M0.2.5-SKILL-1: Add challenge authoring skill` | Implemented | `.agents/skills/challenge-authoring-workflow/SKILL.md` documents creator workflow and private asset ZIP overlays. |
-| `M0.2.5-SKILL-2: Add challenge review skill` | Implemented | `.agents/skills/challenge-review-workflow/SKILL.md` documents reviewer checks and admin CLI flow. |
+| `M0.2.5-CLI-2: Add challenge draft reviewer commands` | Implemented | CLI covers admin validation, review, publish, abandon, and cleanup helpers; creator-side GitHub OAuth CLI support remains deferred in favor of the `/creator` web flow. |
+| `M0.2.5-SKILL-1: Add challenge authoring skill` | Implemented | `.agents/skills/challenge-authoring-workflow/SKILL.md` documents creator workflow, `/creator` web usage, and private asset ZIP overlays. |
+| `M0.2.5-SKILL-2: Add challenge review skill` | Implemented | `.agents/skills/challenge-review-workflow/SKILL.md` documents reviewer checks, admin web inspection, and admin CLI operations. |
 | `M0.2.5-DOC-1: Document public MVP demo usage` | Implemented | Public MVP usage docs now cover humans, agents, creators, reviewers, operators, quotas, sandbox limits, demo caveats, and local smoke evidence. |
 
 ## v0.3 - GitHub PR Solution Submission Protocol
