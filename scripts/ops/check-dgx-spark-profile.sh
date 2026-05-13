@@ -5,10 +5,14 @@ MODE="${AGENTICS_HOST_PROBE_MODE:-off}"
 STATE_ROOT="${AGENTICS_DGX_STATE_ROOT:-/srv/agentics}"
 DOCKER_DATA_ROOT="${AGENTICS_DGX_DOCKER_DATA_ROOT:-${STATE_ROOT}/docker-data-root}"
 PHASE_MOUNT_ROOT="${AGENTICS_DGX_PHASE_MOUNT_ROOT:-${STATE_ROOT}/phase-mounts}"
+RUNNER_STORAGE_MODE="${AGENTICS_RUNNER_WRITABLE_STORAGE_MODE:-unbounded}"
+RUNNER_PHASE_MOUNT_ROOT="${AGENTICS_RUNNER_PHASE_MOUNT_ROOT:-${PHASE_MOUNT_ROOT}}"
+RUNNER_SLOT_CLASSES_MB="${AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB:-64,256,1024,4096}"
 DOCKER_HOST_URI="${AGENTICS_DOCKER_HOST:-unix:///run/agentics/docker.sock}"
 PROBE_IMAGE="${AGENTICS_DGX_PROBE_IMAGE:-busybox:1.36}"
 PULL_POLICY="${AGENTICS_DGX_DOCKER_PULL_POLICY:-never}"
 PHASES="${AGENTICS_DGX_PHASES:-solution-setup solution-build solution-run scorer-prepare scorer-score}"
+SLOT_PROBE_CLASS_MB="${AGENTICS_DGX_PROBE_SLOT_CLASS_MB:-64}"
 RUN_MUTATING_PROBES="${AGENTICS_DGX_RUN_MUTATING_PROBES:-0}"
 DOCKER_CLI="${AGENTICS_DGX_DOCKER_CLI:-docker}"
 read -r -a DOCKER_CMD <<<"$DOCKER_CLI"
@@ -53,6 +57,46 @@ check_xfs_prjquota_mount() {
   esac
 }
 
+runner_slot_classes() {
+  printf '%s\n' "$RUNNER_SLOT_CLASSES_MB" | tr ',' ' '
+}
+
+check_runner_quota_slots() {
+  local phase
+  local class_mb
+  local slot_class_path
+  local first_slot
+
+  if [ "$RUNNER_STORAGE_MODE" != "xfs-project-quota-slots" ]; then
+    record_failure "AGENTICS_RUNNER_WRITABLE_STORAGE_MODE should be xfs-project-quota-slots for DGX hosted workers"
+    return
+  fi
+  if [ "$RUNNER_PHASE_MOUNT_ROOT" != "$PHASE_MOUNT_ROOT" ]; then
+    record_failure "AGENTICS_RUNNER_PHASE_MOUNT_ROOT should match AGENTICS_DGX_PHASE_MOUNT_ROOT"
+  fi
+
+  for phase in $PHASES; do
+    for class_mb in $(runner_slot_classes); do
+      slot_class_path="${RUNNER_PHASE_MOUNT_ROOT}/${phase}/slots/${class_mb}mb"
+      if [ ! -d "$slot_class_path" ]; then
+        record_failure "bounded runner slot class is missing: ${slot_class_path}"
+        continue
+      fi
+      first_slot="$(find "$slot_class_path" -maxdepth 1 -type d -name 'slot-*' | sort | head -n 1)"
+      if [ -z "$first_slot" ]; then
+        record_failure "bounded runner slot class has no slots: ${slot_class_path}"
+        continue
+      fi
+      if [ ! -f "${first_slot}/.agentics-slot.json" ]; then
+        record_failure "bounded runner slot metadata is missing: ${first_slot}/.agentics-slot.json"
+      fi
+      if [ ! -w "$first_slot" ]; then
+        record_failure "bounded runner slot is not writable by the worker user: ${first_slot}"
+      fi
+    done
+  done
+}
+
 docker_cmd() {
   "${DOCKER_CMD[@]}" --host "$DOCKER_HOST_URI" "$@"
 }
@@ -74,6 +118,7 @@ fi
 
 require_command "${DOCKER_CMD[0]}"
 require_command findmnt
+require_command find
 require_command df
 
 if [ "$DOCKER_HOST_URI" != "unix:///run/agentics/docker.sock" ]; then
@@ -84,6 +129,7 @@ check_xfs_prjquota_mount "$DOCKER_DATA_ROOT" "Agentics Docker data root"
 for phase in $PHASES; do
   check_xfs_prjquota_mount "${PHASE_MOUNT_ROOT}/${phase}" "phase mount ${phase}"
 done
+check_runner_quota_slots
 
 if command -v "${DOCKER_CMD[0]}" >/dev/null 2>&1; then
   if ! docker_cmd info >/tmp/agentics-dgx-docker-info.$$ 2>&1; then
@@ -133,6 +179,27 @@ if [ "$RUN_MUTATING_PROBES" = "1" ]; then
       rm -f "$canary"
     fi
     rm -f "$phase_error"
+  done
+
+  log "running bounded runner slot quota probes"
+  for phase in $PHASES; do
+    slot_path="${RUNNER_PHASE_MOUNT_ROOT}/${phase}/slots/${SLOT_PROBE_CLASS_MB}mb/slot-001"
+    probe_path="${slot_path}/agentics-dgx-slot-probe.$$"
+    if [ ! -d "$slot_path" ]; then
+      record_failure "probe slot is missing: ${slot_path}"
+      continue
+    fi
+    rm -rf "$probe_path"
+    mkdir -p "$probe_path"
+    if docker_cmd run --rm --pull="$PULL_POLICY" --network none -v "${probe_path}:/probe" "$PROBE_IMAGE" sh -c "dd if=/dev/zero of=/probe/quota-probe bs=1M count=$((SLOT_PROBE_CLASS_MB + 1))" >/tmp/agentics-dgx-slot-probe.$$ 2>&1; then
+      record_failure "bounded runner slot quota probe unexpectedly succeeded for phase ${phase}"
+    elif grep -Eiq 'no space left on device|disk quota exceeded' /tmp/agentics-dgx-slot-probe.$$; then
+      log "bounded runner slot quota probe failed with expected quota exhaustion for phase ${phase}"
+    else
+      record_failure "bounded runner slot quota probe failed for ${phase} for an unexpected reason: $(tr '\n' ' ' </tmp/agentics-dgx-slot-probe.$$)"
+    fi
+    rm -rf "$probe_path"
+    rm -f /tmp/agentics-dgx-slot-probe.$$
   done
 else
   log "skipping mutating probes; set AGENTICS_DGX_RUN_MUTATING_PROBES=1 to run Docker and phase-mount probes"

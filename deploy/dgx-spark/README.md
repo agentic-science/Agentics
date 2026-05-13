@@ -42,6 +42,8 @@ the DGX systemd units as macOS startup definitions.
 | Agentics Docker data root | `/srv/agentics/docker-data-root` |
 | Docker data-root loop image | `/srv/agentics/loop-images/docker-data-root.xfs` |
 | Per-phase mount root | `/srv/agentics/phase-mounts` |
+| Runner writable storage mode | `xfs-project-quota-slots` |
+| Runner quota slot classes | `64,256,1024,4096` MiB |
 | Probe mode | `AGENTICS_HOST_PROBE_MODE=require` |
 
 MVP deployment supports `linux-arm64-cpu` and `linux-arm64-cuda` targets on the
@@ -64,8 +66,15 @@ capacity exists.
    ```bash
    AGENTICS_DGX_CONFIRM=prepare-storage \
    AGENTICS_DGX_PERSIST_FSTAB=1 \
+   AGENTICS_DGX_PHASE_SLOT_CLASSES_MB='64 256 1024 4096' \
+   AGENTICS_DGX_PHASE_SLOTS_PER_CLASS=4 \
    scripts/ops/prepare-dgx-spark-storage.sh
    ```
+
+   The script creates the Docker data-root loop image, per-phase XFS loop
+   mounts, and root-prepared XFS project-quota slots under each phase mount.
+   The unprivileged worker leases those slots at runtime; it does not set quota
+   limits itself.
 
 4. Install `dockerd-agentics.json` as `/etc/agentics/dockerd-agentics.json`.
 5. Install the service files under `/etc/systemd/system/`.
@@ -85,6 +94,9 @@ capacity exists.
    docker --host unix:///run/agentics/docker.sock pull busybox:1.36
    sudo -u agentics env \
      AGENTICS_HOST_PROBE_MODE=require \
+     AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots \
+     AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts \
+     AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096 \
      AGENTICS_DGX_RUN_MUTATING_PROBES=1 \
      AGENTICS_DGX_DOCKER_PULL_POLICY=never \
      scripts/ops/check-dgx-spark-profile.sh

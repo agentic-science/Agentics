@@ -26,6 +26,9 @@ PHASE_LOOP_SIZE="${AGENTICS_DGX_PHASE_LOOP_SIZE:-20G}"
 SERVICE_USER="${AGENTICS_DGX_SERVICE_USER:-agentics}"
 SERVICE_GROUP="${AGENTICS_DGX_SERVICE_GROUP:-agentics}"
 PHASES="${AGENTICS_DGX_PHASES:-solution-setup solution-build solution-run scorer-prepare scorer-score}"
+PHASE_SLOT_CLASSES_MB="${AGENTICS_DGX_PHASE_SLOT_CLASSES_MB:-${AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB:-64 256 1024 4096}}"
+PHASE_SLOTS_PER_CLASS="${AGENTICS_DGX_PHASE_SLOTS_PER_CLASS:-4}"
+PHASE_PROJECT_ID_BASE="${AGENTICS_DGX_PHASE_PROJECT_ID_BASE:-100000}"
 PERSIST_FSTAB="${AGENTICS_DGX_PERSIST_FSTAB:-0}"
 
 require_command() {
@@ -69,10 +72,77 @@ ensure_fstab_entry() {
   printf '%s %s xfs loop,prjquota,nofail 0 0\n' "$image_path" "$mount_path" >>/etc/fstab
 }
 
+ensure_positive_integer() {
+  local value="$1"
+  local label="$2"
+  case "$value" in
+    ''|*[!0-9]*)
+      printf '%s must be a positive integer, got: %s\n' "$label" "$value" >&2
+      exit 2
+      ;;
+  esac
+  if [ "$value" -le 0 ]; then
+    printf '%s must be greater than zero, got: %s\n' "$label" "$value" >&2
+    exit 2
+  fi
+}
+
+phase_slot_classes() {
+  printf '%s\n' "$PHASE_SLOT_CLASSES_MB" | tr ',' ' '
+}
+
+ensure_quota_slot() {
+  local mount_path="$1"
+  local phase="$2"
+  local class_mb="$3"
+  local slot_index="$4"
+  local project_id="$5"
+  local slot_name
+  local slot_class_path
+  local slot_path
+
+  ensure_positive_integer "$class_mb" "phase slot class"
+  slot_name="$(printf 'slot-%03d' "$slot_index")"
+  slot_class_path="${mount_path}/slots/${class_mb}mb"
+  slot_path="${slot_class_path}/${slot_name}"
+  install -d -m 0755 "$slot_class_path" "$slot_path"
+  xfs_quota -x -c "project -s -p ${slot_path} ${project_id}" "$mount_path"
+  xfs_quota -x -c "limit -p bhard=${class_mb}m ${project_id}" "$mount_path"
+  cat >"${slot_path}/.agentics-slot.json" <<EOF
+{"phase":"${phase}","slot_class_mb":${class_mb},"slot_index":${slot_index},"project_id":${project_id}}
+EOF
+  if getent passwd "$SERVICE_USER" >/dev/null 2>&1 && getent group "$SERVICE_GROUP" >/dev/null 2>&1; then
+    chown -R "${SERVICE_USER}:${SERVICE_GROUP}" "$slot_path"
+  fi
+}
+
+ensure_phase_slots() {
+  local mount_path="$1"
+  local phase="$2"
+  local class_index=0
+  local class_mb
+  local slot_index
+  local project_id
+
+  ensure_positive_integer "$PHASE_SLOTS_PER_CLASS" "AGENTICS_DGX_PHASE_SLOTS_PER_CLASS"
+  ensure_positive_integer "$PHASE_PROJECT_ID_BASE" "AGENTICS_DGX_PHASE_PROJECT_ID_BASE"
+
+  for class_mb in $(phase_slot_classes); do
+    slot_index=1
+    while [ "$slot_index" -le "$PHASE_SLOTS_PER_CLASS" ]; do
+      project_id=$((PHASE_PROJECT_ID_BASE + class_index * PHASE_SLOTS_PER_CLASS + slot_index))
+      ensure_quota_slot "$mount_path" "$phase" "$class_mb" "$slot_index" "$project_id"
+      slot_index=$((slot_index + 1))
+    done
+    class_index=$((class_index + 1))
+  done
+}
+
 require_command findmnt
 require_command mkfs.xfs
 require_command mount
 require_command truncate
+require_command xfs_quota
 if [ "$PERSIST_FSTAB" = "1" ]; then
   require_command awk
 fi
@@ -90,6 +160,7 @@ for phase in $PHASES; do
   ensure_xfs_image "$image_path" "$PHASE_LOOP_SIZE"
   ensure_mount "$image_path" "$mount_path"
   ensure_fstab_entry "$image_path" "$mount_path"
+  ensure_phase_slots "$mount_path" "$phase"
 done
 
 if getent passwd "$SERVICE_USER" >/dev/null 2>&1 && getent group "$SERVICE_GROUP" >/dev/null 2>&1; then
@@ -101,6 +172,8 @@ DGX storage preparation completed.
 
 Docker data root: $DOCKER_DATA_ROOT
 Phase mount root: $PHASE_MOUNT_ROOT
+Phase quota slot classes: $(phase_slot_classes)
+Phase quota slots per class: $PHASE_SLOTS_PER_CLASS
 EOF
 
 if [ "$PERSIST_FSTAB" = "1" ]; then
