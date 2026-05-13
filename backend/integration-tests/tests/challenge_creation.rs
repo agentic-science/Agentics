@@ -569,24 +569,49 @@ async fn private_asset_upload_rejects_duplicate_asset_id(pool: sqlx::PgPool) {
     .expect("draft json");
     let draft_id = draft["id"].as_str().expect("draft id");
 
-    for expected_status in [reqwest::StatusCode::CREATED, reqwest::StatusCode::CONFLICT] {
-        let response = creator_auth(
-            client.post(api_url(
-                &app,
-                &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
-            )),
-            &creator,
-        )
-        .json(&json!({
-            "asset_id": "official-cases",
-            "kind": "private_benchmark_data",
-            "asset_base64": STANDARD.encode(b"[]")
-        }))
-        .send()
-        .await
-        .expect("asset request");
-        assert_eq!(response.status(), expected_status);
-    }
+    let first_response = creator_auth(
+        client.post(api_url(
+            &app,
+            &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+        )),
+        &creator,
+    )
+    .json(&json!({
+        "asset_id": "official-cases",
+        "kind": "private_benchmark_data",
+        "asset_base64": STANDARD.encode(b"[]")
+    }))
+    .send()
+    .await
+    .expect("asset request");
+    assert_eq!(first_response.status(), reqwest::StatusCode::CREATED);
+    let first_asset: serde_json::Value = first_response.json().await.expect("asset json");
+    let storage_uri = first_asset["storage_uri"]
+        .as_str()
+        .expect("storage uri")
+        .to_string();
+    assert!(storage.path().join(&storage_uri).exists());
+
+    let duplicate_response = creator_auth(
+        client.post(api_url(
+            &app,
+            &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+        )),
+        &creator,
+    )
+    .json(&json!({
+        "asset_id": "official-cases",
+        "kind": "private_benchmark_data",
+        "asset_base64": STANDARD.encode(b"[]")
+    }))
+    .send()
+    .await
+    .expect("duplicate asset request");
+    assert_eq!(duplicate_response.status(), reqwest::StatusCode::CONFLICT);
+    assert!(
+        storage.path().join(&storage_uri).exists(),
+        "duplicate rejection must not delete the accepted durable asset"
+    );
 }
 
 #[sqlx::test(migrations = "../migrations")]

@@ -13,6 +13,10 @@ pub type Result<T> = std::result::Result<T, AppError>;
 pub trait Storage: std::fmt::Debug + Send + Sync {
     /// Store content at a storage-relative key and return that opaque key.
     async fn put(&self, path: &str, content: &[u8]) -> Result<String>;
+    /// Atomically promote a temporary object to a durable storage-relative key.
+    ///
+    /// Implementations must not overwrite an existing durable object.
+    async fn promote(&self, temporary_path: &str, durable_path: &str) -> Result<String>;
     /// Read content from a storage-relative key.
     async fn get(&self, path: &str) -> Result<Vec<u8>>;
     /// Return whether a storage-relative key exists.
@@ -87,6 +91,31 @@ impl Storage for LocalStorage {
         self.reject_symlink_object(&full)?;
         tokio::fs::write(&full, content).await?;
         Ok(key.to_string_lossy().to_string())
+    }
+
+    async fn promote(&self, temporary_path: &str, durable_path: &str) -> Result<String> {
+        let (temporary_full, temporary_key) = self.resolve(temporary_path)?;
+        let (durable_full, durable_key) = self.resolve(durable_path)?;
+        self.reject_symlink_prefixes(&temporary_key)?;
+        self.reject_symlink_object(&temporary_full)?;
+        self.reject_symlink_prefixes(&durable_key)?;
+        if let Some(parent) = durable_full.parent() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+        self.reject_symlink_prefixes(&durable_key)?;
+        self.reject_symlink_object(&durable_full)?;
+
+        tokio::fs::hard_link(&temporary_full, &durable_full).await?;
+        if let Err(error) = tokio::fs::remove_file(&temporary_full).await {
+            let cleanup_result = tokio::fs::remove_file(&durable_full).await;
+            if let Err(cleanup_error) = cleanup_result
+                && cleanup_error.kind() != std::io::ErrorKind::NotFound
+            {
+                return Err(cleanup_error.into());
+            }
+            return Err(error.into());
+        }
+        Ok(durable_key.to_string_lossy().to_string())
     }
 
     async fn get(&self, path: &str) -> Result<Vec<u8>> {
@@ -198,6 +227,63 @@ mod tests {
         assert!(!outside.join("escape.txt").exists());
         drop(std::fs::remove_dir_all(root));
         drop(std::fs::remove_dir_all(outside));
+    }
+
+    #[tokio::test]
+    async fn local_storage_promotes_without_overwriting() {
+        let root = temp_storage_root("promote");
+        let storage = LocalStorage::new(&root);
+
+        let temporary_key = storage
+            .put("_tmp/object.txt", b"temporary")
+            .await
+            .expect("temporary put should succeed");
+        let durable_key = storage
+            .promote(&temporary_key, "objects/object.txt")
+            .await
+            .expect("promote should succeed");
+
+        assert_eq!(durable_key, "objects/object.txt");
+        assert_eq!(
+            storage
+                .get("objects/object.txt")
+                .await
+                .expect("durable object should exist"),
+            b"temporary"
+        );
+        assert!(
+            !storage
+                .exists(&temporary_key)
+                .await
+                .expect("temporary existence check should succeed")
+        );
+
+        let second_temporary_key = storage
+            .put("_tmp/object-2.txt", b"second")
+            .await
+            .expect("second temporary put should succeed");
+        let overwrite = storage
+            .promote(&second_temporary_key, "objects/object.txt")
+            .await;
+        assert!(
+            overwrite.is_err(),
+            "promote must not overwrite an existing durable object"
+        );
+        assert_eq!(
+            storage
+                .get("objects/object.txt")
+                .await
+                .expect("durable object should remain unchanged"),
+            b"temporary"
+        );
+        assert!(
+            storage
+                .exists(&second_temporary_key)
+                .await
+                .expect("failed promotion should leave temporary object")
+        );
+
+        drop(std::fs::remove_dir_all(root));
     }
 
     fn temp_storage_root(label: &str) -> PathBuf {

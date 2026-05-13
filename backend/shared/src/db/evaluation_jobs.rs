@@ -113,6 +113,29 @@ pub async fn refresh_evaluation_job_claim(
     Ok(result.rows_affected() > 0)
 }
 
+/// Make a staged queued job eligible for worker claiming after its artifact is durable.
+pub async fn mark_evaluation_job_ready(pool: &PgPool, job_id: &str) -> Result<()> {
+    let result = sqlx::query(
+        r#"
+        UPDATE evaluation_jobs
+        SET scheduled_at = NOW()
+        WHERE id = $1
+          AND status = 'queued'
+        "#,
+    )
+    .bind(job_id)
+    .execute(pool)
+    .await?;
+
+    if result.rows_affected() != 1 {
+        return Err(AppError::Internal(format!(
+            "staged evaluation job `{job_id}` is not queued"
+        )));
+    }
+
+    Ok(())
+}
+
 /// Input for queueing a validation or official re-run.
 #[derive(Debug, Clone)]
 pub struct QueueEvaluationJobInput {

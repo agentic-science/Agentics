@@ -11,6 +11,7 @@ use axum::{
     extract::{Path as AxumPath, State},
     http::StatusCode,
 };
+use tracing::warn;
 use uuid::Uuid;
 
 use shared::error::{AppError, Result};
@@ -171,7 +172,16 @@ pub async fn upload_challenge_private_asset(
         "challenge-drafts/{}/private-assets/{}-{}.bin",
         draft.id, body.asset_id, sha256
     );
-    let storage_uri = state.storage.put(&storage_path, &asset_bytes).await?;
+    let temporary_storage_path = format!(
+        "_tmp/challenge-private-assets/{}-{}-{}.bin",
+        draft.id,
+        body.asset_id,
+        Uuid::new_v4()
+    );
+    let temporary_storage_uri = state
+        .storage
+        .put(&temporary_storage_path, &asset_bytes)
+        .await?;
     let asset = db::create_challenge_private_asset(
         &state.db,
         &db::CreateChallengePrivateAssetInput {
@@ -182,7 +192,7 @@ pub async fn upload_challenge_private_asset(
             required: requirement.required,
             size_bytes: asset_size_bytes_i64,
             sha256,
-            storage_uri,
+            storage_uri: storage_path.clone(),
             uploader_agent_id: creator.agent_id.clone(),
         },
         state.config.challenge_private_asset_bytes_per_draft,
@@ -192,10 +202,20 @@ pub async fn upload_challenge_private_asset(
     let asset = match asset {
         Ok(asset) => asset,
         Err(error) => {
-            drop(state.storage.delete(&storage_path).await);
+            cleanup_storage_key(&state, &temporary_storage_uri).await;
             return Err(map_unique_conflict(error));
         }
     };
+
+    if let Err(error) = state
+        .storage
+        .promote(&temporary_storage_uri, &storage_path)
+        .await
+    {
+        cleanup_challenge_private_asset_record(&state, &asset.id).await;
+        cleanup_storage_key(&state, &temporary_storage_uri).await;
+        return Err(error);
+    }
 
     db::create_challenge_draft_audit_event(
         &state.db,
@@ -217,6 +237,26 @@ pub async fn upload_challenge_private_asset(
     .await?;
 
     Ok((StatusCode::CREATED, Json(asset)))
+}
+
+async fn cleanup_challenge_private_asset_record(state: &AppState, asset_row_id: &str) {
+    if let Err(error) = db::delete_challenge_private_asset(&state.db, asset_row_id).await {
+        warn!(
+            asset_row_id,
+            error = %error,
+            "failed to clean up private asset record after storage promotion failure"
+        );
+    }
+}
+
+async fn cleanup_storage_key(state: &AppState, storage_key: &str) {
+    if let Err(error) = state.storage.delete(storage_key).await {
+        warn!(
+            storage_key,
+            error = %error,
+            "failed to clean up private asset temporary storage object"
+        );
+    }
 }
 
 /// List GitHub-backed challenge drafts for admin review.

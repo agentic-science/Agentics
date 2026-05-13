@@ -29,6 +29,7 @@ pub struct CreateSolutionSubmissionInput {
     pub explanation: String,
     pub parent_solution_submission_id: Option<String>,
     pub credit_text: String,
+    pub initial_job_delay_seconds: Option<i64>,
     pub quota_admission: SolutionSubmissionQuotaAdmission,
 }
 
@@ -125,9 +126,15 @@ pub async fn create_solution_submission_with_job(
     sqlx::query(
         r#"
         INSERT INTO evaluation_jobs (
-            id, solution_submission_id, challenge_id, challenge_version_id, benchmark_target_id, eval_type, status, priority, payload_json
+            id, solution_submission_id, challenge_id, challenge_version_id, benchmark_target_id, eval_type, status, priority, payload_json, scheduled_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, 'queued', $7, $8)
+        VALUES (
+            $1, $2, $3, $4, $5, $6, 'queued', $7, $8,
+            CASE
+                WHEN $9::BIGINT IS NULL THEN NOW()
+                ELSE NOW() + ($9::DOUBLE PRECISION * INTERVAL '1 second')
+            END
+        )
         "#,
     )
     .bind(&input.job_id)
@@ -138,6 +145,7 @@ pub async fn create_solution_submission_with_job(
     .bind(input.eval_type.as_str())
     .bind(priority)
     .bind(&payload)
+    .bind(input.initial_job_delay_seconds)
     .execute(&mut *tx)
     .await?;
 
@@ -167,6 +175,15 @@ pub async fn create_solution_submission_with_job(
         validation_evaluation: None,
         official_evaluation: None,
     })
+}
+
+/// Delete a solution submission and its dependent jobs/evaluations.
+pub async fn delete_solution_submission(pool: &PgPool, solution_submission_id: &str) -> Result<()> {
+    sqlx::query("DELETE FROM solution_submissions WHERE id = $1")
+        .bind(solution_submission_id)
+        .execute(pool)
+        .await?;
+    Ok(())
 }
 
 async fn enforce_quota_admission(

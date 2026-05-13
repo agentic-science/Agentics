@@ -6,6 +6,7 @@ use axum::{
     http::StatusCode,
 };
 use serde::Deserialize;
+use tracing::warn;
 use uuid::Uuid;
 
 use shared::auth;
@@ -36,6 +37,7 @@ use crate::state::AppState;
 const MAX_INLINE_TEXT_BYTES: u64 = 200_000;
 const MAX_TOTAL_INLINE_TEXT_BYTES: u64 = 1_000_000;
 const SUBMISSION_QUOTA_WINDOW_SECONDS: i64 = 24 * 60 * 60;
+const STAGED_EVALUATION_JOB_DELAY_SECONDS: i64 = 315_360_000;
 const DEFAULT_PUBLIC_LIST_LIMIT: i64 = 50;
 const MAX_PUBLIC_LIST_LIMIT: i64 = 100;
 
@@ -206,10 +208,16 @@ async fn create_solution_submission_for_mode(
     let manifest = shared::zip_project::parse_zip_project_manifest_from_zip_bytes(&artifact_bytes)?;
 
     let solution_submission_id = Uuid::new_v4().to_string();
-    let artifact_path_rel = format!("solution-submissions/{}.zip", solution_submission_id);
-    let artifact_path = state
+    let job_id = Uuid::new_v4().to_string();
+    let artifact_path = format!("solution-submissions/{solution_submission_id}.zip");
+    let temporary_artifact_path = format!(
+        "_tmp/solution-submissions/{}-{}.zip",
+        solution_submission_id,
+        Uuid::new_v4()
+    );
+    let temporary_artifact_path = state
         .storage
-        .put(&artifact_path_rel, &artifact_bytes)
+        .put(&temporary_artifact_path, &artifact_bytes)
         .await?;
 
     let quota_limit = match eval_type {
@@ -222,8 +230,8 @@ async fn create_solution_submission_for_mode(
     let solution_submission = db::create_solution_submission_with_job(
         &state.db,
         &db::CreateSolutionSubmissionInput {
-            solution_submission_id,
-            job_id: Uuid::new_v4().to_string(),
+            solution_submission_id: solution_submission_id.clone(),
+            job_id: job_id.clone(),
             agent_id: agent.agent_id,
             challenge_id,
             benchmark_target_id,
@@ -236,6 +244,7 @@ async fn create_solution_submission_for_mode(
                 .as_ref()
                 .map(|s| s.trim().to_string()),
             credit_text: body.credit_text.trim().to_string(),
+            initial_job_delay_seconds: Some(STAGED_EVALUATION_JOB_DELAY_SECONDS),
             quota_admission: db::SolutionSubmissionQuotaAdmission {
                 window_seconds: SUBMISSION_QUOTA_WINDOW_SECONDS,
                 per_agent_challenge_limit: quota_limit,
@@ -247,10 +256,27 @@ async fn create_solution_submission_for_mode(
     let solution_submission = match solution_submission {
         Ok(solution_submission) => solution_submission,
         Err(error) => {
-            drop(state.storage.delete(&artifact_path).await);
+            cleanup_storage_key(&state, &temporary_artifact_path).await;
             return Err(error);
         }
     };
+
+    if let Err(error) = state
+        .storage
+        .promote(&temporary_artifact_path, &artifact_path)
+        .await
+    {
+        cleanup_solution_submission_record(&state, &solution_submission.id).await;
+        cleanup_storage_key(&state, &temporary_artifact_path).await;
+        return Err(error);
+    }
+
+    if let Err(error) = db::mark_evaluation_job_ready(&state.db, &job_id).await {
+        cleanup_solution_submission_record(&state, &solution_submission.id).await;
+        cleanup_storage_key(&state, &artifact_path).await;
+        cleanup_storage_key(&state, &temporary_artifact_path).await;
+        return Err(error);
+    }
 
     Ok((
         StatusCode::CREATED,
@@ -258,6 +284,26 @@ async fn create_solution_submission_for_mode(
             &solution_submission,
         )),
     ))
+}
+
+async fn cleanup_solution_submission_record(state: &AppState, solution_submission_id: &str) {
+    if let Err(error) = db::delete_solution_submission(&state.db, solution_submission_id).await {
+        warn!(
+            solution_submission_id,
+            error = %error,
+            "failed to clean up staged solution submission after storage admission failure"
+        );
+    }
+}
+
+async fn cleanup_storage_key(state: &AppState, storage_key: &str) {
+    if let Err(error) = state.storage.delete(storage_key).await {
+        warn!(
+            storage_key,
+            error = %error,
+            "failed to clean up staged storage object after admission failure"
+        );
+    }
 }
 
 async fn ensure_submission_quota_available(
