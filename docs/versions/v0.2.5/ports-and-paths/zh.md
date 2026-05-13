@@ -31,6 +31,11 @@ profile 将 `deploy/dgx-spark/agentics.env.example` 复制到
 | Agentics Docker data root | `/srv/agentics/docker-data-root` |
 | Loop image root | `/srv/agentics/loop-images` |
 | Phase mount root | `/srv/agentics/phase-mounts` |
+| Runner quota slots | `/srv/agentics/phase-mounts/<phase>/slots/<size>mb/slot-NNN` |
+
+DGX 默认 quota slot classes 为 `64`、`256`、`1024` 和 `4096` MiB，每个 phase
+和 class 有四个 slots。Worker 会为 writable container bind mounts 租用这些
+slots，并使用 Docker `storage_opt.size` 约束 container-layer writes。
 
 Systemd units 仅适用于 Linux，并使用上述 release symlink paths。macOS
 development 使用前台 `cargo` 和 `bun` commands。

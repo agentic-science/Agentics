@@ -677,13 +677,13 @@ Current operational expectations:
 Agentics should not claim strong hostile-code isolation in v0. Docker-based evaluation reduces risk but is not a complete security boundary.
 
 For hosted MVP execution, runner disk isolation should be validated explicitly.
-The planned DGX Spark profile uses an Agentics-owned Docker daemon backed by a
-loopback XFS data-root image mounted with project quotas for Docker
-writable-layer limits. Per-phase writable paths should use separate loopback
-filesystem images so solution setup/build/run and scorer prepare/score phases
-all have hard writable-disk boundaries. Mac-local development may skip these
-strict probes; hosted staging and public workers should require them before
-accepting jobs.
+The DGX Spark profile uses an Agentics-owned Docker daemon backed by a loopback
+XFS data-root image mounted with project quotas for Docker writable-layer
+limits. Per-phase writable paths use root-prepared XFS project-quota slots under
+separate loopback filesystem images so solution setup/build/run and scorer
+prepare/score phases all have hard writable-disk boundaries. Mac-local
+development may skip these strict probes; hosted staging and public workers
+should require them before accepting jobs.
 
 ## 17. Success Metrics
 

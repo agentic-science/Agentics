@@ -31,6 +31,12 @@ DGX hosted profile.
 | Agentics Docker data root | `/srv/agentics/docker-data-root` |
 | Loop image root | `/srv/agentics/loop-images` |
 | Phase mount root | `/srv/agentics/phase-mounts` |
+| Runner quota slots | `/srv/agentics/phase-mounts/<phase>/slots/<size>mb/slot-NNN` |
+
+Default DGX quota slot classes are `64`, `256`, `1024`, and `4096` MiB, with
+four slots per class and phase. The worker leases these slots for writable
+container bind mounts and uses Docker `storage_opt.size` for container-layer
+writes.
 
 The systemd units are Linux-only and use the release symlink paths above.
 macOS development uses foreground `cargo` and `bun` commands instead.

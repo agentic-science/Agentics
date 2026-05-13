@@ -45,6 +45,7 @@ Captured on May 12-13, 2026 from host `MapleSpark`.
 | Agentics Docker daemon | Running at `unix:///run/agentics/docker.sock`, group `agentics`, Docker Engine `29.2.1`, `overlay2` on XFS, data root `/srv/agentics/docker-data-root`, named `nvidia` runtime visible, separate containerd namespaces `agentics` and `agentics-plugins` |
 | Root storage | `/dev/nvme0n1p2` mounted at `/` as `ext4`, 3.7 TiB total, about 3.5 TiB free |
 | Current XFS mounts | `/srv/agentics/docker-data-root` at 200 GiB and five `/srv/agentics/phase-mounts/*` mounts at 20 GiB each, all loopback XFS with `prjquota` |
+| Runner quota slots | Each phase mount has 64 MiB, 256 MiB, 1 GiB, and 4 GiB XFS project-quota slots, four slots per class |
 | XFS tools | `mkfs.xfs`, `xfs_quota`, and `xfs_info` are installed |
 | XFS kernel support | `modinfo xfs` reports an in-tree XFS module for the NVIDIA kernel |
 | Loopback tools | `losetup` and `truncate` are installed |
@@ -176,11 +177,12 @@ Use these paths for the DGX Spark deployment profile unless host policy changes:
 | Agentics-owned Docker data-root mount | `/srv/agentics/docker-data-root` |
 | Docker data-root loop image | `/srv/agentics/loop-images/docker-data-root.xfs` |
 | Per-phase loop images | `/srv/agentics/loop-images/phase-*.xfs` |
+| Runner quota slot root | `/srv/agentics/phase-mounts/<phase>/slots/<size>mb/slot-NNN` |
 | Strict probe mode | `AGENTICS_HOST_PROBE_MODE=require` |
 
-Do not run public jobs on the operator's default Docker daemon. DGX-2 should
-define a separate Agentics-owned Docker daemon and prove Docker writable-layer
-quota behavior there.
+Do not run public jobs on the operator's default Docker daemon. The Agentics
+Docker daemon and root-prepared runner quota slots are the hosted storage
+boundary for public jobs.
 
 ## Remaining Work
 

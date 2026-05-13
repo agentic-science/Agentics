@@ -84,7 +84,11 @@ Hosted DGX profile 会在 public workers 接受 jobs 前添加 strict storage pr
 不要从 `CI=true` 推断 strictness，因为 CI 可能运行在无法证明 Docker/XFS quota
 behavior 的 hosts 上。在 `require` mode 下，worker startup 应验证 Agentics-owned
 Docker daemon 上的 Docker writable-layer quota enforcement，并验证 runner-owned
-writable mounts 由有界的 per-phase loop images 支撑。
+writable mounts 由有界的 per-phase XFS project-quota slots 支撑。DGX profile
+应设置 `AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots`、
+`AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts`、
+`AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096` 和
+`AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true`。
 
 ## Operational Checks
 
@@ -126,10 +130,17 @@ image，然后以 service user 运行 strict check：
 docker --host unix:///run/agentics/docker.sock pull busybox:1.36
 sudo -u agentics env \
   AGENTICS_HOST_PROBE_MODE=require \
+  AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots \
+  AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts \
+  AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096 \
   AGENTICS_DGX_RUN_MUTATING_PROBES=1 \
   AGENTICS_DGX_DOCKER_PULL_POLICY=never \
   scripts/ops/check-dgx-spark-profile.sh
 ```
+
+Strict profile check 会验证 Docker writable-layer quota probe、per-phase mount
+writeability、root-prepared quota slots 是否存在，以及使用 64 MiB slot class 的
+per-phase bind-mount quota exhaustion probe。
 
 ## Logs
 

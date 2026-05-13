@@ -86,7 +86,11 @@ instead of deriving strictness from `CI=true`, because CI may run on hosts that
 cannot prove Docker/XFS quota behavior. In `require` mode, worker startup should
 verify Docker writable-layer quota enforcement on the Agentics-owned Docker
 daemon and verify that runner-owned writable mounts are backed by bounded
-per-phase loop images.
+per-phase XFS project-quota slots. The DGX profile should set
+`AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots`,
+`AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts`,
+`AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096`, and
+`AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true`.
 
 ## Operational Checks
 
@@ -128,10 +132,17 @@ preload the probe image, then run the strict check as the service user:
 docker --host unix:///run/agentics/docker.sock pull busybox:1.36
 sudo -u agentics env \
   AGENTICS_HOST_PROBE_MODE=require \
+  AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots \
+  AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts \
+  AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096 \
   AGENTICS_DGX_RUN_MUTATING_PROBES=1 \
   AGENTICS_DGX_DOCKER_PULL_POLICY=never \
   scripts/ops/check-dgx-spark-profile.sh
 ```
+
+The strict profile check validates the Docker writable-layer quota probe,
+per-phase mount writeability, presence of root-prepared quota slots, and a
+per-phase bind-mount quota exhaustion probe using the 64 MiB slot class.
 
 ## Logs
 

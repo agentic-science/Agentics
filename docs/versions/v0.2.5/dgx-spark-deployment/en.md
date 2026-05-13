@@ -67,6 +67,7 @@ The Linux-gated scripts are:
 | Loop image root | `/srv/agentics/loop-images` |
 | Docker data-root loop image | `/srv/agentics/loop-images/docker-data-root.xfs` |
 | Phase mount root | `/srv/agentics/phase-mounts` |
+| Runner quota slots | `/srv/agentics/phase-mounts/<phase>/slots/<size>mb/slot-NNN` |
 | API binary | `/opt/agentics/current/bin/api` |
 | Worker binary | `/opt/agentics/current/bin/worker` |
 | CLI binary | `/opt/agentics/current/bin/agentics` |
@@ -81,9 +82,11 @@ class:
 - `scorer-prepare`
 - `scorer-score`
 
-DGX-2 establishes this deployment contract and probes the mounts. Runner code
-still enforces per-phase disk limits after execution; the per-phase loop images
-provide the hosted hard-stop boundary for future runner mount placement.
+Each phase mount contains root-prepared XFS project-quota slots. The worker
+leases one slot for each writable container mount, binds only that slot's clean
+`work` directory into Docker, and keeps the slot locked until phase output is
+copied back to durable runner artifacts. Docker `storage_opt.size` bounds writes
+that land in the container root filesystem.
 
 ## Environment
 
@@ -103,6 +106,10 @@ AGENTICS_WEB_SESSION_COOKIE_SECURE=true
 AGENTICS_DOCKER_HOST=unix:///run/agentics/docker.sock
 AGENTICS_HOST_PROBE_MODE=require
 AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true
+AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots
+AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts
+AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096
+AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true
 ```
 
 MVP deployment supports `linux-arm64-cpu` and `linux-arm64-cuda` targets on DGX
@@ -115,13 +122,16 @@ Run only on Linux and only with operator privileges:
 ```bash
 AGENTICS_DGX_CONFIRM=prepare-storage \
 AGENTICS_DGX_PERSIST_FSTAB=1 \
+AGENTICS_DGX_PHASE_SLOT_CLASSES_MB='64 256 1024 4096' \
+AGENTICS_DGX_PHASE_SLOTS_PER_CLASS=4 \
 scripts/ops/prepare-dgx-spark-storage.sh
 ```
 
 The script refuses to run unless `AGENTICS_DGX_CONFIRM=prepare-storage` is set.
 It creates the persistent directory layout, formats missing loopback XFS images,
-and mounts them with `prjquota`. Set `AGENTICS_DGX_PERSIST_FSTAB=1` to append
-idempotent `/etc/fstab` entries for the loopback mounts.
+mounts them with `prjquota`, and prepares quota slots under each phase mount.
+Set `AGENTICS_DGX_PERSIST_FSTAB=1` to append idempotent `/etc/fstab` entries for
+the loopback mounts.
 
 On `MapleSpark`, the DGX-2 run mounted:
 
@@ -136,6 +146,17 @@ On `MapleSpark`, the DGX-2 run mounted:
   `prjquota`,
 - `/srv/agentics/phase-mounts/scorer-score`, 20 GiB loopback XFS with
   `prjquota`.
+
+For each phase mount, the default slot layout is:
+
+- `slots/64mb/slot-001` through `slot-004`
+- `slots/256mb/slot-001` through `slot-004`
+- `slots/1024mb/slot-001` through `slot-004`
+- `slots/4096mb/slot-001` through `slot-004`
+
+The worker chooses the smallest configured slot class that is at least the
+effective phase `disk_limit_mb`. If an exact hard phase limit is required, keep
+challenge resource profiles aligned to the configured slot classes.
 
 ## Service Startup
 
@@ -213,6 +234,9 @@ strict check with mutating probes:
 docker --host unix:///run/agentics/docker.sock pull busybox:1.36
 sudo -u agentics env \
   AGENTICS_HOST_PROBE_MODE=require \
+  AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots \
+  AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts \
+  AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096 \
   AGENTICS_DGX_RUN_MUTATING_PROBES=1 \
   AGENTICS_DGX_DOCKER_PULL_POLICY=never \
   scripts/ops/check-dgx-spark-profile.sh
@@ -226,7 +250,9 @@ This verifies:
 - XFS `prjquota` on phase mounts,
 - Docker daemon access and `overlay2`,
 - Docker writable-layer quota behavior through `--storage-opt size=16m`,
-- phase writable-mount canary writes.
+- phase writable-mount canary writes,
+- root-prepared bounded runner quota slots,
+- per-phase Docker bind-mount quota exhaustion using the 64 MiB probe slot.
 
 Then run:
 

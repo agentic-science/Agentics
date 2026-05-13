@@ -670,14 +670,14 @@ Agentics 应可复现，并且实际可本地运行。
 
 Agentics 不应在 v0 声称拥有强 hostile-code isolation。基于 Docker 的评测会降低风险，但不是完整安全边界。
 
-对于 hosted MVP execution，runner disk isolation 必须显式验证。计划中的
-DGX Spark profile 会使用 Agentics-owned Docker daemon，其 Docker data-root
-位于启用 project quotas 的 loopback XFS image 上，用于约束 Docker
-writable-layer。每个 phase 的 writable paths 应使用独立的 loopback
-filesystem images，因此 solution setup/build/run 和 scorer prepare/score
-phases 都有硬性的 writable-disk 边界。Mac-local development 可以跳过这些
-strict probes；hosted staging 和 public workers 在接受 jobs 前应强制通过这些
-probes。
+对于 hosted MVP execution，runner disk isolation 必须显式验证。DGX Spark
+profile 会使用 Agentics-owned Docker daemon，其 Docker data-root 位于启用
+project quotas 的 loopback XFS image 上，用于约束 Docker writable-layer。每个
+phase 的 writable paths 使用位于独立 loopback filesystem images 下、由 root
+预先准备的 XFS project-quota slots，因此 solution setup/build/run 和 scorer
+prepare/score phases 都有硬性的 writable-disk 边界。Mac-local development 可以
+跳过这些 strict probes；hosted staging 和 public workers 在接受 jobs 前应强制通过
+这些 probes。
 
 ## 17. 成功指标
 

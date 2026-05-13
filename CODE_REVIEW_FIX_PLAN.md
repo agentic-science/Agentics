@@ -43,7 +43,7 @@ requires a small paired frontend/backend change.
 | 15. Globally unique worker instance ids | Fixed | `b223d8e fix: use UUID worker instance identifiers` |
 | 16. Runner module split | Fixed | `e54ff7e refactor: split runner support modules` |
 | 17. Web DTO contract fixtures | Fixed | `f1b0994 test: add web dto contract fixtures` |
-| Docker writable-layer quota | Deferred operational hardening; hosted design decided | Tracked in [GitHub issue #2](https://github.com/ifsheldon/Agentics/issues/2) |
+| Docker and bind-mount writable quota | Fixed in worktree; pending commit/merge | Runner containers now support Docker `storage_opt.size` plus root-prepared XFS project-quota slots for solution setup/build/run and scorer prepare/score writable mounts. DGX storage prep, strict profile probes, a worker-backed validation integration, and a worker-backed run `/io` quota escape test were rerun on MapleSpark. [GitHub issue #2](https://github.com/ifsheldon/Agentics/issues/2) has the evidence comment and can close after these changes land. |
 
 ## Recommended Fix Order
 
@@ -683,13 +683,13 @@ These product and engineering choices are now fixed for the implementation plan:
 6. Exact server-side Git commit materialization is post-MVP hardening. For MVP,
    verified creator identity plus visible PR/commit/digest metadata is the trust
    boundary.
-7. Hosted runner disk isolation should use an Agentics-owned Docker daemon whose
-   data root lives on a loopback XFS image mounted with project quotas. Docker
-   writable-layer quotas should be enforced through `storage_opt.size` and
-   verified by a startup probe. Separately, solution setup, build, and run
-   phases, plus scorer prepare and score phases, should receive their writable
-   paths through per-phase loopback filesystem images so bind-mounted scratch
-   paths have hard limits as well.
-8. Strict host capability checks should use an explicit Agentics flag such as
+7. Hosted runner disk isolation uses an Agentics-owned Docker daemon whose data
+   root lives on a loopback XFS image mounted with project quotas. Docker
+   writable-layer quotas are enforced through `storage_opt.size` and verified by
+   startup probes. Separately, solution setup, build, and run phases, plus scorer
+   prepare and score phases, lease root-prepared XFS project-quota slots under
+   per-phase loopback filesystem images so bind-mounted scratch paths have hard
+   limits as well.
+8. Strict host capability checks use the explicit Agentics flag
    `AGENTICS_HOST_PROBE_MODE=off|warn|require`, not the generic `CI` variable.
    Mac-local development defaults to `off`; hosted DGX/staging uses `require`.

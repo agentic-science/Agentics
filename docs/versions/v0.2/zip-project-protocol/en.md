@@ -208,15 +208,18 @@ capabilities dropped, `no-new-privileges`, no published ports, and bounded Docke
 log files. These controls reduce blast radius, but Docker should still not be
 treated as a complete hostile-code isolation boundary.
 
-Hosted workers should treat `disk_limit_mb` as a hard operational contract, not
-only a post-run accounting check. The planned hosted design has two layers:
-Docker writable-layer quotas from an Agentics-owned Docker daemon whose data root
-lives on a loopback XFS image mounted with project quotas, and separate
-per-phase loopback filesystem images for writable mounts such as setup/build
-workspace scratch, run `/io`, prepare `/prepared`, scorer `/output`, home, and
-temporary paths. This covers all three solution phases and both scorer phases.
-Strict deployment probes should be controlled by an Agentics-specific flag such
-as `AGENTICS_HOST_PROBE_MODE=off|warn|require`; Mac-local development can skip
+Hosted workers treat `disk_limit_mb` as a hard operational contract, not only a
+post-run accounting check. The DGX hosted design has two layers: Docker
+writable-layer quotas from an Agentics-owned Docker daemon whose data root lives
+on a loopback XFS image mounted with project quotas, and root-prepared XFS
+project-quota slots under separate per-phase loopback filesystem images for
+writable mounts such as setup/build workspace scratch, run `/io`, prepare
+`/prepared`, scorer `/output`, home, and temporary paths. This covers all three
+solution phases and both scorer phases. The worker chooses the smallest
+configured slot class that can satisfy the effective phase `disk_limit_mb`;
+operators should align resource profiles to slot classes when they need an
+exact hard phase limit. Strict deployment probes are controlled by
+`AGENTICS_HOST_PROBE_MODE=off|warn|require`; Mac-local development can skip
 them, while hosted workers should require them before accepting jobs.
 
 ## Interface

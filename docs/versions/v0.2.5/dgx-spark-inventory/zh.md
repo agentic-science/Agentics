@@ -44,6 +44,7 @@ scripts/ops/check-dgx-spark-host.sh
 | Agentics Docker daemon | 已运行在 `unix:///run/agentics/docker.sock`，group 为 `agentics`，Docker Engine `29.2.1`，`overlay2` on XFS，data root 为 `/srv/agentics/docker-data-root`，可见名为 `nvidia` 的 runtime，并使用独立 containerd namespaces `agentics` 和 `agentics-plugins` |
 | Root storage | `/dev/nvme0n1p2` 以 `ext4` 挂载到 `/`，总容量 3.7 TiB，约 3.5 TiB 可用 |
 | Current XFS mounts | `/srv/agentics/docker-data-root` 为 200 GiB，五个 `/srv/agentics/phase-mounts/*` mounts 各为 20 GiB，全部是带 `prjquota` 的 loopback XFS |
+| Runner quota slots | 每个 phase mount 都有 64 MiB、256 MiB、1 GiB 和 4 GiB XFS project-quota slots，每个 class 有四个 slots |
 | XFS tools | 已安装 `mkfs.xfs`、`xfs_quota` 和 `xfs_info` |
 | XFS kernel support | `modinfo xfs` 显示 NVIDIA kernel 有 in-tree XFS module |
 | Loopback tools | 已安装 `losetup` 和 `truncate` |
@@ -174,11 +175,12 @@ phase writable mounts 都由带 project quotas 的 loopback XFS images 支撑。
 | Agentics-owned Docker data-root mount | `/srv/agentics/docker-data-root` |
 | Docker data-root loop image | `/srv/agentics/loop-images/docker-data-root.xfs` |
 | Per-phase loop images | `/srv/agentics/loop-images/phase-*.xfs` |
+| Runner quota slot root | `/srv/agentics/phase-mounts/<phase>/slots/<size>mb/slot-NNN` |
 | Strict probe mode | `AGENTICS_HOST_PROBE_MODE=require` |
 
-不要在 operator 的 default Docker daemon 上运行 public jobs。DGX-2 应定义独立的
-Agentics-owned Docker daemon，并在该 daemon 上证明 Docker writable-layer quota
-行为。
+不要在 operator 的 default Docker daemon 上运行 public jobs。Agentics Docker
+daemon 和 root-prepared runner quota slots 是 public jobs 的 hosted storage
+boundary。
 
 ## 剩余工作
 

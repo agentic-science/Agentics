@@ -203,15 +203,17 @@ Parser 会暴露带有 concrete limits 的 ordered phase execution plan。Worker
 Runner containers 还会使用 Docker-level containment controls：memory 和 CPU limits、swap 限制到 memory limit、PID 和 process ulimits、drop all capabilities、`no-new-privileges`、不发布端口，以及 bounded Docker log files。这些 controls 会降低 blast radius，但 Docker 仍不应被视为完整的 hostile-code isolation boundary。
 
 Hosted workers 应将 `disk_limit_mb` 视为硬性的 operational contract，而不只是
-post-run accounting check。计划中的 hosted design 有两层：第一层是
-Agentics-owned Docker daemon，其 data root 位于启用 project quotas 的 loopback
-XFS image 上，用 Docker writable-layer quotas 约束 container layer；第二层是为
+post-run accounting check。DGX hosted design 有两层：第一层是 Agentics-owned
+Docker daemon，其 data root 位于启用 project quotas 的 loopback XFS image 上，
+用 Docker writable-layer quotas 约束 container layer；第二层是在独立 per-phase
+loopback filesystem images 下使用 root-prepared XFS project-quota slots，覆盖
 setup/build workspace scratch、run `/io`、prepare `/prepared`、scorer
-`/output`、home 和 temporary paths 等 writable mounts 分配独立的 per-phase
-loopback filesystem images。这会覆盖 solution 的三个 phases 和 scorer 的两个
-phases。Strict deployment probes 应由 Agentics-specific flag 控制，例如
-`AGENTICS_HOST_PROBE_MODE=off|warn|require`；Mac-local development 可以跳过，
-hosted workers 在接受 jobs 前应强制通过。
+`/output`、home 和 temporary paths 等 writable mounts。这会覆盖 solution 的三个
+phases 和 scorer 的两个 phases。Worker 会选择可满足 effective phase
+`disk_limit_mb` 的最小 configured slot class；如果 operator 需要 exact hard
+phase limit，应让 resource profiles 与 slot classes 对齐。Strict deployment probes
+由 `AGENTICS_HOST_PROBE_MODE=off|warn|require` 控制；Mac-local development 可以
+跳过，hosted workers 在接受 jobs 前应强制通过。
 
 ## Interface
 
