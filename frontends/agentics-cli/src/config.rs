@@ -7,7 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 
-const DEFAULT_API_BASE_URL: &str = "http://127.0.0.1:3100";
+const DEFAULT_API_PORT: u16 = 3100;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct CliConfig {
@@ -71,11 +71,12 @@ impl ResolvedSettings {
         file: &CliConfig,
         config_path: PathBuf,
     ) -> Result<Self> {
+        let default_api_base_url = default_api_base_url();
         let (api_base_url, api_base_url_source) = first_value_with_default(
             flag_api_base_url,
             env.api_base_url.as_deref(),
             file.api_base_url.as_deref(),
-            DEFAULT_API_BASE_URL,
+            default_api_base_url.as_str(),
         );
         let (token, token_source) =
             first_optional_value(flag_token, env.token.as_deref(), file.token.as_deref());
@@ -92,6 +93,14 @@ impl ResolvedSettings {
     pub(crate) fn token_configured(&self) -> bool {
         self.token.is_some()
     }
+}
+
+fn default_api_base_url() -> String {
+    let api_port = std::env::var("AGENTICS_API_PORT")
+        .ok()
+        .and_then(|value| value.parse::<u16>().ok())
+        .unwrap_or(DEFAULT_API_PORT);
+    format!("http://127.0.0.1:{api_port}")
 }
 
 #[derive(Debug, Clone)]

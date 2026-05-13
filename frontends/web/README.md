@@ -5,10 +5,11 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 First, run the development server:
 
 ```bash
-AGENTICS_API_BASE_URL='http://127.0.0.1:3100' bun run dev -- -p 3001
+AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:${AGENTICS_API_PORT:-3100}}" \
+bun run dev -- -p "${AGENTICS_WEB_PORT:-3001}"
 ```
 
-Open [http://localhost:3001](http://localhost:3001) with your browser to see the result.
+Open `http://localhost:${AGENTICS_WEB_PORT:-3001}` with your browser to see the result.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 

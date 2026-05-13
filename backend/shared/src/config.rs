@@ -6,6 +6,9 @@ use serde::Deserialize;
 const CONFIG_ENV_PREFIX: &str = "AGENTICS_";
 const DEFAULT_ADMIN_USERNAME: &str = "admin";
 const DEFAULT_ADMIN_PASSWORD: &str = "agentics-admin";
+const DEFAULT_POSTGRES_PORT: u16 = 5432;
+const DEFAULT_API_PORT: u16 = 3100;
+const DEFAULT_WEB_PORT: u16 = 3001;
 
 /// Application configuration loaded from `AGENTICS_*` environment variables.
 #[derive(Debug, Clone, Deserialize)]
@@ -82,7 +85,10 @@ pub struct Config {
 }
 
 fn default_database_url() -> String {
-    "postgres://agentics:agentics@127.0.0.1:5432/agentics".to_string()
+    format!(
+        "postgres://agentics:agentics@127.0.0.1:{}/agentics",
+        env_port("AGENTICS_POSTGRES_PORT", DEFAULT_POSTGRES_PORT)
+    )
 }
 
 fn default_api_host() -> String {
@@ -90,7 +96,7 @@ fn default_api_host() -> String {
 }
 
 fn default_api_port() -> u16 {
-    3100
+    DEFAULT_API_PORT
 }
 
 fn default_storage_root() -> String {
@@ -110,7 +116,15 @@ fn default_admin_password() -> String {
 }
 
 fn default_cors_allowed_origins() -> String {
-    "http://127.0.0.1:3001,http://localhost:3001".to_string()
+    let web_port = env_port("AGENTICS_WEB_PORT", DEFAULT_WEB_PORT);
+    format!("http://127.0.0.1:{web_port},http://localhost:{web_port}")
+}
+
+fn env_port(name: &str, default: u16) -> u16 {
+    std::env::var(name)
+        .ok()
+        .and_then(|value| value.parse::<u16>().ok())
+        .unwrap_or(default)
 }
 
 fn default_worker_poll_interval_ms() -> u64 {

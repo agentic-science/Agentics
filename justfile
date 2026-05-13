@@ -10,7 +10,7 @@ setup-hooks:
 
 # Start infrastructure (platform database)
 infra-up:
-    {{platform_db_compose}} up -d platform-db
+    AGENTICS_POSTGRES_PORT="${AGENTICS_POSTGRES_PORT:-5432}" {{platform_db_compose}} up -d platform-db
 
 # Stop infrastructure
 infra-down:
@@ -30,7 +30,7 @@ dev-worker:
 
 # Dev: Next.js frontend (separate service)
 dev-web:
-    cd frontends/web && AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:3100}" bun run dev -- -p 3001
+    cd frontends/web && AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:${AGENTICS_API_PORT:-3100}}" bun run dev -- -p "${AGENTICS_WEB_PORT:-3001}"
 
 # Dev: all three in parallel (requires tmux or multiple terminals)
 dev-all:

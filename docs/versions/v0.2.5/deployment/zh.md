@@ -14,14 +14,21 @@
 
 Mac 本地演练验证进程连接和平台行为。它不验证 DGX GPU runtime、ARM64 CUDA images、public TLS 或 production ingress。
 
+这条 macOS 路径有意使用前台 process commands，而不是 systemd `ExecStart=`
+定义。`deploy/dgx-spark/` 下的 systemd units 是仅适用于 Linux 的 DGX hosted
+artifacts，并使用 `/opt/agentics/current` release paths。
+
+Ports 和 paths 在 `deploy/local/agentics.env.example` 中为 local development
+集中配置，并记录在 `docs/versions/v0.2.5/ports-and-paths/zh.md`。
+
 ## 必需服务
 
 | Service | Command | Default port |
 | --- | --- | --- |
-| Postgres | `docker compose -f docker/platform-db/docker-compose.yml up -d platform-db` | `5432` |
-| API | `cargo run -p api-server --bin api` 或 `./target/release/api` | `3100` |
+| Postgres | `docker compose -f docker/platform-db/docker-compose.yml up -d platform-db` | `${AGENTICS_POSTGRES_PORT:-5432}` |
+| API | `cargo run -p api-server --bin api` 或 `./target/release/api` | `${AGENTICS_API_PORT:-3100}` |
 | Worker | `cargo run -p worker --bin worker` 或 `./target/release/worker` | 无 |
-| Web | `bun run dev -- -p 3001` 或 `bun run start -- -p 3001` | `3001` |
+| Web | `bun run dev -- -p "$AGENTICS_WEB_PORT"` 或 `bun run start -- -p "$AGENTICS_WEB_PORT"` | `${AGENTICS_WEB_PORT:-3001}` |
 
 ## 环境变量
 
@@ -31,8 +38,10 @@ Mac 本地演练验证进程连接和平台行为。它不验证 DGX GPU runtime
 export AGENTICS_DATABASE_URL='postgres://agentics:agentics@127.0.0.1:5432/agentics'
 export AGENTICS_CHALLENGES_ROOT="$PWD/examples/challenges"
 export AGENTICS_STORAGE_ROOT="$PWD/storage"
+export AGENTICS_POSTGRES_PORT='5432'
 export AGENTICS_API_HOST='127.0.0.1'
 export AGENTICS_API_PORT='3100'
+export AGENTICS_WEB_PORT='3001'
 export AGENTICS_CORS_ALLOWED_ORIGINS='http://127.0.0.1:3001,http://localhost:3001'
 export AGENTICS_ADMIN_USERNAME='admin'
 export AGENTICS_ADMIN_PASSWORD='<change-me>'
@@ -156,10 +165,13 @@ scripts/ops/check-dgx-spark-host.sh
 ```
 
 该检查带 Linux gate，会报告 Docker/NVIDIA runtime blockers，且不会修改 host
-state。当前 inventory 已确认 OS、GPU、NVIDIA toolkit、storage、XFS tooling 和
-loopback tooling，但 Docker server access 和 NVIDIA Docker smoke command 仍被阻塞，
-需要 operator 授权访问 Docker daemon，或创建 DGX-2 计划中的 Agentics-owned
-Docker daemon。
+state。当前 inventory 已确认 OS、GPU、NVIDIA toolkit、storage、XFS tooling、
+loopback tooling、default Docker GPU smoke 行为，以及 Agentics-owned Docker
+daemon profile。
+
+DGX Spark deployment profile 记录在
+`docs/versions/v0.2.5/dgx-spark-deployment/zh.md`，deploy artifacts 位于
+`deploy/dgx-spark/`，Linux-gated storage/profile scripts 位于 `scripts/ops/`。
 
 DGX Spark 运维应以 NVIDIA 官方文档为准：
 

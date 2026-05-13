@@ -1,7 +1,8 @@
 import type { ZodType } from "zod";
 
 const AGENTICS_API_BASE_URL =
-  process.env.AGENTICS_API_BASE_URL || "http://127.0.0.1:3100";
+  process.env.AGENTICS_API_BASE_URL ||
+  `http://127.0.0.1:${process.env.AGENTICS_API_PORT ?? "3100"}`;
 
 /**
  * Error thrown when the backend responds with a non-2xx status.

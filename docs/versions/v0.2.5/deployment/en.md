@@ -14,14 +14,23 @@ The current verified target is a single-machine deployment:
 
 The Mac-local rehearsal validates process wiring and platform behavior. It does not validate DGX GPU runtime, ARM64 CUDA images, public TLS, or production ingress.
 
+This macOS path intentionally uses foreground process commands instead of
+systemd `ExecStart=` definitions. The systemd units under `deploy/dgx-spark/`
+are Linux-only DGX hosted artifacts and use `/opt/agentics/current` release
+paths.
+
+Ports and paths are centralized in `deploy/local/agentics.env.example` for
+local development and documented in
+`docs/versions/v0.2.5/ports-and-paths/en.md`.
+
 ## Required Services
 
 | Service | Command | Default port |
 | --- | --- | --- |
-| Postgres | `docker compose -f docker/platform-db/docker-compose.yml up -d platform-db` | `5432` |
-| API | `cargo run -p api-server --bin api` or `./target/release/api` | `3100` |
+| Postgres | `docker compose -f docker/platform-db/docker-compose.yml up -d platform-db` | `${AGENTICS_POSTGRES_PORT:-5432}` |
+| API | `cargo run -p api-server --bin api` or `./target/release/api` | `${AGENTICS_API_PORT:-3100}` |
 | Worker | `cargo run -p worker --bin worker` or `./target/release/worker` | none |
-| Web | `bun run dev -- -p 3001` or `bun run start -- -p 3001` | `3001` |
+| Web | `bun run dev -- -p "$AGENTICS_WEB_PORT"` or `bun run start -- -p "$AGENTICS_WEB_PORT"` | `${AGENTICS_WEB_PORT:-3001}` |
 
 ## Environment
 
@@ -31,8 +40,10 @@ Minimum local environment:
 export AGENTICS_DATABASE_URL='postgres://agentics:agentics@127.0.0.1:5432/agentics'
 export AGENTICS_CHALLENGES_ROOT="$PWD/examples/challenges"
 export AGENTICS_STORAGE_ROOT="$PWD/storage"
+export AGENTICS_POSTGRES_PORT='5432'
 export AGENTICS_API_HOST='127.0.0.1'
 export AGENTICS_API_PORT='3100'
+export AGENTICS_WEB_PORT='3001'
 export AGENTICS_CORS_ALLOWED_ORIGINS='http://127.0.0.1:3001,http://localhost:3001'
 export AGENTICS_ADMIN_USERNAME='admin'
 export AGENTICS_ADMIN_PASSWORD='<change-me>'
@@ -163,9 +174,13 @@ scripts/ops/check-dgx-spark-host.sh
 
 This check is Linux-gated and reports Docker/NVIDIA runtime blockers without
 mutating host state. The current inventory confirms OS, GPU, NVIDIA toolkit,
-storage, XFS tooling, and loopback tooling, but Docker server access and the
-NVIDIA Docker smoke command are blocked until an operator grants access to the
-Docker daemon or creates the Agentics-owned Docker daemon planned for DGX-2.
+storage, XFS tooling, loopback tooling, default Docker GPU smoke behavior, and
+the Agentics-owned Docker daemon profile.
+
+The DGX Spark deployment profile is recorded in
+`docs/versions/v0.2.5/dgx-spark-deployment/en.md`, with deploy artifacts under
+`deploy/dgx-spark/` and Linux-gated storage/profile scripts under
+`scripts/ops/`.
 
 Use NVIDIA's DGX Spark documentation as the operational source of truth:
 

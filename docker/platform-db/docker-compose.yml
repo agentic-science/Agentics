@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: agentics
       POSTGRES_DB: agentics
     ports:
-      - "5432:5432"
+      - "${AGENTICS_POSTGRES_PORT:-5432}:5432"
     volumes:
       - agentics_platform_db_data:/var/lib/postgresql/data
     healthcheck:
