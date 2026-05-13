@@ -2,6 +2,7 @@
 
 use figment::{Figment, providers::Env};
 use serde::Deserialize;
+use std::str::FromStr;
 
 const CONFIG_ENV_PREFIX: &str = "AGENTICS_";
 const DEFAULT_ADMIN_USERNAME: &str = "admin";
@@ -9,6 +10,8 @@ const DEFAULT_ADMIN_PASSWORD: &str = "agentics-admin";
 const DEFAULT_POSTGRES_PORT: u16 = 5432;
 const DEFAULT_API_PORT: u16 = 3100;
 const DEFAULT_WEB_PORT: u16 = 3001;
+const DEFAULT_RUNNER_WRITABLE_STORAGE_MODE: &str = "unbounded";
+const DEFAULT_RUNNER_WRITABLE_SLOT_CLASSES_MB: &str = "64,256,1024,4096";
 
 /// Application configuration loaded from `AGENTICS_*` environment variables.
 #[derive(Debug, Clone, Deserialize)]
@@ -80,8 +83,39 @@ pub struct Config {
     pub docker_host: Option<String>,
     #[serde(default)]
     pub require_digest_pinned_images: bool,
+    #[serde(default = "default_runner_writable_storage_mode")]
+    pub runner_writable_storage_mode: String,
+    #[serde(default)]
+    pub runner_phase_mount_root: Option<String>,
+    #[serde(default = "default_runner_writable_slot_classes_mb")]
+    pub runner_writable_slot_classes_mb: String,
+    #[serde(default)]
+    pub runner_docker_layer_quota: bool,
     #[serde(default = "default_log_level")]
     pub log_level: String,
+}
+
+/// Runner strategy for Docker bind-mounted writable paths.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunnerWritableStorageMode {
+    /// Keep writable paths under `AGENTICS_STORAGE_ROOT`.
+    Unbounded,
+    /// Lease root-prepared XFS project-quota slots for writable container paths.
+    XfsProjectQuotaSlots,
+}
+
+impl FromStr for RunnerWritableStorageMode {
+    type Err = anyhow::Error;
+
+    fn from_str(value: &str) -> anyhow::Result<Self> {
+        match value.trim() {
+            "unbounded" => Ok(Self::Unbounded),
+            "xfs-project-quota-slots" => Ok(Self::XfsProjectQuotaSlots),
+            other => anyhow::bail!(
+                "AGENTICS_RUNNER_WRITABLE_STORAGE_MODE must be `unbounded` or `xfs-project-quota-slots`, got `{other}`"
+            ),
+        }
+    }
 }
 
 fn default_database_url() -> String {
@@ -199,6 +233,14 @@ fn default_log_level() -> String {
     "info".to_string()
 }
 
+fn default_runner_writable_storage_mode() -> String {
+    DEFAULT_RUNNER_WRITABLE_STORAGE_MODE.to_string()
+}
+
+fn default_runner_writable_slot_classes_mb() -> String {
+    DEFAULT_RUNNER_WRITABLE_SLOT_CLASSES_MB.to_string()
+}
+
 impl Config {
     /// Load configuration from `AGENTICS_*` environment variables with defaults.
     pub fn from_env() -> anyhow::Result<Self> {
@@ -299,6 +341,71 @@ impl Config {
         }
 
         Ok(())
+    }
+
+    /// Validate worker-only storage settings before claiming evaluation jobs.
+    pub fn validate_runner_storage(&self) -> anyhow::Result<()> {
+        match self.runner_writable_storage_mode()? {
+            RunnerWritableStorageMode::Unbounded => {}
+            RunnerWritableStorageMode::XfsProjectQuotaSlots => {
+                if !cfg!(target_os = "linux") {
+                    anyhow::bail!(
+                        "AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots is Linux-only"
+                    );
+                }
+                let mount_root = self
+                    .runner_phase_mount_root
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "AGENTICS_RUNNER_PHASE_MOUNT_ROOT must be set when AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots"
+                        )
+                    })?;
+                if !std::path::Path::new(mount_root).is_absolute() {
+                    anyhow::bail!("AGENTICS_RUNNER_PHASE_MOUNT_ROOT must be an absolute path");
+                }
+                if self.runner_writable_slot_classes_mb()?.is_empty() {
+                    anyhow::bail!("AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB must not be empty");
+                }
+            }
+        }
+
+        if self.runner_docker_layer_quota && !cfg!(target_os = "linux") {
+            anyhow::bail!("AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true is Linux-only");
+        }
+
+        Ok(())
+    }
+
+    pub fn runner_writable_storage_mode(&self) -> anyhow::Result<RunnerWritableStorageMode> {
+        self.runner_writable_storage_mode.parse()
+    }
+
+    pub fn runner_writable_slot_classes_mb(&self) -> anyhow::Result<Vec<u64>> {
+        let mut classes = Vec::new();
+        for raw in self
+            .runner_writable_slot_classes_mb
+            .split(|ch: char| ch == ',' || ch.is_ascii_whitespace())
+        {
+            let value = raw.trim();
+            if value.is_empty() {
+                continue;
+            }
+            let parsed = value.parse::<u64>().map_err(|e| {
+                anyhow::anyhow!(
+                    "invalid AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB entry `{value}`: {e}"
+                )
+            })?;
+            if parsed == 0 {
+                anyhow::bail!("AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB entries must be positive");
+            }
+            classes.push(parsed);
+        }
+        classes.sort_unstable();
+        classes.dedup();
+        Ok(classes)
     }
 
     /// Split the comma-separated CORS allowlist into trimmed origin strings.
@@ -409,6 +516,10 @@ mod tests {
             allow_public_agent_registration_on_non_loopback: false,
             docker_host: None,
             require_digest_pinned_images: false,
+            runner_writable_storage_mode: super::default_runner_writable_storage_mode(),
+            runner_phase_mount_root: None,
+            runner_writable_slot_classes_mb: super::default_runner_writable_slot_classes_mb(),
+            runner_docker_layer_quota: false,
             log_level: "info".to_string(),
         };
 
@@ -456,6 +567,10 @@ mod tests {
             allow_public_agent_registration_on_non_loopback: false,
             docker_host: None,
             require_digest_pinned_images: false,
+            runner_writable_storage_mode: super::default_runner_writable_storage_mode(),
+            runner_phase_mount_root: None,
+            runner_writable_slot_classes_mb: super::default_runner_writable_slot_classes_mb(),
+            runner_docker_layer_quota: false,
             log_level: "info".to_string(),
         };
 
@@ -467,5 +582,54 @@ mod tests {
         config.allow_public_agent_registration_on_non_loopback = true;
         config.web_session_cookie_secure = true;
         assert!(config.validate_api_security().is_ok());
+    }
+
+    #[test]
+    fn parses_runner_writable_slot_classes() {
+        let config = Config {
+            database_url: String::new(),
+            api_host: super::default_api_host(),
+            api_port: 3100,
+            storage_root: String::new(),
+            challenges_root: String::new(),
+            admin_username: super::default_admin_username(),
+            admin_password: super::default_admin_password(),
+            allow_insecure_default_admin_credentials: false,
+            cors_allowed_origins: super::default_cors_allowed_origins(),
+            worker_poll_interval_ms: 3000,
+            worker_stale_job_minutes: 1,
+            validation_runs_per_agent_challenge_day: 20,
+            official_runs_per_agent_challenge_day: 5,
+            max_active_official_jobs: 20,
+            max_active_agents: 1_000,
+            max_active_challenge_drafts_per_agent: 10,
+            challenge_private_asset_bytes_per_draft: 250 * 1024 * 1024,
+            challenge_draft_validations_per_day: 10,
+            challenge_draft_ttl_days: 14,
+            unpublished_challenge_asset_grace_days: 7,
+            github_oauth_client_id: None,
+            github_oauth_client_secret: None,
+            github_oauth_redirect_url: None,
+            github_oauth_authorize_url: super::default_github_oauth_authorize_url(),
+            github_oauth_token_url: super::default_github_oauth_token_url(),
+            github_api_user_url: super::default_github_api_user_url(),
+            web_session_cookie_name: super::default_web_session_cookie_name(),
+            web_csrf_cookie_name: super::default_web_csrf_cookie_name(),
+            web_session_ttl_hours: super::default_web_session_ttl_hours(),
+            web_session_cookie_secure: false,
+            allow_public_agent_registration_on_non_loopback: false,
+            docker_host: None,
+            require_digest_pinned_images: false,
+            runner_writable_storage_mode: super::default_runner_writable_storage_mode(),
+            runner_phase_mount_root: None,
+            runner_writable_slot_classes_mb: "1024,64 256,1024".to_string(),
+            runner_docker_layer_quota: false,
+            log_level: "info".to_string(),
+        };
+
+        assert_eq!(
+            config.runner_writable_slot_classes_mb().unwrap(),
+            vec![64, 256, 1024]
+        );
     }
 }

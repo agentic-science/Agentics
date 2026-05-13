@@ -37,6 +37,7 @@ pub struct Worker {
 impl Worker {
     /// Build a worker from runtime configuration.
     pub async fn new(config: Arc<Config>) -> anyhow::Result<Self> {
+        config.validate_runner_storage()?;
         let db = create_pool(&config, 2).await?;
         let docker = connect_docker(&config)?;
         let storage: Arc<dyn shared::storage::Storage> =

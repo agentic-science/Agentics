@@ -621,6 +621,123 @@ python main.py
 }
 
 #[sqlx::test(migrations = "../migrations")]
+async fn worker_enforces_run_writable_disk_limit(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = test_config(storage.path(), &examples_challenges_root());
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "name": "run-disk-limit-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+
+    let run_sh = r#"#!/usr/bin/env sh
+set -eu
+dd if=/dev/zero of="$AGENTICS_OUTPUT_DIR/quota.bin" bs=1M count=80
+python main.py
+"#;
+    let artifact_base64 = zip_project_zip_base64(vec![
+        (
+            "agentics.solution.json",
+            serde_json::json!({
+                "protocol": "zip_project",
+                "protocol_version": 1,
+                "runtime": {
+                    "language": "python",
+                    "language_version": "3.12",
+                    "runtime_profile": "python-cpu"
+                },
+                "commands": {
+                    "run": "run.sh"
+                },
+                "phases": {
+                    "run": {
+                        "timeout_sec": 20,
+                        "disk_limit_mb": 64,
+                        "network_access": "disabled"
+                    }
+                },
+                "interface": {
+                    "kind": "stdio",
+                    "input_contract": "JSON on stdin",
+                    "output_contract": "answer on stdout"
+                },
+                "dependencies": { "policy": "image_provided" }
+            })
+            .to_string(),
+        ),
+        ("run.sh", run_sh.to_string()),
+        (
+            "main.py",
+            sample_sum_solution("payload['a'] + payload['b']"),
+        ),
+    ]);
+
+    let create_response: serde_json::Value = client
+        .post(api_url(&app, "/api/validation-runs"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "challenge_id": "sample-sum",
+            "benchmark_target_id": "linux-arm64-cpu",
+            "artifact_base64": artifact_base64,
+            "explanation": "run writable disk limit probe"
+        }))
+        .send()
+        .await
+        .expect("failed to create validation run")
+        .json()
+        .await
+        .expect("failed to decode create validation response");
+    let validation_id = create_response["id"]
+        .as_str()
+        .expect("missing validation id");
+
+    run_worker_once(&pool, &config).await;
+
+    let validation: serde_json::Value = client
+        .get(api_url(
+            &app,
+            &format!("/api/validation-runs/{validation_id}"),
+        ))
+        .header("Authorization", format!("Bearer {token}"))
+        .send()
+        .await
+        .expect("failed to get validation run")
+        .json()
+        .await
+        .expect("failed to decode validation response");
+    assert_eq!(validation["status"], "failed");
+    assert_eq!(validation["evaluation"]["status"], "failed");
+
+    let last_error: String = sqlx::query_scalar(
+        "SELECT last_error FROM evaluation_jobs WHERE solution_submission_id = $1",
+    )
+    .bind(validation_id)
+    .fetch_one(&pool)
+    .await
+    .expect("failed to query failed job");
+    assert!(
+        last_error.contains("\"phase\":\"run\""),
+        "expected run phase failure, got: {last_error}"
+    );
+
+    let bounded_slots = std::env::var("AGENTICS_TEST_RUNNER_WRITABLE_STORAGE_MODE")
+        .is_ok_and(|value| value == "xfs-project-quota-slots");
+    if bounded_slots {
+        assert!(last_error.contains("\"reason\":\"non_zero_exit\""));
+    } else {
+        assert!(last_error.contains("phase exceeded disk limit"));
+    }
+}
+
+#[sqlx::test(migrations = "../migrations")]
 async fn validation_run_is_rejected_when_challenge_disables_validation(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let challenges = tempfile::tempdir().expect("failed to create challenges tempdir");

@@ -33,6 +33,7 @@ http = "1"
 hyper = { version = "1", features = ["full"] }
 async-trait = "0.1"
 hex = "0.4"
+fs2 = { workspace = true }
 
 [dev-dependencies]
 reqwest = { workspace = true }

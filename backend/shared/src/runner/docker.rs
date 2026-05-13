@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use bollard::Docker;
@@ -29,6 +30,7 @@ pub(super) struct ContainerRequest {
     pub(super) docker_platform: DockerPlatform,
     pub(super) accelerator: BenchmarkAccelerator,
     pub(super) limits: ZipProjectPhaseLimits,
+    pub(super) docker_layer_quota_mb: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -87,6 +89,7 @@ pub(super) async fn run_container(
         init: Some(true),
         oom_kill_disable: Some(false),
         log_config: Some(docker_log_config(log_limit_bytes)),
+        storage_opt: docker_storage_opt(request.docker_layer_quota_mb),
         runtime: gpu_runtime(request.accelerator),
         device_requests: gpu_device_requests(request.accelerator),
         ..Default::default()
@@ -264,6 +267,14 @@ fn docker_log_config(limit_bytes: u64) -> HostConfigLogConfig {
         typ: Some("json-file".to_string()),
         config: Some(config),
     }
+}
+
+fn docker_storage_opt(limit_mb: Option<u64>) -> Option<HashMap<String, String>> {
+    limit_mb.map(|limit_mb| {
+        let mut storage_opt = HashMap::new();
+        storage_opt.insert("size".to_string(), format!("{limit_mb}m"));
+        storage_opt
+    })
 }
 
 fn gpu_runtime(accelerator: BenchmarkAccelerator) -> Option<String> {

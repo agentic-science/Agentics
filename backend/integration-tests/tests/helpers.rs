@@ -107,8 +107,17 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
         web_session_ttl_hours: 24,
         web_session_cookie_secure: false,
         allow_public_agent_registration_on_non_loopback: false,
-        docker_host: None,
+        docker_host: std::env::var("AGENTICS_TEST_DOCKER_HOST").ok(),
         require_digest_pinned_images: false,
+        runner_writable_storage_mode: std::env::var("AGENTICS_TEST_RUNNER_WRITABLE_STORAGE_MODE")
+            .unwrap_or_else(|_| "unbounded".to_string()),
+        runner_phase_mount_root: std::env::var("AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT").ok(),
+        runner_writable_slot_classes_mb: std::env::var(
+            "AGENTICS_TEST_RUNNER_WRITABLE_SLOT_CLASSES_MB",
+        )
+        .unwrap_or_else(|_| "64,256,1024,4096".to_string()),
+        runner_docker_layer_quota: std::env::var("AGENTICS_TEST_RUNNER_DOCKER_LAYER_QUOTA")
+            .is_ok_and(|value| value == "true"),
         log_level: "error".to_string(),
     }
 }
