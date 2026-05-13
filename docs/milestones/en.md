@@ -260,7 +260,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 
 ## v0.2 - Multi-Language ZIP Projects, Benchmark Targets, GPU, and Capacity Controls
 
-v0.2 expands Agentics beyond the initial archive protocol into manifest-based multi-language solution submissions and target-aware execution. The first target-aware execution work should support `linux/arm64` and `linux/amd64` CPU targets, with GPU-capable targets built on the same model later.
+v0.2 expands Agentics beyond the initial archive protocol into manifest-based multi-language solution submissions and target-aware execution. For the hosted MVP, target-aware execution is DGX-first: `linux-arm64-cpu` and `linux-arm64-cuda` run on `linux/arm64`, local platform development may use `macos-arm64-cpu` foreground rehearsal, and `linux-amd64-cpu` plus `linux-amd64-cuda` are post-MVP expansion targets.
 
 ### Solution Submission Protocol
 
@@ -283,20 +283,20 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 
 - **M0.2-TARGET-1: Define benchmark target schema**
   - Commit target: `protocol: add benchmark target schema`
-  - Scope: Replace the single challenge-version resource profile assumption with one or more benchmark targets. Support `cpu-linux-arm64` with Docker platform `linux/arm64` and `cpu-linux-amd64` with Docker platform `linux/amd64`. Each target owns image references or digests, resource limits, validation availability, quota scope, and ranking scope. Leave GPU target metadata extensible without implementing GPU scheduling.
-  - Test spec: Add schema and bundle validation tests for single ARM64 target, single AMD64 target, both CPU targets, duplicate target ids, unsupported Docker platforms, missing target references, target-specific validation disabled, and invalid image or resource metadata.
+  - Scope: Replace the single challenge-version resource profile assumption with one or more benchmark targets. For MVP, support `linux-arm64-cpu` and `linux-arm64-cuda` on Docker platform `linux/arm64`; reserve `linux-amd64-cpu` and `linux-amd64-cuda` for post-MVP deployment expansion. Each target owns image references or digests, resource limits, validation availability, quota scope, and ranking scope.
+  - Test spec: Add schema and bundle validation tests for ARM64 CPU target, ARM64 CUDA target, AMD64 target rejection, duplicate target ids, unsupported Docker platforms, missing target references, target-specific validation disabled, CUDA hardware metadata, and invalid image or resource metadata.
 
 - **M0.2-TARGET-2: Add target-specific evaluation and leaderboards**
   - Commit target: `api: add benchmark target evaluations`
   - Scope: Persist the selected benchmark target on validation runs, official evaluations, solution submissions, and leaderboard rows. The worker should use the selected target's Docker platform and resource profile. Official submissions should be able to target one supported benchmark target or all supported targets. Each target should produce independent official results and leaderboard entries.
-  - Test spec: Add integration tests proving unsupported targets are rejected before artifact upload, target-specific validation disablement is enforced, Docker receives the selected platform, two CPU targets produce separate official results, leaderboard rows are scoped by target, and hidden or rejudged submissions repair only the affected target leaderboard.
+  - Test spec: Add integration tests proving unsupported targets are rejected before artifact upload, target-specific validation disablement is enforced, Docker receives the selected platform and accelerator policy, multiple supported targets produce separate official results, leaderboard rows are scoped by target, and hidden or rejudged submissions repair only the affected target leaderboard.
 
 ### Base Images
 
 - **M0.2-IMAGE-1: Define first-party CPU base image**
   - Commit target: `docker: add agentics cpu base image`
-  - Scope: Add a source-defined Agentics CPU base image for solution and scorer containers on `linux/arm64` and `linux/amd64`. Use Ubuntu 26.04, run setup/build/run as root for MVP simplicity, install shell/core utilities, network tools, build tools, `apt-fast` with `aria2`, `uv`, `fnm`, Node, Bun, rustup, `jq`, `file`, editor/debugging basics, `time`, and `tini`. Add image metadata, a smoke script, local build instructions, and participant guidance. Do not publish or switch active challenge specs until a release digest exists.
-  - Test spec: Run shell syntax checks for image scripts and, when network is stable, build both platforms with Docker Buildx and run `/opt/agentics/smoke.sh` on each supported platform.
+  - Scope: Add a source-defined Agentics CPU base image for solution and scorer containers. For MVP, publish and smoke `linux/arm64`; reserve `linux/amd64` publication for post-MVP capacity. Use Ubuntu 26.04, run setup/build/run as root for MVP simplicity, install shell/core utilities, network tools, build tools, `apt-fast` with `aria2`, `uv`, `fnm`, Node, Bun, rustup, `jq`, `file`, editor/debugging basics, `time`, and `tini`. Add image metadata, a smoke script, local build instructions, and participant guidance. Do not publish or switch active challenge specs until a release digest exists.
+  - Test spec: Run shell syntax checks for image scripts and, when network is stable, build `linux/arm64` with Docker Buildx and run `/opt/agentics/smoke.sh` on that supported MVP platform.
 
 ### Worker and Resource Profiles
 
@@ -329,7 +329,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 
 - **M0.2-BE-2: Add capacity and quota controls**
   - Commit target: `api: add evaluation quota controls`
-  - Scope: Add API and persistence-backed read models for validation quota, official-run limits, active official capacity, active agent capacity, admin capacity inspection, and clear quota error responses. GPU quota remains part of the skipped GPU lane.
+  - Scope: Add API and persistence-backed read models for validation quota, official-run limits, active official capacity, active agent capacity, admin capacity inspection, and clear quota error responses. Heterogeneous GPU quota remains part of the future GPU lane.
   - Test spec: Add integration tests for quota boundaries, admin override, and retry-after metadata if present.
 
 ### Agentics CLI
@@ -347,7 +347,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 - **M0.2-CLI-3: Select benchmark targets**
   - Commit target: `cli: add benchmark target selection`
   - Scope: Add explicit `--target <target-id>` support to remote validation and official submission commands, plus an all-target option for challenges that advertise more than one target. CLI preflight should reject unsupported targets before packaging.
-  - Test spec: Add mocked API tests for ARM64 target, AMD64 target, all-target submission, unsupported target rejection, disabled validation on a selected target, and JSON output containing target-specific status ids.
+  - Test spec: Add mocked API tests for ARM64 CPU target, ARM64 CUDA target metadata, all-target submission, unsupported target rejection, disabled validation on a selected target, and JSON output containing target-specific status ids.
 
 - **M0.2-CLI-4: Request GPU validation**
   - Commit target: `cli: add gpu validation request support`
@@ -364,11 +364,11 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 - **M0.2-WEB-2: Show target-specific leaderboards**
   - Commit target: `web: show benchmark target leaderboards`
   - Scope: Add target selectors or tabs on challenge detail and leaderboard pages. Each tab should show the selected target's ranking, validation availability, resource summary, and empty state.
-  - Test spec: Add rendering tests for challenges with one target, two CPU targets, disabled validation on one target, and target-specific empty leaderboards.
+  - Test spec: Add rendering tests for challenges with one target, CPU and CUDA targets, disabled validation on one target, and target-specific empty leaderboards.
 
 - **M0.2-ADMIN-1: Manage resource profiles and quotas**
   - Commit target: `admin: manage resource profiles and quotas`
-  - Scope: Add admin UI for current resource profile review, validation and official quotas, and capacity status. GPU profile configuration remains part of the skipped GPU lane.
+  - Scope: Add admin UI for current resource profile review, validation and official quotas, and capacity status. Heterogeneous GPU profile configuration remains part of the future GPU lane.
   - Test spec: Add UI rendering tests and backend integration tests for resource profile and capacity read models.
 
 ### Challenge Authoring and Documentation
@@ -401,25 +401,25 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 | `M0.2-PROTO-2: Add setup/build/run phase model` | Implemented | Adds per-phase defaults, override validation, execution plan resolution, and failure-report models. |
 | `M0.2-PROTO-3: Add dependency policy validation` | Deferred | Discarded as a standalone milestone; dependency reproducibility belongs to challenge owners and submitting agents, while Agentics records metadata and execution policy. |
 | `M0.2-PROTO-4: Add scorer-owned prepare phase` | Implemented | Challenge bundles can generate validation or official run manifests and source-backed inputs in a scorer-owned `/prepared` workspace before solution invocations. |
-| `M0.2-TARGET-1: Define benchmark target schema` | Implemented | Challenge bundles now declare `benchmark_targets` with ARM64 and AMD64 CPU target ids, Docker platform, accelerator, validation flag, and target-owned resource profile. GPU targets are schema-reserved but rejected until scheduling exists. |
+| `M0.2-TARGET-1: Define benchmark target schema` | Implemented | Challenge bundles now declare `benchmark_targets` with canonical ARM64 CPU/CUDA target ids, Docker platform, accelerator, validation flag, and target-owned resource profile. AMD64 Linux targets are rejected until post-MVP deployment capacity exists. |
 | `M0.2-TARGET-2: Add target-specific evaluation and leaderboards` | Implemented | Solution submissions, jobs, evaluations, quotas, workers, API DTOs, and leaderboard rows now carry `benchmark_target_id`; HTTP submissions validate targets before artifact decode. |
 | `M0.2-IMAGE-1: Define first-party CPU base image` | Implemented | Adds source-defined Ubuntu 26.04 CPU base image files, smoke checks, local build docs, and participant guidance. Publishing and digest rollout are intentionally deferred. |
 | `M0.2-WORKER-1: Execute multi-phase solution-submissions` | Implemented | Runs setup/build in a build solution container, runs each invocation in a fresh solution container, supports source-backed run inputs, records per-invocation metadata, and isolates scoring in a separate scorer container. |
 | `M0.2-WORKER-2: Add resource profile enforcement` | Implemented | Enforces challenge-declared Docker images, timeout, memory, CPU, disk, image digest validation, and network policy. |
-| `M0.2-WORKER-3: Add GPU profile recording` | Planned | GPU metadata foundation. |
-| `M0.2-WORKER-4: Add GPU validation and official scheduling hooks` | Planned | Depends on GPU metadata and worker capability flags. |
+| `M0.2-WORKER-3: Add GPU profile recording` | Implemented | Benchmark targets record accelerator and CUDA hardware metadata for the DGX MVP. |
+| `M0.2-WORKER-4: Add GPU validation and official scheduling hooks` | Planned | Single-DGX CUDA execution uses target accelerator metadata; heterogeneous worker capability flags and GPU-specific scheduling remain planned. |
 | `M0.2-BE-1: Expose resource profiles` | Implemented | Public challenge detail responses expose strict benchmark target and resource profile metadata and reject invalid stored specs. |
-| `M0.2-BE-2: Add capacity and quota controls` | Implemented | Enforces validation and official quotas before artifact upload, exposes `/admin/capacity`, and documents admin official-run overrides. GPU quota remains in the skipped GPU lane. |
+| `M0.2-BE-2: Add capacity and quota controls` | Implemented | Enforces validation and official quotas before artifact upload, exposes `/admin/capacity`, and documents admin official-run overrides. Heterogeneous GPU quota remains in the future GPU lane. |
 | `M0.2-CLI-1: Generate manifest-based solution workspaces` | Implemented | `init-solution` now generates validated manifests for `python-cpu`, `rust-cpu`, `node-cpu`, and `generic-cpu` profiles. |
 | `M0.2-CLI-2: Run local validation with benchmark images` | Planned | Depends on benchmark image metadata. |
 | `M0.2-CLI-3: Select benchmark targets` | Implemented | `submit` and `validate --remote` support `--target` and `--all-targets`; CLI preflight rejects unsupported targets and target-disabled validation before packaging. |
-| `M0.2-CLI-4: Request GPU validation` | Planned | Depends on GPU validation API and quota. |
+| `M0.2-CLI-4: Request GPU validation` | Planned | Dedicated GPU quota UX remains planned; the current CLI can select a CUDA target through `--target`. |
 | `M0.2-WEB-1: Show protocol and resource metadata` | Implemented | Observer challenge pages and frontend schemas display protocol, manifest, scorer command, benchmark targets, and resource profile metadata. |
 | `M0.2-WEB-2: Show target-specific leaderboards` | Implemented | Observer leaderboard fetches and displays the selected target, with target tabs for multi-target challenges. |
-| `M0.2-ADMIN-1: Manage resource profiles and quotas` | Implemented | Admin challenge rows show current benchmark targets and mode flags; the capacity tab shows configured quotas and active usage. GPU configuration remains in the skipped GPU lane. |
+| `M0.2-ADMIN-1: Manage resource profiles and quotas` | Implemented | Admin challenge rows show current benchmark targets and mode flags; the capacity tab shows configured quotas and active usage. Heterogeneous GPU configuration remains in the future GPU lane. |
 | `M0.2-EXAMPLE-1: Add zip_project protocol fixture challenges and submissions` | Implemented | Adds sample-sum stdio, grid-routing file-mode, and matrix-multiplication multi-invocation fixtures, manifest-based solutions, scorer tests, and worker integration coverage for timing metadata, private source-backed inputs, and run-stage no-egress behavior. |
 | `M0.2-DOC-1: Document multi-language challenge authoring` | Implemented | Documents the canonical protocol, generated CLI profiles, run manifests, resource profiles, execution isolation, dependency metadata, quota controls, and admin capacity views. Local benchmark-image validation remains `M0.2-CLI-2`. |
-| `M0.2-DOC-2: Document GPU benchmark expectations` | Planned | Should ship with GPU profile implementation. |
+| `M0.2-DOC-2: Document GPU benchmark expectations` | Planned | Broader GPU expectations should ship with heterogeneous GPU scheduling; MVP CUDA target policy is covered by the benchmark target and DGX docs. |
 | `M0.2-DOC-3: Document benchmark target authoring` | Implemented | Adds bilingual v0.2 benchmark target docs covering target ids, Docker platforms, validation flags, target-aware APIs, CLI behavior, worker behavior, and leaderboards. |
 
 ## v0.2.5-mvp - Hosted MVP Demo and Human-Facing Web Revamp
@@ -521,7 +521,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 
 - **M0.2.5-DGX-3: Run DGX Spark end-to-end smoke and benchmark calibration**
   - Commit target: `ops: add dgx spark smoke checklist`
-  - Scope: Run hosted CLI onboarding, matrix official submission on supported CPU targets, no-egress runner smoke, storage-quota escape smoke, worker heartbeat inspection, capacity inspection, and initial runtime calibration on DGX Spark. Record whether `linux/amd64` emulation is acceptable or whether hosted MVP should restrict targets by host capability.
+  - Scope: Run hosted CLI onboarding, matrix official submission on supported CPU targets, no-egress runner smoke, storage-quota escape smoke, worker heartbeat inspection, capacity inspection, and initial runtime calibration on DGX Spark. Record that the hosted MVP deployment supports `linux-arm64-cpu` and `linux-arm64-cuda`, while `linux-amd64-cpu` and `linux-amd64-cuda` remain post-MVP targets until AMD64 deployment capacity exists.
   - Test spec: Capture terminal status for a sample official submission, `/admin/capacity`, `/admin/service-heartbeats`, runner logs, matrix benchmark timing baselines, and proof that a job writing beyond Docker writable-layer or writable-mount limits fails without exhausting host disk.
 
 ### CLI and Documentation
@@ -567,12 +567,12 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 | `M0.2.5-CREATE-6: Add stale draft cleanup and challenge creation quotas` | Implemented | Active draft limits, private asset byte limits, validation-frequency limits, stale draft abandonment, and unpublished asset purge are implemented. |
 | `M0.2.5-DEMO-1: Decide official demo challenge set` | Implemented | Matrix multiplication throughput is the first MVP demo challenge; broader hosted demo set remains a TODO. |
 | `M0.2.5-DEMO-2: Package official demo challenges` | Implemented | Matrix demo lives in the challenge repository, uses private seed/config plus prepare-generated official data, and passed the local GitHub draft/publish/submit smoke path. |
-| `M0.2.5-DEPLOY-1: Add hosted deployment baseline` | Implemented | Mac-local MVP deployment rehearsal is documented; DGX Spark hosted profile remains planned. |
+| `M0.2.5-DEPLOY-1: Add hosted deployment baseline` | Implemented | Mac-local MVP deployment rehearsal is documented; DGX Spark hosted profile is now covered separately by DGX-1 and DGX-2. |
 | `M0.2.5-OPS-1: Add public quota and abuse limits` | Implemented | Backend-enforced quotas are documented with recommended Mac-local MVP values and reverse-proxy requirements. |
 | `M0.2.5-OPS-2: Add health checks, observability, and runbook` | Implemented | Operations runbook and `scripts/ops/check-local-mvp.sh` cover health, capacity, heartbeat, logs, failures, and backups. |
-| `M0.2.5-DGX-1: Inventory DGX Spark host and container runtime` | Blocked | Linux host, GPU, NVIDIA toolkit, storage, XFS tooling, and loopback tooling inventory is documented in `docs/versions/v0.2.5/dgx-spark-inventory/en.md`; Docker server/storage driver and NVIDIA Docker smoke evidence require Docker daemon access. |
-| `M0.2.5-DGX-2: Add DGX Spark deployment profile` | Planned | Storage decision: Agentics-owned Docker daemon on loopback XFS plus per-phase loop images. Depends on Docker daemon access, DGX inventory completion, and ingress decisions. |
-| `M0.2.5-DGX-3: Run DGX Spark end-to-end smoke and benchmark calibration` | Planned | Depends on DGX deployment profile and published matrix demo; must include storage-quota escape smoke. |
+| `M0.2.5-DGX-1: Inventory DGX Spark host and container runtime` | Implemented | Linux host, GPU, NVIDIA toolkit, storage, XFS tooling, loopback tooling, default Docker server/storage driver, and NVIDIA Docker smoke evidence are documented in `docs/versions/v0.2.5/dgx-spark-inventory/en.md`. |
+| `M0.2.5-DGX-2: Add DGX Spark deployment profile` | Implemented | Profile docs, env template, systemd units, Agentics-owned Docker config, Linux-gated storage/profile scripts, loopback XFS mounts with `/etc/fstab` entries, enabled Agentics-owned Docker daemon, and strict profile verification are in place. |
+| `M0.2.5-DGX-3: Run DGX Spark end-to-end smoke and benchmark calibration` | Implemented | DGX smoke evidence is documented in `docs/versions/v0.2.5/dgx-spark-smoke/en.md`, including hosted CLI onboarding, matrix validation and official submission on `linux-arm64-cpu`, no-egress runner smoke, storage-quota escape smoke, capacity, heartbeats, and the MVP target decision. |
 | `M0.2.5-CLI-1: Validate hosted CLI onboarding` | Implemented | Hosted CLI smoke path is documented for registration, challenge inspection, workspace initialization, validation, official submission, and polling. |
 | `M0.2.5-CLI-2: Add challenge draft reviewer commands` | Implemented | CLI covers admin validation, review, publish, abandon, and cleanup helpers; creator-side GitHub OAuth CLI support remains deferred in favor of the `/creator` web flow. |
 | `M0.2.5-SKILL-1: Add challenge authoring skill` | Implemented | `.agents/skills/challenge-authoring-workflow/SKILL.md` documents creator workflow, `/creator` web usage, and private asset ZIP overlays. |

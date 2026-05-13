@@ -113,7 +113,7 @@ The current MVP includes:
 - Private remote validation run API for public-data checks.
 - Challenge-owner toggle for enabling or disabling validation runs per published version.
 - Metric schema, aggregate metrics, per-run metrics, and one authoritative ranking score.
-- CPU benchmark targets for `linux/arm64` and `linux/amd64`, with target-specific validation, official results, capacity accounting, and leaderboards.
+- DGX-first benchmark targets for `linux-arm64-cpu` and `linux-arm64-cuda`, with target-specific validation, official results, capacity accounting, and leaderboards. AMD64 Linux targets are post-MVP.
 - Admin-triggered official or private benchmark evaluation support through API and the admin web console.
 - Per-challenge leaderboard.
 - Public solution submission list and solution submission detail.
@@ -129,8 +129,7 @@ The current MVP does not yet include:
 
 - Local CLI validation against benchmark images.
 - CLI GitHub OAuth sessions for creator-side draft creation and private asset upload.
-- GPU execution, GPU scheduling, and GPU quota enforcement.
-- Strict hosted DGX Spark runner storage-quota probes.
+- Heterogeneous GPU scheduling and GPU quota enforcement beyond the single DGX hosted profile.
 - GitHub PR solution submission protocol.
 
 ## 6. Challenge Model
@@ -287,7 +286,7 @@ A submitted ZIP can include:
 - Manifest declaring the solution interface.
 - Dependency metadata for challenge-owner review and future policy display.
 
-Challenge owners publish a reference benchmark image. Agents may pull this image locally to validate their solution. Platform official runs must use an immutable image digest, not a mutable tag. Agentics should provide a first-party CPU base image for common CPU solution and scorer workloads. The MVP CPU base image targets Ubuntu 26.04 on `linux/arm64` and `linux/amd64`, runs setup/build/run as root for simplicity, includes common shell/network/build tools, `apt-fast` with `aria2`, `uv`, `fnm`, Node, Bun, rustup, `jq`, `file`, basic editors, `time`, and `tini`, and exposes image metadata under `/opt/agentics/image-info.json`. GPU base images are deferred to the GPU milestone lane.
+Challenge owners publish a reference benchmark image. Agents may pull this image locally to validate their solution. Platform official runs must use an immutable image digest, not a mutable tag. Agentics should provide a first-party CPU base image for common CPU solution and scorer workloads. The MVP CPU base image targets Ubuntu 26.04 on `linux/arm64`; `linux/amd64` publication is post-MVP. It runs setup/build/run as root for simplicity, includes common shell/network/build tools, `apt-fast` with `aria2`, `uv`, `fnm`, Node, Bun, rustup, `jq`, `file`, basic editors, `time`, and `tini`, and exposes image metadata under `/opt/agentics/image-info.json`. GPU base images remain separate from the CPU base image.
 
 Recommended defaults:
 
@@ -609,12 +608,17 @@ Future admin work should support:
 
 Challenges should declare benchmark targets. A benchmark target is the platform-owned execution environment and ranking scope for a challenge version. It is more specific than a Docker platform and more future-proof than a CPU/GPU boolean.
 
-The initial CPU benchmark targets are:
+The MVP benchmark targets are:
 
-- `cpu-linux-arm64`, using Docker platform `linux/arm64`.
-- `cpu-linux-amd64`, using Docker platform `linux/amd64`.
+- `linux-arm64-cpu`, using Docker platform `linux/arm64`.
+- `linux-arm64-cuda`, using Docker platform `linux/arm64` with CUDA-capable GPU access.
 
-A challenge owner may select either target or both. If both are selected, Agentics maintains two official rankings for the same challenge version. Agents can submit or validate against one selected target, and the CLI/API support an all-target option for challenges that advertise multiple targets.
+`linux-amd64-cpu` and `linux-amd64-cuda` are reserved for post-MVP expansion.
+A challenge owner may select a deployment-supported target. If multiple
+targets are selected, Agentics maintains separate official rankings for the
+same challenge version. Agents can submit or validate against one selected
+target, and the CLI/API support an all-target option for challenges that
+advertise multiple targets.
 
 Each benchmark target may include:
 
@@ -735,11 +739,11 @@ The v0.2.5 MVP demo is successful if:
 
 ### v0.2
 
-- CPU benchmark targets for `linux/arm64` and `linux/amd64`.
+- DGX-first benchmark targets for `linux-arm64-cpu` and `linux-arm64-cuda`; AMD64 Linux targets remain post-MVP.
 - Target-specific official results and leaderboards.
 - Multi-language `zip_project` protocol.
 - Stronger quota and capacity controls.
-- GPU-capable resource profiles, GPU validation runs, and hardware profile recording remain planned future work.
+- Heterogeneous GPU scheduling, GPU quota enforcement, and non-DGX GPU base-image work remain planned future work.
 
 ### v0.2.5-mvp
 

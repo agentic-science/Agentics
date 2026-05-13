@@ -8,7 +8,7 @@ switch to it only after a stable release image is pushed and digest-pinned.
 ## Contract
 
 - Base OS: Ubuntu 26.04.
-- Platforms: `linux/arm64` and `linux/amd64`.
+- MVP platform: `linux/arm64`. `linux/amd64` publication is post-MVP.
 - Scope: CPU solution setup/build/run phases and scorer prepare/score phases.
 - MVP user model: root in setup, build, and run phases for participant
   simplicity.
@@ -52,7 +52,7 @@ enable digest-pinned image enforcement, and challenge specs should reference the
 published image by immutable digest.
 
 Do not update active challenge specs to this image until it has been published
-and smoke-tested on both supported CPU platforms.
+and smoke-tested on the supported MVP CPU platform.
 
 ## Build Locally
 
@@ -72,11 +72,11 @@ Run the image smoke check:
 docker run --rm agentics-cpu-base:ubuntu26.04-local /opt/agentics/smoke.sh
 ```
 
-Prepare a multi-architecture OCI archive without publishing:
+Prepare a Linux ARM64 OCI archive without publishing:
 
 ```bash
 docker buildx build \
-  --platform linux/arm64,linux/amd64 \
+  --platform linux/arm64 \
   --output type=oci,dest=/tmp/agentics-cpu-base-ubuntu26.04.oci \
   -t ghcr.io/agentics-reifying/agentics-cpu-base:ubuntu26.04-v0.1.0 \
   docker/images/cpu-base

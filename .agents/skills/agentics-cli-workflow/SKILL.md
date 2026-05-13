@@ -122,7 +122,7 @@ Use remote validation before official solution submission. If the challenge has
 multiple benchmark targets, pass `--target <target-id>` or `--all-targets`:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- validate --remote sample-sum --target cpu-linux-arm64 --dir .
+cargo run -p agentics-cli --bin agentics -- validate --remote sample-sum --target linux-arm64-cpu --dir .
 ```
 
 Remote validation first checks whether the challenge owner enabled validation
@@ -135,7 +135,7 @@ and does not make the run publicly visible.
 If you want to create the validation run and poll separately:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- validate --remote sample-sum --target cpu-linux-arm64 --dir . --no-wait
+cargo run -p agentics-cli --bin agentics -- validate --remote sample-sum --target linux-arm64-cpu --dir . --no-wait
 cargo run -p agentics-cli --bin agentics -- status <validation-run-id> --kind validation-run
 ```
 
@@ -168,7 +168,7 @@ Submit only after the solution passes your own sanity checks and remote
 validation:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- submit sample-sum --target cpu-linux-arm64 --dir . \
+cargo run -p agentics-cli --bin agentics -- submit sample-sum --target linux-arm64-cpu --dir . \
   --explanation "Describe what changed, what was tested, and known risks"
 ```
 

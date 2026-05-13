@@ -12,7 +12,7 @@ agentics.solution.json
 
 `zip_project` is intended to support multi-language solution submissions. A local candidate is still called a solution. Once uploaded, it becomes a solution submission.
 
-The current implementation validates ZIP project manifests at submission time, executes setup/build/run phases in Docker, runs challenge-owned scorers in a separate Docker container, and enforces challenge-declared resource profiles. Target-specific CPU platform selection, local benchmark-image validation, and GPU scheduling remain separate v0.2 milestones.
+The current implementation validates ZIP project manifests at submission time, executes setup/build/run phases in Docker, runs challenge-owned scorers in a separate Docker container, and enforces challenge-declared resource profiles. Target-specific platform selection is implemented for the DGX-first MVP targets. Local benchmark-image validation, heterogeneous GPU scheduling, and GPU quota enforcement remain separate milestones.
 
 ## CLI Workspace Initialization
 
@@ -354,15 +354,17 @@ The admin challenge list also includes each current version's resource profile a
 The current implementation makes benchmark target the first-class execution and
 ranking scope for challenge versions.
 
-Initial CPU targets:
+MVP targets:
 
-- `cpu-linux-arm64`, using Docker platform `linux/arm64`.
-- `cpu-linux-amd64`, using Docker platform `linux/amd64`.
+- `linux-arm64-cpu`, using Docker platform `linux/arm64`.
+- `linux-arm64-cuda`, using Docker platform `linux/arm64` with CUDA-capable GPU access.
 
-A challenge version may select one target or both. When both are selected,
-validation runs, official evaluations, capacity accounting, and leaderboards are
-target-specific. A solution submission may request one target, and the CLI
-`--all-targets` option creates one evaluation per supported target.
+AMD64 Linux targets are reserved for post-MVP deployment expansion. A challenge
+version may select one deployment-supported target or multiple deployment-
+supported targets. Validation runs, official evaluations, capacity accounting,
+and leaderboards are target-specific. A solution submission may request one
+target, and the CLI `--all-targets` option creates one evaluation per supported
+target.
 
 Each benchmark target owns:
 
@@ -397,6 +399,7 @@ manifest-based workspaces for selected runtime profiles, the API rejects ZIP
 submissions that do not include a valid root `agentics.solution.json`, the
 worker executes the challenge run manifest, public challenge views expose
 protocol, benchmark target, and resource profile metadata, and admin views
-expose resource profiles plus quota/capacity state. Target-specific CPU platform
-selection is implemented. Local benchmark-image validation and GPU scheduling
-remain planned.
+expose resource profiles plus quota/capacity state. Target-specific platform
+selection is implemented for `linux-arm64-cpu` and `linux-arm64-cuda`. Local
+benchmark-image validation, heterogeneous GPU scheduling, and GPU quota
+enforcement remain planned.

@@ -8,7 +8,7 @@ challenges 才应切换到该 image。
 ## Contract
 
 - Base OS：Ubuntu 26.04。
-- Platforms：`linux/arm64` 和 `linux/amd64`。
+- MVP platform：`linux/arm64`。`linux/amd64` publication 属于 post-MVP。
 - Scope：CPU solution setup/build/run phases，以及 scorer prepare/score phases。
 - MVP user model：setup、build 和 run phases 均使用 root，以降低 participant
   cognitive load。
@@ -51,8 +51,8 @@ Rust toolchain。
 digest-pinned image enforcement，并且 challenge specs 应使用 published image 的
 immutable digest。
 
-在该 image 发布并且在两个 CPU platforms 上完成 smoke test 之前，不要把 active
-challenge specs 切换到该 image。
+在该 image 发布并且在 supported MVP CPU platform 上完成 smoke test 之前，不要把
+active challenge specs 切换到该 image。
 
 ## Build Locally
 
@@ -72,11 +72,11 @@ docker buildx build \
 docker run --rm agentics-cpu-base:ubuntu26.04-local /opt/agentics/smoke.sh
 ```
 
-不发布，仅生成 multi-architecture OCI archive：
+不发布，仅生成 Linux ARM64 OCI archive：
 
 ```bash
 docker buildx build \
-  --platform linux/arm64,linux/amd64 \
+  --platform linux/arm64 \
   --output type=oci,dest=/tmp/agentics-cpu-base-ubuntu26.04.oci \
   -t ghcr.io/agentics-reifying/agentics-cpu-base:ubuntu26.04-v0.1.0 \
   docker/images/cpu-base

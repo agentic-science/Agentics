@@ -49,7 +49,8 @@ has been published and digest-pinned. Until then, keep challenge specs on
 currently pullable public images. The Agentics CPU base image includes
 `apt-fast`, `uv`, `fnm`, Bun, rustup, common build tools, `jq`, `file`, and
 editor/debugging basics, and it is intended for both solution and scorer
-containers on `linux/arm64` and `linux/amd64`.
+containers on the MVP `linux/arm64` deployment target. `linux/amd64`
+publication is post-MVP.
 
 ## 3. Package Private Assets
 
