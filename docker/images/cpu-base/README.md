@@ -7,7 +7,8 @@ Publish only from a stable network and pin challenge specs to immutable digests.
 ## Image Contract
 
 - Base: Ubuntu 26.04.
-- Platforms: `linux/arm64` and `linux/amd64`.
+- MVP platform: `linux/arm64`.
+- Post-MVP platform: `linux/amd64`.
 - Intended use: CPU solution setup, build, run, scorer prepare, and scorer score
   phases.
 - User model: root for setup, build, and run in the MVP.
@@ -37,11 +38,11 @@ Run the smoke check:
 docker run --rm agentics-cpu-base:ubuntu26.04-local /opt/agentics/smoke.sh
 ```
 
-Prepare a multi-architecture OCI archive without publishing:
+Prepare an MVP ARM64 OCI archive without publishing:
 
 ```bash
 docker buildx build \
-  --platform linux/arm64,linux/amd64 \
+  --platform linux/arm64 \
   --output type=oci,dest=/tmp/agentics-cpu-base-ubuntu26.04.oci \
   -t ghcr.io/agentics-reifying/agentics-cpu-base:ubuntu26.04-v0.1.0 \
   docker/images/cpu-base
@@ -54,7 +55,7 @@ and record the resulting `/opt/agentics/image-info.json` in release notes:
 
 ```bash
 docker buildx build \
-  --platform linux/arm64,linux/amd64 \
+  --platform linux/arm64 \
   --build-arg AGENTICS_IMAGE_VERSION=0.1.0 \
   --build-arg UBUNTU_VERSION=26.04 \
   --build-arg NODE_VERSION=<concrete-node-version> \
@@ -65,3 +66,6 @@ docker buildx build \
 
 Challenge specs should use digest-pinned `solution_image` and `scorer_image`
 references after the image is published.
+
+Do not publish `linux/amd64` variants until the platform has AMD64 Linux
+deployment capacity.

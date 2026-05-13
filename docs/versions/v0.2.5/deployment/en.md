@@ -1,10 +1,13 @@
 # v0.2.5 MVP Deployment Baseline
 
-This document defines the current Mac-local deployment rehearsal for the MVP. The hosted MVP will run on an NVIDIA DGX Spark, so this baseline is intentionally conservative and must be revisited before public launch.
+This document defines the Mac-local deployment rehearsal for the MVP. The hosted
+MVP profile runs on NVIDIA DGX Spark and is documented separately in
+`docs/versions/v0.2.5/dgx-spark-deployment/en.md`. Use this document for local
+foreground rehearsal and the DGX profile docs for hosted Linux operation.
 
 ## Current Target
 
-The current verified target is a single-machine deployment:
+The Mac-local verified target is a single-machine deployment:
 
 - Postgres runs from `docker/platform-db/docker-compose.yml`.
 - API, worker, and web run as separate processes.
@@ -12,7 +15,9 @@ The current verified target is a single-machine deployment:
 - The worker talks to the local Docker daemon.
 - Public traffic should terminate at a reverse proxy before reaching the API or web process.
 
-The Mac-local rehearsal validates process wiring and platform behavior. It does not validate DGX GPU runtime, ARM64 CUDA images, public TLS, or production ingress.
+The Mac-local rehearsal validates process wiring and platform behavior. It does
+not validate DGX GPU runtime, ARM64 CUDA images, public TLS, production ingress,
+or Linux systemd startup.
 
 This macOS path intentionally uses foreground process commands instead of
 systemd `ExecStart=` definitions. The systemd units under `deploy/dgx-spark/`
@@ -106,7 +111,7 @@ The reverse proxy should:
 
 `AGENTICS_STORAGE_ROOT` contains uploaded solution artifacts, runner logs, runtime challenge bundles, and private asset overlays. Treat it as durable platform state.
 
-Before public MVP:
+For hosted or public MVP operation:
 
 - Put `AGENTICS_STORAGE_ROOT` on a persistent volume.
 - Back up Postgres and `AGENTICS_STORAGE_ROOT` together.
@@ -115,7 +120,7 @@ Before public MVP:
 
 ## Hosted Runner Disk Isolation Decision
 
-The hosted MVP should use a Linux-only storage profile before accepting public
+The hosted MVP uses a Linux-only storage profile before accepting public
 evaluation jobs:
 
 - Run an Agentics-owned Docker daemon instead of the operator's default Docker
@@ -169,9 +174,11 @@ scripts/ops/check-local-mvp.sh
 
 Then perform a CLI smoke path from `docs/versions/v0.2.5/hosted-cli-onboarding/en.md`.
 
-## DGX Spark Follow-Up
+## DGX Spark Hosted Profile
 
-The DGX Spark hosted deployment must be separately verified because it adds ARM64, NVIDIA container runtime, GPU device access, and DGX OS lifecycle assumptions. See the DGX Spark milestones in `docs/milestones/en.md`.
+The DGX Spark hosted deployment is verified separately because it adds ARM64,
+NVIDIA container runtime, GPU device access, Linux systemd startup, and DGX OS
+lifecycle assumptions. See the DGX Spark milestones in `docs/milestones/en.md`.
 
 The first host inventory is recorded in
 `docs/versions/v0.2.5/dgx-spark-inventory/en.md`. The repeatable check is:
@@ -187,8 +194,9 @@ the Agentics-owned Docker daemon profile.
 
 The DGX Spark deployment profile is recorded in
 `docs/versions/v0.2.5/dgx-spark-deployment/en.md`, with deploy artifacts under
-`deploy/dgx-spark/` and Linux-gated storage/profile scripts under
-`scripts/ops/`.
+`deploy/dgx-spark/`, Linux-gated storage/profile scripts under `scripts/ops/`,
+and end-to-end smoke evidence in
+`docs/versions/v0.2.5/dgx-spark-smoke/en.md`.
 
 Use NVIDIA's DGX Spark documentation as the operational source of truth:
 

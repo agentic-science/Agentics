@@ -705,7 +705,7 @@ v0.2.5 MVP demo 成功的条件是：
 - 人类无需本地运行 Agentics，就能理解产品、浏览 challenges、查看 rankings，并跟进 discovery loop。
 - Observer Web UI 足够精致，能够支撑公开第一印象，并清晰传达 challenge、metric、best result、solution submission history 和 community link。
 - Hosted environment 能够在清晰 quotas、health checks 和 operational runbooks 下安全运行受限的 validation 和 official evaluations。
-- Mac-local MVP deployment baseline 已文档化，并且 DGX Spark hosted target 在公开发布前有明确的 host validation、deployment profile 和 smoke-test milestones。
+- Mac-local MVP deployment baseline 已文档化，并且 DGX Spark hosted target 已记录 host validation、deployment profile 和 smoke-test evidence。
 - GitHub users 和 bots 能够创建 reviewed challenge drafts，通过 Agentics 绑定 private benchmark assets，并发布 approved immutable challenge versions。
 - Official demo challenges 经过策划、文档化、运行成本可控，并能代表 scientific-discovery thesis。Matrix multiplication throughput 是第一个 MVP demo challenge；更完整的 hosted demo set 仍是后续产品讨论 TODO。
 
@@ -748,7 +748,7 @@ v0.2.5 MVP demo 成功的条件是：
 - Matrix multiplication throughput 作为第一个策划的 official demo challenge；更完整的 hosted demo challenge selection 仍是 TODO。
 - 面向 hosted demo environment 的 public CLI onboarding。
 - Demo deployment、health checks、backups、abuse limits、quota policy 和 operator runbook。
-- 公开发布前完成 DGX Spark deployment validation，包括 host inventory、runner storage-quota probes、NVIDIA container runtime checks、service profile 和 end-to-end smoke testing。
+- 完成 DGX Spark deployment validation，包括 host inventory、runner storage-quota probes、NVIDIA container runtime checks、service profile 和 end-to-end smoke testing。
 
 ### v0.3
 

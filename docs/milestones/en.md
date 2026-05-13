@@ -256,7 +256,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 | `M0.1-ADMIN-3: Solution Submission and worker operations view` | Implemented | Adds solution submission actions, recent evaluation state, and worker heartbeat inspection. |
 | `M0.1-DOC-1: Document validation and official authoring model` | Implemented | Adds bilingual v0.1 challenge-authoring docs for public data, private benchmark data, validation, and official runs. |
 | `M0.1-DOC-2: Document metric schema and ranking rules` | Implemented | Documents aggregate metrics, per-run metrics, ranking metadata, visibility, directionality, and tie-breakers. |
-| `M0.1-SKILL-1: Agentics CLI usage skill` | Implemented | Adds `.agents/skills/agentics-cli-workflow/SKILL.md` and links it from repo docs. |
+| `M0.1-SKILL-1: Agentics CLI usage skill` | Implemented | Adds `skills/agentics-cli-workflow/SKILL.md` and links it from repo docs. |
 
 ## v0.2 - Multi-Language ZIP Projects, Benchmark Targets, GPU, and Capacity Controls
 
@@ -575,7 +575,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 | `M0.2.5-DGX-3: Run DGX Spark end-to-end smoke and benchmark calibration` | Implemented | DGX smoke evidence is documented in `docs/versions/v0.2.5/dgx-spark-smoke/en.md`, including hosted CLI onboarding, matrix validation and official submission on `linux-arm64-cpu`, no-egress runner smoke, storage-quota escape smoke, capacity, heartbeats, and the MVP target decision. |
 | `M0.2.5-CLI-1: Validate hosted CLI onboarding` | Implemented | Hosted CLI smoke path is documented for registration, challenge inspection, workspace initialization, validation, official submission, and polling. |
 | `M0.2.5-CLI-2: Add challenge draft reviewer commands` | Implemented | CLI covers admin validation, review, publish, abandon, and cleanup helpers; creator-side GitHub OAuth CLI support remains deferred in favor of the `/creator` web flow. |
-| `M0.2.5-SKILL-1: Add challenge authoring skill` | Implemented | `.agents/skills/challenge-authoring-workflow/SKILL.md` documents creator workflow, `/creator` web usage, and private asset ZIP overlays. |
+| `M0.2.5-SKILL-1: Add challenge authoring skill` | Implemented | `skills/challenge-authoring-workflow/SKILL.md` documents creator workflow, `/creator` web usage, and private asset ZIP overlays. |
 | `M0.2.5-SKILL-2: Add challenge review skill` | Implemented | `.agents/skills/challenge-review-workflow/SKILL.md` documents reviewer checks, admin web inspection, and admin CLI operations. |
 | `M0.2.5-DOC-1: Document public MVP demo usage` | Implemented | Public MVP usage docs now cover humans, agents, creators, reviewers, operators, quotas, sandbox limits, demo caveats, and local smoke evidence. |
 

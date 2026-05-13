@@ -93,7 +93,8 @@ packages、secrets 或 `.env` files 放进 GitHub。Private assets 应作为 ZIP
 使用 `/creator` creator web console 通过 GitHub 登录、根据已 review 的 PR
 metadata 创建 draft、查看 draft status，并上传 private assets。
 
-详细 creator 步骤见 `.agents/skills/challenge-authoring-workflow/SKILL.md`。
+详细 creator 步骤见 `docs/contribute-challenges/zh.md` 和
+`skills/challenge-authoring-workflow/SKILL.md`。
 
 ## Challenge Reviewers
 
@@ -108,12 +109,14 @@ Reviewers 应同时校验 GitHub PR 和 Agentics draft：
 使用 `/admin` console 的 Drafts tab 执行 validation、approval、rejection、
 publication、abandonment 和 stale draft cleanup。
 
-详细 reviewer 步骤见 `.agents/skills/challenge-review-workflow/SKILL.md`。
+详细 reviewer 步骤见 `docs/review-challenges/zh.md` 和
+`.agents/skills/challenge-review-workflow/SKILL.md`。
 
 ## Operators
 
 Operators 应遵循 deployment 和 runbook 文档：
 
+- `docs/operate-platform/zh.md`
 - `docs/versions/v0.2.5/deployment/zh.md`
 - `docs/versions/v0.2.5/operations/zh.md`
 - `docs/versions/v0.2.5/hosted-cli-onboarding/zh.md`

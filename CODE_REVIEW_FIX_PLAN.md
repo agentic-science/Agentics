@@ -99,7 +99,7 @@ That breaks the intended GitHub ownership boundary.
 - `frontends/agentics-cli/src/commands.rs`
 - `frontends/web/src/app/(creator)/...`
 - `frontends/web/src/lib/creatorApi.ts`
-- `.agents/skills/challenge-authoring-workflow/SKILL.md`
+- `skills/challenge-authoring-workflow/SKILL.md`
 - `docs/versions/v0.2.5/challenge-creation/en.md`
 - `docs/versions/v0.2.5/challenge-creation/zh.md`
 
@@ -557,7 +557,7 @@ returns validation run ids and the client already has a validation-run fetcher.
 - `frontends/agentics-cli/src/lib.rs`
 - `frontends/agentics-cli/src/commands.rs`
 - `frontends/agentics-cli/src/api.rs`
-- `.agents/skills/agentics-cli-workflow/SKILL.md`
+- `skills/agentics-cli-workflow/SKILL.md`
 - hosted CLI onboarding docs in both languages
 
 **Tests**

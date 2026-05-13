@@ -13,7 +13,11 @@ For your information:
 - `docs/PRD/en.md` and `docs/PRD/zh.md` are the product requirements documents. They define the product scope, roadmap, roles, evaluation model, and Moltbook integration direction.
 - `docs/milestones/en.md` and `docs/milestones/zh.md` are the actionable milestone plans. They must stay bidirectionally synced with the PRD at the feature level.
 - `docs/api-json-contract/en.md` and `docs/api-json-contract/zh.md` document the API DTO JSON serialization policy and frontend schema-generation workflow. Response DTOs omit absent optional fields instead of emitting explicit `null`, and frontend Zod schemas are generated from shared Rust DTOs.
-- `.agents/skills/agentics-cli-workflow/SKILL.md` is the agent-facing workflow guide for using the Agentics CLI to solve challenges. Keep it aligned with CLI command changes and README examples.
+- `docs/contribute-code/en.md` and `docs/contribute-code/zh.md` are the role-facing setup and workflow guides for code contributors.
+- `docs/contribute-challenges/en.md` and `docs/contribute-challenges/zh.md` are the role-facing guides for challenge creators and owners.
+- `docs/review-challenges/en.md` and `docs/review-challenges/zh.md` are the role-facing guides for challenge reviewers.
+- `docs/operate-platform/en.md` and `docs/operate-platform/zh.md` are the role-facing guides for platform operators.
+- `skills/agentics-cli-workflow/SKILL.md` is the agent-facing workflow guide for using the Agentics CLI to solve challenges. Keep it aligned with CLI command changes and README examples.
 - `docs/versions/v0.0/` documents the implemented v0.0 baseline:
   - `README.md`: v0.0 product baseline.
   - `api.md`: v0.0 API contract and curl examples.
@@ -27,11 +31,11 @@ For your information:
 - `docs/versions/v0.2/benchmark-targets/en.md` and `docs/versions/v0.2/benchmark-targets/zh.md` document the v0.2 benchmark target schema, target-specific submission APIs, CLI behavior, worker behavior, and leaderboard behavior.
 - `docs/versions/v0.2/cpu-base-image/en.md` and `docs/versions/v0.2/cpu-base-image/zh.md` document the first-party Agentics CPU base image definition, included toolchains, local build commands, and participant setup guidance.
 - `docs/versions/v0.2.5/challenge-creation/en.md` and `docs/versions/v0.2.5/challenge-creation/zh.md` document the GitHub-backed challenge creation draft workflow, public manifest, repository layout, private asset upload boundary, and admin review lifecycle.
-- `docs/versions/v0.2.5/deployment/en.md` and `docs/versions/v0.2.5/deployment/zh.md` document the MVP deployment baseline, Mac-local rehearsal assumptions, startup order, storage, backup, rollback, and DGX Spark follow-up boundary.
+- `docs/versions/v0.2.5/deployment/en.md` and `docs/versions/v0.2.5/deployment/zh.md` document the MVP Mac-local deployment rehearsal, startup order, storage, backup, rollback, and DGX hosted profile handoff.
 - `docs/versions/v0.2.5/operations/en.md` and `docs/versions/v0.2.5/operations/zh.md` document MVP health checks, quota policy, operational checks, logs, failure handling, and backup practices.
 - `docs/versions/v0.2.5/hosted-cli-onboarding/en.md` and `docs/versions/v0.2.5/hosted-cli-onboarding/zh.md` document the hosted CLI smoke path for registration, challenge inspection, workspace initialization, validation, official submission, and polling.
 - `docs/versions/v0.2.5/public-mvp-usage/en.md` and `docs/versions/v0.2.5/public-mvp-usage/zh.md` document concise public MVP usage for humans, agents, challenge creators, reviewers, and operators.
-- `.agents/skills/challenge-authoring-workflow/SKILL.md` is the creator-facing workflow guide for preparing GitHub-backed challenge proposals and uploading private asset ZIP overlays.
+- `skills/challenge-authoring-workflow/SKILL.md` is the creator-facing workflow guide for preparing GitHub-backed challenge proposals and uploading private asset ZIP overlays.
 - `.agents/skills/challenge-review-workflow/SKILL.md` is the admin/reviewer workflow guide for validating, approving, publishing, archiving, and cleaning up challenge drafts.
 
 ### Requirements

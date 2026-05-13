@@ -1,10 +1,13 @@
 # v0.2.5 MVP 部署基线
 
-本文档定义当前在 Mac 本地演练的 MVP 部署基线。正式 hosted MVP 会运行在 NVIDIA DGX Spark 上，因此这个基线是保守的，公开上线前必须重新审视。
+本文档定义 MVP 的 Mac 本地部署演练。Hosted MVP profile 运行在 NVIDIA DGX
+Spark 上，并单独记录在 `docs/versions/v0.2.5/dgx-spark-deployment/zh.md`。
+本文件用于 local foreground rehearsal；hosted Linux operation 应使用 DGX profile
+文档。
 
 ## 当前目标
 
-当前已验证目标是单机部署：
+Mac-local 已验证目标是单机部署：
 
 - Postgres 通过 `docker/platform-db/docker-compose.yml` 运行。
 - API、worker 和 web 作为独立进程运行。
@@ -12,7 +15,8 @@
 - Worker 连接本机 Docker daemon。
 - Public traffic 应先进入 reverse proxy，再转发到 API 或 web 进程。
 
-Mac 本地演练验证进程连接和平台行为。它不验证 DGX GPU runtime、ARM64 CUDA images、public TLS 或 production ingress。
+Mac 本地演练验证进程连接和平台行为。它不验证 DGX GPU runtime、ARM64 CUDA
+images、public TLS、production ingress 或 Linux systemd startup。
 
 这条 macOS 路径有意使用前台 process commands，而不是 systemd `ExecStart=`
 定义。`deploy/dgx-spark/` 下的 systemd units 是仅适用于 Linux 的 DGX hosted
@@ -104,7 +108,7 @@ Reverse proxy 应该：
 
 `AGENTICS_STORAGE_ROOT` 包含 uploaded solution artifacts、runner logs、runtime challenge bundles 和 private asset overlays。它应被视为持久平台状态。
 
-公开 MVP 之前：
+Hosted 或 public MVP operation：
 
 - 将 `AGENTICS_STORAGE_ROOT` 放在 persistent volume 上。
 - 同步备份 Postgres 和 `AGENTICS_STORAGE_ROOT`。
@@ -113,8 +117,7 @@ Reverse proxy 应该：
 
 ## Hosted Runner Disk Isolation 决策
 
-Hosted MVP 在接受 public evaluation jobs 前，应使用 Linux-only storage
-profile：
+Hosted MVP 在接受 public evaluation jobs 前使用 Linux-only storage profile：
 
 - 运行 Agentics-owned Docker daemon，而不是 operator 的 default Docker daemon。
 - 将该 daemon 的 Docker data root 放在启用 project quotas 的 loopback XFS
@@ -164,9 +167,11 @@ scripts/ops/check-local-mvp.sh
 
 然后执行 `docs/versions/v0.2.5/hosted-cli-onboarding/zh.md` 中的 CLI smoke path。
 
-## DGX Spark 后续工作
+## DGX Spark Hosted Profile
 
-DGX Spark hosted deployment 必须单独验证，因为它加入了 ARM64、NVIDIA container runtime、GPU device access 和 DGX OS lifecycle assumptions。见 `docs/milestones/zh.md` 中的 DGX Spark 里程碑。
+DGX Spark hosted deployment 单独验证，因为它加入了 ARM64、NVIDIA container
+runtime、GPU device access、Linux systemd startup 和 DGX OS lifecycle
+assumptions。见 `docs/milestones/zh.md` 中的 DGX Spark 里程碑。
 
 第一轮 host inventory 记录在 `docs/versions/v0.2.5/dgx-spark-inventory/zh.md`。
 可重复检查命令为：
@@ -182,7 +187,9 @@ daemon profile。
 
 DGX Spark deployment profile 记录在
 `docs/versions/v0.2.5/dgx-spark-deployment/zh.md`，deploy artifacts 位于
-`deploy/dgx-spark/`，Linux-gated storage/profile scripts 位于 `scripts/ops/`。
+`deploy/dgx-spark/`，Linux-gated storage/profile scripts 位于 `scripts/ops/`，
+end-to-end smoke evidence 位于
+`docs/versions/v0.2.5/dgx-spark-smoke/zh.md`。
 
 DGX Spark 运维应以 NVIDIA 官方文档为准：
 

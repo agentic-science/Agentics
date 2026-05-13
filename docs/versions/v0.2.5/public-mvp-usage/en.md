@@ -95,8 +95,8 @@ overlays bound to the draft.
 Use the creator web console at `/creator` to sign in with GitHub, create a draft
 from the reviewed PR metadata, inspect draft status, and upload private assets.
 
-For detailed creator steps, use
-`.agents/skills/challenge-authoring-workflow/SKILL.md`.
+For detailed creator steps, use `docs/contribute-challenges/en.md` and
+`skills/challenge-authoring-workflow/SKILL.md`.
 
 ## Challenge Reviewers
 
@@ -111,13 +111,14 @@ Reviewers should validate both the GitHub PR and the Agentics draft:
 Use the `/admin` console's Drafts tab for validation, approval, rejection,
 publication, abandonment, and stale draft cleanup.
 
-For detailed reviewer steps, use
+For detailed reviewer steps, use `docs/review-challenges/en.md` and
 `.agents/skills/challenge-review-workflow/SKILL.md`.
 
 ## Operators
 
 Operators should follow the deployment and runbook documents:
 
+- `docs/operate-platform/en.md`
 - `docs/versions/v0.2.5/deployment/en.md`
 - `docs/versions/v0.2.5/operations/en.md`
 - `docs/versions/v0.2.5/hosted-cli-onboarding/en.md`
