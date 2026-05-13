@@ -68,6 +68,16 @@ struct SolutionRunRequest<'a> {
     runs_root: &'a Path,
 }
 
+#[derive(Clone, Copy)]
+struct SetupBuildRequest<'a> {
+    profile: &'a ResourceProfileSpec,
+    docker_platform: DockerPlatform,
+    accelerator: BenchmarkAccelerator,
+    manifest: &'a ZipProjectManifest,
+    source_root: &'a Path,
+    build_root: &'a Path,
+}
+
 struct ScorerRequest<'a> {
     eval_type: ScoringMode,
     spec: &'a ChallengeBundleSpec,
@@ -186,12 +196,14 @@ pub async fn execute_evaluation_job(
         let manifest = read_solution_manifest(&source_root, &spec).await?;
         run_setup_and_build(
             runner_context,
-            profile,
-            target.docker_platform,
-            target.accelerator,
-            &manifest,
-            &source_root,
-            &build_root,
+            SetupBuildRequest {
+                profile,
+                docker_platform: target.docker_platform,
+                accelerator: target.accelerator,
+                manifest: &manifest,
+                source_root: &source_root,
+                build_root: &build_root,
+            },
             &mut logs,
         )
         .await?;
@@ -288,50 +300,36 @@ async fn read_solution_manifest(
 
 async fn run_setup_and_build(
     runner: RunnerContext<'_>,
-    profile: &ResourceProfileSpec,
-    docker_platform: DockerPlatform,
-    accelerator: BenchmarkAccelerator,
-    manifest: &ZipProjectManifest,
-    source_root: &Path,
-    build_root: &Path,
+    request: SetupBuildRequest<'_>,
     logs: &mut String,
 ) -> Result<()> {
     if runner.storage.uses_bounded_slots() {
-        return run_setup_and_build_bounded(
-            runner,
-            profile,
-            docker_platform,
-            accelerator,
-            manifest,
-            source_root,
-            build_root,
-            logs,
-        )
-        .await;
+        return run_setup_and_build_bounded(runner, request, logs).await;
     }
 
-    cleanup_paths([build_root.to_path_buf()]).await?;
-    copy_dir_all(source_root, build_root).await?;
-    make_container_writable_tree(build_root).await?;
+    cleanup_paths([request.build_root.to_path_buf()]).await?;
+    copy_dir_all(request.source_root, request.build_root).await?;
+    make_container_writable_tree(request.build_root).await?;
 
-    for phase in manifest
+    for phase in request
+        .manifest
         .phase_execution_plan()
         .into_iter()
         .filter(|phase| phase.name != ZipProjectPhaseName::Run)
     {
-        let limits = effective_phase_limits(profile, &phase);
+        let limits = effective_phase_limits(request.profile, &phase);
         let cmd = vec!["sh".to_string(), format!("/workspace/{}", phase.command)];
         let outcome = run_container(
             runner.docker,
             ContainerRequest {
                 name: container_name(runner.job_id, &format!("{:?}", phase.name).to_lowercase()),
-                image: profile.solution_image.clone(),
+                image: request.profile.solution_image.clone(),
                 cmd,
                 env: vec![format!("AGENTICS_PHASE={}", phase_name(&phase.name))],
-                mounts: vec![bind_mount(build_root, "/workspace", false)],
+                mounts: vec![bind_mount(request.build_root, "/workspace", false)],
                 working_dir: "/workspace".to_string(),
-                docker_platform,
-                accelerator,
+                docker_platform: request.docker_platform,
+                accelerator: request.accelerator,
                 limits: limits.clone(),
                 docker_layer_quota_mb: runner.storage.docker_layer_quota_mb(&limits),
             },
@@ -339,7 +337,7 @@ async fn run_setup_and_build(
         .await?;
         append_phase_logs(logs, phase.name, &outcome.logs);
         ensure_container_succeeded(phase.name, &outcome)?;
-        ensure_disk_limit(build_root, limits.disk_limit_mb, phase.name).await?;
+        ensure_disk_limit(request.build_root, limits.disk_limit_mb, phase.name).await?;
     }
 
     Ok(())
@@ -347,32 +345,28 @@ async fn run_setup_and_build(
 
 async fn run_setup_and_build_bounded(
     runner: RunnerContext<'_>,
-    profile: &ResourceProfileSpec,
-    docker_platform: DockerPlatform,
-    accelerator: BenchmarkAccelerator,
-    manifest: &ZipProjectManifest,
-    source_root: &Path,
-    build_root: &Path,
+    request: SetupBuildRequest<'_>,
     logs: &mut String,
 ) -> Result<()> {
-    let phases = manifest
+    let phases = request
+        .manifest
         .phase_execution_plan()
         .into_iter()
         .filter(|phase| phase.name != ZipProjectPhaseName::Run)
         .collect::<Vec<_>>();
 
     if phases.is_empty() {
-        replace_dir_all(source_root, build_root).await?;
+        replace_dir_all(request.source_root, request.build_root).await?;
         return Ok(());
     }
 
-    let mut source_workspace = source_root.to_path_buf();
+    let mut source_workspace = request.source_root.to_path_buf();
     for phase in phases {
-        let limits = effective_phase_limits(profile, &phase);
+        let limits = effective_phase_limits(request.profile, &phase);
         let workspace = runner
             .storage
             .writable_mount(
-                build_root,
+                request.build_root,
                 writable_phase_for_solution_phase(phase.name),
                 limits.disk_limit_mb,
             )
@@ -385,13 +379,13 @@ async fn run_setup_and_build_bounded(
             runner.docker,
             ContainerRequest {
                 name: container_name(runner.job_id, &format!("{:?}", phase.name).to_lowercase()),
-                image: profile.solution_image.clone(),
+                image: request.profile.solution_image.clone(),
                 cmd,
                 env: vec![format!("AGENTICS_PHASE={}", phase_name(&phase.name))],
                 mounts: vec![bind_mount(workspace.path(), "/workspace", false)],
                 working_dir: "/workspace".to_string(),
-                docker_platform,
-                accelerator,
+                docker_platform: request.docker_platform,
+                accelerator: request.accelerator,
                 limits: limits.clone(),
                 docker_layer_quota_mb: runner.storage.docker_layer_quota_mb(&limits),
             },
@@ -400,8 +394,8 @@ async fn run_setup_and_build_bounded(
         append_phase_logs(logs, phase.name, &outcome.logs);
         ensure_container_succeeded(phase.name, &outcome)?;
         ensure_disk_limit(workspace.path(), limits.disk_limit_mb, phase.name).await?;
-        replace_dir_all(workspace.path(), build_root).await?;
-        source_workspace = build_root.to_path_buf();
+        replace_dir_all(workspace.path(), request.build_root).await?;
+        source_workspace = request.build_root.to_path_buf();
     }
 
     Ok(())
@@ -437,7 +431,7 @@ async fn run_solution_invocations(
         tokio::fs::create_dir_all(&input_dir).await?;
         tokio::fs::create_dir_all(&output_dir).await?;
         tokio::fs::create_dir_all(&tmp_dir).await?;
-        materialize_run_io(run, request.input_source_root, &io_root, &input_dir).await?;
+        materialize_run_io(run, request.input_source_root, io_root, &input_dir).await?;
         make_container_writable_tree(io_root).await?;
 
         let outcome = run_container(
