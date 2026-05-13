@@ -16,7 +16,7 @@ submit a solution or observe public results, use the root `README.md` first.
 - `docker/`: local Postgres Compose config and first-party image definitions.
 - `deploy/`: local and DGX Spark deployment configuration.
 - `scripts/ops/`: local and DGX operational checks.
-- `docs/`: product, protocol, role, and versioned documentation.
+- `docs/`: product, protocol, role, and operations documentation.
 
 ## Local Environment
 
@@ -143,8 +143,8 @@ Keep `frontends/web/src/lib/schemas.ts` as the stable import facade.
 ## Documentation Rules
 
 When changing planned product scope, update both PRDs and both milestone docs in
-the same change set. When changing implemented behavior for a released version,
-update the matching `docs/versions/<version>/` documents.
+the same change set. When changing implemented behavior, update the relevant
+current docs in the same change set.
 
 When adding a new document, create a folder with at least `en.md` and `zh.md`.
 Keep multilingual documents aligned at the feature level.
@@ -161,7 +161,9 @@ Use `down -v` only when you want to delete the local Postgres volume.
 
 - [Root README](../../README.md)
 - [API JSON contract](../api-json-contract/en.md)
-- [Benchmark targets](../versions/v0.2/benchmark-targets/en.md)
-- [ZIP project protocol](../versions/v0.2/zip-project-protocol/en.md)
-- [Operations runbook](../versions/v0.2.5/operations/en.md)
-- [Ports, paths, and target policy](../versions/v0.2.5/ports-and-paths/en.md)
+- [Benchmark targets](../benchmark-targets/en.md)
+- [Solution protocol](../solution-protocol/en.md)
+- [Operations runbook](../operations/en.md)
+- [Ports, paths, and target policy](../ports-and-paths/en.md)
+- [Visual identity system](../visual-identity-system/en.md)
+- [Rust feature review reference](../new-rust-features-apis/en.md)

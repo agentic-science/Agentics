@@ -1,13 +1,13 @@
 # DGX Spark MVP Deployment Profile
 
 This profile is the `M0.2.5-DGX-2` deployment target for a single DGX Spark
-host. It is Linux-only and assumes the host inventory in
-`docs/versions/v0.2.5/dgx-spark-inventory/en.md` has been completed.
+host. It is Linux-only and assumes the host inventory summarized in
+`docs/dgx-spark/en.md` has been completed.
 
 The `ExecStart=` paths in these service files are Linux systemd paths for the
 DGX hosted profile. macOS rehearsal uses the foreground `cargo` and `bun`
-commands documented in `docs/versions/v0.2.5/deployment/en.md`; do not reuse
-the DGX systemd units as macOS startup definitions.
+commands documented in `docs/deployment/en.md`; do not reuse the DGX systemd
+units as macOS startup definitions.
 
 ## Files
 
@@ -103,7 +103,7 @@ capacity exists.
    ```
 
 8. Run the hosted CLI onboarding smoke path and record DGX-3 evidence in
-   `docs/versions/v0.2.5/dgx-spark-smoke/en.md`.
+   `docs/dgx-spark/en.md`.
 
 The scripts intentionally fail on non-Linux hosts and do not infer strictness
 from `CI=true`.

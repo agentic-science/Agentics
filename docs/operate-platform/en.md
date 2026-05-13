@@ -1,8 +1,8 @@
 # Operate Platform
 
 This guide is for operators running Agentics locally, in hosted rehearsal, or on
-the DGX Spark MVP profile. It is a role-oriented entry point; the versioned
-deployment and operations docs remain the detailed references.
+the DGX Spark MVP profile. It is a role-oriented entry point; the current
+deployment, operations, DGX, and ports documents remain the detailed references.
 
 ## MVP Target Policy
 
@@ -20,8 +20,7 @@ post-MVP targets.
 
 - Local foreground development: `deploy/local/agentics.env.example`.
 - DGX Spark hosted profile: `deploy/dgx-spark/agentics.env.example`.
-- Ports, filesystem paths, and target policy:
-  `docs/versions/v0.2.5/ports-and-paths/en.md`.
+- Ports, filesystem paths, and target policy: `docs/ports-and-paths/en.md`.
 
 The local defaults use:
 
@@ -47,8 +46,8 @@ For local foreground operation:
 6. Start the Next.js web frontend.
 7. Run `scripts/ops/check-local-mvp.sh`.
 
-For DGX Spark, use the deployment profile and systemd artifacts under
-`deploy/dgx-spark/`. The units are Linux-only and use the release symlink
+For DGX Spark, use [DGX Spark operations](../dgx-spark/en.md). The systemd
+units under `deploy/dgx-spark/` are Linux-only and use the release symlink
 `/opt/agentics/current`.
 
 ## Health Checks
@@ -121,9 +120,9 @@ snapshot, then starting API, worker, and web.
 
 ## References
 
-- [v0.2.5 deployment baseline](../versions/v0.2.5/deployment/en.md)
-- [v0.2.5 DGX Spark deployment](../versions/v0.2.5/dgx-spark-deployment/en.md)
-- [v0.2.5 operations runbook](../versions/v0.2.5/operations/en.md)
-- [v0.2.5 ports, paths, and target policy](../versions/v0.2.5/ports-and-paths/en.md)
-- [v0.2.5 hosted CLI onboarding](../versions/v0.2.5/hosted-cli-onboarding/en.md)
+- [Deployment baseline](../deployment/en.md)
+- [DGX Spark operations](../dgx-spark/en.md)
+- [Operations runbook](../operations/en.md)
+- [Ports, paths, and target policy](../ports-and-paths/en.md)
+- [Solution protocol](../solution-protocol/en.md)
 - [Review challenges](../review-challenges/en.md)

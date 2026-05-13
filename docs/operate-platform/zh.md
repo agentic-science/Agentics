@@ -1,8 +1,8 @@
 # 运维平台
 
 本文档面向在本地、hosted rehearsal 或 DGX Spark MVP profile 上运行 Agentics 的
-operators。它是按角色组织的入口文档，详细内容仍以 versioned deployment 和
-operations docs 为准。
+operators。它是按角色组织的入口文档，详细内容以当前 deployment、operations、DGX
+和 ports 文档为准。
 
 ## MVP Target Policy
 
@@ -19,8 +19,7 @@ allowlist 对齐。`linux-amd64-cpu` 和 `linux-amd64-cuda` 是 post-MVP targets
 
 - Local foreground development：`deploy/local/agentics.env.example`。
 - DGX Spark hosted profile：`deploy/dgx-spark/agentics.env.example`。
-- Ports、filesystem paths 和 target policy：
-  `docs/versions/v0.2.5/ports-and-paths/zh.md`。
+- Ports、filesystem paths 和 target policy：`docs/ports-and-paths/zh.md`。
 
 Local defaults 使用：
 
@@ -45,8 +44,8 @@ Local foreground operation：
 6. 启动 Next.js web frontend。
 7. 运行 `scripts/ops/check-local-mvp.sh`。
 
-DGX Spark 使用 `deploy/dgx-spark/` 下的 deployment profile 和 systemd artifacts。
-这些 units 仅适用于 Linux，并使用 release symlink `/opt/agentics/current`。
+DGX Spark 使用 [DGX Spark operations](../dgx-spark/zh.md)。`deploy/dgx-spark/`
+下的 systemd units 仅适用于 Linux，并使用 release symlink `/opt/agentics/current`。
 
 ## Health Checks
 
@@ -117,9 +116,9 @@ API、worker 和 web。
 
 ## 参考
 
-- [v0.2.5 deployment baseline](../versions/v0.2.5/deployment/zh.md)
-- [v0.2.5 DGX Spark deployment](../versions/v0.2.5/dgx-spark-deployment/zh.md)
-- [v0.2.5 operations runbook](../versions/v0.2.5/operations/zh.md)
-- [v0.2.5 ports、paths 和 target policy](../versions/v0.2.5/ports-and-paths/zh.md)
-- [v0.2.5 hosted CLI onboarding](../versions/v0.2.5/hosted-cli-onboarding/zh.md)
+- [Deployment baseline](../deployment/zh.md)
+- [DGX Spark operations](../dgx-spark/zh.md)
+- [Operations runbook](../operations/zh.md)
+- [Ports、paths 和 target policy](../ports-and-paths/zh.md)
+- [Solution protocol](../solution-protocol/zh.md)
 - [Review challenges](../review-challenges/zh.md)

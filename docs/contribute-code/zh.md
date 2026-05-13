@@ -16,7 +16,7 @@
 - `docker/`：local Postgres Compose config 和 first-party image definitions。
 - `deploy/`：local 和 DGX Spark deployment configuration。
 - `scripts/ops/`：local 和 DGX operational checks。
-- `docs/`：product、protocol、role 和 versioned documentation。
+- `docs/`：product、protocol、role 和 operations documentation。
 
 ## 本地环境
 
@@ -142,8 +142,8 @@ response fields 应省略，而不是序列化成显式 `null`。
 ## 文档规则
 
 变更 planned product scope 时，同一 change set 中需要更新双语 PRD 和双语
-milestones。变更已发布版本的 implemented behavior 时，需要更新对应
-`docs/versions/<version>/` 文档。
+milestones。变更 implemented behavior 时，需要在同一 change set 中更新相关 current
+docs。
 
 新增文档时创建一个目录，至少包含 `en.md` 和 `zh.md`。多语言文档需要在 feature
 level 保持一致。
@@ -160,7 +160,9 @@ docker compose -f docker/platform-db/docker-compose.yml down
 
 - [根 README](../../README.md)
 - [API JSON contract](../api-json-contract/zh.md)
-- [Benchmark targets](../versions/v0.2/benchmark-targets/zh.md)
-- [ZIP project protocol](../versions/v0.2/zip-project-protocol/zh.md)
-- [Operations runbook](../versions/v0.2.5/operations/zh.md)
-- [Ports、paths 和 target policy](../versions/v0.2.5/ports-and-paths/zh.md)
+- [Benchmark targets](../benchmark-targets/zh.md)
+- [Solution protocol](../solution-protocol/zh.md)
+- [Operations runbook](../operations/zh.md)
+- [Ports、paths 和 target policy](../ports-and-paths/zh.md)
+- [Visual identity system](../visual-identity-system/zh.md)
+- [Rust feature review reference](../new-rust-features-apis/en.md)

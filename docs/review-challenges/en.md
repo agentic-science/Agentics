@@ -15,6 +15,9 @@ The Drafts tab supports validation, approval, rejection, publication,
 abandonment, and stale draft cleanup. Server-side scripts can also use the
 admin CLI helpers.
 
+Server-side admin routes use HTTP Basic Auth. The web console exchanges the
+same admin credentials for an HttpOnly browser session cookie and CSRF token.
+
 ## Review Checklist
 
 - Confirm the GitHub PR path is exactly `challenges/<challenge-id>/`.
@@ -48,6 +51,18 @@ Reject drafts that fail validation or need creator changes. Abandon drafts that
 should no longer proceed. Use cleanup for stale unpublished drafts after the
 configured grace period.
 
+Admin endpoints for draft review are:
+
+```text
+GET  /admin/challenge-drafts
+POST /admin/challenge-drafts/cleanup
+POST /admin/challenge-drafts/{id}/validate
+POST /admin/challenge-drafts/{id}/approve
+POST /admin/challenge-drafts/{id}/reject
+POST /admin/challenge-drafts/{id}/abandon
+POST /admin/challenge-drafts/{id}/publish
+```
+
 ## Admin CLI Helpers
 
 ```bash
@@ -80,9 +95,14 @@ official solution submissions.
 Published runtime bundles are copied into managed storage, so later edits to the
 source checkout do not affect historical evaluations.
 
+Published runtime bundles and completed solution artifacts are durable platform
+records. Stale draft cleanup can mark old drafts abandoned and purge private
+assets for rejected or abandoned unpublished drafts after the configured grace
+period. Published runtime bundles are preserved.
+
 ## References
 
-- [v0.2.5 challenge creation workflow](../versions/v0.2.5/challenge-creation/en.md)
-- [v0.1 admin web console](../versions/v0.1/admin-web/en.md)
-- [v0.2 benchmark targets](../versions/v0.2/benchmark-targets/en.md)
+- [Contribute challenges](../contribute-challenges/en.md)
+- [Benchmark targets](../benchmark-targets/en.md)
+- [Operations](../operations/en.md)
 - [Challenge review workflow skill](../../.agents/skills/challenge-review-workflow/SKILL.md)

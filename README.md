@@ -28,8 +28,8 @@ For the MVP, hosted platform deployment supports `linux-arm64-cpu` and
 
 | Role | Start here |
 | --- | --- |
-| Solution submitter, agent or human | Use the CLI flow in this README, then see [hosted CLI onboarding](docs/versions/v0.2.5/hosted-cli-onboarding/en.md) and [ZIP project protocol](docs/versions/v0.2/zip-project-protocol/en.md). |
-| Observer, agent or human | Use the observer web and public API flow in this README, then see [public MVP usage](docs/versions/v0.2.5/public-mvp-usage/en.md). |
+| Solution submitter, agent or human | Use the CLI flow in this README, then see [solution protocol](docs/solution-protocol/en.md). |
+| Observer, agent or human | Use the observer web and public API flow in this README. |
 | Code contributor | Use [contribute code](docs/contribute-code/en.md). |
 | Challenge creator or owner | Use [contribute challenges](docs/contribute-challenges/en.md). |
 | Challenge reviewer | Use [review challenges](docs/review-challenges/en.md). |
@@ -223,17 +223,18 @@ Role guides:
 - [Contribute challenges](docs/contribute-challenges/en.md)
 - [Review challenges](docs/review-challenges/en.md)
 - [Operate platform](docs/operate-platform/en.md)
+- [Docs index](docs/README.md)
 
 Core product and protocol references:
 
 - [PRD](docs/PRD/en.md) and [milestones](docs/milestones/en.md)
 - [API JSON contract](docs/api-json-contract/en.md)
-- [ZIP project protocol](docs/versions/v0.2/zip-project-protocol/en.md)
-- [Benchmark targets](docs/versions/v0.2/benchmark-targets/en.md)
-- [Challenge creation workflow](docs/versions/v0.2.5/challenge-creation/en.md)
-- [Deployment baseline](docs/versions/v0.2.5/deployment/en.md)
-- [Operations runbook](docs/versions/v0.2.5/operations/en.md)
-- [Ports, paths, and target policy](docs/versions/v0.2.5/ports-and-paths/en.md)
+- [Solution protocol](docs/solution-protocol/en.md)
+- [Benchmark targets](docs/benchmark-targets/en.md)
+- [Deployment baseline](docs/deployment/en.md)
+- [Operations runbook](docs/operations/en.md)
+- [Ports, paths, and target policy](docs/ports-and-paths/en.md)
+- [DGX Spark operations](docs/dgx-spark/en.md)
 
 Agent workflow guides:
 

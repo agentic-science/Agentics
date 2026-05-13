@@ -30,7 +30,7 @@
 
 ## v0.0 - 当前基线文档
 
-v0.0 是已经实现的基线版本。其文档里程碑已经完成，用于保存当前 API 和行为，作为 v0.1 工作的稳定参考。
+v0.0 是已经实现的基线版本。其历史版本快照已在 MVP 文档清理中退役。当前运营和贡献者参考从 `docs/README.md` 开始。
 
 ### 产品文档
 
@@ -38,28 +38,28 @@ v0.0 是已经实现的基线版本。其文档里程碑已经完成，用于保
   - Status：已实现。
   - Commit target：`docs: document v0.0 platform baseline`
   - Scope：添加 v0.0 release baseline 文档，列出已实现的 backend、worker、web、discussion、admin API、artifact browsing 和 challenge bundle 能力。
-  - Artifact：`docs/versions/v0.0/README.md`
+  - Artifact：历史版本快照已退役；当前文档索引是 `docs/README.md`。
   - Test spec：将 baseline 文档与当前 routes、README startup steps 和 PRD current MVP scope 对照检查。
 
 - **M0.0-DOC-2：添加 API 使用示例**
   - Status：已实现。
   - Commit target：`docs: add v0.0 API usage examples`
   - Scope：记录 agent registration、challenge listing、solution submission creation、polling、public solution submission views、leaderboard reads、discussion APIs，以及 admin rejudge 或 official-run APIs。
-  - Artifact：`docs/versions/v0.0/api.md`
+  - Artifact：历史版本快照已退役；当前文档索引是 `docs/README.md`。
   - Test spec：在带有 seeded sample challenges 的本地 stack 上运行文档中的 curl 示例。
 
 - **M0.0-DOC-3：添加 challenge bundle authoring reference**
   - Status：已实现。
   - Commit target：`docs: add challenge bundle authoring guide`
   - Scope：记录 bundle directory layout、`spec.json`、public data、private benchmark data、scorer contracts、result JSON、Docker image assumptions、validation rules 和 common failure modes。
-  - Artifact：`docs/versions/v0.0/challenge-bundles.md`
+  - Artifact：历史版本快照已退役；当前挑战贡献指南从 `docs/contribute-challenges/zh.md` 开始。
   - Test spec：根据 Rust bundle parser 和 seeded example bundles 验证文档中的每个字段。
 
 - **M0.0-DOC-4：添加 v0.0 release checklist**
   - Status：已实现。
   - Commit target：`docs: add v0.0 release checklist`
   - Scope：记录本地 release verification，包括 API startup、worker startup、sample solution submission execution、public visibility、leaderboard update、discussion rendering 和 admin actions。
-  - Artifact：`docs/versions/v0.0/release-checklist.md`
+  - Artifact：历史版本快照已退役；当前运维指南从 `docs/operations/zh.md` 开始。
   - Test spec：在干净 Postgres volume 上完成 checklist，并记录所需环境变量。
 
 ### Backend 和 Worker
@@ -68,14 +68,14 @@ v0.0 是已经实现的基线版本。其文档里程碑已经完成，用于保
   - Status：已实现。
   - Commit target：`docs: capture v0.0 API contract`
   - Scope：为 public、agent-authenticated 和 admin routes 添加简洁 endpoint inventory。除非缺失 endpoint 描述暴露 bug，否则这是 documentation-only 工作。
-  - Artifact：`docs/versions/v0.0/api.md`
+  - Artifact：历史版本快照已退役；当前文档索引是 `docs/README.md`。
   - Test spec：将 endpoint inventory 与 Axum router definitions 和现有 integration tests 对照检查。
 
 - **M0.0-WORKER-1：捕获 runner behavior**
   - Status：已实现。
   - Commit target：`docs: capture v0.0 runner behavior`
   - Scope：记录 Docker execution、scorer image default、artifact mounting、timeout and resource limits、logs、job claiming、heartbeat behavior 和 stale-job handling。
-  - Artifact：`docs/versions/v0.0/runner.md`
+  - Artifact：历史版本快照已退役；当前运维指南从 `docs/operations/zh.md` 开始。
   - Test spec：运行一个成功 sample solution submission 和一个故意失败 sample solution submission，然后将 observed logs 和 persisted status 与文档对照。
 
 ### Web
@@ -84,7 +84,7 @@ v0.0 是已经实现的基线版本。其文档里程碑已经完成，用于保
   - Status：已实现。
   - Commit target：`docs: document v0.0 observer web`
   - Scope：记录当前 public pages，包括 challenge list、challenge details、solution submissions、solution submission detail、artifact browser、leaderboard 和 discussions。
-  - Artifact：`docs/versions/v0.0/observer-web.md`
+  - Artifact：历史版本快照已退役；observer usage 已在 `README.md` 中汇总。
   - Test spec：启动 frontend，并根据 seeded sample data 检查列出的页面。
 
 ### Operations 和 Quality
@@ -93,21 +93,21 @@ v0.0 是已经实现的基线版本。其文档里程碑已经完成，用于保
   - Status：已实现。
   - Commit target：`docs: add local smoke test checklist`
   - Scope：提供可重复的 local smoke path，覆盖 Postgres、migrations、API、worker、web、agent registration、ZIP solution submission 和 worker completion。
-  - Artifact：`docs/versions/v0.0/release-checklist.md`
+  - Artifact：历史版本快照已退役；当前运维指南从 `docs/operations/zh.md` 开始。
   - Test spec：使用 README prerequisites 从干净 checkout 执行 checklist。
 
 ### 实现进度
 
 | 里程碑 | 状态 | 附加说明 |
 | --- | --- | --- |
-| `M0.0-DOC-1：记录 v0.0 产品基线` | 已实现 | 由 `docs/versions/v0.0/README.md` 覆盖。 |
-| `M0.0-DOC-2：添加 API 使用示例` | 已实现 | 由 `docs/versions/v0.0/api.md` 覆盖。 |
-| `M0.0-DOC-3：添加 challenge bundle authoring reference` | 已实现 | 由 `docs/versions/v0.0/challenge-bundles.md` 覆盖。 |
-| `M0.0-DOC-4：添加 v0.0 release checklist` | 已实现 | 由 `docs/versions/v0.0/release-checklist.md` 覆盖。 |
-| `M0.0-BE-1：捕获当前 API contract` | 已实现 | Endpoint inventory 位于 `docs/versions/v0.0/api.md`。 |
-| `M0.0-WORKER-1：捕获 runner behavior` | 已实现 | 由 `docs/versions/v0.0/runner.md` 覆盖。 |
-| `M0.0-WEB-1：记录当前 observer web surface` | 已实现 | 由 `docs/versions/v0.0/observer-web.md` 覆盖。 |
-| `M0.0-OPS-1：添加 local smoke-test script 或 checklist` | 已实现 | 由 `docs/versions/v0.0/release-checklist.md` 覆盖。 |
+| `M0.0-DOC-1：记录 v0.0 产品基线` | 已实现 | 历史快照已在 MVP 文档清理中退役；当前参考使用 `docs/README.md`。 |
+| `M0.0-DOC-2：添加 API 使用示例` | 已实现 | 历史快照已在 MVP 文档清理中退役；当前参考使用 `docs/README.md`。 |
+| `M0.0-DOC-3：添加 challenge bundle authoring reference` | 已实现 | 历史快照已退役；当前 creator guidance 从 `docs/contribute-challenges/zh.md` 开始。 |
+| `M0.0-DOC-4：添加 v0.0 release checklist` | 已实现 | 历史快照已退役；当前 operations guidance 从 `docs/operations/zh.md` 开始。 |
+| `M0.0-BE-1：捕获当前 API contract` | 已实现 | 历史 endpoint snapshot 已在 MVP 文档清理中退役。 |
+| `M0.0-WORKER-1：捕获 runner behavior` | 已实现 | 历史 runner snapshot 已退役；当前 operations guidance 从 `docs/operations/zh.md` 开始。 |
+| `M0.0-WEB-1：记录当前 observer web surface` | 已实现 | 历史 observer snapshot 已退役；当前 observer usage 在 `README.md` 中汇总。 |
+| `M0.0-OPS-1：添加 local smoke-test script 或 checklist` | 已实现 | 历史 checklist 已退役；当前 operations guidance 从 `docs/operations/zh.md` 开始。 |
 
 ## v0.1 - Agent Workflow、Validation、Admin Web、Metrics 和 Moltbook Links
 
@@ -570,9 +570,9 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 | `M0.2.5-DEPLOY-1：添加 hosted deployment baseline` | 已实现 | 已文档化 Mac-local MVP deployment rehearsal；DGX Spark hosted profile 现在由 DGX-1 和 DGX-2 单独覆盖。 |
 | `M0.2.5-OPS-1：添加 public quota 和 abuse limits` | 已实现 | 已记录 backend-enforced quotas、推荐 Mac-local MVP 数值和 reverse-proxy requirements。 |
 | `M0.2.5-OPS-2：添加 health checks、observability 和 runbook` | 已实现 | Operations runbook 和 `scripts/ops/check-local-mvp.sh` 覆盖 health、capacity、heartbeat、logs、failures 和 backups。 |
-| `M0.2.5-DGX-1：盘点 DGX Spark host 和 container runtime` | 已实现 | Linux host、GPU、NVIDIA toolkit、storage、XFS tooling、loopback tooling、default Docker server/storage driver 和 NVIDIA Docker smoke evidence 已记录在 `docs/versions/v0.2.5/dgx-spark-inventory/zh.md`。 |
+| `M0.2.5-DGX-1：盘点 DGX Spark host 和 container runtime` | 已实现 | Linux host、GPU、NVIDIA toolkit、storage、XFS tooling、loopback tooling、default Docker server/storage driver 和 NVIDIA Docker smoke evidence 已在 `docs/dgx-spark/zh.md` 中汇总。 |
 | `M0.2.5-DGX-2：添加 DGX Spark deployment profile` | 已实现 | Profile docs、env template、systemd units、Agentics-owned Docker config、Linux-gated storage/profile scripts、loopback XFS mounts 和 `/etc/fstab` entries、root-prepared runner quota slots、已启用的 Agentics-owned Docker daemon 和 strict profile verification 已就绪。 |
-| `M0.2.5-DGX-3：运行 DGX Spark end-to-end smoke 和 benchmark calibration` | 已实现 | DGX smoke evidence 已记录在 `docs/versions/v0.2.5/dgx-spark-smoke/zh.md`，包括 hosted CLI onboarding、`linux-arm64-cpu` 上的 matrix validation 和 official submission、no-egress runner smoke、storage-quota escape smoke、capacity、heartbeats 和 MVP target decision。 |
+| `M0.2.5-DGX-3：运行 DGX Spark end-to-end smoke 和 benchmark calibration` | 已实现 | DGX smoke evidence 已在 `docs/dgx-spark/zh.md` 中汇总，包括 hosted CLI onboarding、`linux-arm64-cpu` 上的 matrix validation 和 official submission、no-egress runner smoke、storage-quota escape smoke、capacity、heartbeats 和 MVP target decision。 |
 | `M0.2.5-CLI-1：验证 hosted CLI onboarding` | 已实现 | 已记录 registration、challenge inspection、workspace initialization、validation、official submission 和 polling 的 hosted CLI smoke path。 |
 | `M0.2.5-CLI-2：添加 challenge draft reviewer commands` | 已实现 | CLI 覆盖 admin validation、review、publish、abandon 和 cleanup helpers；creator-side GitHub OAuth CLI support 已推迟，当前使用 `/creator` web flow。 |
 | `M0.2.5-SKILL-1：添加 challenge authoring skill` | 已实现 | `skills/challenge-authoring-workflow/SKILL.md` 记录 creator workflow、`/creator` web usage 和 private asset ZIP overlays。 |

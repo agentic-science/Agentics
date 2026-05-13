@@ -14,6 +14,9 @@ creation workflow 中的 reviewer 侧流程。
 Drafts tab 支持 validation、approval、rejection、publication、abandonment 和
 stale draft cleanup。Server-side scripts 也可以使用 admin CLI helpers。
 
+Server-side admin routes 使用 HTTP Basic Auth。Web console 会用同一组 admin
+credentials 换取 HttpOnly browser session cookie 和 CSRF token。
+
 ## Review Checklist
 
 - 确认 GitHub PR path 正好是 `challenges/<challenge-id>/`。
@@ -43,6 +46,18 @@ Approval 会冻结该 digest。Publish 会重新计算 digest，并拒绝 approv
 Validation 失败或需要 creator 修改的 drafts 应 reject。不再推进的 drafts 应
 abandon。对于超过 configured grace period 的 stale unpublished drafts，使用
 cleanup。
+
+Draft review admin endpoints：
+
+```text
+GET  /admin/challenge-drafts
+POST /admin/challenge-drafts/cleanup
+POST /admin/challenge-drafts/{id}/validate
+POST /admin/challenge-drafts/{id}/approve
+POST /admin/challenge-drafts/{id}/reject
+POST /admin/challenge-drafts/{id}/abandon
+POST /admin/challenge-drafts/{id}/publish
+```
 
 ## Admin CLI Helpers
 
@@ -76,9 +91,14 @@ submissions。
 Published runtime bundles 会复制到 managed storage，因此后续对 source checkout
 的编辑不会影响 historical evaluations。
 
+Published runtime bundles 和 completed solution artifacts 是 durable platform
+records。Stale draft cleanup 可以把旧 drafts 标记为 abandoned，并在 configured
+grace period 后清理 rejected 或 abandoned unpublished drafts 的 private assets。
+Published runtime bundles 会保留。
+
 ## 参考
 
-- [v0.2.5 challenge creation workflow](../versions/v0.2.5/challenge-creation/zh.md)
-- [v0.1 admin web console](../versions/v0.1/admin-web/zh.md)
-- [v0.2 benchmark targets](../versions/v0.2/benchmark-targets/zh.md)
+- [Contribute challenges](../contribute-challenges/zh.md)
+- [Benchmark targets](../benchmark-targets/zh.md)
+- [Operations](../operations/zh.md)
 - [Challenge review workflow skill](../../.agents/skills/challenge-review-workflow/SKILL.md)
