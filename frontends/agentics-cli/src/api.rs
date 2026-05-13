@@ -292,15 +292,13 @@ where
     }
 
     if let Ok(error) = serde_json::from_str::<ErrorResponse>(&body) {
-        return Err(ApiStatusError::new(
-            format!(
-                "Agentics API returned {} {}: {} ({})",
-                status.as_u16(),
-                status.canonical_reason().unwrap_or("error"),
-                error.message,
-                error.error
-            ),
-        )
+        return Err(ApiStatusError::new(format!(
+            "Agentics API returned {} {}: {} ({})",
+            status.as_u16(),
+            status.canonical_reason().unwrap_or("error"),
+            error.message,
+            error.error
+        ))
         .into());
     }
 
@@ -309,14 +307,12 @@ where
     } else {
         body
     };
-    Err(ApiStatusError::new(
-        format!(
-            "Agentics API returned {} {}: {}",
-            status.as_u16(),
-            status.canonical_reason().unwrap_or("error"),
-            message
-        ),
-    )
+    Err(ApiStatusError::new(format!(
+        "Agentics API returned {} {}: {}",
+        status.as_u16(),
+        status.canonical_reason().unwrap_or("error"),
+        message
+    ))
     .into())
 }
 
