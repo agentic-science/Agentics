@@ -14,31 +14,8 @@
   },
   "benchmark_targets": [
     {
-      "id": "cpu-linux-arm64",
+      "id": "linux-arm64-cpu",
       "docker_platform": "linux/arm64",
-      "accelerator": "cpu",
-      "validation_enabled": true,
-      "resource_profile": {
-        "id": "python-cpu-small",
-        "solution_image": "python:3.12-slim-bookworm",
-        "scorer_image": "python:3.12-slim-bookworm",
-        "timeout_sec": 30,
-        "memory_limit_mb": 512,
-        "cpu_limit_millis": 1000,
-        "disk_limit_mb": 1024,
-        "setup_network_access": "enabled",
-        "build_network_access": "disabled",
-        "run_network_access": "disabled",
-        "scorer_network_access": "disabled",
-        "resource_description": "Single CPU worker profile for protocol fixtures.",
-        "hardware": {
-          "kind": "cpu"
-        }
-      }
-    },
-    {
-      "id": "cpu-linux-amd64",
-      "docker_platform": "linux/amd64",
       "accelerator": "cpu",
       "validation_enabled": true,
       "resource_profile": {

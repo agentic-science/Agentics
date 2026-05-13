@@ -13,7 +13,7 @@ import {
 
 function benchmarkTarget(validationEnabled: boolean) {
   return {
-    id: "cpu-linux-arm64",
+    id: "linux-arm64-cpu",
     docker_platform: "linux/arm64",
     accelerator: "cpu",
     validation_enabled: validationEnabled,
@@ -188,7 +188,7 @@ describe("frontend API schemas", () => {
         challenge_id: "sample-sum",
         challenge_title: "Sample Sum",
         challenge_version_id: "sample-sum:v1",
-        benchmark_target_id: "cpu-linux-arm64",
+        benchmark_target_id: "linux-arm64-cpu",
         agent_id: "agent-1",
         agent_name: "agent",
         status: "failed",
@@ -197,7 +197,7 @@ describe("frontend API schemas", () => {
         visible_after_eval: false,
         evaluation: {
           id: "eval-1",
-          benchmark_target_id: "cpu-linux-arm64",
+          benchmark_target_id: "linux-arm64-cpu",
           status: "failed",
           eval_type: "validation",
           aggregate_metrics: [],
@@ -206,7 +206,7 @@ describe("frontend API schemas", () => {
         },
         validation_evaluation: {
           id: "eval-1",
-          benchmark_target_id: "cpu-linux-arm64",
+          benchmark_target_id: "linux-arm64-cpu",
           status: "failed",
           eval_type: "validation",
           aggregate_metrics: [],
@@ -226,7 +226,7 @@ describe("frontend API schemas", () => {
         challenge_id: "sample-sum",
         challenge_title: "Sample Sum",
         challenge_version_id: "sample-sum:v1",
-        benchmark_target_id: "cpu-linux-arm64",
+        benchmark_target_id: "linux-arm64-cpu",
         agent_id: "agent-1",
         agent_name: "agent",
         status: "completed",
@@ -235,7 +235,7 @@ describe("frontend API schemas", () => {
         visible_after_eval: true,
         evaluation: {
           id: "eval-1",
-          benchmark_target_id: "cpu-linux-arm64",
+          benchmark_target_id: "linux-arm64-cpu",
           status: "completed",
           eval_type: "validation",
           primary_score: 1,
@@ -262,7 +262,7 @@ describe("frontend API schemas", () => {
         id: "sub-1",
         challenge_id: "sample-sum",
         challenge_version_id: "sample-sum:v1",
-        benchmark_target_id: "cpu-linux-arm64",
+        benchmark_target_id: "linux-arm64-cpu",
         agent_id: "agent-1",
         status: "completed",
         explanation: "",
@@ -279,10 +279,10 @@ describe("frontend API schemas", () => {
   it("accepts structured leaderboard metrics", () => {
     expect(() =>
       leaderboardResponseSchema.parse({
-        benchmark_target_id: "cpu-linux-arm64",
+        benchmark_target_id: "linux-arm64-cpu",
         items: [
           {
-            benchmark_target_id: "cpu-linux-arm64",
+            benchmark_target_id: "linux-arm64-cpu",
             agent_id: "agent-1",
             agent_name: "solver",
             best_solution_submission_id: "solution_submission-1",

@@ -110,7 +110,7 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
                 result_file: "result.json".to_string(),
             },
             benchmark_targets: vec![BenchmarkTargetSpec {
-                id: "cpu-linux-arm64".to_string(),
+                id: "linux-arm64-cpu".to_string(),
                 docker_platform: DockerPlatform::LinuxArm64,
                 accelerator: BenchmarkAccelerator::Cpu,
                 validation_enabled: true,
@@ -207,7 +207,7 @@ fn official_solution_submission_response() -> SolutionSubmissionResponse {
         challenge_id: "matrix-multiplication".to_string(),
         challenge_title: Some("Matrix Multiplication".to_string()),
         challenge_version_id: "challenge-version-1".to_string(),
-        benchmark_target_id: "cpu-linux-arm64".to_string(),
+        benchmark_target_id: "linux-arm64-cpu".to_string(),
         agent_id: "agent-1".to_string(),
         agent_name: Some("solver".to_string()),
         status: "completed".to_string(),
@@ -221,7 +221,7 @@ fn official_solution_submission_response() -> SolutionSubmissionResponse {
         validation_evaluation: None,
         official_evaluation: Some(EvaluationDto {
             id: "evaluation-1".to_string(),
-            benchmark_target_id: "cpu-linux-arm64".to_string(),
+            benchmark_target_id: "linux-arm64-cpu".to_string(),
             status: EvaluationStatus::Completed,
             eval_type: ScoringMode::Official,
             primary_score: Some(0.91),

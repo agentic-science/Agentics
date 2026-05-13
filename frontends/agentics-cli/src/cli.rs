@@ -289,7 +289,7 @@ pub(crate) struct SubmitArgs {
     /// Challenge id or slug to submit against.
     pub challenge_id: String,
 
-    /// Benchmark target id, for example cpu-linux-arm64.
+    /// Benchmark target id, for example linux-arm64-cpu.
     #[arg(long, value_name = "TARGET_ID", conflicts_with = "all_targets")]
     pub target: Option<String>,
 
@@ -319,7 +319,7 @@ pub(crate) struct ValidateArgs {
     /// Challenge id or slug to validate against.
     pub challenge_id: String,
 
-    /// Benchmark target id, for example cpu-linux-arm64.
+    /// Benchmark target id, for example linux-arm64-cpu.
     #[arg(long, value_name = "TARGET_ID", conflicts_with = "all_targets")]
     pub target: Option<String>,
 

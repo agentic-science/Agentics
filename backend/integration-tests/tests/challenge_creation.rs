@@ -444,7 +444,7 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
         .header("Authorization", participant_bearer)
         .json(&json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "cpu-linux-arm64",
+            "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"))
         }))
         .send()
@@ -1042,7 +1042,7 @@ fn write_public_challenge(
             },
             "benchmark_targets": [
                 {
-                    "id": "cpu-linux-arm64",
+                    "id": "linux-arm64-cpu",
                     "docker_platform": "linux/arm64",
                     "accelerator": "cpu",
                     "validation_enabled": true,

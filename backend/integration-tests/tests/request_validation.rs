@@ -72,7 +72,7 @@ async fn zip_submission_routes_accept_declared_large_json_bodies(pool: sqlx::PgP
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "missing-challenge",
-            "benchmark_target_id": "cpu-linux-arm64",
+            "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": artifact_base64
         }))
         .send()

@@ -13,8 +13,9 @@ use bollard::Docker;
 use crate::config::Config;
 use crate::error::{AppError, Result};
 use crate::models::challenge::{
-    ChallengeBundleSpec, ChallengePrepareSpec, ChallengeRunInputFile, ChallengeRunInterface,
-    ChallengeRunManifest, ChallengeRunSpec, DockerPlatform, MetricSchemaSpec, ResourceProfileSpec,
+    BenchmarkAccelerator, ChallengeBundleSpec, ChallengePrepareSpec, ChallengeRunInputFile,
+    ChallengeRunInterface, ChallengeRunManifest, ChallengeRunSpec, DockerPlatform,
+    MetricSchemaSpec, ResourceProfileSpec,
 };
 use crate::models::evaluation::{EvaluationJobPayload, ScorerRunResult, ScoringMode};
 use crate::storage::Storage;
@@ -56,6 +57,7 @@ struct RunnerContext<'a> {
 struct SolutionRunRequest<'a> {
     profile: &'a ResourceProfileSpec,
     docker_platform: DockerPlatform,
+    accelerator: BenchmarkAccelerator,
     manifest: &'a ZipProjectManifest,
     run_manifest: &'a ChallengeRunManifest,
     input_source_root: &'a Path,
@@ -68,6 +70,7 @@ struct ScorerRequest<'a> {
     spec: &'a ChallengeBundleSpec,
     profile: &'a ResourceProfileSpec,
     docker_platform: DockerPlatform,
+    accelerator: BenchmarkAccelerator,
     run_manifest_container_path: &'a str,
     bundle_dir: &'a Path,
     prepared_root: Option<&'a Path>,
@@ -87,6 +90,7 @@ struct RunPlanRequest<'a> {
     spec: &'a ChallengeBundleSpec,
     profile: &'a ResourceProfileSpec,
     docker_platform: DockerPlatform,
+    accelerator: BenchmarkAccelerator,
     benchmark_target_id: &'a str,
     eval_type: ScoringMode,
     bundle_dir: &'a Path,
@@ -97,6 +101,7 @@ struct PrepareRequest<'a> {
     runner: RunnerContext<'a>,
     profile: &'a ResourceProfileSpec,
     docker_platform: DockerPlatform,
+    accelerator: BenchmarkAccelerator,
     benchmark_target_id: &'a str,
     eval_type: ScoringMode,
     prepare: &'a ChallengePrepareSpec,
@@ -172,11 +177,13 @@ pub async fn execute_evaluation_job(
         extract_zip_safe(&artifact_path, &source_root).await?;
         let manifest = read_solution_manifest(&source_root, &spec).await?;
         copy_dir_all(&source_root, &build_root).await?;
+        make_container_writable_tree(&build_root).await?;
 
         run_setup_and_build(
             runner_context,
             profile,
             target.docker_platform,
+            target.accelerator,
             &manifest,
             &build_root,
             &mut logs,
@@ -189,6 +196,7 @@ pub async fn execute_evaluation_job(
                 spec: &spec,
                 profile,
                 docker_platform: target.docker_platform,
+                accelerator: target.accelerator,
                 benchmark_target_id: target.id.as_str(),
                 eval_type,
                 bundle_dir,
@@ -202,6 +210,7 @@ pub async fn execute_evaluation_job(
             SolutionRunRequest {
                 profile,
                 docker_platform: target.docker_platform,
+                accelerator: target.accelerator,
                 manifest: &manifest,
                 run_manifest: &run_plan.manifest,
                 input_source_root: &run_plan.input_source_root,
@@ -219,6 +228,7 @@ pub async fn execute_evaluation_job(
                 spec: &spec,
                 profile,
                 docker_platform: target.docker_platform,
+                accelerator: target.accelerator,
                 run_manifest_container_path: &run_plan.run_manifest_container_path,
                 bundle_dir,
                 prepared_root: run_plan.prepared_root.as_deref(),
@@ -274,6 +284,7 @@ async fn run_setup_and_build(
     runner: RunnerContext<'_>,
     profile: &ResourceProfileSpec,
     docker_platform: DockerPlatform,
+    accelerator: BenchmarkAccelerator,
     manifest: &ZipProjectManifest,
     build_root: &Path,
     logs: &mut String,
@@ -295,6 +306,7 @@ async fn run_setup_and_build(
                 mounts: vec![bind_mount(build_root, "/workspace", false)],
                 working_dir: "/workspace".to_string(),
                 docker_platform,
+                accelerator,
                 limits: limits.clone(),
             },
         )
@@ -328,6 +340,7 @@ async fn run_solution_invocations(
         tokio::fs::create_dir_all(&output_dir).await?;
         tokio::fs::create_dir_all(&tmp_dir).await?;
         materialize_run_io(run, request.input_source_root, &io_root, &input_dir).await?;
+        make_container_writable_tree(&io_root).await?;
 
         let limits = effective_phase_limits(request.profile, &run_phase);
         let outcome = run_container(
@@ -360,6 +373,7 @@ async fn run_solution_invocations(
                 ],
                 working_dir: "/workspace".to_string(),
                 docker_platform: request.docker_platform,
+                accelerator: request.accelerator,
                 limits: limits.clone(),
             },
         )
@@ -379,6 +393,8 @@ async fn run_scorer(
     request: ScorerRequest<'_>,
     logs: &mut String,
 ) -> Result<()> {
+    make_container_writable_tree(request.scorer_output_root).await?;
+
     let mut cmd = request.spec.scorer.command.clone();
     cmd.extend([
         "--challenge-dir".to_string(),
@@ -412,6 +428,7 @@ async fn run_scorer(
             mounts,
             working_dir: "/challenge".to_string(),
             docker_platform: request.docker_platform,
+            accelerator: request.accelerator,
             limits,
         },
     )
@@ -471,6 +488,7 @@ async fn resolve_run_plan(
                     runner: request.runner,
                     profile: request.profile,
                     docker_platform: request.docker_platform,
+                    accelerator: request.accelerator,
                     benchmark_target_id: request.benchmark_target_id,
                     eval_type: request.eval_type,
                     prepare,
@@ -503,6 +521,7 @@ async fn resolve_run_plan(
 
 async fn run_prepare_phase(request: PrepareRequest<'_>, logs: &mut String) -> Result<()> {
     tokio::fs::create_dir_all(request.prepared_root).await?;
+    make_container_writable_tree(request.prepared_root).await?;
     let mut cmd = request.prepare.command.clone();
     cmd.extend([
         "--challenge-dir".to_string(),
@@ -537,6 +556,7 @@ async fn run_prepare_phase(request: PrepareRequest<'_>, logs: &mut String) -> Re
             ],
             working_dir: "/challenge".to_string(),
             docker_platform: request.docker_platform,
+            accelerator: request.accelerator,
             limits: limits.clone(),
         },
     )
@@ -624,6 +644,45 @@ fn prepare_limits(
         network_access: prepare.network_access,
         log_limit_bytes: 1024 * 1024,
     }
+}
+
+#[cfg(unix)]
+async fn make_container_writable_tree(root: &Path) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = root.to_path_buf();
+    tokio::task::spawn_blocking(move || -> Result<()> {
+        let mut pending = vec![root];
+        while let Some(path) = pending.pop() {
+            let metadata = std::fs::symlink_metadata(&path)?;
+            if metadata.file_type().is_symlink() {
+                continue;
+            }
+            if !metadata.is_dir() && !metadata.is_file() {
+                continue;
+            }
+
+            let mut permissions = metadata.permissions();
+            let writable_bits = if metadata.is_dir() { 0o777 } else { 0o666 };
+            permissions.set_mode(permissions.mode() | writable_bits);
+            std::fs::set_permissions(&path, permissions)?;
+
+            if metadata.is_dir() {
+                for entry in std::fs::read_dir(&path)? {
+                    let entry = entry?;
+                    pending.push(entry.path());
+                }
+            }
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("container writable chmod task failed: {e}")))?
+}
+
+#[cfg(not(unix))]
+async fn make_container_writable_tree(_root: &Path) -> Result<()> {
+    Ok(())
 }
 
 async fn materialize_run_io(

@@ -3,7 +3,8 @@ use std::time::{Duration, Instant};
 use bollard::Docker;
 use bollard::container::LogOutput;
 use bollard::models::{
-    ContainerCreateBody, HostConfig, HostConfigLogConfig, Mount, MountTypeEnum, ResourcesUlimits,
+    ContainerCreateBody, DeviceRequest, HostConfig, HostConfigLogConfig, Mount, MountTypeEnum,
+    ResourcesUlimits,
 };
 use bollard::query_parameters::{
     CreateContainerOptionsBuilder, KillContainerOptionsBuilder, LogsOptionsBuilder,
@@ -14,7 +15,7 @@ use tokio::time::timeout;
 
 use crate::config::Config;
 use crate::error::{AppError, Result};
-use crate::models::challenge::DockerPlatform;
+use crate::models::challenge::{BenchmarkAccelerator, DockerPlatform};
 use crate::zip_project::ZipProjectPhaseLimits;
 
 #[derive(Debug)]
@@ -26,6 +27,7 @@ pub(super) struct ContainerRequest {
     pub(super) mounts: Vec<Mount>,
     pub(super) working_dir: String,
     pub(super) docker_platform: DockerPlatform,
+    pub(super) accelerator: BenchmarkAccelerator,
     pub(super) limits: ZipProjectPhaseLimits,
 }
 
@@ -85,6 +87,8 @@ pub(super) async fn run_container(
         init: Some(true),
         oom_kill_disable: Some(false),
         log_config: Some(docker_log_config(log_limit_bytes)),
+        runtime: gpu_runtime(request.accelerator),
+        device_requests: gpu_device_requests(request.accelerator),
         ..Default::default()
     };
     let container_config = ContainerCreateBody {
@@ -259,6 +263,25 @@ fn docker_log_config(limit_bytes: u64) -> HostConfigLogConfig {
     HostConfigLogConfig {
         typ: Some("json-file".to_string()),
         config: Some(config),
+    }
+}
+
+fn gpu_runtime(accelerator: BenchmarkAccelerator) -> Option<String> {
+    match accelerator {
+        BenchmarkAccelerator::Cpu => None,
+        BenchmarkAccelerator::Gpu => Some("nvidia".to_string()),
+    }
+}
+
+fn gpu_device_requests(accelerator: BenchmarkAccelerator) -> Option<Vec<DeviceRequest>> {
+    match accelerator {
+        BenchmarkAccelerator::Cpu => None,
+        BenchmarkAccelerator::Gpu => Some(vec![DeviceRequest {
+            driver: Some("nvidia".to_string()),
+            count: Some(-1),
+            capabilities: Some(vec![vec!["gpu".to_string()]]),
+            ..Default::default()
+        }]),
     }
 }
 

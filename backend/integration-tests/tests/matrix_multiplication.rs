@@ -27,6 +27,7 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
     let repo = tempfile::tempdir().expect("failed to create challenge repo tempdir");
     copy_dir_all(&challenge_repo_root(), repo.path());
     let challenge_root = repo.path().join("challenges/matrix-multiplication");
+    normalize_matrix_targets_for_mvp(&challenge_root);
     let private_asset_zip = generate_smoke_private_asset(&challenge_root);
     std::fs::remove_dir_all(challenge_root.join("v1/private-benchmark"))
         .expect("failed to remove generated private benchmark dir from public repo");
@@ -222,11 +223,28 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
 }
 
 fn native_cpu_target() -> &'static str {
-    if std::env::consts::ARCH == "aarch64" {
-        "cpu-linux-arm64"
-    } else {
-        "cpu-linux-amd64"
-    }
+    "linux-arm64-cpu"
+}
+
+fn normalize_matrix_targets_for_mvp(challenge_root: &Path) {
+    let spec_path = challenge_root.join("v1/spec.json");
+    let mut spec: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(&spec_path).expect("failed to read matrix spec"),
+    )
+    .expect("failed to parse matrix spec");
+    let targets = spec["benchmark_targets"]
+        .as_array_mut()
+        .expect("matrix spec targets should be an array");
+    targets.retain(|target| target["docker_platform"] == "linux/arm64");
+    let target = targets
+        .first_mut()
+        .expect("matrix spec should retain one arm64 target");
+    target["id"] = serde_json::Value::String("linux-arm64-cpu".to_string());
+    std::fs::write(
+        &spec_path,
+        serde_json::to_vec_pretty(&spec).expect("matrix spec should serialize"),
+    )
+    .expect("failed to write normalized matrix spec");
 }
 
 fn generate_smoke_private_asset(challenge_root: &Path) -> PathBuf {

@@ -441,21 +441,31 @@ fn validate_benchmark_targets(spec: &ChallengeBundleSpec) -> Result<()> {
 
 fn validate_benchmark_target(target: &BenchmarkTargetSpec, field: &str) -> Result<()> {
     require_non_empty(&target.id, &format!("{field}.id"))?;
-    if target.accelerator != BenchmarkAccelerator::Cpu {
-        return Err(AppError::Validation(format!(
-            "{field}.accelerator must be cpu until GPU scheduling is implemented"
-        )));
-    }
-
-    let expected_id = match target.docker_platform {
-        DockerPlatform::LinuxArm64 => "cpu-linux-arm64",
-        DockerPlatform::LinuxAmd64 => "cpu-linux-amd64",
+    let expected_id = match (target.docker_platform, target.accelerator) {
+        (DockerPlatform::LinuxArm64, BenchmarkAccelerator::Cpu) => "linux-arm64-cpu",
+        (DockerPlatform::LinuxArm64, BenchmarkAccelerator::Gpu) => "linux-arm64-cuda",
+        (DockerPlatform::LinuxAmd64, _) => {
+            return Err(AppError::Validation(format!(
+                "{field}.docker_platform `linux/amd64` is reserved for post-MVP deployment support"
+            )));
+        }
     };
     if target.id != expected_id {
         return Err(AppError::Validation(format!(
-            "{field}.id must be `{expected_id}` for docker_platform `{}`",
-            target.docker_platform.as_str()
+            "{field}.id must be `{expected_id}` for docker_platform `{}` and accelerator `{}`",
+            target.docker_platform.as_str(),
+            target.accelerator.as_str()
         )));
+    }
+    if target.accelerator == BenchmarkAccelerator::Gpu {
+        match target.resource_profile.hardware.as_ref() {
+            Some(hardware) if hardware.kind == "cuda" => {}
+            _ => {
+                return Err(AppError::Validation(format!(
+                    "{field}.resource_profile.hardware.kind must be `cuda` for accelerator `gpu`"
+                )));
+            }
+        }
     }
 
     validate_resource_profile(
@@ -935,9 +945,9 @@ mod tests {
 
     use crate::models::challenge::{
         BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengeExecutionSpec,
-        ChallengePrepareSpec, CommunitySpec, DatasetsSpec, DockerPlatform, MetricDirection,
-        MetricSchemaSpec, MetricVisibility, PrivateBenchmarkPolicy, ResourceProfileSpec,
-        ScorerSpec, SolutionSpec,
+        ChallengePrepareSpec, CommunitySpec, DatasetsSpec, DockerPlatform, HardwareProfileSpec,
+        MetricDirection, MetricSchemaSpec, MetricVisibility, PrivateBenchmarkPolicy,
+        ResourceProfileSpec, ScorerSpec, SolutionSpec,
     };
     use crate::models::evaluation::ScoreVisibility;
     use crate::zip_project::ZipProjectNetworkAccess;
@@ -966,7 +976,7 @@ mod tests {
                 result_file: "result.json".to_string(),
             },
             benchmark_targets: vec![BenchmarkTargetSpec {
-                id: "cpu-linux-arm64".to_string(),
+                id: "linux-arm64-cpu".to_string(),
                 docker_platform: DockerPlatform::LinuxArm64,
                 accelerator: BenchmarkAccelerator::Cpu,
                 validation_enabled: true,
@@ -1028,11 +1038,39 @@ mod tests {
     #[test]
     fn target_id_must_match_docker_platform() {
         let mut spec = base_spec();
-        spec.benchmark_targets[0].id = "cpu-linux-amd64".to_string();
+        spec.benchmark_targets[0].id = "linux-arm64-cuda".to_string();
 
         let error =
             validate_challenge_bundle_spec(&spec).expect_err("mismatched target should fail");
         assert!(error.to_string().contains("docker_platform"));
+    }
+
+    #[test]
+    fn amd64_targets_are_reserved_for_post_mvp() {
+        let mut spec = base_spec();
+        spec.benchmark_targets[0].id = "linux-amd64-cpu".to_string();
+        spec.benchmark_targets[0].docker_platform = DockerPlatform::LinuxAmd64;
+
+        let error = validate_challenge_bundle_spec(&spec)
+            .expect_err("amd64 targets should be reserved for post-MVP");
+        assert!(error.to_string().contains("post-MVP"));
+    }
+
+    #[test]
+    fn cuda_target_requires_cuda_hardware_metadata() {
+        let mut spec = base_spec();
+        let target = &mut spec.benchmark_targets[0];
+        target.id = "linux-arm64-cuda".to_string();
+        target.accelerator = BenchmarkAccelerator::Gpu;
+
+        let error =
+            validate_challenge_bundle_spec(&spec).expect_err("missing cuda hardware should fail");
+        assert!(error.to_string().contains("hardware.kind"));
+
+        spec.benchmark_targets[0].resource_profile.hardware = Some(HardwareProfileSpec {
+            kind: "cuda".to_string(),
+        });
+        validate_challenge_bundle_spec(&spec).expect("cuda target should validate");
     }
 
     #[test]

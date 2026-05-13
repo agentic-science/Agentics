@@ -32,7 +32,7 @@ async fn stale_running_job_fails_after_max_attempts(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "cpu-linux-arm64",
+            "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "stale job"
         }))
@@ -106,7 +106,7 @@ async fn refreshed_job_lease_is_not_reaped(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "cpu-linux-arm64",
+            "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "lease refresh"
         }))
@@ -172,7 +172,7 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "cpu-linux-arm64",
+            "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "stale worker finish"
         }))
@@ -346,7 +346,7 @@ async fn losing_official_submission_does_not_overwrite_leaderboard_best_metadata
         SELECT best_solution_submission_id, best_rank_score, official_score, official_metrics_json
         FROM leaderboard_entries
         WHERE challenge_id = 'sample-sum'
-          AND benchmark_target_id = 'cpu-linux-arm64'
+          AND benchmark_target_id = 'linux-arm64-cpu'
           AND agent_id = $1
         "#,
     )
@@ -380,7 +380,7 @@ async fn create_official_submission(
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "cpu-linux-arm64",
+            "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": explanation
         }))

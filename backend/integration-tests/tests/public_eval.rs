@@ -71,7 +71,7 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "cpu-linux-arm64",
+            "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "official eval smoke test"
         }))
@@ -215,7 +215,7 @@ async fn worker_completes_private_validation_run_without_leaderboard(pool: sqlx:
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "cpu-linux-arm64",
+            "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "validation smoke test"
         }))
@@ -294,7 +294,7 @@ async fn worker_completes_file_mode_validation_run(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "grid-routing",
-            "benchmark_target_id": "cpu-linux-arm64",
+            "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "file mode validation smoke test"
         }))
@@ -356,7 +356,7 @@ async fn worker_rejects_symlink_declared_output(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "grid-routing",
-            "benchmark_target_id": "cpu-linux-arm64",
+            "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": grid_routing_symlink_solution_zip_base64(),
             "explanation": "symlink output should fail before scorer"
         }))
@@ -426,7 +426,7 @@ async fn worker_reports_build_phase_failure(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "cpu-linux-arm64",
+            "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "build phase failure smoke test"
         }))
@@ -513,7 +513,7 @@ python main.py
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "cpu-linux-arm64",
+            "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "run stage internet probe"
         }))
@@ -580,7 +580,7 @@ python main.py
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "cpu-linux-arm64",
+            "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "run workspace readonly probe"
         }))
@@ -645,7 +645,7 @@ async fn validation_run_is_rejected_when_challenge_disables_validation(pool: sql
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "validation-disabled",
-            "benchmark_target_id": "cpu-linux-arm64",
+            "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": "not-base64",
             "explanation": "should fail before artifact decode"
         }))
@@ -701,7 +701,7 @@ async fn validation_run_quota_rejects_and_resets(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "cpu-linux-arm64",
+            "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "first validation run"
         }))
@@ -715,7 +715,7 @@ async fn validation_run_quota_rejects_and_resets(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "cpu-linux-arm64",
+            "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": "not-base64",
             "explanation": "should fail before artifact decode"
         }))
@@ -748,7 +748,7 @@ async fn validation_run_quota_rejects_and_resets(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "cpu-linux-arm64",
+            "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": reset_artifact_base64,
             "explanation": "validation run after quota reset"
         }))
@@ -795,7 +795,7 @@ async fn official_submission_quota_rejects_before_artifact_decode(pool: sqlx::Pg
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "cpu-linux-arm64",
+            "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "first official run"
         }))
@@ -809,7 +809,7 @@ async fn official_submission_quota_rejects_before_artifact_decode(pool: sqlx::Pg
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "cpu-linux-arm64",
+            "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": "not-base64",
             "explanation": "should fail before artifact decode"
         }))
@@ -857,7 +857,7 @@ async fn official_active_queue_limit_rejects_before_artifact_decode(pool: sqlx::
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "cpu-linux-arm64",
+            "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "fills active queue"
         }))
@@ -871,7 +871,7 @@ async fn official_active_queue_limit_rejects_before_artifact_decode(pool: sqlx::
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "cpu-linux-arm64",
+            "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": "not-base64",
             "explanation": "should fail before artifact decode"
         }))
@@ -911,7 +911,7 @@ async fn concurrent_official_admission_locks_admit_only_one(pool: sqlx::PgPool) 
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "cpu-linux-arm64",
+            "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": artifact_a,
             "explanation": "concurrent official run A"
         }))
@@ -921,7 +921,7 @@ async fn concurrent_official_admission_locks_admit_only_one(pool: sqlx::PgPool) 
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "cpu-linux-arm64",
+            "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": artifact_b,
             "explanation": "concurrent official run B"
         }))
@@ -1027,7 +1027,7 @@ async fn worker_marks_solution_submission_failed_when_artifact_is_missing(pool: 
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "cpu-linux-arm64",
+            "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "official eval failure test"
         }))

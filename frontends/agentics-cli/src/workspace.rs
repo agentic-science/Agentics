@@ -493,7 +493,7 @@ mod tests {
                     result_file: "result.json".to_string(),
                 },
                 benchmark_targets: vec![BenchmarkTargetSpec {
-                    id: "cpu-linux-arm64".to_string(),
+                    id: "linux-arm64-cpu".to_string(),
                     docker_platform: DockerPlatform::LinuxArm64,
                     accelerator: BenchmarkAccelerator::Cpu,
                     validation_enabled: false,

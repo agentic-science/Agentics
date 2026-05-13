@@ -5,7 +5,7 @@ import { selectSubmissionDisplayEvaluation } from "./submissionEvaluation";
 function evaluation(id: string) {
   return {
     id,
-    benchmark_target_id: "cpu-linux-arm64",
+    benchmark_target_id: "linux-arm64-cpu",
     status: "completed" as const,
     eval_type: "official" as const,
     aggregate_metrics: [],

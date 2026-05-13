@@ -693,7 +693,7 @@ mod tests {
                 },
                 "benchmark_targets": [
                     {
-                        "id": "cpu-linux-arm64",
+                        "id": "linux-arm64-cpu",
                         "docker_platform": "linux/arm64",
                         "accelerator": "cpu",
                         "validation_enabled": true,

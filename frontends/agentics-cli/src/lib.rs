@@ -295,7 +295,7 @@ mod tests {
                 "status": "queued",
                 "challenge_id": "sample-sum",
                 "challenge_version_id": "version-1",
-                "benchmark_target_id": "cpu-linux-arm64",
+                "benchmark_target_id": "linux-arm64-cpu",
                 "artifact_path": "solution-submissions/solution_submission-1.zip",
                 "evaluation_job_id": "job-1",
                 "created_at": "2026-05-01T00:00:00Z"
@@ -328,7 +328,7 @@ mod tests {
             "submit",
             "sample-sum",
             "--target",
-            "cpu-linux-arm64",
+            "linux-arm64-cpu",
             "--dir",
             workspace_dir.to_str().expect("utf8 path"),
             "--explanation",
@@ -351,7 +351,7 @@ mod tests {
 
         assert!(output.contains("Submitted solution_submission-1"));
         assert_eq!(body["challenge_id"], "sample-sum");
-        assert_eq!(body["benchmark_target_id"], "cpu-linux-arm64");
+        assert_eq!(body["benchmark_target_id"], "linux-arm64-cpu");
         assert_eq!(body["explanation"], "first attempt");
         assert!(body["artifact_base64"].as_str().expect("artifact").len() > 20);
     }
@@ -410,7 +410,7 @@ mod tests {
                 "challenge_id": "sample-sum",
                 "challenge_title": "Sample Sum",
                 "challenge_version_id": "version-1",
-                "benchmark_target_id": "cpu-linux-arm64",
+                "benchmark_target_id": "linux-arm64-cpu",
                 "agent_id": "agent-1",
                 "agent_name": "solver",
                 "status": "queued",
@@ -421,7 +421,7 @@ mod tests {
                 "artifact_path": "solution-submissions/solution_submission-1.zip",
                 "evaluation_job": {
                     "id": "job-1",
-                    "benchmark_target_id": "cpu-linux-arm64",
+                    "benchmark_target_id": "linux-arm64-cpu",
                     "status": "queued"
                 },
                 "created_at": "2026-05-01T00:00:00Z",
@@ -465,7 +465,7 @@ mod tests {
                 "challenge_id": "sample-sum",
                 "challenge_title": "Sample Sum",
                 "challenge_version_id": "version-1",
-                "benchmark_target_id": "cpu-linux-arm64",
+                "benchmark_target_id": "linux-arm64-cpu",
                 "agent_id": "agent-1",
                 "agent_name": "solver",
                 "status": "completed",
@@ -476,12 +476,12 @@ mod tests {
                 "artifact_path": "solution-submissions/validation-1.zip",
                 "evaluation_job": {
                     "id": "job-1",
-                    "benchmark_target_id": "cpu-linux-arm64",
+                    "benchmark_target_id": "linux-arm64-cpu",
                     "status": "completed"
                 },
                 "evaluation": {
                     "id": "eval-1",
-                    "benchmark_target_id": "cpu-linux-arm64",
+                    "benchmark_target_id": "linux-arm64-cpu",
                     "status": "completed",
                     "eval_type": "validation",
                     "primary_score": 1.0,
@@ -557,7 +557,7 @@ mod tests {
                 "status": "queued",
                 "challenge_id": "sample-sum",
                 "challenge_version_id": "version-1",
-                "benchmark_target_id": "cpu-linux-arm64",
+                "benchmark_target_id": "linux-arm64-cpu",
                 "artifact_path": "solution-submissions/validation-1.zip",
                 "evaluation_job_id": "job-1",
                 "created_at": "2026-05-01T00:00:00Z"
@@ -572,7 +572,7 @@ mod tests {
                 "challenge_id": "sample-sum",
                 "challenge_title": "Sample Sum",
                 "challenge_version_id": "version-1",
-                "benchmark_target_id": "cpu-linux-arm64",
+                "benchmark_target_id": "linux-arm64-cpu",
                 "agent_id": "agent-1",
                 "agent_name": "solver",
                 "status": "completed",
@@ -583,12 +583,12 @@ mod tests {
                 "artifact_path": "solution-submissions/validation-1.zip",
                 "evaluation_job": {
                     "id": "job-1",
-                    "benchmark_target_id": "cpu-linux-arm64",
+                    "benchmark_target_id": "linux-arm64-cpu",
                     "status": "completed"
                 },
                 "evaluation": {
                     "id": "eval-1",
-                    "benchmark_target_id": "cpu-linux-arm64",
+                    "benchmark_target_id": "linux-arm64-cpu",
                     "status": "completed",
                     "eval_type": "validation",
                     "primary_score": 1.0,
@@ -664,7 +664,7 @@ mod tests {
         assert!(output.contains("rank_score: 1"));
         assert!(output.contains("visible_after_eval: false"));
         assert_eq!(body["challenge_id"], "sample-sum");
-        assert_eq!(body["benchmark_target_id"], "cpu-linux-arm64");
+        assert_eq!(body["benchmark_target_id"], "linux-arm64-cpu");
         assert_eq!(body["explanation"], "quick check");
         assert!(body["artifact_base64"].as_str().expect("artifact").len() > 20);
     }
@@ -906,7 +906,7 @@ mod tests {
                 },
                 "benchmark_targets": [
                     {
-                        "id": "cpu-linux-arm64",
+                        "id": "linux-arm64-cpu",
                         "docker_platform": "linux/arm64",
                         "accelerator": "cpu",
                         "validation_enabled": validation_enabled,
