@@ -77,10 +77,10 @@ DGX Spark 数值应在 benchmark calibration 后重新评估。
 
 ## Hosted Storage Probe Policy
 
-Hosted DGX profile 应在 public workers 接受 jobs 前添加 strict storage probes。
-这是计划中的 operational hardening，不属于当前 Mac-local runbook。
+Hosted DGX profile 会在 public workers 接受 jobs 前添加 strict storage probes。
+这是 DGX-hosted hardening，并与 Mac-local runbook 分离。
 
-使用明确的 Agentics flag，例如 `AGENTICS_HOST_PROBE_MODE=off|warn|require`，
+使用明确的 Agentics flag `AGENTICS_HOST_PROBE_MODE=off|warn|require`，
 不要从 `CI=true` 推断 strictness，因为 CI 可能运行在无法证明 Docker/XFS quota
 behavior 的 hosts 上。在 `require` mode 下，worker startup 应验证 Agentics-owned
 Docker daemon 上的 Docker writable-layer quota enforcement，并验证 runner-owned
@@ -110,7 +110,26 @@ scripts/ops/check-dgx-spark-host.sh
 ```
 
 仅在 operator account 能访问目标 Docker daemon 时，才设置
-`AGENTICS_DGX_RUN_DOCKER_SMOKE=1`。
+`AGENTICS_DGX_RUN_DOCKER_SMOKE=1`。如果 Docker access 需要 sudo，设置
+`AGENTICS_DGX_DOCKER_CLI='sudo -n docker'`。
+
+DGX deployment profile 使用以下检查：
+
+```bash
+AGENTICS_HOST_PROBE_MODE=warn scripts/ops/check-dgx-spark-profile.sh
+```
+
+配置好 Agentics-owned Docker daemon 和 loopback XFS mounts 后，先 preload probe
+image，然后以 service user 运行 strict check：
+
+```bash
+docker --host unix:///run/agentics/docker.sock pull busybox:1.36
+sudo -u agentics env \
+  AGENTICS_HOST_PROBE_MODE=require \
+  AGENTICS_DGX_RUN_MUTATING_PROBES=1 \
+  AGENTICS_DGX_DOCKER_PULL_POLICY=never \
+  scripts/ops/check-dgx-spark-profile.sh
+```
 
 ## Logs
 

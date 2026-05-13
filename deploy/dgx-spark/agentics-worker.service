@@ -1,0 +1,23 @@
+[Unit]
+Description=Agentics evaluation worker
+After=network-online.target postgresql.service agentics-docker.service
+Requires=agentics-docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=agentics
+Group=agentics
+WorkingDirectory=/opt/agentics/current
+EnvironmentFile=/etc/agentics/agentics.env
+ExecStartPre=/opt/agentics/current/scripts/ops/check-dgx-spark-profile.sh
+ExecStart=/opt/agentics/current/bin/worker
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/srv/agentics/storage /srv/agentics/phase-mounts/solution-setup /srv/agentics/phase-mounts/solution-build /srv/agentics/phase-mounts/solution-run /srv/agentics/phase-mounts/scorer-prepare /srv/agentics/phase-mounts/scorer-score /run/agentics
+
+[Install]
+WantedBy=multi-user.target

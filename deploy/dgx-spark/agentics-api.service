@@ -1,0 +1,21 @@
+[Unit]
+Description=Agentics API server
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=agentics
+Group=agentics
+WorkingDirectory=/opt/agentics/current
+EnvironmentFile=/etc/agentics/agentics.env
+ExecStart=/opt/agentics/current/bin/api
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/srv/agentics/storage /run/agentics
+
+[Install]
+WantedBy=multi-user.target

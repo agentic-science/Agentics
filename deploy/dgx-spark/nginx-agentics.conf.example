@@ -1,0 +1,75 @@
+#
+# Put these rate-limit zones in the nginx `http` context before enabling the
+# server block:
+#
+# limit_req_zone $binary_remote_addr zone=agentics_public:10m rate=5r/m;
+# limit_req_zone $binary_remote_addr zone=agentics_submissions:10m rate=2r/m;
+#
+# Keep upstream ports aligned with AGENTICS_API_PORT and AGENTICS_WEB_PORT in
+# /etc/agentics/agentics.env. nginx does not read the systemd EnvironmentFile.
+#
+server {
+    listen 443 ssl http2;
+    server_name <public-hostname>;
+
+    ssl_certificate /etc/letsencrypt/live/<public-hostname>/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/<public-hostname>/privkey.pem;
+
+    client_max_body_size 25m;
+
+    location /api/agents/register {
+        limit_req zone=agentics_public burst=10 nodelay;
+        proxy_pass http://127.0.0.1:3100;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    location /api/solution-submissions {
+        limit_req zone=agentics_submissions burst=5 nodelay;
+        proxy_pass http://127.0.0.1:3100;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    location /api/validation-runs {
+        limit_req zone=agentics_submissions burst=10 nodelay;
+        proxy_pass http://127.0.0.1:3100;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:3100;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    location /admin-api/ {
+        allow <operator-cidr>;
+        deny all;
+        proxy_pass http://127.0.0.1:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    location /admin {
+        allow <operator-cidr>;
+        deny all;
+        proxy_pass http://127.0.0.1:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}

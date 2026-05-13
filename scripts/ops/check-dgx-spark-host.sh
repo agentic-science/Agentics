@@ -20,6 +20,23 @@ if [ "$(uname -s)" != "Linux" ]; then
   exit 2
 fi
 
+DOCKER_CLI="${AGENTICS_DGX_DOCKER_CLI:-docker}"
+read -r -a DOCKER_CMD <<<"$DOCKER_CLI"
+if [ "${#DOCKER_CMD[@]}" -eq 0 ]; then
+  DOCKER_CMD=(docker)
+fi
+
+run_docker_info_head() {
+  printf '$'
+  printf ' %q' "${DOCKER_CMD[@]}" info
+  printf ' | sed -n "1,160p"\n'
+  "${DOCKER_CMD[@]}" info 2>&1 | sed -n "1,160p"
+  local docker_status="${PIPESTATUS[0]}"
+  if [ "$docker_status" -ne 0 ]; then
+    printf '[exit=%s]\n' "$docker_status"
+  fi
+}
+
 section "Host"
 run uname -a
 run_shell 'sed -n "1,80p" /etc/os-release 2>/dev/null || true'
@@ -46,28 +63,28 @@ section "Docker"
 run_shell 'id'
 run_shell 'ls -l /var/run/docker.sock 2>&1 || true'
 run_shell 'stat -c "%A %U %G %n" /var/run/docker.sock 2>&1 || true'
-run_shell 'docker version --format "Client={{.Client.Version}} Server={{.Server.Version}} API={{.Server.APIVersion}}" 2>&1 || true'
-run_shell 'docker info 2>&1 | sed -n "1,160p"'
-run_shell 'docker context ls 2>&1 || true'
+run "${DOCKER_CMD[@]}" version --format "Client={{.Client.Version}} Server={{.Server.Version}} API={{.Server.APIVersion}}"
+run_docker_info_head
+run "${DOCKER_CMD[@]}" context ls
 
 section "NVIDIA"
 run_shell 'nvidia-smi 2>&1 | sed -n "1,120p"'
 run_shell 'nvidia-container-cli --version 2>&1 || true'
 run_shell 'dpkg -l "nvidia-container*" "libnvidia-container*" 2>/dev/null | sed -n "1,120p" || true'
-run_shell 'docker info --format "{{json .Runtimes}}" 2>&1 || true'
+run "${DOCKER_CMD[@]}" info --format "{{json .Runtimes}}"
 run_shell 'nvidia-ctk runtime configure --runtime=docker --dry-run 2>&1 | sed -n "1,120p" || true'
 
 section "NVIDIA Docker Smoke"
 if [ "${AGENTICS_DGX_RUN_DOCKER_SMOKE:-0}" = "1" ]; then
   cuda_image="${AGENTICS_DGX_CUDA_IMAGE:-nvidia/cuda:13.0.0-base-ubuntu24.04}"
   pull_policy="${AGENTICS_DGX_DOCKER_PULL_POLICY:-never}"
-  run docker run --rm --pull="$pull_policy" --gpus all "$cuda_image" nvidia-smi
+  run "${DOCKER_CMD[@]}" run --rm --pull="$pull_policy" --network none --gpus all "$cuda_image" nvidia-smi
 else
   cat <<'EOF'
 Skipped. Set AGENTICS_DGX_RUN_DOCKER_SMOKE=1 to run:
 
-  docker run --rm --pull="${AGENTICS_DGX_DOCKER_PULL_POLICY:-never}" \
-    --gpus all "${AGENTICS_DGX_CUDA_IMAGE:-nvidia/cuda:13.0.0-base-ubuntu24.04}" \
+  ${AGENTICS_DGX_DOCKER_CLI:-docker} run --rm --pull="${AGENTICS_DGX_DOCKER_PULL_POLICY:-never}" \
+    --network none --gpus all "${AGENTICS_DGX_CUDA_IMAGE:-nvidia/cuda:13.0.0-base-ubuntu24.04}" \
     nvidia-smi
 
 Use an image that already exists locally or set AGENTICS_DGX_DOCKER_PULL_POLICY=missing.

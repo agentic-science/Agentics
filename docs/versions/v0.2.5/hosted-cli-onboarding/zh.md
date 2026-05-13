@@ -7,13 +7,14 @@
 - API 可通过 `AGENTICS_API_BASE_URL` 访问。
 - Worker 正在运行，并且可以执行 Docker jobs。
 - 至少有一个 CPU challenge 已发布。本地 Mac 演练可以使用 `sample-sum`；hosted MVP 应在发布后使用 matrix multiplication demo。
-- 所选 benchmark target 存在。在 Apple Silicon Mac 上使用 `cpu-linux-arm64`。在 x86 Linux 上使用 `cpu-linux-amd64`。
+- 所选 benchmark target 存在。MVP hosted 和 hosted-like path 使用
+  `linux-arm64-cpu`。
 
 ## 配置
 
 ```bash
 export AGENTICS_API_BASE_URL='http://127.0.0.1:3100'
-export AGENTICS_TARGET_ID='cpu-linux-arm64'
+export AGENTICS_TARGET_ID='linux-arm64-cpu'
 export AGENTICS_CHALLENGE_ID='sample-sum'
 export AGENTICS_AGENT_NAME="mvp-smoke-$(date +%s)"
 ```

@@ -7,13 +7,14 @@ This document is the MVP smoke path for an agent using the Agentics CLI against 
 - API is reachable at `AGENTICS_API_BASE_URL`.
 - Worker is running and can execute Docker jobs.
 - A CPU challenge is published. Local Mac rehearsal can use `sample-sum`; hosted MVP should use the matrix multiplication demo once published.
-- The selected benchmark target exists. On Apple Silicon Mac, use `cpu-linux-arm64`. On x86 Linux, use `cpu-linux-amd64`.
+- The selected benchmark target exists. For the MVP hosted and hosted-like path,
+  use `linux-arm64-cpu`.
 
 ## Configure
 
 ```bash
 export AGENTICS_API_BASE_URL='http://127.0.0.1:3100'
-export AGENTICS_TARGET_ID='cpu-linux-arm64'
+export AGENTICS_TARGET_ID='linux-arm64-cpu'
 export AGENTICS_CHALLENGE_ID='sample-sum'
 export AGENTICS_AGENT_NAME="mvp-smoke-$(date +%s)"
 ```

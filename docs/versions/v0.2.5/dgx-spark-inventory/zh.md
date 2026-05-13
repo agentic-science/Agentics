@@ -1,7 +1,7 @@
 # v0.2.5 DGX Spark Host Inventory
 
 本文档记录 `M0.2.5-DGX-1` 的第一轮 DGX Spark host inventory。它记录当前 host
-已经确认的信息，以及在最终确定 deployment profile 前仍然阻塞的部分。
+已经确认的信息，以及在该 host 上采集到的 DGX-2 deployment-profile evidence。
 
 ## 可重复检查
 
@@ -12,17 +12,21 @@ scripts/ops/check-dgx-spark-host.sh
 ```
 
 该脚本会在非 Linux host 上退出，不会运行 DGX checks。若要运行 NVIDIA Docker
-smoke check，需要使用能够访问 Docker daemon 的 operator account，并显式启用：
+smoke check，需要使用能够访问 Docker daemon 的 operator account，并显式启用。
+如果 Docker access 需要通过 sudo，设置
+`AGENTICS_DGX_DOCKER_CLI='sudo -n docker'`：
 
 ```bash
+AGENTICS_DGX_DOCKER_CLI='sudo -n docker' \
 AGENTICS_DGX_RUN_DOCKER_SMOKE=1 \
-AGENTICS_DGX_DOCKER_PULL_POLICY=missing \
+AGENTICS_DGX_DOCKER_PULL_POLICY=never \
+AGENTICS_DGX_CUDA_IMAGE=nvidia/cuda:12.9.1-base-ubuntu24.04 \
 scripts/ops/check-dgx-spark-host.sh
 ```
 
 ## 已采集 Host
 
-采集时间为 2026-05-12，host 为 `MapleSpark`。
+采集时间为 2026-05-12 至 2026-05-13，host 为 `MapleSpark`。
 
 | Area | Result |
 | --- | --- |
@@ -34,9 +38,12 @@ scripts/ops/check-dgx-spark-host.sh
 | Driver reported CUDA | `13.0` |
 | NVIDIA container toolkit | `nvidia-container-toolkit 1.19.0-1`，`libnvidia-container1 1.19.0-1` |
 | Docker client | Docker Engine Community client `29.2.1`，Buildx `v0.31.1`，Compose `v5.0.2` |
-| Docker server | 当前 user 无法读取，因为 `/var/run/docker.sock` 是 `root:docker`，且当前 user 不在 `docker` group 中 |
+| Default Docker server | 可通过 Docker-only passwordless sudo 读取；Docker Engine `29.2.1`，API `1.53`，`overlay2` on `extfs`，cgroup driver `systemd`，cgroup v2，Docker root `/var/lib/docker` |
+| Default Docker runtimes | `io.containerd.runc.v2` 和 `runc`；虽然没有名为 `nvidia` 的 runtime，但安装的 NVIDIA toolkit/CDI path 可通过 `--gpus all` 使用 GPU |
+| NVIDIA Docker smoke | `sudo -n docker run --rm --pull=never --network none --gpus all nvidia/cuda:12.9.1-base-ubuntu24.04 nvidia-smi` 已通过 |
+| Agentics Docker daemon | 已运行在 `unix:///run/agentics/docker.sock`，group 为 `agentics`，Docker Engine `29.2.1`，`overlay2` on XFS，data root 为 `/srv/agentics/docker-data-root`，可见名为 `nvidia` 的 runtime，并使用独立 containerd namespaces `agentics` 和 `agentics-plugins` |
 | Root storage | `/dev/nvme0n1p2` 以 `ext4` 挂载到 `/`，总容量 3.7 TiB，约 3.5 TiB 可用 |
-| Current XFS mounts | 未发现 |
+| Current XFS mounts | `/srv/agentics/docker-data-root` 为 200 GiB，五个 `/srv/agentics/phase-mounts/*` mounts 各为 20 GiB，全部是带 `prjquota` 的 loopback XFS |
 | XFS tools | 已安装 `mkfs.xfs`、`xfs_quota` 和 `xfs_info` |
 | XFS kernel support | `modinfo xfs` 显示 NVIDIA kernel 有 in-tree XFS module |
 | Loopback tools | 已安装 `losetup` 和 `truncate` |
@@ -74,6 +81,41 @@ srw-rw---- root docker /var/run/docker.sock
 permission denied while trying to connect to the docker API at unix:///var/run/docker.sock
 ```
 
+通过 Docker-only sudo 读取 default Docker 的 evidence：
+
+```text
+Client=29.2.1 Server=29.2.1 API=1.53
+Storage Driver: overlay2
+Backing Filesystem: extfs
+Cgroup Driver: systemd
+Cgroup Version: 2
+Runtimes: io.containerd.runc.v2 runc
+Docker Root Dir: /var/lib/docker
+```
+
+NVIDIA Docker smoke：
+
+```text
+sudo -n docker run --rm --pull=never --network none --gpus all nvidia/cuda:12.9.1-base-ubuntu24.04 nvidia-smi
+NVIDIA-SMI 580.142
+Driver Version: 580.142
+CUDA Version: 13.0
+GPU 0: NVIDIA GB10
+```
+
+Agentics-owned Docker evidence：
+
+```text
+srw-rw---- root agentics /run/agentics/docker.sock
+Client=29.2.1 Server=29.2.1 API=1.53
+Driver=overlay2
+BackingFilesystem=xfs
+DockerRootDir=/srv/agentics/docker-data-root
+CgroupDriver=systemd
+CgroupVersion=2
+Runtimes=io.containerd.runc.v2,nvidia,runc
+```
+
 NVIDIA container runtime packages 和 dry-run configuration：
 
 ```text
@@ -102,13 +144,19 @@ Storage：
 ```text
 /dev/nvme0n1p2 / ext4 rw,relatime,errors=remount-ro
 NAME        TYPE   SIZE FSTYPE   MOUNTPOINTS
+loop17      loop   200G xfs      /srv/agentics/docker-data-root
+loop18      loop    20G xfs      /srv/agentics/phase-mounts/solution-setup
+loop19      loop    20G xfs      /srv/agentics/phase-mounts/solution-build
+loop20      loop    20G xfs      /srv/agentics/phase-mounts/solution-run
+loop21      loop    20G xfs      /srv/agentics/phase-mounts/scorer-prepare
+loop22      loop    20G xfs      /srv/agentics/phase-mounts/scorer-score
 nvme0n1     disk   3.7T
 ├─nvme0n1p1 part   512M vfat     /boot/efi
 └─nvme0n1p2 part   3.7T ext4     /
 ```
 
-Root filesystem 不是计划中的 hosted Docker data-root。Docker writable-layer
-quota validation 仍需要 Agentics-owned Docker daemon 和 loopback XFS data-root。
+Root filesystem 不作为 hosted Docker data-root。Agentics daemon data root 和各个
+phase writable mounts 都由带 project quotas 的 loopback XFS images 支撑。
 
 ## DGX-2 决策
 
@@ -132,20 +180,20 @@ quota validation 仍需要 Agentics-owned Docker daemon 和 loopback XFS data-ro
 Agentics-owned Docker daemon，并在该 daemon 上证明 Docker writable-layer quota
 行为。
 
-## Blockers
+## 剩余工作
 
-- 当前 user 无法验证 Docker server details、Docker storage driver、Docker runtime
-  list 和 NVIDIA Docker smoke command。
-- 当前 user 属于 sudo group，但本 shell 不支持 passwordless sudo。Operator 必须用
-  合适权限运行 inventory script，或为 deployment user 配置正确的 Docker access
-  path。
-- Loopback XFS project-quota behavior 尚未挂载或验证。DGX-2 必须创建 loop image，
-  用 project quotas 挂载，并在 public worker execution 前运行 quota probes。
-- Public ingress、TLS termination、DNS 和 operator-only admin access 仍是 DGX-2
-  deployment-profile 决策。
+DGX-1 inventory 不再有阻塞项。Default Docker daemon 仅用于 host inventory 和 GPU
+smoke，不要在其上运行 public Agentics jobs，因为它的 data root 由 `ext4` 支撑。
+
+Public traffic 前剩余的 deployment tasks：
+
+- 保持 `/opt/agentics/current` 下已安装 release 和 `/etc/agentics/agentics.env`
+  与每次 promoted build 对齐。
+- 配置 public ingress、TLS termination、DNS 和 operator-only admin access。
 
 ## 下一步
 
-Docker daemon access 可用后进入 `M0.2.5-DGX-2`。DGX-2 应添加 deployment profile
-和 strict Linux-host probes，并在 `AGENTICS_HOST_PROBE_MODE=require` 时 fail
-closed。
+DGX deployment profile 已记录在
+`docs/versions/v0.2.5/dgx-spark-deployment/zh.md`。DGX-3 hosted smoke evidence
+已记录在 `docs/versions/v0.2.5/dgx-spark-smoke/zh.md`；接下来继续完成 public
+ingress、DNS、TLS 和 operator access cutover。

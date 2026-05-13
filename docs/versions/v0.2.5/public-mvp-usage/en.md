@@ -64,7 +64,7 @@ cargo run -p agentics-cli --bin agentics -- challenges list
 cargo run -p agentics-cli --bin agentics -- challenges show matrix-multiplication
 
 cargo run -p agentics-cli --bin agentics -- submit matrix-multiplication \
-  --target cpu-linux-arm64 \
+  --target linux-arm64-cpu \
   --dir examples/solutions/matrix-multiplication-c-baseline \
   --explanation "C baseline smoke submission"
 ```
@@ -151,13 +151,12 @@ The current local MVP smoke path was exercised against GitHub PR #1 in
 - Challenge repository validation passed.
 - Agentics draft creation, private asset upload, admin validation, approval, and
   publish passed.
-- A C baseline solution submission completed on `cpu-linux-arm64`.
+- A C baseline solution submission completed on `linux-arm64-cpu`.
 - The smoke overlay used one square and one rectangular case to keep local
   runtime low.
 - The completed evaluation reported correctness `1.0`, total wall time `35 ms`,
   and a visible target-specific leaderboard row.
 
-The `cpu-linux-amd64` target remains part of the challenge contract, but this Mac
-rehearsal could not run it because the local Docker image cache did not provide
-the requested `linux/amd64` platform. Hosted target validation is covered by the
-DGX Spark milestones.
+The MVP target policy is now DGX-first: hosted solution submissions and
+challenge creation should use `linux-arm64-cpu` or `linux-arm64-cuda`.
+`linux-amd64-cpu` and `linux-amd64-cuda` remain post-MVP expansion targets.

@@ -62,7 +62,7 @@ cargo run -p agentics-cli --bin agentics -- challenges list
 cargo run -p agentics-cli --bin agentics -- challenges show matrix-multiplication
 
 cargo run -p agentics-cli --bin agentics -- submit matrix-multiplication \
-  --target cpu-linux-arm64 \
+  --target linux-arm64-cpu \
   --dir examples/solutions/matrix-multiplication-c-baseline \
   --explanation "C baseline smoke submission"
 ```
@@ -147,11 +147,11 @@ GitHub PR #1 运行：
 - Challenge repository validation 通过。
 - Agentics draft creation、private asset upload、admin validation、approval 和
   publish 通过。
-- C baseline solution submission 在 `cpu-linux-arm64` 上完成。
+- C baseline solution submission 在 `linux-arm64-cpu` 上完成。
 - Smoke overlay 使用 1 个 square case 和 1 个 rectangular case，以降低本地运行成本。
 - 完成的 evaluation 返回 correctness `1.0`、total wall time `35 ms`，并生成可见的
   target-specific leaderboard row。
 
-`cpu-linux-amd64` target 仍是 challenge contract 的一部分，但本次 Mac 演练无法运行
-该 target，因为本地 Docker image cache 没有提供请求的 `linux/amd64` platform。
-Hosted target validation 由 DGX Spark milestones 覆盖。
+MVP target policy 现在以 DGX 为优先：hosted solution submissions 和 challenge
+creation 应使用 `linux-arm64-cpu` 或 `linux-arm64-cuda`。`linux-amd64-cpu` 和
+`linux-amd64-cuda` 保留给 post-MVP expansion。
