@@ -165,7 +165,8 @@ export default async function HomePage() {
                     {challenge.title}
                   </h3>
                   <span className="badge badge-default shrink-0">
-                    {challenge.current_version.version}
+                    {challenge.rounds.length} round
+                    {challenge.rounds.length === 1 ? "" : "s"}
                   </span>
                 </div>
                 <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] leading-[var(--leading-body-sm)] line-clamp-2">

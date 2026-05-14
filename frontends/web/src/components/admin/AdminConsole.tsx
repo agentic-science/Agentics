@@ -41,10 +41,10 @@ import {
   type ChallengeDraftListResponse,
   challengeAdminResponseSchema,
   challengeDraftListResponseSchema,
-  createChallengeVersionResponseSchema,
   disableAgentResponseSchema,
   evaluationJobResponseSchema,
   hideSolutionSubmissionResponseSchema,
+  publishChallengeResponseSchema,
 } from "@/lib/schemas";
 
 type AdminTab =
@@ -209,7 +209,7 @@ export function AdminConsole() {
               Platform operations console
             </h1>
             <p className="mt-3 max-w-2xl text-[var(--text-body)] leading-[var(--leading-body)] text-[var(--text-secondary)]">
-              Publish challenge versions, inspect evaluation flow, and keep
+              Publish challenge contracts, inspect evaluation flow, and keep
               worker capacity visible without leaving the Agentics observatory.
             </p>
           </div>
@@ -509,7 +509,7 @@ function ChallengeAdminPanel({
               <tr>
                 <th>Challenge</th>
                 <th>Status</th>
-                <th>Version</th>
+                <th>Rounds</th>
                 <th>Targets</th>
                 <th>Modes</th>
                 <th>Updated</th>
@@ -528,7 +528,9 @@ function ChallengeAdminPanel({
                     <StatusBadge status={challenge.status} />
                   </td>
                   <td className="font-mono">
-                    {challenge.current_version?.version ?? "—"}
+                    {(challenge.rounds ?? [])
+                      .map((round) => round.id)
+                      .join(", ") || "—"}
                   </td>
                   <td>
                     <BenchmarkTargetSummary challenge={challenge} />
@@ -648,7 +650,7 @@ function BenchmarkTargetSummary({
 }: {
   challenge: AdminChallengeListItem;
 }) {
-  const targets = challenge.current_benchmark_targets ?? [];
+  const targets = challenge.benchmark_targets ?? [];
   if (targets.length === 0) {
     return <span className="text-[var(--text-muted)]">—</span>;
   }
@@ -672,7 +674,7 @@ function BenchmarkTargetSummary({
 }
 
 function ModeSummary({ challenge }: { challenge: AdminChallengeListItem }) {
-  const targets = challenge.current_benchmark_targets ?? [];
+  const targets = challenge.benchmark_targets ?? [];
   const validationEnabled = targets.some((target) => target.validation_enabled);
 
   return (
@@ -790,8 +792,8 @@ function PublishVersionForm({
     event.preventDefault();
     try {
       const response = await adminFetchJson(
-        `/admin/challenges/${encodeURIComponent(form.challengeId.trim())}/versions`,
-        createChallengeVersionResponseSchema,
+        `/admin/challenges/${encodeURIComponent(form.challengeId.trim())}/publish`,
+        publishChallengeResponseSchema,
         csrfToken,
         {
           method: "POST",
@@ -800,7 +802,7 @@ function PublishVersionForm({
       );
       onError(null);
       onMessage(
-        `Published ${response.challenge_id} ${response.version} from ${response.bundle_path}`,
+        `Published ${response.challenge_id} from ${response.bundle_path}`,
       );
       await onRefresh({ quiet: true });
     } catch (e) {
@@ -812,7 +814,7 @@ function PublishVersionForm({
     <form className="card flex flex-col gap-4" onSubmit={submit}>
       <SectionTitle
         icon={<UploadCloud className="w-4 h-4" />}
-        title="Publish bundle version"
+        title="Publish bundle"
       />
       <TextInput
         label="Challenge ID"

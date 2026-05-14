@@ -20,24 +20,64 @@ export default async function LeaderboardPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ target?: string }>;
+  searchParams: Promise<{ round?: string; target?: string }>;
 }) {
   const { id } = await params;
-  const { target } = await searchParams;
+  const { round, target } = await searchParams;
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
 
   const detail = await fetchJson(
     `/api/public/challenges/${id}`,
     challengeDetailResponseSchema,
   );
-  const selectedTarget =
-    detail.spec.benchmark_targets.find((candidate) => candidate.id === target)
-      ?.id ?? detail.spec.benchmark_targets[0].id;
+  const selectedRound = detail.rounds.find(
+    (candidate) => candidate.id === round,
+  );
+  const selectedTarget = detail.spec.benchmark_targets.find(
+    (candidate) => candidate.id === target,
+  )?.id;
   const selectedTargetSpec = detail.spec.benchmark_targets.find(
     (candidate) => candidate.id === selectedTarget,
   );
+  if (!selectedRound || !selectedTarget) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="card">
+          <h2
+            className="text-[var(--text-h2)] font-semibold text-[var(--text-primary)]"
+            style={{ fontFamily: "var(--font-serif)" }}
+          >
+            {t("leaderboard.title")}
+          </h2>
+          <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] mt-1">
+            Select an explicit round and target.
+          </p>
+        </div>
+        <div className="card flex flex-col gap-4">
+          {detail.rounds.map((roundSpec) => (
+            <div key={roundSpec.id} className="flex flex-col gap-2">
+              <div className="font-medium text-[var(--text-primary)]">
+                {roundSpec.title}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {detail.spec.benchmark_targets.map((targetSpec) => (
+                  <Link
+                    key={`${roundSpec.id}:${targetSpec.id}`}
+                    href={`/challenges/${id}/leaderboard?round=${encodeURIComponent(roundSpec.id)}&target=${encodeURIComponent(targetSpec.id)}`}
+                    className="badge badge-default"
+                  >
+                    {roundSpec.id} · {targetSpec.id}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
   const leaderboard = await fetchJson(
-    `/api/public/challenges/${id}/leaderboard?target=${encodeURIComponent(selectedTarget)}&limit=100`,
+    `/api/public/challenges/${id}/rounds/${encodeURIComponent(selectedRound.id)}/leaderboard?target=${encodeURIComponent(selectedTarget)}&limit=100`,
     leaderboardResponseSchema,
   );
 
@@ -60,7 +100,9 @@ export default async function LeaderboardPage({
             </h2>
             <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] mt-1">
               {leaderboard.items.length} {t("leaderboard.entries")} ·{" "}
-              <span className="font-mono">{selectedTarget}</span>
+              <span className="font-mono">
+                {selectedRound.id} · {selectedTarget}
+              </span>
             </p>
           </div>
           <EvaluationModeBadges
@@ -79,7 +121,7 @@ export default async function LeaderboardPage({
           {detail.spec.benchmark_targets.map((targetSpec) => (
             <Link
               key={targetSpec.id}
-              href={`/challenges/${id}/leaderboard?target=${encodeURIComponent(targetSpec.id)}`}
+              href={`/challenges/${id}/leaderboard?round=${encodeURIComponent(selectedRound.id)}&target=${encodeURIComponent(targetSpec.id)}`}
               className={`badge ${
                 targetSpec.id === selectedTarget
                   ? "badge-official"

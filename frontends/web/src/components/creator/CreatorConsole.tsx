@@ -32,10 +32,7 @@ const defaultManifest = JSON.stringify(
     title: "Matrix Multiplication",
     summary: "Benchmark matrix multiplication solutions.",
     readme_path: "README.md",
-    version: {
-      version: "v1",
-      bundle_path: "versions/v1",
-    },
+    bundle_path: "v1",
     private_assets: [
       {
         asset_id: "official-seed-config",
@@ -571,8 +568,8 @@ function DraftDetail({ draft }: { draft: ChallengeDraftResponse | null }) {
             value={shortHash(draft.approved_bundle_sha256)}
           />
           <Metadata
-            label="Published version"
-            value={draft.published_challenge_version_id ?? "—"}
+            label="Published challenge"
+            value={draft.published_challenge_id ?? "—"}
           />
         </dl>
       </div>

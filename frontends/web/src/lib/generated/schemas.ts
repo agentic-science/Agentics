@@ -41,14 +41,7 @@ export const adminChallengeListResponseSchema = z
           title: z.string(),
           summary: z.string(),
           status: z.string(),
-          current_version: z
-            .object({ id: z.string(), version: z.string() })
-            .strict()
-            .describe(
-              "Current published version summary embedded in challenge DTOs.",
-            )
-            .optional(),
-          current_benchmark_targets: z
+          benchmark_targets: z
             .array(
               z
                 .object({
@@ -112,12 +105,66 @@ export const adminChallengeListResponseSchema = z
                     })
                     .strict()
                     .describe(
-                      "Resource envelope and Docker images declared by a challenge version.",
+                      "Resource envelope and Docker images declared by a challenge.",
                     ),
                 })
                 .strict()
                 .describe(
-                  "One execution and ranking target declared by a challenge version.",
+                  "One execution and ranking target declared by a challenge.",
+                ),
+            )
+            .optional(),
+          rounds: z
+            .array(
+              z
+                .object({
+                  id: z.string(),
+                  title: z.string(),
+                  opens_at: z.string().optional(),
+                  closes_at: z.string().optional(),
+                  eligibility: z
+                    .object({
+                      type: z
+                        .literal("open")
+                        .describe("Stable eligibility policy names."),
+                    })
+                    .strict()
+                    .describe(
+                      "Eligibility policy for a round. MVP supports only open participation.",
+                    ),
+                  validation_submission_limit: z.number().int().optional(),
+                  official_submission_limit: z.number().int().optional(),
+                  visibility: z
+                    .object({
+                      leaderboard: z
+                        .enum(["public_live", "public_after_close", "hidden"])
+                        .describe("Visibility for public aggregate surfaces."),
+                      score_distribution: z
+                        .enum(["public_live", "public_after_close", "hidden"])
+                        .describe("Visibility for public aggregate surfaces."),
+                      result_detail: z
+                        .enum([
+                          "submitter_live_public_live",
+                          "submitter_live_public_after_close",
+                          "submitter_only",
+                        ])
+                        .describe(
+                          "Visibility for solution submission details.",
+                        ),
+                    })
+                    .strict()
+                    .describe(
+                      "Visibility policy for round-scoped result surfaces.",
+                    ),
+                  solution_publication: z
+                    .enum(["private", "submitter_opt_in", "public_after_close"])
+                    .describe(
+                      "Policy controlling when solution artifacts may become public.",
+                    ),
+                })
+                .strict()
+                .describe(
+                  "One explicit participation round declared by a challenge.",
                 ),
             )
             .optional(),
@@ -167,6 +214,7 @@ export const adminSolutionSubmissionListResponseSchema = z
           id: z.string(),
           challenge_id: z.string(),
           challenge_title: z.string(),
+          round_id: z.string(),
           benchmark_target_id: z.string(),
           agent_id: z.string(),
           agent_name: z.string(),
@@ -209,12 +257,52 @@ export const challengeDetailResponseSchema = z
     slug: z.string(),
     title: z.string(),
     summary: z.string(),
-    current_version: z
-      .object({ id: z.string(), version: z.string() })
-      .strict()
-      .describe(
-        "Current published version summary embedded in challenge DTOs.",
-      ),
+    rounds: z.array(
+      z
+        .object({
+          id: z.string(),
+          title: z.string(),
+          opens_at: z.string().optional(),
+          closes_at: z.string().optional(),
+          eligibility: z
+            .object({
+              type: z
+                .literal("open")
+                .describe("Stable eligibility policy names."),
+            })
+            .strict()
+            .describe(
+              "Eligibility policy for a round. MVP supports only open participation.",
+            ),
+          validation_submission_limit: z.number().int().optional(),
+          official_submission_limit: z.number().int().optional(),
+          visibility: z
+            .object({
+              leaderboard: z
+                .enum(["public_live", "public_after_close", "hidden"])
+                .describe("Visibility for public aggregate surfaces."),
+              score_distribution: z
+                .enum(["public_live", "public_after_close", "hidden"])
+                .describe("Visibility for public aggregate surfaces."),
+              result_detail: z
+                .enum([
+                  "submitter_live_public_live",
+                  "submitter_live_public_after_close",
+                  "submitter_only",
+                ])
+                .describe("Visibility for solution submission details."),
+            })
+            .strict()
+            .describe("Visibility policy for round-scoped result surfaces."),
+          solution_publication: z
+            .enum(["private", "submitter_opt_in", "public_after_close"])
+            .describe(
+              "Policy controlling when solution artifacts may become public.",
+            ),
+        })
+        .strict()
+        .describe("One explicit participation round declared by a challenge."),
+    ),
     spec: z
       .object({
         schema_version: z.number().int(),
@@ -225,7 +313,6 @@ export const challengeDetailResponseSchema = z
           .describe(
             "Plain-text summary used in compact challenge catalog surfaces.",
           ),
-        challenge_version: z.string(),
         solution: z
           .object({ protocol: z.string(), manifest_file: z.string() })
           .strict()
@@ -287,12 +374,62 @@ export const challengeDetailResponseSchema = z
                 })
                 .strict()
                 .describe(
-                  "Resource envelope and Docker images declared by a challenge version.",
+                  "Resource envelope and Docker images declared by a challenge.",
                 ),
             })
             .strict()
             .describe(
-              "One execution and ranking target declared by a challenge version.",
+              "One execution and ranking target declared by a challenge.",
+            ),
+        ),
+        rounds: z.array(
+          z
+            .object({
+              id: z.string(),
+              title: z.string(),
+              opens_at: z.string().optional(),
+              closes_at: z.string().optional(),
+              eligibility: z
+                .object({
+                  type: z
+                    .literal("open")
+                    .describe("Stable eligibility policy names."),
+                })
+                .strict()
+                .describe(
+                  "Eligibility policy for a round. MVP supports only open participation.",
+                ),
+              validation_submission_limit: z.number().int().optional(),
+              official_submission_limit: z.number().int().optional(),
+              visibility: z
+                .object({
+                  leaderboard: z
+                    .enum(["public_live", "public_after_close", "hidden"])
+                    .describe("Visibility for public aggregate surfaces."),
+                  score_distribution: z
+                    .enum(["public_live", "public_after_close", "hidden"])
+                    .describe("Visibility for public aggregate surfaces."),
+                  result_detail: z
+                    .enum([
+                      "submitter_live_public_live",
+                      "submitter_live_public_after_close",
+                      "submitter_only",
+                    ])
+                    .describe("Visibility for solution submission details."),
+                })
+                .strict()
+                .describe(
+                  "Visibility policy for round-scoped result surfaces.",
+                ),
+              solution_publication: z
+                .enum(["private", "submitter_opt_in", "public_after_close"])
+                .describe(
+                  "Policy controlling when solution artifacts may become public.",
+                ),
+            })
+            .strict()
+            .describe(
+              "One explicit participation round declared by a challenge.",
             ),
         ),
         execution: z
@@ -438,9 +575,7 @@ export const challengeDetailResponseSchema = z
               .optional(),
           })
           .strict()
-          .describe(
-            "External community link metadata owned by the challenge version.",
-          )
+          .describe("External community link metadata owned by the challenge.")
           .optional(),
         metric_schema: z
           .object({
@@ -473,7 +608,7 @@ export const challengeDetailResponseSchema = z
                 tie_breaker_metric_ids: z.array(z.string()),
               })
               .strict()
-              .describe("Ranking configuration for a challenge version."),
+              .describe("Ranking configuration for a challenge."),
           })
           .strict()
           .describe(
@@ -507,7 +642,7 @@ export const challengeDraftListResponseSchema = z
           id: z.string(),
           challenge_id: z.string(),
           request: z
-            .enum(["new_challenge", "new_version", "archive_challenge"])
+            .enum(["new_challenge", "archive_challenge"])
             .describe("Lifecycle request represented by a public manifest."),
           status: z
             .enum([
@@ -532,7 +667,7 @@ export const challengeDraftListResponseSchema = z
             .object({
               schema_version: z.number().int(),
               request: z
-                .enum(["new_challenge", "new_version", "archive_challenge"])
+                .enum(["new_challenge", "archive_challenge"])
                 .describe(
                   "Lifecycle request represented by a public manifest.",
                 ),
@@ -540,17 +675,7 @@ export const challengeDraftListResponseSchema = z
               title: z.string(),
               summary: z.string(),
               readme_path: z.string(),
-              version: z
-                .object({
-                  version: z.string(),
-                  bundle_path: z.string(),
-                  supersedes_version: z.string().optional(),
-                })
-                .strict()
-                .describe(
-                  "Version metadata for new-challenge and new-version requests.",
-                )
-                .optional(),
+              bundle_path: z.string().optional(),
               archive: z
                 .object({ reason: z.string() })
                 .strict()
@@ -597,7 +722,7 @@ export const challengeDraftListResponseSchema = z
           approved_bundle_sha256: z.string().optional(),
           validation_message: z.string().optional(),
           validation_repository_path: z.string().optional(),
-          published_challenge_version_id: z.string().optional(),
+          published_challenge_id: z.string().optional(),
           private_assets: z.array(
             z
               .object({
@@ -658,7 +783,7 @@ export const challengeDraftResponseSchema = z
     id: z.string(),
     challenge_id: z.string(),
     request: z
-      .enum(["new_challenge", "new_version", "archive_challenge"])
+      .enum(["new_challenge", "archive_challenge"])
       .describe("Lifecycle request represented by a public manifest."),
     status: z
       .enum([
@@ -683,23 +808,13 @@ export const challengeDraftResponseSchema = z
       .object({
         schema_version: z.number().int(),
         request: z
-          .enum(["new_challenge", "new_version", "archive_challenge"])
+          .enum(["new_challenge", "archive_challenge"])
           .describe("Lifecycle request represented by a public manifest."),
         challenge_id: z.string(),
         title: z.string(),
         summary: z.string(),
         readme_path: z.string(),
-        version: z
-          .object({
-            version: z.string(),
-            bundle_path: z.string(),
-            supersedes_version: z.string().optional(),
-          })
-          .strict()
-          .describe(
-            "Version metadata for new-challenge and new-version requests.",
-          )
-          .optional(),
+        bundle_path: z.string().optional(),
         archive: z
           .object({ reason: z.string() })
           .strict()
@@ -744,7 +859,7 @@ export const challengeDraftResponseSchema = z
     approved_bundle_sha256: z.string().optional(),
     validation_message: z.string().optional(),
     validation_repository_path: z.string().optional(),
-    published_challenge_version_id: z.string().optional(),
+    published_challenge_id: z.string().optional(),
     private_assets: z.array(
       z
         .object({
@@ -805,12 +920,56 @@ export const challengeListResponseSchema = z
           slug: z.string(),
           title: z.string(),
           summary: z.string(),
-          current_version: z
-            .object({ id: z.string(), version: z.string() })
-            .strict()
-            .describe(
-              "Current published version summary embedded in challenge DTOs.",
-            ),
+          rounds: z.array(
+            z
+              .object({
+                id: z.string(),
+                title: z.string(),
+                opens_at: z.string().optional(),
+                closes_at: z.string().optional(),
+                eligibility: z
+                  .object({
+                    type: z
+                      .literal("open")
+                      .describe("Stable eligibility policy names."),
+                  })
+                  .strict()
+                  .describe(
+                    "Eligibility policy for a round. MVP supports only open participation.",
+                  ),
+                validation_submission_limit: z.number().int().optional(),
+                official_submission_limit: z.number().int().optional(),
+                visibility: z
+                  .object({
+                    leaderboard: z
+                      .enum(["public_live", "public_after_close", "hidden"])
+                      .describe("Visibility for public aggregate surfaces."),
+                    score_distribution: z
+                      .enum(["public_live", "public_after_close", "hidden"])
+                      .describe("Visibility for public aggregate surfaces."),
+                    result_detail: z
+                      .enum([
+                        "submitter_live_public_live",
+                        "submitter_live_public_after_close",
+                        "submitter_only",
+                      ])
+                      .describe("Visibility for solution submission details."),
+                  })
+                  .strict()
+                  .describe(
+                    "Visibility policy for round-scoped result surfaces.",
+                  ),
+                solution_publication: z
+                  .enum(["private", "submitter_opt_in", "public_after_close"])
+                  .describe(
+                    "Policy controlling when solution artifacts may become public.",
+                  ),
+              })
+              .strict()
+              .describe(
+                "One explicit participation round declared by a challenge.",
+              ),
+          ),
         })
         .strict()
         .describe("One row in the public challenge catalog."),
@@ -841,19 +1000,6 @@ export const challengePrivateAssetResponseSchema = z
   })
   .strict()
   .describe("API response for one private benchmark asset bound to a draft.");
-
-export const createChallengeVersionResponseSchema = z
-  .object({
-    challenge_id: z.string(),
-    slug: z.string(),
-    title: z.string(),
-    version_id: z.string(),
-    version: z.string(),
-    bundle_path: z.string(),
-    statement_path: z.string(),
-  })
-  .strict()
-  .describe("Admin response returned after publishing a bundle version.");
 
 export const creatorMeResponseSchema = z
   .object({
@@ -919,6 +1065,7 @@ export const evaluationJobResponseSchema = z
   .object({
     job_id: z.string(),
     solution_submission_id: z.string(),
+    round_id: z.string(),
     benchmark_target_id: z.string(),
     eval_type: z.string(),
     status: z.string(),
@@ -942,10 +1089,13 @@ export const hideSolutionSubmissionResponseSchema = z
 
 export const leaderboardResponseSchema = z
   .object({
+    challenge_id: z.string(),
+    round_id: z.string(),
     benchmark_target_id: z.string(),
     items: z.array(
       z
         .object({
+          round_id: z.string(),
           benchmark_target_id: z.string(),
           agent_id: z.string(),
           agent_name: z.string(),
@@ -983,7 +1133,7 @@ export const publicSolutionSubmissionListResponseSchema = z
         .object({
           id: z.string(),
           challenge_id: z.string(),
-          challenge_version_id: z.string(),
+          round_id: z.string(),
           benchmark_target_id: z.string(),
           challenge_title: z.string(),
           agent_id: z.string(),
@@ -1017,6 +1167,130 @@ export const publicSolutionSubmissionListResponseSchema = z
   .strict()
   .describe("Public solution submission list response.");
 
+export const publishChallengeResponseSchema = z
+  .object({
+    challenge_id: z.string(),
+    slug: z.string(),
+    title: z.string(),
+    bundle_path: z.string(),
+    statement_path: z.string(),
+  })
+  .strict()
+  .describe("Admin response returned after publishing a challenge bundle.");
+
+export const rankingContextResponseSchema = z
+  .object({
+    challenge_id: z.string(),
+    round_id: z.string(),
+    benchmark_target_id: z.string(),
+    solution_submission_id: z.string(),
+    rank: z.number().int().optional(),
+    total_ranked: z.number().int(),
+    percentile: z.number().optional(),
+    is_agent_best: z.boolean(),
+    entry: z
+      .object({
+        round_id: z.string(),
+        benchmark_target_id: z.string(),
+        agent_id: z.string(),
+        agent_name: z.string(),
+        best_solution_submission_id: z.string(),
+        best_rank_score: z.number(),
+        rank_score: z.number(),
+        aggregate_metrics: z.array(
+          z
+            .object({ metric_id: z.string(), value: z.number() })
+            .strict()
+            .describe("Numeric value for one declared metric."),
+        ),
+        official_metrics: z.array(
+          z
+            .object({ metric_id: z.string(), value: z.number() })
+            .strict()
+            .describe("Numeric value for one declared metric."),
+        ),
+        official_score: z.number().optional(),
+        updated_at: z.string(),
+      })
+      .strict()
+      .describe("One leaderboard row for an agent's best solution submission.")
+      .optional(),
+    nearby_entries: z.array(
+      z
+        .object({
+          rank: z.number().int(),
+          entry: z
+            .object({
+              round_id: z.string(),
+              benchmark_target_id: z.string(),
+              agent_id: z.string(),
+              agent_name: z.string(),
+              best_solution_submission_id: z.string(),
+              best_rank_score: z.number(),
+              rank_score: z.number(),
+              aggregate_metrics: z.array(
+                z
+                  .object({ metric_id: z.string(), value: z.number() })
+                  .strict()
+                  .describe("Numeric value for one declared metric."),
+              ),
+              official_metrics: z.array(
+                z
+                  .object({ metric_id: z.string(), value: z.number() })
+                  .strict()
+                  .describe("Numeric value for one declared metric."),
+              ),
+              official_score: z.number().optional(),
+              updated_at: z.string(),
+            })
+            .strict()
+            .describe(
+              "One leaderboard row for an agent's best solution submission.",
+            ),
+        })
+        .strict()
+        .describe(
+          "Leaderboard row with its rank in one explicit round and target scope.",
+        ),
+    ),
+  })
+  .strict()
+  .describe(
+    "Ranking context for a solution submission in one explicit leaderboard scope.",
+  );
+
+export const scoreDistributionResponseSchema = z
+  .object({
+    challenge_id: z.string(),
+    round_id: z.string(),
+    benchmark_target_id: z.string(),
+    metric_id: z.string(),
+    count: z.number().int(),
+    min: z.number().optional(),
+    max: z.number().optional(),
+    mean: z.number().optional(),
+    quantiles: z.array(
+      z
+        .object({ quantile: z.number(), value: z.number() })
+        .strict()
+        .describe("One quantile in a score distribution response."),
+    ),
+    histogram: z.array(
+      z
+        .object({
+          lower: z.number(),
+          upper: z.number(),
+          count: z.number().int(),
+        })
+        .strict()
+        .describe("One histogram bucket in a score distribution response."),
+    ),
+  })
+  .strict()
+  .describe(
+    "Aggregate distribution of one visible metric within a round and target.",
+  );
+
 export const solutionSubmissionArtifactResponseSchema = z
   .object({
     archive_name: z.string(),
@@ -1040,12 +1314,22 @@ export const solutionSubmissionArtifactResponseSchema = z
   .strict()
   .describe("Archive browser response for a solution submission artifact.");
 
+export const solutionSubmissionLogsResponseSchema = z
+  .object({
+    solution_submission_id: z.string(),
+    log_path: z.string().optional(),
+    content: z.string().optional(),
+    truncated: z.boolean(),
+  })
+  .strict()
+  .describe("Logs associated with a solution submission.");
+
 export const solutionSubmissionResponseSchema = z
   .object({
     id: z.string(),
     challenge_id: z.string(),
     challenge_title: z.string().optional(),
-    challenge_version_id: z.string(),
+    round_id: z.string(),
     benchmark_target_id: z.string(),
     agent_id: z.string(),
     agent_name: z.string().optional(),
@@ -1058,6 +1342,7 @@ export const solutionSubmissionResponseSchema = z
     evaluation_job: z
       .object({
         id: z.string(),
+        round_id: z.string(),
         benchmark_target_id: z.string(),
         status: z
           .enum(["queued", "running", "completed", "failed"])
@@ -1071,6 +1356,7 @@ export const solutionSubmissionResponseSchema = z
     evaluation: z
       .object({
         id: z.string(),
+        round_id: z.string(),
         benchmark_target_id: z.string(),
         status: z
           .enum(["queued", "running", "completed", "failed"])
@@ -1167,6 +1453,7 @@ export const solutionSubmissionResponseSchema = z
     validation_evaluation: z
       .object({
         id: z.string(),
+        round_id: z.string(),
         benchmark_target_id: z.string(),
         status: z
           .enum(["queued", "running", "completed", "failed"])
@@ -1263,6 +1550,7 @@ export const solutionSubmissionResponseSchema = z
     official_evaluation: z
       .object({
         id: z.string(),
+        round_id: z.string(),
         benchmark_target_id: z.string(),
         status: z
           .enum(["queued", "running", "completed", "failed"])
@@ -1364,6 +1652,367 @@ export const solutionSubmissionResponseSchema = z
     "Solution submission detail DTO used by both public and authenticated routes.",
   );
 
+export const solutionSubmissionResultReportResponseSchema = z
+  .object({
+    solution_submission: z
+      .object({
+        id: z.string(),
+        challenge_id: z.string(),
+        challenge_title: z.string().optional(),
+        round_id: z.string(),
+        benchmark_target_id: z.string(),
+        agent_id: z.string(),
+        agent_name: z.string().optional(),
+        status: z.string(),
+        explanation: z.string(),
+        parent_solution_submission_id: z.string().optional(),
+        credit_text: z.string(),
+        visible_after_eval: z.boolean(),
+        artifact_path: z.string().optional(),
+        evaluation_job: z
+          .object({
+            id: z.string(),
+            round_id: z.string(),
+            benchmark_target_id: z.string(),
+            status: z
+              .enum(["queued", "running", "completed", "failed"])
+              .describe(
+                "Persistent lifecycle state for an evaluation job/result.",
+              ),
+          })
+          .strict()
+          .describe(
+            "Minimal job DTO returned when a solution submission queues an evaluation.",
+          )
+          .optional(),
+        evaluation: z
+          .object({
+            id: z.string(),
+            round_id: z.string(),
+            benchmark_target_id: z.string(),
+            status: z
+              .enum(["queued", "running", "completed", "failed"])
+              .describe(
+                "Persistent lifecycle state for an evaluation job/result.",
+              ),
+            eval_type: z
+              .enum(["validation", "official"])
+              .describe(
+                "Evaluation surface requested for a solution submission.",
+              ),
+            primary_score: z.number().optional(),
+            rank_score: z.number().optional(),
+            aggregate_metrics: z.array(
+              z
+                .object({ metric_id: z.string(), value: z.number() })
+                .strict()
+                .describe("Numeric value for one declared metric."),
+            ),
+            run_metrics: z.array(
+              z
+                .object({
+                  run_id: z.string(),
+                  metrics: z.array(
+                    z
+                      .object({ metric_id: z.string(), value: z.number() })
+                      .strict()
+                      .describe("Numeric value for one declared metric."),
+                  ),
+                })
+                .strict()
+                .describe(
+                  "Metric values for one scorer-defined run, case, seed, shard, or scenario.",
+                ),
+            ),
+            public_results: z.array(
+              z
+                .object({
+                  case_id: z.string(),
+                  status: z
+                    .enum(["passed", "failed", "error"])
+                    .describe(
+                      "Per-case scorer outcome for public validation tests.",
+                    ),
+                  score: z.number(),
+                  message: z.string().optional(),
+                })
+                .strict()
+                .describe(
+                  "Public per-case result exposed for validation feedback.",
+                ),
+            ),
+            validation_summary: z
+              .object({
+                score: z
+                  .number()
+                  .describe(
+                    "Normalized score in the inclusive range `[0, 1]`.",
+                  ),
+                passed: z
+                  .number()
+                  .int()
+                  .describe("Number of passed cases in the aggregate."),
+                total: z
+                  .number()
+                  .int()
+                  .describe("Total number of cases in the aggregate."),
+              })
+              .strict()
+              .describe(
+                "Aggregate score summary for validation or official datasets.",
+              )
+              .optional(),
+            official_summary: z
+              .object({
+                score: z
+                  .number()
+                  .describe(
+                    "Normalized score in the inclusive range `[0, 1]`.",
+                  ),
+                passed: z
+                  .number()
+                  .int()
+                  .describe("Number of passed cases in the aggregate."),
+                total: z
+                  .number()
+                  .int()
+                  .describe("Total number of cases in the aggregate."),
+              })
+              .strict()
+              .describe(
+                "Aggregate score summary for validation or official datasets.",
+              )
+              .optional(),
+            log_path: z.string().optional(),
+            started_at: z.string().optional(),
+            finished_at: z.string().optional(),
+          })
+          .strict()
+          .describe("API DTO for a persisted evaluation.")
+          .optional(),
+        validation_evaluation: z
+          .object({
+            id: z.string(),
+            round_id: z.string(),
+            benchmark_target_id: z.string(),
+            status: z
+              .enum(["queued", "running", "completed", "failed"])
+              .describe(
+                "Persistent lifecycle state for an evaluation job/result.",
+              ),
+            eval_type: z
+              .enum(["validation", "official"])
+              .describe(
+                "Evaluation surface requested for a solution submission.",
+              ),
+            primary_score: z.number().optional(),
+            rank_score: z.number().optional(),
+            aggregate_metrics: z.array(
+              z
+                .object({ metric_id: z.string(), value: z.number() })
+                .strict()
+                .describe("Numeric value for one declared metric."),
+            ),
+            run_metrics: z.array(
+              z
+                .object({
+                  run_id: z.string(),
+                  metrics: z.array(
+                    z
+                      .object({ metric_id: z.string(), value: z.number() })
+                      .strict()
+                      .describe("Numeric value for one declared metric."),
+                  ),
+                })
+                .strict()
+                .describe(
+                  "Metric values for one scorer-defined run, case, seed, shard, or scenario.",
+                ),
+            ),
+            public_results: z.array(
+              z
+                .object({
+                  case_id: z.string(),
+                  status: z
+                    .enum(["passed", "failed", "error"])
+                    .describe(
+                      "Per-case scorer outcome for public validation tests.",
+                    ),
+                  score: z.number(),
+                  message: z.string().optional(),
+                })
+                .strict()
+                .describe(
+                  "Public per-case result exposed for validation feedback.",
+                ),
+            ),
+            validation_summary: z
+              .object({
+                score: z
+                  .number()
+                  .describe(
+                    "Normalized score in the inclusive range `[0, 1]`.",
+                  ),
+                passed: z
+                  .number()
+                  .int()
+                  .describe("Number of passed cases in the aggregate."),
+                total: z
+                  .number()
+                  .int()
+                  .describe("Total number of cases in the aggregate."),
+              })
+              .strict()
+              .describe(
+                "Aggregate score summary for validation or official datasets.",
+              )
+              .optional(),
+            official_summary: z
+              .object({
+                score: z
+                  .number()
+                  .describe(
+                    "Normalized score in the inclusive range `[0, 1]`.",
+                  ),
+                passed: z
+                  .number()
+                  .int()
+                  .describe("Number of passed cases in the aggregate."),
+                total: z
+                  .number()
+                  .int()
+                  .describe("Total number of cases in the aggregate."),
+              })
+              .strict()
+              .describe(
+                "Aggregate score summary for validation or official datasets.",
+              )
+              .optional(),
+            log_path: z.string().optional(),
+            started_at: z.string().optional(),
+            finished_at: z.string().optional(),
+          })
+          .strict()
+          .describe("API DTO for a persisted evaluation.")
+          .optional(),
+        official_evaluation: z
+          .object({
+            id: z.string(),
+            round_id: z.string(),
+            benchmark_target_id: z.string(),
+            status: z
+              .enum(["queued", "running", "completed", "failed"])
+              .describe(
+                "Persistent lifecycle state for an evaluation job/result.",
+              ),
+            eval_type: z
+              .enum(["validation", "official"])
+              .describe(
+                "Evaluation surface requested for a solution submission.",
+              ),
+            primary_score: z.number().optional(),
+            rank_score: z.number().optional(),
+            aggregate_metrics: z.array(
+              z
+                .object({ metric_id: z.string(), value: z.number() })
+                .strict()
+                .describe("Numeric value for one declared metric."),
+            ),
+            run_metrics: z.array(
+              z
+                .object({
+                  run_id: z.string(),
+                  metrics: z.array(
+                    z
+                      .object({ metric_id: z.string(), value: z.number() })
+                      .strict()
+                      .describe("Numeric value for one declared metric."),
+                  ),
+                })
+                .strict()
+                .describe(
+                  "Metric values for one scorer-defined run, case, seed, shard, or scenario.",
+                ),
+            ),
+            public_results: z.array(
+              z
+                .object({
+                  case_id: z.string(),
+                  status: z
+                    .enum(["passed", "failed", "error"])
+                    .describe(
+                      "Per-case scorer outcome for public validation tests.",
+                    ),
+                  score: z.number(),
+                  message: z.string().optional(),
+                })
+                .strict()
+                .describe(
+                  "Public per-case result exposed for validation feedback.",
+                ),
+            ),
+            validation_summary: z
+              .object({
+                score: z
+                  .number()
+                  .describe(
+                    "Normalized score in the inclusive range `[0, 1]`.",
+                  ),
+                passed: z
+                  .number()
+                  .int()
+                  .describe("Number of passed cases in the aggregate."),
+                total: z
+                  .number()
+                  .int()
+                  .describe("Total number of cases in the aggregate."),
+              })
+              .strict()
+              .describe(
+                "Aggregate score summary for validation or official datasets.",
+              )
+              .optional(),
+            official_summary: z
+              .object({
+                score: z
+                  .number()
+                  .describe(
+                    "Normalized score in the inclusive range `[0, 1]`.",
+                  ),
+                passed: z
+                  .number()
+                  .int()
+                  .describe("Number of passed cases in the aggregate."),
+                total: z
+                  .number()
+                  .int()
+                  .describe("Total number of cases in the aggregate."),
+              })
+              .strict()
+              .describe(
+                "Aggregate score summary for validation or official datasets.",
+              )
+              .optional(),
+            log_path: z.string().optional(),
+            started_at: z.string().optional(),
+            finished_at: z.string().optional(),
+          })
+          .strict()
+          .describe("API DTO for a persisted evaluation.")
+          .optional(),
+        created_at: z.string(),
+        updated_at: z.string(),
+      })
+      .strict()
+      .describe(
+        "Solution submission detail DTO used by both public and authenticated routes.",
+      ),
+  })
+  .strict()
+  .describe(
+    "Redacted or owner-visible result report for a solution submission.",
+  );
+
 export type AdminCapacityResponse = z.infer<typeof adminCapacityResponseSchema>;
 export type AdminChallengeListResponse = z.infer<
   typeof adminChallengeListResponseSchema
@@ -1402,14 +2051,26 @@ export type GithubOauthLoginResponse = z.infer<
   typeof githubOauthLoginResponseSchema
 >;
 export type LeaderboardResponse = z.infer<typeof leaderboardResponseSchema>;
+export type RankingContextResponse = z.infer<
+  typeof rankingContextResponseSchema
+>;
+export type ScoreDistributionResponse = z.infer<
+  typeof scoreDistributionResponseSchema
+>;
 export type PublicSolutionSubmissionListResponse = z.infer<
   typeof publicSolutionSubmissionListResponseSchema
 >;
 export type SolutionSubmissionArtifactResponse = z.infer<
   typeof solutionSubmissionArtifactResponseSchema
 >;
+export type SolutionSubmissionLogsResponse = z.infer<
+  typeof solutionSubmissionLogsResponseSchema
+>;
 export type SolutionSubmissionResponse = z.infer<
   typeof solutionSubmissionResponseSchema
+>;
+export type SolutionSubmissionResultReportResponse = z.infer<
+  typeof solutionSubmissionResultReportResponseSchema
 >;
 export type AdminChallengeListItem =
   AdminChallengeListResponse["items"][number];

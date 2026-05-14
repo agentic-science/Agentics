@@ -122,7 +122,7 @@ export function ChallengeDraftReviewPanel({
             />
             <p className="mt-2 text-[var(--text-body-sm)] text-[var(--text-secondary)]">
               Validate GitHub-backed drafts, freeze approved review digests, and
-              publish immutable challenge versions.
+              publish immutable challenge contracts.
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-[minmax(260px,1fr)_minmax(200px,280px)_auto] gap-3 w-full lg:w-auto">

@@ -30,16 +30,24 @@ export default async function ChallengePage({
     challengeDetailResponseSchema,
   );
   const defaultTargetId = detail.spec.benchmark_targets[0].id;
+  const defaultRoundId = detail.rounds[0]?.id;
 
   const [submissions, leaderboard, discussions] = await Promise.all([
     fetchJson(
       `/api/public/challenges/${id}/solution-submissions?limit=5`,
       publicSolutionSubmissionListResponseSchema,
     ),
-    fetchJson(
-      `/api/public/challenges/${id}/leaderboard?target=${encodeURIComponent(defaultTargetId)}&limit=5`,
-      leaderboardResponseSchema,
-    ),
+    defaultRoundId
+      ? fetchJson(
+          `/api/public/challenges/${id}/rounds/${encodeURIComponent(defaultRoundId)}/leaderboard?target=${encodeURIComponent(defaultTargetId)}&limit=5`,
+          leaderboardResponseSchema,
+        )
+      : Promise.resolve({
+          challenge_id: detail.id,
+          round_id: "",
+          benchmark_target_id: defaultTargetId,
+          items: [],
+        }),
     fetchJson(
       `/api/public/challenges/${id}/discussions?limit=3`,
       discussionListResponseSchema,
@@ -91,10 +99,10 @@ export default async function ChallengePage({
             </div>
             <div>
               <span className="block text-[var(--text-caption)] text-[var(--text-muted)] uppercase tracking-wide">
-                {t("challenge.config.resultFile")}
+                Round
               </span>
               <span className="text-[var(--text-body-sm)] font-mono text-[var(--text-primary)]">
-                {detail.spec.scorer.result_file}
+                {detail.rounds.map((round) => round.id).join(", ")}
               </span>
             </div>
             <div>
@@ -196,7 +204,11 @@ export default async function ChallengePage({
               {t("challenge.topLeaderboard")}
             </h3>
             <Link
-              href={`/challenges/${id}/leaderboard?target=${encodeURIComponent(defaultTargetId)}`}
+              href={
+                defaultRoundId
+                  ? `/challenges/${id}/leaderboard?round=${encodeURIComponent(defaultRoundId)}&target=${encodeURIComponent(defaultTargetId)}`
+                  : `/challenges/${id}/leaderboard`
+              }
               className="text-[var(--text-body-sm)] text-[var(--text-muted)] hover:text-[var(--accent-primary-text)] transition-colors"
             >
               {t("challenge.viewAll")}

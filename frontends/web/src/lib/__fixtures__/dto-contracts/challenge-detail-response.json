@@ -3,16 +3,24 @@
   "slug": "matrix-multiplication",
   "title": "Matrix Multiplication",
   "summary": "Optimize CPU matrix multiplication kernels.",
-  "current_version": {
-    "id": "challenge-version-1",
-    "version": "v1"
-  },
+  "rounds": [
+    {
+      "id": "main",
+      "title": "Main Round",
+      "eligibility": { "type": "open" },
+      "visibility": {
+        "leaderboard": "public_live",
+        "score_distribution": "public_live",
+        "result_detail": "submitter_live_public_after_close"
+      },
+      "solution_publication": "submitter_opt_in"
+    }
+  ],
   "spec": {
     "schema_version": 1,
     "challenge_id": "matrix-multiplication",
     "challenge_title": "Matrix Multiplication",
     "challenge_summary": "Optimize CPU matrix multiplication kernels.",
-    "challenge_version": "v1",
     "solution": {
       "protocol": "zip_project",
       "manifest_file": "agentics.solution.json"
@@ -46,6 +54,19 @@
             "kind": "cpu"
           }
         }
+      }
+    ],
+    "rounds": [
+      {
+        "id": "main",
+        "title": "Main Round",
+        "eligibility": { "type": "open" },
+        "visibility": {
+          "leaderboard": "public_live",
+          "score_distribution": "public_live",
+          "result_detail": "submitter_live_public_after_close"
+        },
+        "solution_publication": "submitter_opt_in"
       }
     ],
     "execution": {

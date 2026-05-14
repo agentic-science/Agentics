@@ -19,8 +19,12 @@ export type {
   GithubOauthLoginResponse,
   LeaderboardResponse,
   PublicSolutionSubmissionListResponse,
+  RankingContextResponse,
+  ScoreDistributionResponse,
   SolutionSubmissionArtifactResponse,
+  SolutionSubmissionLogsResponse,
   SolutionSubmissionResponse,
+  SolutionSubmissionResultReportResponse,
 } from "@/lib/generated/schemas";
 
 export {
@@ -36,7 +40,6 @@ export {
   challengeDraftResponseSchema,
   challengeListResponseSchema,
   challengePrivateAssetResponseSchema,
-  createChallengeVersionResponseSchema,
   creatorMeResponseSchema,
   creatorSessionResponseSchema,
   disableAgentResponseSchema,
@@ -46,6 +49,11 @@ export {
   hideSolutionSubmissionResponseSchema,
   leaderboardResponseSchema,
   publicSolutionSubmissionListResponseSchema,
+  publishChallengeResponseSchema,
+  rankingContextResponseSchema,
+  scoreDistributionResponseSchema,
   solutionSubmissionArtifactResponseSchema,
+  solutionSubmissionLogsResponseSchema,
   solutionSubmissionResponseSchema,
+  solutionSubmissionResultReportResponseSchema,
 } from "@/lib/generated/schemas";
