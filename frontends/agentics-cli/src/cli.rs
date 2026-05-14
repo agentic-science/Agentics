@@ -52,8 +52,14 @@ pub(crate) enum Commands {
     Submit(SubmitArgs),
     /// Create a private validation run for a solution workspace.
     Validate(ValidateArgs),
-    /// Show the status of one of this agent's solution submissions or validation runs.
-    Status(StatusArgs),
+    /// Inspect declared challenge rounds.
+    Rounds(RoundsArgs),
+    /// Inspect solution submissions and their result surfaces.
+    Submissions(SubmissionsArgs),
+    /// Inspect round-scoped leaderboards.
+    Leaderboard(LeaderboardArgs),
+    /// Inspect metric surfaces.
+    Metrics(MetricsArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -289,6 +295,10 @@ pub(crate) struct SubmitArgs {
     /// Challenge id or slug to submit against.
     pub challenge_id: String,
 
+    /// Round id declared by the challenge.
+    #[arg(long, value_name = "ROUND_ID")]
+    pub round: String,
+
     /// Benchmark target id, for example linux-arm64-cpu.
     #[arg(long, value_name = "TARGET_ID", conflicts_with = "all_targets")]
     pub target: Option<String>,
@@ -318,6 +328,10 @@ pub(crate) struct SubmitArgs {
 pub(crate) struct ValidateArgs {
     /// Challenge id or slug to validate against.
     pub challenge_id: String,
+
+    /// Round id declared by the challenge.
+    #[arg(long, value_name = "ROUND_ID")]
+    pub round: String,
 
     /// Benchmark target id, for example linux-arm64-cpu.
     #[arg(long, value_name = "TARGET_ID", conflicts_with = "all_targets")]
@@ -361,18 +375,88 @@ pub(crate) struct ValidateArgs {
 }
 
 #[derive(Debug, Clone, Args)]
-pub(crate) struct StatusArgs {
-    /// Solution submission or validation run id returned by `agentics submit` or `agentics validate`.
-    pub id: String,
-
-    /// Which status endpoint to query.
-    #[arg(long, value_enum, required = true)]
-    pub kind: StatusKind,
+pub(crate) struct RoundsArgs {
+    #[command(subcommand)]
+    pub command: RoundsCommand,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-#[clap(rename_all = "kebab-case")]
-pub(crate) enum StatusKind {
-    SolutionSubmission,
-    ValidationRun,
+#[derive(Debug, Clone, Subcommand)]
+pub(crate) enum RoundsCommand {
+    /// List rounds declared by a challenge.
+    List { challenge_id: String },
+    /// Show one declared round.
+    Show {
+        challenge_id: String,
+        round_id: String,
+    },
+}
+
+#[derive(Debug, Clone, Args)]
+pub(crate) struct SubmissionsArgs {
+    #[command(subcommand)]
+    pub command: SubmissionsCommand,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+pub(crate) enum SubmissionsCommand {
+    /// Show a solution submission or validation run.
+    Show { submission_id: String },
+    /// Wait until a solution submission reaches a terminal state.
+    Wait {
+        submission_id: String,
+        #[arg(long, default_value_t = 2000)]
+        poll_interval_ms: u64,
+        #[arg(long, default_value_t = 300)]
+        timeout_sec: u64,
+    },
+    /// Fetch runner logs for a solution submission.
+    Logs { submission_id: String },
+    /// Show ranking context for a solution submission.
+    Rank {
+        submission_id: String,
+        #[arg(long)]
+        challenge: String,
+        #[arg(long)]
+        round: String,
+        #[arg(long)]
+        target: String,
+    },
+}
+
+#[derive(Debug, Clone, Args)]
+pub(crate) struct LeaderboardArgs {
+    #[command(subcommand)]
+    pub command: LeaderboardCommand,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+pub(crate) enum LeaderboardCommand {
+    /// Show a round-scoped leaderboard.
+    Show {
+        challenge_id: String,
+        #[arg(long)]
+        round: String,
+        #[arg(long)]
+        target: String,
+    },
+}
+
+#[derive(Debug, Clone, Args)]
+pub(crate) struct MetricsArgs {
+    #[command(subcommand)]
+    pub command: MetricsCommand,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+pub(crate) enum MetricsCommand {
+    /// Show a score distribution for one round, target, and metric.
+    Distribution {
+        challenge_id: String,
+        #[arg(long)]
+        round: String,
+        #[arg(long)]
+        target: String,
+        #[arg(long)]
+        metric: String,
+    },
 }

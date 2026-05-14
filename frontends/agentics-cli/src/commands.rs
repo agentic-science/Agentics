@@ -296,6 +296,7 @@ pub(crate) async fn submit(
 ) -> Result<String> {
     let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
     let challenge = client.get_challenge(&args.challenge_id).await?;
+    validate_round_id(&challenge, &args.round)?;
     let target_ids = select_benchmark_targets(
         &challenge,
         args.target.as_deref(),
@@ -308,6 +309,7 @@ pub(crate) async fn submit(
     for target_id in target_ids {
         let request = create_solution_submission_request(
             args.challenge_id.clone(),
+            args.round.clone(),
             target_id,
             &package,
             args.explanation.clone(),
@@ -331,6 +333,7 @@ pub(crate) async fn validate(
 
     let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
     let challenge = client.get_challenge(&args.challenge_id).await?;
+    validate_round_id(&challenge, &args.round)?;
     let target_ids = select_benchmark_targets(
         &challenge,
         args.target.as_deref(),
@@ -343,6 +346,7 @@ pub(crate) async fn validate(
     for target_id in target_ids {
         let request = create_solution_submission_request(
             args.challenge_id.clone(),
+            args.round.clone(),
             target_id,
             &package,
             args.explanation.clone(),
@@ -379,6 +383,7 @@ fn parse_model_info(raw: &str) -> Result<serde_json::Value> {
 
 fn create_solution_submission_request(
     challenge_id: String,
+    round_id: String,
     benchmark_target_id: String,
     package: &package::SolutionPackage,
     explanation: String,
@@ -387,12 +392,33 @@ fn create_solution_submission_request(
 ) -> CreateSolutionSubmissionRequest {
     CreateSolutionSubmissionRequest {
         challenge_id,
+        round_id,
         benchmark_target_id,
         artifact_base64: STANDARD.encode(&package.bytes),
         explanation,
         parent_solution_submission_id,
         credit_text,
     }
+}
+
+fn validate_round_id(challenge: &ChallengeDetailResponse, round_id: &str) -> Result<()> {
+    let round_id = round_id.trim();
+    if round_id.is_empty() {
+        bail!("round id must not be empty");
+    }
+    if challenge.spec.round(round_id).is_some() {
+        return Ok(());
+    }
+    let available = challenge
+        .rounds
+        .iter()
+        .map(|round| round.id.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+    bail!(
+        "challenge `{}` does not declare round `{round_id}`. Available rounds: {available}",
+        challenge.id
+    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -428,10 +454,6 @@ fn select_benchmark_targets(
     }
 
     match challenge.spec.benchmark_targets.as_slice() {
-        [target] => {
-            validate_selected_targets(challenge, &[target], mode)?;
-            Ok(vec![target.id.clone()])
-        }
         [] => bail!(
             "challenge `{}` does not declare any benchmark targets",
             challenge.id
@@ -491,6 +513,29 @@ async fn poll_validation_run(
         }
         if Instant::now() >= deadline {
             bail!("validation run {validation_run_id} did not finish within {timeout:?}");
+        }
+        tokio::time::sleep(poll_interval).await;
+    }
+}
+
+pub(crate) async fn wait_for_solution_submission(
+    client: &ApiClient,
+    solution_submission_id: &str,
+    poll_interval: Duration,
+    timeout: Duration,
+) -> Result<shared::models::request::SolutionSubmissionResponse> {
+    let deadline = Instant::now()
+        .checked_add(timeout)
+        .context("solution submission poll timeout is too large")?;
+    loop {
+        let response = client
+            .get_solution_submission(solution_submission_id)
+            .await?;
+        if is_terminal_status(&response.status) {
+            return Ok(response);
+        }
+        if Instant::now() >= deadline {
+            bail!("solution submission {solution_submission_id} did not finish within {timeout:?}");
         }
         tokio::time::sleep(poll_interval).await;
     }

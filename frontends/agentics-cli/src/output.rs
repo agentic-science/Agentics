@@ -1,12 +1,16 @@
 use anyhow::Result;
 use serde::Serialize;
 use serde_json::{Map, Value, json};
-use shared::models::challenge::{ChallengeDetailResponse, ChallengeListResponse};
+use shared::models::challenge::{
+    ChallengeDetailResponse, ChallengeListResponse, ChallengeRoundSpec,
+};
 use shared::models::challenge_creation::{
     ChallengeDraftCleanupResponse, ChallengeDraftResponse, ChallengePrivateAssetResponse,
 };
 use shared::models::request::{
-    CreateSolutionSubmissionResponse, RegisterAgentResponse, SolutionSubmissionResponse,
+    CreateSolutionSubmissionResponse, LeaderboardResponse, RankingContextResponse,
+    RegisterAgentResponse, ScoreDistributionResponse, SolutionSubmissionLogsResponse,
+    SolutionSubmissionResponse,
 };
 
 use crate::cli::OutputFormat;
@@ -92,7 +96,7 @@ pub(crate) fn render_challenge_draft(
     match format {
         OutputFormat::Json => pretty_json(response),
         OutputFormat::Table => Ok(format!(
-            "challenge_draft: {}\nchallenge: {}\nrequest: {}\nstatus: {}\nrepo: {}#{}\npath: {}\ncommit: {}\nmanifest_sha256: {}\npublished_version: {}\nprivate_assets: {}\nvalidation_records: {}",
+            "challenge_draft: {}\nchallenge: {}\nrequest: {}\nstatus: {}\nrepo: {}#{}\npath: {}\ncommit: {}\nmanifest_sha256: {}\npublished_challenge: {}\nprivate_assets: {}\nvalidation_records: {}",
             response.id,
             response.challenge_id,
             status_label(&response.request),
@@ -102,10 +106,7 @@ pub(crate) fn render_challenge_draft(
             response.challenge_path,
             response.commit_sha,
             response.manifest_sha256,
-            response
-                .published_challenge_version_id
-                .as_deref()
-                .unwrap_or("none"),
+            response.published_challenge_id.as_deref().unwrap_or("none"),
             response.private_assets.len(),
             response.validation_records.len()
         )),
@@ -162,12 +163,12 @@ pub(crate) fn render_challenge_list(
                     vec![
                         challenge.id.clone(),
                         challenge.slug.clone(),
-                        challenge.current_version.version.clone(),
+                        format_round_ids(&challenge.rounds),
                         challenge.title.clone(),
                     ]
                 })
                 .collect::<Vec<_>>();
-            Ok(render_table(&["ID", "SLUG", "VERSION", "TITLE"], &rows))
+            Ok(render_table(&["ID", "SLUG", "ROUNDS", "TITLE"], &rows))
         }
     }
 }
@@ -191,12 +192,11 @@ pub(crate) fn render_challenge_detail(
             };
 
             Ok(format!(
-                "{} ({})\nsummary: {}\nversion: {} ({})\nsolution_protocol: {} ({})\nbenchmark_targets:\n{}\ndatasets: public={}, private_benchmark={}\nranking_metric: {}\n\n{}",
+                "{} ({})\nsummary: {}\nrounds:\n{}\nsolution_protocol: {} ({})\nbenchmark_targets:\n{}\ndatasets: public={}, private_benchmark={}\nranking_metric: {}\n\n{}",
                 response.title,
                 response.id,
                 response.summary,
-                response.current_version.version,
-                response.current_version.id,
+                format_rounds(&response.rounds),
                 response.spec.solution.protocol,
                 response.spec.solution.manifest_file,
                 format_benchmark_targets(&response.spec.benchmark_targets),
@@ -216,11 +216,11 @@ pub(crate) fn render_init_solution(
     match format {
         OutputFormat::Json => pretty_json(summary),
         OutputFormat::Table => Ok(format!(
-            "Initialized solution workspace: {}\nchallenge: {} ({})\nversion: {}\nruntime_profile: {}\ninterface: {}",
+            "Initialized solution workspace: {}\nchallenge: {} ({})\nrounds: {}\nruntime_profile: {}\ninterface: {}",
             summary.workspace_dir.display(),
             summary.challenge_title,
             summary.challenge_id,
-            summary.challenge_version,
+            summary.rounds.join(", "),
             summary.runtime_profile,
             summary.interface
         )),
@@ -243,9 +243,10 @@ pub(crate) fn render_create_solution_submission(
             }
         })),
         OutputFormat::Table => Ok(format!(
-            "Submitted {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}",
+            "Submitted {}\nchallenge: {}\nround: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}",
             response.id,
             response.challenge_id,
+            response.round_id,
             response.benchmark_target_id,
             response.status,
             response.evaluation_job_id,
@@ -284,9 +285,10 @@ pub(crate) fn render_create_validation_run(
             }
         })),
         OutputFormat::Table => Ok(format!(
-            "Created validation run {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}",
+            "Created validation run {}\nchallenge: {}\nround: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}",
             response.id,
             response.challenge_id,
+            response.round_id,
             response.benchmark_target_id,
             response.status,
             response.evaluation_job_id,
@@ -339,9 +341,10 @@ pub(crate) fn render_solution_submission_status(
                 .unwrap_or_else(|| "none".to_string());
 
             Ok(format!(
-                "solution submission: {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\nvalidation_evaluation: {}\nofficial_evaluation: {}\nrank_score: {}\nvisible_after_eval: {}",
+                "solution submission: {}\nchallenge: {}\nround: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\nvalidation_evaluation: {}\nofficial_evaluation: {}\nrank_score: {}\nvisible_after_eval: {}",
                 response.id,
                 response.challenge_id,
+                response.round_id,
                 response.benchmark_target_id,
                 response.status,
                 evaluation_job,
@@ -383,9 +386,10 @@ pub(crate) fn render_validation_run_status(
                 .unwrap_or_else(|| "none".to_string());
 
             Ok(format!(
-                "validation_run: {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\nvalidation: {}\nprimary_score: {}\nrank_score: {}\nvisible_after_eval: {}",
+                "validation_run: {}\nchallenge: {}\nround: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\nvalidation: {}\nprimary_score: {}\nrank_score: {}\nvisible_after_eval: {}",
                 response.id,
                 response.challenge_id,
+                response.round_id,
                 response.benchmark_target_id,
                 response.status,
                 evaluation_job,
@@ -428,6 +432,7 @@ pub(crate) fn render_validation_run_status_batch(
                             .unwrap_or_else(|| "none".to_string());
                         vec![
                             response.benchmark_target_id.clone(),
+                            response.round_id.clone(),
                             response.id.clone(),
                             status_label(&response.status),
                             evaluation_job,
@@ -437,7 +442,15 @@ pub(crate) fn render_validation_run_status_batch(
                     })
                     .collect::<Vec<_>>();
                 Ok(render_table(
-                    &["TARGET", "ID", "STATUS", "JOB", "VALIDATION", "RANK_SCORE"],
+                    &[
+                        "TARGET",
+                        "ROUND",
+                        "ID",
+                        "STATUS",
+                        "JOB",
+                        "VALIDATION",
+                        "RANK_SCORE",
+                    ],
                     &rows,
                 ))
             }
@@ -472,6 +485,7 @@ fn render_create_submission_batch(
                 .map(|response| {
                     vec![
                         response.benchmark_target_id.clone(),
+                        response.round_id.clone(),
                         response.id.clone(),
                         response.challenge_id.clone(),
                         response.status.clone(),
@@ -481,7 +495,10 @@ fn render_create_submission_batch(
                 .collect::<Vec<_>>();
             Ok(format!(
                 "{}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}",
-                render_table(&["TARGET", "ID", "CHALLENGE", "STATUS", "JOB"], &rows),
+                render_table(
+                    &["TARGET", "ROUND", "ID", "CHALLENGE", "STATUS", "JOB"],
+                    &rows
+                ),
                 package.file_count,
                 package.uncompressed_bytes,
                 package.bytes.len(),
@@ -489,6 +506,236 @@ fn render_create_submission_batch(
             ))
         }
     }
+}
+
+pub(crate) fn render_round_list(
+    challenge: &ChallengeDetailResponse,
+    format: OutputFormat,
+) -> Result<String> {
+    match format {
+        OutputFormat::Json => pretty_json(&json!({
+            "challenge_id": challenge.id,
+            "rounds": challenge.rounds,
+        })),
+        OutputFormat::Table => {
+            let rows = challenge
+                .rounds
+                .iter()
+                .map(|round| {
+                    vec![
+                        round.id.clone(),
+                        round.title.clone(),
+                        round.opens_at.clone().unwrap_or_else(|| "-".to_string()),
+                        round.closes_at.clone().unwrap_or_else(|| "-".to_string()),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            Ok(render_table(&["ID", "TITLE", "OPENS", "CLOSES"], &rows))
+        }
+    }
+}
+
+pub(crate) fn render_round_detail(
+    challenge: &ChallengeDetailResponse,
+    round_id: &str,
+    format: OutputFormat,
+) -> Result<String> {
+    let round = challenge
+        .rounds
+        .iter()
+        .find(|round| round.id == round_id)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "challenge `{}` does not declare round `{round_id}`",
+                challenge.id
+            )
+        })?;
+    match format {
+        OutputFormat::Json => pretty_json(round),
+        OutputFormat::Table => Ok(format_round_detail(round)),
+    }
+}
+
+pub(crate) fn render_solution_submission_logs(
+    response: &SolutionSubmissionLogsResponse,
+    format: OutputFormat,
+) -> Result<String> {
+    match format {
+        OutputFormat::Json => pretty_json(response),
+        OutputFormat::Table => Ok(format!(
+            "solution_submission: {}\nlog_path: {}\ntruncated: {}\n\n{}",
+            response.solution_submission_id,
+            response.log_path.as_deref().unwrap_or("none"),
+            response.truncated,
+            response.content.as_deref().unwrap_or("")
+        )),
+    }
+}
+
+pub(crate) fn render_ranking_context(
+    response: &RankingContextResponse,
+    format: OutputFormat,
+) -> Result<String> {
+    match format {
+        OutputFormat::Json => pretty_json(response),
+        OutputFormat::Table => {
+            let nearby = response
+                .nearby_entries
+                .iter()
+                .map(|entry| {
+                    vec![
+                        entry.rank.to_string(),
+                        entry.entry.agent_name.clone(),
+                        entry.entry.best_solution_submission_id.clone(),
+                        format_score(entry.entry.best_rank_score),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            Ok(format!(
+                "solution_submission: {}\nchallenge: {}\nround: {}\ntarget: {}\nrank: {}\ntotal_ranked: {}\npercentile: {}\nis_agent_best: {}\nnearby:\n{}",
+                response.solution_submission_id,
+                response.challenge_id,
+                response.round_id,
+                response.benchmark_target_id,
+                response
+                    .rank
+                    .map(|rank| rank.to_string())
+                    .unwrap_or_else(|| "unranked".to_string()),
+                response.total_ranked,
+                response
+                    .percentile
+                    .map(format_score)
+                    .unwrap_or_else(|| "none".to_string()),
+                response.is_agent_best,
+                render_table(&["RANK", "AGENT", "SUBMISSION", "SCORE"], &nearby)
+            ))
+        }
+    }
+}
+
+pub(crate) fn render_leaderboard(
+    response: &LeaderboardResponse,
+    format: OutputFormat,
+) -> Result<String> {
+    match format {
+        OutputFormat::Json => pretty_json(response),
+        OutputFormat::Table => {
+            let rows = response
+                .items
+                .iter()
+                .enumerate()
+                .map(|(index, entry)| {
+                    let rank = index
+                        .checked_add(1)
+                        .ok_or_else(|| anyhow::anyhow!("leaderboard rank overflow"))?;
+                    Ok(vec![
+                        rank.to_string(),
+                        entry.agent_name.clone(),
+                        entry.best_solution_submission_id.clone(),
+                        format_score(entry.best_rank_score),
+                        entry.updated_at.clone(),
+                    ])
+                })
+                .collect::<Result<Vec<_>>>()?;
+            Ok(format!(
+                "challenge: {}\nround: {}\ntarget: {}\n{}",
+                response.challenge_id,
+                response.round_id,
+                response.benchmark_target_id,
+                render_table(&["RANK", "AGENT", "SUBMISSION", "SCORE", "UPDATED"], &rows)
+            ))
+        }
+    }
+}
+
+pub(crate) fn render_score_distribution(
+    response: &ScoreDistributionResponse,
+    format: OutputFormat,
+) -> Result<String> {
+    match format {
+        OutputFormat::Json => pretty_json(response),
+        OutputFormat::Table => {
+            let quantiles = response
+                .quantiles
+                .iter()
+                .map(|quantile| {
+                    vec![
+                        format_score(quantile.quantile),
+                        format_score(quantile.value),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            let buckets = response
+                .histogram
+                .iter()
+                .map(|bucket| {
+                    vec![
+                        format_score(bucket.lower),
+                        format_score(bucket.upper),
+                        bucket.count.to_string(),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            Ok(format!(
+                "challenge: {}\nround: {}\ntarget: {}\nmetric: {}\ncount: {}\nmin: {}\nmax: {}\nmean: {}\nquantiles:\n{}\nhistogram:\n{}",
+                response.challenge_id,
+                response.round_id,
+                response.benchmark_target_id,
+                response.metric_id,
+                response.count,
+                response
+                    .min
+                    .map(format_score)
+                    .unwrap_or_else(|| "none".to_string()),
+                response
+                    .max
+                    .map(format_score)
+                    .unwrap_or_else(|| "none".to_string()),
+                response
+                    .mean
+                    .map(format_score)
+                    .unwrap_or_else(|| "none".to_string()),
+                render_table(&["Q", "VALUE"], &quantiles),
+                render_table(&["LOWER", "UPPER", "COUNT"], &buckets)
+            ))
+        }
+    }
+}
+
+fn format_round_ids(rounds: &[ChallengeRoundSpec]) -> String {
+    if rounds.is_empty() {
+        return "-".to_string();
+    }
+    rounds
+        .iter()
+        .map(|round| round.id.as_str())
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn format_rounds(rounds: &[ChallengeRoundSpec]) -> String {
+    if rounds.is_empty() {
+        return "  <none>".to_string();
+    }
+    rounds
+        .iter()
+        .map(|round| format!("  - {}: {}", round.id, round.title))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn format_round_detail(round: &ChallengeRoundSpec) -> String {
+    format!(
+        "{} ({})\nopens_at: {}\ncloses_at: {}\nleaderboard_visibility: {}\nscore_distribution_visibility: {}\nresult_detail_visibility: {}\nsolution_publication: {}",
+        round.title,
+        round.id,
+        round.opens_at.as_deref().unwrap_or("none"),
+        round.closes_at.as_deref().unwrap_or("none"),
+        status_label(&round.visibility.leaderboard),
+        status_label(&round.visibility.score_distribution),
+        status_label(&round.visibility.result_detail),
+        status_label(&round.solution_publication)
+    )
 }
 
 fn format_benchmark_targets(targets: &[shared::models::challenge::BenchmarkTargetSpec]) -> String {
@@ -581,10 +828,12 @@ fn render_table_row(row: &[String], widths: &[usize]) -> String {
 #[cfg(test)]
 mod tests {
     use serde_json::Value;
-    use shared::models::CurrentVersionDto;
     use shared::models::challenge::{
         BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengeDetailResponse,
-        ChallengeExecutionSpec, ChallengeListItemDto, ChallengeListResponse, DatasetsSpec,
+        ChallengeExecutionSpec, ChallengeListItemDto, ChallengeListResponse,
+        ChallengeResultDetailVisibility, ChallengeRoundEligibilitySpec,
+        ChallengeRoundEligibilityType, ChallengeRoundSpec, ChallengeRoundVisibility,
+        ChallengeRoundVisibilitySpec, ChallengeSolutionPublicationPolicy, DatasetsSpec,
         DockerPlatform, MetricSchemaSpec, PrivateBenchmarkPolicy, ResourceProfileSpec, ScorerSpec,
         SolutionSpec,
     };
@@ -602,10 +851,7 @@ mod tests {
                     slug: "sum".to_string(),
                     title: "Sample Sum".to_string(),
                     summary: "Add numbers".to_string(),
-                    current_version: CurrentVersionDto {
-                        id: "version-1".to_string(),
-                        version: "v1".to_string(),
-                    },
+                    rounds: vec![default_round()],
                 }],
             },
             OutputFormat::Table,
@@ -614,7 +860,7 @@ mod tests {
 
         assert_eq!(
             output,
-            "ID          SLUG  VERSION  TITLE\nsample-sum  sum   v1       Sample Sum"
+            "ID          SLUG  ROUNDS  TITLE\nsample-sum  sum   main    Sample Sum"
         );
     }
 
@@ -634,16 +880,12 @@ mod tests {
             slug: "sum".to_string(),
             title: "Sample Sum".to_string(),
             summary: "Add numbers".to_string(),
-            current_version: CurrentVersionDto {
-                id: "version-1".to_string(),
-                version: "v1".to_string(),
-            },
+            rounds: vec![default_round()],
             spec: ChallengeBundleSpec {
                 schema_version: 1,
                 challenge_id: "sample-sum".to_string(),
                 challenge_title: "Sample Sum".to_string(),
                 challenge_summary: "Add numbers".to_string(),
-                challenge_version: "v1".to_string(),
                 solution: SolutionSpec {
                     protocol: "zip_project".to_string(),
                     manifest_file: "agentics.solution.json".to_string(),
@@ -675,6 +917,7 @@ mod tests {
                         hardware: None,
                     },
                 }],
+                rounds: vec![default_round()],
                 execution: ChallengeExecutionSpec {
                     validation_runs: Some("public/runs.json".to_string()),
                     validation_prepare: None,
@@ -692,6 +935,26 @@ mod tests {
                 metric_schema: MetricSchemaSpec::default(),
             },
             statement_markdown: "# Statement\n\nReturn the sum.".to_string(),
+        }
+    }
+
+    fn default_round() -> ChallengeRoundSpec {
+        ChallengeRoundSpec {
+            id: "main".to_string(),
+            title: "Main Round".to_string(),
+            opens_at: None,
+            closes_at: None,
+            eligibility: ChallengeRoundEligibilitySpec {
+                eligibility_type: ChallengeRoundEligibilityType::Open,
+            },
+            validation_submission_limit: None,
+            official_submission_limit: None,
+            visibility: ChallengeRoundVisibilitySpec {
+                leaderboard: ChallengeRoundVisibility::PublicLive,
+                score_distribution: ChallengeRoundVisibility::PublicLive,
+                result_detail: ChallengeResultDetailVisibility::SubmitterLivePublicAfterClose,
+            },
+            solution_publication: ChallengeSolutionPublicationPolicy::SubmitterOptIn,
         }
     }
 }

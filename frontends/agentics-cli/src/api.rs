@@ -10,8 +10,9 @@ use shared::models::challenge_creation::{
     ValidateChallengeDraftRequest,
 };
 use shared::models::request::{
-    CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse, RegisterAgentRequest,
-    RegisterAgentResponse, SolutionSubmissionResponse,
+    CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse, LeaderboardResponse,
+    RankingContextResponse, RegisterAgentRequest, RegisterAgentResponse, ScoreDistributionResponse,
+    SolutionSubmissionLogsResponse, SolutionSubmissionResponse,
 };
 
 #[derive(Debug)]
@@ -97,6 +98,52 @@ impl ApiClient {
     ) -> Result<SolutionSubmissionResponse> {
         let path = format!("/api/validation-runs/{validation_run_id}");
         self.get_json(&path, true).await
+    }
+
+    pub(crate) async fn get_solution_submission_logs(
+        &self,
+        solution_submission_id: &str,
+    ) -> Result<SolutionSubmissionLogsResponse> {
+        let path = format!("/api/solution-submissions/{solution_submission_id}/logs");
+        self.get_json(&path, true).await
+    }
+
+    pub(crate) async fn get_solution_submission_ranking_context(
+        &self,
+        solution_submission_id: &str,
+        challenge_id: &str,
+        round_id: &str,
+        target_id: &str,
+    ) -> Result<RankingContextResponse> {
+        let path = format!(
+            "/api/solution-submissions/{solution_submission_id}/ranking-context?challenge_id={challenge_id}&round_id={round_id}&target={target_id}"
+        );
+        self.get_json(&path, true).await
+    }
+
+    pub(crate) async fn get_leaderboard(
+        &self,
+        challenge_id: &str,
+        round_id: &str,
+        target_id: &str,
+    ) -> Result<LeaderboardResponse> {
+        let path = format!(
+            "/api/public/challenges/{challenge_id}/rounds/{round_id}/leaderboard?target={target_id}"
+        );
+        self.get_json(&path, false).await
+    }
+
+    pub(crate) async fn get_score_distribution(
+        &self,
+        challenge_id: &str,
+        round_id: &str,
+        target_id: &str,
+        metric_id: &str,
+    ) -> Result<ScoreDistributionResponse> {
+        let path = format!(
+            "/api/public/challenges/{challenge_id}/rounds/{round_id}/score-distributions?target={target_id}&metric={metric_id}"
+        );
+        self.get_json(&path, false).await
     }
 
     pub(crate) async fn create_challenge_draft(
