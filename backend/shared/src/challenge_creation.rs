@@ -11,7 +11,7 @@ use crate::challenge_bundle::{
 use crate::error::{AppError, Result};
 use crate::models::challenge_creation::{
     AGENTICS_CHALLENGE_MANIFEST_FILE, ChallengeCreationManifest, ChallengeCreationRequestKind,
-    ChallengeCreationVersionSpec, ChallengePrivateAssetRequirement, ChallengePrivateAssetResponse,
+    ChallengePrivateAssetRequirement, ChallengePrivateAssetResponse,
 };
 
 /// Read `agentics.challenge.json` from a proposal root.
@@ -52,42 +52,20 @@ pub fn validate_challenge_creation_manifest(manifest: &ChallengeCreationManifest
 
     match manifest.request {
         ChallengeCreationRequestKind::NewChallenge => {
-            let version = manifest.version.as_ref().ok_or_else(|| {
-                AppError::Validation("version is required for new_challenge".to_string())
+            let bundle_path = manifest.bundle_path.as_deref().ok_or_else(|| {
+                AppError::Validation("bundle_path is required for new_challenge".to_string())
             })?;
             if manifest.archive.is_some() {
                 return Err(AppError::Validation(
                     "archive must be omitted for new_challenge".to_string(),
                 ));
             }
-            if version.supersedes_version.is_some() {
-                return Err(AppError::Validation(
-                    "version.supersedes_version must be omitted for new_challenge".to_string(),
-                ));
-            }
-            validate_version_spec(version)?;
-        }
-        ChallengeCreationRequestKind::NewVersion => {
-            let version = manifest.version.as_ref().ok_or_else(|| {
-                AppError::Validation("version is required for new_version".to_string())
-            })?;
-            if manifest.archive.is_some() {
-                return Err(AppError::Validation(
-                    "archive must be omitted for new_version".to_string(),
-                ));
-            }
-            let supersedes = version.supersedes_version.as_deref().ok_or_else(|| {
-                AppError::Validation(
-                    "version.supersedes_version is required for new_version".to_string(),
-                )
-            })?;
-            validate_version_string(supersedes, "version.supersedes_version")?;
-            validate_version_spec(version)?;
+            require_safe_relative_path(bundle_path, "bundle_path")?;
         }
         ChallengeCreationRequestKind::ArchiveChallenge => {
-            if manifest.version.is_some() {
+            if manifest.bundle_path.is_some() {
                 return Err(AppError::Validation(
-                    "version must be omitted for archive_challenge".to_string(),
+                    "bundle_path must be omitted for archive_challenge".to_string(),
                 ));
             }
             let archive = manifest.archive.as_ref().ok_or_else(|| {
@@ -147,8 +125,8 @@ fn draft_review_bundle_sha256_blocking(
         serde_json::to_vec(manifest).map_err(|e| AppError::Internal(e.to_string()))?;
     hash_field(&mut hasher, "manifest", &manifest_bytes);
 
-    if let Some(version) = &manifest.version {
-        let bundle_root = proposal_root.join(&version.bundle_path);
+    if let Some(bundle_path) = &manifest.bundle_path {
+        let bundle_root = proposal_root.join(bundle_path);
         hash_public_tree(&mut hasher, &bundle_root)?;
     }
 
@@ -264,8 +242,8 @@ async fn validate_challenge_creation_repository_with_manifest(
     assert_public_file_exists(root.join(&manifest.readme_path), "readme_path").await?;
     reject_private_files(root)?;
 
-    if let Some(version) = &manifest.version {
-        validate_public_bundle(root, manifest, version).await?;
+    if let Some(bundle_path) = &manifest.bundle_path {
+        validate_public_bundle(root, manifest, bundle_path).await?;
     }
 
     Ok(())
@@ -274,9 +252,9 @@ async fn validate_challenge_creation_repository_with_manifest(
 async fn validate_public_bundle(
     root: &Path,
     manifest: &ChallengeCreationManifest,
-    version: &ChallengeCreationVersionSpec,
+    bundle_path: &str,
 ) -> Result<()> {
-    let bundle_dir = root.join(&version.bundle_path);
+    let bundle_dir = root.join(bundle_path);
     let spec = read_challenge_bundle_spec(&bundle_dir).await?;
     if spec.challenge_id != manifest.challenge_id {
         return Err(AppError::Validation(format!(
@@ -296,13 +274,6 @@ async fn validate_public_bundle(
             manifest.summary, spec.challenge_summary
         )));
     }
-    if spec.challenge_version != version.version {
-        return Err(AppError::Validation(format!(
-            "bundle challenge_version mismatch: expected {}, got {}",
-            version.version, spec.challenge_version
-        )));
-    }
-
     assert_public_file_exists(bundle_dir.join("statement.md"), "statement.md").await?;
     assert_public_dir_exists(
         bundle_dir.join(&spec.datasets.public_dir),
@@ -361,28 +332,6 @@ fn validate_challenge_namespace(value: &str) -> Result<()> {
             "challenge_id must be 3-63 lowercase ASCII letters, digits, or single hyphens, and must start and end with a letter or digit"
                 .to_string(),
         ));
-    }
-    Ok(())
-}
-
-fn validate_version_spec(version: &ChallengeCreationVersionSpec) -> Result<()> {
-    validate_version_string(&version.version, "version.version")?;
-    require_safe_relative_path(&version.bundle_path, "version.bundle_path")
-}
-
-fn validate_version_string(value: &str, field: &str) -> Result<()> {
-    require_non_empty(value, field)?;
-    let Some(rest) = value.strip_prefix('v') else {
-        return Err(AppError::Validation(format!("{field} must start with `v`")));
-    };
-    if rest.is_empty()
-        || rest
-            .split('.')
-            .any(|part| part.is_empty() || !part.chars().all(|c| c.is_ascii_digit()))
-    {
-        return Err(AppError::Validation(format!(
-            "{field} must use a version like v1, v1.2, or v1.2.3"
-        )));
     }
     Ok(())
 }
@@ -503,12 +452,7 @@ mod tests {
     #[tokio::test]
     async fn validates_new_challenge_repository() {
         let repo = temp_repo("new-challenge");
-        write_valid_public_challenge(
-            &repo,
-            ChallengeCreationRequestKind::NewChallenge,
-            "v1",
-            None,
-        );
+        write_valid_public_challenge(&repo);
 
         let manifest = validate_challenge_creation_repository(&repo)
             .await
@@ -519,23 +463,28 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn validates_new_version_repository() {
+    async fn rejects_new_version_repository() {
         let repo = temp_repo("new-version");
-        write_valid_public_challenge(
-            &repo,
-            ChallengeCreationRequestKind::NewVersion,
-            "v2",
-            Some("v1"),
+        write_valid_public_challenge(&repo);
+        write_file(
+            &repo.join(AGENTICS_CHALLENGE_MANIFEST_FILE),
+            &json!({
+                "schema_version": 1,
+                "request": "new_version",
+                "challenge_id": "sample-sum",
+                "title": "Sample Sum",
+                "summary": "Add numbers",
+                "readme_path": "README.md",
+                "bundle_path": "v1"
+            })
+            .to_string(),
         );
 
-        let manifest = validate_challenge_creation_repository(&repo)
+        let error = validate_challenge_creation_repository(&repo)
             .await
-            .expect("new version should validate");
+            .expect_err("new_version should be rejected");
 
-        assert_eq!(
-            manifest.version.expect("version").supersedes_version,
-            Some("v1".to_string())
-        );
+        assert!(error.to_string().contains("new_version"));
         cleanup(&repo);
     }
 
@@ -553,7 +502,7 @@ mod tests {
                 "title": "Sample Sum",
                 "summary": "Add numbers",
                 "readme_path": "README.md",
-                "archive": { "reason": "Superseded by a better benchmark" }
+                "archive": { "reason": "Retired by challenge owner" }
             })
             .to_string(),
         );
@@ -567,12 +516,7 @@ mod tests {
     #[tokio::test]
     async fn rejects_missing_readme() {
         let repo = temp_repo("missing-readme");
-        write_valid_public_challenge(
-            &repo,
-            ChallengeCreationRequestKind::NewChallenge,
-            "v1",
-            None,
-        );
+        write_valid_public_challenge(&repo);
         std::fs::remove_file(repo.join("README.md")).expect("remove readme");
 
         let error = validate_challenge_creation_repository(&repo)
@@ -600,35 +544,23 @@ mod tests {
             title: "Sample Sum".to_string(),
             summary: "Add numbers".to_string(),
             readme_path: "README.md".to_string(),
-            version: Some(ChallengeCreationVersionSpec {
-                version: "v1".to_string(),
-                bundle_path: "versions/v1".to_string(),
-                supersedes_version: None,
-            }),
+            bundle_path: Some("v1".to_string()),
             archive: None,
             private_assets: Vec::new(),
             ci: Default::default(),
         };
 
         let error = validate_challenge_creation_manifest(&manifest)
-            .expect_err("archive with version should fail");
-        assert!(error.to_string().contains("version must be omitted"));
+            .expect_err("archive with bundle_path should fail");
+        assert!(error.to_string().contains("bundle_path must be omitted"));
     }
 
     #[tokio::test]
     async fn rejects_private_material_in_public_repo() {
         let repo = temp_repo("private-leak");
-        write_valid_public_challenge(
-            &repo,
-            ChallengeCreationRequestKind::NewChallenge,
-            "v1",
-            None,
-        );
-        std::fs::create_dir_all(repo.join("versions/v1/private-benchmark")).expect("private dir");
-        write_file(
-            &repo.join("versions/v1/private-benchmark/cases.json"),
-            "[]\n",
-        );
+        write_valid_public_challenge(&repo);
+        std::fs::create_dir_all(repo.join("v1/private-benchmark")).expect("private dir");
+        write_file(&repo.join("v1/private-benchmark/cases.json"), "[]\n");
 
         let error = validate_challenge_creation_repository(&repo)
             .await
@@ -648,21 +580,13 @@ mod tests {
         drop(std::fs::remove_dir_all(path));
     }
 
-    fn write_valid_public_challenge(
-        repo: &Path,
-        request: ChallengeCreationRequestKind,
-        version: &str,
-        supersedes_version: Option<&str>,
-    ) {
-        std::fs::create_dir_all(repo.join("versions").join(version).join("public"))
-            .expect("public dir");
+    fn write_valid_public_challenge(repo: &Path) {
+        let bundle = "v1";
+        std::fs::create_dir_all(repo.join(bundle).join("public")).expect("public dir");
         write_file(&repo.join("README.md"), "# Sample Sum\n");
+        write_file(&repo.join(bundle).join("statement.md"), "# Sample Sum\n");
         write_file(
-            &repo.join("versions").join(version).join("statement.md"),
-            "# Sample Sum\n",
-        );
-        write_file(
-            &repo.join("versions").join(version).join("public/runs.json"),
+            &repo.join(bundle).join("public/runs.json"),
             &json!({
                 "runs": [
                     {
@@ -676,13 +600,12 @@ mod tests {
             .to_string(),
         );
         write_file(
-            &repo.join("versions").join(version).join("spec.json"),
+            &repo.join(bundle).join("spec.json"),
             &json!({
                 "schema_version": 1,
                 "challenge_id": "sample-sum",
                 "challenge_title": "Sample Sum",
                 "challenge_summary": "Add numbers",
-                "challenge_version": version,
                 "solution": {
                     "protocol": "zip_project",
                     "manifest_file": "agentics.solution.json"
@@ -710,6 +633,19 @@ mod tests {
                             "run_network_access": "disabled",
                             "scorer_network_access": "disabled"
                         }
+                    }
+                ],
+                "rounds": [
+                    {
+                        "id": "main",
+                        "title": "Main Round",
+                        "eligibility": { "type": "open" },
+                        "visibility": {
+                            "leaderboard": "public_live",
+                            "score_distribution": "public_live",
+                            "result_detail": "submitter_live_public_after_close"
+                        },
+                        "solution_publication": "submitter_opt_in"
                     }
                 ],
                 "execution": {
@@ -740,41 +676,22 @@ mod tests {
             .to_string(),
         );
 
-        let manifest = match request {
-            ChallengeCreationRequestKind::NewChallenge => json!({
-                "schema_version": 1,
-                "request": "new_challenge",
-                "challenge_id": "sample-sum",
-                "title": "Sample Sum",
-                "summary": "Add numbers",
-                "readme_path": "README.md",
-                "version": {
-                    "version": version,
-                    "bundle_path": format!("versions/{version}")
-                },
-                "private_assets": [
-                    {
-                        "asset_id": "official-cases",
-                        "kind": "private_benchmark_data",
-                        "required": true
-                    }
-                ]
-            }),
-            ChallengeCreationRequestKind::NewVersion => json!({
-                "schema_version": 1,
-                "request": "new_version",
-                "challenge_id": "sample-sum",
-                "title": "Sample Sum",
-                "summary": "Add numbers",
-                "readme_path": "README.md",
-                "version": {
-                    "version": version,
-                    "bundle_path": format!("versions/{version}"),
-                    "supersedes_version": supersedes_version.expect("supersedes version")
+        let manifest = json!({
+            "schema_version": 1,
+            "request": "new_challenge",
+            "challenge_id": "sample-sum",
+            "title": "Sample Sum",
+            "summary": "Add numbers",
+            "readme_path": "README.md",
+            "bundle_path": bundle,
+            "private_assets": [
+                {
+                    "asset_id": "official-cases",
+                    "kind": "private_benchmark_data",
+                    "required": true
                 }
-            }),
-            ChallengeCreationRequestKind::ArchiveChallenge => unreachable!(),
-        };
+            ]
+        });
         write_file(
             &repo.join(AGENTICS_CHALLENGE_MANIFEST_FILE),
             &manifest.to_string(),

@@ -47,6 +47,18 @@ pub fn router(config: &Config) -> Router<AppState> {
             get(crate::handlers::get_solution_submission),
         )
         .route(
+            "/api/solution-submissions/{id}/result-report",
+            get(crate::handlers::get_solution_submission_result_report),
+        )
+        .route(
+            "/api/solution-submissions/{id}/ranking-context",
+            get(crate::handlers::get_solution_submission_ranking_context),
+        )
+        .route(
+            "/api/solution-submissions/{id}/logs",
+            get(crate::handlers::get_solution_submission_logs),
+        )
+        .route(
             "/api/validation-runs",
             post(crate::handlers::create_validation_run)
                 .layer(DefaultBodyLimit::max(ZIP_SUBMISSION_JSON_BODY_LIMIT_BYTES)),
@@ -107,8 +119,12 @@ pub fn router(config: &Config) -> Router<AppState> {
             get(crate::handlers::list_public_solution_submissions),
         )
         .route(
-            "/api/public/challenges/{id}/leaderboard",
+            "/api/public/challenges/{id}/rounds/{round_id}/leaderboard",
             get(crate::handlers::get_leaderboard),
+        )
+        .route(
+            "/api/public/challenges/{id}/rounds/{round_id}/score-distributions",
+            get(crate::handlers::get_score_distribution),
         )
         .route(
             "/api/public/challenges/{id}/discussions",
@@ -117,6 +133,14 @@ pub fn router(config: &Config) -> Router<AppState> {
         .route(
             "/api/public/solution-submissions/{id}",
             get(crate::handlers::get_public_solution_submission),
+        )
+        .route(
+            "/api/public/solution-submissions/{id}/result-report",
+            get(crate::handlers::get_public_solution_submission_result_report),
+        )
+        .route(
+            "/api/public/solution-submissions/{id}/ranking-context",
+            get(crate::handlers::get_public_solution_submission_ranking_context),
         )
         .route(
             "/api/public/solution-submissions/{id}/artifact",
@@ -128,8 +152,8 @@ pub fn router(config: &Config) -> Router<AppState> {
             get(crate::handlers::list_admin_challenges).post(crate::handlers::create_challenge),
         )
         .route(
-            "/admin/challenges/{id}/versions",
-            post(crate::handlers::publish_version),
+            "/admin/challenges/{id}/publish",
+            post(crate::handlers::publish_challenge),
         )
         .route(
             "/admin/challenge-drafts",

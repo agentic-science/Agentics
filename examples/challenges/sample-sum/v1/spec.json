@@ -3,7 +3,6 @@
   "challenge_id": "sample-sum",
   "challenge_title": "Sample Sum",
   "challenge_summary": "Add numbers across scorer-controlled public and private benchmark runs.",
-  "challenge_version": "v1",
   "solution": {
     "protocol": "zip_project",
     "manifest_file": "agentics.solution.json"
@@ -35,6 +34,19 @@
           "kind": "cpu"
         }
       }
+    }
+  ],
+  "rounds": [
+    {
+      "id": "main",
+      "title": "Main Round",
+      "eligibility": { "type": "open" },
+      "visibility": {
+        "leaderboard": "public_live",
+        "score_distribution": "public_live",
+        "result_detail": "submitter_live_public_after_close"
+      },
+      "solution_publication": "submitter_opt_in"
     }
   ],
   "execution": {

@@ -15,8 +15,8 @@ use shared::models::challenge_creation::{
     ValidateChallengeDraftRequest,
 };
 use shared::models::request::{
-    CreateChallengeRequest, CreateChallengeVersionRequest, CreateDiscussionReplyRequest,
-    CreateDiscussionThreadRequest, CreateSolutionSubmissionRequest, RegisterAgentRequest,
+    CreateChallengeRequest, CreateDiscussionReplyRequest, CreateDiscussionThreadRequest,
+    CreateSolutionSubmissionRequest, PublishChallengeRequest, RegisterAgentRequest,
 };
 
 use crate::state::AppState;
@@ -322,6 +322,7 @@ impl ValidateRequest for ReviewChallengeDraftRequest {
 impl ValidateRequest for CreateSolutionSubmissionRequest {
     fn validate(&self) -> Result<(), String> {
         require_non_empty(&self.challenge_id, "challenge_id")?;
+        require_non_empty(&self.round_id, "round_id")?;
         require_non_empty(&self.benchmark_target_id, "benchmark_target_id")?;
         require_non_empty(&self.artifact_base64, "artifact_base64")
     }
@@ -348,7 +349,7 @@ impl ValidateRequest for CreateChallengeRequest {
     }
 }
 
-impl ValidateRequest for CreateChallengeVersionRequest {
+impl ValidateRequest for PublishChallengeRequest {
     fn validate(&self) -> Result<(), String> {
         require_non_empty(&self.bundle_path, "bundle_path")
     }

@@ -3,7 +3,6 @@
   "challenge_id": "grid-routing",
   "challenge_title": "Grid Routing",
   "challenge_summary": "在二维网格中从 S 到 G 规划一条有效路径，并避开障碍物。",
-  "challenge_version": "v1",
   "solution": {
     "protocol": "zip_project",
     "manifest_file": "agentics.solution.json"
@@ -31,6 +30,19 @@
         "run_network_access": "disabled",
         "scorer_network_access": "disabled"
       }
+    }
+  ],
+  "rounds": [
+    {
+      "id": "main",
+      "title": "Main Round",
+      "eligibility": { "type": "open" },
+      "visibility": {
+        "leaderboard": "public_live",
+        "score_distribution": "public_live",
+        "result_detail": "submitter_live_public_after_close"
+      },
+      "solution_publication": "submitter_opt_in"
     }
   ],
   "execution": {

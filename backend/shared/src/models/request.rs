@@ -35,6 +35,7 @@ pub struct RegisterAgentResponse {
 #[serde(deny_unknown_fields)]
 pub struct CreateSolutionSubmissionRequest {
     pub challenge_id: String,
+    pub round_id: String,
     pub benchmark_target_id: String,
     pub artifact_base64: String,
     #[serde(default)]
@@ -51,7 +52,7 @@ pub struct CreateSolutionSubmissionResponse {
     pub id: String,
     pub status: String,
     pub challenge_id: String,
-    pub challenge_version_id: String,
+    pub round_id: String,
     pub benchmark_target_id: String,
     pub artifact_path: String,
     pub evaluation_job_id: String,
@@ -65,7 +66,7 @@ pub struct SolutionSubmissionResponse {
     pub challenge_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub challenge_title: Option<String>,
-    pub challenge_version_id: String,
+    pub round_id: String,
     pub benchmark_target_id: String,
     pub agent_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -95,7 +96,7 @@ pub struct SolutionSubmissionResponse {
 pub struct PublicSolutionSubmissionListItemDto {
     pub id: String,
     pub challenge_id: String,
-    pub challenge_version_id: String,
+    pub round_id: String,
     pub benchmark_target_id: String,
     pub challenge_title: String,
     pub agent_id: String,
@@ -149,6 +150,7 @@ pub struct SolutionSubmissionArtifactResponse {
 /// One leaderboard row for an agent's best solution submission.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct LeaderboardEntryDto {
+    pub round_id: String,
     pub benchmark_target_id: String,
     pub agent_id: String,
     pub agent_name: String,
@@ -165,8 +167,85 @@ pub struct LeaderboardEntryDto {
 /// Challenge leaderboard response.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct LeaderboardResponse {
+    pub challenge_id: String,
+    pub round_id: String,
     pub benchmark_target_id: String,
     pub items: Vec<LeaderboardEntryDto>,
+}
+
+/// Leaderboard row with its rank in one explicit round and target scope.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct RankedLeaderboardEntryDto {
+    pub rank: i64,
+    pub entry: LeaderboardEntryDto,
+}
+
+/// Ranking context for a solution submission in one explicit leaderboard scope.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct RankingContextResponse {
+    pub challenge_id: String,
+    pub round_id: String,
+    pub benchmark_target_id: String,
+    pub solution_submission_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rank: Option<i64>,
+    pub total_ranked: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub percentile: Option<f64>,
+    pub is_agent_best: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entry: Option<LeaderboardEntryDto>,
+    pub nearby_entries: Vec<RankedLeaderboardEntryDto>,
+}
+
+/// Redacted or owner-visible result report for a solution submission.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct SolutionSubmissionResultReportResponse {
+    pub solution_submission: SolutionSubmissionResponse,
+}
+
+/// One quantile in a score distribution response.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct ScoreDistributionQuantileDto {
+    pub quantile: f64,
+    pub value: f64,
+}
+
+/// One histogram bucket in a score distribution response.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct ScoreDistributionBucketDto {
+    pub lower: f64,
+    pub upper: f64,
+    pub count: i64,
+}
+
+/// Aggregate distribution of one visible metric within a round and target.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct ScoreDistributionResponse {
+    pub challenge_id: String,
+    pub round_id: String,
+    pub benchmark_target_id: String,
+    pub metric_id: String,
+    pub count: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mean: Option<f64>,
+    pub quantiles: Vec<ScoreDistributionQuantileDto>,
+    pub histogram: Vec<ScoreDistributionBucketDto>,
+}
+
+/// Logs associated with a solution submission.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct SolutionSubmissionLogsResponse {
+    pub solution_submission_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+    pub truncated: bool,
 }
 
 /// Reply nested under a discussion thread.
@@ -205,6 +284,7 @@ pub struct AdminSolutionSubmissionListItemDto {
     pub id: String,
     pub challenge_id: String,
     pub challenge_title: String,
+    pub round_id: String,
     pub benchmark_target_id: String,
     pub agent_id: String,
     pub agent_name: String,
@@ -273,10 +353,10 @@ pub struct CreateChallengeRequest {
     pub summary: String,
 }
 
-/// Admin payload for publishing a bundle as a challenge version.
+/// Admin payload for publishing a bundle as a challenge.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct CreateChallengeVersionRequest {
+pub struct PublishChallengeRequest {
     pub bundle_path: String,
 }
 
@@ -285,6 +365,7 @@ pub struct CreateChallengeVersionRequest {
 pub struct EvaluationJobResponse {
     pub job_id: String,
     pub solution_submission_id: String,
+    pub round_id: String,
     pub benchmark_target_id: String,
     pub eval_type: String,
     pub status: String,

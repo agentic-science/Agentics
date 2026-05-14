@@ -5,7 +5,7 @@ use crate::error::{AppError, Result};
 use crate::models::challenge::ChallengeBundleSpec;
 use crate::models::evaluation::{EvaluationJobPayload, ScoringMode};
 
-use super::evaluation_policy::ensure_challenge_supports_eval_type;
+use super::evaluation_policy::ensure_challenge_round_supports_eval_type;
 
 /// Claimed or queued evaluation job with parsed runner payload.
 #[derive(Debug, Clone)]
@@ -13,7 +13,7 @@ pub struct EvaluationJobRecord {
     pub id: String,
     pub solution_submission_id: String,
     pub challenge_id: String,
-    pub challenge_version_id: String,
+    pub round_id: String,
     pub benchmark_target_id: String,
     pub eval_type: ScoringMode,
     pub status: String,
@@ -47,7 +47,7 @@ pub async fn claim_next_evaluation_job(
         SET status = 'running', claimed_at = NOW(), worker_id = $1, attempt_count = j.attempt_count + 1
         FROM next_job
         WHERE j.id = next_job.id
-        RETURNING j.id, j.solution_submission_id, j.challenge_id, j.challenge_version_id, j.benchmark_target_id, j.eval_type, j.status, j.attempt_count, j.payload_json
+        RETURNING j.id, j.solution_submission_id, j.challenge_id, j.round_id, j.benchmark_target_id, j.eval_type, j.status, j.attempt_count, j.payload_json
         "#
     )
     .bind(worker_id)
@@ -81,7 +81,7 @@ pub async fn claim_next_evaluation_job(
         id: r.try_get("id")?,
         solution_submission_id,
         challenge_id: r.try_get("challenge_id")?,
-        challenge_version_id: r.try_get("challenge_version_id")?,
+        round_id: r.try_get("round_id")?,
         benchmark_target_id: r.try_get("benchmark_target_id")?,
         eval_type,
         status: r.try_get("status")?,
@@ -146,7 +146,7 @@ pub struct QueueEvaluationJobInput {
 
 /// Queue an evaluation job for an existing solution submission.
 ///
-/// Official jobs are rejected when the challenge version does not enable private benchmark data.
+/// Official jobs are rejected when the challenge does not enable private benchmark data.
 /// Any queued re-run hides the solution submission until its completion path decides
 /// whether the result should become public.
 pub async fn queue_evaluation_job(
@@ -157,11 +157,12 @@ pub async fn queue_evaluation_job(
 
     let row = sqlx::query(
         r#"
-        SELECT s.id, s.challenge_id, s.challenge_version_id, s.benchmark_target_id, s.agent_id, s.artifact_path, s.visible_after_eval,
-               pv.bundle_path, pv.spec_json
+        SELECT s.id, s.challenge_id, s.round_id, s.benchmark_target_id, s.agent_id, s.artifact_path, s.visible_after_eval,
+               p.bundle_path, p.spec_json
         FROM solution_submissions s
-        JOIN challenge_versions pv ON pv.id = s.challenge_version_id
+        JOIN challenges p ON p.id = s.challenge_id
         WHERE s.id = $1
+          AND p.spec_json IS NOT NULL
         LIMIT 1
         "#
     )
@@ -174,14 +175,20 @@ pub async fn queue_evaluation_job(
     let spec: ChallengeBundleSpec =
         serde_json::from_value(spec_json).map_err(|e| AppError::Internal(e.to_string()))?;
 
+    let round_id: String = row.try_get("round_id")?;
     let benchmark_target_id: String = row.try_get("benchmark_target_id")?;
-    ensure_challenge_supports_eval_type(&spec, &benchmark_target_id, input.eval_type)?;
+    ensure_challenge_round_supports_eval_type(
+        &spec,
+        &round_id,
+        &benchmark_target_id,
+        input.eval_type,
+    )?;
 
     let payload = serde_json::to_value(EvaluationJobPayload {
         artifact_path: row.try_get("artifact_path")?,
         bundle_path: row.try_get("bundle_path")?,
         challenge_id: row.try_get("challenge_id")?,
-        challenge_version_id: row.try_get("challenge_version_id")?,
+        round_id: round_id.clone(),
         benchmark_target_id: benchmark_target_id.clone(),
     })
     .map_err(|e| AppError::Internal(e.to_string()))?;
@@ -195,14 +202,14 @@ pub async fn queue_evaluation_job(
 
     sqlx::query(
         r#"
-        INSERT INTO evaluation_jobs (id, solution_submission_id, challenge_id, challenge_version_id, benchmark_target_id, eval_type, status, priority, payload_json)
+        INSERT INTO evaluation_jobs (id, solution_submission_id, challenge_id, round_id, benchmark_target_id, eval_type, status, priority, payload_json)
         VALUES ($1, $2, $3, $4, $5, $6, 'queued', $7, $8)
         "#
     )
     .bind(&input.job_id)
     .bind(row.try_get::<String, _>("id")?)
     .bind(row.try_get::<String, _>("challenge_id")?)
-    .bind(row.try_get::<String, _>("challenge_version_id")?)
+    .bind(&round_id)
     .bind(&benchmark_target_id)
     .bind(eval_type_str)
     .bind(priority)
@@ -224,7 +231,7 @@ pub async fn queue_evaluation_job(
         id: input.job_id.clone(),
         solution_submission_id: row.try_get("id")?,
         challenge_id: row.try_get("challenge_id")?,
-        challenge_version_id: row.try_get("challenge_version_id")?,
+        round_id,
         benchmark_target_id,
         eval_type: input.eval_type,
         status: "queued".to_string(),

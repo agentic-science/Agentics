@@ -46,14 +46,12 @@ async fn admin_read_models_power_operator_console(pool: sqlx::PgPool) {
         .iter()
         .find(|item| item["id"] == "sample-sum")
         .expect("sample-sum should be seeded");
+    assert_eq!(sample_sum["benchmark_targets"][0]["id"], "linux-arm64-cpu");
     assert_eq!(
-        sample_sum["current_benchmark_targets"][0]["id"],
-        "linux-arm64-cpu"
-    );
-    assert_eq!(
-        sample_sum["current_benchmark_targets"][0]["validation_enabled"],
+        sample_sum["benchmark_targets"][0]["validation_enabled"],
         true
     );
+    assert_eq!(sample_sum["rounds"][0]["id"], "main");
     assert_eq!(sample_sum["private_benchmark_enabled"], true);
 
     let submissions: serde_json::Value = client
@@ -102,7 +100,7 @@ async fn admin_read_models_power_operator_console(pool: sqlx::PgPool) {
 }
 
 #[sqlx::test(migrations = "../migrations")]
-async fn create_challenge_and_publish_version(pool: sqlx::PgPool) {
+async fn create_challenge_and_publish_contract(pool: sqlx::PgPool) {
     let app = spawn_app(pool).await;
     let config = Config::from_env().expect("failed to load config");
 
@@ -129,9 +127,9 @@ async fn create_challenge_and_publish_version(pool: sqlx::PgPool) {
     assert_eq!(body["id"], "test-challenge");
     assert_eq!(body["title"], "Test Challenge");
 
-    // Publishing still validates bundle paths before writing a version row.
+    // Publishing still validates bundle paths before writing the benchmark contract.
     let response = reqwest::Client::new()
-        .post(api_url(&app, "/admin/challenges/test-challenge/versions"))
+        .post(api_url(&app, "/admin/challenges/test-challenge/publish"))
         .header(
             "Authorization",
             helpers::basic_auth_header(&config.admin_username, &config.admin_password),
@@ -147,7 +145,7 @@ async fn create_challenge_and_publish_version(pool: sqlx::PgPool) {
 }
 
 #[sqlx::test(migrations = "../migrations")]
-async fn publishing_version_updates_explicit_current_version(pool: sqlx::PgPool) {
+async fn publishing_contract_exposes_rounds(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let challenges = tempfile::tempdir().expect("failed to create challenge tempdir");
     let config = test_config(storage.path(), challenges.path());
@@ -155,19 +153,22 @@ async fn publishing_version_updates_explicit_current_version(pool: sqlx::PgPool)
     let auth = helpers::basic_auth_header(&config.admin_username, &config.admin_password);
     let client = reqwest::Client::new();
 
-    let v1 = challenges.path().join("current-pointer/v1");
-    let v2 = challenges.path().join("current-pointer/v2");
-    write_current_pointer_bundle(&v1, "v1");
-    write_current_pointer_bundle(&v2, "v2");
+    let bundle = challenges.path().join("published-contract/v1");
+    write_admin_publish_bundle(
+        &bundle,
+        "published-contract",
+        "Published Contract",
+        "Published contract summary",
+    );
 
     client
         .post(api_url(&app, "/admin/challenges"))
         .header("Authorization", &auth)
         .json(&serde_json::json!({
-            "id": "current-pointer",
-            "slug": "current-pointer",
-            "title": "Current Pointer",
-            "summary": "Current pointer challenge"
+            "id": "published-contract",
+            "slug": "published-contract",
+            "title": "Published Contract",
+            "summary": "Published contract challenge"
         }))
         .send()
         .await
@@ -175,20 +176,21 @@ async fn publishing_version_updates_explicit_current_version(pool: sqlx::PgPool)
         .error_for_status()
         .expect("challenge create should succeed");
 
-    for bundle in [&v1, &v2] {
-        client
-            .post(api_url(&app, "/admin/challenges/current-pointer/versions"))
-            .header("Authorization", &auth)
-            .json(&serde_json::json!({ "bundle_path": bundle.to_string_lossy() }))
-            .send()
-            .await
-            .expect("failed to publish version")
-            .error_for_status()
-            .expect("publish should succeed");
-    }
+    client
+        .post(api_url(
+            &app,
+            "/admin/challenges/published-contract/publish",
+        ))
+        .header("Authorization", &auth)
+        .json(&serde_json::json!({ "bundle_path": bundle.to_string_lossy() }))
+        .send()
+        .await
+        .expect("failed to publish contract")
+        .error_for_status()
+        .expect("publish should succeed");
 
     let public_challenge: serde_json::Value = client
-        .get(api_url(&app, "/api/public/challenges/current-pointer"))
+        .get(api_url(&app, "/api/public/challenges/published-contract"))
         .send()
         .await
         .expect("failed to fetch public challenge")
@@ -196,24 +198,20 @@ async fn publishing_version_updates_explicit_current_version(pool: sqlx::PgPool)
         .await
         .expect("failed to decode public challenge");
 
-    assert_eq!(public_challenge["current_version"]["version"], "v2");
-    assert_eq!(
-        public_challenge["current_version"]["id"],
-        "current-pointer:v2"
-    );
-    assert_eq!(public_challenge["summary"], "Current pointer challenge v2");
+    assert_eq!(public_challenge["rounds"][0]["id"], "main");
+    assert_eq!(public_challenge["summary"], "Published contract summary");
 
-    let current_version_id: String =
-        sqlx::query_scalar("SELECT current_version_id FROM challenges WHERE id = $1")
-            .bind("current-pointer")
+    let spec_json: serde_json::Value =
+        sqlx::query_scalar("SELECT spec_json FROM challenges WHERE id = $1")
+            .bind("published-contract")
             .fetch_one(&pool)
             .await
-            .expect("failed to query current version");
-    assert_eq!(current_version_id, "current-pointer:v2");
+            .expect("failed to query published contract");
+    assert_eq!(spec_json["rounds"][0]["id"], "main");
 }
 
 #[sqlx::test(migrations = "../migrations")]
-async fn publishing_existing_version_is_rejected_without_mutating_version(pool: sqlx::PgPool) {
+async fn publishing_existing_contract_is_rejected_without_mutating_it(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let challenges = tempfile::tempdir().expect("failed to create challenge tempdir");
     let config = test_config(storage.path(), challenges.path());
@@ -221,31 +219,29 @@ async fn publishing_existing_version_is_rejected_without_mutating_version(pool: 
     let auth = helpers::basic_auth_header(&config.admin_username, &config.admin_password);
     let client = reqwest::Client::new();
 
-    let original_bundle = challenges.path().join("immutable-version/original");
-    let replacement_bundle = challenges.path().join("immutable-version/replacement");
+    let original_bundle = challenges.path().join("immutable-challenge/original");
+    let replacement_bundle = challenges.path().join("immutable-challenge/replacement");
     write_admin_publish_bundle(
         &original_bundle,
-        "immutable-version",
-        "Immutable Version",
+        "immutable-challenge",
+        "Immutable Challenge",
         "Original summary",
-        "v1",
     );
     write_admin_publish_bundle(
         &replacement_bundle,
-        "immutable-version",
-        "Immutable Version",
+        "immutable-challenge",
+        "Immutable Challenge",
         "Replacement summary",
-        "v1",
     );
 
     client
         .post(api_url(&app, "/admin/challenges"))
         .header("Authorization", &auth)
         .json(&serde_json::json!({
-            "id": "immutable-version",
-            "slug": "immutable-version",
-            "title": "Immutable Version",
-            "summary": "Immutable version challenge"
+            "id": "immutable-challenge",
+            "slug": "immutable-challenge",
+            "title": "Immutable Challenge",
+            "summary": "Immutable challenge"
         }))
         .send()
         .await
@@ -256,34 +252,34 @@ async fn publishing_existing_version_is_rejected_without_mutating_version(pool: 
     client
         .post(api_url(
             &app,
-            "/admin/challenges/immutable-version/versions",
+            "/admin/challenges/immutable-challenge/publish",
         ))
         .header("Authorization", &auth)
         .json(&serde_json::json!({ "bundle_path": original_bundle.to_string_lossy() }))
         .send()
         .await
-        .expect("failed to publish original version")
+        .expect("failed to publish original contract")
         .error_for_status()
-        .expect("original publish should succeed");
+        .expect("original contract publish should succeed");
 
     let duplicate_response = client
         .post(api_url(
             &app,
-            "/admin/challenges/immutable-version/versions",
+            "/admin/challenges/immutable-challenge/publish",
         ))
         .header("Authorization", &auth)
         .json(&serde_json::json!({ "bundle_path": replacement_bundle.to_string_lossy() }))
         .send()
         .await
-        .expect("failed to publish duplicate version");
+        .expect("failed to publish duplicate contract");
     assert_eq!(duplicate_response.status(), reqwest::StatusCode::CONFLICT);
 
     let row: (String, serde_json::Value) =
-        sqlx::query_as("SELECT bundle_path, spec_json FROM challenge_versions WHERE id = $1")
-            .bind("immutable-version:v1")
+        sqlx::query_as("SELECT bundle_path, spec_json FROM challenges WHERE id = $1")
+            .bind("immutable-challenge")
             .fetch_one(&pool)
             .await
-            .expect("failed to query published version");
+            .expect("failed to query published contract");
 
     assert_ne!(row.0, original_bundle.to_string_lossy());
     assert!(
@@ -309,7 +305,7 @@ async fn publish_rejects_tag_only_images_when_digest_policy_is_enabled(pool: sql
     let auth = helpers::basic_auth_header(&config.admin_username, &config.admin_password);
 
     let response = reqwest::Client::new()
-        .post(api_url(&app, "/admin/challenges/sample-sum/versions"))
+        .post(api_url(&app, "/admin/challenges/sample-sum/publish"))
         .header("Authorization", auth)
         .json(&serde_json::json!({ "bundle_path": "sample-sum/v1" }))
         .send()
@@ -328,22 +324,11 @@ async fn publish_rejects_tag_only_images_when_digest_policy_is_enabled(pool: sql
     );
 }
 
-fn write_current_pointer_bundle(target: &std::path::Path, version: &str) {
-    write_admin_publish_bundle(
-        target,
-        "current-pointer",
-        "Current Pointer",
-        &format!("Current pointer challenge {version}"),
-        version,
-    );
-}
-
 fn write_admin_publish_bundle(
     target: &std::path::Path,
     challenge_id: &str,
     challenge_title: &str,
     challenge_summary: &str,
-    version: &str,
 ) {
     copy_dir_all(&examples_challenges_root().join("sample-sum/v1"), target);
     let spec_path = target.join("spec.json");
@@ -353,7 +338,6 @@ fn write_admin_publish_bundle(
     spec["challenge_id"] = serde_json::json!(challenge_id);
     spec["challenge_title"] = serde_json::json!(challenge_title);
     spec["challenge_summary"] = serde_json::json!(challenge_summary);
-    spec["challenge_version"] = serde_json::json!(version);
     std::fs::write(
         &spec_path,
         serde_json::to_string_pretty(&spec).expect("failed to serialize spec"),
@@ -525,6 +509,7 @@ async fn admin_official_run_bypasses_public_official_queue_limit(pool: sqlx::PgP
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
+            "round_id": "main",
             "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": helpers::solution_zip_base64(&helpers::sample_sum_solution("payload['a'] + payload['b']")),
             "explanation": "fills official queue"
@@ -539,6 +524,7 @@ async fn admin_official_run_bypasses_public_official_queue_limit(pool: sqlx::PgP
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
+            "round_id": "main",
             "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": helpers::solution_zip_base64(&helpers::sample_sum_solution("payload['a'] + payload['b']")),
             "explanation": "admin promotes this validation run"
@@ -558,6 +544,7 @@ async fn admin_official_run_bypasses_public_official_queue_limit(pool: sqlx::PgP
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
+            "round_id": "main",
             "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": "not-base64",
             "explanation": "public official run should still be rejected"

@@ -16,7 +16,7 @@ pub struct ChallengeCreationManifest {
     pub summary: String,
     pub readme_path: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub version: Option<ChallengeCreationVersionSpec>,
+    pub bundle_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub archive: Option<ChallengeArchiveRequestSpec>,
     #[serde(default)]
@@ -30,18 +30,7 @@ pub struct ChallengeCreationManifest {
 #[serde(rename_all = "snake_case")]
 pub enum ChallengeCreationRequestKind {
     NewChallenge,
-    NewVersion,
     ArchiveChallenge,
-}
-
-/// Version metadata for new-challenge and new-version requests.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct ChallengeCreationVersionSpec {
-    pub version: String,
-    pub bundle_path: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub supersedes_version: Option<String>,
 }
 
 /// Public archive request metadata.
@@ -211,7 +200,7 @@ pub struct ChallengeDraftResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub validation_repository_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub published_challenge_version_id: Option<String>,
+    pub published_challenge_id: Option<String>,
     #[serde(default)]
     pub private_assets: Vec<ChallengePrivateAssetResponse>,
     #[serde(default)]

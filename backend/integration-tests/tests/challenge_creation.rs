@@ -26,7 +26,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
     let public_repo = tempfile::tempdir().expect("public repo tempdir");
-    write_public_challenge(public_repo.path(), "new_challenge", "v1", None);
+    write_public_challenge(public_repo.path());
 
     let config = test_config(storage.path(), seeded_challenges.path());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
@@ -45,7 +45,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
         "commit_sha": "0123456789abcdef",
         "challenge_path": "challenges/sample-sum",
         "pr_author_github_user_id": 1001,
-        "manifest": manifest_json("new_challenge", "v1", None)
+        "manifest": manifest_json()
     }))
     .send()
     .await
@@ -189,10 +189,10 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
         .await
         .expect("published json");
     assert_eq!(published["status"], "published");
-    assert_eq!(published["published_challenge_version_id"], "sample-sum:v1");
+    assert_eq!(published["published_challenge_id"], "sample-sum");
     let bundle_path: String =
-        sqlx::query_scalar("SELECT bundle_path FROM challenge_versions WHERE id = $1")
-            .bind("sample-sum:v1")
+        sqlx::query_scalar("SELECT bundle_path FROM challenges WHERE id = $1")
+            .bind("sample-sum")
             .fetch_one(&pool)
             .await
             .expect("bundle path");
@@ -213,7 +213,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
         .json()
         .await
         .expect("public challenge json");
-    assert_eq!(public_challenge["current_version"]["version"], "v1");
+    assert_eq!(public_challenge["rounds"][0]["id"], "main");
 }
 
 #[sqlx::test(migrations = "../migrations")]
@@ -221,7 +221,7 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
     let public_repo = tempfile::tempdir().expect("public repo tempdir");
-    write_public_challenge(public_repo.path(), "new_challenge", "v1", None);
+    write_public_challenge(public_repo.path());
 
     let config = test_config(storage.path(), seeded_challenges.path());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
@@ -229,14 +229,7 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
     let creator = create_creator_session(&pool, 1001, "creator").await;
     let admin_auth = basic_auth_header(&config.admin_username, &config.admin_password);
 
-    let draft = create_draft(
-        &client,
-        &app,
-        &creator,
-        17,
-        manifest_json("new_challenge", "v1", None),
-    )
-    .await;
+    let draft = create_draft(&client, &app, &creator, 17, manifest_json()).await;
     let draft_id = draft["id"].as_str().expect("draft id");
 
     creator_auth(
@@ -285,7 +278,7 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
     write_file(
         &public_repo
             .path()
-            .join("challenges/sample-sum/versions/v1/statement.md"),
+            .join("challenges/sample-sum/v1/statement.md"),
         "# Sample Sum\n\nChanged after approval.\n",
     );
 
@@ -301,78 +294,58 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
         .expect("publish request");
     assert_eq!(publish_response.status(), reqwest::StatusCode::BAD_REQUEST);
 
-    let version_count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*)::BIGINT FROM challenge_versions WHERE id = $1")
-            .bind("sample-sum:v1")
-            .fetch_one(&pool)
-            .await
-            .expect("version count");
-    assert_eq!(version_count, 0);
+    let published_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::BIGINT FROM challenges WHERE id = $1 AND spec_json IS NOT NULL",
+    )
+    .bind("sample-sum")
+    .fetch_one(&pool)
+    .await
+    .expect("published count");
+    assert_eq!(published_count, 0);
 }
 
 #[sqlx::test(migrations = "../migrations")]
-async fn new_version_publish_supersedes_previous_current_version(pool: sqlx::PgPool) {
+async fn challenge_draft_rejects_new_version_manifest(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
-    let public_repo = tempfile::tempdir().expect("public repo tempdir");
-    write_public_challenge(public_repo.path(), "new_challenge", "v1", None);
-
     let config = test_config(storage.path(), seeded_challenges.path());
-    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let app = spawn_app_with_config(pool.clone(), config).await;
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
-    let admin_auth = basic_auth_header(&config.admin_username, &config.admin_password);
 
-    create_validate_approve_publish_draft(
-        &client,
-        &app,
+    let response = creator_auth(
+        client.post(api_url(&app, "/api/creator/challenge-drafts")),
         &creator,
-        &admin_auth,
-        public_repo.path(),
-        21,
-        manifest_json("new_challenge", "v1", None),
     )
-    .await;
-
-    write_public_challenge(public_repo.path(), "new_version", "v2", Some("v1"));
-    let published_v2 = create_validate_approve_publish_draft(
-        &client,
-        &app,
-        &creator,
-        &admin_auth,
-        public_repo.path(),
-        22,
-        manifest_json("new_version", "v2", Some("v1")),
-    )
-    .await;
-
-    assert_eq!(
-        published_v2["published_challenge_version_id"],
-        "sample-sum:v2"
-    );
-
-    let versions = sqlx::query_as::<_, (String, String)>(
-        "SELECT version, status FROM challenge_versions WHERE challenge_id = $1 ORDER BY version",
-    )
-    .bind("sample-sum")
-    .fetch_all(&pool)
+    .json(&json!({
+        "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
+        "pr_number": 22,
+        "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/22",
+        "commit_sha": "0123456789abcde22",
+        "challenge_path": "challenges/sample-sum",
+        "pr_author_github_user_id": 1001,
+        "manifest": {
+            "schema_version": 1,
+            "request": "new_version",
+            "challenge_id": "sample-sum",
+            "title": "Sample Sum",
+            "summary": "Add numbers",
+            "readme_path": "README.md",
+            "version": {
+                "version": "v2",
+                "bundle_path": "v2",
+                "supersedes_version": "v1"
+            }
+        }
+    }))
+    .send()
     .await
-    .expect("version statuses");
+    .expect("new_version draft request");
     assert_eq!(
-        versions,
-        vec![
-            ("v1".to_string(), "superseded".to_string()),
-            ("v2".to_string(), "published".to_string())
-        ]
-    );
-
-    let current_version_id: String =
-        sqlx::query_scalar("SELECT current_version_id FROM challenges WHERE id = $1")
-            .bind("sample-sum")
-            .fetch_one(&pool)
-            .await
-            .expect("current version");
-    assert_eq!(current_version_id, "sample-sum:v2");
+        response.status(),
+        reqwest::StatusCode::BAD_REQUEST,
+        "new_version manifests are no longer accepted"
+    )
 }
 
 #[sqlx::test(migrations = "../migrations")]
@@ -380,7 +353,7 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
     let public_repo = tempfile::tempdir().expect("public repo tempdir");
-    write_public_challenge(public_repo.path(), "new_challenge", "v1", None);
+    write_public_challenge(public_repo.path());
 
     let config = test_config(storage.path(), seeded_challenges.path());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
@@ -397,7 +370,7 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
         &admin_auth,
         public_repo.path(),
         31,
-        manifest_json("new_challenge", "v1", None),
+        manifest_json(),
     )
     .await;
 
@@ -444,6 +417,7 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
         .header("Authorization", participant_bearer)
         .json(&json!({
             "challenge_id": "sample-sum",
+            "round_id": "main",
             "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"))
         }))
@@ -473,7 +447,7 @@ async fn challenge_draft_rejects_mismatched_pr_author(pool: sqlx::PgPool) {
         "commit_sha": "0123456789abcdef",
         "challenge_path": "challenges/sample-sum",
         "pr_author_github_user_id": 2002,
-        "manifest": manifest_json("new_challenge", "v1", None)
+        "manifest": manifest_json()
     }))
     .send()
     .await
@@ -500,7 +474,7 @@ async fn challenge_creator_routes_require_oauth_session_and_csrf(pool: sqlx::PgP
             "commit_sha": "0123456789abcdef",
             "challenge_path": "challenges/sample-sum",
             "pr_author_github_user_id": 1001,
-            "manifest": manifest_json("new_challenge", "v1", None)
+            "manifest": manifest_json()
         }))
         .send()
         .await
@@ -517,7 +491,7 @@ async fn challenge_creator_routes_require_oauth_session_and_csrf(pool: sqlx::PgP
             "commit_sha": "0123456789abcdef",
             "challenge_path": "challenges/sample-sum",
             "pr_author_github_user_id": 1001,
-            "manifest": manifest_json("new_challenge", "v1", None)
+            "manifest": manifest_json()
         }))
         .send()
         .await
@@ -557,7 +531,7 @@ async fn private_asset_upload_rejects_duplicate_asset_id(pool: sqlx::PgPool) {
         "commit_sha": "0123456789abcdef",
         "challenge_path": "challenges/sample-sum",
         "pr_author_github_user_id": 1001,
-        "manifest": manifest_json("new_challenge", "v1", None)
+        "manifest": manifest_json()
     }))
     .send()
     .await
@@ -623,7 +597,7 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
 
-    let mut manifest = manifest_json("new_challenge", "v1", None);
+    let mut manifest = manifest_json();
     manifest["private_assets"] = json!([
         {
             "asset_id": "official-cases-a",
@@ -727,7 +701,7 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
     let public_repo = tempfile::tempdir().expect("public repo tempdir");
-    write_public_challenge(public_repo.path(), "new_challenge", "v1", None);
+    write_public_challenge(public_repo.path());
 
     let mut config = test_config(storage.path(), seeded_challenges.path());
     config.max_active_challenge_drafts_per_agent = 1;
@@ -738,14 +712,7 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
     let creator = create_creator_session(&pool, 1001, "creator").await;
     let admin_auth = basic_auth_header(&config.admin_username, &config.admin_password);
 
-    let draft: serde_json::Value = create_draft(
-        &client,
-        &app,
-        &creator,
-        41,
-        manifest_json("new_challenge", "v1", None),
-    )
-    .await;
+    let draft: serde_json::Value = create_draft(&client, &app, &creator, 41, manifest_json()).await;
     let draft_id = draft["id"].as_str().expect("draft id");
 
     let quota_response = creator_auth(
@@ -759,7 +726,7 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
         "commit_sha": "0123456789abcde42",
         "challenge_path": "challenges/sample-sum",
         "pr_author_github_user_id": 1001,
-        "manifest": manifest_json("new_challenge", "v1", None)
+        "manifest": manifest_json()
     }))
     .send()
     .await
@@ -825,14 +792,7 @@ async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
     let creator = create_creator_session(&pool, 1001, "creator").await;
     let admin_auth = basic_auth_header(&config.admin_username, &config.admin_password);
 
-    let draft = create_draft(
-        &client,
-        &app,
-        &creator,
-        51,
-        manifest_json("new_challenge", "v1", None),
-    )
-    .await;
+    let draft = create_draft(&client, &app, &creator, 51, manifest_json()).await;
     let draft_id = draft["id"].as_str().expect("draft id");
 
     let asset: serde_json::Value = creator_auth(
@@ -1016,22 +976,13 @@ async fn register_agent(pool: &sqlx::PgPool, name: &str) -> String {
     token
 }
 
-fn write_public_challenge(
-    repo: &Path,
-    request: &str,
-    version: &str,
-    supersedes_version: Option<&str>,
-) {
+fn write_public_challenge(repo: &Path) {
     let challenge_root = repo.join("challenges/sample-sum");
-    std::fs::create_dir_all(challenge_root.join(format!("versions/{version}/public")))
-        .expect("public dir");
+    std::fs::create_dir_all(challenge_root.join("v1/public")).expect("public dir");
     write_file(&challenge_root.join("README.md"), "# Sample Sum\n");
+    write_file(&challenge_root.join("v1/statement.md"), "# Sample Sum\n");
     write_file(
-        &challenge_root.join(format!("versions/{version}/statement.md")),
-        "# Sample Sum\n",
-    );
-    write_file(
-        &challenge_root.join(format!("versions/{version}/public/runs.json")),
+        &challenge_root.join("v1/public/runs.json"),
         &json!({
             "runs": [
                 {
@@ -1045,18 +996,14 @@ fn write_public_challenge(
         })
         .to_string(),
     );
+    write_file(&challenge_root.join("v1/scorer/run.py"), SAMPLE_SUM_SCORER);
     write_file(
-        &challenge_root.join(format!("versions/{version}/scorer/run.py")),
-        SAMPLE_SUM_SCORER,
-    );
-    write_file(
-        &challenge_root.join(format!("versions/{version}/spec.json")),
+        &challenge_root.join("v1/spec.json"),
         &json!({
             "schema_version": 1,
             "challenge_id": "sample-sum",
             "challenge_title": "Sample Sum",
             "challenge_summary": "Add numbers",
-            "challenge_version": version,
             "solution": {
                 "protocol": "zip_project",
                 "manifest_file": "agentics.solution.json"
@@ -1084,6 +1031,19 @@ fn write_public_challenge(
                         "run_network_access": "disabled",
                         "scorer_network_access": "disabled"
                     }
+                }
+            ],
+            "rounds": [
+                {
+                    "id": "main",
+                    "title": "Main Round",
+                    "eligibility": { "type": "open" },
+                    "visibility": {
+                        "leaderboard": "public_live",
+                        "score_distribution": "public_live",
+                        "result_detail": "submitter_live_public_after_close"
+                    },
+                    "solution_publication": "submitter_opt_in"
                 }
             ],
             "execution": {
@@ -1115,7 +1075,7 @@ fn write_public_challenge(
     );
     write_file(
         &challenge_root.join("agentics.challenge.json"),
-        &manifest_json(request, version, supersedes_version).to_string(),
+        &manifest_json().to_string(),
     );
 }
 
@@ -1127,27 +1087,15 @@ fn write_archive_manifest(repo: &Path) {
     );
 }
 
-fn manifest_json(
-    request: &str,
-    version: &str,
-    supersedes_version: Option<&str>,
-) -> serde_json::Value {
-    let mut version_json = json!({
-        "version": version,
-        "bundle_path": format!("versions/{version}")
-    });
-    if let Some(supersedes_version) = supersedes_version {
-        version_json["supersedes_version"] = json!(supersedes_version);
-    }
-
+fn manifest_json() -> serde_json::Value {
     json!({
         "schema_version": 1,
-        "request": request,
+        "request": "new_challenge",
         "challenge_id": "sample-sum",
         "title": "Sample Sum",
         "summary": "Add numbers",
         "readme_path": "README.md",
-        "version": version_json,
+        "bundle_path": "v1",
         "private_assets": [
             {
                 "asset_id": "official-cases",

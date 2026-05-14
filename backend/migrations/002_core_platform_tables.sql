@@ -5,6 +5,8 @@ CREATE TABLE IF NOT EXISTS agents (
   owner TEXT NOT NULL DEFAULT '',
   model_info JSONB NOT NULL DEFAULT '{}'::jsonb,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
+  github_user_id BIGINT UNIQUE,
+  github_login TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -22,32 +24,39 @@ CREATE TABLE IF NOT EXISTS challenges (
   slug TEXT NOT NULL UNIQUE,
   title TEXT NOT NULL,
   summary TEXT NOT NULL DEFAULT '',
+  bundle_path TEXT,
+  statement_path TEXT,
+  spec_json JSONB,
   status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'archived')),
-  current_version_id TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS challenge_versions (
-  id TEXT PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS challenge_rounds (
   challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
-  version TEXT NOT NULL,
-  bundle_path TEXT NOT NULL,
-  statement_path TEXT NOT NULL,
-  spec_json JSONB NOT NULL,
-  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'archived')),
+  round_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  opens_at TIMESTAMPTZ,
+  closes_at TIMESTAMPTZ,
+  eligibility_policy_json JSONB NOT NULL DEFAULT '{"type":"open"}'::jsonb,
+  validation_submission_limit BIGINT,
+  official_submission_limit BIGINT,
+  leaderboard_visibility TEXT NOT NULL CHECK (leaderboard_visibility IN ('public_live', 'public_after_close', 'hidden')),
+  score_distribution_visibility TEXT NOT NULL CHECK (score_distribution_visibility IN ('public_live', 'public_after_close', 'hidden')),
+  result_detail_visibility TEXT NOT NULL CHECK (result_detail_visibility IN ('submitter_live_public_live', 'submitter_live_public_after_close', 'submitter_only')),
+  solution_publication_policy TEXT NOT NULL CHECK (solution_publication_policy IN ('private', 'submitter_opt_in', 'public_after_close')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (challenge_id, version)
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (challenge_id, round_id),
+  CHECK (validation_submission_limit IS NULL OR validation_submission_limit > 0),
+  CHECK (official_submission_limit IS NULL OR official_submission_limit > 0),
+  CHECK (opens_at IS NULL OR closes_at IS NULL OR closes_at > opens_at)
 );
-
-ALTER TABLE challenges
-  ADD CONSTRAINT challenges_current_version_id_fkey
-  FOREIGN KEY (current_version_id) REFERENCES challenge_versions(id) ON DELETE SET NULL;
 
 CREATE TABLE IF NOT EXISTS solution_submissions (
   id TEXT PRIMARY KEY,
   challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE RESTRICT,
-  challenge_version_id TEXT NOT NULL REFERENCES challenge_versions(id) ON DELETE RESTRICT,
+  round_id TEXT NOT NULL,
   benchmark_target_id TEXT NOT NULL,
   agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
   artifact_path TEXT NOT NULL,
@@ -58,14 +67,15 @@ CREATE TABLE IF NOT EXISTS solution_submissions (
   credit_text TEXT NOT NULL DEFAULT '',
   visible_after_eval BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  FOREIGN KEY (challenge_id, round_id) REFERENCES challenge_rounds(challenge_id, round_id) ON DELETE RESTRICT
 );
 
 CREATE TABLE IF NOT EXISTS evaluation_jobs (
   id TEXT PRIMARY KEY,
   solution_submission_id TEXT NOT NULL REFERENCES solution_submissions(id) ON DELETE CASCADE,
   challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE RESTRICT,
-  challenge_version_id TEXT NOT NULL REFERENCES challenge_versions(id) ON DELETE RESTRICT,
+  round_id TEXT NOT NULL,
   benchmark_target_id TEXT NOT NULL,
   eval_type TEXT NOT NULL CHECK (eval_type IN ('validation', 'official')),
   status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'completed', 'failed')),
@@ -78,17 +88,22 @@ CREATE TABLE IF NOT EXISTS evaluation_jobs (
   finished_at TIMESTAMPTZ,
   last_error TEXT,
   worker_id TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  FOREIGN KEY (challenge_id, round_id) REFERENCES challenge_rounds(challenge_id, round_id) ON DELETE RESTRICT
 );
 
 CREATE TABLE IF NOT EXISTS evaluations (
   id TEXT PRIMARY KEY,
   solution_submission_id TEXT NOT NULL REFERENCES solution_submissions(id) ON DELETE CASCADE,
   job_id TEXT NOT NULL REFERENCES evaluation_jobs(id) ON DELETE CASCADE UNIQUE,
+  round_id TEXT NOT NULL,
   benchmark_target_id TEXT NOT NULL,
   eval_type TEXT NOT NULL CHECK (eval_type IN ('validation', 'official')),
   status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'completed', 'failed')),
   primary_score DOUBLE PRECISION,
+  rank_score DOUBLE PRECISION,
+  aggregate_metrics_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  run_metrics_json JSONB NOT NULL DEFAULT '[]'::jsonb,
   public_results_json JSONB,
   validation_summary_json JSONB,
   official_summary_json JSONB,
@@ -100,14 +115,18 @@ CREATE TABLE IF NOT EXISTS evaluations (
 
 CREATE TABLE IF NOT EXISTS leaderboard_entries (
   challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
+  round_id TEXT NOT NULL,
   benchmark_target_id TEXT NOT NULL,
   agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
   best_solution_submission_id TEXT NOT NULL REFERENCES solution_submissions(id) ON DELETE CASCADE,
   best_rank_score DOUBLE PRECISION NOT NULL DEFAULT 0,
   public_results_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  aggregate_metrics_json JSONB NOT NULL DEFAULT '[]'::jsonb,
   official_score DOUBLE PRECISION,
+  official_metrics_json JSONB NOT NULL DEFAULT '[]'::jsonb,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (challenge_id, benchmark_target_id, agent_id)
+  PRIMARY KEY (challenge_id, round_id, benchmark_target_id, agent_id),
+  FOREIGN KEY (challenge_id, round_id) REFERENCES challenge_rounds(challenge_id, round_id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS discussion_threads (
@@ -130,9 +149,9 @@ CREATE TABLE IF NOT EXISTS discussion_replies (
 );
 
 CREATE INDEX IF NOT EXISTS idx_agent_tokens_agent_id ON agent_tokens (agent_id);
-CREATE INDEX IF NOT EXISTS idx_challenge_versions_challenge_id ON challenge_versions (challenge_id);
-CREATE INDEX IF NOT EXISTS idx_solution_submissions_challenge_agent ON solution_submissions (challenge_id, benchmark_target_id, agent_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_solution_submissions_challenge_version ON solution_submissions (challenge_version_id, benchmark_target_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_challenge_rounds_challenge_id ON challenge_rounds (challenge_id, round_id);
+CREATE INDEX IF NOT EXISTS idx_solution_submissions_challenge_round_agent
+  ON solution_submissions (challenge_id, round_id, benchmark_target_id, agent_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_evaluation_jobs_status_scheduled ON evaluation_jobs (status, scheduled_at, priority DESC);
 CREATE INDEX IF NOT EXISTS idx_evaluation_jobs_solution_submission_id ON evaluation_jobs (solution_submission_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_evaluation_jobs_one_active_per_submission_mode

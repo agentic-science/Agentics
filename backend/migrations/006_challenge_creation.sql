@@ -1,11 +1,7 @@
-ALTER TABLE agents
-  ADD COLUMN IF NOT EXISTS github_user_id BIGINT UNIQUE,
-  ADD COLUMN IF NOT EXISTS github_login TEXT;
-
 CREATE TABLE IF NOT EXISTS challenge_drafts (
   id TEXT PRIMARY KEY,
   challenge_id TEXT NOT NULL,
-  request_kind TEXT NOT NULL CHECK (request_kind IN ('new_challenge', 'new_version', 'archive_challenge')),
+  request_kind TEXT NOT NULL CHECK (request_kind IN ('new_challenge', 'archive_challenge')),
   status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'validated', 'approved', 'rejected', 'published', 'abandoned')),
   creator_agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
   creator_github_user_id BIGINT NOT NULL,
@@ -19,7 +15,7 @@ CREATE TABLE IF NOT EXISTS challenge_drafts (
   manifest_json JSONB NOT NULL,
   validation_message TEXT,
   validation_repository_path TEXT,
-  published_challenge_version_id TEXT REFERENCES challenge_versions(id) ON DELETE SET NULL,
+  published_challenge_id TEXT REFERENCES challenges(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (repo_url, pr_number, challenge_path)

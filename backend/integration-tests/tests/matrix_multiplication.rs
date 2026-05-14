@@ -144,6 +144,7 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {participant_token}"))
         .json(&serde_json::json!({
             "challenge_id": "matrix-multiplication",
+            "round_id": "main",
             "benchmark_target_id": target_id,
             "artifact_base64": matrix_multiplication_solution_zip_base64(),
             "explanation": "C baseline for matrix multiplication"

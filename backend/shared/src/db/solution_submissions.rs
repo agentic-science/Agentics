@@ -12,7 +12,7 @@ use crate::models::request::AdminSolutionSubmissionListItemDto;
 use crate::models::request::PublicSolutionSubmissionListItemDto;
 
 use super::challenges::get_published_challenge;
-use super::evaluation_policy::ensure_challenge_supports_eval_type;
+use super::evaluation_policy::ensure_challenge_round_supports_eval_type;
 use super::json::decode_optional_json;
 
 /// Input for creating a solution submission and its initial evaluation job.
@@ -22,6 +22,7 @@ pub struct CreateSolutionSubmissionInput {
     pub job_id: String,
     pub agent_id: String,
     pub challenge_id: String,
+    pub round_id: String,
     pub benchmark_target_id: String,
     pub artifact_path: String,
     pub language: String,
@@ -46,7 +47,7 @@ pub struct SolutionSubmissionQuotaAdmission {
 pub struct SolutionSubmissionRecord {
     pub id: String,
     pub challenge_id: String,
-    pub challenge_version_id: String,
+    pub round_id: String,
     pub benchmark_target_id: String,
     pub agent_id: String,
     pub agent_name: Option<String>,
@@ -77,7 +78,12 @@ pub async fn create_solution_submission_with_job(
         challenge.ok_or_else(|| AppError::BadRequest("challenge not found".to_string()))?;
     let spec: ChallengeBundleSpec = serde_json::from_value(challenge.spec_json.clone())
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    ensure_challenge_supports_eval_type(&spec, &input.benchmark_target_id, input.eval_type)?;
+    ensure_challenge_round_supports_eval_type(
+        &spec,
+        &input.round_id,
+        &input.benchmark_target_id,
+        input.eval_type,
+    )?;
 
     let mut tx = pool.begin().await?;
     enforce_quota_admission(&mut tx, input).await?;
@@ -85,19 +91,19 @@ pub async fn create_solution_submission_with_job(
     let row = sqlx::query(
         r#"
         INSERT INTO solution_submissions (
-            id, challenge_id, challenge_version_id, benchmark_target_id, agent_id, artifact_path, language,
+            id, challenge_id, round_id, benchmark_target_id, agent_id, artifact_path, language,
             status, explanation, parent_solution_submission_id, credit_text, visible_after_eval
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, 'queued', $8, $9, $10, FALSE)
         RETURNING
-            id, challenge_id, challenge_version_id, benchmark_target_id, agent_id, artifact_path, language,
+            id, challenge_id, round_id, benchmark_target_id, agent_id, artifact_path, language,
             status, explanation, parent_solution_submission_id, credit_text, visible_after_eval,
             created_at, updated_at
         "#,
     )
     .bind(&input.solution_submission_id)
     .bind(&challenge.challenge_id)
-    .bind(&challenge.challenge_version_id)
+    .bind(&input.round_id)
     .bind(&input.benchmark_target_id)
     .bind(&input.agent_id)
     .bind(&input.artifact_path)
@@ -112,7 +118,7 @@ pub async fn create_solution_submission_with_job(
         artifact_path: input.artifact_path.clone(),
         bundle_path: challenge.bundle_path.clone(),
         challenge_id: challenge.challenge_id.clone(),
-        challenge_version_id: challenge.challenge_version_id.clone(),
+        round_id: input.round_id.clone(),
         benchmark_target_id: input.benchmark_target_id.clone(),
     })
     .map_err(|e| AppError::Internal(e.to_string()))?;
@@ -126,7 +132,7 @@ pub async fn create_solution_submission_with_job(
     sqlx::query(
         r#"
         INSERT INTO evaluation_jobs (
-            id, solution_submission_id, challenge_id, challenge_version_id, benchmark_target_id, eval_type, status, priority, payload_json, scheduled_at
+            id, solution_submission_id, challenge_id, round_id, benchmark_target_id, eval_type, status, priority, payload_json, scheduled_at
         )
         VALUES (
             $1, $2, $3, $4, $5, $6, 'queued', $7, $8,
@@ -140,7 +146,7 @@ pub async fn create_solution_submission_with_job(
     .bind(&input.job_id)
     .bind(&input.solution_submission_id)
     .bind(&challenge.challenge_id)
-    .bind(&challenge.challenge_version_id)
+    .bind(&input.round_id)
     .bind(&input.benchmark_target_id)
     .bind(input.eval_type.as_str())
     .bind(priority)
@@ -154,7 +160,7 @@ pub async fn create_solution_submission_with_job(
     Ok(SolutionSubmissionRecord {
         id: row.try_get("id")?,
         challenge_id: row.try_get("challenge_id")?,
-        challenge_version_id: row.try_get("challenge_version_id")?,
+        round_id: row.try_get("round_id")?,
         benchmark_target_id: row.try_get("benchmark_target_id")?,
         agent_id: row.try_get("agent_id")?,
         agent_name: None,
@@ -191,9 +197,10 @@ async fn enforce_quota_admission(
     input: &CreateSolutionSubmissionInput,
 ) -> Result<()> {
     let mut scopes = vec![format!(
-        "agent:{}:challenge:{}:target:{}:mode:{}:daily",
+        "agent:{}:challenge:{}:round:{}:target:{}:mode:{}:daily",
         input.agent_id,
         input.challenge_id,
+        input.round_id,
         input.benchmark_target_id,
         input.eval_type.as_str()
     )];
@@ -210,6 +217,7 @@ async fn enforce_quota_admission(
         tx,
         &input.agent_id,
         &input.challenge_id,
+        &input.round_id,
         &input.benchmark_target_id,
         input.eval_type,
         input.quota_admission.window_seconds,
@@ -269,6 +277,7 @@ async fn count_recent_runs_for_agent_challenge_tx(
     tx: &mut Transaction<'_, Postgres>,
     agent_id: &str,
     challenge_id: &str,
+    round_id: &str,
     benchmark_target_id: &str,
     eval_type: ScoringMode,
     window_seconds: i64,
@@ -280,13 +289,15 @@ async fn count_recent_runs_for_agent_challenge_tx(
         JOIN evaluation_jobs j ON j.solution_submission_id = s.id
         WHERE s.agent_id = $1
           AND s.challenge_id = $2
-          AND s.benchmark_target_id = $3
-          AND j.eval_type = $4
-          AND s.created_at >= NOW() - ($5::DOUBLE PRECISION * INTERVAL '1 second')
+          AND s.round_id = $3
+          AND s.benchmark_target_id = $4
+          AND j.eval_type = $5
+          AND s.created_at >= NOW() - ($6::DOUBLE PRECISION * INTERVAL '1 second')
         "#,
     )
     .bind(agent_id)
     .bind(challenge_id)
+    .bind(round_id)
     .bind(benchmark_target_id)
     .bind(eval_type.as_str())
     .bind(window_seconds)
@@ -323,13 +334,14 @@ pub async fn get_solution_submission_by_id(
     let row = sqlx::query(
         r#"
         SELECT
-            s.id, s.challenge_id, s.challenge_version_id, s.benchmark_target_id, s.agent_id,
+            s.id, s.challenge_id, s.round_id, s.benchmark_target_id, s.agent_id,
             p.title AS challenge_title, a.name AS agent_name,
             s.artifact_path, s.language, s.status, s.explanation,
             s.parent_solution_submission_id, s.credit_text, s.visible_after_eval,
             s.created_at, s.updated_at,
             j.id AS latest_job_id, j.status AS latest_job_status,
             pe.id AS validation_eval_id,
+            pe.round_id AS validation_eval_round_id,
             pe.benchmark_target_id AS validation_eval_benchmark_target_id,
             pe.status AS validation_eval_status,
             pe.eval_type AS validation_eval_eval_type,
@@ -344,6 +356,7 @@ pub async fn get_solution_submission_by_id(
             pe.started_at AS validation_eval_started_at,
             pe.finished_at AS validation_eval_finished_at,
             oe.id AS official_eval_id,
+            oe.round_id AS official_eval_round_id,
             oe.benchmark_target_id AS official_eval_benchmark_target_id,
             oe.status AS official_eval_status,
             oe.eval_type AS official_eval_eval_type,
@@ -364,12 +377,12 @@ pub async fn get_solution_submission_by_id(
             SELECT id, status FROM evaluation_jobs WHERE solution_submission_id = s.id ORDER BY created_at DESC LIMIT 1
         ) j ON TRUE
         LEFT JOIN LATERAL (
-            SELECT id, benchmark_target_id, status, eval_type, primary_score, rank_score, aggregate_metrics_json, run_metrics_json, public_results_json, validation_summary_json, official_summary_json, log_path, started_at, finished_at
-            FROM evaluations WHERE solution_submission_id = s.id AND eval_type = 'validation' AND benchmark_target_id = s.benchmark_target_id ORDER BY created_at DESC LIMIT 1
+            SELECT id, round_id, benchmark_target_id, status, eval_type, primary_score, rank_score, aggregate_metrics_json, run_metrics_json, public_results_json, validation_summary_json, official_summary_json, log_path, started_at, finished_at
+            FROM evaluations WHERE solution_submission_id = s.id AND eval_type = 'validation' AND round_id = s.round_id AND benchmark_target_id = s.benchmark_target_id ORDER BY created_at DESC LIMIT 1
         ) pe ON TRUE
         LEFT JOIN LATERAL (
-            SELECT id, benchmark_target_id, status, eval_type, primary_score, rank_score, aggregate_metrics_json, run_metrics_json, public_results_json, validation_summary_json, official_summary_json, log_path, started_at, finished_at
-            FROM evaluations WHERE solution_submission_id = s.id AND eval_type = 'official' AND benchmark_target_id = s.benchmark_target_id ORDER BY created_at DESC LIMIT 1
+            SELECT id, round_id, benchmark_target_id, status, eval_type, primary_score, rank_score, aggregate_metrics_json, run_metrics_json, public_results_json, validation_summary_json, official_summary_json, log_path, started_at, finished_at
+            FROM evaluations WHERE solution_submission_id = s.id AND eval_type = 'official' AND round_id = s.round_id AND benchmark_target_id = s.benchmark_target_id ORDER BY created_at DESC LIMIT 1
         ) oe ON TRUE
         WHERE s.id = $1
         LIMIT 1
@@ -389,7 +402,7 @@ pub async fn get_solution_submission_by_id(
     Ok(Some(SolutionSubmissionRecord {
         id: r.try_get("id")?,
         challenge_id: r.try_get("challenge_id")?,
-        challenge_version_id: r.try_get("challenge_version_id")?,
+        round_id: r.try_get("round_id")?,
         benchmark_target_id: r.try_get("benchmark_target_id")?,
         agent_id: r.try_get("agent_id")?,
         agent_name: r.try_get::<Option<String>, _>("agent_name")?,
@@ -422,6 +435,7 @@ pub async fn list_admin_solution_submissions(
         SELECT
             s.id,
             s.challenge_id,
+            s.round_id,
             s.benchmark_target_id,
             p.title AS challenge_title,
             s.agent_id,
@@ -449,14 +463,14 @@ pub async fn list_admin_solution_submissions(
         LEFT JOIN LATERAL (
             SELECT status
             FROM evaluations
-            WHERE solution_submission_id = s.id AND eval_type = 'validation'
+            WHERE solution_submission_id = s.id AND eval_type = 'validation' AND round_id = s.round_id
             ORDER BY created_at DESC
             LIMIT 1
         ) ve ON TRUE
         LEFT JOIN LATERAL (
             SELECT status, rank_score
             FROM evaluations
-            WHERE solution_submission_id = s.id AND eval_type = 'official'
+            WHERE solution_submission_id = s.id AND eval_type = 'official' AND round_id = s.round_id
             ORDER BY created_at DESC
             LIMIT 1
         ) oe ON TRUE
@@ -474,6 +488,7 @@ pub async fn list_admin_solution_submissions(
                 id: r.try_get("id")?,
                 challenge_id: r.try_get("challenge_id")?,
                 challenge_title: r.try_get("challenge_title")?,
+                round_id: r.try_get("round_id")?,
                 benchmark_target_id: r.try_get("benchmark_target_id")?,
                 agent_id: r.try_get("agent_id")?,
                 agent_name: r.try_get("agent_name")?,
@@ -501,7 +516,7 @@ pub async fn list_public_solution_submissions_for_challenge(
     let rows = sqlx::query(
         r#"
         SELECT
-            s.id, s.challenge_id, s.challenge_version_id, s.benchmark_target_id, p.title AS challenge_title,
+            s.id, s.challenge_id, s.round_id, s.benchmark_target_id, p.title AS challenge_title,
             s.agent_id, a.name AS agent_name, s.status, s.explanation,
             s.parent_solution_submission_id, s.credit_text, s.created_at, s.updated_at,
             COALESCE(pe.primary_score, (pe.validation_summary_json->>'score')::double precision) AS validation_score,
@@ -515,13 +530,13 @@ pub async fn list_public_solution_submissions_for_challenge(
         LEFT JOIN LATERAL (
             SELECT primary_score, rank_score, aggregate_metrics_json, validation_summary_json
             FROM evaluations
-            WHERE solution_submission_id = s.id AND eval_type = 'validation' AND status = 'completed' AND benchmark_target_id = s.benchmark_target_id
+            WHERE solution_submission_id = s.id AND eval_type = 'validation' AND status = 'completed' AND round_id = s.round_id AND benchmark_target_id = s.benchmark_target_id
             ORDER BY created_at DESC LIMIT 1
         ) pe ON TRUE
         LEFT JOIN LATERAL (
             SELECT primary_score, rank_score, aggregate_metrics_json, official_summary_json
             FROM evaluations
-            WHERE solution_submission_id = s.id AND eval_type = 'official' AND status = 'completed' AND benchmark_target_id = s.benchmark_target_id
+            WHERE solution_submission_id = s.id AND eval_type = 'official' AND status = 'completed' AND round_id = s.round_id AND benchmark_target_id = s.benchmark_target_id
             ORDER BY created_at DESC LIMIT 1
         ) oe ON TRUE
         WHERE (p.id = $1 OR p.slug = $1)
@@ -551,7 +566,7 @@ pub async fn list_public_solution_submissions_for_challenge(
             Ok(PublicSolutionSubmissionListItemDto {
                 id: r.try_get("id")?,
                 challenge_id: r.try_get("challenge_id")?,
-                challenge_version_id: r.try_get("challenge_version_id")?,
+                round_id: r.try_get("round_id")?,
                 benchmark_target_id: r.try_get("benchmark_target_id")?,
                 challenge_title: r.try_get("challenge_title")?,
                 agent_id: r.try_get("agent_id")?,
@@ -581,6 +596,7 @@ fn parse_eval_from_row(row: &sqlx::postgres::PgRow, prefix: &str) -> Result<Opti
         _ => return Ok(None),
     };
     let status_str: String = row.try_get(format!("{}_status", prefix).as_str())?;
+    let round_id: String = row.try_get(format!("{}_round_id", prefix).as_str())?;
     let benchmark_target_id: String =
         row.try_get(format!("{}_benchmark_target_id", prefix).as_str())?;
     let eval_type_str: String = row.try_get(format!("{}_eval_type", prefix).as_str())?;
@@ -634,6 +650,7 @@ fn parse_eval_from_row(row: &sqlx::postgres::PgRow, prefix: &str) -> Result<Opti
 
     Ok(Some(EvaluationDto {
         id,
+        round_id,
         benchmark_target_id,
         status,
         eval_type,

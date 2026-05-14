@@ -495,24 +495,24 @@ pub async fn delete_challenge_private_asset(pool: &PgPool, asset_row_id: &str) -
     Ok(())
 }
 
-/// Mark a draft published and bind it to the immutable challenge version row.
+/// Mark a draft published and bind it to the published challenge row.
 pub async fn mark_challenge_draft_published(
     pool: &PgPool,
     draft_id: &str,
-    published_challenge_version_id: Option<&str>,
+    published_challenge_id: Option<&str>,
 ) -> Result<()> {
     let result = sqlx::query(
         r#"
         UPDATE challenge_drafts
         SET status = 'published',
-            published_challenge_version_id = $2,
+            published_challenge_id = $2,
             updated_at = NOW()
         WHERE id = $1
           AND status = 'approved'
         "#,
     )
     .bind(draft_id)
-    .bind(published_challenge_version_id)
+    .bind(published_challenge_id)
     .execute(pool)
     .await?;
 
@@ -618,7 +618,7 @@ fn row_to_draft_response(
         approved_bundle_sha256: row.try_get("approved_bundle_sha256")?,
         validation_message: row.try_get("validation_message")?,
         validation_repository_path: row.try_get("validation_repository_path")?,
-        published_challenge_version_id: row.try_get("published_challenge_version_id")?,
+        published_challenge_id: row.try_get("published_challenge_id")?,
         private_assets,
         validation_records,
         created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
@@ -661,7 +661,6 @@ fn row_to_validation_record_response(
 fn parse_request_kind(value: &str) -> Result<ChallengeCreationRequestKind> {
     match value {
         "new_challenge" => Ok(ChallengeCreationRequestKind::NewChallenge),
-        "new_version" => Ok(ChallengeCreationRequestKind::NewVersion),
         "archive_challenge" => Ok(ChallengeCreationRequestKind::ArchiveChallenge),
         _ => Err(AppError::Internal(format!(
             "unknown challenge draft request kind `{value}`"
@@ -710,7 +709,6 @@ impl ChallengeCreationRequestKind {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::NewChallenge => "new_challenge",
-            Self::NewVersion => "new_version",
             Self::ArchiveChallenge => "archive_challenge",
         }
     }

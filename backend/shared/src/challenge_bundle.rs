@@ -8,13 +8,15 @@
 use std::collections::HashSet;
 use std::path::Path;
 
+use chrono::{DateTime, Utc};
 use sha2::{Digest, Sha256};
 
 use crate::error::{AppError, Result};
 use crate::models::challenge::{
     BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengePrepareSpec,
-    ChallengeRunInputFile, ChallengeRunManifest, ChallengeRunSpec, DockerPlatform,
-    HardwareProfileSpec, PrivateBenchmarkPolicy, ResourceProfileSpec,
+    ChallengeRoundEligibilityType, ChallengeRoundSpec, ChallengeRunInputFile, ChallengeRunManifest,
+    ChallengeRunSpec, DockerPlatform, HardwareProfileSpec, PrivateBenchmarkPolicy,
+    ResourceProfileSpec,
 };
 use crate::zip_project::{ZIP_PROJECT_MANIFEST_FILE, ZIP_PROJECT_PROTOCOL};
 
@@ -313,7 +315,6 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
     require_non_empty(&spec.challenge_id, "challenge_id")?;
     require_non_empty(&spec.challenge_title, "challenge_title")?;
     require_non_empty(&spec.challenge_summary, "challenge_summary")?;
-    require_non_empty(&spec.challenge_version, "challenge_version")?;
 
     if spec.schema_version != 1 {
         return Err(AppError::Validation("schema_version must be 1".to_string()));
@@ -332,6 +333,7 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
     validate_scorer_command(&spec.scorer.command)?;
     require_safe_relative_path(&spec.scorer.result_file, "scorer.result_file")?;
     validate_benchmark_targets(spec)?;
+    validate_rounds(spec)?;
     validate_execution(spec)?;
 
     require_safe_relative_path(&spec.datasets.public_dir, "datasets.public_dir")?;
@@ -448,6 +450,77 @@ fn validate_benchmark_targets(spec: &ChallengeBundleSpec) -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+fn validate_rounds(spec: &ChallengeBundleSpec) -> Result<()> {
+    if spec.rounds.is_empty() {
+        return Err(AppError::Validation(
+            "rounds must declare at least one explicit round".to_string(),
+        ));
+    }
+
+    let mut ids = HashSet::with_capacity(spec.rounds.len());
+    for (index, round) in spec.rounds.iter().enumerate() {
+        let field = format!("rounds[{index}]");
+        validate_round(round, &field)?;
+        if !ids.insert(round.id.as_str()) {
+            return Err(AppError::Validation(format!(
+                "rounds contains duplicate id `{}`",
+                round.id
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_round(round: &ChallengeRoundSpec, field: &str) -> Result<()> {
+    validate_identifier(&round.id, &format!("{field}.id"))?;
+    require_non_empty(&round.title, &format!("{field}.title"))?;
+    if round.eligibility.eligibility_type != ChallengeRoundEligibilityType::Open {
+        return Err(AppError::Validation(format!(
+            "{field}.eligibility.type must be open"
+        )));
+    }
+    let opens_at = parse_optional_rfc3339(round.opens_at.as_deref(), &format!("{field}.opens_at"))?;
+    let closes_at =
+        parse_optional_rfc3339(round.closes_at.as_deref(), &format!("{field}.closes_at"))?;
+    if let (Some(opens_at), Some(closes_at)) = (opens_at, closes_at)
+        && closes_at <= opens_at
+    {
+        return Err(AppError::Validation(format!(
+            "{field}.closes_at must be later than {field}.opens_at"
+        )));
+    }
+    validate_optional_positive_limit(
+        round.validation_submission_limit,
+        &format!("{field}.validation_submission_limit"),
+    )?;
+    validate_optional_positive_limit(
+        round.official_submission_limit,
+        &format!("{field}.official_submission_limit"),
+    )?;
+
+    Ok(())
+}
+
+fn parse_optional_rfc3339(value: Option<&str>, field: &str) -> Result<Option<DateTime<Utc>>> {
+    value
+        .map(|value| {
+            DateTime::parse_from_rfc3339(value)
+                .map(|date| date.with_timezone(&Utc))
+                .map_err(|e| AppError::Validation(format!("{field} must be RFC3339: {e}")))
+        })
+        .transpose()
+}
+
+fn validate_optional_positive_limit(value: Option<i64>, field: &str) -> Result<()> {
+    if let Some(value) = value
+        && value <= 0
+    {
+        return Err(AppError::Validation(format!("{field} must be positive")));
+    }
     Ok(())
 }
 
@@ -1107,6 +1180,19 @@ fn require_non_empty(value: &str, field: &str) -> Result<()> {
     Ok(())
 }
 
+fn validate_identifier(value: &str, field: &str) -> Result<()> {
+    require_non_empty(value, field)?;
+    let valid = value.bytes().all(|byte| {
+        byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'-' | b'_')
+    });
+    if !valid {
+        return Err(AppError::Validation(format!(
+            "{field} must contain only lowercase ASCII letters, digits, hyphens, or underscores"
+        )));
+    }
+    Ok(())
+}
+
 fn validate_positive_u64(value: u64, field: &str) -> Result<()> {
     if value == 0 {
         return Err(AppError::Validation(format!(
@@ -1157,9 +1243,11 @@ mod tests {
 
     use crate::models::challenge::{
         BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengeExecutionSpec,
-        ChallengePrepareSpec, CommunitySpec, DatasetsSpec, DockerPlatform, HardwareProfileSpec,
-        MetricDirection, MetricSchemaSpec, MetricVisibility, PrivateBenchmarkPolicy,
-        ResourceProfileSpec, ScorerSpec, SolutionSpec,
+        ChallengePrepareSpec, ChallengeResultDetailVisibility, ChallengeRoundEligibilitySpec,
+        ChallengeRoundEligibilityType, ChallengeRoundSpec, ChallengeRoundVisibility,
+        ChallengeRoundVisibilitySpec, ChallengeSolutionPublicationPolicy, CommunitySpec,
+        DatasetsSpec, DockerPlatform, HardwareProfileSpec, MetricDirection, MetricSchemaSpec,
+        MetricVisibility, PrivateBenchmarkPolicy, ResourceProfileSpec, ScorerSpec, SolutionSpec,
     };
     use crate::models::evaluation::ScoreVisibility;
     use crate::zip_project::ZipProjectNetworkAccess;
@@ -1178,7 +1266,6 @@ mod tests {
             challenge_id: "sample-sum".to_string(),
             challenge_title: "Sample Sum".to_string(),
             challenge_summary: "Add numbers from worker-managed runs.".to_string(),
-            challenge_version: "v1".to_string(),
             solution: SolutionSpec {
                 protocol: "zip_project".to_string(),
                 manifest_file: "agentics.solution.json".to_string(),
@@ -1209,6 +1296,23 @@ mod tests {
                     scorer_network_access: ZipProjectNetworkAccess::Disabled,
                     hardware: None,
                 },
+            }],
+            rounds: vec![ChallengeRoundSpec {
+                id: "main".to_string(),
+                title: "Main Round".to_string(),
+                opens_at: None,
+                closes_at: None,
+                eligibility: ChallengeRoundEligibilitySpec {
+                    eligibility_type: ChallengeRoundEligibilityType::Open,
+                },
+                validation_submission_limit: None,
+                official_submission_limit: None,
+                visibility: ChallengeRoundVisibilitySpec {
+                    leaderboard: ChallengeRoundVisibility::PublicLive,
+                    score_distribution: ChallengeRoundVisibility::PublicLive,
+                    result_detail: ChallengeResultDetailVisibility::SubmitterLivePublicAfterClose,
+                },
+                solution_publication: ChallengeSolutionPublicationPolicy::SubmitterOptIn,
             }],
             execution: ChallengeExecutionSpec {
                 validation_runs: Some("public/runs.json".to_string()),

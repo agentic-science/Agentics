@@ -1,4 +1,4 @@
-//! Challenge shell and published version queries.
+//! Challenge shell and published challenge queries.
 
 use chrono::{DateTime, Utc};
 use serde_json::Value;
@@ -6,25 +6,23 @@ use sqlx::{PgPool, Row};
 
 use crate::error::{AppError, Result};
 use crate::models::challenge::{
-    AdminChallengeListItemDto, ChallengeBundleSpec, ChallengeListItemDto,
-    CreateChallengeVersionResponse,
+    AdminChallengeListItemDto, ChallengeBundleSpec, ChallengeListItemDto, ChallengeRoundSpec,
+    PublishChallengeResponse,
 };
 
-/// Latest published challenge version joined with challenge metadata.
+/// Published challenge joined with challenge metadata.
 #[derive(Debug, Clone)]
-pub struct ChallengeVersionRecord {
+pub struct ChallengeRecord {
     pub challenge_id: String,
     pub slug: String,
     pub title: String,
     pub summary: String,
-    pub challenge_version_id: String,
-    pub version: String,
     pub bundle_path: String,
     pub statement_path: String,
     pub spec_json: Value,
 }
 
-/// Create or update the challenge shell that versions attach to.
+/// Create or update an unpublished challenge shell.
 pub async fn create_or_update_challenge(
     pool: &PgPool,
     id: &str,
@@ -35,13 +33,13 @@ pub async fn create_or_update_challenge(
     let row = sqlx::query(
         r#"
         INSERT INTO challenges (id, slug, title, summary, status)
-        VALUES ($1, $2, $3, $4, 'active')
+        VALUES ($1, $2, $3, $4, 'draft')
         ON CONFLICT (id) DO UPDATE
         SET slug = EXCLUDED.slug,
             title = EXCLUDED.title,
             summary = EXCLUDED.summary,
-            status = 'active',
             updated_at = NOW()
+        WHERE challenges.spec_json IS NULL
         RETURNING id, slug, title, summary, status, created_at, updated_at
         "#,
     )
@@ -50,7 +48,11 @@ pub async fn create_or_update_challenge(
     .bind(title)
     .bind(summary)
     .fetch_one(pool)
-    .await?;
+    .await
+    .map_err(|error| match error {
+        sqlx::Error::RowNotFound => AppError::Conflict,
+        error => AppError::Database(error),
+    })?;
 
     Ok(crate::models::challenge::ChallengeAdminResponse {
         id: row.try_get("id")?,
@@ -63,24 +65,13 @@ pub async fn create_or_update_challenge(
     })
 }
 
-/// List all challenge shells for admin review, including drafts without versions.
+/// List all challenge shells for admin review.
 pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeListItemDto>> {
     let rows = sqlx::query(
         r#"
-        SELECT
-            p.id,
-            p.slug,
-            p.title,
-            p.summary,
-            p.status,
-            p.created_at,
-            p.updated_at,
-            pv.id AS version_id,
-            pv.version,
-            pv.spec_json
-        FROM challenges p
-        LEFT JOIN challenge_versions pv ON pv.id = p.current_version_id
-        ORDER BY p.updated_at DESC, p.created_at DESC
+        SELECT id, slug, title, summary, status, spec_json, created_at, updated_at
+        FROM challenges
+        ORDER BY updated_at DESC, created_at DESC
         "#,
     )
     .fetch_all(pool)
@@ -88,8 +79,6 @@ pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeLi
 
     rows.into_iter()
         .map(|r| {
-            let version_id: Option<String> = r.try_get("version_id")?;
-            let version: Option<String> = r.try_get("version")?;
             let spec_json: Option<Value> = r.try_get("spec_json")?;
             let spec = spec_json
                 .map(serde_json::from_value::<ChallengeBundleSpec>)
@@ -101,10 +90,8 @@ pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeLi
                 title: r.try_get("title")?,
                 summary: r.try_get("summary")?,
                 status: r.try_get("status")?,
-                current_version: version_id
-                    .zip(version)
-                    .map(|(id, version)| crate::models::CurrentVersionDto { id, version }),
-                current_benchmark_targets: spec.as_ref().map(|spec| spec.benchmark_targets.clone()),
+                benchmark_targets: spec.as_ref().map(|spec| spec.benchmark_targets.clone()),
+                rounds: spec.as_ref().map(|spec| spec.rounds.clone()),
                 private_benchmark_enabled: spec
                     .as_ref()
                     .map(|spec| spec.datasets.private_benchmark_enabled),
@@ -115,12 +102,8 @@ pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeLi
         .collect::<Result<Vec<_>>>()
 }
 
-/// Publish a validated bundle as the current challenge version.
-///
-/// Publishing a different version preserves older records and marks the
-/// previous current version `superseded` so historical leaderboards and
-/// solution submissions stay attached to the exact version they evaluated.
-pub async fn publish_challenge_version(
+/// Publish a validated bundle as the benchmark contract for a challenge id.
+pub async fn publish_challenge(
     pool: &PgPool,
     challenge_id: &str,
     bundle_path: &str,
@@ -128,85 +111,112 @@ pub async fn publish_challenge_version(
     spec: &ChallengeBundleSpec,
     title: &str,
     summary: &str,
-) -> Result<CreateChallengeVersionResponse> {
-    let version_id = format!("{}:{}", challenge_id, spec.challenge_version);
+) -> Result<PublishChallengeResponse> {
     let spec_json = serde_json::to_value(spec).map_err(|e| AppError::Internal(e.to_string()))?;
-
     let mut tx = pool.begin().await?;
-
-    sqlx::query(
-        r#"
-        UPDATE challenge_versions pv
-        SET status = 'superseded'
-        FROM challenges p
-        WHERE p.id = $1
-          AND p.current_version_id = pv.id
-          AND pv.id <> $2
-          AND pv.status = 'published'
-        "#,
-    )
-    .bind(challenge_id)
-    .bind(&version_id)
-    .execute(&mut *tx)
-    .await?;
 
     let row = sqlx::query(
         r#"
-        WITH inserted_version AS (
-            INSERT INTO challenge_versions (
-                id, challenge_id, version, bundle_path, statement_path, spec_json, status
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, 'published')
-            RETURNING id, challenge_id, version, bundle_path, statement_path
+        INSERT INTO challenges (
+            id, slug, title, summary, bundle_path, statement_path, spec_json, status
         )
-            UPDATE challenges p
-            SET title = $7,
-                summary = $8,
-                status = 'active',
-                current_version_id = v.id,
-                updated_at = NOW()
-            FROM inserted_version v
-        WHERE p.id = v.challenge_id
-        RETURNING
-            p.id AS challenge_id,
-            p.slug,
-            p.title,
-            v.id AS version_id,
-            v.version,
-            v.bundle_path,
-            v.statement_path
+        VALUES ($1, $1, $2, $3, $4, $5, $6, 'active')
+        ON CONFLICT (id) DO UPDATE
+        SET title = EXCLUDED.title,
+            summary = EXCLUDED.summary,
+            bundle_path = EXCLUDED.bundle_path,
+            statement_path = EXCLUDED.statement_path,
+            spec_json = EXCLUDED.spec_json,
+            status = 'active',
+            updated_at = NOW()
+        WHERE challenges.spec_json IS NULL
+        RETURNING id AS challenge_id, slug, title, bundle_path, statement_path
         "#,
     )
-    .bind(&version_id)
     .bind(challenge_id)
-    .bind(&spec.challenge_version)
+    .bind(title)
+    .bind(summary)
     .bind(bundle_path)
     .bind(statement_path)
     .bind(&spec_json)
-    .bind(title)
-    .bind(summary)
     .fetch_one(&mut *tx)
     .await
     .map_err(|error| match error {
+        sqlx::Error::RowNotFound => AppError::Conflict,
         sqlx::Error::Database(db_error) if db_error.is_unique_violation() => AppError::Conflict,
         error => AppError::Database(error),
     })?;
 
+    insert_rounds(&mut tx, challenge_id, &spec.rounds).await?;
     tx.commit().await?;
 
-    Ok(CreateChallengeVersionResponse {
+    Ok(PublishChallengeResponse {
         challenge_id: row.try_get("challenge_id")?,
         slug: row.try_get("slug")?,
         title: row.try_get("title")?,
-        version_id: row.try_get("version_id")?,
-        version: row.try_get("version")?,
         bundle_path: row.try_get("bundle_path")?,
         statement_path: row.try_get("statement_path")?,
     })
 }
 
-/// Archive a challenge shell while preserving versions, private assets, and
-/// historical solution submissions.
+async fn insert_rounds(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    challenge_id: &str,
+    rounds: &[ChallengeRoundSpec],
+) -> Result<()> {
+    for round in rounds {
+        let eligibility = serde_json::to_value(&round.eligibility)
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        sqlx::query(
+            r#"
+            INSERT INTO challenge_rounds (
+                challenge_id, round_id, title, opens_at, closes_at,
+                eligibility_policy_json, validation_submission_limit,
+                official_submission_limit, leaderboard_visibility,
+                score_distribution_visibility, result_detail_visibility,
+                solution_publication_policy
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            "#,
+        )
+        .bind(challenge_id)
+        .bind(&round.id)
+        .bind(&round.title)
+        .bind(parse_optional_time(round.opens_at.as_deref())?)
+        .bind(parse_optional_time(round.closes_at.as_deref())?)
+        .bind(&eligibility)
+        .bind(round.validation_submission_limit)
+        .bind(round.official_submission_limit)
+        .bind(to_json_string(round.visibility.leaderboard)?)
+        .bind(to_json_string(round.visibility.score_distribution)?)
+        .bind(to_json_string(round.visibility.result_detail)?)
+        .bind(to_json_string(round.solution_publication)?)
+        .execute(&mut **tx)
+        .await?;
+    }
+
+    Ok(())
+}
+
+fn parse_optional_time(value: Option<&str>) -> Result<Option<DateTime<Utc>>> {
+    value
+        .map(|value| {
+            DateTime::parse_from_rfc3339(value)
+                .map(|date| date.with_timezone(&Utc))
+                .map_err(|e| AppError::Validation(format!("invalid round timestamp: {e}")))
+        })
+        .transpose()
+}
+
+fn to_json_string<T: serde::Serialize>(value: T) -> Result<String> {
+    let value = serde_json::to_value(value).map_err(|e| AppError::Internal(e.to_string()))?;
+    value
+        .as_str()
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| AppError::Internal("round enum did not serialize to string".to_string()))
+}
+
+/// Archive a challenge shell while preserving private assets and historical submissions.
 pub async fn archive_challenge(pool: &PgPool, challenge_id: &str) -> Result<()> {
     let result = sqlx::query(
         r#"
@@ -223,26 +233,18 @@ pub async fn archive_challenge(pool: &PgPool, challenge_id: &str) -> Result<()> 
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
-
     Ok(())
 }
 
-/// List active challenges with their latest published version.
+/// List active challenges with their published benchmark contract.
 pub async fn list_published_challenges(pool: &PgPool) -> Result<Vec<ChallengeListItemDto>> {
     let rows = sqlx::query(
         r#"
-        SELECT
-            p.id AS challenge_id,
-            p.slug,
-            p.title,
-            p.summary,
-            pv.id AS version_id,
-            pv.version
-        FROM challenges p
-        JOIN challenge_versions pv ON pv.id = p.current_version_id
-        WHERE p.status = 'active'
-          AND pv.status = 'published'
-        ORDER BY p.created_at ASC
+        SELECT id, slug, title, summary, spec_json
+        FROM challenges
+        WHERE status = 'active'
+          AND spec_json IS NOT NULL
+        ORDER BY created_at DESC
         "#,
     )
     .fetch_all(pool)
@@ -250,42 +252,31 @@ pub async fn list_published_challenges(pool: &PgPool) -> Result<Vec<ChallengeLis
 
     rows.into_iter()
         .map(|r| {
+            let spec: ChallengeBundleSpec = serde_json::from_value(r.try_get("spec_json")?)
+                .map_err(|e| AppError::Internal(e.to_string()))?;
             Ok(ChallengeListItemDto {
-                id: r.try_get("challenge_id")?,
+                id: r.try_get("id")?,
                 slug: r.try_get("slug")?,
                 title: r.try_get("title")?,
                 summary: r.try_get("summary")?,
-                current_version: crate::models::CurrentVersionDto {
-                    id: r.try_get("version_id")?,
-                    version: r.try_get("version")?,
-                },
+                rounds: spec.rounds,
             })
         })
         .collect::<Result<Vec<_>>>()
 }
 
-/// Fetch one active challenge by id or slug with its latest published version.
+/// Fetch one active challenge by id or slug.
 pub async fn get_published_challenge(
     pool: &PgPool,
     challenge_id_or_slug: &str,
-) -> Result<Option<ChallengeVersionRecord>> {
+) -> Result<Option<ChallengeRecord>> {
     let row = sqlx::query(
         r#"
-        SELECT
-            p.id AS challenge_id,
-            p.slug,
-            p.title,
-            p.summary,
-            pv.id AS version_id,
-            pv.version,
-            pv.bundle_path,
-            pv.statement_path,
-            pv.spec_json
-        FROM challenges p
-        JOIN challenge_versions pv ON pv.id = p.current_version_id
-        WHERE p.status = 'active'
-          AND pv.status = 'published'
-          AND (p.id = $1 OR p.slug = $1)
+        SELECT id AS challenge_id, slug, title, summary, bundle_path, statement_path, spec_json
+        FROM challenges
+        WHERE status = 'active'
+          AND spec_json IS NOT NULL
+          AND (id = $1 OR slug = $1)
         LIMIT 1
         "#,
     )
@@ -293,20 +284,7 @@ pub async fn get_published_challenge(
     .fetch_optional(pool)
     .await?;
 
-    row.map(|r| {
-        Ok(ChallengeVersionRecord {
-            challenge_id: r.try_get("challenge_id")?,
-            slug: r.try_get("slug")?,
-            title: r.try_get("title")?,
-            summary: r.try_get("summary")?,
-            challenge_version_id: r.try_get("version_id")?,
-            version: r.try_get("version")?,
-            bundle_path: r.try_get("bundle_path")?,
-            statement_path: r.try_get("statement_path")?,
-            spec_json: r.try_get("spec_json")?,
-        })
-    })
-    .transpose()
+    row.map(row_to_challenge_record).transpose()
 }
 
 /// Fetch one public challenge detail by id or slug, including archived records
@@ -314,24 +292,14 @@ pub async fn get_published_challenge(
 pub async fn get_public_challenge(
     pool: &PgPool,
     challenge_id_or_slug: &str,
-) -> Result<Option<ChallengeVersionRecord>> {
+) -> Result<Option<ChallengeRecord>> {
     let row = sqlx::query(
         r#"
-        SELECT
-            p.id AS challenge_id,
-            p.slug,
-            p.title,
-            p.summary,
-            pv.id AS version_id,
-            pv.version,
-            pv.bundle_path,
-            pv.statement_path,
-            pv.spec_json
-        FROM challenges p
-        JOIN challenge_versions pv ON pv.id = p.current_version_id
-        WHERE p.status IN ('active', 'archived')
-          AND pv.status IN ('published', 'archived')
-          AND (p.id = $1 OR p.slug = $1)
+        SELECT id AS challenge_id, slug, title, summary, bundle_path, statement_path, spec_json
+        FROM challenges
+        WHERE status IN ('active', 'archived')
+          AND spec_json IS NOT NULL
+          AND (id = $1 OR slug = $1)
         LIMIT 1
         "#,
     )
@@ -339,17 +307,15 @@ pub async fn get_public_challenge(
     .fetch_optional(pool)
     .await?;
 
-    row.map(row_to_challenge_version_record).transpose()
+    row.map(row_to_challenge_record).transpose()
 }
 
-fn row_to_challenge_version_record(r: sqlx::postgres::PgRow) -> Result<ChallengeVersionRecord> {
-    Ok(ChallengeVersionRecord {
+fn row_to_challenge_record(r: sqlx::postgres::PgRow) -> Result<ChallengeRecord> {
+    Ok(ChallengeRecord {
         challenge_id: r.try_get("challenge_id")?,
         slug: r.try_get("slug")?,
         title: r.try_get("title")?,
         summary: r.try_get("summary")?,
-        challenge_version_id: r.try_get("version_id")?,
-        version: r.try_get("version")?,
         bundle_path: r.try_get("bundle_path")?,
         statement_path: r.try_get("statement_path")?,
         spec_json: r.try_get("spec_json")?,

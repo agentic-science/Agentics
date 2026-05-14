@@ -16,11 +16,11 @@ use uuid::Uuid;
 
 use shared::error::{AppError, Result};
 use shared::models::challenge_creation::{
-    ChallengeCreationManifest, ChallengeCreationRequestKind, ChallengeCreationVersionSpec,
-    ChallengeDraftCleanupResponse, ChallengeDraftListResponse, ChallengeDraftResponse,
-    ChallengeDraftStatus, ChallengeDraftValidationStatus, ChallengePrivateAssetKind,
-    ChallengePrivateAssetResponse, CreateChallengeDraftRequest, ReviewChallengeDraftRequest,
-    UploadChallengePrivateAssetRequest, ValidateChallengeDraftRequest,
+    ChallengeCreationManifest, ChallengeCreationRequestKind, ChallengeDraftCleanupResponse,
+    ChallengeDraftListResponse, ChallengeDraftResponse, ChallengeDraftStatus,
+    ChallengeDraftValidationStatus, ChallengePrivateAssetKind, ChallengePrivateAssetResponse,
+    CreateChallengeDraftRequest, ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest,
+    ValidateChallengeDraftRequest,
 };
 use shared::{challenge_bundle, challenge_creation, db};
 
@@ -506,7 +506,7 @@ pub async fn reject_challenge_draft(
     ))
 }
 
-/// Publish an approved draft into immutable challenge/version rows.
+/// Publish an approved draft into an immutable challenge contract.
 pub async fn publish_challenge_draft(
     admin: AdminAuth,
     State(state): State<AppState>,
@@ -536,17 +536,14 @@ pub async fn publish_challenge_draft(
         ));
     }
     let proposal_root = Path::new(repository_path).join(&draft.challenge_path);
-    let published_version_id = match manifest.request {
+    let published_challenge_id = match manifest.request {
         ChallengeCreationRequestKind::ArchiveChallenge => {
             db::archive_challenge(&state.db, &manifest.challenge_id).await?;
             None
         }
-        ChallengeCreationRequestKind::NewChallenge | ChallengeCreationRequestKind::NewVersion => {
-            let version = manifest.version.as_ref().ok_or_else(|| {
-                AppError::BadRequest("version is required for publishable drafts".to_string())
-            })?;
+        ChallengeCreationRequestKind::NewChallenge => {
             let bundle_path =
-                assemble_runtime_bundle(&state, &draft, &proposal_root, &manifest, version).await?;
+                assemble_runtime_bundle(&state, &draft, &proposal_root, &manifest).await?;
             challenge_bundle::validate_challenge_bundle(&bundle_path).await?;
             let spec = challenge_bundle::read_challenge_bundle_spec(&bundle_path).await?;
             if state.config.require_digest_pinned_images {
@@ -561,7 +558,7 @@ pub async fn publish_challenge_draft(
             )
             .await?;
             let statement_path = bundle_path.join("statement.md");
-            let published = db::publish_challenge_version(
+            let published = db::publish_challenge(
                 &state.db,
                 &manifest.challenge_id,
                 &bundle_path.to_string_lossy(),
@@ -571,10 +568,10 @@ pub async fn publish_challenge_draft(
                 &manifest.summary,
             )
             .await?;
-            Some(published.version_id)
+            Some(published.challenge_id)
         }
     };
-    db::mark_challenge_draft_published(&state.db, &draft.id, published_version_id.as_deref())
+    db::mark_challenge_draft_published(&state.db, &draft.id, published_challenge_id.as_deref())
         .await?;
     db::create_challenge_draft_audit_event(
         &state.db,
@@ -587,7 +584,7 @@ pub async fn publish_challenge_draft(
             message: "challenge draft published".to_string(),
             metadata: serde_json::json!({
                 "challenge_id": &manifest.challenge_id,
-                "version_id": &published_version_id,
+                "published_challenge_id": &published_challenge_id,
                 "repository_path": repository_path,
                 "bundle_sha256": &bundle_sha256
             }),
@@ -710,16 +707,17 @@ async fn assemble_runtime_bundle(
     draft: &ChallengeDraftResponse,
     proposal_root: &Path,
     manifest: &ChallengeCreationManifest,
-    version: &ChallengeCreationVersionSpec,
 ) -> Result<PathBuf> {
-    let public_bundle_path = proposal_root.join(&version.bundle_path);
+    let bundle_path = manifest.bundle_path.as_deref().ok_or_else(|| {
+        AppError::BadRequest("bundle_path is required for publishable drafts".to_string())
+    })?;
+    let public_bundle_path = proposal_root.join(bundle_path);
     let public_spec = challenge_bundle::read_challenge_bundle_spec(&public_bundle_path).await?;
     validate_private_assets_for_publish(draft, manifest, &public_spec)?;
 
     let runtime_bundle_path = Path::new(&state.config.storage_root)
         .join("challenge-bundles")
         .join(&manifest.challenge_id)
-        .join(&version.version)
         .join(&draft.id);
     challenge_bundle::copy_challenge_bundle_dir(&public_bundle_path, &runtime_bundle_path, true)
         .await?;

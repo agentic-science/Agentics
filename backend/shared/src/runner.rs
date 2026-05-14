@@ -181,7 +181,7 @@ pub async fn execute_evaluation_job(
             .benchmark_target(&payload.benchmark_target_id)
             .ok_or_else(|| {
                 AppError::Runner(format!(
-                    "challenge version does not declare benchmark target `{}`",
+                    "challenge contract does not declare benchmark target `{}`",
                     payload.benchmark_target_id
                 ))
             })?;

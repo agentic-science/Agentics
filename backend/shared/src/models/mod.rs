@@ -46,10 +46,3 @@ pub struct DatabaseHealth {
 pub struct IdOnlyResponse {
     pub id: String,
 }
-
-/// Current published version summary embedded in challenge DTOs.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
-pub struct CurrentVersionDto {
-    pub id: String,
-    pub version: String,
-}

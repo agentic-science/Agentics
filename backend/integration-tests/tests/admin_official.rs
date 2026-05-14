@@ -23,6 +23,8 @@ fn create_admin_bundle(root: &Path) -> std::path::PathBuf {
     spec["challenge_id"] = serde_json::json!("admin-sum");
     spec["challenge_title"] = serde_json::json!("Admin Sum");
     spec["challenge_summary"] = serde_json::json!("Official flow test");
+    spec["rounds"][0]["visibility"]["result_detail"] =
+        serde_json::json!("submitter_live_public_live");
     std::fs::write(
         &spec_path,
         serde_json::to_string_pretty(&spec).expect("failed to serialize admin spec"),
@@ -70,14 +72,14 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         .expect("failed to create challenge");
     assert_eq!(create_challenge.status(), 201);
 
-    let publish_version = client
-        .post(api_url(&app, "/admin/challenges/admin-sum/versions"))
+    let publish_challenge = client
+        .post(api_url(&app, "/admin/challenges/admin-sum/publish"))
         .header("Authorization", &admin_auth)
         .json(&serde_json::json!({ "bundle_path": bundle_dir }))
         .send()
         .await
-        .expect("failed to publish challenge version");
-    assert_eq!(publish_version.status(), 201);
+        .expect("failed to publish challenge");
+    assert_eq!(publish_challenge.status(), 201);
 
     let register_a: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
@@ -111,6 +113,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token_a}"))
         .json(&serde_json::json!({
             "challenge_id": "admin-sum",
+            "round_id": "main",
             "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": perfect_zip,
             "explanation": "best rank score"
@@ -132,6 +135,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token_b}"))
         .json(&serde_json::json!({
             "challenge_id": "admin-sum",
+            "round_id": "main",
             "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": private_benchmark_only_zip,
             "explanation": "passes private benchmark only"
@@ -151,7 +155,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
     let leaderboard_before: serde_json::Value = client
         .get(api_url(
             &app,
-            "/api/public/challenges/admin-sum/leaderboard?target=linux-arm64-cpu",
+            "/api/public/challenges/admin-sum/rounds/main/leaderboard?target=linux-arm64-cpu",
         ))
         .send()
         .await
@@ -240,7 +244,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
     let leaderboard_after_official: serde_json::Value = client
         .get(api_url(
             &app,
-            "/api/public/challenges/admin-sum/leaderboard?target=linux-arm64-cpu",
+            "/api/public/challenges/admin-sum/rounds/main/leaderboard?target=linux-arm64-cpu",
         ))
         .send()
         .await
@@ -324,7 +328,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
     let leaderboard_after_hide: serde_json::Value = client
         .get(api_url(
             &app,
-            "/api/public/challenges/admin-sum/leaderboard?target=linux-arm64-cpu",
+            "/api/public/challenges/admin-sum/rounds/main/leaderboard?target=linux-arm64-cpu",
         ))
         .send()
         .await

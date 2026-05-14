@@ -16,6 +16,7 @@ pub struct MarkEvaluationStartedInput {
     pub evaluation_id: String,
     pub solution_submission_id: String,
     pub job_id: String,
+    pub round_id: String,
     pub benchmark_target_id: String,
     pub eval_type: ScoringMode,
 }
@@ -29,14 +30,15 @@ pub async fn mark_evaluation_started(
 
     let result = sqlx::query(
         r#"
-        INSERT INTO evaluations (id, solution_submission_id, job_id, benchmark_target_id, eval_type, status, started_at)
-        VALUES ($1, $2, $3, $4, $5, 'running', NOW())
+        INSERT INTO evaluations (id, solution_submission_id, job_id, round_id, benchmark_target_id, eval_type, status, started_at)
+        VALUES ($1, $2, $3, $4, $5, $6, 'running', NOW())
         ON CONFLICT (job_id) DO NOTHING
         "#,
     )
     .bind(&input.evaluation_id)
     .bind(&input.solution_submission_id)
     .bind(&input.job_id)
+    .bind(&input.round_id)
     .bind(&input.benchmark_target_id)
     .bind(eval_type_str)
     .execute(pool)
@@ -52,6 +54,7 @@ pub struct PersistedEvaluationResult {
     pub job_id: String,
     pub worker_id: String,
     pub claim_attempt_count: i32,
+    pub round_id: String,
     pub benchmark_target_id: String,
     pub eval_type: ScoringMode,
     pub status: EvaluationStatus,
@@ -172,6 +175,7 @@ pub async fn mark_evaluation_finished(
                 let became_best = upsert_leaderboard_entry_for_solution_submission_tx(
                     &mut tx,
                     &result.solution_submission_id,
+                    &result.round_id,
                     &result.benchmark_target_id,
                     rank_score,
                     &result.public_results,
@@ -182,6 +186,7 @@ pub async fn mark_evaluation_finished(
                     update_official_score_for_solution_submission_tx(
                         &mut tx,
                         &result.solution_submission_id,
+                        &result.round_id,
                         &result.benchmark_target_id,
                         rank_score,
                         &result.aggregate_metrics,

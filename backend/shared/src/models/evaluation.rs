@@ -119,6 +119,7 @@ pub struct RunMetricResult {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct EvaluationDto {
     pub id: String,
+    pub round_id: String,
     pub benchmark_target_id: String,
     pub status: EvaluationStatus,
     pub eval_type: ScoringMode,
@@ -631,6 +632,7 @@ mod tests {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct EvaluationJobDto {
     pub id: String,
+    pub round_id: String,
     pub benchmark_target_id: String,
     pub status: EvaluationStatus,
 }
@@ -641,6 +643,6 @@ pub struct EvaluationJobPayload {
     pub artifact_path: String,
     pub bundle_path: String,
     pub challenge_id: String,
-    pub challenge_version_id: String,
+    pub round_id: String,
     pub benchmark_target_id: String,
 }

@@ -75,7 +75,7 @@ pub async fn list_service_heartbeats(pool: &PgPool) -> Result<Vec<AdminServiceHe
 
 /// Seed or refresh published challenges by scanning a bundle root.
 ///
-/// Each immediate child directory may contain one or more version directories.
+/// Each immediate child directory may contain one or more bundle directories.
 /// Directories without `spec.json` are ignored so local notes or partial bundles
 /// do not block startup.
 pub async fn ensure_challenges_seeded_from_root(
@@ -95,81 +95,62 @@ pub async fn ensure_challenges_seeded_from_root(
     challenge_dirs.sort();
 
     for slug_root in challenge_dirs {
-        let mut versions = tokio::fs::read_dir(&slug_root).await?;
-        let mut version_dirs: Vec<PathBuf> = Vec::new();
+        let mut bundles = tokio::fs::read_dir(&slug_root).await?;
+        let mut bundle_dirs: Vec<PathBuf> = Vec::new();
 
-        while let Some(v_entry) = versions.next_entry().await? {
-            if !v_entry.file_type().await?.is_dir() {
+        while let Some(bundle_entry) = bundles.next_entry().await? {
+            if !bundle_entry.file_type().await?.is_dir() {
                 continue;
             }
-            let bundle_dir = v_entry.path();
+            let bundle_dir = bundle_entry.path();
             if tokio::fs::try_exists(bundle_dir.join("spec.json")).await? {
-                version_dirs.push(bundle_dir);
+                bundle_dirs.push(bundle_dir);
             }
         }
-        version_dirs.sort();
+        bundle_dirs.sort();
 
-        for bundle_dir in version_dirs {
+        for bundle_dir in bundle_dirs {
             crate::challenge_bundle::validate_challenge_bundle(&bundle_dir).await?;
             let spec = crate::challenge_bundle::read_challenge_bundle_spec(&bundle_dir).await?;
             let statement_path = bundle_dir.join("statement.md");
             let challenge_id = &spec.challenge_id;
-            let version_id = format!("{}:{}", challenge_id, spec.challenge_version);
 
-            sqlx::query(
-                r#"
-                INSERT INTO challenges (id, slug, title, summary, status)
-                VALUES ($1, $2, $3, $4, 'active')
-                ON CONFLICT (id) DO UPDATE
-                SET slug = EXCLUDED.slug,
-                    title = EXCLUDED.title,
-                    summary = EXCLUDED.summary,
-                    status = 'active',
-                    updated_at = NOW()
-                "#,
+            if crate::db::publish_challenge(
+                pool,
+                challenge_id,
+                bundle_dir.to_string_lossy().as_ref(),
+                statement_path.to_string_lossy().as_ref(),
+                &spec,
+                &spec.challenge_title,
+                &spec.challenge_summary,
             )
-            .bind(challenge_id)
-            .bind(challenge_id)
-            .bind(&spec.challenge_title)
-            .bind(&spec.challenge_summary)
-            .execute(pool)
-            .await?;
-
-            let spec_json =
-                serde_json::to_value(&spec).map_err(|e| AppError::Internal(e.to_string()))?;
-
-            sqlx::query(
-                r#"
-                INSERT INTO challenge_versions (id, challenge_id, version, bundle_path, statement_path, spec_json, status)
-                VALUES ($1, $2, $3, $4, $5, $6, 'published')
-                ON CONFLICT (challenge_id, version) DO UPDATE
-                SET bundle_path = EXCLUDED.bundle_path,
-                    statement_path = EXCLUDED.statement_path,
-                    spec_json = EXCLUDED.spec_json,
-                    status = 'published'
-                "#
-            )
-            .bind(&version_id)
-            .bind(challenge_id)
-            .bind(&spec.challenge_version)
-            .bind(bundle_dir.to_string_lossy().as_ref())
-            .bind(statement_path.to_string_lossy().as_ref())
-            .bind(&spec_json)
-            .execute(pool)
-            .await?;
-
-            sqlx::query(
-                r#"
-                UPDATE challenges
-                SET current_version_id = $2,
-                    updated_at = NOW()
-                WHERE id = $1
-                "#,
-            )
-            .bind(challenge_id)
-            .bind(&version_id)
-            .execute(pool)
-            .await?;
+            .await
+            .is_err()
+            {
+                sqlx::query(
+                    r#"
+                    UPDATE challenges
+                    SET slug = $2,
+                        title = $3,
+                        summary = $4,
+                        bundle_path = $5,
+                        statement_path = $6,
+                        spec_json = $7,
+                        status = 'active',
+                        updated_at = NOW()
+                    WHERE id = $1
+                    "#,
+                )
+                .bind(challenge_id)
+                .bind(challenge_id)
+                .bind(&spec.challenge_title)
+                .bind(&spec.challenge_summary)
+                .bind(bundle_dir.to_string_lossy().as_ref())
+                .bind(statement_path.to_string_lossy().as_ref())
+                .bind(serde_json::to_value(&spec).map_err(|e| AppError::Internal(e.to_string()))?)
+                .execute(pool)
+                .await?;
+            }
 
             synced = synced
                 .checked_add(1)
