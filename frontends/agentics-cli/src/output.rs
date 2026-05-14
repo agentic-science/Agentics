@@ -875,7 +875,6 @@ fn render_table_row(row: &[String], widths: &[usize]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use serde_json::Value;
     use shared::models::challenge::{
         BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengeDetailResponse,
         ChallengeEligibilitySpec, ChallengeEligibilityType, ChallengeExecutionSpec,
@@ -916,13 +915,20 @@ mod tests {
     }
 
     #[test]
-    fn renders_challenge_detail_json() {
-        let output = render_challenge_detail(&challenge_detail(), OutputFormat::Json)
+    fn renders_challenge_detail_table() {
+        let output = render_challenge_detail(&challenge_detail(), OutputFormat::Table)
             .expect("render should succeed");
-        let parsed: Value = serde_json::from_str(&output).expect("JSON output should parse");
 
-        assert_eq!(parsed["id"], "sample-sum");
-        assert_eq!(parsed["spec"]["solution"]["protocol"], "zip_project");
+        assert!(output.contains("Sample Sum (sample-sum)"));
+        assert!(output.contains("eligibility: open"));
+        assert!(output.contains("solution_publication: public"));
+        assert!(
+            output.contains(
+                "  - linux-arm64-cpu: linux/arm64 cpu, image=python:3.12-slim-bookworm, timeout=30 sec, memory=512 MB, validation=disabled"
+            )
+        );
+        assert!(output.contains("ranking_metric: score"));
+        assert!(output.ends_with("# Statement\n\nReturn the sum."));
     }
 
     fn challenge_detail() -> ChallengeDetailResponse {

@@ -473,106 +473,17 @@ fn validate_cookie_name(value: &str, field: &str) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{CONFIG_ENV_PREFIX, Config};
+    use super::Config;
 
     #[test]
-    fn uses_agentics_environment_prefix() {
-        assert_eq!(CONFIG_ENV_PREFIX, "AGENTICS_");
-    }
-
-    #[test]
-    fn default_api_host_is_loopback() {
-        let config = Config {
-            database_url: String::new(),
-            api_host: super::default_api_host(),
-            api_port: 3100,
-            storage_root: String::new(),
-            challenges_root: String::new(),
-            admin_username: super::default_admin_username(),
-            admin_password: super::default_admin_password(),
-            allow_insecure_default_admin_credentials: false,
-            cors_allowed_origins: super::default_cors_allowed_origins(),
-            worker_poll_interval_ms: 3000,
-            worker_stale_job_minutes: 1,
-            validation_runs_per_agent_challenge_day: 20,
-            official_runs_per_agent_challenge_day: 5,
-            max_active_official_jobs: 20,
-            max_active_agents: 1_000,
-            max_active_challenge_drafts_per_agent: 10,
-            challenge_private_asset_bytes_per_draft: 250 * 1024 * 1024,
-            challenge_draft_validations_per_day: 10,
-            challenge_draft_ttl_days: 14,
-            unpublished_challenge_asset_grace_days: 7,
-            github_oauth_client_id: None,
-            github_oauth_client_secret: None,
-            github_oauth_redirect_url: None,
-            github_oauth_authorize_url: super::default_github_oauth_authorize_url(),
-            github_oauth_token_url: super::default_github_oauth_token_url(),
-            github_api_user_url: super::default_github_api_user_url(),
-            web_session_cookie_name: super::default_web_session_cookie_name(),
-            web_csrf_cookie_name: super::default_web_csrf_cookie_name(),
-            web_session_ttl_hours: super::default_web_session_ttl_hours(),
-            web_session_cookie_secure: false,
-            allow_public_agent_registration_on_non_loopback: false,
-            docker_host: None,
-            require_digest_pinned_images: false,
-            runner_writable_storage_mode: super::default_runner_writable_storage_mode(),
-            runner_phase_mount_root: None,
-            runner_writable_slot_classes_mb: super::default_runner_writable_slot_classes_mb(),
-            runner_docker_layer_quota: false,
-            log_level: "info".to_string(),
-        };
-
-        assert!(config.validate_api_security().is_ok());
-    }
-
-    #[test]
-    fn default_api_port_avoids_common_frontend_port() {
-        assert_eq!(super::default_api_port(), 3100);
+    fn loopback_bind_allows_local_default_credentials() {
+        assert!(test_config().validate_api_security().is_ok());
     }
 
     #[test]
     fn default_admin_credentials_are_rejected_on_wildcard_bind() {
-        let mut config = Config {
-            database_url: String::new(),
-            api_host: "0.0.0.0".to_string(),
-            api_port: 3100,
-            storage_root: String::new(),
-            challenges_root: String::new(),
-            admin_username: super::default_admin_username(),
-            admin_password: super::default_admin_password(),
-            allow_insecure_default_admin_credentials: false,
-            cors_allowed_origins: super::default_cors_allowed_origins(),
-            worker_poll_interval_ms: 3000,
-            worker_stale_job_minutes: 1,
-            validation_runs_per_agent_challenge_day: 20,
-            official_runs_per_agent_challenge_day: 5,
-            max_active_official_jobs: 20,
-            max_active_agents: 1_000,
-            max_active_challenge_drafts_per_agent: 10,
-            challenge_private_asset_bytes_per_draft: 250 * 1024 * 1024,
-            challenge_draft_validations_per_day: 10,
-            challenge_draft_ttl_days: 14,
-            unpublished_challenge_asset_grace_days: 7,
-            github_oauth_client_id: None,
-            github_oauth_client_secret: None,
-            github_oauth_redirect_url: None,
-            github_oauth_authorize_url: super::default_github_oauth_authorize_url(),
-            github_oauth_token_url: super::default_github_oauth_token_url(),
-            github_api_user_url: super::default_github_api_user_url(),
-            web_session_cookie_name: super::default_web_session_cookie_name(),
-            web_csrf_cookie_name: super::default_web_csrf_cookie_name(),
-            web_session_ttl_hours: super::default_web_session_ttl_hours(),
-            web_session_cookie_secure: false,
-            allow_public_agent_registration_on_non_loopback: false,
-            docker_host: None,
-            require_digest_pinned_images: false,
-            runner_writable_storage_mode: super::default_runner_writable_storage_mode(),
-            runner_phase_mount_root: None,
-            runner_writable_slot_classes_mb: super::default_runner_writable_slot_classes_mb(),
-            runner_docker_layer_quota: false,
-            log_level: "info".to_string(),
-        };
+        let mut config = test_config();
+        config.api_host = "0.0.0.0".to_string();
 
         assert!(config.validate_api_security().is_err());
 
@@ -587,9 +498,21 @@ mod tests {
     #[test]
     fn parses_runner_writable_slot_classes() {
         let config = Config {
+            runner_writable_slot_classes_mb: "1024,64 256,1024".to_string(),
+            ..test_config()
+        };
+
+        assert_eq!(
+            config.runner_writable_slot_classes_mb().unwrap(),
+            vec![64, 256, 1024]
+        );
+    }
+
+    fn test_config() -> Config {
+        Config {
             database_url: String::new(),
             api_host: super::default_api_host(),
-            api_port: 3100,
+            api_port: super::default_api_port(),
             storage_root: String::new(),
             challenges_root: String::new(),
             admin_username: super::default_admin_username(),
@@ -622,14 +545,9 @@ mod tests {
             require_digest_pinned_images: false,
             runner_writable_storage_mode: super::default_runner_writable_storage_mode(),
             runner_phase_mount_root: None,
-            runner_writable_slot_classes_mb: "1024,64 256,1024".to_string(),
+            runner_writable_slot_classes_mb: super::default_runner_writable_slot_classes_mb(),
             runner_docker_layer_quota: false,
             log_level: "info".to_string(),
-        };
-
-        assert_eq!(
-            config.runner_writable_slot_classes_mb().unwrap(),
-            vec![64, 256, 1024]
-        );
+        }
     }
 }

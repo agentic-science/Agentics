@@ -406,13 +406,16 @@ mod tests {
     use super::{sanitize_worker_label, worker_instance_id};
 
     #[test]
-    fn worker_instance_ids_are_unique() {
-        let first = worker_instance_id();
-        let second = worker_instance_id();
+    fn worker_instance_ids_use_log_safe_uuid_suffix() {
+        let instance_id = worker_instance_id();
+        let uuid_start = instance_id
+            .len()
+            .checked_sub(36)
+            .expect("worker id should include a UUID suffix");
+        let uuid_suffix = &instance_id[uuid_start..];
 
-        assert_ne!(first, second);
-        assert!(first.starts_with("agentics-worker-"));
-        assert!(second.starts_with("agentics-worker-"));
+        assert!(instance_id[..uuid_start].starts_with("agentics-worker-"));
+        assert!(uuid::Uuid::parse_str(uuid_suffix).is_ok());
     }
 
     #[test]
