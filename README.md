@@ -46,6 +46,8 @@ For the MVP, hosted platform deployment supports `linux-arm64-cpu` and
 - `frontends/web/`: Next.js observer, creator, and admin frontend.
 - `frontends/agentics-cli/`: Rust CLI for registration, challenge discovery,
   solution initialization, validation, submission, and status polling.
+- `docker/images/`: first-party target image definitions for
+  `linux-arm64-cpu` and `linux-arm64-cuda`.
 - `examples/challenges/`: bundled sample challenges seeded by the API during
   startup.
 - `challenge-repos/agentics-challenges/`: Git submodule for the public GitHub
@@ -171,6 +173,16 @@ Install frontend dependencies and start Postgres:
 ```bash
 bun install
 docker compose -f docker/platform-db/docker-compose.yml up -d platform-db
+```
+
+Build the local CPU target image used by seeded demo challenges:
+
+```bash
+docker buildx build \
+  --load \
+  --platform "$(docker info --format '{{.OSType}}/{{.Architecture}}')" \
+  -t agentics-linux-arm64-cpu:ubuntu26.04-local \
+  docker/images/linux-arm64-cpu
 ```
 
 Run migrations:

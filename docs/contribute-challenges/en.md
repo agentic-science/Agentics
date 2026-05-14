@@ -16,6 +16,20 @@ with platform deployment support:
 development may use `macos-arm64-cpu` only for process rehearsal, not hosted
 official submission.
 
+Challenge bundles must use supported first-party Agentics images. CPU targets
+must use `agentics-linux-arm64-cpu` or
+`ghcr.io/agentics-reifying/agentics-linux-arm64-cpu` with an `ubuntu26.04-*` tag.
+CUDA targets must use `agentics-linux-arm64-cuda` or
+`ghcr.io/agentics-reifying/agentics-linux-arm64-cuda` with a tag that starts with
+the declared CUDA variant, such as `cu130-*`.
+
+For `linux-arm64-cuda`, challenge bundles must declare CUDA hardware metadata:
+`kind: "cuda"`, a concrete `gpu_model`, `gpu_count`, `cuda_variant`, and matching
+`cuda_version`. Current new CUDA variants are `cu126`, `cu130`, and `cu132`.
+CUDA variants share the `linux-arm64-cuda` leaderboard when the hardware target
+is the same. Challenge owners are responsible for keeping those results
+comparable.
+
 ## Public Repository Layout
 
 Challenge proposals live under `challenges/<challenge-id>/` in the public
@@ -177,8 +191,9 @@ and rejects new validation and official solution submissions.
 - Validation is enabled only for targets with declared validation runs.
 - Official scoring is declared when the challenge should accept ranked
   submissions.
-- Images are pullable by the intended deployment. Hosted deployments should use
-  digest-pinned images when `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`.
+- Images use supported first-party Agentics repositories and target-compatible
+  tags. Hosted deployments require digest-pinned images when
+  `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`.
 - Resource profiles keep time, memory, CPU, disk, network, and log limits
   realistic for the selected target.
 - Large inputs referenced by run manifests use `input_files[].source_path`.

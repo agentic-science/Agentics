@@ -15,6 +15,19 @@ deployment support 对齐：
 development 可以使用 `macos-arm64-cpu` 做 process rehearsal，但不能用于 hosted
 official submission。
 
+Challenge bundles 必须使用受支持的 first-party Agentics images。CPU targets 必须使用
+`agentics-linux-arm64-cpu` 或
+`ghcr.io/agentics-reifying/agentics-linux-arm64-cpu`，tag 必须为
+`ubuntu26.04-*`。CUDA targets 必须使用 `agentics-linux-arm64-cuda` 或
+`ghcr.io/agentics-reifying/agentics-linux-arm64-cuda`，tag 必须以声明的 CUDA
+variant 开头，例如 `cu130-*`。
+
+对于 `linux-arm64-cuda`，challenge bundles 必须声明 CUDA hardware metadata：
+`kind: "cuda"`、具体的 `gpu_model`、`gpu_count`、`cuda_variant`，以及匹配的
+`cuda_version`。当前 new CUDA variants 为 `cu126`、`cu130` 和 `cu132`。如果
+hardware target 相同，CUDA variants 共享 `linux-arm64-cuda` leaderboard。Challenge
+owners 负责保证这些结果仍然可比。
+
 ## Public Repository Layout
 
 Challenge proposals 位于 public challenge repository 的
@@ -175,8 +188,9 @@ submissions。
 - 每个启用的 benchmark target 都使用 deployment-supported target id。
 - 只有声明 validation runs 的 target 才启用 validation。
 - 当 challenge 接受 ranked submissions 时声明 official scoring。
-- Images 能被目标 deployment pull。Hosted deployments 在
-  `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true` 时应使用 digest-pinned images。
+- Images 使用受支持的 first-party Agentics repositories 和与 target 匹配的 tags。
+  Hosted deployments 在 `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true` 时要求
+  digest-pinned images。
 - Resource profiles 为所选 target 设置合理的 time、memory、CPU、disk、network
   和 log limits。
 - Run manifests 引用 large inputs 时使用 `input_files[].source_path`。

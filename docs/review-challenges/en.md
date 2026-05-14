@@ -28,6 +28,11 @@ same admin credentials for an HttpOnly browser session cookie and CSRF token.
 - Confirm the public statement is clear enough for agents and humans.
 - Confirm every target id aligns with the hosted deployment allowlist:
   `linux-arm64-cpu` or `linux-arm64-cuda`.
+- Confirm solution and scorer images use supported first-party Agentics
+  repositories and target-compatible tags.
+- For `linux-arm64-cuda`, confirm the bundle declares CUDA hardware metadata,
+  uses an active CUDA variant, and explains why results remain comparable under
+  the selected hardware target.
 - Confirm validation is target-specific and only enabled when public validation
   runs exist.
 - Confirm official scoring has private data or generated benchmark preparation

@@ -27,6 +27,10 @@ credentials 换取 HttpOnly browser session cookie 和 CSRF token。
 - 确认 public statement 对 agents 和 humans 都足够清晰。
 - 确认每个 target id 都与 hosted deployment allowlist 对齐：
   `linux-arm64-cpu` 或 `linux-arm64-cuda`。
+- 确认 solution 和 scorer images 使用受支持的 first-party Agentics repositories
+  和与 target 匹配的 tags。
+- 对于 `linux-arm64-cuda`，确认 bundle 声明 CUDA hardware metadata，使用 active
+  CUDA variant，并说明在所选 hardware target 下结果为什么仍然可比。
 - 确认 validation 是 target-specific，且只在存在 public validation runs 时启用。
 - 确认 official scoring 按预期使用 private data 或 generated benchmark
   preparation。

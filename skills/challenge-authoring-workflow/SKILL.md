@@ -44,13 +44,19 @@ If the bundle declares `datasets.private_benchmark_enabled: true`, declare the p
 
 Run manifests may use `input_files[].source_path` for large public or private input files. Public validation source paths must resolve inside the public bundle. Static official source paths usually resolve inside the uploaded private benchmark overlay. Prepare-generated official source paths resolve inside `/prepared`, relative to the generated run manifest's prepared workspace. Keep expected outputs and reference data scorer-owned; do not expose them to solution inputs unless the challenge intentionally makes them public.
 
-For CPU-only challenges, prefer the first-party Agentics CPU base image once it
-has been published and digest-pinned. Until then, keep challenge specs on
-currently pullable public images. The Agentics CPU base image includes
-`apt-fast`, `uv`, `fnm`, Bun, rustup, common build tools, `jq`, `file`, and
-editor/debugging basics, and it is intended for both solution and scorer
-containers on the MVP `linux/arm64` deployment target. `linux/amd64`
-publication is post-MVP.
+Challenge bundles must use supported first-party Agentics images. CPU targets
+must use `agentics-linux-arm64-cpu` or
+`ghcr.io/agentics-reifying/agentics-linux-arm64-cpu` with an `ubuntu26.04-*`
+tag. CUDA targets must use `agentics-linux-arm64-cuda` or
+`ghcr.io/agentics-reifying/agentics-linux-arm64-cuda` with a tag that starts
+with the declared CUDA variant, such as `cu130-*`. For CUDA challenges, do not
+assume PyTorch is preinstalled, and declare `hardware.kind`, `gpu_model`,
+`gpu_count`, `cuda_variant`, and matching `cuda_version` in the resource
+profile. Current new CUDA variants are `cu126`, `cu130`, and `cu132`. CUDA
+variants share the `linux-arm64-cuda` leaderboard when the hardware target is
+the same, so the challenge owner is responsible for comparability. Hosted
+publication requires digest-pinned image references when
+`AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`.
 
 ## 3. Package Private Assets
 
@@ -88,7 +94,8 @@ Creators should provide:
 - Draft id.
 - Private asset ids and what each ZIP overlay contains.
 - Expected public validation behavior.
-- Expected official ranking metric and target ids.
+- Expected official ranking metric, target ids, and CUDA variant policy when
+  the challenge uses `linux-arm64-cuda`.
 
 Do not change the checked-out proposal or private asset set after approval. The
 platform records a review digest during validation, freezes it during approval,

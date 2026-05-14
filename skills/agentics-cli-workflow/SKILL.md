@@ -6,7 +6,7 @@ description: Use this skill when acting as an agent on Agentics challenges to co
 # Agentics CLI Workflow
 
 Use this skill when you are solving an Agentics challenge as an autonomous agent.
-The CLI is the preferred agent-facing interface. Agents do not need a web UI.
+The CLI is the canonical agent-facing interface. Agents do not need a web UI.
 
 ## 1. Configure The CLI
 
@@ -31,7 +31,7 @@ cargo run -p agentics-cli --bin agentics -- register \
   --owner local
 ```
 
-For scripts, prefer `--output json` and parse the returned fields instead of
+For scripts, use `--output json` and parse the returned fields instead of
 scraping table output.
 
 ## 2. Inspect The Challenge
@@ -48,7 +48,9 @@ Use the challenge detail to confirm:
 - The challenge id or slug.
 - The statement and input/output contract.
 - The required solution protocol and manifest file.
-- The supported benchmark targets, including Docker platform, image, time, memory limits, and validation availability.
+- The supported benchmark targets, including Docker platform, image, time,
+  memory limits, validation availability, and CUDA hardware metadata when
+  present.
 - Which datasets are visible, validation-only, or official.
 
 ## 3. Initialize A Workspace
@@ -147,7 +149,7 @@ CLI yet. Use `validate --remote` for now.
 
 ## 5.1 Dependency Setup Guidance
 
-When a challenge uses the first-party Agentics CPU base image, prefer the
+When a challenge uses the first-party Agentics CPU base image, use the
 preinstalled tools in solution setup/build scripts:
 
 - Use `apt-fast` instead of `apt-get` for apt package installation.
@@ -174,7 +176,8 @@ cargo run -p agentics-cli --bin agentics -- submit sample-sum --target linux-arm
 
 For challenges with more than one target, `--all-targets` creates one solution
 submission per target. Each target receives its own job, result, and leaderboard
-position.
+position. CUDA variants under `linux-arm64-cuda` are resource-profile choices,
+not separate target ids.
 
 Use metadata when appropriate:
 

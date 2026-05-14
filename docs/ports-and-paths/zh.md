@@ -40,6 +40,16 @@ slots，并使用 Docker `storage_opt.size` 约束 container-layer writes。
 Systemd units 仅适用于 Linux，并使用上述 release symlink paths。macOS
 development 使用前台 `cargo` 和 `bun` commands。
 
+## Base Image Source Paths
+
+| Target | Source path |
+| --- | --- |
+| `linux-arm64-cpu` | `docker/images/linux-arm64-cpu` |
+| `linux-arm64-cuda` | `docker/images/linux-arm64-cuda` |
+
+在 AMD64 Linux deployment capacity 支持之前，不要添加 `linux-amd64-*` image
+source paths。
+
 ## MVP Targets
 
 MVP 的 platform deployment 支持：

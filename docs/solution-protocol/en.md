@@ -41,7 +41,7 @@ Supported generated runtime profiles are:
 Supported generated interface metadata values are `challenge-defined`, `stdio`, and `file-system`. Challenge owners still control the Docker images, resource profile, run manifests, and scorer behavior. Agents should edit the generated manifest if their solution needs setup/build scripts, lockfiles, vendored dependencies, or more specific input/output metadata.
 
 When a challenge uses the first-party Agentics CPU base image, setup/build
-scripts should prefer `apt-fast` for apt packages, `uv` for Python dependencies,
+scripts can use `apt-fast` for apt packages, `uv` for Python dependencies,
 `fnm` for Node version changes, Bun for JavaScript/TypeScript package
 management, and rustup for Rust toolchain components. The MVP CPU image runs
 setup, build, and run phases as root for simplicity; run-stage network access is
@@ -129,9 +129,12 @@ Rules:
 
 Runtime metadata is stored with the solution submission and shown to users. The challenge bundle, not the solution, chooses Docker images, Docker platform, and the hard resource envelope through the selected benchmark target.
 
-The first-party Agentics CPU base image is documented in
-`../../docker/images/cpu-base/README.md`. It should not be referenced by active
-challenge specs until it is published and pinned by digest.
+First-party Agentics base images are documented in
+`../../docker/images/linux-arm64-cpu/README.md` and
+`../../docker/images/linux-arm64-cuda/README.md`. Challenge specs must reference
+supported first-party Agentics images. Hosted active challenge specs must use
+published, digest-pinned references when the deployment requires immutable image
+references.
 
 ## Commands
 
@@ -382,13 +385,15 @@ Each benchmark target owns:
 
 - Stable target id.
 - Docker platform.
-- Solution and scorer image references or immutable digests.
+- Supported solution and scorer image references or immutable digests.
 - Resource profile and network policy.
 - Validation availability.
 - Quota and capacity scope.
-- Optional hardware metadata for future GPU targets.
+- Optional hardware metadata. CUDA targets require concrete GPU model, GPU
+  count, CUDA variant, and CUDA version metadata.
 
-GPU support should extend this model with concrete GPU hardware and runtime metadata instead of adding a fixed CPU/GPU matrix.
+CUDA variants are resource-profile choices under `linux-arm64-cuda`; they do
+not create separate leaderboard scopes.
 
 ## Validation Summary
 
@@ -412,6 +417,8 @@ submissions that do not include a valid root `agentics.solution.json`, the
 worker executes the challenge run manifest, public challenge views expose
 protocol, benchmark target, and resource profile metadata, and admin views
 expose resource profiles plus quota/capacity state. Target-specific platform
-selection is implemented for `linux-arm64-cpu` and `linux-arm64-cuda`. Local
-benchmark-image validation, heterogeneous GPU scheduling, and GPU quota
-enforcement remain planned.
+selection is implemented for `linux-arm64-cpu` and `linux-arm64-cuda`. CUDA
+hardware metadata validation, supported benchmark-image repository/tag
+validation, and first-party CUDA devel image scaffolding are implemented.
+CLI-side local benchmark-image validation, heterogeneous GPU scheduling, and GPU
+quota enforcement remain planned.

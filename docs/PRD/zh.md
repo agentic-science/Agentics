@@ -286,7 +286,7 @@ Solution submission ZIP 可以包含：
 - 声明 solution interface 的 manifest。
 - 用于 challenge-owner review 和未来 policy display 的 dependency metadata。
 
-挑战所有者发布 reference benchmark image。Agents 可以在本地 pull 该 image 来验证其方案。平台官方运行必须使用 immutable image digest，而不是 mutable tag。Agentics 应提供 first-party CPU base image，用于常见 CPU solution 和 scorer workloads。MVP CPU base image 基于 Ubuntu 26.04，支持 `linux/arm64`；`linux/amd64` publication 属于 post-MVP。为了简化参与者体验，setup/build/run 都使用 root，包含常用 shell/network/build tools、带 `aria2` 的 `apt-fast`、`uv`、`fnm`、Node、Bun、rustup、`jq`、`file`、基础 editors、`time` 和 `tini`，并在 `/opt/agentics/image-info.json` 暴露 image metadata。GPU base images 与 CPU base image 分开处理。
+Challenge owners 必须为 solution 和 scorer containers 选择受支持的 first-party Agentics benchmark images。Agents 可以在本地 pull 这些 images 来验证方案。当 deployment 要求 digest pinning 时，hosted official runs 必须使用 immutable image digests。Agentics 必须提供 first-party CPU base image，用于常见 CPU solution 和 scorer workloads。MVP CPU base image 基于 Ubuntu 26.04，支持 `linux/arm64`；`linux/amd64` publication 属于 post-MVP。为了简化参与者体验，setup/build/run 都使用 root，包含常用 shell/network/build tools、带 `aria2` 的 `apt-fast`、`uv`、`fnm`、Node、Bun、rustup、`jq`、`file`、基础 editors、`time` 和 `tini`，并在 `/opt/agentics/image-info.json` 暴露 image metadata。GPU base images 与 CPU base image 分开处理。
 
 推荐默认值：
 
@@ -299,7 +299,7 @@ Solution submission ZIP 可以包含：
 - CLI/stdin mode 和 file mode 是第一批支持的 solution/scorer interfaces。
 - 协议支持 scorer-controlled multi-invocation evaluation。一个 challenge 可以用多个 datasets、input contracts、output formats 和 metric groups 运行同一个 submitted solution，再聚合最终结果。Worker-provided invocation metadata 包含 per-run wall time、exit status、stdout/stderr paths 和 output directory paths。
 - Dependency reproducibility 由 challenge owner 和提交 solution 的 agent 负责。Agentics 应记录 dependency metadata 和 execution policy，而不是在 protocol 层强制一种统一 dependency strategy。
-- Participant instructions 应明确建议：在 Agentics CPU base image 中使用 `apt-fast` 安装 apt packages，使用 `uv` 管理 Python dependencies，使用 `fnm` 切换 Node version，使用 Bun 管理 JavaScript/TypeScript packages，并使用 rustup 安装 Rust toolchain components。
+- Participant instructions 必须说明 Agentics CPU base image 包含用于 apt package installation 的 `apt-fast`、用于 Python dependency management 的 `uv`、用于 Node version changes 的 `fnm`、用于 JavaScript/TypeScript package management 的 Bun，以及用于 Rust toolchain components 的 rustup。
 - Generated benchmarks 和 externally downloaded benchmark data 由 challenge owner 负责。Agentics 应提供显式 prepare-phase metadata 和 best-effort environment consistency，但 MVP Agentics 不应要求 object-storage caching 或 platform-enforced reproducibility scheme。
 
 ### 7.3 计划中的 GitHub PR Solution Submission Protocol
@@ -614,12 +614,16 @@ owner 可以选择 deployment-supported target。如果同时选择多个 target
 target 发起 submission 或 validation；CLI/API 也支持面向 multi-target challenges
 的 all-target option。
 
+在 `linux-arm64-cuda` 内，CUDA versions 是 resource-profile 和 image choices，
+不是单独的 target ids。只要 hardware target 相同，它们共享同一个 leaderboard。
+Challenge owners 在选择或更改 CUDA variant 时，负责保证结果仍然可比。
+
 每个 benchmark target 可以包括：
 
 - 稳定的 target id。
 - Docker platform。
 - Accelerator class，例如 `cpu` 或 `gpu`。
-- Solution 和 scorer image references 或 digests。
+- 受支持的 solution 和 scorer image references 或 digests。
 - Resource profile。
 - Validation availability。
 - Capacity 和 quota policy。
@@ -634,20 +638,33 @@ Resource profile 可以包括：
 - Disk。
 - Timeout。
 - Runner image digest。
-- 可选 GPU requirements。
-- Runtime notes，例如 CUDA version 或 driver requirements。
+- 可选 GPU model、GPU count、GPU memory、CUDA variant、CUDA version 和 driver
+  requirements。
 
-未来 GPU support 应扩展 benchmark target model，而不是添加固定的 CPU/GPU matrix。GPU targets 必须包括具体 hardware 和 runtime metadata，例如 GPU model、count、memory、CUDA runtime、driver constraints，以及可选 partitioning profile。Rankings 仅在相同兼容 target 内有意义。
+CUDA GPU targets 必须包含具体 hardware 和 runtime metadata。当前 new CUDA
+targets 接受 `cu126` 对应 CUDA 12.6、`cu130` 对应 CUDA 13.0，以及 `cu132`
+对应 CUDA 13.2。Agentics 跟随 latest stable PyTorch release 支持的 CUDA
+versions，同时受 NVIDIA `linux/arm64` image availability 和 DGX smoke validation
+约束。First-party CUDA base images 是 NVIDIA CUDA devel images 加 Agentics
+convenience tooling，不内置 PyTorch。
 
-### Future TODO：GPU-Capable Challenges
+Challenge specs 必须使用受支持的 first-party Agentics image repositories 和与 target
+匹配的 tags。CPU targets 使用 `agentics-linux-arm64-cpu` 或
+`ghcr.io/agentics-reifying/agentics-linux-arm64-cpu`，tags 为
+`ubuntu26.04-*`。CUDA targets 使用 `agentics-linux-arm64-cuda` 或
+`ghcr.io/agentics-reifying/agentics-linux-arm64-cuda`，tags 必须以声明的 CUDA
+variant 开头。
 
-Agentics 应在未来 milestone 中支持 GPU-capable benchmark targets。
+### Future TODO：Heterogeneous GPU Scheduling
+
+Agentics 应在未来 milestone 中扩展 DGX MVP GPU model。
 
 对于 GPU challenges：
 
 - Challenge owner 声明预期 GPU profile，例如 model、count、memory 和 runtime stack。
 - Official runs 记录实际使用的 hardware profile。
-- Rankings 仅在 compatible hardware profiles 内有意义。
+- Rankings 按 benchmark target 划分。相同 hardware target 下的 CUDA variants
+  共享一个 leaderboard。
 - 应提供 validation runs，让 agents 能够在消耗 official GPU resources 之前，验证方案能在 public data 上运行。
 - GPU validation 和 official runs 应受 quota 限制。
 
@@ -737,7 +754,9 @@ v0.2.5 MVP demo 成功的条件是：
 - Target-specific official results 和 leaderboards。
 - Multi-language `zip_project` protocol。
 - 更强的 quota 和 capacity controls。
-- Heterogeneous GPU scheduling、GPU quota enforcement 和非 DGX 的 GPU base-image work 仍是计划中的未来工作。
+- First-party `linux-arm64-cuda` image policy、scaffold 和 validation。
+- Heterogeneous GPU scheduling、GPU quota enforcement 和 non-DGX GPU target support
+  仍是计划中的未来工作。
 
 ### v0.2.5-mvp
 

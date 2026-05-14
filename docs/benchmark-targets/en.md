@@ -16,12 +16,24 @@ The MVP supported targets are:
 expansion. The target contract records an extensible accelerator field, and CUDA targets use
 Docker's NVIDIA runtime and GPU device requests on Linux hosts.
 
-Agentics defines a first-party CPU base image in `docker/images/cpu-base` for
-future published CPU challenges. It targets Ubuntu 26.04 on `linux/arm64` for
-the MVP; `linux/amd64` publication is post-MVP. It can be used for both
-solution and scorer containers after it is published and digest-pinned. Active
-challenge specs should stay on currently pullable images until that release
-digest exists.
+Agentics base-image source directories are target named:
+
+- `docker/images/linux-arm64-cpu`: first-party CPU base image on Ubuntu 26.04.
+- `docker/images/linux-arm64-cuda`: first-party CUDA devel base images on
+  NVIDIA CUDA Ubuntu 24.04 images.
+
+Challenge bundles must use supported first-party Agentics image repositories and
+target-compatible tags. CPU targets must use `agentics-linux-arm64-cpu` or
+`ghcr.io/agentics-reifying/agentics-linux-arm64-cpu` with an `ubuntu26.04-*` tag.
+CUDA targets must use `agentics-linux-arm64-cuda` or
+`ghcr.io/agentics-reifying/agentics-linux-arm64-cuda` with a tag that starts with
+the declared CUDA variant, such as `cu130-*`.
+
+The CUDA base images intentionally do not include PyTorch. CUDA variants follow
+CUDA versions supported by the latest stable PyTorch release, subject to NVIDIA
+`linux/arm64` image availability and DGX smoke validation. Published challenge
+specs must use digest-pinned solution and scorer images when hosted deployment
+requires `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`.
 
 ## Schema
 
@@ -36,9 +48,9 @@ Challenge versions must declare one or more benchmark targets:
       "accelerator": "cpu",
       "validation_enabled": true,
       "resource_profile": {
-        "id": "python-cpu-small",
-        "solution_image": "python:3.12-slim-bookworm",
-        "scorer_image": "python:3.12-slim-bookworm",
+        "id": "agentics-cpu-small",
+        "solution_image": "agentics-linux-arm64-cpu:ubuntu26.04-local",
+        "scorer_image": "agentics-linux-arm64-cpu:ubuntu26.04-local",
         "timeout_sec": 30,
         "memory_limit_mb": 512,
         "cpu_limit_millis": 1000,
@@ -58,13 +70,42 @@ Rules:
 - `benchmark_targets` must not be empty.
 - Target ids must be unique within a challenge version.
 - `linux-arm64-cpu` must use Docker platform `linux/arm64` and accelerator `cpu`.
-- `linux-arm64-cuda` must use Docker platform `linux/arm64`, accelerator `gpu`, and `resource_profile.hardware.kind: "cuda"`.
+- `linux-arm64-cuda` must use Docker platform `linux/arm64`, accelerator `gpu`,
+  and CUDA hardware metadata in `resource_profile.hardware`.
 - AMD64 Linux targets are reserved for post-MVP deployment support.
 - `validation_enabled` is target-specific. Validation can be enabled for one target and disabled for another.
-- `resource_profile` contains the Docker images, hard resource limits, network policy, optional image digests, optional resource description, and optional hardware metadata for that target. Hosted deployments should enable `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`, which requires solution and scorer images to use immutable `@sha256:<digest>` references.
-- For CPU-only challenges, prefer the first-party Agentics CPU base image once it is published. Its participant-facing setup guidance is to use `apt-fast` for apt packages, `uv` for Python dependencies, `fnm` for Node version changes, Bun for JavaScript/TypeScript package management, and rustup for Rust toolchain components.
+- `resource_profile` contains the Docker images, hard resource limits, network policy, optional image digests, optional resource description, and optional hardware metadata for that target. The solution and scorer images must use supported first-party Agentics image repositories and target-compatible tags. Hosted deployments should enable `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`, which requires solution and scorer images to use immutable `@sha256:<digest>` references.
+- CPU targets must use the first-party Agentics CPU base image. Its participant-facing setup guidance is to use `apt-fast` for apt packages, `uv` for Python dependencies, `fnm` for Node version changes, Bun for JavaScript/TypeScript package management, and rustup for Rust toolchain components.
 - If any target has `validation_enabled: true`, the bundle must declare `execution.validation_runs`.
 - If private benchmark scoring is enabled, the bundle must declare `execution.official_runs`.
+
+CUDA target hardware metadata must include:
+
+```json
+{
+  "resource_profile": {
+    "hardware": {
+      "kind": "cuda",
+      "gpu_model": "NVIDIA GB10",
+      "gpu_count": 1,
+      "gpu_memory_gb": 128,
+      "cuda_variant": "cu130",
+      "cuda_version": "13.0",
+      "driver_minimum": ">=580"
+    }
+  }
+}
+```
+
+Required fields are `kind`, `gpu_model`, `gpu_count`, `cuda_variant`, and
+`cuda_version`. `gpu_memory_gb` and `driver_minimum` are optional but must be
+valid when present. New CUDA targets currently accept `cu126` with CUDA 12.6,
+`cu130` with CUDA 13.0, and `cu132` with CUDA 13.2.
+
+CUDA variants are resource-profile choices under `linux-arm64-cuda`, not
+separate target ids. They share the same target leaderboard when the hardware
+target is the same. Challenge owners are responsible for preserving
+comparability when choosing or changing CUDA variants for a challenge version.
 
 ## Submission API
 
@@ -104,6 +145,7 @@ Workers read the selected target from the evaluation job payload. The target con
 - Docker platform used when creating setup, build, run, and scorer containers.
 - Solution and scorer images.
 - Timeout, memory, CPU, disk, network, and log limits.
+- Accelerator policy and CUDA hardware metadata for GPU targets.
 
 Private benchmark data remains mounted only in the scorer environment.
 
@@ -115,4 +157,7 @@ Leaderboards are target-specific. Public leaderboard requests must include a `ta
 GET /api/public/challenges/sample-sum/leaderboard?target=linux-arm64-cpu
 ```
 
-The response includes `benchmark_target_id`, and each row belongs to the same target. Ranking comparisons are meaningful only within a target because architecture, CPU, GPU, and runtime constraints can change benchmark results.
+The response includes `benchmark_target_id`, and each row belongs to the same
+target. Ranking comparisons are scoped by target. CUDA variants under the same
+`linux-arm64-cuda` hardware target intentionally share a leaderboard because
+the variant choice is part of optimization and runtime selection.

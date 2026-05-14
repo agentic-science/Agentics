@@ -46,7 +46,7 @@ account：
 AGENTICS_DGX_DOCKER_CLI='sudo -n docker' \
 AGENTICS_DGX_RUN_DOCKER_SMOKE=1 \
 AGENTICS_DGX_DOCKER_PULL_POLICY=never \
-AGENTICS_DGX_CUDA_IMAGE=nvidia/cuda:12.9.1-base-ubuntu24.04 \
+AGENTICS_DGX_CUDA_IMAGE=nvidia/cuda:13.0.1-base-ubuntu24.04 \
 scripts/ops/check-dgx-spark-host.sh
 ```
 

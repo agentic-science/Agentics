@@ -41,6 +41,16 @@ writes.
 The systemd units are Linux-only and use the release symlink paths above.
 macOS development uses foreground `cargo` and `bun` commands instead.
 
+## Base Image Source Paths
+
+| Target | Source path |
+| --- | --- |
+| `linux-arm64-cpu` | `docker/images/linux-arm64-cpu` |
+| `linux-arm64-cuda` | `docker/images/linux-arm64-cuda` |
+
+Do not add `linux-amd64-*` image source paths until AMD64 Linux deployment
+capacity is supported.
+
 ## MVP Targets
 
 Platform deployment for the MVP supports:

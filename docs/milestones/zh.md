@@ -295,8 +295,13 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 
 - **M0.2-IMAGE-1：定义 first-party CPU base image**
   - Commit target：`docker: add agentics cpu base image`
-  - Scope：添加 source-defined Agentics CPU base image，用于 solution 与 scorer containers。MVP 发布和 smoke `linux/arm64`；`linux/amd64` publication 保留给 post-MVP capacity。使用 Ubuntu 26.04；为了 MVP 简洁性，setup/build/run 都使用 root；安装 shell/core utilities、network tools、build tools、带 `aria2` 的 `apt-fast`、`uv`、`fnm`、Node、Bun、rustup、`jq`、`file`、基础 editor/debugging tools、`time` 和 `tini`。添加 image metadata、smoke script、local build instructions 和 participant guidance。发布 release digest 之前，不发布该 image，也不切换 active challenge specs。
-  - Test spec：对 image scripts 运行 shell syntax checks；网络稳定后，用 Docker Buildx 构建 `linux/arm64`，并在该 supported MVP platform 上运行 `/opt/agentics/smoke.sh`。
+  - Scope：添加 source-defined Agentics CPU base image，用于 solution 与 scorer containers。MVP 发布和 smoke `linux/arm64`；`linux/amd64` publication 保留给 post-MVP capacity。使用 Ubuntu 26.04；为了 MVP 简洁性，setup/build/run 都使用 root；安装 shell/core utilities、network tools、build tools、带 `aria2` 的 `apt-fast`、`uv`、`fnm`、Node、Bun、rustup、`jq`、`file`、基础 editor/debugging tools、`time` 和 `tini`。添加 image metadata、smoke script、local build instructions、participant guidance，以及要求 CPU targets 使用受支持 `agentics-linux-arm64-cpu` repositories 和 `ubuntu26.04-*` tags 的 validation。
+  - Test spec：对 image scripts 运行 shell syntax checks；网络稳定后，用 Docker Buildx 构建 `linux/arm64`，并在该 supported MVP platform 上运行 `/opt/agentics/smoke.sh`。为 supported 和 unsupported CPU image repositories/tags 添加 bundle-validation tests。
+
+- **M0.2-IMAGE-2：定义 first-party CUDA devel base images**
+  - Commit target：`docker: add agentics cuda base images`
+  - Scope：添加 target-named `linux-arm64-cuda` image sources，基于 NVIDIA CUDA devel Ubuntu 24.04 images。维护 latest stable PyTorch release 支持的 CUDA versions 对应 active variants，同时受 NVIDIA `linux/arm64` image availability 和 DGX smoke validation 约束。不内置 PyTorch。将 CUDA variant、CUDA version、NVIDIA base image、Ubuntu version 和 Agentics image version 写入 labels 和 `/opt/agentics/image-info.json`。验证 CUDA targets 使用受支持 `agentics-linux-arm64-cuda` repositories，并且 tags 以声明的 CUDA variant 开头。
+  - Test spec：验证所选 NVIDIA base image manifests 包含 `linux/arm64`；对 image scripts 运行 shell syntax checks；网络稳定后用 Docker Buildx 构建每个 active variant；发布前在 DGX 上使用 `AGENTICS_GPU_SMOKE_REQUIRE_DEVICE=1` 运行 `/opt/agentics/smoke.sh`。为 CUDA image variant/tag alignment 添加 bundle-validation tests。
 
 ### Worker 和 Resource Profiles
 
@@ -401,12 +406,13 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 | `M0.2-PROTO-2：添加 setup/build/run phase model` | 已实现 | 添加 per-phase defaults、override validation、execution plan resolution 和 failure-report models。 |
 | `M0.2-PROTO-3：添加 dependency policy validation` | 已推迟 | 作为 standalone milestone 废弃；dependency reproducibility 属于 challenge owners 和 submitting agents 的责任，Agentics 记录 metadata 和 execution policy。 |
 | `M0.2-PROTO-4：添加 scorer-owned prepare phase` | 已实现 | Challenge bundles 可以在 solution invocations 之前，在 scorer-owned `/prepared` workspace 中生成 validation 或 official run manifests 和 source-backed inputs。 |
-| `M0.2-TARGET-1：定义 benchmark target schema` | 已实现 | Challenge bundles 现在声明带有 canonical ARM64 CPU/CUDA target ids、Docker platform、accelerator、validation flag 和 target-owned resource profile 的 `benchmark_targets`。AMD64 Linux targets 在 post-MVP deployment capacity 存在前会被拒绝。 |
+| `M0.2-TARGET-1：定义 benchmark target schema` | 已实现 | Challenge bundles 现在声明带有 canonical ARM64 CPU/CUDA target ids、Docker platform、accelerator、validation flag 和 target-owned resource profile 的 `benchmark_targets`。CUDA targets 必须声明 hardware model、GPU count、CUDA variant 和匹配的 CUDA version metadata。AMD64 Linux targets 在 post-MVP deployment capacity 存在前会被拒绝。 |
 | `M0.2-TARGET-2：添加 target-specific evaluations 和 leaderboards` | 已实现 | Solution submissions、jobs、evaluations、quotas、workers、API DTOs 和 leaderboard rows 现在都携带 `benchmark_target_id`；HTTP submissions 会在 artifact decode 前校验 target。 |
-| `M0.2-IMAGE-1：定义 first-party CPU base image` | 已实现 | 添加 source-defined Ubuntu 26.04 CPU base image files、smoke checks、local build docs 和 participant guidance。发布和 digest rollout 已有意推迟。 |
+| `M0.2-IMAGE-1：定义 first-party CPU base image` | 已实现 | 添加 source-defined Ubuntu 26.04 CPU base image files、smoke checks、local build docs、participant guidance，以及要求 supported CPU image repositories 和 `ubuntu26.04-*` tags 的 validation。发布和 digest rollout 已有意推迟。 |
+| `M0.2-IMAGE-2：定义 first-party CUDA devel base images` | 已实现 | 添加 target-named `linux-arm64-cuda` image sources、active CUDA 12.6/13.0/13.2 variant policy、NVIDIA manifest digests、metadata labels、smoke checks、DGX publication guidance，以及要求 CUDA image tag 匹配声明 variant 的 validation。Publishing 和 DGX runtime smoke 仍然 deferred。 |
 | `M0.2-WORKER-1：执行 multi-phase solution-submissions` | 已实现 | 在 build solution container 中运行 setup/build，在 fresh solution container 中运行每次 invocation，支持 source-backed run inputs，记录 per-invocation metadata，并将 scoring 隔离到单独 scorer container。 |
 | `M0.2-WORKER-2：添加 resource profile enforcement` | 已实现 | 强制执行 challenge-declared Docker images、timeout、memory、CPU、disk、image digest validation 和 network policy。 |
-| `M0.2-WORKER-3：添加 GPU profile recording` | 已实现 | Benchmark targets 为 DGX MVP 记录 accelerator 和 CUDA hardware metadata。 |
+| `M0.2-WORKER-3：添加 GPU profile recording` | 已实现 | Benchmark targets 为 DGX MVP 记录 accelerator 和 CUDA hardware metadata，包括 CUDA variant 和 version。 |
 | `M0.2-WORKER-4：添加 GPU validation 和 official scheduling hooks` | 计划中 | Single-DGX CUDA execution 使用 target accelerator metadata；heterogeneous worker capability flags 和 GPU-specific scheduling 仍是计划中。 |
 | `M0.2-BE-1：暴露 resource profiles` | 已实现 | Public challenge detail responses 暴露 strict benchmark target 和 resource profile metadata，并拒绝 invalid stored specs。 |
 | `M0.2-BE-2：添加 capacity 和 quota controls` | 已实现 | 在 artifact upload 前执行 validation 和 official quotas，暴露 `/admin/capacity`，并记录 admin official-run overrides。Heterogeneous GPU quota 保留在未来 GPU lane 中。 |
@@ -419,7 +425,7 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 | `M0.2-ADMIN-1：管理 resource profiles 和 quotas` | 已实现 | Admin challenge rows 展示 current benchmark targets 和 mode flags；capacity tab 展示 configured quotas 和 active usage。Heterogeneous GPU configuration 保留在未来 GPU lane 中。 |
 | `M0.2-EXAMPLE-1：添加 zip_project protocol fixture challenges 和 submissions` | 已实现 | 添加 sample-sum stdio、grid-routing file-mode 和 matrix-multiplication multi-invocation fixtures、manifest-based solutions、scorer tests，以及覆盖 timing metadata、private source-backed inputs 和 run-stage no-egress behavior 的 worker integration tests。 |
 | `M0.2-DOC-1：记录 multi-language challenge authoring` | 已实现 | 已记录 canonical protocol、generated CLI profiles、run manifests、resource profiles、execution isolation、dependency metadata、quota controls 和 admin capacity views。Local benchmark-image validation 保持为 `M0.2-CLI-2`。 |
-| `M0.2-DOC-2：记录 GPU benchmark expectations` | 计划中 | 更完整的 GPU expectations 应与 heterogeneous GPU scheduling 一起交付；MVP CUDA target policy 已由 benchmark target 和 DGX docs 覆盖。 |
+| `M0.2-DOC-2：记录 GPU benchmark expectations` | 已实现 | MVP CUDA target policy 已记录 required hardware metadata、active CUDA variants、`linux-arm64-cuda` 下的 shared leaderboard behavior，以及 challenge-owner comparability responsibility。Heterogeneous GPU scheduling docs 仍是未来工作。 |
 | `M0.2-DOC-3：记录 benchmark target authoring` | 已实现 | 新增双语 v0.2 benchmark target docs，覆盖 target ids、Docker platforms、validation flags、target-aware APIs、CLI behavior、worker behavior 和 leaderboards。 |
 
 ## v0.2.5-mvp - Hosted MVP Demo 和 Human-Facing Web Revamp
