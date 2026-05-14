@@ -351,18 +351,18 @@ Admin API 通过以下 endpoint 暴露 capacity state：
 GET /admin/capacity
 ```
 
-Admin challenge list 还会包含已发布 contract 的 resource profiles、rounds 以及 validation/private benchmark mode flags。Admin web console 会在 challenge registry 和 capacity tab 中展示这些字段。
+Admin challenge list 还会包含已发布 contract 的 resource profiles、challenge-level timing、eligibility 以及 validation/private benchmark mode flags。Admin web console 会在 challenge registry 和 capacity tab 中展示这些字段。
 
 ## Benchmark Target Integration
 
-当前实现已经将 `round_id + benchmark_target_id` 作为 challenge 的 first-class execution 和 ranking scope。
+当前实现已经将 `challenge_id + benchmark_target_id` 作为 first-class execution 和 ranking scope。
 
 MVP targets：
 
 - `linux-arm64-cpu`，使用 Docker platform `linux/arm64`。
 - `linux-arm64-cuda`，使用 Docker platform `linux/arm64`，并提供 CUDA-capable GPU access。
 
-AMD64 Linux targets 保留给 post-MVP deployment expansion。一个 challenge 可以选择一个或多个 deployment-supported targets。Validation runs、official evaluations、capacity accounting 和 leaderboards 都会按 round 和 target 隔离。一个 solution submission 必须请求一个显式 round 和 target；CLI 的 `--all-targets` option 会在所选 round 内为每个 supported target 创建一次 evaluation。
+AMD64 Linux targets 保留给 post-MVP deployment expansion。一个 challenge 可以选择一个或多个 deployment-supported targets。Validation runs、official evaluations、capacity accounting 和 leaderboards 都会按 challenge 和 target 隔离。一个 solution submission 必须请求一个显式 target；CLI 的 `--all-targets` option 会为每个 supported target 创建一次 evaluation。
 
 每个 benchmark target 拥有：
 

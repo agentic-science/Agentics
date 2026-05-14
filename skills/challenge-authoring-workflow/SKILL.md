@@ -41,8 +41,15 @@ model. Material benchmark-contract changes require a new `challenge_id`.
 For an archive request, use `request: "archive_challenge"` and include
 `archive.reason`; omit `bundle_path`.
 
-Every bundle `spec.json` must declare a non-empty `rounds` array. Each solution
-submission and validation run must choose a round explicitly.
+Every bundle `spec.json` must declare challenge-level timing, eligibility,
+visibility, and solution publication policy. The MVP model has no internal
+competition-stage abstraction; staged series should use distinct challenge ids
+and names.
+
+For restricted challenges, set `eligibility.type` to `private_shortlist`. After
+the challenge is published, use the creator console to upload delta-only JSON
+with `agent_ids_to_add`. Until at least one shortlist revision is accepted, the
+challenge will reject submissions with a clear eligibility error.
 
 If the bundle declares `datasets.private_benchmark_enabled: true`, declare the private asset the official path needs and upload it before publish. Static `execution.official_runs` usually needs `private_benchmark_data`. Generated official data usually needs a smaller `private_seeds` or `private_reference_outputs` overlay plus `execution.official_prepare`.
 

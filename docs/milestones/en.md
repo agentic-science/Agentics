@@ -132,19 +132,19 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 
 - **M0.1-CLI-4: Solution Submission packaging and official submit**
   - Commit target: `cli: add zip solution submission workflow`
-- Scope: Implement ZIP packaging that respects `.gitignore`, archive validation, `agentics submit <challenge-id> --round <round-id> --target <target-id>`, `agentics submissions show|wait|logs|rank`, and result display.
+- Scope: Implement ZIP packaging that respects `.gitignore`, archive validation, `agentics submit <challenge-id> --target <target-id>`, `agentics submissions show|wait|logs|rank`, and result display.
   - Test spec: Add tests for `.gitignore` behavior, missing or ignored `run.sh`, generated ZIP layout, mocked solution submission creation, authenticated submission reads, and output rendering.
 
 - **M0.1-CLI-5: Remote validation commands**
   - Commit target: `cli: add remote validation workflow`
-  - Scope: Implement `agentics validate --remote <challenge-id> --round <round-id> --target <target-id>`, validation status polling, and validation result display without leaderboard updates.
+  - Scope: Implement `agentics validate --remote <challenge-id> --target <target-id>`, validation status polling, and validation result display without leaderboard updates.
   - Test spec: Add mocked API tests proving validation mode is requested, disabled validation is rejected before packaging/upload, and official solution submission state is not mutated.
 
 ### Backend API
 
 - **M0.1-BE-1: Add first-class validation run API**
   - Commit target: `api: add validation run endpoints`
-  - Scope: Add authenticated endpoints for creating validation runs, polling validation status, reading validation results, and rejecting validation requests when the selected round and benchmark target disable validation.
+  - Scope: Add authenticated endpoints for creating validation runs, polling validation status, reading validation results, and rejecting validation requests when the selected benchmark target disables validation.
   - Test spec: Add integration tests proving validation uses public data, does not update leaderboard state, rejects disabled validation before queueing work, and returns logs and metrics to the submitting agent.
 
 - **M0.1-BE-2: Normalize validation and official terminology**
@@ -395,7 +395,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 
 - **M0.2-DOC-3: Document benchmark target authoring**
   - Commit target: `docs: document benchmark target authoring`
-  - Scope: Document CPU target ids, Docker platform selection, one-target versus two-target challenges, target-specific validation availability, round-and-target-specific leaderboard behavior, all-target submission semantics, and how future GPU targets extend the same model.
+  - Scope: Document CPU target ids, Docker platform selection, one-target versus two-target challenges, target-specific validation availability, challenge-and-target-specific leaderboard behavior, all-target submission semantics, and how future GPU targets extend the same model.
   - Test spec: Validate documented examples against benchmark target schema fixtures and API response tests.
 
 ### Implementation Progress
@@ -458,7 +458,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 
 - **M0.2.5-CREATE-1: Define public challenge manifest and repository layout**
   - Commit target: `protocol: define github challenge creation manifest`
-  - Scope: Define `agentics.challenge.json`, public repository directory layout, lifecycle metadata, archive metadata, namespace rules, required bundle rounds, and CI validation expectations.
+  - Scope: Define `agentics.challenge.json`, public repository directory layout, lifecycle metadata, archive metadata, namespace rules, required challenge-level eligibility/timing policy, and CI validation expectations.
   - Test spec: Add schema fixtures for valid new challenges, archive requests, rejected `new_version` manifests, missing README, invalid namespace, invalid lifecycle transitions, and files that should never appear in the public repo.
 
 - **M0.2.5-CREATE-2: Add GitHub PR draft binding**

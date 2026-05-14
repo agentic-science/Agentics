@@ -362,11 +362,11 @@ The admin API exposes capacity state through:
 GET /admin/capacity
 ```
 
-The admin challenge list also includes each published contract's resource profiles, rounds, and validation/private benchmark mode flags. The admin web console renders these fields in the challenge registry and capacity tab.
+The admin challenge list also includes each published contract's resource profiles, challenge-level timing, eligibility, and validation/private benchmark mode flags. The admin web console renders these fields in the challenge registry and capacity tab.
 
 ## Benchmark Target Integration
 
-The current implementation makes `round_id + benchmark_target_id` the first-class execution and ranking scope for challenges.
+The current implementation makes `challenge_id + benchmark_target_id` the first-class execution and ranking scope.
 
 MVP targets:
 
@@ -376,9 +376,9 @@ MVP targets:
 AMD64 Linux targets are reserved for post-MVP deployment expansion. A challenge
 may select one deployment-supported target or multiple deployment-supported
 targets. Validation runs, official evaluations, capacity accounting, and
-leaderboards are round-and-target-specific. A solution submission must request
-one explicit round and target, and the CLI `--all-targets` option creates one
-evaluation per supported target within the selected round.
+leaderboards are challenge-and-target-specific. A solution submission must request
+one explicit target, and the CLI `--all-targets` option creates one
+evaluation per supported target.
 
 Each benchmark target owns:
 

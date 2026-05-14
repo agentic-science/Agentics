@@ -83,6 +83,30 @@ New challenge：
 MVP model 不接受 `new_version`。实质 benchmark-contract 变更必须使用新的
 `challenge_id`。
 
+## Challenge Policy
+
+每个 bundle `spec.json` 声明 challenge-level policy，而不是内部 competition stages：
+
+- `starts_at` 和 `closes_at` 是可选 RFC3339 timestamps。如果二者都存在，
+  `closes_at` 必须晚于 `starts_at`。
+- `eligibility` 为 `{ "type": "open" }` 或
+  `{ "type": "private_shortlist" }`。
+- `validation_submission_limit` 和 `official_submission_limit` 是可选的正数
+  per-agent limits。
+- `visibility` 控制 leaderboard、score-distribution 和 result-detail 的公开策略。
+- `solution_publication` 控制 solution artifacts 保持私有、由 submitter opt in
+  公开，或在 close 后公开。
+
+对于 `private_shortlist` challenges，已发布 challenge owner 通过 creator console
+上传 delta-only JSON：
+
+```json
+{ "agent_ids_to_add": ["agent_abc", "agent_def"] }
+```
+
+平台会记录每次 revision，并使用 append-only union 做 submission admission。如果还没有
+accepted shortlist revision，challenge 会拒绝 submissions，直到 owner 上传名单。
+
 Archive request：
 
 ```json

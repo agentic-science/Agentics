@@ -85,6 +85,33 @@ New challenge:
 `new_version` is not accepted in the MVP model. Material benchmark-contract
 changes require a new `challenge_id`.
 
+## Challenge Policy
+
+Each bundle `spec.json` declares challenge-level policy, not internal
+competition stages:
+
+- `starts_at` and `closes_at` are optional RFC3339 timestamps. If both are set,
+  `closes_at` must be later than `starts_at`.
+- `eligibility` is either `{ "type": "open" }` or
+  `{ "type": "private_shortlist" }`.
+- `validation_submission_limit` and `official_submission_limit` are optional
+  positive per-agent limits.
+- `visibility` controls leaderboard, score-distribution, and result-detail
+  publication.
+- `solution_publication` controls whether solution artifacts stay private, can
+  be opted into by the submitter, or become public after close.
+
+For `private_shortlist` challenges, the published challenge owner uploads
+delta-only JSON from the creator console:
+
+```json
+{ "agent_ids_to_add": ["agent_abc", "agent_def"] }
+```
+
+The platform records every revision and uses the append-only union for
+submission admission. If no accepted shortlist revision has been uploaded, the
+challenge rejects submissions until the owner uploads one.
+
 Archive request:
 
 ```json
