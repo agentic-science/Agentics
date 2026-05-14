@@ -57,6 +57,16 @@ Cover these lanes when the user asks for a complete review:
    - API contract ownership, route data loading, UI state boundaries, component
      size, visual-system consistency, admin workflow separation, tests, and CLI
      extensibility.
+6. Test quality
+   - Find trivial or low-value tests and report them as P3 findings unless they
+     mask a higher-risk issue. Flag tests that only restate constants, assert
+     fields on freshly constructed structs, check generic library behavior,
+     assert static labels without exercising workflow behavior, or duplicate
+     coverage already provided by stronger contract or integration tests.
+   - Recommend deletion when a test has no meaningful regression value.
+     Recommend replacement when the surrounding code needs coverage of real
+     behavior, edge cases, security properties, API contracts, or user-visible
+     workflows.
 
 ## Agentics-Specific Checks
 
@@ -123,6 +133,11 @@ starting points, then manually judge context:
 
 For implementation follow-up after review, require focused regression tests
 around each fixed behavior. Before committing fixes, run the relevant checks:
+
+Do not add tests just to increase test count. A good test should protect a
+specific behavior, contract, regression, security property, or workflow. Avoid
+tests that merely restate implementation details or prove that a dependency does
+what its own test suite already covers.
 
 - Rust: `cargo fmt --all`, `cargo check`, targeted tests, and
   `cargo clippy --workspace --all-targets -- -D warnings`.
