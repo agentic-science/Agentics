@@ -95,7 +95,15 @@ export const adminChallengeListResponseSchema = z
                           "Network access policy requested for a phase.",
                         ),
                       hardware: z
-                        .object({ kind: z.string() })
+                        .object({
+                          kind: z.string(),
+                          gpu_model: z.string().optional(),
+                          gpu_count: z.number().int().gte(0).optional(),
+                          gpu_memory_gb: z.number().int().gte(0).optional(),
+                          cuda_variant: z.string().optional(),
+                          cuda_version: z.string().optional(),
+                          driver_minimum: z.string().optional(),
+                        })
                         .strict()
                         .describe(
                           "Optional hardware metadata advertised with a resource profile.",
@@ -262,7 +270,15 @@ export const challengeDetailResponseSchema = z
                     .enum(["disabled", "loopback", "enabled"])
                     .describe("Network access policy requested for a phase."),
                   hardware: z
-                    .object({ kind: z.string() })
+                    .object({
+                      kind: z.string(),
+                      gpu_model: z.string().optional(),
+                      gpu_count: z.number().int().gte(0).optional(),
+                      gpu_memory_gb: z.number().int().gte(0).optional(),
+                      cuda_variant: z.string().optional(),
+                      cuda_version: z.string().optional(),
+                      driver_minimum: z.string().optional(),
+                    })
                     .strict()
                     .describe(
                       "Optional hardware metadata advertised with a resource profile.",

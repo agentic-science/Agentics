@@ -14,9 +14,21 @@ use crate::error::{AppError, Result};
 use crate::models::challenge::{
     BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengePrepareSpec,
     ChallengeRunInputFile, ChallengeRunManifest, ChallengeRunSpec, DockerPlatform,
-    PrivateBenchmarkPolicy, ResourceProfileSpec,
+    HardwareProfileSpec, PrivateBenchmarkPolicy, ResourceProfileSpec,
 };
 use crate::zip_project::{ZIP_PROJECT_MANIFEST_FILE, ZIP_PROJECT_PROTOCOL};
+
+const SUPPORTED_CUDA_VARIANTS: &[(&str, &str)] =
+    &[("cu126", "12.6"), ("cu130", "13.0"), ("cu132", "13.2")];
+const SUPPORTED_CPU_IMAGE_REPOSITORIES: &[&str] = &[
+    "agentics-linux-arm64-cpu",
+    "ghcr.io/agentics-reifying/agentics-linux-arm64-cpu",
+];
+const SUPPORTED_CUDA_IMAGE_REPOSITORIES: &[&str] = &[
+    "agentics-linux-arm64-cuda",
+    "ghcr.io/agentics-reifying/agentics-linux-arm64-cuda",
+];
+const CPU_IMAGE_TAG_PREFIX: &str = "ubuntu26.04-";
 
 /// Read `spec.json` from a bundle directory and validate its contract fields.
 pub async fn read_challenge_bundle_spec(bundle_dir: &Path) -> Result<ChallengeBundleSpec> {
@@ -457,21 +469,139 @@ fn validate_benchmark_target(target: &BenchmarkTargetSpec, field: &str) -> Resul
             target.accelerator.as_str()
         )));
     }
-    if target.accelerator == BenchmarkAccelerator::Gpu {
-        match target.resource_profile.hardware.as_ref() {
-            Some(hardware) if hardware.kind == "cuda" => {}
-            _ => {
+    validate_resource_profile(
+        &target.resource_profile,
+        &format!("{field}.resource_profile"),
+    )?;
+
+    match target.accelerator {
+        BenchmarkAccelerator::Cpu => {
+            validate_supported_target_images(target, SupportedTargetImage::Cpu, field)?
+        }
+        BenchmarkAccelerator::Gpu => {
+            let cuda_variant = validate_cuda_hardware(
+                target.resource_profile.hardware.as_ref(),
+                &format!("{field}.resource_profile.hardware"),
+            )?;
+            validate_supported_target_images(
+                target,
+                SupportedTargetImage::Cuda { cuda_variant },
+                field,
+            )?;
+        }
+    }
+
+    Ok(())
+}
+
+enum SupportedTargetImage<'a> {
+    Cpu,
+    Cuda { cuda_variant: &'a str },
+}
+
+fn validate_supported_target_images(
+    target: &BenchmarkTargetSpec,
+    image_kind: SupportedTargetImage<'_>,
+    field: &str,
+) -> Result<()> {
+    validate_supported_image_reference(
+        &target.resource_profile.solution_image,
+        &format!("{field}.resource_profile.solution_image"),
+        &image_kind,
+    )?;
+    validate_supported_image_reference(
+        &target.resource_profile.scorer_image,
+        &format!("{field}.resource_profile.scorer_image"),
+        &image_kind,
+    )
+}
+
+fn validate_supported_image_reference(
+    image: &str,
+    field: &str,
+    image_kind: &SupportedTargetImage<'_>,
+) -> Result<()> {
+    let parsed_image = parse_tagged_image_reference(image, field)?;
+    match image_kind {
+        SupportedTargetImage::Cpu => {
+            require_supported_image_repository(
+                parsed_image.repository,
+                SUPPORTED_CPU_IMAGE_REPOSITORIES,
+                "linux-arm64-cpu",
+                field,
+            )?;
+            if !parsed_image.tag.starts_with(CPU_IMAGE_TAG_PREFIX) {
                 return Err(AppError::Validation(format!(
-                    "{field}.resource_profile.hardware.kind must be `cuda` for accelerator `gpu`"
+                    "{field} tag must start with `{CPU_IMAGE_TAG_PREFIX}` for target `linux-arm64-cpu`"
+                )));
+            }
+        }
+        SupportedTargetImage::Cuda { cuda_variant } => {
+            require_supported_image_repository(
+                parsed_image.repository,
+                SUPPORTED_CUDA_IMAGE_REPOSITORIES,
+                "linux-arm64-cuda",
+                field,
+            )?;
+            let expected_prefix = format!("{cuda_variant}-");
+            if !parsed_image.tag.starts_with(&expected_prefix) {
+                return Err(AppError::Validation(format!(
+                    "{field} tag must start with `{expected_prefix}` to match resource_profile.hardware.cuda_variant"
                 )));
             }
         }
     }
 
-    validate_resource_profile(
-        &target.resource_profile,
-        &format!("{field}.resource_profile"),
-    )
+    Ok(())
+}
+
+struct ParsedImageReference<'a> {
+    repository: &'a str,
+    tag: &'a str,
+}
+
+fn parse_tagged_image_reference<'a>(
+    image: &'a str,
+    field: &str,
+) -> Result<ParsedImageReference<'a>> {
+    let image_without_digest = image
+        .rsplit_once('@')
+        .map_or(image, |(reference, _)| reference);
+    let slash_index = image_without_digest.rfind('/');
+    let Some(tag_separator_index) = image_without_digest.rfind(':') else {
+        return Err(AppError::Validation(format!(
+            "{field} must include a supported Agentics image tag"
+        )));
+    };
+    if slash_index.is_some_and(|index| tag_separator_index < index) {
+        return Err(AppError::Validation(format!(
+            "{field} must include a supported Agentics image tag"
+        )));
+    }
+    let (repository, tag_with_separator) = image_without_digest.split_at(tag_separator_index);
+    let tag = tag_with_separator.trim_start_matches(':');
+    if repository.is_empty() || tag.is_empty() {
+        return Err(AppError::Validation(format!(
+            "{field} must include a supported Agentics image repository and tag"
+        )));
+    }
+
+    Ok(ParsedImageReference { repository, tag })
+}
+
+fn require_supported_image_repository(
+    repository: &str,
+    supported_repositories: &[&str],
+    target_id: &str,
+    field: &str,
+) -> Result<()> {
+    if supported_repositories.contains(&repository) {
+        return Ok(());
+    }
+    let supported = supported_repositories.join(", ");
+    Err(AppError::Validation(format!(
+        "{field} must use a supported Agentics image repository for target `{target_id}`; supported repositories: {supported}"
+    )))
 }
 
 fn validate_resource_profile(profile: &ResourceProfileSpec, field: &str) -> Result<()> {
@@ -508,10 +638,92 @@ fn validate_resource_profile(profile: &ResourceProfileSpec, field: &str) -> Resu
         )?;
     }
     if let Some(hardware) = &profile.hardware {
-        require_non_empty(&hardware.kind, &format!("{field}.hardware.kind"))?;
+        validate_hardware_profile(hardware, &format!("{field}.hardware"))?;
     }
 
     Ok(())
+}
+
+fn validate_hardware_profile(hardware: &HardwareProfileSpec, field: &str) -> Result<()> {
+    require_non_empty(&hardware.kind, &format!("{field}.kind"))?;
+    if let Some(gpu_model) = &hardware.gpu_model {
+        require_non_empty(gpu_model, &format!("{field}.gpu_model"))?;
+    }
+    if let Some(gpu_count) = hardware.gpu_count {
+        validate_positive_u32(gpu_count, &format!("{field}.gpu_count"))?;
+    }
+    if let Some(gpu_memory_gb) = hardware.gpu_memory_gb {
+        validate_positive_u64(gpu_memory_gb, &format!("{field}.gpu_memory_gb"))?;
+    }
+    if let Some(cuda_variant) = &hardware.cuda_variant {
+        require_non_empty(cuda_variant, &format!("{field}.cuda_variant"))?;
+    }
+    if let Some(cuda_version) = &hardware.cuda_version {
+        require_non_empty(cuda_version, &format!("{field}.cuda_version"))?;
+    }
+    if let Some(driver_minimum) = &hardware.driver_minimum {
+        require_non_empty(driver_minimum, &format!("{field}.driver_minimum"))?;
+    }
+
+    Ok(())
+}
+
+fn validate_cuda_hardware<'a>(
+    hardware: Option<&'a HardwareProfileSpec>,
+    field: &str,
+) -> Result<&'a str> {
+    let hardware = hardware.ok_or_else(|| {
+        AppError::Validation(format!("{field}.kind must be `cuda` for accelerator `gpu`"))
+    })?;
+    if hardware.kind != "cuda" {
+        return Err(AppError::Validation(format!(
+            "{field}.kind must be `cuda` for accelerator `gpu`"
+        )));
+    }
+
+    require_required_optional_string(&hardware.gpu_model, &format!("{field}.gpu_model"))?;
+    let gpu_count = hardware.gpu_count.ok_or_else(|| {
+        AppError::Validation(format!("{field}.gpu_count must be greater than zero"))
+    })?;
+    validate_positive_u32(gpu_count, &format!("{field}.gpu_count"))?;
+
+    let cuda_variant =
+        require_required_optional_string(&hardware.cuda_variant, &format!("{field}.cuda_variant"))?;
+    let cuda_version =
+        require_required_optional_string(&hardware.cuda_version, &format!("{field}.cuda_version"))?;
+    let Some(expected_cuda_version) = cuda_version_for_variant(cuda_variant) else {
+        let supported = SUPPORTED_CUDA_VARIANTS
+            .iter()
+            .map(|(variant, _)| *variant)
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Err(AppError::Validation(format!(
+            "{field}.cuda_variant `{cuda_variant}` is not supported for new CUDA targets; supported variants: {supported}"
+        )));
+    };
+    if cuda_version != expected_cuda_version {
+        return Err(AppError::Validation(format!(
+            "{field}.cuda_version must be `{expected_cuda_version}` for cuda_variant `{cuda_variant}`"
+        )));
+    }
+
+    Ok(cuda_variant)
+}
+
+fn cuda_version_for_variant(cuda_variant: &str) -> Option<&'static str> {
+    SUPPORTED_CUDA_VARIANTS
+        .iter()
+        .find_map(|(variant, version)| (*variant == cuda_variant).then_some(*version))
+}
+
+fn require_required_optional_string<'a>(value: &'a Option<String>, field: &str) -> Result<&'a str> {
+    match value {
+        Some(value) => {
+            require_non_empty(value, field)?;
+            Ok(value)
+        }
+        None => Err(AppError::Validation(format!("{field} is required"))),
+    }
 }
 
 fn require_image_digest_reference(image: &str, field: &str) -> Result<()> {
@@ -981,11 +1193,11 @@ mod tests {
                 accelerator: BenchmarkAccelerator::Cpu,
                 validation_enabled: true,
                 resource_profile: ResourceProfileSpec {
-                    id: "python-cpu-small".to_string(),
+                    id: "agentics-cpu-small".to_string(),
                     resource_description: None,
-                    solution_image: "python:3.12-slim-bookworm".to_string(),
+                    solution_image: "agentics-linux-arm64-cpu:ubuntu26.04-local".to_string(),
                     solution_image_digest: None,
-                    scorer_image: "python:3.12-slim-bookworm".to_string(),
+                    scorer_image: "agentics-linux-arm64-cpu:ubuntu26.04-local".to_string(),
                     scorer_image_digest: None,
                     timeout_sec: 30,
                     memory_limit_mb: 512,
@@ -1019,10 +1231,32 @@ mod tests {
     fn pin_images(spec: &mut ChallengeBundleSpec) {
         let digest = test_digest();
         for target in &mut spec.benchmark_targets {
-            target.resource_profile.solution_image = format!("python:3.12-slim-bookworm@{digest}");
+            let image = format!("agentics-linux-arm64-cpu:ubuntu26.04-local@{digest}");
+            target.resource_profile.solution_image = image.clone();
             target.resource_profile.solution_image_digest = Some(digest.clone());
-            target.resource_profile.scorer_image = format!("python:3.12-slim-bookworm@{digest}");
+            target.resource_profile.scorer_image = image;
             target.resource_profile.scorer_image_digest = Some(digest.clone());
+        }
+    }
+
+    fn use_cuda_target(target: &mut BenchmarkTargetSpec, cuda_variant: &str) {
+        target.id = "linux-arm64-cuda".to_string();
+        target.accelerator = BenchmarkAccelerator::Gpu;
+        target.resource_profile.hardware = Some(cuda_hardware());
+        let image = format!("agentics-linux-arm64-cuda:{cuda_variant}-ubuntu24.04-local");
+        target.resource_profile.solution_image = image.clone();
+        target.resource_profile.scorer_image = image;
+    }
+
+    fn cuda_hardware() -> HardwareProfileSpec {
+        HardwareProfileSpec {
+            kind: "cuda".to_string(),
+            gpu_model: Some("NVIDIA GB10".to_string()),
+            gpu_count: Some(1),
+            gpu_memory_gb: Some(128),
+            cuda_variant: Some("cu130".to_string()),
+            cuda_version: Some("13.0".to_string()),
+            driver_minimum: Some(">=580".to_string()),
         }
     }
 
@@ -1067,10 +1301,93 @@ mod tests {
             validate_challenge_bundle_spec(&spec).expect_err("missing cuda hardware should fail");
         assert!(error.to_string().contains("hardware.kind"));
 
-        spec.benchmark_targets[0].resource_profile.hardware = Some(HardwareProfileSpec {
-            kind: "cuda".to_string(),
-        });
+        spec.benchmark_targets[0].resource_profile.hardware = Some(cuda_hardware());
+        let image = "agentics-linux-arm64-cuda:cu130-ubuntu24.04-local".to_string();
+        spec.benchmark_targets[0].resource_profile.solution_image = image.clone();
+        spec.benchmark_targets[0].resource_profile.scorer_image = image;
         validate_challenge_bundle_spec(&spec).expect("cuda target should validate");
+    }
+
+    #[test]
+    fn cpu_target_rejects_unsupported_image_repository() {
+        let mut spec = base_spec();
+        spec.benchmark_targets[0].resource_profile.solution_image =
+            "python:3.12-slim-bookworm".to_string();
+
+        let error = validate_challenge_bundle_spec(&spec)
+            .expect_err("unsupported image repository should fail");
+
+        assert!(
+            error
+                .to_string()
+                .contains("supported Agentics image repository")
+        );
+    }
+
+    #[test]
+    fn cpu_target_rejects_unsupported_image_tag() {
+        let mut spec = base_spec();
+        let image = "agentics-linux-arm64-cpu:bookworm".to_string();
+        spec.benchmark_targets[0].resource_profile.solution_image = image.clone();
+        spec.benchmark_targets[0].resource_profile.scorer_image = image;
+
+        let error =
+            validate_challenge_bundle_spec(&spec).expect_err("unsupported image tag should fail");
+
+        assert!(error.to_string().contains("tag must start with"));
+    }
+
+    #[test]
+    fn cuda_target_accepts_matching_supported_image() {
+        let mut spec = base_spec();
+        use_cuda_target(&mut spec.benchmark_targets[0], "cu130");
+
+        validate_challenge_bundle_spec(&spec).expect("matching cuda image should validate");
+    }
+
+    #[test]
+    fn cuda_target_rejects_mismatched_image_variant() {
+        let mut spec = base_spec();
+        use_cuda_target(&mut spec.benchmark_targets[0], "cu132");
+
+        let error = validate_challenge_bundle_spec(&spec)
+            .expect_err("mismatched cuda image variant should fail");
+
+        assert!(error.to_string().contains("tag must start with `cu130-`"));
+    }
+
+    #[test]
+    fn cuda_target_rejects_unsupported_cuda_variant() {
+        let mut spec = base_spec();
+        let target = &mut spec.benchmark_targets[0];
+        target.id = "linux-arm64-cuda".to_string();
+        target.accelerator = BenchmarkAccelerator::Gpu;
+        target.resource_profile.hardware = Some(HardwareProfileSpec {
+            cuda_variant: Some("cu129".to_string()),
+            cuda_version: Some("12.9".to_string()),
+            ..cuda_hardware()
+        });
+
+        let error = validate_challenge_bundle_spec(&spec)
+            .expect_err("unsupported cuda variant should fail");
+        assert!(error.to_string().contains("supported variants"));
+    }
+
+    #[test]
+    fn cuda_target_rejects_mismatched_cuda_version() {
+        let mut spec = base_spec();
+        let target = &mut spec.benchmark_targets[0];
+        target.id = "linux-arm64-cuda".to_string();
+        target.accelerator = BenchmarkAccelerator::Gpu;
+        target.resource_profile.hardware = Some(HardwareProfileSpec {
+            cuda_variant: Some("cu132".to_string()),
+            cuda_version: Some("13.0".to_string()),
+            ..cuda_hardware()
+        });
+
+        let error =
+            validate_challenge_bundle_spec(&spec).expect_err("mismatched cuda version should fail");
+        assert!(error.to_string().contains("cuda_version"));
     }
 
     #[test]

@@ -133,6 +133,12 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
                     scorer_network_access: ZipProjectNetworkAccess::Disabled,
                     hardware: Some(HardwareProfileSpec {
                         kind: "cpu".to_string(),
+                        gpu_model: None,
+                        gpu_count: None,
+                        gpu_memory_gb: None,
+                        cuda_variant: None,
+                        cuda_version: None,
+                        driver_minimum: None,
                     }),
                 },
             }],

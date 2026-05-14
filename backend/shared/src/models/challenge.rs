@@ -134,6 +134,18 @@ pub struct ResourceProfileSpec {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct HardwareProfileSpec {
     pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gpu_model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gpu_count: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gpu_memory_gb: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cuda_variant: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cuda_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub driver_minimum: Option<String>,
 }
 
 /// Challenge-owned run manifest locations for standardized `zip_project` execution.
