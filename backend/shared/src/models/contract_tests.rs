@@ -3,12 +3,12 @@ use serde_json::Value;
 
 use super::challenge::{
     BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengeDetailResponse,
-    ChallengeExecutionSpec, ChallengePrepareExternalDataSpec, ChallengePrepareSpec,
-    ChallengeResultDetailVisibility, ChallengeRoundEligibilitySpec, ChallengeRoundEligibilityType,
-    ChallengeRoundSpec, ChallengeRoundVisibility, ChallengeRoundVisibilitySpec,
-    ChallengeSolutionPublicationPolicy, CommunitySpec, DatasetsSpec, DockerPlatform,
-    HardwareProfileSpec, MetricDefinitionSpec, MetricDirection, MetricSchemaSpec, MetricVisibility,
-    PrivateBenchmarkPolicy, RankingSpec, ResourceProfileSpec, ScorerSpec, SolutionSpec,
+    ChallengeEligibilitySpec, ChallengeEligibilityType, ChallengeExecutionSpec,
+    ChallengePrepareExternalDataSpec, ChallengePrepareSpec, ChallengeResultDetailVisibility,
+    ChallengeSolutionPublicationPolicy, ChallengeVisibility, ChallengeVisibilitySpec,
+    CommunitySpec, DatasetsSpec, DockerPlatform, HardwareProfileSpec, MetricDefinitionSpec,
+    MetricDirection, MetricSchemaSpec, MetricVisibility, PrivateBenchmarkPolicy, RankingSpec,
+    ResourceProfileSpec, ScorerSpec, SolutionSpec,
 };
 use super::evaluation::{
     EvaluationDto, EvaluationStatus, MetricValue, RunMetricResult, ScoreVisibility, ScoringMode,
@@ -92,12 +92,24 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
         slug: "matrix-multiplication".to_string(),
         title: "Matrix Multiplication".to_string(),
         summary: "Optimize CPU matrix multiplication kernels.".to_string(),
-        rounds: vec![default_round()],
         spec: ChallengeBundleSpec {
             schema_version: 1,
             challenge_id: "matrix-multiplication".to_string(),
             challenge_title: "Matrix Multiplication".to_string(),
             challenge_summary: "Optimize CPU matrix multiplication kernels.".to_string(),
+            starts_at: None,
+            closes_at: None,
+            eligibility: ChallengeEligibilitySpec {
+                eligibility_type: ChallengeEligibilityType::Open,
+            },
+            validation_submission_limit: None,
+            official_submission_limit: None,
+            visibility: ChallengeVisibilitySpec {
+                leaderboard: ChallengeVisibility::PublicLive,
+                score_distribution: ChallengeVisibility::PublicLive,
+                result_detail: ChallengeResultDetailVisibility::SubmitterLivePublicAfterClose,
+            },
+            solution_publication: ChallengeSolutionPublicationPolicy::SubmitterOptIn,
             solution: SolutionSpec {
                 protocol: "zip_project".to_string(),
                 manifest_file: "agentics.solution.json".to_string(),
@@ -139,7 +151,6 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
                     }),
                 },
             }],
-            rounds: vec![default_round()],
             execution: ChallengeExecutionSpec {
                 validation_runs: Some("public/runs.json".to_string()),
                 validation_prepare: None,
@@ -210,7 +221,6 @@ fn official_solution_submission_response() -> SolutionSubmissionResponse {
         id: "solution-submission-1".to_string(),
         challenge_id: "matrix-multiplication".to_string(),
         challenge_title: Some("Matrix Multiplication".to_string()),
-        round_id: "main".to_string(),
         benchmark_target_id: "linux-arm64-cpu".to_string(),
         agent_id: "agent-1".to_string(),
         agent_name: Some("solver".to_string()),
@@ -225,7 +235,6 @@ fn official_solution_submission_response() -> SolutionSubmissionResponse {
         validation_evaluation: None,
         official_evaluation: Some(EvaluationDto {
             id: "evaluation-1".to_string(),
-            round_id: "main".to_string(),
             benchmark_target_id: "linux-arm64-cpu".to_string(),
             status: EvaluationStatus::Completed,
             eval_type: ScoringMode::Official,
@@ -274,26 +283,6 @@ fn admin_capacity_response() -> AdminCapacityResponse {
             active_validation_jobs: 1,
             active_official_jobs: 0,
         },
-    }
-}
-
-fn default_round() -> ChallengeRoundSpec {
-    ChallengeRoundSpec {
-        id: "main".to_string(),
-        title: "Main Round".to_string(),
-        opens_at: None,
-        closes_at: None,
-        eligibility: ChallengeRoundEligibilitySpec {
-            eligibility_type: ChallengeRoundEligibilityType::Open,
-        },
-        validation_submission_limit: None,
-        official_submission_limit: None,
-        visibility: ChallengeRoundVisibilitySpec {
-            leaderboard: ChallengeRoundVisibility::PublicLive,
-            score_distribution: ChallengeRoundVisibility::PublicLive,
-            result_detail: ChallengeResultDetailVisibility::SubmitterLivePublicAfterClose,
-        },
-        solution_publication: ChallengeSolutionPublicationPolicy::SubmitterOptIn,
     }
 }
 

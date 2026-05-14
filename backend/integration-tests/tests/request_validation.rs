@@ -5,8 +5,18 @@ mod helpers;
 use std::path::Path;
 
 use helpers::{
-    api_url, copy_dir_all, examples_challenges_root, spawn_app, spawn_app_with_config, test_config,
+    TestCreatorSession, api_url, copy_dir_all, create_creator_session, examples_challenges_root,
+    sample_sum_solution, solution_zip_base64, spawn_app, spawn_app_with_config, test_config,
 };
+
+fn creator_auth(
+    request: reqwest::RequestBuilder,
+    creator: &TestCreatorSession,
+) -> reqwest::RequestBuilder {
+    request
+        .header("Cookie", &creator.cookie_header)
+        .header("X-Agentics-CSRF-Token", &creator.csrf_token)
+}
 
 #[sqlx::test(migrations = "../migrations")]
 async fn request_validation_returns_contract_error_shape(pool: sqlx::PgPool) {
@@ -76,7 +86,6 @@ async fn zip_submission_routes_accept_declared_large_json_bodies(pool: sqlx::PgP
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "missing-challenge",
-            "round_id": "main",
             "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": artifact_base64
         }))
@@ -114,7 +123,6 @@ async fn solution_submission_rejects_invalid_target_before_artifact_decode(pool:
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "round_id": "main",
             "benchmark_target_id": "cpu-linux-ppc64le",
             "artifact_base64": "not-base64"
         }))
@@ -141,7 +149,7 @@ async fn solution_submission_rejects_invalid_target_before_artifact_decode(pool:
 }
 
 #[sqlx::test(migrations = "../migrations")]
-async fn solution_submission_rejects_invalid_round_before_artifact_decode(pool: sqlx::PgPool) {
+async fn solution_submission_rejects_legacy_round_field_before_artifact_decode(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let config = test_config(storage.path(), &examples_challenges_root());
     let app = spawn_app_with_config(pool.clone(), config).await;
@@ -149,7 +157,7 @@ async fn solution_submission_rejects_invalid_round_before_artifact_decode(pool: 
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "invalid-round-agent" }))
+        .json(&serde_json::json!({ "name": "legacy-round-agent" }))
         .send()
         .await
         .expect("failed to register agent")
@@ -158,7 +166,7 @@ async fn solution_submission_rejects_invalid_round_before_artifact_decode(pool: 
         .expect("failed to decode register response");
     let token = register_response["token"].as_str().expect("missing token");
 
-    let missing_round = client
+    let no_round_field = client
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
@@ -168,10 +176,10 @@ async fn solution_submission_rejects_invalid_round_before_artifact_decode(pool: 
         }))
         .send()
         .await
-        .expect("failed to send missing-round submission");
-    assert_eq!(missing_round.status(), 400);
+        .expect("failed to send no-round submission");
+    assert_eq!(no_round_field.status(), 400);
 
-    let unknown_round = client
+    let unknown_round_field = client
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
@@ -182,10 +190,12 @@ async fn solution_submission_rejects_invalid_round_before_artifact_decode(pool: 
         }))
         .send()
         .await
-        .expect("failed to send unknown-round submission");
-    assert_eq!(unknown_round.status(), 400);
-    let unknown_error: serde_json::Value =
-        unknown_round.json().await.expect("failed to decode error");
+        .expect("failed to send submission with legacy round_id");
+    assert_eq!(unknown_round_field.status(), 400);
+    let unknown_error: serde_json::Value = unknown_round_field
+        .json()
+        .await
+        .expect("failed to decode error");
     assert!(
         unknown_error["message"]
             .as_str()
@@ -193,7 +203,7 @@ async fn solution_submission_rejects_invalid_round_before_artifact_decode(pool: 
             .contains("round")
     );
 
-    let malformed_round = client
+    let malformed_round_field = client
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
@@ -204,9 +214,9 @@ async fn solution_submission_rejects_invalid_round_before_artifact_decode(pool: 
         }))
         .send()
         .await
-        .expect("failed to send malformed-round submission");
-    assert_eq!(malformed_round.status(), 400);
-    let malformed_error: serde_json::Value = malformed_round
+        .expect("failed to send malformed legacy round_id");
+    assert_eq!(malformed_round_field.status(), 400);
+    let malformed_error: serde_json::Value = malformed_round_field
         .json()
         .await
         .expect("failed to decode error");
@@ -226,20 +236,20 @@ async fn solution_submission_rejects_invalid_round_before_artifact_decode(pool: 
 }
 
 #[sqlx::test(migrations = "../migrations")]
-async fn solution_submission_rejects_unopened_and_closed_rounds_before_artifact_decode(
+async fn solution_submission_rejects_unstarted_and_closed_challenges_before_artifact_decode(
     pool: sqlx::PgPool,
 ) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let challenges = tempfile::tempdir().expect("failed to create challenges tempdir");
-    write_round_window_challenge(
+    write_challenge_window_challenge(
         challenges.path(),
-        "future-round",
+        "future-challenge",
         Some("2999-01-01T00:00:00Z"),
         None,
     );
-    write_round_window_challenge(
+    write_challenge_window_challenge(
         challenges.path(),
-        "closed-round",
+        "closed-challenge",
         Some("2000-01-01T00:00:00Z"),
         Some("2000-01-02T00:00:00Z"),
     );
@@ -249,7 +259,7 @@ async fn solution_submission_rejects_unopened_and_closed_rounds_before_artifact_
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "round-window-agent" }))
+        .json(&serde_json::json!({ "name": "challenge-window-agent" }))
         .send()
         .await
         .expect("failed to register agent")
@@ -258,22 +268,22 @@ async fn solution_submission_rejects_unopened_and_closed_rounds_before_artifact_
         .expect("failed to decode register response");
     let token = register_response["token"].as_str().expect("missing token");
 
-    for (challenge_id, expected_message) in
-        [("future-round", "not open yet"), ("closed-round", "closed")]
-    {
+    for (challenge_id, expected_message) in [
+        ("future-challenge", "not started"),
+        ("closed-challenge", "closed"),
+    ] {
         let response = client
             .post(api_url(&app, "/api/solution-submissions"))
             .header("Authorization", format!("Bearer {token}"))
             .json(&serde_json::json!({
                 "challenge_id": challenge_id,
-                "round_id": "main",
                 "benchmark_target_id": "linux-arm64-cpu",
                 "artifact_base64": "not-base64"
             }))
             .send()
             .await
-            .expect("failed to send round-window submission");
-        assert_eq!(response.status(), 400);
+            .expect("failed to send challenge-window submission");
+        assert_eq!(response.status(), 403);
         let error: serde_json::Value = response.json().await.expect("failed to decode error");
         assert!(
             error["message"]
@@ -291,10 +301,215 @@ async fn solution_submission_rejects_unopened_and_closed_rounds_before_artifact_
     assert_eq!(solution_submission_count.0, 0);
 }
 
-fn write_round_window_challenge(
+#[sqlx::test(migrations = "../migrations")]
+async fn private_shortlist_challenge_requires_owner_delta_before_artifact_decode(
+    pool: sqlx::PgPool,
+) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let challenges = tempfile::tempdir().expect("failed to create challenges tempdir");
+    write_private_shortlist_challenge(challenges.path(), "shortlist-challenge");
+    let config = test_config(storage.path(), challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+    let owner = create_creator_session(&pool, 2001, "shortlist-owner").await;
+    let non_owner = create_creator_session(&pool, 2002, "not-owner").await;
+    shared::db::add_challenge_owner(&pool, "shortlist-challenge", &owner.agent_id)
+        .await
+        .expect("owner should be granted");
+
+    let shortlisted = register_api_agent(&client, &app, "shortlisted-agent").await;
+    let outsider = register_api_agent(&client, &app, "outsider-agent").await;
+
+    let missing_shortlist = submit_solution(
+        &client,
+        &app,
+        &shortlisted.token,
+        "shortlist-challenge",
+        "not-base64",
+    )
+    .await;
+    assert_eq!(missing_shortlist.status(), reqwest::StatusCode::FORBIDDEN);
+    let missing_error: serde_json::Value = missing_shortlist
+        .json()
+        .await
+        .expect("failed to decode missing-shortlist error");
+    assert_eq!(
+        missing_error["message"],
+        "challenge requires a shortlist, but no shortlist has been uploaded yet"
+    );
+
+    let non_owner_upload = creator_auth(
+        client.post(api_url(
+            &app,
+            "/api/creator/challenges/shortlist-challenge/shortlist-revisions",
+        )),
+        &non_owner,
+    )
+    .json(&serde_json::json!({ "agent_ids_to_add": [shortlisted.agent_id] }))
+    .send()
+    .await
+    .expect("failed to upload shortlist as non-owner");
+    assert_eq!(non_owner_upload.status(), reqwest::StatusCode::FORBIDDEN);
+
+    let unknown_agent_upload = creator_auth(
+        client.post(api_url(
+            &app,
+            "/api/creator/challenges/shortlist-challenge/shortlist-revisions",
+        )),
+        &owner,
+    )
+    .json(&serde_json::json!({ "agent_ids_to_add": ["agent_missing"] }))
+    .send()
+    .await
+    .expect("failed to upload unknown shortlist agent");
+    assert_eq!(
+        unknown_agent_upload.status(),
+        reqwest::StatusCode::BAD_REQUEST
+    );
+
+    let revision: serde_json::Value = creator_auth(
+        client.post(api_url(
+            &app,
+            "/api/creator/challenges/shortlist-challenge/shortlist-revisions",
+        )),
+        &owner,
+    )
+    .json(&serde_json::json!({ "agent_ids_to_add": [
+        shortlisted.agent_id,
+        shortlisted.agent_id
+    ] }))
+    .send()
+    .await
+    .expect("failed to upload shortlist")
+    .error_for_status()
+    .expect("shortlist upload should succeed")
+    .json()
+    .await
+    .expect("failed to decode shortlist revision");
+    assert_eq!(revision["requested_count"], 2);
+    assert_eq!(revision["added_count"], 1);
+
+    let duplicate_revision: serde_json::Value = creator_auth(
+        client.post(api_url(
+            &app,
+            "/api/creator/challenges/shortlist-challenge/shortlist-revisions",
+        )),
+        &owner,
+    )
+    .json(&serde_json::json!({ "agent_ids_to_add": [shortlisted.agent_id] }))
+    .send()
+    .await
+    .expect("failed to upload duplicate shortlist")
+    .error_for_status()
+    .expect("duplicate shortlist upload should succeed")
+    .json()
+    .await
+    .expect("failed to decode duplicate shortlist revision");
+    assert_eq!(duplicate_revision["added_count"], 0);
+
+    let shortlist: serde_json::Value = creator_auth(
+        client.get(api_url(
+            &app,
+            "/api/creator/challenges/shortlist-challenge/shortlist",
+        )),
+        &owner,
+    )
+    .send()
+    .await
+    .expect("failed to fetch shortlist")
+    .error_for_status()
+    .expect("shortlist fetch should succeed")
+    .json()
+    .await
+    .expect("failed to decode shortlist");
+    assert_eq!(shortlist["items"].as_array().expect("items").len(), 1);
+    assert_eq!(shortlist["items"][0]["agent_id"], shortlisted.agent_id);
+
+    let outsider_response = submit_solution(
+        &client,
+        &app,
+        &outsider.token,
+        "shortlist-challenge",
+        "not-base64",
+    )
+    .await;
+    assert_eq!(outsider_response.status(), reqwest::StatusCode::FORBIDDEN);
+    let outsider_error: serde_json::Value = outsider_response
+        .json()
+        .await
+        .expect("failed to decode outsider error");
+    assert_eq!(
+        outsider_error["message"],
+        "agent is not eligible for this challenge"
+    );
+
+    let accepted = submit_solution(
+        &client,
+        &app,
+        &shortlisted.token,
+        "shortlist-challenge",
+        &solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']")),
+    )
+    .await;
+    assert_eq!(accepted.status(), reqwest::StatusCode::CREATED);
+}
+
+struct ApiAgent {
+    agent_id: String,
+    token: String,
+}
+
+async fn register_api_agent(
+    client: &reqwest::Client,
+    app: &helpers::TestApp,
+    name: &str,
+) -> ApiAgent {
+    let register_response: serde_json::Value = client
+        .post(api_url(app, "/api/agents/register"))
+        .json(&serde_json::json!({ "name": name }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+
+    ApiAgent {
+        agent_id: register_response["agent_id"]
+            .as_str()
+            .expect("missing agent id")
+            .to_string(),
+        token: register_response["token"]
+            .as_str()
+            .expect("missing token")
+            .to_string(),
+    }
+}
+
+async fn submit_solution(
+    client: &reqwest::Client,
+    app: &helpers::TestApp,
+    token: &str,
+    challenge_id: &str,
+    artifact_base64: &str,
+) -> reqwest::Response {
+    client
+        .post(api_url(app, "/api/solution-submissions"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "challenge_id": challenge_id,
+            "benchmark_target_id": "linux-arm64-cpu",
+            "artifact_base64": artifact_base64
+        }))
+        .send()
+        .await
+        .expect("failed to submit solution")
+}
+
+fn write_challenge_window_challenge(
     root: &Path,
     challenge_id: &str,
-    opens_at: Option<&str>,
+    starts_at: Option<&str>,
     closes_at: Option<&str>,
 ) {
     let bundle_dir = root.join(challenge_id).join("v1");
@@ -308,12 +523,32 @@ fn write_round_window_challenge(
             .expect("failed to parse spec");
     spec["challenge_id"] = serde_json::json!(challenge_id);
     spec["challenge_title"] = serde_json::json!(challenge_id);
-    if let Some(opens_at) = opens_at {
-        spec["rounds"][0]["opens_at"] = serde_json::json!(opens_at);
+    if let Some(starts_at) = starts_at {
+        spec["starts_at"] = serde_json::json!(starts_at);
     }
     if let Some(closes_at) = closes_at {
-        spec["rounds"][0]["closes_at"] = serde_json::json!(closes_at);
+        spec["closes_at"] = serde_json::json!(closes_at);
     }
+    std::fs::write(
+        &spec_path,
+        serde_json::to_string_pretty(&spec).expect("failed to serialize spec"),
+    )
+    .expect("failed to write spec");
+}
+
+fn write_private_shortlist_challenge(root: &Path, challenge_id: &str) {
+    let bundle_dir = root.join(challenge_id).join("v1");
+    copy_dir_all(
+        &examples_challenges_root().join("sample-sum/v1"),
+        &bundle_dir,
+    );
+    let spec_path = bundle_dir.join("spec.json");
+    let mut spec: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&spec_path).expect("failed to read spec"))
+            .expect("failed to parse spec");
+    spec["challenge_id"] = serde_json::json!(challenge_id);
+    spec["challenge_title"] = serde_json::json!(challenge_id);
+    spec["eligibility"] = serde_json::json!({ "type": "private_shortlist" });
     std::fs::write(
         &spec_path,
         serde_json::to_string_pretty(&spec).expect("failed to serialize spec"),

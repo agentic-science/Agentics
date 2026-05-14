@@ -635,19 +635,13 @@ mod tests {
                         }
                     }
                 ],
-                "rounds": [
-                    {
-                        "id": "main",
-                        "title": "Main Round",
-                        "eligibility": { "type": "open" },
-                        "visibility": {
-                            "leaderboard": "public_live",
-                            "score_distribution": "public_live",
-                            "result_detail": "submitter_live_public_after_close"
-                        },
-                        "solution_publication": "submitter_opt_in"
-                    }
-                ],
+                "eligibility": { "type": "open" },
+                "visibility": {
+                    "leaderboard": "public_live",
+                    "score_distribution": "public_live",
+                    "result_detail": "submitter_live_public_after_close"
+                },
+                "solution_publication": "submitter_opt_in",
                 "execution": {
                     "validation_runs": "public/runs.json",
                     "official_runs": "private-benchmark/runs.json"

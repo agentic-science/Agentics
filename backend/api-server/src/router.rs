@@ -105,6 +105,22 @@ pub fn router(config: &Config) -> Router<AppState> {
             post(crate::challenge_creation_handlers::upload_challenge_private_asset)
                 .layer(DefaultBodyLimit::max(PRIVATE_ASSET_JSON_BODY_LIMIT_BYTES)),
         )
+        .route(
+            "/api/creator/challenges/{id}/stats",
+            get(crate::handlers::get_creator_challenge_stats),
+        )
+        .route(
+            "/api/creator/challenges/{id}/participants",
+            get(crate::handlers::list_creator_challenge_participants),
+        )
+        .route(
+            "/api/creator/challenges/{id}/shortlist-revisions",
+            post(crate::handlers::create_challenge_shortlist_revision),
+        )
+        .route(
+            "/api/creator/challenges/{id}/shortlist",
+            get(crate::handlers::get_challenge_shortlist),
+        )
         // Public routes
         .route(
             "/api/public/challenges",
@@ -119,11 +135,11 @@ pub fn router(config: &Config) -> Router<AppState> {
             get(crate::handlers::list_public_solution_submissions),
         )
         .route(
-            "/api/public/challenges/{id}/rounds/{round_id}/leaderboard",
+            "/api/public/challenges/{id}/leaderboard",
             get(crate::handlers::get_leaderboard),
         )
         .route(
-            "/api/public/challenges/{id}/rounds/{round_id}/score-distributions",
+            "/api/public/challenges/{id}/score-distributions",
             get(crate::handlers::get_score_distribution),
         )
         .route(

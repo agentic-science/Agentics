@@ -568,6 +568,8 @@ pub async fn publish_challenge_draft(
                 &manifest.summary,
             )
             .await?;
+            db::add_challenge_owner(&state.db, &published.challenge_id, &draft.creator_agent_id)
+                .await?;
             Some(published.challenge_id)
         }
     };

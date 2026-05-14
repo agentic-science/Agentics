@@ -14,9 +14,8 @@ use sha2::{Digest, Sha256};
 use crate::error::{AppError, Result};
 use crate::models::challenge::{
     BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengePrepareSpec,
-    ChallengeRoundEligibilityType, ChallengeRoundSpec, ChallengeRunInputFile, ChallengeRunManifest,
-    ChallengeRunSpec, DockerPlatform, HardwareProfileSpec, PrivateBenchmarkPolicy,
-    ResourceProfileSpec,
+    ChallengeRunInputFile, ChallengeRunManifest, ChallengeRunSpec, DockerPlatform,
+    HardwareProfileSpec, PrivateBenchmarkPolicy, ResourceProfileSpec,
 };
 use crate::zip_project::{ZIP_PROJECT_MANIFEST_FILE, ZIP_PROJECT_PROTOCOL};
 
@@ -333,7 +332,7 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
     validate_scorer_command(&spec.scorer.command)?;
     require_safe_relative_path(&spec.scorer.result_file, "scorer.result_file")?;
     validate_benchmark_targets(spec)?;
-    validate_rounds(spec)?;
+    validate_challenge_policy(spec)?;
     validate_execution(spec)?;
 
     require_safe_relative_path(&spec.datasets.public_dir, "datasets.public_dir")?;
@@ -453,54 +452,21 @@ fn validate_benchmark_targets(spec: &ChallengeBundleSpec) -> Result<()> {
     Ok(())
 }
 
-fn validate_rounds(spec: &ChallengeBundleSpec) -> Result<()> {
-    if spec.rounds.is_empty() {
+fn validate_challenge_policy(spec: &ChallengeBundleSpec) -> Result<()> {
+    let starts_at = parse_optional_rfc3339(spec.starts_at.as_deref(), "starts_at")?;
+    let closes_at = parse_optional_rfc3339(spec.closes_at.as_deref(), "closes_at")?;
+    if let (Some(starts_at), Some(closes_at)) = (starts_at, closes_at)
+        && closes_at <= starts_at
+    {
         return Err(AppError::Validation(
-            "rounds must declare at least one explicit round".to_string(),
+            "closes_at must be later than starts_at".to_string(),
         ));
     }
-
-    let mut ids = HashSet::with_capacity(spec.rounds.len());
-    for (index, round) in spec.rounds.iter().enumerate() {
-        let field = format!("rounds[{index}]");
-        validate_round(round, &field)?;
-        if !ids.insert(round.id.as_str()) {
-            return Err(AppError::Validation(format!(
-                "rounds contains duplicate id `{}`",
-                round.id
-            )));
-        }
-    }
-
-    Ok(())
-}
-
-fn validate_round(round: &ChallengeRoundSpec, field: &str) -> Result<()> {
-    validate_identifier(&round.id, &format!("{field}.id"))?;
-    require_non_empty(&round.title, &format!("{field}.title"))?;
-    if round.eligibility.eligibility_type != ChallengeRoundEligibilityType::Open {
-        return Err(AppError::Validation(format!(
-            "{field}.eligibility.type must be open"
-        )));
-    }
-    let opens_at = parse_optional_rfc3339(round.opens_at.as_deref(), &format!("{field}.opens_at"))?;
-    let closes_at =
-        parse_optional_rfc3339(round.closes_at.as_deref(), &format!("{field}.closes_at"))?;
-    if let (Some(opens_at), Some(closes_at)) = (opens_at, closes_at)
-        && closes_at <= opens_at
-    {
-        return Err(AppError::Validation(format!(
-            "{field}.closes_at must be later than {field}.opens_at"
-        )));
-    }
     validate_optional_positive_limit(
-        round.validation_submission_limit,
-        &format!("{field}.validation_submission_limit"),
+        spec.validation_submission_limit,
+        "validation_submission_limit",
     )?;
-    validate_optional_positive_limit(
-        round.official_submission_limit,
-        &format!("{field}.official_submission_limit"),
-    )?;
+    validate_optional_positive_limit(spec.official_submission_limit, "official_submission_limit")?;
 
     Ok(())
 }
@@ -1180,19 +1146,6 @@ fn require_non_empty(value: &str, field: &str) -> Result<()> {
     Ok(())
 }
 
-fn validate_identifier(value: &str, field: &str) -> Result<()> {
-    require_non_empty(value, field)?;
-    let valid = value.bytes().all(|byte| {
-        byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'-' | b'_')
-    });
-    if !valid {
-        return Err(AppError::Validation(format!(
-            "{field} must contain only lowercase ASCII letters, digits, hyphens, or underscores"
-        )));
-    }
-    Ok(())
-}
-
 fn validate_positive_u64(value: u64, field: &str) -> Result<()> {
     if value == 0 {
         return Err(AppError::Validation(format!(
@@ -1242,12 +1195,12 @@ mod tests {
     use std::path::Path;
 
     use crate::models::challenge::{
-        BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengeExecutionSpec,
-        ChallengePrepareSpec, ChallengeResultDetailVisibility, ChallengeRoundEligibilitySpec,
-        ChallengeRoundEligibilityType, ChallengeRoundSpec, ChallengeRoundVisibility,
-        ChallengeRoundVisibilitySpec, ChallengeSolutionPublicationPolicy, CommunitySpec,
-        DatasetsSpec, DockerPlatform, HardwareProfileSpec, MetricDirection, MetricSchemaSpec,
-        MetricVisibility, PrivateBenchmarkPolicy, ResourceProfileSpec, ScorerSpec, SolutionSpec,
+        BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengeEligibilitySpec,
+        ChallengeEligibilityType, ChallengeExecutionSpec, ChallengePrepareSpec,
+        ChallengeResultDetailVisibility, ChallengeSolutionPublicationPolicy, ChallengeVisibility,
+        ChallengeVisibilitySpec, CommunitySpec, DatasetsSpec, DockerPlatform, HardwareProfileSpec,
+        MetricDirection, MetricSchemaSpec, MetricVisibility, PrivateBenchmarkPolicy,
+        ResourceProfileSpec, ScorerSpec, SolutionSpec,
     };
     use crate::models::evaluation::ScoreVisibility;
     use crate::zip_project::ZipProjectNetworkAccess;
@@ -1297,23 +1250,19 @@ mod tests {
                     hardware: None,
                 },
             }],
-            rounds: vec![ChallengeRoundSpec {
-                id: "main".to_string(),
-                title: "Main Round".to_string(),
-                opens_at: None,
-                closes_at: None,
-                eligibility: ChallengeRoundEligibilitySpec {
-                    eligibility_type: ChallengeRoundEligibilityType::Open,
-                },
-                validation_submission_limit: None,
-                official_submission_limit: None,
-                visibility: ChallengeRoundVisibilitySpec {
-                    leaderboard: ChallengeRoundVisibility::PublicLive,
-                    score_distribution: ChallengeRoundVisibility::PublicLive,
-                    result_detail: ChallengeResultDetailVisibility::SubmitterLivePublicAfterClose,
-                },
-                solution_publication: ChallengeSolutionPublicationPolicy::SubmitterOptIn,
-            }],
+            starts_at: None,
+            closes_at: None,
+            eligibility: ChallengeEligibilitySpec {
+                eligibility_type: ChallengeEligibilityType::Open,
+            },
+            validation_submission_limit: None,
+            official_submission_limit: None,
+            visibility: ChallengeVisibilitySpec {
+                leaderboard: ChallengeVisibility::PublicLive,
+                score_distribution: ChallengeVisibility::PublicLive,
+                result_detail: ChallengeResultDetailVisibility::SubmitterLivePublicAfterClose,
+            },
+            solution_publication: ChallengeSolutionPublicationPolicy::SubmitterOptIn,
             execution: ChallengeExecutionSpec {
                 validation_runs: Some("public/runs.json".to_string()),
                 validation_prepare: None,
@@ -1362,6 +1311,28 @@ mod tests {
             cuda_version: Some("13.0".to_string()),
             driver_minimum: Some(">=580".to_string()),
         }
+    }
+
+    #[test]
+    fn legacy_rounds_field_is_rejected() {
+        let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
+        spec_json["rounds"] = serde_json::json!([
+            {
+                "id": "main",
+                "title": "Main",
+                "eligibility": { "type": "open" },
+                "visibility": {
+                    "leaderboard": "public_live",
+                    "score_distribution": "public_live",
+                    "result_detail": "submitter_live_public_after_close"
+                },
+                "solution_publication": "submitter_opt_in"
+            }
+        ]);
+
+        let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+            .expect_err("legacy rounds should be an unknown field");
+        assert!(error.to_string().contains("rounds"));
     }
 
     #[test]

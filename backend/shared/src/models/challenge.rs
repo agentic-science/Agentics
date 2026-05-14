@@ -6,6 +6,7 @@ use crate::zip_project::ZipProjectNetworkAccess;
 
 /// Parsed `spec.json` contract for a challenge bundle.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ChallengeBundleSpec {
     pub schema_version: i32,
     pub challenge_id: String,
@@ -15,7 +16,17 @@ pub struct ChallengeBundleSpec {
     pub solution: SolutionSpec,
     pub scorer: ScorerSpec,
     pub benchmark_targets: Vec<BenchmarkTargetSpec>,
-    pub rounds: Vec<ChallengeRoundSpec>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub starts_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub closes_at: Option<String>,
+    pub eligibility: ChallengeEligibilitySpec,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub validation_submission_limit: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub official_submission_limit: Option<i64>,
+    pub visibility: ChallengeVisibilitySpec,
+    pub solution_publication: ChallengeSolutionPublicationPolicy,
     pub execution: ChallengeExecutionSpec,
     pub datasets: DatasetsSpec,
     /// Optional external community metadata for this challenge.
@@ -35,11 +46,6 @@ impl ChallengeBundleSpec {
             .find(|target| target.id == target_id)
     }
 
-    /// Look up one round declared by this challenge.
-    pub fn round(&self, round_id: &str) -> Option<&ChallengeRoundSpec> {
-        self.rounds.iter().find(|round| round.id == round_id)
-    }
-
     /// Return the only target id when a challenge is unambiguous.
     pub fn sole_benchmark_target_id(&self) -> Option<&str> {
         match self.benchmark_targets.as_slice() {
@@ -49,52 +55,35 @@ impl ChallengeBundleSpec {
     }
 }
 
-/// One explicit participation round declared by a challenge.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
-pub struct ChallengeRoundSpec {
-    pub id: String,
-    pub title: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub opens_at: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub closes_at: Option<String>,
-    pub eligibility: ChallengeRoundEligibilitySpec,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub validation_submission_limit: Option<i64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub official_submission_limit: Option<i64>,
-    pub visibility: ChallengeRoundVisibilitySpec,
-    pub solution_publication: ChallengeSolutionPublicationPolicy,
-}
-
-/// Eligibility policy for a round. MVP supports only open participation.
+/// Eligibility policy for a challenge.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct ChallengeRoundEligibilitySpec {
+pub struct ChallengeEligibilitySpec {
     #[serde(rename = "type")]
-    pub eligibility_type: ChallengeRoundEligibilityType,
+    pub eligibility_type: ChallengeEligibilityType,
 }
 
 /// Stable eligibility policy names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum ChallengeRoundEligibilityType {
+pub enum ChallengeEligibilityType {
     Open,
+    PrivateShortlist,
 }
 
-/// Visibility policy for round-scoped result surfaces.
+/// Visibility policy for challenge result surfaces.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct ChallengeRoundVisibilitySpec {
-    pub leaderboard: ChallengeRoundVisibility,
-    pub score_distribution: ChallengeRoundVisibility,
+pub struct ChallengeVisibilitySpec {
+    pub leaderboard: ChallengeVisibility,
+    pub score_distribution: ChallengeVisibility,
     pub result_detail: ChallengeResultDetailVisibility,
 }
 
 /// Visibility for public aggregate surfaces.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum ChallengeRoundVisibility {
+pub enum ChallengeVisibility {
     PublicLive,
     PublicAfterClose,
     Hidden,
@@ -422,7 +411,11 @@ pub struct ChallengeListItemDto {
     pub slug: String,
     pub title: String,
     pub summary: String,
-    pub rounds: Vec<ChallengeRoundSpec>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub starts_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub closes_at: Option<String>,
+    pub eligibility: ChallengeEligibilitySpec,
 }
 
 /// Public challenge catalog response.
@@ -438,7 +431,6 @@ pub struct ChallengeDetailResponse {
     pub slug: String,
     pub title: String,
     pub summary: String,
-    pub rounds: Vec<ChallengeRoundSpec>,
     pub spec: ChallengeBundleSpec,
     pub statement_markdown: String,
 }
@@ -466,7 +458,15 @@ pub struct AdminChallengeListItemDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub benchmark_targets: Option<Vec<BenchmarkTargetSpec>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub rounds: Option<Vec<ChallengeRoundSpec>>,
+    pub starts_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub closes_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub eligibility: Option<ChallengeEligibilitySpec>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub visibility: Option<ChallengeVisibilitySpec>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub solution_publication: Option<ChallengeSolutionPublicationPolicy>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub private_benchmark_enabled: Option<bool>,
     pub created_at: String,

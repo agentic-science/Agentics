@@ -213,7 +213,63 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
         .json()
         .await
         .expect("public challenge json");
-    assert_eq!(public_challenge["rounds"][0]["id"], "main");
+    assert_eq!(public_challenge["spec"]["eligibility"]["type"], "open");
+
+    let owner_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::BIGINT FROM challenge_owners WHERE challenge_id = $1 AND agent_id = $2",
+    )
+    .bind("sample-sum")
+    .bind(&creator.agent_id)
+    .fetch_one(&pool)
+    .await
+    .expect("owner count");
+    assert_eq!(owner_count, 1);
+
+    let stats: serde_json::Value = creator_auth(
+        client.get(api_url(
+            &app,
+            "/api/creator/challenges/sample-sum/stats?target=linux-arm64-cpu",
+        )),
+        &creator,
+    )
+    .send()
+    .await
+    .expect("creator stats request")
+    .error_for_status()
+    .expect("creator stats should be readable")
+    .json()
+    .await
+    .expect("creator stats json");
+    assert_eq!(stats["challenge_id"], "sample-sum");
+    assert_eq!(stats["benchmark_target_id"], "linux-arm64-cpu");
+    assert_eq!(stats["solution_submission_count"], 0);
+
+    let participants: serde_json::Value = creator_auth(
+        client.get(api_url(
+            &app,
+            "/api/creator/challenges/sample-sum/participants?target=linux-arm64-cpu",
+        )),
+        &creator,
+    )
+    .send()
+    .await
+    .expect("creator participants request")
+    .error_for_status()
+    .expect("creator participants should be readable")
+    .json()
+    .await
+    .expect("creator participants json");
+    assert_eq!(participants["items"].as_array().expect("items").len(), 0);
+
+    let non_owner = create_creator_session(&pool, 1002, "not-owner").await;
+    let non_owner_stats = creator_auth(
+        client.get(api_url(&app, "/api/creator/challenges/sample-sum/stats")),
+        &non_owner,
+    )
+    .send()
+    .await
+    .expect("non-owner stats request");
+    assert_eq!(non_owner_stats.status(), reqwest::StatusCode::FORBIDDEN);
 }
 
 #[sqlx::test(migrations = "../migrations")]
@@ -417,7 +473,6 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
         .header("Authorization", participant_bearer)
         .json(&json!({
             "challenge_id": "sample-sum",
-            "round_id": "main",
             "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"))
         }))
@@ -1033,19 +1088,13 @@ fn write_public_challenge(repo: &Path) {
                     }
                 }
             ],
-            "rounds": [
-                {
-                    "id": "main",
-                    "title": "Main Round",
-                    "eligibility": { "type": "open" },
-                    "visibility": {
-                        "leaderboard": "public_live",
-                        "score_distribution": "public_live",
-                        "result_detail": "submitter_live_public_after_close"
-                    },
-                    "solution_publication": "submitter_opt_in"
-                }
-            ],
+            "eligibility": { "type": "open" },
+            "visibility": {
+                "leaderboard": "public_live",
+                "score_distribution": "public_live",
+                "result_detail": "submitter_live_public_after_close"
+            },
+            "solution_publication": "submitter_opt_in",
             "execution": {
                 "validation_runs": "public/runs.json",
                 "official_runs": "private-benchmark/runs.json"

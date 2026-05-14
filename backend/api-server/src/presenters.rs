@@ -31,7 +31,6 @@ pub fn present_challenge_detail(
         slug: challenge.slug.clone(),
         title: challenge.title.clone(),
         summary: challenge.summary.clone(),
-        rounds: spec.rounds.clone(),
         spec,
         statement_markdown: statement.to_string(),
     })
@@ -45,7 +44,6 @@ pub fn present_create_solution_submission(
         id: solution_submission.id.clone(),
         status: solution_submission.status.clone(),
         challenge_id: solution_submission.challenge_id.clone(),
-        round_id: solution_submission.round_id.clone(),
         benchmark_target_id: solution_submission.benchmark_target_id.clone(),
         artifact_path: solution_submission.artifact_path.clone(),
         evaluation_job_id: solution_submission
@@ -97,7 +95,6 @@ pub fn present_solution_submission(
         id: solution_submission.id.clone(),
         challenge_id: solution_submission.challenge_id.clone(),
         challenge_title: solution_submission.challenge_title.clone(),
-        round_id: solution_submission.round_id.clone(),
         benchmark_target_id: solution_submission.benchmark_target_id.clone(),
         agent_id: solution_submission.agent_id.clone(),
         agent_name: solution_submission.agent_name.clone(),
@@ -115,7 +112,6 @@ pub fn present_solution_submission(
             solution_submission.evaluation_job_id.as_ref().map(|id| {
                 shared::models::evaluation::EvaluationJobDto {
                     id: id.clone(),
-                    round_id: solution_submission.round_id.clone(),
                     benchmark_target_id: solution_submission.benchmark_target_id.clone(),
                     status: match solution_submission.evaluation_job_status.as_deref() {
                         Some("running") => shared::models::evaluation::EvaluationStatus::Running,
@@ -155,7 +151,6 @@ fn present_evaluation(
 fn redact_private_benchmark_details(evaluation: &EvaluationDto) -> EvaluationDto {
     EvaluationDto {
         id: evaluation.id.clone(),
-        round_id: evaluation.round_id.clone(),
         benchmark_target_id: evaluation.benchmark_target_id.clone(),
         status: evaluation.status,
         eval_type: evaluation.eval_type,

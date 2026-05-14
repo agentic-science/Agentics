@@ -17,10 +17,12 @@ use shared::models::challenge_creation::{
 use shared::models::request::DiscussionListResponse;
 use shared::models::request::{
     AdminCapacityResponse, AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse,
-    DisableAgentResponse, EvaluationJobResponse, HideSolutionSubmissionResponse,
-    LeaderboardResponse, PublicSolutionSubmissionListResponse, RankingContextResponse,
-    ScoreDistributionResponse, SolutionSubmissionArtifactResponse, SolutionSubmissionLogsResponse,
-    SolutionSubmissionResponse, SolutionSubmissionResultReportResponse,
+    ChallengeShortlistResponse, ChallengeShortlistRevisionResponse,
+    CreatorChallengeParticipantsResponse, CreatorChallengeStatsResponse, DisableAgentResponse,
+    EvaluationJobResponse, HideSolutionSubmissionResponse, LeaderboardResponse,
+    PublicSolutionSubmissionListResponse, RankingContextResponse, ScoreDistributionResponse,
+    SolutionSubmissionArtifactResponse, SolutionSubmissionLogsResponse, SolutionSubmissionResponse,
+    SolutionSubmissionResultReportResponse,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -50,9 +52,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &mut schemas,
         "challengePrivateAssetResponseSchema",
     )?;
+    insert_schema::<ChallengeShortlistResponse>(&mut schemas, "challengeShortlistResponseSchema")?;
+    insert_schema::<ChallengeShortlistRevisionResponse>(
+        &mut schemas,
+        "challengeShortlistRevisionResponseSchema",
+    )?;
     insert_schema::<PublishChallengeResponse>(&mut schemas, "publishChallengeResponseSchema")?;
     insert_schema::<CreatorMeResponse>(&mut schemas, "creatorMeResponseSchema")?;
     insert_schema::<CreatorSessionResponse>(&mut schemas, "creatorSessionResponseSchema")?;
+    insert_schema::<CreatorChallengeParticipantsResponse>(
+        &mut schemas,
+        "creatorChallengeParticipantsResponseSchema",
+    )?;
+    insert_schema::<CreatorChallengeStatsResponse>(
+        &mut schemas,
+        "creatorChallengeStatsResponseSchema",
+    )?;
     insert_schema::<DisableAgentResponse>(&mut schemas, "disableAgentResponseSchema")?;
     insert_schema::<DiscussionListResponse>(&mut schemas, "discussionListResponseSchema")?;
     insert_schema::<EvaluationJobResponse>(&mut schemas, "evaluationJobResponseSchema")?;

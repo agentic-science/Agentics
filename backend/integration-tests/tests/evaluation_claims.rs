@@ -32,7 +32,6 @@ async fn stale_running_job_fails_after_max_attempts(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "round_id": "main",
             "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "stale job"
@@ -107,7 +106,6 @@ async fn refreshed_job_lease_is_not_reaped(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "round_id": "main",
             "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "lease refresh"
@@ -174,7 +172,6 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "round_id": "main",
             "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "stale worker finish"
@@ -202,7 +199,6 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
                 evaluation_id: uuid::Uuid::new_v4().to_string(),
                 solution_submission_id: solution_submission_id.to_string(),
                 job_id: first_claim.id.clone(),
-                round_id: first_claim.round_id.clone(),
                 benchmark_target_id: first_claim.benchmark_target_id.clone(),
                 eval_type: first_claim.eval_type,
             },
@@ -242,7 +238,6 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
                 evaluation_id: uuid::Uuid::new_v4().to_string(),
                 solution_submission_id: solution_submission_id.to_string(),
                 job_id: second_claim.id.clone(),
-                round_id: second_claim.round_id.clone(),
                 benchmark_target_id: second_claim.benchmark_target_id.clone(),
                 eval_type: second_claim.eval_type,
             },
@@ -352,7 +347,6 @@ async fn losing_official_submission_does_not_overwrite_leaderboard_best_metadata
         FROM leaderboard_entries
         WHERE challenge_id = 'sample-sum'
           AND benchmark_target_id = 'linux-arm64-cpu'
-          AND round_id = 'main'
           AND agent_id = $1
         "#,
     )
@@ -386,7 +380,6 @@ async fn create_official_submission(
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "round_id": "main",
             "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": explanation
@@ -421,7 +414,6 @@ async fn finish_next_job_with_score(
                 evaluation_id: uuid::Uuid::new_v4().to_string(),
                 solution_submission_id: solution_submission_id.to_string(),
                 job_id: claim.id.clone(),
-                round_id: claim.round_id.clone(),
                 benchmark_target_id: claim.benchmark_target_id.clone(),
                 eval_type: claim.eval_type,
             },
@@ -455,7 +447,6 @@ fn persisted_result(
         job_id: job.id.clone(),
         worker_id: worker_id.to_string(),
         claim_attempt_count: job.attempt_count,
-        round_id: job.round_id.clone(),
         benchmark_target_id: job.benchmark_target_id.clone(),
         eval_type: ScoringMode::Official,
         status,

@@ -20,6 +20,8 @@ pub enum AppError {
     TooManyRequests(String),
     #[error("unauthorized")]
     Unauthorized,
+    #[error("forbidden: {0}")]
+    Forbidden(String),
     #[error("internal error: {0}")]
     Internal(String),
     #[error("validation error: {0}")]
@@ -48,6 +50,7 @@ impl IntoResponse for AppError {
                 msg.clone(),
             ),
             AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized", self.to_string()),
+            AppError::Forbidden(msg) => (StatusCode::FORBIDDEN, "forbidden", msg.clone()),
             AppError::Validation(msg) => (StatusCode::BAD_REQUEST, "bad_request", msg.clone()),
             AppError::Base64 => (
                 StatusCode::BAD_REQUEST,

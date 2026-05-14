@@ -51,7 +51,7 @@ async fn admin_read_models_power_operator_console(pool: sqlx::PgPool) {
         sample_sum["benchmark_targets"][0]["validation_enabled"],
         true
     );
-    assert_eq!(sample_sum["rounds"][0]["id"], "main");
+    assert_eq!(sample_sum["eligibility"]["type"], "open");
     assert_eq!(sample_sum["private_benchmark_enabled"], true);
 
     let submissions: serde_json::Value = client
@@ -145,7 +145,7 @@ async fn create_challenge_and_publish_contract(pool: sqlx::PgPool) {
 }
 
 #[sqlx::test(migrations = "../migrations")]
-async fn publishing_contract_exposes_rounds(pool: sqlx::PgPool) {
+async fn publishing_contract_exposes_challenge_policy(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let challenges = tempfile::tempdir().expect("failed to create challenge tempdir");
     let config = test_config(storage.path(), challenges.path());
@@ -198,7 +198,7 @@ async fn publishing_contract_exposes_rounds(pool: sqlx::PgPool) {
         .await
         .expect("failed to decode public challenge");
 
-    assert_eq!(public_challenge["rounds"][0]["id"], "main");
+    assert_eq!(public_challenge["spec"]["eligibility"]["type"], "open");
     assert_eq!(public_challenge["summary"], "Published contract summary");
 
     let spec_json: serde_json::Value =
@@ -207,7 +207,7 @@ async fn publishing_contract_exposes_rounds(pool: sqlx::PgPool) {
             .fetch_one(&pool)
             .await
             .expect("failed to query published contract");
-    assert_eq!(spec_json["rounds"][0]["id"], "main");
+    assert_eq!(spec_json["eligibility"]["type"], "open");
 }
 
 #[sqlx::test(migrations = "../migrations")]
@@ -509,7 +509,6 @@ async fn admin_official_run_bypasses_public_official_queue_limit(pool: sqlx::PgP
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "round_id": "main",
             "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": helpers::solution_zip_base64(&helpers::sample_sum_solution("payload['a'] + payload['b']")),
             "explanation": "fills official queue"
@@ -524,7 +523,6 @@ async fn admin_official_run_bypasses_public_official_queue_limit(pool: sqlx::PgP
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "round_id": "main",
             "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": helpers::solution_zip_base64(&helpers::sample_sum_solution("payload['a'] + payload['b']")),
             "explanation": "admin promotes this validation run"
@@ -544,7 +542,6 @@ async fn admin_official_run_bypasses_public_official_queue_limit(pool: sqlx::PgP
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "round_id": "main",
             "benchmark_target_id": "linux-arm64-cpu",
             "artifact_base64": "not-base64",
             "explanation": "public official run should still be rejected"
