@@ -5,12 +5,13 @@ FROM ubuntu:${UBUNTU_VERSION}
 
 ARG AGENTICS_IMAGE_VERSION=0.1.0
 ARG UBUNTU_VERSION=26.04
-ARG NODE_VERSION=latest
+ARG NODE_VERSION=24
 ARG BUN_VERSION=latest
 
 LABEL org.opencontainers.image.title="Agentics CPU Base" \
       org.opencontainers.image.description="First-party Agentics CPU base image for solution and scorer containers" \
       ai.agentics.image.version="${AGENTICS_IMAGE_VERSION}" \
+      ai.agentics.target.id="linux-arm64-cpu" \
       ai.agentics.ubuntu.version="${UBUNTU_VERSION}"
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -116,6 +117,7 @@ RUN printf '%s\n' \
 RUN mkdir -p /opt/agentics \
     && printf '{\n' > /opt/agentics/image-info.json \
     && printf '  "agentics_image_version": "%s",\n' "${AGENTICS_IMAGE_VERSION}" >> /opt/agentics/image-info.json \
+    && printf '  "target_id": "linux-arm64-cpu",\n' >> /opt/agentics/image-info.json \
     && printf '  "ubuntu_version": "%s",\n' "${UBUNTU_VERSION}" >> /opt/agentics/image-info.json \
     && printf '  "architecture": "%s",\n' "$(dpkg --print-architecture)" >> /opt/agentics/image-info.json \
     && printf '  "python_version": "%s",\n' "$(python --version | awk '{print $2}')" >> /opt/agentics/image-info.json \

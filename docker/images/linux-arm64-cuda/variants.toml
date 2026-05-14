@@ -1,0 +1,30 @@
+# First-party CUDA devel base-image policy for linux-arm64-cuda.
+# Variants follow CUDA versions supported by the latest stable PyTorch release,
+# subject to NVIDIA linux/arm64 image availability and DGX smoke validation.
+
+[[variants]]
+id = "cu126"
+cuda_version = "12.6"
+ubuntu_version = "24.04"
+nvidia_base_image = "nvidia/cuda:12.6.3-devel-ubuntu24.04"
+nvidia_manifest_digest = "sha256:392c0df7b577ecae17a17f6ba7f2009c217bb4422f8431c053ae9af61a8c148a"
+status = "active"
+allow_new_challenges = true
+
+[[variants]]
+id = "cu130"
+cuda_version = "13.0"
+ubuntu_version = "24.04"
+nvidia_base_image = "nvidia/cuda:13.0.1-devel-ubuntu24.04"
+nvidia_manifest_digest = "sha256:7d2f6a8c2071d911524f95061a0db363e24d27aa51ec831fcccf9e76eb72bc92"
+status = "active"
+allow_new_challenges = true
+
+[[variants]]
+id = "cu132"
+cuda_version = "13.2"
+ubuntu_version = "24.04"
+nvidia_base_image = "nvidia/cuda:13.2.0-devel-ubuntu24.04"
+nvidia_manifest_digest = "sha256:f9492f2eea77fbc3d0c14fa8738f35946b42da72917bf5959d284ca39b4f209a"
+status = "active"
+allow_new_challenges = true

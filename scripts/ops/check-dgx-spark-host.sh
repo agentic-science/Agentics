@@ -76,7 +76,7 @@ run_shell 'nvidia-ctk runtime configure --runtime=docker --dry-run 2>&1 | sed -n
 
 section "NVIDIA Docker Smoke"
 if [ "${AGENTICS_DGX_RUN_DOCKER_SMOKE:-0}" = "1" ]; then
-  cuda_image="${AGENTICS_DGX_CUDA_IMAGE:-nvidia/cuda:13.0.0-base-ubuntu24.04}"
+  cuda_image="${AGENTICS_DGX_CUDA_IMAGE:-nvidia/cuda:13.0.1-base-ubuntu24.04}"
   pull_policy="${AGENTICS_DGX_DOCKER_PULL_POLICY:-never}"
   run "${DOCKER_CMD[@]}" run --rm --pull="$pull_policy" --network none --gpus all "$cuda_image" nvidia-smi
 else
@@ -84,7 +84,7 @@ else
 Skipped. Set AGENTICS_DGX_RUN_DOCKER_SMOKE=1 to run:
 
   ${AGENTICS_DGX_DOCKER_CLI:-docker} run --rm --pull="${AGENTICS_DGX_DOCKER_PULL_POLICY:-never}" \
-    --network none --gpus all "${AGENTICS_DGX_CUDA_IMAGE:-nvidia/cuda:13.0.0-base-ubuntu24.04}" \
+    --network none --gpus all "${AGENTICS_DGX_CUDA_IMAGE:-nvidia/cuda:13.0.1-base-ubuntu24.04}" \
     nvidia-smi
 
 Use an image that already exists locally or set AGENTICS_DGX_DOCKER_PULL_POLICY=missing.
