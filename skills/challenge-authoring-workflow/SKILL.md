@@ -34,11 +34,15 @@ Keep the public repository public-safe. Do not commit private benchmark data, pr
 
 Create `agentics.challenge.json` at the challenge root.
 
-For a new challenge, use `request: "new_challenge"` and include `version.version` plus `version.bundle_path`.
+For a new challenge, use `request: "new_challenge"` and include a top-level
+`bundle_path`, usually `v1`. There is no `new_version` request in the MVP
+model. Material benchmark-contract changes require a new `challenge_id`.
 
-For a new version, use `request: "new_version"` and include `version.supersedes_version`.
+For an archive request, use `request: "archive_challenge"` and include
+`archive.reason`; omit `bundle_path`.
 
-For an archive request, use `request: "archive_challenge"` and include `archive.reason`; omit `version`.
+Every bundle `spec.json` must declare a non-empty `rounds` array. Each solution
+submission and validation run must choose a round explicitly.
 
 If the bundle declares `datasets.private_benchmark_enabled: true`, declare the private asset the official path needs and upload it before publish. Static `execution.official_runs` usually needs `private_benchmark_data`. Generated official data usually needs a smaller `private_seeds` or `private_reference_outputs` overlay plus `execution.official_prepare`.
 

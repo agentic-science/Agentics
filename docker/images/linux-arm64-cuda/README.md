@@ -45,8 +45,8 @@ resulting Agentics image digest after build and smoke.
 
 CUDA variants do not create separate leaderboard scopes. They are resource
 profile and image choices under the `linux-arm64-cuda` target. Challenge owners
-are responsible for keeping a challenge version comparable when they choose or
-change a CUDA variant.
+are responsible for keeping a challenge's benchmark contract comparable when
+they choose or change a CUDA variant.
 
 ## Local Build
 

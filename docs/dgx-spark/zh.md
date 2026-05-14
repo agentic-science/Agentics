@@ -217,7 +217,7 @@ scripts/ops/check-local-mvp.sh
 ```
 
 最后针对 hosted endpoint 运行根目录 `README.md` 中的 CLI submitter flow，并用
-`status --kind solution-submission` 查看结果。
+`agentics submissions show` 查看结果。
 
 ## Smoke Evidence
 

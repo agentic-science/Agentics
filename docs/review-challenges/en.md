@@ -92,10 +92,10 @@ The CLI also supports draft rejection, abandonment, and cleanup with
 
 ## Publication Notes
 
-Publishing a new version marks it current and marks the previous current version
-`superseded`. Publishing an archive request hides the challenge from default
-browsing, keeps direct public records readable, and rejects new validation and
-official solution submissions.
+`new_version` manifests are not accepted in the MVP model. Material benchmark
+changes require a new `challenge_id`. Publishing an archive request hides the
+challenge from default browsing, keeps direct public records readable, and
+rejects new validation and official solution submissions.
 
 Published runtime bundles are copied into managed storage, so later edits to the
 source checkout do not affect historical evaluations.

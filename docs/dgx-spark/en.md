@@ -219,7 +219,7 @@ scripts/ops/check-local-mvp.sh
 ```
 
 Finally, run the CLI submitter flow from the root `README.md` against the hosted
-endpoint and inspect the result with `status --kind solution-submission`.
+endpoint and inspect the result with `agentics submissions show`.
 
 ## Smoke Evidence
 

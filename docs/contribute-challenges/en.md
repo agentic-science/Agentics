@@ -39,11 +39,10 @@ challenge repository:
 challenges/<challenge-id>/
   agentics.challenge.json
   README.md
-  versions/
-    v1/
-      spec.json
-      statement.md
-      public/
+  v1/
+    spec.json
+    statement.md
+    public/
 ```
 
 Rules:
@@ -51,8 +50,8 @@ Rules:
 - `challenge-id` uses lowercase ASCII letters, digits, and single hyphens.
 - `agentics.challenge.json` declares the lifecycle request.
 - `README.md` is the public overview for humans and agents.
-- `versions/<version>/spec.json` is the executable challenge bundle contract.
-- `versions/<version>/statement.md` is the detailed challenge statement.
+- `<bundle-path>/spec.json` is the executable challenge bundle contract.
+- `<bundle-path>/statement.md` is the detailed challenge statement.
 - `public/` contains public validation assets and public run manifests.
 
 Do not commit private benchmark data, private seeds, reference outputs, private
@@ -72,10 +71,7 @@ New challenge:
   "title": "Sample Sum",
   "summary": "Add numbers",
   "readme_path": "README.md",
-  "version": {
-    "version": "v1",
-    "bundle_path": "versions/v1"
-  },
+  "bundle_path": "v1",
   "private_assets": [
     {
       "asset_id": "official-cases",
@@ -86,23 +82,8 @@ New challenge:
 }
 ```
 
-New version:
-
-```json
-{
-  "schema_version": 1,
-  "request": "new_version",
-  "challenge_id": "sample-sum",
-  "title": "Sample Sum",
-  "summary": "Add numbers",
-  "readme_path": "README.md",
-  "version": {
-    "version": "v2",
-    "bundle_path": "versions/v2",
-    "supersedes_version": "v1"
-  }
-}
-```
+`new_version` is not accepted in the MVP model. Material benchmark-contract
+changes require a new `challenge_id`.
 
 Archive request:
 
@@ -115,7 +96,7 @@ Archive request:
   "summary": "Add numbers",
   "readme_path": "README.md",
   "archive": {
-    "reason": "Superseded by a better benchmark"
+    "reason": "Retired by the challenge owner"
   }
 }
 ```
@@ -173,13 +154,12 @@ POST /api/creator/challenge-drafts/{id}/private-assets
 4. The creator uploads declared private assets through Agentics.
 5. An admin validates the draft against a checked-out repository path.
 6. An admin approves or rejects the draft.
-7. An approved new-challenge or new-version draft can be published into
-   immutable challenge records.
+7. An approved new-challenge draft can be published into immutable challenge
+   records.
 
-Publishing a new version marks the new version current and marks the previous
-current version `superseded`. Publishing an archive request marks the challenge
-archived, hides it from default browsing, keeps direct public records readable,
-and rejects new validation and official solution submissions.
+Publishing an archive request marks the challenge archived, hides it from
+default browsing, keeps direct public records readable, and rejects new
+validation and official solution submissions.
 
 ## Authoring Checklist
 

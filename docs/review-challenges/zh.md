@@ -87,8 +87,8 @@ abandonment 和 cleanup。
 
 ## Publication Notes
 
-发布 new version 会将其标记为 current，并把 previous current version 标记为
-`superseded`。发布 archive request 会让 challenge 从默认浏览中隐藏，同时保留
+MVP model 不接受 `new_version` manifests。实质 benchmark 变更必须使用新的
+`challenge_id`。发布 archive request 会让 challenge 从默认浏览中隐藏，同时保留
 direct public records 可读，并拒绝新的 validation 和 official solution
 submissions。
 

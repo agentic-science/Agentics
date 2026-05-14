@@ -82,7 +82,7 @@ cargo run -p agentics-cli --bin agentics -- challenge-creator draft reject <draf
 
 ## 5. Publish Or Archive
 
-Publish an approved new-challenge or new-version draft:
+Publish an approved new-challenge draft:
 
 ```bash
 cargo run -p agentics-cli --bin agentics -- challenge-creator draft publish <draft-id> \
@@ -91,7 +91,8 @@ cargo run -p agentics-cli --bin agentics -- challenge-creator draft publish <dra
   --admin-password <admin-password>
 ```
 
-Publishing a new version makes it current and marks the previous current version superseded. It does not archive the challenge.
+The published challenge contract is immutable. Material benchmark changes
+require a new `challenge_id`; do not accept `new_version` manifests.
 
 Publishing an archive draft hides the challenge from default browsing and blocks new validation or official solution submissions, while preserving direct public records.
 

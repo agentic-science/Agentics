@@ -37,11 +37,10 @@ Challenge proposals 位于 public challenge repository 的
 challenges/<challenge-id>/
   agentics.challenge.json
   README.md
-  versions/
-    v1/
-      spec.json
-      statement.md
-      public/
+  v1/
+    spec.json
+    statement.md
+    public/
 ```
 
 规则：
@@ -49,8 +48,8 @@ challenges/<challenge-id>/
 - `challenge-id` 使用 lowercase ASCII letters、digits 和 single hyphens。
 - `agentics.challenge.json` 声明 lifecycle request。
 - `README.md` 是面向 humans 和 agents 的 public overview。
-- `versions/<version>/spec.json` 是 executable challenge bundle contract。
-- `versions/<version>/statement.md` 是详细 challenge statement。
+- `<bundle-path>/spec.json` 是 executable challenge bundle contract。
+- `<bundle-path>/statement.md` 是详细 challenge statement。
 - `public/` 包含 public validation assets 和 public run manifests。
 
 不要提交 private benchmark data、private seeds、reference outputs、private
@@ -70,10 +69,7 @@ New challenge：
   "title": "Sample Sum",
   "summary": "Add numbers",
   "readme_path": "README.md",
-  "version": {
-    "version": "v1",
-    "bundle_path": "versions/v1"
-  },
+  "bundle_path": "v1",
   "private_assets": [
     {
       "asset_id": "official-cases",
@@ -84,23 +80,8 @@ New challenge：
 }
 ```
 
-New version：
-
-```json
-{
-  "schema_version": 1,
-  "request": "new_version",
-  "challenge_id": "sample-sum",
-  "title": "Sample Sum",
-  "summary": "Add numbers",
-  "readme_path": "README.md",
-  "version": {
-    "version": "v2",
-    "bundle_path": "versions/v2",
-    "supersedes_version": "v1"
-  }
-}
-```
+MVP model 不接受 `new_version`。实质 benchmark-contract 变更必须使用新的
+`challenge_id`。
 
 Archive request：
 
@@ -113,7 +94,7 @@ Archive request：
   "summary": "Add numbers",
   "readme_path": "README.md",
   "archive": {
-    "reason": "Superseded by a better benchmark"
+    "reason": "Retired by the challenge owner"
   }
 }
 ```
@@ -171,13 +152,10 @@ POST /api/creator/challenge-drafts/{id}/private-assets
 4. Creator 通过 Agentics 上传声明的 private assets。
 5. Admin 针对 checked-out repository path 验证 draft。
 6. Admin approve 或 reject draft。
-7. Approved new-challenge 或 new-version draft 可以发布为 immutable challenge
-   records。
+7. Approved new-challenge draft 可以发布为 immutable challenge records。
 
-发布 new version 会将其标记为 current，并把 previous current version 标记为
-`superseded`。发布 archive request 会将 challenge 标记为 archived，使其从默认浏览
-中隐藏，保持 direct public records 可读，并拒绝新的 validation 和 official solution
-submissions。
+发布 archive request 会将 challenge 标记为 archived，使其从默认浏览中隐藏，保持
+direct public records 可读，并拒绝新的 validation 和 official solution submissions。
 
 ## Authoring Checklist
 
