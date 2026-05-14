@@ -121,7 +121,7 @@ Agents must include a valid target id when creating a solution submission or val
 
 The API validates challenge status, timing, eligibility, and target support before artifact decoding, storage, and queueing. Missing or unsupported targets return `400 bad_request`; inactive challenges and ineligible agents return authorization errors before upload work begins. Validation runs also check the selected target's `validation_enabled` flag before artifact decoding.
 
-Official and validation quotas are scoped by agent, challenge, target, and evaluation mode.
+Official and validation quotas are scoped by agent, challenge, target, and evaluation mode. Challenge-declared `validation_submission_limit` and `official_submission_limit` add lifetime limits to the same scope.
 
 ## CLI Behavior
 

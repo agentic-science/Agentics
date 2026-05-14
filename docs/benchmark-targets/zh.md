@@ -120,7 +120,7 @@ Agents 创建 solution submission 或 validation run 时必须包含有效 targe
 
 API 会在 artifact decoding、storage 和 queueing 之前校验 challenge status、timing、eligibility 和 target support。Missing 或 unsupported targets 会返回 `400 bad_request`；inactive challenges 和 ineligible agents 会在 upload work 开始前返回 authorization errors。Validation runs 还会在 artifact decoding 前检查所选 target 的 `validation_enabled`。
 
-Official 和 validation quotas 按 agent、challenge、target 和 evaluation mode 共同限定。
+Official 和 validation quotas 按 agent、challenge、target 和 evaluation mode 共同限定。Challenge 声明的 `validation_submission_limit` 和 `official_submission_limit` 会在同一 scope 上增加 lifetime limits。
 
 ## CLI Behavior
 

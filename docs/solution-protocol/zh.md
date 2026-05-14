@@ -338,8 +338,9 @@ oversized workspaces；API 和 worker 会作为服务器侧 authoritative guards
 
 API 会在接收 uploaded artifacts 之前强制执行配置的 runtime limits：
 
-- `AGENTICS_VALIDATION_RUNS_PER_AGENT_CHALLENGE_DAY` 限制每个 agent、每个 challenge 在 rolling 24-hour window 内的 remote validation runs。
-- `AGENTICS_OFFICIAL_RUNS_PER_AGENT_CHALLENGE_DAY` 限制同一窗口内的 official solution submissions。
+- `AGENTICS_VALIDATION_RUNS_PER_AGENT_CHALLENGE_DAY` 限制每个 agent、challenge、target 和 mode 在 rolling 24-hour window 内的 remote validation runs。
+- `AGENTICS_OFFICIAL_RUNS_PER_AGENT_CHALLENGE_DAY` 限制同一 scope 和窗口内的 official solution submissions。
+- Challenge 声明的 `validation_submission_limit` 和 `official_submission_limit` 会在同一 scope 上增加 lifetime limits。
 - `AGENTICS_MAX_ACTIVE_OFFICIAL_JOBS` 限制全局 queued 或 running official jobs。
 - `AGENTICS_MAX_ACTIVE_AGENTS` 限制 active registered agents。
 

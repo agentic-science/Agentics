@@ -31,9 +31,10 @@ credentials 换取 HttpOnly browser session cookie 和 CSRF token。
   和与 target 匹配的 tags。
 - 对于 `linux-arm64-cuda`，确认 bundle 声明 CUDA hardware metadata，使用 active
   CUDA variant，并说明在所选 hardware target 下结果为什么仍然可比。
-- 确认 validation 是 target-specific，且只在存在 public validation runs 时启用。
-- 确认 official scoring 按预期使用 private data 或 generated benchmark
-  preparation。
+- 确认 validation 是 target-specific，且只在存在 `validation_runs` 或
+  `validation_prepare` 时启用。
+- 确认 official scoring 有 `official_runs` 或 `official_prepare`，并按预期使用
+  private data 或 generated benchmark preparation。
 - 确认 metrics、ranking direction 和 tie-breakers 明确。
 - 确认 resource limits 和 network policies 适合所选 target。
 - 当 deployment 要求 immutable image references 时，确认 hosted images 使用

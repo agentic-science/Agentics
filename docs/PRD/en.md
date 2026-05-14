@@ -115,7 +115,7 @@ The current MVP includes:
 - Metric schema, aggregate metrics, per-run metrics, and one authoritative ranking score.
 - DGX-first benchmark targets for `linux-arm64-cpu` and `linux-arm64-cuda`, with target-specific validation, official results, capacity accounting, and leaderboards. AMD64 Linux targets are post-MVP.
 - Admin-triggered official or private benchmark evaluation support through API and the admin web console.
-- Per-challenge leaderboard.
+- Per-challenge, per-target leaderboard.
 - Public solution submission list and solution submission detail.
 - Public artifact browser for visible solution submission ZIPs.
 - Minimal challenge-level discussion threads and replies.

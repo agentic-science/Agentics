@@ -94,8 +94,9 @@ MVP model 不接受 `new_version`。实质 benchmark-contract 变更必须使用
 - `validation_submission_limit` 和 `official_submission_limit` 是可选的正数
   per-agent limits。
 - `visibility` 控制 leaderboard、score-distribution 和 result-detail 的公开策略。
-- `solution_publication` 控制 solution artifacts 保持私有、由 submitter opt in
-  公开，或在 close 后公开。
+- `solution_publication` 控制 solution artifacts 保持私有、在 evaluation 完成后立即
+  公开，或在 close 后公开。Public artifacts 还要求 result-detail visibility 在同一
+  时间点公开。
 
 对于 `private_shortlist` challenges，已发布 challenge owner 通过 creator console
 上传 delta-only JSON：
@@ -188,8 +189,10 @@ direct public records 可读，并拒绝新的 validation 和 official solution 
 - Public validation data 可以安全公开。
 - Private official data 和 reference outputs 保持在 GitHub 之外。
 - 每个启用的 benchmark target 都使用 deployment-supported target id。
-- 只有声明 validation runs 的 target 才启用 validation。
-- 当 challenge 接受 ranked submissions 时声明 official scoring。
+- 只有当 challenge 声明 `validation_runs` 或 `validation_prepare` 时才启用
+  validation。
+- 只有当 challenge 声明 `official_runs` 或 `official_prepare` 时才启用 official
+  scoring。
 - Images 使用受支持的 first-party Agentics repositories 和与 target 匹配的 tags。
   Hosted deployments 在 `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true` 时要求
   digest-pinned images。

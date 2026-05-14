@@ -33,10 +33,10 @@ same admin credentials for an HttpOnly browser session cookie and CSRF token.
 - For `linux-arm64-cuda`, confirm the bundle declares CUDA hardware metadata,
   uses an active CUDA variant, and explains why results remain comparable under
   the selected hardware target.
-- Confirm validation is target-specific and only enabled when public validation
-  runs exist.
-- Confirm official scoring has private data or generated benchmark preparation
-  as intended.
+- Confirm validation is target-specific and only enabled when
+  `validation_runs` or `validation_prepare` exists.
+- Confirm official scoring has `official_runs` or `official_prepare` with
+  private data or generated benchmark preparation as intended.
 - Confirm metrics, ranking direction, and tie-breakers are unambiguous.
 - Confirm resource limits and network policies are appropriate for the selected
   target.

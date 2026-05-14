@@ -98,8 +98,10 @@ competition stages:
   positive per-agent limits.
 - `visibility` controls leaderboard, score-distribution, and result-detail
   publication.
-- `solution_publication` controls whether solution artifacts stay private, can
-  be opted into by the submitter, or become public after close.
+- `solution_publication` controls whether solution artifacts stay private,
+  become public immediately after evaluation, or become public after close.
+  Public artifacts also require result-detail visibility to be public at the
+  same time.
 
 For `private_shortlist` challenges, the published challenge owner uploads
 delta-only JSON from the creator console:
@@ -195,9 +197,10 @@ validation and official solution submissions.
 - Public validation data is safe to expose.
 - Private official data and reference outputs stay outside GitHub.
 - Every enabled benchmark target uses a deployment-supported target id.
-- Validation is enabled only for targets with declared validation runs.
-- Official scoring is declared when the challenge should accept ranked
-  submissions.
+- Validation is enabled only when the challenge declares `validation_runs` or
+  `validation_prepare`.
+- Official scoring is enabled only when the challenge declares `official_runs`
+  or `official_prepare`.
 - Images use supported first-party Agentics repositories and target-compatible
   tags. Hosted deployments require digest-pinned images when
   `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`.
