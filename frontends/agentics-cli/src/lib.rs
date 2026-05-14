@@ -29,7 +29,7 @@ use clap::Parser;
 use crate::api::ApiClient;
 use crate::cli::{
     AuthCommand, ChallengeCreatorCommand, ChallengesCommand, Cli, Commands, ConfigCommand,
-    LeaderboardCommand, MetricsCommand, RoundsCommand, SubmissionsCommand,
+    LeaderboardCommand, MetricsCommand, SubmissionsCommand,
 };
 use crate::config::{ConfigStore, Environment, ResolvedSettings};
 
@@ -84,6 +84,29 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
             ChallengeCreatorCommand::Draft { command } => {
                 commands::challenge_draft(command, cli.output, &settings).await
             }
+            ChallengeCreatorCommand::Stats {
+                challenge_id,
+                target,
+            } => {
+                let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
+                let response = client
+                    .get_creator_challenge_stats(&challenge_id, target.as_deref())
+                    .await?;
+                output::render_creator_challenge_stats(&response, cli.output)
+            }
+            ChallengeCreatorCommand::Participants {
+                challenge_id,
+                target,
+            } => {
+                let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
+                let response = client
+                    .get_creator_challenge_participants(&challenge_id, target.as_deref())
+                    .await?;
+                output::render_creator_challenge_participants(&response, cli.output)
+            }
+            ChallengeCreatorCommand::Shortlist { command } => {
+                commands::challenge_shortlist(command, cli.output, &settings).await
+            }
         },
         Commands::InitSolution(args) => {
             let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
@@ -98,22 +121,6 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
         }
         Commands::Submit(args) => commands::submit(args, cli.output, &settings).await,
         Commands::Validate(args) => commands::validate(args, cli.output, &settings).await,
-        Commands::Rounds(args) => {
-            let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-            match args.command {
-                RoundsCommand::List { challenge_id } => {
-                    let response = client.get_challenge(&challenge_id).await?;
-                    output::render_round_list(&response, cli.output)
-                }
-                RoundsCommand::Show {
-                    challenge_id,
-                    round_id,
-                } => {
-                    let response = client.get_challenge(&challenge_id).await?;
-                    output::render_round_detail(&response, &round_id, cli.output)
-                }
-            }
-        }
         Commands::Submissions(args) => {
             let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
             match args.command {
@@ -142,14 +149,12 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
                 SubmissionsCommand::Rank {
                     submission_id,
                     challenge,
-                    round,
                     target,
                 } => {
                     let response = client
                         .get_solution_submission_ranking_context(
                             &submission_id,
                             &challenge,
-                            &round,
                             &target,
                         )
                         .await?;
@@ -162,12 +167,9 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
             match args.command {
                 LeaderboardCommand::Show {
                     challenge_id,
-                    round,
                     target,
                 } => {
-                    let response = client
-                        .get_leaderboard(&challenge_id, &round, &target)
-                        .await?;
+                    let response = client.get_leaderboard(&challenge_id, &target).await?;
                     output::render_leaderboard(&response, cli.output)
                 }
             }
@@ -177,12 +179,11 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
             match args.command {
                 MetricsCommand::Distribution {
                     challenge_id,
-                    round,
                     target,
                     metric,
                 } => {
                     let response = client
-                        .get_score_distribution(&challenge_id, &round, &target, &metric)
+                        .get_score_distribution(&challenge_id, &target, &metric)
                         .await?;
                     output::render_score_distribution(&response, cli.output)
                 }
@@ -289,7 +290,7 @@ mod tests {
                         "slug": "sum",
                         "title": "Sample Sum",
                         "summary": "Add numbers",
-                        "rounds": [round_json()]
+                        "eligibility": { "type": "open" }
                     }
                 ]
             })))
@@ -314,7 +315,7 @@ mod tests {
 
         assert_eq!(
             output,
-            "ID          SLUG  ROUNDS  TITLE\nsample-sum  sum   main    Sample Sum"
+            "ID          SLUG  ELIGIBILITY  TITLE\nsample-sum  sum   open         Sample Sum"
         );
     }
 
@@ -368,7 +369,6 @@ mod tests {
                 "id": "solution_submission-1",
                 "status": "queued",
                 "challenge_id": "sample-sum",
-                "round_id": "main",
                 "benchmark_target_id": "linux-arm64-cpu",
                 "artifact_path": "solution-submissions/solution_submission-1.zip",
                 "evaluation_job_id": "job-1",
@@ -401,8 +401,6 @@ mod tests {
             "test-token",
             "submit",
             "sample-sum",
-            "--round",
-            "main",
             "--target",
             "linux-arm64-cpu",
             "--dir",
@@ -427,7 +425,6 @@ mod tests {
 
         assert!(output.contains("Submitted solution_submission-1"));
         assert_eq!(body["challenge_id"], "sample-sum");
-        assert_eq!(body["round_id"], "main");
         assert_eq!(body["benchmark_target_id"], "linux-arm64-cpu");
         assert_eq!(body["explanation"], "first attempt");
         assert!(body["artifact_base64"].as_str().expect("artifact").len() > 20);
@@ -457,8 +454,6 @@ mod tests {
             "test-token",
             "submit",
             "sample-sum",
-            "--round",
-            "main",
             "--target",
             "cpu-linux-ppc64le",
             "--dir",
@@ -488,7 +483,6 @@ mod tests {
                 "id": "solution_submission-1",
                 "challenge_id": "sample-sum",
                 "challenge_title": "Sample Sum",
-                "round_id": "main",
                 "benchmark_target_id": "linux-arm64-cpu",
                 "agent_id": "agent-1",
                 "agent_name": "solver",
@@ -500,7 +494,6 @@ mod tests {
                 "artifact_path": "solution-submissions/solution_submission-1.zip",
                 "evaluation_job": {
                     "id": "job-1",
-                    "round_id": "main",
                     "benchmark_target_id": "linux-arm64-cpu",
                     "status": "queued"
                 },
@@ -543,7 +536,6 @@ mod tests {
                 "id": "validation-1",
                 "challenge_id": "sample-sum",
                 "challenge_title": "Sample Sum",
-                "round_id": "main",
                 "benchmark_target_id": "linux-arm64-cpu",
                 "agent_id": "agent-1",
                 "agent_name": "solver",
@@ -555,13 +547,11 @@ mod tests {
                 "artifact_path": "solution-submissions/validation-1.zip",
                 "evaluation_job": {
                     "id": "job-1",
-                    "round_id": "main",
                     "benchmark_target_id": "linux-arm64-cpu",
                     "status": "completed"
                 },
                 "evaluation": {
                     "id": "eval-1",
-                    "round_id": "main",
                     "benchmark_target_id": "linux-arm64-cpu",
                     "status": "completed",
                     "eval_type": "validation",
@@ -573,7 +563,6 @@ mod tests {
                 },
                 "validation_evaluation": {
                     "id": "eval-1",
-                    "round_id": "main",
                     "benchmark_target_id": "linux-arm64-cpu",
                     "status": "completed",
                     "eval_type": "validation",
@@ -634,7 +623,6 @@ mod tests {
                 "id": "validation-1",
                 "status": "queued",
                 "challenge_id": "sample-sum",
-                "round_id": "main",
                 "benchmark_target_id": "linux-arm64-cpu",
                 "artifact_path": "solution-submissions/validation-1.zip",
                 "evaluation_job_id": "job-1",
@@ -649,7 +637,6 @@ mod tests {
                 "id": "validation-1",
                 "challenge_id": "sample-sum",
                 "challenge_title": "Sample Sum",
-                "round_id": "main",
                 "benchmark_target_id": "linux-arm64-cpu",
                 "agent_id": "agent-1",
                 "agent_name": "solver",
@@ -661,13 +648,11 @@ mod tests {
                 "artifact_path": "solution-submissions/validation-1.zip",
                 "evaluation_job": {
                     "id": "job-1",
-                    "round_id": "main",
                     "benchmark_target_id": "linux-arm64-cpu",
                     "status": "completed"
                 },
                 "evaluation": {
                     "id": "eval-1",
-                    "round_id": "main",
                     "benchmark_target_id": "linux-arm64-cpu",
                     "status": "completed",
                     "eval_type": "validation",
@@ -714,8 +699,6 @@ mod tests {
             "validate",
             "--remote",
             "sample-sum",
-            "--round",
-            "main",
             "--target",
             "linux-arm64-cpu",
             "--dir",
@@ -748,7 +731,6 @@ mod tests {
         assert!(output.contains("rank_score: 1"));
         assert!(output.contains("visible_after_eval: false"));
         assert_eq!(body["challenge_id"], "sample-sum");
-        assert_eq!(body["round_id"], "main");
         assert_eq!(body["benchmark_target_id"], "linux-arm64-cpu");
         assert_eq!(body["explanation"], "quick check");
         assert!(body["artifact_base64"].as_str().expect("artifact").len() > 20);
@@ -779,8 +761,6 @@ mod tests {
             "validate",
             "--remote",
             "sample-sum",
-            "--round",
-            "main",
             "--target",
             "linux-arm64-cpu",
             "--dir",
@@ -975,12 +955,18 @@ mod tests {
             "slug": "sample-sum",
             "title": "Sample Sum",
             "summary": "Add numbers",
-            "rounds": [round_json()],
             "spec": {
                 "schema_version": 1,
                 "challenge_id": "sample-sum",
                 "challenge_title": "Sample Sum",
                 "challenge_summary": "Add numbers",
+                "eligibility": { "type": "open" },
+                "visibility": {
+                    "leaderboard": "public_live",
+                    "score_distribution": "public_live",
+                    "result_detail": "submitter_live_public_after_close"
+                },
+                "solution_publication": "submitter_opt_in",
                 "solution": {
                     "protocol": "zip_project",
                     "manifest_file": "agentics.solution.json"
@@ -1010,7 +996,6 @@ mod tests {
                         }
                     }
                 ],
-                "rounds": [round_json()],
                 "execution": {
                     "validation_runs": "public/runs.json",
                     "official_runs": "private-benchmark/runs.json"
@@ -1045,20 +1030,6 @@ mod tests {
                 }
             },
             "statement_markdown": "# Sample Sum"
-        })
-    }
-
-    fn round_json() -> serde_json::Value {
-        json!({
-            "id": "main",
-            "title": "Main Round",
-            "eligibility": { "type": "open" },
-            "visibility": {
-                "leaderboard": "public_live",
-                "score_distribution": "public_live",
-                "result_detail": "submitter_live_public_after_close"
-            },
-            "solution_publication": "submitter_opt_in"
         })
     }
 

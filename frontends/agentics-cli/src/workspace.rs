@@ -32,7 +32,6 @@ pub(crate) struct InitSolutionSummary {
     pub workspace_dir: PathBuf,
     pub challenge_id: String,
     pub challenge_title: String,
-    pub rounds: Vec<String>,
     pub runtime_profile: String,
     pub interface: String,
 }
@@ -78,11 +77,6 @@ pub(crate) fn init_solution_workspace(
         workspace_dir,
         challenge_id: challenge.id.clone(),
         challenge_title: challenge.title.clone(),
-        rounds: challenge
-            .rounds
-            .iter()
-            .map(|round| round.id.clone())
-            .collect(),
         runtime_profile: runtime_profile.manifest_value().to_string(),
         interface: interface.manifest_value().to_string(),
     })
@@ -124,10 +118,15 @@ fn render_readme(
     interface: SolutionInterface,
 ) -> String {
     format!(
-        "# {}\n\nChallenge: `{}`\nRounds:\n{}\nRuntime profile: `{}`\nInterface: `{}`\nBenchmark targets:\n{}\n\n{}\n\n## Workspace Contract\n\nThis workspace intentionally starts with only `README.md`, `{}`, and a Git repository.\n\nCreate a `run.sh` file at the repository root before committing. The generated pre-commit hook checks that `run.sh` and `{}` exist. Keep `run.sh` aligned with the generated manifest before packaging or submitting.\n",
+        "# {}\n\nChallenge: `{}`\nStarts at: `{}`\nCloses at: `{}`\nEligibility: `{}`\nRuntime profile: `{}`\nInterface: `{}`\nBenchmark targets:\n{}\n\n{}\n\n## Workspace Contract\n\nThis workspace intentionally starts with only `README.md`, `{}`, and a Git repository.\n\nCreate a `run.sh` file at the repository root before committing. The generated pre-commit hook checks that `run.sh` and `{}` exist. Keep `run.sh` aligned with the generated manifest before packaging or submitting.\n",
         challenge.title.trim(),
         challenge.id,
-        format_rounds(challenge),
+        challenge.spec.starts_at.as_deref().unwrap_or("none"),
+        challenge.spec.closes_at.as_deref().unwrap_or("none"),
+        serde_json::to_value(challenge.spec.eligibility.eligibility_type)
+            .ok()
+            .and_then(|value| value.as_str().map(ToOwned::to_owned))
+            .unwrap_or_else(|| "unknown".to_string()),
         runtime_profile.manifest_value(),
         interface.manifest_value(),
         format_benchmark_targets(challenge),
@@ -135,18 +134,6 @@ fn render_readme(
         ZIP_PROJECT_MANIFEST_FILE,
         ZIP_PROJECT_MANIFEST_FILE,
     )
-}
-
-fn format_rounds(challenge: &ChallengeDetailResponse) -> String {
-    if challenge.rounds.is_empty() {
-        return "- <none>\n".to_string();
-    }
-    challenge
-        .rounds
-        .iter()
-        .map(|round| format!("- `{}`: {}", round.id, round.title))
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 fn format_benchmark_targets(challenge: &ChallengeDetailResponse) -> String {
@@ -364,11 +351,10 @@ mod tests {
 
     use shared::models::challenge::{
         BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengeDetailResponse,
-        ChallengeExecutionSpec, ChallengeResultDetailVisibility, ChallengeRoundEligibilitySpec,
-        ChallengeRoundEligibilityType, ChallengeRoundSpec, ChallengeRoundVisibility,
-        ChallengeRoundVisibilitySpec, ChallengeSolutionPublicationPolicy, DatasetsSpec,
-        DockerPlatform, MetricSchemaSpec, PrivateBenchmarkPolicy, ResourceProfileSpec, ScorerSpec,
-        SolutionSpec,
+        ChallengeEligibilitySpec, ChallengeEligibilityType, ChallengeExecutionSpec,
+        ChallengeResultDetailVisibility, ChallengeSolutionPublicationPolicy, ChallengeVisibility,
+        ChallengeVisibilitySpec, DatasetsSpec, DockerPlatform, MetricSchemaSpec,
+        PrivateBenchmarkPolicy, ResourceProfileSpec, ScorerSpec, SolutionSpec,
     };
     use shared::models::evaluation::ScoreVisibility;
     use shared::zip_project::{
@@ -491,12 +477,24 @@ mod tests {
             slug: "sum".to_string(),
             title: "Sample Sum".to_string(),
             summary: "Add numbers".to_string(),
-            rounds: vec![default_round()],
             spec: ChallengeBundleSpec {
                 schema_version: 1,
                 challenge_id: "sample-sum".to_string(),
                 challenge_title: "Sample Sum".to_string(),
                 challenge_summary: "Add numbers".to_string(),
+                starts_at: None,
+                closes_at: None,
+                eligibility: ChallengeEligibilitySpec {
+                    eligibility_type: ChallengeEligibilityType::Open,
+                },
+                validation_submission_limit: None,
+                official_submission_limit: None,
+                visibility: ChallengeVisibilitySpec {
+                    leaderboard: ChallengeVisibility::PublicLive,
+                    score_distribution: ChallengeVisibility::PublicLive,
+                    result_detail: ChallengeResultDetailVisibility::SubmitterLivePublicAfterClose,
+                },
+                solution_publication: ChallengeSolutionPublicationPolicy::SubmitterOptIn,
                 solution: SolutionSpec {
                     protocol: "zip_project".to_string(),
                     manifest_file: "agentics.solution.json".to_string(),
@@ -528,7 +526,6 @@ mod tests {
                         hardware: None,
                     },
                 }],
-                rounds: vec![default_round()],
                 execution: ChallengeExecutionSpec {
                     validation_runs: Some("public/runs.json".to_string()),
                     validation_prepare: None,
@@ -546,26 +543,6 @@ mod tests {
                 metric_schema: MetricSchemaSpec::default(),
             },
             statement_markdown: "# Statement\n\nReturn the sum.".to_string(),
-        }
-    }
-
-    fn default_round() -> ChallengeRoundSpec {
-        ChallengeRoundSpec {
-            id: "main".to_string(),
-            title: "Main Round".to_string(),
-            opens_at: None,
-            closes_at: None,
-            eligibility: ChallengeRoundEligibilitySpec {
-                eligibility_type: ChallengeRoundEligibilityType::Open,
-            },
-            validation_submission_limit: None,
-            official_submission_limit: None,
-            visibility: ChallengeRoundVisibilitySpec {
-                leaderboard: ChallengeRoundVisibility::PublicLive,
-                score_distribution: ChallengeRoundVisibility::PublicLive,
-                result_detail: ChallengeResultDetailVisibility::SubmitterLivePublicAfterClose,
-            },
-            solution_publication: ChallengeSolutionPublicationPolicy::SubmitterOptIn,
         }
     }
 }

@@ -9,12 +9,13 @@ use shared::models::challenge_creation::{
     ChallengeCreationManifest, ChallengePrivateAssetKind, CreateChallengeDraftRequest,
     ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest, ValidateChallengeDraftRequest,
 };
+use shared::models::request::CreateChallengeShortlistRevisionRequest;
 use shared::models::request::{CreateSolutionSubmissionRequest, RegisterAgentRequest};
 
 use crate::api::ApiClient;
 use crate::cli::{
-    self, AdminAuthArgs, ChallengeDraftCommand, ChallengePrivateAssetKindArg, ConfigKey,
-    RegisterArgs, SubmitArgs, ValidateArgs,
+    self, AdminAuthArgs, ChallengeDraftCommand, ChallengePrivateAssetKindArg,
+    ChallengeShortlistCommand, ConfigKey, RegisterArgs, SubmitArgs, ValidateArgs,
 };
 use crate::config::{CliConfig, ConfigStore, ResolvedSettings, normalize_api_base_url};
 use crate::{output, package};
@@ -216,6 +217,30 @@ pub(crate) async fn challenge_draft(
     }
 }
 
+pub(crate) async fn challenge_shortlist(
+    command: ChallengeShortlistCommand,
+    output_format: cli::OutputFormat,
+    settings: &ResolvedSettings,
+) -> Result<String> {
+    let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
+    match command {
+        ChallengeShortlistCommand::Show { challenge_id } => {
+            let response = client.get_challenge_shortlist(&challenge_id).await?;
+            output::render_challenge_shortlist(&response, output_format)
+        }
+        ChallengeShortlistCommand::Upload { challenge_id, file } => {
+            let raw = std::fs::read_to_string(&file)
+                .with_context(|| format!("failed to read shortlist delta {}", file.display()))?;
+            let request: CreateChallengeShortlistRevisionRequest = serde_json::from_str(&raw)
+                .with_context(|| format!("failed to parse shortlist delta {}", file.display()))?;
+            let response = client
+                .create_challenge_shortlist_revision(&challenge_id, &request)
+                .await?;
+            output::render_challenge_shortlist_revision(&response, output_format)
+        }
+    }
+}
+
 enum DraftReviewAction {
     Approve,
     Reject,
@@ -296,7 +321,6 @@ pub(crate) async fn submit(
 ) -> Result<String> {
     let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
     let challenge = client.get_challenge(&args.challenge_id).await?;
-    validate_round_id(&challenge, &args.round)?;
     let target_ids = select_benchmark_targets(
         &challenge,
         args.target.as_deref(),
@@ -309,7 +333,6 @@ pub(crate) async fn submit(
     for target_id in target_ids {
         let request = create_solution_submission_request(
             args.challenge_id.clone(),
-            args.round.clone(),
             target_id,
             &package,
             args.explanation.clone(),
@@ -333,7 +356,6 @@ pub(crate) async fn validate(
 
     let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
     let challenge = client.get_challenge(&args.challenge_id).await?;
-    validate_round_id(&challenge, &args.round)?;
     let target_ids = select_benchmark_targets(
         &challenge,
         args.target.as_deref(),
@@ -346,7 +368,6 @@ pub(crate) async fn validate(
     for target_id in target_ids {
         let request = create_solution_submission_request(
             args.challenge_id.clone(),
-            args.round.clone(),
             target_id,
             &package,
             args.explanation.clone(),
@@ -383,7 +404,6 @@ fn parse_model_info(raw: &str) -> Result<serde_json::Value> {
 
 fn create_solution_submission_request(
     challenge_id: String,
-    round_id: String,
     benchmark_target_id: String,
     package: &package::SolutionPackage,
     explanation: String,
@@ -392,33 +412,12 @@ fn create_solution_submission_request(
 ) -> CreateSolutionSubmissionRequest {
     CreateSolutionSubmissionRequest {
         challenge_id,
-        round_id,
         benchmark_target_id,
         artifact_base64: STANDARD.encode(&package.bytes),
         explanation,
         parent_solution_submission_id,
         credit_text,
     }
-}
-
-fn validate_round_id(challenge: &ChallengeDetailResponse, round_id: &str) -> Result<()> {
-    let round_id = round_id.trim();
-    if round_id.is_empty() {
-        bail!("round id must not be empty");
-    }
-    if challenge.spec.round(round_id).is_some() {
-        return Ok(());
-    }
-    let available = challenge
-        .rounds
-        .iter()
-        .map(|round| round.id.as_str())
-        .collect::<Vec<_>>()
-        .join(", ");
-    bail!(
-        "challenge `{}` does not declare round `{round_id}`. Available rounds: {available}",
-        challenge.id
-    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

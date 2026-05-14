@@ -52,11 +52,9 @@ pub(crate) enum Commands {
     Submit(SubmitArgs),
     /// Create a private validation run for a solution workspace.
     Validate(ValidateArgs),
-    /// Inspect declared challenge rounds.
-    Rounds(RoundsArgs),
     /// Inspect solution submissions and their result surfaces.
     Submissions(SubmissionsArgs),
-    /// Inspect round-scoped leaderboards.
+    /// Inspect target-scoped leaderboards.
     Leaderboard(LeaderboardArgs),
     /// Inspect metric surfaces.
     Metrics(MetricsArgs),
@@ -148,6 +146,35 @@ pub(crate) enum ChallengeCreatorCommand {
     Draft {
         #[command(subcommand)]
         command: ChallengeDraftCommand,
+    },
+    /// Show owner-visible challenge statistics.
+    Stats {
+        challenge_id: String,
+        #[arg(long)]
+        target: Option<String>,
+    },
+    /// Show owner-visible challenge participants.
+    Participants {
+        challenge_id: String,
+        #[arg(long)]
+        target: Option<String>,
+    },
+    /// Inspect or update owner-managed challenge shortlists.
+    Shortlist {
+        #[command(subcommand)]
+        command: ChallengeShortlistCommand,
+    },
+}
+
+#[derive(Debug, Clone, Subcommand)]
+pub(crate) enum ChallengeShortlistCommand {
+    /// Show the effective append-only shortlist union.
+    Show { challenge_id: String },
+    /// Upload a delta JSON file with `agent_ids_to_add`.
+    Upload {
+        challenge_id: String,
+        #[arg(long, value_name = "PATH")]
+        file: PathBuf,
     },
 }
 
@@ -295,10 +322,6 @@ pub(crate) struct SubmitArgs {
     /// Challenge id or slug to submit against.
     pub challenge_id: String,
 
-    /// Round id declared by the challenge.
-    #[arg(long, value_name = "ROUND_ID")]
-    pub round: String,
-
     /// Benchmark target id, for example linux-arm64-cpu.
     #[arg(long, value_name = "TARGET_ID", conflicts_with = "all_targets")]
     pub target: Option<String>,
@@ -328,10 +351,6 @@ pub(crate) struct SubmitArgs {
 pub(crate) struct ValidateArgs {
     /// Challenge id or slug to validate against.
     pub challenge_id: String,
-
-    /// Round id declared by the challenge.
-    #[arg(long, value_name = "ROUND_ID")]
-    pub round: String,
 
     /// Benchmark target id, for example linux-arm64-cpu.
     #[arg(long, value_name = "TARGET_ID", conflicts_with = "all_targets")]
@@ -375,23 +394,6 @@ pub(crate) struct ValidateArgs {
 }
 
 #[derive(Debug, Clone, Args)]
-pub(crate) struct RoundsArgs {
-    #[command(subcommand)]
-    pub command: RoundsCommand,
-}
-
-#[derive(Debug, Clone, Subcommand)]
-pub(crate) enum RoundsCommand {
-    /// List rounds declared by a challenge.
-    List { challenge_id: String },
-    /// Show one declared round.
-    Show {
-        challenge_id: String,
-        round_id: String,
-    },
-}
-
-#[derive(Debug, Clone, Args)]
 pub(crate) struct SubmissionsArgs {
     #[command(subcommand)]
     pub command: SubmissionsCommand,
@@ -417,8 +419,6 @@ pub(crate) enum SubmissionsCommand {
         #[arg(long)]
         challenge: String,
         #[arg(long)]
-        round: String,
-        #[arg(long)]
         target: String,
     },
 }
@@ -431,11 +431,9 @@ pub(crate) struct LeaderboardArgs {
 
 #[derive(Debug, Clone, Subcommand)]
 pub(crate) enum LeaderboardCommand {
-    /// Show a round-scoped leaderboard.
+    /// Show a target-scoped leaderboard.
     Show {
         challenge_id: String,
-        #[arg(long)]
-        round: String,
         #[arg(long)]
         target: String,
     },
@@ -449,11 +447,9 @@ pub(crate) struct MetricsArgs {
 
 #[derive(Debug, Clone, Subcommand)]
 pub(crate) enum MetricsCommand {
-    /// Show a score distribution for one round, target, and metric.
+    /// Show a score distribution for one target and metric.
     Distribution {
         challenge_id: String,
-        #[arg(long)]
-        round: String,
         #[arg(long)]
         target: String,
         #[arg(long)]

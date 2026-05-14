@@ -10,8 +10,11 @@ use shared::models::challenge_creation::{
     ValidateChallengeDraftRequest,
 };
 use shared::models::request::{
-    CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse, LeaderboardResponse,
-    RankingContextResponse, RegisterAgentRequest, RegisterAgentResponse, ScoreDistributionResponse,
+    ChallengeShortlistResponse, ChallengeShortlistRevisionResponse,
+    CreateChallengeShortlistRevisionRequest, CreateSolutionSubmissionRequest,
+    CreateSolutionSubmissionResponse, CreatorChallengeParticipantsResponse,
+    CreatorChallengeStatsResponse, LeaderboardResponse, RankingContextResponse,
+    RegisterAgentRequest, RegisterAgentResponse, ScoreDistributionResponse,
     SolutionSubmissionLogsResponse, SolutionSubmissionResponse,
 };
 
@@ -112,11 +115,10 @@ impl ApiClient {
         &self,
         solution_submission_id: &str,
         challenge_id: &str,
-        round_id: &str,
         target_id: &str,
     ) -> Result<RankingContextResponse> {
         let path = format!(
-            "/api/solution-submissions/{solution_submission_id}/ranking-context?challenge_id={challenge_id}&round_id={round_id}&target={target_id}"
+            "/api/solution-submissions/{solution_submission_id}/ranking-context?challenge_id={challenge_id}&target={target_id}"
         );
         self.get_json(&path, true).await
     }
@@ -124,26 +126,57 @@ impl ApiClient {
     pub(crate) async fn get_leaderboard(
         &self,
         challenge_id: &str,
-        round_id: &str,
         target_id: &str,
     ) -> Result<LeaderboardResponse> {
-        let path = format!(
-            "/api/public/challenges/{challenge_id}/rounds/{round_id}/leaderboard?target={target_id}"
-        );
+        let path = format!("/api/public/challenges/{challenge_id}/leaderboard?target={target_id}");
         self.get_json(&path, false).await
     }
 
     pub(crate) async fn get_score_distribution(
         &self,
         challenge_id: &str,
-        round_id: &str,
         target_id: &str,
         metric_id: &str,
     ) -> Result<ScoreDistributionResponse> {
         let path = format!(
-            "/api/public/challenges/{challenge_id}/rounds/{round_id}/score-distributions?target={target_id}&metric={metric_id}"
+            "/api/public/challenges/{challenge_id}/score-distributions?target={target_id}&metric={metric_id}"
         );
         self.get_json(&path, false).await
+    }
+
+    pub(crate) async fn get_creator_challenge_stats(
+        &self,
+        challenge_id: &str,
+        target_id: Option<&str>,
+    ) -> Result<CreatorChallengeStatsResponse> {
+        let path = creator_challenge_path(challenge_id, "stats", target_id);
+        self.get_json(&path, true).await
+    }
+
+    pub(crate) async fn get_creator_challenge_participants(
+        &self,
+        challenge_id: &str,
+        target_id: Option<&str>,
+    ) -> Result<CreatorChallengeParticipantsResponse> {
+        let path = creator_challenge_path(challenge_id, "participants", target_id);
+        self.get_json(&path, true).await
+    }
+
+    pub(crate) async fn get_challenge_shortlist(
+        &self,
+        challenge_id: &str,
+    ) -> Result<ChallengeShortlistResponse> {
+        let path = format!("/api/creator/challenges/{challenge_id}/shortlist");
+        self.get_json(&path, true).await
+    }
+
+    pub(crate) async fn create_challenge_shortlist_revision(
+        &self,
+        challenge_id: &str,
+        request: &CreateChallengeShortlistRevisionRequest,
+    ) -> Result<ChallengeShortlistRevisionResponse> {
+        let path = format!("/api/creator/challenges/{challenge_id}/shortlist-revisions");
+        self.post_json(&path, request, true).await
     }
 
     pub(crate) async fn create_challenge_draft(
@@ -321,6 +354,15 @@ fn parse_base_url(value: &str) -> Result<Url> {
         url.set_path(&path);
     }
     Ok(url)
+}
+
+fn creator_challenge_path(challenge_id: &str, surface: &str, target_id: Option<&str>) -> String {
+    let mut path = format!("/api/creator/challenges/{challenge_id}/{surface}");
+    if let Some(target_id) = target_id.map(str::trim).filter(|value| !value.is_empty()) {
+        path.push_str("?target=");
+        path.push_str(target_id);
+    }
+    path
 }
 
 async fn parse_response<T>(response: reqwest::Response) -> Result<T>
