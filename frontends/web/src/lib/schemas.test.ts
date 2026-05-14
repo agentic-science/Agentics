@@ -33,19 +33,15 @@ function benchmarkTarget(validationEnabled: boolean) {
   };
 }
 
-function round() {
-  return {
-    id: "main",
-    title: "Main Round",
-    eligibility: { type: "open" },
-    visibility: {
-      leaderboard: "public_live",
-      score_distribution: "public_live",
-      result_detail: "submitter_live_public_after_close",
-    },
-    solution_publication: "submitter_opt_in",
-  };
-}
+const challengePolicy = {
+  eligibility: { type: "open" },
+  visibility: {
+    leaderboard: "public_live",
+    score_distribution: "public_live",
+    result_detail: "submitter_live_public_after_close",
+  },
+  solution_publication: "submitter_opt_in",
+};
 
 describe("frontend API schemas", () => {
   it("accepts Rust-serialized DTO contract fixtures", () => {
@@ -69,12 +65,12 @@ describe("frontend API schemas", () => {
         slug: "sample-sum",
         title: "Sample Sum",
         summary: "Add two numbers.",
-        rounds: [round()],
         spec: {
           schema_version: 1,
           challenge_id: "sample-sum",
           challenge_title: "Sample Sum",
           challenge_summary: "Add two numbers.",
+          ...challengePolicy,
           solution: {
             protocol: "zip_project",
             manifest_file: "agentics.solution.json",
@@ -84,7 +80,6 @@ describe("frontend API schemas", () => {
             result_file: "result.json",
           },
           benchmark_targets: [benchmarkTarget(true)],
-          rounds: [round()],
           execution: {
             validation_runs: "public/runs.json",
             official_prepare: {
@@ -146,12 +141,12 @@ describe("frontend API schemas", () => {
       slug: "sample-sum",
       title: "Sample Sum",
       summary: "Add two numbers.",
-      rounds: [round()],
       spec: {
         schema_version: 1,
         challenge_id: "sample-sum",
         challenge_title: "Sample Sum",
         challenge_summary: "Add two numbers.",
+        ...challengePolicy,
         solution: {
           protocol: "zip_project",
           manifest_file: "agentics.solution.json",
@@ -161,7 +156,6 @@ describe("frontend API schemas", () => {
           result_file: "result.json",
         },
         benchmark_targets: [benchmarkTarget(false)],
-        rounds: [round()],
         execution: {
           validation_runs: "public/runs.json",
         },
@@ -201,7 +195,6 @@ describe("frontend API schemas", () => {
         id: "sub-1",
         challenge_id: "sample-sum",
         challenge_title: "Sample Sum",
-        round_id: "main",
         benchmark_target_id: "linux-arm64-cpu",
         agent_id: "agent-1",
         agent_name: "agent",
@@ -211,7 +204,6 @@ describe("frontend API schemas", () => {
         visible_after_eval: false,
         evaluation: {
           id: "eval-1",
-          round_id: "main",
           benchmark_target_id: "linux-arm64-cpu",
           status: "failed",
           eval_type: "validation",
@@ -221,7 +213,6 @@ describe("frontend API schemas", () => {
         },
         validation_evaluation: {
           id: "eval-1",
-          round_id: "main",
           benchmark_target_id: "linux-arm64-cpu",
           status: "failed",
           eval_type: "validation",
@@ -241,7 +232,6 @@ describe("frontend API schemas", () => {
         id: "sub-1",
         challenge_id: "sample-sum",
         challenge_title: "Sample Sum",
-        round_id: "main",
         benchmark_target_id: "linux-arm64-cpu",
         agent_id: "agent-1",
         agent_name: "agent",
@@ -251,7 +241,6 @@ describe("frontend API schemas", () => {
         visible_after_eval: true,
         evaluation: {
           id: "eval-1",
-          round_id: "main",
           benchmark_target_id: "linux-arm64-cpu",
           status: "completed",
           eval_type: "validation",
@@ -278,7 +267,6 @@ describe("frontend API schemas", () => {
       solutionSubmissionResponseSchema.parse({
         id: "sub-1",
         challenge_id: "sample-sum",
-        round_id: "main",
         benchmark_target_id: "linux-arm64-cpu",
         agent_id: "agent-1",
         status: "completed",
@@ -297,11 +285,9 @@ describe("frontend API schemas", () => {
     expect(() =>
       leaderboardResponseSchema.parse({
         challenge_id: "sample-sum",
-        round_id: "main",
         benchmark_target_id: "linux-arm64-cpu",
         items: [
           {
-            round_id: "main",
             benchmark_target_id: "linux-arm64-cpu",
             agent_id: "agent-1",
             agent_name: "solver",
@@ -331,7 +317,7 @@ describe("frontend API schemas", () => {
             title: "Sample Sum",
             summary: "Add numbers",
             status: "active",
-            rounds: [round()],
+            ...challengePolicy,
             benchmark_targets: [
               {
                 ...benchmarkTarget(true),

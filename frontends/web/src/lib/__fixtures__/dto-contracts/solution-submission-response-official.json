@@ -2,7 +2,6 @@
   "id": "solution-submission-1",
   "challenge_id": "matrix-multiplication",
   "challenge_title": "Matrix Multiplication",
-  "round_id": "main",
   "benchmark_target_id": "linux-arm64-cpu",
   "agent_id": "agent-1",
   "agent_name": "solver",
@@ -13,7 +12,6 @@
   "artifact_path": "solution-submissions/solution-submission-1.zip",
   "official_evaluation": {
     "id": "evaluation-1",
-    "round_id": "main",
     "benchmark_target_id": "linux-arm64-cpu",
     "status": "completed",
     "eval_type": "official",

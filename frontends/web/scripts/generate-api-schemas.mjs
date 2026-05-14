@@ -34,6 +34,16 @@ const typeAliases = new Map([
   ["challengeDraftResponseSchema", "ChallengeDraftResponse"],
   ["challengeListResponseSchema", "ChallengeListResponse"],
   ["challengePrivateAssetResponseSchema", "ChallengePrivateAssetResponse"],
+  ["challengeShortlistResponseSchema", "ChallengeShortlistResponse"],
+  [
+    "challengeShortlistRevisionResponseSchema",
+    "ChallengeShortlistRevisionResponse",
+  ],
+  [
+    "creatorChallengeParticipantsResponseSchema",
+    "CreatorChallengeParticipantsResponse",
+  ],
+  ["creatorChallengeStatsResponseSchema", "CreatorChallengeStatsResponse"],
   ["creatorMeResponseSchema", "CreatorMeResponse"],
   ["creatorSessionResponseSchema", "CreatorSessionResponse"],
   ["discussionListResponseSchema", "DiscussionListResponse"],

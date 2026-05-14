@@ -1,11 +1,14 @@
 "use client";
 
 import {
+  BarChart3,
   FileArchive,
   GitPullRequest,
   KeyRound,
+  ListPlus,
   RefreshCw,
   UploadCloud,
+  Users,
 } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import {
@@ -14,13 +17,24 @@ import {
   type CreateChallengeDraftRequest,
   CreatorApiError,
   createChallengeDraft,
+  createChallengeShortlistRevision,
   getChallengeDraft,
+  getChallengeShortlist,
+  getCreatorChallengeParticipants,
+  getCreatorChallengeStats,
   getCreatorMe,
   readCreatorCsrfToken,
   startGithubLogin,
   uploadPrivateAsset,
 } from "@/lib/creatorApi";
-import type { ChallengeDraftResponse, CreatorMeResponse } from "@/lib/schemas";
+import type {
+  ChallengeDraftResponse,
+  ChallengeShortlistResponse,
+  ChallengeShortlistRevisionResponse,
+  CreatorChallengeParticipantsResponse,
+  CreatorChallengeStatsResponse,
+  CreatorMeResponse,
+} from "@/lib/schemas";
 
 const LAST_DRAFT_STORAGE_KEY = "agentics.creator.last_draft_id";
 
@@ -78,6 +92,21 @@ export function CreatorConsole() {
     required: true,
     file: null,
   });
+  const [ownerForm, setOwnerForm] = useState({
+    challengeId: "matrix-multiplication",
+    targetId: "linux-arm64-cpu",
+    shortlistText: JSON.stringify({ agent_ids_to_add: ["agent_..."] }, null, 2),
+  });
+  const [stats, setStats] = useState<CreatorChallengeStatsResponse | null>(
+    null,
+  );
+  const [participants, setParticipants] =
+    useState<CreatorChallengeParticipantsResponse | null>(null);
+  const [shortlist, setShortlist] = useState<ChallengeShortlistResponse | null>(
+    null,
+  );
+  const [shortlistRevision, setShortlistRevision] =
+    useState<ChallengeShortlistRevisionResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -224,6 +253,78 @@ export function CreatorConsole() {
       rememberDraft(refreshed.id);
       setDraft(refreshed);
       setMessage(`Uploaded private asset ${assetForm.assetId}.`);
+    } catch (e) {
+      setError(creatorErrorMessage(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadOwnerSurfaces = async () => {
+    if (!ownerForm.challengeId.trim()) {
+      setError("Enter a published challenge id.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const challengeId = ownerForm.challengeId.trim();
+      const targetId = ownerForm.targetId.trim() || undefined;
+      const [statsResponse, participantsResponse, shortlistResponse] =
+        await Promise.all([
+          getCreatorChallengeStats(challengeId, targetId),
+          getCreatorChallengeParticipants(challengeId, targetId),
+          getChallengeShortlist(challengeId),
+        ]);
+      setStats(statsResponse);
+      setParticipants(participantsResponse);
+      setShortlist(shortlistResponse);
+      setMessage(`Loaded owner surfaces for ${challengeId}.`);
+    } catch (e) {
+      setError(creatorErrorMessage(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const uploadShortlist = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!csrfToken) {
+      setError("Refresh the creator session before uploading a shortlist.");
+      return;
+    }
+    if (!ownerForm.challengeId.trim()) {
+      setError("Enter a published challenge id.");
+      return;
+    }
+
+    let payload: { agent_ids_to_add: string[] };
+    try {
+      payload = JSON.parse(ownerForm.shortlistText) as {
+        agent_ids_to_add: string[];
+      };
+    } catch (e) {
+      setError(creatorErrorMessage(e));
+      return;
+    }
+    if (!Array.isArray(payload.agent_ids_to_add)) {
+      setError("Shortlist JSON must include agent_ids_to_add as an array.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const challengeId = ownerForm.challengeId.trim();
+      const response = await createChallengeShortlistRevision(
+        challengeId,
+        payload,
+        csrfToken,
+      );
+      setShortlistRevision(response);
+      setShortlist(await getChallengeShortlist(challengeId));
+      setMessage(`Uploaded shortlist revision ${response.id}.`);
     } catch (e) {
       setError(creatorErrorMessage(e));
     } finally {
@@ -438,6 +539,77 @@ export function CreatorConsole() {
         </div>
 
         <DraftDetail draft={draft} />
+      </section>
+
+      <section className="grid grid-cols-1 xl:grid-cols-[420px_1fr] gap-6">
+        <div className="flex flex-col gap-5">
+          <div className="card flex flex-col gap-4">
+            <SectionTitle
+              icon={<BarChart3 className="w-4 h-4" />}
+              title="Owner statistics"
+            />
+            <TextInput
+              label="Published challenge ID"
+              value={ownerForm.challengeId}
+              onChange={(challengeId) =>
+                setOwnerForm({ ...ownerForm, challengeId })
+              }
+              required
+            />
+            <TextInput
+              label="Target ID"
+              value={ownerForm.targetId}
+              onChange={(targetId) => setOwnerForm({ ...ownerForm, targetId })}
+            />
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={loading}
+              onClick={() => void loadOwnerSurfaces()}
+            >
+              <Users className="w-4 h-4" />
+              Load owner surfaces
+            </button>
+          </div>
+
+          <form className="card flex flex-col gap-4" onSubmit={uploadShortlist}>
+            <SectionTitle
+              icon={<ListPlus className="w-4 h-4" />}
+              title="Upload shortlist delta"
+            />
+            <label className="flex flex-col gap-1">
+              <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
+                Delta JSON
+              </span>
+              <textarea
+                className="min-h-40 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 font-mono text-[var(--text-caption)] leading-relaxed outline-none focus:border-[var(--accent-primary-500)]"
+                value={ownerForm.shortlistText}
+                onChange={(event) =>
+                  setOwnerForm({
+                    ...ownerForm,
+                    shortlistText: event.target.value,
+                  })
+                }
+                required
+              />
+            </label>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={loading}
+            >
+              <ListPlus className="w-4 h-4" />
+              Upload delta
+            </button>
+          </form>
+        </div>
+
+        <OwnerSurfaces
+          stats={stats}
+          participants={participants}
+          shortlist={shortlist}
+          shortlistRevision={shortlistRevision}
+        />
       </section>
     </div>
   );
@@ -656,6 +828,159 @@ function DraftDetail({ draft }: { draft: ChallengeDraftResponse | null }) {
   );
 }
 
+function OwnerSurfaces({
+  stats,
+  participants,
+  shortlist,
+  shortlistRevision,
+}: {
+  stats: CreatorChallengeStatsResponse | null;
+  participants: CreatorChallengeParticipantsResponse | null;
+  shortlist: ChallengeShortlistResponse | null;
+  shortlistRevision: ChallengeShortlistRevisionResponse | null;
+}) {
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="card">
+        <SectionTitle
+          icon={<BarChart3 className="w-4 h-4" />}
+          title="Challenge statistics"
+        />
+        {!stats ? (
+          <div className="empty-state mt-4">Load a published challenge.</div>
+        ) : (
+          <dl className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-4 text-[var(--text-body-sm)]">
+            <Metadata label="Agents" value={stats.agent_count.toString()} />
+            <Metadata
+              label="Submissions"
+              value={stats.solution_submission_count.toString()}
+            />
+            <Metadata
+              label="Completed"
+              value={stats.completed_solution_submission_count.toString()}
+            />
+            <Metadata
+              label="Failed"
+              value={stats.failed_solution_submission_count.toString()}
+            />
+            <Metadata
+              label="Queued or running"
+              value={stats.queued_or_running_solution_submission_count.toString()}
+            />
+            <Metadata
+              label="Validation runs"
+              value={stats.validation_run_count.toString()}
+            />
+            <Metadata
+              label="Official runs"
+              value={stats.official_run_count.toString()}
+            />
+            <Metadata
+              label="Best score mean"
+              value={formatOptionalScore(stats.best_rank_score_mean)}
+            />
+          </dl>
+        )}
+      </div>
+
+      <div className="card overflow-x-auto">
+        <div className="flex items-center justify-between gap-4 mb-4">
+          <SectionTitle
+            icon={<Users className="w-4 h-4" />}
+            title="Participants"
+          />
+          <span className="badge badge-default">
+            {participants?.items.length ?? 0} rows
+          </span>
+        </div>
+        {!participants || participants.items.length === 0 ? (
+          <div className="empty-state">No participants loaded.</div>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th>Submissions</th>
+                <th>Best</th>
+                <th>Status</th>
+                <th>Latest</th>
+              </tr>
+            </thead>
+            <tbody>
+              {participants.items.map((participant) => (
+                <tr key={participant.agent_id}>
+                  <td>
+                    <div className="font-medium">{participant.agent_name}</div>
+                    <div className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
+                      {participant.agent_id}
+                    </div>
+                  </td>
+                  <td>{participant.solution_submission_count}</td>
+                  <td>
+                    <div className="font-mono">
+                      {formatOptionalScore(participant.best_rank_score)}
+                    </div>
+                    <div className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
+                      {participant.best_solution_submission_id ?? "—"}
+                    </div>
+                  </td>
+                  <td>{participant.latest_status ?? "—"}</td>
+                  <td>{participant.latest_solution_submission_at ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="card overflow-x-auto">
+        <div className="flex items-center justify-between gap-4 mb-4">
+          <SectionTitle
+            icon={<ListPlus className="w-4 h-4" />}
+            title="Shortlist"
+          />
+          <span className="badge badge-default">
+            {shortlist?.items.length ?? 0} rows
+          </span>
+        </div>
+        {shortlistRevision ? (
+          <div className="mb-4 text-[var(--text-body-sm)] text-[var(--text-secondary)]">
+            Last revision added {shortlistRevision.added_count} of{" "}
+            {shortlistRevision.requested_count} requested agents.
+          </div>
+        ) : null}
+        {!shortlist || shortlist.items.length === 0 ? (
+          <div className="empty-state">No shortlisted agents loaded.</div>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th>Added by</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {shortlist.items.map((agent) => (
+                <tr key={agent.agent_id}>
+                  <td>
+                    <div className="font-medium">{agent.agent_name}</div>
+                    <div className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
+                      {agent.agent_id}
+                    </div>
+                  </td>
+                  <td className="font-mono">{agent.added_by_agent_id}</td>
+                  <td>{agent.created_at}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function SectionTitle({ icon, title }: { icon: ReactNode; title: string }) {
   return (
     <h2 className="flex items-center gap-2 text-[var(--text-h3)] font-semibold">
@@ -717,6 +1042,13 @@ function StatusBadge({ status }: { status: string }) {
           : "badge-default";
 
   return <span className={`badge ${className}`}>{status}</span>;
+}
+
+function formatOptionalScore(value: number | undefined): string {
+  if (value === undefined) {
+    return "—";
+  }
+  return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(4);
 }
 
 function shortHash(value: string | undefined): string {

@@ -2,10 +2,18 @@ import type { ZodType } from "zod";
 import {
   type ChallengeDraftResponse,
   type ChallengePrivateAssetResponse,
+  type ChallengeShortlistResponse,
+  type ChallengeShortlistRevisionResponse,
+  type CreatorChallengeParticipantsResponse,
+  type CreatorChallengeStatsResponse,
   type CreatorMeResponse,
   type CreatorSessionResponse,
   challengeDraftResponseSchema,
   challengePrivateAssetResponseSchema,
+  challengeShortlistResponseSchema,
+  challengeShortlistRevisionResponseSchema,
+  creatorChallengeParticipantsResponseSchema,
+  creatorChallengeStatsResponseSchema,
   creatorMeResponseSchema,
   creatorSessionResponseSchema,
   type GithubOauthLoginResponse,
@@ -34,6 +42,10 @@ export interface UploadChallengePrivateAssetRequest {
   kind: ChallengePrivateAssetKind;
   required: boolean;
   asset_base64: string;
+}
+
+export interface ChallengeShortlistRevisionRequest {
+  agent_ids_to_add: string[];
 }
 
 export class CreatorApiError extends Error {
@@ -126,6 +138,51 @@ export async function uploadPrivateAsset(
   );
 }
 
+export async function getCreatorChallengeStats(
+  challengeId: string,
+  targetId?: string,
+): Promise<CreatorChallengeStatsResponse> {
+  return creatorFetchJson(
+    creatorChallengePath(challengeId, "stats", targetId),
+    creatorChallengeStatsResponseSchema,
+  );
+}
+
+export async function getCreatorChallengeParticipants(
+  challengeId: string,
+  targetId?: string,
+): Promise<CreatorChallengeParticipantsResponse> {
+  return creatorFetchJson(
+    creatorChallengePath(challengeId, "participants", targetId),
+    creatorChallengeParticipantsResponseSchema,
+  );
+}
+
+export async function getChallengeShortlist(
+  challengeId: string,
+): Promise<ChallengeShortlistResponse> {
+  return creatorFetchJson(
+    `/api/creator/challenges/${encodeURIComponent(challengeId)}/shortlist`,
+    challengeShortlistResponseSchema,
+  );
+}
+
+export async function createChallengeShortlistRevision(
+  challengeId: string,
+  request: ChallengeShortlistRevisionRequest,
+  csrfToken: string,
+): Promise<ChallengeShortlistRevisionResponse> {
+  return creatorFetchJson(
+    `/api/creator/challenges/${encodeURIComponent(challengeId)}/shortlist-revisions`,
+    challengeShortlistRevisionResponseSchema,
+    csrfToken,
+    {
+      method: "POST",
+      body: JSON.stringify(request),
+    },
+  );
+}
+
 async function creatorFetchJson<T>(
   path: string,
   schema: ZodType<T>,
@@ -170,4 +227,17 @@ function readCookie(name: string): string {
       .find((cookie) => cookie.startsWith(`${name}=`))
       ?.slice(name.length + 1) ?? ""
   );
+}
+
+function creatorChallengePath(
+  challengeId: string,
+  surface: "stats" | "participants",
+  targetId?: string,
+): string {
+  const params = new URLSearchParams();
+  if (targetId?.trim()) {
+    params.set("target", targetId.trim());
+  }
+  const query = params.toString();
+  return `/api/creator/challenges/${encodeURIComponent(challengeId)}/${surface}${query ? `?${query}` : ""}`;
 }

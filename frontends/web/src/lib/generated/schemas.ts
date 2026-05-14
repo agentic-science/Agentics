@@ -114,58 +114,40 @@ export const adminChallengeListResponseSchema = z
                 ),
             )
             .optional(),
-          rounds: z
-            .array(
-              z
-                .object({
-                  id: z.string(),
-                  title: z.string(),
-                  opens_at: z.string().optional(),
-                  closes_at: z.string().optional(),
-                  eligibility: z
-                    .object({
-                      type: z
-                        .literal("open")
-                        .describe("Stable eligibility policy names."),
-                    })
-                    .strict()
-                    .describe(
-                      "Eligibility policy for a round. MVP supports only open participation.",
-                    ),
-                  validation_submission_limit: z.number().int().optional(),
-                  official_submission_limit: z.number().int().optional(),
-                  visibility: z
-                    .object({
-                      leaderboard: z
-                        .enum(["public_live", "public_after_close", "hidden"])
-                        .describe("Visibility for public aggregate surfaces."),
-                      score_distribution: z
-                        .enum(["public_live", "public_after_close", "hidden"])
-                        .describe("Visibility for public aggregate surfaces."),
-                      result_detail: z
-                        .enum([
-                          "submitter_live_public_live",
-                          "submitter_live_public_after_close",
-                          "submitter_only",
-                        ])
-                        .describe(
-                          "Visibility for solution submission details.",
-                        ),
-                    })
-                    .strict()
-                    .describe(
-                      "Visibility policy for round-scoped result surfaces.",
-                    ),
-                  solution_publication: z
-                    .enum(["private", "submitter_opt_in", "public_after_close"])
-                    .describe(
-                      "Policy controlling when solution artifacts may become public.",
-                    ),
-                })
-                .strict()
-                .describe(
-                  "One explicit participation round declared by a challenge.",
-                ),
+          starts_at: z.string().optional(),
+          closes_at: z.string().optional(),
+          eligibility: z
+            .object({
+              type: z
+                .enum(["open", "private_shortlist"])
+                .describe("Stable eligibility policy names."),
+            })
+            .strict()
+            .describe("Eligibility policy for a challenge.")
+            .optional(),
+          visibility: z
+            .object({
+              leaderboard: z
+                .enum(["public_live", "public_after_close", "hidden"])
+                .describe("Visibility for public aggregate surfaces."),
+              score_distribution: z
+                .enum(["public_live", "public_after_close", "hidden"])
+                .describe("Visibility for public aggregate surfaces."),
+              result_detail: z
+                .enum([
+                  "submitter_live_public_live",
+                  "submitter_live_public_after_close",
+                  "submitter_only",
+                ])
+                .describe("Visibility for solution submission details."),
+            })
+            .strict()
+            .describe("Visibility policy for challenge result surfaces.")
+            .optional(),
+          solution_publication: z
+            .enum(["private", "submitter_opt_in", "public_after_close"])
+            .describe(
+              "Policy controlling when solution artifacts may become public.",
             )
             .optional(),
           private_benchmark_enabled: z.boolean().optional(),
@@ -214,7 +196,6 @@ export const adminSolutionSubmissionListResponseSchema = z
           id: z.string(),
           challenge_id: z.string(),
           challenge_title: z.string(),
-          round_id: z.string(),
           benchmark_target_id: z.string(),
           agent_id: z.string(),
           agent_name: z.string(),
@@ -257,52 +238,6 @@ export const challengeDetailResponseSchema = z
     slug: z.string(),
     title: z.string(),
     summary: z.string(),
-    rounds: z.array(
-      z
-        .object({
-          id: z.string(),
-          title: z.string(),
-          opens_at: z.string().optional(),
-          closes_at: z.string().optional(),
-          eligibility: z
-            .object({
-              type: z
-                .literal("open")
-                .describe("Stable eligibility policy names."),
-            })
-            .strict()
-            .describe(
-              "Eligibility policy for a round. MVP supports only open participation.",
-            ),
-          validation_submission_limit: z.number().int().optional(),
-          official_submission_limit: z.number().int().optional(),
-          visibility: z
-            .object({
-              leaderboard: z
-                .enum(["public_live", "public_after_close", "hidden"])
-                .describe("Visibility for public aggregate surfaces."),
-              score_distribution: z
-                .enum(["public_live", "public_after_close", "hidden"])
-                .describe("Visibility for public aggregate surfaces."),
-              result_detail: z
-                .enum([
-                  "submitter_live_public_live",
-                  "submitter_live_public_after_close",
-                  "submitter_only",
-                ])
-                .describe("Visibility for solution submission details."),
-            })
-            .strict()
-            .describe("Visibility policy for round-scoped result surfaces."),
-          solution_publication: z
-            .enum(["private", "submitter_opt_in", "public_after_close"])
-            .describe(
-              "Policy controlling when solution artifacts may become public.",
-            ),
-        })
-        .strict()
-        .describe("One explicit participation round declared by a challenge."),
-    ),
     spec: z
       .object({
         schema_version: z.number().int(),
@@ -382,56 +317,41 @@ export const challengeDetailResponseSchema = z
               "One execution and ranking target declared by a challenge.",
             ),
         ),
-        rounds: z.array(
-          z
-            .object({
-              id: z.string(),
-              title: z.string(),
-              opens_at: z.string().optional(),
-              closes_at: z.string().optional(),
-              eligibility: z
-                .object({
-                  type: z
-                    .literal("open")
-                    .describe("Stable eligibility policy names."),
-                })
-                .strict()
-                .describe(
-                  "Eligibility policy for a round. MVP supports only open participation.",
-                ),
-              validation_submission_limit: z.number().int().optional(),
-              official_submission_limit: z.number().int().optional(),
-              visibility: z
-                .object({
-                  leaderboard: z
-                    .enum(["public_live", "public_after_close", "hidden"])
-                    .describe("Visibility for public aggregate surfaces."),
-                  score_distribution: z
-                    .enum(["public_live", "public_after_close", "hidden"])
-                    .describe("Visibility for public aggregate surfaces."),
-                  result_detail: z
-                    .enum([
-                      "submitter_live_public_live",
-                      "submitter_live_public_after_close",
-                      "submitter_only",
-                    ])
-                    .describe("Visibility for solution submission details."),
-                })
-                .strict()
-                .describe(
-                  "Visibility policy for round-scoped result surfaces.",
-                ),
-              solution_publication: z
-                .enum(["private", "submitter_opt_in", "public_after_close"])
-                .describe(
-                  "Policy controlling when solution artifacts may become public.",
-                ),
-            })
-            .strict()
-            .describe(
-              "One explicit participation round declared by a challenge.",
-            ),
-        ),
+        starts_at: z.string().optional(),
+        closes_at: z.string().optional(),
+        eligibility: z
+          .object({
+            type: z
+              .enum(["open", "private_shortlist"])
+              .describe("Stable eligibility policy names."),
+          })
+          .strict()
+          .describe("Eligibility policy for a challenge."),
+        validation_submission_limit: z.number().int().optional(),
+        official_submission_limit: z.number().int().optional(),
+        visibility: z
+          .object({
+            leaderboard: z
+              .enum(["public_live", "public_after_close", "hidden"])
+              .describe("Visibility for public aggregate surfaces."),
+            score_distribution: z
+              .enum(["public_live", "public_after_close", "hidden"])
+              .describe("Visibility for public aggregate surfaces."),
+            result_detail: z
+              .enum([
+                "submitter_live_public_live",
+                "submitter_live_public_after_close",
+                "submitter_only",
+              ])
+              .describe("Visibility for solution submission details."),
+          })
+          .strict()
+          .describe("Visibility policy for challenge result surfaces."),
+        solution_publication: z
+          .enum(["private", "submitter_opt_in", "public_after_close"])
+          .describe(
+            "Policy controlling when solution artifacts may become public.",
+          ),
         execution: z
           .object({
             validation_runs: z.string().optional(),
@@ -920,56 +840,16 @@ export const challengeListResponseSchema = z
           slug: z.string(),
           title: z.string(),
           summary: z.string(),
-          rounds: z.array(
-            z
-              .object({
-                id: z.string(),
-                title: z.string(),
-                opens_at: z.string().optional(),
-                closes_at: z.string().optional(),
-                eligibility: z
-                  .object({
-                    type: z
-                      .literal("open")
-                      .describe("Stable eligibility policy names."),
-                  })
-                  .strict()
-                  .describe(
-                    "Eligibility policy for a round. MVP supports only open participation.",
-                  ),
-                validation_submission_limit: z.number().int().optional(),
-                official_submission_limit: z.number().int().optional(),
-                visibility: z
-                  .object({
-                    leaderboard: z
-                      .enum(["public_live", "public_after_close", "hidden"])
-                      .describe("Visibility for public aggregate surfaces."),
-                    score_distribution: z
-                      .enum(["public_live", "public_after_close", "hidden"])
-                      .describe("Visibility for public aggregate surfaces."),
-                    result_detail: z
-                      .enum([
-                        "submitter_live_public_live",
-                        "submitter_live_public_after_close",
-                        "submitter_only",
-                      ])
-                      .describe("Visibility for solution submission details."),
-                  })
-                  .strict()
-                  .describe(
-                    "Visibility policy for round-scoped result surfaces.",
-                  ),
-                solution_publication: z
-                  .enum(["private", "submitter_opt_in", "public_after_close"])
-                  .describe(
-                    "Policy controlling when solution artifacts may become public.",
-                  ),
-              })
-              .strict()
-              .describe(
-                "One explicit participation round declared by a challenge.",
-              ),
-          ),
+          starts_at: z.string().optional(),
+          closes_at: z.string().optional(),
+          eligibility: z
+            .object({
+              type: z
+                .enum(["open", "private_shortlist"])
+                .describe("Stable eligibility policy names."),
+            })
+            .strict()
+            .describe("Eligibility policy for a challenge."),
         })
         .strict()
         .describe("One row in the public challenge catalog."),
@@ -1000,6 +880,85 @@ export const challengePrivateAssetResponseSchema = z
   })
   .strict()
   .describe("API response for one private benchmark asset bound to a draft.");
+
+export const challengeShortlistResponseSchema = z
+  .object({
+    challenge_id: z.string(),
+    items: z.array(
+      z
+        .object({
+          agent_id: z.string(),
+          agent_name: z.string(),
+          added_by_agent_id: z.string(),
+          created_at: z.string(),
+        })
+        .strict()
+        .describe("One effective shortlisted agent row."),
+    ),
+  })
+  .strict()
+  .describe("Effective shortlist response.");
+
+export const challengeShortlistRevisionResponseSchema = z
+  .object({
+    id: z.string(),
+    challenge_id: z.string(),
+    uploader_agent_id: z.string(),
+    requested_count: z.number().int(),
+    added_count: z.number().int(),
+    sha256: z.string(),
+    storage_uri: z.string(),
+    created_at: z.string(),
+  })
+  .strict()
+  .describe("Persisted shortlist revision response.");
+
+export const creatorChallengeParticipantsResponseSchema = z
+  .object({
+    challenge_id: z.string(),
+    benchmark_target_id: z.string().optional(),
+    items: z.array(
+      z
+        .object({
+          agent_id: z.string(),
+          agent_name: z.string(),
+          solution_submission_count: z.number().int(),
+          best_solution_submission_id: z.string().optional(),
+          best_rank_score: z.number().optional(),
+          latest_status: z.string().optional(),
+          latest_solution_submission_at: z.string().optional(),
+        })
+        .strict()
+        .describe(
+          "One challenge participant row visible to the challenge owner.",
+        ),
+    ),
+  })
+  .strict()
+  .describe("Challenge-owner participant list for shortlist decisions.");
+
+export const creatorChallengeStatsResponseSchema = z
+  .object({
+    challenge_id: z.string(),
+    benchmark_target_id: z.string().optional(),
+    agent_count: z.number().int(),
+    solution_submission_count: z.number().int(),
+    completed_solution_submission_count: z.number().int(),
+    failed_solution_submission_count: z.number().int(),
+    queued_or_running_solution_submission_count: z.number().int(),
+    visible_solution_submission_count: z.number().int(),
+    validation_run_count: z.number().int(),
+    official_run_count: z.number().int(),
+    latest_solution_submission_at: z.string().optional(),
+    latest_completed_evaluation_at: z.string().optional(),
+    best_rank_score_min: z.number().optional(),
+    best_rank_score_max: z.number().optional(),
+    best_rank_score_mean: z.number().optional(),
+  })
+  .strict()
+  .describe(
+    "Challenge-owner statistics for one challenge and optional benchmark target.",
+  );
 
 export const creatorMeResponseSchema = z
   .object({
@@ -1065,7 +1024,6 @@ export const evaluationJobResponseSchema = z
   .object({
     job_id: z.string(),
     solution_submission_id: z.string(),
-    round_id: z.string(),
     benchmark_target_id: z.string(),
     eval_type: z.string(),
     status: z.string(),
@@ -1090,12 +1048,10 @@ export const hideSolutionSubmissionResponseSchema = z
 export const leaderboardResponseSchema = z
   .object({
     challenge_id: z.string(),
-    round_id: z.string(),
     benchmark_target_id: z.string(),
     items: z.array(
       z
         .object({
-          round_id: z.string(),
           benchmark_target_id: z.string(),
           agent_id: z.string(),
           agent_name: z.string(),
@@ -1133,7 +1089,6 @@ export const publicSolutionSubmissionListResponseSchema = z
         .object({
           id: z.string(),
           challenge_id: z.string(),
-          round_id: z.string(),
           benchmark_target_id: z.string(),
           challenge_title: z.string(),
           agent_id: z.string(),
@@ -1181,7 +1136,6 @@ export const publishChallengeResponseSchema = z
 export const rankingContextResponseSchema = z
   .object({
     challenge_id: z.string(),
-    round_id: z.string(),
     benchmark_target_id: z.string(),
     solution_submission_id: z.string(),
     rank: z.number().int().optional(),
@@ -1190,7 +1144,6 @@ export const rankingContextResponseSchema = z
     is_agent_best: z.boolean(),
     entry: z
       .object({
-        round_id: z.string(),
         benchmark_target_id: z.string(),
         agent_id: z.string(),
         agent_name: z.string(),
@@ -1221,7 +1174,6 @@ export const rankingContextResponseSchema = z
           rank: z.number().int(),
           entry: z
             .object({
-              round_id: z.string(),
               benchmark_target_id: z.string(),
               agent_id: z.string(),
               agent_name: z.string(),
@@ -1250,7 +1202,7 @@ export const rankingContextResponseSchema = z
         })
         .strict()
         .describe(
-          "Leaderboard row with its rank in one explicit round and target scope.",
+          "Leaderboard row with its rank in one explicit challenge and target scope.",
         ),
     ),
   })
@@ -1262,7 +1214,6 @@ export const rankingContextResponseSchema = z
 export const scoreDistributionResponseSchema = z
   .object({
     challenge_id: z.string(),
-    round_id: z.string(),
     benchmark_target_id: z.string(),
     metric_id: z.string(),
     count: z.number().int(),
@@ -1288,7 +1239,7 @@ export const scoreDistributionResponseSchema = z
   })
   .strict()
   .describe(
-    "Aggregate distribution of one visible metric within a round and target.",
+    "Aggregate distribution of one visible metric within a challenge and target.",
   );
 
 export const solutionSubmissionArtifactResponseSchema = z
@@ -1329,7 +1280,6 @@ export const solutionSubmissionResponseSchema = z
     id: z.string(),
     challenge_id: z.string(),
     challenge_title: z.string().optional(),
-    round_id: z.string(),
     benchmark_target_id: z.string(),
     agent_id: z.string(),
     agent_name: z.string().optional(),
@@ -1342,7 +1292,6 @@ export const solutionSubmissionResponseSchema = z
     evaluation_job: z
       .object({
         id: z.string(),
-        round_id: z.string(),
         benchmark_target_id: z.string(),
         status: z
           .enum(["queued", "running", "completed", "failed"])
@@ -1356,7 +1305,6 @@ export const solutionSubmissionResponseSchema = z
     evaluation: z
       .object({
         id: z.string(),
-        round_id: z.string(),
         benchmark_target_id: z.string(),
         status: z
           .enum(["queued", "running", "completed", "failed"])
@@ -1453,7 +1401,6 @@ export const solutionSubmissionResponseSchema = z
     validation_evaluation: z
       .object({
         id: z.string(),
-        round_id: z.string(),
         benchmark_target_id: z.string(),
         status: z
           .enum(["queued", "running", "completed", "failed"])
@@ -1550,7 +1497,6 @@ export const solutionSubmissionResponseSchema = z
     official_evaluation: z
       .object({
         id: z.string(),
-        round_id: z.string(),
         benchmark_target_id: z.string(),
         status: z
           .enum(["queued", "running", "completed", "failed"])
@@ -1659,7 +1605,6 @@ export const solutionSubmissionResultReportResponseSchema = z
         id: z.string(),
         challenge_id: z.string(),
         challenge_title: z.string().optional(),
-        round_id: z.string(),
         benchmark_target_id: z.string(),
         agent_id: z.string(),
         agent_name: z.string().optional(),
@@ -1672,7 +1617,6 @@ export const solutionSubmissionResultReportResponseSchema = z
         evaluation_job: z
           .object({
             id: z.string(),
-            round_id: z.string(),
             benchmark_target_id: z.string(),
             status: z
               .enum(["queued", "running", "completed", "failed"])
@@ -1688,7 +1632,6 @@ export const solutionSubmissionResultReportResponseSchema = z
         evaluation: z
           .object({
             id: z.string(),
-            round_id: z.string(),
             benchmark_target_id: z.string(),
             status: z
               .enum(["queued", "running", "completed", "failed"])
@@ -1793,7 +1736,6 @@ export const solutionSubmissionResultReportResponseSchema = z
         validation_evaluation: z
           .object({
             id: z.string(),
-            round_id: z.string(),
             benchmark_target_id: z.string(),
             status: z
               .enum(["queued", "running", "completed", "failed"])
@@ -1898,7 +1840,6 @@ export const solutionSubmissionResultReportResponseSchema = z
         official_evaluation: z
           .object({
             id: z.string(),
-            round_id: z.string(),
             benchmark_target_id: z.string(),
             status: z
               .enum(["queued", "running", "completed", "failed"])
@@ -2039,6 +1980,18 @@ export type ChallengeDraftResponse = z.infer<
 export type ChallengeListResponse = z.infer<typeof challengeListResponseSchema>;
 export type ChallengePrivateAssetResponse = z.infer<
   typeof challengePrivateAssetResponseSchema
+>;
+export type ChallengeShortlistResponse = z.infer<
+  typeof challengeShortlistResponseSchema
+>;
+export type ChallengeShortlistRevisionResponse = z.infer<
+  typeof challengeShortlistRevisionResponseSchema
+>;
+export type CreatorChallengeParticipantsResponse = z.infer<
+  typeof creatorChallengeParticipantsResponseSchema
+>;
+export type CreatorChallengeStatsResponse = z.infer<
+  typeof creatorChallengeStatsResponseSchema
 >;
 export type CreatorMeResponse = z.infer<typeof creatorMeResponseSchema>;
 export type CreatorSessionResponse = z.infer<

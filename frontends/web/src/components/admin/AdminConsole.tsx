@@ -509,7 +509,7 @@ function ChallengeAdminPanel({
               <tr>
                 <th>Challenge</th>
                 <th>Status</th>
-                <th>Rounds</th>
+                <th>Eligibility</th>
                 <th>Targets</th>
                 <th>Modes</th>
                 <th>Updated</th>
@@ -527,10 +527,15 @@ function ChallengeAdminPanel({
                   <td>
                     <StatusBadge status={challenge.status} />
                   </td>
-                  <td className="font-mono">
-                    {(challenge.rounds ?? [])
-                      .map((round) => round.id)
-                      .join(", ") || "—"}
+                  <td>
+                    <div className="font-mono">
+                      {challenge.eligibility?.type ?? "—"}
+                    </div>
+                    <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
+                      {challenge.starts_at
+                        ? `starts ${formatDate(challenge.starts_at, locale)}`
+                        : "starts anytime"}
+                    </div>
                   </td>
                   <td>
                     <BenchmarkTargetSummary challenge={challenge} />
