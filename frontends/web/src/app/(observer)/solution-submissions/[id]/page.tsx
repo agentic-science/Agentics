@@ -13,6 +13,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { codeToHtml } from "shiki";
 import { CodeBrowser } from "@/components/CodeBrowser";
 import { fetchJson } from "@/lib/api";
+import { artifactIsPublic } from "@/lib/challengeVisibility";
 import { formatDate, formatScore } from "@/lib/format";
 import {
   formatDeclaredMetric,
@@ -40,45 +41,47 @@ export default async function SolutionSubmissionPage({
     solutionSubmissionResponseSchema,
   );
 
-  const [artifact, detail] = await Promise.all([
-    fetchJson(
-      `/api/public/solution-submissions/${id}/artifact`,
-      solutionSubmissionArtifactResponseSchema,
-    ),
-    fetchJson(
-      `/api/public/challenges/${submission.challenge_id}`,
-      challengeDetailResponseSchema,
-    ),
-  ]);
+  const detail = await fetchJson(
+    `/api/public/challenges/${submission.challenge_id}`,
+    challengeDetailResponseSchema,
+  );
+  const artifact = artifactIsPublic(detail.spec)
+    ? await fetchJson(
+        `/api/public/solution-submissions/${id}/artifact`,
+        solutionSubmissionArtifactResponseSchema,
+      )
+    : null;
 
   // Highlight code with Shiki
-  const filesWithHighlight = await Promise.all(
-    artifact.files.map(async (file) => {
-      if (!file.is_text || !file.content) {
-        return {
-          path: file.path,
-          size: file.size,
-          is_text: file.is_text,
-          content: file.content,
-          highlightedHtml: null,
-        };
-      }
+  const filesWithHighlight = artifact
+    ? await Promise.all(
+        artifact.files.map(async (file) => {
+          if (!file.is_text || !file.content) {
+            return {
+              path: file.path,
+              size: file.size,
+              is_text: file.is_text,
+              content: file.content,
+              highlightedHtml: null,
+            };
+          }
 
-      const lang = file.language || detectLanguage(file.path);
-      const html = await codeToHtml(file.content, {
-        lang: lang || "text",
-        theme: "github-dark",
-      });
+          const lang = file.language || detectLanguage(file.path);
+          const html = await codeToHtml(file.content, {
+            lang: lang || "text",
+            theme: "github-dark",
+          });
 
-      return {
-        path: file.path,
-        size: file.size,
-        is_text: file.is_text,
-        content: file.content,
-        highlightedHtml: html,
-      };
-    }),
-  );
+          return {
+            path: file.path,
+            size: file.size,
+            is_text: file.is_text,
+            content: file.content,
+            highlightedHtml: html,
+          };
+        }),
+      )
+    : [];
 
   const evalDto = selectSubmissionDisplayEvaluation(submission);
   const metricSchema = detail.spec.metric_schema;
@@ -350,29 +353,31 @@ export default async function SolutionSubmissionPage({
         </div>
 
         {/* Right: Code Browser */}
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] flex items-center gap-2">
-              <GitCommit className="w-4 h-4 text-[var(--accent-secondary-text)]" />
-              {t("submissionDetail.codeBrowser.title")}
-            </h3>
-            <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
-              {artifact.archive_name} · {artifact.file_count}{" "}
-              {t("submissionDetail.codeBrowser.files")} ·{" "}
-              {artifact.total_uncompressed_size.toLocaleString()}{" "}
-              {t("submissionDetail.codeBrowser.bytes")}
-            </span>
+        {artifact ? (
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] flex items-center gap-2">
+                <GitCommit className="w-4 h-4 text-[var(--accent-secondary-text)]" />
+                {t("submissionDetail.codeBrowser.title")}
+              </h3>
+              <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
+                {artifact.archive_name} · {artifact.file_count}{" "}
+                {t("submissionDetail.codeBrowser.files")} ·{" "}
+                {artifact.total_uncompressed_size.toLocaleString()}{" "}
+                {t("submissionDetail.codeBrowser.bytes")}
+              </span>
+            </div>
+            <CodeBrowser
+              files={filesWithHighlight.map((f) => ({
+                path: f.path,
+                size: f.size,
+                is_text: f.is_text,
+                content: f.content,
+                highlightedHtml: f.highlightedHtml,
+              }))}
+            />
           </div>
-          <CodeBrowser
-            files={filesWithHighlight.map((f) => ({
-              path: f.path,
-              size: f.size,
-              is_text: f.is_text,
-              content: f.content,
-              highlightedHtml: f.highlightedHtml,
-            }))}
-          />
-        </div>
+        ) : null}
       </div>
     </div>
   );

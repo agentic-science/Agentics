@@ -17,8 +17,8 @@ use shared::config::Config;
 use shared::db::{self, QueueEvaluationJobInput};
 use shared::error::{AppError, Result};
 use shared::models::challenge::{
-    ChallengeBundleSpec, ChallengeResultDetailVisibility, ChallengeVisibility,
-    PublishChallengeResponse,
+    ChallengeBundleSpec, ChallengeEligibilityType, ChallengeResultDetailVisibility,
+    ChallengeSolutionPublicationPolicy, ChallengeVisibility, PublishChallengeResponse,
 };
 use shared::models::evaluation::ScoringMode;
 use shared::models::request::{
@@ -190,7 +190,7 @@ async fn create_solution_submission_for_mode(
         ));
     }
     ensure_request_identifier(&benchmark_target_id, "benchmark_target_id")?;
-    let challenge_id = db::ensure_published_challenge_supports_eval_type(
+    let admission = db::ensure_published_challenge_supports_eval_type(
         &state.db,
         &challenge_id,
         &benchmark_target_id,
@@ -198,12 +198,15 @@ async fn create_solution_submission_for_mode(
         &agent.agent_id,
     )
     .await?;
+    let canonical_challenge_id = admission.challenge_id.clone();
+    let challenge_lifetime_limit = challenge_lifetime_limit(&admission, eval_type);
     ensure_submission_quota_available(
         &state,
         &agent.agent_id,
-        &challenge_id,
+        &canonical_challenge_id,
         &benchmark_target_id,
         eval_type,
+        challenge_lifetime_limit,
     )
     .await?;
 
@@ -246,7 +249,7 @@ async fn create_solution_submission_for_mode(
             solution_submission_id: solution_submission_id.clone(),
             job_id: job_id.clone(),
             agent_id: agent.agent_id,
-            challenge_id,
+            challenge_id: canonical_challenge_id,
             benchmark_target_id,
             artifact_path: artifact_path.clone(),
             language: manifest.runtime.language,
@@ -261,6 +264,7 @@ async fn create_solution_submission_for_mode(
             quota_admission: db::SolutionSubmissionQuotaAdmission {
                 window_seconds: SUBMISSION_QUOTA_WINDOW_SECONDS,
                 per_agent_challenge_limit: quota_limit,
+                challenge_lifetime_limit,
                 max_active_official_jobs,
             },
         },
@@ -325,6 +329,7 @@ async fn ensure_submission_quota_available(
     challenge_id: &str,
     benchmark_target_id: &str,
     eval_type: ScoringMode,
+    challenge_lifetime_limit: Option<i64>,
 ) -> Result<()> {
     let limit = match eval_type {
         ScoringMode::Validation => i64::from(state.config.validation_runs_per_agent_challenge_day),
@@ -347,6 +352,23 @@ async fn ensure_submission_quota_available(
         )));
     }
 
+    if let Some(limit) = challenge_lifetime_limit {
+        let used = db::count_lifetime_runs_for_agent_challenge(
+            &state.db,
+            agent_id,
+            challenge_id,
+            benchmark_target_id,
+            eval_type,
+        )
+        .await?;
+        if used >= limit {
+            return Err(AppError::TooManyRequests(format!(
+                "{} challenge limit exceeded for challenge `{challenge_id}`: {used} of {limit} lifetime runs used",
+                eval_type.as_str()
+            )));
+        }
+    }
+
     if eval_type == ScoringMode::Official {
         let active = db::count_active_evaluation_jobs(&state.db, ScoringMode::Official).await?;
         let max_active = i64::from(state.config.max_active_official_jobs);
@@ -358,6 +380,16 @@ async fn ensure_submission_quota_available(
     }
 
     Ok(())
+}
+
+fn challenge_lifetime_limit(
+    admission: &db::PublishedChallengeAdmission,
+    eval_type: ScoringMode,
+) -> Option<i64> {
+    match eval_type {
+        ScoringMode::Validation => admission.validation_submission_limit,
+        ScoringMode::Official => admission.official_submission_limit,
+    }
 }
 
 /// Create a private validation run, store its ZIP artifact, and queue validation evaluation.
@@ -506,6 +538,7 @@ pub async fn list_public_solution_submissions(
     Path(id): Path<String>,
     Query(query): Query<PublicListQuery>,
 ) -> Result<Json<PublicSolutionSubmissionListResponse>> {
+    ensure_public_result_detail_visible(&state.db, &id).await?;
     let items =
         db::list_public_solution_submissions_for_challenge(&state.db, &id, query.limit()).await?;
     Ok(Json(PublicSolutionSubmissionListResponse { items }))
@@ -559,7 +592,9 @@ pub async fn get_public_solution_submission_ranking_context(
         return Err(AppError::NotFound);
     }
     ensure_ranking_scope_matches_submission(&solution_submission, &query)?;
-    ensure_public_result_detail_visible(&state.db, &solution_submission.challenge_id).await?;
+    let (_challenge, spec) =
+        load_challenge_policy(&state.db, &solution_submission.challenge_id).await?;
+    ensure_visibility_allows_public(spec.visibility.leaderboard, &spec)?;
     let response = build_ranking_context(
         &state.db,
         &query.challenge_id,
@@ -580,6 +615,7 @@ pub async fn get_public_artifact(
     if !solution_submission.visible_after_eval {
         return Err(AppError::NotFound);
     }
+    ensure_public_solution_artifact_visible(&state.db, &solution_submission.challenge_id).await?;
 
     let artifact_bytes = state
         .storage
@@ -741,6 +777,29 @@ async fn ensure_public_result_detail_visible(
         }
         ChallengeResultDetailVisibility::SubmitterLivePublicAfterClose
         | ChallengeResultDetailVisibility::SubmitterOnly => Err(AppError::NotFound),
+    }
+}
+
+async fn ensure_public_solution_artifact_visible(
+    pool: &sqlx::PgPool,
+    challenge_id_or_slug: &str,
+) -> Result<()> {
+    let (_challenge, spec) = load_challenge_policy(pool, challenge_id_or_slug).await?;
+    match spec.visibility.result_detail {
+        ChallengeResultDetailVisibility::SubmitterLivePublicLive => {}
+        ChallengeResultDetailVisibility::SubmitterLivePublicAfterClose
+            if challenge_has_closed(&spec)? => {}
+        ChallengeResultDetailVisibility::SubmitterLivePublicAfterClose
+        | ChallengeResultDetailVisibility::SubmitterOnly => return Err(AppError::NotFound),
+    }
+
+    match spec.solution_publication {
+        ChallengeSolutionPublicationPolicy::Public => Ok(()),
+        ChallengeSolutionPublicationPolicy::PublicAfterClose if challenge_has_closed(&spec)? => {
+            Ok(())
+        }
+        ChallengeSolutionPublicationPolicy::Private
+        | ChallengeSolutionPublicationPolicy::PublicAfterClose => Err(AppError::NotFound),
     }
 }
 
@@ -1246,6 +1305,12 @@ pub async fn publish_challenge(
             "challenge bundle id mismatch: expected {}, got {}",
             challenge_id, spec.challenge_id
         )));
+    }
+    if spec.eligibility.eligibility_type == ChallengeEligibilityType::PrivateShortlist {
+        return Err(AppError::BadRequest(
+            "private_shortlist challenges must be published through the creator draft flow so an owner can manage the shortlist"
+                .to_string(),
+        ));
     }
 
     let managed_bundle_path =

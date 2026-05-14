@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS challenges (
   leaderboard_visibility TEXT NOT NULL DEFAULT 'public_live' CHECK (leaderboard_visibility IN ('public_live', 'public_after_close', 'hidden')),
   score_distribution_visibility TEXT NOT NULL DEFAULT 'public_live' CHECK (score_distribution_visibility IN ('public_live', 'public_after_close', 'hidden')),
   result_detail_visibility TEXT NOT NULL DEFAULT 'submitter_live_public_after_close' CHECK (result_detail_visibility IN ('submitter_live_public_live', 'submitter_live_public_after_close', 'submitter_only')),
-  solution_publication_policy TEXT NOT NULL DEFAULT 'submitter_opt_in' CHECK (solution_publication_policy IN ('private', 'submitter_opt_in', 'public_after_close')),
+  solution_publication_policy TEXT NOT NULL DEFAULT 'private' CHECK (solution_publication_policy IN ('private', 'public', 'public_after_close')),
   status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'archived')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

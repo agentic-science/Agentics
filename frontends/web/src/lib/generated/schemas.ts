@@ -145,7 +145,7 @@ export const adminChallengeListResponseSchema = z
             .describe("Visibility policy for challenge result surfaces.")
             .optional(),
           solution_publication: z
-            .enum(["private", "submitter_opt_in", "public_after_close"])
+            .enum(["private", "public", "public_after_close"])
             .describe(
               "Policy controlling when solution artifacts may become public.",
             )
@@ -348,7 +348,7 @@ export const challengeDetailResponseSchema = z
           .strict()
           .describe("Visibility policy for challenge result surfaces."),
         solution_publication: z
-          .enum(["private", "submitter_opt_in", "public_after_close"])
+          .enum(["private", "public", "public_after_close"])
           .describe(
             "Policy controlling when solution artifacts may become public.",
           ),

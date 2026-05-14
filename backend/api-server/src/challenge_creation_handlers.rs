@@ -536,10 +536,20 @@ pub async fn publish_challenge_draft(
         ));
     }
     let proposal_root = Path::new(repository_path).join(&draft.challenge_path);
-    let published_challenge_id = match manifest.request {
+    match manifest.request {
         ChallengeCreationRequestKind::ArchiveChallenge => {
-            db::archive_challenge(&state.db, &manifest.challenge_id).await?;
-            None
+            db::publish_archive_challenge_draft(
+                &state.db,
+                &db::PublishArchiveChallengeDraftInput {
+                    draft_id: draft.id.clone(),
+                    challenge_id: manifest.challenge_id.clone(),
+                    audit_event_id: Uuid::new_v4().to_string(),
+                    admin_username: admin.username,
+                    repository_path: repository_path.to_string(),
+                    bundle_sha256,
+                },
+            )
+            .await?;
         }
         ChallengeCreationRequestKind::NewChallenge => {
             let bundle_path =
@@ -549,50 +559,27 @@ pub async fn publish_challenge_draft(
             if state.config.require_digest_pinned_images {
                 challenge_bundle::validate_digest_pinned_images(&spec)?;
             }
-            db::create_or_update_challenge(
-                &state.db,
-                &manifest.challenge_id,
-                &manifest.challenge_id,
-                &manifest.title,
-                &manifest.summary,
-            )
-            .await?;
             let statement_path = bundle_path.join("statement.md");
-            let published = db::publish_challenge(
+            db::publish_new_challenge_draft(
                 &state.db,
-                &manifest.challenge_id,
-                &bundle_path.to_string_lossy(),
-                &statement_path.to_string_lossy(),
-                &spec,
-                &manifest.title,
-                &manifest.summary,
+                &db::PublishNewChallengeDraftInput {
+                    draft_id: draft.id.clone(),
+                    challenge_id: manifest.challenge_id.clone(),
+                    bundle_path: bundle_path.to_string_lossy().to_string(),
+                    statement_path: statement_path.to_string_lossy().to_string(),
+                    spec,
+                    title: manifest.title.clone(),
+                    summary: manifest.summary.clone(),
+                    owner_agent_id: draft.creator_agent_id.clone(),
+                    audit_event_id: Uuid::new_v4().to_string(),
+                    admin_username: admin.username,
+                    repository_path: repository_path.to_string(),
+                    bundle_sha256,
+                },
             )
             .await?;
-            db::add_challenge_owner(&state.db, &published.challenge_id, &draft.creator_agent_id)
-                .await?;
-            Some(published.challenge_id)
         }
     };
-    db::mark_challenge_draft_published(&state.db, &draft.id, published_challenge_id.as_deref())
-        .await?;
-    db::create_challenge_draft_audit_event(
-        &state.db,
-        &db::CreateChallengeDraftAuditEventInput {
-            event_id: Uuid::new_v4().to_string(),
-            draft_id: draft.id.clone(),
-            actor_agent_id: None,
-            actor_admin_username: Some(admin.username),
-            action: "draft_published".to_string(),
-            message: "challenge draft published".to_string(),
-            metadata: serde_json::json!({
-                "challenge_id": &manifest.challenge_id,
-                "published_challenge_id": &published_challenge_id,
-                "repository_path": repository_path,
-                "bundle_sha256": &bundle_sha256
-            }),
-        },
-    )
-    .await?;
 
     Ok(Json(
         db::get_challenge_draft(&state.db, &draft.id)

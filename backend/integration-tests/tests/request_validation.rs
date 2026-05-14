@@ -5,8 +5,9 @@ mod helpers;
 use std::path::Path;
 
 use helpers::{
-    TestCreatorSession, api_url, copy_dir_all, create_creator_session, examples_challenges_root,
-    sample_sum_solution, solution_zip_base64, spawn_app, spawn_app_with_config, test_config,
+    TestCreatorSession, api_url, basic_auth_header, copy_dir_all, create_creator_session,
+    examples_challenges_root, sample_sum_solution, solution_zip_base64, spawn_app,
+    spawn_app_with_config, test_config,
 };
 
 fn creator_auth(
@@ -454,6 +455,91 @@ async fn private_shortlist_challenge_requires_owner_delta_before_artifact_decode
     assert_eq!(accepted.status(), reqwest::StatusCode::CREATED);
 }
 
+#[sqlx::test(migrations = "../migrations")]
+async fn challenge_submission_limit_rejects_before_extra_artifact_work(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let challenges = tempfile::tempdir().expect("failed to create challenges tempdir");
+    write_limited_submission_challenge(challenges.path(), "limited-sum", 1);
+    let config = test_config(storage.path(), challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+    let agent = register_api_agent(&client, &app, "limited-agent").await;
+    let artifact = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
+
+    let accepted = submit_solution_with_target(
+        &client,
+        &app,
+        &agent.token,
+        "limited-sum",
+        "linux-arm64-cpu",
+        &artifact,
+    )
+    .await;
+    assert_eq!(accepted.status(), reqwest::StatusCode::CREATED);
+
+    let rejected = submit_solution_with_target(
+        &client,
+        &app,
+        &agent.token,
+        "limited-sum",
+        "linux-arm64-cpu",
+        &artifact,
+    )
+    .await;
+    assert_eq!(rejected.status(), reqwest::StatusCode::TOO_MANY_REQUESTS);
+    let error: serde_json::Value = rejected.json().await.expect("failed to decode quota error");
+    assert!(
+        error["message"]
+            .as_str()
+            .expect("message")
+            .contains("challenge limit exceeded")
+    );
+
+    let solution_submission_count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM solution_submissions")
+            .fetch_one(&pool)
+            .await
+            .expect("failed to query solution submission count");
+    assert_eq!(solution_submission_count.0, 1);
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn admin_direct_publish_rejects_private_shortlist_challenge(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let challenges = tempfile::tempdir().expect("failed to create challenges tempdir");
+    write_private_shortlist_challenge(challenges.path(), "shortlist-direct");
+    let config = test_config(storage.path(), challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let client = reqwest::Client::new();
+    let admin_auth = basic_auth_header(&config.admin_username, &config.admin_password);
+
+    let response = client
+        .post(api_url(&app, "/admin/challenges/shortlist-direct/publish"))
+        .header("Authorization", admin_auth)
+        .json(&serde_json::json!({
+            "bundle_path": challenges
+                .path()
+                .join("shortlist-direct/v1")
+                .to_string_lossy()
+                .to_string()
+        }))
+        .send()
+        .await
+        .expect("failed to publish private shortlist challenge directly");
+
+    assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+    let error: serde_json::Value = response
+        .json()
+        .await
+        .expect("failed to decode direct publish error");
+    assert!(
+        error["message"]
+            .as_str()
+            .expect("message")
+            .contains("private_shortlist")
+    );
+}
+
 struct ApiAgent {
     agent_id: String,
     token: String,
@@ -493,12 +579,31 @@ async fn submit_solution(
     challenge_id: &str,
     artifact_base64: &str,
 ) -> reqwest::Response {
+    submit_solution_with_target(
+        client,
+        app,
+        token,
+        challenge_id,
+        "linux-arm64-cpu",
+        artifact_base64,
+    )
+    .await
+}
+
+async fn submit_solution_with_target(
+    client: &reqwest::Client,
+    app: &helpers::TestApp,
+    token: &str,
+    challenge_id: &str,
+    benchmark_target_id: &str,
+    artifact_base64: &str,
+) -> reqwest::Response {
     client
         .post(api_url(app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": challenge_id,
-            "benchmark_target_id": "linux-arm64-cpu",
+            "benchmark_target_id": benchmark_target_id,
             "artifact_base64": artifact_base64
         }))
         .send()
@@ -549,6 +654,26 @@ fn write_private_shortlist_challenge(root: &Path, challenge_id: &str) {
     spec["challenge_id"] = serde_json::json!(challenge_id);
     spec["challenge_title"] = serde_json::json!(challenge_id);
     spec["eligibility"] = serde_json::json!({ "type": "private_shortlist" });
+    std::fs::write(
+        &spec_path,
+        serde_json::to_string_pretty(&spec).expect("failed to serialize spec"),
+    )
+    .expect("failed to write spec");
+}
+
+fn write_limited_submission_challenge(root: &Path, challenge_id: &str, official_limit: i64) {
+    let bundle_dir = root.join(challenge_id).join("v1");
+    copy_dir_all(
+        &examples_challenges_root().join("sample-sum/v1"),
+        &bundle_dir,
+    );
+    let spec_path = bundle_dir.join("spec.json");
+    let mut spec: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&spec_path).expect("failed to read spec"))
+            .expect("failed to parse spec");
+    spec["challenge_id"] = serde_json::json!(challenge_id);
+    spec["challenge_title"] = serde_json::json!(challenge_id);
+    spec["official_submission_limit"] = serde_json::json!(official_limit);
     std::fs::write(
         &spec_path,
         serde_json::to_string_pretty(&spec).expect("failed to serialize spec"),

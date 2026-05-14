@@ -151,10 +151,17 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
                     challenge,
                     target,
                 } => {
+                    let challenge_detail = client.get_challenge(&challenge).await?;
+                    if challenge_detail.spec.benchmark_target(&target).is_none() {
+                        anyhow::bail!(
+                            "challenge `{}` does not support benchmark target `{target}`",
+                            challenge_detail.id
+                        );
+                    }
                     let response = client
                         .get_solution_submission_ranking_context(
                             &submission_id,
-                            &challenge,
+                            &challenge_detail.id,
                             &target,
                         )
                         .await?;
@@ -964,9 +971,9 @@ mod tests {
                 "visibility": {
                     "leaderboard": "public_live",
                     "score_distribution": "public_live",
-                    "result_detail": "submitter_live_public_after_close"
+                    "result_detail": "submitter_live_public_live"
                 },
-                "solution_publication": "submitter_opt_in",
+                "solution_publication": "public",
                 "solution": {
                     "protocol": "zip_project",
                     "manifest_file": "agentics.solution.json"

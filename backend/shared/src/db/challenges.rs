@@ -120,8 +120,31 @@ pub async fn publish_challenge(
     title: &str,
     summary: &str,
 ) -> Result<PublishChallengeResponse> {
-    let spec_json = serde_json::to_value(spec).map_err(|e| AppError::Internal(e.to_string()))?;
     let mut tx = pool.begin().await?;
+    let response = publish_challenge_tx(
+        &mut tx,
+        challenge_id,
+        bundle_path,
+        statement_path,
+        spec,
+        title,
+        summary,
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(response)
+}
+
+pub async fn publish_challenge_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    challenge_id: &str,
+    bundle_path: &str,
+    statement_path: &str,
+    spec: &ChallengeBundleSpec,
+    title: &str,
+    summary: &str,
+) -> Result<PublishChallengeResponse> {
+    let spec_json = serde_json::to_value(spec).map_err(|e| AppError::Internal(e.to_string()))?;
 
     let row = sqlx::query(
         r#"
@@ -168,15 +191,13 @@ pub async fn publish_challenge(
     .bind(to_json_string(spec.visibility.score_distribution)?)
     .bind(to_json_string(spec.visibility.result_detail)?)
     .bind(to_json_string(spec.solution_publication)?)
-    .fetch_one(&mut *tx)
+    .fetch_one(&mut **tx)
     .await
     .map_err(|error| match error {
         sqlx::Error::RowNotFound => AppError::Conflict,
         sqlx::Error::Database(db_error) if db_error.is_unique_violation() => AppError::Conflict,
         error => AppError::Database(error),
     })?;
-
-    tx.commit().await?;
 
     Ok(PublishChallengeResponse {
         challenge_id: row.try_get("challenge_id")?,
@@ -227,6 +248,17 @@ pub async fn archive_challenge(pool: &PgPool, challenge_id: &str) -> Result<()> 
 
 /// Grant challenge-owner permissions to an agent.
 pub async fn add_challenge_owner(pool: &PgPool, challenge_id: &str, agent_id: &str) -> Result<()> {
+    let mut tx = pool.begin().await?;
+    add_challenge_owner_tx(&mut tx, challenge_id, agent_id).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+pub async fn add_challenge_owner_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    challenge_id: &str,
+    agent_id: &str,
+) -> Result<()> {
     sqlx::query(
         r#"
         INSERT INTO challenge_owners (challenge_id, agent_id)
@@ -236,7 +268,7 @@ pub async fn add_challenge_owner(pool: &PgPool, challenge_id: &str, agent_id: &s
     )
     .bind(challenge_id)
     .bind(agent_id)
-    .execute(pool)
+    .execute(&mut **tx)
     .await?;
 
     Ok(())

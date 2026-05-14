@@ -38,9 +38,9 @@ const challengePolicy = {
   visibility: {
     leaderboard: "public_live",
     score_distribution: "public_live",
-    result_detail: "submitter_live_public_after_close",
+    result_detail: "submitter_live_public_live",
   },
-  solution_publication: "submitter_opt_in",
+  solution_publication: "public",
 };
 
 describe("frontend API schemas", () => {

@@ -482,9 +482,15 @@ pub(crate) fn render_solution_submission_status(
                 .and_then(|eval| eval.rank_score)
                 .map(format_score)
                 .unwrap_or_else(|| "none".to_string());
+            let validation_primary_score = response
+                .validation_evaluation
+                .as_ref()
+                .and_then(|eval| eval.primary_score)
+                .map(format_score)
+                .unwrap_or_else(|| "none".to_string());
 
             Ok(format!(
-                "solution submission: {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\nvalidation_evaluation: {}\nofficial_evaluation: {}\nrank_score: {}\nvisible_after_eval: {}",
+                "solution submission: {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\nvalidation_evaluation: {}\nofficial_evaluation: {}\nvalidation_primary_score: {}\nrank_score: {}\nvisible_after_eval: {}",
                 response.id,
                 response.challenge_id,
                 response.benchmark_target_id,
@@ -492,6 +498,7 @@ pub(crate) fn render_solution_submission_status(
                 evaluation_job,
                 validation_eval,
                 official_eval,
+                validation_primary_score,
                 rank_score,
                 response.visible_after_eval
             ))
@@ -939,9 +946,9 @@ mod tests {
                 visibility: ChallengeVisibilitySpec {
                     leaderboard: ChallengeVisibility::PublicLive,
                     score_distribution: ChallengeVisibility::PublicLive,
-                    result_detail: ChallengeResultDetailVisibility::SubmitterLivePublicAfterClose,
+                    result_detail: ChallengeResultDetailVisibility::SubmitterLivePublicLive,
                 },
-                solution_publication: ChallengeSolutionPublicationPolicy::SubmitterOptIn,
+                solution_publication: ChallengeSolutionPublicationPolicy::Public,
                 solution: SolutionSpec {
                     protocol: "zip_project".to_string(),
                     manifest_file: "agentics.solution.json".to_string(),

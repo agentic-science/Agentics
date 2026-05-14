@@ -103,7 +103,7 @@ pub enum ChallengeResultDetailVisibility {
 #[serde(rename_all = "snake_case")]
 pub enum ChallengeSolutionPublicationPolicy {
     Private,
-    SubmitterOptIn,
+    Public,
     PublicAfterClose,
 }
 

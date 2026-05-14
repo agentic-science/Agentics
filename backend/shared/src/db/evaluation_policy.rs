@@ -8,19 +8,27 @@ use crate::models::evaluation::ScoringMode;
 
 use super::challenges::{agent_is_shortlisted, challenge_has_shortlist, get_published_challenge};
 
+/// Published challenge admission data needed by API preflight checks.
+#[derive(Debug, Clone)]
+pub struct PublishedChallengeAdmission {
+    pub challenge_id: String,
+    pub validation_submission_limit: Option<i64>,
+    pub official_submission_limit: Option<i64>,
+}
+
 /// Verify that a published challenge accepts the requested evaluation mode and
-/// return the canonical challenge id.
+/// return the canonical challenge id plus challenge-scoped limits.
 ///
 /// API handlers call this before storing uploaded artifacts so disabled
-/// validation does not consume storage; write paths repeat the same check inside
-/// their transaction as the authoritative guard.
+/// validation does not consume storage; write paths repeat the same check before
+/// inserting queued work as the authoritative guard.
 pub async fn ensure_published_challenge_supports_eval_type(
     pool: &PgPool,
     challenge_id_or_slug: &str,
     benchmark_target_id: &str,
     eval_type: ScoringMode,
     agent_id: &str,
-) -> Result<String> {
+) -> Result<PublishedChallengeAdmission> {
     let challenge = get_published_challenge(pool, challenge_id_or_slug).await?;
     let challenge =
         challenge.ok_or_else(|| AppError::BadRequest("challenge not found".to_string()))?;
@@ -35,7 +43,11 @@ pub async fn ensure_published_challenge_supports_eval_type(
         agent_id,
     )
     .await?;
-    Ok(challenge.challenge_id)
+    Ok(PublishedChallengeAdmission {
+        challenge_id: challenge.challenge_id,
+        validation_submission_limit: spec.validation_submission_limit,
+        official_submission_limit: spec.official_submission_limit,
+    })
 }
 
 pub(super) async fn ensure_challenge_supports_eval_type(

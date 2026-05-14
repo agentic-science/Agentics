@@ -5,11 +5,14 @@ use serde_json::Value;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use crate::error::{AppError, Result};
+use crate::models::challenge::ChallengeBundleSpec;
 use crate::models::challenge_creation::{
     ChallengeCreationManifest, ChallengeCreationRequestKind, ChallengeDraftResponse,
     ChallengeDraftStatus, ChallengeDraftValidationRecordResponse, ChallengeDraftValidationStatus,
     ChallengePrivateAssetKind, ChallengePrivateAssetResponse,
 };
+
+use super::challenges::{add_challenge_owner_tx, publish_challenge_tx};
 
 /// Input for inserting one GitHub PR-backed challenge draft.
 #[derive(Debug, Clone)]
@@ -51,6 +54,34 @@ pub struct CreateChallengeDraftAuditEventInput {
     pub action: String,
     pub message: String,
     pub metadata: Value,
+}
+
+/// Input for atomically publishing one approved new-challenge draft.
+#[derive(Debug, Clone)]
+pub struct PublishNewChallengeDraftInput {
+    pub draft_id: String,
+    pub challenge_id: String,
+    pub bundle_path: String,
+    pub statement_path: String,
+    pub spec: ChallengeBundleSpec,
+    pub title: String,
+    pub summary: String,
+    pub owner_agent_id: String,
+    pub audit_event_id: String,
+    pub admin_username: String,
+    pub repository_path: String,
+    pub bundle_sha256: String,
+}
+
+/// Input for atomically publishing one approved archive draft.
+#[derive(Debug, Clone)]
+pub struct PublishArchiveChallengeDraftInput {
+    pub draft_id: String,
+    pub challenge_id: String,
+    pub audit_event_id: String,
+    pub admin_username: String,
+    pub repository_path: String,
+    pub bundle_sha256: String,
 }
 
 /// Input for recording one admin validation attempt against a draft.
@@ -522,9 +553,138 @@ pub async fn mark_challenge_draft_published(
     Ok(())
 }
 
+/// Publish an approved new-challenge draft as one retry-safe database unit.
+pub async fn publish_new_challenge_draft(
+    pool: &PgPool,
+    input: &PublishNewChallengeDraftInput,
+) -> Result<()> {
+    let mut tx = pool.begin().await?;
+    let published = publish_challenge_tx(
+        &mut tx,
+        &input.challenge_id,
+        &input.bundle_path,
+        &input.statement_path,
+        &input.spec,
+        &input.title,
+        &input.summary,
+    )
+    .await?;
+    add_challenge_owner_tx(&mut tx, &published.challenge_id, &input.owner_agent_id).await?;
+    mark_challenge_draft_published_tx(&mut tx, &input.draft_id, Some(&published.challenge_id))
+        .await?;
+    create_challenge_draft_audit_event_tx(
+        &mut tx,
+        &CreateChallengeDraftAuditEventInput {
+            event_id: input.audit_event_id.clone(),
+            draft_id: input.draft_id.clone(),
+            actor_agent_id: None,
+            actor_admin_username: Some(input.admin_username.clone()),
+            action: "draft_published".to_string(),
+            message: "challenge draft published".to_string(),
+            metadata: serde_json::json!({
+                "challenge_id": &input.challenge_id,
+                "published_challenge_id": &published.challenge_id,
+                "repository_path": &input.repository_path,
+                "bundle_sha256": &input.bundle_sha256
+            }),
+        },
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Publish an approved archive draft as one retry-safe database unit.
+pub async fn publish_archive_challenge_draft(
+    pool: &PgPool,
+    input: &PublishArchiveChallengeDraftInput,
+) -> Result<()> {
+    let mut tx = pool.begin().await?;
+    archive_challenge_tx(&mut tx, &input.challenge_id).await?;
+    mark_challenge_draft_published_tx(&mut tx, &input.draft_id, None).await?;
+    create_challenge_draft_audit_event_tx(
+        &mut tx,
+        &CreateChallengeDraftAuditEventInput {
+            event_id: input.audit_event_id.clone(),
+            draft_id: input.draft_id.clone(),
+            actor_agent_id: None,
+            actor_admin_username: Some(input.admin_username.clone()),
+            action: "draft_published".to_string(),
+            message: "challenge draft published".to_string(),
+            metadata: serde_json::json!({
+                "challenge_id": &input.challenge_id,
+                "published_challenge_id": Value::Null,
+                "repository_path": &input.repository_path,
+                "bundle_sha256": &input.bundle_sha256
+            }),
+        },
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+async fn mark_challenge_draft_published_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    draft_id: &str,
+    published_challenge_id: Option<&str>,
+) -> Result<()> {
+    let result = sqlx::query(
+        r#"
+        UPDATE challenge_drafts
+        SET status = 'published',
+            published_challenge_id = $2,
+            updated_at = NOW()
+        WHERE id = $1
+          AND status = 'approved'
+        "#,
+    )
+    .bind(draft_id)
+    .bind(published_challenge_id)
+    .execute(&mut **tx)
+    .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::Conflict);
+    }
+    Ok(())
+}
+
+async fn archive_challenge_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    challenge_id: &str,
+) -> Result<()> {
+    let result = sqlx::query(
+        r#"
+        UPDATE challenges
+        SET status = 'archived',
+            updated_at = NOW()
+        WHERE id = $1
+        "#,
+    )
+    .bind(challenge_id)
+    .execute(&mut **tx)
+    .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::NotFound);
+    }
+    Ok(())
+}
+
 /// Append a draft audit event.
 pub async fn create_challenge_draft_audit_event(
     pool: &PgPool,
+    input: &CreateChallengeDraftAuditEventInput,
+) -> Result<()> {
+    let mut tx = pool.begin().await?;
+    create_challenge_draft_audit_event_tx(&mut tx, input).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+async fn create_challenge_draft_audit_event_tx(
+    tx: &mut Transaction<'_, Postgres>,
     input: &CreateChallengeDraftAuditEventInput,
 ) -> Result<()> {
     sqlx::query(
@@ -542,7 +702,7 @@ pub async fn create_challenge_draft_audit_event(
     .bind(&input.action)
     .bind(&input.message)
     .bind(&input.metadata)
-    .execute(pool)
+    .execute(&mut **tx)
     .await?;
 
     Ok(())

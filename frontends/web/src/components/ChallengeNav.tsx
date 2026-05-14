@@ -4,7 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 
-export function ChallengeNav({ challengeId }: { challengeId: string }) {
+export function ChallengeNav({
+  challengeId,
+  defaultTargetId,
+}: {
+  challengeId: string;
+  defaultTargetId: string;
+}) {
   const pathname = usePathname();
   const t = useTranslations("challenge");
   const base = `/challenges/${challengeId}`;
@@ -12,16 +18,21 @@ export function ChallengeNav({ challengeId }: { challengeId: string }) {
   const tabs = [
     { href: base, label: t("overview"), end: true },
     { href: `${base}/solution-submissions`, label: t("submissions") },
-    { href: `${base}/leaderboard`, label: t("leaderboard") },
+    {
+      href: `${base}/leaderboard?target=${encodeURIComponent(defaultTargetId)}`,
+      label: t("leaderboard"),
+      match: `${base}/leaderboard`,
+    },
     { href: `${base}/discussions`, label: t("discussions") },
   ];
 
   return (
     <div className="tab-list">
       {tabs.map((tab) => {
+        const activeHref = "match" in tab && tab.match ? tab.match : tab.href;
         const isActive = tab.end
           ? pathname === tab.href
-          : pathname.startsWith(tab.href);
+          : pathname.startsWith(activeHref);
         return (
           <Link
             key={tab.href}

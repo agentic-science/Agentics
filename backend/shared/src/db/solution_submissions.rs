@@ -38,6 +38,7 @@ pub struct CreateSolutionSubmissionInput {
 pub struct SolutionSubmissionQuotaAdmission {
     pub window_seconds: i64,
     pub per_agent_challenge_limit: i64,
+    pub challenge_lifetime_limit: Option<i64>,
     pub max_active_official_jobs: Option<i64>,
 }
 
@@ -203,6 +204,15 @@ async fn enforce_quota_admission(
     if input.eval_type == ScoringMode::Official {
         scopes.push("global:official-active".to_string());
     }
+    if input.quota_admission.challenge_lifetime_limit.is_some() {
+        scopes.push(format!(
+            "agent:{}:challenge:{}:target:{}:mode:{}:lifetime",
+            input.agent_id,
+            input.challenge_id,
+            input.benchmark_target_id,
+            input.eval_type.as_str()
+        ));
+    }
     scopes.sort();
 
     for scope in scopes {
@@ -227,6 +237,26 @@ async fn enforce_quota_admission(
             used,
             limit
         )));
+    }
+
+    if let Some(limit) = input.quota_admission.challenge_lifetime_limit {
+        let used = count_lifetime_runs_for_agent_challenge_tx(
+            tx,
+            &input.agent_id,
+            &input.challenge_id,
+            &input.benchmark_target_id,
+            input.eval_type,
+        )
+        .await?;
+        if used >= limit {
+            return Err(AppError::TooManyRequests(format!(
+                "{} challenge limit exceeded for challenge `{}`: {} of {} lifetime runs used",
+                input.eval_type.as_str(),
+                input.challenge_id,
+                used,
+                limit
+            )));
+        }
     }
 
     if let Some(max_active) = input.quota_admission.max_active_official_jobs {
@@ -293,6 +323,34 @@ async fn count_recent_runs_for_agent_challenge_tx(
     .bind(benchmark_target_id)
     .bind(eval_type.as_str())
     .bind(window_seconds)
+    .fetch_one(&mut **tx)
+    .await?;
+
+    Ok(count)
+}
+
+async fn count_lifetime_runs_for_agent_challenge_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    agent_id: &str,
+    challenge_id: &str,
+    benchmark_target_id: &str,
+    eval_type: ScoringMode,
+) -> Result<i64> {
+    let count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)::BIGINT
+        FROM solution_submissions s
+        JOIN evaluation_jobs j ON j.solution_submission_id = s.id
+        WHERE s.agent_id = $1
+          AND s.challenge_id = $2
+          AND s.benchmark_target_id = $3
+          AND j.eval_type = $4
+        "#,
+    )
+    .bind(agent_id)
+    .bind(challenge_id)
+    .bind(benchmark_target_id)
+    .bind(eval_type.as_str())
     .fetch_one(&mut **tx)
     .await?;
 

@@ -492,9 +492,9 @@ mod tests {
                 visibility: ChallengeVisibilitySpec {
                     leaderboard: ChallengeVisibility::PublicLive,
                     score_distribution: ChallengeVisibility::PublicLive,
-                    result_detail: ChallengeResultDetailVisibility::SubmitterLivePublicAfterClose,
+                    result_detail: ChallengeResultDetailVisibility::SubmitterLivePublicLive,
                 },
-                solution_publication: ChallengeSolutionPublicationPolicy::SubmitterOptIn,
+                solution_publication: ChallengeSolutionPublicationPolicy::Public,
                 solution: SolutionSpec {
                     protocol: "zip_project".to_string(),
                     manifest_file: "agentics.solution.json".to_string(),

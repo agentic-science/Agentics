@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import { EvaluationModeBadges } from "@/components/EvaluationModeBadges";
 import { fetchJson } from "@/lib/api";
+import { publicVisibilityAllows } from "@/lib/challengeVisibility";
 import { formatDate } from "@/lib/format";
 import {
   formatDeclaredMetric,
@@ -30,9 +31,12 @@ export default async function LeaderboardPage({
     `/api/public/challenges/${id}`,
     challengeDetailResponseSchema,
   );
-  const selectedTarget = detail.spec.benchmark_targets.find(
-    (candidate) => candidate.id === target,
-  )?.id;
+  const selectedTarget =
+    detail.spec.benchmark_targets.find((candidate) => candidate.id === target)
+      ?.id ??
+    (detail.spec.benchmark_targets.length === 1
+      ? detail.spec.benchmark_targets[0].id
+      : undefined);
   const selectedTargetSpec = detail.spec.benchmark_targets.find(
     (candidate) => candidate.id === selectedTarget,
   );
@@ -66,10 +70,20 @@ export default async function LeaderboardPage({
       </div>
     );
   }
-  const leaderboard = await fetchJson(
-    `/api/public/challenges/${id}/leaderboard?target=${encodeURIComponent(selectedTarget)}&limit=100`,
-    leaderboardResponseSchema,
+  const leaderboardVisible = publicVisibilityAllows(
+    detail.spec.visibility.leaderboard,
+    detail.spec,
   );
+  const leaderboard = leaderboardVisible
+    ? await fetchJson(
+        `/api/public/challenges/${id}/leaderboard?target=${encodeURIComponent(selectedTarget)}&limit=100`,
+        leaderboardResponseSchema,
+      )
+    : {
+        challenge_id: detail.id,
+        benchmark_target_id: selectedTarget,
+        items: [],
+      };
 
   const metricSchema = detail.spec.metric_schema;
   const primaryDefinition = metricSchema.metrics.find(
@@ -124,7 +138,14 @@ export default async function LeaderboardPage({
 
       {/* Table */}
       <div className="card overflow-x-auto">
-        {leaderboard.items.length === 0 ? (
+        {!leaderboardVisible ? (
+          <div className="empty-state py-12">
+            <Trophy className="empty-state-icon" />
+            <p className="text-[var(--text-muted)]">
+              Leaderboard is not public.
+            </p>
+          </div>
+        ) : leaderboard.items.length === 0 ? (
           <div className="empty-state py-12">
             <Trophy className="empty-state-icon" />
             <p className="text-[var(--text-muted)]">{t("leaderboard.empty")}</p>

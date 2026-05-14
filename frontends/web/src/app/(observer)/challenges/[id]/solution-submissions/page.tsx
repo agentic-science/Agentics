@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import { EvaluationModeBadges } from "@/components/EvaluationModeBadges";
 import { fetchJson } from "@/lib/api";
+import { resultDetailIsPublic } from "@/lib/challengeVisibility";
 import { formatDate } from "@/lib/format";
 import { formatDeclaredMetric, primaryMetric } from "@/lib/metrics";
 import {
@@ -18,13 +19,16 @@ export default async function SolutionSubmissionsPage({
   const { id } = await params;
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
 
-  const [detail, submissions] = await Promise.all([
-    fetchJson(`/api/public/challenges/${id}`, challengeDetailResponseSchema),
-    fetchJson(
-      `/api/public/challenges/${id}/solution-submissions?limit=100`,
-      publicSolutionSubmissionListResponseSchema,
-    ),
-  ]);
+  const detail = await fetchJson(
+    `/api/public/challenges/${id}`,
+    challengeDetailResponseSchema,
+  );
+  const submissions = resultDetailIsPublic(detail.spec)
+    ? await fetchJson(
+        `/api/public/challenges/${id}/solution-submissions?limit=100`,
+        publicSolutionSubmissionListResponseSchema,
+      )
+    : { items: [] };
 
   const latestDate =
     submissions.items.length > 0

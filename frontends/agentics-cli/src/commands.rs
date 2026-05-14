@@ -327,19 +327,39 @@ pub(crate) async fn submit(
         args.all_targets,
         TargetSelectionMode::Official,
     )?;
+    validate_parent_submission_scope(
+        &client,
+        &challenge.id,
+        &target_ids,
+        args.all_targets,
+        args.parent_solution_submission_id.as_deref(),
+    )
+    .await?;
 
     let package = package::package_solution_workspace(&args.dir)?;
     let mut responses = Vec::with_capacity(target_ids.len());
     for target_id in target_ids {
         let request = create_solution_submission_request(
-            args.challenge_id.clone(),
-            target_id,
+            challenge.id.clone(),
+            target_id.clone(),
             &package,
             args.explanation.clone(),
             args.parent_solution_submission_id.clone(),
             args.credit_text.clone(),
         );
-        responses.push(client.create_solution_submission(&request).await?);
+        match client.create_solution_submission(&request).await {
+            Ok(response) => responses.push(response),
+            Err(error) => {
+                return Err(batch_error_with_created_ids(
+                    "submit",
+                    &responses,
+                    Some(&package),
+                    output_format,
+                    &target_id,
+                    error,
+                ));
+            }
+        }
     }
 
     output::render_create_solution_submission_batch(&responses, &package, output_format)
@@ -362,19 +382,39 @@ pub(crate) async fn validate(
         args.all_targets,
         TargetSelectionMode::Validation,
     )?;
+    validate_parent_submission_scope(
+        &client,
+        &challenge.id,
+        &target_ids,
+        args.all_targets,
+        args.parent_solution_submission_id.as_deref(),
+    )
+    .await?;
 
     let package = package::package_solution_workspace(&args.dir)?;
     let mut responses = Vec::with_capacity(target_ids.len());
     for target_id in target_ids {
         let request = create_solution_submission_request(
-            args.challenge_id.clone(),
-            target_id,
+            challenge.id.clone(),
+            target_id.clone(),
             &package,
             args.explanation.clone(),
             args.parent_solution_submission_id.clone(),
             args.credit_text.clone(),
         );
-        responses.push(client.create_validation_run(&request).await?);
+        match client.create_validation_run(&request).await {
+            Ok(response) => responses.push(response),
+            Err(error) => {
+                return Err(batch_error_with_created_ids(
+                    "validate",
+                    &responses,
+                    Some(&package),
+                    output_format,
+                    &target_id,
+                    error,
+                ));
+            }
+        }
     }
     if args.no_wait {
         return output::render_create_validation_run_batch(&responses, &package, output_format);
@@ -382,17 +422,105 @@ pub(crate) async fn validate(
 
     let mut final_responses = Vec::with_capacity(responses.len());
     for response in responses {
-        final_responses.push(
-            poll_validation_run(
-                &client,
-                &response.id,
-                Duration::from_millis(args.poll_interval_ms.max(1)),
-                Duration::from_secs(args.timeout_sec),
-            )
-            .await?,
-        );
+        match poll_validation_run(
+            &client,
+            &response.id,
+            Duration::from_millis(args.poll_interval_ms.max(1)),
+            Duration::from_secs(args.timeout_sec),
+        )
+        .await
+        {
+            Ok(final_response) => final_responses.push(final_response),
+            Err(error) => {
+                return Err(batch_status_error(
+                    &final_responses,
+                    output_format,
+                    &response.benchmark_target_id,
+                    error,
+                ));
+            }
+        }
     }
     output::render_validation_run_status_batch(&final_responses, output_format)
+}
+
+async fn validate_parent_submission_scope(
+    client: &ApiClient,
+    challenge_id: &str,
+    target_ids: &[String],
+    all_targets: bool,
+    parent_solution_submission_id: Option<&str>,
+) -> Result<()> {
+    let Some(parent_solution_submission_id) = parent_solution_submission_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(());
+    };
+    if all_targets {
+        bail!("--parent-solution-submission-id cannot be used with --all-targets");
+    }
+    let [target_id] = target_ids else {
+        bail!("--parent-solution-submission-id requires exactly one selected target");
+    };
+    let parent = client
+        .get_solution_submission(parent_solution_submission_id)
+        .await
+        .with_context(|| {
+            format!(
+                "failed to inspect parent solution submission `{parent_solution_submission_id}`"
+            )
+        })?;
+    if parent.challenge_id != challenge_id || parent.benchmark_target_id != target_id.as_str() {
+        bail!(
+            "parent solution submission `{parent_solution_submission_id}` must belong to challenge `{challenge_id}` target `{target_id}`"
+        );
+    }
+    Ok(())
+}
+
+fn batch_error_with_created_ids(
+    action: &str,
+    responses: &[shared::models::request::CreateSolutionSubmissionResponse],
+    package: Option<&package::SolutionPackage>,
+    output_format: cli::OutputFormat,
+    failed_target_id: &str,
+    error: anyhow::Error,
+) -> anyhow::Error {
+    let created = package
+        .and_then(|package| {
+            if action == "submit" {
+                output::render_create_solution_submission_batch(responses, package, output_format)
+                    .ok()
+            } else {
+                output::render_create_validation_run_batch(responses, package, output_format).ok()
+            }
+        })
+        .unwrap_or_default();
+    if created.is_empty() {
+        anyhow::anyhow!("{action} failed for target `{failed_target_id}`: {error}")
+    } else {
+        anyhow::anyhow!(
+            "{created}\n{action} failed for target `{failed_target_id}` after creating the submissions above: {error}"
+        )
+    }
+}
+
+fn batch_status_error(
+    responses: &[shared::models::request::SolutionSubmissionResponse],
+    output_format: cli::OutputFormat,
+    failed_target_id: &str,
+    error: anyhow::Error,
+) -> anyhow::Error {
+    let completed =
+        output::render_validation_run_status_batch(responses, output_format).unwrap_or_default();
+    if completed.is_empty() {
+        anyhow::anyhow!("validation polling failed for target `{failed_target_id}`: {error}")
+    } else {
+        anyhow::anyhow!(
+            "{completed}\nvalidation polling failed for target `{failed_target_id}` after receiving the completed runs above: {error}"
+        )
+    }
 }
 
 fn parse_model_info(raw: &str) -> Result<serde_json::Value> {

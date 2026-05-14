@@ -641,7 +641,7 @@ mod tests {
                     "score_distribution": "public_live",
                     "result_detail": "submitter_live_public_after_close"
                 },
-                "solution_publication": "submitter_opt_in",
+                "solution_publication": "public",
                 "execution": {
                     "validation_runs": "public/runs.json",
                     "official_runs": "private-benchmark/runs.json"

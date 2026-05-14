@@ -14,8 +14,9 @@ use sha2::{Digest, Sha256};
 use crate::error::{AppError, Result};
 use crate::models::challenge::{
     BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengePrepareSpec,
-    ChallengeRunInputFile, ChallengeRunManifest, ChallengeRunSpec, DockerPlatform,
-    HardwareProfileSpec, PrivateBenchmarkPolicy, ResourceProfileSpec,
+    ChallengeRunInputFile, ChallengeRunManifest, ChallengeRunSpec,
+    ChallengeSolutionPublicationPolicy, DockerPlatform, HardwareProfileSpec,
+    PrivateBenchmarkPolicy, ResourceProfileSpec,
 };
 use crate::zip_project::{ZIP_PROJECT_MANIFEST_FILE, ZIP_PROJECT_PROTOCOL};
 
@@ -460,6 +461,13 @@ fn validate_challenge_policy(spec: &ChallengeBundleSpec) -> Result<()> {
     {
         return Err(AppError::Validation(
             "closes_at must be later than starts_at".to_string(),
+        ));
+    }
+    if spec.solution_publication == ChallengeSolutionPublicationPolicy::PublicAfterClose
+        && closes_at.is_none()
+    {
+        return Err(AppError::Validation(
+            "closes_at is required when solution_publication is public_after_close".to_string(),
         ));
     }
     validate_optional_positive_limit(
@@ -1262,7 +1270,7 @@ mod tests {
                 score_distribution: ChallengeVisibility::PublicLive,
                 result_detail: ChallengeResultDetailVisibility::SubmitterLivePublicAfterClose,
             },
-            solution_publication: ChallengeSolutionPublicationPolicy::SubmitterOptIn,
+            solution_publication: ChallengeSolutionPublicationPolicy::Public,
             execution: ChallengeExecutionSpec {
                 validation_runs: Some("public/runs.json".to_string()),
                 validation_prepare: None,
@@ -1326,7 +1334,7 @@ mod tests {
                     "score_distribution": "public_live",
                     "result_detail": "submitter_live_public_after_close"
                 },
-                "solution_publication": "submitter_opt_in"
+                "solution_publication": "public"
             }
         ]);
 
@@ -1363,6 +1371,19 @@ mod tests {
         let error = validate_challenge_bundle_spec(&spec)
             .expect_err("amd64 targets should be reserved for post-MVP");
         assert!(error.to_string().contains("post-MVP"));
+    }
+
+    #[test]
+    fn public_after_close_solution_publication_requires_close_time() {
+        let mut spec = base_spec();
+        spec.solution_publication = ChallengeSolutionPublicationPolicy::PublicAfterClose;
+
+        let error = validate_challenge_bundle_spec(&spec)
+            .expect_err("public-after-close artifacts need a close time");
+        assert!(error.to_string().contains("solution_publication"));
+
+        spec.closes_at = Some("2999-01-02T00:00:00Z".to_string());
+        validate_challenge_bundle_spec(&spec).expect("close time should satisfy policy");
     }
 
     #[test]

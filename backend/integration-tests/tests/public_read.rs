@@ -2,9 +2,11 @@
 
 mod helpers;
 
+use std::path::Path;
+
 use helpers::{
-    api_url, examples_challenges_root, run_worker_once, sample_sum_solution, solution_zip_base64,
-    spawn_app_with_config, test_config,
+    api_url, copy_dir_all, examples_challenges_root, run_worker_once, sample_sum_solution,
+    solution_zip_base64, spawn_app_with_config, test_config,
 };
 
 #[sqlx::test(migrations = "../migrations")]
@@ -92,7 +94,12 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         .send()
         .await
         .expect("failed to get public solution submission");
-    assert_eq!(public_solution_submission_response.status(), 404);
+    assert_eq!(public_solution_submission_response.status(), 200);
+    let public_solution_submission: serde_json::Value = public_solution_submission_response
+        .json()
+        .await
+        .expect("failed to decode public solution submission");
+    assert_eq!(public_solution_submission["id"], pending_id);
 
     let public_solution_submission_list: serde_json::Value = client
         .get(api_url(
@@ -225,6 +232,68 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     assert_eq!(distribution["count"], 2);
     assert_eq!(distribution["min"], 0.0);
     assert_eq!(distribution["max"], 1.0);
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn public_artifact_respects_solution_publication_policy(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let challenges = tempfile::tempdir().expect("failed to create challenges tempdir");
+    write_private_artifact_challenge(challenges.path(), "private-artifact-sum");
+    let config = test_config(storage.path(), challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "name": "private-artifact-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+
+    let submission: serde_json::Value = client
+        .post(api_url(&app, "/api/solution-submissions"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "challenge_id": "private-artifact-sum",
+            "benchmark_target_id": "linux-arm64-cpu",
+            "artifact_base64": solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']")),
+            "explanation": "artifact should stay private"
+        }))
+        .send()
+        .await
+        .expect("failed to create solution submission")
+        .error_for_status()
+        .expect("solution submission should create")
+        .json()
+        .await
+        .expect("failed to decode solution submission");
+    let submission_id = submission["id"].as_str().expect("submission id");
+
+    run_worker_once(&pool, &config).await;
+
+    let detail = client
+        .get(api_url(
+            &app,
+            &format!("/api/public/solution-submissions/{submission_id}"),
+        ))
+        .send()
+        .await
+        .expect("failed to fetch public submission detail");
+    assert_eq!(detail.status(), reqwest::StatusCode::OK);
+
+    let artifact = client
+        .get(api_url(
+            &app,
+            &format!("/api/public/solution-submissions/{submission_id}/artifact"),
+        ))
+        .send()
+        .await
+        .expect("failed to fetch public artifact");
+    assert_eq!(artifact.status(), reqwest::StatusCode::NOT_FOUND);
 }
 
 #[sqlx::test(migrations = "../migrations")]
@@ -366,4 +435,24 @@ async fn seeded_challenge_summaries_and_discussions_are_public(pool: sqlx::PgPoo
         .as_array()
         .expect("items is array");
     assert_eq!(limited_items.len(), 1);
+}
+
+fn write_private_artifact_challenge(root: &Path, challenge_id: &str) {
+    let bundle_dir = root.join(challenge_id).join("v1");
+    copy_dir_all(
+        &examples_challenges_root().join("sample-sum/v1"),
+        &bundle_dir,
+    );
+    let spec_path = bundle_dir.join("spec.json");
+    let mut spec: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&spec_path).expect("failed to read spec"))
+            .expect("failed to parse spec");
+    spec["challenge_id"] = serde_json::json!(challenge_id);
+    spec["challenge_title"] = serde_json::json!(challenge_id);
+    spec["solution_publication"] = serde_json::json!("private");
+    std::fs::write(
+        &spec_path,
+        serde_json::to_string_pretty(&spec).expect("failed to serialize spec"),
+    )
+    .expect("failed to write spec");
 }

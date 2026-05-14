@@ -4,6 +4,10 @@ import { getLocale, getTranslations } from "next-intl/server";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { fetchJson } from "@/lib/api";
+import {
+  publicVisibilityAllows,
+  resultDetailIsPublic,
+} from "@/lib/challengeVisibility";
 import { formatDate } from "@/lib/format";
 import {
   formatDeclaredMetric,
@@ -30,16 +34,29 @@ export default async function ChallengePage({
     challengeDetailResponseSchema,
   );
   const defaultTargetId = detail.spec.benchmark_targets[0].id;
+  const submissionsPromise = resultDetailIsPublic(detail.spec)
+    ? fetchJson(
+        `/api/public/challenges/${id}/solution-submissions?limit=5`,
+        publicSolutionSubmissionListResponseSchema,
+      )
+    : Promise.resolve({ items: [] });
+  const leaderboardPromise = publicVisibilityAllows(
+    detail.spec.visibility.leaderboard,
+    detail.spec,
+  )
+    ? fetchJson(
+        `/api/public/challenges/${id}/leaderboard?target=${encodeURIComponent(defaultTargetId)}&limit=5`,
+        leaderboardResponseSchema,
+      )
+    : Promise.resolve({
+        challenge_id: detail.id,
+        benchmark_target_id: defaultTargetId,
+        items: [],
+      });
 
   const [submissions, leaderboard, discussions] = await Promise.all([
-    fetchJson(
-      `/api/public/challenges/${id}/solution-submissions?limit=5`,
-      publicSolutionSubmissionListResponseSchema,
-    ),
-    fetchJson(
-      `/api/public/challenges/${id}/leaderboard?target=${encodeURIComponent(defaultTargetId)}&limit=5`,
-      leaderboardResponseSchema,
-    ),
+    submissionsPromise,
+    leaderboardPromise,
     fetchJson(
       `/api/public/challenges/${id}/discussions?limit=3`,
       discussionListResponseSchema,

@@ -122,7 +122,7 @@ export default async function ChallengeLayout({
       </div>
 
       {/* Tabs */}
-      <ChallengeNav challengeId={id} />
+      <ChallengeNav challengeId={id} defaultTargetId={primaryTarget.id} />
 
       {/* Page Content */}
       {children}
