@@ -14,6 +14,7 @@
         reason = "unit tests use direct assertions and fixture indexing for concise failure diagnostics"
     )
 )]
+#![warn(unused_crate_dependencies)]
 
 mod api;
 mod cli;
