@@ -1854,7 +1854,7 @@ export const solutionSubmissionResponseSchema = z
         public_results: z.array(
           z
             .object({
-              case_id: z.string(),
+              case_name: z.string(),
               status: z
                 .enum(["passed", "failed", "error"])
                 .describe(
@@ -1976,7 +1976,7 @@ export const solutionSubmissionResponseSchema = z
         public_results: z.array(
           z
             .object({
-              case_id: z.string(),
+              case_name: z.string(),
               status: z
                 .enum(["passed", "failed", "error"])
                 .describe(
@@ -2098,7 +2098,7 @@ export const solutionSubmissionResponseSchema = z
         public_results: z.array(
           z
             .object({
-              case_id: z.string(),
+              case_name: z.string(),
               status: z
                 .enum(["passed", "failed", "error"])
                 .describe(
@@ -2297,7 +2297,7 @@ export const solutionSubmissionResultReportResponseSchema = z
             public_results: z.array(
               z
                 .object({
-                  case_id: z.string(),
+                  case_name: z.string(),
                   status: z
                     .enum(["passed", "failed", "error"])
                     .describe(
@@ -2427,7 +2427,7 @@ export const solutionSubmissionResultReportResponseSchema = z
             public_results: z.array(
               z
                 .object({
-                  case_id: z.string(),
+                  case_name: z.string(),
                   status: z
                     .enum(["passed", "failed", "error"])
                     .describe(
@@ -2557,7 +2557,7 @@ export const solutionSubmissionResultReportResponseSchema = z
             public_results: z.array(
               z
                 .object({
-                  case_id: z.string(),
+                  case_name: z.string(),
                   status: z
                     .enum(["passed", "failed", "error"])
                     .describe(

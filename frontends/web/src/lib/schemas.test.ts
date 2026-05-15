@@ -247,7 +247,7 @@ describe("frontend API schemas", () => {
           run_metrics: [],
           public_results: [
             {
-              case_id: "case-1",
+              case_name: "case-1",
               status: "passed",
               score: 1,
               message: "",

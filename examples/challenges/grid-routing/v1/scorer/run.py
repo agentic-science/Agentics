@@ -87,7 +87,7 @@ def score_run(run: dict[str, Any], solution_runs_dir: Path, logs: list[str]) -> 
     case_file = solution_runs_dir / run_name / "input" / "case.json"
     if not candidate_path_file.is_file():
         return {
-            "case_id": run_name,
+            "case_name": run_name,
             "status": "error",
             "score": 0,
             "message": "missing output/path.txt",
@@ -103,7 +103,7 @@ def score_run(run: dict[str, Any], solution_runs_dir: Path, logs: list[str]) -> 
     if candidate_metrics["status"] != "passed":
         logs.append(f"{run_name}: {candidate_metrics['message']}")
         return {
-            "case_id": run_name,
+            "case_name": run_name,
             "status": candidate_metrics["status"],
             "score": 0,
             "message": candidate_metrics["message"],
@@ -121,7 +121,7 @@ def score_run(run: dict[str, Any], solution_runs_dir: Path, logs: list[str]) -> 
         f"longest_run={candidate_metrics['longest_run']}, score={score}"
     )
     logs.append(f"{run_name}: {message}")
-    return {"case_id": run_name, "status": "passed", "score": score, "message": message}
+    return {"case_name": run_name, "status": "passed", "score": score, "message": message}
 
 
 def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
@@ -141,7 +141,7 @@ def aggregate_metrics(summary: dict[str, Any]) -> list[dict[str, Any]]:
 def run_metrics(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [
         {
-            "run_name": result["case_id"],
+            "run_name": result["case_name"],
             "metrics": [{"metric_name": "score", "value": result["score"]}],
         }
         for result in results

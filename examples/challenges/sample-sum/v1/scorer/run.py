@@ -37,7 +37,7 @@ def aggregate_metrics(summary: dict[str, Any]) -> list[dict[str, Any]]:
 def run_metrics(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [
         {
-            "run_name": result["case_id"],
+            "run_name": result["case_name"],
             "metrics": [{"metric_name": "score", "value": result["score"]}],
         }
         for result in results
@@ -54,7 +54,7 @@ def score_runs(runs_file: Path, solution_runs_dir: Path, logs: list[str]) -> lis
         if not stdout_path.is_file():
             results.append(
                 {
-                    "case_id": run_name,
+                    "case_name": run_name,
                     "status": "error",
                     "score": 0,
                     "message": "missing stdout.txt",
@@ -65,13 +65,13 @@ def score_runs(runs_file: Path, solution_runs_dir: Path, logs: list[str]) -> lis
         stdout = stdout_path.read_text(encoding="utf-8").strip()
         expected = str(run["expected"])
         if stdout == expected:
-            results.append({"case_id": run_name, "status": "passed", "score": 1})
+            results.append({"case_name": run_name, "status": "passed", "score": 1})
         else:
             message = f"expected {expected}, got {stdout}"
             logs.append(f"{run_name}: {message}")
             results.append(
                 {
-                    "case_id": run_name,
+                    "case_name": run_name,
                     "status": "failed",
                     "score": 0,
                     "message": message,

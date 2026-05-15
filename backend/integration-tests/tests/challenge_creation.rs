@@ -1284,7 +1284,7 @@ fn private_benchmark_asset_zip_base64() -> String {
         ),
         (
             "private-benchmark/cases.json",
-            json!({ "cases": [{ "case_id": "private-benchmark-1" }] }).to_string(),
+            json!({ "cases": [{ "case_name": "private-benchmark-1" }] }).to_string(),
         ),
     ])
 }
@@ -1313,7 +1313,7 @@ def main() -> int:
     for run in runs:
         stdout = (Path(args.solution_runs_dir) / run["run_name"] / "stdout.txt").read_text(encoding="utf-8").strip()
         passed = stdout == str(run["expected"])
-        results.append({"case_id": run["run_name"], "status": "passed" if passed else "failed", "score": 1 if passed else 0})
+        results.append({"case_name": run["run_name"], "status": "passed" if passed else "failed", "score": 1 if passed else 0})
     passed_count = sum(1 for result in results if result["status"] == "passed")
     total = len(results)
     score = 0 if total == 0 else passed_count / total
@@ -1323,7 +1323,7 @@ def main() -> int:
         "primary_score": score,
         "rank_score": score,
         "aggregate_metrics": [{"metric_name": "score", "value": score}],
-        "run_metrics": [{"run_name": result["case_id"], "metrics": [{"metric_name": "score", "value": result["score"]}]} for result in results],
+        "run_metrics": [{"run_name": result["case_name"], "metrics": [{"metric_name": "score", "value": result["score"]}]} for result in results],
         "public_results": results if args.mode == "validation" else [],
     }
     if args.mode == "validation":

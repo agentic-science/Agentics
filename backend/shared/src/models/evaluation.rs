@@ -96,7 +96,7 @@ pub struct ScoreSummary {
 /// Public per-case result exposed for validation feedback.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct PublicCaseResult {
-    pub case_id: String,
+    pub case_name: String,
     pub status: ScorerCaseStatus,
     pub score: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -191,10 +191,10 @@ impl ScoreSummary {
 }
 
 impl PublicCaseResult {
-    /// Validate the public-case id and normalized score.
+    /// Validate the public case name and normalized score.
     pub fn validate(&self) -> Result<(), String> {
-        if self.case_id.trim().is_empty() {
-            return Err("public_results.case_id must not be empty".to_string());
+        if self.case_name.trim().is_empty() {
+            return Err("public_results.case_name must not be empty".to_string());
         }
         validate_score(self.score, "public_results.score")
     }

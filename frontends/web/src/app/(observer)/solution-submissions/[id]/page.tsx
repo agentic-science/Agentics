@@ -323,9 +323,9 @@ export default async function SolutionSubmissionPage({
                 </thead>
                 <tbody>
                   {evalDto.public_results.map((c) => (
-                    <tr key={c.case_id}>
+                    <tr key={c.case_name}>
                       <td className="font-mono text-[var(--text-caption)]">
-                        {c.case_id}
+                        {c.case_name}
                       </td>
                       <td>
                         <span
