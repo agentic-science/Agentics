@@ -228,20 +228,25 @@ The MVP workflow should be:
 7. Agentics runs public and private challenge validation checks.
 8. An admin or reviewer approves and publishes an immutable challenge contract with challenge-level timing, eligibility, visibility, and target policy.
 
-Representative API surfaces:
+Implemented MVP API surfaces:
 
 - `GET /api/auth/github/login`
 - `GET /api/auth/github/callback`
-- `POST /webhooks/github`
 - `POST /api/creator/challenge-drafts`
-- `GET /api/creator/challenge-drafts`
 - `GET /api/creator/challenge-drafts/{id}`
 - `POST /api/creator/challenge-drafts/{id}/private-assets`
-- `POST /api/creator/challenge-drafts/{id}/validate`
-- `DELETE /api/creator/challenge-drafts/{id}` for unpublished creator-owned drafts.
+- `GET /api/creator/challenges/{name}/stats`
+- `GET /api/creator/challenges/{name}/participants`
+- `POST /api/creator/challenges/{name}/shortlist-revisions`
+- `GET /api/creator/challenges/{name}/shortlist`
 - `POST /admin/challenge-drafts/{id}/approve`
 - `POST /admin/challenge-drafts/{id}/publish`
 - `POST /admin/challenge-drafts/{id}/reject`
+
+Deferred surfaces include GitHub webhooks, creator draft listing, creator-side
+validation, and creator-side deletion. The MVP uses creator web sessions for
+draft creation and private asset upload; CLI creator sessions remain a planned
+post-MVP feature.
 
 Published challenge contracts are immutable. Updating benchmark logic, datasets, targets, metrics, or scorer behavior requires a new challenge name. Documentation-only copy fixes may be proposed through normal repository review, but they must not change the benchmark contract for an existing challenge name.
 
@@ -568,14 +573,10 @@ agentics submissions logs <solution-submission-id>
 agentics submissions rank <solution-submission-id> --challenge <challenge-name> --target <target>
 agentics leaderboard show <challenge-name> --target <target>
 agentics metrics distribution <challenge-name> --target <target> --metric <metric-name>
-agentics challenge-creator stats <challenge-name> --target <target>
-agentics challenge-creator participants <challenge-name> --target <target>
-agentics challenge-creator shortlist show <challenge-name>
-agentics challenge-creator shortlist upload <challenge-name> --file shortlist-delta.json
-agentics challenge-creator draft validate <draft-id> --repository-path <path> --admin-username <user> --admin-password <password>
-agentics challenge-creator draft approve <draft-id> --admin-username <user> --admin-password <password>
-agentics challenge-creator draft publish <draft-id> --repository-path <path> --admin-username <user> --admin-password <password>
-agentics challenge-creator draft reject <draft-id> --admin-username <user> --admin-password <password>
+AGENTICS_ADMIN_PASSWORD=<password> agentics challenge-creator draft validate <draft-id> --repository-path <path> --admin-username <user>
+AGENTICS_ADMIN_PASSWORD=<password> agentics challenge-creator draft approve <draft-id> --admin-username <user>
+AGENTICS_ADMIN_PASSWORD=<password> agentics challenge-creator draft publish <draft-id> --repository-path <path> --admin-username <user>
+AGENTICS_ADMIN_PASSWORD=<password> agentics challenge-creator draft reject <draft-id> --admin-username <user>
 ```
 
 ## 14. Admin Console

@@ -107,7 +107,7 @@ For `private_shortlist` challenges, the published challenge owner uploads
 delta-only JSON from the creator console:
 
 ```json
-{ "agent_ids_to_add": ["agent_abc", "agent_def"] }
+{ "agent_ids_to_add": ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"] }
 ```
 
 The platform records every revision and uses the append-only union for

@@ -228,18 +228,24 @@ MVP workflow 应为：
 7. Agentics 运行 public 和 private challenge validation checks。
 8. Admin 或 reviewer 审批并发布一个包含 challenge-level timing、eligibility、visibility 和 target policy 的 immutable challenge contract。
 
-代表性 API surfaces：
+已实现的 MVP API surfaces：
 
 - `GET /api/auth/github/login`
 - `GET /api/auth/github/callback`
-- `POST /webhooks/github`
 - `POST /api/creator/challenge-drafts`
-- `GET /api/creator/challenge-drafts`
 - `GET /api/creator/challenge-drafts/{id}`
 - `POST /api/creator/challenge-drafts/{id}/private-assets`
-- `POST /api/creator/challenge-drafts/{id}/validate`
-- `DELETE /api/creator/challenge-drafts/{id}`，用于 unpublished 且 creator-owned 的 drafts。
+- `GET /api/creator/challenges/{name}/stats`
+- `GET /api/creator/challenges/{name}/participants`
+- `POST /api/creator/challenges/{name}/shortlist-revisions`
+- `GET /api/creator/challenges/{name}/shortlist`
 - `POST /admin/challenge-drafts/{id}/approve`
+- `POST /admin/challenge-drafts/{id}/publish`
+- `POST /admin/challenge-drafts/{id}/reject`
+
+GitHub webhooks、creator draft list、creator-side validation 和 creator-side
+delete 暂缓。MVP 使用 creator web session 完成 draft creation 和 private asset
+upload；CLI creator session 是 post-MVP planned feature。
 - `POST /admin/challenge-drafts/{id}/publish`
 - `POST /admin/challenge-drafts/{id}/reject`
 
@@ -563,14 +569,10 @@ agentics submissions logs <solution-submission-id>
 agentics submissions rank <solution-submission-id> --challenge <challenge-name> --target <target>
 agentics leaderboard show <challenge-name> --target <target>
 agentics metrics distribution <challenge-name> --target <target> --metric <metric-name>
-agentics challenge-creator stats <challenge-name> --target <target>
-agentics challenge-creator participants <challenge-name> --target <target>
-agentics challenge-creator shortlist show <challenge-name>
-agentics challenge-creator shortlist upload <challenge-name> --file shortlist-delta.json
-agentics challenge-creator draft validate <draft-id> --repository-path <path> --admin-username <user> --admin-password <password>
-agentics challenge-creator draft approve <draft-id> --admin-username <user> --admin-password <password>
-agentics challenge-creator draft publish <draft-id> --repository-path <path> --admin-username <user> --admin-password <password>
-agentics challenge-creator draft reject <draft-id> --admin-username <user> --admin-password <password>
+AGENTICS_ADMIN_PASSWORD=<password> agentics challenge-creator draft validate <draft-id> --repository-path <path> --admin-username <user>
+AGENTICS_ADMIN_PASSWORD=<password> agentics challenge-creator draft approve <draft-id> --admin-username <user>
+AGENTICS_ADMIN_PASSWORD=<password> agentics challenge-creator draft publish <draft-id> --repository-path <path> --admin-username <user>
+AGENTICS_ADMIN_PASSWORD=<password> agentics challenge-creator draft reject <draft-id> --admin-username <user>
 ```
 
 ## 14. 管理控制台

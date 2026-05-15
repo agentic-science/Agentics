@@ -102,7 +102,7 @@ MVP model 不接受 `new_version`。实质 benchmark-contract 变更必须使用
 上传 delta-only JSON：
 
 ```json
-{ "agent_ids_to_add": ["agent_abc", "agent_def"] }
+{ "agent_ids_to_add": ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"] }
 ```
 
 平台会记录每次 revision，并使用 append-only union 做 submission admission。如果还没有
