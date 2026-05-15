@@ -276,8 +276,15 @@ async fn publishing_existing_contract_is_rejected_without_mutating_it(pool: sqlx
             .expect("failed to query published contract");
 
     assert_ne!(row.0, original_bundle.to_string_lossy());
+    let managed_bundle_path = std::path::Path::new(&row.0)
+        .canonicalize()
+        .expect("managed bundle path should canonicalize");
+    let storage_root = storage
+        .path()
+        .canonicalize()
+        .expect("storage root should canonicalize");
     assert!(
-        std::path::Path::new(&row.0).starts_with(storage.path()),
+        managed_bundle_path.starts_with(&storage_root),
         "admin publish should copy bundles into managed storage"
     );
     assert_eq!(row.1["challenge_summary"], "Original summary");
