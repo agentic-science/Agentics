@@ -276,13 +276,13 @@ pub(crate) fn render_challenge_shortlist_revision(
     match format {
         OutputFormat::Json => pretty_json(response),
         OutputFormat::Table => Ok(format!(
-            "shortlist_revision: {}\nchallenge: {}\nrequested: {}\nadded: {}\nsha256: {}\nstorage_uri: {}\ncreated_at: {}",
+            "shortlist_revision: {}\nchallenge: {}\nrequested: {}\nadded: {}\nsha256: {}\nstorage_key: {}\ncreated_at: {}",
             response.id,
             response.challenge_name,
             response.requested_count,
             response.added_count,
             response.sha256,
-            response.storage_uri,
+            response.storage_key,
             response.created_at
         )),
     }

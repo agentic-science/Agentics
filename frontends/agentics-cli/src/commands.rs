@@ -18,7 +18,7 @@ use shared::models::names::{ChallengeName, TargetName};
 use shared::models::request::CreateChallengeShortlistRevisionRequest;
 use shared::models::request::{CreateSolutionSubmissionRequest, RegisterAgentRequest};
 use shared::models::urls::{GithubPullRequestUrl, GithubRepoRemote};
-use shared::storage::{LocalStorage, Storage};
+use shared::storage::{LocalStorage, Storage, StorageKey};
 
 use crate::api::ApiClient;
 use crate::cli::{
@@ -534,14 +534,10 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
     let mut target_reports = Vec::with_capacity(targets.len());
     for target in targets {
         let job_id = local_validation_job_id(&spec.challenge_name, &target)?;
-        let artifact_path = storage
-            .put(
-                &format!("local-validation/{job_id}/solution.zip"),
-                &package.bytes,
-            )
-            .await?;
+        let artifact_key = StorageKey::try_new(format!("local-validation/{job_id}/solution.zip"))?;
+        let artifact_path = storage.put(&artifact_key, &package.bytes).await?;
         let payload = EvaluationJobPayload {
-            artifact_path,
+            artifact_path: artifact_path.to_string(),
             bundle_path: bundle_dir.to_string_lossy().to_string(),
             challenge_name: spec.challenge_name.clone(),
             target: target.clone(),

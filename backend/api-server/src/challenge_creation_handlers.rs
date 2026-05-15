@@ -23,6 +23,7 @@ use shared::models::challenge_creation::{
     ValidateChallengeDraftRequest,
 };
 use shared::models::names::ChallengeName;
+use shared::storage::StorageKey;
 use shared::{challenge_bundle, challenge_creation, db};
 
 use crate::extractors::{AdminAuth, CreatorAuth, ValidatedJson};
@@ -167,17 +168,17 @@ pub async fn upload_challenge_private_asset(
         AppError::BadRequest("private asset size exceeds supported database range".to_string())
     })?;
     let sha256 = challenge_creation::sha256_hex(&asset_bytes);
-    let storage_path = format!(
+    let storage_path = StorageKey::try_new(format!(
         "challenge-drafts/{}/private-assets/{}-{}.bin",
         draft.id, body.asset_name, sha256
-    );
-    let temporary_storage_path = format!(
+    ))?;
+    let temporary_storage_path = StorageKey::try_new(format!(
         "_tmp/challenge-private-assets/{}-{}-{}.bin",
         draft.id,
         body.asset_name,
         Uuid::new_v4()
-    );
-    let temporary_storage_uri = state
+    ))?;
+    let temporary_storage_key = state
         .storage
         .put(&temporary_storage_path, &asset_bytes)
         .await?;
@@ -191,7 +192,7 @@ pub async fn upload_challenge_private_asset(
             required: requirement.required,
             size_bytes: asset_size_bytes_i64,
             sha256,
-            storage_uri: storage_path.clone(),
+            storage_key: storage_path.clone(),
             uploader_agent_id: creator.agent_id.clone(),
         },
         state.config.challenge_private_asset_bytes_per_draft,
@@ -201,18 +202,18 @@ pub async fn upload_challenge_private_asset(
     let asset = match asset {
         Ok(asset) => asset,
         Err(error) => {
-            cleanup_storage_key(&state, &temporary_storage_uri).await;
+            cleanup_storage_key(&state, &temporary_storage_key).await;
             return Err(map_unique_conflict(error));
         }
     };
 
     if let Err(error) = state
         .storage
-        .promote(&temporary_storage_uri, &storage_path)
+        .promote(&temporary_storage_key, &storage_path)
         .await
     {
         cleanup_challenge_private_asset_record(&state, &asset.id).await;
-        cleanup_storage_key(&state, &temporary_storage_uri).await;
+        cleanup_storage_key(&state, &temporary_storage_key).await;
         return Err(error);
     }
 
@@ -248,10 +249,10 @@ async fn cleanup_challenge_private_asset_record(state: &AppState, asset_row_id: 
     }
 }
 
-async fn cleanup_storage_key(state: &AppState, storage_key: &str) {
+async fn cleanup_storage_key(state: &AppState, storage_key: &StorageKey) {
     if let Err(error) = state.storage.delete(storage_key).await {
         warn!(
-            storage_key,
+            storage_key = %storage_key,
             error = %error,
             "failed to clean up private asset temporary storage object"
         );
@@ -416,7 +417,7 @@ pub async fn cleanup_challenge_drafts(
 
     let mut purged = 0_i64;
     for asset in purge_candidates {
-        state.storage.delete(&asset.storage_uri).await?;
+        state.storage.delete(&asset.storage_key).await?;
         db::delete_challenge_private_asset(&state.db, &asset.id).await?;
         purged = purged
             .checked_add(1)
@@ -677,7 +678,7 @@ async fn assemble_runtime_bundle(
         .await?;
 
     for asset in &draft.private_assets {
-        let bytes = state.storage.get(&asset.storage_uri).await?;
+        let bytes = state.storage.get(&asset.storage_key).await?;
         extract_private_asset_overlay(
             &bytes,
             &runtime_bundle_path,

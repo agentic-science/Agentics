@@ -17,6 +17,7 @@ use crate::models::request::{
     CreatorChallengeParticipantDto, CreatorChallengeParticipantsResponse,
     CreatorChallengeStatsResponse,
 };
+use crate::storage::StorageKey;
 
 /// Published challenge joined with challenge metadata.
 #[derive(Debug, Clone)]
@@ -348,7 +349,7 @@ pub struct CreateChallengeShortlistRevisionInput {
     pub revision_id: String,
     pub challenge_name: ChallengeName,
     pub uploader_agent_id: String,
-    pub storage_uri: String,
+    pub storage_key: StorageKey,
     pub sha256: String,
     pub requested_count: i64,
     pub agent_ids_to_add: Vec<String>,
@@ -367,7 +368,7 @@ pub async fn create_challenge_shortlist_revision(
     sqlx::query(
         r#"
         INSERT INTO challenge_shortlist_revisions (
-            id, challenge_name, uploader_agent_id, storage_uri, sha256, requested_count, added_count
+            id, challenge_name, uploader_agent_id, storage_key, sha256, requested_count, added_count
         )
         VALUES ($1::uuid, $2, $3::uuid, $4, $5, $6, 0)
         "#,
@@ -375,7 +376,7 @@ pub async fn create_challenge_shortlist_revision(
     .bind(&input.revision_id)
     .bind(input.challenge_name.as_str())
     .bind(&input.uploader_agent_id)
-    .bind(&input.storage_uri)
+    .bind(input.storage_key.as_str())
     .bind(&input.sha256)
     .bind(input.requested_count)
     .execute(&mut *tx)
@@ -410,7 +411,7 @@ pub async fn create_challenge_shortlist_revision(
         UPDATE challenge_shortlist_revisions
         SET added_count = $2
         WHERE id = $1::uuid
-        RETURNING id, challenge_name, uploader_agent_id, storage_uri, sha256, requested_count, added_count, created_at
+        RETURNING id, challenge_name, uploader_agent_id, storage_key, sha256, requested_count, added_count, created_at
         "#,
     )
     .bind(&input.revision_id)
@@ -765,9 +766,15 @@ fn row_to_shortlist_revision_response(
         requested_count: row.try_get("requested_count")?,
         added_count: row.try_get("added_count")?,
         sha256: row.try_get("sha256")?,
-        storage_uri: row.try_get("storage_uri")?,
+        storage_key: storage_key_from_row(&row, "storage_key")?,
         created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
     })
+}
+
+fn storage_key_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<StorageKey> {
+    let value: String = row.try_get(column)?;
+    StorageKey::try_new(&value)
+        .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
 }
 
 fn optional_datetime_rfc3339(row: &sqlx::postgres::PgRow, column: &str) -> Result<Option<String>> {

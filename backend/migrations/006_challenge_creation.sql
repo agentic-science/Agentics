@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS challenge_private_assets (
   required BOOLEAN NOT NULL DEFAULT FALSE,
   size_bytes BIGINT NOT NULL CHECK (size_bytes >= 0),
   sha256 TEXT NOT NULL,
-  storage_uri TEXT NOT NULL,
+  storage_key TEXT NOT NULL,
   uploader_agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (draft_id, asset_name)

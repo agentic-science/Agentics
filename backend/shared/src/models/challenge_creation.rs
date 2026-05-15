@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use super::names::{AssetName, ChallengeName};
 use super::urls::{GithubPullRequestUrl, GithubRepoRemote};
+use crate::storage::StorageKey;
 
 /// Public challenge manifest file expected at the root of a challenge proposal.
 pub const AGENTICS_CHALLENGE_MANIFEST_FILE: &str = "agentics.challenge.json";
@@ -158,7 +159,7 @@ pub struct ChallengePrivateAssetResponse {
     pub required: bool,
     pub size_bytes: i64,
     pub sha256: String,
-    pub storage_uri: String,
+    pub storage_key: StorageKey,
     pub uploader_agent_id: String,
     pub created_at: String,
 }

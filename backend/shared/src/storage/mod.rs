@@ -1,28 +1,107 @@
 //! Storage abstraction for uploaded solution_submissions and runner logs.
 
+use std::borrow::Cow;
+use std::fmt;
 use std::path::{Component, Path, PathBuf};
+use std::str::FromStr;
 
 use async_trait::async_trait;
+use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::error::AppError;
 
 pub type Result<T> = std::result::Result<T, AppError>;
 
+/// Opaque storage-relative object key.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct StorageKey(String);
+
+impl StorageKey {
+    /// Parse and validate a storage-relative object key.
+    pub fn try_new(value: impl AsRef<str>) -> Result<Self> {
+        validate_storage_key(value.as_ref()).map(Self)
+    }
+
+    /// Borrow the storage key string.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    fn as_path(&self) -> &Path {
+        Path::new(&self.0)
+    }
+}
+
+impl fmt::Display for StorageKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for StorageKey {
+    type Err = AppError;
+
+    fn from_str(value: &str) -> Result<Self> {
+        Self::try_new(value)
+    }
+}
+
+impl Serialize for StorageKey {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for StorageKey {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::try_new(&value).map_err(serde::de::Error::custom)
+    }
+}
+
+impl JsonSchema for StorageKey {
+    fn inline_schema() -> bool {
+        true
+    }
+
+    fn schema_name() -> Cow<'static, str> {
+        "StorageKey".into()
+    }
+
+    fn json_schema(_: &mut SchemaGenerator) -> Schema {
+        json_schema!({
+            "type": "string",
+            "pattern": r"^[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$"
+        })
+    }
+}
+
 /// Minimal object-storage interface used by handlers and workers.
 #[async_trait]
 pub trait Storage: std::fmt::Debug + Send + Sync {
     /// Store content at a storage-relative key and return that opaque key.
-    async fn put(&self, path: &str, content: &[u8]) -> Result<String>;
+    async fn put(&self, key: &StorageKey, content: &[u8]) -> Result<StorageKey>;
     /// Atomically promote a temporary object to a durable storage-relative key.
     ///
     /// Implementations must not overwrite an existing durable object.
-    async fn promote(&self, temporary_path: &str, durable_path: &str) -> Result<String>;
+    async fn promote(
+        &self,
+        temporary_key: &StorageKey,
+        durable_key: &StorageKey,
+    ) -> Result<StorageKey>;
     /// Read content from a storage-relative key.
-    async fn get(&self, path: &str) -> Result<Vec<u8>>;
+    async fn get(&self, key: &StorageKey) -> Result<Vec<u8>>;
     /// Return whether a storage-relative key exists.
-    async fn exists(&self, path: &str) -> Result<bool>;
+    async fn exists(&self, key: &StorageKey) -> Result<bool>;
     /// Delete a storage-relative key if it exists.
-    async fn delete(&self, path: &str) -> Result<()>;
+    async fn delete(&self, key: &StorageKey) -> Result<()>;
 }
 
 /// Filesystem-backed storage rooted at a configured directory.
@@ -39,9 +118,9 @@ impl LocalStorage {
         }
     }
 
-    fn resolve(&self, path: &str) -> Result<(PathBuf, PathBuf)> {
-        let key = validate_storage_key(path)?;
-        Ok((self.root.join(&key), key))
+    fn resolve(&self, key: &StorageKey) -> (PathBuf, PathBuf) {
+        let key_path = key.as_path().to_path_buf();
+        (self.root.join(&key_path), key_path)
     }
 
     fn reject_symlink_prefixes(&self, key: &Path) -> Result<()> {
@@ -81,28 +160,32 @@ impl LocalStorage {
 
 #[async_trait]
 impl Storage for LocalStorage {
-    async fn put(&self, path: &str, content: &[u8]) -> Result<String> {
-        let (full, key) = self.resolve(path)?;
-        self.reject_symlink_prefixes(&key)?;
+    async fn put(&self, key: &StorageKey, content: &[u8]) -> Result<StorageKey> {
+        let (full, key_path) = self.resolve(key);
+        self.reject_symlink_prefixes(&key_path)?;
         if let Some(parent) = full.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }
-        self.reject_symlink_prefixes(&key)?;
+        self.reject_symlink_prefixes(&key_path)?;
         self.reject_symlink_object(&full)?;
         tokio::fs::write(&full, content).await?;
-        Ok(key.to_string_lossy().to_string())
+        Ok(key.clone())
     }
 
-    async fn promote(&self, temporary_path: &str, durable_path: &str) -> Result<String> {
-        let (temporary_full, temporary_key) = self.resolve(temporary_path)?;
-        let (durable_full, durable_key) = self.resolve(durable_path)?;
-        self.reject_symlink_prefixes(&temporary_key)?;
+    async fn promote(
+        &self,
+        temporary_key: &StorageKey,
+        durable_key: &StorageKey,
+    ) -> Result<StorageKey> {
+        let (temporary_full, temporary_key_path) = self.resolve(temporary_key);
+        let (durable_full, durable_key_path) = self.resolve(durable_key);
+        self.reject_symlink_prefixes(&temporary_key_path)?;
         self.reject_symlink_object(&temporary_full)?;
-        self.reject_symlink_prefixes(&durable_key)?;
+        self.reject_symlink_prefixes(&durable_key_path)?;
         if let Some(parent) = durable_full.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }
-        self.reject_symlink_prefixes(&durable_key)?;
+        self.reject_symlink_prefixes(&durable_key_path)?;
         self.reject_symlink_object(&durable_full)?;
 
         tokio::fs::hard_link(&temporary_full, &durable_full).await?;
@@ -115,28 +198,28 @@ impl Storage for LocalStorage {
             }
             return Err(error.into());
         }
-        Ok(durable_key.to_string_lossy().to_string())
+        Ok(durable_key.clone())
     }
 
-    async fn get(&self, path: &str) -> Result<Vec<u8>> {
-        let (full, key) = self.resolve(path)?;
-        self.reject_symlink_prefixes(&key)?;
+    async fn get(&self, key: &StorageKey) -> Result<Vec<u8>> {
+        let (full, key_path) = self.resolve(key);
+        self.reject_symlink_prefixes(&key_path)?;
         self.reject_symlink_object(&full)?;
         Ok(tokio::fs::read(&full).await?)
     }
 
-    async fn exists(&self, path: &str) -> Result<bool> {
-        let (full, key) = self.resolve(path)?;
-        self.reject_symlink_prefixes(&key)?;
+    async fn exists(&self, key: &StorageKey) -> Result<bool> {
+        let (full, key_path) = self.resolve(key);
+        self.reject_symlink_prefixes(&key_path)?;
         if let Ok(metadata) = tokio::fs::symlink_metadata(&full).await {
             return Ok(!metadata.file_type().is_symlink());
         }
         Ok(false)
     }
 
-    async fn delete(&self, path: &str) -> Result<()> {
-        let (full, key) = self.resolve(path)?;
-        self.reject_symlink_prefixes(&key)?;
+    async fn delete(&self, key: &StorageKey) -> Result<()> {
+        let (full, key_path) = self.resolve(key);
+        self.reject_symlink_prefixes(&key_path)?;
         self.reject_symlink_object(&full)?;
         match tokio::fs::remove_file(&full).await {
             Ok(()) => {}
@@ -147,31 +230,51 @@ impl Storage for LocalStorage {
     }
 }
 
-fn validate_storage_key(path: &str) -> Result<PathBuf> {
-    if path.trim().is_empty() {
+fn validate_storage_key(value: &str) -> Result<String> {
+    if value.is_empty()
+        || value.trim() != value
+        || value.starts_with('/')
+        || value.ends_with('/')
+        || value.contains('\\')
+        || value
+            .bytes()
+            .any(|byte| byte.is_ascii_whitespace() || byte.is_ascii_control())
+    {
         return Err(invalid_storage_key());
     }
-    let path = Path::new(path);
+    let path = Path::new(value);
     if path.is_absolute() {
         return Err(invalid_storage_key());
     }
 
-    let mut key = PathBuf::new();
+    let mut parts = Vec::new();
     for component in path.components() {
         match component {
-            Component::Normal(part) => key.push(part),
+            Component::Normal(part) => {
+                let Some(part) = part.to_str() else {
+                    return Err(invalid_storage_key());
+                };
+                if part.is_empty()
+                    || !part.bytes().all(|byte| {
+                        byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.')
+                    })
+                {
+                    return Err(invalid_storage_key());
+                }
+                parts.push(part);
+            }
             _ => return Err(invalid_storage_key()),
         }
     }
-    if key.as_os_str().is_empty() {
+    if parts.is_empty() || parts.join("/") != value {
         return Err(invalid_storage_key());
     }
-    Ok(key)
+    Ok(value.to_string())
 }
 
 fn invalid_storage_key() -> AppError {
     AppError::BadRequest(
-        "storage key must be a non-empty relative path without `.` or `..` components".to_string(),
+        "storage key must be a non-empty relative path with safe ASCII components and no `.` or `..` components".to_string(),
     )
 }
 
@@ -179,7 +282,7 @@ fn invalid_storage_key() -> AppError {
 mod tests {
     use std::path::PathBuf;
 
-    use super::{LocalStorage, Storage};
+    use super::{LocalStorage, Storage, StorageKey};
     use crate::error::AppError;
 
     #[tokio::test]
@@ -188,11 +291,11 @@ mod tests {
         let storage = LocalStorage::new(&root);
 
         let key = storage
-            .put("objects/a.txt", b"hello")
+            .put(&storage_key("objects/a.txt"), b"hello")
             .await
             .expect("put should succeed");
 
-        assert_eq!(key, "objects/a.txt");
+        assert_eq!(key.as_str(), "objects/a.txt");
         assert_eq!(
             storage.get(&key).await.expect("get should succeed"),
             b"hello"
@@ -204,10 +307,18 @@ mod tests {
     #[tokio::test]
     async fn local_storage_rejects_absolute_and_parent_keys() {
         let root = temp_storage_root("bad-keys");
-        let storage = LocalStorage::new(&root);
 
-        for key in ["/tmp/escape.txt", "../escape.txt", "a/../escape.txt", "."] {
-            let result = storage.put(key, b"bad").await;
+        for key in [
+            "",
+            "/tmp/escape.txt",
+            "../escape.txt",
+            "a/../escape.txt",
+            ".",
+            "a//b",
+            "a\\b",
+            "a b",
+        ] {
+            let result = StorageKey::try_new(key);
             assert!(matches!(result, Err(AppError::BadRequest(_))));
         }
         drop(std::fs::remove_dir_all(root));
@@ -221,7 +332,7 @@ mod tests {
         std::os::unix::fs::symlink(&outside, root.join("link")).expect("failed to create symlink");
         let storage = LocalStorage::new(&root);
 
-        let result = storage.put("link/escape.txt", b"bad").await;
+        let result = storage.put(&storage_key("link/escape.txt"), b"bad").await;
 
         assert!(matches!(result, Err(AppError::BadRequest(_))));
         assert!(!outside.join("escape.txt").exists());
@@ -235,18 +346,18 @@ mod tests {
         let storage = LocalStorage::new(&root);
 
         let temporary_key = storage
-            .put("_tmp/object.txt", b"temporary")
+            .put(&storage_key("_tmp/object.txt"), b"temporary")
             .await
             .expect("temporary put should succeed");
         let durable_key = storage
-            .promote(&temporary_key, "objects/object.txt")
+            .promote(&temporary_key, &storage_key("objects/object.txt"))
             .await
             .expect("promote should succeed");
 
-        assert_eq!(durable_key, "objects/object.txt");
+        assert_eq!(durable_key.as_str(), "objects/object.txt");
         assert_eq!(
             storage
-                .get("objects/object.txt")
+                .get(&storage_key("objects/object.txt"))
                 .await
                 .expect("durable object should exist"),
             b"temporary"
@@ -259,11 +370,11 @@ mod tests {
         );
 
         let second_temporary_key = storage
-            .put("_tmp/object-2.txt", b"second")
+            .put(&storage_key("_tmp/object-2.txt"), b"second")
             .await
             .expect("second temporary put should succeed");
         let overwrite = storage
-            .promote(&second_temporary_key, "objects/object.txt")
+            .promote(&second_temporary_key, &storage_key("objects/object.txt"))
             .await;
         assert!(
             overwrite.is_err(),
@@ -271,7 +382,7 @@ mod tests {
         );
         assert_eq!(
             storage
-                .get("objects/object.txt")
+                .get(&storage_key("objects/object.txt"))
                 .await
                 .expect("durable object should remain unchanged"),
             b"temporary"
@@ -284,6 +395,10 @@ mod tests {
         );
 
         drop(std::fs::remove_dir_all(root));
+    }
+
+    fn storage_key(value: &str) -> StorageKey {
+        StorageKey::try_new(value).expect("test storage key is valid")
     }
 
     fn temp_storage_root(label: &str) -> PathBuf {

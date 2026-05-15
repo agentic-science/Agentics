@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use super::evaluation::{EvaluationJobDto, MetricValue};
 use super::ids::SolutionSubmissionId;
 use super::names::{ChallengeName, MetricName, TargetName};
+use crate::storage::StorageKey;
 
 /// Agent registration payload accepted by the public API.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
@@ -298,7 +299,7 @@ pub struct ChallengeShortlistRevisionResponse {
     pub requested_count: i64,
     pub added_count: i64,
     pub sha256: String,
-    pub storage_uri: String,
+    pub storage_key: StorageKey,
     pub created_at: String,
 }
 

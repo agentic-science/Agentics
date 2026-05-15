@@ -961,7 +961,7 @@ mod tests {
                 "required": true,
                 "size_bytes": 17,
                 "sha256": "asset-sha",
-                "storage_uri": "storage/challenge-drafts/draft-1/private-assets/official-cases.bin",
+                "storage_key": "challenge-drafts/draft-1/private-assets/official-cases.bin",
                 "uploader_agent_id": "agent-1",
                 "created_at": "2026-05-01T00:00:00Z"
             })))

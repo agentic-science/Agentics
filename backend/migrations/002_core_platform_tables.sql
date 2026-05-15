@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS challenge_shortlist_revisions (
   id UUID PRIMARY KEY,
   challenge_name TEXT NOT NULL REFERENCES challenges(name) ON DELETE CASCADE,
   uploader_agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
-  storage_uri TEXT NOT NULL,
+  storage_key TEXT NOT NULL,
   sha256 TEXT NOT NULL,
   requested_count BIGINT NOT NULL CHECK (requested_count > 0),
   added_count BIGINT NOT NULL CHECK (added_count >= 0),

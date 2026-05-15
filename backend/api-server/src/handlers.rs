@@ -38,6 +38,7 @@ use shared::models::request::{
     SolutionSubmissionLogsResponse, SolutionSubmissionResponse,
     SolutionSubmissionResultReportResponse,
 };
+use shared::storage::StorageKey;
 use shared::zip_project::{
     MAX_ZIP_PROJECT_ARTIFACT_BYTES, MAX_ZIP_PROJECT_FILE_COUNT, MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES,
 };
@@ -235,12 +236,13 @@ async fn create_solution_submission_for_mode(
             AppError::Internal(format!("generated invalid solution submission id: {e}"))
         })?;
     let job_id = Uuid::new_v4().to_string();
-    let artifact_path = format!("solution-submissions/{solution_submission_id}.zip");
-    let temporary_artifact_path = format!(
+    let artifact_path =
+        StorageKey::try_new(format!("solution-submissions/{solution_submission_id}.zip"))?;
+    let temporary_artifact_path = StorageKey::try_new(format!(
         "_tmp/solution-submissions/{}-{}.zip",
         solution_submission_id,
         Uuid::new_v4()
-    );
+    ))?;
     let temporary_artifact_path = state
         .storage
         .put(&temporary_artifact_path, &artifact_bytes)
@@ -261,7 +263,7 @@ async fn create_solution_submission_for_mode(
             agent_id: agent.agent_id,
             challenge_name: canonical_challenge_name,
             target,
-            artifact_path: artifact_path.clone(),
+            artifact_path: artifact_path.to_string(),
             language: manifest.runtime.language,
             eval_type,
             explanation: body.explanation.trim().to_string(),
@@ -323,10 +325,10 @@ async fn cleanup_solution_submission_record(
     }
 }
 
-async fn cleanup_storage_key(state: &AppState, storage_key: &str) {
+async fn cleanup_storage_key(state: &AppState, storage_key: &StorageKey) {
     if let Err(error) = state.storage.delete(storage_key).await {
         warn!(
-            storage_key,
+            storage_key = %storage_key,
             error = %error,
             "failed to clean up staged storage object after admission failure"
         );
@@ -587,15 +589,10 @@ pub async fn get_public_artifact(
     }
     ensure_public_solution_artifact_visible(&state.db, &solution_submission.challenge_name).await?;
 
-    let artifact_bytes = state
-        .storage
-        .get(&solution_submission.artifact_path)
-        .await?;
-    let artifact = read_solution_submission_artifact_summary(
-        &solution_submission.artifact_path,
-        artifact_bytes,
-    )
-    .await?;
+    let artifact_path = StorageKey::try_new(&solution_submission.artifact_path)?;
+    let artifact_bytes = state.storage.get(&artifact_path).await?;
+    let artifact =
+        read_solution_submission_artifact_summary(artifact_path.as_str(), artifact_bytes).await?;
     Ok(Json(artifact))
 }
 
@@ -1084,8 +1081,10 @@ pub async fn create_challenge_shortlist_revision(
 
     let revision_id = Uuid::new_v4().to_string();
     let sha256 = challenge_creation::sha256_hex(&raw_json);
-    let storage_key = format!("challenge-shortlists/{challenge_name}/{revision_id}.json");
-    let storage_uri = state.storage.put(&storage_key, &raw_json).await?;
+    let storage_key = StorageKey::try_new(format!(
+        "challenge-shortlists/{challenge_name}/{revision_id}.json"
+    ))?;
+    let stored_key = state.storage.put(&storage_key, &raw_json).await?;
 
     let response = db::create_challenge_shortlist_revision(
         &state.db,
@@ -1093,7 +1092,7 @@ pub async fn create_challenge_shortlist_revision(
             revision_id,
             challenge_name,
             uploader_agent_id: creator.agent_id,
-            storage_uri: storage_uri.clone(),
+            storage_key: stored_key.clone(),
             sha256,
             requested_count,
             agent_ids_to_add,
@@ -1104,7 +1103,7 @@ pub async fn create_challenge_shortlist_revision(
     match response {
         Ok(response) => Ok((StatusCode::CREATED, Json(response))),
         Err(error) => {
-            cleanup_storage_key(&state, &storage_uri).await;
+            cleanup_storage_key(&state, &stored_key).await;
             Err(error)
         }
     }
@@ -1517,7 +1516,8 @@ async fn read_solution_submission_logs(
         }));
     };
 
-    let bytes = state.storage.get(&log_path).await?;
+    let log_key = StorageKey::try_new(&log_path)?;
+    let bytes = state.storage.get(&log_key).await?;
     let truncated = bytes.len() > MAX_LOG_RESPONSE_BYTES;
     let visible_bytes = if truncated {
         bytes

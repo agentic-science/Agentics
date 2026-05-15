@@ -99,7 +99,7 @@ describe("CreatorConsole", () => {
       requested_count: 1,
       added_count: 1,
       sha256: "shortlist-sha",
-      storage_uri: "local://shortlist",
+      storage_key: "challenge-shortlists/matrix-multiplication/revision-1.json",
       created_at: "2026-05-15T00:00:00Z",
     });
     uploadPrivateAssetMock.mockRejectedValue(new Error("not configured"));

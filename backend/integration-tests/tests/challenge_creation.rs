@@ -14,6 +14,7 @@ use shared::{
     db,
     error::AppError,
     models::{challenge_creation::ChallengePrivateAssetKind, names::AssetName},
+    storage::StorageKey,
 };
 
 fn creator_auth(
@@ -619,11 +620,11 @@ async fn private_asset_upload_rejects_duplicate_asset_name(pool: sqlx::PgPool) {
     .expect("asset request");
     assert_eq!(first_response.status(), reqwest::StatusCode::CREATED);
     let first_asset: serde_json::Value = first_response.json().await.expect("asset json");
-    let storage_uri = first_asset["storage_uri"]
+    let storage_key = first_asset["storage_key"]
         .as_str()
-        .expect("storage uri")
+        .expect("storage key")
         .to_string();
-    assert!(storage.path().join(&storage_uri).exists());
+    assert!(storage.path().join(&storage_key).exists());
 
     let duplicate_response = creator_auth(
         client.post(api_url(
@@ -642,7 +643,7 @@ async fn private_asset_upload_rejects_duplicate_asset_name(pool: sqlx::PgPool) {
     .expect("duplicate asset request");
     assert_eq!(duplicate_response.status(), reqwest::StatusCode::CONFLICT);
     assert!(
-        storage.path().join(&storage_uri).exists(),
+        storage.path().join(&storage_key).exists(),
         "duplicate rejection must not delete the accepted durable asset"
     );
 }
@@ -701,7 +702,8 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
         required: false,
         size_bytes: 8,
         sha256: "a".repeat(64),
-        storage_uri: "challenge-drafts/test/private-assets/a.bin".to_string(),
+        storage_key: StorageKey::try_new("challenge-drafts/test/private-assets/a.bin")
+            .expect("test storage key is valid"),
         uploader_agent_id: creator.agent_id.clone(),
     };
     let input_b = db::CreateChallengePrivateAssetInput {
@@ -713,7 +715,8 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
         required: false,
         size_bytes: 8,
         sha256: "b".repeat(64),
-        storage_uri: "challenge-drafts/test/private-assets/b.bin".to_string(),
+        storage_key: StorageKey::try_new("challenge-drafts/test/private-assets/b.bin")
+            .expect("test storage key is valid"),
         uploader_agent_id: creator.agent_id.clone(),
     };
 
@@ -876,11 +879,11 @@ async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
     .json()
     .await
     .expect("asset json");
-    let storage_uri = asset["storage_uri"]
+    let storage_key = asset["storage_key"]
         .as_str()
-        .expect("storage uri")
+        .expect("storage key")
         .to_string();
-    assert!(storage.path().join(&storage_uri).exists());
+    assert!(storage.path().join(&storage_key).exists());
 
     client
         .post(api_url(
@@ -914,7 +917,7 @@ async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
         .await
         .expect("cleanup json");
     assert_eq!(cleanup["purged_private_assets"], 1);
-    assert!(!storage.path().join(&storage_uri).exists());
+    assert!(!storage.path().join(&storage_key).exists());
 }
 
 async fn create_validate_approve_publish_draft(

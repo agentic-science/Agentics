@@ -743,7 +743,9 @@ export const challengeDraftListResponseSchema = z
                 required: z.boolean(),
                 size_bytes: z.number().int(),
                 sha256: z.string(),
-                storage_uri: z.string(),
+                storage_key: z
+                  .string()
+                  .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
                 uploader_agent_id: z.string(),
                 created_at: z.string(),
               })
@@ -908,7 +910,9 @@ export const challengeDraftResponseSchema = z
           required: z.boolean(),
           size_bytes: z.number().int(),
           sha256: z.string(),
-          storage_uri: z.string(),
+          storage_key: z
+            .string()
+            .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
           uploader_agent_id: z.string(),
           created_at: z.string(),
         })
@@ -989,7 +993,7 @@ export const challengePrivateAssetResponseSchema = z
     required: z.boolean(),
     size_bytes: z.number().int(),
     sha256: z.string(),
-    storage_uri: z.string(),
+    storage_key: z.string().regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
     uploader_agent_id: z.string(),
     created_at: z.string(),
   })
@@ -1030,7 +1034,7 @@ export const challengeShortlistRevisionResponseSchema = z
     requested_count: z.number().int(),
     added_count: z.number().int(),
     sha256: z.string(),
-    storage_uri: z.string(),
+    storage_key: z.string().regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
     created_at: z.string(),
   })
   .strict()

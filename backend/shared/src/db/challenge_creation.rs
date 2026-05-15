@@ -13,6 +13,7 @@ use crate::models::challenge_creation::{
 };
 use crate::models::names::{AssetName, ChallengeName};
 use crate::models::urls::{GithubPullRequestUrl, GithubRepoRemote};
+use crate::storage::StorageKey;
 
 use super::challenges::{add_challenge_owner_tx, publish_challenge_tx};
 use super::ids::{
@@ -46,7 +47,7 @@ pub struct CreateChallengePrivateAssetInput {
     pub required: bool,
     pub size_bytes: i64,
     pub sha256: String,
-    pub storage_uri: String,
+    pub storage_key: StorageKey,
     pub uploader_agent_id: String,
 }
 
@@ -269,7 +270,7 @@ pub async fn create_challenge_private_asset(
             required,
             size_bytes,
             sha256,
-            storage_uri,
+            storage_key,
             uploader_agent_id
         )
         VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9::uuid)
@@ -283,7 +284,7 @@ pub async fn create_challenge_private_asset(
     .bind(input.required)
     .bind(input.size_bytes)
     .bind(&input.sha256)
-    .bind(&input.storage_uri)
+    .bind(input.storage_key.as_str())
     .bind(&input.uploader_agent_id)
     .fetch_one(&mut *tx)
     .await?;
@@ -806,7 +807,7 @@ fn row_to_private_asset_response(
         required: row.try_get("required")?,
         size_bytes: row.try_get("size_bytes")?,
         sha256: row.try_get("sha256")?,
-        storage_uri: row.try_get("storage_uri")?,
+        storage_key: storage_key_from_row(&row, "storage_key")?,
         uploader_agent_id: uuid_string_from_row(&row, "uploader_agent_id")?,
         created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
     })
@@ -827,6 +828,12 @@ fn github_pull_request_url_from_row(
 ) -> Result<GithubPullRequestUrl> {
     let value: String = row.try_get(column)?;
     GithubPullRequestUrl::try_new(&value)
+        .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
+}
+
+fn storage_key_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<StorageKey> {
+    let value: String = row.try_get(column)?;
+    StorageKey::try_new(&value)
         .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
 }
 
