@@ -13,7 +13,10 @@ async fn admin_read_models_power_operator_console(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let config = test_config(storage.path(), &examples_challenges_root());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
-    let auth = helpers::basic_auth_header(&config.admin_username, &config.admin_password);
+    let auth = helpers::basic_auth_header(
+        &config.admin_username,
+        config.expose_admin_password_for_http_basic(),
+    );
     let client = reqwest::Client::new();
 
     shared::db::upsert_service_heartbeat(
@@ -108,7 +111,10 @@ async fn create_challenge_and_publish_contract(pool: sqlx::PgPool) {
         .post(api_url(&app, "/admin/challenges"))
         .header(
             "Authorization",
-            helpers::basic_auth_header(&config.admin_username, &config.admin_password),
+            helpers::basic_auth_header(
+                &config.admin_username,
+                config.expose_admin_password_for_http_basic(),
+            ),
         )
         .json(&serde_json::json!({
             "name": "test-challenge",
@@ -130,7 +136,10 @@ async fn create_challenge_and_publish_contract(pool: sqlx::PgPool) {
         .post(api_url(&app, "/admin/challenges/test-challenge/publish"))
         .header(
             "Authorization",
-            helpers::basic_auth_header(&config.admin_username, &config.admin_password),
+            helpers::basic_auth_header(
+                &config.admin_username,
+                config.expose_admin_password_for_http_basic(),
+            ),
         )
         .json(&serde_json::json!({
             "bundle_path": "/nonexistent/bundle"
@@ -149,7 +158,10 @@ async fn publishing_contract_exposes_challenge_policy(pool: sqlx::PgPool) {
     let challenges = tempfile::tempdir().expect("failed to create challenge tempdir");
     let config = test_config(storage.path(), challenges.path());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
-    let auth = helpers::basic_auth_header(&config.admin_username, &config.admin_password);
+    let auth = helpers::basic_auth_header(
+        &config.admin_username,
+        config.expose_admin_password_for_http_basic(),
+    );
     let client = reqwest::Client::new();
 
     let bundle = challenges.path().join("published-contract/v1");
@@ -215,7 +227,10 @@ async fn publishing_existing_contract_is_rejected_without_mutating_it(pool: sqlx
     let challenges = tempfile::tempdir().expect("failed to create challenge tempdir");
     let config = test_config(storage.path(), challenges.path());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
-    let auth = helpers::basic_auth_header(&config.admin_username, &config.admin_password);
+    let auth = helpers::basic_auth_header(
+        &config.admin_username,
+        config.expose_admin_password_for_http_basic(),
+    );
     let client = reqwest::Client::new();
 
     let original_bundle = challenges.path().join("immutable-challenge/original");
@@ -308,7 +323,10 @@ async fn publish_rejects_tag_only_images_when_digest_policy_is_enabled(pool: sql
     let mut config = test_config(storage.path(), &examples_challenges_root());
     config.require_digest_pinned_images = true;
     let app = spawn_app_with_config(pool, config.clone()).await;
-    let auth = helpers::basic_auth_header(&config.admin_username, &config.admin_password);
+    let auth = helpers::basic_auth_header(
+        &config.admin_username,
+        config.expose_admin_password_for_http_basic(),
+    );
 
     let response = reqwest::Client::new()
         .post(api_url(&app, "/admin/challenges/sample-sum/publish"))
@@ -382,7 +400,7 @@ async fn admin_session_cookie_authenticates_admin_routes(pool: sqlx::PgPool) {
         .post(api_url(&app, "/api/auth/admin/login"))
         .json(&serde_json::json!({
             "username": config.admin_username,
-            "password": config.admin_password
+            "password": config.expose_admin_password_for_http_basic()
         }))
         .send()
         .await
@@ -498,7 +516,10 @@ async fn admin_official_run_bypasses_public_official_queue_limit(pool: sqlx::PgP
     config.max_active_official_jobs = 1;
     config.official_runs_per_agent_challenge_day = 1;
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
-    let admin_auth = helpers::basic_auth_header(&config.admin_username, &config.admin_password);
+    let admin_auth = helpers::basic_auth_header(
+        &config.admin_username,
+        config.expose_admin_password_for_http_basic(),
+    );
     let client = reqwest::Client::new();
 
     let register_response: serde_json::Value = client

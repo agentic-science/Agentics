@@ -171,7 +171,7 @@ fn redact_private_benchmark_details(evaluation: &EvaluationDto) -> EvaluationDto
         eval_type: evaluation.eval_type,
         primary_score: evaluation.primary_score,
         rank_score: evaluation.rank_score,
-        aggregate_metrics: evaluation.aggregate_metrics.clone(),
+        aggregate_metrics: Vec::new(),
         run_metrics: Vec::new(),
         public_results: Vec::new(),
         validation_summary: None,

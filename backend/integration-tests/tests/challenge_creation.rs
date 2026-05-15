@@ -104,7 +104,10 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
-    let admin_auth = basic_auth_header(&config.admin_username, &config.admin_password);
+    let admin_auth = basic_auth_header(
+        &config.admin_username,
+        config.expose_admin_password_for_http_basic(),
+    );
 
     let draft: serde_json::Value = creator_auth(
         client.post(api_url(&app, "/api/creator/challenge-drafts")),
@@ -356,7 +359,10 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
-    let admin_auth = basic_auth_header(&config.admin_username, &config.admin_password);
+    let admin_auth = basic_auth_header(
+        &config.admin_username,
+        config.expose_admin_password_for_http_basic(),
+    );
 
     let draft = create_draft(&client, &app, &creator, 17, manifest_json()).await;
     let draft_id = draft["id"].as_str().expect("draft id");
@@ -492,7 +498,10 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
     let creator = create_creator_session(&pool, 1001, "creator").await;
     let participant_token = register_agent(&pool, "participant-agent").await;
     let participant_bearer = format!("Bearer {participant_token}");
-    let admin_auth = basic_auth_header(&config.admin_username, &config.admin_password);
+    let admin_auth = basic_auth_header(
+        &config.admin_username,
+        config.expose_admin_password_for_http_basic(),
+    );
 
     create_validate_approve_publish_draft(
         &client,
@@ -555,6 +564,78 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
         .await
         .expect("submission request");
     assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+}
+
+/// Verifies that archive publication requires the draft creator to own the challenge.
+#[sqlx::test(migrations = "../migrations")]
+async fn archive_draft_requires_challenge_owner(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("storage tempdir");
+    let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
+    let public_repo = tempfile::tempdir().expect("public repo tempdir");
+    write_public_challenge(public_repo.path());
+
+    let config = test_config(storage.path(), seeded_challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let client = reqwest::Client::new();
+    let owner = create_creator_session(&pool, 1001, "owner").await;
+    let non_owner = create_creator_session(&pool, 1002, "non-owner").await;
+    let admin_auth = basic_auth_header(
+        &config.admin_username,
+        config.expose_admin_password_for_http_basic(),
+    );
+
+    create_validate_approve_publish_draft(
+        &client,
+        &app,
+        &owner,
+        &admin_auth,
+        public_repo.path(),
+        61,
+        manifest_json(),
+    )
+    .await;
+
+    write_archive_manifest(public_repo.path());
+    let archive_draft =
+        create_draft_with_author(&client, &app, &non_owner, 62, archive_manifest_json(), 1002)
+            .await;
+    let archive_draft_id = archive_draft["id"].as_str().expect("archive draft id");
+    client
+        .post(api_url(
+            &app,
+            &format!("/admin/challenge-drafts/{archive_draft_id}/validate"),
+        ))
+        .header("Authorization", &admin_auth)
+        .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
+        .send()
+        .await
+        .expect("validate archive request")
+        .error_for_status()
+        .expect("archive draft should validate");
+    client
+        .post(api_url(
+            &app,
+            &format!("/admin/challenge-drafts/{archive_draft_id}/approve"),
+        ))
+        .header("Authorization", &admin_auth)
+        .json(&json!({ "message": "approved" }))
+        .send()
+        .await
+        .expect("approve archive request")
+        .error_for_status()
+        .expect("archive draft should approve");
+
+    let publish = client
+        .post(api_url(
+            &app,
+            &format!("/admin/challenge-drafts/{archive_draft_id}/publish"),
+        ))
+        .header("Authorization", &admin_auth)
+        .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
+        .send()
+        .await
+        .expect("publish archive request");
+    assert_eq!(publish.status(), StatusCode::FORBIDDEN);
 }
 
 /// Verifies that challenge draft rejects mismatched pr author.
@@ -658,7 +739,10 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
-    let admin_auth = basic_auth_header(&config.admin_username, &config.admin_password);
+    let admin_auth = basic_auth_header(
+        &config.admin_username,
+        config.expose_admin_password_for_http_basic(),
+    );
 
     let draft: serde_json::Value = create_draft(&client, &app, &creator, 41, manifest_json()).await;
     let draft_id = draft["id"].as_str().expect("draft id");
@@ -739,7 +823,10 @@ async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
-    let admin_auth = basic_auth_header(&config.admin_username, &config.admin_password);
+    let admin_auth = basic_auth_header(
+        &config.admin_username,
+        config.expose_admin_password_for_http_basic(),
+    );
 
     let draft = create_draft(&client, &app, &creator, 51, manifest_json()).await;
     let draft_id = draft["id"].as_str().expect("draft id");
@@ -886,6 +973,18 @@ async fn create_draft(
     pr_number: i32,
     manifest: serde_json::Value,
 ) -> serde_json::Value {
+    create_draft_with_author(client, app, creator, pr_number, manifest, 1001).await
+}
+
+/// Creates a draft with an explicit PR author id for ownership boundary tests.
+async fn create_draft_with_author(
+    client: &reqwest::Client,
+    app: &helpers::TestApp,
+    creator: &TestCreatorSession,
+    pr_number: i32,
+    manifest: serde_json::Value,
+    pr_author_github_user_id: i64,
+) -> serde_json::Value {
     creator_auth(
         client.post(api_url(app, "/api/creator/challenge-drafts")),
         creator,
@@ -896,7 +995,7 @@ async fn create_draft(
             "pr_url": format!("https://github.com/agentics-reifying/agentics-challenges/pull/{pr_number}"),
             "commit_sha": format!("0123456789abcdef0123456789abcdef{pr_number:08x}"),
             "challenge_path": "challenges/sample-sum",
-            "pr_author_github_user_id": 1001,
+            "pr_author_github_user_id": pr_author_github_user_id,
             "manifest": manifest
         }))
         .send()

@@ -1,6 +1,7 @@
 //! Authentication token creation, hashing, and header parsing helpers.
 
 use rand::Rng;
+use secrecy::SecretString;
 use sha2::{Digest, Sha256};
 
 /// Parsed bearer-token authorization header.
@@ -13,7 +14,7 @@ pub struct ParsedBearerToken {
 #[derive(Debug, Clone)]
 pub struct ParsedBasicAuth {
     pub username: String,
-    pub password: String,
+    pub password: SecretString,
 }
 
 /// Create an opaque bearer token for an agent.
@@ -101,7 +102,7 @@ pub fn parse_basic_auth(value: Option<&str>) -> Option<ParsedBasicAuth> {
 
     Some(ParsedBasicAuth {
         username: username.to_string(),
-        password: password.to_string(),
+        password: SecretString::from(password),
     })
 }
 

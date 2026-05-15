@@ -54,7 +54,10 @@ pub(super) async fn read_solution_submission_artifact_summary(
     .map_err(|e| AppError::Internal(format!("artifact summary task failed: {e}")))?
 }
 
-/// Read a submitter-visible log response, truncating the payload for transport.
+/// Read a submitter-visible validation log response, truncating the payload for transport.
+///
+/// Official logs can contain scorer output from private benchmark execution, so
+/// they are intentionally not part of the participant-facing log surface.
 pub(super) async fn read_solution_submission_logs(
     state: &AppState,
     solution_submission: &db::SolutionSubmissionRecord,
@@ -62,15 +65,9 @@ pub(super) async fn read_solution_submission_logs(
     const MAX_LOG_RESPONSE_BYTES: usize = 200_000;
 
     let log_key = solution_submission
-        .official_evaluation
+        .validation_evaluation
         .as_ref()
-        .and_then(|evaluation| evaluation.log_key.clone())
-        .or_else(|| {
-            solution_submission
-                .validation_evaluation
-                .as_ref()
-                .and_then(|evaluation| evaluation.log_key.clone())
-        });
+        .and_then(|evaluation| evaluation.log_key.clone());
 
     let Some(log_key) = log_key else {
         return Ok(Json(SolutionSubmissionLogsResponse {

@@ -49,7 +49,10 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
     let config = test_config(storage.path(), challenges.path());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
-    let admin_auth = basic_auth_header(&config.admin_username, &config.admin_password);
+    let admin_auth = basic_auth_header(
+        &config.admin_username,
+        config.expose_admin_password_for_http_basic(),
+    );
 
     let unauthorized = client
         .post(api_url(&app, "/admin/challenges"))
@@ -276,6 +279,29 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         .await
         .expect("failed to check solution submission during rejudge");
     assert_eq!(not_visible_during_rejudge.status(), 404);
+
+    let leaderboard_during_rejudge: serde_json::Value = client
+        .get(api_url(
+            &app,
+            "/api/public/challenges/admin-sum/leaderboard?target=linux-arm64-cpu",
+        ))
+        .send()
+        .await
+        .expect("failed to get leaderboard during rejudge")
+        .json()
+        .await
+        .expect("failed to decode leaderboard during rejudge");
+    assert_eq!(
+        leaderboard_during_rejudge["items"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        leaderboard_during_rejudge["items"][0]["best_solution_submission_id"],
+        solution_submission_a_id
+    );
 
     run_worker_once(&pool, &config).await;
 

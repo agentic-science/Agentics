@@ -267,6 +267,13 @@ async fn validate_public_bundle(
         "datasets.public_dir",
     )
     .await?;
+    if let Some(private_benchmark_dir) = spec.datasets.private_benchmark_dir.as_ref()
+        && tokio::fs::try_exists(bundle_dir.join(private_benchmark_dir.as_path())).await?
+    {
+        return Err(AppError::Validation(format!(
+            "datasets.private_benchmark_dir `{private_benchmark_dir}` must be provided through private asset uploads, not committed to the public challenge repository"
+        )));
+    }
 
     if spec.targets.iter().any(|target| target.validation_enabled)
         && let Some(validation_runs) = spec.execution.validation_runs.as_ref()
@@ -520,6 +527,28 @@ mod tests {
             .expect_err("private material should fail");
 
         assert!(error.to_string().contains("private benchmark"));
+        cleanup(&repo);
+    }
+
+    /// Verifies that public bundle validation rejects declared private benchmark directories.
+    #[tokio::test]
+    async fn rejects_declared_private_benchmark_directory_in_public_bundle() {
+        let repo = temp_repo("declared-private-dir");
+        write_valid_public_challenge(&repo);
+        std::fs::create_dir_all(repo.join("v1/official-cases")).expect("official cases dir");
+        let spec_path = repo.join("v1/spec.json");
+        let mut spec: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&spec_path).expect("spec should read"))
+                .expect("spec should parse");
+        spec["datasets"]["private_benchmark_dir"] = json!("official-cases");
+        spec["execution"]["official_runs"] = json!("official-cases/runs.json");
+        write_file(&spec_path, &spec.to_string());
+
+        let error = validate_challenge_creation_repository(&repo)
+            .await
+            .expect_err("declared private benchmark directory should fail");
+
+        assert!(error.to_string().contains("private asset uploads"));
         cleanup(&repo);
     }
 

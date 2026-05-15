@@ -15,7 +15,7 @@ use crate::state::AppState;
 use shared::config::Config;
 
 const ZIP_SUBMISSION_JSON_BODY_LIMIT_BYTES: usize = 32 * 1024 * 1024;
-const PRIVATE_ASSET_JSON_BODY_LIMIT_BYTES: usize = 128 * 1024 * 1024;
+const PRIVATE_ASSET_JSON_OVERHEAD_BYTES: u64 = 1024 * 1024;
 const X_AGENTICS_CSRF_TOKEN: HeaderName = HeaderName::from_static("x-agentics-csrf-token");
 
 /// Build the application router with public, agent, admin, and health routes.
@@ -95,7 +95,7 @@ pub fn router(config: &Config) -> Router<AppState> {
         .route(
             "/api/creator/challenge-drafts/{id}/private-assets",
             post(crate::challenge_creation_handlers::upload_challenge_private_asset)
-                .layer(DefaultBodyLimit::max(PRIVATE_ASSET_JSON_BODY_LIMIT_BYTES)),
+                .layer(DefaultBodyLimit::max(private_asset_json_body_limit(config))),
         )
         .route(
             "/api/creator/challenges/{name}/stats",
@@ -213,6 +213,17 @@ pub fn router(config: &Config) -> Router<AppState> {
             post(crate::handlers::disable_agent),
         )
         .layer(cors_layer(config))
+}
+
+/// Return a JSON body limit that can carry one configured private asset after base64 encoding.
+fn private_asset_json_body_limit(config: &Config) -> usize {
+    let decoded_limit = config.challenge_private_asset_bytes_per_draft;
+    let base64_limit = decoded_limit
+        .saturating_add(2)
+        .div_ceil(3)
+        .saturating_mul(4);
+    let limit = base64_limit.saturating_add(PRIVATE_ASSET_JSON_OVERHEAD_BYTES);
+    usize::try_from(limit).unwrap_or(usize::MAX)
 }
 
 /// Builds the CORS layer from configured browser origins.

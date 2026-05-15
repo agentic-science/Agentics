@@ -1,16 +1,18 @@
 //! Web authentication API models.
 
+use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 
 use super::ids::AgentId;
 use super::urls::GithubOauthAuthorizationUrl;
 
 /// Browser-submitted admin login credentials.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct AdminLoginRequest {
     pub username: String,
-    pub password: String,
+    #[schemars(with = "String")]
+    pub password: SecretString,
 }
 
 /// Admin session material returned after a successful login.

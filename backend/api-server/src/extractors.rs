@@ -3,6 +3,7 @@ use axum::{
     extract::{FromRequest, FromRequestParts, Path, Request},
     http::{Method, StatusCode, header, request::Parts},
 };
+use secrecy::ExposeSecret;
 use serde::de::DeserializeOwned;
 
 use shared::auth;
@@ -138,7 +139,9 @@ impl FromRequestParts<AppState> for AdminAuth {
 
         if let Some(parsed) = auth::parse_basic_auth(auth_header) {
             if parsed.username == state.config.admin_username
-                && parsed.password == state.config.admin_password
+                && state
+                    .config
+                    .admin_password_matches(parsed.password.expose_secret())
             {
                 return Ok(AdminAuth {
                     username: parsed.username,

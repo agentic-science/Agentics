@@ -211,6 +211,8 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
                 evaluation_id: EvaluationId::generate(),
                 solution_submission_id: solution_submission_id.clone(),
                 job_id: first_claim.id.clone(),
+                worker_id: "worker-a".to_string(),
+                claim_attempt_count: first_claim.attempt_count,
                 target: first_claim.target.clone(),
                 eval_type: first_claim.eval_type,
             },
@@ -236,6 +238,14 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
         .expect("failed to reap first claim");
     assert_eq!(reaped.requeued, 1);
     assert_eq!(reaped.failed, 0);
+    let requeued_submission: (String, bool) = sqlx::query_as(
+        "SELECT status, visible_after_eval FROM solution_submissions WHERE id = $1::uuid",
+    )
+    .bind(solution_submission_id.as_str())
+    .fetch_one(&pool)
+    .await
+    .expect("failed to query requeued submission");
+    assert_eq!(requeued_submission, ("queued".to_string(), false));
 
     let second_claim = shared::db::claim_next_evaluation_job(&pool, "worker-b")
         .await
@@ -250,6 +260,8 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
                 evaluation_id: EvaluationId::generate(),
                 solution_submission_id: solution_submission_id.clone(),
                 job_id: second_claim.id.clone(),
+                worker_id: "worker-b".to_string(),
+                claim_attempt_count: second_claim.attempt_count,
                 target: second_claim.target.clone(),
                 eval_type: second_claim.eval_type,
             },
@@ -429,6 +441,8 @@ async fn finish_next_job_with_score(
                 evaluation_id: EvaluationId::generate(),
                 solution_submission_id: solution_submission_id.clone(),
                 job_id: claim.id.clone(),
+                worker_id: worker_id.to_string(),
+                claim_attempt_count: claim.attempt_count,
                 target: claim.target.clone(),
                 eval_type: claim.eval_type,
             },

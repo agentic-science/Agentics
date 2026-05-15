@@ -37,7 +37,10 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
     let config = test_config(storage.path(), empty_challenges.path());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
-    let admin_auth = basic_auth_header(&config.admin_username, &config.admin_password);
+    let admin_auth = basic_auth_header(
+        &config.admin_username,
+        config.expose_admin_password_for_http_basic(),
+    );
     let target = native_cpu_target();
     let creator = create_creator_session(&pool, 42, "matrix-creator").await;
 
@@ -185,12 +188,8 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
     );
     assert_eq!(completed["evaluation"]["eval_type"], "official");
     assert_eq!(
-        completed["evaluation"]["aggregate_metrics"][0]["metric_name"],
-        "correctness"
-    );
-    assert_eq!(
-        completed["evaluation"]["aggregate_metrics"][0]["value"],
-        1.0
+        completed["evaluation"]["aggregate_metrics"],
+        serde_json::json!([])
     );
     assert!(completed["evaluation"]["official_summary"].is_null());
     assert_eq!(

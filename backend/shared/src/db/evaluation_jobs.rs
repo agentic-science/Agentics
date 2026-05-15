@@ -13,6 +13,7 @@ use super::ids::{
     agent_id_from_row, challenge_name_from_row, evaluation_job_id_from_row,
     solution_submission_id_from_row, target_from_row,
 };
+use super::leaderboard::repair_leaderboard_entry_for_solution_submission_tx;
 
 /// Claimed or queued evaluation job with parsed runner payload.
 #[derive(Debug, Clone)]
@@ -230,6 +231,8 @@ pub async fn queue_evaluation_job(
     .bind(input.solution_submission_id.as_str())
     .execute(&mut *tx)
     .await?;
+    repair_leaderboard_entry_for_solution_submission_tx(&mut tx, &input.solution_submission_id)
+        .await?;
 
     tx.commit().await?;
 

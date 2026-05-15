@@ -8,6 +8,7 @@ use std::sync::Arc;
 use api_server::router;
 use api_server::state::AppState;
 use chrono::{Duration, Utc};
+use secrecy::SecretString;
 use shared::config::Config;
 use shared::runner::connect_docker;
 use shared::storage::{LocalStorage, Storage};
@@ -82,7 +83,7 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
         storage_root: storage_root.to_string_lossy().to_string(),
         challenges_root: challenges_root.to_string_lossy().to_string(),
         admin_username: "admin".to_string(),
-        admin_password: "secret".to_string(),
+        admin_password: SecretString::from("secret"),
         allow_insecure_default_admin_credentials: false,
         cors_allowed_origins: "http://127.0.0.1:3001,http://localhost:3001".to_string(),
         worker_poll_interval_ms: 3000,
@@ -97,7 +98,7 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
         challenge_draft_ttl_days: 14,
         unpublished_challenge_asset_grace_days: 7,
         github_oauth_client_id: Some("test-client-id".to_string()),
-        github_oauth_client_secret: Some("test-client-secret".to_string()),
+        github_oauth_client_secret: Some(SecretString::from("test-client-secret")),
         github_oauth_redirect_url: Some(
             "http://127.0.0.1/auth/github/callback"
                 .parse()

@@ -96,6 +96,14 @@ pub async fn create_solution_submission_with_job(
 
     let mut tx = pool.begin().await?;
     enforce_quota_admission(&mut tx, input).await?;
+    ensure_parent_solution_submission_matches_scope_tx(
+        &mut tx,
+        input.parent_solution_submission_id.as_ref(),
+        &input.agent_id,
+        &challenge.challenge_name,
+        &input.target,
+    )
+    .await?;
 
     let row = sqlx::query(
         r#"
@@ -193,6 +201,82 @@ pub async fn create_solution_submission_with_job(
         validation_evaluation: None,
         official_evaluation: None,
     })
+}
+
+/// Verify that an optional parent submission belongs to the same agent and ranking scope.
+pub async fn ensure_parent_solution_submission_matches_scope(
+    pool: &PgPool,
+    parent_solution_submission_id: Option<&SolutionSubmissionId>,
+    agent_id: &AgentId,
+    challenge_name: &ChallengeName,
+    target: &TargetName,
+) -> Result<()> {
+    let mut tx = pool.begin().await?;
+    ensure_parent_solution_submission_matches_scope_tx(
+        &mut tx,
+        parent_solution_submission_id,
+        agent_id,
+        challenge_name,
+        target,
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Enforce parent-submission lineage invariants inside a submission transaction.
+async fn ensure_parent_solution_submission_matches_scope_tx<'a>(
+    tx: &mut Transaction<'a, Postgres>,
+    parent_solution_submission_id: Option<&SolutionSubmissionId>,
+    agent_id: &AgentId,
+    challenge_name: &ChallengeName,
+    target: &TargetName,
+) -> Result<()> {
+    let Some(parent_solution_submission_id) = parent_solution_submission_id else {
+        return Ok(());
+    };
+
+    let row = sqlx::query(
+        r#"
+        SELECT agent_id, challenge_name, target, status, visible_after_eval
+        FROM solution_submissions
+        WHERE id = $1::uuid
+        LIMIT 1
+        "#,
+    )
+    .bind(parent_solution_submission_id.as_str())
+    .fetch_optional(&mut **tx)
+    .await?;
+    let Some(row) = row else {
+        return Err(AppError::BadRequest(
+            "parent_solution_submission_id does not reference an existing solution submission"
+                .to_string(),
+        ));
+    };
+
+    let parent_agent_id = agent_id_from_row(&row, "agent_id")?;
+    let parent_challenge_name = challenge_name_from_row(&row, "challenge_name")?;
+    let parent_target = target_from_row(&row, "target")?;
+    let parent_status: String = row.try_get("status")?;
+    let parent_visible: bool = row.try_get("visible_after_eval")?;
+
+    if &parent_agent_id != agent_id
+        || &parent_challenge_name != challenge_name
+        || &parent_target != target
+    {
+        return Err(AppError::BadRequest(
+            "parent_solution_submission_id must belong to the same agent, challenge_name, and target"
+                .to_string(),
+        ));
+    }
+    if parent_status != EvaluationStatus::Completed.as_str() || !parent_visible {
+        return Err(AppError::BadRequest(
+            "parent_solution_submission_id must reference a completed visible solution submission"
+                .to_string(),
+        ));
+    }
+
+    Ok(())
 }
 
 /// Delete a solution submission and its dependent jobs/evaluations.
@@ -591,8 +675,7 @@ pub async fn list_public_solution_submissions_for_challenge(
             COALESCE(pe.primary_score, (pe.validation_summary_json->>'score')::double precision) AS validation_score,
             COALESCE(oe.rank_score, (oe.official_summary_json->>'score')::double precision) AS official_score,
             COALESCE(pe.rank_score, oe.rank_score, (pe.validation_summary_json->>'score')::double precision, (oe.official_summary_json->>'score')::double precision) AS rank_score,
-            COALESCE(pe.aggregate_metrics_json, oe.aggregate_metrics_json, '[]'::jsonb) AS aggregate_metrics,
-            COALESCE(oe.aggregate_metrics_json, '[]'::jsonb) AS official_metrics
+            COALESCE(pe.aggregate_metrics_json, '[]'::jsonb) AS aggregate_metrics
         FROM solution_submissions s
         JOIN agents a ON a.id = s.agent_id
         JOIN challenges p ON p.name = s.challenge_name
@@ -603,7 +686,7 @@ pub async fn list_public_solution_submissions_for_challenge(
             ORDER BY created_at DESC LIMIT 1
         ) pe ON TRUE
         LEFT JOIN LATERAL (
-            SELECT primary_score, rank_score, aggregate_metrics_json, official_summary_json
+            SELECT primary_score, rank_score, official_summary_json
             FROM evaluations
             WHERE solution_submission_id = s.id AND eval_type = 'official' AND status = 'completed' AND target = s.target
             ORDER BY created_at DESC LIMIT 1
@@ -626,12 +709,6 @@ pub async fn list_public_solution_submissions_for_challenge(
                 "solution submission aggregate metrics",
             )?
             .unwrap_or_default();
-            let official_metrics = decode_optional_json(
-                r.try_get::<Option<Value>, _>("official_metrics")?,
-                "solution submission official metrics",
-            )?
-            .unwrap_or_default();
-
             Ok(PublicSolutionSubmissionListItemDto {
                 id: solution_submission_id_from_row(&r, "id")?,
                 challenge_name: challenge_name_from_row(&r, "challenge_name")?,
@@ -652,7 +729,7 @@ pub async fn list_public_solution_submissions_for_challenge(
                 official_score: r.try_get::<Option<f64>, _>("official_score")?,
                 rank_score: r.try_get::<Option<f64>, _>("rank_score")?,
                 aggregate_metrics,
-                official_metrics,
+                official_metrics: Vec::new(),
             })
         })
         .collect::<Result<Vec<_>>>()

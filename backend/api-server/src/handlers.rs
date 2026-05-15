@@ -212,6 +212,14 @@ async fn create_solution_submission_for_mode(
         challenge_lifetime_limit,
     )
     .await?;
+    db::ensure_parent_solution_submission_matches_scope(
+        &state.db,
+        body.parent_solution_submission_id.as_ref(),
+        &agent.agent_id,
+        &canonical_challenge_name,
+        &target,
+    )
+    .await?;
 
     let artifact_bytes = artifacts::base64_decode(&body.artifact_base64).ok_or(AppError::Base64)?;
     if artifact_bytes.len() as u64 > MAX_ZIP_PROJECT_ARTIFACT_BYTES {
@@ -623,7 +631,9 @@ pub async fn get_score_distribution(
     let (challenge, spec) = load_challenge_policy(&state.db, &challenge_name).await?;
     ensure_visibility_allows_public(spec.visibility.score_distribution, &spec)?;
     let target = resolve_public_target(&state.db, &challenge_name, query.target.as_deref()).await?;
-    let entries = db::list_leaderboard_entries(&state.db, &challenge_name, &target, 10_000).await?;
+    let entries =
+        db::list_leaderboard_entries_for_distribution(&state.db, &challenge_name, &target, 10_000)
+            .await?;
     let response = score_distribution::build_score_distribution_response(
         challenge.challenge_name,
         target,
@@ -984,10 +994,25 @@ async fn copy_admin_bundle_to_managed_storage(
             tokio::fs::remove_dir_all(&temp_target).await?;
         }
         challenge_bundle::copy_challenge_bundle_dir(source, &temp_target, true).await?;
+        let temp_digest = challenge_bundle::challenge_bundle_tree_sha256(&temp_target).await?;
+        if temp_digest != source_digest {
+            tokio::fs::remove_dir_all(&temp_target).await.ok();
+            return Err(AppError::Validation(format!(
+                "managed bundle temporary copy digest mismatch for {}",
+                temp_target.display()
+            )));
+        }
         match tokio::fs::rename(&temp_target, &target).await {
             Ok(()) => {}
             Err(error) if tokio::fs::try_exists(&target).await? => {
                 tokio::fs::remove_dir_all(&temp_target).await.ok();
+                let target_digest = challenge_bundle::challenge_bundle_tree_sha256(&target).await?;
+                if target_digest != source_digest {
+                    return Err(AppError::Validation(format!(
+                        "managed bundle target digest mismatch for {}",
+                        target.display()
+                    )));
+                }
                 tracing::debug!(
                     target = %target.display(),
                     error = %error,

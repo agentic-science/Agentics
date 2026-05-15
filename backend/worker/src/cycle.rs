@@ -184,6 +184,8 @@ pub async fn run_worker_cycle(
             evaluation_id,
             solution_submission_id: job.solution_submission_id.clone(),
             job_id: job.id.clone(),
+            worker_id: worker_id.to_string(),
+            claim_attempt_count: job.attempt_count,
             target: job.target.clone(),
             eval_type: job.eval_type,
         },

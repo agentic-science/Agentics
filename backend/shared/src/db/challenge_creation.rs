@@ -93,6 +93,7 @@ pub struct PublishNewChallengeDraftInput {
 pub struct PublishArchiveChallengeDraftInput {
     pub draft_id: ChallengeDraftId,
     pub challenge_name: ChallengeName,
+    pub owner_agent_id: AgentId,
     pub audit_event_id: ChallengeDraftAuditEventId,
     pub admin_username: String,
     pub repository_path: String,
@@ -258,6 +259,7 @@ pub async fn create_challenge_private_asset(
     let mut tx = pool.begin().await?;
     let scope = format!("challenge-draft:{}:private-assets", input.draft_id);
     lock_quota_scope(&mut tx, &scope).await?;
+    ensure_private_asset_upload_allowed_tx(&mut tx, input).await?;
 
     let existing_bytes =
         sum_private_asset_bytes_for_draft_tx(&mut tx, input.draft_id.as_str()).await?;
@@ -303,6 +305,41 @@ pub async fn create_challenge_private_asset(
     let response = row_to_private_asset_response(row)?;
     tx.commit().await?;
     Ok(response)
+}
+
+/// Lock a draft row and confirm private assets may still be attached.
+async fn ensure_private_asset_upload_allowed_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    input: &CreateChallengePrivateAssetInput,
+) -> Result<()> {
+    let row = sqlx::query(
+        r#"
+        SELECT status, creator_agent_id
+        FROM challenge_drafts
+        WHERE id = $1::uuid
+        FOR UPDATE
+        "#,
+    )
+    .bind(input.draft_id.as_str())
+    .fetch_optional(&mut **tx)
+    .await?;
+    let Some(row) = row else {
+        return Err(AppError::NotFound);
+    };
+
+    let creator_agent_id = agent_id_from_row(&row, "creator_agent_id")?;
+    if creator_agent_id != input.uploader_agent_id {
+        return Err(AppError::NotFound);
+    }
+    let status = draft_status_from_row(&row, "status")?;
+    if !matches!(
+        status,
+        ChallengeDraftStatus::Draft | ChallengeDraftStatus::Validated
+    ) {
+        return Err(AppError::Conflict);
+    }
+
+    Ok(())
 }
 
 /// Handles sum private asset bytes for draft tx for this module.
@@ -382,7 +419,7 @@ pub async fn record_challenge_draft_validation(
         ChallengeDraftValidationStatus::Passed => ChallengeDraftStatus::Validated,
         ChallengeDraftValidationStatus::Failed => ChallengeDraftStatus::Draft,
     };
-    sqlx::query(
+    let update = sqlx::query(
         r#"
         UPDATE challenge_drafts
         SET status = $2,
@@ -401,6 +438,9 @@ pub async fn record_challenge_draft_validation(
     .bind(input.bundle_sha256.map(|digest| digest.to_string()))
     .execute(&mut *tx)
     .await?;
+    if update.rows_affected() == 0 {
+        return Err(AppError::Conflict);
+    }
 
     tx.commit().await?;
 
@@ -624,6 +664,7 @@ pub async fn publish_archive_challenge_draft(
     input: &PublishArchiveChallengeDraftInput,
 ) -> Result<()> {
     let mut tx = pool.begin().await?;
+    ensure_agent_owns_challenge_tx(&mut tx, &input.challenge_name, &input.owner_agent_id).await?;
     archive_challenge_tx(&mut tx, &input.challenge_name).await?;
     mark_challenge_draft_published_tx(&mut tx, input.draft_id.as_str(), None).await?;
     create_challenge_draft_audit_event_tx(
@@ -645,6 +686,34 @@ pub async fn publish_archive_challenge_draft(
     )
     .await?;
     tx.commit().await?;
+    Ok(())
+}
+
+/// Require that an archive draft creator currently owns the target challenge.
+async fn ensure_agent_owns_challenge_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    challenge_name: &ChallengeName,
+    agent_id: &AgentId,
+) -> Result<()> {
+    let owns_challenge = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM challenge_owners
+            WHERE challenge_name = $1 AND agent_id = $2::uuid
+        )
+        "#,
+    )
+    .bind(challenge_name.as_str())
+    .bind(agent_id.as_str())
+    .fetch_one(&mut **tx)
+    .await?;
+    if !owns_challenge {
+        return Err(AppError::Forbidden(
+            "only a challenge owner can publish an archive draft for this challenge".to_string(),
+        ));
+    }
+
     Ok(())
 }
 

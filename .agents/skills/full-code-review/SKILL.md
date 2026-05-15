@@ -54,6 +54,11 @@ Cover these lanes when the user asks for a complete review:
      as `[u8; 32]` in a domain type with lowercase hex serialization. OCI/Docker
      image digest fields should use the `oci-spec` backed image digest wrapper
      and preserve the `sha256:<hex>` wire format.
+   - Secret handling. Flag passwords, OAuth client secrets, API tokens, bearer
+     tokens, and other long-lived credentials stored as plain `String` beyond
+     immediate HTTP, CLI, env, config-file, or database boundaries. Prefer
+     `secrecy` wrappers and require any `ExposeSecret` call to be located at the
+     exact transmission or comparison boundary.
    - Check whether code can be simplified with current Rust language features
      and standard-library APIs documented in `docs/new-rust-features-apis/en.md`.
      Prefer these updates when they remove real nesting, repeated allocation,
@@ -201,6 +206,8 @@ string is only an immediate boundary value or has leaked into semantic code:
 - `\\.trim\\(\\).*parse|parse_.*\\(.*\\.trim\\(|try_new\\(.*\\.trim\\(`
 - `to_lowercase\\(\\).*try_new|try_new\\(.*to_lowercase\\(`
 - `commit_sha: String|commit_sha: &str|validate_commit_sha|[sS][hH][aA].*chars\\(\\).*is_ascii_hexdigit`
+- `password: String|client_secret: String|api_token: String|bearer.*String|secret.*String`
+- `ExposeSecret|expose_secret`
 
 Do not report raw path strings for literal Docker mount points, human-readable
 messages, test fixtures, SQL display/bind code, or request/CLI fields that are

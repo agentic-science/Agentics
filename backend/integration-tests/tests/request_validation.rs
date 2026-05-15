@@ -6,7 +6,7 @@ use std::path::Path;
 
 use helpers::{
     TestCreatorSession, api_url, basic_auth_header, copy_dir_all, create_creator_session,
-    examples_challenges_root, sample_sum_solution, solution_zip_base64, spawn_app,
+    examples_challenges_root, run_worker_once, sample_sum_solution, solution_zip_base64, spawn_app,
     spawn_app_with_config, test_config,
 };
 
@@ -595,7 +595,10 @@ async fn admin_direct_publish_rejects_private_shortlist_challenge(pool: sqlx::Pg
     let config = test_config(storage.path(), challenges.path());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
-    let admin_auth = basic_auth_header(&config.admin_username, &config.admin_password);
+    let admin_auth = basic_auth_header(
+        &config.admin_username,
+        config.expose_admin_password_for_http_basic(),
+    );
 
     let response = client
         .post(api_url(&app, "/admin/challenges/shortlist-direct/publish"))
@@ -621,6 +624,51 @@ async fn admin_direct_publish_rejects_private_shortlist_challenge(pool: sqlx::Pg
             .as_str()
             .expect("message")
             .contains("private_shortlist")
+    );
+}
+
+/// Verifies that parent submissions cannot cross agent ownership boundaries.
+#[sqlx::test(migrations = "../migrations")]
+async fn parent_solution_submission_must_match_agent_and_scope(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = test_config(storage.path(), &examples_challenges_root());
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let client = reqwest::Client::new();
+    let parent_agent = register_api_agent(&client, &app, "parent-agent").await;
+    let child_agent = register_api_agent(&client, &app, "child-agent").await;
+    let artifact = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
+
+    let parent: serde_json::Value =
+        submit_solution(&client, &app, &parent_agent.token, "sample-sum", &artifact)
+            .await
+            .error_for_status()
+            .expect("parent submission should queue")
+            .json()
+            .await
+            .expect("parent json");
+    run_worker_once(&pool, &config).await;
+
+    let response = client
+        .post(api_url(&app, "/api/solution-submissions"))
+        .header("Authorization", format!("Bearer {}", child_agent.token))
+        .json(&serde_json::json!({
+            "challenge_name": "sample-sum",
+            "target": "linux-arm64-cpu",
+            "parent_solution_submission_id": parent["id"],
+            "artifact_base64": "not base64"
+        }))
+        .send()
+        .await
+        .expect("child submission request");
+
+    assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+    let error: serde_json::Value = response.json().await.expect("error json");
+    assert!(
+        error["message"]
+            .as_str()
+            .expect("message")
+            .contains("same agent, challenge_name, and target"),
+        "parent scope validation must run before artifact decoding"
     );
 }
 

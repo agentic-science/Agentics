@@ -1,6 +1,7 @@
 //! Environment-backed runtime configuration.
 
 use figment::{Figment, providers::Env};
+use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use std::str::FromStr;
 
@@ -33,7 +34,7 @@ pub struct Config {
     #[serde(default = "default_admin_username")]
     pub admin_username: String,
     #[serde(default = "default_admin_password")]
-    pub admin_password: String,
+    pub admin_password: SecretString,
     #[serde(default)]
     pub allow_insecure_default_admin_credentials: bool,
     #[serde(default = "default_cors_allowed_origins")]
@@ -63,7 +64,7 @@ pub struct Config {
     #[serde(default)]
     pub github_oauth_client_id: Option<String>,
     #[serde(default)]
-    pub github_oauth_client_secret: Option<String>,
+    pub github_oauth_client_secret: Option<SecretString>,
     #[serde(default)]
     pub github_oauth_redirect_url: Option<GithubOauthRedirectUrl>,
     #[serde(default = "default_github_oauth_authorize_url")]
@@ -157,8 +158,8 @@ fn default_admin_username() -> String {
 }
 
 /// Handles default admin password for this module.
-fn default_admin_password() -> String {
-    DEFAULT_ADMIN_PASSWORD.to_string()
+fn default_admin_password() -> SecretString {
+    SecretString::from(DEFAULT_ADMIN_PASSWORD)
 }
 
 /// Handles default cors allowed origins for this module.
@@ -380,7 +381,9 @@ impl Config {
                 "AGENTICS_GITHUB_OAUTH_CLIENT_ID",
             )?;
             validate_required_trimmed(
-                self.github_oauth_client_secret.as_deref(),
+                self.github_oauth_client_secret
+                    .as_ref()
+                    .map(ExposeSecret::expose_secret),
                 "AGENTICS_GITHUB_OAUTH_CLIENT_SECRET",
             )?;
             validate_required_trimmed(
@@ -397,7 +400,13 @@ impl Config {
     /// Validate worker-only storage settings before claiming evaluation jobs.
     pub fn validate_runner_storage(&self) -> anyhow::Result<()> {
         match self.runner_writable_storage_mode()? {
-            RunnerWritableStorageMode::Unbounded => {}
+            RunnerWritableStorageMode::Unbounded => {
+                if !self.runner_docker_layer_quota && !is_loopback_host(&self.api_host) {
+                    anyhow::bail!(
+                        "unbounded runner writable storage is allowed only for loopback development; set AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots or AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true for hosted workers"
+                    );
+                }
+            }
             RunnerWritableStorageMode::XfsProjectQuotaSlots => {
                 if !cfg!(target_os = "linux") {
                     anyhow::bail!(
@@ -474,7 +483,21 @@ impl Config {
     /// Handles uses default admin credentials for this module.
     fn uses_default_admin_credentials(&self) -> bool {
         self.admin_username == DEFAULT_ADMIN_USERNAME
-            && self.admin_password == DEFAULT_ADMIN_PASSWORD
+            && self.admin_password.expose_secret() == DEFAULT_ADMIN_PASSWORD
+    }
+
+    /// Compare a candidate admin password against the configured secret.
+    pub fn admin_password_matches(&self, candidate: &str) -> bool {
+        self.admin_password.expose_secret() == candidate
+    }
+
+    /// Expose the admin password for integration-test Basic auth construction.
+    ///
+    /// Production callers should prefer `admin_password_matches`; this accessor
+    /// exists for test clients that must send the configured password over the
+    /// same HTTP boundary as real clients.
+    pub fn expose_admin_password_for_http_basic(&self) -> &str {
+        self.admin_password.expose_secret()
     }
 
     /// Return whether GitHub OAuth is fully configured for creator login.
@@ -484,7 +507,8 @@ impl Config {
             .is_some_and(|value| !value.trim().is_empty())
             && self
                 .github_oauth_client_secret
-                .as_deref()
+                .as_ref()
+                .map(ExposeSecret::expose_secret)
                 .is_some_and(|value| !value.trim().is_empty())
             && self.github_oauth_redirect_url.is_some()
     }
@@ -528,6 +552,7 @@ fn validate_cookie_name(value: &str, field: &str) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::Config;
+    use secrecy::SecretString;
 
     /// Verifies that loopback bind allows local default credentials.
     #[test]
@@ -543,7 +568,7 @@ mod tests {
 
         assert!(config.validate_api_security().is_err());
 
-        config.admin_password = "changed".to_string();
+        config.admin_password = SecretString::from("changed");
         assert!(config.validate_api_security().is_err());
 
         config.allow_public_agent_registration_on_non_loopback = true;
@@ -562,6 +587,28 @@ mod tests {
         assert_eq!(
             config.runner_writable_slot_classes_mb().unwrap(),
             vec![64, 256, 1024]
+        );
+    }
+
+    /// Verifies that hosted workers cannot silently use unbounded writable storage.
+    #[test]
+    fn hosted_runner_rejects_unbounded_storage_without_layer_quota() {
+        let mut config = test_config();
+        config.api_host = "0.0.0.0".to_string();
+
+        let error = config
+            .validate_runner_storage()
+            .expect_err("hosted workers require a writable storage boundary");
+        assert!(
+            error
+                .to_string()
+                .contains("unbounded runner writable storage")
+        );
+
+        config.runner_docker_layer_quota = true;
+        assert_eq!(
+            config.validate_runner_storage().is_ok(),
+            cfg!(target_os = "linux")
         );
     }
 

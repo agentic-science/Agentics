@@ -19,6 +19,8 @@ pub struct MarkEvaluationStartedInput {
     pub evaluation_id: EvaluationId,
     pub solution_submission_id: SolutionSubmissionId,
     pub job_id: EvaluationJobId,
+    pub worker_id: String,
+    pub claim_attempt_count: i32,
     pub target: TargetName,
     pub eval_type: ScoringMode,
 }
@@ -33,13 +35,23 @@ pub async fn mark_evaluation_started(
     let result = sqlx::query(
         r#"
         INSERT INTO evaluations (id, solution_submission_id, job_id, target, eval_type, status, started_at)
-        VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, 'running', NOW())
+        SELECT $1::uuid, j.solution_submission_id, j.id, j.target, j.eval_type, 'running', NOW()
+        FROM evaluation_jobs j
+        WHERE j.id = $3::uuid
+          AND j.solution_submission_id = $2::uuid
+          AND j.worker_id = $4
+          AND j.attempt_count = $5
+          AND j.status = 'running'
+          AND j.target = $6
+          AND j.eval_type = $7
         ON CONFLICT (job_id) DO NOTHING
         "#,
     )
     .bind(input.evaluation_id.as_str())
     .bind(input.solution_submission_id.as_str())
     .bind(input.job_id.as_str())
+    .bind(&input.worker_id)
+    .bind(input.claim_attempt_count)
     .bind(input.target.as_str())
     .bind(eval_type_str)
     .execute(pool)

@@ -557,6 +557,7 @@ pub async fn publish_challenge_draft(
                 &db::PublishArchiveChallengeDraftInput {
                     draft_id: draft.id.clone(),
                     challenge_name: manifest.challenge_name.clone(),
+                    owner_agent_id: draft.creator_agent_id.clone(),
                     audit_event_id: ChallengeDraftAuditEventId::generate(),
                     admin_username: admin.username,
                     repository_path: repository_path.to_string(),

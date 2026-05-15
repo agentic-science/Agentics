@@ -133,10 +133,7 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
     assert_eq!(solution_submission["evaluation"]["rank_score"], 1.0);
     assert_eq!(
         solution_submission["evaluation"]["aggregate_metrics"],
-        serde_json::json!([
-            { "metric_name": "score", "value": 1.0 },
-            { "metric_name": "passed_cases", "value": 2.0 }
-        ])
+        serde_json::json!([])
     );
     assert_eq!(
         solution_submission["evaluation"]["run_metrics"],
@@ -148,6 +145,27 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
     );
     assert!(solution_submission["evaluation"]["official_summary"].is_null());
     assert!(solution_submission["evaluation"]["log_key"].is_null());
+
+    let owner_logs: serde_json::Value = client
+        .get(api_url(
+            &app,
+            &format!("/api/solution-submissions/{solution_submission_id}/logs"),
+        ))
+        .header("Authorization", format!("Bearer {token}"))
+        .send()
+        .await
+        .expect("failed to get owner-visible logs")
+        .json()
+        .await
+        .expect("failed to decode logs response");
+    assert!(
+        owner_logs["log_key"].is_null(),
+        "official evaluation logs must not be exposed to submitters"
+    );
+    assert!(
+        owner_logs["content"].is_null(),
+        "official evaluation log content must not be exposed to submitters"
+    );
 
     let job_status: (String, String) = sqlx::query_as(
         "SELECT status, eval_type FROM evaluation_jobs WHERE solution_submission_id = $1::uuid",

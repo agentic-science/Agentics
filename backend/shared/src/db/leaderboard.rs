@@ -5,7 +5,6 @@ use serde_json::Value;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use crate::error::{AppError, Result};
-use crate::leaderboard::should_replace_leaderboard_entry;
 use crate::models::challenge::{ChallengeBundleSpec, MetricDirection};
 use crate::models::evaluation::{MetricValue, PublicCaseResult};
 use crate::models::ids::SolutionSubmissionId;
@@ -23,15 +22,37 @@ pub async fn hide_solution_submission(
 ) -> Result<()> {
     let mut tx = pool.begin().await?;
 
-    let row: Option<(String, String, String)> = sqlx::query_as(
-        "UPDATE solution_submissions SET visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1::uuid RETURNING challenge_name, target, agent_id::text AS agent_id"
+    let row: Option<(String,)> = sqlx::query_as(
+        "UPDATE solution_submissions SET visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1::uuid RETURNING id::text"
     )
     .bind(solution_submission_id.as_str())
     .fetch_optional(&mut *tx)
     .await?;
 
-    let Some((challenge_name, target, agent_id)) = row else {
+    if row.is_none() {
         return Err(AppError::NotFound);
+    };
+
+    repair_leaderboard_entry_for_solution_submission_tx(&mut tx, solution_submission_id).await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Repair or remove the leaderboard row touched by one submission visibility change.
+pub(super) async fn repair_leaderboard_entry_for_solution_submission_tx<'a>(
+    tx: &mut Transaction<'a, Postgres>,
+    solution_submission_id: &SolutionSubmissionId,
+) -> Result<()> {
+    let row: Option<(String, String, String)> = sqlx::query_as(
+        "SELECT challenge_name, target, agent_id::text AS agent_id FROM solution_submissions WHERE id = $1::uuid LIMIT 1"
+    )
+    .bind(solution_submission_id.as_str())
+    .fetch_optional(&mut **tx)
+    .await?;
+
+    let Some((challenge_name, target, agent_id)) = row else {
+        return Ok(());
     };
 
     let leaderboard_entry: Option<(String,)> = sqlx::query_as(
@@ -40,7 +61,7 @@ pub async fn hide_solution_submission(
     .bind(&challenge_name)
     .bind(&target)
     .bind(&agent_id)
-    .fetch_optional(&mut *tx)
+    .fetch_optional(&mut **tx)
     .await?;
 
     if leaderboard_entry
@@ -91,7 +112,7 @@ pub async fn hide_solution_submission(
         .bind(&agent_id)
         .bind(solution_submission_id.as_str())
         .bind(&target)
-        .fetch_optional(&mut *tx)
+        .fetch_optional(&mut **tx)
         .await?;
 
         if let Some((
@@ -130,7 +151,7 @@ pub async fn hide_solution_submission(
             .bind(&aggregate_metrics)
             .bind(official_score)
             .bind(&official_metrics)
-            .execute(&mut *tx)
+            .execute(&mut **tx)
             .await?;
         } else {
             sqlx::query(
@@ -139,12 +160,11 @@ pub async fn hide_solution_submission(
             .bind(&challenge_name)
             .bind(&target)
             .bind(&agent_id)
-            .execute(&mut *tx)
+            .execute(&mut **tx)
             .await?;
         }
     }
 
-    tx.commit().await?;
     Ok(())
 }
 
@@ -155,13 +175,34 @@ pub async fn list_leaderboard_entries(
     target: &TargetName,
     limit: i64,
 ) -> Result<Vec<LeaderboardEntryDto>> {
+    list_leaderboard_entries_inner(pool, challenge_name, target, limit, true).await
+}
+
+/// List visible leaderboard entries with metric payloads retained for aggregation-only APIs.
+pub async fn list_leaderboard_entries_for_distribution(
+    pool: &PgPool,
+    challenge_name: &ChallengeName,
+    target: &TargetName,
+    limit: i64,
+) -> Result<Vec<LeaderboardEntryDto>> {
+    list_leaderboard_entries_inner(pool, challenge_name, target, limit, false).await
+}
+
+/// Query, order, and optionally redact the visible leaderboard rows for one target.
+async fn list_leaderboard_entries_inner(
+    pool: &PgPool,
+    challenge_name: &ChallengeName,
+    target: &TargetName,
+    limit: i64,
+    redact_metric_payloads: bool,
+) -> Result<Vec<LeaderboardEntryDto>> {
     let requested_limit = limit.max(1);
     let fetch_limit = requested_limit.saturating_mul(5).clamp(1, 10_000);
-    let spec = get_published_challenge(pool, challenge_name)
+    let challenge = get_published_challenge(pool, challenge_name)
         .await?
-        .and_then(|challenge| {
-            serde_json::from_value::<ChallengeBundleSpec>(challenge.spec_json).ok()
-        });
+        .ok_or(AppError::NotFound)?;
+    let spec = serde_json::from_value::<ChallengeBundleSpec>(challenge.spec_json)
+        .map_err(|e| AppError::Internal(format!("stored challenge spec is invalid: {e}")))?;
     let rows = sqlx::query(
         r#"
         SELECT
@@ -169,10 +210,13 @@ pub async fn list_leaderboard_entries(
             le.best_rank_score, le.aggregate_metrics_json, le.official_score,
             le.official_metrics_json, le.updated_at
         FROM leaderboard_entries le
+        JOIN solution_submissions s ON s.id = le.best_solution_submission_id
         JOIN agents a ON a.id = le.agent_id
         JOIN challenges p ON p.name = le.challenge_name
         WHERE p.name = $1
           AND le.target = $2
+          AND s.visible_after_eval = TRUE
+          AND s.status = 'completed'
         ORDER BY le.best_rank_score DESC, le.updated_at ASC
         LIMIT $3
         "#,
@@ -216,10 +260,14 @@ pub async fn list_leaderboard_entries(
         })
         .collect::<Result<Vec<_>>>()?;
 
-    if let Some(spec) = spec {
-        entries.sort_by(|a, b| compare_leaderboard_entries(&spec, a, b));
-    }
+    entries.sort_by(|a, b| compare_leaderboard_entries(&spec, a, b));
     entries.truncate(usize::try_from(requested_limit).unwrap_or(usize::MAX));
+    if redact_metric_payloads {
+        for entry in &mut entries {
+            entry.aggregate_metrics.clear();
+            entry.official_metrics.clear();
+        }
+    }
 
     Ok(entries)
 }
@@ -249,7 +297,8 @@ pub(super) async fn upsert_leaderboard_entry_for_solution_submission_tx<'a>(
     let Some((challenge_name, agent_id, spec_json)) = row else {
         return Ok(false);
     };
-    let spec = serde_json::from_value::<ChallengeBundleSpec>(spec_json).ok();
+    let spec = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+        .map_err(|e| AppError::Internal(format!("stored challenge spec is invalid: {e}")))?;
 
     let current: Option<(f64, Value)> = sqlx::query_as(
         "SELECT best_rank_score, aggregate_metrics_json FROM leaderboard_entries WHERE challenge_name = $1 AND target = $2 AND agent_id = $3::uuid LIMIT 1"
@@ -266,8 +315,7 @@ pub(super) async fn upsert_leaderboard_entry_for_solution_submission_tx<'a>(
         })
         .transpose()?;
 
-    if !candidate_replaces_leaderboard_entry(spec.as_ref(), current, rank_score, aggregate_metrics)
-    {
+    if !candidate_replaces_leaderboard_entry(&spec, current, rank_score, aggregate_metrics) {
         return Ok(false);
     }
 
@@ -393,7 +441,7 @@ fn compare_rank_payloads(
 
 /// Handles candidate replaces leaderboard entry for this module.
 fn candidate_replaces_leaderboard_entry(
-    spec: Option<&ChallengeBundleSpec>,
+    spec: &ChallengeBundleSpec,
     current: Option<(f64, Vec<MetricValue>)>,
     candidate_score: f64,
     candidate_metrics: &[MetricValue],
@@ -402,17 +450,13 @@ fn candidate_replaces_leaderboard_entry(
         return true;
     };
 
-    if let Some(spec) = spec {
-        return compare_rank_payloads(
-            spec,
-            candidate_score,
-            candidate_metrics,
-            current_score,
-            &current_metrics,
-        ) == Ordering::Less;
-    }
-
-    should_replace_leaderboard_entry(Some(current_score), candidate_score)
+    compare_rank_payloads(
+        spec,
+        candidate_score,
+        candidate_metrics,
+        current_score,
+        &current_metrics,
+    ) == Ordering::Less
 }
 
 /// Handles metric value for this module.

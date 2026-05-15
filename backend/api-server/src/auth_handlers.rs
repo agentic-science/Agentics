@@ -8,6 +8,7 @@ use axum::{
 };
 use chrono::{Duration, Utc};
 use reqwest::Url;
+use secrecy::ExposeSecret;
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -51,11 +52,13 @@ pub async fn admin_login(
     AppendHeaders<[(HeaderName, String); 2]>,
     Json<AdminSessionResponse>,
 )> {
-    if request.username.trim().is_empty() || request.password.is_empty() {
+    if request.username.trim().is_empty() || request.password.expose_secret().is_empty() {
         return Err(AppError::Unauthorized);
     }
     if request.username != state.config.admin_username
-        || request.password != state.config.admin_password
+        || !state
+            .config
+            .admin_password_matches(request.password.expose_secret())
     {
         return Err(AppError::Unauthorized);
     }
@@ -249,7 +252,11 @@ async fn exchange_github_code(state: &AppState, code: &str) -> Result<String> {
         "AGENTICS_GITHUB_OAUTH_CLIENT_ID",
     )?;
     let client_secret = required_oauth_config(
-        state.config.github_oauth_client_secret.as_deref(),
+        state
+            .config
+            .github_oauth_client_secret
+            .as_ref()
+            .map(ExposeSecret::expose_secret),
         "AGENTICS_GITHUB_OAUTH_CLIENT_SECRET",
     )?;
     let redirect_url = required_oauth_config(
