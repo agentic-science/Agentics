@@ -41,6 +41,18 @@ impl fmt::Display for RepoRelativePath {
     }
 }
 
+impl AsRef<str> for RepoRelativePath {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl AsRef<Path> for RepoRelativePath {
+    fn as_ref(&self) -> &Path {
+        self.as_path()
+    }
+}
+
 impl FromStr for RepoRelativePath {
     type Err = AppError;
 
@@ -84,6 +96,99 @@ impl JsonSchema for RepoRelativePath {
         })
     }
 }
+
+macro_rules! define_relative_path_type {
+    ($type_name:ident, $schema_name:literal) => {
+        #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        pub struct $type_name(String);
+
+        impl $type_name {
+            /// Parse and validate a safe relative path.
+            pub fn try_new(value: impl AsRef<str>) -> Result<Self> {
+                validate_relative_path(value.as_ref()).map(Self)
+            }
+
+            /// Borrow the path as a string using `/` separators.
+            pub fn as_str(&self) -> &str {
+                &self.0
+            }
+
+            /// Borrow the path for filesystem joins.
+            pub fn as_path(&self) -> &Path {
+                Path::new(&self.0)
+            }
+        }
+
+        impl fmt::Display for $type_name {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str(self.as_str())
+            }
+        }
+
+        impl AsRef<str> for $type_name {
+            fn as_ref(&self) -> &str {
+                self.as_str()
+            }
+        }
+
+        impl AsRef<Path> for $type_name {
+            fn as_ref(&self) -> &Path {
+                self.as_path()
+            }
+        }
+
+        impl FromStr for $type_name {
+            type Err = AppError;
+
+            fn from_str(value: &str) -> Result<Self> {
+                Self::try_new(value)
+            }
+        }
+
+        impl Serialize for $type_name {
+            fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+            where
+                S: Serializer,
+            {
+                serializer.serialize_str(self.as_str())
+            }
+        }
+
+        impl<'de> Deserialize<'de> for $type_name {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                let value = String::deserialize(deserializer)?;
+                Self::try_new(&value).map_err(serde::de::Error::custom)
+            }
+        }
+
+        impl JsonSchema for $type_name {
+            fn inline_schema() -> bool {
+                true
+            }
+
+            fn schema_name() -> Cow<'static, str> {
+                $schema_name.into()
+            }
+
+            fn json_schema(_: &mut SchemaGenerator) -> Schema {
+                json_schema!({
+                    "type": "string",
+                    "pattern": r"^[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$"
+                })
+            }
+        }
+    };
+}
+
+define_relative_path_type!(BundleRelativePath, "BundleRelativePath");
+define_relative_path_type!(RunInputPath, "RunInputPath");
+define_relative_path_type!(RunOutputPath, "RunOutputPath");
+define_relative_path_type!(ProjectRelativePath, "ProjectRelativePath");
+define_relative_path_type!(ScriptPath, "ScriptPath");
+define_relative_path_type!(LogRelativePath, "LogRelativePath");
 
 /// Canonical server-local repository checkout path.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -209,7 +314,10 @@ fn validate_relative_path(value: &str) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::RepoRelativePath;
+    use super::{
+        BundleRelativePath, LogRelativePath, ProjectRelativePath, RepoRelativePath, RunInputPath,
+        RunOutputPath, ScriptPath,
+    };
 
     #[test]
     fn validates_repo_relative_paths() {
@@ -218,6 +326,39 @@ mod tests {
         }
         for value in ["", "/abs", "../escape", "a/../b", "a//b", "a b", "a\\b"] {
             assert!(RepoRelativePath::try_new(value).is_err());
+        }
+    }
+
+    #[test]
+    fn validates_manifest_and_runner_relative_paths() {
+        for value in [
+            "agentics.solution.json",
+            "public/runs.json",
+            "logs/build.txt",
+        ] {
+            assert!(BundleRelativePath::try_new(value).is_ok());
+            assert!(RunInputPath::try_new(value).is_ok());
+            assert!(RunOutputPath::try_new(value).is_ok());
+            assert!(ProjectRelativePath::try_new(value).is_ok());
+            assert!(ScriptPath::try_new(value).is_ok());
+            assert!(LogRelativePath::try_new(value).is_ok());
+        }
+        for value in [
+            "",
+            "/abs",
+            "../escape",
+            "a/../b",
+            "a//b",
+            "a b",
+            "a\\b",
+            "a/\nb",
+        ] {
+            assert!(BundleRelativePath::try_new(value).is_err());
+            assert!(RunInputPath::try_new(value).is_err());
+            assert!(RunOutputPath::try_new(value).is_err());
+            assert!(ProjectRelativePath::try_new(value).is_err());
+            assert!(ScriptPath::try_new(value).is_err());
+            assert!(LogRelativePath::try_new(value).is_err());
         }
     }
 }

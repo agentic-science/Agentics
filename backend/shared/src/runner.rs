@@ -18,6 +18,7 @@ use crate::models::challenge::{
     TargetAccelerator,
 };
 use crate::models::evaluation::{EvaluationJobPayload, ScorerRunResult, ScoringMode};
+use crate::models::paths::BundleRelativePath;
 use crate::storage::{Storage, StorageKey};
 use crate::zip_project::{
     ZIP_PROJECT_MANIFEST_FILE, ZipProjectManifest, ZipProjectPhaseFailureReason,
@@ -167,7 +168,7 @@ pub async fn execute_evaluation_job(
     if config.require_digest_pinned_images {
         crate::challenge_bundle::validate_digest_pinned_images(&spec)?;
     }
-    let result_path = scorer_output_root.join(&spec.scorer.result_file);
+    let result_path = scorer_output_root.join(spec.scorer.result_file.as_path());
     let mut logs = String::new();
     let runner_storage = RunnerStorage::from_config(config)?;
     let runner_context = RunnerContext {
@@ -286,7 +287,7 @@ async fn read_solution_manifest(
     source_root: &Path,
     spec: &ChallengeBundleSpec,
 ) -> Result<ZipProjectManifest> {
-    let manifest_path = source_root.join(&spec.solution.manifest_file);
+    let manifest_path = source_root.join(spec.solution.manifest_file.as_path());
     let raw = tokio::fs::read_to_string(&manifest_path)
         .await
         .map_err(|e| {
@@ -562,7 +563,7 @@ fn validate_scorer_result(
 }
 
 enum RunManifestSource<'a> {
-    Static(&'a str),
+    Static(&'a BundleRelativePath),
     Prepared(&'a ChallengePrepareSpec),
 }
 
@@ -600,7 +601,9 @@ async fn resolve_run_plan(
                 logs,
             )
             .await?;
-            let manifest_path = request.prepared_root.join(&prepare.result_runs_file);
+            let manifest_path = request
+                .prepared_root
+                .join(prepare.result_runs_file.as_path());
             let manifest = crate::challenge_bundle::read_challenge_run_manifest_file(
                 &manifest_path,
                 &format!("prepared run manifest {}", manifest_path.display()),
@@ -690,7 +693,7 @@ fn run_manifest_source(
 ) -> Result<RunManifestSource<'_>> {
     match eval_type {
         ScoringMode::Validation => {
-            if let Some(path) = spec.execution.validation_runs.as_deref() {
+            if let Some(path) = spec.execution.validation_runs.as_ref() {
                 Ok(RunManifestSource::Static(path))
             } else if let Some(prepare) = spec.execution.validation_prepare.as_ref() {
                 Ok(RunManifestSource::Prepared(prepare))
@@ -701,7 +704,7 @@ fn run_manifest_source(
             }
         }
         ScoringMode::Official => {
-            if let Some(path) = spec.execution.official_runs.as_deref() {
+            if let Some(path) = spec.execution.official_runs.as_ref() {
                 Ok(RunManifestSource::Static(path))
             } else if let Some(prepare) = spec.execution.official_prepare.as_ref() {
                 Ok(RunManifestSource::Prepared(prepare))
@@ -841,12 +844,12 @@ async fn write_run_input_file(
     input_dir: &Path,
     input: &ChallengeRunInputFile,
 ) -> Result<()> {
-    let path = input_dir.join(&input.path);
+    let path = input_dir.join(input.path.as_path());
     if let Some(parent) = path.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
     if let Some(source_path) = &input.source_path {
-        tokio::fs::copy(input_source_root.join(source_path), path)
+        tokio::fs::copy(input_source_root.join(source_path.as_path()), path)
             .await
             .map_err(|e| {
                 AppError::Runner(format!("copy run input source `{source_path}` failed: {e}"))
@@ -889,7 +892,7 @@ async fn write_run_metadata(
 
 async fn ensure_declared_outputs_exist(run: &ChallengeRunSpec, output_dir: &Path) -> Result<()> {
     for output in &run.output_files {
-        let output_path = output_dir.join(output);
+        let output_path = output_dir.join(output.as_path());
         let metadata = tokio::fs::symlink_metadata(&output_path)
             .await
             .map_err(|_| {

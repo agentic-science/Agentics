@@ -6,6 +6,7 @@ use anyhow::{Context, Result, bail};
 use serde::Serialize;
 use shared::models::challenge::ChallengeDetailResponse;
 use shared::models::names::ChallengeName;
+use shared::models::paths::ScriptPath;
 use shared::zip_project::{
     ZIP_PROJECT_MANIFEST_FILE, ZIP_PROJECT_PROTOCOL, ZIP_PROJECT_PROTOCOL_VERSION,
     ZipProjectCommands, ZipProjectDependencies, ZipProjectDependencyPolicy, ZipProjectInterface,
@@ -171,7 +172,7 @@ fn render_manifest(
         commands: ZipProjectCommands {
             setup: None,
             build: None,
-            run: "run.sh".to_string(),
+            run: ScriptPath::try_new("run.sh")?,
         },
         phases: ZipProjectPhases::default(),
         interface: ZipProjectInterface {
@@ -362,6 +363,7 @@ mod tests {
     };
     use shared::models::evaluation::ScoreVisibility;
     use shared::models::names::{ChallengeName, ResourceProfileName, TargetName};
+    use shared::models::paths::BundleRelativePath;
     use shared::zip_project::{
         ZipProjectInterfaceKind, ZipProjectNetworkAccess, parse_zip_project_manifest,
     };
@@ -463,7 +465,7 @@ mod tests {
             Some("rust-cpu")
         );
         assert_eq!(manifest.interface.kind, ZipProjectInterfaceKind::Stdio);
-        assert_eq!(manifest.commands.run, "run.sh");
+        assert_eq!(manifest.commands.run.as_str(), "run.sh");
         assert!(manifest.commands.setup.is_none());
         assert!(manifest.commands.build.is_none());
     }
@@ -501,11 +503,11 @@ mod tests {
                 solution_publication: ChallengeSolutionPublicationPolicy::Public,
                 solution: SolutionSpec {
                     protocol: "zip_project".to_string(),
-                    manifest_file: "agentics.solution.json".to_string(),
+                    manifest_file: bundle_path("agentics.solution.json"),
                 },
                 scorer: ScorerSpec {
                     command: vec!["python".to_string(), "scorer/run.py".to_string()],
-                    result_file: "result.json".to_string(),
+                    result_file: bundle_path("result.json"),
                 },
                 targets: vec![ChallengeTargetSpec {
                     name: target_name("linux-arm64-cpu"),
@@ -531,13 +533,13 @@ mod tests {
                     },
                 }],
                 execution: ChallengeExecutionSpec {
-                    validation_runs: Some("public/runs.json".to_string()),
+                    validation_runs: Some(bundle_path("public/runs.json")),
                     validation_prepare: None,
-                    official_runs: Some("private-benchmark/runs.json".to_string()),
+                    official_runs: Some(bundle_path("private-benchmark/runs.json")),
                     official_prepare: None,
                 },
                 datasets: DatasetsSpec {
-                    public_dir: "data/public".to_string(),
+                    public_dir: bundle_path("data/public"),
                     private_benchmark_dir: None,
                     public_policy: ScoreVisibility::Full,
                     private_benchmark_policy: PrivateBenchmarkPolicy::ScoreOnly,
@@ -561,5 +563,9 @@ mod tests {
     fn resource_profile_name(value: &str) -> ResourceProfileName {
         ResourceProfileName::try_new(value.to_string())
             .expect("test resource profile name is valid")
+    }
+
+    fn bundle_path(value: &str) -> BundleRelativePath {
+        BundleRelativePath::try_new(value).expect("test bundle path is valid")
     }
 }

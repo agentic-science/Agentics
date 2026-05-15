@@ -17,6 +17,7 @@ use crate::models::challenge::{
     ChallengeRunSpec, ChallengeSolutionPublicationPolicy, ChallengeTargetSpec, DockerPlatform,
     HardwareProfileSpec, PrivateBenchmarkPolicy, ResourceProfileSpec, TargetAccelerator,
 };
+use crate::models::paths::BundleRelativePath;
 use crate::zip_project::{ZIP_PROJECT_MANIFEST_FILE, ZIP_PROJECT_PROTOCOL};
 
 const SUPPORTED_CUDA_VARIANTS: &[(&str, &str)] =
@@ -44,11 +45,10 @@ pub async fn read_challenge_bundle_spec(bundle_dir: &Path) -> Result<ChallengeBu
 /// Read and validate one challenge-owned run manifest from a bundle directory.
 pub async fn read_challenge_run_manifest(
     bundle_dir: &Path,
-    manifest_path: &str,
+    manifest_path: &BundleRelativePath,
 ) -> Result<ChallengeRunManifest> {
-    require_safe_relative_path(manifest_path, "execution run manifest")?;
     read_challenge_run_manifest_file(
-        &bundle_dir.join(manifest_path),
+        &bundle_dir.join(manifest_path.as_path()),
         &format!("run manifest {manifest_path}"),
     )
     .await
@@ -71,7 +71,7 @@ pub async fn validate_challenge_bundle(bundle_dir: &Path) -> Result<()> {
     let spec = read_challenge_bundle_spec(bundle_dir).await?;
     let spec_path = bundle_dir.join("spec.json");
     let statement_path = bundle_dir.join("statement.md");
-    let public_dir = bundle_dir.join(&spec.datasets.public_dir);
+    let public_dir = bundle_dir.join(spec.datasets.public_dir.as_path());
 
     assert_path_type(&spec_path, "file", "spec.json").await?;
     assert_path_type(&statement_path, "file", "statement.md").await?;
@@ -97,10 +97,10 @@ pub async fn validate_challenge_bundle(bundle_dir: &Path) -> Result<()> {
     assert_path_type(&public_dir, "directory", "public data dir").await?;
 
     if spec.targets.iter().any(|target| target.validation_enabled)
-        && let Some(validation_runs) = spec.execution.validation_runs.as_deref()
+        && let Some(validation_runs) = spec.execution.validation_runs.as_ref()
     {
         assert_path_type(
-            &bundle_dir.join(validation_runs),
+            &bundle_dir.join(validation_runs.as_path()),
             "file",
             "validation run manifest",
         )
@@ -112,15 +112,15 @@ pub async fn validate_challenge_bundle(bundle_dir: &Path) -> Result<()> {
     if spec.datasets.private_benchmark_enabled {
         if let Some(ref private_benchmark_dir) = spec.datasets.private_benchmark_dir {
             assert_path_type(
-                &bundle_dir.join(private_benchmark_dir),
+                &bundle_dir.join(private_benchmark_dir.as_path()),
                 "directory",
                 "private benchmark data dir",
             )
             .await?;
         }
-        if let Some(official_runs) = spec.execution.official_runs.as_deref() {
+        if let Some(official_runs) = spec.execution.official_runs.as_ref() {
             assert_path_type(
-                &bundle_dir.join(official_runs),
+                &bundle_dir.join(official_runs.as_path()),
                 "file",
                 "official run manifest",
             )
@@ -319,19 +319,16 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
             "solution.protocol must be {ZIP_PROJECT_PROTOCOL}"
         )));
     }
-    require_safe_relative_path(&spec.solution.manifest_file, "solution.manifest_file")?;
-    if spec.solution.manifest_file != ZIP_PROJECT_MANIFEST_FILE {
+    if spec.solution.manifest_file.as_str() != ZIP_PROJECT_MANIFEST_FILE {
         return Err(AppError::Validation(format!(
             "solution.manifest_file must be {ZIP_PROJECT_MANIFEST_FILE}"
         )));
     }
     validate_scorer_command(&spec.scorer.command)?;
-    require_safe_relative_path(&spec.scorer.result_file, "scorer.result_file")?;
     validate_targets(spec)?;
     validate_challenge_policy(spec)?;
     validate_execution(spec)?;
 
-    require_safe_relative_path(&spec.datasets.public_dir, "datasets.public_dir")?;
     if spec.datasets.private_benchmark_policy != PrivateBenchmarkPolicy::ScoreOnly {
         return Err(AppError::Validation(
             "datasets.private_benchmark_policy must be score_only".to_string(),
@@ -343,12 +340,10 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
     // while prepare-generated official runs may only need private seeds.
     match (
         spec.datasets.private_benchmark_enabled,
-        spec.datasets.private_benchmark_dir.as_deref(),
+        spec.datasets.private_benchmark_dir.as_ref(),
         spec.execution.official_runs.is_some(),
     ) {
-        (true, Some(path), _) => {
-            require_safe_relative_path(path, "datasets.private_benchmark_dir")?
-        }
+        (true, Some(_), _) => {}
         (true, None, true) => {
             return Err(AppError::Validation(
                 "datasets.private_benchmark_dir is required when private_benchmark_enabled uses static official_runs"
@@ -356,9 +351,7 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
             ));
         }
         (true, None, false) => {}
-        (false, Some(path), _) => {
-            require_safe_relative_path(path, "datasets.private_benchmark_dir")?
-        }
+        (false, Some(_), _) => {}
         (false, None, _) => {}
     }
 
@@ -810,14 +803,8 @@ fn validate_sha256_digest(digest: &str, field: &str) -> Result<()> {
 }
 
 fn validate_execution(spec: &ChallengeBundleSpec) -> Result<()> {
-    if let Some(path) = &spec.execution.validation_runs {
-        require_safe_relative_path(path, "execution.validation_runs")?;
-    }
     if let Some(prepare) = &spec.execution.validation_prepare {
         validate_prepare_spec(prepare, "execution.validation_prepare")?;
-    }
-    if let Some(path) = &spec.execution.official_runs {
-        require_safe_relative_path(path, "execution.official_runs")?;
     }
     if let Some(prepare) = &spec.execution.official_prepare {
         validate_prepare_spec(prepare, "execution.official_prepare")?;
@@ -856,10 +843,6 @@ fn validate_execution(spec: &ChallengeBundleSpec) -> Result<()> {
 
 fn validate_prepare_spec(prepare: &ChallengePrepareSpec, field: &str) -> Result<()> {
     validate_prepare_command(&prepare.command, &format!("{field}.command"))?;
-    require_safe_relative_path(
-        &prepare.result_runs_file,
-        &format!("{field}.result_runs_file"),
-    )?;
     if let Some(notes) = &prepare.reproducibility_notes {
         require_non_empty(notes, &format!("{field}.reproducibility_notes"))?;
     }
@@ -911,7 +894,6 @@ fn validate_challenge_run(run: &ChallengeRunSpec) -> Result<()> {
     }
     let mut output_paths = HashSet::with_capacity(run.output_files.len());
     for path in &run.output_files {
-        require_safe_relative_path(path, "runs[].output_files[]")?;
         if !output_paths.insert(path.as_str()) {
             return Err(AppError::Validation(format!(
                 "runs[].output_files contains duplicate path `{path}`"
@@ -923,10 +905,6 @@ fn validate_challenge_run(run: &ChallengeRunSpec) -> Result<()> {
 }
 
 fn validate_run_input_file(input: &ChallengeRunInputFile) -> Result<()> {
-    require_safe_relative_path(&input.path, "runs[].input_files[].path")?;
-    if let Some(source_path) = &input.source_path {
-        require_safe_relative_path(source_path, "runs[].input_files[].source_path")?;
-    }
     let source_count = [
         input.source_path.is_some(),
         input.content.is_some(),
@@ -958,7 +936,7 @@ pub async fn validate_challenge_run_manifest_sources(
     for run in &manifest.runs {
         for input in &run.input_files {
             if let Some(source_path) = &input.source_path {
-                let full_path = bundle_dir.join(source_path);
+                let full_path = bundle_dir.join(source_path.as_path());
                 let meta = tokio::fs::symlink_metadata(&full_path).await.map_err(|_| {
                     AppError::Validation(format!(
                         "runs[].input_files[].source_path does not exist: {}",
@@ -1112,16 +1090,6 @@ fn validate_positive_u32(value: u32, field: &str) -> Result<()> {
     Ok(())
 }
 
-fn require_safe_relative_path(value: &str, field: &str) -> Result<()> {
-    if !is_safe_relative_path(value) {
-        return Err(AppError::Validation(format!(
-            "{field} must be a safe relative path"
-        )));
-    }
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use std::path::Path;
@@ -1136,6 +1104,7 @@ mod tests {
     };
     use crate::models::evaluation::ScoreVisibility;
     use crate::models::names::{ChallengeName, MetricName, ResourceProfileName, TargetName};
+    use crate::models::paths::BundleRelativePath;
     use crate::models::urls::MoltbookSubmoltUrl;
     use crate::zip_project::ZipProjectNetworkAccess;
 
@@ -1155,11 +1124,11 @@ mod tests {
             challenge_summary: "Add numbers from worker-managed runs.".to_string(),
             solution: SolutionSpec {
                 protocol: "zip_project".to_string(),
-                manifest_file: "agentics.solution.json".to_string(),
+                manifest_file: bundle_path("agentics.solution.json"),
             },
             scorer: ScorerSpec {
                 command: vec!["python".to_string(), "scorer/run.py".to_string()],
-                result_file: "result.json".to_string(),
+                result_file: bundle_path("result.json"),
             },
             targets: vec![ChallengeTargetSpec {
                 name: target_name("linux-arm64-cpu"),
@@ -1198,14 +1167,14 @@ mod tests {
             },
             solution_publication: ChallengeSolutionPublicationPolicy::Public,
             execution: ChallengeExecutionSpec {
-                validation_runs: Some("public/runs.json".to_string()),
+                validation_runs: Some(bundle_path("public/runs.json")),
                 validation_prepare: None,
-                official_runs: Some("private-benchmark/runs.json".to_string()),
+                official_runs: Some(bundle_path("private-benchmark/runs.json")),
                 official_prepare: None,
             },
             datasets: DatasetsSpec {
-                public_dir: "public".to_string(),
-                private_benchmark_dir: Some("private-benchmark".to_string()),
+                public_dir: bundle_path("public"),
+                private_benchmark_dir: Some(bundle_path("private-benchmark")),
                 public_policy: ScoreVisibility::Full,
                 private_benchmark_policy: PrivateBenchmarkPolicy::ScoreOnly,
                 private_benchmark_enabled: true,
@@ -1230,6 +1199,10 @@ mod tests {
     fn resource_profile_name(value: &str) -> ResourceProfileName {
         ResourceProfileName::try_new(value.to_string())
             .expect("test resource profile name is valid")
+    }
+
+    fn bundle_path(value: &str) -> BundleRelativePath {
+        BundleRelativePath::try_new(value).expect("test bundle path is valid")
     }
 
     fn pin_images(spec: &mut ChallengeBundleSpec) {
@@ -1472,7 +1445,7 @@ mod tests {
     fn disabled_private_benchmark_may_still_declare_directory() {
         let mut spec = base_spec();
         spec.datasets.private_benchmark_enabled = false;
-        spec.datasets.private_benchmark_dir = Some("private-benchmark".to_string());
+        spec.datasets.private_benchmark_dir = Some(bundle_path("private-benchmark"));
 
         assert!(validate_challenge_bundle_spec(&spec).is_ok());
     }
@@ -1641,7 +1614,7 @@ mod tests {
     fn prepare_spec() -> ChallengePrepareSpec {
         ChallengePrepareSpec {
             command: vec!["python".to_string(), "scorer/prepare.py".to_string()],
-            result_runs_file: "generated/runs.json".to_string(),
+            result_runs_file: bundle_path("generated/runs.json"),
             network_access: ZipProjectNetworkAccess::Disabled,
             reproducibility_notes: Some("Generated from deterministic private seeds.".to_string()),
             external_data: Vec::new(),
@@ -1657,7 +1630,7 @@ mod tests {
         ));
         let mut spec = base_spec();
         spec.datasets.private_benchmark_enabled = false;
-        spec.datasets.private_benchmark_dir = Some("private-benchmark".to_string());
+        spec.datasets.private_benchmark_dir = Some(bundle_path("private-benchmark"));
         create_bundle(&root, &spec);
 
         let result = validate_challenge_bundle(&root).await;
@@ -1699,7 +1672,7 @@ mod tests {
         ));
         let mut spec = base_spec();
         spec.datasets.private_benchmark_enabled = true;
-        spec.datasets.private_benchmark_dir = Some("private-benchmark".to_string());
+        spec.datasets.private_benchmark_dir = Some(bundle_path("private-benchmark"));
         create_bundle(&root, &spec);
 
         let result = validate_challenge_bundle(&root).await;

@@ -252,16 +252,16 @@ async fn validate_public_bundle(
     }
     assert_public_file_exists(bundle_dir.join("statement.md"), "statement.md").await?;
     assert_public_dir_exists(
-        bundle_dir.join(&spec.datasets.public_dir),
+        bundle_dir.join(spec.datasets.public_dir.as_path()),
         "datasets.public_dir",
     )
     .await?;
 
     if spec.targets.iter().any(|target| target.validation_enabled)
-        && let Some(validation_runs) = spec.execution.validation_runs.as_deref()
+        && let Some(validation_runs) = spec.execution.validation_runs.as_ref()
     {
         assert_public_file_exists(
-            bundle_dir.join(validation_runs),
+            bundle_dir.join(validation_runs.as_path()),
             "execution.validation_runs",
         )
         .await?;

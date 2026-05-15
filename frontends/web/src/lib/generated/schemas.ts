@@ -278,11 +278,21 @@ export const challengeDetailResponseSchema = z
             "Plain-text summary used in compact challenge catalog surfaces.",
           ),
         solution: z
-          .object({ protocol: z.string(), manifest_file: z.string() })
+          .object({
+            protocol: z.string(),
+            manifest_file: z
+              .string()
+              .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+          })
           .strict()
           .describe("Local solution format constraints declared by a bundle."),
         scorer: z
-          .object({ command: z.array(z.string()), result_file: z.string() })
+          .object({
+            command: z.array(z.string()),
+            result_file: z
+              .string()
+              .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+          })
           .strict()
           .describe("Scorer entrypoint and output-file contract for a bundle."),
         targets: z.array(
@@ -389,12 +399,16 @@ export const challengeDetailResponseSchema = z
           ),
         execution: z
           .object({
-            validation_runs: z.string().optional(),
+            validation_runs: z
+              .string()
+              .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+              .optional(),
             validation_prepare: z
               .object({
                 command: z.array(z.string()),
                 result_runs_file: z
                   .string()
+                  .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
                   .describe(
                     "Relative path, under the prepared workspace, to the generated run manifest.",
                   ),
@@ -439,12 +453,16 @@ export const challengeDetailResponseSchema = z
                 "Optional scorer-image command that prepares generated benchmark inputs.",
               )
               .optional(),
-            official_runs: z.string().optional(),
+            official_runs: z
+              .string()
+              .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+              .optional(),
             official_prepare: z
               .object({
                 command: z.array(z.string()),
                 result_runs_file: z
                   .string()
+                  .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
                   .describe(
                     "Relative path, under the prepared workspace, to the generated run manifest.",
                   ),
@@ -498,11 +516,13 @@ export const challengeDetailResponseSchema = z
           .object({
             public_dir: z
               .string()
+              .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
               .describe(
                 "Directory containing data that agents may inspect and use for validation.",
               ),
             private_benchmark_dir: z
               .string()
+              .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
               .describe(
                 "Directory containing private benchmark data or private prepare config used by official runs.",
               )

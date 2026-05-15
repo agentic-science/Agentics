@@ -9,6 +9,7 @@ use std::io::Read;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{AppError, Result};
+use crate::models::paths::{LogRelativePath, ProjectRelativePath, ScriptPath};
 
 pub const ZIP_PROJECT_MANIFEST_FILE: &str = "agentics.solution.json";
 pub const ZIP_PROJECT_PROTOCOL: &str = "zip_project";
@@ -54,10 +55,10 @@ pub struct ZipProjectRuntime {
 #[serde(deny_unknown_fields)]
 pub struct ZipProjectCommands {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub setup: Option<String>,
+    pub setup: Option<ScriptPath>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub build: Option<String>,
-    pub run: String,
+    pub build: Option<ScriptPath>,
+    pub run: ScriptPath,
 }
 
 /// Optional per-phase resource and behavior overrides.
@@ -154,7 +155,7 @@ pub enum ZipProjectPhaseName {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ZipProjectResolvedPhase {
     pub name: ZipProjectPhaseName,
-    pub command: String,
+    pub command: ScriptPath,
     pub limits: ZipProjectPhaseLimits,
 }
 
@@ -168,7 +169,7 @@ pub struct ZipProjectPhaseFailureReport {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub exit_code: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub log_path: Option<String>,
+    pub log_path: Option<LogRelativePath>,
 }
 
 /// Coarse failure classes used by workers when reporting phase outcomes.
@@ -210,9 +211,9 @@ pub enum ZipProjectInterfaceKind {
 pub struct ZipProjectDependencies {
     pub policy: ZipProjectDependencyPolicy,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub lockfiles: Vec<String>,
+    pub lockfiles: Vec<ProjectRelativePath>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub vendor_dirs: Vec<String>,
+    pub vendor_dirs: Vec<ProjectRelativePath>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub notes: Option<String>,
 }
@@ -336,14 +337,6 @@ impl ZipProjectRuntime {
 
 impl ZipProjectCommands {
     fn validate(&self) -> Result<()> {
-        if let Some(setup) = &self.setup {
-            require_safe_relative_path(setup, "commands.setup")?;
-        }
-        if let Some(build) = &self.build {
-            require_safe_relative_path(build, "commands.build")?;
-        }
-        require_safe_relative_path(&self.run, "commands.run")?;
-
         Ok(())
     }
 }
@@ -414,9 +407,6 @@ impl ZipProjectPhaseFailureReport {
     /// Validate a future worker failure report before persistence or API output.
     pub fn validate(&self) -> Result<()> {
         require_non_empty(&self.message, "phase_failure.message")?;
-        if let Some(log_path) = &self.log_path {
-            require_safe_relative_path(log_path, "phase_failure.log_path")?;
-        }
 
         Ok(())
     }
@@ -447,11 +437,13 @@ impl ZipProjectDependencies {
     }
 }
 
-fn validate_unique_paths(values: &[String], field: &str) -> Result<()> {
+fn validate_unique_paths<T>(values: &[T], field: &str) -> Result<()>
+where
+    T: AsRef<str> + std::fmt::Display,
+{
     let mut seen = HashSet::with_capacity(values.len());
     for value in values {
-        require_safe_relative_path(value, field)?;
-        if !seen.insert(value.as_str()) {
+        if !seen.insert(value.as_ref()) {
             return Err(AppError::Validation(format!(
                 "{field} contains duplicate path `{value}`"
             )));
@@ -489,20 +481,11 @@ fn validate_positive_u32(value: Option<u32>, field: &str) -> Result<()> {
     Ok(())
 }
 
-fn require_safe_relative_path(value: &str, field: &str) -> Result<()> {
-    require_non_empty(value, field)?;
-    if !is_safe_relative_path(value) {
-        return Err(AppError::Validation(format!(
-            "{field} must be a safe relative path"
-        )));
-    }
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use serde_json::json;
+
+    use crate::models::paths::LogRelativePath;
 
     use super::{
         ZipProjectDependencyPolicy, ZipProjectInterfaceKind, ZipProjectNetworkAccess,
@@ -562,7 +545,7 @@ mod tests {
         assert_eq!(manifest.protocol, "zip_project");
         assert_eq!(manifest.protocol_version, 1);
         assert_eq!(manifest.runtime.language, "python");
-        assert_eq!(manifest.commands.run, "run.sh");
+        assert_eq!(manifest.commands.run.as_str(), "run.sh");
         assert_eq!(
             manifest.interface.kind,
             ZipProjectInterfaceKind::ChallengeDefined
@@ -575,7 +558,7 @@ mod tests {
         let phases = manifest.phase_execution_plan();
         assert_eq!(phases.len(), 3);
         assert_eq!(phases[0].name, ZipProjectPhaseName::Setup);
-        assert_eq!(phases[0].command, "scripts/setup.sh");
+        assert_eq!(phases[0].command.as_str(), "scripts/setup.sh");
         assert_eq!(phases[0].limits.timeout_sec, 120);
         assert_eq!(phases[0].limits.memory_limit_mb, 1024);
         assert_eq!(phases[0].limits.cpu_limit_millis, 1500);
@@ -692,11 +675,7 @@ mod tests {
 
         let error =
             parse_zip_project_manifest(&value.to_string()).expect_err("unsafe run path fails");
-        assert!(
-            error
-                .to_string()
-                .contains("commands.run must be a safe relative path")
-        );
+        assert!(error.to_string().contains("repo-relative paths"));
     }
 
     #[test]
@@ -706,11 +685,7 @@ mod tests {
 
         let error = parse_zip_project_manifest(&value.to_string())
             .expect_err("absolute dependency path fails");
-        assert!(
-            error
-                .to_string()
-                .contains("dependencies.lockfiles must be a safe relative path")
-        );
+        assert!(error.to_string().contains("repo-relative paths"));
     }
 
     #[test]
@@ -744,19 +719,21 @@ mod tests {
             reason: ZipProjectPhaseFailureReason::NonZeroExit,
             message: "build script exited with status 1".to_string(),
             exit_code: Some(1),
-            log_path: Some("logs/build.stderr.txt".to_string()),
+            log_path: Some(
+                LogRelativePath::try_new("logs/build.stderr.txt").expect("test log path is valid"),
+            ),
         };
         report.validate().expect("failure report should validate");
 
-        let invalid = ZipProjectPhaseFailureReport {
-            log_path: Some("../outside.log".to_string()),
-            ..report
-        };
-        let error = invalid.validate().expect_err("unsafe log path should fail");
-        assert!(
-            error
-                .to_string()
-                .contains("phase_failure.log_path must be a safe relative path")
-        );
+        let invalid = json!({
+            "phase": "build",
+            "reason": "non_zero_exit",
+            "message": "build script exited with status 1",
+            "exit_code": 1,
+            "log_path": "../outside.log"
+        });
+        let error = serde_json::from_value::<ZipProjectPhaseFailureReport>(invalid)
+            .expect_err("unsafe log path should fail during deserialization");
+        assert!(error.to_string().contains("repo-relative paths"));
     }
 }

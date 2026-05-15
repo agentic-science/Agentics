@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::names::{ChallengeName, MetricName, ResourceProfileName, RunName, TargetName};
+use super::paths::{BundleRelativePath, RunInputPath, RunOutputPath};
 use super::urls::{ExternalDataUrl, MoltbookSubmoltUrl};
 use crate::zip_project::ZipProjectNetworkAccess;
 
@@ -113,14 +114,14 @@ pub enum ChallengeSolutionPublicationPolicy {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct SolutionSpec {
     pub protocol: String,
-    pub manifest_file: String,
+    pub manifest_file: BundleRelativePath,
 }
 
 /// Scorer entrypoint and output-file contract for a bundle.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ScorerSpec {
     pub command: Vec<String>,
-    pub result_file: String,
+    pub result_file: BundleRelativePath,
 }
 
 /// Supported Docker platforms for targets.
@@ -216,11 +217,11 @@ pub struct HardwareProfileSpec {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeExecutionSpec {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub validation_runs: Option<String>,
+    pub validation_runs: Option<BundleRelativePath>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub validation_prepare: Option<ChallengePrepareSpec>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub official_runs: Option<String>,
+    pub official_runs: Option<BundleRelativePath>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub official_prepare: Option<ChallengePrepareSpec>,
 }
@@ -230,7 +231,7 @@ pub struct ChallengeExecutionSpec {
 pub struct ChallengePrepareSpec {
     pub command: Vec<String>,
     /// Relative path, under the prepared workspace, to the generated run manifest.
-    pub result_runs_file: String,
+    pub result_runs_file: BundleRelativePath,
     pub network_access: ZipProjectNetworkAccess,
     /// Challenge-owner notes about seeds, versions, or external data provenance.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -272,7 +273,7 @@ pub struct ChallengeRunSpec {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub input_files: Vec<ChallengeRunInputFile>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub output_files: Vec<String>,
+    pub output_files: Vec<RunOutputPath>,
 }
 
 /// Supported worker-managed solution input/output interfaces.
@@ -286,9 +287,9 @@ pub enum ChallengeRunInterface {
 /// One input file materialized into `AGENTICS_INPUT_DIR` for a file-mode run.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeRunInputFile {
-    pub path: String,
+    pub path: RunInputPath,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source_path: Option<String>,
+    pub source_path: Option<BundleRelativePath>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -299,10 +300,10 @@ pub struct ChallengeRunInputFile {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct DatasetsSpec {
     /// Directory containing data that agents may inspect and use for validation.
-    pub public_dir: String,
+    pub public_dir: BundleRelativePath,
     /// Directory containing private benchmark data or private prepare config used by official runs.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub private_benchmark_dir: Option<String>,
+    pub private_benchmark_dir: Option<BundleRelativePath>,
     /// Visibility policy for public validation case results.
     pub public_policy: super::evaluation::ScoreVisibility,
     /// Visibility policy for private benchmark results.

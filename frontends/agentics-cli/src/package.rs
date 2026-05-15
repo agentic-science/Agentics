@@ -78,7 +78,7 @@ fn package_solution_workspace_with_limits(
         .with_context(|| format!("failed to read {}", manifest_path.display()))?;
     let manifest = shared::zip_project::parse_zip_project_manifest(&manifest_raw)?;
 
-    let run_script = workspace_dir.join(&manifest.commands.run);
+    let run_script = workspace_dir.join(manifest.commands.run.as_path());
     if !fs::exists(&run_script)
         .with_context(|| format!("failed to inspect {}", run_script.display()))?
     {
@@ -101,7 +101,7 @@ fn package_solution_workspace_with_limits(
     }
     if !files
         .iter()
-        .any(|file| file.archive_name == manifest.commands.run)
+        .any(|file| file.archive_name == manifest.commands.run.as_str())
     {
         bail!(
             "{} is excluded by .gitignore or package filters",

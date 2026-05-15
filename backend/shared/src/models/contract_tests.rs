@@ -15,6 +15,7 @@ use super::evaluation::{
 };
 use super::ids::SolutionSubmissionId;
 use super::names::{ChallengeName, MetricName, ResourceProfileName, RunName, TargetName};
+use super::paths::BundleRelativePath;
 use super::request::{
     AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto, SolutionSubmissionResponse,
 };
@@ -114,11 +115,11 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
             solution_publication: ChallengeSolutionPublicationPolicy::Public,
             solution: SolutionSpec {
                 protocol: "zip_project".to_string(),
-                manifest_file: "agentics.solution.json".to_string(),
+                manifest_file: bundle_path("agentics.solution.json"),
             },
             scorer: ScorerSpec {
                 command: vec!["python".to_string(), "scorer/run.py".to_string()],
-                result_file: "result.json".to_string(),
+                result_file: bundle_path("result.json"),
             },
             targets: vec![ChallengeTargetSpec {
                 name: target_name("linux-arm64-cpu"),
@@ -154,12 +155,12 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
                 },
             }],
             execution: ChallengeExecutionSpec {
-                validation_runs: Some("public/runs.json".to_string()),
+                validation_runs: Some(bundle_path("public/runs.json")),
                 validation_prepare: None,
                 official_runs: None,
                 official_prepare: Some(ChallengePrepareSpec {
                     command: vec!["python".to_string(), "scorer/prepare.py".to_string()],
-                    result_runs_file: "generated/runs.json".to_string(),
+                    result_runs_file: bundle_path("generated/runs.json"),
                     network_access: ZipProjectNetworkAccess::Enabled,
                     reproducibility_notes: Some(
                         "Generated from a fixed benchmark seed.".to_string(),
@@ -174,8 +175,8 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
                 }),
             },
             datasets: DatasetsSpec {
-                public_dir: "public".to_string(),
-                private_benchmark_dir: Some("private-benchmark".to_string()),
+                public_dir: bundle_path("public"),
+                private_benchmark_dir: Some(bundle_path("private-benchmark")),
                 public_policy: ScoreVisibility::Full,
                 private_benchmark_policy: PrivateBenchmarkPolicy::ScoreOnly,
                 private_benchmark_enabled: true,
@@ -236,6 +237,10 @@ fn metric_name(value: &str) -> MetricName {
 
 fn resource_profile_name(value: &str) -> ResourceProfileName {
     ResourceProfileName::try_new(value.to_string()).expect("test resource profile name is valid")
+}
+
+fn bundle_path(value: &str) -> BundleRelativePath {
+    BundleRelativePath::try_new(value).expect("test bundle path is valid")
 }
 
 fn run_name(value: &str) -> RunName {
