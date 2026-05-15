@@ -1,0 +1,346 @@
+//! Artifact and log helpers for solution-submission routes.
+
+use axum::Json;
+
+use shared::db;
+use shared::error::{AppError, Result};
+use shared::models::request::{
+    SolutionSubmissionArtifactFileDto, SolutionSubmissionArtifactResponse,
+    SolutionSubmissionLogsResponse,
+};
+use shared::zip_project::{
+    MAX_ZIP_PROJECT_ARTIFACT_BYTES, MAX_ZIP_PROJECT_FILE_COUNT, MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES,
+};
+
+use crate::state::AppState;
+
+const MAX_INLINE_TEXT_BYTES: u64 = 200_000;
+const MAX_TOTAL_INLINE_TEXT_BYTES: u64 = 1_000_000;
+
+/// Decode a base64 request payload after trimming transport whitespace.
+pub(super) fn base64_decode(input: &str) -> Option<Vec<u8>> {
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    STANDARD.decode(input.trim()).ok()
+}
+
+/// Return whether a byte buffer starts with a known ZIP file signature.
+pub(super) fn is_likely_zip(bytes: &[u8]) -> bool {
+    if bytes.len() < 4 {
+        return false;
+    }
+    bytes.starts_with(&[0x50, 0x4b, 0x03, 0x04])
+        || bytes.starts_with(&[0x50, 0x4b, 0x05, 0x06])
+        || bytes.starts_with(&[0x50, 0x4b, 0x07, 0x08])
+}
+
+/// Summarize a solution submission ZIP for safe public code browsing.
+pub(super) async fn read_solution_submission_artifact_summary(
+    artifact_key: &str,
+    artifact_bytes: Vec<u8>,
+) -> Result<SolutionSubmissionArtifactResponse> {
+    let archive_size = artifact_bytes.len() as u64;
+    if archive_size > MAX_ZIP_PROJECT_ARTIFACT_BYTES {
+        return Err(AppError::BadRequest(format!(
+            "artifact zip must be at most {} bytes",
+            MAX_ZIP_PROJECT_ARTIFACT_BYTES
+        )));
+    }
+
+    let artifact_key = artifact_key.to_string();
+    tokio::task::spawn_blocking(move || {
+        read_solution_submission_artifact_summary_blocking(&artifact_key, artifact_bytes)
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("artifact summary task failed: {e}")))?
+}
+
+/// Read a submitter-visible log response, truncating the payload for transport.
+pub(super) async fn read_solution_submission_logs(
+    state: &AppState,
+    solution_submission: &db::SolutionSubmissionRecord,
+) -> Result<Json<SolutionSubmissionLogsResponse>> {
+    const MAX_LOG_RESPONSE_BYTES: usize = 200_000;
+
+    let log_key = solution_submission
+        .official_evaluation
+        .as_ref()
+        .and_then(|evaluation| evaluation.log_key.clone())
+        .or_else(|| {
+            solution_submission
+                .validation_evaluation
+                .as_ref()
+                .and_then(|evaluation| evaluation.log_key.clone())
+        });
+
+    let Some(log_key) = log_key else {
+        return Ok(Json(SolutionSubmissionLogsResponse {
+            solution_submission_id: solution_submission.id.clone(),
+            log_key: None,
+            content: None,
+            truncated: false,
+        }));
+    };
+
+    let bytes = state.storage.get(&log_key).await?;
+    let truncated = bytes.len() > MAX_LOG_RESPONSE_BYTES;
+    let visible_bytes = if truncated {
+        bytes
+            .get(..MAX_LOG_RESPONSE_BYTES)
+            .ok_or_else(|| AppError::Internal("log truncation range invalid".to_string()))?
+    } else {
+        bytes.as_slice()
+    };
+    let content = String::from_utf8_lossy(visible_bytes).to_string();
+
+    Ok(Json(SolutionSubmissionLogsResponse {
+        solution_submission_id: solution_submission.id.clone(),
+        log_key: Some(log_key),
+        content: Some(content),
+        truncated,
+    }))
+}
+
+/// Perform ZIP parsing and safe summary construction on a blocking thread.
+fn read_solution_submission_artifact_summary_blocking(
+    artifact_key: &str,
+    artifact_bytes: Vec<u8>,
+) -> Result<SolutionSubmissionArtifactResponse> {
+    let archive_size = artifact_bytes.len();
+    let reader = std::io::Cursor::new(artifact_bytes);
+    let mut archive = zip::ZipArchive::new(reader)?;
+
+    if archive.len() > MAX_ZIP_PROJECT_FILE_COUNT {
+        return Err(AppError::BadRequest(format!(
+            "artifact zip must contain at most {} entries",
+            MAX_ZIP_PROJECT_FILE_COUNT
+        )));
+    }
+
+    let mut files = Vec::new();
+    let mut total_uncompressed_size = 0u64;
+    let mut total_inline_text_bytes = 0u64;
+
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i)?;
+        if file.is_dir() {
+            continue;
+        }
+
+        let entry_path = file
+            .enclosed_name()
+            .map(|path| path.to_string_lossy().to_string());
+        let Some(entry_path) = entry_path else {
+            continue;
+        };
+
+        let size = file.size();
+        total_uncompressed_size = total_uncompressed_size
+            .checked_add(size)
+            .ok_or_else(|| AppError::BadRequest("artifact zip is too large".to_string()))?;
+        if total_uncompressed_size > MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES {
+            return Err(AppError::BadRequest(format!(
+                "artifact zip must expand to at most {} bytes",
+                MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES
+            )));
+        }
+
+        let mut buf = Vec::new();
+        let compressed_size = i64::try_from(file.compressed_size()).map_err(|_| {
+            AppError::BadRequest(
+                "artifact ZIP entry compressed size exceeds supported range".to_string(),
+            )
+        })?;
+        let projected_inline_text_bytes = total_inline_text_bytes.checked_add(size);
+        let should_try_inline = size <= MAX_INLINE_TEXT_BYTES
+            && projected_inline_text_bytes
+                .is_some_and(|projected| projected <= MAX_TOTAL_INLINE_TEXT_BYTES);
+        if should_try_inline {
+            std::io::Read::read_to_end(&mut file, &mut buf)?;
+        }
+
+        let inline_text = if should_try_inline {
+            std::str::from_utf8(&buf).ok()
+        } else {
+            None
+        };
+        let is_text = inline_text.is_some() || is_text_like_path(&entry_path);
+
+        let content = if let Some(text) = inline_text {
+            total_inline_text_bytes = total_inline_text_bytes
+                .checked_add(u64::try_from(buf.len()).map_err(|_| {
+                    AppError::BadRequest(
+                        "artifact inline text size exceeds supported range".to_string(),
+                    )
+                })?)
+                .ok_or_else(|| {
+                    AppError::BadRequest("artifact inline text budget overflow".to_string())
+                })?;
+            Some(text.to_string())
+        } else {
+            None
+        };
+
+        files.push(SolutionSubmissionArtifactFileDto {
+            path: entry_path.clone(),
+            size: i64::try_from(size).map_err(|_| {
+                AppError::BadRequest("artifact ZIP entry size exceeds supported range".to_string())
+            })?,
+            compressed_size,
+            language: Some(infer_language(&entry_path)),
+            is_text,
+            content,
+        });
+    }
+
+    files.sort_by(|a, b| a.path.cmp(&b.path));
+
+    Ok(SolutionSubmissionArtifactResponse {
+        archive_name: std::path::Path::new(artifact_key)
+            .file_name()
+            .map(|file_name| file_name.to_string_lossy().to_string())
+            .unwrap_or_default(),
+        archive_size: i64::try_from(archive_size).map_err(|_| {
+            AppError::BadRequest("artifact ZIP size exceeds supported range".to_string())
+        })?,
+        file_count: i64::try_from(files.len()).map_err(|_| {
+            AppError::BadRequest("artifact ZIP file count exceeds supported range".to_string())
+        })?,
+        total_uncompressed_size: i64::try_from(total_uncompressed_size).map_err(|_| {
+            AppError::BadRequest("artifact ZIP expanded size exceeds supported range".to_string())
+        })?,
+        files,
+    })
+}
+
+/// Infer whether a file should be rendered as text even when inlining is skipped.
+fn is_text_like_path(file_path: &str) -> bool {
+    !matches!(infer_language(file_path).as_str(), "plaintext")
+        || matches!(
+            std::path::Path::new(file_path)
+                .extension()
+                .and_then(|extension| extension.to_str())
+                .map(str::to_ascii_lowercase)
+                .as_deref(),
+            Some("txt")
+        )
+}
+
+/// Infer a display language from a source file extension.
+fn infer_language(file_path: &str) -> String {
+    let ext = std::path::Path::new(file_path)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    match ext.as_str() {
+        "py" => "python",
+        "json" => "json",
+        "md" => "markdown",
+        "ts" | "tsx" => "typescript",
+        "js" | "jsx" => "javascript",
+        "yml" | "yaml" => "yaml",
+        "toml" => "ini",
+        "sh" => "shell",
+        "sql" => "sql",
+        "txt" => "plaintext",
+        _ => "plaintext",
+    }
+    .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Write;
+    use std::path::PathBuf;
+
+    use uuid::Uuid;
+
+    use super::*;
+
+    /// Build a temporary ZIP path for artifact summary tests.
+    fn temp_zip_path(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("agentics-{name}-{}.zip", Uuid::new_v4()))
+    }
+
+    /// Write a small ZIP file containing the supplied entries.
+    fn write_zip(path: &PathBuf, entries: Vec<(String, Vec<u8>)>) {
+        let file = std::fs::File::create(path).expect("failed to create test zip");
+        let mut archive = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+
+        for (name, bytes) in entries {
+            archive
+                .start_file(name, options)
+                .expect("failed to start zip entry");
+            archive
+                .write_all(&bytes)
+                .expect("failed to write zip entry");
+        }
+
+        archive.finish().expect("failed to finish test zip");
+    }
+
+    #[tokio::test]
+    async fn artifact_summary_skips_unsafe_entry_names() {
+        let path = temp_zip_path("unsafe-entry");
+        write_zip(
+            &path,
+            vec![
+                ("../escape.py".to_string(), b"print('bad')\n".to_vec()),
+                ("main.py".to_string(), b"print('ok')\n".to_vec()),
+            ],
+        );
+
+        let bytes = std::fs::read(&path).expect("failed to read test zip");
+        let summary = read_solution_submission_artifact_summary(&path.to_string_lossy(), bytes)
+            .await
+            .expect("summary should succeed");
+        drop(std::fs::remove_file(path));
+
+        assert_eq!(summary.file_count, 1);
+        assert_eq!(summary.files[0].path, "main.py");
+    }
+
+    #[tokio::test]
+    async fn artifact_summary_rejects_too_many_entries() {
+        let path = temp_zip_path("too-many");
+        let entries = (0..=MAX_ZIP_PROJECT_FILE_COUNT)
+            .map(|i| (format!("file-{i}.txt"), Vec::new()))
+            .collect();
+        write_zip(&path, entries);
+
+        let bytes = std::fs::read(&path).expect("failed to read test zip");
+        let result =
+            read_solution_submission_artifact_summary(&path.to_string_lossy(), bytes).await;
+        drop(std::fs::remove_file(path));
+
+        assert!(
+            matches!(result, Err(AppError::BadRequest(message)) if message.contains("at most"))
+        );
+    }
+
+    #[tokio::test]
+    async fn artifact_summary_does_not_inline_large_text_entries() {
+        let path = temp_zip_path("large-text");
+        write_zip(
+            &path,
+            vec![(
+                "main.py".to_string(),
+                vec![b'a'; (MAX_INLINE_TEXT_BYTES + 1) as usize],
+            )],
+        );
+
+        let bytes = std::fs::read(&path).expect("failed to read test zip");
+        let summary = read_solution_submission_artifact_summary(&path.to_string_lossy(), bytes)
+            .await
+            .expect("summary should succeed");
+        drop(std::fs::remove_file(path));
+
+        assert_eq!(summary.file_count, 1);
+        assert_eq!(summary.files[0].path, "main.py");
+        assert!(summary.files[0].is_text);
+        assert!(summary.files[0].content.is_none());
+    }
+}

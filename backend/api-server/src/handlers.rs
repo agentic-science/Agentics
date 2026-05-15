@@ -2,6 +2,15 @@
 
 use std::path::{Path as FsPath, PathBuf};
 
+mod artifacts;
+mod creator;
+mod score_distribution;
+
+pub use creator::{
+    create_challenge_shortlist_revision, get_challenge_shortlist, get_creator_challenge_stats,
+    list_creator_challenge_participants,
+};
+
 use axum::{
     Json,
     extract::{Path, Query, State},
@@ -14,7 +23,6 @@ use uuid::Uuid;
 
 use shared::auth;
 use shared::challenge_bundle;
-use shared::challenge_creation;
 use shared::config::Config;
 use shared::db::{self, QueueEvaluationJobInput};
 use shared::error::{AppError, Result};
@@ -23,37 +31,26 @@ use shared::models::challenge::{
     ChallengeSolutionPublicationPolicy, ChallengeVisibility, PublishChallengeResponse,
 };
 use shared::models::evaluation::ScoringMode;
-use shared::models::ids::{
-    AgentId, ChallengeShortlistRevisionId, EvaluationJobId, SolutionSubmissionId,
-};
+use shared::models::ids::{AgentId, EvaluationJobId, SolutionSubmissionId};
 use shared::models::names::{ChallengeName, MetricName, TargetName};
 use shared::models::paths::AdminBundlePath;
 use shared::models::request::{
     AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto,
-    AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse,
-    ChallengeShortlistResponse, ChallengeShortlistRevisionResponse, CreateChallengeRequest,
-    CreateChallengeShortlistRevisionRequest, CreateSolutionSubmissionRequest,
-    CreateSolutionSubmissionResponse, CreatorChallengeParticipantsResponse,
-    CreatorChallengeStatsResponse, DisableAgentResponse, EvaluationJobResponse,
-    HideSolutionSubmissionResponse, LeaderboardEntryDto, LeaderboardResponse,
+    AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse, CreateChallengeRequest,
+    CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse, DisableAgentResponse,
+    EvaluationJobResponse, HideSolutionSubmissionResponse, LeaderboardResponse,
     PublicSolutionSubmissionListResponse, PublishChallengeRequest, RankedLeaderboardEntryDto,
-    RankingContextResponse, RegisterAgentRequest, RegisterAgentResponse,
-    ScoreDistributionBucketDto, ScoreDistributionQuantileDto, ScoreDistributionResponse,
-    SolutionSubmissionArtifactFileDto, SolutionSubmissionArtifactResponse,
-    SolutionSubmissionLogsResponse, SolutionSubmissionResponse,
+    RankingContextResponse, RegisterAgentRequest, RegisterAgentResponse, ScoreDistributionResponse,
+    SolutionSubmissionArtifactResponse, SolutionSubmissionLogsResponse, SolutionSubmissionResponse,
     SolutionSubmissionResultReportResponse,
 };
 use shared::storage::StorageKey;
-use shared::zip_project::{
-    MAX_ZIP_PROJECT_ARTIFACT_BYTES, MAX_ZIP_PROJECT_FILE_COUNT, MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES,
-};
+use shared::zip_project::MAX_ZIP_PROJECT_ARTIFACT_BYTES;
 
-use crate::extractors::{AdminAuth, AgentAuth, CreatorAuth, SolutionSubmissionPath, ValidatedJson};
+use crate::extractors::{AdminAuth, AgentAuth, SolutionSubmissionPath, ValidatedJson};
 use crate::presenters;
 use crate::state::AppState;
 
-const MAX_INLINE_TEXT_BYTES: u64 = 200_000;
-const MAX_TOTAL_INLINE_TEXT_BYTES: u64 = 1_000_000;
 const SUBMISSION_QUOTA_WINDOW_SECONDS: i64 = 24 * 60 * 60;
 const STAGED_EVALUATION_JOB_DELAY_SECONDS: i64 = 315_360_000;
 const DEFAULT_PUBLIC_LIST_LIMIT: i64 = 50;
@@ -214,7 +211,7 @@ async fn create_solution_submission_for_mode(
     )
     .await?;
 
-    let artifact_bytes = base64_decode(&body.artifact_base64).ok_or(AppError::Base64)?;
+    let artifact_bytes = artifacts::base64_decode(&body.artifact_base64).ok_or(AppError::Base64)?;
     if artifact_bytes.len() as u64 > MAX_ZIP_PROJECT_ARTIFACT_BYTES {
         return Err(AppError::BadRequest(format!(
             "artifact zip must be at most {} bytes",
@@ -222,7 +219,7 @@ async fn create_solution_submission_for_mode(
         )));
     }
 
-    if !is_likely_zip(&artifact_bytes) {
+    if !artifacts::is_likely_zip(&artifact_bytes) {
         return Err(AppError::BadRequest("artifact 必须是 zip 文件".to_string()));
     }
     let manifest = shared::zip_project::ZipProjectManifest::from_zip_bytes(&artifact_bytes)?;
@@ -462,7 +459,7 @@ pub async fn get_solution_submission_logs(
     if solution_submission.agent_id != agent.agent_id {
         return Err(AppError::NotFound);
     }
-    read_solution_submission_logs(&state, &solution_submission).await
+    artifacts::read_solution_submission_logs(&state, &solution_submission).await
 }
 
 /// Fetch a submission's owner-visible ranking context in an explicit scope.
@@ -585,7 +582,8 @@ pub async fn get_public_artifact(
     let artifact_key = solution_submission.artifact_key.clone();
     let artifact_bytes = state.storage.get(&artifact_key).await?;
     let artifact =
-        read_solution_submission_artifact_summary(artifact_key.as_str(), artifact_bytes).await?;
+        artifacts::read_solution_submission_artifact_summary(artifact_key.as_str(), artifact_bytes)
+            .await?;
     Ok(Json(artifact))
 }
 
@@ -620,8 +618,12 @@ pub async fn get_score_distribution(
     ensure_visibility_allows_public(spec.visibility.score_distribution, &spec)?;
     let target = resolve_public_target(&state.db, &challenge_name, query.target.as_deref()).await?;
     let entries = db::list_leaderboard_entries(&state.db, &challenge_name, &target, 10_000).await?;
-    let response =
-        build_score_distribution_response(challenge.challenge_name, target, metric_name, entries)?;
+    let response = score_distribution::build_score_distribution_response(
+        challenge.challenge_name,
+        target,
+        metric_name,
+        entries,
+    )?;
     Ok(Json(response))
 }
 
@@ -850,319 +852,6 @@ async fn build_ranking_context(
         entry,
         nearby_entries,
     })
-}
-
-fn build_score_distribution_response(
-    challenge_name: ChallengeName,
-    target: TargetName,
-    metric_name: MetricName,
-    entries: Vec<LeaderboardEntryDto>,
-) -> Result<ScoreDistributionResponse> {
-    let mut values = entries
-        .iter()
-        .filter_map(|entry| metric_value_from_leaderboard_entry(entry, &metric_name))
-        .filter(|value| value.is_finite())
-        .collect::<Vec<_>>();
-    values.sort_by(f64::total_cmp);
-    let count = i64::try_from(values.len())
-        .map_err(|_| AppError::Internal("score distribution count overflow".to_string()))?;
-    let (min, max, mean, quantiles, histogram) = if values.is_empty() {
-        (None, None, None, Vec::new(), Vec::new())
-    } else {
-        let min = values.first().copied().ok_or_else(|| {
-            AppError::Internal("score distribution unexpectedly empty".to_string())
-        })?;
-        let max = values.last().copied().ok_or_else(|| {
-            AppError::Internal("score distribution unexpectedly empty".to_string())
-        })?;
-        let sum: f64 = values.iter().sum();
-        let mean = sum / values.len() as f64;
-        (
-            Some(min),
-            Some(max),
-            Some(mean),
-            build_quantiles(&values)?,
-            build_histogram(&values)?,
-        )
-    };
-
-    Ok(ScoreDistributionResponse {
-        challenge_name,
-        target,
-        metric_name,
-        count,
-        min,
-        max,
-        mean,
-        quantiles,
-        histogram,
-    })
-}
-
-fn metric_value_from_leaderboard_entry(
-    entry: &LeaderboardEntryDto,
-    metric_name: &MetricName,
-) -> Option<f64> {
-    match metric_name.as_str() {
-        "rank_score" | "best_rank_score" => Some(entry.best_rank_score),
-        "official_score" => entry.official_score,
-        _ => entry
-            .aggregate_metrics
-            .iter()
-            .chain(entry.official_metrics.iter())
-            .find(|metric| &metric.metric_name == metric_name)
-            .map(|metric| metric.value),
-    }
-}
-
-fn build_quantiles(values: &[f64]) -> Result<Vec<ScoreDistributionQuantileDto>> {
-    [
-        (0.0, 0usize, 4usize),
-        (0.25, 1usize, 4usize),
-        (0.5, 2usize, 4usize),
-        (0.75, 3usize, 4usize),
-        (1.0, 4usize, 4usize),
-    ]
-    .into_iter()
-    .map(|(quantile, numerator, denominator)| {
-        Ok(ScoreDistributionQuantileDto {
-            quantile,
-            value: nearest_rank_quantile(values, numerator, denominator)?,
-        })
-    })
-    .collect()
-}
-
-fn nearest_rank_quantile(values: &[f64], numerator: usize, denominator: usize) -> Result<f64> {
-    let max_index = values.len().saturating_sub(1);
-    let rounded_index = max_index
-        .checked_mul(numerator)
-        .and_then(|value| value.checked_add(denominator / 2))
-        .and_then(|value| value.checked_div(denominator))
-        .ok_or_else(|| AppError::Internal("quantile index overflow".to_string()))?
-        .min(max_index);
-    values
-        .get(rounded_index)
-        .copied()
-        .ok_or_else(|| AppError::Internal("quantile index out of range".to_string()))
-}
-
-fn build_histogram(values: &[f64]) -> Result<Vec<ScoreDistributionBucketDto>> {
-    let min = values
-        .first()
-        .copied()
-        .ok_or_else(|| AppError::Internal("histogram values unexpectedly empty".to_string()))?;
-    let max = values
-        .last()
-        .copied()
-        .ok_or_else(|| AppError::Internal("histogram values unexpectedly empty".to_string()))?;
-    if min == max {
-        return Ok(vec![ScoreDistributionBucketDto {
-            lower: min,
-            upper: max,
-            count: i64::try_from(values.len())
-                .map_err(|_| AppError::Internal("histogram count overflow".to_string()))?,
-        }]);
-    }
-
-    let bucket_count = values.len().min(10);
-    let width = (max - min) / bucket_count as f64;
-    let mut counts = vec![0i64; bucket_count];
-    for value in values {
-        let index = histogram_bucket_index(*value, min, width, bucket_count)?;
-        let count = counts
-            .get_mut(index)
-            .ok_or_else(|| AppError::Internal("histogram bucket index invalid".to_string()))?;
-        *count = count
-            .checked_add(1)
-            .ok_or_else(|| AppError::Internal("histogram count overflow".to_string()))?;
-    }
-
-    let mut buckets = Vec::with_capacity(counts.len());
-    for (index, count) in counts.into_iter().enumerate() {
-        let lower = min + width * index as f64;
-        let upper = match index.checked_add(1) {
-            Some(next_index) if next_index == bucket_count => max,
-            Some(next_index) => min + width * next_index as f64,
-            None => {
-                return Err(AppError::Internal(
-                    "histogram bucket index overflow".to_string(),
-                ));
-            }
-        };
-        buckets.push(ScoreDistributionBucketDto {
-            lower,
-            upper,
-            count,
-        });
-    }
-    Ok(buckets)
-}
-
-fn histogram_bucket_index(value: f64, min: f64, width: f64, bucket_count: usize) -> Result<usize> {
-    for index in 0..bucket_count {
-        let next_index = index
-            .checked_add(1)
-            .ok_or_else(|| AppError::Internal("histogram bucket index overflow".to_string()))?;
-        if next_index == bucket_count {
-            return Ok(index);
-        }
-        let upper = min + width * next_index as f64;
-        if value < upper {
-            return Ok(index);
-        }
-    }
-    bucket_count
-        .checked_sub(1)
-        .ok_or_else(|| AppError::Internal("histogram bucket count invalid".to_string()))
-}
-
-// ---------------------------------------------------------------------------
-// Creator routes
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct CreatorChallengeQuery {
-    target: Option<String>,
-}
-
-/// Fetch owner-visible aggregate challenge statistics for shortlist decisions.
-pub async fn get_creator_challenge_stats(
-    State(state): State<AppState>,
-    creator: CreatorAuth,
-    Path(name): Path<String>,
-    Query(query): Query<CreatorChallengeQuery>,
-) -> Result<Json<CreatorChallengeStatsResponse>> {
-    let (challenge_name, target) =
-        resolve_creator_challenge_scope(&state.db, &creator, &name, query.target.as_deref())
-            .await?;
-    let response =
-        db::get_creator_challenge_stats(&state.db, &challenge_name, target.as_ref()).await?;
-    Ok(Json(response))
-}
-
-/// Fetch owner-visible participant rows for shortlist decisions.
-pub async fn list_creator_challenge_participants(
-    State(state): State<AppState>,
-    creator: CreatorAuth,
-    Path(name): Path<String>,
-    Query(query): Query<CreatorChallengeQuery>,
-) -> Result<Json<CreatorChallengeParticipantsResponse>> {
-    let (challenge_name, target) =
-        resolve_creator_challenge_scope(&state.db, &creator, &name, query.target.as_deref())
-            .await?;
-    let response =
-        db::list_creator_challenge_participants(&state.db, &challenge_name, target.as_ref())
-            .await?;
-    Ok(Json(response))
-}
-
-/// Append a delta-only owner-managed shortlist revision.
-pub async fn create_challenge_shortlist_revision(
-    State(state): State<AppState>,
-    creator: CreatorAuth,
-    Path(name): Path<String>,
-    ValidatedJson(body): ValidatedJson<CreateChallengeShortlistRevisionRequest>,
-) -> Result<(StatusCode, Json<ChallengeShortlistRevisionResponse>)> {
-    let (challenge_name, _) =
-        resolve_creator_challenge_scope(&state.db, &creator, &name, None).await?;
-    let requested_count = i64::try_from(body.agent_ids_to_add.len())
-        .map_err(|_| AppError::BadRequest("shortlist payload is too large".to_string()))?;
-    let raw_json = serde_json::to_vec(&body)
-        .map_err(|e| AppError::Internal(format!("failed to encode shortlist revision: {e}")))?;
-    let agent_ids_to_add = normalize_shortlist_agent_ids(&body.agent_ids_to_add)?;
-
-    let revision_id = ChallengeShortlistRevisionId::generate();
-    let sha256 = challenge_creation::sha256_digest(&raw_json);
-    let storage_key = StorageKey::try_new(format!(
-        "challenge-shortlists/{challenge_name}/{revision_id}.json"
-    ))?;
-    let stored_key = state.storage.put(&storage_key, &raw_json).await?;
-
-    let response = db::create_challenge_shortlist_revision(
-        &state.db,
-        &db::CreateChallengeShortlistRevisionInput {
-            revision_id,
-            challenge_name,
-            uploader_agent_id: creator.agent_id,
-            storage_key: stored_key.clone(),
-            sha256,
-            requested_count,
-            agent_ids_to_add,
-        },
-    )
-    .await;
-
-    match response {
-        Ok(response) => Ok((StatusCode::CREATED, Json(response))),
-        Err(error) => {
-            cleanup_storage_key(&state, &stored_key).await;
-            Err(error)
-        }
-    }
-}
-
-/// Fetch the effective owner-managed shortlist union.
-pub async fn get_challenge_shortlist(
-    State(state): State<AppState>,
-    creator: CreatorAuth,
-    Path(name): Path<String>,
-) -> Result<Json<ChallengeShortlistResponse>> {
-    let (challenge_name, _) =
-        resolve_creator_challenge_scope(&state.db, &creator, &name, None).await?;
-    let response = db::list_challenge_shortlist(&state.db, &challenge_name).await?;
-    Ok(Json(response))
-}
-
-async fn resolve_creator_challenge_scope(
-    pool: &sqlx::PgPool,
-    creator: &CreatorAuth,
-    raw_challenge_name: &str,
-    requested_target: Option<&str>,
-) -> Result<(ChallengeName, Option<TargetName>)> {
-    let challenge_name = parse_request_value::<ChallengeName>(raw_challenge_name)?;
-    let challenge = db::get_published_challenge(pool, &challenge_name).await?;
-    let challenge = challenge.ok_or(AppError::NotFound)?;
-    if !db::agent_owns_challenge(pool, &challenge.challenge_name, &creator.agent_id).await? {
-        return Err(AppError::Forbidden(
-            "agent is not an owner of this challenge".to_string(),
-        ));
-    }
-
-    let target = resolve_target_from_spec(&challenge.spec_json, requested_target)?;
-    Ok((challenge.challenge_name, target))
-}
-
-fn resolve_target_from_spec(
-    spec_json: &serde_json::Value,
-    requested_target: Option<&str>,
-) -> Result<Option<TargetName>> {
-    let Some(target) = requested_target else {
-        return Ok(None);
-    };
-
-    let spec: ChallengeBundleSpec =
-        serde_json::from_value(spec_json.clone()).map_err(|e| AppError::Internal(e.to_string()))?;
-    let target = parse_request_value::<TargetName>(target)?;
-    if spec.target(&target).is_some() {
-        return Ok(Some(target));
-    }
-    Err(AppError::BadRequest(format!(
-        "challenge does not support target `{target}`"
-    )))
-}
-
-fn normalize_shortlist_agent_ids(agent_ids: &[AgentId]) -> Result<Vec<AgentId>> {
-    let mut unique = std::collections::BTreeSet::new();
-    for agent_id in agent_ids {
-        unique.insert(agent_id.clone());
-    }
-    if unique.is_empty() {
-        return Err(AppError::BadRequest(
-            "agent_ids_to_add must contain at least one agent id".to_string(),
-        ));
-    }
-    Ok(unique.into_iter().collect())
 }
 
 // ---------------------------------------------------------------------------
@@ -1427,326 +1116,4 @@ pub async fn disable_agent(
         id,
         status: "disabled".to_string(),
     }))
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-fn base64_decode(input: &str) -> Option<Vec<u8>> {
-    use base64::{Engine as _, engine::general_purpose::STANDARD};
-    STANDARD.decode(input.trim()).ok()
-}
-
-fn is_likely_zip(bytes: &[u8]) -> bool {
-    if bytes.len() < 4 {
-        return false;
-    }
-    bytes.starts_with(&[0x50, 0x4b, 0x03, 0x04])
-        || bytes.starts_with(&[0x50, 0x4b, 0x05, 0x06])
-        || bytes.starts_with(&[0x50, 0x4b, 0x07, 0x08])
-}
-
-/// Summarize a solution submission ZIP for safe public code browsing.
-pub async fn read_solution_submission_artifact_summary(
-    artifact_key: &str,
-    artifact_bytes: Vec<u8>,
-) -> Result<SolutionSubmissionArtifactResponse> {
-    let archive_size = artifact_bytes.len() as u64;
-    if archive_size > MAX_ZIP_PROJECT_ARTIFACT_BYTES {
-        return Err(AppError::BadRequest(format!(
-            "artifact zip must be at most {} bytes",
-            MAX_ZIP_PROJECT_ARTIFACT_BYTES
-        )));
-    }
-
-    let artifact_key = artifact_key.to_string();
-    tokio::task::spawn_blocking(move || {
-        read_solution_submission_artifact_summary_blocking(&artifact_key, artifact_bytes)
-    })
-    .await
-    .map_err(|e| AppError::Internal(format!("artifact summary task failed: {e}")))?
-}
-
-async fn read_solution_submission_logs(
-    state: &AppState,
-    solution_submission: &db::SolutionSubmissionRecord,
-) -> Result<Json<SolutionSubmissionLogsResponse>> {
-    const MAX_LOG_RESPONSE_BYTES: usize = 200_000;
-
-    let log_key = solution_submission
-        .official_evaluation
-        .as_ref()
-        .and_then(|evaluation| evaluation.log_key.clone())
-        .or_else(|| {
-            solution_submission
-                .validation_evaluation
-                .as_ref()
-                .and_then(|evaluation| evaluation.log_key.clone())
-        });
-
-    let Some(log_key) = log_key else {
-        return Ok(Json(SolutionSubmissionLogsResponse {
-            solution_submission_id: solution_submission.id.clone(),
-            log_key: None,
-            content: None,
-            truncated: false,
-        }));
-    };
-
-    let bytes = state.storage.get(&log_key).await?;
-    let truncated = bytes.len() > MAX_LOG_RESPONSE_BYTES;
-    let visible_bytes = if truncated {
-        bytes
-            .get(..MAX_LOG_RESPONSE_BYTES)
-            .ok_or_else(|| AppError::Internal("log truncation range invalid".to_string()))?
-    } else {
-        bytes.as_slice()
-    };
-    let content = String::from_utf8_lossy(visible_bytes).to_string();
-
-    Ok(Json(SolutionSubmissionLogsResponse {
-        solution_submission_id: solution_submission.id.clone(),
-        log_key: Some(log_key),
-        content: Some(content),
-        truncated,
-    }))
-}
-
-fn read_solution_submission_artifact_summary_blocking(
-    artifact_key: &str,
-    artifact_bytes: Vec<u8>,
-) -> Result<SolutionSubmissionArtifactResponse> {
-    let archive_size = artifact_bytes.len();
-    let reader = std::io::Cursor::new(artifact_bytes);
-    let mut archive = zip::ZipArchive::new(reader)?;
-
-    if archive.len() > MAX_ZIP_PROJECT_FILE_COUNT {
-        return Err(AppError::BadRequest(format!(
-            "artifact zip must contain at most {} entries",
-            MAX_ZIP_PROJECT_FILE_COUNT
-        )));
-    }
-
-    let mut files = Vec::new();
-    let mut total_uncompressed_size = 0u64;
-    let mut total_inline_text_bytes = 0u64;
-
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i)?;
-        if file.is_dir() {
-            continue;
-        }
-
-        let entry_path = file
-            .enclosed_name()
-            .map(|p| p.to_string_lossy().to_string());
-        let Some(entry_path) = entry_path else {
-            continue;
-        };
-
-        let size = file.size();
-        total_uncompressed_size = total_uncompressed_size
-            .checked_add(size)
-            .ok_or_else(|| AppError::BadRequest("artifact zip is too large".to_string()))?;
-        if total_uncompressed_size > MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES {
-            return Err(AppError::BadRequest(format!(
-                "artifact zip must expand to at most {} bytes",
-                MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES
-            )));
-        }
-
-        let mut buf = Vec::new();
-        let compressed_size = i64::try_from(file.compressed_size()).map_err(|_| {
-            AppError::BadRequest(
-                "artifact ZIP entry compressed size exceeds supported range".to_string(),
-            )
-        })?;
-        let projected_inline_text_bytes = total_inline_text_bytes.checked_add(size);
-        let should_try_inline = size <= MAX_INLINE_TEXT_BYTES
-            && projected_inline_text_bytes
-                .is_some_and(|projected| projected <= MAX_TOTAL_INLINE_TEXT_BYTES);
-        if should_try_inline {
-            std::io::Read::read_to_end(&mut file, &mut buf)?;
-        }
-
-        let inline_text = if should_try_inline {
-            std::str::from_utf8(&buf).ok()
-        } else {
-            None
-        };
-        let is_text = inline_text.is_some() || is_text_like_path(&entry_path);
-
-        let content = if let Some(text) = inline_text {
-            total_inline_text_bytes = total_inline_text_bytes
-                .checked_add(u64::try_from(buf.len()).map_err(|_| {
-                    AppError::BadRequest(
-                        "artifact inline text size exceeds supported range".to_string(),
-                    )
-                })?)
-                .ok_or_else(|| {
-                    AppError::BadRequest("artifact inline text budget overflow".to_string())
-                })?;
-            Some(text.to_string())
-        } else {
-            None
-        };
-
-        files.push(SolutionSubmissionArtifactFileDto {
-            path: entry_path.clone(),
-            size: i64::try_from(size).map_err(|_| {
-                AppError::BadRequest("artifact ZIP entry size exceeds supported range".to_string())
-            })?,
-            compressed_size,
-            language: Some(infer_language(&entry_path)),
-            is_text,
-            content,
-        });
-    }
-
-    files.sort_by(|a, b| a.path.cmp(&b.path));
-
-    Ok(SolutionSubmissionArtifactResponse {
-        archive_name: std::path::Path::new(artifact_key)
-            .file_name()
-            .map(|s| s.to_string_lossy().to_string())
-            .unwrap_or_default(),
-        archive_size: i64::try_from(archive_size).map_err(|_| {
-            AppError::BadRequest("artifact ZIP size exceeds supported range".to_string())
-        })?,
-        file_count: i64::try_from(files.len()).map_err(|_| {
-            AppError::BadRequest("artifact ZIP file count exceeds supported range".to_string())
-        })?,
-        total_uncompressed_size: i64::try_from(total_uncompressed_size).map_err(|_| {
-            AppError::BadRequest("artifact ZIP expanded size exceeds supported range".to_string())
-        })?,
-        files,
-    })
-}
-
-fn is_text_like_path(file_path: &str) -> bool {
-    !matches!(infer_language(file_path).as_str(), "plaintext")
-        || matches!(
-            std::path::Path::new(file_path)
-                .extension()
-                .and_then(|e| e.to_str())
-                .map(|e| e.to_ascii_lowercase())
-                .as_deref(),
-            Some("txt")
-        )
-}
-
-fn infer_language(file_path: &str) -> String {
-    let ext = std::path::Path::new(file_path)
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("")
-        .to_lowercase();
-
-    match ext.as_str() {
-        "py" => "python",
-        "json" => "json",
-        "md" => "markdown",
-        "ts" | "tsx" => "typescript",
-        "js" | "jsx" => "javascript",
-        "yml" | "yaml" => "yaml",
-        "toml" => "ini",
-        "sh" => "shell",
-        "sql" => "sql",
-        "txt" => "plaintext",
-        _ => "plaintext",
-    }
-    .to_string()
-}
-
-#[cfg(test)]
-mod tests {
-    use std::io::Write;
-    use std::path::PathBuf;
-
-    use super::*;
-
-    fn temp_zip_path(name: &str) -> PathBuf {
-        std::env::temp_dir().join(format!("agentics-{name}-{}.zip", Uuid::new_v4()))
-    }
-
-    fn write_zip(path: &PathBuf, entries: Vec<(String, Vec<u8>)>) {
-        let file = std::fs::File::create(path).expect("failed to create test zip");
-        let mut archive = zip::ZipWriter::new(file);
-        let options = zip::write::SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored);
-
-        for (name, bytes) in entries {
-            archive
-                .start_file(name, options)
-                .expect("failed to start zip entry");
-            archive
-                .write_all(&bytes)
-                .expect("failed to write zip entry");
-        }
-
-        archive.finish().expect("failed to finish test zip");
-    }
-
-    #[tokio::test]
-    async fn artifact_summary_skips_unsafe_entry_names() {
-        let path = temp_zip_path("unsafe-entry");
-        write_zip(
-            &path,
-            vec![
-                ("../escape.py".to_string(), b"print('bad')\n".to_vec()),
-                ("main.py".to_string(), b"print('ok')\n".to_vec()),
-            ],
-        );
-
-        let bytes = std::fs::read(&path).expect("failed to read test zip");
-        let summary = read_solution_submission_artifact_summary(&path.to_string_lossy(), bytes)
-            .await
-            .expect("summary should succeed");
-        drop(std::fs::remove_file(path));
-
-        assert_eq!(summary.file_count, 1);
-        assert_eq!(summary.files[0].path, "main.py");
-    }
-
-    #[tokio::test]
-    async fn artifact_summary_rejects_too_many_entries() {
-        let path = temp_zip_path("too-many");
-        let entries = (0..=MAX_ZIP_PROJECT_FILE_COUNT)
-            .map(|i| (format!("file-{i}.txt"), Vec::new()))
-            .collect();
-        write_zip(&path, entries);
-
-        let bytes = std::fs::read(&path).expect("failed to read test zip");
-        let result =
-            read_solution_submission_artifact_summary(&path.to_string_lossy(), bytes).await;
-        drop(std::fs::remove_file(path));
-
-        assert!(
-            matches!(result, Err(AppError::BadRequest(message)) if message.contains("at most"))
-        );
-    }
-
-    #[tokio::test]
-    async fn artifact_summary_does_not_inline_large_text_entries() {
-        let path = temp_zip_path("large-text");
-        write_zip(
-            &path,
-            vec![(
-                "main.py".to_string(),
-                vec![b'a'; (MAX_INLINE_TEXT_BYTES + 1) as usize],
-            )],
-        );
-
-        let bytes = std::fs::read(&path).expect("failed to read test zip");
-        let summary = read_solution_submission_artifact_summary(&path.to_string_lossy(), bytes)
-            .await
-            .expect("summary should succeed");
-        drop(std::fs::remove_file(path));
-
-        assert_eq!(summary.file_count, 1);
-        assert_eq!(summary.files[0].path, "main.py");
-        assert!(summary.files[0].is_text);
-        assert!(summary.files[0].content.is_none());
-    }
 }

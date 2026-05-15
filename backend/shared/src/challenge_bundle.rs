@@ -9,29 +9,20 @@ use std::collections::HashSet;
 use std::path::Path;
 
 use chrono::{DateTime, Utc};
-use sha2::{Digest, Sha256};
 
 use crate::error::{AppError, Result};
 use crate::models::challenge::{
     ChallengeBundleSpec, ChallengePrepareSpec, ChallengeRunInputFile, ChallengeRunManifest,
-    ChallengeRunSpec, ChallengeSolutionPublicationPolicy, ChallengeTargetSpec, DockerPlatform,
-    HardwareProfileSpec, PrivateBenchmarkPolicy, ResourceProfileSpec, TargetAccelerator,
+    ChallengeRunSpec, ChallengeSolutionPublicationPolicy, PrivateBenchmarkPolicy,
 };
-use crate::models::hashes::{OciSha256Digest, Sha256Digest};
 use crate::models::paths::BundleRelativePath;
 use crate::zip_project::{ZIP_PROJECT_MANIFEST_FILE, ZIP_PROJECT_PROTOCOL};
 
-const SUPPORTED_CUDA_VARIANTS: &[(&str, &str)] =
-    &[("cu126", "12.6"), ("cu130", "13.0"), ("cu132", "13.2")];
-const SUPPORTED_CPU_IMAGE_REPOSITORIES: &[&str] = &[
-    "agentics-linux-arm64-cpu",
-    "ghcr.io/agentics-reifying/agentics-linux-arm64-cpu",
-];
-const SUPPORTED_CUDA_IMAGE_REPOSITORIES: &[&str] = &[
-    "agentics-linux-arm64-cuda",
-    "ghcr.io/agentics-reifying/agentics-linux-arm64-cuda",
-];
-const CPU_IMAGE_TAG_PREFIX: &str = "ubuntu26.04-";
+mod community;
+mod filesystem;
+mod images;
+
+pub use filesystem::{challenge_bundle_tree_sha256, copy_challenge_bundle_dir};
 
 /// Read `spec.json` from a bundle directory and validate its contract fields.
 pub async fn read_challenge_bundle_spec(bundle_dir: &Path) -> Result<ChallengeBundleSpec> {
@@ -165,149 +156,6 @@ pub fn is_safe_relative_path(value: &str) -> bool {
     value.split(['/', '\\']).all(|s| !s.is_empty() && s != "..")
 }
 
-/// Return a deterministic SHA-256 digest of all files in a bundle tree.
-pub async fn challenge_bundle_tree_sha256(bundle_root: &Path) -> Result<Sha256Digest> {
-    let bundle_root = bundle_root.to_path_buf();
-    tokio::task::spawn_blocking(move || challenge_bundle_tree_sha256_blocking(&bundle_root))
-        .await
-        .map_err(|e| AppError::Internal(format!("bundle digest task failed: {e}")))?
-}
-
-/// Copy a challenge bundle directory while rejecting symlinks.
-pub async fn copy_challenge_bundle_dir(
-    source: &Path,
-    target: &Path,
-    replace_existing: bool,
-) -> Result<()> {
-    let source = source.to_path_buf();
-    let target = target.to_path_buf();
-    tokio::task::spawn_blocking(move || {
-        copy_challenge_bundle_dir_blocking(&source, &target, replace_existing)
-    })
-    .await
-    .map_err(|e| AppError::Internal(format!("bundle copy task failed: {e}")))?
-}
-
-fn challenge_bundle_tree_sha256_blocking(bundle_root: &Path) -> Result<Sha256Digest> {
-    let mut hasher = Sha256::new();
-    hash_bundle_tree(&mut hasher, bundle_root)?;
-    Ok(Sha256Digest::from_bytes(hasher.finalize().into()))
-}
-
-fn hash_bundle_tree(hasher: &mut Sha256, bundle_root: &Path) -> Result<()> {
-    let mut stack = vec![bundle_root.to_path_buf()];
-    while let Some(dir) = stack.pop() {
-        let mut entries = std::fs::read_dir(&dir)?.collect::<std::io::Result<Vec<_>>>()?;
-        entries.sort_by_key(|entry| entry.path());
-
-        for entry in entries {
-            let path = entry.path();
-            let metadata = std::fs::symlink_metadata(&path)?;
-            let relative_path = path
-                .strip_prefix(bundle_root)
-                .map_err(|e| AppError::Internal(format!("failed to build bundle digest: {e}")))?;
-            let relative_path = relative_path.to_str().ok_or_else(|| {
-                AppError::Validation(format!(
-                    "bundle path must be UTF-8 for digesting: {}",
-                    path.display()
-                ))
-            })?;
-
-            if metadata.file_type().is_symlink() {
-                return Err(AppError::Validation(format!(
-                    "challenge bundle must not contain symlinks: {}",
-                    path.display()
-                )));
-            }
-            if metadata.is_dir() {
-                hash_field(hasher, "dir", relative_path.as_bytes());
-                stack.push(path);
-            } else if metadata.is_file() {
-                hash_field(hasher, "file", relative_path.as_bytes());
-                hash_file(hasher, &path)?;
-            }
-        }
-    }
-
-    Ok(())
-}
-
-fn hash_file(hasher: &mut Sha256, path: &Path) -> Result<()> {
-    use std::io::Read;
-
-    let mut file = std::fs::File::open(path)?;
-    let size = file.metadata()?.len();
-    hash_field(hasher, "file_size", &size.to_be_bytes());
-
-    let mut buffer = [0_u8; 64 * 1024];
-    loop {
-        let bytes_read = file.read(&mut buffer)?;
-        if bytes_read == 0 {
-            break;
-        }
-        let chunk = buffer.get(..bytes_read).ok_or_else(|| {
-            AppError::Internal("file read exceeded digest buffer bounds".to_string())
-        })?;
-        hasher.update(chunk);
-    }
-
-    Ok(())
-}
-
-fn hash_field(hasher: &mut Sha256, label: &str, bytes: &[u8]) {
-    hasher.update((label.len() as u64).to_be_bytes());
-    hasher.update(label.as_bytes());
-    hasher.update((bytes.len() as u64).to_be_bytes());
-    hasher.update(bytes);
-}
-
-fn copy_challenge_bundle_dir_blocking(
-    source: &Path,
-    target: &Path,
-    replace_existing: bool,
-) -> Result<()> {
-    if target.exists() {
-        if !replace_existing {
-            if target.is_dir() {
-                return Ok(());
-            }
-            return Err(AppError::Validation(format!(
-                "managed bundle target exists and is not a directory: {}",
-                target.display()
-            )));
-        }
-        std::fs::remove_dir_all(target)?;
-    }
-    std::fs::create_dir_all(target)?;
-
-    let mut stack = vec![(source.to_path_buf(), target.to_path_buf())];
-    while let Some((current_source, current_target)) = stack.pop() {
-        for entry in std::fs::read_dir(&current_source)? {
-            let entry = entry?;
-            let source_path = entry.path();
-            let target_path = current_target.join(entry.file_name());
-            let meta = std::fs::symlink_metadata(&source_path)?;
-            if meta.file_type().is_symlink() {
-                return Err(AppError::Validation(format!(
-                    "challenge bundle must not contain symlinks: {}",
-                    source_path.display()
-                )));
-            }
-            if meta.is_dir() {
-                std::fs::create_dir_all(&target_path)?;
-                stack.push((source_path, target_path));
-            } else if meta.is_file() {
-                if let Some(parent) = target_path.parent() {
-                    std::fs::create_dir_all(parent)?;
-                }
-                std::fs::copy(&source_path, &target_path)?;
-            }
-        }
-    }
-
-    Ok(())
-}
-
 fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
     require_non_empty(&spec.challenge_title, "challenge_title")?;
     require_non_empty(&spec.challenge_summary, "challenge_summary")?;
@@ -357,7 +205,7 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
     }
 
     validate_metric_schema(spec)?;
-    validate_community(spec)?;
+    community::validate_community(spec)?;
 
     Ok(())
 }
@@ -366,11 +214,11 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
 pub fn validate_digest_pinned_images(spec: &ChallengeBundleSpec) -> Result<()> {
     for (index, target) in spec.targets.iter().enumerate() {
         let field = format!("targets[{index}].resource_profile");
-        require_image_digest_reference(
+        images::require_image_digest_reference(
             &target.resource_profile.solution_image,
             &format!("{field}.solution_image"),
         )?;
-        require_image_digest_reference(
+        images::require_image_digest_reference(
             &target.resource_profile.scorer_image,
             &format!("{field}.scorer_image"),
         )?;
@@ -430,7 +278,7 @@ fn validate_targets(spec: &ChallengeBundleSpec) -> Result<()> {
     let mut target_names = HashSet::with_capacity(spec.targets.len());
     for (index, target) in spec.targets.iter().enumerate() {
         let field = format!("targets[{index}]");
-        validate_target(target, &field)?;
+        images::validate_target(target, &field)?;
         if !target_names.insert(target.name.as_str()) {
             return Err(AppError::Validation(format!(
                 "targets contains duplicate name `{}`",
@@ -484,310 +332,6 @@ fn validate_optional_positive_limit(value: Option<i64>, field: &str) -> Result<(
     {
         return Err(AppError::Validation(format!("{field} must be positive")));
     }
-    Ok(())
-}
-
-fn validate_target(target: &ChallengeTargetSpec, field: &str) -> Result<()> {
-    if target.docker_platform == DockerPlatform::LinuxAmd64 {
-        return Err(AppError::Validation(format!(
-            "{field}.docker_platform `linux/amd64` is reserved for post-MVP deployment support"
-        )));
-    }
-    validate_resource_profile(
-        &target.resource_profile,
-        &format!("{field}.resource_profile"),
-    )?;
-
-    match target.accelerator {
-        TargetAccelerator::Cpu => {
-            validate_supported_target_images(target, SupportedTargetImage::Cpu, field)?
-        }
-        TargetAccelerator::Gpu => {
-            let cuda_variant = validate_cuda_hardware(
-                target.resource_profile.hardware.as_ref(),
-                &format!("{field}.resource_profile.hardware"),
-            )?;
-            validate_supported_target_images(
-                target,
-                SupportedTargetImage::Cuda { cuda_variant },
-                field,
-            )?;
-        }
-    }
-
-    Ok(())
-}
-
-enum SupportedTargetImage<'a> {
-    Cpu,
-    Cuda { cuda_variant: &'a str },
-}
-
-fn validate_supported_target_images(
-    target: &ChallengeTargetSpec,
-    image_kind: SupportedTargetImage<'_>,
-    field: &str,
-) -> Result<()> {
-    validate_supported_image_reference(
-        &target.resource_profile.solution_image,
-        &format!("{field}.resource_profile.solution_image"),
-        &image_kind,
-    )?;
-    validate_supported_image_reference(
-        &target.resource_profile.scorer_image,
-        &format!("{field}.resource_profile.scorer_image"),
-        &image_kind,
-    )
-}
-
-fn validate_supported_image_reference(
-    image: &str,
-    field: &str,
-    image_kind: &SupportedTargetImage<'_>,
-) -> Result<()> {
-    let parsed_image = TaggedImageReference::parse(image, field)?;
-    match image_kind {
-        SupportedTargetImage::Cpu => {
-            require_supported_image_repository(
-                parsed_image.repository,
-                SUPPORTED_CPU_IMAGE_REPOSITORIES,
-                "linux-arm64-cpu",
-                field,
-            )?;
-            if !parsed_image.tag.starts_with(CPU_IMAGE_TAG_PREFIX) {
-                return Err(AppError::Validation(format!(
-                    "{field} tag must start with `{CPU_IMAGE_TAG_PREFIX}` for target `linux-arm64-cpu`"
-                )));
-            }
-        }
-        SupportedTargetImage::Cuda { cuda_variant } => {
-            require_supported_image_repository(
-                parsed_image.repository,
-                SUPPORTED_CUDA_IMAGE_REPOSITORIES,
-                "linux-arm64-cuda",
-                field,
-            )?;
-            let expected_prefix = format!("{cuda_variant}-");
-            if !parsed_image.tag.starts_with(&expected_prefix) {
-                return Err(AppError::Validation(format!(
-                    "{field} tag must start with `{expected_prefix}` to match resource_profile.hardware.cuda_variant"
-                )));
-            }
-        }
-    }
-
-    Ok(())
-}
-
-struct TaggedImageReference<'a> {
-    repository: &'a str,
-    tag: &'a str,
-    digest: Option<OciSha256Digest>,
-}
-
-impl<'a> TaggedImageReference<'a> {
-    fn parse(image: &'a str, field: &str) -> Result<Self> {
-        let (image_without_digest, digest) = match image.rsplit_once('@') {
-            Some((reference, digest)) => {
-                let digest = OciSha256Digest::try_new(digest).map_err(|error| {
-                    AppError::Validation(format!("{field} digest is invalid: {error}"))
-                })?;
-                (reference, Some(digest))
-            }
-            None => (image, None),
-        };
-        let slash_index = image_without_digest.rfind('/');
-        let Some(tag_separator_index) = image_without_digest.rfind(':') else {
-            return Err(AppError::Validation(format!(
-                "{field} must include a supported Agentics image tag"
-            )));
-        };
-        if slash_index.is_some_and(|index| tag_separator_index < index) {
-            return Err(AppError::Validation(format!(
-                "{field} must include a supported Agentics image tag"
-            )));
-        }
-        let (repository, tag_with_separator) = image_without_digest.split_at(tag_separator_index);
-        let tag = tag_with_separator.trim_start_matches(':');
-        if repository.is_empty() || tag.is_empty() {
-            return Err(AppError::Validation(format!(
-                "{field} must include a supported Agentics image repository and tag"
-            )));
-        }
-
-        Ok(Self {
-            repository,
-            tag,
-            digest,
-        })
-    }
-
-    fn digest(&self) -> Option<&OciSha256Digest> {
-        self.digest.as_ref()
-    }
-}
-
-fn require_supported_image_repository(
-    repository: &str,
-    supported_repositories: &[&str],
-    target: &str,
-    field: &str,
-) -> Result<()> {
-    if supported_repositories.contains(&repository) {
-        return Ok(());
-    }
-    let supported = supported_repositories.join(", ");
-    Err(AppError::Validation(format!(
-        "{field} must use a supported Agentics image repository for target `{target}`; supported repositories: {supported}"
-    )))
-}
-
-fn validate_resource_profile(profile: &ResourceProfileSpec, field: &str) -> Result<()> {
-    require_non_empty(&profile.solution_image, &format!("{field}.solution_image"))?;
-    require_non_empty(&profile.scorer_image, &format!("{field}.scorer_image"))?;
-    let solution_image =
-        TaggedImageReference::parse(&profile.solution_image, &format!("{field}.solution_image"))?;
-    let scorer_image =
-        TaggedImageReference::parse(&profile.scorer_image, &format!("{field}.scorer_image"))?;
-    validate_image_digest(
-        solution_image.digest(),
-        profile.solution_image_digest.as_ref(),
-        &format!("{field}.solution_image_digest"),
-    )?;
-    validate_image_digest(
-        scorer_image.digest(),
-        profile.scorer_image_digest.as_ref(),
-        &format!("{field}.scorer_image_digest"),
-    )?;
-    validate_positive_u64(profile.timeout_sec, &format!("{field}.timeout_sec"))?;
-    validate_positive_u64(profile.memory_limit_mb, &format!("{field}.memory_limit_mb"))?;
-    validate_positive_u32(
-        profile.cpu_limit_millis,
-        &format!("{field}.cpu_limit_millis"),
-    )?;
-    validate_positive_u64(profile.disk_limit_mb, &format!("{field}.disk_limit_mb"))?;
-    if let Some(resource_description) = &profile.resource_description {
-        require_non_empty(
-            resource_description,
-            &format!("{field}.resource_description"),
-        )?;
-    }
-    if let Some(hardware) = &profile.hardware {
-        validate_hardware_profile(hardware, &format!("{field}.hardware"))?;
-    }
-
-    Ok(())
-}
-
-fn validate_hardware_profile(hardware: &HardwareProfileSpec, field: &str) -> Result<()> {
-    require_non_empty(&hardware.kind, &format!("{field}.kind"))?;
-    if let Some(gpu_model) = &hardware.gpu_model {
-        require_non_empty(gpu_model, &format!("{field}.gpu_model"))?;
-    }
-    if let Some(gpu_count) = hardware.gpu_count {
-        validate_positive_u32(gpu_count, &format!("{field}.gpu_count"))?;
-    }
-    if let Some(gpu_memory_gb) = hardware.gpu_memory_gb {
-        validate_positive_u64(gpu_memory_gb, &format!("{field}.gpu_memory_gb"))?;
-    }
-    if let Some(cuda_variant) = &hardware.cuda_variant {
-        require_non_empty(cuda_variant, &format!("{field}.cuda_variant"))?;
-    }
-    if let Some(cuda_version) = &hardware.cuda_version {
-        require_non_empty(cuda_version, &format!("{field}.cuda_version"))?;
-    }
-    if let Some(driver_minimum) = &hardware.driver_minimum {
-        require_non_empty(driver_minimum, &format!("{field}.driver_minimum"))?;
-    }
-
-    Ok(())
-}
-
-fn validate_cuda_hardware<'a>(
-    hardware: Option<&'a HardwareProfileSpec>,
-    field: &str,
-) -> Result<&'a str> {
-    let hardware = hardware.ok_or_else(|| {
-        AppError::Validation(format!("{field}.kind must be `cuda` for accelerator `gpu`"))
-    })?;
-    if hardware.kind != "cuda" {
-        return Err(AppError::Validation(format!(
-            "{field}.kind must be `cuda` for accelerator `gpu`"
-        )));
-    }
-
-    require_required_optional_string(&hardware.gpu_model, &format!("{field}.gpu_model"))?;
-    let gpu_count = hardware.gpu_count.ok_or_else(|| {
-        AppError::Validation(format!("{field}.gpu_count must be greater than zero"))
-    })?;
-    validate_positive_u32(gpu_count, &format!("{field}.gpu_count"))?;
-
-    let cuda_variant =
-        require_required_optional_string(&hardware.cuda_variant, &format!("{field}.cuda_variant"))?;
-    let cuda_version =
-        require_required_optional_string(&hardware.cuda_version, &format!("{field}.cuda_version"))?;
-    let Some(expected_cuda_version) = cuda_version_for_variant(cuda_variant) else {
-        let supported = SUPPORTED_CUDA_VARIANTS
-            .iter()
-            .map(|(variant, _)| *variant)
-            .collect::<Vec<_>>()
-            .join(", ");
-        return Err(AppError::Validation(format!(
-            "{field}.cuda_variant `{cuda_variant}` is not supported for new CUDA targets; supported variants: {supported}"
-        )));
-    };
-    if cuda_version != expected_cuda_version {
-        return Err(AppError::Validation(format!(
-            "{field}.cuda_version must be `{expected_cuda_version}` for cuda_variant `{cuda_variant}`"
-        )));
-    }
-
-    Ok(cuda_variant)
-}
-
-fn cuda_version_for_variant(cuda_variant: &str) -> Option<&'static str> {
-    SUPPORTED_CUDA_VARIANTS
-        .iter()
-        .find_map(|(variant, version)| (*variant == cuda_variant).then_some(*version))
-}
-
-fn require_required_optional_string<'a>(value: &'a Option<String>, field: &str) -> Result<&'a str> {
-    match value {
-        Some(value) => {
-            require_non_empty(value, field)?;
-            Ok(value)
-        }
-        None => Err(AppError::Validation(format!("{field} is required"))),
-    }
-}
-
-fn require_image_digest_reference(image: &str, field: &str) -> Result<()> {
-    if TaggedImageReference::parse(image, field)?
-        .digest()
-        .is_none()
-    {
-        return Err(AppError::Validation(format!(
-            "{field} must include an immutable @sha256:<digest> reference"
-        )));
-    }
-
-    Ok(())
-}
-
-fn validate_image_digest(
-    image_reference_digest: Option<&OciSha256Digest>,
-    digest: Option<&OciSha256Digest>,
-    field: &str,
-) -> Result<()> {
-    let Some(digest) = digest else {
-        return Ok(());
-    };
-    if image_reference_digest != Some(digest) {
-        return Err(AppError::Validation(format!(
-            "{field} must match the digest pinned in the image reference"
-        )));
-    }
-
     Ok(())
 }
 
@@ -946,48 +490,6 @@ pub async fn validate_challenge_run_manifest_sources(
                 }
             }
         }
-    }
-
-    Ok(())
-}
-
-fn validate_community(spec: &ChallengeBundleSpec) -> Result<()> {
-    let Some(community) = &spec.community else {
-        return Ok(());
-    };
-
-    let has_name = community
-        .moltbook_submolt_name
-        .as_deref()
-        .is_some_and(|value| !value.trim().is_empty());
-    let has_url = community.moltbook_submolt_url.as_ref().is_some();
-    if !has_name && !has_url {
-        return Err(AppError::Validation(
-            "community must declare moltbook_submolt_name or moltbook_submolt_url".to_string(),
-        ));
-    }
-
-    if let Some(name) = &community.moltbook_submolt_name {
-        validate_moltbook_submolt_name(name)?;
-    }
-    Ok(())
-}
-
-fn validate_moltbook_submolt_name(value: &str) -> Result<()> {
-    require_non_empty(value, "community.moltbook_submolt_name")?;
-    if value.chars().count() > 80 {
-        return Err(AppError::Validation(
-            "community.moltbook_submolt_name must be at most 80 characters".to_string(),
-        ));
-    }
-    if !value
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
-    {
-        return Err(AppError::Validation(
-            "community.moltbook_submolt_name must contain only ASCII letters, digits, underscores, hyphens, or dots"
-                .to_string(),
-        ));
     }
 
     Ok(())
