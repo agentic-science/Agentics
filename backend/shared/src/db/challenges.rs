@@ -11,6 +11,7 @@ use crate::error::{AppError, Result};
 use crate::models::challenge::{
     AdminChallengeListItemDto, ChallengeBundleSpec, ChallengeListItemDto, PublishChallengeResponse,
 };
+use crate::models::hashes::Sha256Digest;
 use crate::models::names::{ChallengeName, TargetName};
 use crate::models::request::{
     ChallengeShortlistResponse, ChallengeShortlistRevisionResponse, ChallengeShortlistedAgentDto,
@@ -350,7 +351,7 @@ pub struct CreateChallengeShortlistRevisionInput {
     pub challenge_name: ChallengeName,
     pub uploader_agent_id: String,
     pub storage_key: StorageKey,
-    pub sha256: String,
+    pub sha256: Sha256Digest,
     pub requested_count: i64,
     pub agent_ids_to_add: Vec<String>,
 }
@@ -377,7 +378,7 @@ pub async fn create_challenge_shortlist_revision(
     .bind(input.challenge_name.as_str())
     .bind(&input.uploader_agent_id)
     .bind(input.storage_key.as_str())
-    .bind(&input.sha256)
+    .bind(input.sha256.to_string())
     .bind(input.requested_count)
     .execute(&mut *tx)
     .await?;
@@ -765,7 +766,7 @@ fn row_to_shortlist_revision_response(
         uploader_agent_id: uuid_string_from_row(&row, "uploader_agent_id")?,
         requested_count: row.try_get("requested_count")?,
         added_count: row.try_get("added_count")?,
-        sha256: row.try_get("sha256")?,
+        sha256: sha256_digest_from_row(&row, "sha256")?,
         storage_key: storage_key_from_row(&row, "storage_key")?,
         created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
     })
@@ -774,6 +775,12 @@ fn row_to_shortlist_revision_response(
 fn storage_key_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<StorageKey> {
     let value: String = row.try_get(column)?;
     StorageKey::try_new(&value)
+        .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
+}
+
+fn sha256_digest_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<Sha256Digest> {
+    let value: String = row.try_get(column)?;
+    Sha256Digest::try_new(&value)
         .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
 }
 

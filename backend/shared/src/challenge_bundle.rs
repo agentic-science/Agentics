@@ -17,6 +17,7 @@ use crate::models::challenge::{
     ChallengeRunSpec, ChallengeSolutionPublicationPolicy, ChallengeTargetSpec, DockerPlatform,
     HardwareProfileSpec, PrivateBenchmarkPolicy, ResourceProfileSpec, TargetAccelerator,
 };
+use crate::models::hashes::{OciSha256Digest, Sha256Digest};
 use crate::models::paths::BundleRelativePath;
 use crate::zip_project::{ZIP_PROJECT_MANIFEST_FILE, ZIP_PROJECT_PROTOCOL};
 
@@ -165,7 +166,7 @@ pub fn is_safe_relative_path(value: &str) -> bool {
 }
 
 /// Return a deterministic SHA-256 digest of all files in a bundle tree.
-pub async fn challenge_bundle_tree_sha256(bundle_root: &Path) -> Result<String> {
+pub async fn challenge_bundle_tree_sha256(bundle_root: &Path) -> Result<Sha256Digest> {
     let bundle_root = bundle_root.to_path_buf();
     tokio::task::spawn_blocking(move || challenge_bundle_tree_sha256_blocking(&bundle_root))
         .await
@@ -187,10 +188,10 @@ pub async fn copy_challenge_bundle_dir(
     .map_err(|e| AppError::Internal(format!("bundle copy task failed: {e}")))?
 }
 
-fn challenge_bundle_tree_sha256_blocking(bundle_root: &Path) -> Result<String> {
+fn challenge_bundle_tree_sha256_blocking(bundle_root: &Path) -> Result<Sha256Digest> {
     let mut hasher = Sha256::new();
     hash_bundle_tree(&mut hasher, bundle_root)?;
-    Ok(hex::encode(hasher.finalize()))
+    Ok(Sha256Digest::from_bytes(hasher.finalize().into()))
 }
 
 fn hash_bundle_tree(hasher: &mut Sha256, bundle_root: &Path) -> Result<()> {
@@ -630,20 +631,18 @@ fn require_supported_image_repository(
 fn validate_resource_profile(profile: &ResourceProfileSpec, field: &str) -> Result<()> {
     require_non_empty(&profile.solution_image, &format!("{field}.solution_image"))?;
     require_non_empty(&profile.scorer_image, &format!("{field}.scorer_image"))?;
-    let solution_reference_digest = validate_image_reference_digest(
-        &profile.solution_image,
-        &format!("{field}.solution_image"),
-    )?;
+    let solution_reference_digest =
+        parse_image_reference_digest(&profile.solution_image, &format!("{field}.solution_image"))?;
     let scorer_reference_digest =
-        validate_image_reference_digest(&profile.scorer_image, &format!("{field}.scorer_image"))?;
+        parse_image_reference_digest(&profile.scorer_image, &format!("{field}.scorer_image"))?;
     validate_image_digest(
-        solution_reference_digest,
-        profile.solution_image_digest.as_deref(),
+        solution_reference_digest.as_ref(),
+        profile.solution_image_digest.as_ref(),
         &format!("{field}.solution_image_digest"),
     )?;
     validate_image_digest(
-        scorer_reference_digest,
-        profile.scorer_image_digest.as_deref(),
+        scorer_reference_digest.as_ref(),
+        profile.scorer_image_digest.as_ref(),
         &format!("{field}.scorer_image_digest"),
     )?;
     validate_positive_u64(profile.timeout_sec, &format!("{field}.timeout_sec"))?;
@@ -749,7 +748,7 @@ fn require_required_optional_string<'a>(value: &'a Option<String>, field: &str) 
 }
 
 fn require_image_digest_reference(image: &str, field: &str) -> Result<()> {
-    if validate_image_reference_digest(image, field)?.is_none() {
+    if parse_image_reference_digest(image, field)?.is_none() {
         return Err(AppError::Validation(format!(
             "{field} must include an immutable @sha256:<digest> reference"
         )));
@@ -758,44 +757,26 @@ fn require_image_digest_reference(image: &str, field: &str) -> Result<()> {
     Ok(())
 }
 
-fn validate_image_reference_digest<'a>(image: &'a str, field: &str) -> Result<Option<&'a str>> {
+fn parse_image_reference_digest(image: &str, field: &str) -> Result<Option<OciSha256Digest>> {
     let Some((_, digest)) = image.rsplit_once('@') else {
         return Ok(None);
     };
-    validate_sha256_digest(digest, &format!("{field} digest"))?;
+    let digest = OciSha256Digest::try_new(digest)
+        .map_err(|error| AppError::Validation(format!("{field} digest is invalid: {error}")))?;
     Ok(Some(digest))
 }
 
 fn validate_image_digest(
-    image_reference_digest: Option<&str>,
-    digest: Option<&str>,
+    image_reference_digest: Option<&OciSha256Digest>,
+    digest: Option<&OciSha256Digest>,
     field: &str,
 ) -> Result<()> {
     let Some(digest) = digest else {
         return Ok(());
     };
-    require_non_empty(digest, field)?;
-    validate_sha256_digest(digest, field)?;
     if image_reference_digest != Some(digest) {
         return Err(AppError::Validation(format!(
             "{field} must match the digest pinned in the image reference"
-        )));
-    }
-
-    Ok(())
-}
-
-fn validate_sha256_digest(digest: &str, field: &str) -> Result<()> {
-    const PREFIX: &str = "sha256:";
-    if !digest.starts_with(PREFIX) {
-        return Err(AppError::Validation(format!(
-            "{field} must start with sha256:"
-        )));
-    }
-    let hex = &digest[PREFIX.len()..];
-    if hex.len() != 64 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        return Err(AppError::Validation(format!(
-            "{field} must be sha256: followed by 64 hexadecimal characters"
         )));
     }
 
@@ -1103,6 +1084,7 @@ mod tests {
         ResourceProfileSpec, ScorerSpec, SolutionSpec, TargetAccelerator,
     };
     use crate::models::evaluation::ScoreVisibility;
+    use crate::models::hashes::OciSha256Digest;
     use crate::models::names::{ChallengeName, MetricName, ResourceProfileName, TargetName};
     use crate::models::paths::BundleRelativePath;
     use crate::models::urls::MoltbookSubmoltUrl;
@@ -1112,8 +1094,9 @@ mod tests {
         validate_challenge_bundle, validate_challenge_bundle_spec, validate_digest_pinned_images,
     };
 
-    fn test_digest() -> String {
-        format!("sha256:{}", "a".repeat(64))
+    fn test_digest() -> OciSha256Digest {
+        OciSha256Digest::try_new(format!("sha256:{}", "a".repeat(64)))
+            .expect("test OCI digest is valid")
     }
 
     fn base_spec() -> ChallengeBundleSpec {
@@ -1423,8 +1406,10 @@ mod tests {
     fn image_digest_field_must_match_image_reference() {
         let mut spec = base_spec();
         pin_images(&mut spec);
-        spec.targets[0].resource_profile.solution_image_digest =
-            Some(format!("sha256:{}", "b".repeat(64)));
+        spec.targets[0].resource_profile.solution_image_digest = Some(
+            OciSha256Digest::try_new(format!("sha256:{}", "b".repeat(64)))
+                .expect("test OCI digest is valid"),
+        );
 
         let error =
             validate_challenge_bundle_spec(&spec).expect_err("mismatched digest should fail");

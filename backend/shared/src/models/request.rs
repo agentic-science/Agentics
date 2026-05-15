@@ -7,6 +7,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::evaluation::{EvaluationJobDto, MetricValue};
+use super::hashes::Sha256Digest;
 use super::ids::SolutionSubmissionId;
 use super::names::{ChallengeName, MetricName, TargetName};
 use crate::storage::StorageKey;
@@ -298,7 +299,7 @@ pub struct ChallengeShortlistRevisionResponse {
     pub uploader_agent_id: String,
     pub requested_count: i64,
     pub added_count: i64,
-    pub sha256: String,
+    pub sha256: Sha256Digest,
     pub storage_key: StorageKey,
     pub created_at: String,
 }

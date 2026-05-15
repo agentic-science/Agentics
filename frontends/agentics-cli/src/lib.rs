@@ -913,7 +913,7 @@ mod tests {
             "--pr-url",
             "https://github.com/agentics-reifying/agentics-challenges/pull/7",
             "--commit-sha",
-            "0123456789abcdef",
+            "0123456789abcdef0123456789abcdef01234567",
             "--repo-dir",
             temp.path().to_str().expect("utf8 path"),
             "--challenge-path",
@@ -935,6 +935,30 @@ mod tests {
         assert!(output.contains("challenge_draft: draft-1"));
         assert_eq!(body["manifest"]["request"], "new_challenge");
         assert_eq!(body["challenge_path"], "challenges/sample-sum");
+    }
+
+    #[test]
+    fn challenge_creator_rejects_invalid_commit_sha_during_cli_parse() {
+        let result = Cli::try_parse_from([
+            "agentics",
+            "challenge-creator",
+            "draft",
+            "create",
+            "--repo-url",
+            "https://github.com/agentics-reifying/agentics-challenges",
+            "--pr-number",
+            "7",
+            "--pr-url",
+            "https://github.com/agentics-reifying/agentics-challenges/pull/7",
+            "--commit-sha",
+            "0123456789abcdef",
+            "--challenge-path",
+            "challenges/sample-sum",
+            "--pr-author-github-user-id",
+            "1001",
+        ]);
+
+        assert!(result.is_err());
     }
 
     #[tokio::test]
@@ -960,7 +984,7 @@ mod tests {
                 "kind": "private_benchmark_data",
                 "required": true,
                 "size_bytes": 17,
-                "sha256": "asset-sha",
+                "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 "storage_key": "challenge-drafts/draft-1/private-assets/official-cases.bin",
                 "uploader_agent_id": "agent-1",
                 "created_at": "2026-05-01T00:00:00Z"
@@ -1159,9 +1183,9 @@ mod tests {
             "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
             "pr_number": 7,
             "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/7",
-            "commit_sha": "0123456789abcdef",
+            "commit_sha": "0123456789abcdef0123456789abcdef01234567",
             "challenge_path": "challenges/sample-sum",
-            "manifest_sha256": "abc123",
+            "manifest_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
             "manifest": challenge_manifest_json(),
             "private_assets": [],
             "validation_records": [],

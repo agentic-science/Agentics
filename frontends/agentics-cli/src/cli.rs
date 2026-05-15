@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use shared::models::hashes::GitCommitSha;
 use shared::models::ids::SolutionSubmissionId;
 use shared::models::names::{AssetName, ChallengeName, MetricName, TargetName};
 
@@ -191,7 +192,7 @@ pub(crate) enum ChallengeDraftCommand {
         #[arg(long)]
         pr_url: String,
         #[arg(long)]
-        commit_sha: String,
+        commit_sha: GitCommitSha,
         #[arg(long, value_name = "PATH", default_value = ".")]
         repo_dir: PathBuf,
         #[arg(long, value_name = "PATH")]

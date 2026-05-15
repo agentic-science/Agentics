@@ -11,6 +11,8 @@ use crate::models::challenge_creation::{
     ChallengeDraftStatus, ChallengeDraftValidationRecordResponse, ChallengeDraftValidationStatus,
     ChallengePrivateAssetKind, ChallengePrivateAssetResponse,
 };
+use crate::models::hashes::GitCommitSha;
+use crate::models::hashes::Sha256Digest;
 use crate::models::names::{AssetName, ChallengeName};
 use crate::models::paths::RepoRelativePath;
 use crate::models::urls::{GithubPullRequestUrl, GithubRepoRemote};
@@ -32,9 +34,9 @@ pub struct CreateChallengeDraftInput {
     pub repo_url: GithubRepoRemote,
     pub pr_number: i32,
     pub pr_url: GithubPullRequestUrl,
-    pub commit_sha: String,
+    pub commit_sha: GitCommitSha,
     pub challenge_path: RepoRelativePath,
-    pub manifest_sha256: String,
+    pub manifest_sha256: Sha256Digest,
     pub manifest: ChallengeCreationManifest,
 }
 
@@ -47,7 +49,7 @@ pub struct CreateChallengePrivateAssetInput {
     pub kind: ChallengePrivateAssetKind,
     pub required: bool,
     pub size_bytes: i64,
-    pub sha256: String,
+    pub sha256: Sha256Digest,
     pub storage_key: StorageKey,
     pub uploader_agent_id: String,
 }
@@ -78,7 +80,7 @@ pub struct PublishNewChallengeDraftInput {
     pub audit_event_id: String,
     pub admin_username: String,
     pub repository_path: String,
-    pub bundle_sha256: String,
+    pub bundle_sha256: Sha256Digest,
 }
 
 /// Input for atomically publishing one approved archive draft.
@@ -89,7 +91,7 @@ pub struct PublishArchiveChallengeDraftInput {
     pub audit_event_id: String,
     pub admin_username: String,
     pub repository_path: String,
-    pub bundle_sha256: String,
+    pub bundle_sha256: Sha256Digest,
 }
 
 /// Input for recording one admin validation attempt against a draft.
@@ -100,8 +102,8 @@ pub struct RecordChallengeDraftValidationInput {
     pub status: ChallengeDraftValidationStatus,
     pub message: String,
     pub repository_path: String,
-    pub manifest_sha256: String,
-    pub bundle_sha256: Option<String>,
+    pub manifest_sha256: Sha256Digest,
+    pub bundle_sha256: Option<Sha256Digest>,
 }
 
 /// Insert a new challenge draft bound to a GitHub PR.
@@ -142,9 +144,9 @@ pub async fn create_challenge_draft(
     .bind(input.repo_url.as_str())
     .bind(input.pr_number)
     .bind(input.pr_url.as_str())
-    .bind(&input.commit_sha)
+    .bind(input.commit_sha.to_string())
     .bind(input.challenge_path.as_str())
-    .bind(&input.manifest_sha256)
+    .bind(input.manifest_sha256.to_string())
     .bind(&manifest_json)
     .fetch_one(pool)
     .await?;
@@ -284,7 +286,7 @@ pub async fn create_challenge_private_asset(
     .bind(input.kind.as_str())
     .bind(input.required)
     .bind(input.size_bytes)
-    .bind(&input.sha256)
+    .bind(input.sha256.to_string())
     .bind(input.storage_key.as_str())
     .bind(&input.uploader_agent_id)
     .fetch_one(&mut *tx)
@@ -361,8 +363,8 @@ pub async fn record_challenge_draft_validation(
     .bind(input.status.as_str())
     .bind(&input.message)
     .bind(&input.repository_path)
-    .bind(&input.manifest_sha256)
-    .bind(&input.bundle_sha256)
+    .bind(input.manifest_sha256.to_string())
+    .bind(input.bundle_sha256.map(|digest| digest.to_string()))
     .fetch_one(&mut *tx)
     .await?;
 
@@ -386,7 +388,7 @@ pub async fn record_challenge_draft_validation(
     .bind(next_status.as_str())
     .bind(&input.message)
     .bind(&input.repository_path)
-    .bind(&input.bundle_sha256)
+    .bind(input.bundle_sha256.map(|digest| digest.to_string()))
     .execute(&mut *tx)
     .await?;
 
@@ -593,7 +595,7 @@ pub async fn publish_new_challenge_draft(
                 "challenge_name": &input.challenge_name,
                 "published_challenge_name": &published.challenge_name,
                 "repository_path": &input.repository_path,
-                "bundle_sha256": &input.bundle_sha256
+                "bundle_sha256": input.bundle_sha256
             }),
         },
     )
@@ -623,7 +625,7 @@ pub async fn publish_archive_challenge_draft(
                 "challenge_name": &input.challenge_name,
                 "published_challenge_name": Value::Null,
                 "repository_path": &input.repository_path,
-                "bundle_sha256": &input.bundle_sha256
+                "bundle_sha256": input.bundle_sha256
             }),
         },
     )
@@ -778,12 +780,15 @@ fn row_to_draft_response(
         repo_url: github_repo_remote_from_row(&row, "repo_url")?,
         pr_number: row.try_get("pr_number")?,
         pr_url: github_pull_request_url_from_row(&row, "pr_url")?,
-        commit_sha: row.try_get("commit_sha")?,
+        commit_sha: git_commit_sha_from_row(&row, "commit_sha")?,
         challenge_path: repo_relative_path_from_row(&row, "challenge_path")?,
-        manifest_sha256: row.try_get("manifest_sha256")?,
+        manifest_sha256: sha256_digest_from_row(&row, "manifest_sha256")?,
         manifest,
-        validation_bundle_sha256: row.try_get("validation_bundle_sha256")?,
-        approved_bundle_sha256: row.try_get("approved_bundle_sha256")?,
+        validation_bundle_sha256: optional_sha256_digest_from_row(
+            &row,
+            "validation_bundle_sha256",
+        )?,
+        approved_bundle_sha256: optional_sha256_digest_from_row(&row, "approved_bundle_sha256")?,
         validation_message: row.try_get("validation_message")?,
         validation_repository_path: row.try_get("validation_repository_path")?,
         published_challenge_name: optional_challenge_name_from_row(
@@ -807,7 +812,7 @@ fn row_to_private_asset_response(
         kind: parse_private_asset_kind(&row.try_get::<String, _>("kind")?)?,
         required: row.try_get("required")?,
         size_bytes: row.try_get("size_bytes")?,
-        sha256: row.try_get("sha256")?,
+        sha256: sha256_digest_from_row(&row, "sha256")?,
         storage_key: storage_key_from_row(&row, "storage_key")?,
         uploader_agent_id: uuid_string_from_row(&row, "uploader_agent_id")?,
         created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
@@ -829,6 +834,30 @@ fn github_pull_request_url_from_row(
 ) -> Result<GithubPullRequestUrl> {
     let value: String = row.try_get(column)?;
     GithubPullRequestUrl::try_new(&value)
+        .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
+}
+
+fn git_commit_sha_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<GitCommitSha> {
+    let value: String = row.try_get(column)?;
+    GitCommitSha::try_new(&value)
+        .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
+}
+
+fn sha256_digest_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<Sha256Digest> {
+    let value: String = row.try_get(column)?;
+    Sha256Digest::try_new(&value)
+        .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
+}
+
+fn optional_sha256_digest_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<Option<Sha256Digest>> {
+    let Some(value) = row.try_get::<Option<String>, _>(column)? else {
+        return Ok(None);
+    };
+    Sha256Digest::try_new(&value)
+        .map(Some)
         .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
 }
 
@@ -856,8 +885,8 @@ fn row_to_validation_record_response(
         status: parse_validation_status(&row.try_get::<String, _>("status")?)?,
         message: row.try_get("message")?,
         repository_path: row.try_get("repository_path")?,
-        manifest_sha256: row.try_get("manifest_sha256")?,
-        bundle_sha256: row.try_get("bundle_sha256")?,
+        manifest_sha256: sha256_digest_from_row(&row, "manifest_sha256")?,
+        bundle_sha256: optional_sha256_digest_from_row(&row, "bundle_sha256")?,
         created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
     })
 }

@@ -1083,7 +1083,7 @@ pub async fn create_challenge_shortlist_revision(
     let agent_ids_to_add = normalize_shortlist_agent_ids(&body.agent_ids_to_add)?;
 
     let revision_id = Uuid::new_v4().to_string();
-    let sha256 = challenge_creation::sha256_hex(&raw_json);
+    let sha256 = challenge_creation::sha256_digest(&raw_json);
     let storage_key = StorageKey::try_new(format!(
         "challenge-shortlists/{challenge_name}/{revision_id}.json"
     ))?;
@@ -1289,7 +1289,7 @@ async fn copy_admin_bundle_to_managed_storage(
     let target = std::path::Path::new(&config.storage_root)
         .join("challenge-bundles")
         .join("admin")
-        .join(&source_digest);
+        .join(source_digest.to_string());
     if !tokio::fs::try_exists(&target).await? {
         let temp_target = target.with_extension(format!("tmp-{}", Uuid::new_v4()));
         if tokio::fs::try_exists(&temp_target).await? {

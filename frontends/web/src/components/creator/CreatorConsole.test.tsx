@@ -98,7 +98,8 @@ describe("CreatorConsole", () => {
       uploader_agent_id: "agent-creator",
       requested_count: 1,
       added_count: 1,
-      sha256: "shortlist-sha",
+      sha256:
+        "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
       storage_key: "challenge-shortlists/matrix-multiplication/revision-1.json",
       created_at: "2026-05-15T00:00:00Z",
     });
@@ -146,7 +147,7 @@ describe("CreatorConsole", () => {
           pr_number: 42,
           pr_url:
             "https://github.com/agentics-reifying/agentics-challenges/pull/42",
-          commit_sha: "0123456789abcdef",
+          commit_sha: "0123456789abcdef0123456789abcdef01234567",
           challenge_path: "challenges/matrix-multiplication",
           pr_author_github_user_id: 123,
         }),
@@ -172,7 +173,7 @@ function fillDraftRequiredFields(view: RenderResult) {
     },
   });
   fireEvent.input(view.getByLabelText("Commit SHA"), {
-    target: { value: "0123456789abcdef" },
+    target: { value: "0123456789abcdef0123456789abcdef01234567" },
   });
 }
 
@@ -187,9 +188,10 @@ const challengeDraftResponse = {
   repo_url: "https://github.com/agentics-reifying/agentics-challenges",
   pr_number: 42,
   pr_url: "https://github.com/agentics-reifying/agentics-challenges/pull/42",
-  commit_sha: "0123456789abcdef",
+  commit_sha: "0123456789abcdef0123456789abcdef01234567",
   challenge_path: "challenges/matrix-multiplication",
-  manifest_sha256: "manifest-sha",
+  manifest_sha256:
+    "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
   manifest: {
     schema_version: 1,
     request: "new_challenge",

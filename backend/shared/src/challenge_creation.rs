@@ -11,6 +11,7 @@ use crate::models::challenge_creation::{
     AGENTICS_CHALLENGE_MANIFEST_FILE, ChallengeCreationManifest, ChallengeCreationRequestKind,
     ChallengePrivateAssetRequirement, ChallengePrivateAssetResponse,
 };
+use crate::models::hashes::Sha256Digest;
 use crate::models::paths::RepoRelativePath;
 
 /// Read `agentics.challenge.json` from a proposal root.
@@ -75,9 +76,9 @@ pub fn validate_challenge_creation_manifest(manifest: &ChallengeCreationManifest
 }
 
 /// Return a stable SHA-256 digest of a normalized manifest JSON representation.
-pub fn normalized_manifest_sha256(manifest: &ChallengeCreationManifest) -> Result<String> {
+pub fn normalized_manifest_sha256(manifest: &ChallengeCreationManifest) -> Result<Sha256Digest> {
     let bytes = serde_json::to_vec(manifest).map_err(|e| AppError::Internal(e.to_string()))?;
-    Ok(sha256_hex(&bytes))
+    Ok(sha256_digest(&bytes))
 }
 
 /// Return a deterministic digest for the draft content a reviewer validated.
@@ -91,7 +92,7 @@ pub async fn draft_review_bundle_sha256(
     proposal_root: &Path,
     manifest: &ChallengeCreationManifest,
     private_assets: &[ChallengePrivateAssetResponse],
-) -> Result<String> {
+) -> Result<Sha256Digest> {
     let proposal_root = proposal_root.to_path_buf();
     let manifest = manifest.clone();
     let private_assets = private_assets.to_vec();
@@ -102,18 +103,18 @@ pub async fn draft_review_bundle_sha256(
     .map_err(|e| AppError::Internal(format!("draft digest task failed: {e}")))?
 }
 
-/// Return the hex SHA-256 digest of arbitrary bytes.
-pub fn sha256_hex(bytes: &[u8]) -> String {
+/// Return the SHA-256 digest of arbitrary bytes.
+pub fn sha256_digest(bytes: &[u8]) -> Sha256Digest {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
-    hex::encode(hasher.finalize())
+    Sha256Digest::from_bytes(hasher.finalize().into())
 }
 
 fn draft_review_bundle_sha256_blocking(
     proposal_root: &Path,
     manifest: &ChallengeCreationManifest,
     private_assets: &[ChallengePrivateAssetResponse],
-) -> Result<String> {
+) -> Result<Sha256Digest> {
     let mut hasher = Sha256::new();
     hash_field(&mut hasher, "format", b"agentics-draft-review-v1");
 
@@ -133,10 +134,14 @@ fn draft_review_bundle_sha256_blocking(
         hash_field(&mut hasher, "asset_kind", asset.kind.as_str().as_bytes());
         hash_field(&mut hasher, "asset_required", &[u8::from(asset.required)]);
         hash_field(&mut hasher, "asset_size", &asset.size_bytes.to_be_bytes());
-        hash_field(&mut hasher, "asset_sha256", asset.sha256.as_bytes());
+        hash_field(
+            &mut hasher,
+            "asset_sha256",
+            asset.sha256.to_string().as_bytes(),
+        );
     }
 
-    Ok(hex::encode(hasher.finalize()))
+    Ok(Sha256Digest::from_bytes(hasher.finalize().into()))
 }
 
 fn hash_public_tree(hasher: &mut Sha256, bundle_root: &Path) -> Result<()> {

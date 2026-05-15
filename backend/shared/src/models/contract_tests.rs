@@ -13,6 +13,7 @@ use super::challenge::{
 use super::evaluation::{
     EvaluationDto, EvaluationStatus, MetricValue, RunMetricResult, ScoreVisibility, ScoringMode,
 };
+use super::hashes::OciSha256Digest;
 use super::ids::SolutionSubmissionId;
 use super::names::{ChallengeName, MetricName, ResourceProfileName, RunName, TargetName};
 use super::paths::BundleRelativePath;
@@ -131,10 +132,10 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
                     resource_description: Some(
                         "Small CPU target for local validation.".to_string(),
                     ),
-                    solution_image: format!("ubuntu:24.04@{}", digest("1")),
-                    solution_image_digest: Some(digest("1")),
-                    scorer_image: format!("ubuntu:24.04@{}", digest("2")),
-                    scorer_image_digest: Some(digest("2")),
+                    solution_image: format!("ubuntu:24.04@{}", image_digest("1")),
+                    solution_image_digest: Some(image_digest("1")),
+                    scorer_image: format!("ubuntu:24.04@{}", image_digest("2")),
+                    scorer_image_digest: Some(image_digest("2")),
                     timeout_sec: 60,
                     memory_limit_mb: 2048,
                     cpu_limit_millis: 2000,
@@ -325,4 +326,8 @@ fn admin_capacity_response() -> AdminCapacityResponse {
 
 fn digest(fill: &str) -> String {
     format!("sha256:{}", fill.repeat(64))
+}
+
+fn image_digest(fill: &str) -> OciSha256Digest {
+    OciSha256Digest::try_new(digest(fill)).expect("test OCI digest is valid")
 }

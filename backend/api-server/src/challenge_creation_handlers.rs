@@ -22,6 +22,7 @@ use shared::models::challenge_creation::{
     CreateChallengeDraftRequest, ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest,
     ValidateChallengeDraftRequest,
 };
+use shared::models::hashes::Sha256Digest;
 use shared::models::names::ChallengeName;
 use shared::models::paths::{RepoRelativePath, RepositoryCheckoutPath};
 use shared::storage::StorageKey;
@@ -39,7 +40,6 @@ pub async fn create_challenge_draft(
     creator: CreatorAuth,
     ValidatedJson(body): ValidatedJson<CreateChallengeDraftRequest>,
 ) -> Result<(StatusCode, Json<ChallengeDraftResponse>)> {
-    validate_github_pr_metadata(&body)?;
     challenge_creation::validate_challenge_creation_manifest(&body.manifest)?;
     validate_challenge_draft_path(&body.challenge_path, &body.manifest.challenge_name)?;
 
@@ -69,7 +69,7 @@ pub async fn create_challenge_draft(
             repo_url: body.repo_url,
             pr_number: body.pr_number,
             pr_url: body.pr_url,
-            commit_sha: body.commit_sha.trim().to_string(),
+            commit_sha: body.commit_sha,
             challenge_path: body.challenge_path,
             manifest_sha256,
             manifest: body.manifest,
@@ -168,7 +168,7 @@ pub async fn upload_challenge_private_asset(
     let asset_size_bytes_i64 = i64::try_from(asset_size_bytes).map_err(|_| {
         AppError::BadRequest("private asset size exceeds supported database range".to_string())
     })?;
-    let sha256 = challenge_creation::sha256_hex(&asset_bytes);
+    let sha256 = challenge_creation::sha256_digest(&asset_bytes);
     let storage_path = StorageKey::try_new(format!(
         "challenge-drafts/{}/private-assets/{}-{}.bin",
         draft.id, body.asset_name, sha256
@@ -312,8 +312,8 @@ pub async fn validate_challenge_draft(
                     status: ChallengeDraftValidationStatus::Passed,
                     message: message.clone(),
                     repository_path: repository_path.to_string(),
-                    manifest_sha256: draft.manifest_sha256.clone(),
-                    bundle_sha256: Some(bundle_sha256.clone()),
+                    manifest_sha256: draft.manifest_sha256,
+                    bundle_sha256: Some(bundle_sha256),
                 },
             )
             .await?;
@@ -348,7 +348,7 @@ pub async fn validate_challenge_draft(
                     status: ChallengeDraftValidationStatus::Failed,
                     message: message.clone(),
                     repository_path: repository_path.to_string(),
-                    manifest_sha256: draft.manifest_sha256.clone(),
+                    manifest_sha256: draft.manifest_sha256,
                     bundle_sha256: None,
                 },
             )
@@ -446,7 +446,7 @@ pub async fn approve_challenge_draft(
     }
     db::approve_validated_challenge_draft(&state.db, &draft.id, non_empty_message(&body.message))
         .await?;
-    let approved_bundle_sha256 = draft.validation_bundle_sha256.clone();
+    let approved_bundle_sha256 = draft.validation_bundle_sha256;
     db::create_challenge_draft_audit_event(
         &state.db,
         &db::CreateChallengeDraftAuditEventInput {
@@ -528,9 +528,9 @@ pub async fn publish_challenge_draft(
     let (manifest, bundle_sha256) = validate_draft_repository(&draft, &repository_path).await?;
     let approved_bundle_sha256 = draft
         .approved_bundle_sha256
-        .as_deref()
+        .as_ref()
         .ok_or_else(|| AppError::Conflict)?;
-    if approved_bundle_sha256 != bundle_sha256 {
+    if *approved_bundle_sha256 != bundle_sha256 {
         return Err(AppError::Validation(
             "challenge draft content changed after approval; validate and approve the draft again before publishing"
                 .to_string(),
@@ -600,21 +600,6 @@ fn map_unique_conflict(error: AppError) -> AppError {
     }
 }
 
-fn validate_github_pr_metadata(body: &CreateChallengeDraftRequest) -> Result<()> {
-    validate_commit_sha(&body.commit_sha)?;
-    Ok(())
-}
-
-fn validate_commit_sha(value: &str) -> Result<()> {
-    let value = value.trim();
-    if !(7..=64).contains(&value.len()) || !value.chars().all(|c| c.is_ascii_hexdigit()) {
-        return Err(AppError::BadRequest(
-            "commit_sha must be a 7-64 character hexadecimal Git commit id".to_string(),
-        ));
-    }
-    Ok(())
-}
-
 fn validate_challenge_draft_path(
     path: &RepoRelativePath,
     challenge_name: &ChallengeName,
@@ -631,7 +616,7 @@ fn validate_challenge_draft_path(
 async fn validate_draft_repository(
     draft: &ChallengeDraftResponse,
     repository_path: &RepositoryCheckoutPath,
-) -> Result<(ChallengeCreationManifest, String)> {
+) -> Result<(ChallengeCreationManifest, Sha256Digest)> {
     let proposal_root = repository_path
         .as_path()
         .join(draft.challenge_path.as_path());

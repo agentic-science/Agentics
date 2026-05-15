@@ -20,6 +20,8 @@ uuid = { workspace = true }
 url = { workspace = true }
 figment = { workspace = true }
 nutype = { workspace = true }
+gix-hash = { workspace = true }
+oci-spec = { workspace = true }
 
 axum = { workspace = true }
 sqlx = { workspace = true }

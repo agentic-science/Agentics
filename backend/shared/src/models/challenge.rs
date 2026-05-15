@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::hashes::OciSha256Digest;
 use super::names::{ChallengeName, MetricName, ResourceProfileName, RunName, TargetName};
 use super::paths::{BundleRelativePath, RunInputPath, RunOutputPath};
 use super::urls::{ExternalDataUrl, MoltbookSubmoltUrl};
@@ -179,10 +180,10 @@ pub struct ResourceProfileSpec {
     pub resource_description: Option<String>,
     pub solution_image: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub solution_image_digest: Option<String>,
+    pub solution_image_digest: Option<OciSha256Digest>,
     pub scorer_image: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub scorer_image_digest: Option<String>,
+    pub scorer_image_digest: Option<OciSha256Digest>,
     pub timeout_sec: u64,
     pub memory_limit_mb: u64,
     pub cpu_limit_millis: u32,

@@ -13,9 +13,13 @@ use serde_json::json;
 use shared::{
     db,
     error::AppError,
-    models::{challenge_creation::ChallengePrivateAssetKind, names::AssetName},
+    models::{
+        challenge_creation::ChallengePrivateAssetKind, hashes::Sha256Digest, names::AssetName,
+    },
     storage::StorageKey,
 };
+
+use reqwest::StatusCode;
 
 fn creator_auth(
     request: reqwest::RequestBuilder,
@@ -24,6 +28,42 @@ fn creator_auth(
     request
         .header("Cookie", &creator.cookie_header)
         .header("X-Agentics-CSRF-Token", &creator.csrf_token)
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn challenge_draft_rejects_short_commit_sha(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("storage tempdir");
+    let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
+    let config = test_config(storage.path(), seeded_challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+    let creator = create_creator_session(&pool, 1001, "creator").await;
+
+    let response = creator_auth(
+        client.post(api_url(&app, "/api/creator/challenge-drafts")),
+        &creator,
+    )
+    .json(&json!({
+        "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
+        "pr_number": 7,
+        "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/7",
+        "commit_sha": "0123456789abcdef",
+        "challenge_path": "challenges/sample-sum",
+        "pr_author_github_user_id": 1001,
+        "manifest": manifest_json()
+    }))
+    .send()
+    .await
+    .expect("draft request");
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = response.json().await.expect("error json");
+    assert!(
+        body["message"]
+            .as_str()
+            .expect("error message")
+            .contains("commit_sha must be a full")
+    );
 }
 
 #[sqlx::test(migrations = "../migrations")]
@@ -47,7 +87,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
         "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
         "pr_number": 7,
         "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/7",
-        "commit_sha": "0123456789abcdef",
+        "commit_sha": "0123456789abcdef0123456789abcdef01234567",
         "challenge_path": "challenges/sample-sum",
         "pr_author_github_user_id": 1001,
         "manifest": manifest_json()
@@ -382,7 +422,7 @@ async fn challenge_draft_rejects_new_version_manifest(pool: sqlx::PgPool) {
         "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
         "pr_number": 22,
         "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/22",
-        "commit_sha": "0123456789abcde22",
+        "commit_sha": "0123456789abcde220123456789abcde22012345",
         "challenge_path": "challenges/sample-sum",
         "pr_author_github_user_id": 1001,
         "manifest": {
@@ -504,7 +544,7 @@ async fn challenge_draft_rejects_mismatched_pr_author(pool: sqlx::PgPool) {
         "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
         "pr_number": 8,
         "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/8",
-        "commit_sha": "0123456789abcdef",
+        "commit_sha": "0123456789abcdef0123456789abcdef01234567",
         "challenge_path": "challenges/sample-sum",
         "pr_author_github_user_id": 2002,
         "manifest": manifest_json()
@@ -531,7 +571,7 @@ async fn challenge_creator_routes_require_oauth_session_and_csrf(pool: sqlx::PgP
             "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
             "pr_number": 8,
             "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/8",
-            "commit_sha": "0123456789abcdef",
+            "commit_sha": "0123456789abcdef0123456789abcdef01234567",
             "challenge_path": "challenges/sample-sum",
             "pr_author_github_user_id": 1001,
             "manifest": manifest_json()
@@ -548,7 +588,7 @@ async fn challenge_creator_routes_require_oauth_session_and_csrf(pool: sqlx::PgP
             "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
             "pr_number": 8,
             "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/8",
-            "commit_sha": "0123456789abcdef",
+            "commit_sha": "0123456789abcdef0123456789abcdef01234567",
             "challenge_path": "challenges/sample-sum",
             "pr_author_github_user_id": 1001,
             "manifest": manifest_json()
@@ -588,7 +628,7 @@ async fn private_asset_upload_rejects_duplicate_asset_name(pool: sqlx::PgPool) {
         "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
         "pr_number": 9,
         "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/9",
-        "commit_sha": "0123456789abcdef",
+        "commit_sha": "0123456789abcdef0123456789abcdef01234567",
         "challenge_path": "challenges/sample-sum",
         "pr_author_github_user_id": 1001,
         "manifest": manifest_json()
@@ -678,7 +718,7 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
         "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
         "pr_number": 10,
         "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/10",
-        "commit_sha": "0123456789abcdef",
+        "commit_sha": "0123456789abcdef0123456789abcdef01234567",
         "challenge_path": "challenges/sample-sum",
         "pr_author_github_user_id": 1001,
         "manifest": manifest
@@ -701,7 +741,7 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
         kind: ChallengePrivateAssetKind::PrivateBenchmarkData,
         required: false,
         size_bytes: 8,
-        sha256: "a".repeat(64),
+        sha256: Sha256Digest::try_new("a".repeat(64)).expect("test digest is valid"),
         storage_key: StorageKey::try_new("challenge-drafts/test/private-assets/a.bin")
             .expect("test storage key is valid"),
         uploader_agent_id: creator.agent_id.clone(),
@@ -714,7 +754,7 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
         kind: ChallengePrivateAssetKind::PrivateBenchmarkData,
         required: false,
         size_bytes: 8,
-        sha256: "b".repeat(64),
+        sha256: Sha256Digest::try_new("b".repeat(64)).expect("test digest is valid"),
         storage_key: StorageKey::try_new("challenge-drafts/test/private-assets/b.bin")
             .expect("test storage key is valid"),
         uploader_agent_id: creator.agent_id.clone(),
@@ -787,7 +827,7 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
         "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
         "pr_number": 42,
         "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/42",
-        "commit_sha": "0123456789abcde42",
+        "commit_sha": "0123456789abcde420123456789abcde42012345",
         "challenge_path": "challenges/sample-sum",
         "pr_author_github_user_id": 1001,
         "manifest": manifest_json()
@@ -1007,7 +1047,7 @@ async fn create_draft(
             "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
             "pr_number": pr_number,
             "pr_url": format!("https://github.com/agentics-reifying/agentics-challenges/pull/{pr_number}"),
-            "commit_sha": format!("0123456789abcde{pr_number:x}"),
+            "commit_sha": format!("0123456789abcdef0123456789abcdef{pr_number:08x}"),
             "challenge_path": "challenges/sample-sum",
             "pr_author_github_user_id": 1001,
             "manifest": manifest

@@ -47,6 +47,13 @@ Cover these lanes when the user asks for a complete review:
      archive, and container paths. Also flag ad hoc URL validators, string
      prefix URL checks, and scattered `.trim()`/case conversion near domain
      parser calls when the normalization belongs in the newtype constructor.
+     Git object identifiers such as PR commit SHAs should use the repo's
+     `gix-hash` backed domain type, not handwritten hex validators. Keep Git
+     object IDs separate from ordinary SHA-256 content digests, token hashes,
+     and Docker image digests. Ordinary SHA-256 content digests should be stored
+     as `[u8; 32]` in a domain type with lowercase hex serialization. OCI/Docker
+     image digest fields should use the `oci-spec` backed image digest wrapper
+     and preserve the `sha256:<hex>` wire format.
    - Check whether code can be simplified with current Rust language features
      and standard-library APIs documented in `docs/new-rust-features-apis/en.md`.
      Prefer these updates when they remove real nesting, repeated allocation,
@@ -171,6 +178,7 @@ string is only an immediate boundary value or has leaked into semantic code:
 - `validate_.*url|urlish|starts_with\\(\"https://|contains\\(\"github.com\"`
 - `\\.trim\\(\\).*parse|parse_.*\\(.*\\.trim\\(|try_new\\(.*\\.trim\\(`
 - `to_lowercase\\(\\).*try_new|try_new\\(.*to_lowercase\\(`
+- `commit_sha: String|commit_sha: &str|validate_commit_sha|[sS][hH][aA].*chars\\(\\).*is_ascii_hexdigit`
 
 Do not report raw path strings for literal Docker mount points, human-readable
 messages, test fixtures, SQL display/bind code, or request/CLI fields that are

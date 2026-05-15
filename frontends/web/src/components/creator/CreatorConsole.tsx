@@ -184,7 +184,7 @@ export function CreatorConsole() {
       repo_url: draftForm.repoUrl.trim(),
       pr_number: prNumber,
       pr_url: draftForm.prUrl.trim(),
-      commit_sha: draftForm.commitSha.trim(),
+      commit_sha: draftForm.commitSha,
       challenge_path: draftForm.challengePath.trim(),
       pr_author_github_user_id: creator.github_user_id,
       manifest,

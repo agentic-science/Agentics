@@ -53,7 +53,7 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
         "repo_url": "git@github.com:agentics-reifying/agentics-challenges.git",
         "pr_number": 1,
         "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/1",
-        "commit_sha": "abcdef1234567890",
+        "commit_sha": "abcdef1234567890abcdef1234567890abcdef12",
         "challenge_path": "challenges/matrix-multiplication",
         "pr_author_github_user_id": 42,
         "manifest": manifest

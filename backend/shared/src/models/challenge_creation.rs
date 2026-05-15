@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::hashes::{GitCommitSha, Sha256Digest};
 use super::names::{AssetName, ChallengeName};
 use super::paths::RepoRelativePath;
 use super::urls::{GithubPullRequestUrl, GithubRepoRemote};
@@ -100,7 +101,7 @@ pub struct CreateChallengeDraftRequest {
     pub repo_url: GithubRepoRemote,
     pub pr_number: i32,
     pub pr_url: GithubPullRequestUrl,
-    pub commit_sha: String,
+    pub commit_sha: GitCommitSha,
     pub challenge_path: RepoRelativePath,
     pub pr_author_github_user_id: i64,
     pub manifest: ChallengeCreationManifest,
@@ -159,7 +160,7 @@ pub struct ChallengePrivateAssetResponse {
     pub kind: ChallengePrivateAssetKind,
     pub required: bool,
     pub size_bytes: i64,
-    pub sha256: String,
+    pub sha256: Sha256Digest,
     pub storage_key: StorageKey,
     pub uploader_agent_id: String,
     pub created_at: String,
@@ -173,9 +174,9 @@ pub struct ChallengeDraftValidationRecordResponse {
     pub status: ChallengeDraftValidationStatus,
     pub message: String,
     pub repository_path: String,
-    pub manifest_sha256: String,
+    pub manifest_sha256: Sha256Digest,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bundle_sha256: Option<String>,
+    pub bundle_sha256: Option<Sha256Digest>,
     pub created_at: String,
 }
 
@@ -192,14 +193,14 @@ pub struct ChallengeDraftResponse {
     pub repo_url: GithubRepoRemote,
     pub pr_number: i32,
     pub pr_url: GithubPullRequestUrl,
-    pub commit_sha: String,
+    pub commit_sha: GitCommitSha,
     pub challenge_path: RepoRelativePath,
-    pub manifest_sha256: String,
+    pub manifest_sha256: Sha256Digest,
     pub manifest: ChallengeCreationManifest,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub validation_bundle_sha256: Option<String>,
+    pub validation_bundle_sha256: Option<Sha256Digest>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub approved_bundle_sha256: Option<String>,
+    pub approved_bundle_sha256: Option<Sha256Digest>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub validation_message: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

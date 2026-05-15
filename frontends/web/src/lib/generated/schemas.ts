@@ -67,9 +67,15 @@ export const adminChallengeListResponseSchema = z
                         .min(1),
                       resource_description: z.string().optional(),
                       solution_image: z.string(),
-                      solution_image_digest: z.string().optional(),
+                      solution_image_digest: z
+                        .string()
+                        .regex(/^sha256:[0-9a-f]{64}$/)
+                        .optional(),
                       scorer_image: z.string(),
-                      scorer_image_digest: z.string().optional(),
+                      scorer_image_digest: z
+                        .string()
+                        .regex(/^sha256:[0-9a-f]{64}$/)
+                        .optional(),
                       timeout_sec: z.number().int().gte(0),
                       memory_limit_mb: z.number().int().gte(0),
                       cpu_limit_millis: z.number().int().gte(0),
@@ -317,9 +323,15 @@ export const challengeDetailResponseSchema = z
                     .min(1),
                   resource_description: z.string().optional(),
                   solution_image: z.string(),
-                  solution_image_digest: z.string().optional(),
+                  solution_image_digest: z
+                    .string()
+                    .regex(/^sha256:[0-9a-f]{64}$/)
+                    .optional(),
                   scorer_image: z.string(),
-                  scorer_image_digest: z.string().optional(),
+                  scorer_image_digest: z
+                    .string()
+                    .regex(/^sha256:[0-9a-f]{64}$/)
+                    .optional(),
                   timeout_sec: z.number().int().gte(0),
                   memory_limit_mb: z.number().int().gte(0),
                   cpu_limit_millis: z.number().int().gte(0),
@@ -666,11 +678,11 @@ export const challengeDraftListResponseSchema = z
             .regex(
               /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/[0-9]+$/,
             ),
-          commit_sha: z.string(),
+          commit_sha: z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/),
           challenge_path: z
             .string()
             .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
-          manifest_sha256: z.string(),
+          manifest_sha256: z.string().regex(/^[0-9a-f]{64}$/),
           manifest: z
             .object({
               schema_version: z.number().int(),
@@ -738,8 +750,14 @@ export const challengeDraftListResponseSchema = z
             .describe(
               "Public manifest submitted through the reviewed challenge repository.",
             ),
-          validation_bundle_sha256: z.string().optional(),
-          approved_bundle_sha256: z.string().optional(),
+          validation_bundle_sha256: z
+            .string()
+            .regex(/^[0-9a-f]{64}$/)
+            .optional(),
+          approved_bundle_sha256: z
+            .string()
+            .regex(/^[0-9a-f]{64}$/)
+            .optional(),
           validation_message: z.string().optional(),
           validation_repository_path: z.string().optional(),
           published_challenge_name: z
@@ -769,7 +787,7 @@ export const challengeDraftListResponseSchema = z
                   ),
                 required: z.boolean(),
                 size_bytes: z.number().int(),
-                sha256: z.string(),
+                sha256: z.string().regex(/^[0-9a-f]{64}$/),
                 storage_key: z
                   .string()
                   .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
@@ -791,8 +809,11 @@ export const challengeDraftListResponseSchema = z
                   .describe("Validation record status for a challenge draft."),
                 message: z.string(),
                 repository_path: z.string(),
-                manifest_sha256: z.string(),
-                bundle_sha256: z.string().optional(),
+                manifest_sha256: z.string().regex(/^[0-9a-f]{64}$/),
+                bundle_sha256: z
+                  .string()
+                  .regex(/^[0-9a-f]{64}$/)
+                  .optional(),
                 created_at: z.string(),
               })
               .strict()
@@ -844,9 +865,9 @@ export const challengeDraftResponseSchema = z
       .regex(
         /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/[0-9]+$/,
       ),
-    commit_sha: z.string(),
+    commit_sha: z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/),
     challenge_path: z.string().regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
-    manifest_sha256: z.string(),
+    manifest_sha256: z.string().regex(/^[0-9a-f]{64}$/),
     manifest: z
       .object({
         schema_version: z.number().int(),
@@ -910,8 +931,14 @@ export const challengeDraftResponseSchema = z
       .describe(
         "Public manifest submitted through the reviewed challenge repository.",
       ),
-    validation_bundle_sha256: z.string().optional(),
-    approved_bundle_sha256: z.string().optional(),
+    validation_bundle_sha256: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional(),
+    approved_bundle_sha256: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional(),
     validation_message: z.string().optional(),
     validation_repository_path: z.string().optional(),
     published_challenge_name: z
@@ -941,7 +968,7 @@ export const challengeDraftResponseSchema = z
             ),
           required: z.boolean(),
           size_bytes: z.number().int(),
-          sha256: z.string(),
+          sha256: z.string().regex(/^[0-9a-f]{64}$/),
           storage_key: z
             .string()
             .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
@@ -963,8 +990,11 @@ export const challengeDraftResponseSchema = z
             .describe("Validation record status for a challenge draft."),
           message: z.string(),
           repository_path: z.string(),
-          manifest_sha256: z.string(),
-          bundle_sha256: z.string().optional(),
+          manifest_sha256: z.string().regex(/^[0-9a-f]{64}$/),
+          bundle_sha256: z
+            .string()
+            .regex(/^[0-9a-f]{64}$/)
+            .optional(),
           created_at: z.string(),
         })
         .strict()
@@ -1024,7 +1054,7 @@ export const challengePrivateAssetResponseSchema = z
       .describe("Supported private asset classes for challenge creation."),
     required: z.boolean(),
     size_bytes: z.number().int(),
-    sha256: z.string(),
+    sha256: z.string().regex(/^[0-9a-f]{64}$/),
     storage_key: z.string().regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
     uploader_agent_id: z.string(),
     created_at: z.string(),
@@ -1065,7 +1095,7 @@ export const challengeShortlistRevisionResponseSchema = z
     uploader_agent_id: z.string(),
     requested_count: z.number().int(),
     added_count: z.number().int(),
-    sha256: z.string(),
+    sha256: z.string().regex(/^[0-9a-f]{64}$/),
     storage_key: z.string().regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
     created_at: z.string(),
   })
