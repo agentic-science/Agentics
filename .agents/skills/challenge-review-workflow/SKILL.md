@@ -56,13 +56,15 @@ For source-backed run inputs, confirm every public validation `input_files[].sou
 
 ## 3. Validate The Draft
 
-Run validation against a checked-out repository at the reviewed commit:
+Run validation against a checked-out repository at the reviewed commit. Provide
+the admin password through `AGENTICS_ADMIN_PASSWORD` or `--admin-password-stdin`;
+do not pass it as a command-line argument.
 
 ```bash
+AGENTICS_ADMIN_PASSWORD=<admin-password> \
 cargo run -p agentics-cli --bin agentics -- challenge-creator draft validate <draft-id> \
   --repository-path <repo-dir> \
-  --admin-username <admin-username> \
-  --admin-password <admin-password>
+  --admin-username <admin-username>
 ```
 
 Reject validation failures unless the failure is clearly an operator path issue and can be retried with the correct checkout.
@@ -72,19 +74,19 @@ Reject validation failures unless the failure is clearly an operator path issue 
 Approve only after PR review and Agentics validation both pass:
 
 ```bash
+AGENTICS_ADMIN_PASSWORD=<admin-password> \
 cargo run -p agentics-cli --bin agentics -- challenge-creator draft approve <draft-id> \
   --message "approved for publish" \
-  --admin-username <admin-username> \
-  --admin-password <admin-password>
+  --admin-username <admin-username>
 ```
 
 Reject with actionable feedback:
 
 ```bash
+AGENTICS_ADMIN_PASSWORD=<admin-password> \
 cargo run -p agentics-cli --bin agentics -- challenge-creator draft reject <draft-id> \
   --message "reason" \
-  --admin-username <admin-username> \
-  --admin-password <admin-password>
+  --admin-username <admin-username>
 ```
 
 ## 5. Publish Or Archive
@@ -92,10 +94,10 @@ cargo run -p agentics-cli --bin agentics -- challenge-creator draft reject <draf
 Publish an approved new-challenge draft:
 
 ```bash
+AGENTICS_ADMIN_PASSWORD=<admin-password> \
 cargo run -p agentics-cli --bin agentics -- challenge-creator draft publish <draft-id> \
   --repository-path <repo-dir> \
-  --admin-username <admin-username> \
-  --admin-password <admin-password>
+  --admin-username <admin-username>
 ```
 
 The published challenge contract is immutable. Material benchmark changes
@@ -108,18 +110,18 @@ Publishing an archive draft hides the challenge from default browsing and blocks
 Abandon drafts when their backing PR is closed without merge or withdrawn:
 
 ```bash
+AGENTICS_ADMIN_PASSWORD=<admin-password> \
 cargo run -p agentics-cli --bin agentics -- challenge-creator draft abandon <draft-id> \
   --message "closed without merge" \
-  --admin-username <admin-username> \
-  --admin-password <admin-password>
+  --admin-username <admin-username>
 ```
 
 Run cleanup for stale drafts and expired unpublished private assets:
 
 ```bash
+AGENTICS_ADMIN_PASSWORD=<admin-password> \
 cargo run -p agentics-cli --bin agentics -- challenge-creator draft cleanup \
-  --admin-username <admin-username> \
-  --admin-password <admin-password>
+  --admin-username <admin-username>
 ```
 
 Do not use cleanup as a substitute for review decisions. It is an operational maintenance action.

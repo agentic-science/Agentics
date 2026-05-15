@@ -4,15 +4,11 @@ use anyhow::Result;
 use serde::Serialize;
 use serde_json::{Map, Value, json};
 use shared::models::challenge::{ChallengeDetailResponse, ChallengeListResponse};
-use shared::models::challenge_creation::{
-    ChallengeDraftCleanupResponse, ChallengeDraftResponse, ChallengePrivateAssetResponse,
-};
+use shared::models::challenge_creation::{ChallengeDraftCleanupResponse, ChallengeDraftResponse};
 use shared::models::evaluation::ScorerRunResult;
 use shared::models::names::{ChallengeName, TargetName};
 use shared::models::request::{
-    ChallengeShortlistResponse, ChallengeShortlistRevisionResponse,
-    CreateSolutionSubmissionResponse, CreatorChallengeParticipantsResponse,
-    CreatorChallengeStatsResponse, LeaderboardResponse, RankingContextResponse,
+    CreateSolutionSubmissionResponse, LeaderboardResponse, RankingContextResponse,
     RegisterAgentResponse, ScoreDistributionResponse, SolutionSubmissionLogsResponse,
     SolutionSubmissionResponse,
 };
@@ -151,26 +147,6 @@ pub(crate) fn render_challenge_draft(
     }
 }
 
-/// Renders challenge private asset for user-facing output.
-pub(crate) fn render_challenge_private_asset(
-    response: &ChallengePrivateAssetResponse,
-    format: OutputFormat,
-) -> Result<String> {
-    match format {
-        OutputFormat::Json => pretty_json(response),
-        OutputFormat::Table => Ok(format!(
-            "private_asset: {}\ndraft: {}\nasset_name: {}\nkind: {}\nrequired: {}\nsize_bytes: {}\nsha256: {}",
-            response.id,
-            response.draft_id,
-            response.asset_name,
-            status_label(&response.kind),
-            response.required,
-            response.size_bytes,
-            response.sha256
-        )),
-    }
-}
-
 /// Renders challenge draft cleanup for user-facing output.
 pub(crate) fn render_challenge_draft_cleanup(
     response: &ChallengeDraftCleanupResponse,
@@ -182,150 +158,6 @@ pub(crate) fn render_challenge_draft_cleanup(
             "abandoned_drafts: {}\npurged_private_assets: {}",
             response.abandoned_drafts, response.purged_private_assets
         )),
-    }
-}
-
-/// Renders creator challenge stats for user-facing output.
-pub(crate) fn render_creator_challenge_stats(
-    response: &CreatorChallengeStatsResponse,
-    format: OutputFormat,
-) -> Result<String> {
-    match format {
-        OutputFormat::Json => pretty_json(response),
-        OutputFormat::Table => Ok(format!(
-            "challenge: {}\ntarget: {}\nagents: {}\nsolution_submissions: {}\ncompleted: {}\nfailed: {}\nqueued_or_running: {}\nvalidation_runs: {}\nofficial_runs: {}\nvisible_submissions: {}\nlatest_submission: {}\nlatest_completed_evaluation: {}\nbest_rank_score_min: {}\nbest_rank_score_max: {}\nbest_rank_score_mean: {}",
-            response.challenge_name,
-            response.target.as_ref().map_or("all", TargetName::as_str),
-            response.agent_count,
-            response.solution_submission_count,
-            response.completed_solution_submission_count,
-            response.failed_solution_submission_count,
-            response.queued_or_running_solution_submission_count,
-            response.validation_run_count,
-            response.official_run_count,
-            response.visible_solution_submission_count,
-            response
-                .latest_solution_submission_at
-                .as_deref()
-                .unwrap_or("none"),
-            response
-                .latest_completed_evaluation_at
-                .as_deref()
-                .unwrap_or("none"),
-            response
-                .best_rank_score_min
-                .map(format_score)
-                .unwrap_or_else(|| "none".to_string()),
-            response
-                .best_rank_score_max
-                .map(format_score)
-                .unwrap_or_else(|| "none".to_string()),
-            response
-                .best_rank_score_mean
-                .map(format_score)
-                .unwrap_or_else(|| "none".to_string())
-        )),
-    }
-}
-
-/// Renders creator challenge participants for user-facing output.
-pub(crate) fn render_creator_challenge_participants(
-    response: &CreatorChallengeParticipantsResponse,
-    format: OutputFormat,
-) -> Result<String> {
-    match format {
-        OutputFormat::Json => pretty_json(response),
-        OutputFormat::Table => {
-            let rows = response
-                .items
-                .iter()
-                .map(|item| {
-                    vec![
-                        item.agent_id.to_string(),
-                        item.agent_display_name.clone(),
-                        item.solution_submission_count.to_string(),
-                        item.best_solution_submission_id
-                            .as_ref()
-                            .map_or_else(|| "none".to_string(), ToString::to_string),
-                        item.best_rank_score
-                            .map(format_score)
-                            .unwrap_or_else(|| "none".to_string()),
-                        item.latest_status
-                            .clone()
-                            .unwrap_or_else(|| "none".to_string()),
-                        item.latest_solution_submission_at
-                            .clone()
-                            .unwrap_or_else(|| "none".to_string()),
-                    ]
-                })
-                .collect::<Vec<_>>();
-            Ok(format!(
-                "challenge: {}\ntarget: {}\n{}",
-                response.challenge_name,
-                response.target.as_ref().map_or("all", TargetName::as_str),
-                render_table(
-                    &[
-                        "AGENT_ID",
-                        "NAME",
-                        "SUBMISSIONS",
-                        "BEST",
-                        "SCORE",
-                        "STATUS",
-                        "LATEST"
-                    ],
-                    &rows
-                )
-            ))
-        }
-    }
-}
-
-/// Renders challenge shortlist revision for user-facing output.
-pub(crate) fn render_challenge_shortlist_revision(
-    response: &ChallengeShortlistRevisionResponse,
-    format: OutputFormat,
-) -> Result<String> {
-    match format {
-        OutputFormat::Json => pretty_json(response),
-        OutputFormat::Table => Ok(format!(
-            "shortlist_revision: {}\nchallenge: {}\nrequested: {}\nadded: {}\nsha256: {}\nstorage_key: {}\ncreated_at: {}",
-            response.id,
-            response.challenge_name,
-            response.requested_count,
-            response.added_count,
-            response.sha256,
-            response.storage_key,
-            response.created_at
-        )),
-    }
-}
-
-/// Renders challenge shortlist for user-facing output.
-pub(crate) fn render_challenge_shortlist(
-    response: &ChallengeShortlistResponse,
-    format: OutputFormat,
-) -> Result<String> {
-    match format {
-        OutputFormat::Json => pretty_json(response),
-        OutputFormat::Table => {
-            let rows = response
-                .items
-                .iter()
-                .map(|item| {
-                    vec![
-                        item.agent_id.to_string(),
-                        item.agent_display_name.clone(),
-                        item.added_by_agent_id.to_string(),
-                        item.created_at.clone(),
-                    ]
-                })
-                .collect::<Vec<_>>();
-            Ok(format!(
-                "challenge: {}\n{}",
-                response.challenge_name,
-                render_table(&["AGENT_ID", "NAME", "ADDED_BY", "CREATED_AT"], &rows)
-            ))
-        }
     }
 }
 

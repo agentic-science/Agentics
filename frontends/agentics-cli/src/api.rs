@@ -5,18 +5,14 @@ use serde::de::DeserializeOwned;
 use shared::models::ErrorResponse;
 use shared::models::challenge::{ChallengeDetailResponse, ChallengeListResponse};
 use shared::models::challenge_creation::{
-    ChallengeDraftCleanupResponse, ChallengeDraftResponse, ChallengePrivateAssetResponse,
-    CreateChallengeDraftRequest, ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest,
+    ChallengeDraftCleanupResponse, ChallengeDraftResponse, ReviewChallengeDraftRequest,
     ValidateChallengeDraftRequest,
 };
 use shared::models::ids::SolutionSubmissionId;
 use shared::models::names::{ChallengeName, MetricName, TargetName};
 use shared::models::request::{
-    ChallengeShortlistResponse, ChallengeShortlistRevisionResponse,
-    CreateChallengeShortlistRevisionRequest, CreateSolutionSubmissionRequest,
-    CreateSolutionSubmissionResponse, CreatorChallengeParticipantsResponse,
-    CreatorChallengeStatsResponse, LeaderboardResponse, RankingContextResponse,
-    RegisterAgentRequest, RegisterAgentResponse, ScoreDistributionResponse,
+    CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse, LeaderboardResponse,
+    RankingContextResponse, RegisterAgentRequest, RegisterAgentResponse, ScoreDistributionResponse,
     SolutionSubmissionLogsResponse, SolutionSubmissionResponse,
 };
 
@@ -164,73 +160,6 @@ impl ApiClient {
         self.get_json(&path, false).await
     }
 
-    /// Fetches creator challenge stats for the requested scope.
-    pub(crate) async fn get_creator_challenge_stats(
-        &self,
-        challenge_name: &ChallengeName,
-        target: Option<&TargetName>,
-    ) -> Result<CreatorChallengeStatsResponse> {
-        let path = creator_challenge_path(challenge_name, "stats", target);
-        self.get_json(&path, true).await
-    }
-
-    /// Fetches creator challenge participants for the requested scope.
-    pub(crate) async fn get_creator_challenge_participants(
-        &self,
-        challenge_name: &ChallengeName,
-        target: Option<&TargetName>,
-    ) -> Result<CreatorChallengeParticipantsResponse> {
-        let path = creator_challenge_path(challenge_name, "participants", target);
-        self.get_json(&path, true).await
-    }
-
-    /// Fetches challenge shortlist for the requested scope.
-    pub(crate) async fn get_challenge_shortlist(
-        &self,
-        challenge_name: &ChallengeName,
-    ) -> Result<ChallengeShortlistResponse> {
-        let path = format!("/api/creator/challenges/{challenge_name}/shortlist");
-        self.get_json(&path, true).await
-    }
-
-    /// Creates challenge shortlist revision after validating caller inputs.
-    pub(crate) async fn create_challenge_shortlist_revision(
-        &self,
-        challenge_name: &ChallengeName,
-        request: &CreateChallengeShortlistRevisionRequest,
-    ) -> Result<ChallengeShortlistRevisionResponse> {
-        let path = format!("/api/creator/challenges/{challenge_name}/shortlist-revisions");
-        self.post_json(&path, request, true).await
-    }
-
-    /// Creates challenge draft after validating caller inputs.
-    pub(crate) async fn create_challenge_draft(
-        &self,
-        request: &CreateChallengeDraftRequest,
-    ) -> Result<ChallengeDraftResponse> {
-        self.post_json("/api/creator/challenge-drafts", request, true)
-            .await
-    }
-
-    /// Fetches challenge draft for the requested scope.
-    pub(crate) async fn get_challenge_draft(
-        &self,
-        draft_id: &str,
-    ) -> Result<ChallengeDraftResponse> {
-        let path = format!("/api/creator/challenge-drafts/{draft_id}");
-        self.get_json(&path, true).await
-    }
-
-    /// Handles upload challenge private asset for this module.
-    pub(crate) async fn upload_challenge_private_asset(
-        &self,
-        draft_id: &str,
-        request: &UploadChallengePrivateAssetRequest,
-    ) -> Result<ChallengePrivateAssetResponse> {
-        let path = format!("/api/creator/challenge-drafts/{draft_id}/private-assets");
-        self.post_json(&path, request, true).await
-    }
-
     /// Validates challenge draft admin invariants for this contract.
     pub(crate) async fn validate_challenge_draft_admin(
         &self,
@@ -375,20 +304,6 @@ impl ApiClient {
             .join(path.trim_start_matches('/'))
             .with_context(|| format!("failed to build API endpoint for {path}"))
     }
-}
-
-/// Handles creator challenge path for this module.
-fn creator_challenge_path(
-    challenge_name: &ChallengeName,
-    surface: &str,
-    target: Option<&TargetName>,
-) -> String {
-    let mut path = format!("/api/creator/challenges/{challenge_name}/{surface}");
-    if let Some(target) = target {
-        path.push_str("?target=");
-        path.push_str(target);
-    }
-    path
 }
 
 /// Parses response from an external boundary string.

@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use clap::Parser;
+use secrecy::SecretString;
 use serde_json::json;
 use wiremock::matchers::{body_json, header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -729,18 +730,20 @@ async fn challenge_creator_creates_draft_from_repo_manifest() {
         "1001",
     ]);
 
-    let output = execute(cli, Environment::default())
+    let error = execute(cli, Environment::default())
         .await
-        .expect("draft create should succeed");
+        .expect_err("creator draft creation requires web-session auth");
     let requests = server
         .received_requests()
         .await
         .expect("requests should be recorded");
-    let body: serde_json::Value = serde_json::from_slice(&requests[0].body).expect("request body");
 
-    assert!(output.contains("challenge_draft: dddddddd-dddd-4ddd-8ddd-dddddddddddd"));
-    assert_eq!(body["manifest"]["request"], "new_challenge");
-    assert_eq!(body["challenge_path"], "challenges/sample-sum");
+    assert!(requests.is_empty());
+    assert!(
+        error
+            .to_string()
+            .contains("creator draft creation requires")
+    );
 }
 
 /// Verifies that challenge creator rejects invalid commit sha during cli parse.
@@ -825,12 +828,20 @@ async fn challenge_creator_uploads_private_asset_file() {
         "--required",
     ]);
 
-    let output = execute(cli, Environment::default())
+    let error = execute(cli, Environment::default())
         .await
-        .expect("asset upload should succeed");
+        .expect_err("creator private asset upload requires web-session auth");
+    let requests = server
+        .received_requests()
+        .await
+        .expect("requests should be recorded");
 
-    assert!(output.contains("private_asset: eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"));
-    assert!(output.contains("asset_name: official-cases"));
+    assert!(requests.is_empty());
+    assert!(
+        error
+            .to_string()
+            .contains("creator private asset upload requires")
+    );
 }
 
 /// Verifies that challenge creator validates draft with admin auth.
@@ -867,13 +878,17 @@ async fn challenge_creator_validates_draft_with_admin_auth() {
         "/tmp/challenges",
         "--admin-username",
         "admin",
-        "--admin-password",
-        "secret",
     ]);
 
-    let output = execute(cli, Environment::default())
-        .await
-        .expect("admin validation should succeed");
+    let output = execute(
+        cli,
+        Environment {
+            admin_password: Some(SecretString::from("secret")),
+            ..Environment::default()
+        },
+    )
+    .await
+    .expect("admin validation should succeed");
 
     assert!(output.contains("status: validated"));
 }

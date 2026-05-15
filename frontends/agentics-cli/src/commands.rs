@@ -4,21 +4,18 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+use secrecy::{ExposeSecret, SecretString};
 use shared::config::Config;
 use shared::models::challenge::{
     ChallengeBundleSpec, ChallengeDetailResponse, ChallengeTargetSpec,
 };
 use shared::models::challenge_creation::{
-    ChallengeCreationManifest, ChallengePrivateAssetKind, CreateChallengeDraftRequest,
-    ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest, ValidateChallengeDraftRequest,
+    ChallengePrivateAssetKind, ReviewChallengeDraftRequest, ValidateChallengeDraftRequest,
 };
 use shared::models::evaluation::{EvaluationJobPayload, ScoringMode};
 use shared::models::ids::SolutionSubmissionId;
 use shared::models::names::{ChallengeName, TargetName};
-use shared::models::paths::RepoRelativePath;
-use shared::models::request::CreateChallengeShortlistRevisionRequest;
 use shared::models::request::{CreateSolutionSubmissionRequest, RegisterAgentRequest};
-use shared::models::urls::{GithubPullRequestUrl, GithubRepoRemote};
 use shared::storage::{LocalStorage, Storage, StorageKey};
 
 use crate::api::ApiClient;
@@ -92,64 +89,29 @@ pub(crate) async fn challenge_draft(
 ) -> Result<String> {
     let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
     match command {
-        ChallengeDraftCommand::Create {
-            repo_url,
-            pr_number,
-            pr_url,
-            commit_sha,
-            repo_dir,
-            challenge_path,
-            pr_author_github_user_id,
-        } => {
-            let challenge_path = RepoRelativePath::try_new(&challenge_path)
-                .with_context(|| format!("invalid challenge_path `{challenge_path}`"))?;
-            let manifest = read_challenge_creation_manifest(&repo_dir, &challenge_path)?;
-            let response = client
-                .create_challenge_draft(&CreateChallengeDraftRequest {
-                    repo_url: GithubRepoRemote::try_new(&repo_url)
-                        .with_context(|| format!("invalid repo_url `{repo_url}`"))?,
-                    pr_number,
-                    pr_url: GithubPullRequestUrl::try_new(&pr_url)
-                        .with_context(|| format!("invalid pr_url `{pr_url}`"))?,
-                    commit_sha,
-                    challenge_path,
-                    pr_author_github_user_id,
-                    manifest,
-                })
-                .await?;
-            output::render_challenge_draft(&response, output_format)
+        ChallengeDraftCommand::Create { .. } => {
+            bail!(
+                "creator draft creation requires GitHub OAuth web-session support; use the creator web UI"
+            )
         }
-        ChallengeDraftCommand::Status { draft_id } => {
-            let response = client.get_challenge_draft(&draft_id).await?;
-            output::render_challenge_draft(&response, output_format)
-        }
-        ChallengeDraftCommand::UploadPrivateAsset {
-            draft_id,
-            asset_name,
-            kind,
-            file,
-            required,
+        ChallengeDraftCommand::Status {
+            draft_id: _draft_id,
         } => {
-            let bytes = std::fs::read(&file)
-                .with_context(|| format!("failed to read private asset {}", file.display()))?;
-            let response = client
-                .upload_challenge_private_asset(
-                    &draft_id,
-                    &UploadChallengePrivateAssetRequest {
-                        asset_name,
-                        kind: kind.into(),
-                        required,
-                        asset_base64: STANDARD.encode(bytes),
-                    },
-                )
-                .await?;
-            output::render_challenge_private_asset(&response, output_format)
+            bail!(
+                "creator draft status requires GitHub OAuth web-session support; use the creator web UI"
+            )
+        }
+        ChallengeDraftCommand::UploadPrivateAsset { .. } => {
+            bail!(
+                "creator private asset upload requires GitHub OAuth web-session support; use the creator web UI"
+            )
         }
         ChallengeDraftCommand::Validate {
             draft_id,
             repository_path,
             admin,
         } => {
+            let admin_password = resolve_admin_password(&admin, settings)?;
             let response = client
                 .validate_challenge_draft_admin(
                     &draft_id,
@@ -157,7 +119,7 @@ pub(crate) async fn challenge_draft(
                         repository_path: repository_path.to_string_lossy().to_string(),
                     },
                     &admin.admin_username,
-                    &admin.admin_password,
+                    admin_password.expose_secret(),
                 )
                 .await?;
             output::render_challenge_draft(&response, output_format)
@@ -174,6 +136,7 @@ pub(crate) async fn challenge_draft(
                 draft_id,
                 message,
                 DraftReviewAction::Approve,
+                settings,
             )
             .await
         }
@@ -189,6 +152,7 @@ pub(crate) async fn challenge_draft(
                 draft_id,
                 message,
                 DraftReviewAction::Reject,
+                settings,
             )
             .await
         }
@@ -197,6 +161,7 @@ pub(crate) async fn challenge_draft(
             repository_path,
             admin,
         } => {
+            let admin_password = resolve_admin_password(&admin, settings)?;
             let response = client
                 .publish_challenge_draft_admin(
                     &draft_id,
@@ -204,7 +169,7 @@ pub(crate) async fn challenge_draft(
                         repository_path: repository_path.to_string_lossy().to_string(),
                     },
                     &admin.admin_username,
-                    &admin.admin_password,
+                    admin_password.expose_secret(),
                 )
                 .await?;
             output::render_challenge_draft(&response, output_format)
@@ -221,12 +186,17 @@ pub(crate) async fn challenge_draft(
                 draft_id,
                 message,
                 DraftReviewAction::Abandon,
+                settings,
             )
             .await
         }
         ChallengeDraftCommand::Cleanup { admin } => {
+            let admin_password = resolve_admin_password(&admin, settings)?;
             let response = client
-                .cleanup_challenge_drafts_admin(&admin.admin_username, &admin.admin_password)
+                .cleanup_challenge_drafts_admin(
+                    &admin.admin_username,
+                    admin_password.expose_secret(),
+                )
                 .await?;
             output::render_challenge_draft_cleanup(&response, output_format)
         }
@@ -234,31 +204,33 @@ pub(crate) async fn challenge_draft(
 }
 
 /// Handles challenge shortlist for this module.
-pub(crate) async fn challenge_shortlist(
-    command: ChallengeShortlistCommand,
-    output_format: cli::OutputFormat,
-    settings: &ResolvedSettings,
+pub(crate) fn challenge_shortlist(
+    _command: ChallengeShortlistCommand,
+    _output_format: cli::OutputFormat,
+    _settings: &ResolvedSettings,
 ) -> Result<String> {
-    let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-    match command {
-        ChallengeShortlistCommand::Show { challenge_name } => {
-            let response = client.get_challenge_shortlist(&challenge_name).await?;
-            output::render_challenge_shortlist(&response, output_format)
-        }
-        ChallengeShortlistCommand::Upload {
-            challenge_name,
-            file,
-        } => {
-            let raw = std::fs::read_to_string(&file)
-                .with_context(|| format!("failed to read shortlist delta {}", file.display()))?;
-            let request: CreateChallengeShortlistRevisionRequest = serde_json::from_str(&raw)
-                .with_context(|| format!("failed to parse shortlist delta {}", file.display()))?;
-            let response = client
-                .create_challenge_shortlist_revision(&challenge_name, &request)
-                .await?;
-            output::render_challenge_shortlist_revision(&response, output_format)
-        }
+    bail!(
+        "challenge shortlist commands require GitHub OAuth web-session support; use the creator web UI"
+    )
+}
+
+/// Resolve the admin password from a non-argv source.
+fn resolve_admin_password(
+    admin: &AdminAuthArgs,
+    settings: &ResolvedSettings,
+) -> Result<SecretString> {
+    let password = if admin.admin_password_stdin {
+        let mut input = String::new();
+        std::io::Read::read_to_string(&mut std::io::stdin(), &mut input)
+            .context("failed to read admin password from stdin")?;
+        SecretString::from(input.trim_end_matches(['\r', '\n']).to_string())
+    } else {
+        settings.admin_password.clone().unwrap_or_default()
+    };
+    if password.expose_secret().is_empty() {
+        bail!("set AGENTICS_ADMIN_PASSWORD or pass --admin-password-stdin for admin commands");
     }
+    Ok(password)
 }
 
 /// Enumerates draft review action variants supported by this module.
@@ -276,8 +248,10 @@ async fn review_draft(
     draft_id: String,
     message: String,
     action: DraftReviewAction,
+    settings: &ResolvedSettings,
 ) -> Result<String> {
     let request = ReviewChallengeDraftRequest { message };
+    let admin_password = resolve_admin_password(&admin, settings)?;
     let response = match action {
         DraftReviewAction::Approve => {
             client
@@ -285,7 +259,7 @@ async fn review_draft(
                     &draft_id,
                     &request,
                     &admin.admin_username,
-                    &admin.admin_password,
+                    admin_password.expose_secret(),
                 )
                 .await?
         }
@@ -295,7 +269,7 @@ async fn review_draft(
                     &draft_id,
                     &request,
                     &admin.admin_username,
-                    &admin.admin_password,
+                    admin_password.expose_secret(),
                 )
                 .await?
         }
@@ -305,25 +279,12 @@ async fn review_draft(
                     &draft_id,
                     &request,
                     &admin.admin_username,
-                    &admin.admin_password,
+                    admin_password.expose_secret(),
                 )
                 .await?
         }
     };
     output::render_challenge_draft(&response, output_format)
-}
-
-/// Reads challenge creation manifest from disk or storage.
-fn read_challenge_creation_manifest(
-    repo_dir: &Path,
-    challenge_path: &RepoRelativePath,
-) -> Result<ChallengeCreationManifest> {
-    let path = repo_dir
-        .join(challenge_path.as_path())
-        .join(shared::models::challenge_creation::AGENTICS_CHALLENGE_MANIFEST_FILE);
-    let raw = std::fs::read_to_string(&path)
-        .with_context(|| format!("failed to read {}", path.display()))?;
-    serde_json::from_str(&raw).with_context(|| format!("failed to parse {}", path.display()))
 }
 
 impl From<ChallengePrivateAssetKindArg> for ChallengePrivateAssetKind {

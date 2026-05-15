@@ -281,7 +281,7 @@ pub(crate) struct AdminAuthArgs {
     #[arg(long)]
     pub admin_username: String,
     #[arg(long)]
-    pub admin_password: String,
+    pub admin_password_stdin: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]

@@ -88,27 +88,23 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
                 commands::challenge_draft(command, cli.output, &settings).await
             }
             ChallengeCreatorCommand::Stats {
-                challenge_name,
-                target,
+                challenge_name: _,
+                target: _,
             } => {
-                let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-                let response = client
-                    .get_creator_challenge_stats(&challenge_name, target.as_ref())
-                    .await?;
-                output::render_creator_challenge_stats(&response, cli.output)
+                anyhow::bail!(
+                    "creator stats require GitHub OAuth web-session support; use the creator web UI"
+                )
             }
             ChallengeCreatorCommand::Participants {
-                challenge_name,
-                target,
+                challenge_name: _,
+                target: _,
             } => {
-                let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-                let response = client
-                    .get_creator_challenge_participants(&challenge_name, target.as_ref())
-                    .await?;
-                output::render_creator_challenge_participants(&response, cli.output)
+                anyhow::bail!(
+                    "creator participants require GitHub OAuth web-session support; use the creator web UI"
+                )
             }
             ChallengeCreatorCommand::Shortlist { command } => {
-                commands::challenge_shortlist(command, cli.output, &settings).await
+                commands::challenge_shortlist(command, cli.output, &settings)
             }
         },
         Commands::InitSolution(args) => {

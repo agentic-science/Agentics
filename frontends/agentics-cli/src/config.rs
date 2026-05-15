@@ -6,6 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, anyhow, bail};
 use reqwest::Url;
+use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 
 const DEFAULT_API_PORT: u16 = 3100;
@@ -19,11 +20,12 @@ pub(crate) struct CliConfig {
     pub token: Option<String>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default)]
 /// Carries environment data across this module boundary.
 pub(crate) struct Environment {
     pub api_base_url: Option<String>,
     pub token: Option<String>,
+    pub admin_password: Option<SecretString>,
 }
 
 impl Environment {
@@ -32,6 +34,7 @@ impl Environment {
         Self {
             api_base_url: read_non_empty_env("AGENTICS_API_BASE_URL"),
             token: read_non_empty_env("AGENTICS_TOKEN"),
+            admin_password: read_non_empty_env("AGENTICS_ADMIN_PASSWORD").map(SecretString::from),
         }
     }
 }
@@ -60,13 +63,14 @@ impl fmt::Display for SettingSource {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 /// Carries resolved settings data across this module boundary.
 pub(crate) struct ResolvedSettings {
     pub api_base_url: ApiBaseUrl,
     pub api_base_url_source: SettingSource,
     pub token: Option<String>,
     pub token_source: SettingSource,
+    pub admin_password: Option<SecretString>,
     pub config_path: PathBuf,
 }
 
@@ -94,6 +98,7 @@ impl ResolvedSettings {
             api_base_url_source,
             token: token.map(ToOwned::to_owned),
             token_source,
+            admin_password: env.admin_password.clone(),
             config_path,
         })
     }
@@ -340,6 +345,7 @@ mod tests {
         let env = Environment {
             api_base_url: Some("http://env.example".to_string()),
             token: Some("env-token".to_string()),
+            admin_password: None,
         };
 
         let settings = ResolvedSettings::resolve(

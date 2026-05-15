@@ -67,24 +67,25 @@ POST /admin/challenge-drafts/{id}/publish
 ## Admin CLI Helpers
 
 ```bash
+AGENTICS_ADMIN_PASSWORD=<password> \
 cargo run -p agentics-cli --bin agentics -- challenge-creator draft validate <draft-id> \
   --repository-path <repo-dir> \
-  --admin-username admin \
-  --admin-password <password>
+  --admin-username admin
 
+AGENTICS_ADMIN_PASSWORD=<password> \
 cargo run -p agentics-cli --bin agentics -- challenge-creator draft approve <draft-id> \
   --message "approved" \
-  --admin-username admin \
-  --admin-password <password>
+  --admin-username admin
 
+AGENTICS_ADMIN_PASSWORD=<password> \
 cargo run -p agentics-cli --bin agentics -- challenge-creator draft publish <draft-id> \
   --repository-path <repo-dir> \
-  --admin-username admin \
-  --admin-password <password>
+  --admin-username admin
 ```
 
 CLI 还支持 `challenge-creator draft <command>` 下的 draft rejection、
-abandonment 和 cleanup。
+abandonment 和 cleanup。请使用 `AGENTICS_ADMIN_PASSWORD` 或
+`--admin-password-stdin`，不要把 admin password 放在 argv 参数中。
 
 ## Publication Notes
 
