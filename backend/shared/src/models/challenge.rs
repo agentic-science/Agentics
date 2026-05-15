@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::ids::ChallengeId;
+use super::ids::{ChallengeId, TargetName};
 use crate::zip_project::ZipProjectNetworkAccess;
 
 /// Parsed `spec.json` contract for a challenge bundle.
@@ -16,7 +16,7 @@ pub struct ChallengeBundleSpec {
     pub challenge_summary: String,
     pub solution: SolutionSpec,
     pub scorer: ScorerSpec,
-    pub benchmark_targets: Vec<BenchmarkTargetSpec>,
+    pub targets: Vec<ChallengeTargetSpec>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub starts_at: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -40,17 +40,17 @@ pub struct ChallengeBundleSpec {
 }
 
 impl ChallengeBundleSpec {
-    /// Look up one benchmark target declared by this challenge.
-    pub fn benchmark_target(&self, target_id: &str) -> Option<&BenchmarkTargetSpec> {
-        self.benchmark_targets
+    /// Look up one target declared by this challenge.
+    pub fn target(&self, target: &TargetName) -> Option<&ChallengeTargetSpec> {
+        self.targets
             .iter()
-            .find(|target| target.id == target_id)
+            .find(|candidate| &candidate.name == target)
     }
 
-    /// Return the only target id when a challenge is unambiguous.
-    pub fn sole_benchmark_target_id(&self) -> Option<&str> {
-        match self.benchmark_targets.as_slice() {
-            [target] => Some(target.id.as_str()),
+    /// Return the only target name when a challenge is unambiguous.
+    pub fn sole_target(&self) -> Option<&TargetName> {
+        match self.targets.as_slice() {
+            [target] => Some(&target.name),
             _ => None,
         }
     }
@@ -122,7 +122,7 @@ pub struct ScorerSpec {
     pub result_file: String,
 }
 
-/// Supported Docker platforms for benchmark targets.
+/// Supported Docker platforms for targets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum DockerPlatform {
     #[serde(rename = "linux/arm64")]
@@ -141,15 +141,15 @@ impl DockerPlatform {
     }
 }
 
-/// Accelerator family used by a benchmark target.
+/// Accelerator family used by a target.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum BenchmarkAccelerator {
+pub enum TargetAccelerator {
     Cpu,
     Gpu,
 }
 
-impl BenchmarkAccelerator {
+impl TargetAccelerator {
     /// Stable string form used in user-facing summaries.
     pub fn as_str(self) -> &'static str {
         match self {
@@ -161,10 +161,10 @@ impl BenchmarkAccelerator {
 
 /// One execution and ranking target declared by a challenge.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
-pub struct BenchmarkTargetSpec {
-    pub id: String,
+pub struct ChallengeTargetSpec {
+    pub name: TargetName,
     pub docker_platform: DockerPlatform,
-    pub accelerator: BenchmarkAccelerator,
+    pub accelerator: TargetAccelerator,
     pub validation_enabled: bool,
     pub resource_profile: ResourceProfileSpec,
 }
@@ -453,7 +453,7 @@ pub struct AdminChallengeListItemDto {
     pub summary: String,
     pub status: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub benchmark_targets: Option<Vec<BenchmarkTargetSpec>>,
+    pub targets: Option<Vec<ChallengeTargetSpec>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub starts_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

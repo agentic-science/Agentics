@@ -9,7 +9,7 @@ use shared::models::challenge_creation::{
     CreateChallengeDraftRequest, ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest,
     ValidateChallengeDraftRequest,
 };
-use shared::models::ids::ChallengeId;
+use shared::models::ids::{ChallengeId, SolutionSubmissionId, TargetName};
 use shared::models::request::{
     ChallengeShortlistResponse, ChallengeShortlistRevisionResponse,
     CreateChallengeShortlistRevisionRequest, CreateSolutionSubmissionRequest,
@@ -90,7 +90,7 @@ impl ApiClient {
 
     pub(crate) async fn get_solution_submission(
         &self,
-        solution_submission_id: &str,
+        solution_submission_id: &SolutionSubmissionId,
     ) -> Result<SolutionSubmissionResponse> {
         let path = format!("/api/solution-submissions/{solution_submission_id}");
         self.get_json(&path, true).await
@@ -98,7 +98,7 @@ impl ApiClient {
 
     pub(crate) async fn get_validation_run(
         &self,
-        validation_run_id: &str,
+        validation_run_id: &SolutionSubmissionId,
     ) -> Result<SolutionSubmissionResponse> {
         let path = format!("/api/validation-runs/{validation_run_id}");
         self.get_json(&path, true).await
@@ -106,7 +106,7 @@ impl ApiClient {
 
     pub(crate) async fn get_solution_submission_logs(
         &self,
-        solution_submission_id: &str,
+        solution_submission_id: &SolutionSubmissionId,
     ) -> Result<SolutionSubmissionLogsResponse> {
         let path = format!("/api/solution-submissions/{solution_submission_id}/logs");
         self.get_json(&path, true).await
@@ -114,12 +114,12 @@ impl ApiClient {
 
     pub(crate) async fn get_solution_submission_ranking_context(
         &self,
-        solution_submission_id: &str,
+        solution_submission_id: &SolutionSubmissionId,
         challenge_id: &ChallengeId,
-        target_id: &str,
+        target: &TargetName,
     ) -> Result<RankingContextResponse> {
         let path = format!(
-            "/api/solution-submissions/{solution_submission_id}/ranking-context?challenge_id={challenge_id}&target={target_id}"
+            "/api/solution-submissions/{solution_submission_id}/ranking-context?challenge_id={challenge_id}&target={target}"
         );
         self.get_json(&path, true).await
     }
@@ -127,20 +127,20 @@ impl ApiClient {
     pub(crate) async fn get_leaderboard(
         &self,
         challenge_id: &ChallengeId,
-        target_id: &str,
+        target: &TargetName,
     ) -> Result<LeaderboardResponse> {
-        let path = format!("/api/public/challenges/{challenge_id}/leaderboard?target={target_id}");
+        let path = format!("/api/public/challenges/{challenge_id}/leaderboard?target={target}");
         self.get_json(&path, false).await
     }
 
     pub(crate) async fn get_score_distribution(
         &self,
         challenge_id: &ChallengeId,
-        target_id: &str,
+        target: &TargetName,
         metric_id: &str,
     ) -> Result<ScoreDistributionResponse> {
         let path = format!(
-            "/api/public/challenges/{challenge_id}/score-distributions?target={target_id}&metric={metric_id}"
+            "/api/public/challenges/{challenge_id}/score-distributions?target={target}&metric={metric_id}"
         );
         self.get_json(&path, false).await
     }
@@ -148,18 +148,18 @@ impl ApiClient {
     pub(crate) async fn get_creator_challenge_stats(
         &self,
         challenge_id: &ChallengeId,
-        target_id: Option<&str>,
+        target: Option<&TargetName>,
     ) -> Result<CreatorChallengeStatsResponse> {
-        let path = creator_challenge_path(challenge_id, "stats", target_id);
+        let path = creator_challenge_path(challenge_id, "stats", target);
         self.get_json(&path, true).await
     }
 
     pub(crate) async fn get_creator_challenge_participants(
         &self,
         challenge_id: &ChallengeId,
-        target_id: Option<&str>,
+        target: Option<&TargetName>,
     ) -> Result<CreatorChallengeParticipantsResponse> {
-        let path = creator_challenge_path(challenge_id, "participants", target_id);
+        let path = creator_challenge_path(challenge_id, "participants", target);
         self.get_json(&path, true).await
     }
 
@@ -360,12 +360,12 @@ fn parse_base_url(value: &str) -> Result<Url> {
 fn creator_challenge_path(
     challenge_id: &ChallengeId,
     surface: &str,
-    target_id: Option<&str>,
+    target: Option<&TargetName>,
 ) -> String {
     let mut path = format!("/api/creator/challenges/{challenge_id}/{surface}");
-    if let Some(target_id) = target_id.map(str::trim).filter(|value| !value.is_empty()) {
+    if let Some(target) = target {
         path.push_str("?target=");
-        path.push_str(target_id);
+        path.push_str(target);
     }
     path
 }

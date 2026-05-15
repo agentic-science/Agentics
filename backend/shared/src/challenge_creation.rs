@@ -260,10 +260,7 @@ async fn validate_public_bundle(
     )
     .await?;
 
-    if spec
-        .benchmark_targets
-        .iter()
-        .any(|target| target.validation_enabled)
+    if spec.targets.iter().any(|target| target.validation_enabled)
         && let Some(validation_runs) = spec.execution.validation_runs.as_deref()
     {
         assert_public_file_exists(
@@ -575,9 +572,9 @@ mod tests {
                     "command": ["python", "scorer/run.py"],
                     "result_file": "result.json"
                 },
-                "benchmark_targets": [
+                "targets": [
                     {
-                        "id": "linux-arm64-cpu",
+                        "name": "linux-arm64-cpu",
                         "docker_platform": "linux/arm64",
                         "accelerator": "cpu",
                         "validation_enabled": true,

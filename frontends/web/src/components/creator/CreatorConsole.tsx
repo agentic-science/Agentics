@@ -94,7 +94,7 @@ export function CreatorConsole() {
   });
   const [ownerForm, setOwnerForm] = useState({
     challengeId: "matrix-multiplication",
-    targetId: "linux-arm64-cpu",
+    target: "linux-arm64-cpu",
     shortlistText: JSON.stringify({ agent_ids_to_add: ["agent_..."] }, null, 2),
   });
   const [stats, setStats] = useState<CreatorChallengeStatsResponse | null>(
@@ -270,11 +270,11 @@ export function CreatorConsole() {
     setError(null);
     try {
       const challengeId = ownerForm.challengeId.trim();
-      const targetId = ownerForm.targetId.trim() || undefined;
+      const target = ownerForm.target.trim() || undefined;
       const [statsResponse, participantsResponse, shortlistResponse] =
         await Promise.all([
-          getCreatorChallengeStats(challengeId, targetId),
-          getCreatorChallengeParticipants(challengeId, targetId),
+          getCreatorChallengeStats(challengeId, target),
+          getCreatorChallengeParticipants(challengeId, target),
           getChallengeShortlist(challengeId),
         ]);
       setStats(statsResponse);
@@ -557,9 +557,9 @@ export function CreatorConsole() {
               required
             />
             <TextInput
-              label="Target ID"
-              value={ownerForm.targetId}
-              onChange={(targetId) => setOwnerForm({ ...ownerForm, targetId })}
+              label="Target"
+              value={ownerForm.target}
+              onChange={(target) => setOwnerForm({ ...ownerForm, target })}
             />
             <button
               type="button"

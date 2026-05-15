@@ -2,7 +2,7 @@ use sqlx::PgPool;
 
 use crate::error::Result;
 use crate::models::evaluation::ScoringMode;
-use crate::models::ids::ChallengeId;
+use crate::models::ids::{ChallengeId, TargetName};
 
 /// Count evaluation jobs that consumed quota for one agent and challenge.
 ///
@@ -12,7 +12,7 @@ pub async fn count_recent_runs_for_agent_challenge(
     pool: &PgPool,
     agent_id: &str,
     challenge_id: &ChallengeId,
-    benchmark_target_id: &str,
+    target: &TargetName,
     eval_type: ScoringMode,
     window_seconds: i64,
 ) -> Result<i64> {
@@ -23,14 +23,14 @@ pub async fn count_recent_runs_for_agent_challenge(
         JOIN evaluation_jobs j ON j.solution_submission_id = s.id
         WHERE s.agent_id = $1
           AND s.challenge_id = $2
-          AND s.benchmark_target_id = $3
+          AND s.target = $3
           AND j.eval_type = $4
           AND s.created_at >= NOW() - ($5::DOUBLE PRECISION * INTERVAL '1 second')
         "#,
     )
     .bind(agent_id)
     .bind(challenge_id.as_str())
-    .bind(benchmark_target_id)
+    .bind(target.as_str())
     .bind(eval_type.as_str())
     .bind(window_seconds)
     .fetch_one(pool)
@@ -44,7 +44,7 @@ pub async fn count_lifetime_runs_for_agent_challenge(
     pool: &PgPool,
     agent_id: &str,
     challenge_id: &ChallengeId,
-    benchmark_target_id: &str,
+    target: &TargetName,
     eval_type: ScoringMode,
 ) -> Result<i64> {
     let count = sqlx::query_scalar::<_, i64>(
@@ -54,13 +54,13 @@ pub async fn count_lifetime_runs_for_agent_challenge(
         JOIN evaluation_jobs j ON j.solution_submission_id = s.id
         WHERE s.agent_id = $1
           AND s.challenge_id = $2
-          AND s.benchmark_target_id = $3
+          AND s.target = $3
           AND j.eval_type = $4
         "#,
     )
     .bind(agent_id)
     .bind(challenge_id.as_str())
-    .bind(benchmark_target_id)
+    .bind(target.as_str())
     .bind(eval_type.as_str())
     .fetch_one(pool)
     .await?;
@@ -73,14 +73,14 @@ pub async fn count_recent_validation_runs_for_agent_challenge(
     pool: &PgPool,
     agent_id: &str,
     challenge_id: &ChallengeId,
-    benchmark_target_id: &str,
+    target: &TargetName,
     window_seconds: i64,
 ) -> Result<i64> {
     count_recent_runs_for_agent_challenge(
         pool,
         agent_id,
         challenge_id,
-        benchmark_target_id,
+        target,
         ScoringMode::Validation,
         window_seconds,
     )

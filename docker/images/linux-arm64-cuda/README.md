@@ -8,7 +8,7 @@ the supported DGX host, and pin challenge specs to immutable digests.
 
 ## Image Contract
 
-- Target id: `linux-arm64-cuda`.
+- Target: `linux-arm64-cuda`.
 - Platform: `linux/arm64`.
 - Base: NVIDIA CUDA `devel` images on Ubuntu 24.04.
 - CUDA policy: maintain variants that match CUDA versions supported by the
@@ -19,7 +19,7 @@ the supported DGX host, and pin challenge specs to immutable digests.
 - Intended use: CUDA solution setup, build, run, scorer prepare, and scorer
   score phases.
 - User model: root for setup, build, and run in the MVP.
-- Docker labels: Agentics image version, target id, CUDA variant, CUDA version,
+- Docker labels: Agentics image version, target, CUDA variant, CUDA version,
   CUDA base image, and Ubuntu version.
 - Runtime metadata: `/opt/agentics/image-info.json`.
 - Smoke test: `/opt/agentics/smoke.sh`.

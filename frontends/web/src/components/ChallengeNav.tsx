@@ -6,10 +6,10 @@ import { useTranslations } from "next-intl";
 
 export function ChallengeNav({
   challengeId,
-  defaultTargetId,
+  defaultTarget,
 }: {
   challengeId: string;
-  defaultTargetId: string;
+  defaultTarget: string;
 }) {
   const pathname = usePathname();
   const t = useTranslations("challenge");
@@ -19,7 +19,7 @@ export function ChallengeNav({
     { href: base, label: t("overview"), end: true },
     { href: `${base}/solution-submissions`, label: t("submissions") },
     {
-      href: `${base}/leaderboard?target=${encodeURIComponent(defaultTargetId)}`,
+      href: `${base}/leaderboard?target=${encodeURIComponent(defaultTarget)}`,
       label: t("leaderboard"),
       match: `${base}/leaderboard`,
     },

@@ -14,6 +14,7 @@ use crate::models::challenge_creation::{
 use crate::models::ids::ChallengeId;
 
 use super::challenges::{add_challenge_owner_tx, publish_challenge_tx};
+use super::ids::{challenge_id_from_row, optional_challenge_id_from_row};
 
 /// Input for inserting one GitHub PR-backed challenge draft.
 #[derive(Debug, Clone)]
@@ -785,29 +786,6 @@ fn row_to_draft_response(
         created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
         updated_at: row.try_get::<DateTime<Utc>, _>("updated_at")?.to_rfc3339(),
     })
-}
-
-fn challenge_id_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<ChallengeId> {
-    let raw: String = row.try_get(column)?;
-    ChallengeId::try_new(raw).map_err(|e| {
-        AppError::Internal(format!(
-            "stored invalid challenge id in column `{column}`: {e}"
-        ))
-    })
-}
-
-fn optional_challenge_id_from_row(
-    row: &sqlx::postgres::PgRow,
-    column: &str,
-) -> Result<Option<ChallengeId>> {
-    row.try_get::<Option<String>, _>(column)?
-        .map(ChallengeId::try_new)
-        .transpose()
-        .map_err(|e| {
-            AppError::Internal(format!(
-                "stored invalid challenge id in column `{column}`: {e}"
-            ))
-        })
 }
 
 fn row_to_private_asset_response(

@@ -77,12 +77,12 @@ describe("CreatorConsole", () => {
     });
     getCreatorChallengeParticipantsMock.mockResolvedValue({
       challenge_id: "matrix-multiplication",
-      benchmark_target_id: "linux-arm64-cpu",
+      target: "linux-arm64-cpu",
       items: [],
     });
     getCreatorChallengeStatsMock.mockResolvedValue({
       challenge_id: "matrix-multiplication",
-      benchmark_target_id: "linux-arm64-cpu",
+      target: "linux-arm64-cpu",
       agent_count: 0,
       solution_submission_count: 0,
       completed_solution_submission_count: 0,

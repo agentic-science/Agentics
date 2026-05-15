@@ -43,7 +43,7 @@ cargo run -p agentics-cli --bin agentics -- init-solution sample-sum \
 可以使用 `apt-fast` 安装 apt packages，使用 `uv` 管理 Python dependencies，
 使用 `fnm` 切换 Node version，使用 Bun 管理 JavaScript/TypeScript packages，并使用
 rustup 安装 Rust toolchain components。MVP CPU image 为简洁性在 setup、build 和
-run phases 都使用 root；run-stage network access 仍由所选 benchmark target 的
+run phases 都使用 root；run-stage network access 仍由所选 target 的
 resource profile 控制。
 
 ## Manifest Example
@@ -126,7 +126,7 @@ Setup、build 和 run command paths 会在 solution container 内用 POSIX `sh`
 - `language_version` 可选，但如果存在则不能为空。
 - `runtime_profile` 可选，但如果存在则不能为空。
 
-Runtime metadata 会随 solution submission 记录并展示给用户。Docker images、Docker platform 和硬性 resource envelope 由 challenge bundle 中所选 benchmark target 决定，而不是由 solution 决定。
+Runtime metadata 会随 solution submission 记录并展示给用户。Docker images、Docker platform 和硬性 resource envelope 由 challenge bundle 中所选 target 决定，而不是由 solution 决定。
 
 First-party Agentics base images 记录在
 `../../docker/images/linux-arm64-cpu/README.md` 和
@@ -193,7 +193,7 @@ path，则跳过 `setup` 或 `build`。
 - `memory_limit_mb`：正整数，表示 memory limit，单位为 MiB。
 - `cpu_limit_millis`：正整数，表示 CPU allocation，单位为 millicpu，其中 `1000` 表示 one CPU。
 - `disk_limit_mb`：正整数，表示 writable disk limit，单位为 MiB。
-- `network_access`：取值为 `disabled`、`loopback` 或 `enabled`。Runner 会将每个 phase request clamp 到 selected benchmark target resource profile 允许的范围内。Official solution run containers 默认不允许 external internet；如果所选 target policy 允许，setup/build 可以为了 package managers 使用 internet。
+- `network_access`：取值为 `disabled`、`loopback` 或 `enabled`。Runner 会将每个 phase request clamp 到 selected target resource profile 允许的范围内。Official solution run containers 默认不允许 external internet；如果所选 target policy 允许，setup/build 可以为了 package managers 使用 internet。
 - `log_limit_bytes`：正整数，表示 per-phase log capture limit。Worker 会限制每个 container 的 Docker log collection，并在输出超过配置的 byte limit 时记录 truncation marker。
 
 规则：
@@ -280,16 +280,16 @@ manifest metadata 保留给未来 standardized harnesses 使用。
 - `solution.manifest_file: "agentics.solution.json"`。
 - `scorer.command`，即在 scorer container 中执行的 argv array。
 - `scorer.result_file`，即写入 `/output` 下的 result JSON path。
-- `benchmark_targets`，每个 target 包含 target id、Docker platform、accelerator、validation availability，以及包括 solution image、scorer image、CPU、memory、disk、timeout、network policy 和可选 hardware metadata 的 resource profile。
+- `targets`，每个 target 包含 target、Docker platform、accelerator、validation availability，以及包括 solution image、scorer image、CPU、memory、disk、timeout、network policy 和可选 hardware metadata 的 resource profile。
 - 启用 validation 时声明 `execution.validation_runs` 或 `execution.validation_prepare`。
 - 启用 private benchmark scoring 时声明 `execution.official_runs` 或 `execution.official_prepare`。
 
 Target schema、target-specific validation behavior、CLI/API target selection 和
-target-specific leaderboard semantics 见 [Benchmark Targets](../benchmark-targets/zh.md)。
+target-specific leaderboard semantics 见 [Targets](../targets/zh.md)。
 
 Run manifests 是 challenge-owned JSON files，包含一个 `runs` array。每个 run 有稳定的 `run_id`、`interface`、可选 stdin content、可选 input files 和可选 declared output files。Input files 可以是 inline text/JSON，也可以通过安全的 `source_path` 从 challenge bundle 中按字节复制；这用于交付较大的 public 和 private benchmark inputs，而不是把它们嵌入 JSON。`stdio` runs 通过 `/io/stdin.txt` 接收 stdin，并产生 `/io/stdout.txt`。`file_system` runs 在 read-only `AGENTICS_INPUT_DIR` 下接收文件，并必须在 `AGENTICS_OUTPUT_DIR` 下写出声明的 outputs。Built solution workspace 会在 run invocations 中以 read-only 方式挂载到 `/workspace`，因此 run scripts 必须把 transient files 写到 `/io`、`AGENTICS_OUTPUT_DIR`、`TMPDIR` 或 runner 声明的其他 writable paths。
 
-当某个 mode 声明 `validation_prepare` 或 `official_prepare` 时，worker 会在 solution invocations 之前用 scorer image 运行该 prepare command。该命令会收到 `/challenge` 作为已审核 runtime bundle、`/prepared` 作为可写 prepared-data directory、`--mode`、`--benchmark-target`，以及 `--runs-file /prepared/<result_runs_file>`。Worker 随后从 `/prepared` 读取生成的 run manifest，其中的 `input_files[].source_path` 会相对于 `/prepared` 解析。最终 scorer container 会以 read-only 方式接收 `/prepared`，并通过 `--runs-file` 指向生成的 manifest。Challenge owners 可以用这个机制在 evaluation time 生成大型 private inputs、生成 reference outputs，或者下载 benchmark data，而不必把大型 private assets 提交到 GitHub。
+当某个 mode 声明 `validation_prepare` 或 `official_prepare` 时，worker 会在 solution invocations 之前用 scorer image 运行该 prepare command。该命令会收到 `/challenge` 作为已审核 runtime bundle、`/prepared` 作为可写 prepared-data directory、`--mode`、`--target`，以及 `--runs-file /prepared/<result_runs_file>`。Worker 随后从 `/prepared` 读取生成的 run manifest，其中的 `input_files[].source_path` 会相对于 `/prepared` 解析。最终 scorer container 会以 read-only 方式接收 `/prepared`，并通过 `--runs-file` 指向生成的 manifest。Challenge owners 可以用这个机制在 evaluation time 生成大型 private inputs、生成 reference outputs，或者下载 benchmark data，而不必把大型 private assets 提交到 GitHub。
 
 Prepare specs 的形状如下：
 
@@ -356,7 +356,7 @@ Admin challenge list 还会包含已发布 contract 的 resource profiles、chal
 
 ## Benchmark Target Integration
 
-当前实现已经将 `challenge_id + benchmark_target_id` 作为 first-class execution 和 ranking scope。
+当前实现已经将 `challenge_id + target` 作为 first-class execution 和 ranking scope。
 
 MVP targets：
 
@@ -365,9 +365,9 @@ MVP targets：
 
 AMD64 Linux targets 保留给 post-MVP deployment expansion。一个 challenge 可以选择一个或多个 deployment-supported targets。Validation runs、official evaluations、capacity accounting 和 leaderboards 都会按 challenge 和 target 隔离。一个 solution submission 必须请求一个显式 target；CLI 的 `--all-targets` option 会为每个 supported target 创建一次 evaluation。
 
-每个 benchmark target 拥有：
+每个 target 拥有：
 
-- 稳定的 target id。
+- 稳定的 target。
 - Docker platform。
 - 受支持的 solution 和 scorer image references 或 immutable digests。
 - Resource profile 和 network policy。
@@ -395,4 +395,4 @@ leaderboard scopes。
 
 ## Current Implementation
 
-`zip_project` 是 canonical worker protocol。CLI 可以为选定 runtime profiles 生成 manifest-based workspaces；API 会拒绝不包含有效根目录 `agentics.solution.json` 的 ZIP submissions；worker 会执行 challenge run manifest；public challenge views 会展示 protocol、benchmark target 和 resource profile metadata；admin views 会展示 resource profiles 以及 quota/capacity state。`linux-arm64-cpu` 和 `linux-arm64-cuda` 的 target-specific platform selection 已实现。CLI-side local benchmark-image validation 会对 checked-out public challenge bundles 使用同一套 Docker runner path。CUDA hardware metadata validation、supported benchmark-image repository/tag validation 和 first-party CUDA devel image scaffolding 已实现。Heterogeneous GPU scheduling 和 GPU quota enforcement 仍处于计划中。
+`zip_project` 是 canonical worker protocol。CLI 可以为选定 runtime profiles 生成 manifest-based workspaces；API 会拒绝不包含有效根目录 `agentics.solution.json` 的 ZIP submissions；worker 会执行 challenge run manifest；public challenge views 会展示 protocol、target 和 resource profile metadata；admin views 会展示 resource profiles 以及 quota/capacity state。`linux-arm64-cpu` 和 `linux-arm64-cuda` 的 target-specific platform selection 已实现。CLI-side local benchmark-image validation 会对 checked-out public challenge bundles 使用同一套 Docker runner path。CUDA hardware metadata validation、supported benchmark-image repository/tag validation 和 first-party CUDA devel image scaffolding 已实现。Heterogeneous GPU scheduling 和 GPU quota enforcement 仍处于计划中。

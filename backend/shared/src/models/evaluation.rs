@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
 
 use super::challenge::{MetricDirection, MetricSchemaSpec, MetricVisibility};
-use super::ids::ChallengeId;
+use super::ids::{ChallengeId, TargetName};
 
 /// Evaluation surface requested for a solution submission.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
@@ -120,7 +120,7 @@ pub struct RunMetricResult {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct EvaluationDto {
     pub id: String,
-    pub benchmark_target_id: String,
+    pub target: TargetName,
     pub status: EvaluationStatus,
     pub eval_type: ScoringMode,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -632,7 +632,7 @@ mod tests {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct EvaluationJobDto {
     pub id: String,
-    pub benchmark_target_id: String,
+    pub target: TargetName,
     pub status: EvaluationStatus,
 }
 
@@ -642,5 +642,5 @@ pub struct EvaluationJobPayload {
     pub artifact_path: String,
     pub bundle_path: String,
     pub challenge_id: ChallengeId,
-    pub benchmark_target_id: String,
+    pub target: TargetName,
 }

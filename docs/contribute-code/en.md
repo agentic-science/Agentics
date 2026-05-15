@@ -161,7 +161,7 @@ Use `down -v` only when you want to delete the local Postgres volume.
 
 - [Root README](../../README.md)
 - [API JSON contract](../api-json-contract/en.md)
-- [Benchmark targets](../benchmark-targets/en.md)
+- [Targets](../targets/en.md)
 - [Solution protocol](../solution-protocol/en.md)
 - [Operations runbook](../operations/en.md)
 - [Ports, paths, and target policy](../ports-and-paths/en.md)

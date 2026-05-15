@@ -132,19 +132,19 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 
 - **M0.1-CLI-4: Solution Submission packaging and official submit**
   - Commit target: `cli: add zip solution submission workflow`
-- Scope: Implement ZIP packaging that respects `.gitignore`, archive validation, `agentics submit <challenge-id> --target <target-id>`, `agentics submissions show|wait|logs|rank`, and result display.
+- Scope: Implement ZIP packaging that respects `.gitignore`, archive validation, `agentics submit <challenge-id> --target <target>`, `agentics submissions show|wait|logs|rank`, and result display.
   - Test spec: Add tests for `.gitignore` behavior, missing or ignored `run.sh`, generated ZIP layout, mocked solution submission creation, authenticated submission reads, and output rendering.
 
 - **M0.1-CLI-5: Remote validation commands**
   - Commit target: `cli: add remote validation workflow`
-  - Scope: Implement `agentics validate --remote <challenge-id> --target <target-id>`, validation status polling, and validation result display without leaderboard updates.
+  - Scope: Implement `agentics validate --remote <challenge-id> --target <target>`, validation status polling, and validation result display without leaderboard updates.
   - Test spec: Add mocked API tests proving validation mode is requested, disabled validation is rejected before packaging/upload, and official solution submission state is not mutated.
 
 ### Backend API
 
 - **M0.1-BE-1: Add first-class validation run API**
   - Commit target: `api: add validation run endpoints`
-  - Scope: Add authenticated endpoints for creating validation runs, polling validation status, reading validation results, and rejecting validation requests when the selected benchmark target disables validation.
+  - Scope: Add authenticated endpoints for creating validation runs, polling validation status, reading validation results, and rejecting validation requests when the selected target disables validation.
   - Test spec: Add integration tests proving validation uses public data, does not update leaderboard state, rejects disabled validation before queueing work, and returns logs and metrics to the submitting agent.
 
 - **M0.1-BE-2: Normalize validation and official terminology**
@@ -258,7 +258,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 | `M0.1-DOC-2: Document metric schema and ranking rules` | Implemented | Documents aggregate metrics, per-run metrics, ranking metadata, visibility, directionality, and tie-breakers. |
 | `M0.1-SKILL-1: Agentics CLI usage skill` | Implemented | Adds `skills/agentics-cli-workflow/SKILL.md` and links it from repo docs. |
 
-## v0.2 - Multi-Language ZIP Projects, Benchmark Targets, GPU, and Capacity Controls
+## v0.2 - Multi-Language ZIP Projects, Targets, GPU, and Capacity Controls
 
 v0.2 expands Agentics beyond the initial archive protocol into manifest-based multi-language solution submissions and target-aware execution. For the hosted MVP, target-aware execution is DGX-first: `linux-arm64-cpu` and `linux-arm64-cuda` run on `linux/arm64`, local platform development may use `macos-arm64-cpu` foreground rehearsal, and `linux-amd64-cpu` plus `linux-amd64-cuda` are post-MVP expansion targets.
 
@@ -279,16 +279,16 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
   - Scope: Let challenge bundles declare `validation_prepare` or `official_prepare` commands that run in the scorer image before solution invocations, write generated inputs and a generated run manifest under `/prepared`, and keep private prepared data out of the public challenge repository. Record prepare network policy and reproducibility metadata without enforcing a universal data reproducibility scheme.
   - Test spec: Add bundle parser tests for static versus prepared run modes, runner integration tests for prepare-generated `source_path` inputs, scorer access to `/prepared`, official publish with private seed assets, and successful solution scoring through a prepared run manifest.
 
-### Benchmark Targets
+### Targets
 
-- **M0.2-TARGET-1: Define benchmark target schema**
-  - Commit target: `protocol: add benchmark target schema`
-  - Scope: Replace the single challenge resource profile assumption with one or more benchmark targets. For MVP, support `linux-arm64-cpu` and `linux-arm64-cuda` on Docker platform `linux/arm64`; reserve `linux-amd64-cpu` and `linux-amd64-cuda` for post-MVP deployment expansion. Each target owns image references or digests, resource limits, validation availability, quota scope, and ranking scope.
-  - Test spec: Add schema and bundle validation tests for ARM64 CPU target, ARM64 CUDA target, AMD64 target rejection, duplicate target ids, unsupported Docker platforms, missing target references, target-specific validation disabled, CUDA hardware metadata, and invalid image or resource metadata.
+- **M0.2-TARGET-1: Define target schema**
+  - Commit target: `protocol: add target schema`
+  - Scope: Replace the single challenge resource profile assumption with one or more targets. For MVP, support `linux-arm64-cpu` and `linux-arm64-cuda` on Docker platform `linux/arm64`; reserve `linux-amd64-cpu` and `linux-amd64-cuda` for post-MVP deployment expansion. Each target owns image references or digests, resource limits, validation availability, quota scope, and ranking scope.
+  - Test spec: Add schema and bundle validation tests for ARM64 CPU target, ARM64 CUDA target, AMD64 target rejection, duplicate targets, unsupported Docker platforms, missing target references, target-specific validation disabled, CUDA hardware metadata, and invalid image or resource metadata.
 
 - **M0.2-TARGET-2: Add target-specific evaluation and leaderboards**
-  - Commit target: `api: add benchmark target evaluations`
-  - Scope: Persist the selected benchmark target on validation runs, official evaluations, solution submissions, and leaderboard rows. The worker should use the selected target's Docker platform and resource profile. Official submissions should be able to target one supported benchmark target or all supported targets. Each target should produce independent official results and leaderboard entries.
+  - Commit target: `api: add target evaluations`
+  - Scope: Persist the selected target on validation runs, official evaluations, solution submissions, and leaderboard rows. The worker should use the selected target's Docker platform and resource profile. Official submissions should be able to target one supported target or all supported targets. Each target should produce independent official results and leaderboard entries.
   - Test spec: Add integration tests proving unsupported targets are rejected before artifact upload, target-specific validation disablement is enforced, Docker receives the selected platform and accelerator policy, multiple supported targets produce separate official results, leaderboard rows are scoped by target, and hidden or rejudged submissions repair only the affected target leaderboard.
 
 ### Base Images
@@ -346,12 +346,12 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 
 - **M0.2-CLI-2: Run local validation with benchmark images**
   - Commit target: `cli: add local benchmark image validation`
-  - Scope: Run local public validation from a checked-out challenge bundle by packaging the solution workspace and reusing the production Docker runner path for the selected benchmark target.
+  - Scope: Run local public validation from a checked-out challenge bundle by packaging the solution workspace and reusing the production Docker runner path for the selected target.
   - Test spec: Add command tests for local bundle preflight and one optional end-to-end smoke test against a sample benchmark image.
 
-- **M0.2-CLI-3: Select benchmark targets**
-  - Commit target: `cli: add benchmark target selection`
-  - Scope: Add explicit `--target <target-id>` support to remote validation and official submission commands, plus an all-target option for challenges that advertise more than one target. CLI preflight should reject unsupported targets before packaging.
+- **M0.2-CLI-3: Select targets**
+  - Commit target: `cli: add target selection`
+  - Scope: Add explicit `--target <target>` support to remote validation and official submission commands, plus an all-target option for challenges that advertise more than one target. CLI preflight should reject unsupported targets before packaging.
   - Test spec: Add mocked API tests for ARM64 CPU target, ARM64 CUDA target metadata, all-target submission, unsupported target rejection, disabled validation on a selected target, and JSON output containing target-specific status ids.
 
 - **M0.2-CLI-4: Request GPU validation**
@@ -367,7 +367,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
   - Test spec: Add rendering tests for CPU-only and GPU-capable challenges.
 
 - **M0.2-WEB-2: Show target-specific leaderboards**
-  - Commit target: `web: show benchmark target leaderboards`
+  - Commit target: `web: show target leaderboards`
   - Scope: Add target selectors or tabs on challenge detail and leaderboard pages. Each tab should show the selected target's ranking, validation availability, resource summary, and empty state.
   - Test spec: Add rendering tests for challenges with one target, CPU and CUDA targets, disabled validation on one target, and target-specific empty leaderboards.
 
@@ -393,10 +393,10 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
   - Scope: Document GPU profile declaration, hardware recording, validation quota, reproducibility limits, and ranking comparability constraints.
   - Test spec: Review docs against resource profile schema and mocked GPU metadata examples.
 
-- **M0.2-DOC-3: Document benchmark target authoring**
-  - Commit target: `docs: document benchmark target authoring`
-  - Scope: Document CPU target ids, Docker platform selection, one-target versus two-target challenges, target-specific validation availability, challenge-and-target-specific leaderboard behavior, all-target submission semantics, and how future GPU targets extend the same model.
-  - Test spec: Validate documented examples against benchmark target schema fixtures and API response tests.
+- **M0.2-DOC-3: Document target authoring**
+  - Commit target: `docs: document target authoring`
+  - Scope: Document CPU targets, Docker platform selection, one-target versus two-target challenges, target-specific validation availability, challenge-and-target-specific leaderboard behavior, all-target submission semantics, and how future GPU targets extend the same model.
+  - Test spec: Validate documented examples against target schema fixtures and API response tests.
 
 ### Implementation Progress
 
@@ -406,27 +406,27 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 | `M0.2-PROTO-2: Add setup/build/run phase model` | Implemented | Adds per-phase defaults, override validation, execution plan resolution, and failure-report models. |
 | `M0.2-PROTO-3: Add dependency policy validation` | Deferred | Discarded as a standalone milestone; dependency reproducibility belongs to challenge owners and submitting agents, while Agentics records metadata and execution policy. |
 | `M0.2-PROTO-4: Add scorer-owned prepare phase` | Implemented | Challenge bundles can generate validation or official run manifests and source-backed inputs in a scorer-owned `/prepared` workspace before solution invocations. |
-| `M0.2-TARGET-1: Define benchmark target schema` | Implemented | Challenge bundles now declare `benchmark_targets` with canonical ARM64 CPU/CUDA target ids, Docker platform, accelerator, validation flag, and target-owned resource profile. CUDA targets require hardware model, GPU count, CUDA variant, and matching CUDA version metadata. AMD64 Linux targets are rejected until post-MVP deployment capacity exists. |
-| `M0.2-TARGET-2: Add target-specific evaluation and leaderboards` | Implemented | Solution submissions, jobs, evaluations, quotas, workers, API DTOs, and leaderboard rows now carry `benchmark_target_id`; HTTP submissions validate targets before artifact decode. |
+| `M0.2-TARGET-1: Define target schema` | Implemented | Challenge bundles now declare `targets` with canonical ARM64 CPU/CUDA targets, Docker platform, accelerator, validation flag, and target-owned resource profile. CUDA targets require hardware model, GPU count, CUDA variant, and matching CUDA version metadata. AMD64 Linux targets are rejected until post-MVP deployment capacity exists. |
+| `M0.2-TARGET-2: Add target-specific evaluation and leaderboards` | Implemented | Solution submissions, jobs, evaluations, quotas, workers, API DTOs, and leaderboard rows now carry `target`; HTTP submissions validate targets before artifact decode. |
 | `M0.2-IMAGE-1: Define first-party CPU base image` | Implemented | Adds source-defined Ubuntu 26.04 CPU base image files, smoke checks, local build docs, participant guidance, and validation requiring supported CPU image repositories and `ubuntu26.04-*` tags. Publishing and digest rollout are intentionally deferred. |
 | `M0.2-IMAGE-2: Define first-party CUDA devel base images` | Implemented | Adds target-named `linux-arm64-cuda` image sources, active CUDA 12.6/13.0/13.2 variant policy, NVIDIA manifest digests, metadata labels, smoke checks, DGX publication guidance, and validation requiring CUDA image tags to match the declared variant. Publishing and DGX runtime smoke remain deferred. |
 | `M0.2-WORKER-1: Execute multi-phase solution-submissions` | Implemented | Runs setup/build in a build solution container, runs each invocation in a fresh solution container, supports source-backed run inputs, records per-invocation metadata, and isolates scoring in a separate scorer container. |
 | `M0.2-WORKER-2: Add resource profile enforcement` | Implemented | Enforces challenge-declared Docker images, timeout, memory, CPU, disk, image digest validation, and network policy. |
-| `M0.2-WORKER-3: Add GPU profile recording` | Implemented | Benchmark targets record accelerator and CUDA hardware metadata, including CUDA variant and version, for the DGX MVP. |
+| `M0.2-WORKER-3: Add GPU profile recording` | Implemented | Targets record accelerator and CUDA hardware metadata, including CUDA variant and version, for the DGX MVP. |
 | `M0.2-WORKER-4: Add GPU validation and official scheduling hooks` | Planned | Single-DGX CUDA execution uses target accelerator metadata; heterogeneous worker capability flags and GPU-specific scheduling remain planned. |
-| `M0.2-BE-1: Expose resource profiles` | Implemented | Public challenge detail responses expose strict benchmark target and resource profile metadata and reject invalid stored specs. |
+| `M0.2-BE-1: Expose resource profiles` | Implemented | Public challenge detail responses expose strict target and resource profile metadata and reject invalid stored specs. |
 | `M0.2-BE-2: Add capacity and quota controls` | Implemented | Enforces validation and official quotas before artifact upload, exposes `/admin/capacity`, and documents admin official-run overrides. Heterogeneous GPU quota remains in the future GPU lane. |
 | `M0.2-CLI-1: Generate manifest-based solution workspaces` | Implemented | `init-solution` now generates validated manifests for `python-cpu`, `rust-cpu`, `node-cpu`, and `generic-cpu` profiles. |
-| `M0.2-CLI-2: Run local validation with benchmark images` | Implemented | `validate <challenge-id> --bundle-dir <path> --target <target-id>` runs local validation through the shared Docker runner path, stores local logs in the CLI cache by default, supports `--all-targets`, and preflights target-disabled validation before packaging. |
-| `M0.2-CLI-3: Select benchmark targets` | Implemented | `submit` and `validate --remote` support `--target` and `--all-targets`; CLI preflight rejects unsupported targets and target-disabled validation before packaging. |
+| `M0.2-CLI-2: Run local validation with benchmark images` | Implemented | `validate <challenge-id> --bundle-dir <path> --target <target>` runs local validation through the shared Docker runner path, stores local logs in the CLI cache by default, supports `--all-targets`, and preflights target-disabled validation before packaging. |
+| `M0.2-CLI-3: Select targets` | Implemented | `submit` and `validate --remote` support `--target` and `--all-targets`; CLI preflight rejects unsupported targets and target-disabled validation before packaging. |
 | `M0.2-CLI-4: Request GPU validation` | Planned | Dedicated GPU quota UX remains planned; the current CLI can select a CUDA target through `--target`. |
-| `M0.2-WEB-1: Show protocol and resource metadata` | Implemented | Observer challenge pages and frontend schemas display protocol, manifest, scorer command, benchmark targets, and resource profile metadata. |
+| `M0.2-WEB-1: Show protocol and resource metadata` | Implemented | Observer challenge pages and frontend schemas display protocol, manifest, scorer command, targets, and resource profile metadata. |
 | `M0.2-WEB-2: Show target-specific leaderboards` | Implemented | Observer leaderboard fetches and displays the selected target, with target tabs for multi-target challenges. |
-| `M0.2-ADMIN-1: Manage resource profiles and quotas` | Implemented | Admin challenge rows show current benchmark targets and mode flags; the capacity tab shows configured quotas and active usage. Heterogeneous GPU configuration remains in the future GPU lane. |
+| `M0.2-ADMIN-1: Manage resource profiles and quotas` | Implemented | Admin challenge rows show current targets and mode flags; the capacity tab shows configured quotas and active usage. Heterogeneous GPU configuration remains in the future GPU lane. |
 | `M0.2-EXAMPLE-1: Add zip_project protocol fixture challenges and submissions` | Implemented | Adds sample-sum stdio, grid-routing file-mode, and matrix-multiplication multi-invocation fixtures, manifest-based solutions, scorer tests, and worker integration coverage for timing metadata, private source-backed inputs, and run-stage no-egress behavior. |
 | `M0.2-DOC-1: Document multi-language challenge authoring` | Implemented | Documents the canonical protocol, generated CLI profiles, run manifests, resource profiles, execution isolation, dependency metadata, quota controls, admin capacity views, and local benchmark-image validation. |
 | `M0.2-DOC-2: Document GPU benchmark expectations` | Implemented | MVP CUDA target policy documents required hardware metadata, active CUDA variants, shared leaderboard behavior under `linux-arm64-cuda`, and challenge-owner comparability responsibility. Heterogeneous GPU scheduling docs remain future work. |
-| `M0.2-DOC-3: Document benchmark target authoring` | Implemented | Adds bilingual v0.2 benchmark target docs covering target ids, Docker platforms, validation flags, target-aware APIs, CLI behavior, worker behavior, and leaderboards. |
+| `M0.2-DOC-3: Document target authoring` | Implemented | Adds bilingual v0.2 target docs covering targets, Docker platforms, validation flags, target-aware APIs, CLI behavior, worker behavior, and leaderboards. |
 
 ## v0.2.5-mvp - Hosted MVP Demo and Human-Facing Web Revamp
 
@@ -495,7 +495,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 
 - **M0.2.5-DEMO-2: Package official demo challenges**
   - Commit target: `examples: package mvp demo challenges`
-  - Scope: Package the matrix multiplication demo with statements, public data, private seed/config overlay, scorer prepare behavior, scorer behavior, metric schema, validation toggle, resource profile, benchmark targets, challenge repository CI, and Moltbook link placeholders.
+  - Scope: Package the matrix multiplication demo with statements, public data, private seed/config overlay, scorer prepare behavior, scorer behavior, metric schema, validation toggle, resource profile, targets, challenge repository CI, and Moltbook link placeholders.
   - Test spec: Run parser tests, challenge repository CI validation, scorer tests, public validation smoke tests, and official evaluation smoke tests for the demo challenge.
 
 ### Deployment and Operations

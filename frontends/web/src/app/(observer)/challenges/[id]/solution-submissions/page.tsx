@@ -35,7 +35,7 @@ export default async function SolutionSubmissionsPage({
       ? formatDate(submissions.items[0].created_at, locale)
       : "—";
   const metricSchema = detail.spec.metric_schema;
-  const validationEnabled = detail.spec.benchmark_targets.some(
+  const validationEnabled = detail.spec.targets.some(
     (target) => target.validation_enabled,
   );
 
@@ -120,7 +120,7 @@ export default async function SolutionSubmissionsPage({
                     </Link>
                   </td>
                   <td className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
-                    {s.benchmark_target_id}
+                    {s.target}
                   </td>
                   <td className="font-mono text-[var(--accent-primary-text)]">
                     {formatDeclaredMetric(

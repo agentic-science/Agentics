@@ -20,7 +20,7 @@ truth.
 
 - [Solution protocol](solution-protocol/en.md): `zip_project` manifest,
   setup/build/run phases, archive rules, dependency policy, and runner contract.
-- [Benchmark targets](benchmark-targets/en.md): target ids, Docker platform,
+- [Targets](targets/en.md): targets, Docker platform,
   accelerator policy, target-specific submissions, validation, and leaderboards.
 - [Deployment baseline](deployment/en.md): Mac-local deployment rehearsal,
   startup order, storage, rollback, and DGX hosted profile handoff.
@@ -57,7 +57,7 @@ Most current documents have Chinese versions next to the English version:
 - [Review Challenges](review-challenges/zh.md)
 - [运维平台](operate-platform/zh.md)
 - [Solution protocol](solution-protocol/zh.md)
-- [Benchmark targets](benchmark-targets/zh.md)
+- [Targets](targets/zh.md)
 - [Deployment baseline](deployment/zh.md)
 - [DGX Spark operations](dgx-spark/zh.md)
 - [Operations runbook](operations/zh.md)

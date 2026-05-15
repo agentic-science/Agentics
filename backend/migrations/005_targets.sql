@@ -1,0 +1,1 @@
+-- Targets are included in the reset baseline schema.

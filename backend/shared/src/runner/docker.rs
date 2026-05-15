@@ -16,7 +16,7 @@ use tokio::time::timeout;
 
 use crate::config::Config;
 use crate::error::{AppError, Result};
-use crate::models::challenge::{BenchmarkAccelerator, DockerPlatform};
+use crate::models::challenge::{DockerPlatform, TargetAccelerator};
 use crate::zip_project::ZipProjectPhaseLimits;
 
 #[derive(Debug)]
@@ -28,7 +28,7 @@ pub(super) struct ContainerRequest {
     pub(super) mounts: Vec<Mount>,
     pub(super) working_dir: String,
     pub(super) docker_platform: DockerPlatform,
-    pub(super) accelerator: BenchmarkAccelerator,
+    pub(super) accelerator: TargetAccelerator,
     pub(super) limits: ZipProjectPhaseLimits,
     pub(super) docker_layer_quota_mb: Option<u64>,
 }
@@ -277,17 +277,17 @@ fn docker_storage_opt(limit_mb: Option<u64>) -> Option<HashMap<String, String>> 
     })
 }
 
-fn gpu_runtime(accelerator: BenchmarkAccelerator) -> Option<String> {
+fn gpu_runtime(accelerator: TargetAccelerator) -> Option<String> {
     match accelerator {
-        BenchmarkAccelerator::Cpu => None,
-        BenchmarkAccelerator::Gpu => Some("nvidia".to_string()),
+        TargetAccelerator::Cpu => None,
+        TargetAccelerator::Gpu => Some("nvidia".to_string()),
     }
 }
 
-fn gpu_device_requests(accelerator: BenchmarkAccelerator) -> Option<Vec<DeviceRequest>> {
+fn gpu_device_requests(accelerator: TargetAccelerator) -> Option<Vec<DeviceRequest>> {
     match accelerator {
-        BenchmarkAccelerator::Cpu => None,
-        BenchmarkAccelerator::Gpu => Some(vec![DeviceRequest {
+        TargetAccelerator::Cpu => None,
+        TargetAccelerator::Gpu => Some(vec![DeviceRequest {
             driver: Some("nvidia".to_string()),
             count: Some(-1),
             capabilities: Some(vec![vec!["gpu".to_string()]]),

@@ -13,10 +13,9 @@ use sha2::{Digest, Sha256};
 
 use crate::error::{AppError, Result};
 use crate::models::challenge::{
-    BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengePrepareSpec,
-    ChallengeRunInputFile, ChallengeRunManifest, ChallengeRunSpec,
-    ChallengeSolutionPublicationPolicy, DockerPlatform, HardwareProfileSpec,
-    PrivateBenchmarkPolicy, ResourceProfileSpec,
+    ChallengeBundleSpec, ChallengePrepareSpec, ChallengeRunInputFile, ChallengeRunManifest,
+    ChallengeRunSpec, ChallengeSolutionPublicationPolicy, ChallengeTargetSpec, DockerPlatform,
+    HardwareProfileSpec, PrivateBenchmarkPolicy, ResourceProfileSpec, TargetAccelerator,
 };
 use crate::zip_project::{ZIP_PROJECT_MANIFEST_FILE, ZIP_PROJECT_PROTOCOL};
 
@@ -97,10 +96,7 @@ pub async fn validate_challenge_bundle(bundle_dir: &Path) -> Result<()> {
     }
     assert_path_type(&public_dir, "directory", "public data dir").await?;
 
-    if spec
-        .benchmark_targets
-        .iter()
-        .any(|target| target.validation_enabled)
+    if spec.targets.iter().any(|target| target.validation_enabled)
         && let Some(validation_runs) = spec.execution.validation_runs.as_deref()
     {
         assert_path_type(
@@ -312,7 +308,6 @@ fn copy_challenge_bundle_dir_blocking(
 }
 
 fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
-    require_non_empty(&spec.challenge_id, "challenge_id")?;
     require_non_empty(&spec.challenge_title, "challenge_title")?;
     require_non_empty(&spec.challenge_summary, "challenge_summary")?;
 
@@ -332,7 +327,7 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
     }
     validate_scorer_command(&spec.scorer.command)?;
     require_safe_relative_path(&spec.scorer.result_file, "scorer.result_file")?;
-    validate_benchmark_targets(spec)?;
+    validate_targets(spec)?;
     validate_challenge_policy(spec)?;
     validate_execution(spec)?;
 
@@ -375,8 +370,8 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
 
 /// Require immutable Docker image references for hosted or audited execution.
 pub fn validate_digest_pinned_images(spec: &ChallengeBundleSpec) -> Result<()> {
-    for (index, target) in spec.benchmark_targets.iter().enumerate() {
-        let field = format!("benchmark_targets[{index}].resource_profile");
+    for (index, target) in spec.targets.iter().enumerate() {
+        let field = format!("targets[{index}].resource_profile");
         require_image_digest_reference(
             &target.resource_profile.solution_image,
             &format!("{field}.solution_image"),
@@ -431,21 +426,21 @@ fn declared_scorer_script(command: &[String]) -> Option<&str> {
         .map(String::as_str)
 }
 
-fn validate_benchmark_targets(spec: &ChallengeBundleSpec) -> Result<()> {
-    if spec.benchmark_targets.is_empty() {
+fn validate_targets(spec: &ChallengeBundleSpec) -> Result<()> {
+    if spec.targets.is_empty() {
         return Err(AppError::Validation(
-            "benchmark_targets must not be empty".to_string(),
+            "targets must not be empty".to_string(),
         ));
     }
 
-    let mut target_ids = HashSet::with_capacity(spec.benchmark_targets.len());
-    for (index, target) in spec.benchmark_targets.iter().enumerate() {
-        let field = format!("benchmark_targets[{index}]");
-        validate_benchmark_target(target, &field)?;
-        if !target_ids.insert(target.id.as_str()) {
+    let mut target_names = HashSet::with_capacity(spec.targets.len());
+    for (index, target) in spec.targets.iter().enumerate() {
+        let field = format!("targets[{index}]");
+        validate_target(target, &field)?;
+        if !target_names.insert(target.name.as_str()) {
             return Err(AppError::Validation(format!(
-                "benchmark_targets contains duplicate id `{}`",
-                target.id
+                "targets contains duplicate name `{}`",
+                target.name
             )));
         }
     }
@@ -498,22 +493,10 @@ fn validate_optional_positive_limit(value: Option<i64>, field: &str) -> Result<(
     Ok(())
 }
 
-fn validate_benchmark_target(target: &BenchmarkTargetSpec, field: &str) -> Result<()> {
-    require_non_empty(&target.id, &format!("{field}.id"))?;
-    let expected_id = match (target.docker_platform, target.accelerator) {
-        (DockerPlatform::LinuxArm64, BenchmarkAccelerator::Cpu) => "linux-arm64-cpu",
-        (DockerPlatform::LinuxArm64, BenchmarkAccelerator::Gpu) => "linux-arm64-cuda",
-        (DockerPlatform::LinuxAmd64, _) => {
-            return Err(AppError::Validation(format!(
-                "{field}.docker_platform `linux/amd64` is reserved for post-MVP deployment support"
-            )));
-        }
-    };
-    if target.id != expected_id {
+fn validate_target(target: &ChallengeTargetSpec, field: &str) -> Result<()> {
+    if target.docker_platform == DockerPlatform::LinuxAmd64 {
         return Err(AppError::Validation(format!(
-            "{field}.id must be `{expected_id}` for docker_platform `{}` and accelerator `{}`",
-            target.docker_platform.as_str(),
-            target.accelerator.as_str()
+            "{field}.docker_platform `linux/amd64` is reserved for post-MVP deployment support"
         )));
     }
     validate_resource_profile(
@@ -522,10 +505,10 @@ fn validate_benchmark_target(target: &BenchmarkTargetSpec, field: &str) -> Resul
     )?;
 
     match target.accelerator {
-        BenchmarkAccelerator::Cpu => {
+        TargetAccelerator::Cpu => {
             validate_supported_target_images(target, SupportedTargetImage::Cpu, field)?
         }
-        BenchmarkAccelerator::Gpu => {
+        TargetAccelerator::Gpu => {
             let cuda_variant = validate_cuda_hardware(
                 target.resource_profile.hardware.as_ref(),
                 &format!("{field}.resource_profile.hardware"),
@@ -547,7 +530,7 @@ enum SupportedTargetImage<'a> {
 }
 
 fn validate_supported_target_images(
-    target: &BenchmarkTargetSpec,
+    target: &ChallengeTargetSpec,
     image_kind: SupportedTargetImage<'_>,
     field: &str,
 ) -> Result<()> {
@@ -639,7 +622,7 @@ fn parse_tagged_image_reference<'a>(
 fn require_supported_image_repository(
     repository: &str,
     supported_repositories: &[&str],
-    target_id: &str,
+    target: &str,
     field: &str,
 ) -> Result<()> {
     if supported_repositories.contains(&repository) {
@@ -647,7 +630,7 @@ fn require_supported_image_repository(
     }
     let supported = supported_repositories.join(", ");
     Err(AppError::Validation(format!(
-        "{field} must use a supported Agentics image repository for target `{target_id}`; supported repositories: {supported}"
+        "{field} must use a supported Agentics image repository for target `{target}`; supported repositories: {supported}"
     )))
 }
 
@@ -850,15 +833,12 @@ fn validate_execution(spec: &ChallengeBundleSpec) -> Result<()> {
             "execution must not declare both official_runs and official_prepare".to_string(),
         ));
     }
-    if spec
-        .benchmark_targets
-        .iter()
-        .any(|target| target.validation_enabled)
+    if spec.targets.iter().any(|target| target.validation_enabled)
         && spec.execution.validation_runs.is_none()
         && spec.execution.validation_prepare.is_none()
     {
         return Err(AppError::Validation(
-            "execution.validation_runs or execution.validation_prepare is required when any benchmark target has validation_enabled true"
+            "execution.validation_runs or execution.validation_prepare is required when any target has validation_enabled true"
                 .to_string(),
         ));
     }
@@ -1203,15 +1183,15 @@ mod tests {
     use std::path::Path;
 
     use crate::models::challenge::{
-        BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengeEligibilitySpec,
-        ChallengeEligibilityType, ChallengeExecutionSpec, ChallengePrepareSpec,
-        ChallengeResultDetailVisibility, ChallengeSolutionPublicationPolicy, ChallengeVisibility,
+        ChallengeBundleSpec, ChallengeEligibilitySpec, ChallengeEligibilityType,
+        ChallengeExecutionSpec, ChallengePrepareSpec, ChallengeResultDetailVisibility,
+        ChallengeSolutionPublicationPolicy, ChallengeTargetSpec, ChallengeVisibility,
         ChallengeVisibilitySpec, CommunitySpec, DatasetsSpec, DockerPlatform, HardwareProfileSpec,
         MetricDirection, MetricSchemaSpec, MetricVisibility, PrivateBenchmarkPolicy,
-        ResourceProfileSpec, ScorerSpec, SolutionSpec,
+        ResourceProfileSpec, ScorerSpec, SolutionSpec, TargetAccelerator,
     };
     use crate::models::evaluation::ScoreVisibility;
-    use crate::models::ids::ChallengeId;
+    use crate::models::ids::{ChallengeId, TargetName};
     use crate::zip_project::ZipProjectNetworkAccess;
 
     use super::{
@@ -1236,10 +1216,10 @@ mod tests {
                 command: vec!["python".to_string(), "scorer/run.py".to_string()],
                 result_file: "result.json".to_string(),
             },
-            benchmark_targets: vec![BenchmarkTargetSpec {
-                id: "linux-arm64-cpu".to_string(),
+            targets: vec![ChallengeTargetSpec {
+                name: target_name("linux-arm64-cpu"),
                 docker_platform: DockerPlatform::LinuxArm64,
-                accelerator: BenchmarkAccelerator::Cpu,
+                accelerator: TargetAccelerator::Cpu,
                 validation_enabled: true,
                 resource_profile: ResourceProfileSpec {
                     id: "agentics-cpu-small".to_string(),
@@ -1294,9 +1274,13 @@ mod tests {
         ChallengeId::try_new(value.to_string()).expect("test challenge id is valid")
     }
 
+    fn target_name(value: &str) -> TargetName {
+        TargetName::try_new(value.to_string()).expect("test target is valid")
+    }
+
     fn pin_images(spec: &mut ChallengeBundleSpec) {
         let digest = test_digest();
-        for target in &mut spec.benchmark_targets {
+        for target in &mut spec.targets {
             let image = format!("agentics-linux-arm64-cpu:ubuntu26.04-local@{digest}");
             target.resource_profile.solution_image = image.clone();
             target.resource_profile.solution_image_digest = Some(digest.clone());
@@ -1305,9 +1289,9 @@ mod tests {
         }
     }
 
-    fn use_cuda_target(target: &mut BenchmarkTargetSpec, cuda_variant: &str) {
-        target.id = "linux-arm64-cuda".to_string();
-        target.accelerator = BenchmarkAccelerator::Gpu;
+    fn use_cuda_target(target: &mut ChallengeTargetSpec, cuda_variant: &str) {
+        target.name = target_name("linux-arm64-cuda");
+        target.accelerator = TargetAccelerator::Gpu;
         target.resource_profile.hardware = Some(cuda_hardware());
         let image = format!("agentics-linux-arm64-cuda:{cuda_variant}-ubuntu24.04-local");
         target.resource_profile.solution_image = image.clone();
@@ -1349,29 +1333,28 @@ mod tests {
     }
 
     #[test]
-    fn benchmark_targets_are_required() {
+    fn targets_are_required() {
         let mut spec = base_spec();
-        spec.benchmark_targets.clear();
+        spec.targets.clear();
 
         let error = validate_challenge_bundle_spec(&spec).expect_err("empty targets should fail");
-        assert!(error.to_string().contains("benchmark_targets"));
+        assert!(error.to_string().contains("targets"));
     }
 
     #[test]
-    fn target_id_must_match_docker_platform() {
+    fn target_name_is_independent_from_docker_platform() {
         let mut spec = base_spec();
-        spec.benchmark_targets[0].id = "linux-arm64-cuda".to_string();
+        spec.targets[0].name = target_name("main");
 
-        let error =
-            validate_challenge_bundle_spec(&spec).expect_err("mismatched target should fail");
-        assert!(error.to_string().contains("docker_platform"));
+        validate_challenge_bundle_spec(&spec)
+            .expect("target name should not be coupled to docker platform");
     }
 
     #[test]
     fn amd64_targets_are_reserved_for_post_mvp() {
         let mut spec = base_spec();
-        spec.benchmark_targets[0].id = "linux-amd64-cpu".to_string();
-        spec.benchmark_targets[0].docker_platform = DockerPlatform::LinuxAmd64;
+        spec.targets[0].name = target_name("linux-amd64-cpu");
+        spec.targets[0].docker_platform = DockerPlatform::LinuxAmd64;
 
         let error = validate_challenge_bundle_spec(&spec)
             .expect_err("amd64 targets should be reserved for post-MVP");
@@ -1394,26 +1377,25 @@ mod tests {
     #[test]
     fn cuda_target_requires_cuda_hardware_metadata() {
         let mut spec = base_spec();
-        let target = &mut spec.benchmark_targets[0];
-        target.id = "linux-arm64-cuda".to_string();
-        target.accelerator = BenchmarkAccelerator::Gpu;
+        let target = &mut spec.targets[0];
+        target.name = target_name("linux-arm64-cuda");
+        target.accelerator = TargetAccelerator::Gpu;
 
         let error =
             validate_challenge_bundle_spec(&spec).expect_err("missing cuda hardware should fail");
         assert!(error.to_string().contains("hardware.kind"));
 
-        spec.benchmark_targets[0].resource_profile.hardware = Some(cuda_hardware());
+        spec.targets[0].resource_profile.hardware = Some(cuda_hardware());
         let image = "agentics-linux-arm64-cuda:cu130-ubuntu24.04-local".to_string();
-        spec.benchmark_targets[0].resource_profile.solution_image = image.clone();
-        spec.benchmark_targets[0].resource_profile.scorer_image = image;
+        spec.targets[0].resource_profile.solution_image = image.clone();
+        spec.targets[0].resource_profile.scorer_image = image;
         validate_challenge_bundle_spec(&spec).expect("cuda target should validate");
     }
 
     #[test]
     fn cpu_target_rejects_unsupported_image_repository() {
         let mut spec = base_spec();
-        spec.benchmark_targets[0].resource_profile.solution_image =
-            "python:3.12-slim-bookworm".to_string();
+        spec.targets[0].resource_profile.solution_image = "python:3.12-slim-bookworm".to_string();
 
         let error = validate_challenge_bundle_spec(&spec)
             .expect_err("unsupported image repository should fail");
@@ -1429,8 +1411,8 @@ mod tests {
     fn cpu_target_rejects_unsupported_image_tag() {
         let mut spec = base_spec();
         let image = "agentics-linux-arm64-cpu:bookworm".to_string();
-        spec.benchmark_targets[0].resource_profile.solution_image = image.clone();
-        spec.benchmark_targets[0].resource_profile.scorer_image = image;
+        spec.targets[0].resource_profile.solution_image = image.clone();
+        spec.targets[0].resource_profile.scorer_image = image;
 
         let error =
             validate_challenge_bundle_spec(&spec).expect_err("unsupported image tag should fail");
@@ -1441,7 +1423,7 @@ mod tests {
     #[test]
     fn cuda_target_accepts_matching_supported_image() {
         let mut spec = base_spec();
-        use_cuda_target(&mut spec.benchmark_targets[0], "cu130");
+        use_cuda_target(&mut spec.targets[0], "cu130");
 
         validate_challenge_bundle_spec(&spec).expect("matching cuda image should validate");
     }
@@ -1449,7 +1431,7 @@ mod tests {
     #[test]
     fn cuda_target_rejects_mismatched_image_variant() {
         let mut spec = base_spec();
-        use_cuda_target(&mut spec.benchmark_targets[0], "cu132");
+        use_cuda_target(&mut spec.targets[0], "cu132");
 
         let error = validate_challenge_bundle_spec(&spec)
             .expect_err("mismatched cuda image variant should fail");
@@ -1460,9 +1442,9 @@ mod tests {
     #[test]
     fn cuda_target_rejects_unsupported_cuda_variant() {
         let mut spec = base_spec();
-        let target = &mut spec.benchmark_targets[0];
-        target.id = "linux-arm64-cuda".to_string();
-        target.accelerator = BenchmarkAccelerator::Gpu;
+        let target = &mut spec.targets[0];
+        target.name = target_name("linux-arm64-cuda");
+        target.accelerator = TargetAccelerator::Gpu;
         target.resource_profile.hardware = Some(HardwareProfileSpec {
             cuda_variant: Some("cu129".to_string()),
             cuda_version: Some("12.9".to_string()),
@@ -1477,9 +1459,9 @@ mod tests {
     #[test]
     fn cuda_target_rejects_mismatched_cuda_version() {
         let mut spec = base_spec();
-        let target = &mut spec.benchmark_targets[0];
-        target.id = "linux-arm64-cuda".to_string();
-        target.accelerator = BenchmarkAccelerator::Gpu;
+        let target = &mut spec.targets[0];
+        target.name = target_name("linux-arm64-cuda");
+        target.accelerator = TargetAccelerator::Gpu;
         target.resource_profile.hardware = Some(HardwareProfileSpec {
             cuda_variant: Some("cu132".to_string()),
             cuda_version: Some("13.0".to_string()),
@@ -1514,9 +1496,8 @@ mod tests {
     fn image_digest_field_must_match_image_reference() {
         let mut spec = base_spec();
         pin_images(&mut spec);
-        spec.benchmark_targets[0]
-            .resource_profile
-            .solution_image_digest = Some(format!("sha256:{}", "b".repeat(64)));
+        spec.targets[0].resource_profile.solution_image_digest =
+            Some(format!("sha256:{}", "b".repeat(64)));
 
         let error =
             validate_challenge_bundle_spec(&spec).expect_err("mismatched digest should fail");
@@ -1555,11 +1536,11 @@ mod tests {
     fn validation_run_manifest_required_only_when_target_enables_validation() {
         let mut spec = base_spec();
         spec.execution.validation_runs = None;
-        spec.benchmark_targets[0].validation_enabled = false;
+        spec.targets[0].validation_enabled = false;
 
         assert!(validate_challenge_bundle_spec(&spec).is_ok());
 
-        spec.benchmark_targets[0].validation_enabled = true;
+        spec.targets[0].validation_enabled = true;
         let error = validate_challenge_bundle_spec(&spec)
             .expect_err("target validation should require run manifest");
         assert!(error.to_string().contains("execution.validation_runs"));

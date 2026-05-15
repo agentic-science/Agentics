@@ -6,14 +6,14 @@ use anyhow::{Context, Result, bail};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use shared::config::Config;
 use shared::models::challenge::{
-    BenchmarkTargetSpec, ChallengeBundleSpec, ChallengeDetailResponse,
+    ChallengeBundleSpec, ChallengeDetailResponse, ChallengeTargetSpec,
 };
 use shared::models::challenge_creation::{
     ChallengeCreationManifest, ChallengePrivateAssetKind, CreateChallengeDraftRequest,
     ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest, ValidateChallengeDraftRequest,
 };
 use shared::models::evaluation::{EvaluationJobPayload, ScoringMode};
-use shared::models::ids::ChallengeId;
+use shared::models::ids::{ChallengeId, SolutionSubmissionId, TargetName};
 use shared::models::request::CreateChallengeShortlistRevisionRequest;
 use shared::models::request::{CreateSolutionSubmissionRequest, RegisterAgentRequest};
 use shared::storage::{LocalStorage, Storage};
@@ -327,27 +327,27 @@ pub(crate) async fn submit(
 ) -> Result<String> {
     let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
     let challenge = client.get_challenge(&args.challenge_id).await?;
-    let target_ids = select_benchmark_targets(
+    let targets = select_targets(
         &challenge,
-        args.target.as_deref(),
+        args.target.as_ref(),
         args.all_targets,
         TargetSelectionMode::Official,
     )?;
     validate_parent_submission_scope(
         &client,
         &challenge.id,
-        &target_ids,
+        &targets,
         args.all_targets,
-        args.parent_solution_submission_id.as_deref(),
+        args.parent_solution_submission_id.as_ref(),
     )
     .await?;
 
     let package = package::package_solution_workspace(&args.dir)?;
-    let mut responses = Vec::with_capacity(target_ids.len());
-    for target_id in target_ids {
+    let mut responses = Vec::with_capacity(targets.len());
+    for target in targets {
         let request = create_solution_submission_request(
             challenge.id.clone(),
-            target_id.clone(),
+            target.clone(),
             &package,
             args.explanation.clone(),
             args.parent_solution_submission_id.clone(),
@@ -361,7 +361,7 @@ pub(crate) async fn submit(
                     &responses,
                     Some(&package),
                     output_format,
-                    &target_id,
+                    &target,
                     error,
                 ));
             }
@@ -390,27 +390,27 @@ async fn validate_remote(
 ) -> Result<String> {
     let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
     let challenge = client.get_challenge(&args.challenge_id).await?;
-    let target_ids = select_benchmark_targets(
+    let targets = select_targets(
         &challenge,
-        args.target.as_deref(),
+        args.target.as_ref(),
         args.all_targets,
         TargetSelectionMode::Validation,
     )?;
     validate_parent_submission_scope(
         &client,
         &challenge.id,
-        &target_ids,
+        &targets,
         args.all_targets,
-        args.parent_solution_submission_id.as_deref(),
+        args.parent_solution_submission_id.as_ref(),
     )
     .await?;
 
     let package = package::package_solution_workspace(&args.dir)?;
-    let mut responses = Vec::with_capacity(target_ids.len());
-    for target_id in target_ids {
+    let mut responses = Vec::with_capacity(targets.len());
+    for target in targets {
         let request = create_solution_submission_request(
             challenge.id.clone(),
-            target_id.clone(),
+            target.clone(),
             &package,
             args.explanation.clone(),
             args.parent_solution_submission_id.clone(),
@@ -424,7 +424,7 @@ async fn validate_remote(
                     &responses,
                     Some(&package),
                     output_format,
-                    &target_id,
+                    &target,
                     error,
                 ));
             }
@@ -449,7 +449,7 @@ async fn validate_remote(
                 return Err(batch_status_error(
                     &final_responses,
                     output_format,
-                    &response.benchmark_target_id,
+                    &response.target,
                     error,
                 ));
             }
@@ -462,11 +462,7 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
     if args.no_wait {
         bail!("--no-wait can only be used with --remote validation");
     }
-    if args
-        .parent_solution_submission_id
-        .as_deref()
-        .is_some_and(|value| !value.trim().is_empty())
-    {
+    if args.parent_solution_submission_id.is_some() {
         bail!("--parent-solution-submission-id can only be used with --remote validation");
     }
 
@@ -484,10 +480,10 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
         );
     }
 
-    let target_ids = select_benchmark_targets_from_spec(
+    let targets = select_targets_from_spec(
         &spec.challenge_id,
         &spec,
-        args.target.as_deref(),
+        args.target.as_ref(),
         args.all_targets,
         TargetSelectionMode::Validation,
     )?;
@@ -528,9 +524,9 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
         uncompressed_bytes: package.uncompressed_bytes,
         zip_bytes: package.bytes.len(),
     };
-    let mut target_reports = Vec::with_capacity(target_ids.len());
-    for target_id in target_ids {
-        let job_id = local_validation_job_id(&spec.challenge_id, &target_id)?;
+    let mut target_reports = Vec::with_capacity(targets.len());
+    for target in targets {
+        let job_id = local_validation_job_id(&spec.challenge_id, &target)?;
         let artifact_path = storage
             .put(
                 &format!("local-validation/{job_id}/solution.zip"),
@@ -541,7 +537,7 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
             artifact_path,
             bundle_path: bundle_dir.to_string_lossy().to_string(),
             challenge_id: spec.challenge_id.clone(),
-            benchmark_target_id: target_id.clone(),
+            target: target.clone(),
         };
         let log_path = storage_root.join(runner_log_key(&job_id));
         match shared::runner::execute_evaluation_job(
@@ -555,7 +551,7 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
         .await
         {
             Ok(execution) => target_reports.push(output::LocalValidationTargetReport {
-                benchmark_target_id: target_id,
+                target,
                 log_path,
                 result: execution.result,
             }),
@@ -568,7 +564,7 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
                         package: &package_report,
                         completed_targets: &target_reports,
                         output_format,
-                        failed_target_id: &target_id,
+                        failed_target: &target,
                         log_path: &log_path,
                     },
                     error.into(),
@@ -595,7 +591,7 @@ struct LocalValidationErrorContext<'a> {
     package: &'a output::LocalValidationPackageReport,
     completed_targets: &'a [output::LocalValidationTargetReport],
     output_format: cli::OutputFormat,
-    failed_target_id: &'a str,
+    failed_target: &'a TargetName,
     log_path: &'a Path,
 }
 
@@ -619,7 +615,7 @@ fn local_validation_error(
     };
     anyhow::anyhow!(
         "{completed}local validation failed for target `{}`: {error}\nlog: {}",
-        context.failed_target_id,
+        context.failed_target,
         context.log_path.display()
     )
 }
@@ -650,14 +646,14 @@ fn resolve_local_storage_dir(configured: Option<&Path>) -> Result<PathBuf> {
     Ok(cache_dir.join("agentics").join("local-validation"))
 }
 
-fn local_validation_job_id(challenge_id: &ChallengeId, target_id: &str) -> Result<String> {
+fn local_validation_job_id(challenge_id: &ChallengeId, target: &TargetName) -> Result<String> {
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .context("system clock is before UNIX_EPOCH")?;
     Ok(format!(
         "local-{}-{}-{}-{}",
         sanitize_identifier_component(challenge_id.as_str()),
-        sanitize_identifier_component(target_id),
+        sanitize_identifier_component(target.as_str()),
         std::process::id(),
         timestamp.as_nanos()
     ))
@@ -692,20 +688,17 @@ fn runner_log_key(job_id: &str) -> PathBuf {
 async fn validate_parent_submission_scope(
     client: &ApiClient,
     challenge_id: &ChallengeId,
-    target_ids: &[String],
+    targets: &[TargetName],
     all_targets: bool,
-    parent_solution_submission_id: Option<&str>,
+    parent_solution_submission_id: Option<&SolutionSubmissionId>,
 ) -> Result<()> {
-    let Some(parent_solution_submission_id) = parent_solution_submission_id
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    else {
+    let Some(parent_solution_submission_id) = parent_solution_submission_id else {
         return Ok(());
     };
     if all_targets {
         bail!("--parent-solution-submission-id cannot be used with --all-targets");
     }
-    let [target_id] = target_ids else {
+    let [target] = targets else {
         bail!("--parent-solution-submission-id requires exactly one selected target");
     };
     let parent = client
@@ -716,9 +709,9 @@ async fn validate_parent_submission_scope(
                 "failed to inspect parent solution submission `{parent_solution_submission_id}`"
             )
         })?;
-    if &parent.challenge_id != challenge_id || parent.benchmark_target_id != target_id.as_str() {
+    if &parent.challenge_id != challenge_id || parent.target != *target {
         bail!(
-            "parent solution submission `{parent_solution_submission_id}` must belong to challenge `{challenge_id}` target `{target_id}`"
+            "parent solution submission `{parent_solution_submission_id}` must belong to challenge `{challenge_id}` target `{target}`"
         );
     }
     Ok(())
@@ -729,7 +722,7 @@ fn batch_error_with_created_ids(
     responses: &[shared::models::request::CreateSolutionSubmissionResponse],
     package: Option<&package::SolutionPackage>,
     output_format: cli::OutputFormat,
-    failed_target_id: &str,
+    failed_target: &TargetName,
     error: anyhow::Error,
 ) -> anyhow::Error {
     let created = package
@@ -743,10 +736,10 @@ fn batch_error_with_created_ids(
         })
         .unwrap_or_default();
     if created.is_empty() {
-        anyhow::anyhow!("{action} failed for target `{failed_target_id}`: {error}")
+        anyhow::anyhow!("{action} failed for target `{failed_target}`: {error}")
     } else {
         anyhow::anyhow!(
-            "{created}\n{action} failed for target `{failed_target_id}` after creating the submissions above: {error}"
+            "{created}\n{action} failed for target `{failed_target}` after creating the submissions above: {error}"
         )
     }
 }
@@ -754,16 +747,16 @@ fn batch_error_with_created_ids(
 fn batch_status_error(
     responses: &[shared::models::request::SolutionSubmissionResponse],
     output_format: cli::OutputFormat,
-    failed_target_id: &str,
+    failed_target: &TargetName,
     error: anyhow::Error,
 ) -> anyhow::Error {
     let completed =
         output::render_validation_run_status_batch(responses, output_format).unwrap_or_default();
     if completed.is_empty() {
-        anyhow::anyhow!("validation polling failed for target `{failed_target_id}`: {error}")
+        anyhow::anyhow!("validation polling failed for target `{failed_target}`: {error}")
     } else {
         anyhow::anyhow!(
-            "{completed}\nvalidation polling failed for target `{failed_target_id}` after receiving the completed runs above: {error}"
+            "{completed}\nvalidation polling failed for target `{failed_target}` after receiving the completed runs above: {error}"
         )
     }
 }
@@ -777,15 +770,15 @@ fn parse_model_info(raw: &str) -> Result<serde_json::Value> {
 
 fn create_solution_submission_request(
     challenge_id: ChallengeId,
-    benchmark_target_id: String,
+    target: TargetName,
     package: &package::SolutionPackage,
     explanation: String,
-    parent_solution_submission_id: Option<String>,
+    parent_solution_submission_id: Option<SolutionSubmissionId>,
     credit_text: String,
 ) -> CreateSolutionSubmissionRequest {
     CreateSolutionSubmissionRequest {
         challenge_id,
-        benchmark_target_id,
+        target,
         artifact_base64: STANDARD.encode(&package.bytes),
         explanation,
         parent_solution_submission_id,
@@ -799,13 +792,13 @@ enum TargetSelectionMode {
     Validation,
 }
 
-fn select_benchmark_targets(
+fn select_targets(
     challenge: &ChallengeDetailResponse,
-    requested_target: Option<&str>,
+    requested_target: Option<&TargetName>,
     all_targets: bool,
     mode: TargetSelectionMode,
-) -> Result<Vec<String>> {
-    select_benchmark_targets_from_spec(
+) -> Result<Vec<TargetName>> {
+    select_targets_from_spec(
         &challenge.id,
         &challenge.spec,
         requested_target,
@@ -814,46 +807,40 @@ fn select_benchmark_targets(
     )
 }
 
-fn select_benchmark_targets_from_spec(
+fn select_targets_from_spec(
     challenge_id: &ChallengeId,
     spec: &ChallengeBundleSpec,
-    requested_target: Option<&str>,
+    requested_target: Option<&TargetName>,
     all_targets: bool,
     mode: TargetSelectionMode,
-) -> Result<Vec<String>> {
+) -> Result<Vec<TargetName>> {
     if all_targets {
-        let targets = spec.benchmark_targets.iter().collect::<Vec<_>>();
+        let targets = spec.targets.iter().collect::<Vec<_>>();
         validate_selected_targets(challenge_id, &targets, mode)?;
-        return Ok(targets.iter().map(|target| target.id.clone()).collect());
+        return Ok(targets.iter().map(|target| target.name.clone()).collect());
     }
 
-    if let Some(target_id) = requested_target
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
-        let target = spec.benchmark_target(target_id).ok_or_else(|| {
+    if let Some(target) = requested_target {
+        let target = spec.target(target).ok_or_else(|| {
             anyhow::anyhow!(
-                "challenge `{}` does not support benchmark target `{target_id}`",
+                "challenge `{}` does not support target `{target}`",
                 challenge_id
             )
         })?;
         validate_selected_targets(challenge_id, &[target], mode)?;
-        return Ok(vec![target.id.clone()]);
+        return Ok(vec![target.name.clone()]);
     }
 
-    match spec.benchmark_targets.as_slice() {
-        [] => bail!(
-            "challenge `{}` does not declare any benchmark targets",
-            challenge_id
-        ),
+    match spec.targets.as_slice() {
+        [] => bail!("challenge `{}` does not declare any targets", challenge_id),
         targets => {
             let available = targets
                 .iter()
-                .map(|target| target.id.as_str())
+                .map(|target| target.name.as_str())
                 .collect::<Vec<_>>()
                 .join(", ");
             bail!(
-                "benchmark target is required for challenge `{}`; pass --target <target-id> or --all-targets. Available targets: {available}",
+                "target is required for challenge `{}`; pass --target <target> or --all-targets. Available targets: {available}",
                 challenge_id
             )
         }
@@ -862,7 +849,7 @@ fn select_benchmark_targets_from_spec(
 
 fn validate_selected_targets(
     challenge_id: &ChallengeId,
-    targets: &[&BenchmarkTargetSpec],
+    targets: &[&ChallengeTargetSpec],
     mode: TargetSelectionMode,
 ) -> Result<()> {
     if mode != TargetSelectionMode::Validation {
@@ -872,7 +859,7 @@ fn validate_selected_targets(
     let disabled = targets
         .iter()
         .filter(|target| !target.validation_enabled)
-        .map(|target| target.id.as_str())
+        .map(|target| target.name.as_str())
         .collect::<Vec<_>>();
     if disabled.is_empty() {
         return Ok(());
@@ -887,7 +874,7 @@ fn validate_selected_targets(
 
 async fn poll_validation_run(
     client: &ApiClient,
-    validation_run_id: &str,
+    validation_run_id: &SolutionSubmissionId,
     poll_interval: Duration,
     timeout: Duration,
 ) -> Result<shared::models::request::SolutionSubmissionResponse> {
@@ -908,7 +895,7 @@ async fn poll_validation_run(
 
 pub(crate) async fn wait_for_solution_submission(
     client: &ApiClient,
-    solution_submission_id: &str,
+    solution_submission_id: &SolutionSubmissionId,
     poll_interval: Duration,
     timeout: Duration,
 ) -> Result<shared::models::request::SolutionSubmissionResponse> {

@@ -4,7 +4,9 @@ use std::path::PathBuf;
 
 use sqlx::{PgPool, Row};
 
+use super::ids::solution_submission_id_from_row;
 use crate::error::{AppError, Result};
+use crate::models::ids::SolutionSubmissionId;
 use crate::models::request::AdminServiceHeartbeatDto;
 
 /// JSON payload stored with each service heartbeat.
@@ -17,7 +19,7 @@ pub struct HeartbeatPayload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub job_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub solution_submission_id: Option<String>,
+    pub solution_submission_id: Option<SolutionSubmissionId>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_completed_job_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -207,7 +209,8 @@ pub async fn reap_stuck_jobs(pool: &PgPool, timeout_minutes: i32) -> Result<Stal
 
     for row in &failed_jobs {
         let job_id: String = row.try_get("id")?;
-        let solution_submission_id: String = row.try_get("solution_submission_id")?;
+        let solution_submission_id =
+            solution_submission_id_from_row(row, "solution_submission_id")?;
         sqlx::query(
             r#"
             UPDATE evaluations
@@ -228,9 +231,9 @@ pub async fn reap_stuck_jobs(pool: &PgPool, timeout_minutes: i32) -> Result<Stal
                 visible_after_eval = FALSE,
                 updated_at = NOW()
             WHERE id = $1
-            "#,
+        "#,
         )
-        .bind(&solution_submission_id)
+        .bind(solution_submission_id.as_str())
         .execute(&mut *tx)
         .await?;
     }

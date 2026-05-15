@@ -241,7 +241,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
     .await
     .expect("creator stats json");
     assert_eq!(stats["challenge_id"], "sample-sum");
-    assert_eq!(stats["benchmark_target_id"], "linux-arm64-cpu");
+    assert_eq!(stats["target"], "linux-arm64-cpu");
     assert_eq!(stats["solution_submission_count"], 0);
 
     let participants: serde_json::Value = creator_auth(
@@ -473,7 +473,7 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
         .header("Authorization", participant_bearer)
         .json(&json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "linux-arm64-cpu",
+            "target": "linux-arm64-cpu",
             "artifact_base64": solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"))
         }))
         .send()
@@ -1067,9 +1067,9 @@ fn write_public_challenge(repo: &Path) {
                 "command": ["python", "scorer/run.py"],
                 "result_file": "result.json"
             },
-            "benchmark_targets": [
+            "targets": [
                 {
-                    "id": "linux-arm64-cpu",
+                    "name": "linux-arm64-cpu",
                     "docker_platform": "linux/arm64",
                     "accelerator": "cpu",
                     "validation_enabled": true,

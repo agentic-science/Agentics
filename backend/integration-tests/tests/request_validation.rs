@@ -105,7 +105,7 @@ async fn zip_submission_routes_accept_declared_large_json_bodies(pool: sqlx::PgP
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "missing-challenge",
-            "benchmark_target_id": "linux-arm64-cpu",
+            "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64
         }))
         .send()
@@ -137,12 +137,37 @@ async fn solution_submission_rejects_invalid_target_before_artifact_decode(pool:
         .expect("failed to decode register response");
     let token = register_response["token"].as_str().expect("missing token");
 
+    let malformed_response = client
+        .post(helpers::api_url(&app, "/api/solution-submissions"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "challenge_id": "sample-sum",
+            "target": "linux arm64",
+            "artifact_base64": "not-base64"
+        }))
+        .send()
+        .await
+        .expect("failed to send malformed-target submission");
+    assert_eq!(malformed_response.status(), 400);
+
+    let malformed_error: serde_json::Value = malformed_response
+        .json()
+        .await
+        .expect("failed to decode malformed-target error");
+    assert_eq!(malformed_error["error"], "bad_request");
+    assert!(
+        malformed_error["message"]
+            .as_str()
+            .expect("error message")
+            .contains("target")
+    );
+
     let response = client
         .post(helpers::api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "cpu-linux-ppc64le",
+            "target": "cpu-linux-ppc64le",
             "artifact_base64": "not-base64"
         }))
         .send()
@@ -156,7 +181,7 @@ async fn solution_submission_rejects_invalid_target_before_artifact_decode(pool:
         error["message"]
             .as_str()
             .expect("error message")
-            .contains("benchmark target")
+            .contains("target")
     );
 
     let solution_submission_count: (i64,) =
@@ -165,6 +190,32 @@ async fn solution_submission_rejects_invalid_target_before_artifact_decode(pool:
             .await
             .expect("failed to query solution submission count");
     assert_eq!(solution_submission_count.0, 0);
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn invalid_solution_submission_path_ids_return_bad_request(pool: sqlx::PgPool) {
+    let app = helpers::spawn_app(pool).await;
+    let client = reqwest::Client::new();
+
+    for path in [
+        "/api/solution-submissions/not-a-uuid",
+        "/api/solution-submissions/not-a-uuid/logs",
+    ] {
+        let response = client
+            .get(helpers::api_url(&app, path))
+            .send()
+            .await
+            .expect("failed to send invalid path-id request");
+        assert_eq!(response.status(), 400);
+        let error: serde_json::Value = response.json().await.expect("failed to decode error");
+        assert_eq!(error["error"], "bad_request");
+        assert!(
+            error["message"]
+                .as_str()
+                .expect("error message")
+                .contains("solution_submission_id")
+        );
+    }
 }
 
 #[sqlx::test(migrations = "../migrations")]
@@ -190,7 +241,7 @@ async fn solution_submission_rejects_legacy_round_field_before_artifact_decode(p
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "linux-arm64-cpu",
+            "target": "linux-arm64-cpu",
             "artifact_base64": "not-base64"
         }))
         .send()
@@ -204,7 +255,7 @@ async fn solution_submission_rejects_legacy_round_field_before_artifact_decode(p
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
             "round_id": "missing-round",
-            "benchmark_target_id": "linux-arm64-cpu",
+            "target": "linux-arm64-cpu",
             "artifact_base64": "not-base64"
         }))
         .send()
@@ -228,7 +279,7 @@ async fn solution_submission_rejects_legacy_round_field_before_artifact_decode(p
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
             "round_id": "Main Round!",
-            "benchmark_target_id": "linux-arm64-cpu",
+            "target": "linux-arm64-cpu",
             "artifact_base64": "not-base64"
         }))
         .send()
@@ -296,7 +347,7 @@ async fn solution_submission_rejects_unstarted_and_closed_challenges_before_arti
             .header("Authorization", format!("Bearer {token}"))
             .json(&serde_json::json!({
                 "challenge_id": challenge_id,
-                "benchmark_target_id": "linux-arm64-cpu",
+                "target": "linux-arm64-cpu",
                 "artifact_base64": "not-base64"
             }))
             .send()
@@ -615,7 +666,7 @@ async fn submit_solution_with_target(
     app: &helpers::TestApp,
     token: &str,
     challenge_id: &str,
-    benchmark_target_id: &str,
+    target: &str,
     artifact_base64: &str,
 ) -> reqwest::Response {
     client
@@ -623,7 +674,7 @@ async fn submit_solution_with_target(
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": challenge_id,
-            "benchmark_target_id": benchmark_target_id,
+            "target": target,
             "artifact_base64": artifact_base64
         }))
         .send()

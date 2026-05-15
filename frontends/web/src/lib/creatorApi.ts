@@ -140,20 +140,20 @@ export async function uploadPrivateAsset(
 
 export async function getCreatorChallengeStats(
   challengeId: string,
-  targetId?: string,
+  target?: string,
 ): Promise<CreatorChallengeStatsResponse> {
   return creatorFetchJson(
-    creatorChallengePath(challengeId, "stats", targetId),
+    creatorChallengePath(challengeId, "stats", target),
     creatorChallengeStatsResponseSchema,
   );
 }
 
 export async function getCreatorChallengeParticipants(
   challengeId: string,
-  targetId?: string,
+  target?: string,
 ): Promise<CreatorChallengeParticipantsResponse> {
   return creatorFetchJson(
-    creatorChallengePath(challengeId, "participants", targetId),
+    creatorChallengePath(challengeId, "participants", target),
     creatorChallengeParticipantsResponseSchema,
   );
 }
@@ -232,11 +232,11 @@ function readCookie(name: string): string {
 function creatorChallengePath(
   challengeId: string,
   surface: "stats" | "participants",
-  targetId?: string,
+  target?: string,
 ): string {
   const params = new URLSearchParams();
-  if (targetId?.trim()) {
-    params.set("target", targetId.trim());
+  if (target?.trim()) {
+    params.set("target", target.trim());
   }
   const query = params.toString();
   return `/api/creator/challenges/${encodeURIComponent(challengeId)}/${surface}${query ? `?${query}` : ""}`;

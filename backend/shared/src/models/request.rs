@@ -7,7 +7,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::evaluation::{EvaluationJobDto, MetricValue};
-use super::ids::ChallengeId;
+use super::ids::{ChallengeId, SolutionSubmissionId, TargetName};
 
 /// Agent registration payload accepted by the public API.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
@@ -36,12 +36,12 @@ pub struct RegisterAgentResponse {
 #[serde(deny_unknown_fields)]
 pub struct CreateSolutionSubmissionRequest {
     pub challenge_id: ChallengeId,
-    pub benchmark_target_id: String,
+    pub target: TargetName,
     pub artifact_base64: String,
     #[serde(default)]
     pub explanation: String,
     #[serde(default)]
-    pub parent_solution_submission_id: Option<String>,
+    pub parent_solution_submission_id: Option<SolutionSubmissionId>,
     #[serde(default)]
     pub credit_text: String,
 }
@@ -49,10 +49,10 @@ pub struct CreateSolutionSubmissionRequest {
 /// Response returned after a solution submission is accepted and queued.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct CreateSolutionSubmissionResponse {
-    pub id: String,
+    pub id: SolutionSubmissionId,
     pub status: String,
     pub challenge_id: ChallengeId,
-    pub benchmark_target_id: String,
+    pub target: TargetName,
     pub artifact_path: String,
     pub evaluation_job_id: String,
     pub created_at: String,
@@ -61,18 +61,18 @@ pub struct CreateSolutionSubmissionResponse {
 /// Solution submission detail DTO used by both public and authenticated routes.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct SolutionSubmissionResponse {
-    pub id: String,
+    pub id: SolutionSubmissionId,
     pub challenge_id: ChallengeId,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub challenge_title: Option<String>,
-    pub benchmark_target_id: String,
+    pub target: TargetName,
     pub agent_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_name: Option<String>,
     pub status: String,
     pub explanation: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub parent_solution_submission_id: Option<String>,
+    pub parent_solution_submission_id: Option<SolutionSubmissionId>,
     pub credit_text: String,
     pub visible_after_eval: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -92,16 +92,16 @@ pub struct SolutionSubmissionResponse {
 /// One row in a public challenge solution submission list.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct PublicSolutionSubmissionListItemDto {
-    pub id: String,
+    pub id: SolutionSubmissionId,
     pub challenge_id: ChallengeId,
-    pub benchmark_target_id: String,
+    pub target: TargetName,
     pub challenge_title: String,
     pub agent_id: String,
     pub agent_name: String,
     pub status: String,
     pub explanation: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub parent_solution_submission_id: Option<String>,
+    pub parent_solution_submission_id: Option<SolutionSubmissionId>,
     pub credit_text: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub validation_score: Option<f64>,
@@ -147,10 +147,10 @@ pub struct SolutionSubmissionArtifactResponse {
 /// One leaderboard row for an agent's best solution submission.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct LeaderboardEntryDto {
-    pub benchmark_target_id: String,
+    pub target: TargetName,
     pub agent_id: String,
     pub agent_name: String,
-    pub best_solution_submission_id: String,
+    pub best_solution_submission_id: SolutionSubmissionId,
     pub best_rank_score: f64,
     pub rank_score: f64,
     pub aggregate_metrics: Vec<MetricValue>,
@@ -164,7 +164,7 @@ pub struct LeaderboardEntryDto {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct LeaderboardResponse {
     pub challenge_id: ChallengeId,
-    pub benchmark_target_id: String,
+    pub target: TargetName,
     pub items: Vec<LeaderboardEntryDto>,
 }
 
@@ -179,8 +179,8 @@ pub struct RankedLeaderboardEntryDto {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct RankingContextResponse {
     pub challenge_id: ChallengeId,
-    pub benchmark_target_id: String,
-    pub solution_submission_id: String,
+    pub target: TargetName,
+    pub solution_submission_id: SolutionSubmissionId,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rank: Option<i64>,
     pub total_ranked: i64,
@@ -217,7 +217,7 @@ pub struct ScoreDistributionBucketDto {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ScoreDistributionResponse {
     pub challenge_id: ChallengeId,
-    pub benchmark_target_id: String,
+    pub target: TargetName,
     pub metric_id: String,
     pub count: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -230,12 +230,12 @@ pub struct ScoreDistributionResponse {
     pub histogram: Vec<ScoreDistributionBucketDto>,
 }
 
-/// Challenge-owner statistics for one challenge and optional benchmark target.
+/// Challenge-owner statistics for one challenge and optional target.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct CreatorChallengeStatsResponse {
     pub challenge_id: ChallengeId,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub benchmark_target_id: Option<String>,
+    pub target: Option<TargetName>,
     pub agent_count: i64,
     pub solution_submission_count: i64,
     pub completed_solution_submission_count: i64,
@@ -263,7 +263,7 @@ pub struct CreatorChallengeParticipantDto {
     pub agent_name: String,
     pub solution_submission_count: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub best_solution_submission_id: Option<String>,
+    pub best_solution_submission_id: Option<SolutionSubmissionId>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub best_rank_score: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -277,7 +277,7 @@ pub struct CreatorChallengeParticipantDto {
 pub struct CreatorChallengeParticipantsResponse {
     pub challenge_id: ChallengeId,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub benchmark_target_id: Option<String>,
+    pub target: Option<TargetName>,
     pub items: Vec<CreatorChallengeParticipantDto>,
 }
 
@@ -320,7 +320,7 @@ pub struct ChallengeShortlistResponse {
 /// Logs associated with a solution submission.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct SolutionSubmissionLogsResponse {
-    pub solution_submission_id: String,
+    pub solution_submission_id: SolutionSubmissionId,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub log_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -361,10 +361,10 @@ pub struct DiscussionListResponse {
 /// One solution submission row in the admin operations console.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct AdminSolutionSubmissionListItemDto {
-    pub id: String,
+    pub id: SolutionSubmissionId,
     pub challenge_id: ChallengeId,
     pub challenge_title: String,
-    pub benchmark_target_id: String,
+    pub target: TargetName,
     pub agent_id: String,
     pub agent_name: String,
     pub status: String,
@@ -441,8 +441,8 @@ pub struct PublishChallengeRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct EvaluationJobResponse {
     pub job_id: String,
-    pub solution_submission_id: String,
-    pub benchmark_target_id: String,
+    pub solution_submission_id: SolutionSubmissionId,
+    pub target: TargetName,
     pub eval_type: String,
     pub status: String,
 }
@@ -450,7 +450,7 @@ pub struct EvaluationJobResponse {
 /// Admin response returned after toggling solution submission visibility.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct HideSolutionSubmissionResponse {
-    pub id: String,
+    pub id: SolutionSubmissionId,
     pub hidden: bool,
 }
 

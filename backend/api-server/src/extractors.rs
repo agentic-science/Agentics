@@ -1,6 +1,6 @@
 use axum::{
     Json,
-    extract::{FromRequest, FromRequestParts, Request},
+    extract::{FromRequest, FromRequestParts, Path, Request},
     http::{Method, StatusCode, header, request::Parts},
 };
 use serde::de::DeserializeOwned;
@@ -14,6 +14,7 @@ use shared::models::challenge_creation::{
     CreateChallengeDraftRequest, ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest,
     ValidateChallengeDraftRequest,
 };
+use shared::models::ids::SolutionSubmissionId;
 use shared::models::request::{
     CreateChallengeRequest, CreateChallengeShortlistRevisionRequest, CreateDiscussionReplyRequest,
     CreateDiscussionThreadRequest, CreateSolutionSubmissionRequest, PublishChallengeRequest,
@@ -21,6 +22,28 @@ use shared::models::request::{
 };
 
 use crate::state::AppState;
+
+/// Validated solution-submission id extracted from a route path.
+///
+/// Put this extractor before authentication extractors in handler signatures when
+/// malformed ids should fail before auth and database lookup.
+#[derive(Debug, Clone)]
+pub struct SolutionSubmissionPath(pub SolutionSubmissionId);
+
+impl FromRequestParts<AppState> for SolutionSubmissionPath {
+    type Rejection = (StatusCode, Json<shared::models::ErrorResponse>);
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let Path(raw) = Path::<String>::from_request_parts(parts, state)
+            .await
+            .map_err(|_| bad_request("solution_submission_id path parameter is required"))?;
+        let id = SolutionSubmissionId::try_new(raw).map_err(|e| bad_request(&e.to_string()))?;
+        Ok(Self(id))
+    }
+}
 
 /// Authenticated agent context extracted from a bearer token.
 ///
@@ -322,8 +345,6 @@ impl ValidateRequest for ReviewChallengeDraftRequest {
 
 impl ValidateRequest for CreateSolutionSubmissionRequest {
     fn validate(&self) -> Result<(), String> {
-        require_non_empty(&self.challenge_id, "challenge_id")?;
-        require_non_empty(&self.benchmark_target_id, "benchmark_target_id")?;
         require_non_empty(&self.artifact_base64, "artifact_base64")
     }
 }

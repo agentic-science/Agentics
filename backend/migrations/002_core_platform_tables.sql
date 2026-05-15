@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS challenge_shortlisted_agents (
 CREATE TABLE IF NOT EXISTS solution_submissions (
   id TEXT PRIMARY KEY,
   challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE RESTRICT,
-  benchmark_target_id TEXT NOT NULL,
+  target TEXT NOT NULL,
   agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
   artifact_path TEXT NOT NULL,
   language TEXT NOT NULL,
@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS evaluation_jobs (
   id TEXT PRIMARY KEY,
   solution_submission_id TEXT NOT NULL REFERENCES solution_submissions(id) ON DELETE CASCADE,
   challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE RESTRICT,
-  benchmark_target_id TEXT NOT NULL,
+  target TEXT NOT NULL,
   eval_type TEXT NOT NULL CHECK (eval_type IN ('validation', 'official')),
   status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'completed', 'failed')),
   priority INTEGER NOT NULL DEFAULT 0,
@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS evaluations (
   id TEXT PRIMARY KEY,
   solution_submission_id TEXT NOT NULL REFERENCES solution_submissions(id) ON DELETE CASCADE,
   job_id TEXT NOT NULL REFERENCES evaluation_jobs(id) ON DELETE CASCADE UNIQUE,
-  benchmark_target_id TEXT NOT NULL,
+  target TEXT NOT NULL,
   eval_type TEXT NOT NULL CHECK (eval_type IN ('validation', 'official')),
   status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'completed', 'failed')),
   primary_score DOUBLE PRECISION,
@@ -128,7 +128,7 @@ CREATE TABLE IF NOT EXISTS evaluations (
 
 CREATE TABLE IF NOT EXISTS leaderboard_entries (
   challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
-  benchmark_target_id TEXT NOT NULL,
+  target TEXT NOT NULL,
   agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
   best_solution_submission_id TEXT NOT NULL REFERENCES solution_submissions(id) ON DELETE CASCADE,
   best_rank_score DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -137,7 +137,7 @@ CREATE TABLE IF NOT EXISTS leaderboard_entries (
   official_score DOUBLE PRECISION,
   official_metrics_json JSONB NOT NULL DEFAULT '[]'::jsonb,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (challenge_id, benchmark_target_id, agent_id)
+  PRIMARY KEY (challenge_id, target, agent_id)
 );
 
 CREATE TABLE IF NOT EXISTS discussion_threads (
@@ -164,7 +164,7 @@ CREATE INDEX IF NOT EXISTS idx_challenge_owners_agent_id ON challenge_owners (ag
 CREATE INDEX IF NOT EXISTS idx_challenge_shortlist_revisions_challenge_id ON challenge_shortlist_revisions (challenge_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_challenge_shortlisted_agents_agent_id ON challenge_shortlisted_agents (agent_id, challenge_id);
 CREATE INDEX IF NOT EXISTS idx_solution_submissions_challenge_target_agent
-  ON solution_submissions (challenge_id, benchmark_target_id, agent_id, created_at DESC);
+  ON solution_submissions (challenge_id, target, agent_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_evaluation_jobs_status_scheduled ON evaluation_jobs (status, scheduled_at, priority DESC);
 CREATE INDEX IF NOT EXISTS idx_evaluation_jobs_solution_submission_id ON evaluation_jobs (solution_submission_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_evaluation_jobs_one_active_per_submission_mode

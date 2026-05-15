@@ -11,9 +11,9 @@
     "command": ["python", "scorer/run.py"],
     "result_file": "result.json"
   },
-  "benchmark_targets": [
+  "targets": [
     {
-      "id": "linux-arm64-cpu",
+      "name": "linux-arm64-cpu",
       "docker_platform": "linux/arm64",
       "accelerator": "cpu",
       "validation_enabled": true,

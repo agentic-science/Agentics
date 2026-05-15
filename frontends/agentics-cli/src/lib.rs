@@ -90,7 +90,7 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
             } => {
                 let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
                 let response = client
-                    .get_creator_challenge_stats(&challenge_id, target.as_deref())
+                    .get_creator_challenge_stats(&challenge_id, target.as_ref())
                     .await?;
                 output::render_creator_challenge_stats(&response, cli.output)
             }
@@ -100,7 +100,7 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
             } => {
                 let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
                 let response = client
-                    .get_creator_challenge_participants(&challenge_id, target.as_deref())
+                    .get_creator_challenge_participants(&challenge_id, target.as_ref())
                     .await?;
                 output::render_creator_challenge_participants(&response, cli.output)
             }
@@ -152,9 +152,9 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
                     target,
                 } => {
                     let challenge_detail = client.get_challenge(&challenge).await?;
-                    if challenge_detail.spec.benchmark_target(&target).is_none() {
+                    if challenge_detail.spec.target(&target).is_none() {
                         anyhow::bail!(
-                            "challenge `{}` does not support benchmark target `{target}`",
+                            "challenge `{}` does not support target `{target}`",
                             challenge_detail.id
                         );
                     }
@@ -372,11 +372,11 @@ mod tests {
             .and(path("/api/solution-submissions"))
             .and(header("authorization", "Bearer test-token"))
             .respond_with(ResponseTemplate::new(201).set_body_json(json!({
-                "id": "solution_submission-1",
+                "id": "11111111-1111-4111-8111-111111111111",
                 "status": "queued",
                 "challenge_id": "sample-sum",
-                "benchmark_target_id": "linux-arm64-cpu",
-                "artifact_path": "solution-submissions/solution_submission-1.zip",
+                "target": "linux-arm64-cpu",
+                "artifact_path": "solution-submissions/11111111-1111-4111-8111-111111111111.zip",
                 "evaluation_job_id": "job-1",
                 "created_at": "2026-05-01T00:00:00Z"
             })))
@@ -429,9 +429,9 @@ mod tests {
         let body: serde_json::Value =
             serde_json::from_slice(&post.body).expect("request body should be JSON");
 
-        assert!(output.contains("Submitted solution_submission-1"));
+        assert!(output.contains("Submitted 11111111-1111-4111-8111-111111111111"));
         assert_eq!(body["challenge_id"], "sample-sum");
-        assert_eq!(body["benchmark_target_id"], "linux-arm64-cpu");
+        assert_eq!(body["target"], "linux-arm64-cpu");
         assert_eq!(body["explanation"], "first attempt");
         assert!(body["artifact_base64"].as_str().expect("artifact").len() > 20);
     }
@@ -474,7 +474,7 @@ mod tests {
             .await
             .expect("requests should be recorded");
 
-        assert!(error.to_string().contains("benchmark target"));
+        assert!(error.to_string().contains("target"));
         assert_eq!(requests.len(), 1);
         assert_eq!(requests[0].url.path(), "/api/public/challenges/sample-sum");
     }
@@ -483,13 +483,15 @@ mod tests {
     async fn submissions_show_fetches_authenticated_solution_submission() {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
-            .and(path("/api/solution-submissions/solution_submission-1"))
+            .and(path(
+                "/api/solution-submissions/11111111-1111-4111-8111-111111111111",
+            ))
             .and(header("authorization", "Bearer test-token"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-                "id": "solution_submission-1",
+                "id": "11111111-1111-4111-8111-111111111111",
                 "challenge_id": "sample-sum",
                 "challenge_title": "Sample Sum",
-                "benchmark_target_id": "linux-arm64-cpu",
+                "target": "linux-arm64-cpu",
                 "agent_id": "agent-1",
                 "agent_name": "solver",
                 "status": "queued",
@@ -497,10 +499,10 @@ mod tests {
                 "parent_solution_submission_id": null,
                 "credit_text": "",
                 "visible_after_eval": false,
-                "artifact_path": "solution-submissions/solution_submission-1.zip",
+                "artifact_path": "solution-submissions/11111111-1111-4111-8111-111111111111.zip",
                 "evaluation_job": {
                     "id": "job-1",
-                    "benchmark_target_id": "linux-arm64-cpu",
+                    "target": "linux-arm64-cpu",
                     "status": "queued"
                 },
                 "created_at": "2026-05-01T00:00:00Z",
@@ -521,14 +523,14 @@ mod tests {
             "test-token",
             "submissions",
             "show",
-            "solution_submission-1",
+            "11111111-1111-4111-8111-111111111111",
         ]);
 
         let output = execute(cli, Environment::default())
             .await
             .expect("submissions show should succeed");
 
-        assert!(output.contains("solution submission: solution_submission-1"));
+        assert!(output.contains("solution submission: 11111111-1111-4111-8111-111111111111"));
         assert!(output.contains("evaluation_job: job-1 (queued)"));
     }
 
@@ -536,13 +538,15 @@ mod tests {
     async fn submissions_show_fetches_validation_run_id() {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
-            .and(path("/api/solution-submissions/validation-1"))
+            .and(path(
+                "/api/solution-submissions/22222222-2222-4222-8222-222222222222",
+            ))
             .and(header("authorization", "Bearer test-token"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-                "id": "validation-1",
+                "id": "22222222-2222-4222-8222-222222222222",
                 "challenge_id": "sample-sum",
                 "challenge_title": "Sample Sum",
-                "benchmark_target_id": "linux-arm64-cpu",
+                "target": "linux-arm64-cpu",
                 "agent_id": "agent-1",
                 "agent_name": "solver",
                 "status": "completed",
@@ -550,15 +554,15 @@ mod tests {
                 "parent_solution_submission_id": null,
                 "credit_text": "",
                 "visible_after_eval": false,
-                "artifact_path": "solution-submissions/validation-1.zip",
+                "artifact_path": "solution-submissions/22222222-2222-4222-8222-222222222222.zip",
                 "evaluation_job": {
                     "id": "job-1",
-                    "benchmark_target_id": "linux-arm64-cpu",
+                    "target": "linux-arm64-cpu",
                     "status": "completed"
                 },
                 "evaluation": {
                     "id": "eval-1",
-                    "benchmark_target_id": "linux-arm64-cpu",
+                    "target": "linux-arm64-cpu",
                     "status": "completed",
                     "eval_type": "validation",
                     "primary_score": 1.0,
@@ -569,7 +573,7 @@ mod tests {
                 },
                 "validation_evaluation": {
                     "id": "eval-1",
-                    "benchmark_target_id": "linux-arm64-cpu",
+                    "target": "linux-arm64-cpu",
                     "status": "completed",
                     "eval_type": "validation",
                     "primary_score": 1.0,
@@ -596,20 +600,40 @@ mod tests {
             "test-token",
             "submissions",
             "show",
-            "validation-1",
+            "22222222-2222-4222-8222-222222222222",
         ]);
 
         let output = execute(cli, Environment::default())
             .await
             .expect("submissions show should read validation ids through solution submissions");
 
-        assert!(output.contains("solution submission: validation-1"));
+        assert!(output.contains("solution submission: 22222222-2222-4222-8222-222222222222"));
         assert!(output.contains("validation_evaluation: completed"));
     }
 
     #[test]
     fn old_status_command_is_removed() {
         let result = Cli::try_parse_from(["agentics", "status", "submission-1"]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn invalid_submit_target_fails_during_cli_parse() {
+        let result = Cli::try_parse_from([
+            "agentics",
+            "submit",
+            "sample-sum",
+            "--target",
+            "linux arm64",
+        ]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn invalid_submission_id_fails_during_cli_parse() {
+        let result = Cli::try_parse_from(["agentics", "submissions", "show", "submission-1"]);
 
         assert!(result.is_err());
     }
@@ -626,24 +650,26 @@ mod tests {
             .and(path("/api/validation-runs"))
             .and(header("authorization", "Bearer test-token"))
             .respond_with(ResponseTemplate::new(201).set_body_json(json!({
-                "id": "validation-1",
+                "id": "22222222-2222-4222-8222-222222222222",
                 "status": "queued",
                 "challenge_id": "sample-sum",
-                "benchmark_target_id": "linux-arm64-cpu",
-                "artifact_path": "solution-submissions/validation-1.zip",
+                "target": "linux-arm64-cpu",
+                "artifact_path": "solution-submissions/22222222-2222-4222-8222-222222222222.zip",
                 "evaluation_job_id": "job-1",
                 "created_at": "2026-05-01T00:00:00Z"
             })))
             .mount(&server)
             .await;
         Mock::given(method("GET"))
-            .and(path("/api/validation-runs/validation-1"))
+            .and(path(
+                "/api/validation-runs/22222222-2222-4222-8222-222222222222",
+            ))
             .and(header("authorization", "Bearer test-token"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-                "id": "validation-1",
+                "id": "22222222-2222-4222-8222-222222222222",
                 "challenge_id": "sample-sum",
                 "challenge_title": "Sample Sum",
-                "benchmark_target_id": "linux-arm64-cpu",
+                "target": "linux-arm64-cpu",
                 "agent_id": "agent-1",
                 "agent_name": "solver",
                 "status": "completed",
@@ -651,15 +677,15 @@ mod tests {
                 "parent_solution_submission_id": null,
                 "credit_text": "",
                 "visible_after_eval": false,
-                "artifact_path": "solution-submissions/validation-1.zip",
+                "artifact_path": "solution-submissions/22222222-2222-4222-8222-222222222222.zip",
                 "evaluation_job": {
                     "id": "job-1",
-                    "benchmark_target_id": "linux-arm64-cpu",
+                    "target": "linux-arm64-cpu",
                     "status": "completed"
                 },
                 "evaluation": {
                     "id": "eval-1",
-                    "benchmark_target_id": "linux-arm64-cpu",
+                    "target": "linux-arm64-cpu",
                     "status": "completed",
                     "eval_type": "validation",
                     "primary_score": 1.0,
@@ -731,13 +757,13 @@ mod tests {
         let body: serde_json::Value =
             serde_json::from_slice(&post.body).expect("request body should be JSON");
 
-        assert!(output.contains("validation_run: validation-1"));
+        assert!(output.contains("validation_run: 22222222-2222-4222-8222-222222222222"));
         assert!(output.contains("validation: completed"));
         assert!(output.contains("primary_score: 1"));
         assert!(output.contains("rank_score: 1"));
         assert!(output.contains("visible_after_eval: false"));
         assert_eq!(body["challenge_id"], "sample-sum");
-        assert_eq!(body["benchmark_target_id"], "linux-arm64-cpu");
+        assert_eq!(body["target"], "linux-arm64-cpu");
         assert_eq!(body["explanation"], "quick check");
         assert!(body["artifact_base64"].as_str().expect("artifact").len() > 20);
     }
@@ -1044,9 +1070,9 @@ mod tests {
                     "command": ["python", "scorer/run.py"],
                     "result_file": "result.json"
                 },
-                "benchmark_targets": [
+                "targets": [
                     {
-                        "id": "linux-arm64-cpu",
+                        "name": "linux-arm64-cpu",
                         "docker_platform": "linux/arm64",
                         "accelerator": "cpu",
                         "validation_enabled": validation_enabled,

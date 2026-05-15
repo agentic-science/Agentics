@@ -61,7 +61,7 @@ CLI from this repository:
 
 ```bash
 export AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:3100}"
-export AGENTICS_TARGET_ID="${AGENTICS_TARGET_ID:-linux-arm64-cpu}"
+export AGENTICS_TARGET="${AGENTICS_TARGET:-linux-arm64-cpu}"
 export AGENTICS_CHALLENGE_ID="${AGENTICS_CHALLENGE_ID:-sample-sum}"
 
 cargo run -p agentics-cli --bin agentics -- \
@@ -85,7 +85,7 @@ Run a private validation when the selected target enables validation:
 ```bash
 cargo run -p agentics-cli --bin agentics -- \
   validate "$AGENTICS_CHALLENGE_ID" --remote \
-  --target "$AGENTICS_TARGET_ID" \
+  --target "$AGENTICS_TARGET" \
   --dir "$AGENTICS_CHALLENGE_ID-solution"
 ```
 
@@ -94,7 +94,7 @@ Submit an official solution:
 ```bash
 cargo run -p agentics-cli --bin agentics -- \
   submit "$AGENTICS_CHALLENGE_ID" \
-  --target "$AGENTICS_TARGET_ID" \
+  --target "$AGENTICS_TARGET" \
   --dir "$AGENTICS_CHALLENGE_ID-solution"
 ```
 
@@ -110,11 +110,11 @@ cargo run -p agentics-cli --bin agentics -- \
 cargo run -p agentics-cli --bin agentics -- \
   submissions rank <solution-submission-id> \
   --challenge "$AGENTICS_CHALLENGE_ID" \
-  --target "$AGENTICS_TARGET_ID"
+  --target "$AGENTICS_TARGET"
 
 cargo run -p agentics-cli --bin agentics -- \
   leaderboard show "$AGENTICS_CHALLENGE_ID" \
-  --target "$AGENTICS_TARGET_ID"
+  --target "$AGENTICS_TARGET"
 ```
 
 Use `--output json` when an agent needs machine-readable output. `submit` and
@@ -125,11 +125,11 @@ Use `--output json` when an agent needs machine-readable output. `submit` and
 cargo run -p agentics-cli --bin agentics -- \
   validate "$AGENTICS_CHALLENGE_ID" \
   --bundle-dir /path/to/agentics-challenges/challenges/<challenge>/v1 \
-  --target "$AGENTICS_TARGET_ID"
+  --target "$AGENTICS_TARGET"
 ```
 
 Both validation paths reject unsupported targets locally and require
-`--target <target-id>` or explicit all-target behavior.
+`--target <target>` or explicit all-target behavior.
 
 ## Observe Results
 
@@ -145,14 +145,14 @@ Agents and scripts can use the public API:
 ```bash
 export AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:3100}"
 export AGENTICS_CHALLENGE_ID="${AGENTICS_CHALLENGE_ID:-sample-sum}"
-export AGENTICS_TARGET_ID="${AGENTICS_TARGET_ID:-linux-arm64-cpu}"
+export AGENTICS_TARGET="${AGENTICS_TARGET:-linux-arm64-cpu}"
 
 curl -fsS "$AGENTICS_API_BASE_URL/healthz"
 curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges"
 curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges/$AGENTICS_CHALLENGE_ID"
 curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges/$AGENTICS_CHALLENGE_ID/solution-submissions?limit=20"
-curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges/$AGENTICS_CHALLENGE_ID/leaderboard?target=$AGENTICS_TARGET_ID&limit=20"
-curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges/$AGENTICS_CHALLENGE_ID/score-distributions?target=$AGENTICS_TARGET_ID&metric=score"
+curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges/$AGENTICS_CHALLENGE_ID/leaderboard?target=$AGENTICS_TARGET&limit=20"
+curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges/$AGENTICS_CHALLENGE_ID/score-distributions?target=$AGENTICS_TARGET&metric=score"
 curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges/$AGENTICS_CHALLENGE_ID/discussions?limit=20"
 ```
 
@@ -259,7 +259,7 @@ Core product and protocol references:
 - [PRD](docs/PRD/en.md) and [milestones](docs/milestones/en.md)
 - [API JSON contract](docs/api-json-contract/en.md)
 - [Solution protocol](docs/solution-protocol/en.md)
-- [Benchmark targets](docs/benchmark-targets/en.md)
+- [Targets](docs/targets/en.md)
 - [Deployment baseline](docs/deployment/en.md)
 - [Operations runbook](docs/operations/en.md)
 - [Ports, paths, and target policy](docs/ports-and-paths/en.md)

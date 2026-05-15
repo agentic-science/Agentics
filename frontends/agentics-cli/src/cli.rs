@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use shared::models::ids::ChallengeId;
+use shared::models::ids::{ChallengeId, SolutionSubmissionId, TargetName};
 
 /// Agent-facing command line for registration, challenge discovery, and
 /// solution submission workflows.
@@ -152,13 +152,13 @@ pub(crate) enum ChallengeCreatorCommand {
     Stats {
         challenge_id: ChallengeId,
         #[arg(long)]
-        target: Option<String>,
+        target: Option<TargetName>,
     },
     /// Show owner-visible challenge participants.
     Participants {
         challenge_id: ChallengeId,
         #[arg(long)]
-        target: Option<String>,
+        target: Option<TargetName>,
     },
     /// Inspect or update owner-managed challenge shortlists.
     Shortlist {
@@ -323,11 +323,11 @@ pub(crate) struct SubmitArgs {
     /// Challenge id to submit against.
     pub challenge_id: ChallengeId,
 
-    /// Benchmark target id, for example linux-arm64-cpu.
+    /// Target, for example linux-arm64-cpu.
     #[arg(long, value_name = "TARGET_ID", conflicts_with = "all_targets")]
-    pub target: Option<String>,
+    pub target: Option<TargetName>,
 
-    /// Submit once per benchmark target declared by the challenge.
+    /// Submit once per target declared by the challenge.
     #[arg(long)]
     pub all_targets: bool,
 
@@ -341,7 +341,7 @@ pub(crate) struct SubmitArgs {
 
     /// Parent solution submission id when this solution submission is an iteration.
     #[arg(long)]
-    pub parent_solution_submission_id: Option<String>,
+    pub parent_solution_submission_id: Option<SolutionSubmissionId>,
 
     /// Optional credit or provenance text.
     #[arg(long, default_value = "")]
@@ -353,11 +353,11 @@ pub(crate) struct ValidateArgs {
     /// Challenge id to validate against.
     pub challenge_id: ChallengeId,
 
-    /// Benchmark target id, for example linux-arm64-cpu.
+    /// Target, for example linux-arm64-cpu.
     #[arg(long, value_name = "TARGET_ID", conflicts_with = "all_targets")]
-    pub target: Option<String>,
+    pub target: Option<TargetName>,
 
-    /// Create one validation run per benchmark target declared by the challenge.
+    /// Create one validation run per target declared by the challenge.
     #[arg(long)]
     pub all_targets: bool,
 
@@ -388,7 +388,7 @@ pub(crate) struct ValidateArgs {
 
     /// Parent solution submission id when this validation run iterates on prior work.
     #[arg(long)]
-    pub parent_solution_submission_id: Option<String>,
+    pub parent_solution_submission_id: Option<SolutionSubmissionId>,
 
     /// Optional credit or provenance text.
     #[arg(long, default_value = "")]
@@ -416,24 +416,24 @@ pub(crate) struct SubmissionsArgs {
 #[derive(Debug, Clone, Subcommand)]
 pub(crate) enum SubmissionsCommand {
     /// Show a solution submission or validation run.
-    Show { submission_id: String },
+    Show { submission_id: SolutionSubmissionId },
     /// Wait until a solution submission reaches a terminal state.
     Wait {
-        submission_id: String,
+        submission_id: SolutionSubmissionId,
         #[arg(long, default_value_t = 2000)]
         poll_interval_ms: u64,
         #[arg(long, default_value_t = 300)]
         timeout_sec: u64,
     },
     /// Fetch runner logs for a solution submission.
-    Logs { submission_id: String },
+    Logs { submission_id: SolutionSubmissionId },
     /// Show ranking context for a solution submission.
     Rank {
-        submission_id: String,
+        submission_id: SolutionSubmissionId,
         #[arg(long)]
         challenge: ChallengeId,
         #[arg(long)]
-        target: String,
+        target: TargetName,
     },
 }
 
@@ -449,7 +449,7 @@ pub(crate) enum LeaderboardCommand {
     Show {
         challenge_id: ChallengeId,
         #[arg(long)]
-        target: String,
+        target: TargetName,
     },
 }
 
@@ -465,7 +465,7 @@ pub(crate) enum MetricsCommand {
     Distribution {
         challenge_id: ChallengeId,
         #[arg(long)]
-        target: String,
+        target: TargetName,
         #[arg(long)]
         metric: String,
     },

@@ -105,7 +105,7 @@ Creators should provide:
 - Draft id.
 - Private asset ids and what each ZIP overlay contains.
 - Expected public validation behavior.
-- Expected official ranking metric, target ids, and CUDA variant policy when
+- Expected official ranking metric, targets, and CUDA variant policy when
   the challenge uses `linux-arm64-cuda`.
 
 Do not change the checked-out proposal or private asset set after approval. The

@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use crate::error::{AppError, Result};
 use crate::models::challenge::{ChallengeBundleSpec, ChallengeEligibilityType};
 use crate::models::evaluation::ScoringMode;
-use crate::models::ids::ChallengeId;
+use crate::models::ids::{ChallengeId, TargetName};
 
 use super::challenges::{agent_is_shortlisted, challenge_has_shortlist, get_published_challenge};
 
@@ -26,7 +26,7 @@ pub struct PublishedChallengeAdmission {
 pub async fn ensure_published_challenge_supports_eval_type(
     pool: &PgPool,
     challenge_id: &ChallengeId,
-    benchmark_target_id: &str,
+    target: &TargetName,
     eval_type: ScoringMode,
     agent_id: &str,
 ) -> Result<PublishedChallengeAdmission> {
@@ -39,7 +39,7 @@ pub async fn ensure_published_challenge_supports_eval_type(
         pool,
         &challenge.challenge_id,
         &spec,
-        benchmark_target_id,
+        target,
         eval_type,
         agent_id,
     )
@@ -55,22 +55,20 @@ pub(super) async fn ensure_challenge_supports_eval_type(
     pool: &PgPool,
     challenge_id: &ChallengeId,
     spec: &ChallengeBundleSpec,
-    benchmark_target_id: &str,
+    target: &TargetName,
     eval_type: ScoringMode,
     agent_id: &str,
 ) -> Result<()> {
     ensure_challenge_accepts_submissions(spec)?;
     ensure_challenge_eligibility(pool, challenge_id, spec, agent_id).await?;
 
-    let target = spec.benchmark_target(benchmark_target_id).ok_or_else(|| {
-        AppError::BadRequest(format!(
-            "challenge does not support benchmark target `{benchmark_target_id}`"
-        ))
+    let target = spec.target(target).ok_or_else(|| {
+        AppError::BadRequest(format!("challenge does not support target `{target}`"))
     })?;
 
     if eval_type == ScoringMode::Validation && !target.validation_enabled {
         return Err(AppError::BadRequest(
-            "validation pass is disabled for this challenge and benchmark target".to_string(),
+            "validation pass is disabled for this challenge and target".to_string(),
         ));
     }
     if eval_type == ScoringMode::Official && !spec.datasets.private_benchmark_enabled {

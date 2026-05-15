@@ -7,6 +7,7 @@ pub mod discussions;
 pub mod evaluation_jobs;
 mod evaluation_policy;
 pub mod evaluations;
+mod ids;
 mod json;
 pub mod leaderboard;
 pub mod maintenance;

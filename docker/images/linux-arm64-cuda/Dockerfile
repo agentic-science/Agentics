@@ -14,7 +14,7 @@ ARG BUN_VERSION=latest
 LABEL org.opencontainers.image.title="Agentics Linux ARM64 CUDA Base" \
       org.opencontainers.image.description="First-party Agentics CUDA devel base image for linux-arm64-cuda solution and scorer containers" \
       ai.agentics.image.version="${AGENTICS_IMAGE_VERSION}" \
-      ai.agentics.target.id="linux-arm64-cuda" \
+      ai.agentics.target.name="linux-arm64-cuda" \
       ai.agentics.cuda.variant="${CUDA_VARIANT}" \
       ai.agentics.cuda.version="${CUDA_VERSION}" \
       ai.agentics.cuda.base_image="${CUDA_BASE_IMAGE}" \
@@ -123,7 +123,7 @@ RUN printf '%s\n' \
 RUN mkdir -p /opt/agentics \
     && printf '{\n' > /opt/agentics/image-info.json \
     && printf '  "agentics_image_version": "%s",\n' "${AGENTICS_IMAGE_VERSION}" >> /opt/agentics/image-info.json \
-    && printf '  "target_id": "linux-arm64-cuda",\n' >> /opt/agentics/image-info.json \
+    && printf '  "target": "linux-arm64-cuda",\n' >> /opt/agentics/image-info.json \
     && printf '  "cuda_variant": "%s",\n' "${CUDA_VARIANT}" >> /opt/agentics/image-info.json \
     && printf '  "cuda_version": "%s",\n' "${CUDA_VERSION}" >> /opt/agentics/image-info.json \
     && printf '  "cuda_base_image": "%s",\n' "${CUDA_BASE_IMAGE}" >> /opt/agentics/image-info.json \

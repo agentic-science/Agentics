@@ -4,11 +4,12 @@ use chrono::{DateTime, Utc};
 use serde_json::Value;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
+use super::ids::{challenge_id_from_row, optional_solution_submission_id_from_row};
 use crate::error::{AppError, Result};
 use crate::models::challenge::{
     AdminChallengeListItemDto, ChallengeBundleSpec, ChallengeListItemDto, PublishChallengeResponse,
 };
-use crate::models::ids::ChallengeId;
+use crate::models::ids::{ChallengeId, TargetName};
 use crate::models::request::{
     ChallengeShortlistResponse, ChallengeShortlistRevisionResponse, ChallengeShortlistedAgentDto,
     CreatorChallengeParticipantDto, CreatorChallengeParticipantsResponse,
@@ -89,7 +90,7 @@ pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeLi
                 title: r.try_get("title")?,
                 summary: r.try_get("summary")?,
                 status: r.try_get("status")?,
-                benchmark_targets: spec.as_ref().map(|spec| spec.benchmark_targets.clone()),
+                targets: spec.as_ref().map(|spec| spec.targets.clone()),
                 starts_at: spec.as_ref().and_then(|spec| spec.starts_at.clone()),
                 closes_at: spec.as_ref().and_then(|spec| spec.closes_at.clone()),
                 eligibility: spec.as_ref().map(|spec| spec.eligibility.clone()),
@@ -487,15 +488,16 @@ pub async fn list_challenge_shortlist(
 pub async fn get_creator_challenge_stats(
     pool: &PgPool,
     challenge_id: &ChallengeId,
-    benchmark_target_id: Option<&str>,
+    target: Option<&TargetName>,
 ) -> Result<CreatorChallengeStatsResponse> {
+    let target_raw = target.map(TargetName::as_str);
     let row = sqlx::query(
         r#"
         WITH filtered_submissions AS (
             SELECT id, agent_id, status, visible_after_eval, created_at
             FROM solution_submissions
             WHERE challenge_id = $1
-              AND ($2::TEXT IS NULL OR benchmark_target_id = $2)
+              AND ($2::TEXT IS NULL OR target = $2)
         ),
         submission_counts AS (
             SELECT
@@ -528,7 +530,7 @@ pub async fn get_creator_challenge_stats(
                 AVG(best_rank_score) AS best_rank_score_mean
             FROM leaderboard_entries
             WHERE challenge_id = $1
-              AND ($2::TEXT IS NULL OR benchmark_target_id = $2)
+              AND ($2::TEXT IS NULL OR target = $2)
         )
         SELECT
             sc.agent_count,
@@ -551,13 +553,13 @@ pub async fn get_creator_challenge_stats(
         "#,
     )
     .bind(challenge_id.as_str())
-    .bind(benchmark_target_id)
+    .bind(target_raw)
     .fetch_one(pool)
     .await?;
 
     Ok(CreatorChallengeStatsResponse {
         challenge_id: challenge_id.clone(),
-        benchmark_target_id: benchmark_target_id.map(ToOwned::to_owned),
+        target: target.cloned(),
         agent_count: row.try_get("agent_count")?,
         solution_submission_count: row.try_get("solution_submission_count")?,
         completed_solution_submission_count: row.try_get("completed_solution_submission_count")?,
@@ -585,8 +587,9 @@ pub async fn get_creator_challenge_stats(
 pub async fn list_creator_challenge_participants(
     pool: &PgPool,
     challenge_id: &ChallengeId,
-    benchmark_target_id: Option<&str>,
+    target: Option<&TargetName>,
 ) -> Result<CreatorChallengeParticipantsResponse> {
+    let target_raw = target.map(TargetName::as_str);
     let rows = sqlx::query(
         r#"
         WITH latest AS (
@@ -594,14 +597,14 @@ pub async fn list_creator_challenge_participants(
                 s.agent_id, s.status AS latest_status, s.created_at AS latest_solution_submission_at
             FROM solution_submissions s
             WHERE s.challenge_id = $1
-              AND ($2::TEXT IS NULL OR s.benchmark_target_id = $2)
+              AND ($2::TEXT IS NULL OR s.target = $2)
             ORDER BY s.agent_id, s.created_at DESC
         ),
         counts AS (
             SELECT s.agent_id, COUNT(*)::BIGINT AS solution_submission_count
             FROM solution_submissions s
             WHERE s.challenge_id = $1
-              AND ($2::TEXT IS NULL OR s.benchmark_target_id = $2)
+              AND ($2::TEXT IS NULL OR s.target = $2)
             GROUP BY s.agent_id
         ),
         best AS (
@@ -609,7 +612,7 @@ pub async fn list_creator_challenge_participants(
                 le.agent_id, le.best_solution_submission_id, le.best_rank_score
             FROM leaderboard_entries le
             WHERE le.challenge_id = $1
-              AND ($2::TEXT IS NULL OR le.benchmark_target_id = $2)
+              AND ($2::TEXT IS NULL OR le.target = $2)
             ORDER BY le.agent_id, le.best_rank_score DESC, le.updated_at ASC
         )
         SELECT
@@ -628,7 +631,7 @@ pub async fn list_creator_challenge_participants(
         "#,
     )
     .bind(challenge_id.as_str())
-    .bind(benchmark_target_id)
+    .bind(target_raw)
     .fetch_all(pool)
     .await?;
 
@@ -639,7 +642,10 @@ pub async fn list_creator_challenge_participants(
                 agent_id: row.try_get("agent_id")?,
                 agent_name: row.try_get("agent_name")?,
                 solution_submission_count: row.try_get("solution_submission_count")?,
-                best_solution_submission_id: row.try_get("best_solution_submission_id")?,
+                best_solution_submission_id: optional_solution_submission_id_from_row(
+                    &row,
+                    "best_solution_submission_id",
+                )?,
                 best_rank_score: row.try_get("best_rank_score")?,
                 latest_status: row.try_get("latest_status")?,
                 latest_solution_submission_at: optional_datetime_rfc3339(
@@ -652,7 +658,7 @@ pub async fn list_creator_challenge_participants(
 
     Ok(CreatorChallengeParticipantsResponse {
         challenge_id: challenge_id.clone(),
-        benchmark_target_id: benchmark_target_id.map(ToOwned::to_owned),
+        target: target.cloned(),
         items,
     })
 }
@@ -755,15 +761,6 @@ fn row_to_shortlist_revision_response(
         sha256: row.try_get("sha256")?,
         storage_uri: row.try_get("storage_uri")?,
         created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
-    })
-}
-
-fn challenge_id_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<ChallengeId> {
-    let raw: String = row.try_get(column)?;
-    ChallengeId::try_new(raw).map_err(|e| {
-        AppError::Internal(format!(
-            "stored invalid challenge id in column `{column}`: {e}"
-        ))
     })
 }
 

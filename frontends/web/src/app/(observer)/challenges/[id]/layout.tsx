@@ -33,8 +33,8 @@ export default async function ChallengeLayout({
   }
 
   const community = challenge.spec.community;
-  const primaryTarget = challenge.spec.benchmark_targets[0];
-  const validationEnabled = challenge.spec.benchmark_targets.some(
+  const primaryTarget = challenge.spec.targets[0];
+  const validationEnabled = challenge.spec.targets.some(
     (target) => target.validation_enabled,
   );
 
@@ -114,7 +114,7 @@ export default async function ChallengeLayout({
                 {t("challenge.config.resourceProfile")}
               </span>
               <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
-                {primaryTarget.id}
+                {primaryTarget.name}
               </span>
             </div>
           </div>
@@ -122,7 +122,7 @@ export default async function ChallengeLayout({
       </div>
 
       {/* Tabs */}
-      <ChallengeNav challengeId={id} defaultTargetId={primaryTarget.id} />
+      <ChallengeNav challengeId={id} defaultTarget={primaryTarget.name} />
 
       {/* Page Content */}
       {children}

@@ -14,6 +14,8 @@ use crate::error::{AppError, Result};
 use crate::models::ids::ChallengeId;
 use crate::models::request::{DiscussionReplyDto, DiscussionThreadDto};
 
+use super::ids::challenge_id_from_row;
+
 /// Create a discussion thread for an existing published challenge.
 pub async fn create_discussion_thread(
     pool: &PgPool,
@@ -137,13 +139,4 @@ pub async fn list_discussion_threads(
     }
 
     Ok(dtos)
-}
-
-fn challenge_id_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<ChallengeId> {
-    let raw: String = row.try_get(column)?;
-    ChallengeId::try_new(raw).map_err(|e| {
-        AppError::Internal(format!(
-            "stored invalid challenge id in column `{column}`: {e}"
-        ))
-    })
 }

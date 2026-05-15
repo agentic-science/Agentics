@@ -11,9 +11,9 @@ import {
   solutionSubmissionResponseSchema,
 } from "./schemas";
 
-function benchmarkTarget(validationEnabled: boolean) {
+function targetFixture(validationEnabled: boolean) {
   return {
-    id: "linux-arm64-cpu",
+    name: "linux-arm64-cpu",
     docker_platform: "linux/arm64",
     accelerator: "cpu",
     validation_enabled: validationEnabled,
@@ -78,7 +78,7 @@ describe("frontend API schemas", () => {
             command: ["python", "scorer/run.py"],
             result_file: "result.json",
           },
-          benchmark_targets: [benchmarkTarget(true)],
+          targets: [targetFixture(true)],
           execution: {
             validation_runs: "public/runs.json",
             official_prepare: {
@@ -153,7 +153,7 @@ describe("frontend API schemas", () => {
           command: ["python", "scorer/run.py"],
           result_file: "result.json",
         },
-        benchmark_targets: [benchmarkTarget(false)],
+        targets: [targetFixture(false)],
         execution: {
           validation_runs: "public/runs.json",
         },
@@ -190,10 +190,10 @@ describe("frontend API schemas", () => {
   it("accepts relaxed omission of nullable evaluation fields", () => {
     expect(() =>
       solutionSubmissionResponseSchema.parse({
-        id: "sub-1",
+        id: "11111111-1111-4111-8111-111111111111",
         challenge_id: "sample-sum",
         challenge_title: "Sample Sum",
-        benchmark_target_id: "linux-arm64-cpu",
+        target: "linux-arm64-cpu",
         agent_id: "agent-1",
         agent_name: "agent",
         status: "failed",
@@ -202,7 +202,7 @@ describe("frontend API schemas", () => {
         visible_after_eval: false,
         evaluation: {
           id: "eval-1",
-          benchmark_target_id: "linux-arm64-cpu",
+          target: "linux-arm64-cpu",
           status: "failed",
           eval_type: "validation",
           aggregate_metrics: [],
@@ -211,7 +211,7 @@ describe("frontend API schemas", () => {
         },
         validation_evaluation: {
           id: "eval-1",
-          benchmark_target_id: "linux-arm64-cpu",
+          target: "linux-arm64-cpu",
           status: "failed",
           eval_type: "validation",
           aggregate_metrics: [],
@@ -227,10 +227,10 @@ describe("frontend API schemas", () => {
   it("accepts empty public result messages emitted by relaxed scorer JSON", () => {
     expect(() =>
       solutionSubmissionResponseSchema.parse({
-        id: "sub-1",
+        id: "11111111-1111-4111-8111-111111111111",
         challenge_id: "sample-sum",
         challenge_title: "Sample Sum",
-        benchmark_target_id: "linux-arm64-cpu",
+        target: "linux-arm64-cpu",
         agent_id: "agent-1",
         agent_name: "agent",
         status: "completed",
@@ -239,7 +239,7 @@ describe("frontend API schemas", () => {
         visible_after_eval: true,
         evaluation: {
           id: "eval-1",
-          benchmark_target_id: "linux-arm64-cpu",
+          target: "linux-arm64-cpu",
           status: "completed",
           eval_type: "validation",
           primary_score: 1,
@@ -263,9 +263,9 @@ describe("frontend API schemas", () => {
   it("rejects explicit nulls for omitted optional response fields", () => {
     expect(() =>
       solutionSubmissionResponseSchema.parse({
-        id: "sub-1",
+        id: "11111111-1111-4111-8111-111111111111",
         challenge_id: "sample-sum",
-        benchmark_target_id: "linux-arm64-cpu",
+        target: "linux-arm64-cpu",
         agent_id: "agent-1",
         status: "completed",
         explanation: "",
@@ -283,13 +283,13 @@ describe("frontend API schemas", () => {
     expect(() =>
       leaderboardResponseSchema.parse({
         challenge_id: "sample-sum",
-        benchmark_target_id: "linux-arm64-cpu",
+        target: "linux-arm64-cpu",
         items: [
           {
-            benchmark_target_id: "linux-arm64-cpu",
+            target: "linux-arm64-cpu",
             agent_id: "agent-1",
             agent_name: "solver",
-            best_solution_submission_id: "solution_submission-1",
+            best_solution_submission_id: "11111111-1111-4111-8111-111111111111",
             best_rank_score: -42,
             rank_score: -42,
             aggregate_metrics: [
@@ -315,11 +315,11 @@ describe("frontend API schemas", () => {
             summary: "Add numbers",
             status: "active",
             ...challengePolicy,
-            benchmark_targets: [
+            targets: [
               {
-                ...benchmarkTarget(true),
+                ...targetFixture(true),
                 resource_profile: {
-                  ...benchmarkTarget(true).resource_profile,
+                  ...targetFixture(true).resource_profile,
                   hardware: { kind: "cpu" },
                 },
               },

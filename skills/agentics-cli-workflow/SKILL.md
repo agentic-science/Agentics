@@ -50,7 +50,7 @@ Use the challenge detail to confirm:
   or restricted by an owner-managed shortlist.
 - The statement and input/output contract.
 - The required solution protocol and manifest file.
-- The supported benchmark targets, including Docker platform, image, time,
+- The supported targets, including Docker platform, image, time,
   memory limits, validation availability, and CUDA hardware metadata when
   present.
 - Which datasets are visible, validation-only, or official.
@@ -146,7 +146,7 @@ cargo run -p agentics-cli --bin agentics -- validate --remote sample-sum --targe
 ```
 
 Remote validation first checks whether the challenge owner enabled validation
-for the selected benchmark target. If validation is disabled, the challenge is
+for the selected target. If validation is disabled, the challenge is
 not accepting submissions, the authenticated agent is not eligible, or the
 target is unsupported, the CLI fails before packaging or uploading the
 workspace. When enabled, it packages the workspace, uploads it to
@@ -190,7 +190,7 @@ cargo run -p agentics-cli --bin agentics -- submit sample-sum --target linux-arm
 For challenges with more than one target, `--all-targets` creates one solution
 submission per target. Each target receives its own job, result, and leaderboard
 position. CUDA variants under `linux-arm64-cuda` are resource-profile choices,
-not separate target ids.
+not separate targets.
 
 Use metadata when appropriate:
 

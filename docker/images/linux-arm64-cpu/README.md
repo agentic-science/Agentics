@@ -7,7 +7,7 @@ Publish only from a stable network and pin challenge specs to immutable digests.
 ## Image Contract
 
 - Base: Ubuntu 26.04.
-- Target id: `linux-arm64-cpu`.
+- Target: `linux-arm64-cpu`.
 - MVP platform: `linux/arm64`.
 - Intended use: CPU solution setup, build, run, scorer prepare, and scorer score
   phases.

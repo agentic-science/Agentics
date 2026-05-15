@@ -8,6 +8,7 @@ use helpers::{
 };
 use shared::db::{MarkEvaluationStartedInput, PersistedEvaluationResult};
 use shared::models::evaluation::{EvaluationStatus, MetricValue, ScoreSummary, ScoringMode};
+use shared::models::ids::SolutionSubmissionId;
 
 #[sqlx::test(migrations = "../migrations")]
 async fn stale_running_job_fails_after_max_attempts(pool: sqlx::PgPool) {
@@ -32,7 +33,7 @@ async fn stale_running_job_fails_after_max_attempts(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "linux-arm64-cpu",
+            "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "stale job"
         }))
@@ -45,6 +46,8 @@ async fn stale_running_job_fails_after_max_attempts(pool: sqlx::PgPool) {
     let solution_submission_id = create_response["id"]
         .as_str()
         .expect("missing solution submission id");
+    let solution_submission_id = SolutionSubmissionId::try_new(solution_submission_id.to_string())
+        .expect("API returned valid solution submission id");
 
     sqlx::query(
         r#"
@@ -56,7 +59,7 @@ async fn stale_running_job_fails_after_max_attempts(pool: sqlx::PgPool) {
         WHERE solution_submission_id = $1
         "#,
     )
-    .bind(solution_submission_id)
+    .bind(solution_submission_id.as_str())
     .execute(&pool)
     .await
     .expect("failed to mark job stale");
@@ -76,7 +79,7 @@ async fn stale_running_job_fails_after_max_attempts(pool: sqlx::PgPool) {
         WHERE s.id = $1
         "#,
     )
-    .bind(solution_submission_id)
+    .bind(solution_submission_id.as_str())
     .fetch_one(&pool)
     .await
     .expect("failed to query states");
@@ -106,7 +109,7 @@ async fn refreshed_job_lease_is_not_reaped(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "linux-arm64-cpu",
+            "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "lease refresh"
         }))
@@ -119,6 +122,8 @@ async fn refreshed_job_lease_is_not_reaped(pool: sqlx::PgPool) {
     let solution_submission_id = create_response["id"]
         .as_str()
         .expect("missing solution submission id");
+    let solution_submission_id = SolutionSubmissionId::try_new(solution_submission_id.to_string())
+        .expect("API returned valid solution submission id");
     let job_id: String = sqlx::query_scalar(
         r#"
         UPDATE evaluation_jobs
@@ -131,7 +136,7 @@ async fn refreshed_job_lease_is_not_reaped(pool: sqlx::PgPool) {
         RETURNING id
         "#,
     )
-    .bind(solution_submission_id)
+    .bind(solution_submission_id.as_str())
     .fetch_one(&pool)
     .await
     .expect("failed to mark job running");
@@ -172,7 +177,7 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "linux-arm64-cpu",
+            "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "stale worker finish"
         }))
@@ -185,6 +190,8 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
     let solution_submission_id = create_response["id"]
         .as_str()
         .expect("missing solution submission id");
+    let solution_submission_id = SolutionSubmissionId::try_new(solution_submission_id.to_string())
+        .expect("API returned valid solution submission id");
 
     let first_claim = shared::db::claim_next_evaluation_job(&pool, "worker-a")
         .await
@@ -197,9 +204,9 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
             &pool,
             &MarkEvaluationStartedInput {
                 evaluation_id: uuid::Uuid::new_v4().to_string(),
-                solution_submission_id: solution_submission_id.to_string(),
+                solution_submission_id: solution_submission_id.clone(),
                 job_id: first_claim.id.clone(),
-                benchmark_target_id: first_claim.benchmark_target_id.clone(),
+                target: first_claim.target.clone(),
                 eval_type: first_claim.eval_type,
             },
         )
@@ -236,9 +243,9 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
             &pool,
             &MarkEvaluationStartedInput {
                 evaluation_id: uuid::Uuid::new_v4().to_string(),
-                solution_submission_id: solution_submission_id.to_string(),
+                solution_submission_id: solution_submission_id.clone(),
                 job_id: second_claim.id.clone(),
-                benchmark_target_id: second_claim.benchmark_target_id.clone(),
+                target: second_claim.target.clone(),
                 eval_type: second_claim.eval_type,
             },
         )
@@ -250,7 +257,7 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
     let stale_failure = persisted_result(
         &first_claim,
         "worker-a",
-        solution_submission_id,
+        &solution_submission_id,
         EvaluationStatus::Failed,
         None,
     );
@@ -274,7 +281,7 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
     let current_success = persisted_result(
         &second_claim,
         "worker-b",
-        solution_submission_id,
+        &solution_submission_id,
         EvaluationStatus::Completed,
         Some(1.0),
     );
@@ -346,7 +353,7 @@ async fn losing_official_submission_does_not_overwrite_leaderboard_best_metadata
         SELECT best_solution_submission_id, best_rank_score, official_score, official_metrics_json
         FROM leaderboard_entries
         WHERE challenge_id = 'sample-sum'
-          AND benchmark_target_id = 'linux-arm64-cpu'
+          AND target = 'linux-arm64-cpu'
           AND agent_id = $1
         "#,
     )
@@ -359,7 +366,7 @@ async fn losing_official_submission_does_not_overwrite_leaderboard_best_metadata
     .await
     .expect("failed to query leaderboard entry");
 
-    assert_eq!(row.0, winning_submission_id);
+    assert_eq!(row.0, winning_submission_id.as_str());
     assert_eq!(row.1, 1.0);
     assert_eq!(row.2, Some(1.0));
     assert_eq!(
@@ -373,14 +380,14 @@ async fn create_official_submission(
     app: &helpers::TestApp,
     token: &str,
     explanation: &str,
-) -> String {
+) -> SolutionSubmissionId {
     let artifact_base64 = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
     let create_response: serde_json::Value = client
         .post(api_url(app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "linux-arm64-cpu",
+            "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": explanation
         }))
@@ -390,15 +397,16 @@ async fn create_official_submission(
         .json()
         .await
         .expect("failed to decode create solution submission response");
-    create_response["id"]
+    let id = create_response["id"]
         .as_str()
-        .expect("missing solution submission id")
-        .to_string()
+        .expect("missing solution submission id");
+    SolutionSubmissionId::try_new(id.to_string())
+        .expect("API returned valid solution submission id")
 }
 
 async fn finish_next_job_with_score(
     pool: &sqlx::PgPool,
-    solution_submission_id: &str,
+    solution_submission_id: &SolutionSubmissionId,
     worker_id: &str,
     score: f64,
 ) {
@@ -406,15 +414,15 @@ async fn finish_next_job_with_score(
         .await
         .expect("failed to claim job")
         .expect("missing queued job");
-    assert_eq!(claim.solution_submission_id, solution_submission_id);
+    assert_eq!(claim.solution_submission_id, *solution_submission_id);
     assert!(
         shared::db::mark_evaluation_started(
             pool,
             &MarkEvaluationStartedInput {
                 evaluation_id: uuid::Uuid::new_v4().to_string(),
-                solution_submission_id: solution_submission_id.to_string(),
+                solution_submission_id: solution_submission_id.clone(),
                 job_id: claim.id.clone(),
-                benchmark_target_id: claim.benchmark_target_id.clone(),
+                target: claim.target.clone(),
                 eval_type: claim.eval_type,
             },
         )
@@ -438,16 +446,16 @@ async fn finish_next_job_with_score(
 fn persisted_result(
     job: &shared::db::EvaluationJobRecord,
     worker_id: &str,
-    solution_submission_id: &str,
+    solution_submission_id: &SolutionSubmissionId,
     status: EvaluationStatus,
     score: Option<f64>,
 ) -> PersistedEvaluationResult {
     PersistedEvaluationResult {
-        solution_submission_id: solution_submission_id.to_string(),
+        solution_submission_id: solution_submission_id.clone(),
         job_id: job.id.clone(),
         worker_id: worker_id.to_string(),
         claim_attempt_count: job.attempt_count,
-        benchmark_target_id: job.benchmark_target_id.clone(),
+        target: job.target.clone(),
         eval_type: ScoringMode::Official,
         status,
         primary_score: score,

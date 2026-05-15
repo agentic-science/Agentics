@@ -2,18 +2,18 @@ use serde::Serialize;
 use serde_json::Value;
 
 use super::challenge::{
-    BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengeDetailResponse,
-    ChallengeEligibilitySpec, ChallengeEligibilityType, ChallengeExecutionSpec,
-    ChallengePrepareExternalDataSpec, ChallengePrepareSpec, ChallengeResultDetailVisibility,
-    ChallengeSolutionPublicationPolicy, ChallengeVisibility, ChallengeVisibilitySpec,
-    CommunitySpec, DatasetsSpec, DockerPlatform, HardwareProfileSpec, MetricDefinitionSpec,
-    MetricDirection, MetricSchemaSpec, MetricVisibility, PrivateBenchmarkPolicy, RankingSpec,
-    ResourceProfileSpec, ScorerSpec, SolutionSpec,
+    ChallengeBundleSpec, ChallengeDetailResponse, ChallengeEligibilitySpec,
+    ChallengeEligibilityType, ChallengeExecutionSpec, ChallengePrepareExternalDataSpec,
+    ChallengePrepareSpec, ChallengeResultDetailVisibility, ChallengeSolutionPublicationPolicy,
+    ChallengeTargetSpec, ChallengeVisibility, ChallengeVisibilitySpec, CommunitySpec, DatasetsSpec,
+    DockerPlatform, HardwareProfileSpec, MetricDefinitionSpec, MetricDirection, MetricSchemaSpec,
+    MetricVisibility, PrivateBenchmarkPolicy, RankingSpec, ResourceProfileSpec, ScorerSpec,
+    SolutionSpec, TargetAccelerator,
 };
 use super::evaluation::{
     EvaluationDto, EvaluationStatus, MetricValue, RunMetricResult, ScoreVisibility, ScoringMode,
 };
-use super::ids::ChallengeId;
+use super::ids::{ChallengeId, SolutionSubmissionId, TargetName};
 use super::request::{
     AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto, SolutionSubmissionResponse,
 };
@@ -118,10 +118,10 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
                 command: vec!["python".to_string(), "scorer/run.py".to_string()],
                 result_file: "result.json".to_string(),
             },
-            benchmark_targets: vec![BenchmarkTargetSpec {
-                id: "linux-arm64-cpu".to_string(),
+            targets: vec![ChallengeTargetSpec {
+                name: target_name("linux-arm64-cpu"),
                 docker_platform: DockerPlatform::LinuxArm64,
-                accelerator: BenchmarkAccelerator::Cpu,
+                accelerator: TargetAccelerator::Cpu,
                 validation_enabled: true,
                 resource_profile: ResourceProfileSpec {
                     id: "ubuntu-cpu-small".to_string(),
@@ -220,12 +220,20 @@ fn challenge_id(value: &str) -> ChallengeId {
     ChallengeId::try_new(value.to_string()).expect("test challenge id is valid")
 }
 
+fn target_name(value: &str) -> TargetName {
+    TargetName::try_new(value.to_string()).expect("test target is valid")
+}
+
+fn solution_submission_id(value: &str) -> SolutionSubmissionId {
+    SolutionSubmissionId::try_new(value.to_string()).expect("test submission id is valid")
+}
+
 fn official_solution_submission_response() -> SolutionSubmissionResponse {
     SolutionSubmissionResponse {
-        id: "solution-submission-1".to_string(),
+        id: solution_submission_id("11111111-1111-4111-8111-111111111111"),
         challenge_id: challenge_id("matrix-multiplication"),
         challenge_title: Some("Matrix Multiplication".to_string()),
-        benchmark_target_id: "linux-arm64-cpu".to_string(),
+        target: target_name("linux-arm64-cpu"),
         agent_id: "agent-1".to_string(),
         agent_name: Some("solver".to_string()),
         status: "completed".to_string(),
@@ -233,13 +241,15 @@ fn official_solution_submission_response() -> SolutionSubmissionResponse {
         parent_solution_submission_id: None,
         credit_text: String::new(),
         visible_after_eval: true,
-        artifact_path: Some("solution-submissions/solution-submission-1.zip".to_string()),
+        artifact_path: Some(
+            "solution-submissions/11111111-1111-4111-8111-111111111111.zip".to_string(),
+        ),
         evaluation_job: None,
         evaluation: None,
         validation_evaluation: None,
         official_evaluation: Some(EvaluationDto {
             id: "evaluation-1".to_string(),
-            benchmark_target_id: "linux-arm64-cpu".to_string(),
+            target: target_name("linux-arm64-cpu"),
             status: EvaluationStatus::Completed,
             eval_type: ScoringMode::Official,
             primary_score: Some(0.91),

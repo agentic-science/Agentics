@@ -21,7 +21,7 @@ use shared::models::challenge::{
     ChallengeSolutionPublicationPolicy, ChallengeVisibility, PublishChallengeResponse,
 };
 use shared::models::evaluation::ScoringMode;
-use shared::models::ids::ChallengeId;
+use shared::models::ids::{ChallengeId, SolutionSubmissionId, TargetName};
 use shared::models::request::{
     AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto,
     AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse,
@@ -42,7 +42,7 @@ use shared::zip_project::{
     MAX_ZIP_PROJECT_ARTIFACT_BYTES, MAX_ZIP_PROJECT_FILE_COUNT, MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES,
 };
 
-use crate::extractors::{AdminAuth, AgentAuth, CreatorAuth, ValidatedJson};
+use crate::extractors::{AdminAuth, AgentAuth, CreatorAuth, SolutionSubmissionPath, ValidatedJson};
 use crate::presenters;
 use crate::state::AppState;
 
@@ -53,8 +53,12 @@ const STAGED_EVALUATION_JOB_DELAY_SECONDS: i64 = 315_360_000;
 const DEFAULT_PUBLIC_LIST_LIMIT: i64 = 50;
 const MAX_PUBLIC_LIST_LIMIT: i64 = 100;
 
-fn parse_challenge_id(raw: String) -> Result<ChallengeId> {
-    ChallengeId::try_new(raw).map_err(|e| AppError::BadRequest(e.to_string()))
+fn parse_challenge_id(raw: &str) -> Result<ChallengeId> {
+    ChallengeId::try_new(raw.to_string()).map_err(|e| AppError::BadRequest(e.to_string()))
+}
+
+fn parse_target(raw: &str) -> Result<TargetName> {
+    TargetName::try_new(raw.to_string()).map_err(|e| AppError::BadRequest(e.to_string()))
 }
 
 // ---------------------------------------------------------------------------
@@ -137,7 +141,7 @@ pub async fn get_agent_challenge(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<shared::models::challenge::ChallengeDetailResponse>> {
-    get_challenge_detail_response(state, parse_challenge_id(id)?).await
+    get_challenge_detail_response(state, parse_challenge_id(&id)?).await
 }
 
 /// List published challenges on the public API.
@@ -155,7 +159,7 @@ pub async fn get_challenge(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<shared::models::challenge::ChallengeDetailResponse>> {
-    get_challenge_detail_response(state, parse_challenge_id(id)?).await
+    get_challenge_detail_response(state, parse_challenge_id(&id)?).await
 }
 
 /// Shared challenge-detail response path used by public and agent routes.
@@ -188,17 +192,11 @@ async fn create_solution_submission_for_mode(
     eval_type: ScoringMode,
 ) -> Result<(StatusCode, Json<CreateSolutionSubmissionResponse>)> {
     let challenge_id = body.challenge_id;
-    let benchmark_target_id = body.benchmark_target_id.trim().to_string();
-    if benchmark_target_id.is_empty() {
-        return Err(AppError::BadRequest(
-            "benchmark_target_id must not be empty".to_string(),
-        ));
-    }
-    ensure_request_identifier(&benchmark_target_id, "benchmark_target_id")?;
+    let target = body.target.clone();
     let admission = db::ensure_published_challenge_supports_eval_type(
         &state.db,
         &challenge_id,
-        &benchmark_target_id,
+        &target,
         eval_type,
         &agent.agent_id,
     )
@@ -209,7 +207,7 @@ async fn create_solution_submission_for_mode(
         &state,
         &agent.agent_id,
         &canonical_challenge_id,
-        &benchmark_target_id,
+        &target,
         eval_type,
         challenge_lifetime_limit,
     )
@@ -228,7 +226,10 @@ async fn create_solution_submission_for_mode(
     }
     let manifest = shared::zip_project::parse_zip_project_manifest_from_zip_bytes(&artifact_bytes)?;
 
-    let solution_submission_id = Uuid::new_v4().to_string();
+    let solution_submission_id = SolutionSubmissionId::try_new(Uuid::new_v4().to_string())
+        .map_err(|e| {
+            AppError::Internal(format!("generated invalid solution submission id: {e}"))
+        })?;
     let job_id = Uuid::new_v4().to_string();
     let artifact_path = format!("solution-submissions/{solution_submission_id}.zip");
     let temporary_artifact_path = format!(
@@ -255,15 +256,12 @@ async fn create_solution_submission_for_mode(
             job_id: job_id.clone(),
             agent_id: agent.agent_id,
             challenge_id: canonical_challenge_id,
-            benchmark_target_id,
+            target,
             artifact_path: artifact_path.clone(),
             language: manifest.runtime.language,
             eval_type,
             explanation: body.explanation.trim().to_string(),
-            parent_solution_submission_id: body
-                .parent_solution_submission_id
-                .as_ref()
-                .map(|s| s.trim().to_string()),
+            parent_solution_submission_id: body.parent_solution_submission_id,
             credit_text: body.credit_text.trim().to_string(),
             initial_job_delay_seconds: Some(STAGED_EVALUATION_JOB_DELAY_SECONDS),
             quota_admission: db::SolutionSubmissionQuotaAdmission {
@@ -308,10 +306,13 @@ async fn create_solution_submission_for_mode(
     ))
 }
 
-async fn cleanup_solution_submission_record(state: &AppState, solution_submission_id: &str) {
+async fn cleanup_solution_submission_record(
+    state: &AppState,
+    solution_submission_id: &SolutionSubmissionId,
+) {
     if let Err(error) = db::delete_solution_submission(&state.db, solution_submission_id).await {
         warn!(
-            solution_submission_id,
+            solution_submission_id = %solution_submission_id,
             error = %error,
             "failed to clean up staged solution submission after storage admission failure"
         );
@@ -332,7 +333,7 @@ async fn ensure_submission_quota_available(
     state: &AppState,
     agent_id: &str,
     challenge_id: &ChallengeId,
-    benchmark_target_id: &str,
+    target: &TargetName,
     eval_type: ScoringMode,
     challenge_lifetime_limit: Option<i64>,
 ) -> Result<()> {
@@ -344,7 +345,7 @@ async fn ensure_submission_quota_available(
         &state.db,
         agent_id,
         challenge_id,
-        benchmark_target_id,
+        target,
         eval_type,
         SUBMISSION_QUOTA_WINDOW_SECONDS,
     )
@@ -362,7 +363,7 @@ async fn ensure_submission_quota_available(
             &state.db,
             agent_id,
             challenge_id,
-            benchmark_target_id,
+            target,
             eval_type,
         )
         .await?;
@@ -408,9 +409,9 @@ pub async fn create_validation_run(
 
 /// Fetch an authenticated solution submission view with artifact and job metadata.
 pub async fn get_solution_submission(
+    SolutionSubmissionPath(id): SolutionSubmissionPath,
     State(state): State<AppState>,
     agent: AgentAuth,
-    Path(id): Path<String>,
 ) -> Result<Json<SolutionSubmissionResponse>> {
     let solution_submission = db::get_solution_submission_by_id(&state.db, &id).await?;
     let solution_submission = solution_submission.ok_or(AppError::NotFound)?;
@@ -425,18 +426,18 @@ pub async fn get_solution_submission(
 
 /// Fetch an authenticated validation run view owned by the caller.
 pub async fn get_validation_run(
+    SolutionSubmissionPath(id): SolutionSubmissionPath,
     State(state): State<AppState>,
     agent: AgentAuth,
-    Path(id): Path<String>,
 ) -> Result<Json<SolutionSubmissionResponse>> {
-    get_solution_submission(State(state), agent, Path(id)).await
+    get_solution_submission(SolutionSubmissionPath(id), State(state), agent).await
 }
 
 /// Fetch an owner-visible result report for one solution submission.
 pub async fn get_solution_submission_result_report(
+    SolutionSubmissionPath(id): SolutionSubmissionPath,
     State(state): State<AppState>,
     agent: AgentAuth,
-    Path(id): Path<String>,
 ) -> Result<Json<SolutionSubmissionResultReportResponse>> {
     let solution_submission = db::get_solution_submission_by_id(&state.db, &id).await?;
     let solution_submission = solution_submission.ok_or(AppError::NotFound)?;
@@ -453,9 +454,9 @@ pub async fn get_solution_submission_result_report(
 
 /// Fetch owner-visible runner logs for one solution submission.
 pub async fn get_solution_submission_logs(
+    SolutionSubmissionPath(id): SolutionSubmissionPath,
     State(state): State<AppState>,
     agent: AgentAuth,
-    Path(id): Path<String>,
 ) -> Result<Json<SolutionSubmissionLogsResponse>> {
     let solution_submission = db::get_solution_submission_by_id(&state.db, &id).await?;
     let solution_submission = solution_submission.ok_or(AppError::NotFound)?;
@@ -467,9 +468,9 @@ pub async fn get_solution_submission_logs(
 
 /// Fetch a submission's owner-visible ranking context in an explicit scope.
 pub async fn get_solution_submission_ranking_context(
+    SolutionSubmissionPath(id): SolutionSubmissionPath,
     State(state): State<AppState>,
     agent: AgentAuth,
-    Path(id): Path<String>,
     Query(query): Query<RankingContextQuery>,
 ) -> Result<Json<RankingContextResponse>> {
     let solution_submission = db::get_solution_submission_by_id(&state.db, &id).await?;
@@ -495,7 +496,7 @@ pub async fn create_thread(
     Path(challenge_id): Path<String>,
     ValidatedJson(body): ValidatedJson<CreateDiscussionThreadRequest>,
 ) -> Result<(StatusCode, Json<shared::models::IdOnlyResponse>)> {
-    let challenge_id = parse_challenge_id(challenge_id)?;
+    let challenge_id = parse_challenge_id(&challenge_id)?;
     let thread_id = Uuid::new_v4().to_string();
     db::create_discussion_thread(
         &state.db,
@@ -544,7 +545,7 @@ pub async fn list_public_solution_submissions(
     Path(id): Path<String>,
     Query(query): Query<PublicListQuery>,
 ) -> Result<Json<PublicSolutionSubmissionListResponse>> {
-    let challenge_id = parse_challenge_id(id)?;
+    let challenge_id = parse_challenge_id(&id)?;
     ensure_public_result_detail_visible(&state.db, &challenge_id).await?;
     let items =
         db::list_public_solution_submissions_for_challenge(&state.db, &challenge_id, query.limit())
@@ -554,8 +555,8 @@ pub async fn list_public_solution_submissions(
 
 /// Fetch a public solution submission view without private artifact paths or job metadata.
 pub async fn get_public_solution_submission(
+    SolutionSubmissionPath(id): SolutionSubmissionPath,
     State(state): State<AppState>,
-    Path(id): Path<String>,
 ) -> Result<Json<SolutionSubmissionResponse>> {
     let solution_submission = db::get_solution_submission_by_id(&state.db, &id).await?;
     let solution_submission = solution_submission.ok_or(AppError::NotFound)?;
@@ -571,8 +572,8 @@ pub async fn get_public_solution_submission(
 
 /// Fetch a public redacted result report when the challenge visibility allows it.
 pub async fn get_public_solution_submission_result_report(
+    SolutionSubmissionPath(id): SolutionSubmissionPath,
     State(state): State<AppState>,
-    Path(id): Path<String>,
 ) -> Result<Json<SolutionSubmissionResultReportResponse>> {
     let solution_submission = db::get_solution_submission_by_id(&state.db, &id).await?;
     let solution_submission = solution_submission.ok_or(AppError::NotFound)?;
@@ -590,8 +591,8 @@ pub async fn get_public_solution_submission_result_report(
 
 /// Fetch public ranking context for a visible submission when the challenge allows it.
 pub async fn get_public_solution_submission_ranking_context(
+    SolutionSubmissionPath(id): SolutionSubmissionPath,
     State(state): State<AppState>,
-    Path(id): Path<String>,
     Query(query): Query<RankingContextQuery>,
 ) -> Result<Json<RankingContextResponse>> {
     let solution_submission = db::get_solution_submission_by_id(&state.db, &id).await?;
@@ -615,8 +616,8 @@ pub async fn get_public_solution_submission_ranking_context(
 
 /// Fetch a browsable artifact summary for a public solution submission.
 pub async fn get_public_artifact(
+    SolutionSubmissionPath(id): SolutionSubmissionPath,
     State(state): State<AppState>,
-    Path(id): Path<String>,
 ) -> Result<Json<SolutionSubmissionArtifactResponse>> {
     let solution_submission = db::get_solution_submission_by_id(&state.db, &id).await?;
     let solution_submission = solution_submission.ok_or(AppError::NotFound)?;
@@ -643,22 +644,15 @@ pub async fn get_leaderboard(
     Path(id): Path<String>,
     Query(query): Query<LeaderboardQuery>,
 ) -> Result<Json<LeaderboardResponse>> {
-    let challenge_id = parse_challenge_id(id)?;
+    let challenge_id = parse_challenge_id(&id)?;
     let (challenge, spec) = load_challenge_policy(&state.db, &challenge_id).await?;
     ensure_visibility_allows_public(spec.visibility.leaderboard, &spec)?;
-    let benchmark_target_id =
-        resolve_public_benchmark_target_id(&state.db, &challenge_id, query.target.as_deref())
-            .await?;
-    let items = db::list_leaderboard_entries(
-        &state.db,
-        &challenge_id,
-        &benchmark_target_id,
-        query.limit(),
-    )
-    .await?;
+    let target = resolve_public_target(&state.db, &challenge_id, query.target.as_deref()).await?;
+    let items =
+        db::list_leaderboard_entries(&state.db, &challenge_id, &target, query.limit()).await?;
     Ok(Json(LeaderboardResponse {
         challenge_id: challenge.challenge_id,
-        benchmark_target_id,
+        target,
         items,
     }))
 }
@@ -669,7 +663,7 @@ pub async fn get_score_distribution(
     Path(id): Path<String>,
     Query(query): Query<ScoreDistributionQuery>,
 ) -> Result<Json<ScoreDistributionResponse>> {
-    let challenge_id = parse_challenge_id(id)?;
+    let challenge_id = parse_challenge_id(&id)?;
     let metric_id = query.metric.trim();
     if metric_id.is_empty() {
         return Err(AppError::BadRequest(
@@ -678,15 +672,11 @@ pub async fn get_score_distribution(
     }
     let (challenge, spec) = load_challenge_policy(&state.db, &challenge_id).await?;
     ensure_visibility_allows_public(spec.visibility.score_distribution, &spec)?;
-    let benchmark_target_id =
-        resolve_public_benchmark_target_id(&state.db, &challenge_id, query.target.as_deref())
-            .await?;
-    let entries =
-        db::list_leaderboard_entries(&state.db, &challenge_id, &benchmark_target_id, 10_000)
-            .await?;
+    let target = resolve_public_target(&state.db, &challenge_id, query.target.as_deref()).await?;
+    let entries = db::list_leaderboard_entries(&state.db, &challenge_id, &target, 10_000).await?;
     let response = build_score_distribution_response(
         challenge.challenge_id,
-        benchmark_target_id,
+        target,
         metric_id.to_string(),
         entries,
     )?;
@@ -699,7 +689,7 @@ pub async fn list_discussions(
     Path(id): Path<String>,
     Query(query): Query<PublicListQuery>,
 ) -> Result<Json<DiscussionListResponse>> {
-    let challenge_id = parse_challenge_id(id)?;
+    let challenge_id = parse_challenge_id(&id)?;
     let items = db::list_discussion_threads(&state.db, &challenge_id, query.limit()).await?;
     Ok(Json(DiscussionListResponse { items }))
 }
@@ -740,29 +730,27 @@ pub struct ScoreDistributionQuery {
 #[derive(Debug, Clone, Deserialize)]
 pub struct RankingContextQuery {
     challenge_id: ChallengeId,
-    target: String,
+    target: TargetName,
 }
 
-async fn resolve_public_benchmark_target_id(
+async fn resolve_public_target(
     pool: &sqlx::PgPool,
     challenge_id: &ChallengeId,
     requested_target: Option<&str>,
-) -> Result<String> {
+) -> Result<TargetName> {
     let challenge = db::get_published_challenge(pool, challenge_id).await?;
     let challenge = challenge.ok_or(AppError::NotFound)?;
     let spec: shared::models::challenge::ChallengeBundleSpec =
         serde_json::from_value(challenge.spec_json)
             .map_err(|e| AppError::Internal(e.to_string()))?;
 
-    if let Some(target_id) = requested_target
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
-        if spec.benchmark_target(target_id).is_some() {
-            return Ok(target_id.to_string());
+    if let Some(target) = requested_target {
+        let target = parse_target(target)?;
+        if spec.target(&target).is_some() {
+            return Ok(target);
         }
         return Err(AppError::BadRequest(format!(
-            "challenge does not support benchmark target `{target_id}`"
+            "challenge does not support target `{target}`"
         )));
     }
 
@@ -850,7 +838,7 @@ fn ensure_ranking_scope_matches_submission(
     query: &RankingContextQuery,
 ) -> Result<()> {
     if solution_submission.challenge_id != query.challenge_id
-        || solution_submission.benchmark_target_id != query.target
+        || solution_submission.target != query.target
     {
         return Err(AppError::BadRequest(
             "ranking scope must match the solution submission challenge_id and target".to_string(),
@@ -862,11 +850,10 @@ fn ensure_ranking_scope_matches_submission(
 async fn build_ranking_context(
     pool: &sqlx::PgPool,
     challenge_id: &ChallengeId,
-    benchmark_target_id: &str,
-    solution_submission_id: &str,
+    target: &TargetName,
+    solution_submission_id: &SolutionSubmissionId,
 ) -> Result<RankingContextResponse> {
-    let entries =
-        db::list_leaderboard_entries(pool, challenge_id, benchmark_target_id, 10_000).await?;
+    let entries = db::list_leaderboard_entries(pool, challenge_id, target, 10_000).await?;
     let total_ranked = i64::try_from(entries.len())
         .map_err(|_| AppError::Internal("leaderboard entry count overflow".to_string()))?;
     let ranked_entries = entries
@@ -883,7 +870,7 @@ async fn build_ranking_context(
         .collect::<Result<Vec<_>>>()?;
     let index = ranked_entries
         .iter()
-        .position(|entry| entry.entry.best_solution_submission_id == solution_submission_id);
+        .position(|entry| entry.entry.best_solution_submission_id == *solution_submission_id);
     let rank = index
         .map(|index| {
             index
@@ -922,8 +909,8 @@ async fn build_ranking_context(
 
     Ok(RankingContextResponse {
         challenge_id: challenge_id.clone(),
-        benchmark_target_id: benchmark_target_id.to_string(),
-        solution_submission_id: solution_submission_id.to_string(),
+        target: target.clone(),
+        solution_submission_id: solution_submission_id.clone(),
         rank,
         total_ranked,
         percentile,
@@ -935,7 +922,7 @@ async fn build_ranking_context(
 
 fn build_score_distribution_response(
     challenge_id: ChallengeId,
-    benchmark_target_id: String,
+    target: TargetName,
     metric_id: String,
     entries: Vec<LeaderboardEntryDto>,
 ) -> Result<ScoreDistributionResponse> {
@@ -969,7 +956,7 @@ fn build_score_distribution_response(
 
     Ok(ScoreDistributionResponse {
         challenge_id,
-        benchmark_target_id,
+        target,
         metric_id,
         count,
         min,
@@ -1114,11 +1101,10 @@ pub async fn get_creator_challenge_stats(
     Path(id): Path<String>,
     Query(query): Query<CreatorChallengeQuery>,
 ) -> Result<Json<CreatorChallengeStatsResponse>> {
-    let (challenge_id, benchmark_target_id) =
+    let (challenge_id, target) =
         resolve_creator_challenge_scope(&state.db, &creator, &id, query.target.as_deref()).await?;
     let response =
-        db::get_creator_challenge_stats(&state.db, &challenge_id, benchmark_target_id.as_deref())
-            .await?;
+        db::get_creator_challenge_stats(&state.db, &challenge_id, target.as_ref()).await?;
     Ok(Json(response))
 }
 
@@ -1129,14 +1115,10 @@ pub async fn list_creator_challenge_participants(
     Path(id): Path<String>,
     Query(query): Query<CreatorChallengeQuery>,
 ) -> Result<Json<CreatorChallengeParticipantsResponse>> {
-    let (challenge_id, benchmark_target_id) =
+    let (challenge_id, target) =
         resolve_creator_challenge_scope(&state.db, &creator, &id, query.target.as_deref()).await?;
-    let response = db::list_creator_challenge_participants(
-        &state.db,
-        &challenge_id,
-        benchmark_target_id.as_deref(),
-    )
-    .await?;
+    let response =
+        db::list_creator_challenge_participants(&state.db, &challenge_id, target.as_ref()).await?;
     Ok(Json(response))
 }
 
@@ -1198,8 +1180,8 @@ async fn resolve_creator_challenge_scope(
     creator: &CreatorAuth,
     raw_challenge_id: &str,
     requested_target: Option<&str>,
-) -> Result<(ChallengeId, Option<String>)> {
-    let challenge_id = parse_challenge_id(raw_challenge_id.to_string())?;
+) -> Result<(ChallengeId, Option<TargetName>)> {
+    let challenge_id = parse_challenge_id(raw_challenge_id)?;
     let challenge = db::get_published_challenge(pool, &challenge_id).await?;
     let challenge = challenge.ok_or(AppError::NotFound)?;
     if !db::agent_owns_challenge(pool, &challenge.challenge_id, &creator.agent_id).await? {
@@ -1208,29 +1190,26 @@ async fn resolve_creator_challenge_scope(
         ));
     }
 
-    let benchmark_target_id =
-        resolve_benchmark_target_from_spec(&challenge.spec_json, requested_target)?;
-    Ok((challenge.challenge_id, benchmark_target_id))
+    let target = resolve_target_from_spec(&challenge.spec_json, requested_target)?;
+    Ok((challenge.challenge_id, target))
 }
 
-fn resolve_benchmark_target_from_spec(
+fn resolve_target_from_spec(
     spec_json: &serde_json::Value,
     requested_target: Option<&str>,
-) -> Result<Option<String>> {
-    let Some(target_id) = requested_target
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    else {
+) -> Result<Option<TargetName>> {
+    let Some(target) = requested_target else {
         return Ok(None);
     };
 
     let spec: ChallengeBundleSpec =
         serde_json::from_value(spec_json.clone()).map_err(|e| AppError::Internal(e.to_string()))?;
-    if spec.benchmark_target(target_id).is_some() {
-        return Ok(Some(target_id.to_string()));
+    let target = parse_target(target)?;
+    if spec.target(&target).is_some() {
+        return Ok(Some(target));
     }
     Err(AppError::BadRequest(format!(
-        "challenge does not support benchmark target `{target_id}`"
+        "challenge does not support target `{target}`"
     )))
 }
 
@@ -1296,7 +1275,7 @@ pub async fn publish_challenge(
     Path(challenge_id): Path<String>,
     ValidatedJson(body): ValidatedJson<PublishChallengeRequest>,
 ) -> Result<(StatusCode, Json<PublishChallengeResponse>)> {
-    let challenge_id = parse_challenge_id(challenge_id)?;
+    let challenge_id = parse_challenge_id(&challenge_id)?;
     let bundle_path = if std::path::Path::new(&body.bundle_path).is_absolute() {
         body.bundle_path
     } else {
@@ -1437,15 +1416,15 @@ pub async fn get_admin_capacity(
 
 /// Queue an official rejudge for an existing solution submission.
 pub async fn rejudge(
+    SolutionSubmissionPath(id): SolutionSubmissionPath,
     _admin: AdminAuth,
     State(state): State<AppState>,
-    Path(id): Path<String>,
 ) -> Result<(StatusCode, Json<EvaluationJobResponse>)> {
     let job = db::queue_evaluation_job(
         &state.db,
         &QueueEvaluationJobInput {
             job_id: Uuid::new_v4().to_string(),
-            solution_submission_id: id.clone(),
+            solution_submission_id: id,
             eval_type: ScoringMode::Official,
         },
     )
@@ -1456,7 +1435,7 @@ pub async fn rejudge(
         Json(EvaluationJobResponse {
             job_id: job.id,
             solution_submission_id: job.solution_submission_id,
-            benchmark_target_id: job.benchmark_target_id,
+            target: job.target,
             eval_type: ScoringMode::Official.as_str().to_string(),
             status: job.status,
         }),
@@ -1465,15 +1444,15 @@ pub async fn rejudge(
 
 /// Queue an official private benchmark run for an existing solution submission.
 pub async fn official_run(
+    SolutionSubmissionPath(id): SolutionSubmissionPath,
     _admin: AdminAuth,
     State(state): State<AppState>,
-    Path(id): Path<String>,
 ) -> Result<(StatusCode, Json<EvaluationJobResponse>)> {
     let job = db::queue_evaluation_job(
         &state.db,
         &QueueEvaluationJobInput {
             job_id: Uuid::new_v4().to_string(),
-            solution_submission_id: id.clone(),
+            solution_submission_id: id,
             eval_type: ScoringMode::Official,
         },
     )
@@ -1484,7 +1463,7 @@ pub async fn official_run(
         Json(EvaluationJobResponse {
             job_id: job.id,
             solution_submission_id: job.solution_submission_id,
-            benchmark_target_id: job.benchmark_target_id,
+            target: job.target,
             eval_type: ScoringMode::Official.as_str().to_string(),
             status: job.status,
         }),
@@ -1493,9 +1472,9 @@ pub async fn official_run(
 
 /// Hide a solution submission from public views and repair leaderboard state.
 pub async fn hide_solution_submission(
+    SolutionSubmissionPath(id): SolutionSubmissionPath,
     _admin: AdminAuth,
     State(state): State<AppState>,
-    Path(id): Path<String>,
 ) -> Result<Json<HideSolutionSubmissionResponse>> {
     db::hide_solution_submission(&state.db, &id).await?;
     Ok(Json(HideSolutionSubmissionResponse { id, hidden: true }))

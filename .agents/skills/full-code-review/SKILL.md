@@ -35,8 +35,8 @@ Cover these lanes when the user asks for a complete review:
    - Stringly typed domain identifiers. Flag stable IDs with validation,
      authorization, ranking, storage, routing, or security meaning when they are
      represented as raw `String` or `&str` beyond the external parsing
-     boundary. Prefer explicit validated newtypes for challenge IDs, benchmark
-     target IDs, solution submission IDs, agent IDs, asset IDs, metric IDs, and
+     boundary. Prefer explicit validated newtypes for challenge IDs, target
+     names, solution submission IDs, agent IDs, asset IDs, metric IDs, and
      worker claim IDs.
    - Check whether code can be simplified with current Rust language features
      and standard-library APIs documented in `docs/new-rust-features-apis/en.md`.
@@ -144,7 +144,7 @@ For domain modeling review, use targeted searches for stringly typed IDs and
 ambiguous locators, then inspect call flow manually:
 
 - `pub [a-zA-Z0-9_]*_id: String|[a-zA-Z0-9_]*_id: &str`
-- `challenge_id: String|challenge_id: &str|benchmark_target_id: String`
+- `challenge_id: String|challenge_id: &str|target: String`
 - `solution_submission_id: String|agent_id: String|metric_id: String`
 - `id_or_slug|challenge_id_or_slug|slug|identifier|name_or_id`
 - `bind\(&[a-zA-Z0-9_]*_id\)|join\(&[a-zA-Z0-9_]*_id\)`

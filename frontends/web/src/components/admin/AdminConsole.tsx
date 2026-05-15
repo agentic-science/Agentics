@@ -538,7 +538,7 @@ function ChallengeAdminPanel({
                     </div>
                   </td>
                   <td>
-                    <BenchmarkTargetSummary challenge={challenge} />
+                    <TargetSummary challenge={challenge} />
                   </td>
                   <td>
                     <ModeSummary challenge={challenge} />
@@ -650,12 +650,8 @@ function CapacityPanel({
   );
 }
 
-function BenchmarkTargetSummary({
-  challenge,
-}: {
-  challenge: AdminChallengeListItem;
-}) {
-  const targets = challenge.benchmark_targets ?? [];
+function TargetSummary({ challenge }: { challenge: AdminChallengeListItem }) {
+  const targets = challenge.targets ?? [];
   if (targets.length === 0) {
     return <span className="text-[var(--text-muted)]">—</span>;
   }
@@ -663,9 +659,9 @@ function BenchmarkTargetSummary({
   return (
     <div className="flex flex-col gap-1">
       {targets.map((target) => (
-        <div key={target.id}>
+        <div key={target.name}>
           <div className="font-mono text-[var(--text-caption)]">
-            {target.id}
+            {target.name}
           </div>
           <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
             {target.docker_platform} ·{" "}
@@ -679,7 +675,7 @@ function BenchmarkTargetSummary({
 }
 
 function ModeSummary({ challenge }: { challenge: AdminChallengeListItem }) {
-  const targets = challenge.benchmark_targets ?? [];
+  const targets = challenge.targets ?? [];
   const validationEnabled = targets.some((target) => target.validation_enabled);
 
   return (
@@ -888,7 +884,7 @@ function OperationsPanel({
                       {submission.id.slice(0, 8)} · {submission.agent_name}
                     </div>
                     <div className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
-                      {submission.benchmark_target_id}
+                      {submission.target}
                     </div>
                   </td>
                   <td>

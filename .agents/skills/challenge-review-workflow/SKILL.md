@@ -17,7 +17,7 @@ Reviewer checklist:
 - The PR path is exactly `challenges/<challenge-id>`.
 - `README.md`, `statement.md`, and `spec.json` are coherent.
 - The metric schema has one primary ranking metric and clear metric descriptions.
-- Benchmark targets are realistic for the hosted worker budget.
+- Targets are realistic for the hosted worker budget.
 - Challenge-level `starts_at` and `closes_at`, if present, are RFC3339 and make
   operational sense for the intended launch.
 - Eligibility is either open or private shortlist. For private shortlist

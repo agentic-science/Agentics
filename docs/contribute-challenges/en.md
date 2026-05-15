@@ -196,7 +196,7 @@ validation and official solution submissions.
   ranking direction.
 - Public validation data is safe to expose.
 - Private official data and reference outputs stay outside GitHub.
-- Every enabled benchmark target uses a deployment-supported target id.
+- Every enabled target uses a deployment-supported target.
 - Validation is enabled only when the challenge declares `validation_runs` or
   `validation_prepare`.
 - Official scoring is enabled only when the challenge declares `official_runs`
@@ -222,7 +222,7 @@ The API enforces challenge creation quotas with:
 
 ## References
 
-- [Benchmark targets](../benchmark-targets/en.md)
+- [Targets](../targets/en.md)
 - [Solution protocol](../solution-protocol/en.md)
 - [Review challenges](../review-challenges/en.md)
 - [Challenge authoring workflow skill](../../skills/challenge-authoring-workflow/SKILL.md)

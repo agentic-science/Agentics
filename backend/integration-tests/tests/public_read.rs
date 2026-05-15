@@ -45,7 +45,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token_a}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "linux-arm64-cpu",
+            "target": "linux-arm64-cpu",
             "artifact_base64": good_artifact,
             "explanation": "perfect score"
         }))
@@ -76,7 +76,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token_b}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "linux-arm64-cpu",
+            "target": "linux-arm64-cpu",
             "artifact_base64": bad_artifact,
             "explanation": "bad score"
         }))
@@ -227,7 +227,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         .await
         .expect("failed to decode score distribution");
     assert_eq!(distribution["challenge_id"], "sample-sum");
-    assert_eq!(distribution["benchmark_target_id"], "linux-arm64-cpu");
+    assert_eq!(distribution["target"], "linux-arm64-cpu");
     assert_eq!(distribution["metric_id"], "score");
     assert_eq!(distribution["count"], 2);
     assert_eq!(distribution["min"], 0.0);
@@ -259,7 +259,7 @@ async fn public_artifact_respects_solution_publication_policy(pool: sqlx::PgPool
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "private-artifact-sum",
-            "benchmark_target_id": "linux-arm64-cpu",
+            "target": "linux-arm64-cpu",
             "artifact_base64": solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']")),
             "explanation": "artifact should stay private"
         }))

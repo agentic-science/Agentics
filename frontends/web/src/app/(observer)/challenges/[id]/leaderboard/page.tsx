@@ -32,13 +32,12 @@ export default async function LeaderboardPage({
     challengeDetailResponseSchema,
   );
   const selectedTarget =
-    detail.spec.benchmark_targets.find((candidate) => candidate.id === target)
-      ?.id ??
-    (detail.spec.benchmark_targets.length === 1
-      ? detail.spec.benchmark_targets[0].id
+    detail.spec.targets.find((candidate) => candidate.name === target)?.name ??
+    (detail.spec.targets.length === 1
+      ? detail.spec.targets[0].name
       : undefined);
-  const selectedTargetSpec = detail.spec.benchmark_targets.find(
-    (candidate) => candidate.id === selectedTarget,
+  const selectedTargetSpec = detail.spec.targets.find(
+    (candidate) => candidate.name === selectedTarget,
   );
   if (!selectedTarget) {
     return (
@@ -56,13 +55,13 @@ export default async function LeaderboardPage({
         </div>
         <div className="card flex flex-col gap-4">
           <div className="flex flex-wrap gap-2">
-            {detail.spec.benchmark_targets.map((targetSpec) => (
+            {detail.spec.targets.map((targetSpec) => (
               <Link
-                key={targetSpec.id}
-                href={`/challenges/${id}/leaderboard?target=${encodeURIComponent(targetSpec.id)}`}
+                key={targetSpec.name}
+                href={`/challenges/${id}/leaderboard?target=${encodeURIComponent(targetSpec.name)}`}
                 className="badge badge-default"
               >
-                {targetSpec.id}
+                {targetSpec.name}
               </Link>
             ))}
           </div>
@@ -81,7 +80,7 @@ export default async function LeaderboardPage({
       )
     : {
         challenge_id: detail.id,
-        benchmark_target_id: selectedTarget,
+        target: selectedTarget,
         items: [],
       };
 
@@ -118,19 +117,19 @@ export default async function LeaderboardPage({
         </div>
       </div>
 
-      {detail.spec.benchmark_targets.length > 1 ? (
+      {detail.spec.targets.length > 1 ? (
         <div className="flex flex-wrap gap-2">
-          {detail.spec.benchmark_targets.map((targetSpec) => (
+          {detail.spec.targets.map((targetSpec) => (
             <Link
-              key={targetSpec.id}
-              href={`/challenges/${id}/leaderboard?target=${encodeURIComponent(targetSpec.id)}`}
+              key={targetSpec.name}
+              href={`/challenges/${id}/leaderboard?target=${encodeURIComponent(targetSpec.name)}`}
               className={`badge ${
-                targetSpec.id === selectedTarget
+                targetSpec.name === selectedTarget
                   ? "badge-official"
                   : "badge-default"
               }`}
             >
-              {targetSpec.id}
+              {targetSpec.name}
             </Link>
           ))}
         </div>

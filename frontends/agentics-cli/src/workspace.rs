@@ -119,7 +119,7 @@ fn render_readme(
     interface: SolutionInterface,
 ) -> String {
     format!(
-        "# {}\n\nChallenge: `{}`\nStarts at: `{}`\nCloses at: `{}`\nEligibility: `{}`\nRuntime profile: `{}`\nInterface: `{}`\nBenchmark targets:\n{}\n\n{}\n\n## Workspace Contract\n\nThis workspace intentionally starts with only `README.md`, `{}`, and a Git repository.\n\nCreate a `run.sh` file at the repository root before committing. The generated pre-commit hook checks that `run.sh` and `{}` exist. Keep `run.sh` aligned with the generated manifest before packaging or submitting.\n",
+        "# {}\n\nChallenge: `{}`\nStarts at: `{}`\nCloses at: `{}`\nEligibility: `{}`\nRuntime profile: `{}`\nInterface: `{}`\nTargets:\n{}\n\n{}\n\n## Workspace Contract\n\nThis workspace intentionally starts with only `README.md`, `{}`, and a Git repository.\n\nCreate a `run.sh` file at the repository root before committing. The generated pre-commit hook checks that `run.sh` and `{}` exist. Keep `run.sh` aligned with the generated manifest before packaging or submitting.\n",
         challenge.title.trim(),
         challenge.id,
         challenge.spec.starts_at.as_deref().unwrap_or("none"),
@@ -130,22 +130,22 @@ fn render_readme(
             .unwrap_or_else(|| "unknown".to_string()),
         runtime_profile.manifest_value(),
         interface.manifest_value(),
-        format_benchmark_targets(challenge),
+        format_targets(challenge),
         challenge.statement_markdown.trim(),
         ZIP_PROJECT_MANIFEST_FILE,
         ZIP_PROJECT_MANIFEST_FILE,
     )
 }
 
-fn format_benchmark_targets(challenge: &ChallengeDetailResponse) -> String {
+fn format_targets(challenge: &ChallengeDetailResponse) -> String {
     challenge
         .spec
-        .benchmark_targets
+        .targets
         .iter()
         .map(|target| {
             format!(
                 "- `{}`: {} {}, image `{}`",
-                target.id,
+                target.name,
                 target.docker_platform.as_str(),
                 target.accelerator.as_str(),
                 target.resource_profile.solution_image
@@ -354,14 +354,14 @@ mod tests {
     use std::fs;
 
     use shared::models::challenge::{
-        BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengeDetailResponse,
-        ChallengeEligibilitySpec, ChallengeEligibilityType, ChallengeExecutionSpec,
-        ChallengeResultDetailVisibility, ChallengeSolutionPublicationPolicy, ChallengeVisibility,
+        ChallengeBundleSpec, ChallengeDetailResponse, ChallengeEligibilitySpec,
+        ChallengeEligibilityType, ChallengeExecutionSpec, ChallengeResultDetailVisibility,
+        ChallengeSolutionPublicationPolicy, ChallengeTargetSpec, ChallengeVisibility,
         ChallengeVisibilitySpec, DatasetsSpec, DockerPlatform, MetricSchemaSpec,
-        PrivateBenchmarkPolicy, ResourceProfileSpec, ScorerSpec, SolutionSpec,
+        PrivateBenchmarkPolicy, ResourceProfileSpec, ScorerSpec, SolutionSpec, TargetAccelerator,
     };
     use shared::models::evaluation::ScoreVisibility;
-    use shared::models::ids::ChallengeId;
+    use shared::models::ids::{ChallengeId, TargetName};
     use shared::zip_project::{
         ZipProjectInterfaceKind, ZipProjectNetworkAccess, parse_zip_project_manifest,
     };
@@ -507,10 +507,10 @@ mod tests {
                     command: vec!["python".to_string(), "scorer/run.py".to_string()],
                     result_file: "result.json".to_string(),
                 },
-                benchmark_targets: vec![BenchmarkTargetSpec {
-                    id: "linux-arm64-cpu".to_string(),
+                targets: vec![ChallengeTargetSpec {
+                    name: target_name("linux-arm64-cpu"),
                     docker_platform: DockerPlatform::LinuxArm64,
-                    accelerator: BenchmarkAccelerator::Cpu,
+                    accelerator: TargetAccelerator::Cpu,
                     validation_enabled: false,
                     resource_profile: ResourceProfileSpec {
                         id: "python-cpu-small".to_string(),
@@ -552,5 +552,9 @@ mod tests {
 
     fn challenge_id(value: &str) -> ChallengeId {
         ChallengeId::try_new(value.to_string()).expect("test challenge id is valid")
+    }
+
+    fn target_name(value: &str) -> TargetName {
+        TargetName::try_new(value.to_string()).expect("test target is valid")
     }
 }

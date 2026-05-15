@@ -8,7 +8,7 @@ use shared::models::challenge_creation::{
     ChallengeDraftCleanupResponse, ChallengeDraftResponse, ChallengePrivateAssetResponse,
 };
 use shared::models::evaluation::ScorerRunResult;
-use shared::models::ids::ChallengeId;
+use shared::models::ids::{ChallengeId, TargetName};
 use shared::models::request::{
     ChallengeShortlistResponse, ChallengeShortlistRevisionResponse,
     CreateSolutionSubmissionResponse, CreatorChallengeParticipantsResponse,
@@ -32,7 +32,7 @@ pub(crate) struct LocalValidationPackageReport {
 
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct LocalValidationTargetReport {
-    pub benchmark_target_id: String,
+    pub target: TargetName,
     pub log_path: PathBuf,
     pub result: ScorerRunResult,
 }
@@ -185,7 +185,7 @@ pub(crate) fn render_creator_challenge_stats(
         OutputFormat::Table => Ok(format!(
             "challenge: {}\ntarget: {}\nagents: {}\nsolution_submissions: {}\ncompleted: {}\nfailed: {}\nqueued_or_running: {}\nvalidation_runs: {}\nofficial_runs: {}\nvisible_submissions: {}\nlatest_submission: {}\nlatest_completed_evaluation: {}\nbest_rank_score_min: {}\nbest_rank_score_max: {}\nbest_rank_score_mean: {}",
             response.challenge_id,
-            response.benchmark_target_id.as_deref().unwrap_or("all"),
+            response.target.as_ref().map_or("all", TargetName::as_str),
             response.agent_count,
             response.solution_submission_count,
             response.completed_solution_submission_count,
@@ -234,8 +234,8 @@ pub(crate) fn render_creator_challenge_participants(
                         item.agent_name.clone(),
                         item.solution_submission_count.to_string(),
                         item.best_solution_submission_id
-                            .clone()
-                            .unwrap_or_else(|| "none".to_string()),
+                            .as_ref()
+                            .map_or_else(|| "none".to_string(), ToString::to_string),
                         item.best_rank_score
                             .map(format_score)
                             .unwrap_or_else(|| "none".to_string()),
@@ -251,7 +251,7 @@ pub(crate) fn render_creator_challenge_participants(
             Ok(format!(
                 "challenge: {}\ntarget: {}\n{}",
                 response.challenge_id,
-                response.benchmark_target_id.as_deref().unwrap_or("all"),
+                response.target.as_ref().map_or("all", TargetName::as_str),
                 render_table(
                     &[
                         "AGENT_ID",
@@ -362,7 +362,7 @@ pub(crate) fn render_challenge_detail(
             };
 
             Ok(format!(
-                "{} ({})\nsummary: {}\nstarts_at: {}\ncloses_at: {}\neligibility: {}\nleaderboard_visibility: {}\nscore_distribution_visibility: {}\nresult_detail_visibility: {}\nsolution_publication: {}\nsolution_protocol: {} ({})\nbenchmark_targets:\n{}\ndatasets: public={}, private_benchmark={}\nranking_metric: {}\n\n{}",
+                "{} ({})\nsummary: {}\nstarts_at: {}\ncloses_at: {}\neligibility: {}\nleaderboard_visibility: {}\nscore_distribution_visibility: {}\nresult_detail_visibility: {}\nsolution_publication: {}\nsolution_protocol: {} ({})\ntargets:\n{}\ndatasets: public={}, private_benchmark={}\nranking_metric: {}\n\n{}",
                 response.title,
                 response.id,
                 response.summary,
@@ -375,7 +375,7 @@ pub(crate) fn render_challenge_detail(
                 status_label(&response.spec.solution_publication),
                 response.spec.solution.protocol,
                 response.spec.solution.manifest_file,
-                format_benchmark_targets(&response.spec.benchmark_targets),
+                format_targets(&response.spec.targets),
                 response.spec.datasets.public_dir,
                 private_benchmark,
                 response.spec.metric_schema.ranking.primary_metric_id,
@@ -421,7 +421,7 @@ pub(crate) fn render_create_solution_submission(
             "Submitted {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}",
             response.id,
             response.challenge_id,
-            response.benchmark_target_id,
+            response.target,
             response.status,
             response.evaluation_job_id,
             package.file_count,
@@ -462,7 +462,7 @@ pub(crate) fn render_create_validation_run(
             "Created validation run {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}",
             response.id,
             response.challenge_id,
-            response.benchmark_target_id,
+            response.target,
             response.status,
             response.evaluation_job_id,
             package.file_count,
@@ -523,7 +523,7 @@ pub(crate) fn render_solution_submission_status(
                 "solution submission: {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\nvalidation_evaluation: {}\nofficial_evaluation: {}\nvalidation_primary_score: {}\nrank_score: {}\nvisible_after_eval: {}",
                 response.id,
                 response.challenge_id,
-                response.benchmark_target_id,
+                response.target,
                 response.status,
                 evaluation_job,
                 validation_eval,
@@ -568,7 +568,7 @@ pub(crate) fn render_validation_run_status(
                 "validation_run: {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\nvalidation: {}\nprimary_score: {}\nrank_score: {}\nvisible_after_eval: {}",
                 response.id,
                 response.challenge_id,
-                response.benchmark_target_id,
+                response.target,
                 response.status,
                 evaluation_job,
                 validation_status,
@@ -609,8 +609,8 @@ pub(crate) fn render_validation_run_status_batch(
                             .map(format_score)
                             .unwrap_or_else(|| "none".to_string());
                         vec![
-                            response.benchmark_target_id.clone(),
-                            response.id.clone(),
+                            response.target.to_string(),
+                            response.id.to_string(),
                             status_label(&response.status),
                             evaluation_job,
                             validation_status,
@@ -637,7 +637,7 @@ pub(crate) fn render_local_validation_report(
             [target] => Ok(format!(
                 "Local validation completed\nchallenge: {}\ntarget: {}\nstatus: {}\nprimary_score: {}\nrank_score: {}\nlog: {}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}\nbundle: {}\nstorage: {}",
                 report.challenge_id,
-                target.benchmark_target_id,
+                target.target,
                 status_label(&target.result.status),
                 format_score(target.result.primary_score),
                 target
@@ -659,7 +659,7 @@ pub(crate) fn render_local_validation_report(
                     .iter()
                     .map(|target| {
                         vec![
-                            target.benchmark_target_id.clone(),
+                            target.target.to_string(),
                             status_label(&target.result.status),
                             format_score(target.result.primary_score),
                             target
@@ -713,8 +713,8 @@ fn render_create_submission_batch(
                 .iter()
                 .map(|response| {
                     vec![
-                        response.benchmark_target_id.clone(),
-                        response.id.clone(),
+                        response.target.to_string(),
+                        response.id.to_string(),
                         response.challenge_id.to_string(),
                         response.status.clone(),
                         response.evaluation_job_id.clone(),
@@ -763,7 +763,7 @@ pub(crate) fn render_ranking_context(
                     vec![
                         entry.rank.to_string(),
                         entry.entry.agent_name.clone(),
-                        entry.entry.best_solution_submission_id.clone(),
+                        entry.entry.best_solution_submission_id.to_string(),
                         format_score(entry.entry.best_rank_score),
                     ]
                 })
@@ -772,7 +772,7 @@ pub(crate) fn render_ranking_context(
                 "solution_submission: {}\nchallenge: {}\ntarget: {}\nrank: {}\ntotal_ranked: {}\npercentile: {}\nis_agent_best: {}\nnearby:\n{}",
                 response.solution_submission_id,
                 response.challenge_id,
-                response.benchmark_target_id,
+                response.target,
                 response
                     .rank
                     .map(|rank| rank.to_string())
@@ -807,7 +807,7 @@ pub(crate) fn render_leaderboard(
                     Ok(vec![
                         rank.to_string(),
                         entry.agent_name.clone(),
-                        entry.best_solution_submission_id.clone(),
+                        entry.best_solution_submission_id.to_string(),
                         format_score(entry.best_rank_score),
                         entry.updated_at.clone(),
                     ])
@@ -816,7 +816,7 @@ pub(crate) fn render_leaderboard(
             Ok(format!(
                 "challenge: {}\ntarget: {}\n{}",
                 response.challenge_id,
-                response.benchmark_target_id,
+                response.target,
                 render_table(&["RANK", "AGENT", "SUBMISSION", "SCORE", "UPDATED"], &rows)
             ))
         }
@@ -854,7 +854,7 @@ pub(crate) fn render_score_distribution(
             Ok(format!(
                 "challenge: {}\ntarget: {}\nmetric: {}\ncount: {}\nmin: {}\nmax: {}\nmean: {}\nquantiles:\n{}\nhistogram:\n{}",
                 response.challenge_id,
-                response.benchmark_target_id,
+                response.target,
                 response.metric_id,
                 response.count,
                 response
@@ -876,7 +876,7 @@ pub(crate) fn render_score_distribution(
     }
 }
 
-fn format_benchmark_targets(targets: &[shared::models::challenge::BenchmarkTargetSpec]) -> String {
+fn format_targets(targets: &[shared::models::challenge::ChallengeTargetSpec]) -> String {
     if targets.is_empty() {
         return "  <none>".to_string();
     }
@@ -886,7 +886,7 @@ fn format_benchmark_targets(targets: &[shared::models::challenge::BenchmarkTarge
         .map(|target| {
             format!(
                 "  - {}: {} {}, image={}, timeout={} sec, memory={} MB, validation={}",
-                target.id,
+                target.name,
                 target.docker_platform.as_str(),
                 target.accelerator.as_str(),
                 target.resource_profile.solution_image,
@@ -966,15 +966,15 @@ fn render_table_row(row: &[String], widths: &[usize]) -> String {
 #[cfg(test)]
 mod tests {
     use shared::models::challenge::{
-        BenchmarkAccelerator, BenchmarkTargetSpec, ChallengeBundleSpec, ChallengeDetailResponse,
-        ChallengeEligibilitySpec, ChallengeEligibilityType, ChallengeExecutionSpec,
-        ChallengeListItemDto, ChallengeListResponse, ChallengeResultDetailVisibility,
-        ChallengeSolutionPublicationPolicy, ChallengeVisibility, ChallengeVisibilitySpec,
-        DatasetsSpec, DockerPlatform, MetricSchemaSpec, PrivateBenchmarkPolicy,
-        ResourceProfileSpec, ScorerSpec, SolutionSpec,
+        ChallengeBundleSpec, ChallengeDetailResponse, ChallengeEligibilitySpec,
+        ChallengeEligibilityType, ChallengeExecutionSpec, ChallengeListItemDto,
+        ChallengeListResponse, ChallengeResultDetailVisibility, ChallengeSolutionPublicationPolicy,
+        ChallengeTargetSpec, ChallengeVisibility, ChallengeVisibilitySpec, DatasetsSpec,
+        DockerPlatform, MetricSchemaSpec, PrivateBenchmarkPolicy, ResourceProfileSpec, ScorerSpec,
+        SolutionSpec, TargetAccelerator,
     };
     use shared::models::evaluation::ScoreVisibility;
-    use shared::models::ids::ChallengeId;
+    use shared::models::ids::{ChallengeId, TargetName};
     use shared::zip_project::ZipProjectNetworkAccess;
 
     use super::{OutputFormat, render_challenge_detail, render_challenge_list};
@@ -1052,10 +1052,10 @@ mod tests {
                     command: vec!["python".to_string(), "scorer/run.py".to_string()],
                     result_file: "result.json".to_string(),
                 },
-                benchmark_targets: vec![BenchmarkTargetSpec {
-                    id: "linux-arm64-cpu".to_string(),
+                targets: vec![ChallengeTargetSpec {
+                    name: target_name("linux-arm64-cpu"),
                     docker_platform: DockerPlatform::LinuxArm64,
-                    accelerator: BenchmarkAccelerator::Cpu,
+                    accelerator: TargetAccelerator::Cpu,
                     validation_enabled: false,
                     resource_profile: ResourceProfileSpec {
                         id: "python-cpu-small".to_string(),
@@ -1093,6 +1093,10 @@ mod tests {
             },
             statement_markdown: "# Statement\n\nReturn the sum.".to_string(),
         }
+    }
+
+    fn target_name(value: &str) -> TargetName {
+        TargetName::try_new(value.to_string()).expect("test target is valid")
     }
 
     fn challenge_id(value: &str) -> ChallengeId {

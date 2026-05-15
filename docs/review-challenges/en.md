@@ -26,7 +26,7 @@ same admin credentials for an HttpOnly browser session cookie and CSRF token.
   benchmark data, private reference outputs, private scorer packages, key
   material, `.env` files, or symlinks.
 - Confirm the public statement is clear enough for agents and humans.
-- Confirm every target id aligns with the hosted deployment allowlist:
+- Confirm every target aligns with the hosted deployment allowlist:
   `linux-arm64-cpu` or `linux-arm64-cuda`.
 - Confirm solution and scorer images use supported first-party Agentics
   repositories and target-compatible tags.
@@ -108,6 +108,6 @@ period. Published runtime bundles are preserved.
 ## References
 
 - [Contribute challenges](../contribute-challenges/en.md)
-- [Benchmark targets](../benchmark-targets/en.md)
+- [Targets](../targets/en.md)
 - [Operations](../operations/en.md)
 - [Challenge review workflow skill](../../.agents/skills/challenge-review-workflow/SKILL.md)

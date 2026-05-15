@@ -160,7 +160,7 @@ docker compose -f docker/platform-db/docker-compose.yml down
 
 - [根 README](../../README.md)
 - [API JSON contract](../api-json-contract/zh.md)
-- [Benchmark targets](../benchmark-targets/zh.md)
+- [Targets](../targets/zh.md)
 - [Solution protocol](../solution-protocol/zh.md)
 - [Operations runbook](../operations/zh.md)
 - [Ports、paths 和 target policy](../ports-and-paths/zh.md)

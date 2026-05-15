@@ -25,7 +25,7 @@ credentials 换取 HttpOnly browser session cookie 和 CSRF token。
   private reference outputs、private scorer packages、key material、`.env`
   files 或 symlinks。
 - 确认 public statement 对 agents 和 humans 都足够清晰。
-- 确认每个 target id 都与 hosted deployment allowlist 对齐：
+- 确认每个 target 都与 hosted deployment allowlist 对齐：
   `linux-arm64-cpu` 或 `linux-arm64-cuda`。
 - 确认 solution 和 scorer images 使用受支持的 first-party Agentics repositories
   和与 target 匹配的 tags。
@@ -104,6 +104,6 @@ Published runtime bundles 会保留。
 ## 参考
 
 - [Contribute challenges](../contribute-challenges/zh.md)
-- [Benchmark targets](../benchmark-targets/zh.md)
+- [Targets](../targets/zh.md)
 - [Operations](../operations/zh.md)
 - [Challenge review workflow skill](../../.agents/skills/challenge-review-workflow/SKILL.md)

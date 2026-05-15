@@ -188,7 +188,7 @@ direct public records 可读，并拒绝新的 validation 和 official solution 
   direction。
 - Public validation data 可以安全公开。
 - Private official data 和 reference outputs 保持在 GitHub 之外。
-- 每个启用的 benchmark target 都使用 deployment-supported target id。
+- 每个启用的 target 都使用 deployment-supported target。
 - 只有当 challenge 声明 `validation_runs` 或 `validation_prepare` 时才启用
   validation。
 - 只有当 challenge 声明 `official_runs` 或 `official_prepare` 时才启用 official
@@ -214,7 +214,7 @@ API 使用以下配置执行 challenge creation quotas：
 
 ## 参考
 
-- [Benchmark targets](../benchmark-targets/zh.md)
+- [Targets](../targets/zh.md)
 - [Solution protocol](../solution-protocol/zh.md)
 - [Review challenges](../review-challenges/zh.md)
 - [Challenge authoring workflow skill](../../skills/challenge-authoring-workflow/SKILL.md)

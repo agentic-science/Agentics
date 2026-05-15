@@ -4,6 +4,7 @@ use crate::error::{AppError, Result};
 use crate::models::evaluation::{
     EvaluationStatus, MetricValue, PublicCaseResult, RunMetricResult, ScoreSummary, ScoringMode,
 };
+use crate::models::ids::{SolutionSubmissionId, TargetName};
 
 use super::leaderboard::{
     update_official_score_for_solution_submission_tx,
@@ -14,9 +15,9 @@ use super::leaderboard::{
 #[derive(Debug, Clone)]
 pub struct MarkEvaluationStartedInput {
     pub evaluation_id: String,
-    pub solution_submission_id: String,
+    pub solution_submission_id: SolutionSubmissionId,
     pub job_id: String,
-    pub benchmark_target_id: String,
+    pub target: TargetName,
     pub eval_type: ScoringMode,
 }
 
@@ -29,15 +30,15 @@ pub async fn mark_evaluation_started(
 
     let result = sqlx::query(
         r#"
-        INSERT INTO evaluations (id, solution_submission_id, job_id, benchmark_target_id, eval_type, status, started_at)
+        INSERT INTO evaluations (id, solution_submission_id, job_id, target, eval_type, status, started_at)
         VALUES ($1, $2, $3, $4, $5, 'running', NOW())
         ON CONFLICT (job_id) DO NOTHING
         "#,
     )
     .bind(&input.evaluation_id)
-    .bind(&input.solution_submission_id)
+    .bind(input.solution_submission_id.as_str())
     .bind(&input.job_id)
-    .bind(&input.benchmark_target_id)
+    .bind(input.target.as_str())
     .bind(eval_type_str)
     .execute(pool)
     .await?;
@@ -48,11 +49,11 @@ pub async fn mark_evaluation_started(
 /// Validated runner result prepared for persistence.
 #[derive(Debug, Clone)]
 pub struct PersistedEvaluationResult {
-    pub solution_submission_id: String,
+    pub solution_submission_id: SolutionSubmissionId,
     pub job_id: String,
     pub worker_id: String,
     pub claim_attempt_count: i32,
-    pub benchmark_target_id: String,
+    pub target: TargetName,
     pub eval_type: ScoringMode,
     pub status: EvaluationStatus,
     pub primary_score: Option<f64>,
@@ -149,7 +150,7 @@ pub async fn mark_evaluation_finished(
             sqlx::query(
                 "UPDATE solution_submissions SET status = $2, visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1"
             )
-            .bind(&result.solution_submission_id)
+            .bind(result.solution_submission_id.as_str())
             .bind(sub_status)
             .execute(&mut *tx)
             .await?;
@@ -160,7 +161,7 @@ pub async fn mark_evaluation_finished(
             sqlx::query(
                 "UPDATE solution_submissions SET status = $2, visible_after_eval = $3, updated_at = NOW() WHERE id = $1"
             )
-            .bind(&result.solution_submission_id)
+            .bind(result.solution_submission_id.as_str())
             .bind(sub_status)
             .bind(visible)
             .execute(&mut *tx)
@@ -172,7 +173,7 @@ pub async fn mark_evaluation_finished(
                 let became_best = upsert_leaderboard_entry_for_solution_submission_tx(
                     &mut tx,
                     &result.solution_submission_id,
-                    &result.benchmark_target_id,
+                    &result.target,
                     rank_score,
                     &result.public_results,
                     &result.aggregate_metrics,
@@ -182,7 +183,7 @@ pub async fn mark_evaluation_finished(
                     update_official_score_for_solution_submission_tx(
                         &mut tx,
                         &result.solution_submission_id,
-                        &result.benchmark_target_id,
+                        &result.target,
                         rank_score,
                         &result.aggregate_metrics,
                     )

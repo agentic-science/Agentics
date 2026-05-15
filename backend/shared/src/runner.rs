@@ -13,9 +13,9 @@ use bollard::Docker;
 use crate::config::Config;
 use crate::error::{AppError, Result};
 use crate::models::challenge::{
-    BenchmarkAccelerator, ChallengeBundleSpec, ChallengePrepareSpec, ChallengeRunInputFile,
-    ChallengeRunInterface, ChallengeRunManifest, ChallengeRunSpec, DockerPlatform,
-    MetricSchemaSpec, ResourceProfileSpec,
+    ChallengeBundleSpec, ChallengePrepareSpec, ChallengeRunInputFile, ChallengeRunInterface,
+    ChallengeRunManifest, ChallengeRunSpec, DockerPlatform, MetricSchemaSpec, ResourceProfileSpec,
+    TargetAccelerator,
 };
 use crate::models::evaluation::{EvaluationJobPayload, ScorerRunResult, ScoringMode};
 use crate::storage::Storage;
@@ -60,7 +60,7 @@ struct RunnerContext<'a> {
 struct SolutionRunRequest<'a> {
     profile: &'a ResourceProfileSpec,
     docker_platform: DockerPlatform,
-    accelerator: BenchmarkAccelerator,
+    accelerator: TargetAccelerator,
     manifest: &'a ZipProjectManifest,
     run_manifest: &'a ChallengeRunManifest,
     input_source_root: &'a Path,
@@ -72,7 +72,7 @@ struct SolutionRunRequest<'a> {
 struct SetupBuildRequest<'a> {
     profile: &'a ResourceProfileSpec,
     docker_platform: DockerPlatform,
-    accelerator: BenchmarkAccelerator,
+    accelerator: TargetAccelerator,
     manifest: &'a ZipProjectManifest,
     source_root: &'a Path,
     build_root: &'a Path,
@@ -83,7 +83,7 @@ struct ScorerRequest<'a> {
     spec: &'a ChallengeBundleSpec,
     profile: &'a ResourceProfileSpec,
     docker_platform: DockerPlatform,
-    accelerator: BenchmarkAccelerator,
+    accelerator: TargetAccelerator,
     run_manifest_container_path: &'a str,
     bundle_dir: &'a Path,
     prepared_root: Option<&'a Path>,
@@ -103,8 +103,8 @@ struct RunPlanRequest<'a> {
     spec: &'a ChallengeBundleSpec,
     profile: &'a ResourceProfileSpec,
     docker_platform: DockerPlatform,
-    accelerator: BenchmarkAccelerator,
-    benchmark_target_id: &'a str,
+    accelerator: TargetAccelerator,
+    target: &'a str,
     eval_type: ScoringMode,
     bundle_dir: &'a Path,
     prepared_root: &'a Path,
@@ -114,8 +114,8 @@ struct PrepareRequest<'a> {
     runner: RunnerContext<'a>,
     profile: &'a ResourceProfileSpec,
     docker_platform: DockerPlatform,
-    accelerator: BenchmarkAccelerator,
-    benchmark_target_id: &'a str,
+    accelerator: TargetAccelerator,
+    target: &'a str,
     eval_type: ScoringMode,
     prepare: &'a ChallengePrepareSpec,
     bundle_dir: &'a Path,
@@ -177,14 +177,12 @@ pub async fn execute_evaluation_job(
     };
 
     let execution = async {
-        let target = spec
-            .benchmark_target(&payload.benchmark_target_id)
-            .ok_or_else(|| {
-                AppError::Runner(format!(
-                    "challenge contract does not declare benchmark target `{}`",
-                    payload.benchmark_target_id
-                ))
-            })?;
+        let target = spec.target(&payload.target).ok_or_else(|| {
+            AppError::Runner(format!(
+                "challenge contract does not declare target `{}`",
+                payload.target
+            ))
+        })?;
         let profile = &target.resource_profile;
         pre_pull_image(docker, &profile.solution_image, target.docker_platform).await?;
         pre_pull_image(docker, &profile.scorer_image, target.docker_platform).await?;
@@ -215,7 +213,7 @@ pub async fn execute_evaluation_job(
                 profile,
                 docker_platform: target.docker_platform,
                 accelerator: target.accelerator,
-                benchmark_target_id: target.id.as_str(),
+                target: target.name.as_str(),
                 eval_type,
                 bundle_dir,
                 prepared_root: &prepared_root,
@@ -592,7 +590,7 @@ async fn resolve_run_plan(
                     profile: request.profile,
                     docker_platform: request.docker_platform,
                     accelerator: request.accelerator,
-                    benchmark_target_id: request.benchmark_target_id,
+                    target: request.target,
                     eval_type: request.eval_type,
                     prepare,
                     bundle_dir: request.bundle_dir,
@@ -642,8 +640,8 @@ async fn run_prepare_phase(request: PrepareRequest<'_>, logs: &mut String) -> Re
         "/prepared".to_string(),
         "--mode".to_string(),
         request.eval_type.scorer_mode_arg().to_string(),
-        "--benchmark-target".to_string(),
-        request.benchmark_target_id.to_string(),
+        "--target".to_string(),
+        request.target.to_string(),
         "--runs-file".to_string(),
         format!("/prepared/{}", request.prepare.result_runs_file),
     ]);

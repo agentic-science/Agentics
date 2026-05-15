@@ -44,19 +44,20 @@ export const adminChallengeListResponseSchema = z
           title: z.string(),
           summary: z.string(),
           status: z.string(),
-          benchmark_targets: z
+          targets: z
             .array(
               z
                 .object({
-                  id: z.string(),
+                  name: z
+                    .string()
+                    .regex(/^[A-Za-z0-9_.-]+$/)
+                    .min(1),
                   docker_platform: z
                     .enum(["linux/arm64", "linux/amd64"])
-                    .describe(
-                      "Supported Docker platforms for benchmark targets.",
-                    ),
+                    .describe("Supported Docker platforms for targets."),
                   accelerator: z
                     .enum(["cpu", "gpu"])
-                    .describe("Accelerator family used by a benchmark target."),
+                    .describe("Accelerator family used by a target."),
                   validation_enabled: z.boolean(),
                   resource_profile: z
                     .object({
@@ -196,14 +197,22 @@ export const adminSolutionSubmissionListResponseSchema = z
     items: z.array(
       z
         .object({
-          id: z.string(),
+          id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
           challenge_id: z
             .string()
             .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
             .min(3)
             .max(63),
           challenge_title: z.string(),
-          benchmark_target_id: z.string(),
+          target: z
+            .string()
+            .regex(/^[A-Za-z0-9_.-]+$/)
+            .min(1),
           agent_id: z.string(),
           agent_name: z.string(),
           status: z.string(),
@@ -273,16 +282,19 @@ export const challengeDetailResponseSchema = z
           .object({ command: z.array(z.string()), result_file: z.string() })
           .strict()
           .describe("Scorer entrypoint and output-file contract for a bundle."),
-        benchmark_targets: z.array(
+        targets: z.array(
           z
             .object({
-              id: z.string(),
+              name: z
+                .string()
+                .regex(/^[A-Za-z0-9_.-]+$/)
+                .min(1),
               docker_platform: z
                 .enum(["linux/arm64", "linux/amd64"])
-                .describe("Supported Docker platforms for benchmark targets."),
+                .describe("Supported Docker platforms for targets."),
               accelerator: z
                 .enum(["cpu", "gpu"])
-                .describe("Accelerator family used by a benchmark target."),
+                .describe("Accelerator family used by a target."),
               validation_enabled: z.boolean(),
               resource_profile: z
                 .object({
@@ -974,14 +986,24 @@ export const creatorChallengeParticipantsResponseSchema = z
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
       .min(3)
       .max(63),
-    benchmark_target_id: z.string().optional(),
+    target: z
+      .string()
+      .regex(/^[A-Za-z0-9_.-]+$/)
+      .min(1)
+      .optional(),
     items: z.array(
       z
         .object({
           agent_id: z.string(),
           agent_name: z.string(),
           solution_submission_count: z.number().int(),
-          best_solution_submission_id: z.string().optional(),
+          best_solution_submission_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            )
+            .optional(),
           best_rank_score: z.number().optional(),
           latest_status: z.string().optional(),
           latest_solution_submission_at: z.string().optional(),
@@ -1002,7 +1024,11 @@ export const creatorChallengeStatsResponseSchema = z
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
       .min(3)
       .max(63),
-    benchmark_target_id: z.string().optional(),
+    target: z
+      .string()
+      .regex(/^[A-Za-z0-9_.-]+$/)
+      .min(1)
+      .optional(),
     agent_count: z.number().int(),
     solution_submission_count: z.number().int(),
     completed_solution_submission_count: z.number().int(),
@@ -1019,7 +1045,7 @@ export const creatorChallengeStatsResponseSchema = z
   })
   .strict()
   .describe(
-    "Challenge-owner statistics for one challenge and optional benchmark target.",
+    "Challenge-owner statistics for one challenge and optional target.",
   );
 
 export const creatorMeResponseSchema = z
@@ -1089,8 +1115,14 @@ export const discussionListResponseSchema = z
 export const evaluationJobResponseSchema = z
   .object({
     job_id: z.string(),
-    solution_submission_id: z.string(),
-    benchmark_target_id: z.string(),
+    solution_submission_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+    target: z
+      .string()
+      .regex(/^[A-Za-z0-9_.-]+$/)
+      .min(1),
     eval_type: z.string(),
     status: z.string(),
   })
@@ -1105,7 +1137,13 @@ export const githubOauthLoginResponseSchema = z
   .describe("URL returned to a browser or CLI so it can start GitHub OAuth.");
 
 export const hideSolutionSubmissionResponseSchema = z
-  .object({ id: z.string(), hidden: z.boolean() })
+  .object({
+    id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+    hidden: z.boolean(),
+  })
   .strict()
   .describe(
     "Admin response returned after toggling solution submission visibility.",
@@ -1118,14 +1156,25 @@ export const leaderboardResponseSchema = z
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
       .min(3)
       .max(63),
-    benchmark_target_id: z.string(),
+    target: z
+      .string()
+      .regex(/^[A-Za-z0-9_.-]+$/)
+      .min(1),
     items: z.array(
       z
         .object({
-          benchmark_target_id: z.string(),
+          target: z
+            .string()
+            .regex(/^[A-Za-z0-9_.-]+$/)
+            .min(1),
           agent_id: z.string(),
           agent_name: z.string(),
-          best_solution_submission_id: z.string(),
+          best_solution_submission_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
           best_rank_score: z.number(),
           rank_score: z.number(),
           aggregate_metrics: z.array(
@@ -1157,19 +1206,33 @@ export const publicSolutionSubmissionListResponseSchema = z
     items: z.array(
       z
         .object({
-          id: z.string(),
+          id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
           challenge_id: z
             .string()
             .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
             .min(3)
             .max(63),
-          benchmark_target_id: z.string(),
+          target: z
+            .string()
+            .regex(/^[A-Za-z0-9_.-]+$/)
+            .min(1),
           challenge_title: z.string(),
           agent_id: z.string(),
           agent_name: z.string(),
           status: z.string(),
           explanation: z.string(),
-          parent_solution_submission_id: z.string().optional(),
+          parent_solution_submission_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            )
+            .optional(),
           credit_text: z.string(),
           validation_score: z.number().optional(),
           official_score: z.number().optional(),
@@ -1217,18 +1280,32 @@ export const rankingContextResponseSchema = z
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
       .min(3)
       .max(63),
-    benchmark_target_id: z.string(),
-    solution_submission_id: z.string(),
+    target: z
+      .string()
+      .regex(/^[A-Za-z0-9_.-]+$/)
+      .min(1),
+    solution_submission_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
     rank: z.number().int().optional(),
     total_ranked: z.number().int(),
     percentile: z.number().optional(),
     is_agent_best: z.boolean(),
     entry: z
       .object({
-        benchmark_target_id: z.string(),
+        target: z
+          .string()
+          .regex(/^[A-Za-z0-9_.-]+$/)
+          .min(1),
         agent_id: z.string(),
         agent_name: z.string(),
-        best_solution_submission_id: z.string(),
+        best_solution_submission_id: z
+          .string()
+          .uuid()
+          .regex(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          ),
         best_rank_score: z.number(),
         rank_score: z.number(),
         aggregate_metrics: z.array(
@@ -1255,10 +1332,18 @@ export const rankingContextResponseSchema = z
           rank: z.number().int(),
           entry: z
             .object({
-              benchmark_target_id: z.string(),
+              target: z
+                .string()
+                .regex(/^[A-Za-z0-9_.-]+$/)
+                .min(1),
               agent_id: z.string(),
               agent_name: z.string(),
-              best_solution_submission_id: z.string(),
+              best_solution_submission_id: z
+                .string()
+                .uuid()
+                .regex(
+                  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+                ),
               best_rank_score: z.number(),
               rank_score: z.number(),
               aggregate_metrics: z.array(
@@ -1299,7 +1384,10 @@ export const scoreDistributionResponseSchema = z
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
       .min(3)
       .max(63),
-    benchmark_target_id: z.string(),
+    target: z
+      .string()
+      .regex(/^[A-Za-z0-9_.-]+$/)
+      .min(1),
     metric_id: z.string(),
     count: z.number().int(),
     min: z.number().optional(),
@@ -1352,7 +1440,10 @@ export const solutionSubmissionArtifactResponseSchema = z
 
 export const solutionSubmissionLogsResponseSchema = z
   .object({
-    solution_submission_id: z.string(),
+    solution_submission_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
     log_path: z.string().optional(),
     content: z.string().optional(),
     truncated: z.boolean(),
@@ -1362,26 +1453,39 @@ export const solutionSubmissionLogsResponseSchema = z
 
 export const solutionSubmissionResponseSchema = z
   .object({
-    id: z.string(),
+    id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
     challenge_id: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
       .min(3)
       .max(63),
     challenge_title: z.string().optional(),
-    benchmark_target_id: z.string(),
+    target: z
+      .string()
+      .regex(/^[A-Za-z0-9_.-]+$/)
+      .min(1),
     agent_id: z.string(),
     agent_name: z.string().optional(),
     status: z.string(),
     explanation: z.string(),
-    parent_solution_submission_id: z.string().optional(),
+    parent_solution_submission_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
+      .optional(),
     credit_text: z.string(),
     visible_after_eval: z.boolean(),
     artifact_path: z.string().optional(),
     evaluation_job: z
       .object({
         id: z.string(),
-        benchmark_target_id: z.string(),
+        target: z
+          .string()
+          .regex(/^[A-Za-z0-9_.-]+$/)
+          .min(1),
         status: z
           .enum(["queued", "running", "completed", "failed"])
           .describe("Persistent lifecycle state for an evaluation job/result."),
@@ -1394,7 +1498,10 @@ export const solutionSubmissionResponseSchema = z
     evaluation: z
       .object({
         id: z.string(),
-        benchmark_target_id: z.string(),
+        target: z
+          .string()
+          .regex(/^[A-Za-z0-9_.-]+$/)
+          .min(1),
         status: z
           .enum(["queued", "running", "completed", "failed"])
           .describe("Persistent lifecycle state for an evaluation job/result."),
@@ -1490,7 +1597,10 @@ export const solutionSubmissionResponseSchema = z
     validation_evaluation: z
       .object({
         id: z.string(),
-        benchmark_target_id: z.string(),
+        target: z
+          .string()
+          .regex(/^[A-Za-z0-9_.-]+$/)
+          .min(1),
         status: z
           .enum(["queued", "running", "completed", "failed"])
           .describe("Persistent lifecycle state for an evaluation job/result."),
@@ -1586,7 +1696,10 @@ export const solutionSubmissionResponseSchema = z
     official_evaluation: z
       .object({
         id: z.string(),
-        benchmark_target_id: z.string(),
+        target: z
+          .string()
+          .regex(/^[A-Za-z0-9_.-]+$/)
+          .min(1),
         status: z
           .enum(["queued", "running", "completed", "failed"])
           .describe("Persistent lifecycle state for an evaluation job/result."),
@@ -1691,26 +1804,43 @@ export const solutionSubmissionResultReportResponseSchema = z
   .object({
     solution_submission: z
       .object({
-        id: z.string(),
+        id: z
+          .string()
+          .uuid()
+          .regex(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          ),
         challenge_id: z
           .string()
           .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
           .min(3)
           .max(63),
         challenge_title: z.string().optional(),
-        benchmark_target_id: z.string(),
+        target: z
+          .string()
+          .regex(/^[A-Za-z0-9_.-]+$/)
+          .min(1),
         agent_id: z.string(),
         agent_name: z.string().optional(),
         status: z.string(),
         explanation: z.string(),
-        parent_solution_submission_id: z.string().optional(),
+        parent_solution_submission_id: z
+          .string()
+          .uuid()
+          .regex(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          )
+          .optional(),
         credit_text: z.string(),
         visible_after_eval: z.boolean(),
         artifact_path: z.string().optional(),
         evaluation_job: z
           .object({
             id: z.string(),
-            benchmark_target_id: z.string(),
+            target: z
+              .string()
+              .regex(/^[A-Za-z0-9_.-]+$/)
+              .min(1),
             status: z
               .enum(["queued", "running", "completed", "failed"])
               .describe(
@@ -1725,7 +1855,10 @@ export const solutionSubmissionResultReportResponseSchema = z
         evaluation: z
           .object({
             id: z.string(),
-            benchmark_target_id: z.string(),
+            target: z
+              .string()
+              .regex(/^[A-Za-z0-9_.-]+$/)
+              .min(1),
             status: z
               .enum(["queued", "running", "completed", "failed"])
               .describe(
@@ -1829,7 +1962,10 @@ export const solutionSubmissionResultReportResponseSchema = z
         validation_evaluation: z
           .object({
             id: z.string(),
-            benchmark_target_id: z.string(),
+            target: z
+              .string()
+              .regex(/^[A-Za-z0-9_.-]+$/)
+              .min(1),
             status: z
               .enum(["queued", "running", "completed", "failed"])
               .describe(
@@ -1933,7 +2069,10 @@ export const solutionSubmissionResultReportResponseSchema = z
         official_evaluation: z
           .object({
             id: z.string(),
-            benchmark_target_id: z.string(),
+            target: z
+              .string()
+              .regex(/^[A-Za-z0-9_.-]+$/)
+              .min(1),
             status: z
               .enum(["queued", "running", "completed", "failed"])
               .describe(

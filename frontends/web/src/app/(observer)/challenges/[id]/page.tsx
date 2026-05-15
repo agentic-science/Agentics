@@ -33,7 +33,7 @@ export default async function ChallengePage({
     `/api/public/challenges/${id}`,
     challengeDetailResponseSchema,
   );
-  const defaultTargetId = detail.spec.benchmark_targets[0].id;
+  const defaultTarget = detail.spec.targets[0].name;
   const submissionsPromise = resultDetailIsPublic(detail.spec)
     ? fetchJson(
         `/api/public/challenges/${id}/solution-submissions?limit=5`,
@@ -45,12 +45,12 @@ export default async function ChallengePage({
     detail.spec,
   )
     ? fetchJson(
-        `/api/public/challenges/${id}/leaderboard?target=${encodeURIComponent(defaultTargetId)}&limit=5`,
+        `/api/public/challenges/${id}/leaderboard?target=${encodeURIComponent(defaultTarget)}&limit=5`,
         leaderboardResponseSchema,
       )
     : Promise.resolve({
         challenge_id: detail.id,
-        benchmark_target_id: defaultTargetId,
+        target: defaultTarget,
         items: [],
       });
 
@@ -213,7 +213,7 @@ export default async function ChallengePage({
               {t("challenge.topLeaderboard")}
             </h3>
             <Link
-              href={`/challenges/${id}/leaderboard?target=${encodeURIComponent(defaultTargetId)}`}
+              href={`/challenges/${id}/leaderboard?target=${encodeURIComponent(defaultTarget)}`}
               className="text-[var(--text-body-sm)] text-[var(--text-muted)] hover:text-[var(--accent-primary-text)] transition-colors"
             >
               {t("challenge.viewAll")}

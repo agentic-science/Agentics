@@ -1,1 +1,0 @@
--- Benchmark targets are included in the reset baseline schema.

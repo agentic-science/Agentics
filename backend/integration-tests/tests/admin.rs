@@ -46,11 +46,8 @@ async fn admin_read_models_power_operator_console(pool: sqlx::PgPool) {
         .iter()
         .find(|item| item["id"] == "sample-sum")
         .expect("sample-sum should be seeded");
-    assert_eq!(sample_sum["benchmark_targets"][0]["id"], "linux-arm64-cpu");
-    assert_eq!(
-        sample_sum["benchmark_targets"][0]["validation_enabled"],
-        true
-    );
+    assert_eq!(sample_sum["targets"][0]["name"], "linux-arm64-cpu");
+    assert_eq!(sample_sum["targets"][0]["validation_enabled"], true);
     assert_eq!(sample_sum["eligibility"]["type"], "open");
     assert_eq!(sample_sum["private_benchmark_enabled"], true);
 
@@ -504,7 +501,7 @@ async fn admin_official_run_bypasses_public_official_queue_limit(pool: sqlx::PgP
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "linux-arm64-cpu",
+            "target": "linux-arm64-cpu",
             "artifact_base64": helpers::solution_zip_base64(&helpers::sample_sum_solution("payload['a'] + payload['b']")),
             "explanation": "fills official queue"
         }))
@@ -518,7 +515,7 @@ async fn admin_official_run_bypasses_public_official_queue_limit(pool: sqlx::PgP
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "linux-arm64-cpu",
+            "target": "linux-arm64-cpu",
             "artifact_base64": helpers::solution_zip_base64(&helpers::sample_sum_solution("payload['a'] + payload['b']")),
             "explanation": "admin promotes this validation run"
         }))
@@ -537,7 +534,7 @@ async fn admin_official_run_bypasses_public_official_queue_limit(pool: sqlx::PgP
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "challenge_id": "sample-sum",
-            "benchmark_target_id": "linux-arm64-cpu",
+            "target": "linux-arm64-cpu",
             "artifact_base64": "not-base64",
             "explanation": "public official run should still be rejected"
         }))
