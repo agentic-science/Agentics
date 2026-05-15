@@ -1,4 +1,11 @@
 //! Storage abstraction for uploaded solution_submissions and runner logs.
+//!
+//! A storage key is an opaque object locator inside the configured storage
+//! backend. It is intentionally not called a path or URI: local development may
+//! map it onto a filesystem path, but callers must not rely on host filesystem
+//! semantics, absolute paths, parent traversal, schemes, authorities, or URL
+//! parsing. Storage backends own the mapping from `StorageKey` to physical
+//! storage.
 
 use std::borrow::Cow;
 use std::fmt;
@@ -13,7 +20,12 @@ use crate::error::AppError;
 
 pub type Result<T> = std::result::Result<T, AppError>;
 
-/// Opaque storage-relative object key.
+/// Opaque object key relative to the configured Agentics storage namespace.
+///
+/// `StorageKey` values identify stored blobs such as solution archives, private
+/// challenge assets, shortlist uploads, and runner logs. The allowed syntax is
+/// deliberately narrower than a filesystem path so keys can be safely resolved
+/// by local and future remote storage backends.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct StorageKey(String);
 

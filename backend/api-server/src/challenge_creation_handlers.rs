@@ -28,7 +28,7 @@ use shared::models::paths::{RepoRelativePath, RepositoryCheckoutPath};
 use shared::storage::StorageKey;
 use shared::{challenge_bundle, challenge_creation, db};
 
-use crate::extractors::{AdminAuth, ChallengeDraftPath, CreatorAuth, ValidatedJson};
+use crate::extractors::{AdminAuth, ChallengeDraftIdPath, CreatorAuth, ValidatedJson};
 use crate::state::AppState;
 
 const CHALLENGE_DRAFT_QUOTA_WINDOW_SECONDS: i64 = 24 * 60 * 60;
@@ -129,7 +129,7 @@ pub async fn create_challenge_draft(
 pub async fn get_challenge_draft(
     State(state): State<AppState>,
     creator: CreatorAuth,
-    ChallengeDraftPath(draft_id): ChallengeDraftPath,
+    ChallengeDraftIdPath(draft_id): ChallengeDraftIdPath,
 ) -> Result<Json<ChallengeDraftResponse>> {
     let draft = db::get_challenge_draft(&state.db, draft_id.as_str())
         .await?
@@ -144,7 +144,7 @@ pub async fn get_challenge_draft(
 pub async fn upload_challenge_private_asset(
     State(state): State<AppState>,
     creator: CreatorAuth,
-    ChallengeDraftPath(draft_id): ChallengeDraftPath,
+    ChallengeDraftIdPath(draft_id): ChallengeDraftIdPath,
     ValidatedJson(body): ValidatedJson<UploadChallengePrivateAssetRequest>,
 ) -> Result<(StatusCode, Json<ChallengePrivateAssetResponse>)> {
     let draft = db::get_challenge_draft(&state.db, draft_id.as_str())
@@ -195,11 +195,11 @@ pub async fn upload_challenge_private_asset(
         AppError::BadRequest("private asset size exceeds supported database range".to_string())
     })?;
     let sha256 = challenge_creation::sha256_digest(&asset_bytes);
-    let storage_path = StorageKey::try_new(format!(
+    let storage_key = StorageKey::try_new(format!(
         "challenge-drafts/{}/private-assets/{}-{}.bin",
         draft.id, body.asset_name, sha256
     ))?;
-    let temporary_storage_path = StorageKey::try_new(format!(
+    let temporary_asset_key = StorageKey::try_new(format!(
         "_tmp/challenge-private-assets/{}-{}-{}.bin",
         draft.id,
         body.asset_name,
@@ -207,7 +207,7 @@ pub async fn upload_challenge_private_asset(
     ))?;
     let temporary_storage_key = state
         .storage
-        .put(&temporary_storage_path, &asset_bytes)
+        .put(&temporary_asset_key, &asset_bytes)
         .await?;
     let asset = db::create_challenge_private_asset(
         &state.db,
@@ -219,7 +219,7 @@ pub async fn upload_challenge_private_asset(
             required: requirement.required,
             size_bytes: asset_size_bytes_i64,
             sha256,
-            storage_key: storage_path.clone(),
+            storage_key: storage_key.clone(),
             uploader_agent_id: creator.agent_id.clone(),
         },
         state.config.challenge_private_asset_bytes_per_draft,
@@ -236,7 +236,7 @@ pub async fn upload_challenge_private_asset(
 
     if let Err(error) = state
         .storage
-        .promote(&temporary_storage_key, &storage_path)
+        .promote(&temporary_storage_key, &storage_key)
         .await
     {
         cleanup_challenge_private_asset_record(&state, asset.id.as_str()).await;
@@ -299,7 +299,7 @@ pub async fn list_admin_challenge_drafts(
 pub async fn validate_challenge_draft(
     admin: AdminAuth,
     State(state): State<AppState>,
-    ChallengeDraftPath(draft_id): ChallengeDraftPath,
+    ChallengeDraftIdPath(draft_id): ChallengeDraftIdPath,
     ValidatedJson(body): ValidatedJson<ValidateChallengeDraftRequest>,
 ) -> Result<Json<ChallengeDraftResponse>> {
     let draft = db::get_challenge_draft(&state.db, draft_id.as_str())
@@ -402,7 +402,7 @@ pub async fn validate_challenge_draft(
 pub async fn abandon_challenge_draft(
     admin: AdminAuth,
     State(state): State<AppState>,
-    ChallengeDraftPath(draft_id): ChallengeDraftPath,
+    ChallengeDraftIdPath(draft_id): ChallengeDraftIdPath,
     ValidatedJson(body): ValidatedJson<ReviewChallengeDraftRequest>,
 ) -> Result<Json<ChallengeDraftResponse>> {
     db::abandon_challenge_draft(
@@ -466,7 +466,7 @@ pub async fn cleanup_challenge_drafts(
 pub async fn approve_challenge_draft(
     admin: AdminAuth,
     State(state): State<AppState>,
-    ChallengeDraftPath(draft_id): ChallengeDraftPath,
+    ChallengeDraftIdPath(draft_id): ChallengeDraftIdPath,
     ValidatedJson(body): ValidatedJson<ReviewChallengeDraftRequest>,
 ) -> Result<Json<ChallengeDraftResponse>> {
     let draft = db::get_challenge_draft(&state.db, draft_id.as_str())
@@ -506,7 +506,7 @@ pub async fn approve_challenge_draft(
 pub async fn reject_challenge_draft(
     admin: AdminAuth,
     State(state): State<AppState>,
-    ChallengeDraftPath(draft_id): ChallengeDraftPath,
+    ChallengeDraftIdPath(draft_id): ChallengeDraftIdPath,
     ValidatedJson(body): ValidatedJson<ReviewChallengeDraftRequest>,
 ) -> Result<Json<ChallengeDraftResponse>> {
     let draft = db::get_challenge_draft(&state.db, draft_id.as_str())
@@ -546,7 +546,7 @@ pub async fn reject_challenge_draft(
 pub async fn publish_challenge_draft(
     admin: AdminAuth,
     State(state): State<AppState>,
-    ChallengeDraftPath(draft_id): ChallengeDraftPath,
+    ChallengeDraftIdPath(draft_id): ChallengeDraftIdPath,
     ValidatedJson(body): ValidatedJson<ValidateChallengeDraftRequest>,
 ) -> Result<Json<ChallengeDraftResponse>> {
     let draft = db::get_challenge_draft(&state.db, draft_id.as_str())

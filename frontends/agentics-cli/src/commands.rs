@@ -538,9 +538,9 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
     for target in targets {
         let job_id = local_validation_job_id(&spec.challenge_name, &target)?;
         let artifact_key = StorageKey::try_new(format!("local-validation/{job_id}/solution.zip"))?;
-        let artifact_path = storage.put(&artifact_key, &package.bytes).await?;
+        let stored_artifact_key = storage.put(&artifact_key, &package.bytes).await?;
         let payload = EvaluationJobPayload {
-            artifact_key: artifact_path,
+            artifact_key: stored_artifact_key,
             bundle_path: shared::models::paths::ManagedBundlePath::from_existing_dir(&bundle_dir)?,
             challenge_name: spec.challenge_name.clone(),
             target: target.clone(),

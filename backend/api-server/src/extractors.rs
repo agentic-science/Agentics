@@ -44,11 +44,16 @@ impl FromRequestParts<AppState> for SolutionSubmissionPath {
     }
 }
 
-/// Validated challenge-draft id extracted from a route path.
+/// Validated challenge-draft id extracted from a route path parameter.
+///
+/// This is HTTP framework glue, not a filesystem or storage path. Its only
+/// responsibility is to parse `challenge_draft_id` before handlers perform
+/// authorization or database lookup, so malformed UUIDs fail as `400 bad_request`
+/// instead of surfacing later as SQL cast errors.
 #[derive(Debug, Clone)]
-pub struct ChallengeDraftPath(pub ChallengeDraftId);
+pub struct ChallengeDraftIdPath(pub ChallengeDraftId);
 
-impl FromRequestParts<AppState> for ChallengeDraftPath {
+impl FromRequestParts<AppState> for ChallengeDraftIdPath {
     type Rejection = (StatusCode, Json<shared::models::ErrorResponse>);
 
     async fn from_request_parts(

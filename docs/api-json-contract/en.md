@@ -35,6 +35,24 @@ Request DTOs may accept omitted optional fields where that improves client
 ergonomics. Request deserialization rules are separate from response
 serialization rules.
 
+## Locator Naming
+
+Use `*_key` only for canonical lookup values, not as a generic replacement for
+`id`, `name`, `path`, or `url`.
+
+- `storage_key`, `artifact_key`, and `log_key` are opaque object-storage keys
+  relative to the configured Agentics storage backend. They are not filesystem
+  paths, URLs, or URIs, even when local development stores them on disk.
+- `repo_url` is the submitted GitHub remote and should be preserved for
+  provenance and display.
+- `repo_key` is the canonical GitHub repository identity used for duplicate
+  detection and authorization. It normalizes accepted GitHub HTTPS and SSH
+  remotes for the same repository into lowercase `owner/repo`.
+
+Do not expose ambiguous fields such as `path` or `uri` when the value is really
+an object-storage key. Do not expose `repo_key` as a replacement for `repo_url`
+when the original remote matters.
+
 ## Schema Generation
 
 Frontend runtime schemas are generated from Rust DTOs:

@@ -132,6 +132,11 @@ impl GithubRepoRemote {
     }
 
     /// Return the canonical GitHub owner/repository key.
+    ///
+    /// This key is not a URL and does not preserve the submitted remote syntax.
+    /// It collapses accepted GitHub HTTPS and SSH remotes for the same
+    /// repository into one `owner/repo` identity for duplicate detection and
+    /// authorization checks.
     pub fn repository_key(&self) -> &GithubRepoKey {
         match self {
             Self::Https { key, .. } => key,
@@ -236,6 +241,10 @@ impl GithubSshRepoRemote {
 }
 
 /// Canonical GitHub repository identity used for duplicate detection.
+///
+/// The string is always lowercase `owner/repo`. Keep the original
+/// `GithubRepoRemote` when provenance or display should preserve whether the
+/// contributor submitted an HTTPS URL or SSH remote.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GithubRepoKey(String);
 

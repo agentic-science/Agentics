@@ -32,6 +32,23 @@ contract fixture 覆盖。
 Request DTOs 可以在有助于 client ergonomics 时接受省略的 optional fields。
 Request deserialization rules 与 response serialization rules 分开处理。
 
+## Locator Naming
+
+只有 canonical lookup values 才使用 `*_key`，不要把 `key` 当作 `id`、
+`name`、`path` 或 `url` 的通用替代词。
+
+- `storage_key`、`artifact_key` 和 `log_key` 是相对于 Agentics storage
+  backend 的 opaque object-storage keys。它们不是 filesystem paths、URLs 或
+  URIs，即使 local development 会把它们映射到磁盘文件。
+- `repo_url` 是 contributor 提交的 GitHub remote，应保留用于 provenance
+  和 display。
+- `repo_key` 是用于 duplicate detection 和 authorization 的 canonical
+  GitHub repository identity。它会把同一个 repository 的 GitHub HTTPS 与
+  SSH remotes 规范化成小写的 `owner/repo`。
+
+如果一个值本质上是 object-storage key，不要暴露含糊的 `path` 或 `uri`
+字段。如果需要保留原始 remote，不要用 `repo_key` 替代 `repo_url`。
+
 ## Schema Generation
 
 Frontend runtime schemas 从 Rust DTOs 生成：

@@ -155,7 +155,7 @@ pub async fn execute_evaluation_job(
     let runs_root = working_root.join("solution-runs");
     let prepared_root = working_root.join("prepared");
     let scorer_output_root = working_root.join("scorer-output");
-    let log_path_rel = StorageKey::try_new(format!("eval-artifacts/{job_id}/runner.log"))?;
+    let log_key = StorageKey::try_new(format!("eval-artifacts/{job_id}/runner.log"))?;
 
     tokio::fs::create_dir_all(&working_root).await?;
     tokio::fs::create_dir_all(&source_root).await?;
@@ -265,12 +265,12 @@ pub async fn execute_evaluation_job(
 
         Ok(ExecutionResult {
             result,
-            log_key: log_path_rel.clone(),
+            log_key: log_key.clone(),
         })
     }
     .await;
 
-    storage.put(&log_path_rel, logs.as_bytes()).await?;
+    storage.put(&log_key, logs.as_bytes()).await?;
     let cleanup = cleanup_paths([source_root]).await;
     match (execution, cleanup) {
         (Ok(result), Ok(())) => Ok(result),
