@@ -97,6 +97,7 @@ impl fmt::Display for ResourceProfileNameError {
 impl std::error::Error for ResourceProfileNameError {}
 
 #[nutype(
+    sanitize(trim, lowercase),
     validate(with = validate_challenge_name, error = ChallengeNameError),
     derive(
         Debug,
@@ -240,6 +241,7 @@ impl ResourceProfileName {
 }
 
 #[nutype(
+    sanitize(trim),
     validate(with = validate_metric_name, error = MetricNameError),
     derive(
         Debug,
@@ -412,13 +414,14 @@ mod tests {
     fn validates_challenge_names() {
         assert!(is_valid_challenge_name("sample-sum"));
         assert!(ChallengeName::try_new("matrix-multiplication").is_ok());
+        let canonical = ChallengeName::try_new(" Matrix-Multiplication ")
+            .expect("challenge names should be lowercased and trimmed");
+        assert_eq!(canonical.as_str(), "matrix-multiplication");
         assert!(ChallengeName::try_new("Bad_ID").is_err());
         assert!(ChallengeName::try_new("-bad").is_err());
         assert!(ChallengeName::try_new("bad-").is_err());
         assert!(ChallengeName::try_new("bad--id").is_err());
         assert!(ChallengeName::try_new("ab").is_err());
-        assert!(ChallengeName::try_new(" matrix").is_err());
-        assert!(ChallengeName::try_new("matrix ").is_err());
         assert!(ChallengeName::try_new("matrix mult").is_err());
     }
 
@@ -438,12 +441,18 @@ mod tests {
             assert!(RunName::try_new(value).is_err());
             assert!(ResourceProfileName::try_new(value).is_err());
         }
+        let metric = MetricName::try_new(" runtime_ms ").expect("metric names trim edge spaces");
+        assert_eq!(metric.as_str(), "runtime_ms");
+        assert!(MetricName::try_new("runtime ms").is_err());
     }
 
     #[test]
     fn serde_rejects_invalid_names() {
         let challenge: ChallengeName =
             serde_json::from_str("\"sample-sum\"").expect("valid challenge name should parse");
+        assert_eq!(challenge.as_str(), "sample-sum");
+        let challenge: ChallengeName =
+            serde_json::from_str("\" Sample-Sum \"").expect("challenge name should canonicalize");
         assert_eq!(challenge.as_str(), "sample-sum");
         assert!(serde_json::from_str::<ChallengeName>("\"sample sum\"").is_err());
 
@@ -454,6 +463,9 @@ mod tests {
 
         let metric: MetricName =
             serde_json::from_str("\"runtime_ms\"").expect("valid metric name should parse");
+        assert_eq!(metric.as_str(), "runtime_ms");
+        let metric: MetricName =
+            serde_json::from_str("\" runtime_ms \"").expect("metric name should trim");
         assert_eq!(metric.as_str(), "runtime_ms");
         assert!(serde_json::from_str::<MetricName>("\"runtime ms\"").is_err());
     }

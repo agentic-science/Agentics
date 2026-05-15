@@ -307,7 +307,6 @@ fn validate_private_asset_requirements(
 ) -> Result<()> {
     let mut ids = HashSet::with_capacity(private_assets.len());
     for asset in private_assets {
-        validate_identifier(&asset.asset_name, "private_assets[].asset_name")?;
         if !ids.insert(asset.asset_name.as_str()) {
             return Err(AppError::Validation(format!(
                 "private_assets contains duplicate asset_name `{}`",
@@ -317,19 +316,6 @@ fn validate_private_asset_requirements(
         if let Some(note) = &asset.asset_note {
             require_non_empty(note, "private_assets[].asset_note")?;
         }
-    }
-    Ok(())
-}
-
-fn validate_identifier(value: &str, field: &str) -> Result<()> {
-    require_non_empty(value, field)?;
-    if !value
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
-    {
-        return Err(AppError::Validation(format!(
-            "{field} must contain only ASCII letters, digits, underscores, hyphens, or dots"
-        )));
     }
     Ok(())
 }

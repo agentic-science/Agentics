@@ -625,7 +625,7 @@ pub async fn get_score_distribution(
     Query(query): Query<ScoreDistributionQuery>,
 ) -> Result<Json<ScoreDistributionResponse>> {
     let challenge_name = parse_challenge_name(&name)?;
-    let metric_name = parse_metric_name(query.metric.trim())?;
+    let metric_name = parse_metric_name(&query.metric)?;
     let (challenge, spec) = load_challenge_policy(&state.db, &challenge_name).await?;
     ensure_visibility_allows_public(spec.visibility.score_distribution, &spec)?;
     let target = resolve_public_target(&state.db, &challenge_name, query.target.as_deref()).await?;

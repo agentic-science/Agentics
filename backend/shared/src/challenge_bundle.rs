@@ -1070,7 +1070,6 @@ fn validate_metric_schema(spec: &ChallengeBundleSpec) -> Result<()> {
 
     let mut names = HashSet::with_capacity(schema.metrics.len());
     for metric in &schema.metrics {
-        require_metric_name(metric.name.as_str(), "metric_schema.metrics[].name")?;
         require_non_empty(&metric.label, "metric_schema.metrics[].label")?;
         if let Some(unit) = &metric.unit {
             require_non_empty(unit, "metric_schema.metrics[].unit")?;
@@ -1089,10 +1088,6 @@ fn validate_metric_schema(spec: &ChallengeBundleSpec) -> Result<()> {
         }
     }
 
-    require_metric_name(
-        schema.ranking.primary_metric_name.as_str(),
-        "metric_schema.ranking.primary_metric_name",
-    )?;
     if !names.contains(schema.ranking.primary_metric_name.as_str()) {
         return Err(AppError::Validation(format!(
             "metric_schema.ranking.primary_metric_name references unknown metric `{}`",
@@ -1102,10 +1097,6 @@ fn validate_metric_schema(spec: &ChallengeBundleSpec) -> Result<()> {
 
     let mut tie_breakers = HashSet::with_capacity(schema.ranking.tie_breaker_metric_names.len());
     for metric_name in &schema.ranking.tie_breaker_metric_names {
-        require_metric_name(
-            metric_name.as_str(),
-            "metric_schema.ranking.tie_breaker_metric_names[]",
-        )?;
         if metric_name == &schema.ranking.primary_metric_name {
             return Err(AppError::Validation(
                 "metric_schema.ranking.tie_breaker_metric_names must not repeat the primary metric"
@@ -1159,24 +1150,6 @@ fn require_safe_relative_path(value: &str, field: &str) -> Result<()> {
     if !is_safe_relative_path(value) {
         return Err(AppError::Validation(format!(
             "{field} must be a safe relative path"
-        )));
-    }
-
-    Ok(())
-}
-
-fn require_metric_name(value: &str, field: &str) -> Result<()> {
-    require_name_token(value, field)
-}
-
-fn require_name_token(value: &str, field: &str) -> Result<()> {
-    require_non_empty(value, field)?;
-    if !value
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
-    {
-        return Err(AppError::Validation(format!(
-            "{field} must contain only ASCII letters, digits, underscores, hyphens, or dots"
         )));
     }
 
