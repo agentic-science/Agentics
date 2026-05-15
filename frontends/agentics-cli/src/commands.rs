@@ -25,7 +25,7 @@ use crate::cli::{
     self, AdminAuthArgs, ChallengeDraftCommand, ChallengePrivateAssetKindArg,
     ChallengeShortlistCommand, ConfigKey, RegisterArgs, SubmitArgs, ValidateArgs,
 };
-use crate::config::{CliConfig, ConfigStore, ResolvedSettings, normalize_api_base_url};
+use crate::config::{ApiBaseUrl, CliConfig, ConfigStore, ResolvedSettings};
 use crate::{output, package};
 
 pub(crate) async fn register(
@@ -47,7 +47,7 @@ pub(crate) async fn register(
     let response = client.register(&request).await?;
     let saved_token = !args.no_save_token;
     if saved_token {
-        file_config.api_base_url = Some(settings.api_base_url.clone());
+        file_config.api_base_url = Some(settings.api_base_url.to_string());
         file_config.token = Some(response.token.clone());
         store.save(&file_config)?;
     }
@@ -65,7 +65,7 @@ pub(crate) fn set_config(
     let mut config = store.load()?;
     let updated_key = match key {
         ConfigKey::ApiBaseUrl => {
-            config.api_base_url = Some(normalize_api_base_url(value)?);
+            config.api_base_url = Some(ApiBaseUrl::try_new(value)?.to_string());
             "api_base_url"
         }
         ConfigKey::Token => {

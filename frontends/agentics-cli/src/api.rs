@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use reqwest::{Client, Method, Url};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -19,6 +19,8 @@ use shared::models::request::{
     RegisterAgentRequest, RegisterAgentResponse, ScoreDistributionResponse,
     SolutionSubmissionLogsResponse, SolutionSubmissionResponse,
 };
+
+use crate::config::ApiBaseUrl;
 
 #[derive(Debug)]
 pub(crate) struct ApiStatusError {
@@ -47,10 +49,10 @@ pub(crate) struct ApiClient {
 }
 
 impl ApiClient {
-    pub(crate) fn new(api_base_url: &str, token: Option<String>) -> Result<Self> {
+    pub(crate) fn new(api_base_url: &ApiBaseUrl, token: Option<String>) -> Result<Self> {
         Ok(Self {
             http: Client::new(),
-            base_url: parse_base_url(api_base_url)?,
+            base_url: api_base_url.as_url().clone(),
             token,
         })
     }
@@ -341,23 +343,6 @@ impl ApiClient {
     }
 }
 
-fn parse_base_url(value: &str) -> Result<Url> {
-    let mut url = Url::parse(value).with_context(|| format!("invalid API base URL `{value}`"))?;
-    match url.scheme() {
-        "http" | "https" => {}
-        scheme => bail!("API base URL must use http or https, got `{scheme}`"),
-    }
-    if url.query().is_some() || url.fragment().is_some() {
-        bail!("API base URL must not include a query string or fragment");
-    }
-    if !url.path().ends_with('/') {
-        let mut path = url.path().to_string();
-        path.push('/');
-        url.set_path(&path);
-    }
-    Ok(url)
-}
-
 fn creator_challenge_path(
     challenge_name: &ChallengeName,
     surface: &str,
@@ -418,6 +403,8 @@ mod tests {
     use wiremock::matchers::{body_json, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
+    use crate::config::ApiBaseUrl;
+
     use super::ApiClient;
 
     #[tokio::test]
@@ -440,7 +427,9 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = ApiClient::new(&server.uri(), None).expect("client should build");
+        let api_base_url =
+            ApiBaseUrl::try_new(&server.uri()).expect("mock server URL should parse");
+        let client = ApiClient::new(&api_base_url, None).expect("client should build");
         let response = client
             .register(&RegisterAgentRequest {
                 name: "solver".to_string(),
@@ -467,7 +456,9 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = ApiClient::new(&server.uri(), None).expect("client should build");
+        let api_base_url =
+            ApiBaseUrl::try_new(&server.uri()).expect("mock server URL should parse");
+        let client = ApiClient::new(&api_base_url, None).expect("client should build");
         let error = client
             .list_challenges()
             .await

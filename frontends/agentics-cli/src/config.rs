@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, anyhow, bail};
+use reqwest::Url;
 use serde::{Deserialize, Serialize};
 
 const DEFAULT_API_PORT: u16 = 3100;
@@ -56,7 +57,7 @@ impl fmt::Display for SettingSource {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ResolvedSettings {
-    pub api_base_url: String,
+    pub api_base_url: ApiBaseUrl,
     pub api_base_url_source: SettingSource,
     pub token: Option<String>,
     pub token_source: SettingSource,
@@ -82,7 +83,7 @@ impl ResolvedSettings {
             first_optional_value(flag_token, env.token.as_deref(), file.token.as_deref());
 
         Ok(Self {
-            api_base_url: normalize_api_base_url(api_base_url)?,
+            api_base_url: ApiBaseUrl::try_new(api_base_url)?,
             api_base_url_source,
             token: token.map(ToOwned::to_owned),
             token_source,
@@ -92,6 +93,46 @@ impl ResolvedSettings {
 
     pub(crate) fn token_configured(&self) -> bool {
         self.token.is_some()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ApiBaseUrl(Url);
+
+impl ApiBaseUrl {
+    pub(crate) fn try_new(value: &str) -> Result<Self> {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            bail!("API base URL must not be empty");
+        }
+
+        let mut url =
+            Url::parse(trimmed).with_context(|| format!("invalid API base URL `{trimmed}`"))?;
+        match url.scheme() {
+            "http" | "https" => {}
+            scheme => bail!("API base URL must use http or https, got `{scheme}`"),
+        }
+        if url.query().is_some() || url.fragment().is_some() {
+            bail!("API base URL must not include a query string or fragment");
+        }
+        if !url.path().ends_with('/') {
+            let mut path = url.path().to_string();
+            path.push('/');
+            url.set_path(&path);
+        }
+
+        Ok(Self(url))
+    }
+
+    pub(crate) fn as_url(&self) -> &Url {
+        &self.0
+    }
+}
+
+impl fmt::Display for ApiBaseUrl {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let value = self.0.as_str();
+        f.write_str(value.strip_suffix('/').unwrap_or(value))
     }
 }
 
@@ -147,25 +188,6 @@ impl ConfigStore {
         write_private_file(&self.path, raw.as_bytes())
             .with_context(|| format!("failed to write config file {}", self.path.display()))
     }
-}
-
-pub(crate) fn normalize_api_base_url(value: &str) -> Result<String> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        bail!("API base URL must not be empty");
-    }
-
-    let url = reqwest::Url::parse(trimmed)
-        .with_context(|| format!("invalid API base URL `{trimmed}`"))?;
-    match url.scheme() {
-        "http" | "https" => {}
-        scheme => bail!("API base URL must use http or https, got `{scheme}`"),
-    }
-    if url.query().is_some() || url.fragment().is_some() {
-        bail!("API base URL must not include a query string or fragment");
-    }
-
-    Ok(trimmed.trim_end_matches('/').to_string())
 }
 
 fn read_non_empty_env(name: &str) -> Option<String> {
@@ -301,7 +323,7 @@ mod tests {
         )
         .expect("settings should resolve");
 
-        assert_eq!(settings.api_base_url, "http://flag.example");
+        assert_eq!(settings.api_base_url.to_string(), "http://flag.example");
         assert_eq!(settings.api_base_url_source, SettingSource::Flag);
         assert_eq!(settings.token.as_deref(), Some("env-token"));
         assert_eq!(settings.token_source, SettingSource::Environment);
@@ -360,7 +382,7 @@ mod tests {
 
     #[test]
     fn rejects_invalid_api_base_url() {
-        let error = normalize_api_base_url("file:///tmp/api").expect_err("must reject file URL");
+        let error = ApiBaseUrl::try_new("file:///tmp/api").expect_err("must reject file URL");
         assert!(error.to_string().contains("http or https"));
     }
 }

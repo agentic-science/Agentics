@@ -60,7 +60,7 @@ pub(crate) fn render_register_agent(
             "created_at": response.created_at,
             "saved_token": saved_token,
             "config_path": settings.config_path,
-            "api_base_url": settings.api_base_url,
+            "api_base_url": settings.api_base_url.to_string(),
         })),
         OutputFormat::Table => Ok(format!(
             "Registered agent {}\nagent_id: {}\ntoken: {}\nsaved_token: {}\nconfig: {}",
@@ -79,7 +79,7 @@ pub(crate) fn render_auth_status(
 ) -> Result<String> {
     match format {
         OutputFormat::Json => pretty_json(&json!({
-            "api_base_url": settings.api_base_url,
+            "api_base_url": settings.api_base_url.to_string(),
             "api_base_url_source": settings.api_base_url_source.to_string(),
             "token_configured": settings.token_configured(),
             "token_source": settings.token_source.to_string(),
