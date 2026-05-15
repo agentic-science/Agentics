@@ -48,7 +48,6 @@ describe("AdminConsole", () => {
             items: [
               {
                 id: "matrix-multiplication",
-                slug: "matrix-multiplication",
                 title: "Matrix Multiplication",
                 summary: "Benchmark matrix multiplication.",
                 status: "active",

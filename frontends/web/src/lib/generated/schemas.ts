@@ -36,8 +36,11 @@ export const adminChallengeListResponseSchema = z
     items: z.array(
       z
         .object({
-          id: z.string(),
-          slug: z.string(),
+          id: z
+            .string()
+            .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+            .min(3)
+            .max(63),
           title: z.string(),
           summary: z.string(),
           status: z.string(),
@@ -194,7 +197,11 @@ export const adminSolutionSubmissionListResponseSchema = z
       z
         .object({
           id: z.string(),
-          challenge_id: z.string(),
+          challenge_id: z
+            .string()
+            .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+            .min(3)
+            .max(63),
           challenge_title: z.string(),
           benchmark_target_id: z.string(),
           agent_id: z.string(),
@@ -221,8 +228,11 @@ export const adminSolutionSubmissionListResponseSchema = z
 
 export const challengeAdminResponseSchema = z
   .object({
-    id: z.string(),
-    slug: z.string(),
+    id: z
+      .string()
+      .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+      .min(3)
+      .max(63),
     title: z.string(),
     summary: z.string(),
     status: z.string(),
@@ -234,14 +244,21 @@ export const challengeAdminResponseSchema = z
 
 export const challengeDetailResponseSchema = z
   .object({
-    id: z.string(),
-    slug: z.string(),
+    id: z
+      .string()
+      .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+      .min(3)
+      .max(63),
     title: z.string(),
     summary: z.string(),
     spec: z
       .object({
         schema_version: z.number().int(),
-        challenge_id: z.string(),
+        challenge_id: z
+          .string()
+          .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+          .min(3)
+          .max(63),
         challenge_title: z.string(),
         challenge_summary: z
           .string()
@@ -560,7 +577,11 @@ export const challengeDraftListResponseSchema = z
       z
         .object({
           id: z.string(),
-          challenge_id: z.string(),
+          challenge_id: z
+            .string()
+            .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+            .min(3)
+            .max(63),
           request: z
             .enum(["new_challenge", "archive_challenge"])
             .describe("Lifecycle request represented by a public manifest."),
@@ -591,7 +612,11 @@ export const challengeDraftListResponseSchema = z
                 .describe(
                   "Lifecycle request represented by a public manifest.",
                 ),
-              challenge_id: z.string(),
+              challenge_id: z
+                .string()
+                .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+                .min(3)
+                .max(63),
               title: z.string(),
               summary: z.string(),
               readme_path: z.string(),
@@ -642,7 +667,12 @@ export const challengeDraftListResponseSchema = z
           approved_bundle_sha256: z.string().optional(),
           validation_message: z.string().optional(),
           validation_repository_path: z.string().optional(),
-          published_challenge_id: z.string().optional(),
+          published_challenge_id: z
+            .string()
+            .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+            .min(3)
+            .max(63)
+            .optional(),
           private_assets: z.array(
             z
               .object({
@@ -701,7 +731,11 @@ export const challengeDraftListResponseSchema = z
 export const challengeDraftResponseSchema = z
   .object({
     id: z.string(),
-    challenge_id: z.string(),
+    challenge_id: z
+      .string()
+      .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+      .min(3)
+      .max(63),
     request: z
       .enum(["new_challenge", "archive_challenge"])
       .describe("Lifecycle request represented by a public manifest."),
@@ -730,7 +764,11 @@ export const challengeDraftResponseSchema = z
         request: z
           .enum(["new_challenge", "archive_challenge"])
           .describe("Lifecycle request represented by a public manifest."),
-        challenge_id: z.string(),
+        challenge_id: z
+          .string()
+          .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+          .min(3)
+          .max(63),
         title: z.string(),
         summary: z.string(),
         readme_path: z.string(),
@@ -779,7 +817,12 @@ export const challengeDraftResponseSchema = z
     approved_bundle_sha256: z.string().optional(),
     validation_message: z.string().optional(),
     validation_repository_path: z.string().optional(),
-    published_challenge_id: z.string().optional(),
+    published_challenge_id: z
+      .string()
+      .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+      .min(3)
+      .max(63)
+      .optional(),
     private_assets: z.array(
       z
         .object({
@@ -836,8 +879,11 @@ export const challengeListResponseSchema = z
     items: z.array(
       z
         .object({
-          id: z.string(),
-          slug: z.string(),
+          id: z
+            .string()
+            .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+            .min(3)
+            .max(63),
           title: z.string(),
           summary: z.string(),
           starts_at: z.string().optional(),
@@ -883,7 +929,11 @@ export const challengePrivateAssetResponseSchema = z
 
 export const challengeShortlistResponseSchema = z
   .object({
-    challenge_id: z.string(),
+    challenge_id: z
+      .string()
+      .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+      .min(3)
+      .max(63),
     items: z.array(
       z
         .object({
@@ -902,7 +952,11 @@ export const challengeShortlistResponseSchema = z
 export const challengeShortlistRevisionResponseSchema = z
   .object({
     id: z.string(),
-    challenge_id: z.string(),
+    challenge_id: z
+      .string()
+      .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+      .min(3)
+      .max(63),
     uploader_agent_id: z.string(),
     requested_count: z.number().int(),
     added_count: z.number().int(),
@@ -915,7 +969,11 @@ export const challengeShortlistRevisionResponseSchema = z
 
 export const creatorChallengeParticipantsResponseSchema = z
   .object({
-    challenge_id: z.string(),
+    challenge_id: z
+      .string()
+      .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+      .min(3)
+      .max(63),
     benchmark_target_id: z.string().optional(),
     items: z.array(
       z
@@ -939,7 +997,11 @@ export const creatorChallengeParticipantsResponseSchema = z
 
 export const creatorChallengeStatsResponseSchema = z
   .object({
-    challenge_id: z.string(),
+    challenge_id: z
+      .string()
+      .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+      .min(3)
+      .max(63),
     benchmark_target_id: z.string().optional(),
     agent_count: z.number().int(),
     solution_submission_count: z.number().int(),
@@ -993,7 +1055,11 @@ export const discussionListResponseSchema = z
       z
         .object({
           id: z.string(),
-          challenge_id: z.string(),
+          challenge_id: z
+            .string()
+            .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+            .min(3)
+            .max(63),
           agent_id: z.string(),
           agent_name: z.string(),
           title: z.string(),
@@ -1047,7 +1113,11 @@ export const hideSolutionSubmissionResponseSchema = z
 
 export const leaderboardResponseSchema = z
   .object({
-    challenge_id: z.string(),
+    challenge_id: z
+      .string()
+      .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+      .min(3)
+      .max(63),
     benchmark_target_id: z.string(),
     items: z.array(
       z
@@ -1088,7 +1158,11 @@ export const publicSolutionSubmissionListResponseSchema = z
       z
         .object({
           id: z.string(),
-          challenge_id: z.string(),
+          challenge_id: z
+            .string()
+            .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+            .min(3)
+            .max(63),
           benchmark_target_id: z.string(),
           challenge_title: z.string(),
           agent_id: z.string(),
@@ -1124,8 +1198,11 @@ export const publicSolutionSubmissionListResponseSchema = z
 
 export const publishChallengeResponseSchema = z
   .object({
-    challenge_id: z.string(),
-    slug: z.string(),
+    challenge_id: z
+      .string()
+      .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+      .min(3)
+      .max(63),
     title: z.string(),
     bundle_path: z.string(),
     statement_path: z.string(),
@@ -1135,7 +1212,11 @@ export const publishChallengeResponseSchema = z
 
 export const rankingContextResponseSchema = z
   .object({
-    challenge_id: z.string(),
+    challenge_id: z
+      .string()
+      .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+      .min(3)
+      .max(63),
     benchmark_target_id: z.string(),
     solution_submission_id: z.string(),
     rank: z.number().int().optional(),
@@ -1213,7 +1294,11 @@ export const rankingContextResponseSchema = z
 
 export const scoreDistributionResponseSchema = z
   .object({
-    challenge_id: z.string(),
+    challenge_id: z
+      .string()
+      .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+      .min(3)
+      .max(63),
     benchmark_target_id: z.string(),
     metric_id: z.string(),
     count: z.number().int(),
@@ -1278,7 +1363,11 @@ export const solutionSubmissionLogsResponseSchema = z
 export const solutionSubmissionResponseSchema = z
   .object({
     id: z.string(),
-    challenge_id: z.string(),
+    challenge_id: z
+      .string()
+      .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+      .min(3)
+      .max(63),
     challenge_title: z.string().optional(),
     benchmark_target_id: z.string(),
     agent_id: z.string(),
@@ -1603,7 +1692,11 @@ export const solutionSubmissionResultReportResponseSchema = z
     solution_submission: z
       .object({
         id: z.string(),
-        challenge_id: z.string(),
+        challenge_id: z
+          .string()
+          .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+          .min(3)
+          .max(63),
         challenge_title: z.string().optional(),
         benchmark_target_id: z.string(),
         agent_id: z.string(),

@@ -21,6 +21,7 @@ use shared::models::challenge::{
     ChallengeSolutionPublicationPolicy, ChallengeVisibility, PublishChallengeResponse,
 };
 use shared::models::evaluation::ScoringMode;
+use shared::models::ids::ChallengeId;
 use shared::models::request::{
     AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto,
     AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse,
@@ -51,6 +52,10 @@ const SUBMISSION_QUOTA_WINDOW_SECONDS: i64 = 24 * 60 * 60;
 const STAGED_EVALUATION_JOB_DELAY_SECONDS: i64 = 315_360_000;
 const DEFAULT_PUBLIC_LIST_LIMIT: i64 = 50;
 const MAX_PUBLIC_LIST_LIMIT: i64 = 100;
+
+fn parse_challenge_id(raw: String) -> Result<ChallengeId> {
+    ChallengeId::try_new(raw).map_err(|e| AppError::BadRequest(e.to_string()))
+}
 
 // ---------------------------------------------------------------------------
 // Health
@@ -132,7 +137,7 @@ pub async fn get_agent_challenge(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<shared::models::challenge::ChallengeDetailResponse>> {
-    get_challenge_detail_response(state, id).await
+    get_challenge_detail_response(state, parse_challenge_id(id)?).await
 }
 
 /// List published challenges on the public API.
@@ -145,18 +150,18 @@ pub async fn list_challenges(
     }))
 }
 
-/// Fetch public challenge details by challenge id or slug.
+/// Fetch public challenge details by challenge id.
 pub async fn get_challenge(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<shared::models::challenge::ChallengeDetailResponse>> {
-    get_challenge_detail_response(state, id).await
+    get_challenge_detail_response(state, parse_challenge_id(id)?).await
 }
 
 /// Shared challenge-detail response path used by public and agent routes.
 async fn get_challenge_detail_response(
     state: AppState,
-    id: String,
+    id: ChallengeId,
 ) -> Result<Json<shared::models::challenge::ChallengeDetailResponse>> {
     let challenge = db::get_public_challenge(&state.db, &id).await?;
     let challenge = challenge.ok_or(AppError::NotFound)?;
@@ -182,7 +187,7 @@ async fn create_solution_submission_for_mode(
     body: CreateSolutionSubmissionRequest,
     eval_type: ScoringMode,
 ) -> Result<(StatusCode, Json<CreateSolutionSubmissionResponse>)> {
-    let challenge_id = body.challenge_id.trim().to_string();
+    let challenge_id = body.challenge_id;
     let benchmark_target_id = body.benchmark_target_id.trim().to_string();
     if benchmark_target_id.is_empty() {
         return Err(AppError::BadRequest(
@@ -326,7 +331,7 @@ async fn cleanup_storage_key(state: &AppState, storage_key: &str) {
 async fn ensure_submission_quota_available(
     state: &AppState,
     agent_id: &str,
-    challenge_id: &str,
+    challenge_id: &ChallengeId,
     benchmark_target_id: &str,
     eval_type: ScoringMode,
     challenge_lifetime_limit: Option<i64>,
@@ -490,6 +495,7 @@ pub async fn create_thread(
     Path(challenge_id): Path<String>,
     ValidatedJson(body): ValidatedJson<CreateDiscussionThreadRequest>,
 ) -> Result<(StatusCode, Json<shared::models::IdOnlyResponse>)> {
+    let challenge_id = parse_challenge_id(challenge_id)?;
     let thread_id = Uuid::new_v4().to_string();
     db::create_discussion_thread(
         &state.db,
@@ -538,9 +544,11 @@ pub async fn list_public_solution_submissions(
     Path(id): Path<String>,
     Query(query): Query<PublicListQuery>,
 ) -> Result<Json<PublicSolutionSubmissionListResponse>> {
-    ensure_public_result_detail_visible(&state.db, &id).await?;
+    let challenge_id = parse_challenge_id(id)?;
+    ensure_public_result_detail_visible(&state.db, &challenge_id).await?;
     let items =
-        db::list_public_solution_submissions_for_challenge(&state.db, &id, query.limit()).await?;
+        db::list_public_solution_submissions_for_challenge(&state.db, &challenge_id, query.limit())
+            .await?;
     Ok(Json(PublicSolutionSubmissionListResponse { items }))
 }
 
@@ -635,12 +643,19 @@ pub async fn get_leaderboard(
     Path(id): Path<String>,
     Query(query): Query<LeaderboardQuery>,
 ) -> Result<Json<LeaderboardResponse>> {
-    let (challenge, spec) = load_challenge_policy(&state.db, &id).await?;
+    let challenge_id = parse_challenge_id(id)?;
+    let (challenge, spec) = load_challenge_policy(&state.db, &challenge_id).await?;
     ensure_visibility_allows_public(spec.visibility.leaderboard, &spec)?;
     let benchmark_target_id =
-        resolve_public_benchmark_target_id(&state.db, &id, query.target.as_deref()).await?;
-    let items =
-        db::list_leaderboard_entries(&state.db, &id, &benchmark_target_id, query.limit()).await?;
+        resolve_public_benchmark_target_id(&state.db, &challenge_id, query.target.as_deref())
+            .await?;
+    let items = db::list_leaderboard_entries(
+        &state.db,
+        &challenge_id,
+        &benchmark_target_id,
+        query.limit(),
+    )
+    .await?;
     Ok(Json(LeaderboardResponse {
         challenge_id: challenge.challenge_id,
         benchmark_target_id,
@@ -654,18 +669,21 @@ pub async fn get_score_distribution(
     Path(id): Path<String>,
     Query(query): Query<ScoreDistributionQuery>,
 ) -> Result<Json<ScoreDistributionResponse>> {
+    let challenge_id = parse_challenge_id(id)?;
     let metric_id = query.metric.trim();
     if metric_id.is_empty() {
         return Err(AppError::BadRequest(
             "metric query parameter is required".to_string(),
         ));
     }
-    let (challenge, spec) = load_challenge_policy(&state.db, &id).await?;
+    let (challenge, spec) = load_challenge_policy(&state.db, &challenge_id).await?;
     ensure_visibility_allows_public(spec.visibility.score_distribution, &spec)?;
     let benchmark_target_id =
-        resolve_public_benchmark_target_id(&state.db, &id, query.target.as_deref()).await?;
+        resolve_public_benchmark_target_id(&state.db, &challenge_id, query.target.as_deref())
+            .await?;
     let entries =
-        db::list_leaderboard_entries(&state.db, &id, &benchmark_target_id, 10_000).await?;
+        db::list_leaderboard_entries(&state.db, &challenge_id, &benchmark_target_id, 10_000)
+            .await?;
     let response = build_score_distribution_response(
         challenge.challenge_id,
         benchmark_target_id,
@@ -681,7 +699,8 @@ pub async fn list_discussions(
     Path(id): Path<String>,
     Query(query): Query<PublicListQuery>,
 ) -> Result<Json<DiscussionListResponse>> {
-    let items = db::list_discussion_threads(&state.db, &id, query.limit()).await?;
+    let challenge_id = parse_challenge_id(id)?;
+    let items = db::list_discussion_threads(&state.db, &challenge_id, query.limit()).await?;
     Ok(Json(DiscussionListResponse { items }))
 }
 
@@ -720,16 +739,16 @@ pub struct ScoreDistributionQuery {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct RankingContextQuery {
-    challenge_id: String,
+    challenge_id: ChallengeId,
     target: String,
 }
 
 async fn resolve_public_benchmark_target_id(
     pool: &sqlx::PgPool,
-    challenge_id_or_slug: &str,
+    challenge_id: &ChallengeId,
     requested_target: Option<&str>,
 ) -> Result<String> {
-    let challenge = db::get_published_challenge(pool, challenge_id_or_slug).await?;
+    let challenge = db::get_published_challenge(pool, challenge_id).await?;
     let challenge = challenge.ok_or(AppError::NotFound)?;
     let spec: shared::models::challenge::ChallengeBundleSpec =
         serde_json::from_value(challenge.spec_json)
@@ -754,9 +773,9 @@ async fn resolve_public_benchmark_target_id(
 
 async fn load_challenge_policy(
     pool: &sqlx::PgPool,
-    challenge_id_or_slug: &str,
+    challenge_id: &ChallengeId,
 ) -> Result<(db::ChallengeRecord, ChallengeBundleSpec)> {
-    let challenge = db::get_public_challenge(pool, challenge_id_or_slug).await?;
+    let challenge = db::get_public_challenge(pool, challenge_id).await?;
     let challenge = challenge.ok_or(AppError::NotFound)?;
     let spec: ChallengeBundleSpec = serde_json::from_value(challenge.spec_json.clone())
         .map_err(|e| AppError::Internal(e.to_string()))?;
@@ -765,9 +784,9 @@ async fn load_challenge_policy(
 
 async fn ensure_public_result_detail_visible(
     pool: &sqlx::PgPool,
-    challenge_id_or_slug: &str,
+    challenge_id: &ChallengeId,
 ) -> Result<()> {
-    let (_challenge, spec) = load_challenge_policy(pool, challenge_id_or_slug).await?;
+    let (_challenge, spec) = load_challenge_policy(pool, challenge_id).await?;
     match spec.visibility.result_detail {
         ChallengeResultDetailVisibility::SubmitterLivePublicLive => Ok(()),
         ChallengeResultDetailVisibility::SubmitterLivePublicAfterClose
@@ -782,9 +801,9 @@ async fn ensure_public_result_detail_visible(
 
 async fn ensure_public_solution_artifact_visible(
     pool: &sqlx::PgPool,
-    challenge_id_or_slug: &str,
+    challenge_id: &ChallengeId,
 ) -> Result<()> {
-    let (_challenge, spec) = load_challenge_policy(pool, challenge_id_or_slug).await?;
+    let (_challenge, spec) = load_challenge_policy(pool, challenge_id).await?;
     match spec.visibility.result_detail {
         ChallengeResultDetailVisibility::SubmitterLivePublicLive => {}
         ChallengeResultDetailVisibility::SubmitterLivePublicAfterClose
@@ -842,7 +861,7 @@ fn ensure_ranking_scope_matches_submission(
 
 async fn build_ranking_context(
     pool: &sqlx::PgPool,
-    challenge_id: &str,
+    challenge_id: &ChallengeId,
     benchmark_target_id: &str,
     solution_submission_id: &str,
 ) -> Result<RankingContextResponse> {
@@ -902,7 +921,7 @@ async fn build_ranking_context(
     };
 
     Ok(RankingContextResponse {
-        challenge_id: challenge_id.to_string(),
+        challenge_id: challenge_id.clone(),
         benchmark_target_id: benchmark_target_id.to_string(),
         solution_submission_id: solution_submission_id.to_string(),
         rank,
@@ -915,7 +934,7 @@ async fn build_ranking_context(
 }
 
 fn build_score_distribution_response(
-    challenge_id: String,
+    challenge_id: ChallengeId,
     benchmark_target_id: String,
     metric_id: String,
     entries: Vec<LeaderboardEntryDto>,
@@ -1177,10 +1196,11 @@ pub async fn get_challenge_shortlist(
 async fn resolve_creator_challenge_scope(
     pool: &sqlx::PgPool,
     creator: &CreatorAuth,
-    challenge_id_or_slug: &str,
+    raw_challenge_id: &str,
     requested_target: Option<&str>,
-) -> Result<(String, Option<String>)> {
-    let challenge = db::get_published_challenge(pool, challenge_id_or_slug).await?;
+) -> Result<(ChallengeId, Option<String>)> {
+    let challenge_id = parse_challenge_id(raw_challenge_id.to_string())?;
+    let challenge = db::get_published_challenge(pool, &challenge_id).await?;
     let challenge = challenge.ok_or(AppError::NotFound)?;
     if !db::agent_owns_challenge(pool, &challenge.challenge_id, &creator.agent_id).await? {
         return Err(AppError::Forbidden(
@@ -1258,22 +1278,14 @@ pub async fn create_challenge(
     StatusCode,
     Json<shared::models::challenge::ChallengeAdminResponse>,
 )> {
-    let slug = body
-        .slug
-        .as_ref()
-        .map(|s| s.trim().to_string())
-        .unwrap_or_else(|| body.id.trim().to_string());
-    let challenge =
-        db::create_or_update_challenge(&state.db, &body.id, &slug, &body.title, &body.summary)
-            .await
-            .map_err(|e| match e {
-                AppError::Database(sqlx::Error::Database(db_err))
-                    if db_err.is_unique_violation() =>
-                {
-                    AppError::Conflict
-                }
-                _ => e,
-            })?;
+    let challenge = db::create_or_update_challenge(&state.db, &body.id, &body.title, &body.summary)
+        .await
+        .map_err(|e| match e {
+            AppError::Database(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
+                AppError::Conflict
+            }
+            _ => e,
+        })?;
     Ok((StatusCode::CREATED, Json(challenge)))
 }
 
@@ -1284,6 +1296,7 @@ pub async fn publish_challenge(
     Path(challenge_id): Path<String>,
     ValidatedJson(body): ValidatedJson<PublishChallengeRequest>,
 ) -> Result<(StatusCode, Json<PublishChallengeResponse>)> {
+    let challenge_id = parse_challenge_id(challenge_id)?;
     let bundle_path = if std::path::Path::new(&body.bundle_path).is_absolute() {
         body.bundle_path
     } else {

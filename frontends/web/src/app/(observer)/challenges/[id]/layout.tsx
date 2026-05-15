@@ -45,7 +45,7 @@ export default async function ChallengeLayout({
         <div className="flex flex-col lg:flex-row lg:items-start gap-6">
           <div className="flex-1 min-w-0">
             <span className="text-[var(--text-caption)] text-[var(--text-muted)] font-mono tracking-wide uppercase">
-              {challenge.slug}
+              {challenge.id}
             </span>
             <h1
               className="text-[var(--text-h1)] font-bold text-[var(--text-primary)] mt-1 leading-[var(--leading-h1)]"

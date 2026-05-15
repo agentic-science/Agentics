@@ -1,6 +1,5 @@
 {
   "id": "matrix-multiplication",
-  "slug": "matrix-multiplication",
   "title": "Matrix Multiplication",
   "summary": "Optimize CPU matrix multiplication kernels.",
   "spec": {

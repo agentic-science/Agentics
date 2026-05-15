@@ -44,7 +44,6 @@ pub fn validate_challenge_creation_manifest(manifest: &ChallengeCreationManifest
     if manifest.schema_version != 1 {
         return Err(AppError::Validation("schema_version must be 1".to_string()));
     }
-    validate_challenge_namespace(&manifest.challenge_id)?;
     require_non_empty(&manifest.title, "title")?;
     require_non_empty(&manifest.summary, "summary")?;
     require_safe_relative_path(&manifest.readme_path, "readme_path")?;
@@ -210,26 +209,6 @@ fn hash_field(hasher: &mut Sha256, label: &str, bytes: &[u8]) {
     hasher.update(bytes);
 }
 
-/// Check whether a challenge id is valid in the public repository namespace.
-pub fn is_valid_challenge_namespace(value: &str) -> bool {
-    let bytes = value.as_bytes();
-    if !(3..=63).contains(&bytes.len()) {
-        return false;
-    }
-    let (Some(first), Some(last)) = (bytes.first(), bytes.last()) else {
-        return false;
-    };
-    if !first.is_ascii_alphanumeric() || !last.is_ascii_alphanumeric() {
-        return false;
-    }
-    if value.contains("--") {
-        return false;
-    }
-    bytes
-        .iter()
-        .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || *byte == b'-')
-}
-
 async fn validate_challenge_creation_repository_with_manifest(
     root: &Path,
     manifest: &ChallengeCreationManifest,
@@ -322,16 +301,6 @@ async fn assert_public_dir_exists(path: PathBuf, field: &str) -> Result<()> {
             "{field} is not a directory: {}",
             path.display()
         )));
-    }
-    Ok(())
-}
-
-fn validate_challenge_namespace(value: &str) -> Result<()> {
-    if !is_valid_challenge_namespace(value) {
-        return Err(AppError::Validation(
-            "challenge_id must be 3-63 lowercase ASCII letters, digits, or single hyphens, and must start and end with a letter or digit"
-                .to_string(),
-        ));
     }
     Ok(())
 }
@@ -458,7 +427,7 @@ mod tests {
             .await
             .expect("new challenge should validate");
 
-        assert_eq!(manifest.challenge_id, "sample-sum");
+        assert_eq!(manifest.challenge_id.as_str(), "sample-sum");
         cleanup(&repo);
     }
 
@@ -528,19 +497,11 @@ mod tests {
     }
 
     #[test]
-    fn rejects_invalid_namespace() {
-        assert!(!is_valid_challenge_namespace("Bad_ID"));
-        assert!(!is_valid_challenge_namespace("-bad"));
-        assert!(!is_valid_challenge_namespace("bad--id"));
-        assert!(is_valid_challenge_namespace("sample-sum"));
-    }
-
-    #[test]
     fn rejects_invalid_lifecycle_shape() {
         let manifest = ChallengeCreationManifest {
             schema_version: 1,
             request: ChallengeCreationRequestKind::ArchiveChallenge,
-            challenge_id: "sample-sum".to_string(),
+            challenge_id: "sample-sum".parse().expect("valid challenge id"),
             title: "Sample Sum".to_string(),
             summary: "Add numbers".to_string(),
             readme_path: "README.md".to_string(),

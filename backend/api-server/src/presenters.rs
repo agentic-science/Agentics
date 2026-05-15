@@ -28,7 +28,6 @@ pub fn present_challenge_detail(
 
     Ok(ChallengeDetailResponse {
         id: challenge.challenge_id.clone(),
-        slug: challenge.slug.clone(),
         title: challenge.title.clone(),
         summary: challenge.summary.clone(),
         spec,

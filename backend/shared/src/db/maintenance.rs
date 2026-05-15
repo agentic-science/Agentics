@@ -94,8 +94,8 @@ pub async fn ensure_challenges_seeded_from_root(
     }
     challenge_dirs.sort();
 
-    for slug_root in challenge_dirs {
-        let mut bundles = tokio::fs::read_dir(&slug_root).await?;
+    for challenge_root in challenge_dirs {
+        let mut bundles = tokio::fs::read_dir(&challenge_root).await?;
         let mut bundle_dirs: Vec<PathBuf> = Vec::new();
 
         while let Some(bundle_entry) = bundles.next_entry().await? {
@@ -130,19 +130,17 @@ pub async fn ensure_challenges_seeded_from_root(
                 sqlx::query(
                     r#"
                     UPDATE challenges
-                    SET slug = $2,
-                        title = $3,
-                        summary = $4,
-                        bundle_path = $5,
-                        statement_path = $6,
-                        spec_json = $7,
+                    SET title = $2,
+                        summary = $3,
+                        bundle_path = $4,
+                        statement_path = $5,
+                        spec_json = $6,
                         status = 'active',
                         updated_at = NOW()
                     WHERE id = $1
                     "#,
                 )
-                .bind(challenge_id)
-                .bind(challenge_id)
+                .bind(challenge_id.as_str())
                 .bind(&spec.challenge_title)
                 .bind(&spec.challenge_summary)
                 .bind(bundle_dir.to_string_lossy().as_ref())

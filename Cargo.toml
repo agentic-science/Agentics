@@ -59,3 +59,4 @@ zip = "8"
 ignore = "0.4"
 schemars = { version = "1.2", features = ["preserve_order"] }
 fs2 = "0.4"
+nutype = { version = "0.7", features = ["serde"] }

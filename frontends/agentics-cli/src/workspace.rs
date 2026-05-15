@@ -5,6 +5,7 @@ use std::process::Command;
 use anyhow::{Context, Result, bail};
 use serde::Serialize;
 use shared::models::challenge::ChallengeDetailResponse;
+use shared::models::ids::ChallengeId;
 use shared::zip_project::{
     ZIP_PROJECT_MANIFEST_FILE, ZIP_PROJECT_PROTOCOL, ZIP_PROJECT_PROTOCOL_VERSION,
     ZipProjectCommands, ZipProjectDependencies, ZipProjectDependencyPolicy, ZipProjectInterface,
@@ -30,7 +31,7 @@ fi
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct InitSolutionSummary {
     pub workspace_dir: PathBuf,
-    pub challenge_id: String,
+    pub challenge_id: ChallengeId,
     pub challenge_title: String,
     pub runtime_profile: String,
     pub interface: String,
@@ -230,8 +231,11 @@ fn install_pre_commit_hook(workspace_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn default_workspace_dir(challenge_id: &str) -> PathBuf {
-    PathBuf::from(format!("{}-solution", sanitize_path_segment(challenge_id)))
+fn default_workspace_dir(challenge_id: &ChallengeId) -> PathBuf {
+    PathBuf::from(format!(
+        "{}-solution",
+        sanitize_path_segment(challenge_id.as_str())
+    ))
 }
 
 fn sanitize_path_segment(value: &str) -> String {
@@ -357,6 +361,7 @@ mod tests {
         PrivateBenchmarkPolicy, ResourceProfileSpec, ScorerSpec, SolutionSpec,
     };
     use shared::models::evaluation::ScoreVisibility;
+    use shared::models::ids::ChallengeId;
     use shared::zip_project::{
         ZipProjectInterfaceKind, ZipProjectNetworkAccess, parse_zip_project_manifest,
     };
@@ -385,7 +390,7 @@ mod tests {
         let hook = fs::read_to_string(workspace_dir.join(".git/hooks/pre-commit"))
             .expect("hook should be readable");
 
-        assert_eq!(summary.challenge_id, "sample-sum");
+        assert_eq!(summary.challenge_id.as_str(), "sample-sum");
         assert_eq!(summary.runtime_profile, "python-cpu");
         assert_eq!(summary.interface, "challenge_defined");
         assert!(readme.contains("# Sample Sum"));
@@ -464,22 +469,21 @@ mod tests {
     }
 
     #[test]
-    fn default_workspace_dir_is_sanitized() {
+    fn default_workspace_dir_uses_challenge_id() {
         assert_eq!(
-            default_workspace_dir("../bad challenge!*"),
-            std::path::PathBuf::from("bad-challenge-solution")
+            default_workspace_dir(&challenge_id("sample-sum")),
+            std::path::PathBuf::from("sample-sum-solution")
         );
     }
 
     fn challenge_detail() -> ChallengeDetailResponse {
         ChallengeDetailResponse {
-            id: "sample-sum".to_string(),
-            slug: "sum".to_string(),
+            id: challenge_id("sample-sum"),
             title: "Sample Sum".to_string(),
             summary: "Add numbers".to_string(),
             spec: ChallengeBundleSpec {
                 schema_version: 1,
-                challenge_id: "sample-sum".to_string(),
+                challenge_id: challenge_id("sample-sum"),
                 challenge_title: "Sample Sum".to_string(),
                 challenge_summary: "Add numbers".to_string(),
                 starts_at: None,
@@ -544,5 +548,9 @@ mod tests {
             },
             statement_markdown: "# Statement\n\nReturn the sum.".to_string(),
         }
+    }
+
+    fn challenge_id(value: &str) -> ChallengeId {
+        ChallengeId::try_new(value.to_string()).expect("test challenge id is valid")
     }
 }

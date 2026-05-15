@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::ids::ChallengeId;
 use crate::zip_project::ZipProjectNetworkAccess;
 
 /// Parsed `spec.json` contract for a challenge bundle.
@@ -9,7 +10,7 @@ use crate::zip_project::ZipProjectNetworkAccess;
 #[serde(deny_unknown_fields)]
 pub struct ChallengeBundleSpec {
     pub schema_version: i32,
-    pub challenge_id: String,
+    pub challenge_id: ChallengeId,
     pub challenge_title: String,
     /// Plain-text summary used in compact challenge catalog surfaces.
     pub challenge_summary: String,
@@ -407,8 +408,7 @@ impl Default for MetricSchemaSpec {
 /// One row in the public challenge catalog.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeListItemDto {
-    pub id: String,
-    pub slug: String,
+    pub id: ChallengeId,
     pub title: String,
     pub summary: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -427,8 +427,7 @@ pub struct ChallengeListResponse {
 /// Public challenge detail response with spec and Markdown statement.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeDetailResponse {
-    pub id: String,
-    pub slug: String,
+    pub id: ChallengeId,
     pub title: String,
     pub summary: String,
     pub spec: ChallengeBundleSpec,
@@ -438,8 +437,7 @@ pub struct ChallengeDetailResponse {
 /// Admin-facing challenge metadata response.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeAdminResponse {
-    pub id: String,
-    pub slug: String,
+    pub id: ChallengeId,
     pub title: String,
     pub summary: String,
     pub status: String,
@@ -450,8 +448,7 @@ pub struct ChallengeAdminResponse {
 /// One row in the admin challenge list.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct AdminChallengeListItemDto {
-    pub id: String,
-    pub slug: String,
+    pub id: ChallengeId,
     pub title: String,
     pub summary: String,
     pub status: String,
@@ -482,8 +479,7 @@ pub struct AdminChallengeListResponse {
 /// Admin response returned after publishing a challenge bundle.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct PublishChallengeResponse {
-    pub challenge_id: String,
-    pub slug: String,
+    pub challenge_id: ChallengeId,
     pub title: String,
     pub bundle_path: String,
     pub statement_path: String,

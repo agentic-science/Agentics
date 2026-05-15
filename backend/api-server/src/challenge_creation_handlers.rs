@@ -22,6 +22,7 @@ use shared::models::challenge_creation::{
     CreateChallengeDraftRequest, ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest,
     ValidateChallengeDraftRequest,
 };
+use shared::models::ids::ChallengeId;
 use shared::{challenge_bundle, challenge_creation, db};
 
 use crate::extractors::{AdminAuth, CreatorAuth, ValidatedJson};
@@ -632,7 +633,7 @@ fn validate_commit_sha(value: &str) -> Result<()> {
     Ok(())
 }
 
-fn validate_challenge_draft_path(path: &str, challenge_id: &str) -> Result<()> {
+fn validate_challenge_draft_path(path: &str, challenge_id: &ChallengeId) -> Result<()> {
     let path = path.trim();
     if !challenge_bundle::is_safe_relative_path(path) {
         return Err(AppError::BadRequest(
@@ -706,7 +707,7 @@ async fn assemble_runtime_bundle(
 
     let runtime_bundle_path = Path::new(&state.config.storage_root)
         .join("challenge-bundles")
-        .join(&manifest.challenge_id)
+        .join(manifest.challenge_id.as_str())
         .join(&draft.id);
     challenge_bundle::copy_challenge_bundle_dir(&public_bundle_path, &runtime_bundle_path, true)
         .await?;

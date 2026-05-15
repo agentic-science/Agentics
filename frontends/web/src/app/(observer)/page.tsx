@@ -173,7 +173,7 @@ export default async function HomePage() {
                 </p>
                 <div className="flex items-center gap-2 mt-auto pt-2">
                   <span className="text-[var(--text-caption)] text-[var(--text-muted)] font-mono">
-                    {challenge.slug}
+                    {challenge.id}
                   </span>
                   <ArrowRight className="w-3.5 h-3.5 text-[var(--text-muted)] group-hover:text-[var(--accent-primary-text)] group-hover:translate-x-0.5 transition-all ml-auto" />
                 </div>

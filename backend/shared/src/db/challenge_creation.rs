@@ -11,6 +11,7 @@ use crate::models::challenge_creation::{
     ChallengeDraftStatus, ChallengeDraftValidationRecordResponse, ChallengeDraftValidationStatus,
     ChallengePrivateAssetKind, ChallengePrivateAssetResponse,
 };
+use crate::models::ids::ChallengeId;
 
 use super::challenges::{add_challenge_owner_tx, publish_challenge_tx};
 
@@ -60,7 +61,7 @@ pub struct CreateChallengeDraftAuditEventInput {
 #[derive(Debug, Clone)]
 pub struct PublishNewChallengeDraftInput {
     pub draft_id: String,
-    pub challenge_id: String,
+    pub challenge_id: ChallengeId,
     pub bundle_path: String,
     pub statement_path: String,
     pub spec: ChallengeBundleSpec,
@@ -77,7 +78,7 @@ pub struct PublishNewChallengeDraftInput {
 #[derive(Debug, Clone)]
 pub struct PublishArchiveChallengeDraftInput {
     pub draft_id: String,
-    pub challenge_id: String,
+    pub challenge_id: ChallengeId,
     pub audit_event_id: String,
     pub admin_username: String,
     pub repository_path: String,
@@ -126,7 +127,7 @@ pub async fn create_challenge_draft(
         "#,
     )
     .bind(&input.draft_id)
-    .bind(&input.manifest.challenge_id)
+    .bind(input.manifest.challenge_id.as_str())
     .bind(input.manifest.request.as_str())
     .bind(&input.creator_agent_id)
     .bind(input.creator_github_user_id)
@@ -530,7 +531,7 @@ pub async fn delete_challenge_private_asset(pool: &PgPool, asset_row_id: &str) -
 pub async fn mark_challenge_draft_published(
     pool: &PgPool,
     draft_id: &str,
-    published_challenge_id: Option<&str>,
+    published_challenge_id: Option<&ChallengeId>,
 ) -> Result<()> {
     let result = sqlx::query(
         r#"
@@ -543,7 +544,7 @@ pub async fn mark_challenge_draft_published(
         "#,
     )
     .bind(draft_id)
-    .bind(published_challenge_id)
+    .bind(published_challenge_id.map(ChallengeId::as_str))
     .execute(pool)
     .await?;
 
@@ -627,7 +628,7 @@ pub async fn publish_archive_challenge_draft(
 async fn mark_challenge_draft_published_tx(
     tx: &mut Transaction<'_, Postgres>,
     draft_id: &str,
-    published_challenge_id: Option<&str>,
+    published_challenge_id: Option<&ChallengeId>,
 ) -> Result<()> {
     let result = sqlx::query(
         r#"
@@ -640,7 +641,7 @@ async fn mark_challenge_draft_published_tx(
         "#,
     )
     .bind(draft_id)
-    .bind(published_challenge_id)
+    .bind(published_challenge_id.map(ChallengeId::as_str))
     .execute(&mut **tx)
     .await?;
 
@@ -652,7 +653,7 @@ async fn mark_challenge_draft_published_tx(
 
 async fn archive_challenge_tx(
     tx: &mut Transaction<'_, Postgres>,
-    challenge_id: &str,
+    challenge_id: &ChallengeId,
 ) -> Result<()> {
     let result = sqlx::query(
         r#"
@@ -662,7 +663,7 @@ async fn archive_challenge_tx(
         WHERE id = $1
         "#,
     )
-    .bind(challenge_id)
+    .bind(challenge_id.as_str())
     .execute(&mut **tx)
     .await?;
 
@@ -761,7 +762,7 @@ fn row_to_draft_response(
 
     Ok(ChallengeDraftResponse {
         id: row.try_get("id")?,
-        challenge_id: row.try_get("challenge_id")?,
+        challenge_id: challenge_id_from_row(&row, "challenge_id")?,
         request: parse_request_kind(&row.try_get::<String, _>("request_kind")?)?,
         status: parse_draft_status(&row.try_get::<String, _>("status")?)?,
         creator_agent_id: row.try_get("creator_agent_id")?,
@@ -778,12 +779,35 @@ fn row_to_draft_response(
         approved_bundle_sha256: row.try_get("approved_bundle_sha256")?,
         validation_message: row.try_get("validation_message")?,
         validation_repository_path: row.try_get("validation_repository_path")?,
-        published_challenge_id: row.try_get("published_challenge_id")?,
+        published_challenge_id: optional_challenge_id_from_row(&row, "published_challenge_id")?,
         private_assets,
         validation_records,
         created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
         updated_at: row.try_get::<DateTime<Utc>, _>("updated_at")?.to_rfc3339(),
     })
+}
+
+fn challenge_id_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<ChallengeId> {
+    let raw: String = row.try_get(column)?;
+    ChallengeId::try_new(raw).map_err(|e| {
+        AppError::Internal(format!(
+            "stored invalid challenge id in column `{column}`: {e}"
+        ))
+    })
+}
+
+fn optional_challenge_id_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<Option<ChallengeId>> {
+    row.try_get::<Option<String>, _>(column)?
+        .map(ChallengeId::try_new)
+        .transpose()
+        .map_err(|e| {
+            AppError::Internal(format!(
+                "stored invalid challenge id in column `{column}`: {e}"
+            ))
+        })
 }
 
 fn row_to_private_asset_response(

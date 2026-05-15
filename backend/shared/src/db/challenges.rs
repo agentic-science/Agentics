@@ -8,6 +8,7 @@ use crate::error::{AppError, Result};
 use crate::models::challenge::{
     AdminChallengeListItemDto, ChallengeBundleSpec, ChallengeListItemDto, PublishChallengeResponse,
 };
+use crate::models::ids::ChallengeId;
 use crate::models::request::{
     ChallengeShortlistResponse, ChallengeShortlistRevisionResponse, ChallengeShortlistedAgentDto,
     CreatorChallengeParticipantDto, CreatorChallengeParticipantsResponse,
@@ -17,8 +18,7 @@ use crate::models::request::{
 /// Published challenge joined with challenge metadata.
 #[derive(Debug, Clone)]
 pub struct ChallengeRecord {
-    pub challenge_id: String,
-    pub slug: String,
+    pub challenge_id: ChallengeId,
     pub title: String,
     pub summary: String,
     pub bundle_path: String,
@@ -29,26 +29,23 @@ pub struct ChallengeRecord {
 /// Create or update an unpublished challenge shell.
 pub async fn create_or_update_challenge(
     pool: &PgPool,
-    id: &str,
-    slug: &str,
+    id: &ChallengeId,
     title: &str,
     summary: &str,
 ) -> Result<crate::models::challenge::ChallengeAdminResponse> {
     let row = sqlx::query(
         r#"
-        INSERT INTO challenges (id, slug, title, summary, status)
-        VALUES ($1, $2, $3, $4, 'draft')
+        INSERT INTO challenges (id, title, summary, status)
+        VALUES ($1, $2, $3, 'draft')
         ON CONFLICT (id) DO UPDATE
-        SET slug = EXCLUDED.slug,
-            title = EXCLUDED.title,
+        SET title = EXCLUDED.title,
             summary = EXCLUDED.summary,
             updated_at = NOW()
         WHERE challenges.spec_json IS NULL
-        RETURNING id, slug, title, summary, status, created_at, updated_at
+        RETURNING id, title, summary, status, created_at, updated_at
         "#,
     )
-    .bind(id)
-    .bind(slug)
+    .bind(id.as_str())
     .bind(title)
     .bind(summary)
     .fetch_one(pool)
@@ -59,8 +56,7 @@ pub async fn create_or_update_challenge(
     })?;
 
     Ok(crate::models::challenge::ChallengeAdminResponse {
-        id: row.try_get("id")?,
-        slug: row.try_get("slug")?,
+        id: challenge_id_from_row(&row, "id")?,
         title: row.try_get("title")?,
         summary: row.try_get("summary")?,
         status: row.try_get("status")?,
@@ -73,7 +69,7 @@ pub async fn create_or_update_challenge(
 pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeListItemDto>> {
     let rows = sqlx::query(
         r#"
-        SELECT id, slug, title, summary, status, spec_json, created_at, updated_at
+        SELECT id, title, summary, status, spec_json, created_at, updated_at
         FROM challenges
         ORDER BY updated_at DESC, created_at DESC
         "#,
@@ -89,8 +85,7 @@ pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeLi
                 .transpose()
                 .map_err(|e| AppError::Internal(e.to_string()))?;
             Ok(AdminChallengeListItemDto {
-                id: r.try_get("id")?,
-                slug: r.try_get("slug")?,
+                id: challenge_id_from_row(&r, "id")?,
                 title: r.try_get("title")?,
                 summary: r.try_get("summary")?,
                 status: r.try_get("status")?,
@@ -113,7 +108,7 @@ pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeLi
 /// Publish a validated bundle as the benchmark contract for a challenge id.
 pub async fn publish_challenge(
     pool: &PgPool,
-    challenge_id: &str,
+    challenge_id: &ChallengeId,
     bundle_path: &str,
     statement_path: &str,
     spec: &ChallengeBundleSpec,
@@ -137,7 +132,7 @@ pub async fn publish_challenge(
 
 pub async fn publish_challenge_tx(
     tx: &mut Transaction<'_, Postgres>,
-    challenge_id: &str,
+    challenge_id: &ChallengeId,
     bundle_path: &str,
     statement_path: &str,
     spec: &ChallengeBundleSpec,
@@ -149,12 +144,12 @@ pub async fn publish_challenge_tx(
     let row = sqlx::query(
         r#"
         INSERT INTO challenges (
-            id, slug, title, summary, bundle_path, statement_path, spec_json,
+            id, title, summary, bundle_path, statement_path, spec_json,
             starts_at, closes_at, eligibility_policy_json, validation_submission_limit,
             official_submission_limit, leaderboard_visibility, score_distribution_visibility,
             result_detail_visibility, solution_publication_policy, status
         )
-        VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'active')
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'active')
         ON CONFLICT (id) DO UPDATE
         SET title = EXCLUDED.title,
             summary = EXCLUDED.summary,
@@ -173,10 +168,10 @@ pub async fn publish_challenge_tx(
             status = 'active',
             updated_at = NOW()
         WHERE challenges.spec_json IS NULL
-        RETURNING id AS challenge_id, slug, title, bundle_path, statement_path
+        RETURNING id AS challenge_id, title, bundle_path, statement_path
         "#,
     )
-    .bind(challenge_id)
+    .bind(challenge_id.as_str())
     .bind(title)
     .bind(summary)
     .bind(bundle_path)
@@ -200,8 +195,7 @@ pub async fn publish_challenge_tx(
     })?;
 
     Ok(PublishChallengeResponse {
-        challenge_id: row.try_get("challenge_id")?,
-        slug: row.try_get("slug")?,
+        challenge_id: challenge_id_from_row(&row, "challenge_id")?,
         title: row.try_get("title")?,
         bundle_path: row.try_get("bundle_path")?,
         statement_path: row.try_get("statement_path")?,
@@ -227,7 +221,7 @@ fn to_json_string<T: serde::Serialize>(value: T) -> Result<String> {
 }
 
 /// Archive a challenge shell while preserving private assets and historical submissions.
-pub async fn archive_challenge(pool: &PgPool, challenge_id: &str) -> Result<()> {
+pub async fn archive_challenge(pool: &PgPool, challenge_id: &ChallengeId) -> Result<()> {
     let result = sqlx::query(
         r#"
         UPDATE challenges
@@ -236,7 +230,7 @@ pub async fn archive_challenge(pool: &PgPool, challenge_id: &str) -> Result<()> 
         WHERE id = $1
         "#,
     )
-    .bind(challenge_id)
+    .bind(challenge_id.as_str())
     .execute(pool)
     .await?;
 
@@ -247,7 +241,11 @@ pub async fn archive_challenge(pool: &PgPool, challenge_id: &str) -> Result<()> 
 }
 
 /// Grant challenge-owner permissions to an agent.
-pub async fn add_challenge_owner(pool: &PgPool, challenge_id: &str, agent_id: &str) -> Result<()> {
+pub async fn add_challenge_owner(
+    pool: &PgPool,
+    challenge_id: &ChallengeId,
+    agent_id: &str,
+) -> Result<()> {
     let mut tx = pool.begin().await?;
     add_challenge_owner_tx(&mut tx, challenge_id, agent_id).await?;
     tx.commit().await?;
@@ -256,7 +254,7 @@ pub async fn add_challenge_owner(pool: &PgPool, challenge_id: &str, agent_id: &s
 
 pub async fn add_challenge_owner_tx(
     tx: &mut Transaction<'_, Postgres>,
-    challenge_id: &str,
+    challenge_id: &ChallengeId,
     agent_id: &str,
 ) -> Result<()> {
     sqlx::query(
@@ -266,7 +264,7 @@ pub async fn add_challenge_owner_tx(
         ON CONFLICT (challenge_id, agent_id) DO NOTHING
         "#,
     )
-    .bind(challenge_id)
+    .bind(challenge_id.as_str())
     .bind(agent_id)
     .execute(&mut **tx)
     .await?;
@@ -277,7 +275,7 @@ pub async fn add_challenge_owner_tx(
 /// Check whether an agent is an owner of a challenge.
 pub async fn agent_owns_challenge(
     pool: &PgPool,
-    challenge_id: &str,
+    challenge_id: &ChallengeId,
     agent_id: &str,
 ) -> Result<bool> {
     let exists = sqlx::query_scalar::<_, bool>(
@@ -289,7 +287,7 @@ pub async fn agent_owns_challenge(
         )
         "#,
     )
-    .bind(challenge_id)
+    .bind(challenge_id.as_str())
     .bind(agent_id)
     .fetch_one(pool)
     .await?;
@@ -298,7 +296,7 @@ pub async fn agent_owns_challenge(
 }
 
 /// Return whether a challenge has any effective shortlisted agents.
-pub async fn challenge_has_shortlist(pool: &PgPool, challenge_id: &str) -> Result<bool> {
+pub async fn challenge_has_shortlist(pool: &PgPool, challenge_id: &ChallengeId) -> Result<bool> {
     let exists = sqlx::query_scalar::<_, bool>(
         r#"
         SELECT EXISTS (
@@ -308,7 +306,7 @@ pub async fn challenge_has_shortlist(pool: &PgPool, challenge_id: &str) -> Resul
         )
         "#,
     )
-    .bind(challenge_id)
+    .bind(challenge_id.as_str())
     .fetch_one(pool)
     .await?;
 
@@ -318,7 +316,7 @@ pub async fn challenge_has_shortlist(pool: &PgPool, challenge_id: &str) -> Resul
 /// Return whether an agent is in a challenge's effective shortlist.
 pub async fn agent_is_shortlisted(
     pool: &PgPool,
-    challenge_id: &str,
+    challenge_id: &ChallengeId,
     agent_id: &str,
 ) -> Result<bool> {
     let exists = sqlx::query_scalar::<_, bool>(
@@ -330,7 +328,7 @@ pub async fn agent_is_shortlisted(
         )
         "#,
     )
-    .bind(challenge_id)
+    .bind(challenge_id.as_str())
     .bind(agent_id)
     .fetch_one(pool)
     .await?;
@@ -342,7 +340,7 @@ pub async fn agent_is_shortlisted(
 #[derive(Debug, Clone)]
 pub struct CreateChallengeShortlistRevisionInput {
     pub revision_id: String,
-    pub challenge_id: String,
+    pub challenge_id: ChallengeId,
     pub uploader_agent_id: String,
     pub storage_uri: String,
     pub sha256: String,
@@ -369,7 +367,7 @@ pub async fn create_challenge_shortlist_revision(
         "#,
     )
     .bind(&input.revision_id)
-    .bind(&input.challenge_id)
+    .bind(input.challenge_id.as_str())
     .bind(&input.uploader_agent_id)
     .bind(&input.storage_uri)
     .bind(&input.sha256)
@@ -388,7 +386,7 @@ pub async fn create_challenge_shortlist_revision(
             ON CONFLICT (challenge_id, agent_id) DO NOTHING
             "#,
         )
-        .bind(&input.challenge_id)
+        .bind(input.challenge_id.as_str())
         .bind(agent_id)
         .bind(&input.uploader_agent_id)
         .bind(&input.revision_id)
@@ -421,10 +419,10 @@ pub async fn create_challenge_shortlist_revision(
 
 async fn lock_challenge_shortlist(
     tx: &mut Transaction<'_, Postgres>,
-    challenge_id: &str,
+    challenge_id: &ChallengeId,
 ) -> Result<()> {
     sqlx::query("SELECT id FROM challenges WHERE id = $1 FOR UPDATE")
-        .bind(challenge_id)
+        .bind(challenge_id.as_str())
         .fetch_one(&mut **tx)
         .await?;
     Ok(())
@@ -452,7 +450,7 @@ async fn ensure_shortlist_agents_exist(
 /// List the effective challenge shortlist.
 pub async fn list_challenge_shortlist(
     pool: &PgPool,
-    challenge_id: &str,
+    challenge_id: &ChallengeId,
 ) -> Result<ChallengeShortlistResponse> {
     let rows = sqlx::query(
         r#"
@@ -463,7 +461,7 @@ pub async fn list_challenge_shortlist(
         ORDER BY s.created_at ASC, s.agent_id ASC
         "#,
     )
-    .bind(challenge_id)
+    .bind(challenge_id.as_str())
     .fetch_all(pool)
     .await?;
 
@@ -480,7 +478,7 @@ pub async fn list_challenge_shortlist(
         .collect::<Result<Vec<_>>>()?;
 
     Ok(ChallengeShortlistResponse {
-        challenge_id: challenge_id.to_string(),
+        challenge_id: challenge_id.clone(),
         items,
     })
 }
@@ -488,7 +486,7 @@ pub async fn list_challenge_shortlist(
 /// Challenge-owner statistics for one challenge and optional target.
 pub async fn get_creator_challenge_stats(
     pool: &PgPool,
-    challenge_id: &str,
+    challenge_id: &ChallengeId,
     benchmark_target_id: Option<&str>,
 ) -> Result<CreatorChallengeStatsResponse> {
     let row = sqlx::query(
@@ -552,13 +550,13 @@ pub async fn get_creator_challenge_stats(
         CROSS JOIN leaderboard_summary ls
         "#,
     )
-    .bind(challenge_id)
+    .bind(challenge_id.as_str())
     .bind(benchmark_target_id)
     .fetch_one(pool)
     .await?;
 
     Ok(CreatorChallengeStatsResponse {
-        challenge_id: challenge_id.to_string(),
+        challenge_id: challenge_id.clone(),
         benchmark_target_id: benchmark_target_id.map(ToOwned::to_owned),
         agent_count: row.try_get("agent_count")?,
         solution_submission_count: row.try_get("solution_submission_count")?,
@@ -586,7 +584,7 @@ pub async fn get_creator_challenge_stats(
 /// Challenge-owner participant rows for one challenge and optional target.
 pub async fn list_creator_challenge_participants(
     pool: &PgPool,
-    challenge_id: &str,
+    challenge_id: &ChallengeId,
     benchmark_target_id: Option<&str>,
 ) -> Result<CreatorChallengeParticipantsResponse> {
     let rows = sqlx::query(
@@ -629,7 +627,7 @@ pub async fn list_creator_challenge_participants(
         ORDER BY b.best_rank_score DESC NULLS LAST, c.solution_submission_count DESC, a.name ASC
         "#,
     )
-    .bind(challenge_id)
+    .bind(challenge_id.as_str())
     .bind(benchmark_target_id)
     .fetch_all(pool)
     .await?;
@@ -653,7 +651,7 @@ pub async fn list_creator_challenge_participants(
         .collect::<Result<Vec<_>>>()?;
 
     Ok(CreatorChallengeParticipantsResponse {
-        challenge_id: challenge_id.to_string(),
+        challenge_id: challenge_id.clone(),
         benchmark_target_id: benchmark_target_id.map(ToOwned::to_owned),
         items,
     })
@@ -663,7 +661,7 @@ pub async fn list_creator_challenge_participants(
 pub async fn list_published_challenges(pool: &PgPool) -> Result<Vec<ChallengeListItemDto>> {
     let rows = sqlx::query(
         r#"
-        SELECT id, slug, title, summary, spec_json
+        SELECT id, title, summary, spec_json
         FROM challenges
         WHERE status = 'active'
           AND spec_json IS NOT NULL
@@ -678,8 +676,7 @@ pub async fn list_published_challenges(pool: &PgPool) -> Result<Vec<ChallengeLis
             let spec: ChallengeBundleSpec = serde_json::from_value(r.try_get("spec_json")?)
                 .map_err(|e| AppError::Internal(e.to_string()))?;
             Ok(ChallengeListItemDto {
-                id: r.try_get("id")?,
-                slug: r.try_get("slug")?,
+                id: challenge_id_from_row(&r, "id")?,
                 title: r.try_get("title")?,
                 summary: r.try_get("summary")?,
                 starts_at: spec.starts_at,
@@ -690,45 +687,45 @@ pub async fn list_published_challenges(pool: &PgPool) -> Result<Vec<ChallengeLis
         .collect::<Result<Vec<_>>>()
 }
 
-/// Fetch one active challenge by id or slug.
+/// Fetch one active challenge by id.
 pub async fn get_published_challenge(
     pool: &PgPool,
-    challenge_id_or_slug: &str,
+    challenge_id: &ChallengeId,
 ) -> Result<Option<ChallengeRecord>> {
     let row = sqlx::query(
         r#"
-        SELECT id AS challenge_id, slug, title, summary, bundle_path, statement_path, spec_json
+        SELECT id AS challenge_id, title, summary, bundle_path, statement_path, spec_json
         FROM challenges
         WHERE status = 'active'
           AND spec_json IS NOT NULL
-          AND (id = $1 OR slug = $1)
+          AND id = $1
         LIMIT 1
         "#,
     )
-    .bind(challenge_id_or_slug)
+    .bind(challenge_id.as_str())
     .fetch_optional(pool)
     .await?;
 
     row.map(row_to_challenge_record).transpose()
 }
 
-/// Fetch one public challenge detail by id or slug, including archived records
+/// Fetch one public challenge detail by id, including archived records
 /// that are hidden from default browsing.
 pub async fn get_public_challenge(
     pool: &PgPool,
-    challenge_id_or_slug: &str,
+    challenge_id: &ChallengeId,
 ) -> Result<Option<ChallengeRecord>> {
     let row = sqlx::query(
         r#"
-        SELECT id AS challenge_id, slug, title, summary, bundle_path, statement_path, spec_json
+        SELECT id AS challenge_id, title, summary, bundle_path, statement_path, spec_json
         FROM challenges
         WHERE status IN ('active', 'archived')
           AND spec_json IS NOT NULL
-          AND (id = $1 OR slug = $1)
+          AND id = $1
         LIMIT 1
         "#,
     )
-    .bind(challenge_id_or_slug)
+    .bind(challenge_id.as_str())
     .fetch_optional(pool)
     .await?;
 
@@ -737,8 +734,7 @@ pub async fn get_public_challenge(
 
 fn row_to_challenge_record(r: sqlx::postgres::PgRow) -> Result<ChallengeRecord> {
     Ok(ChallengeRecord {
-        challenge_id: r.try_get("challenge_id")?,
-        slug: r.try_get("slug")?,
+        challenge_id: challenge_id_from_row(&r, "challenge_id")?,
         title: r.try_get("title")?,
         summary: r.try_get("summary")?,
         bundle_path: r.try_get("bundle_path")?,
@@ -752,13 +748,22 @@ fn row_to_shortlist_revision_response(
 ) -> Result<ChallengeShortlistRevisionResponse> {
     Ok(ChallengeShortlistRevisionResponse {
         id: row.try_get("id")?,
-        challenge_id: row.try_get("challenge_id")?,
+        challenge_id: challenge_id_from_row(&row, "challenge_id")?,
         uploader_agent_id: row.try_get("uploader_agent_id")?,
         requested_count: row.try_get("requested_count")?,
         added_count: row.try_get("added_count")?,
         sha256: row.try_get("sha256")?,
         storage_uri: row.try_get("storage_uri")?,
         created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
+    })
+}
+
+fn challenge_id_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<ChallengeId> {
+    let raw: String = row.try_get(column)?;
+    ChallengeId::try_new(raw).map_err(|e| {
+        AppError::Internal(format!(
+            "stored invalid challenge id in column `{column}`: {e}"
+        ))
     })
 }
 

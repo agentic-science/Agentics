@@ -5,13 +5,14 @@ use chrono::{DateTime, Utc};
 use crate::error::{AppError, Result};
 use crate::models::challenge::{ChallengeBundleSpec, ChallengeEligibilityType};
 use crate::models::evaluation::ScoringMode;
+use crate::models::ids::ChallengeId;
 
 use super::challenges::{agent_is_shortlisted, challenge_has_shortlist, get_published_challenge};
 
 /// Published challenge admission data needed by API preflight checks.
 #[derive(Debug, Clone)]
 pub struct PublishedChallengeAdmission {
-    pub challenge_id: String,
+    pub challenge_id: ChallengeId,
     pub validation_submission_limit: Option<i64>,
     pub official_submission_limit: Option<i64>,
 }
@@ -24,12 +25,12 @@ pub struct PublishedChallengeAdmission {
 /// inserting queued work as the authoritative guard.
 pub async fn ensure_published_challenge_supports_eval_type(
     pool: &PgPool,
-    challenge_id_or_slug: &str,
+    challenge_id: &ChallengeId,
     benchmark_target_id: &str,
     eval_type: ScoringMode,
     agent_id: &str,
 ) -> Result<PublishedChallengeAdmission> {
-    let challenge = get_published_challenge(pool, challenge_id_or_slug).await?;
+    let challenge = get_published_challenge(pool, challenge_id).await?;
     let challenge =
         challenge.ok_or_else(|| AppError::BadRequest("challenge not found".to_string()))?;
     let spec: ChallengeBundleSpec = serde_json::from_value(challenge.spec_json)
@@ -52,7 +53,7 @@ pub async fn ensure_published_challenge_supports_eval_type(
 
 pub(super) async fn ensure_challenge_supports_eval_type(
     pool: &PgPool,
-    challenge_id: &str,
+    challenge_id: &ChallengeId,
     spec: &ChallengeBundleSpec,
     benchmark_target_id: &str,
     eval_type: ScoringMode,
@@ -100,7 +101,7 @@ fn ensure_challenge_accepts_submissions(spec: &ChallengeBundleSpec) -> Result<()
 
 async fn ensure_challenge_eligibility(
     pool: &PgPool,
-    challenge_id: &str,
+    challenge_id: &ChallengeId,
     spec: &ChallengeBundleSpec,
     agent_id: &str,
 ) -> Result<()> {

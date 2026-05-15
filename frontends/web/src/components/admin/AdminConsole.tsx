@@ -521,7 +521,7 @@ function ChallengeAdminPanel({
                   <td>
                     <div className="font-medium">{challenge.title}</div>
                     <div className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
-                      {challenge.id} · {challenge.slug}
+                      {challenge.id}
                     </div>
                   </td>
                   <td>
@@ -712,7 +712,6 @@ function ChallengeShellForm({
 }: ActionProps) {
   const [form, setForm] = useState({
     id: "",
-    slug: "",
     title: "",
     summary: "",
   });
@@ -722,7 +721,6 @@ function ChallengeShellForm({
     try {
       const body = {
         id: form.id.trim(),
-        slug: form.slug.trim() || undefined,
         title: form.title.trim(),
         summary: form.summary.trim(),
       };
@@ -754,11 +752,6 @@ function ChallengeShellForm({
         value={form.id}
         onChange={(id) => setForm({ ...form, id })}
         required
-      />
-      <TextInput
-        label="Slug"
-        value={form.slug}
-        onChange={(slug) => setForm({ ...form, slug })}
       />
       <TextInput
         label="Title"

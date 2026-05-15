@@ -62,7 +62,6 @@ describe("frontend API schemas", () => {
     expect(() =>
       challengeDetailResponseSchema.parse({
         id: "sample-sum",
-        slug: "sample-sum",
         title: "Sample Sum",
         summary: "Add two numbers.",
         spec: {
@@ -138,7 +137,6 @@ describe("frontend API schemas", () => {
   it("rejects non-Moltbook community links", () => {
     const payload = {
       id: "sample-sum",
-      slug: "sample-sum",
       title: "Sample Sum",
       summary: "Add two numbers.",
       spec: {
@@ -313,7 +311,6 @@ describe("frontend API schemas", () => {
         items: [
           {
             id: "sample-sum",
-            slug: "sample-sum",
             title: "Sample Sum",
             summary: "Add numbers",
             status: "active",

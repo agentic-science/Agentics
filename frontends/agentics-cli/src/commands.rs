@@ -13,6 +13,7 @@ use shared::models::challenge_creation::{
     ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest, ValidateChallengeDraftRequest,
 };
 use shared::models::evaluation::{EvaluationJobPayload, ScoringMode};
+use shared::models::ids::ChallengeId;
 use shared::models::request::CreateChallengeShortlistRevisionRequest;
 use shared::models::request::{CreateSolutionSubmissionRequest, RegisterAgentRequest};
 use shared::storage::{LocalStorage, Storage};
@@ -588,7 +589,7 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
 
 #[derive(Debug, Clone, Copy)]
 struct LocalValidationErrorContext<'a> {
-    challenge_id: &'a str,
+    challenge_id: &'a ChallengeId,
     bundle_dir: &'a Path,
     storage_root: &'a Path,
     package: &'a output::LocalValidationPackageReport,
@@ -606,7 +607,7 @@ fn local_validation_error(
         String::new()
     } else {
         let report = output::LocalValidationReport {
-            challenge_id: context.challenge_id.to_string(),
+            challenge_id: context.challenge_id.clone(),
             bundle_dir: context.bundle_dir.to_path_buf(),
             storage_root: context.storage_root.to_path_buf(),
             package: context.package.clone(),
@@ -649,13 +650,13 @@ fn resolve_local_storage_dir(configured: Option<&Path>) -> Result<PathBuf> {
     Ok(cache_dir.join("agentics").join("local-validation"))
 }
 
-fn local_validation_job_id(challenge_id: &str, target_id: &str) -> Result<String> {
+fn local_validation_job_id(challenge_id: &ChallengeId, target_id: &str) -> Result<String> {
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .context("system clock is before UNIX_EPOCH")?;
     Ok(format!(
         "local-{}-{}-{}-{}",
-        sanitize_identifier_component(challenge_id),
+        sanitize_identifier_component(challenge_id.as_str()),
         sanitize_identifier_component(target_id),
         std::process::id(),
         timestamp.as_nanos()
@@ -690,7 +691,7 @@ fn runner_log_key(job_id: &str) -> PathBuf {
 
 async fn validate_parent_submission_scope(
     client: &ApiClient,
-    challenge_id: &str,
+    challenge_id: &ChallengeId,
     target_ids: &[String],
     all_targets: bool,
     parent_solution_submission_id: Option<&str>,
@@ -715,7 +716,7 @@ async fn validate_parent_submission_scope(
                 "failed to inspect parent solution submission `{parent_solution_submission_id}`"
             )
         })?;
-    if parent.challenge_id != challenge_id || parent.benchmark_target_id != target_id.as_str() {
+    if &parent.challenge_id != challenge_id || parent.benchmark_target_id != target_id.as_str() {
         bail!(
             "parent solution submission `{parent_solution_submission_id}` must belong to challenge `{challenge_id}` target `{target_id}`"
         );
@@ -775,7 +776,7 @@ fn parse_model_info(raw: &str) -> Result<serde_json::Value> {
 }
 
 fn create_solution_submission_request(
-    challenge_id: String,
+    challenge_id: ChallengeId,
     benchmark_target_id: String,
     package: &package::SolutionPackage,
     explanation: String,
@@ -814,7 +815,7 @@ fn select_benchmark_targets(
 }
 
 fn select_benchmark_targets_from_spec(
-    challenge_id: &str,
+    challenge_id: &ChallengeId,
     spec: &ChallengeBundleSpec,
     requested_target: Option<&str>,
     all_targets: bool,
@@ -860,7 +861,7 @@ fn select_benchmark_targets_from_spec(
 }
 
 fn validate_selected_targets(
-    challenge_id: &str,
+    challenge_id: &ChallengeId,
     targets: &[&BenchmarkTargetSpec],
     mode: TargetSelectionMode,
 ) -> Result<()> {

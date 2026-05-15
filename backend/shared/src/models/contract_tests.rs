@@ -13,6 +13,7 @@ use super::challenge::{
 use super::evaluation::{
     EvaluationDto, EvaluationStatus, MetricValue, RunMetricResult, ScoreVisibility, ScoringMode,
 };
+use super::ids::ChallengeId;
 use super::request::{
     AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto, SolutionSubmissionResponse,
 };
@@ -88,13 +89,12 @@ fn ensure_no_explicit_nulls(value: &Value, path: &str) -> Result<(), Box<dyn std
 
 fn challenge_detail_response() -> ChallengeDetailResponse {
     ChallengeDetailResponse {
-        id: "matrix-multiplication".to_string(),
-        slug: "matrix-multiplication".to_string(),
+        id: challenge_id("matrix-multiplication"),
         title: "Matrix Multiplication".to_string(),
         summary: "Optimize CPU matrix multiplication kernels.".to_string(),
         spec: ChallengeBundleSpec {
             schema_version: 1,
-            challenge_id: "matrix-multiplication".to_string(),
+            challenge_id: challenge_id("matrix-multiplication"),
             challenge_title: "Matrix Multiplication".to_string(),
             challenge_summary: "Optimize CPU matrix multiplication kernels.".to_string(),
             starts_at: None,
@@ -216,10 +216,14 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
     }
 }
 
+fn challenge_id(value: &str) -> ChallengeId {
+    ChallengeId::try_new(value.to_string()).expect("test challenge id is valid")
+}
+
 fn official_solution_submission_response() -> SolutionSubmissionResponse {
     SolutionSubmissionResponse {
         id: "solution-submission-1".to_string(),
-        challenge_id: "matrix-multiplication".to_string(),
+        challenge_id: challenge_id("matrix-multiplication"),
         challenge_title: Some("Matrix Multiplication".to_string()),
         benchmark_target_id: "linux-arm64-cpu".to_string(),
         agent_id: "agent-1".to_string(),

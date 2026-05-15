@@ -8,6 +8,7 @@ use shared::models::challenge_creation::{
     ChallengeDraftCleanupResponse, ChallengeDraftResponse, ChallengePrivateAssetResponse,
 };
 use shared::models::evaluation::ScorerRunResult;
+use shared::models::ids::ChallengeId;
 use shared::models::request::{
     ChallengeShortlistResponse, ChallengeShortlistRevisionResponse,
     CreateSolutionSubmissionResponse, CreatorChallengeParticipantsResponse,
@@ -38,7 +39,7 @@ pub(crate) struct LocalValidationTargetReport {
 
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct LocalValidationReport {
-    pub challenge_id: String,
+    pub challenge_id: ChallengeId,
     pub bundle_dir: PathBuf,
     pub storage_root: PathBuf,
     pub package: LocalValidationPackageReport,
@@ -133,7 +134,10 @@ pub(crate) fn render_challenge_draft(
             response.challenge_path,
             response.commit_sha,
             response.manifest_sha256,
-            response.published_challenge_id.as_deref().unwrap_or("none"),
+            response
+                .published_challenge_id
+                .as_ref()
+                .map_or("none", ChallengeId::as_str),
             response.private_assets.len(),
             response.validation_records.len()
         )),
@@ -328,14 +332,13 @@ pub(crate) fn render_challenge_list(
                 .iter()
                 .map(|challenge| {
                     vec![
-                        challenge.id.clone(),
-                        challenge.slug.clone(),
+                        challenge.id.to_string(),
                         status_label(&challenge.eligibility.eligibility_type),
                         challenge.title.clone(),
                     ]
                 })
                 .collect::<Vec<_>>();
-            Ok(render_table(&["ID", "SLUG", "ELIGIBILITY", "TITLE"], &rows))
+            Ok(render_table(&["ID", "ELIGIBILITY", "TITLE"], &rows))
         }
     }
 }
@@ -712,7 +715,7 @@ fn render_create_submission_batch(
                     vec![
                         response.benchmark_target_id.clone(),
                         response.id.clone(),
-                        response.challenge_id.clone(),
+                        response.challenge_id.to_string(),
                         response.status.clone(),
                         response.evaluation_job_id.clone(),
                     ]
@@ -971,6 +974,7 @@ mod tests {
         ResourceProfileSpec, ScorerSpec, SolutionSpec,
     };
     use shared::models::evaluation::ScoreVisibility;
+    use shared::models::ids::ChallengeId;
     use shared::zip_project::ZipProjectNetworkAccess;
 
     use super::{OutputFormat, render_challenge_detail, render_challenge_list};
@@ -980,8 +984,7 @@ mod tests {
         let output = render_challenge_list(
             &ChallengeListResponse {
                 items: vec![ChallengeListItemDto {
-                    id: "sample-sum".to_string(),
-                    slug: "sum".to_string(),
+                    id: challenge_id("sample-sum"),
                     title: "Sample Sum".to_string(),
                     summary: "Add numbers".to_string(),
                     starts_at: None,
@@ -997,7 +1000,7 @@ mod tests {
 
         assert_eq!(
             output,
-            "ID          SLUG  ELIGIBILITY  TITLE\nsample-sum  sum   open         Sample Sum"
+            "ID          ELIGIBILITY  TITLE\nsample-sum  open         Sample Sum"
         );
     }
 
@@ -1020,13 +1023,12 @@ mod tests {
 
     fn challenge_detail() -> ChallengeDetailResponse {
         ChallengeDetailResponse {
-            id: "sample-sum".to_string(),
-            slug: "sum".to_string(),
+            id: challenge_id("sample-sum"),
             title: "Sample Sum".to_string(),
             summary: "Add numbers".to_string(),
             spec: ChallengeBundleSpec {
                 schema_version: 1,
-                challenge_id: "sample-sum".to_string(),
+                challenge_id: challenge_id("sample-sum"),
                 challenge_title: "Sample Sum".to_string(),
                 challenge_summary: "Add numbers".to_string(),
                 starts_at: None,
@@ -1091,5 +1093,9 @@ mod tests {
             },
             statement_markdown: "# Statement\n\nReturn the sum.".to_string(),
         }
+    }
+
+    fn challenge_id(value: &str) -> ChallengeId {
+        ChallengeId::try_new(value.to_string()).expect("test challenge id is valid")
     }
 }

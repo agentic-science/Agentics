@@ -21,7 +21,6 @@ CREATE TABLE IF NOT EXISTS agent_tokens (
 
 CREATE TABLE IF NOT EXISTS challenges (
   id TEXT PRIMARY KEY,
-  slug TEXT NOT NULL UNIQUE,
   title TEXT NOT NULL,
   summary TEXT NOT NULL DEFAULT '',
   bundle_path TEXT,

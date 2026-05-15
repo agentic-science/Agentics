@@ -1211,6 +1211,7 @@ mod tests {
         ResourceProfileSpec, ScorerSpec, SolutionSpec,
     };
     use crate::models::evaluation::ScoreVisibility;
+    use crate::models::ids::ChallengeId;
     use crate::zip_project::ZipProjectNetworkAccess;
 
     use super::{
@@ -1224,7 +1225,7 @@ mod tests {
     fn base_spec() -> ChallengeBundleSpec {
         ChallengeBundleSpec {
             schema_version: 1,
-            challenge_id: "sample-sum".to_string(),
+            challenge_id: challenge_id("sample-sum"),
             challenge_title: "Sample Sum".to_string(),
             challenge_summary: "Add numbers from worker-managed runs.".to_string(),
             solution: SolutionSpec {
@@ -1287,6 +1288,10 @@ mod tests {
             community: None,
             metric_schema: MetricSchemaSpec::default(),
         }
+    }
+
+    fn challenge_id(value: &str) -> ChallengeId {
+        ChallengeId::try_new(value.to_string()).expect("test challenge id is valid")
     }
 
     fn pin_images(spec: &mut ChallengeBundleSpec) {

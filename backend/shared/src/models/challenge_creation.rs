@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::ids::ChallengeId;
+
 /// Public challenge manifest file expected at the root of a challenge proposal.
 pub const AGENTICS_CHALLENGE_MANIFEST_FILE: &str = "agentics.challenge.json";
 
@@ -11,7 +13,7 @@ pub const AGENTICS_CHALLENGE_MANIFEST_FILE: &str = "agentics.challenge.json";
 pub struct ChallengeCreationManifest {
     pub schema_version: i32,
     pub request: ChallengeCreationRequestKind,
-    pub challenge_id: String,
+    pub challenge_id: ChallengeId,
     pub title: String,
     pub summary: String,
     pub readme_path: String,
@@ -178,7 +180,7 @@ pub struct ChallengeDraftValidationRecordResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeDraftResponse {
     pub id: String,
-    pub challenge_id: String,
+    pub challenge_id: ChallengeId,
     pub request: ChallengeCreationRequestKind,
     pub status: ChallengeDraftStatus,
     pub creator_agent_id: String,
@@ -200,7 +202,7 @@ pub struct ChallengeDraftResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub validation_repository_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub published_challenge_id: Option<String>,
+    pub published_challenge_id: Option<ChallengeId>,
     #[serde(default)]
     pub private_assets: Vec<ChallengePrivateAssetResponse>,
     #[serde(default)]

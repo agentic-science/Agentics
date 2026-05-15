@@ -58,6 +58,24 @@ async fn request_validation_returns_contract_error_shape(pool: sqlx::PgPool) {
         .await
         .expect("failed to decode unknown-field response");
     assert_eq!(unknown_field_body["error"], "bad_request");
+
+    let invalid_challenge_id = client
+        .get(api_url(&app, "/api/public/challenges/bad%20id"))
+        .send()
+        .await
+        .expect("failed to send invalid challenge id request");
+    assert_eq!(invalid_challenge_id.status(), 400);
+    let invalid_challenge_id_body: serde_json::Value = invalid_challenge_id
+        .json()
+        .await
+        .expect("failed to decode invalid challenge id response");
+    assert_eq!(invalid_challenge_id_body["error"], "bad_request");
+    assert!(
+        invalid_challenge_id_body["message"]
+            .as_str()
+            .expect("message should be a string")
+            .contains("challenge_id")
+    );
 }
 
 #[sqlx::test(migrations = "../migrations")]
@@ -314,7 +332,9 @@ async fn private_shortlist_challenge_requires_owner_delta_before_artifact_decode
     let client = reqwest::Client::new();
     let owner = create_creator_session(&pool, 2001, "shortlist-owner").await;
     let non_owner = create_creator_session(&pool, 2002, "not-owner").await;
-    shared::db::add_challenge_owner(&pool, "shortlist-challenge", &owner.agent_id)
+    let challenge_id = shared::models::ids::ChallengeId::try_new("shortlist-challenge".to_string())
+        .expect("test challenge id is valid");
+    shared::db::add_challenge_owner(&pool, &challenge_id, &owner.agent_id)
         .await
         .expect("owner should be granted");
 

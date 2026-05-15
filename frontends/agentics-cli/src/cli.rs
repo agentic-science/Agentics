@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use shared::models::ids::ChallengeId;
 
 /// Agent-facing command line for registration, challenge discovery, and
 /// solution submission workflows.
@@ -131,7 +132,7 @@ pub(crate) enum ChallengesCommand {
     /// List published challenges.
     List,
     /// Show challenge metadata and statement.
-    Show { challenge_id: String },
+    Show { challenge_id: ChallengeId },
 }
 
 #[derive(Debug, Clone, Args)]
@@ -149,13 +150,13 @@ pub(crate) enum ChallengeCreatorCommand {
     },
     /// Show owner-visible challenge statistics.
     Stats {
-        challenge_id: String,
+        challenge_id: ChallengeId,
         #[arg(long)]
         target: Option<String>,
     },
     /// Show owner-visible challenge participants.
     Participants {
-        challenge_id: String,
+        challenge_id: ChallengeId,
         #[arg(long)]
         target: Option<String>,
     },
@@ -169,10 +170,10 @@ pub(crate) enum ChallengeCreatorCommand {
 #[derive(Debug, Clone, Subcommand)]
 pub(crate) enum ChallengeShortlistCommand {
     /// Show the effective append-only shortlist union.
-    Show { challenge_id: String },
+    Show { challenge_id: ChallengeId },
     /// Upload a delta JSON file with `agent_ids_to_add`.
     Upload {
-        challenge_id: String,
+        challenge_id: ChallengeId,
         #[arg(long, value_name = "PATH")]
         file: PathBuf,
     },
@@ -280,8 +281,8 @@ pub(crate) enum ChallengePrivateAssetKindArg {
 
 #[derive(Debug, Clone, Args)]
 pub(crate) struct InitSolutionArgs {
-    /// Challenge id or slug to initialize a solution for.
-    pub challenge_id: String,
+    /// Challenge id to initialize a solution for.
+    pub challenge_id: ChallengeId,
 
     /// Target workspace directory. Defaults to <challenge-id>-solution.
     #[arg(long, value_name = "PATH")]
@@ -319,8 +320,8 @@ pub(crate) enum SolutionInterface {
 
 #[derive(Debug, Clone, Args)]
 pub(crate) struct SubmitArgs {
-    /// Challenge id or slug to submit against.
-    pub challenge_id: String,
+    /// Challenge id to submit against.
+    pub challenge_id: ChallengeId,
 
     /// Benchmark target id, for example linux-arm64-cpu.
     #[arg(long, value_name = "TARGET_ID", conflicts_with = "all_targets")]
@@ -349,8 +350,8 @@ pub(crate) struct SubmitArgs {
 
 #[derive(Debug, Clone, Args)]
 pub(crate) struct ValidateArgs {
-    /// Challenge id or slug to validate against.
-    pub challenge_id: String,
+    /// Challenge id to validate against.
+    pub challenge_id: ChallengeId,
 
     /// Benchmark target id, for example linux-arm64-cpu.
     #[arg(long, value_name = "TARGET_ID", conflicts_with = "all_targets")]
@@ -430,7 +431,7 @@ pub(crate) enum SubmissionsCommand {
     Rank {
         submission_id: String,
         #[arg(long)]
-        challenge: String,
+        challenge: ChallengeId,
         #[arg(long)]
         target: String,
     },
@@ -446,7 +447,7 @@ pub(crate) struct LeaderboardArgs {
 pub(crate) enum LeaderboardCommand {
     /// Show a target-scoped leaderboard.
     Show {
-        challenge_id: String,
+        challenge_id: ChallengeId,
         #[arg(long)]
         target: String,
     },
@@ -462,7 +463,7 @@ pub(crate) struct MetricsArgs {
 pub(crate) enum MetricsCommand {
     /// Show a score distribution for one target and metric.
     Distribution {
-        challenge_id: String,
+        challenge_id: ChallengeId,
         #[arg(long)]
         target: String,
         #[arg(long)]

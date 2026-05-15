@@ -4,6 +4,7 @@ use sqlx::{PgPool, Row};
 use crate::error::{AppError, Result};
 use crate::models::challenge::ChallengeBundleSpec;
 use crate::models::evaluation::{EvaluationJobPayload, ScoringMode};
+use crate::models::ids::ChallengeId;
 
 use super::evaluation_policy::ensure_challenge_supports_eval_type;
 
@@ -12,7 +13,7 @@ use super::evaluation_policy::ensure_challenge_supports_eval_type;
 pub struct EvaluationJobRecord {
     pub id: String,
     pub solution_submission_id: String,
-    pub challenge_id: String,
+    pub challenge_id: ChallengeId,
     pub benchmark_target_id: String,
     pub eval_type: ScoringMode,
     pub status: String,
@@ -79,7 +80,7 @@ pub async fn claim_next_evaluation_job(
     Ok(Some(EvaluationJobRecord {
         id: r.try_get("id")?,
         solution_submission_id,
-        challenge_id: r.try_get("challenge_id")?,
+        challenge_id: challenge_id_from_row(&r, "challenge_id")?,
         benchmark_target_id: r.try_get("benchmark_target_id")?,
         eval_type,
         status: r.try_get("status")?,
@@ -174,9 +175,10 @@ pub async fn queue_evaluation_job(
         serde_json::from_value(spec_json).map_err(|e| AppError::Internal(e.to_string()))?;
 
     let benchmark_target_id: String = row.try_get("benchmark_target_id")?;
+    let challenge_id = challenge_id_from_row(&row, "challenge_id")?;
     ensure_challenge_supports_eval_type(
         pool,
-        &row.try_get::<String, _>("challenge_id")?,
+        &challenge_id,
         &spec,
         &benchmark_target_id,
         input.eval_type,
@@ -187,7 +189,7 @@ pub async fn queue_evaluation_job(
     let payload = serde_json::to_value(EvaluationJobPayload {
         artifact_path: row.try_get("artifact_path")?,
         bundle_path: row.try_get("bundle_path")?,
-        challenge_id: row.try_get("challenge_id")?,
+        challenge_id: challenge_id.clone(),
         benchmark_target_id: benchmark_target_id.clone(),
     })
     .map_err(|e| AppError::Internal(e.to_string()))?;
@@ -207,7 +209,7 @@ pub async fn queue_evaluation_job(
     )
     .bind(&input.job_id)
     .bind(row.try_get::<String, _>("id")?)
-    .bind(row.try_get::<String, _>("challenge_id")?)
+    .bind(challenge_id.as_str())
     .bind(&benchmark_target_id)
     .bind(eval_type_str)
     .bind(priority)
@@ -228,12 +230,21 @@ pub async fn queue_evaluation_job(
     Ok(EvaluationJobRecord {
         id: input.job_id.clone(),
         solution_submission_id: row.try_get("id")?,
-        challenge_id: row.try_get("challenge_id")?,
+        challenge_id,
         benchmark_target_id,
         eval_type: input.eval_type,
         status: "queued".to_string(),
         attempt_count: 0,
         payload: serde_json::from_value(payload).map_err(|e| AppError::Internal(e.to_string()))?,
+    })
+}
+
+fn challenge_id_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<ChallengeId> {
+    let raw: String = row.try_get(column)?;
+    ChallengeId::try_new(raw).map_err(|e| {
+        AppError::Internal(format!(
+            "stored invalid challenge id in column `{column}`: {e}"
+        ))
     })
 }
 

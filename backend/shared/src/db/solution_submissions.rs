@@ -8,6 +8,7 @@ use crate::models::evaluation::{
     EvaluationDto, EvaluationJobPayload, EvaluationStatus, MetricValue, PublicCaseResult,
     RunMetricResult, ScoringMode,
 };
+use crate::models::ids::ChallengeId;
 use crate::models::request::AdminSolutionSubmissionListItemDto;
 use crate::models::request::PublicSolutionSubmissionListItemDto;
 
@@ -21,7 +22,7 @@ pub struct CreateSolutionSubmissionInput {
     pub solution_submission_id: String,
     pub job_id: String,
     pub agent_id: String,
-    pub challenge_id: String,
+    pub challenge_id: ChallengeId,
     pub benchmark_target_id: String,
     pub artifact_path: String,
     pub language: String,
@@ -46,7 +47,7 @@ pub struct SolutionSubmissionQuotaAdmission {
 #[derive(Debug, Clone)]
 pub struct SolutionSubmissionRecord {
     pub id: String,
-    pub challenge_id: String,
+    pub challenge_id: ChallengeId,
     pub benchmark_target_id: String,
     pub agent_id: String,
     pub agent_name: Option<String>,
@@ -104,7 +105,7 @@ pub async fn create_solution_submission_with_job(
         "#,
     )
     .bind(&input.solution_submission_id)
-    .bind(&challenge.challenge_id)
+    .bind(challenge.challenge_id.as_str())
     .bind(&input.benchmark_target_id)
     .bind(&input.agent_id)
     .bind(&input.artifact_path)
@@ -145,7 +146,7 @@ pub async fn create_solution_submission_with_job(
     )
     .bind(&input.job_id)
     .bind(&input.solution_submission_id)
-    .bind(&challenge.challenge_id)
+    .bind(challenge.challenge_id.as_str())
     .bind(&input.benchmark_target_id)
     .bind(input.eval_type.as_str())
     .bind(priority)
@@ -158,7 +159,7 @@ pub async fn create_solution_submission_with_job(
 
     Ok(SolutionSubmissionRecord {
         id: row.try_get("id")?,
-        challenge_id: row.try_get("challenge_id")?,
+        challenge_id: challenge_id_from_row(&row, "challenge_id")?,
         benchmark_target_id: row.try_get("benchmark_target_id")?,
         agent_id: row.try_get("agent_id")?,
         agent_name: None,
@@ -301,7 +302,7 @@ async fn lock_quota_scope(tx: &mut Transaction<'_, Postgres>, scope: &str) -> Re
 async fn count_recent_runs_for_agent_challenge_tx(
     tx: &mut Transaction<'_, Postgres>,
     agent_id: &str,
-    challenge_id: &str,
+    challenge_id: &ChallengeId,
     benchmark_target_id: &str,
     eval_type: ScoringMode,
     window_seconds: i64,
@@ -319,7 +320,7 @@ async fn count_recent_runs_for_agent_challenge_tx(
         "#,
     )
     .bind(agent_id)
-    .bind(challenge_id)
+    .bind(challenge_id.as_str())
     .bind(benchmark_target_id)
     .bind(eval_type.as_str())
     .bind(window_seconds)
@@ -332,7 +333,7 @@ async fn count_recent_runs_for_agent_challenge_tx(
 async fn count_lifetime_runs_for_agent_challenge_tx(
     tx: &mut Transaction<'_, Postgres>,
     agent_id: &str,
-    challenge_id: &str,
+    challenge_id: &ChallengeId,
     benchmark_target_id: &str,
     eval_type: ScoringMode,
 ) -> Result<i64> {
@@ -348,7 +349,7 @@ async fn count_lifetime_runs_for_agent_challenge_tx(
         "#,
     )
     .bind(agent_id)
-    .bind(challenge_id)
+    .bind(challenge_id.as_str())
     .bind(benchmark_target_id)
     .bind(eval_type.as_str())
     .fetch_one(&mut **tx)
@@ -449,7 +450,7 @@ pub async fn get_solution_submission_by_id(
 
     Ok(Some(SolutionSubmissionRecord {
         id: r.try_get("id")?,
-        challenge_id: r.try_get("challenge_id")?,
+        challenge_id: challenge_id_from_row(&r, "challenge_id")?,
         benchmark_target_id: r.try_get("benchmark_target_id")?,
         agent_id: r.try_get("agent_id")?,
         agent_name: r.try_get::<Option<String>, _>("agent_name")?,
@@ -532,7 +533,7 @@ pub async fn list_admin_solution_submissions(
         .map(|r| {
             Ok(AdminSolutionSubmissionListItemDto {
                 id: r.try_get("id")?,
-                challenge_id: r.try_get("challenge_id")?,
+                challenge_id: challenge_id_from_row(&r, "challenge_id")?,
                 challenge_title: r.try_get("challenge_title")?,
                 benchmark_target_id: r.try_get("benchmark_target_id")?,
                 agent_id: r.try_get("agent_id")?,
@@ -555,7 +556,7 @@ pub async fn list_admin_solution_submissions(
 /// List solution submissions for a challenge after an official evaluation makes them visible.
 pub async fn list_public_solution_submissions_for_challenge(
     pool: &PgPool,
-    challenge_id_or_slug: &str,
+    challenge_id: &ChallengeId,
     limit: i64,
 ) -> Result<Vec<PublicSolutionSubmissionListItemDto>> {
     let rows = sqlx::query(
@@ -584,13 +585,13 @@ pub async fn list_public_solution_submissions_for_challenge(
             WHERE solution_submission_id = s.id AND eval_type = 'official' AND status = 'completed' AND benchmark_target_id = s.benchmark_target_id
             ORDER BY created_at DESC LIMIT 1
         ) oe ON TRUE
-        WHERE (p.id = $1 OR p.slug = $1)
+        WHERE p.id = $1
           AND s.visible_after_eval = TRUE
         ORDER BY s.created_at DESC
         LIMIT $2
         "#,
     )
-    .bind(challenge_id_or_slug)
+    .bind(challenge_id.as_str())
     .bind(limit)
     .fetch_all(pool)
     .await?;
@@ -610,7 +611,7 @@ pub async fn list_public_solution_submissions_for_challenge(
 
             Ok(PublicSolutionSubmissionListItemDto {
                 id: r.try_get("id")?,
-                challenge_id: r.try_get("challenge_id")?,
+                challenge_id: challenge_id_from_row(&r, "challenge_id")?,
                 benchmark_target_id: r.try_get("benchmark_target_id")?,
                 challenge_title: r.try_get("challenge_title")?,
                 agent_id: r.try_get("agent_id")?,
@@ -707,4 +708,13 @@ fn parse_eval_from_row(row: &sqlx::postgres::PgRow, prefix: &str) -> Result<Opti
         started_at: started_at.map(|d| d.to_rfc3339()),
         finished_at: finished_at.map(|d| d.to_rfc3339()),
     }))
+}
+
+fn challenge_id_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<ChallengeId> {
+    let raw: String = row.try_get(column)?;
+    ChallengeId::try_new(raw).map_err(|e| {
+        AppError::Internal(format!(
+            "stored invalid challenge id in column `{column}`: {e}"
+        ))
+    })
 }

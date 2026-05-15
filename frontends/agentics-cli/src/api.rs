@@ -9,6 +9,7 @@ use shared::models::challenge_creation::{
     CreateChallengeDraftRequest, ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest,
     ValidateChallengeDraftRequest,
 };
+use shared::models::ids::ChallengeId;
 use shared::models::request::{
     ChallengeShortlistResponse, ChallengeShortlistRevisionResponse,
     CreateChallengeShortlistRevisionRequest, CreateSolutionSubmissionRequest,
@@ -66,7 +67,7 @@ impl ApiClient {
 
     pub(crate) async fn get_challenge(
         &self,
-        challenge_id: &str,
+        challenge_id: &ChallengeId,
     ) -> Result<ChallengeDetailResponse> {
         let path = format!("/api/public/challenges/{challenge_id}");
         self.get_json(&path, false).await
@@ -114,7 +115,7 @@ impl ApiClient {
     pub(crate) async fn get_solution_submission_ranking_context(
         &self,
         solution_submission_id: &str,
-        challenge_id: &str,
+        challenge_id: &ChallengeId,
         target_id: &str,
     ) -> Result<RankingContextResponse> {
         let path = format!(
@@ -125,7 +126,7 @@ impl ApiClient {
 
     pub(crate) async fn get_leaderboard(
         &self,
-        challenge_id: &str,
+        challenge_id: &ChallengeId,
         target_id: &str,
     ) -> Result<LeaderboardResponse> {
         let path = format!("/api/public/challenges/{challenge_id}/leaderboard?target={target_id}");
@@ -134,7 +135,7 @@ impl ApiClient {
 
     pub(crate) async fn get_score_distribution(
         &self,
-        challenge_id: &str,
+        challenge_id: &ChallengeId,
         target_id: &str,
         metric_id: &str,
     ) -> Result<ScoreDistributionResponse> {
@@ -146,7 +147,7 @@ impl ApiClient {
 
     pub(crate) async fn get_creator_challenge_stats(
         &self,
-        challenge_id: &str,
+        challenge_id: &ChallengeId,
         target_id: Option<&str>,
     ) -> Result<CreatorChallengeStatsResponse> {
         let path = creator_challenge_path(challenge_id, "stats", target_id);
@@ -155,7 +156,7 @@ impl ApiClient {
 
     pub(crate) async fn get_creator_challenge_participants(
         &self,
-        challenge_id: &str,
+        challenge_id: &ChallengeId,
         target_id: Option<&str>,
     ) -> Result<CreatorChallengeParticipantsResponse> {
         let path = creator_challenge_path(challenge_id, "participants", target_id);
@@ -164,7 +165,7 @@ impl ApiClient {
 
     pub(crate) async fn get_challenge_shortlist(
         &self,
-        challenge_id: &str,
+        challenge_id: &ChallengeId,
     ) -> Result<ChallengeShortlistResponse> {
         let path = format!("/api/creator/challenges/{challenge_id}/shortlist");
         self.get_json(&path, true).await
@@ -172,7 +173,7 @@ impl ApiClient {
 
     pub(crate) async fn create_challenge_shortlist_revision(
         &self,
-        challenge_id: &str,
+        challenge_id: &ChallengeId,
         request: &CreateChallengeShortlistRevisionRequest,
     ) -> Result<ChallengeShortlistRevisionResponse> {
         let path = format!("/api/creator/challenges/{challenge_id}/shortlist-revisions");
@@ -356,7 +357,11 @@ fn parse_base_url(value: &str) -> Result<Url> {
     Ok(url)
 }
 
-fn creator_challenge_path(challenge_id: &str, surface: &str, target_id: Option<&str>) -> String {
+fn creator_challenge_path(
+    challenge_id: &ChallengeId,
+    surface: &str,
+    target_id: Option<&str>,
+) -> String {
     let mut path = format!("/api/creator/challenges/{challenge_id}/{surface}");
     if let Some(target_id) = target_id.map(str::trim).filter(|value| !value.is_empty()) {
         path.push_str("?target=");

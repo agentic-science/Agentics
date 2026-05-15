@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
 
 use super::challenge::{MetricDirection, MetricSchemaSpec, MetricVisibility};
+use super::ids::ChallengeId;
 
 /// Evaluation surface requested for a solution submission.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
@@ -640,6 +641,6 @@ pub struct EvaluationJobDto {
 pub struct EvaluationJobPayload {
     pub artifact_path: String,
     pub bundle_path: String,
-    pub challenge_id: String,
+    pub challenge_id: ChallengeId,
     pub benchmark_target_id: String,
 }

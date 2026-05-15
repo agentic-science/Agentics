@@ -294,7 +294,6 @@ mod tests {
                 "items": [
                     {
                         "id": "sample-sum",
-                        "slug": "sum",
                         "title": "Sample Sum",
                         "summary": "Add numbers",
                         "eligibility": { "type": "open" }
@@ -322,7 +321,7 @@ mod tests {
 
         assert_eq!(
             output,
-            "ID          SLUG  ELIGIBILITY  TITLE\nsample-sum  sum   open         Sample Sum"
+            "ID          ELIGIBILITY  TITLE\nsample-sum  open         Sample Sum"
         );
     }
 
@@ -1023,7 +1022,6 @@ mod tests {
     fn challenge_detail_json(validation_enabled: bool) -> serde_json::Value {
         json!({
             "id": "sample-sum",
-            "slug": "sample-sum",
             "title": "Sample Sum",
             "summary": "Add numbers",
             "spec": {

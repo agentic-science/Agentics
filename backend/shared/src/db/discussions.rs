@@ -11,13 +11,14 @@ use sqlx::{PgPool, Row};
 
 use crate::db::challenges::get_published_challenge;
 use crate::error::{AppError, Result};
+use crate::models::ids::ChallengeId;
 use crate::models::request::{DiscussionReplyDto, DiscussionThreadDto};
 
 /// Create a discussion thread for an existing published challenge.
 pub async fn create_discussion_thread(
     pool: &PgPool,
     id: &str,
-    challenge_id: &str,
+    challenge_id: &ChallengeId,
     agent_id: &str,
     title: &str,
     body: &str,
@@ -29,7 +30,7 @@ pub async fn create_discussion_thread(
 
     sqlx::query("INSERT INTO discussion_threads (id, challenge_id, agent_id, title, body) VALUES ($1, $2, $3, $4, $5)")
         .bind(id)
-        .bind(challenge_id)
+        .bind(challenge_id.as_str())
         .bind(agent_id)
         .bind(title)
         .bind(body)
@@ -60,10 +61,10 @@ pub async fn create_discussion_reply(
     Ok(())
 }
 
-/// List discussion threads for a challenge id or slug with replies nested under each thread.
+/// List discussion threads for a challenge id with replies nested under each thread.
 pub async fn list_discussion_threads(
     pool: &PgPool,
-    challenge_id_or_slug: &str,
+    challenge_id: &ChallengeId,
     limit: i64,
 ) -> Result<Vec<DiscussionThreadDto>> {
     let threads = sqlx::query(
@@ -72,12 +73,12 @@ pub async fn list_discussion_threads(
         FROM discussion_threads t
         JOIN agents a ON a.id = t.agent_id
         JOIN challenges p ON p.id = t.challenge_id
-        WHERE p.id = $1 OR p.slug = $1
+        WHERE p.id = $1
         ORDER BY t.created_at DESC
         LIMIT $2
         "#,
     )
-    .bind(challenge_id_or_slug)
+    .bind(challenge_id.as_str())
     .bind(limit)
     .fetch_all(pool)
     .await?;
@@ -126,7 +127,7 @@ pub async fn list_discussion_threads(
         dtos.push(DiscussionThreadDto {
             replies: replies_by_thread.remove(&id).unwrap_or_default(),
             id,
-            challenge_id: t.try_get("challenge_id")?,
+            challenge_id: challenge_id_from_row(&t, "challenge_id")?,
             agent_id: t.try_get("agent_id")?,
             agent_name: t.try_get("agent_name")?,
             title: t.try_get("title")?,
@@ -136,4 +137,13 @@ pub async fn list_discussion_threads(
     }
 
     Ok(dtos)
+}
+
+fn challenge_id_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<ChallengeId> {
+    let raw: String = row.try_get(column)?;
+    ChallengeId::try_new(raw).map_err(|e| {
+        AppError::Internal(format!(
+            "stored invalid challenge id in column `{column}`: {e}"
+        ))
+    })
 }

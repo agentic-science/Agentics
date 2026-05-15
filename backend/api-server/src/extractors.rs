@@ -352,7 +352,6 @@ impl ValidateRequest for CreateDiscussionReplyRequest {
 
 impl ValidateRequest for CreateChallengeRequest {
     fn validate(&self) -> Result<(), String> {
-        require_non_empty(&self.id, "id")?;
         require_non_empty(&self.title, "title")?;
         require_non_empty(&self.summary, "summary")
     }

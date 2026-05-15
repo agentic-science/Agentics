@@ -113,7 +113,6 @@ async fn create_challenge_and_publish_contract(pool: sqlx::PgPool) {
         )
         .json(&serde_json::json!({
             "id": "test-challenge",
-            "slug": "test-challenge",
             "title": "Test Challenge",
             "summary": "A test challenge"
         }))
@@ -166,7 +165,6 @@ async fn publishing_contract_exposes_challenge_policy(pool: sqlx::PgPool) {
         .header("Authorization", &auth)
         .json(&serde_json::json!({
             "id": "published-contract",
-            "slug": "published-contract",
             "title": "Published Contract",
             "summary": "Published contract challenge"
         }))
@@ -239,7 +237,6 @@ async fn publishing_existing_contract_is_rejected_without_mutating_it(pool: sqlx
         .header("Authorization", &auth)
         .json(&serde_json::json!({
             "id": "immutable-challenge",
-            "slug": "immutable-challenge",
             "title": "Immutable Challenge",
             "summary": "Immutable challenge"
         }))
@@ -423,7 +420,6 @@ async fn admin_session_cookie_authenticates_admin_routes(pool: sqlx::PgPool) {
         .header(reqwest::header::COOKIE, &session_cookie)
         .json(&serde_json::json!({
             "id": "session-admin-missing-csrf",
-            "slug": "session-admin-missing-csrf",
             "title": "Session Admin Missing CSRF",
             "summary": "Session admin challenge"
         }))
@@ -441,7 +437,6 @@ async fn admin_session_cookie_authenticates_admin_routes(pool: sqlx::PgPool) {
         .header("x-agentics-csrf-token", csrf_token)
         .json(&serde_json::json!({
             "id": "session-admin",
-            "slug": "session-admin",
             "title": "Session Admin",
             "summary": "Session admin challenge"
         }))

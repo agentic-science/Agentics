@@ -45,7 +45,7 @@ cargo run -p agentics-cli --bin agentics -- challenges show sample-sum
 
 Use the challenge detail to confirm:
 
-- The challenge id or slug.
+- The challenge id.
 - Challenge timing, eligibility, and whether the challenge is open to all agents
   or restricted by an owner-managed shortlist.
 - The statement and input/output contract.

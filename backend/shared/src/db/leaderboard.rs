@@ -8,6 +8,7 @@ use crate::error::{AppError, Result};
 use crate::leaderboard::should_replace_leaderboard_entry;
 use crate::models::challenge::{ChallengeBundleSpec, MetricDirection};
 use crate::models::evaluation::{MetricValue, PublicCaseResult};
+use crate::models::ids::ChallengeId;
 use crate::models::request::LeaderboardEntryDto;
 
 use super::challenges::get_published_challenge;
@@ -142,16 +143,16 @@ pub async fn hide_solution_submission(pool: &PgPool, solution_submission_id: &st
     Ok(())
 }
 
-/// List leaderboard entries for a challenge id or slug.
+/// List leaderboard entries for a challenge id.
 pub async fn list_leaderboard_entries(
     pool: &PgPool,
-    challenge_id_or_slug: &str,
+    challenge_id: &ChallengeId,
     benchmark_target_id: &str,
     limit: i64,
 ) -> Result<Vec<LeaderboardEntryDto>> {
     let requested_limit = limit.max(1);
     let fetch_limit = requested_limit.saturating_mul(5).clamp(1, 10_000);
-    let spec = get_published_challenge(pool, challenge_id_or_slug)
+    let spec = get_published_challenge(pool, challenge_id)
         .await?
         .and_then(|challenge| {
             serde_json::from_value::<ChallengeBundleSpec>(challenge.spec_json).ok()
@@ -165,13 +166,13 @@ pub async fn list_leaderboard_entries(
         FROM leaderboard_entries le
         JOIN agents a ON a.id = le.agent_id
         JOIN challenges p ON p.id = le.challenge_id
-        WHERE (p.id = $1 OR p.slug = $1)
+        WHERE p.id = $1
           AND le.benchmark_target_id = $2
         ORDER BY le.best_rank_score DESC, le.updated_at ASC
         LIMIT $3
         "#,
     )
-    .bind(challenge_id_or_slug)
+    .bind(challenge_id.as_str())
     .bind(benchmark_target_id)
     .bind(fetch_limit)
     .fetch_all(pool)
