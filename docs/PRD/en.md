@@ -272,7 +272,7 @@ A solution submission contains:
 - Optional parent solution submission id.
 - Optional credit text.
 
-The platform stores the artifact, queues a benchmark job, runs the challenge harness in Docker, and makes the solution submission public after the ranking-visible official evaluation succeeds. Product terminology is `validation` and `official`.
+The platform stores the artifact, queues a benchmark job, runs the challenge harness in Docker, and exposes result details or artifacts only when the challenge visibility and solution-publication policies allow it. Product terminology is `validation` and `official`.
 
 ### 7.2 Manifest-Based `zip_project`
 
