@@ -32,6 +32,12 @@ Cover these lanes when the user asks for a complete review:
    - Non-idiomatic Rust, weak error handling, avoidable `unwrap` or `expect`,
      duplicated logic, excessive coupling, missing regression tests, and
      reinvented functionality that a mature crate should handle.
+   - Stringly typed domain identifiers. Flag stable IDs with validation,
+     authorization, ranking, storage, routing, or security meaning when they are
+     represented as raw `String` or `&str` beyond the external parsing
+     boundary. Prefer explicit validated newtypes for challenge IDs, benchmark
+     target IDs, solution submission IDs, agent IDs, asset IDs, metric IDs, and
+     worker claim IDs.
    - Check whether code can be simplified with current Rust language features
      and standard-library APIs documented in `docs/new-rust-features-apis/en.md`.
      Prefer these updates when they remove real nesting, repeated allocation,
@@ -41,6 +47,10 @@ Cover these lanes when the user asks for a complete review:
    - TypeScript and React correctness, schema drift, weak typing, state
      handling, i18n drift, CLI command structure, package misuse, and missing
      focused tests.
+   - Public contract drift caused by hand-written or duplicated identifier
+     schemas. Frontend code should consume generated schemas and stable re-export
+     types, and CLI code should parse identifiers through the shared Rust DTOs
+     rather than accepting arbitrary strings deep in command execution.
 3. Security
    - Auth and authorization, hostile-code execution, Docker isolation, private
      benchmark leakage, path traversal, symlink handling, CORS, request limits,
@@ -97,6 +107,17 @@ Always inspect these platform-specific risks:
   logs.
 - Challenge bundle schemas, CLI packaging rules, web schemas, README examples,
   PRDs, milestones, and skills must stay aligned when behavior changes.
+- Domain identifiers should be explicit, validated, and canonical. Search for
+  raw `String` or `&str` fields named like `*_id`, function parameters such as
+  `challenge_id: &str`, and ambiguous names like `id_or_slug`,
+  `challenge_id_or_slug`, `slug`, `identifier`, or `name_or_id`. Treat these as
+  architectural smells unless they are immediate raw boundary inputs that are
+  parsed into a newtype before any business logic, database lookup,
+  authorization check, queue operation, or filesystem/storage path construction.
+- Canonical lookup should use one public identifier unless product requirements
+  explicitly demand aliases. Before MVP, do not preserve old locator aliases with
+  compatibility shims; remove the alias and update API, CLI, web, docs, schemas,
+  and tests together.
 - Rust review passes should include a modernization check against
   `docs/new-rust-features-apis/en.md`, especially for `LazyLock`, let chains,
   `std::fs::exists`, `cfg_select!`, collection helpers, duration constructors,
@@ -118,6 +139,20 @@ starting points, then manually judge context:
 - `\.ok\(\)|unwrap_or_default|let _ =`
 - `unwrap\(|expect\(|panic!|\[[^\]]+\]`
 - `== Path::new|== "/"|PathBuf.*==`
+
+For domain modeling review, use targeted searches for stringly typed IDs and
+ambiguous locators, then inspect call flow manually:
+
+- `pub [a-zA-Z0-9_]*_id: String|[a-zA-Z0-9_]*_id: &str`
+- `challenge_id: String|challenge_id: &str|benchmark_target_id: String`
+- `solution_submission_id: String|agent_id: String|metric_id: String`
+- `id_or_slug|challenge_id_or_slug|slug|identifier|name_or_id`
+- `bind\(&[a-zA-Z0-9_]*_id\)|join\(&[a-zA-Z0-9_]*_id\)`
+
+Do not report a raw string merely because it appears at an HTTP path extractor,
+CLI parser field, SQL bind, display formatter, or test fixture. Report it when
+the raw value crosses into semantic code without validation, or when the same
+logical ID can be looked up through multiple public aliases.
 
 ## Severity Guidance
 
