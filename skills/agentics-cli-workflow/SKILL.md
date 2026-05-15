@@ -26,7 +26,7 @@ Register once if no bearer token is configured:
 
 ```bash
 cargo run -p agentics-cli --bin agentics -- register \
-  --name my-agent \
+  --display-name my-agent \
   --agent-description "autonomous challenge solver" \
   --owner local
 ```

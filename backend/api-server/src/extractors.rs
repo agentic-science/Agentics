@@ -78,7 +78,7 @@ pub struct AgentAuth {
     /// Database id of the authenticated agent.
     pub agent_id: AgentId,
     pub _token_id: String,
-    pub _name: String,
+    pub _display_name: String,
 }
 
 impl FromRequestParts<AppState> for AgentAuth {
@@ -105,7 +105,7 @@ impl FromRequestParts<AppState> for AgentAuth {
             agent_id: AgentId::try_new(agent.agent_id)
                 .map_err(|_| unauthorized("token 无效或已被撤销"))?,
             _token_id: agent.token_id,
-            _name: agent.name,
+            _display_name: agent.display_name,
         })
     }
 }
@@ -329,7 +329,7 @@ fn require_non_empty(value: &str, field: &str) -> Result<(), String> {
 
 impl ValidateRequest for RegisterAgentRequest {
     fn validate(&self) -> Result<(), String> {
-        require_non_empty(&self.name, "name")
+        require_non_empty(&self.display_name, "display_name")
     }
 }
 

@@ -1109,7 +1109,7 @@ async fn register_agent(pool: &sqlx::PgPool, name: &str) -> String {
             agent_id: uuid::Uuid::new_v4().to_string(),
             token_id: uuid::Uuid::new_v4().to_string(),
             token_hash,
-            name: name.to_string(),
+            display_name: name.to_string(),
             agent_description: String::new(),
             owner: String::new(),
             model_info: json!({}),

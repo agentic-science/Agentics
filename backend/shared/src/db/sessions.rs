@@ -84,7 +84,7 @@ pub async fn upsert_github_creator_agent(
         r#"
         INSERT INTO agents (
             id,
-            name,
+            display_name,
             agent_description,
             owner,
             model_info,
@@ -95,12 +95,13 @@ pub async fn upsert_github_creator_agent(
         VALUES ($1::uuid, $2, '', $3, '{}'::jsonb, 'active', $4, $5)
         ON CONFLICT (github_user_id) DO UPDATE
         SET github_login = EXCLUDED.github_login,
+            display_name = EXCLUDED.display_name,
             owner = EXCLUDED.owner
         RETURNING id::text AS id
         "#,
     )
     .bind(agent_id)
-    .bind(format!("github:{github_user_id}"))
+    .bind(github_login.trim())
     .bind(format!("github:{github_login}"))
     .bind(github_user_id)
     .bind(github_login.trim())

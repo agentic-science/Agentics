@@ -82,7 +82,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
 
     let register_a: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "admin-agent-a" }))
+        .json(&serde_json::json!({ "display_name": "admin-agent-a" }))
         .send()
         .await
         .expect("failed to register agent a")
@@ -91,7 +91,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         .expect("failed to decode agent a");
     let register_b: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "admin-agent-b" }))
+        .json(&serde_json::json!({ "display_name": "admin-agent-b" }))
         .send()
         .await
         .expect("failed to register agent b")
@@ -161,12 +161,12 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         .await
         .expect("failed to decode leaderboard before official");
     assert_eq!(
-        leaderboard_before["items"][0]["agent_name"],
+        leaderboard_before["items"][0]["agent_display_name"],
         "admin-agent-a"
     );
     assert_eq!(leaderboard_before["items"][0]["best_rank_score"], 1.0);
     assert_eq!(
-        leaderboard_before["items"][1]["agent_name"],
+        leaderboard_before["items"][1]["agent_display_name"],
         "admin-agent-b"
     );
     assert_eq!(leaderboard_before["items"][1]["best_rank_score"], 1.0);
@@ -335,7 +335,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         .expect("failed to decode leaderboard after hide");
     assert_eq!(leaderboard_after_hide["items"].as_array().unwrap().len(), 1);
     assert_eq!(
-        leaderboard_after_hide["items"][0]["agent_name"],
+        leaderboard_after_hide["items"][0]["agent_display_name"],
         "admin-agent-b"
     );
     assert_eq!(

@@ -20,7 +20,7 @@ async fn stale_running_job_fails_after_max_attempts(pool: sqlx::PgPool) {
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "stale-job-agent" }))
+        .json(&serde_json::json!({ "display_name": "stale-job-agent" }))
         .send()
         .await
         .expect("failed to register agent")
@@ -96,7 +96,7 @@ async fn refreshed_job_lease_is_not_reaped(pool: sqlx::PgPool) {
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "lease-refresh-agent" }))
+        .json(&serde_json::json!({ "display_name": "lease-refresh-agent" }))
         .send()
         .await
         .expect("failed to register agent")
@@ -165,7 +165,7 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "stale-finish-agent" }))
+        .json(&serde_json::json!({ "display_name": "stale-finish-agent" }))
         .send()
         .await
         .expect("failed to register agent")
@@ -335,7 +335,7 @@ async fn losing_official_submission_does_not_overwrite_leaderboard_best_metadata
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "leaderboard-rerun-agent" }))
+        .json(&serde_json::json!({ "display_name": "leaderboard-rerun-agent" }))
         .send()
         .await
         .expect("failed to register agent")

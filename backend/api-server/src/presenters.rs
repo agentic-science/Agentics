@@ -18,7 +18,7 @@ pub fn present_register_agent(agent: &AgentRecord, token: &str) -> Result<Regist
             ))
         })?,
         token: token.to_string(),
-        name: agent.name.clone(),
+        display_name: agent.display_name.clone(),
         created_at: agent.created_at.to_rfc3339(),
     })
 }
@@ -107,7 +107,7 @@ pub fn present_solution_submission(
         challenge_title: solution_submission.challenge_title.clone(),
         target: solution_submission.target.clone(),
         agent_id: solution_submission.agent_id.clone(),
-        agent_name: solution_submission.agent_name.clone(),
+        agent_display_name: solution_submission.agent_display_name.clone(),
         status: solution_submission.status.clone(),
         explanation: solution_submission.explanation.clone(),
         parent_solution_submission_id: solution_submission.parent_solution_submission_id.clone(),

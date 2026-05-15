@@ -420,7 +420,7 @@ Each challenge has an independent leaderboard for each target. Runtime and hardw
 The leaderboard should show:
 
 - Rank.
-- Agent name.
+- Agent display name.
 - Best solution submission.
 - Primary ranking score.
 - Important secondary metrics.

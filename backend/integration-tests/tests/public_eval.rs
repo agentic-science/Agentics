@@ -44,7 +44,7 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "worker-e2e-agent" }))
+        .json(&serde_json::json!({ "display_name": "worker-e2e-agent" }))
         .send()
         .await
         .expect("failed to register agent")
@@ -54,7 +54,7 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
     let token = register_response["token"].as_str().expect("missing token");
     let other_register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "worker-e2e-other-agent" }))
+        .json(&serde_json::json!({ "display_name": "worker-e2e-other-agent" }))
         .send()
         .await
         .expect("failed to register other agent")
@@ -200,7 +200,7 @@ async fn worker_completes_private_validation_run_without_leaderboard(pool: sqlx:
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "validation-agent" }))
+        .json(&serde_json::json!({ "display_name": "validation-agent" }))
         .send()
         .await
         .expect("failed to register agent")
@@ -275,7 +275,7 @@ async fn worker_completes_file_mode_validation_run(pool: sqlx::PgPool) {
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "file-mode-agent" }))
+        .json(&serde_json::json!({ "display_name": "file-mode-agent" }))
         .send()
         .await
         .expect("failed to register agent")
@@ -342,7 +342,7 @@ async fn worker_rejects_symlink_declared_output(pool: sqlx::PgPool) {
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "symlink-output-agent" }))
+        .json(&serde_json::json!({ "display_name": "symlink-output-agent" }))
         .send()
         .await
         .expect("failed to register agent")
@@ -406,7 +406,7 @@ async fn worker_reports_build_phase_failure(pool: sqlx::PgPool) {
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "build-failure-agent" }))
+        .json(&serde_json::json!({ "display_name": "build-failure-agent" }))
         .send()
         .await
         .expect("failed to register agent")
@@ -478,7 +478,7 @@ async fn worker_blocks_run_stage_internet_access(pool: sqlx::PgPool) {
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "no-egress-agent" }))
+        .json(&serde_json::json!({ "display_name": "no-egress-agent" }))
         .send()
         .await
         .expect("failed to register agent")
@@ -555,7 +555,7 @@ async fn worker_mounts_run_workspace_read_only(pool: sqlx::PgPool) {
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "readonly-run-agent" }))
+        .json(&serde_json::json!({ "display_name": "readonly-run-agent" }))
         .send()
         .await
         .expect("failed to register agent")
@@ -631,7 +631,7 @@ async fn worker_enforces_run_writable_disk_limit(pool: sqlx::PgPool) {
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "run-disk-limit-agent" }))
+        .json(&serde_json::json!({ "display_name": "run-disk-limit-agent" }))
         .send()
         .await
         .expect("failed to register agent")
@@ -750,7 +750,7 @@ async fn validation_run_is_rejected_when_challenge_disables_validation(pool: sql
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "validation-disabled-agent" }))
+        .json(&serde_json::json!({ "display_name": "validation-disabled-agent" }))
         .send()
         .await
         .expect("failed to register agent")
@@ -805,7 +805,7 @@ async fn validation_run_quota_rejects_and_resets(pool: sqlx::PgPool) {
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "validation-quota-agent" }))
+        .json(&serde_json::json!({ "display_name": "validation-quota-agent" }))
         .send()
         .await
         .expect("failed to register agent")
@@ -899,7 +899,7 @@ async fn official_submission_quota_rejects_before_artifact_decode(pool: sqlx::Pg
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "official-quota-agent" }))
+        .json(&serde_json::json!({ "display_name": "official-quota-agent" }))
         .send()
         .await
         .expect("failed to register agent")
@@ -961,7 +961,7 @@ async fn official_active_queue_limit_rejects_before_artifact_decode(pool: sqlx::
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "official-active-limit-agent" }))
+        .json(&serde_json::json!({ "display_name": "official-active-limit-agent" }))
         .send()
         .await
         .expect("failed to register agent")
@@ -1074,7 +1074,7 @@ async fn register_agent_token(
 ) -> String {
     let register_response: serde_json::Value = client
         .post(api_url(app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": name }))
+        .json(&serde_json::json!({ "display_name": name }))
         .send()
         .await
         .expect("failed to register agent")
@@ -1131,7 +1131,7 @@ async fn worker_marks_solution_submission_failed_when_artifact_is_missing(pool: 
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "worker-failure-agent" }))
+        .json(&serde_json::json!({ "display_name": "worker-failure-agent" }))
         .send()
         .await
         .expect("failed to register agent")

@@ -55,7 +55,7 @@ pub(crate) fn render_register_agent(
     match format {
         OutputFormat::Json => pretty_json(&json!({
             "agent_id": response.agent_id,
-            "name": response.name,
+            "display_name": response.display_name,
             "token": response.token,
             "created_at": response.created_at,
             "saved_token": saved_token,
@@ -64,7 +64,7 @@ pub(crate) fn render_register_agent(
         })),
         OutputFormat::Table => Ok(format!(
             "Registered agent {}\nagent_id: {}\ntoken: {}\nsaved_token: {}\nconfig: {}",
-            response.name,
+            response.display_name,
             response.agent_id,
             response.token,
             saved_token,
@@ -231,7 +231,7 @@ pub(crate) fn render_creator_challenge_participants(
                 .map(|item| {
                     vec![
                         item.agent_id.to_string(),
-                        item.agent_name.clone(),
+                        item.agent_display_name.clone(),
                         item.solution_submission_count.to_string(),
                         item.best_solution_submission_id
                             .as_ref()
@@ -301,7 +301,7 @@ pub(crate) fn render_challenge_shortlist(
                 .map(|item| {
                     vec![
                         item.agent_id.to_string(),
-                        item.agent_name.clone(),
+                        item.agent_display_name.clone(),
                         item.added_by_agent_id.to_string(),
                         item.created_at.clone(),
                     ]
@@ -765,7 +765,7 @@ pub(crate) fn render_ranking_context(
                 .map(|entry| {
                     vec![
                         entry.rank.to_string(),
-                        entry.entry.agent_name.clone(),
+                        entry.entry.agent_display_name.clone(),
                         entry.entry.best_solution_submission_id.to_string(),
                         format_score(entry.entry.best_rank_score),
                     ]
@@ -809,7 +809,7 @@ pub(crate) fn render_leaderboard(
                         .ok_or_else(|| anyhow::anyhow!("leaderboard rank overflow"))?;
                     Ok(vec![
                         rank.to_string(),
-                        entry.agent_name.clone(),
+                        entry.agent_display_name.clone(),
                         entry.best_solution_submission_id.to_string(),
                         format_score(entry.best_rank_score),
                         entry.updated_at.clone(),

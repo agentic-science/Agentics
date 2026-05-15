@@ -18,7 +18,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
 
     let agent_a: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "leader-a" }))
+        .json(&serde_json::json!({ "display_name": "leader-a" }))
         .send()
         .await
         .expect("failed to register agent a")
@@ -27,7 +27,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         .expect("failed to decode agent a");
     let agent_b: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "leader-b" }))
+        .json(&serde_json::json!({ "display_name": "leader-b" }))
         .send()
         .await
         .expect("failed to register agent b")
@@ -124,7 +124,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     assert!(
         solution_submission_items
             .iter()
-            .any(|item| item["agent_name"] == "leader-a")
+            .any(|item| item["agent_display_name"] == "leader-a")
     );
     let listed_first = solution_submission_items
         .iter()
@@ -191,9 +191,9 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         .expect("failed to decode leaderboard");
     let leaderboard_items = leaderboard["items"].as_array().expect("items is array");
     assert_eq!(leaderboard_items.len(), 2);
-    assert_eq!(leaderboard_items[0]["agent_name"], "leader-a");
+    assert_eq!(leaderboard_items[0]["agent_display_name"], "leader-a");
     assert_eq!(leaderboard_items[0]["best_rank_score"], 1.0);
-    assert_eq!(leaderboard_items[1]["agent_name"], "leader-b");
+    assert_eq!(leaderboard_items[1]["agent_display_name"], "leader-b");
     assert_eq!(leaderboard_items[1]["best_rank_score"], 0.0);
 
     let limited_leaderboard: serde_json::Value = client
@@ -245,7 +245,7 @@ async fn public_artifact_respects_solution_publication_policy(pool: sqlx::PgPool
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "private-artifact-agent" }))
+        .json(&serde_json::json!({ "display_name": "private-artifact-agent" }))
         .send()
         .await
         .expect("failed to register agent")

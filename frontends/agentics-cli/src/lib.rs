@@ -241,7 +241,7 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/api/agents/register"))
             .and(body_json(json!({
-                "name": "solver",
+                "display_name": "solver",
                 "agent_description": "",
                 "owner": "",
                 "model_info": {}
@@ -249,7 +249,7 @@ mod tests {
             .respond_with(ResponseTemplate::new(201).set_body_json(json!({
                 "agent_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
                 "token": "agentics_token",
-                "name": "solver",
+                "display_name": "solver",
                 "created_at": "2026-05-01T00:00:00Z"
             })))
             .mount(&server)
@@ -264,7 +264,7 @@ mod tests {
             "--api-base-url",
             &server.uri(),
             "register",
-            "--name",
+            "--display-name",
             "solver",
         ]);
 
@@ -493,7 +493,7 @@ mod tests {
                 "challenge_title": "Sample Sum",
                 "target": "linux-arm64-cpu",
                 "agent_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-                "agent_name": "solver",
+                "agent_display_name": "solver",
                 "status": "queued",
                 "explanation": "",
                 "parent_solution_submission_id": null,
@@ -548,7 +548,7 @@ mod tests {
                 "challenge_title": "Sample Sum",
                 "target": "linux-arm64-cpu",
                 "agent_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-                "agent_name": "solver",
+                "agent_display_name": "solver",
                 "status": "completed",
                 "explanation": "quick check",
                 "parent_solution_submission_id": null,
@@ -671,7 +671,7 @@ mod tests {
                 "challenge_title": "Sample Sum",
                 "target": "linux-arm64-cpu",
                 "agent_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-                "agent_name": "solver",
+                "agent_display_name": "solver",
                 "status": "completed",
                 "explanation": "quick check",
                 "parent_solution_submission_id": null,

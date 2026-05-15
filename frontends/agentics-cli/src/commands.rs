@@ -38,7 +38,7 @@ pub(crate) async fn register(
 ) -> Result<String> {
     let model_info = parse_model_info(&args.model_info_json)?;
     let request = RegisterAgentRequest {
-        name: args.name,
+        display_name: args.display_name,
         agent_description: args.agent_description,
         owner: args.owner,
         model_info,

@@ -24,29 +24,29 @@ async fn request_validation_returns_contract_error_shape(pool: sqlx::PgPool) {
     let app = spawn_app(pool).await;
     let client = reqwest::Client::new();
 
-    let empty_name = client
+    let empty_display_name = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "   " }))
+        .json(&serde_json::json!({ "display_name": "   " }))
         .send()
         .await
-        .expect("failed to send empty-name request");
-    assert_eq!(empty_name.status(), 400);
-    let empty_name_body: serde_json::Value = empty_name
+        .expect("failed to send empty-display-name request");
+    assert_eq!(empty_display_name.status(), 400);
+    let empty_display_name_body: serde_json::Value = empty_display_name
         .json()
         .await
-        .expect("failed to decode empty-name response");
-    assert_eq!(empty_name_body["error"], "bad_request");
+        .expect("failed to decode empty-display-name response");
+    assert_eq!(empty_display_name_body["error"], "bad_request");
     assert!(
-        empty_name_body["message"]
+        empty_display_name_body["message"]
             .as_str()
             .unwrap()
-            .contains("name")
+            .contains("display_name")
     );
 
     let unknown_field = client
         .post(api_url(&app, "/api/agents/register"))
         .json(&serde_json::json!({
-            "name": "strict-agent",
+            "display_name": "strict-agent",
             "unexpected": true
         }))
         .send()
@@ -85,7 +85,7 @@ async fn zip_submission_routes_accept_declared_large_json_bodies(pool: sqlx::PgP
 
     let register_response: serde_json::Value = client
         .post(helpers::api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "large-body-agent" }))
+        .json(&serde_json::json!({ "display_name": "large-body-agent" }))
         .send()
         .await
         .expect("failed to register agent")
@@ -128,7 +128,7 @@ async fn solution_submission_rejects_invalid_target_before_artifact_decode(pool:
 
     let register_response: serde_json::Value = client
         .post(helpers::api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "invalid-target-agent" }))
+        .json(&serde_json::json!({ "display_name": "invalid-target-agent" }))
         .send()
         .await
         .expect("failed to register agent")
@@ -227,7 +227,7 @@ async fn solution_submission_rejects_legacy_round_field_before_artifact_decode(p
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "legacy-round-agent" }))
+        .json(&serde_json::json!({ "display_name": "legacy-round-agent" }))
         .send()
         .await
         .expect("failed to register agent")
@@ -329,7 +329,7 @@ async fn solution_submission_rejects_unstarted_and_closed_challenges_before_arti
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "challenge-window-agent" }))
+        .json(&serde_json::json!({ "display_name": "challenge-window-agent" }))
         .send()
         .await
         .expect("failed to register agent")
@@ -626,7 +626,7 @@ async fn register_api_agent(
 ) -> ApiAgent {
     let register_response: serde_json::Value = client
         .post(api_url(app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": name }))
+        .json(&serde_json::json!({ "display_name": name }))
         .send()
         .await
         .expect("failed to register agent")

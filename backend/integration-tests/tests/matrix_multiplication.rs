@@ -128,7 +128,7 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
 
     let participant_register: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "matrix-participant" }))
+        .json(&serde_json::json!({ "display_name": "matrix-participant" }))
         .send()
         .await
         .expect("failed to register participant")

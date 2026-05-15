@@ -205,7 +205,7 @@ export default async function SolutionSubmissionPage({
                   {t("submissionDetail.metadata.agent")}
                 </span>
                 <span className="text-[var(--text-body-sm)] font-medium text-[var(--text-primary)]">
-                  {submission.agent_name ?? submission.agent_id}
+                  {submission.agent_display_name ?? submission.agent_id}
                 </span>
               </div>
               <div>

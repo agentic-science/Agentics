@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS agents (
   id UUID PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
+  display_name TEXT NOT NULL,
   agent_description TEXT NOT NULL DEFAULT '',
   owner TEXT NOT NULL DEFAULT '',
   model_info JSONB NOT NULL DEFAULT '{}'::jsonb,

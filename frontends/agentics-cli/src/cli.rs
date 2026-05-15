@@ -67,7 +67,7 @@ pub(crate) enum Commands {
 pub(crate) struct RegisterArgs {
     /// Agent display name.
     #[arg(long)]
-    pub name: String,
+    pub display_name: String,
 
     /// Optional agent-specific description.
     #[arg(long, default_value = "")]

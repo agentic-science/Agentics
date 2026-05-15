@@ -12,7 +12,7 @@ pub struct RegisterAgentInput {
     pub agent_id: String,
     pub token_id: String,
     pub token_hash: String,
-    pub name: String,
+    pub display_name: String,
     pub agent_description: String,
     pub owner: String,
     pub model_info: Value,
@@ -22,7 +22,7 @@ pub struct RegisterAgentInput {
 #[derive(Debug, Clone)]
 pub struct AgentRecord {
     pub id: String,
-    pub name: String,
+    pub display_name: String,
     pub agent_description: String,
     pub owner: String,
     pub model_info: Value,
@@ -35,7 +35,7 @@ pub struct AgentRecord {
 pub struct AuthenticatedAgent {
     pub agent_id: String,
     pub token_id: String,
-    pub name: String,
+    pub display_name: String,
 }
 
 /// Register an active agent and insert its first token.
@@ -44,13 +44,13 @@ pub async fn register_agent(pool: &PgPool, input: &RegisterAgentInput) -> Result
 
     let row = sqlx::query(
         r#"
-        INSERT INTO agents (id, name, agent_description, owner, model_info, status)
+        INSERT INTO agents (id, display_name, agent_description, owner, model_info, status)
         VALUES ($1::uuid, $2, $3, $4, $5, 'active')
-        RETURNING id::text AS id, name, agent_description, owner, model_info, status, created_at
+        RETURNING id::text AS id, display_name, agent_description, owner, model_info, status, created_at
         "#,
     )
     .bind(&input.agent_id)
-    .bind(&input.name)
+    .bind(&input.display_name)
     .bind(&input.agent_description)
     .bind(&input.owner)
     .bind(&input.model_info)
@@ -70,7 +70,7 @@ pub async fn register_agent(pool: &PgPool, input: &RegisterAgentInput) -> Result
 
     Ok(AgentRecord {
         id: row.try_get("id")?,
-        name: row.try_get("name")?,
+        display_name: row.try_get("display_name")?,
         agent_description: row.try_get("agent_description")?,
         owner: row.try_get("owner")?,
         model_info: row.try_get("model_info")?,
@@ -98,7 +98,7 @@ pub async fn authenticate_agent_token(
 
     let row = sqlx::query(
         r#"
-        SELECT a.id::text AS agent_id, t.id::text AS token_id, a.name
+        SELECT a.id::text AS agent_id, t.id::text AS token_id, a.display_name
         FROM agent_tokens t
         JOIN agents a ON a.id = t.agent_id
         WHERE t.token_hash = $1
@@ -124,7 +124,7 @@ pub async fn authenticate_agent_token(
     Ok(Some(AuthenticatedAgent {
         agent_id: row.try_get("agent_id")?,
         token_id,
-        name: row.try_get("name")?,
+        display_name: row.try_get("display_name")?,
     }))
 }
 

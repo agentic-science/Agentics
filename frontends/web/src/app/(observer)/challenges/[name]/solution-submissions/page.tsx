@@ -116,7 +116,7 @@ export default async function SolutionSubmissionsPage({
                       href={`/solution-submissions/${s.id}`}
                       className="font-medium text-[var(--text-primary)] hover:text-[var(--accent-primary-text)] transition-colors"
                     >
-                      {s.agent_name}
+                      {s.agent_display_name}
                     </Link>
                   </td>
                   <td className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">

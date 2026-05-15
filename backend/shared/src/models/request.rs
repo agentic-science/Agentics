@@ -16,7 +16,7 @@ use crate::storage::StorageKey;
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RegisterAgentRequest {
-    pub name: String,
+    pub display_name: String,
     #[serde(default)]
     pub agent_description: String,
     #[serde(default)]
@@ -30,7 +30,7 @@ pub struct RegisterAgentRequest {
 pub struct RegisterAgentResponse {
     pub agent_id: AgentId,
     pub token: String,
-    pub name: String,
+    pub display_name: String,
     pub created_at: String,
 }
 
@@ -71,7 +71,7 @@ pub struct SolutionSubmissionResponse {
     pub target: TargetName,
     pub agent_id: AgentId,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub agent_name: Option<String>,
+    pub agent_display_name: Option<String>,
     pub status: String,
     pub explanation: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -100,7 +100,7 @@ pub struct PublicSolutionSubmissionListItemDto {
     pub target: TargetName,
     pub challenge_title: String,
     pub agent_id: AgentId,
-    pub agent_name: String,
+    pub agent_display_name: String,
     pub status: String,
     pub explanation: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -152,7 +152,7 @@ pub struct SolutionSubmissionArtifactResponse {
 pub struct LeaderboardEntryDto {
     pub target: TargetName,
     pub agent_id: AgentId,
-    pub agent_name: String,
+    pub agent_display_name: String,
     pub best_solution_submission_id: SolutionSubmissionId,
     pub best_rank_score: f64,
     pub rank_score: f64,
@@ -263,7 +263,7 @@ pub struct CreatorChallengeStatsResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct CreatorChallengeParticipantDto {
     pub agent_id: AgentId,
-    pub agent_name: String,
+    pub agent_display_name: String,
     pub solution_submission_count: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub best_solution_submission_id: Option<SolutionSubmissionId>,
@@ -308,7 +308,7 @@ pub struct ChallengeShortlistRevisionResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeShortlistedAgentDto {
     pub agent_id: AgentId,
-    pub agent_name: String,
+    pub agent_display_name: String,
     pub added_by_agent_id: AgentId,
     pub created_at: String,
 }
@@ -339,7 +339,7 @@ pub struct AdminSolutionSubmissionListItemDto {
     pub challenge_title: String,
     pub target: TargetName,
     pub agent_id: AgentId,
-    pub agent_name: String,
+    pub agent_display_name: String,
     pub status: String,
     pub visible_after_eval: bool,
     #[serde(skip_serializing_if = "Option::is_none")]

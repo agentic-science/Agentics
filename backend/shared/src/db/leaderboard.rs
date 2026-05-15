@@ -165,7 +165,7 @@ pub async fn list_leaderboard_entries(
     let rows = sqlx::query(
         r#"
         SELECT
-            le.target, le.agent_id, a.name AS agent_name, le.best_solution_submission_id,
+            le.target, le.agent_id, a.display_name AS agent_display_name, le.best_solution_submission_id,
             le.best_rank_score, le.aggregate_metrics_json, le.official_score,
             le.official_metrics_json, le.updated_at
         FROM leaderboard_entries le
@@ -201,7 +201,7 @@ pub async fn list_leaderboard_entries(
             Ok(LeaderboardEntryDto {
                 target: target_from_row(&r, "target")?,
                 agent_id: agent_id_from_row(&r, "agent_id")?,
-                agent_name: r.try_get("agent_name")?,
+                agent_display_name: r.try_get("agent_display_name")?,
                 best_solution_submission_id: solution_submission_id_from_row(
                     &r,
                     "best_solution_submission_id",
@@ -351,7 +351,7 @@ fn compare_leaderboard_entries(
         &b.aggregate_metrics,
     )
     .then_with(|| a.updated_at.cmp(&b.updated_at))
-    .then_with(|| a.agent_name.cmp(&b.agent_name))
+    .then_with(|| a.agent_display_name.cmp(&b.agent_display_name))
     .then_with(|| {
         a.best_solution_submission_id
             .cmp(&b.best_solution_submission_id)

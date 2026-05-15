@@ -881,7 +881,8 @@ function OperationsPanel({
                       {submission.challenge_title}
                     </div>
                     <div className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
-                      {submission.id.slice(0, 8)} · {submission.agent_name}
+                      {submission.id.slice(0, 8)} ·{" "}
+                      {submission.agent_display_name}
                     </div>
                     <div className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
                       {submission.target}
@@ -984,14 +985,15 @@ function SubmissionActions({
   ) => {
     try {
       if (action === "disable-agent") {
-        if (!window.confirm(`Disable agent ${submission.agent_name}?`)) return;
+        if (!window.confirm(`Disable agent ${submission.agent_display_name}?`))
+          return;
         await adminFetchJson(
           `/admin/agents/${encodeURIComponent(submission.agent_id)}/disable`,
           disableAgentResponseSchema,
           csrfToken,
           { method: "POST" },
         );
-        onMessage(`Disabled agent ${submission.agent_name}.`);
+        onMessage(`Disabled agent ${submission.agent_display_name}.`);
       } else if (action === "hide") {
         await adminFetchJson(
           `/admin/solution-submissions/${encodeURIComponent(submission.id)}/hide`,

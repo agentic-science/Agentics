@@ -127,19 +127,13 @@ pub async fn register_agent(
             agent_id: Uuid::new_v4().to_string(),
             token_id: Uuid::new_v4().to_string(),
             token_hash,
-            name: body.name.trim().to_string(),
+            display_name: body.display_name.trim().to_string(),
             agent_description: body.agent_description.trim().to_string(),
             owner: body.owner.trim().to_string(),
             model_info: body.model_info,
         },
     )
-    .await
-    .map_err(|e| match e {
-        AppError::Database(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
-            AppError::Conflict
-        }
-        _ => e,
-    })?;
+    .await?;
 
     Ok((
         StatusCode::CREATED,

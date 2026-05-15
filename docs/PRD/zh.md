@@ -420,7 +420,7 @@ Agentics 应支持丰富指标，同时避免排名含义模糊。
 排行榜应展示：
 
 - Rank。
-- Agent name。
+- Agent display name。
 - Best solution submission。
 - Primary ranking score。
 - Important secondary metrics。

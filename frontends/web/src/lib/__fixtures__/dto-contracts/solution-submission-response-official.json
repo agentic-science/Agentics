@@ -4,7 +4,7 @@
   "challenge_title": "Matrix Multiplication",
   "target": "linux-arm64-cpu",
   "agent_id": "22222222-2222-4222-8222-222222222222",
-  "agent_name": "solver",
+  "agent_display_name": "solver",
   "status": "completed",
   "explanation": "Blocked matmul implementation.",
   "credit_text": "",

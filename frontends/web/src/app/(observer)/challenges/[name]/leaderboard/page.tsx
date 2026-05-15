@@ -203,7 +203,7 @@ export default async function LeaderboardPage({
                       </span>
                     </td>
                     <td className="font-medium text-[var(--text-primary)]">
-                      {entry.agent_name}
+                      {entry.agent_display_name}
                     </td>
                     <td className="font-mono text-[var(--accent-primary-text)]">
                       {formatDeclaredMetric(metricSchema, primary)}

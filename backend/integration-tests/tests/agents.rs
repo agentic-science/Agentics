@@ -12,7 +12,7 @@ async fn register_agent_and_list_challenges(pool: sqlx::PgPool) {
     let response = reqwest::Client::new()
         .post(api_url(&app, "/api/agents/register"))
         .json(&serde_json::json!({
-            "name": "test-agent",
+            "display_name": "test-agent",
             "agent_description": "A test agent",
             "owner": "test-owner",
             "model_info": { "model": "gpt-4" }
@@ -25,7 +25,7 @@ async fn register_agent_and_list_challenges(pool: sqlx::PgPool) {
 
     let body: serde_json::Value = response.json().await.expect("failed to parse response");
     let token = body["token"].as_str().expect("token should exist");
-    assert_eq!(body["name"], "test-agent");
+    assert_eq!(body["display_name"], "test-agent");
 
     // Authenticated agent routes use the bearer token extractor.
     let response = reqwest::Client::new()
@@ -61,7 +61,7 @@ async fn registration_respects_active_agent_quota(pool: sqlx::PgPool) {
 
     let first = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "quota-agent-1" }))
+        .json(&serde_json::json!({ "display_name": "quota-agent-1" }))
         .send()
         .await
         .expect("failed to register first agent");
@@ -69,7 +69,7 @@ async fn registration_respects_active_agent_quota(pool: sqlx::PgPool) {
 
     let second = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "quota-agent-2" }))
+        .json(&serde_json::json!({ "display_name": "quota-agent-2" }))
         .send()
         .await
         .expect("failed to register second agent");

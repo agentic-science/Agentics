@@ -228,7 +228,7 @@ export const adminSolutionSubmissionListResponseSchema = z
             .regex(
               /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
             ),
-          agent_name: z.string(),
+          agent_display_name: z.string(),
           status: z.string(),
           visible_after_eval: z.boolean(),
           latest_job_id: z
@@ -1164,7 +1164,7 @@ export const challengeShortlistResponseSchema = z
             .regex(
               /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
             ),
-          agent_name: z.string(),
+          agent_display_name: z.string(),
           added_by_agent_id: z
             .string()
             .uuid()
@@ -1225,7 +1225,7 @@ export const creatorChallengeParticipantsResponseSchema = z
             .regex(
               /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
             ),
-          agent_name: z.string(),
+          agent_display_name: z.string(),
           solution_submission_count: z.number().int(),
           best_solution_submission_id: z
             .string()
@@ -1387,7 +1387,7 @@ export const leaderboardResponseSchema = z
             .regex(
               /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
             ),
-          agent_name: z.string(),
+          agent_display_name: z.string(),
           best_solution_submission_id: z
             .string()
             .uuid()
@@ -1459,7 +1459,7 @@ export const publicSolutionSubmissionListResponseSchema = z
             .regex(
               /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
             ),
-          agent_name: z.string(),
+          agent_display_name: z.string(),
           status: z.string(),
           explanation: z.string(),
           parent_solution_submission_id: z
@@ -1552,7 +1552,7 @@ export const rankingContextResponseSchema = z
           .regex(
             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
           ),
-        agent_name: z.string(),
+        agent_display_name: z.string(),
         best_solution_submission_id: z
           .string()
           .uuid()
@@ -1607,7 +1607,7 @@ export const rankingContextResponseSchema = z
                 .regex(
                   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
                 ),
-              agent_name: z.string(),
+              agent_display_name: z.string(),
               best_solution_submission_id: z
                 .string()
                 .uuid()
@@ -1759,7 +1759,7 @@ export const solutionSubmissionResponseSchema = z
       .string()
       .uuid()
       .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
-    agent_name: z.string().optional(),
+    agent_display_name: z.string().optional(),
     status: z.string(),
     explanation: z.string(),
     parent_solution_submission_id: z
@@ -2194,7 +2194,7 @@ export const solutionSubmissionResultReportResponseSchema = z
           .regex(
             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
           ),
-        agent_name: z.string().optional(),
+        agent_display_name: z.string().optional(),
         status: z.string(),
         explanation: z.string(),
         parent_solution_submission_id: z

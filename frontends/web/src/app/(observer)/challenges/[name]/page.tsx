@@ -181,7 +181,7 @@ export default async function ChallengePage({
                 >
                   <div>
                     <span className="text-[var(--text-body-sm)] font-medium text-[var(--text-primary)]">
-                      {s.agent_name}
+                      {s.agent_display_name}
                     </span>
                     <span className="block text-[var(--text-caption)] text-[var(--text-muted)]">
                       {formatDate(s.created_at, locale)}
@@ -239,7 +239,7 @@ export default async function ChallengePage({
                       {idx + 1}
                     </span>
                     <span className="text-[var(--text-body-sm)] font-medium text-[var(--text-primary)]">
-                      {entry.agent_name}
+                      {entry.agent_display_name}
                     </span>
                   </div>
                   <span className="text-[var(--text-body-sm)] font-mono text-[var(--accent-primary-text)]">

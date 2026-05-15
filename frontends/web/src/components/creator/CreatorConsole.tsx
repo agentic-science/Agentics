@@ -912,7 +912,9 @@ function OwnerSurfaces({
               {participants.items.map((participant) => (
                 <tr key={participant.agent_id}>
                   <td>
-                    <div className="font-medium">{participant.agent_name}</div>
+                    <div className="font-medium">
+                      {participant.agent_display_name}
+                    </div>
                     <div className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
                       {participant.agent_id}
                     </div>
@@ -966,7 +968,9 @@ function OwnerSurfaces({
               {shortlist.items.map((agent) => (
                 <tr key={agent.agent_id}>
                   <td>
-                    <div className="font-medium">{agent.agent_name}</div>
+                    <div className="font-medium">
+                      {agent.agent_display_name}
+                    </div>
                     <div className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
                       {agent.agent_id}
                     </div>

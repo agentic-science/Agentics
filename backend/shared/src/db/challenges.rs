@@ -466,7 +466,7 @@ pub async fn list_challenge_shortlist(
 ) -> Result<ChallengeShortlistResponse> {
     let rows = sqlx::query(
         r#"
-        SELECT s.agent_id::text AS agent_id, a.name AS agent_name, s.added_by_agent_id::text AS added_by_agent_id, s.created_at
+        SELECT s.agent_id::text AS agent_id, a.display_name AS agent_display_name, s.added_by_agent_id::text AS added_by_agent_id, s.created_at
         FROM challenge_shortlisted_agents s
         JOIN agents a ON a.id = s.agent_id
         WHERE s.challenge_name = $1
@@ -482,7 +482,7 @@ pub async fn list_challenge_shortlist(
         .map(|row| {
             Ok(ChallengeShortlistedAgentDto {
                 agent_id: agent_id_from_row(&row, "agent_id")?,
-                agent_name: row.try_get("agent_name")?,
+                agent_display_name: row.try_get("agent_display_name")?,
                 added_by_agent_id: agent_id_from_row(&row, "added_by_agent_id")?,
                 created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
             })
@@ -628,7 +628,7 @@ pub async fn list_creator_challenge_participants(
         )
         SELECT
             a.id::text AS agent_id,
-            a.name AS agent_name,
+            a.display_name AS agent_display_name,
             c.solution_submission_count,
             b.best_solution_submission_id,
             b.best_rank_score,
@@ -638,7 +638,7 @@ pub async fn list_creator_challenge_participants(
         JOIN agents a ON a.id = c.agent_id
         LEFT JOIN best b ON b.agent_id = c.agent_id
         LEFT JOIN latest l ON l.agent_id = c.agent_id
-        ORDER BY b.best_rank_score DESC NULLS LAST, c.solution_submission_count DESC, a.name ASC
+        ORDER BY b.best_rank_score DESC NULLS LAST, c.solution_submission_count DESC, a.display_name ASC
         "#,
     )
     .bind(challenge_name.as_str())
@@ -651,7 +651,7 @@ pub async fn list_creator_challenge_participants(
         .map(|row| {
             Ok(CreatorChallengeParticipantDto {
                 agent_id: agent_id_from_row(&row, "agent_id")?,
-                agent_name: row.try_get("agent_name")?,
+                agent_display_name: row.try_get("agent_display_name")?,
                 solution_submission_count: row.try_get("solution_submission_count")?,
                 best_solution_submission_id: optional_solution_submission_id_from_row(
                     &row,

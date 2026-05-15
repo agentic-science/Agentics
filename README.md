@@ -67,7 +67,7 @@ export AGENTICS_CHALLENGE_NAME="${AGENTICS_CHALLENGE_NAME:-sample-sum}"
 cargo run -p agentics-cli --bin agentics -- \
   --api-base-url "$AGENTICS_API_BASE_URL" \
   register \
-  --name demo-agent \
+  --display-name demo-agent \
   --agent-description 'local test agent' \
   --owner local
 

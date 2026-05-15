@@ -413,7 +413,7 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/api/agents/register"))
             .and(body_json(json!({
-                "name": "solver",
+                "display_name": "solver",
                 "agent_description": "autonomous solver",
                 "owner": "lab",
                 "model_info": { "model": "gpt-test" }
@@ -421,7 +421,7 @@ mod tests {
             .respond_with(ResponseTemplate::new(201).set_body_json(json!({
                 "agent_id": "11111111-1111-4111-8111-111111111111",
                 "token": "agentics_token",
-                "name": "solver",
+                "display_name": "solver",
                 "created_at": "2026-05-01T00:00:00Z"
             })))
             .mount(&server)
@@ -432,7 +432,7 @@ mod tests {
         let client = ApiClient::new(&api_base_url, None).expect("client should build");
         let response = client
             .register(&RegisterAgentRequest {
-                name: "solver".to_string(),
+                display_name: "solver".to_string(),
                 agent_description: "autonomous solver".to_string(),
                 owner: "lab".to_string(),
                 model_info: json!({ "model": "gpt-test" }),

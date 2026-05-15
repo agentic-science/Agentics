@@ -494,7 +494,7 @@ async fn admin_official_run_bypasses_public_official_queue_limit(pool: sqlx::PgP
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "admin-override-agent" }))
+        .json(&serde_json::json!({ "display_name": "admin-override-agent" }))
         .send()
         .await
         .expect("failed to register agent")
