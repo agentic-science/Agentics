@@ -399,8 +399,6 @@ fn is_forbidden_public_repo_name(name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::path::{Path, PathBuf};
-
     use serde_json::json;
     use uuid::Uuid;
 

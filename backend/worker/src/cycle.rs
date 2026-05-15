@@ -420,9 +420,9 @@ mod tests {
             .len()
             .checked_sub(36)
             .expect("worker id should include a UUID suffix");
-        let uuid_suffix = &instance_id[uuid_start..];
+        let (prefix, uuid_suffix) = instance_id.split_at(uuid_start);
 
-        assert!(instance_id[..uuid_start].starts_with("agentics-worker-"));
+        assert!(prefix.starts_with("agentics-worker-"));
         assert!(uuid::Uuid::parse_str(uuid_suffix).is_ok());
     }
 

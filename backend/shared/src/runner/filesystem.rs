@@ -170,7 +170,6 @@ fn copy_dir_all_blocking(source: &Path, destination: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use std::io::Write;
-    use std::path::{Path, PathBuf};
 
     use super::*;
 
