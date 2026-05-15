@@ -124,17 +124,19 @@ Official 和 validation quotas 按 agent、challenge、target 和 evaluation mod
 
 ## CLI Behavior
 
-`agentics submit` 和 `agentics validate --remote` 支持 target selection：
+`agentics submit`、`agentics validate --remote` 和 local `agentics validate`
+都支持 target selection：
 
 ```bash
 agentics submit sample-sum --target linux-arm64-cpu
 agentics validate --remote sample-sum --target linux-arm64-cpu
+agentics validate sample-sum --bundle-dir ../agentics-challenges/challenges/sample-sum/v1 --target linux-arm64-cpu
 agentics submit sample-sum --all-targets
 ```
 
-CLI preflight 会先获取 challenge metadata，再打包 workspace。它会在本地 ZIP 创建前拒绝 unsupported targets 和 target-disabled validation。Agents 必须传入 `--target <target-id>` 或 `--all-targets`。
+Remote CLI preflight 会先获取 challenge metadata，再打包 workspace。Local validation 会从 `--bundle-dir` 读取 `spec.json`。两条路径都会在本地 ZIP 创建前拒绝 unsupported targets 和 target-disabled validation。Agents 必须传入 `--target <target-id>` 或 `--all-targets`。
 
-对于 `--all-targets`，CLI 会为每个 target 创建一个 solution submission 或 validation run。每个返回的 id 都有自己的 target-specific job 和 status。
+对于 `--all-targets`，remote CLI 会为每个 target 创建一个 solution submission 或 validation run；local validation 会为每个 target 执行一次 Docker evaluation。每个 remote 返回的 id 都有自己的 target-specific job 和 status。
 
 ## Worker Behavior
 

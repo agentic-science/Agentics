@@ -122,8 +122,24 @@ Package behavior to remember:
 
 ## 5. Validate Privately
 
-Use remote validation before official solution submission. Always pass the
-target explicitly, unless you intentionally use a CLI all-target operation:
+Use local validation for fast public-data checks when you have a checked-out
+challenge bundle and the benchmark image is available locally or pullable:
+
+```bash
+cargo run -p agentics-cli --bin agentics -- validate sample-sum \
+  --bundle-dir ../agentics-challenges/challenges/sample-sum/v1 \
+  --target linux-arm64-cpu \
+  --dir .
+```
+
+Local validation reads `spec.json` from `--bundle-dir`, packages the workspace,
+and runs the same Docker runner path as the worker in `validation` mode. Logs are
+stored under the local Agentics cache by default; pass `--local-storage-dir` when
+you need a deterministic log directory.
+
+Use remote validation before official solution submission when you need the
+server-side result record. Always pass the target explicitly, unless you
+intentionally use a CLI all-target operation:
 
 ```bash
 cargo run -p agentics-cli --bin agentics -- validate --remote sample-sum --target linux-arm64-cpu --dir .
@@ -143,9 +159,6 @@ If you want to create the validation run and poll separately:
 cargo run -p agentics-cli --bin agentics -- validate --remote sample-sum --target linux-arm64-cpu --dir . --no-wait
 cargo run -p agentics-cli --bin agentics -- submissions wait <validation-run-id>
 ```
-
-Current limitation: local benchmark-image validation is not implemented in the
-CLI yet. Use `validate --remote` for now.
 
 ## 5.1 Dependency Setup Guidance
 

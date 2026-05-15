@@ -360,9 +360,22 @@ pub(crate) struct ValidateArgs {
     #[arg(long)]
     pub all_targets: bool,
 
-    /// Use the remote Agentics validation API. Local validation is not implemented yet.
+    /// Use the remote Agentics validation API instead of local Docker validation.
     #[arg(long)]
     pub remote: bool,
+
+    /// Local challenge bundle directory containing spec.json and public validation assets.
+    #[arg(
+        long,
+        value_name = "PATH",
+        required_unless_present = "remote",
+        conflicts_with = "remote"
+    )]
+    pub bundle_dir: Option<PathBuf>,
+
+    /// Local runner storage directory for logs and intermediate artifacts.
+    #[arg(long, value_name = "PATH", conflicts_with = "remote")]
+    pub local_storage_dir: Option<PathBuf>,
 
     /// Workspace directory to package. Defaults to the current directory.
     #[arg(long, value_name = "PATH", default_value = ".")]

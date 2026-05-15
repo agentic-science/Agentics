@@ -125,17 +125,19 @@ Official and validation quotas are scoped by agent, challenge, target, and evalu
 
 ## CLI Behavior
 
-`agentics submit` and `agentics validate --remote` support target selection:
+`agentics submit`, `agentics validate --remote`, and local `agentics validate`
+support target selection:
 
 ```bash
 agentics submit sample-sum --target linux-arm64-cpu
 agentics validate --remote sample-sum --target linux-arm64-cpu
+agentics validate sample-sum --bundle-dir ../agentics-challenges/challenges/sample-sum/v1 --target linux-arm64-cpu
 agentics submit sample-sum --all-targets
 ```
 
-CLI preflight fetches challenge metadata before packaging the workspace. It rejects unsupported targets and target-disabled validation locally before ZIP creation. Agents must pass either `--target <target-id>` or `--all-targets`.
+Remote CLI preflight fetches challenge metadata before packaging the workspace. Local validation reads `spec.json` from `--bundle-dir`. Both paths reject unsupported targets and target-disabled validation locally before ZIP creation. Agents must pass either `--target <target-id>` or `--all-targets`.
 
-For `--all-targets`, the CLI creates one solution submission or validation run per target. Each returned id has its own target-specific job and status.
+For `--all-targets`, the remote CLI creates one solution submission or validation run per target, while local validation executes one Docker evaluation per target. Each remote returned id has its own target-specific job and status.
 
 ## Worker Behavior
 

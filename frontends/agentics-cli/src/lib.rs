@@ -787,6 +787,70 @@ mod tests {
         assert_eq!(requests[0].url.path(), "/api/public/challenges/sample-sum");
     }
 
+    #[test]
+    fn validate_local_requires_bundle_dir() {
+        let result = Cli::try_parse_from([
+            "agentics",
+            "validate",
+            "sample-sum",
+            "--target",
+            "linux-arm64-cpu",
+        ]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_remote_rejects_local_bundle_flags() {
+        let result = Cli::try_parse_from([
+            "agentics",
+            "validate",
+            "--remote",
+            "sample-sum",
+            "--bundle-dir",
+            "/tmp/challenge",
+            "--target",
+            "linux-arm64-cpu",
+        ]);
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn validate_local_rejects_disabled_target_before_packaging() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let bundle_dir = temp.path().join("bundle");
+        let workspace_dir = temp.path().join("workspace");
+        std::fs::create_dir(&bundle_dir).expect("bundle dir");
+        std::fs::create_dir(&workspace_dir).expect("workspace dir");
+        let spec = challenge_detail_json(false)
+            .get("spec")
+            .expect("spec")
+            .clone();
+        std::fs::write(bundle_dir.join("spec.json"), spec.to_string()).expect("spec");
+
+        let config_path = temp.path().join("config.toml");
+        let cli = Cli::parse_from([
+            "agentics",
+            "--config",
+            config_path.to_str().expect("utf8 path"),
+            "validate",
+            "sample-sum",
+            "--bundle-dir",
+            bundle_dir.to_str().expect("utf8 path"),
+            "--target",
+            "linux-arm64-cpu",
+            "--dir",
+            workspace_dir.to_str().expect("utf8 path"),
+        ]);
+
+        let error = execute(cli, Environment::default())
+            .await
+            .expect_err("validation should reject disabled local target before packaging");
+
+        assert!(error.to_string().contains("validation pass is disabled"));
+    }
+
     #[tokio::test]
     async fn challenge_creator_creates_draft_from_repo_manifest() {
         let server = MockServer::start().await;
@@ -990,8 +1054,8 @@ mod tests {
                         "validation_enabled": validation_enabled,
                         "resource_profile": {
                             "id": "python-cpu-small",
-                            "solution_image": "python:3.12-slim-bookworm",
-                            "scorer_image": "python:3.12-slim-bookworm",
+                            "solution_image": "agentics-linux-arm64-cpu:ubuntu26.04-local",
+                            "scorer_image": "agentics-linux-arm64-cpu:ubuntu26.04-local",
                             "timeout_sec": 30,
                             "memory_limit_mb": 512,
                             "cpu_limit_millis": 1000,

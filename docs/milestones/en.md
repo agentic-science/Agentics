@@ -346,8 +346,8 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 
 - **M0.2-CLI-2: Run local validation with benchmark images**
   - Commit target: `cli: add local benchmark image validation`
-  - Scope: Pull or verify immutable benchmark image digests, mount solution workspaces, and run local public validation.
-  - Test spec: Add command tests with mocked Docker calls and one optional end-to-end smoke test against a sample benchmark image.
+  - Scope: Run local public validation from a checked-out challenge bundle by packaging the solution workspace and reusing the production Docker runner path for the selected benchmark target.
+  - Test spec: Add command tests for local bundle preflight and one optional end-to-end smoke test against a sample benchmark image.
 
 - **M0.2-CLI-3: Select benchmark targets**
   - Commit target: `cli: add benchmark target selection`
@@ -417,14 +417,14 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 | `M0.2-BE-1: Expose resource profiles` | Implemented | Public challenge detail responses expose strict benchmark target and resource profile metadata and reject invalid stored specs. |
 | `M0.2-BE-2: Add capacity and quota controls` | Implemented | Enforces validation and official quotas before artifact upload, exposes `/admin/capacity`, and documents admin official-run overrides. Heterogeneous GPU quota remains in the future GPU lane. |
 | `M0.2-CLI-1: Generate manifest-based solution workspaces` | Implemented | `init-solution` now generates validated manifests for `python-cpu`, `rust-cpu`, `node-cpu`, and `generic-cpu` profiles. |
-| `M0.2-CLI-2: Run local validation with benchmark images` | Planned | Depends on benchmark image metadata. |
+| `M0.2-CLI-2: Run local validation with benchmark images` | Implemented | `validate <challenge-id> --bundle-dir <path> --target <target-id>` runs local validation through the shared Docker runner path, stores local logs in the CLI cache by default, supports `--all-targets`, and preflights target-disabled validation before packaging. |
 | `M0.2-CLI-3: Select benchmark targets` | Implemented | `submit` and `validate --remote` support `--target` and `--all-targets`; CLI preflight rejects unsupported targets and target-disabled validation before packaging. |
 | `M0.2-CLI-4: Request GPU validation` | Planned | Dedicated GPU quota UX remains planned; the current CLI can select a CUDA target through `--target`. |
 | `M0.2-WEB-1: Show protocol and resource metadata` | Implemented | Observer challenge pages and frontend schemas display protocol, manifest, scorer command, benchmark targets, and resource profile metadata. |
 | `M0.2-WEB-2: Show target-specific leaderboards` | Implemented | Observer leaderboard fetches and displays the selected target, with target tabs for multi-target challenges. |
 | `M0.2-ADMIN-1: Manage resource profiles and quotas` | Implemented | Admin challenge rows show current benchmark targets and mode flags; the capacity tab shows configured quotas and active usage. Heterogeneous GPU configuration remains in the future GPU lane. |
 | `M0.2-EXAMPLE-1: Add zip_project protocol fixture challenges and submissions` | Implemented | Adds sample-sum stdio, grid-routing file-mode, and matrix-multiplication multi-invocation fixtures, manifest-based solutions, scorer tests, and worker integration coverage for timing metadata, private source-backed inputs, and run-stage no-egress behavior. |
-| `M0.2-DOC-1: Document multi-language challenge authoring` | Implemented | Documents the canonical protocol, generated CLI profiles, run manifests, resource profiles, execution isolation, dependency metadata, quota controls, and admin capacity views. Local benchmark-image validation remains `M0.2-CLI-2`. |
+| `M0.2-DOC-1: Document multi-language challenge authoring` | Implemented | Documents the canonical protocol, generated CLI profiles, run manifests, resource profiles, execution isolation, dependency metadata, quota controls, admin capacity views, and local benchmark-image validation. |
 | `M0.2-DOC-2: Document GPU benchmark expectations` | Implemented | MVP CUDA target policy documents required hardware metadata, active CUDA variants, shared leaderboard behavior under `linux-arm64-cuda`, and challenge-owner comparability responsibility. Heterogeneous GPU scheduling docs remain future work. |
 | `M0.2-DOC-3: Document benchmark target authoring` | Implemented | Adds bilingual v0.2 benchmark target docs covering target ids, Docker platforms, validation flags, target-aware APIs, CLI behavior, worker behavior, and leaderboards. |
 

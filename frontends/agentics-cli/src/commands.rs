@@ -1,16 +1,21 @@
-use std::time::{Duration, Instant};
-
 use std::path::Path;
+use std::path::PathBuf;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use shared::models::challenge::{BenchmarkTargetSpec, ChallengeDetailResponse};
+use shared::config::Config;
+use shared::models::challenge::{
+    BenchmarkTargetSpec, ChallengeBundleSpec, ChallengeDetailResponse,
+};
 use shared::models::challenge_creation::{
     ChallengeCreationManifest, ChallengePrivateAssetKind, CreateChallengeDraftRequest,
     ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest, ValidateChallengeDraftRequest,
 };
+use shared::models::evaluation::{EvaluationJobPayload, ScoringMode};
 use shared::models::request::CreateChallengeShortlistRevisionRequest;
 use shared::models::request::{CreateSolutionSubmissionRequest, RegisterAgentRequest};
+use shared::storage::{LocalStorage, Storage};
 
 use crate::api::ApiClient;
 use crate::cli::{
@@ -370,10 +375,18 @@ pub(crate) async fn validate(
     output_format: cli::OutputFormat,
     settings: &ResolvedSettings,
 ) -> Result<String> {
-    if !args.remote {
-        bail!("local validation is not implemented yet; pass --remote to use the Agentics API");
+    if args.remote {
+        validate_remote(args, output_format, settings).await
+    } else {
+        validate_local(args, output_format).await
     }
+}
 
+async fn validate_remote(
+    args: ValidateArgs,
+    output_format: cli::OutputFormat,
+    settings: &ResolvedSettings,
+) -> Result<String> {
     let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
     let challenge = client.get_challenge(&args.challenge_id).await?;
     let target_ids = select_benchmark_targets(
@@ -442,6 +455,237 @@ pub(crate) async fn validate(
         }
     }
     output::render_validation_run_status_batch(&final_responses, output_format)
+}
+
+async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) -> Result<String> {
+    if args.no_wait {
+        bail!("--no-wait can only be used with --remote validation");
+    }
+    if args
+        .parent_solution_submission_id
+        .as_deref()
+        .is_some_and(|value| !value.trim().is_empty())
+    {
+        bail!("--parent-solution-submission-id can only be used with --remote validation");
+    }
+
+    let bundle_dir = args
+        .bundle_dir
+        .as_deref()
+        .context("--bundle-dir is required for local validation")?;
+    let bundle_dir = canonical_dir(bundle_dir, "challenge bundle")?;
+    let spec = shared::challenge_bundle::read_challenge_bundle_spec(&bundle_dir).await?;
+    if spec.challenge_id != args.challenge_id {
+        bail!(
+            "local challenge bundle declares challenge `{}`, but command requested `{}`",
+            spec.challenge_id,
+            args.challenge_id
+        );
+    }
+
+    let target_ids = select_benchmark_targets_from_spec(
+        &spec.challenge_id,
+        &spec,
+        args.target.as_deref(),
+        args.all_targets,
+        TargetSelectionMode::Validation,
+    )?;
+    let package = package::package_solution_workspace(&args.dir)?;
+    let storage_root = resolve_local_storage_dir(args.local_storage_dir.as_deref())?;
+    tokio::fs::create_dir_all(&storage_root)
+        .await
+        .with_context(|| {
+            format!(
+                "failed to create local validation storage {}",
+                storage_root.display()
+            )
+        })?;
+    let storage_root = tokio::fs::canonicalize(&storage_root)
+        .await
+        .with_context(|| {
+            format!(
+                "failed to resolve local validation storage {}",
+                storage_root.display()
+            )
+        })?;
+    let storage_root_value = storage_root.to_str().ok_or_else(|| {
+        anyhow::anyhow!(
+            "local validation storage path is not valid UTF-8: {}",
+            storage_root.display()
+        )
+    })?;
+
+    let mut config = Config::from_env()?;
+    config.storage_root = storage_root_value.to_string();
+    config.validate_runner_storage()?;
+
+    let docker = shared::runner::connect_docker(&config)?;
+    let storage = LocalStorage::new(&storage_root);
+    let package_report = output::LocalValidationPackageReport {
+        workspace_dir: package.workspace_dir.clone(),
+        file_count: package.file_count,
+        uncompressed_bytes: package.uncompressed_bytes,
+        zip_bytes: package.bytes.len(),
+    };
+    let mut target_reports = Vec::with_capacity(target_ids.len());
+    for target_id in target_ids {
+        let job_id = local_validation_job_id(&spec.challenge_id, &target_id)?;
+        let artifact_path = storage
+            .put(
+                &format!("local-validation/{job_id}/solution.zip"),
+                &package.bytes,
+            )
+            .await?;
+        let payload = EvaluationJobPayload {
+            artifact_path,
+            bundle_path: bundle_dir.to_string_lossy().to_string(),
+            challenge_id: spec.challenge_id.clone(),
+            benchmark_target_id: target_id.clone(),
+        };
+        let log_path = storage_root.join(runner_log_key(&job_id));
+        match shared::runner::execute_evaluation_job(
+            &docker,
+            &config,
+            &job_id,
+            ScoringMode::Validation,
+            &payload,
+            &storage,
+        )
+        .await
+        {
+            Ok(execution) => target_reports.push(output::LocalValidationTargetReport {
+                benchmark_target_id: target_id,
+                log_path,
+                result: execution.result,
+            }),
+            Err(error) => {
+                return Err(local_validation_error(
+                    LocalValidationErrorContext {
+                        challenge_id: &spec.challenge_id,
+                        bundle_dir: &bundle_dir,
+                        storage_root: &storage_root,
+                        package: &package_report,
+                        completed_targets: &target_reports,
+                        output_format,
+                        failed_target_id: &target_id,
+                        log_path: &log_path,
+                    },
+                    error.into(),
+                ));
+            }
+        }
+    }
+
+    let report = output::LocalValidationReport {
+        challenge_id: spec.challenge_id,
+        bundle_dir,
+        storage_root,
+        package: package_report,
+        targets: target_reports,
+    };
+    output::render_local_validation_report(&report, output_format)
+}
+
+#[derive(Debug, Clone, Copy)]
+struct LocalValidationErrorContext<'a> {
+    challenge_id: &'a str,
+    bundle_dir: &'a Path,
+    storage_root: &'a Path,
+    package: &'a output::LocalValidationPackageReport,
+    completed_targets: &'a [output::LocalValidationTargetReport],
+    output_format: cli::OutputFormat,
+    failed_target_id: &'a str,
+    log_path: &'a Path,
+}
+
+fn local_validation_error(
+    context: LocalValidationErrorContext<'_>,
+    error: anyhow::Error,
+) -> anyhow::Error {
+    let completed = if context.completed_targets.is_empty() {
+        String::new()
+    } else {
+        let report = output::LocalValidationReport {
+            challenge_id: context.challenge_id.to_string(),
+            bundle_dir: context.bundle_dir.to_path_buf(),
+            storage_root: context.storage_root.to_path_buf(),
+            package: context.package.clone(),
+            targets: context.completed_targets.to_vec(),
+        };
+        output::render_local_validation_report(&report, context.output_format)
+            .map(|rendered| format!("{rendered}\n"))
+            .unwrap_or_default()
+    };
+    anyhow::anyhow!(
+        "{completed}local validation failed for target `{}`: {error}\nlog: {}",
+        context.failed_target_id,
+        context.log_path.display()
+    )
+}
+
+fn canonical_dir(path: &Path, label: &str) -> Result<PathBuf> {
+    let path = path
+        .canonicalize()
+        .with_context(|| format!("failed to resolve {label} {}", path.display()))?;
+    if !path.is_dir() {
+        bail!("{label} is not a directory: {}", path.display());
+    }
+    Ok(path)
+}
+
+fn resolve_local_storage_dir(configured: Option<&Path>) -> Result<PathBuf> {
+    if let Some(path) = configured {
+        return Ok(if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            std::env::current_dir()
+                .context("failed to read current directory")?
+                .join(path)
+        });
+    }
+
+    let cache_dir = dirs::cache_dir()
+        .ok_or_else(|| anyhow::anyhow!("could not determine a local cache directory"))?;
+    Ok(cache_dir.join("agentics").join("local-validation"))
+}
+
+fn local_validation_job_id(challenge_id: &str, target_id: &str) -> Result<String> {
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .context("system clock is before UNIX_EPOCH")?;
+    Ok(format!(
+        "local-{}-{}-{}-{}",
+        sanitize_identifier_component(challenge_id),
+        sanitize_identifier_component(target_id),
+        std::process::id(),
+        timestamp.as_nanos()
+    ))
+}
+
+fn sanitize_identifier_component(value: &str) -> String {
+    let sanitized = value
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.') {
+                ch
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .trim_matches('-')
+        .to_string();
+    if sanitized.is_empty() {
+        "item".to_string()
+    } else {
+        sanitized
+    }
+}
+
+fn runner_log_key(job_id: &str) -> PathBuf {
+    PathBuf::from("eval-artifacts")
+        .join(job_id)
+        .join("runner.log")
 }
 
 async fn validate_parent_submission_scope(
@@ -560,9 +804,25 @@ fn select_benchmark_targets(
     all_targets: bool,
     mode: TargetSelectionMode,
 ) -> Result<Vec<String>> {
+    select_benchmark_targets_from_spec(
+        &challenge.id,
+        &challenge.spec,
+        requested_target,
+        all_targets,
+        mode,
+    )
+}
+
+fn select_benchmark_targets_from_spec(
+    challenge_id: &str,
+    spec: &ChallengeBundleSpec,
+    requested_target: Option<&str>,
+    all_targets: bool,
+    mode: TargetSelectionMode,
+) -> Result<Vec<String>> {
     if all_targets {
-        let targets = challenge.spec.benchmark_targets.iter().collect::<Vec<_>>();
-        validate_selected_targets(challenge, &targets, mode)?;
+        let targets = spec.benchmark_targets.iter().collect::<Vec<_>>();
+        validate_selected_targets(challenge_id, &targets, mode)?;
         return Ok(targets.iter().map(|target| target.id.clone()).collect());
     }
 
@@ -570,20 +830,20 @@ fn select_benchmark_targets(
         .map(str::trim)
         .filter(|value| !value.is_empty())
     {
-        let target = challenge.spec.benchmark_target(target_id).ok_or_else(|| {
+        let target = spec.benchmark_target(target_id).ok_or_else(|| {
             anyhow::anyhow!(
                 "challenge `{}` does not support benchmark target `{target_id}`",
-                challenge.id
+                challenge_id
             )
         })?;
-        validate_selected_targets(challenge, &[target], mode)?;
+        validate_selected_targets(challenge_id, &[target], mode)?;
         return Ok(vec![target.id.clone()]);
     }
 
-    match challenge.spec.benchmark_targets.as_slice() {
+    match spec.benchmark_targets.as_slice() {
         [] => bail!(
             "challenge `{}` does not declare any benchmark targets",
-            challenge.id
+            challenge_id
         ),
         targets => {
             let available = targets
@@ -593,14 +853,14 @@ fn select_benchmark_targets(
                 .join(", ");
             bail!(
                 "benchmark target is required for challenge `{}`; pass --target <target-id> or --all-targets. Available targets: {available}",
-                challenge.id
+                challenge_id
             )
         }
     }
 }
 
 fn validate_selected_targets(
-    challenge: &ChallengeDetailResponse,
+    challenge_id: &str,
     targets: &[&BenchmarkTargetSpec],
     mode: TargetSelectionMode,
 ) -> Result<()> {
@@ -619,7 +879,7 @@ fn validate_selected_targets(
 
     bail!(
         "validation pass is disabled for challenge `{}` target(s): {}; submit officially or ask the challenge owner to enable validation",
-        challenge.id,
+        challenge_id,
         disabled.join(", ")
     )
 }

@@ -118,9 +118,18 @@ cargo run -p agentics-cli --bin agentics -- \
 ```
 
 Use `--output json` when an agent needs machine-readable output. `submit` and
-`validate --remote` preflight challenge metadata before packaging, reject
-unsupported targets locally, and require `--target <target-id>` or explicit
-all-target behavior.
+`validate --remote` preflight challenge metadata before packaging, while local
+`validate` reads the checked-out challenge bundle:
+
+```bash
+cargo run -p agentics-cli --bin agentics -- \
+  validate "$AGENTICS_CHALLENGE_ID" \
+  --bundle-dir /path/to/agentics-challenges/challenges/<challenge>/v1 \
+  --target "$AGENTICS_TARGET_ID"
+```
+
+Both validation paths reject unsupported targets locally and require
+`--target <target-id>` or explicit all-target behavior.
 
 ## Observe Results
 

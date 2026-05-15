@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use anyhow::Result;
 use serde::Serialize;
 use serde_json::{Map, Value, json};
@@ -5,6 +7,7 @@ use shared::models::challenge::{ChallengeDetailResponse, ChallengeListResponse};
 use shared::models::challenge_creation::{
     ChallengeDraftCleanupResponse, ChallengeDraftResponse, ChallengePrivateAssetResponse,
 };
+use shared::models::evaluation::ScorerRunResult;
 use shared::models::request::{
     ChallengeShortlistResponse, ChallengeShortlistRevisionResponse,
     CreateSolutionSubmissionResponse, CreatorChallengeParticipantsResponse,
@@ -17,6 +20,30 @@ use crate::cli::OutputFormat;
 use crate::config::ResolvedSettings;
 use crate::package::SolutionPackage;
 use crate::workspace::InitSolutionSummary;
+
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct LocalValidationPackageReport {
+    pub workspace_dir: PathBuf,
+    pub file_count: usize,
+    pub uncompressed_bytes: u64,
+    pub zip_bytes: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct LocalValidationTargetReport {
+    pub benchmark_target_id: String,
+    pub log_path: PathBuf,
+    pub result: ScorerRunResult,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct LocalValidationReport {
+    pub challenge_id: String,
+    pub bundle_dir: PathBuf,
+    pub storage_root: PathBuf,
+    pub package: LocalValidationPackageReport,
+    pub targets: Vec<LocalValidationTargetReport>,
+}
 
 pub(crate) fn render_register_agent(
     response: &RegisterAgentResponse,
@@ -591,6 +618,66 @@ pub(crate) fn render_validation_run_status_batch(
                 Ok(render_table(
                     &["TARGET", "ID", "STATUS", "JOB", "VALIDATION", "RANK_SCORE"],
                     &rows,
+                ))
+            }
+        },
+    }
+}
+
+pub(crate) fn render_local_validation_report(
+    report: &LocalValidationReport,
+    format: OutputFormat,
+) -> Result<String> {
+    match format {
+        OutputFormat::Json => pretty_json(report),
+        OutputFormat::Table => match report.targets.as_slice() {
+            [target] => Ok(format!(
+                "Local validation completed\nchallenge: {}\ntarget: {}\nstatus: {}\nprimary_score: {}\nrank_score: {}\nlog: {}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}\nbundle: {}\nstorage: {}",
+                report.challenge_id,
+                target.benchmark_target_id,
+                status_label(&target.result.status),
+                format_score(target.result.primary_score),
+                target
+                    .result
+                    .rank_score
+                    .map(format_score)
+                    .unwrap_or_else(|| "none".to_string()),
+                target.log_path.display(),
+                report.package.file_count,
+                report.package.uncompressed_bytes,
+                report.package.zip_bytes,
+                report.package.workspace_dir.display(),
+                report.bundle_dir.display(),
+                report.storage_root.display()
+            )),
+            _ => {
+                let rows = report
+                    .targets
+                    .iter()
+                    .map(|target| {
+                        vec![
+                            target.benchmark_target_id.clone(),
+                            status_label(&target.result.status),
+                            format_score(target.result.primary_score),
+                            target
+                                .result
+                                .rank_score
+                                .map(format_score)
+                                .unwrap_or_else(|| "none".to_string()),
+                            target.log_path.display().to_string(),
+                        ]
+                    })
+                    .collect::<Vec<_>>();
+                Ok(format!(
+                    "Local validation completed\nchallenge: {}\n{}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}\nbundle: {}\nstorage: {}",
+                    report.challenge_id,
+                    render_table(&["TARGET", "STATUS", "PRIMARY", "RANK", "LOG"], &rows),
+                    report.package.file_count,
+                    report.package.uncompressed_bytes,
+                    report.package.zip_bytes,
+                    report.package.workspace_dir.display(),
+                    report.bundle_dir.display(),
+                    report.storage_root.display()
                 ))
             }
         },

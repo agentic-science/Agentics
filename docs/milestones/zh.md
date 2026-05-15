@@ -346,8 +346,8 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 
 - **M0.2-CLI-2：使用 benchmark images 运行 local validation**
   - Commit target：`cli: add local benchmark image validation`
-  - Scope：pull 或验证 immutable benchmark image digests，mount solution workspaces，并运行 local public validation。
-  - Test spec：添加 mocked Docker calls 的 command tests，以及一个针对 sample benchmark image 的可选 end-to-end smoke test。
+  - Scope：基于 checked-out challenge bundle 运行 local public validation：打包 solution workspace，并对所选 benchmark target 复用 production Docker runner path。
+  - Test spec：为 local bundle preflight 添加 command tests，并保留一个针对 sample benchmark image 的可选 end-to-end smoke test。
 
 - **M0.2-CLI-3：选择 benchmark targets**
   - Commit target：`cli: add benchmark target selection`
@@ -417,14 +417,14 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 | `M0.2-BE-1：暴露 resource profiles` | 已实现 | Public challenge detail responses 暴露 strict benchmark target 和 resource profile metadata，并拒绝 invalid stored specs。 |
 | `M0.2-BE-2：添加 capacity 和 quota controls` | 已实现 | 在 artifact upload 前执行 validation 和 official quotas，暴露 `/admin/capacity`，并记录 admin official-run overrides。Heterogeneous GPU quota 保留在未来 GPU lane 中。 |
 | `M0.2-CLI-1：生成 manifest-based solution workspaces` | 已实现 | `init-solution` 现在可为 `python-cpu`、`rust-cpu`、`node-cpu` 和 `generic-cpu` profiles 生成通过校验的 manifests。 |
-| `M0.2-CLI-2：使用 benchmark images 运行 local validation` | 计划中 | 依赖 benchmark image metadata。 |
+| `M0.2-CLI-2：使用 benchmark images 运行 local validation` | 已实现 | `validate <challenge-id> --bundle-dir <path> --target <target-id>` 会通过 shared Docker runner path 运行 local validation，默认将 local logs 存入 CLI cache，支持 `--all-targets`，并在 packaging 前 preflight target-disabled validation。 |
 | `M0.2-CLI-3：选择 benchmark targets` | 已实现 | `submit` 和 `validate --remote` 支持 `--target` 和 `--all-targets`；CLI preflight 会在 packaging 前拒绝 unsupported targets 和 target-disabled validation。 |
 | `M0.2-CLI-4：请求 GPU validation` | 计划中 | Dedicated GPU quota UX 仍是计划中；当前 CLI 可通过 `--target` 选择 CUDA target。 |
 | `M0.2-WEB-1：展示 protocol 和 resource metadata` | 已实现 | Observer challenge pages 和 frontend schemas 展示 protocol、manifest、scorer command、benchmark targets 和 resource profile metadata。 |
 | `M0.2-WEB-2：展示 target-specific leaderboards` | 已实现 | Observer leaderboard 会获取并展示 selected target，并为 multi-target challenges 显示 target tabs。 |
 | `M0.2-ADMIN-1：管理 resource profiles 和 quotas` | 已实现 | Admin challenge rows 展示 current benchmark targets 和 mode flags；capacity tab 展示 configured quotas 和 active usage。Heterogeneous GPU configuration 保留在未来 GPU lane 中。 |
 | `M0.2-EXAMPLE-1：添加 zip_project protocol fixture challenges 和 submissions` | 已实现 | 添加 sample-sum stdio、grid-routing file-mode 和 matrix-multiplication multi-invocation fixtures、manifest-based solutions、scorer tests，以及覆盖 timing metadata、private source-backed inputs 和 run-stage no-egress behavior 的 worker integration tests。 |
-| `M0.2-DOC-1：记录 multi-language challenge authoring` | 已实现 | 已记录 canonical protocol、generated CLI profiles、run manifests、resource profiles、execution isolation、dependency metadata、quota controls 和 admin capacity views。Local benchmark-image validation 保持为 `M0.2-CLI-2`。 |
+| `M0.2-DOC-1：记录 multi-language challenge authoring` | 已实现 | 已记录 canonical protocol、generated CLI profiles、run manifests、resource profiles、execution isolation、dependency metadata、quota controls、admin capacity views 和 local benchmark-image validation。 |
 | `M0.2-DOC-2：记录 GPU benchmark expectations` | 已实现 | MVP CUDA target policy 已记录 required hardware metadata、active CUDA variants、`linux-arm64-cuda` 下的 shared leaderboard behavior，以及 challenge-owner comparability responsibility。Heterogeneous GPU scheduling docs 仍是未来工作。 |
 | `M0.2-DOC-3：记录 benchmark target authoring` | 已实现 | 新增双语 v0.2 benchmark target docs，覆盖 target ids、Docker platforms、validation flags、target-aware APIs、CLI behavior、worker behavior 和 leaderboards。 |
 
