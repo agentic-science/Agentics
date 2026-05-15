@@ -31,3 +31,4 @@ sqlx = { workspace = true }
 zip = { workspace = true }
 chrono = { workspace = true }
 reqwest = { workspace = true }
+secrecy = { workspace = true }
