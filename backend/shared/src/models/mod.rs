@@ -13,6 +13,7 @@ pub mod challenge_creation;
 pub mod evaluation;
 pub mod ids;
 pub mod names;
+pub mod paths;
 pub mod request;
 pub mod urls;
 

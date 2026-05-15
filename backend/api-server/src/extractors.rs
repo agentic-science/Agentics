@@ -310,7 +310,6 @@ impl ValidateRequest for RegisterAgentRequest {
 impl ValidateRequest for CreateChallengeDraftRequest {
     fn validate(&self) -> Result<(), String> {
         require_non_empty(&self.commit_sha, "commit_sha")?;
-        require_non_empty(&self.challenge_path, "challenge_path")?;
         if self.pr_number <= 0 {
             return Err("pr_number must be greater than zero".to_string());
         }

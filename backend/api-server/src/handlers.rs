@@ -1,5 +1,7 @@
 //! HTTP handlers for the public, agent, admin, and health APIs.
 
+use std::path::{Path as FsPath, PathBuf};
+
 use axum::{
     Json,
     extract::{Path, Query, State},
@@ -23,6 +25,7 @@ use shared::models::challenge::{
 use shared::models::evaluation::ScoringMode;
 use shared::models::ids::SolutionSubmissionId;
 use shared::models::names::{ChallengeName, MetricName, TargetName};
+use shared::models::paths::AdminBundlePath;
 use shared::models::request::{
     AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto,
     AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse,
@@ -1234,18 +1237,15 @@ pub async fn publish_challenge(
     ValidatedJson(body): ValidatedJson<PublishChallengeRequest>,
 ) -> Result<(StatusCode, Json<PublishChallengeResponse>)> {
     let challenge_name = parse_challenge_name(&challenge_name)?;
-    let bundle_path = if std::path::Path::new(&body.bundle_path).is_absolute() {
-        body.bundle_path
+    let bundle_path = if FsPath::new(&body.bundle_path).is_absolute() {
+        PathBuf::from(&body.bundle_path)
     } else {
-        std::path::Path::new(&state.config.challenges_root)
-            .join(&body.bundle_path)
-            .to_string_lossy()
-            .to_string()
+        FsPath::new(&state.config.challenges_root).join(&body.bundle_path)
     };
+    let bundle_path = AdminBundlePath::from_existing_dir(&bundle_path)?;
 
-    challenge_bundle::validate_challenge_bundle(std::path::Path::new(&bundle_path)).await?;
-    let spec =
-        challenge_bundle::read_challenge_bundle_spec(std::path::Path::new(&bundle_path)).await?;
+    challenge_bundle::validate_challenge_bundle(bundle_path.as_path()).await?;
+    let spec = challenge_bundle::read_challenge_bundle_spec(bundle_path.as_path()).await?;
     if state.config.require_digest_pinned_images {
         challenge_bundle::validate_digest_pinned_images(&spec)?;
     }
@@ -1264,8 +1264,7 @@ pub async fn publish_challenge(
     }
 
     let managed_bundle_path =
-        copy_admin_bundle_to_managed_storage(&state.config, std::path::Path::new(&bundle_path))
-            .await?;
+        copy_admin_bundle_to_managed_storage(&state.config, bundle_path.as_path()).await?;
     let statement_path = managed_bundle_path.join("statement.md");
 
     let challenge = db::publish_challenge(

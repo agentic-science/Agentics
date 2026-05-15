@@ -23,6 +23,7 @@ use shared::models::challenge_creation::{
     ValidateChallengeDraftRequest,
 };
 use shared::models::names::ChallengeName;
+use shared::models::paths::{RepoRelativePath, RepositoryCheckoutPath};
 use shared::storage::StorageKey;
 use shared::{challenge_bundle, challenge_creation, db};
 
@@ -69,7 +70,7 @@ pub async fn create_challenge_draft(
             pr_number: body.pr_number,
             pr_url: body.pr_url,
             commit_sha: body.commit_sha.trim().to_string(),
-            challenge_path: body.challenge_path.trim().to_string(),
+            challenge_path: body.challenge_path,
             manifest_sha256,
             manifest: body.manifest,
         },
@@ -297,8 +298,8 @@ pub async fn validate_challenge_draft(
             draft.id, recent_validations, validation_limit
         )));
     }
-    let repository_path = body.repository_path.trim();
-    let validation = validate_draft_repository(&draft, repository_path).await;
+    let repository_path = RepositoryCheckoutPath::from_existing_dir(&body.repository_path)?;
+    let validation = validate_draft_repository(&draft, &repository_path).await;
 
     match validation {
         Ok((_, bundle_sha256)) => {
@@ -326,7 +327,7 @@ pub async fn validate_challenge_draft(
                     action: "draft_validated".to_string(),
                     message: message.clone(),
                     metadata: serde_json::json!({
-                        "repository_path": repository_path,
+                        "repository_path": repository_path.to_string(),
                         "bundle_sha256": &bundle_sha256
                     }),
                 },
@@ -361,7 +362,7 @@ pub async fn validate_challenge_draft(
                     actor_admin_username: Some(admin.username.clone()),
                     action: "draft_validation_failed".to_string(),
                     message,
-                    metadata: serde_json::json!({ "repository_path": repository_path }),
+                    metadata: serde_json::json!({ "repository_path": repository_path.to_string() }),
                 },
             )
             .await?;
@@ -523,8 +524,8 @@ pub async fn publish_challenge_draft(
         return Err(AppError::Conflict);
     }
 
-    let repository_path = body.repository_path.trim();
-    let (manifest, bundle_sha256) = validate_draft_repository(&draft, repository_path).await?;
+    let repository_path = RepositoryCheckoutPath::from_existing_dir(&body.repository_path)?;
+    let (manifest, bundle_sha256) = validate_draft_repository(&draft, &repository_path).await?;
     let approved_bundle_sha256 = draft
         .approved_bundle_sha256
         .as_deref()
@@ -535,7 +536,9 @@ pub async fn publish_challenge_draft(
                 .to_string(),
         ));
     }
-    let proposal_root = Path::new(repository_path).join(&draft.challenge_path);
+    let proposal_root = repository_path
+        .as_path()
+        .join(draft.challenge_path.as_path());
     match manifest.request {
         ChallengeCreationRequestKind::ArchiveChallenge => {
             db::publish_archive_challenge_draft(
@@ -612,15 +615,12 @@ fn validate_commit_sha(value: &str) -> Result<()> {
     Ok(())
 }
 
-fn validate_challenge_draft_path(path: &str, challenge_name: &ChallengeName) -> Result<()> {
-    let path = path.trim();
-    if !challenge_bundle::is_safe_relative_path(path) {
-        return Err(AppError::BadRequest(
-            "challenge_path must be a safe relative path".to_string(),
-        ));
-    }
+fn validate_challenge_draft_path(
+    path: &RepoRelativePath,
+    challenge_name: &ChallengeName,
+) -> Result<()> {
     let expected = format!("challenges/{challenge_name}");
-    if path != expected {
+    if path.as_str() != expected {
         return Err(AppError::BadRequest(format!(
             "challenge_path must be `{expected}`"
         )));
@@ -630,9 +630,11 @@ fn validate_challenge_draft_path(path: &str, challenge_name: &ChallengeName) -> 
 
 async fn validate_draft_repository(
     draft: &ChallengeDraftResponse,
-    repository_path: &str,
+    repository_path: &RepositoryCheckoutPath,
 ) -> Result<(ChallengeCreationManifest, String)> {
-    let proposal_root = Path::new(repository_path).join(&draft.challenge_path);
+    let proposal_root = repository_path
+        .as_path()
+        .join(draft.challenge_path.as_path());
     let manifest =
         challenge_creation::validate_challenge_creation_repository(&proposal_root).await?;
     let manifest_sha256 = challenge_creation::normalized_manifest_sha256(&manifest)?;
@@ -663,10 +665,10 @@ async fn assemble_runtime_bundle(
     proposal_root: &Path,
     manifest: &ChallengeCreationManifest,
 ) -> Result<PathBuf> {
-    let bundle_path = manifest.bundle_path.as_deref().ok_or_else(|| {
+    let bundle_path = manifest.bundle_path.as_ref().ok_or_else(|| {
         AppError::BadRequest("bundle_path is required for publishable drafts".to_string())
     })?;
-    let public_bundle_path = proposal_root.join(bundle_path);
+    let public_bundle_path = proposal_root.join(bundle_path.as_path());
     let public_spec = challenge_bundle::read_challenge_bundle_spec(&public_bundle_path).await?;
     validate_private_assets_for_publish(draft, manifest, &public_spec)?;
 

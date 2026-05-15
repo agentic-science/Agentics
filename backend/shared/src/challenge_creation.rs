@@ -5,14 +5,13 @@ use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 
-use crate::challenge_bundle::{
-    is_safe_relative_path, read_challenge_bundle_spec, read_challenge_run_manifest,
-};
+use crate::challenge_bundle::{read_challenge_bundle_spec, read_challenge_run_manifest};
 use crate::error::{AppError, Result};
 use crate::models::challenge_creation::{
     AGENTICS_CHALLENGE_MANIFEST_FILE, ChallengeCreationManifest, ChallengeCreationRequestKind,
     ChallengePrivateAssetRequirement, ChallengePrivateAssetResponse,
 };
+use crate::models::paths::RepoRelativePath;
 
 /// Read `agentics.challenge.json` from a proposal root.
 pub async fn read_challenge_creation_manifest(root: &Path) -> Result<ChallengeCreationManifest> {
@@ -46,12 +45,11 @@ pub fn validate_challenge_creation_manifest(manifest: &ChallengeCreationManifest
     }
     require_non_empty(&manifest.title, "title")?;
     require_non_empty(&manifest.summary, "summary")?;
-    require_safe_relative_path(&manifest.readme_path, "readme_path")?;
     validate_private_asset_requirements(&manifest.private_assets)?;
 
     match manifest.request {
         ChallengeCreationRequestKind::NewChallenge => {
-            let bundle_path = manifest.bundle_path.as_deref().ok_or_else(|| {
+            let _bundle_path = manifest.bundle_path.as_ref().ok_or_else(|| {
                 AppError::Validation("bundle_path is required for new_challenge".to_string())
             })?;
             if manifest.archive.is_some() {
@@ -59,7 +57,6 @@ pub fn validate_challenge_creation_manifest(manifest: &ChallengeCreationManifest
                     "archive must be omitted for new_challenge".to_string(),
                 ));
             }
-            require_safe_relative_path(bundle_path, "bundle_path")?;
         }
         ChallengeCreationRequestKind::ArchiveChallenge => {
             if manifest.bundle_path.is_some() {
@@ -125,7 +122,7 @@ fn draft_review_bundle_sha256_blocking(
     hash_field(&mut hasher, "manifest", &manifest_bytes);
 
     if let Some(bundle_path) = &manifest.bundle_path {
-        let bundle_root = proposal_root.join(bundle_path);
+        let bundle_root = proposal_root.join(bundle_path.as_path());
         hash_public_tree(&mut hasher, &bundle_root)?;
     }
 
@@ -218,7 +215,7 @@ async fn validate_challenge_creation_repository_with_manifest(
             "{AGENTICS_CHALLENGE_MANIFEST_FILE} is required"
         )));
     }
-    assert_public_file_exists(root.join(&manifest.readme_path), "readme_path").await?;
+    assert_public_file_exists(root.join(manifest.readme_path.as_path()), "readme_path").await?;
     reject_private_files(root)?;
 
     if let Some(bundle_path) = &manifest.bundle_path {
@@ -231,9 +228,9 @@ async fn validate_challenge_creation_repository_with_manifest(
 async fn validate_public_bundle(
     root: &Path,
     manifest: &ChallengeCreationManifest,
-    bundle_path: &str,
+    bundle_path: &RepoRelativePath,
 ) -> Result<()> {
-    let bundle_dir = root.join(bundle_path);
+    let bundle_dir = root.join(bundle_path.as_path());
     let spec = read_challenge_bundle_spec(&bundle_dir).await?;
     if spec.challenge_name != manifest.challenge_name {
         return Err(AppError::Validation(format!(
@@ -323,15 +320,6 @@ fn validate_private_asset_requirements(
 fn require_non_empty(value: &str, field: &str) -> Result<()> {
     if value.trim().is_empty() {
         return Err(AppError::Validation(format!("{field} must not be empty")));
-    }
-    Ok(())
-}
-
-fn require_safe_relative_path(value: &str, field: &str) -> Result<()> {
-    if !is_safe_relative_path(value) {
-        return Err(AppError::Validation(format!(
-            "{field} must be a safe relative path"
-        )));
     }
     Ok(())
 }
@@ -487,8 +475,8 @@ mod tests {
             challenge_name: "sample-sum".parse().expect("valid challenge name"),
             title: "Sample Sum".to_string(),
             summary: "Add numbers".to_string(),
-            readme_path: "README.md".to_string(),
-            bundle_path: Some("v1".to_string()),
+            readme_path: "README.md".parse().expect("valid readme path"),
+            bundle_path: Some("v1".parse().expect("valid bundle path")),
             archive: None,
             private_assets: Vec::new(),
             ci: Default::default(),

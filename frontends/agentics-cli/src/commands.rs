@@ -15,6 +15,7 @@ use shared::models::challenge_creation::{
 use shared::models::evaluation::{EvaluationJobPayload, ScoringMode};
 use shared::models::ids::SolutionSubmissionId;
 use shared::models::names::{ChallengeName, TargetName};
+use shared::models::paths::RepoRelativePath;
 use shared::models::request::CreateChallengeShortlistRevisionRequest;
 use shared::models::request::{CreateSolutionSubmissionRequest, RegisterAgentRequest};
 use shared::models::urls::{GithubPullRequestUrl, GithubRepoRemote};
@@ -97,6 +98,8 @@ pub(crate) async fn challenge_draft(
             challenge_path,
             pr_author_github_user_id,
         } => {
+            let challenge_path = RepoRelativePath::try_new(&challenge_path)
+                .with_context(|| format!("invalid challenge_path `{challenge_path}`"))?;
             let manifest = read_challenge_creation_manifest(&repo_dir, &challenge_path)?;
             let response = client
                 .create_challenge_draft(&CreateChallengeDraftRequest {
@@ -306,10 +309,10 @@ async fn review_draft(
 
 fn read_challenge_creation_manifest(
     repo_dir: &Path,
-    challenge_path: &str,
+    challenge_path: &RepoRelativePath,
 ) -> Result<ChallengeCreationManifest> {
     let path = repo_dir
-        .join(challenge_path)
+        .join(challenge_path.as_path())
         .join(shared::models::challenge_creation::AGENTICS_CHALLENGE_MANIFEST_FILE);
     let raw = std::fs::read_to_string(&path)
         .with_context(|| format!("failed to read {}", path.display()))?;

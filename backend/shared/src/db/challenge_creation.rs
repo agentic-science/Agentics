@@ -12,6 +12,7 @@ use crate::models::challenge_creation::{
     ChallengePrivateAssetKind, ChallengePrivateAssetResponse,
 };
 use crate::models::names::{AssetName, ChallengeName};
+use crate::models::paths::RepoRelativePath;
 use crate::models::urls::{GithubPullRequestUrl, GithubRepoRemote};
 use crate::storage::StorageKey;
 
@@ -32,7 +33,7 @@ pub struct CreateChallengeDraftInput {
     pub pr_number: i32,
     pub pr_url: GithubPullRequestUrl,
     pub commit_sha: String,
-    pub challenge_path: String,
+    pub challenge_path: RepoRelativePath,
     pub manifest_sha256: String,
     pub manifest: ChallengeCreationManifest,
 }
@@ -142,7 +143,7 @@ pub async fn create_challenge_draft(
     .bind(input.pr_number)
     .bind(input.pr_url.as_str())
     .bind(&input.commit_sha)
-    .bind(&input.challenge_path)
+    .bind(input.challenge_path.as_str())
     .bind(&input.manifest_sha256)
     .bind(&manifest_json)
     .fetch_one(pool)
@@ -778,7 +779,7 @@ fn row_to_draft_response(
         pr_number: row.try_get("pr_number")?,
         pr_url: github_pull_request_url_from_row(&row, "pr_url")?,
         commit_sha: row.try_get("commit_sha")?,
-        challenge_path: row.try_get("challenge_path")?,
+        challenge_path: repo_relative_path_from_row(&row, "challenge_path")?,
         manifest_sha256: row.try_get("manifest_sha256")?,
         manifest,
         validation_bundle_sha256: row.try_get("validation_bundle_sha256")?,
@@ -834,6 +835,15 @@ fn github_pull_request_url_from_row(
 fn storage_key_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<StorageKey> {
     let value: String = row.try_get(column)?;
     StorageKey::try_new(&value)
+        .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
+}
+
+fn repo_relative_path_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<RepoRelativePath> {
+    let value: String = row.try_get(column)?;
+    RepoRelativePath::try_new(&value)
         .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
 }
 

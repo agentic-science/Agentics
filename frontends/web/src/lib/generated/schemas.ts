@@ -647,7 +647,9 @@ export const challengeDraftListResponseSchema = z
               /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/[0-9]+$/,
             ),
           commit_sha: z.string(),
-          challenge_path: z.string(),
+          challenge_path: z
+            .string()
+            .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
           manifest_sha256: z.string(),
           manifest: z
             .object({
@@ -664,8 +666,13 @@ export const challengeDraftListResponseSchema = z
                 .max(63),
               title: z.string(),
               summary: z.string(),
-              readme_path: z.string(),
-              bundle_path: z.string().optional(),
+              readme_path: z
+                .string()
+                .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+              bundle_path: z
+                .string()
+                .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+                .optional(),
               archive: z
                 .object({ reason: z.string() })
                 .strict()
@@ -818,7 +825,7 @@ export const challengeDraftResponseSchema = z
         /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/[0-9]+$/,
       ),
     commit_sha: z.string(),
-    challenge_path: z.string(),
+    challenge_path: z.string().regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
     manifest_sha256: z.string(),
     manifest: z
       .object({
@@ -833,8 +840,13 @@ export const challengeDraftResponseSchema = z
           .max(63),
         title: z.string(),
         summary: z.string(),
-        readme_path: z.string(),
-        bundle_path: z.string().optional(),
+        readme_path: z
+          .string()
+          .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+        bundle_path: z
+          .string()
+          .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+          .optional(),
         archive: z
           .object({ reason: z.string() })
           .strict()

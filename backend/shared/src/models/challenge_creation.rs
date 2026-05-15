@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::names::{AssetName, ChallengeName};
+use super::paths::RepoRelativePath;
 use super::urls::{GithubPullRequestUrl, GithubRepoRemote};
 use crate::storage::StorageKey;
 
@@ -18,9 +19,9 @@ pub struct ChallengeCreationManifest {
     pub challenge_name: ChallengeName,
     pub title: String,
     pub summary: String,
-    pub readme_path: String,
+    pub readme_path: RepoRelativePath,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub bundle_path: Option<String>,
+    pub bundle_path: Option<RepoRelativePath>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub archive: Option<ChallengeArchiveRequestSpec>,
     #[serde(default)]
@@ -100,7 +101,7 @@ pub struct CreateChallengeDraftRequest {
     pub pr_number: i32,
     pub pr_url: GithubPullRequestUrl,
     pub commit_sha: String,
-    pub challenge_path: String,
+    pub challenge_path: RepoRelativePath,
     pub pr_author_github_user_id: i64,
     pub manifest: ChallengeCreationManifest,
 }
@@ -192,7 +193,7 @@ pub struct ChallengeDraftResponse {
     pub pr_number: i32,
     pub pr_url: GithubPullRequestUrl,
     pub commit_sha: String,
-    pub challenge_path: String,
+    pub challenge_path: RepoRelativePath,
     pub manifest_sha256: String,
     pub manifest: ChallengeCreationManifest,
     #[serde(skip_serializing_if = "Option::is_none")]
