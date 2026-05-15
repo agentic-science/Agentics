@@ -517,11 +517,11 @@ function ChallengeAdminPanel({
             </thead>
             <tbody>
               {challenges.map((challenge) => (
-                <tr key={challenge.id}>
+                <tr key={challenge.name}>
                   <td>
                     <div className="font-medium">{challenge.title}</div>
                     <div className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
-                      {challenge.id}
+                      {challenge.name}
                     </div>
                   </td>
                   <td>
@@ -707,7 +707,7 @@ function ChallengeShellForm({
   onMessage,
 }: ActionProps) {
   const [form, setForm] = useState({
-    id: "",
+    name: "",
     title: "",
     summary: "",
   });
@@ -716,7 +716,7 @@ function ChallengeShellForm({
     event.preventDefault();
     try {
       const body = {
-        id: form.id.trim(),
+        name: form.name.trim(),
         title: form.title.trim(),
         summary: form.summary.trim(),
       };
@@ -730,7 +730,7 @@ function ChallengeShellForm({
         },
       );
       onError(null);
-      onMessage(`Challenge shell saved: ${response.id}`);
+      onMessage(`Challenge shell saved: ${response.name}`);
       await onRefresh({ quiet: true });
     } catch (e) {
       onError(adminErrorMessage(e));
@@ -744,9 +744,9 @@ function ChallengeShellForm({
         title="Challenge shell"
       />
       <TextInput
-        label="Challenge ID"
-        value={form.id}
-        onChange={(id) => setForm({ ...form, id })}
+        label="Challenge Name"
+        value={form.name}
+        onChange={(name) => setForm({ ...form, name })}
         required
       />
       <TextInput
@@ -780,13 +780,13 @@ function PublishVersionForm({
   onError,
   onMessage,
 }: ActionProps) {
-  const [form, setForm] = useState({ challengeId: "", bundlePath: "" });
+  const [form, setForm] = useState({ challengeName: "", bundlePath: "" });
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     try {
       const response = await adminFetchJson(
-        `/admin/challenges/${encodeURIComponent(form.challengeId.trim())}/publish`,
+        `/admin/challenges/${encodeURIComponent(form.challengeName.trim())}/publish`,
         publishChallengeResponseSchema,
         csrfToken,
         {
@@ -796,7 +796,7 @@ function PublishVersionForm({
       );
       onError(null);
       onMessage(
-        `Published ${response.challenge_id} from ${response.bundle_path}`,
+        `Published ${response.challenge_name} from ${response.bundle_path}`,
       );
       await onRefresh({ quiet: true });
     } catch (e) {
@@ -811,9 +811,9 @@ function PublishVersionForm({
         title="Publish bundle"
       />
       <TextInput
-        label="Challenge ID"
-        value={form.challengeId}
-        onChange={(challengeId) => setForm({ ...form, challengeId })}
+        label="Challenge Name"
+        value={form.challengeName}
+        onChange={(challengeName) => setForm({ ...form, challengeName })}
         required
       />
       <TextInput

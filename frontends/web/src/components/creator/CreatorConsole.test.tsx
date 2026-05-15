@@ -72,16 +72,16 @@ describe("CreatorConsole", () => {
     });
     getChallengeDraftMock.mockRejectedValue(new Error("not configured"));
     getChallengeShortlistMock.mockResolvedValue({
-      challenge_id: "matrix-multiplication",
+      challenge_name: "matrix-multiplication",
       items: [],
     });
     getCreatorChallengeParticipantsMock.mockResolvedValue({
-      challenge_id: "matrix-multiplication",
+      challenge_name: "matrix-multiplication",
       target: "linux-arm64-cpu",
       items: [],
     });
     getCreatorChallengeStatsMock.mockResolvedValue({
-      challenge_id: "matrix-multiplication",
+      challenge_name: "matrix-multiplication",
       target: "linux-arm64-cpu",
       agent_count: 0,
       solution_submission_count: 0,
@@ -94,7 +94,7 @@ describe("CreatorConsole", () => {
     });
     createChallengeShortlistRevisionMock.mockResolvedValue({
       id: "revision-1",
-      challenge_id: "matrix-multiplication",
+      challenge_name: "matrix-multiplication",
       uploader_agent_id: "agent-creator",
       requested_count: 1,
       added_count: 1,
@@ -178,7 +178,7 @@ function fillDraftRequiredFields(view: RenderResult) {
 
 const challengeDraftResponse = {
   id: "draft-matrix-1",
-  challenge_id: "matrix-multiplication",
+  challenge_name: "matrix-multiplication",
   request: "new_challenge",
   status: "draft",
   creator_agent_id: "agent-creator",
@@ -193,7 +193,7 @@ const challengeDraftResponse = {
   manifest: {
     schema_version: 1,
     request: "new_challenge",
-    challenge_id: "matrix-multiplication",
+    challenge_name: "matrix-multiplication",
     title: "Matrix Multiplication",
     summary: "Benchmark matrix multiplication solutions.",
     readme_path: "README.md",

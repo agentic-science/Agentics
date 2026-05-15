@@ -1,4 +1,4 @@
-import { BarChart3, GitCommit, MessageSquare } from "lucide-react";
+import { BarChart3, GitCommit } from "lucide-react";
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import ReactMarkdown from "react-markdown";
@@ -16,7 +16,6 @@ import {
 } from "@/lib/metrics";
 import {
   challengeDetailResponseSchema,
-  discussionListResponseSchema,
   leaderboardResponseSchema,
   publicSolutionSubmissionListResponseSchema,
 } from "@/lib/schemas";
@@ -24,19 +23,19 @@ import {
 export default async function ChallengePage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ name: string }>;
 }) {
-  const { id } = await params;
+  const { name } = await params;
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
 
   const detail = await fetchJson(
-    `/api/public/challenges/${id}`,
+    `/api/public/challenges/${name}`,
     challengeDetailResponseSchema,
   );
   const defaultTarget = detail.spec.targets[0].name;
   const submissionsPromise = resultDetailIsPublic(detail.spec)
     ? fetchJson(
-        `/api/public/challenges/${id}/solution-submissions?limit=5`,
+        `/api/public/challenges/${name}/solution-submissions?limit=5`,
         publicSolutionSubmissionListResponseSchema,
       )
     : Promise.resolve({ items: [] });
@@ -45,30 +44,25 @@ export default async function ChallengePage({
     detail.spec,
   )
     ? fetchJson(
-        `/api/public/challenges/${id}/leaderboard?target=${encodeURIComponent(defaultTarget)}&limit=5`,
+        `/api/public/challenges/${name}/leaderboard?target=${encodeURIComponent(defaultTarget)}&limit=5`,
         leaderboardResponseSchema,
       )
     : Promise.resolve({
-        challenge_id: detail.id,
+        challenge_name: detail.name,
         target: defaultTarget,
         items: [],
       });
 
-  const [submissions, leaderboard, discussions] = await Promise.all([
+  const [submissions, leaderboard] = await Promise.all([
     submissionsPromise,
     leaderboardPromise,
-    fetchJson(
-      `/api/public/challenges/${id}/discussions?limit=3`,
-      discussionListResponseSchema,
-    ),
   ]);
 
   const latestSubmissions = submissions.items;
   const topLeaderboard = leaderboard.items;
-  const recentDiscussions = discussions.items;
   const metricSchema = detail.spec.metric_schema;
   const primaryDefinition = metricSchema.metrics.find(
-    (metric) => metric.id === metricSchema.ranking.primary_metric_id,
+    (metric) => metric.name === metricSchema.ranking.primary_metric_name,
   );
 
   return (
@@ -133,7 +127,7 @@ export default async function ChallengePage({
           <div className="flex flex-col gap-2">
             {metricSchema.metrics.map((metric) => (
               <div
-                key={metric.id}
+                key={metric.name}
                 className="flex items-center justify-between py-2 border-b border-[var(--border-subtle)] last:border-0"
               >
                 <div>
@@ -141,7 +135,7 @@ export default async function ChallengePage({
                     {metric.label}
                   </span>
                   <span className="block text-[var(--text-caption)] text-[var(--text-muted)]">
-                    {metric.id} · {metricDirectionLabel(metric.direction)}
+                    {metric.name} · {metricDirectionLabel(metric.direction)}
                     {metric.unit ? ` · ${metric.unit}` : ""}
                   </span>
                 </div>
@@ -167,7 +161,7 @@ export default async function ChallengePage({
               {t("challenge.latestSubmissions")}
             </h3>
             <Link
-              href={`/challenges/${id}/solution-submissions`}
+              href={`/challenges/${name}/solution-submissions`}
               className="text-[var(--text-body-sm)] text-[var(--text-muted)] hover:text-[var(--accent-primary-text)] transition-colors"
             >
               {t("challenge.viewAll")}
@@ -213,7 +207,7 @@ export default async function ChallengePage({
               {t("challenge.topLeaderboard")}
             </h3>
             <Link
-              href={`/challenges/${id}/leaderboard?target=${encodeURIComponent(defaultTarget)}`}
+              href={`/challenges/${name}/leaderboard?target=${encodeURIComponent(defaultTarget)}`}
               className="text-[var(--text-body-sm)] text-[var(--text-muted)] hover:text-[var(--accent-primary-text)] transition-colors"
             >
               {t("challenge.viewAll")}
@@ -254,51 +248,6 @@ export default async function ChallengePage({
                       primaryMetric(metricSchema, entry.aggregate_metrics),
                     )}
                   </span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Recent Discussions */}
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] flex items-center gap-2">
-              <MessageSquare className="w-4 h-4 text-[var(--accent-secondary-text)]" />
-              {t("challenge.recentDiscussions")}
-            </h3>
-            <Link
-              href={`/challenges/${id}/discussions`}
-              className="text-[var(--text-body-sm)] text-[var(--text-muted)] hover:text-[var(--accent-primary-text)] transition-colors"
-            >
-              {t("challenge.viewAll")}
-            </Link>
-          </div>
-          <div className="flex flex-col gap-3">
-            {recentDiscussions.length === 0 ? (
-              <p className="text-[var(--text-muted)] text-[var(--text-body-sm)]">
-                {t("common.empty")}
-              </p>
-            ) : (
-              recentDiscussions.map((thread) => (
-                <div
-                  key={thread.id}
-                  className="py-2 border-b border-[var(--border-subtle)] last:border-0"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[var(--text-body-sm)] font-medium text-[var(--text-primary)] truncate">
-                      {thread.title}
-                    </span>
-                    <span className="badge badge-default shrink-0">
-                      {thread.replies.length}{" "}
-                      {thread.replies.length === 1
-                        ? t("challenge.reply")
-                        : t("challenge.replies")}
-                    </span>
-                  </div>
-                  <p className="text-[var(--text-caption)] text-[var(--text-muted)] mt-1 truncate">
-                    {thread.body.slice(0, 100)}…
-                  </p>
                 </div>
               ))
             )}

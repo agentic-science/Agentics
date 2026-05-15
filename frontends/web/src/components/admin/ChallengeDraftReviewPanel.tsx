@@ -176,7 +176,7 @@ export function ChallengeDraftReviewPanel({
                     <td>
                       <div className="font-medium">{draft.manifest.title}</div>
                       <div className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
-                        {draft.challenge_id} · {draft.request}
+                        {draft.challenge_name} · {draft.request}
                       </div>
                       <a
                         href={draft.pr_url}

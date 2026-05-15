@@ -18,7 +18,7 @@ function targetFixture(validationEnabled: boolean) {
     accelerator: "cpu",
     validation_enabled: validationEnabled,
     resource_profile: {
-      id: "python-cpu-small",
+      name: "python-cpu-small",
       solution_image: "python:3.12-slim-bookworm",
       scorer_image: "python:3.12-slim-bookworm",
       timeout_sec: 30,
@@ -61,12 +61,12 @@ describe("frontend API schemas", () => {
   it("accepts public challenge detail responses", () => {
     expect(() =>
       challengeDetailResponseSchema.parse({
-        id: "sample-sum",
+        name: "sample-sum",
         title: "Sample Sum",
         summary: "Add two numbers.",
         spec: {
           schema_version: 1,
-          challenge_id: "sample-sum",
+          challenge_name: "sample-sum",
           challenge_title: "Sample Sum",
           challenge_summary: "Add two numbers.",
           ...challengePolicy,
@@ -110,13 +110,13 @@ describe("frontend API schemas", () => {
           metric_schema: {
             metrics: [
               {
-                id: "score",
+                name: "score",
                 label: "Score",
                 direction: "maximize",
                 visibility: "public",
               },
               {
-                id: "runtime_ms",
+                name: "runtime_ms",
                 label: "Runtime",
                 unit: "ms",
                 direction: "minimize",
@@ -124,8 +124,8 @@ describe("frontend API schemas", () => {
               },
             ],
             ranking: {
-              primary_metric_id: "score",
-              tie_breaker_metric_ids: ["runtime_ms"],
+              primary_metric_name: "score",
+              tie_breaker_metric_names: ["runtime_ms"],
             },
           },
         },
@@ -136,12 +136,12 @@ describe("frontend API schemas", () => {
 
   it("rejects non-Moltbook community links", () => {
     const payload = {
-      id: "sample-sum",
+      name: "sample-sum",
       title: "Sample Sum",
       summary: "Add two numbers.",
       spec: {
         schema_version: 1,
-        challenge_id: "sample-sum",
+        challenge_name: "sample-sum",
         challenge_title: "Sample Sum",
         challenge_summary: "Add two numbers.",
         ...challengePolicy,
@@ -169,15 +169,15 @@ describe("frontend API schemas", () => {
         metric_schema: {
           metrics: [
             {
-              id: "score",
+              name: "score",
               label: "Score",
               direction: "maximize",
               visibility: "public",
             },
           ],
           ranking: {
-            primary_metric_id: "score",
-            tie_breaker_metric_ids: [],
+            primary_metric_name: "score",
+            tie_breaker_metric_names: [],
           },
         },
       },
@@ -191,7 +191,7 @@ describe("frontend API schemas", () => {
     expect(() =>
       solutionSubmissionResponseSchema.parse({
         id: "11111111-1111-4111-8111-111111111111",
-        challenge_id: "sample-sum",
+        challenge_name: "sample-sum",
         challenge_title: "Sample Sum",
         target: "linux-arm64-cpu",
         agent_id: "agent-1",
@@ -228,7 +228,7 @@ describe("frontend API schemas", () => {
     expect(() =>
       solutionSubmissionResponseSchema.parse({
         id: "11111111-1111-4111-8111-111111111111",
-        challenge_id: "sample-sum",
+        challenge_name: "sample-sum",
         challenge_title: "Sample Sum",
         target: "linux-arm64-cpu",
         agent_id: "agent-1",
@@ -264,7 +264,7 @@ describe("frontend API schemas", () => {
     expect(() =>
       solutionSubmissionResponseSchema.parse({
         id: "11111111-1111-4111-8111-111111111111",
-        challenge_id: "sample-sum",
+        challenge_name: "sample-sum",
         target: "linux-arm64-cpu",
         agent_id: "agent-1",
         status: "completed",
@@ -282,7 +282,7 @@ describe("frontend API schemas", () => {
   it("accepts structured leaderboard metrics", () => {
     expect(() =>
       leaderboardResponseSchema.parse({
-        challenge_id: "sample-sum",
+        challenge_name: "sample-sum",
         target: "linux-arm64-cpu",
         items: [
           {
@@ -293,10 +293,10 @@ describe("frontend API schemas", () => {
             best_rank_score: -42,
             rank_score: -42,
             aggregate_metrics: [
-              { metric_id: "latency_ms", value: 42 },
-              { metric_id: "score", value: 0.9 },
+              { metric_name: "latency_ms", value: 42 },
+              { metric_name: "score", value: 0.9 },
             ],
-            official_metrics: [{ metric_id: "latency_ms", value: 42 }],
+            official_metrics: [{ metric_name: "latency_ms", value: 42 }],
             official_score: -42,
             updated_at: "2026-04-28T00:00:00Z",
           },
@@ -310,7 +310,7 @@ describe("frontend API schemas", () => {
       adminChallengeListResponseSchema.parse({
         items: [
           {
-            id: "sample-sum",
+            name: "sample-sum",
             title: "Sample Sum",
             summary: "Add numbers",
             status: "active",

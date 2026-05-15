@@ -11,16 +11,16 @@ export default async function ChallengeLayout({
   params,
 }: {
   children: React.ReactNode;
-  params: Promise<{ id: string }>;
+  params: Promise<{ name: string }>;
 }) {
-  const { id } = await params;
+  const { name } = await params;
   const t = await getTranslations();
   let challenge: import("@/lib/schemas").ChallengeDetailResponse;
   let error: string | null = null;
 
   try {
     challenge = await fetchJson(
-      `/api/public/challenges/${id}`,
+      `/api/public/challenges/${name}`,
       challengeDetailResponseSchema,
     );
   } catch (e) {
@@ -45,7 +45,7 @@ export default async function ChallengeLayout({
         <div className="flex flex-col lg:flex-row lg:items-start gap-6">
           <div className="flex-1 min-w-0">
             <span className="text-[var(--text-caption)] text-[var(--text-muted)] font-mono tracking-wide uppercase">
-              {challenge.id}
+              {challenge.name}
             </span>
             <h1
               className="text-[var(--text-h1)] font-bold text-[var(--text-primary)] mt-1 leading-[var(--leading-h1)]"
@@ -122,7 +122,7 @@ export default async function ChallengeLayout({
       </div>
 
       {/* Tabs */}
-      <ChallengeNav challengeId={id} defaultTarget={primaryTarget.name} />
+      <ChallengeNav challengeName={name} defaultTarget={primaryTarget.name} />
 
       {/* Page Content */}
       {children}

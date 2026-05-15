@@ -42,7 +42,7 @@ export default async function SolutionSubmissionPage({
   );
 
   const detail = await fetchJson(
-    `/api/public/challenges/${submission.challenge_id}`,
+    `/api/public/challenges/${submission.challenge_name}`,
     challengeDetailResponseSchema,
   );
   const artifact = artifactIsPublic(detail.spec)
@@ -96,11 +96,11 @@ export default async function SolutionSubmissionPage({
       {/* Hero Card */}
       <div className="card-elevated">
         <Link
-          href={`/challenges/${submission.challenge_id}`}
+          href={`/challenges/${submission.challenge_name}`}
           className="inline-flex items-center gap-1.5 text-[var(--text-body-sm)] text-[var(--text-muted)] hover:text-[var(--accent-primary-text)] transition-colors mb-4"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          {submission.challenge_title ?? submission.challenge_id}
+          {submission.challenge_title ?? submission.challenge_name}
         </Link>
 
         <div className="flex flex-col lg:flex-row lg:items-start gap-6">
@@ -151,7 +151,7 @@ export default async function SolutionSubmissionPage({
               <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
                 {metricLabel(
                   metricSchema,
-                  metricSchema.ranking.primary_metric_id,
+                  metricSchema.ranking.primary_metric_name,
                 )}
               </span>
               <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
@@ -248,12 +248,12 @@ export default async function SolutionSubmissionPage({
               <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                 {evalDto.aggregate_metrics.map((metric) => {
                   const definition = detail.spec.metric_schema.metrics.find(
-                    (item) => item.id === metric.metric_id,
+                    (item) => item.name === metric.metric_name,
                   );
                   return (
-                    <div key={metric.metric_id}>
+                    <div key={metric.metric_name}>
                       <span className="block text-[var(--text-caption)] text-[var(--text-muted)]">
-                        {definition?.label ?? metric.metric_id}
+                        {definition?.label ?? metric.metric_name}
                         {definition
                           ? ` · ${metricDirectionLabel(definition.direction)}`
                           : ""}
@@ -287,15 +287,15 @@ export default async function SolutionSubmissionPage({
                 </thead>
                 <tbody>
                   {evalDto.run_metrics.map((run) => (
-                    <tr key={run.run_id}>
+                    <tr key={run.run_name}>
                       <td className="font-mono text-[var(--text-caption)]">
-                        {run.run_id}
+                        {run.run_name}
                       </td>
                       <td className="text-[var(--text-caption)] text-[var(--text-muted)]">
                         {run.metrics
                           .map(
                             (metric) =>
-                              `${metricLabel(metricSchema, metric.metric_id)}: ${formatDeclaredMetric(metricSchema, metric)}`,
+                              `${metricLabel(metricSchema, metric.metric_name)}: ${formatDeclaredMetric(metricSchema, metric)}`,
                           )
                           .join(" · ")}
                       </td>

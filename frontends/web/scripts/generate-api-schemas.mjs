@@ -46,7 +46,6 @@ const typeAliases = new Map([
   ["creatorChallengeStatsResponseSchema", "CreatorChallengeStatsResponse"],
   ["creatorMeResponseSchema", "CreatorMeResponse"],
   ["creatorSessionResponseSchema", "CreatorSessionResponse"],
-  ["discussionListResponseSchema", "DiscussionListResponse"],
   ["githubOauthLoginResponseSchema", "GithubOauthLoginResponse"],
   ["leaderboardResponseSchema", "LeaderboardResponse"],
   ["rankingContextResponseSchema", "RankingContextResponse"],
@@ -91,6 +90,10 @@ output = replaceRegexConstructors(output);
 
 mkdirSync(dirname(outputPath), { recursive: true });
 writeFileSync(outputPath, output);
+execFileSync("bunx", ["biome", "format", "--write", outputPath], {
+  cwd: webRoot,
+  stdio: "inherit",
+});
 
 function resolveLocalRefs(node, root) {
   if (Array.isArray(node)) {

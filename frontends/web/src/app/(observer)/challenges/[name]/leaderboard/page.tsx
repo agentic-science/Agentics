@@ -20,15 +20,15 @@ export default async function LeaderboardPage({
   params,
   searchParams,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ name: string }>;
   searchParams: Promise<{ target?: string }>;
 }) {
-  const { id } = await params;
+  const { name } = await params;
   const { target } = await searchParams;
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
 
   const detail = await fetchJson(
-    `/api/public/challenges/${id}`,
+    `/api/public/challenges/${name}`,
     challengeDetailResponseSchema,
   );
   const selectedTarget =
@@ -58,7 +58,7 @@ export default async function LeaderboardPage({
             {detail.spec.targets.map((targetSpec) => (
               <Link
                 key={targetSpec.name}
-                href={`/challenges/${id}/leaderboard?target=${encodeURIComponent(targetSpec.name)}`}
+                href={`/challenges/${name}/leaderboard?target=${encodeURIComponent(targetSpec.name)}`}
                 className="badge badge-default"
               >
                 {targetSpec.name}
@@ -75,18 +75,18 @@ export default async function LeaderboardPage({
   );
   const leaderboard = leaderboardVisible
     ? await fetchJson(
-        `/api/public/challenges/${id}/leaderboard?target=${encodeURIComponent(selectedTarget)}&limit=100`,
+        `/api/public/challenges/${name}/leaderboard?target=${encodeURIComponent(selectedTarget)}&limit=100`,
         leaderboardResponseSchema,
       )
     : {
-        challenge_id: detail.id,
+        challenge_name: detail.name,
         target: selectedTarget,
         items: [],
       };
 
   const metricSchema = detail.spec.metric_schema;
   const primaryDefinition = metricSchema.metrics.find(
-    (metric) => metric.id === metricSchema.ranking.primary_metric_id,
+    (metric) => metric.name === metricSchema.ranking.primary_metric_name,
   );
 
   return (
@@ -122,7 +122,7 @@ export default async function LeaderboardPage({
           {detail.spec.targets.map((targetSpec) => (
             <Link
               key={targetSpec.name}
-              href={`/challenges/${id}/leaderboard?target=${encodeURIComponent(targetSpec.name)}`}
+              href={`/challenges/${name}/leaderboard?target=${encodeURIComponent(targetSpec.name)}`}
               className={`badge ${
                 targetSpec.name === selectedTarget
                   ? "badge-official"
@@ -181,7 +181,8 @@ export default async function LeaderboardPage({
                 );
                 const secondary = entry.aggregate_metrics.filter(
                   (metric) =>
-                    metric.metric_id !== metricSchema.ranking.primary_metric_id,
+                    metric.metric_name !==
+                    metricSchema.ranking.primary_metric_name,
                 );
 
                 return (
@@ -213,7 +214,7 @@ export default async function LeaderboardPage({
                         ? secondary
                             .map(
                               (metric) =>
-                                `${metricLabel(metricSchema, metric.metric_id)}: ${formatDeclaredMetric(metricSchema, metric)}`,
+                                `${metricLabel(metricSchema, metric.metric_name)}: ${formatDeclaredMetric(metricSchema, metric)}`,
                             )
                             .join(" · ")
                         : "—"}

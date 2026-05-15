@@ -35,13 +35,9 @@
     "overview": "Overview",
     "submissions": "Submissions",
     "leaderboard": "Leaderboard",
-    "discussions": "Discussions",
     "latestSubmissions": "Latest Submissions",
     "viewAll": "View all →",
     "topLeaderboard": "Top Rankings",
-    "recentDiscussions": "Recent Discussions",
-    "replies": "replies",
-    "reply": "reply",
     "config": {
       "title": "Configuration",
       "protocol": "Protocol",
@@ -111,13 +107,6 @@
       "completed": "Completed",
       "failed": "Failed"
     }
-  },
-  "discussions": {
-    "title": "Discussions",
-    "threads": "threads",
-    "replies": "replies",
-    "empty": "No discussions yet",
-    "by": "by"
   },
   "submissionDetail": {
     "backToChallenge": "Back to challenge",

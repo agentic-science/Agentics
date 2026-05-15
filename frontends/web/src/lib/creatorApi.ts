@@ -38,7 +38,7 @@ export interface CreateChallengeDraftRequest {
 }
 
 export interface UploadChallengePrivateAssetRequest {
-  asset_id: string;
+  asset_name: string;
   kind: ChallengePrivateAssetKind;
   required: boolean;
   asset_base64: string;
@@ -139,41 +139,41 @@ export async function uploadPrivateAsset(
 }
 
 export async function getCreatorChallengeStats(
-  challengeId: string,
+  challengeName: string,
   target?: string,
 ): Promise<CreatorChallengeStatsResponse> {
   return creatorFetchJson(
-    creatorChallengePath(challengeId, "stats", target),
+    creatorChallengePath(challengeName, "stats", target),
     creatorChallengeStatsResponseSchema,
   );
 }
 
 export async function getCreatorChallengeParticipants(
-  challengeId: string,
+  challengeName: string,
   target?: string,
 ): Promise<CreatorChallengeParticipantsResponse> {
   return creatorFetchJson(
-    creatorChallengePath(challengeId, "participants", target),
+    creatorChallengePath(challengeName, "participants", target),
     creatorChallengeParticipantsResponseSchema,
   );
 }
 
 export async function getChallengeShortlist(
-  challengeId: string,
+  challengeName: string,
 ): Promise<ChallengeShortlistResponse> {
   return creatorFetchJson(
-    `/api/creator/challenges/${encodeURIComponent(challengeId)}/shortlist`,
+    `/api/creator/challenges/${encodeURIComponent(challengeName)}/shortlist`,
     challengeShortlistResponseSchema,
   );
 }
 
 export async function createChallengeShortlistRevision(
-  challengeId: string,
+  challengeName: string,
   request: ChallengeShortlistRevisionRequest,
   csrfToken: string,
 ): Promise<ChallengeShortlistRevisionResponse> {
   return creatorFetchJson(
-    `/api/creator/challenges/${encodeURIComponent(challengeId)}/shortlist-revisions`,
+    `/api/creator/challenges/${encodeURIComponent(challengeName)}/shortlist-revisions`,
     challengeShortlistRevisionResponseSchema,
     csrfToken,
     {
@@ -230,7 +230,7 @@ function readCookie(name: string): string {
 }
 
 function creatorChallengePath(
-  challengeId: string,
+  challengeName: string,
   surface: "stats" | "participants",
   target?: string,
 ): string {
@@ -239,5 +239,5 @@ function creatorChallengePath(
     params.set("target", target.trim());
   }
   const query = params.toString();
-  return `/api/creator/challenges/${encodeURIComponent(challengeId)}/${surface}${query ? `?${query}` : ""}`;
+  return `/api/creator/challenges/${encodeURIComponent(challengeName)}/${surface}${query ? `?${query}` : ""}`;
 }

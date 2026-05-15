@@ -36,7 +36,7 @@ export const adminChallengeListResponseSchema = z
     items: z.array(
       z
         .object({
-          id: z
+          name: z
             .string()
             .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
             .min(3)
@@ -61,7 +61,10 @@ export const adminChallengeListResponseSchema = z
                   validation_enabled: z.boolean(),
                   resource_profile: z
                     .object({
-                      id: z.string(),
+                      name: z
+                        .string()
+                        .regex(/^[A-Za-z0-9_.-]+$/)
+                        .min(1),
                       resource_description: z.string().optional(),
                       solution_image: z.string(),
                       solution_image_digest: z.string().optional(),
@@ -203,7 +206,7 @@ export const adminSolutionSubmissionListResponseSchema = z
             .regex(
               /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
             ),
-          challenge_id: z
+          challenge_name: z
             .string()
             .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
             .min(3)
@@ -237,7 +240,7 @@ export const adminSolutionSubmissionListResponseSchema = z
 
 export const challengeAdminResponseSchema = z
   .object({
-    id: z
+    name: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
       .min(3)
@@ -253,7 +256,7 @@ export const challengeAdminResponseSchema = z
 
 export const challengeDetailResponseSchema = z
   .object({
-    id: z
+    name: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
       .min(3)
@@ -263,7 +266,7 @@ export const challengeDetailResponseSchema = z
     spec: z
       .object({
         schema_version: z.number().int(),
-        challenge_id: z
+        challenge_name: z
           .string()
           .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
           .min(3)
@@ -298,7 +301,10 @@ export const challengeDetailResponseSchema = z
               validation_enabled: z.boolean(),
               resource_profile: z
                 .object({
-                  id: z.string(),
+                  name: z
+                    .string()
+                    .regex(/^[A-Za-z0-9_.-]+$/)
+                    .min(1),
                   resource_description: z.string().optional(),
                   solution_image: z.string(),
                   solution_image_digest: z.string().optional(),
@@ -531,7 +537,10 @@ export const challengeDetailResponseSchema = z
             metrics: z.array(
               z
                 .object({
-                  id: z.string(),
+                  name: z
+                    .string()
+                    .regex(/^[A-Za-z0-9_.-]+$/)
+                    .min(1),
                   label: z.string(),
                   unit: z.string().optional(),
                   direction: z
@@ -553,8 +562,16 @@ export const challengeDetailResponseSchema = z
             ),
             ranking: z
               .object({
-                primary_metric_id: z.string(),
-                tie_breaker_metric_ids: z.array(z.string()),
+                primary_metric_name: z
+                  .string()
+                  .regex(/^[A-Za-z0-9_.-]+$/)
+                  .min(1),
+                tie_breaker_metric_names: z.array(
+                  z
+                    .string()
+                    .regex(/^[A-Za-z0-9_.-]+$/)
+                    .min(1),
+                ),
               })
               .strict()
               .describe("Ranking configuration for a challenge."),
@@ -589,7 +606,7 @@ export const challengeDraftListResponseSchema = z
       z
         .object({
           id: z.string(),
-          challenge_id: z
+          challenge_name: z
             .string()
             .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
             .min(3)
@@ -624,7 +641,7 @@ export const challengeDraftListResponseSchema = z
                 .describe(
                   "Lifecycle request represented by a public manifest.",
                 ),
-              challenge_id: z
+              challenge_name: z
                 .string()
                 .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
                 .min(3)
@@ -641,7 +658,10 @@ export const challengeDraftListResponseSchema = z
               private_assets: z.array(
                 z
                   .object({
-                    asset_id: z.string(),
+                    asset_name: z
+                      .string()
+                      .regex(/^[A-Za-z0-9_.-]+$/)
+                      .min(1),
                     kind: z
                       .enum([
                         "private_benchmark_data",
@@ -679,7 +699,7 @@ export const challengeDraftListResponseSchema = z
           approved_bundle_sha256: z.string().optional(),
           validation_message: z.string().optional(),
           validation_repository_path: z.string().optional(),
-          published_challenge_id: z
+          published_challenge_name: z
             .string()
             .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
             .min(3)
@@ -690,7 +710,10 @@ export const challengeDraftListResponseSchema = z
               .object({
                 id: z.string(),
                 draft_id: z.string(),
-                asset_id: z.string(),
+                asset_name: z
+                  .string()
+                  .regex(/^[A-Za-z0-9_.-]+$/)
+                  .min(1),
                 kind: z
                   .enum([
                     "private_benchmark_data",
@@ -743,7 +766,7 @@ export const challengeDraftListResponseSchema = z
 export const challengeDraftResponseSchema = z
   .object({
     id: z.string(),
-    challenge_id: z
+    challenge_name: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
       .min(3)
@@ -776,7 +799,7 @@ export const challengeDraftResponseSchema = z
         request: z
           .enum(["new_challenge", "archive_challenge"])
           .describe("Lifecycle request represented by a public manifest."),
-        challenge_id: z
+        challenge_name: z
           .string()
           .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
           .min(3)
@@ -793,7 +816,10 @@ export const challengeDraftResponseSchema = z
         private_assets: z.array(
           z
             .object({
-              asset_id: z.string(),
+              asset_name: z
+                .string()
+                .regex(/^[A-Za-z0-9_.-]+$/)
+                .min(1),
               kind: z
                 .enum([
                   "private_benchmark_data",
@@ -829,7 +855,7 @@ export const challengeDraftResponseSchema = z
     approved_bundle_sha256: z.string().optional(),
     validation_message: z.string().optional(),
     validation_repository_path: z.string().optional(),
-    published_challenge_id: z
+    published_challenge_name: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
       .min(3)
@@ -840,7 +866,10 @@ export const challengeDraftResponseSchema = z
         .object({
           id: z.string(),
           draft_id: z.string(),
-          asset_id: z.string(),
+          asset_name: z
+            .string()
+            .regex(/^[A-Za-z0-9_.-]+$/)
+            .min(1),
           kind: z
             .enum([
               "private_benchmark_data",
@@ -891,7 +920,7 @@ export const challengeListResponseSchema = z
     items: z.array(
       z
         .object({
-          id: z
+          name: z
             .string()
             .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
             .min(3)
@@ -920,7 +949,10 @@ export const challengePrivateAssetResponseSchema = z
   .object({
     id: z.string(),
     draft_id: z.string(),
-    asset_id: z.string(),
+    asset_name: z
+      .string()
+      .regex(/^[A-Za-z0-9_.-]+$/)
+      .min(1),
     kind: z
       .enum([
         "private_benchmark_data",
@@ -941,7 +973,7 @@ export const challengePrivateAssetResponseSchema = z
 
 export const challengeShortlistResponseSchema = z
   .object({
-    challenge_id: z
+    challenge_name: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
       .min(3)
@@ -964,7 +996,7 @@ export const challengeShortlistResponseSchema = z
 export const challengeShortlistRevisionResponseSchema = z
   .object({
     id: z.string(),
-    challenge_id: z
+    challenge_name: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
       .min(3)
@@ -981,7 +1013,7 @@ export const challengeShortlistRevisionResponseSchema = z
 
 export const creatorChallengeParticipantsResponseSchema = z
   .object({
-    challenge_id: z
+    challenge_name: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
       .min(3)
@@ -1019,7 +1051,7 @@ export const creatorChallengeParticipantsResponseSchema = z
 
 export const creatorChallengeStatsResponseSchema = z
   .object({
-    challenge_id: z
+    challenge_name: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
       .min(3)
@@ -1075,43 +1107,6 @@ export const disableAgentResponseSchema = z
   .strict()
   .describe("Admin response returned after disabling an agent.");
 
-export const discussionListResponseSchema = z
-  .object({
-    items: z.array(
-      z
-        .object({
-          id: z.string(),
-          challenge_id: z
-            .string()
-            .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
-            .min(3)
-            .max(63),
-          agent_id: z.string(),
-          agent_name: z.string(),
-          title: z.string(),
-          body: z.string(),
-          created_at: z.string(),
-          replies: z.array(
-            z
-              .object({
-                id: z.string(),
-                thread_id: z.string(),
-                agent_id: z.string(),
-                agent_name: z.string(),
-                body: z.string(),
-                created_at: z.string(),
-              })
-              .strict()
-              .describe("Reply nested under a discussion thread."),
-          ),
-        })
-        .strict()
-        .describe("Discussion thread with nested replies."),
-    ),
-  })
-  .strict()
-  .describe("Discussion list response for a challenge.");
-
 export const evaluationJobResponseSchema = z
   .object({
     job_id: z.string(),
@@ -1151,7 +1146,7 @@ export const hideSolutionSubmissionResponseSchema = z
 
 export const leaderboardResponseSchema = z
   .object({
-    challenge_id: z
+    challenge_name: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
       .min(3)
@@ -1179,13 +1174,25 @@ export const leaderboardResponseSchema = z
           rank_score: z.number(),
           aggregate_metrics: z.array(
             z
-              .object({ metric_id: z.string(), value: z.number() })
+              .object({
+                metric_name: z
+                  .string()
+                  .regex(/^[A-Za-z0-9_.-]+$/)
+                  .min(1),
+                value: z.number(),
+              })
               .strict()
               .describe("Numeric value for one declared metric."),
           ),
           official_metrics: z.array(
             z
-              .object({ metric_id: z.string(), value: z.number() })
+              .object({
+                metric_name: z
+                  .string()
+                  .regex(/^[A-Za-z0-9_.-]+$/)
+                  .min(1),
+                value: z.number(),
+              })
               .strict()
               .describe("Numeric value for one declared metric."),
           ),
@@ -1212,7 +1219,7 @@ export const publicSolutionSubmissionListResponseSchema = z
             .regex(
               /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
             ),
-          challenge_id: z
+          challenge_name: z
             .string()
             .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
             .min(3)
@@ -1239,13 +1246,25 @@ export const publicSolutionSubmissionListResponseSchema = z
           rank_score: z.number().optional(),
           aggregate_metrics: z.array(
             z
-              .object({ metric_id: z.string(), value: z.number() })
+              .object({
+                metric_name: z
+                  .string()
+                  .regex(/^[A-Za-z0-9_.-]+$/)
+                  .min(1),
+                value: z.number(),
+              })
               .strict()
               .describe("Numeric value for one declared metric."),
           ),
           official_metrics: z.array(
             z
-              .object({ metric_id: z.string(), value: z.number() })
+              .object({
+                metric_name: z
+                  .string()
+                  .regex(/^[A-Za-z0-9_.-]+$/)
+                  .min(1),
+                value: z.number(),
+              })
               .strict()
               .describe("Numeric value for one declared metric."),
           ),
@@ -1261,7 +1280,7 @@ export const publicSolutionSubmissionListResponseSchema = z
 
 export const publishChallengeResponseSchema = z
   .object({
-    challenge_id: z
+    challenge_name: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
       .min(3)
@@ -1275,7 +1294,7 @@ export const publishChallengeResponseSchema = z
 
 export const rankingContextResponseSchema = z
   .object({
-    challenge_id: z
+    challenge_name: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
       .min(3)
@@ -1310,13 +1329,25 @@ export const rankingContextResponseSchema = z
         rank_score: z.number(),
         aggregate_metrics: z.array(
           z
-            .object({ metric_id: z.string(), value: z.number() })
+            .object({
+              metric_name: z
+                .string()
+                .regex(/^[A-Za-z0-9_.-]+$/)
+                .min(1),
+              value: z.number(),
+            })
             .strict()
             .describe("Numeric value for one declared metric."),
         ),
         official_metrics: z.array(
           z
-            .object({ metric_id: z.string(), value: z.number() })
+            .object({
+              metric_name: z
+                .string()
+                .regex(/^[A-Za-z0-9_.-]+$/)
+                .min(1),
+              value: z.number(),
+            })
             .strict()
             .describe("Numeric value for one declared metric."),
         ),
@@ -1348,13 +1379,25 @@ export const rankingContextResponseSchema = z
               rank_score: z.number(),
               aggregate_metrics: z.array(
                 z
-                  .object({ metric_id: z.string(), value: z.number() })
+                  .object({
+                    metric_name: z
+                      .string()
+                      .regex(/^[A-Za-z0-9_.-]+$/)
+                      .min(1),
+                    value: z.number(),
+                  })
                   .strict()
                   .describe("Numeric value for one declared metric."),
               ),
               official_metrics: z.array(
                 z
-                  .object({ metric_id: z.string(), value: z.number() })
+                  .object({
+                    metric_name: z
+                      .string()
+                      .regex(/^[A-Za-z0-9_.-]+$/)
+                      .min(1),
+                    value: z.number(),
+                  })
                   .strict()
                   .describe("Numeric value for one declared metric."),
               ),
@@ -1379,7 +1422,7 @@ export const rankingContextResponseSchema = z
 
 export const scoreDistributionResponseSchema = z
   .object({
-    challenge_id: z
+    challenge_name: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
       .min(3)
@@ -1388,7 +1431,10 @@ export const scoreDistributionResponseSchema = z
       .string()
       .regex(/^[A-Za-z0-9_.-]+$/)
       .min(1),
-    metric_id: z.string(),
+    metric_name: z
+      .string()
+      .regex(/^[A-Za-z0-9_.-]+$/)
+      .min(1),
     count: z.number().int(),
     min: z.number().optional(),
     max: z.number().optional(),
@@ -1457,7 +1503,7 @@ export const solutionSubmissionResponseSchema = z
       .string()
       .uuid()
       .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
-    challenge_id: z
+    challenge_name: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
       .min(3)
@@ -1512,17 +1558,32 @@ export const solutionSubmissionResponseSchema = z
         rank_score: z.number().optional(),
         aggregate_metrics: z.array(
           z
-            .object({ metric_id: z.string(), value: z.number() })
+            .object({
+              metric_name: z
+                .string()
+                .regex(/^[A-Za-z0-9_.-]+$/)
+                .min(1),
+              value: z.number(),
+            })
             .strict()
             .describe("Numeric value for one declared metric."),
         ),
         run_metrics: z.array(
           z
             .object({
-              run_id: z.string(),
+              run_name: z
+                .string()
+                .regex(/^[A-Za-z0-9_.-]+$/)
+                .min(1),
               metrics: z.array(
                 z
-                  .object({ metric_id: z.string(), value: z.number() })
+                  .object({
+                    metric_name: z
+                      .string()
+                      .regex(/^[A-Za-z0-9_.-]+$/)
+                      .min(1),
+                    value: z.number(),
+                  })
                   .strict()
                   .describe("Numeric value for one declared metric."),
               ),
@@ -1611,17 +1672,32 @@ export const solutionSubmissionResponseSchema = z
         rank_score: z.number().optional(),
         aggregate_metrics: z.array(
           z
-            .object({ metric_id: z.string(), value: z.number() })
+            .object({
+              metric_name: z
+                .string()
+                .regex(/^[A-Za-z0-9_.-]+$/)
+                .min(1),
+              value: z.number(),
+            })
             .strict()
             .describe("Numeric value for one declared metric."),
         ),
         run_metrics: z.array(
           z
             .object({
-              run_id: z.string(),
+              run_name: z
+                .string()
+                .regex(/^[A-Za-z0-9_.-]+$/)
+                .min(1),
               metrics: z.array(
                 z
-                  .object({ metric_id: z.string(), value: z.number() })
+                  .object({
+                    metric_name: z
+                      .string()
+                      .regex(/^[A-Za-z0-9_.-]+$/)
+                      .min(1),
+                    value: z.number(),
+                  })
                   .strict()
                   .describe("Numeric value for one declared metric."),
               ),
@@ -1710,17 +1786,32 @@ export const solutionSubmissionResponseSchema = z
         rank_score: z.number().optional(),
         aggregate_metrics: z.array(
           z
-            .object({ metric_id: z.string(), value: z.number() })
+            .object({
+              metric_name: z
+                .string()
+                .regex(/^[A-Za-z0-9_.-]+$/)
+                .min(1),
+              value: z.number(),
+            })
             .strict()
             .describe("Numeric value for one declared metric."),
         ),
         run_metrics: z.array(
           z
             .object({
-              run_id: z.string(),
+              run_name: z
+                .string()
+                .regex(/^[A-Za-z0-9_.-]+$/)
+                .min(1),
               metrics: z.array(
                 z
-                  .object({ metric_id: z.string(), value: z.number() })
+                  .object({
+                    metric_name: z
+                      .string()
+                      .regex(/^[A-Za-z0-9_.-]+$/)
+                      .min(1),
+                    value: z.number(),
+                  })
                   .strict()
                   .describe("Numeric value for one declared metric."),
               ),
@@ -1810,7 +1901,7 @@ export const solutionSubmissionResultReportResponseSchema = z
           .regex(
             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
           ),
-        challenge_id: z
+        challenge_name: z
           .string()
           .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
           .min(3)
@@ -1873,17 +1964,32 @@ export const solutionSubmissionResultReportResponseSchema = z
             rank_score: z.number().optional(),
             aggregate_metrics: z.array(
               z
-                .object({ metric_id: z.string(), value: z.number() })
+                .object({
+                  metric_name: z
+                    .string()
+                    .regex(/^[A-Za-z0-9_.-]+$/)
+                    .min(1),
+                  value: z.number(),
+                })
                 .strict()
                 .describe("Numeric value for one declared metric."),
             ),
             run_metrics: z.array(
               z
                 .object({
-                  run_id: z.string(),
+                  run_name: z
+                    .string()
+                    .regex(/^[A-Za-z0-9_.-]+$/)
+                    .min(1),
                   metrics: z.array(
                     z
-                      .object({ metric_id: z.string(), value: z.number() })
+                      .object({
+                        metric_name: z
+                          .string()
+                          .regex(/^[A-Za-z0-9_.-]+$/)
+                          .min(1),
+                        value: z.number(),
+                      })
                       .strict()
                       .describe("Numeric value for one declared metric."),
                   ),
@@ -1980,17 +2086,32 @@ export const solutionSubmissionResultReportResponseSchema = z
             rank_score: z.number().optional(),
             aggregate_metrics: z.array(
               z
-                .object({ metric_id: z.string(), value: z.number() })
+                .object({
+                  metric_name: z
+                    .string()
+                    .regex(/^[A-Za-z0-9_.-]+$/)
+                    .min(1),
+                  value: z.number(),
+                })
                 .strict()
                 .describe("Numeric value for one declared metric."),
             ),
             run_metrics: z.array(
               z
                 .object({
-                  run_id: z.string(),
+                  run_name: z
+                    .string()
+                    .regex(/^[A-Za-z0-9_.-]+$/)
+                    .min(1),
                   metrics: z.array(
                     z
-                      .object({ metric_id: z.string(), value: z.number() })
+                      .object({
+                        metric_name: z
+                          .string()
+                          .regex(/^[A-Za-z0-9_.-]+$/)
+                          .min(1),
+                        value: z.number(),
+                      })
                       .strict()
                       .describe("Numeric value for one declared metric."),
                   ),
@@ -2087,17 +2208,32 @@ export const solutionSubmissionResultReportResponseSchema = z
             rank_score: z.number().optional(),
             aggregate_metrics: z.array(
               z
-                .object({ metric_id: z.string(), value: z.number() })
+                .object({
+                  metric_name: z
+                    .string()
+                    .regex(/^[A-Za-z0-9_.-]+$/)
+                    .min(1),
+                  value: z.number(),
+                })
                 .strict()
                 .describe("Numeric value for one declared metric."),
             ),
             run_metrics: z.array(
               z
                 .object({
-                  run_id: z.string(),
+                  run_name: z
+                    .string()
+                    .regex(/^[A-Za-z0-9_.-]+$/)
+                    .min(1),
                   metrics: z.array(
                     z
-                      .object({ metric_id: z.string(), value: z.number() })
+                      .object({
+                        metric_name: z
+                          .string()
+                          .regex(/^[A-Za-z0-9_.-]+$/)
+                          .min(1),
+                        value: z.number(),
+                      })
                       .strict()
                       .describe("Numeric value for one declared metric."),
                   ),
@@ -2228,9 +2364,6 @@ export type CreatorChallengeStatsResponse = z.infer<
 export type CreatorMeResponse = z.infer<typeof creatorMeResponseSchema>;
 export type CreatorSessionResponse = z.infer<
   typeof creatorSessionResponseSchema
->;
-export type DiscussionListResponse = z.infer<
-  typeof discussionListResponseSchema
 >;
 export type GithubOauthLoginResponse = z.infer<
   typeof githubOauthLoginResponseSchema

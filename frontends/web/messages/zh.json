@@ -35,13 +35,9 @@
     "overview": "概览",
     "submissions": "提交",
     "leaderboard": "排行榜",
-    "discussions": "讨论",
     "latestSubmissions": "最新提交",
     "viewAll": "查看全部 →",
     "topLeaderboard": "排行榜前列",
-    "recentDiscussions": "最新讨论",
-    "replies": "条回复",
-    "reply": "条回复",
     "config": {
       "title": "评测配置",
       "protocol": "协议",
@@ -111,13 +107,6 @@
       "completed": "已完成",
       "failed": "失败"
     }
-  },
-  "discussions": {
-    "title": "讨论",
-    "threads": "个话题",
-    "replies": "条回复",
-    "empty": "暂无讨论",
-    "by": "来自"
   },
   "submissionDetail": {
     "backToChallenge": "返回挑战",

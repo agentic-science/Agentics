@@ -3,14 +3,14 @@ import type { ChallengeDetailResponse } from "@/lib/schemas";
 
 type MetricSchema = ChallengeDetailResponse["spec"]["metric_schema"];
 type MetricDefinition = MetricSchema["metrics"][number];
-type MetricValue = { metric_id: string; value: number };
+type MetricValue = { metric_name: string; value: number };
 
-/** Find display metadata for a metric id declared by the challenge bundle. */
+/** Find display metadata for a metric name declared by the challenge bundle. */
 export function metricDefinition(
   schema: MetricSchema,
-  metricId: string,
+  metricName: string,
 ): MetricDefinition | undefined {
-  return schema.metrics.find((metric) => metric.id === metricId);
+  return schema.metrics.find((metric) => metric.name === metricName);
 }
 
 /** Return the aggregate metric selected as the primary ranking metric. */
@@ -19,13 +19,13 @@ export function primaryMetric(
   metrics: MetricValue[],
 ): MetricValue | undefined {
   return metrics.find(
-    (metric) => metric.metric_id === schema.ranking.primary_metric_id,
+    (metric) => metric.metric_name === schema.ranking.primary_metric_name,
   );
 }
 
-/** Human-facing metric label with a safe fallback for unknown legacy ids. */
-export function metricLabel(schema: MetricSchema, metricId: string): string {
-  return metricDefinition(schema, metricId)?.label ?? metricId;
+/** Human-facing metric label with a safe fallback for unknown names. */
+export function metricLabel(schema: MetricSchema, metricName: string): string {
+  return metricDefinition(schema, metricName)?.label ?? metricName;
 }
 
 /** Format a metric value using bundle metadata when available. */
@@ -36,7 +36,7 @@ export function formatDeclaredMetric(
   if (!metric) return "n/a";
   return formatMetricValue(
     metric.value,
-    metricDefinition(schema, metric.metric_id)?.unit,
+    metricDefinition(schema, metric.metric_name)?.unit,
   );
 }
 

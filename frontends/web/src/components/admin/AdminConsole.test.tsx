@@ -63,7 +63,7 @@ describe("AdminConsole", () => {
             items: [
               {
                 id: "submission-queued",
-                challenge_id: "matrix-multiplication",
+                challenge_name: "matrix-multiplication",
                 challenge_title: "Matrix Multiplication",
                 target: "linux-arm64-cpu",
                 agent_id: "agent-1",
@@ -75,7 +75,7 @@ describe("AdminConsole", () => {
               },
               {
                 id: "submission-running",
-                challenge_id: "matrix-multiplication",
+                challenge_name: "matrix-multiplication",
                 challenge_title: "Matrix Multiplication",
                 target: "linux-arm64-cpu",
                 agent_id: "agent-2",

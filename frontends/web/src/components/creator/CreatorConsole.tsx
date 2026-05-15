@@ -42,14 +42,14 @@ const defaultManifest = JSON.stringify(
   {
     schema_version: 1,
     request: "new_challenge",
-    challenge_id: "matrix-multiplication",
+    challenge_name: "matrix-multiplication",
     title: "Matrix Multiplication",
     summary: "Benchmark matrix multiplication solutions.",
     readme_path: "README.md",
     bundle_path: "v1",
     private_assets: [
       {
-        asset_id: "official-seed-config",
+        asset_name: "official-seed-config",
         kind: "private_seeds",
         required: true,
       },
@@ -81,19 +81,19 @@ export function CreatorConsole() {
   });
   const [assetForm, setAssetForm] = useState<{
     draftId: string;
-    assetId: string;
+    assetName: string;
     kind: ChallengePrivateAssetKind;
     required: boolean;
     file: File | null;
   }>({
     draftId: "",
-    assetId: "official-seed-config",
+    assetName: "official-seed-config",
     kind: "private_seeds",
     required: true,
     file: null,
   });
   const [ownerForm, setOwnerForm] = useState({
-    challengeId: "matrix-multiplication",
+    challengeName: "matrix-multiplication",
     target: "linux-arm64-cpu",
     shortlistText: JSON.stringify({ agent_ids_to_add: ["agent_..."] }, null, 2),
   });
@@ -242,7 +242,7 @@ export function CreatorConsole() {
       await uploadPrivateAsset(
         assetForm.draftId.trim(),
         {
-          asset_id: assetForm.assetId.trim(),
+          asset_name: assetForm.assetName.trim(),
           kind: assetForm.kind,
           required: assetForm.required,
           asset_base64: await fileToBase64(assetForm.file),
@@ -252,7 +252,7 @@ export function CreatorConsole() {
       const refreshed = await getChallengeDraft(assetForm.draftId.trim());
       rememberDraft(refreshed.id);
       setDraft(refreshed);
-      setMessage(`Uploaded private asset ${assetForm.assetId}.`);
+      setMessage(`Uploaded private asset ${assetForm.assetName}.`);
     } catch (e) {
       setError(creatorErrorMessage(e));
     } finally {
@@ -261,26 +261,26 @@ export function CreatorConsole() {
   };
 
   const loadOwnerSurfaces = async () => {
-    if (!ownerForm.challengeId.trim()) {
-      setError("Enter a published challenge id.");
+    if (!ownerForm.challengeName.trim()) {
+      setError("Enter a published challenge name.");
       return;
     }
 
     setLoading(true);
     setError(null);
     try {
-      const challengeId = ownerForm.challengeId.trim();
+      const challengeName = ownerForm.challengeName.trim();
       const target = ownerForm.target.trim() || undefined;
       const [statsResponse, participantsResponse, shortlistResponse] =
         await Promise.all([
-          getCreatorChallengeStats(challengeId, target),
-          getCreatorChallengeParticipants(challengeId, target),
-          getChallengeShortlist(challengeId),
+          getCreatorChallengeStats(challengeName, target),
+          getCreatorChallengeParticipants(challengeName, target),
+          getChallengeShortlist(challengeName),
         ]);
       setStats(statsResponse);
       setParticipants(participantsResponse);
       setShortlist(shortlistResponse);
-      setMessage(`Loaded owner surfaces for ${challengeId}.`);
+      setMessage(`Loaded owner surfaces for ${challengeName}.`);
     } catch (e) {
       setError(creatorErrorMessage(e));
     } finally {
@@ -294,8 +294,8 @@ export function CreatorConsole() {
       setError("Refresh the creator session before uploading a shortlist.");
       return;
     }
-    if (!ownerForm.challengeId.trim()) {
-      setError("Enter a published challenge id.");
+    if (!ownerForm.challengeName.trim()) {
+      setError("Enter a published challenge name.");
       return;
     }
 
@@ -316,14 +316,14 @@ export function CreatorConsole() {
     setLoading(true);
     setError(null);
     try {
-      const challengeId = ownerForm.challengeId.trim();
+      const challengeName = ownerForm.challengeName.trim();
       const response = await createChallengeShortlistRevision(
-        challengeId,
+        challengeName,
         payload,
         csrfToken,
       );
       setShortlistRevision(response);
-      setShortlist(await getChallengeShortlist(challengeId));
+      setShortlist(await getChallengeShortlist(challengeName));
       setMessage(`Uploaded shortlist revision ${response.id}.`);
     } catch (e) {
       setError(creatorErrorMessage(e));
@@ -477,9 +477,11 @@ export function CreatorConsole() {
               required
             />
             <TextInput
-              label="Asset ID"
-              value={assetForm.assetId}
-              onChange={(assetId) => setAssetForm({ ...assetForm, assetId })}
+              label="Asset Name"
+              value={assetForm.assetName}
+              onChange={(assetName) =>
+                setAssetForm({ ...assetForm, assetName })
+              }
               required
             />
             <label className="flex flex-col gap-1">
@@ -549,10 +551,10 @@ export function CreatorConsole() {
               title="Owner statistics"
             />
             <TextInput
-              label="Published challenge ID"
-              value={ownerForm.challengeId}
-              onChange={(challengeId) =>
-                setOwnerForm({ ...ownerForm, challengeId })
+              label="Published challenge name"
+              value={ownerForm.challengeName}
+              onChange={(challengeName) =>
+                setOwnerForm({ ...ownerForm, challengeName })
               }
               required
             />
@@ -724,7 +726,7 @@ function DraftDetail({ draft }: { draft: ChallengeDraftResponse | null }) {
 
         <dl className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 text-[var(--text-body-sm)]">
           <Metadata label="Draft ID" value={draft.id} />
-          <Metadata label="Challenge ID" value={draft.challenge_id} />
+          <Metadata label="Challenge Name" value={draft.challenge_name} />
           <Metadata label="Creator" value={draft.creator_github_login} />
           <Metadata label="Commit" value={shortHash(draft.commit_sha)} />
           <Metadata
@@ -741,7 +743,7 @@ function DraftDetail({ draft }: { draft: ChallengeDraftResponse | null }) {
           />
           <Metadata
             label="Published challenge"
-            value={draft.published_challenge_id ?? "—"}
+            value={draft.published_challenge_name ?? "—"}
           />
         </dl>
       </div>
@@ -772,7 +774,7 @@ function DraftDetail({ draft }: { draft: ChallengeDraftResponse | null }) {
               {draft.private_assets.map((asset) => (
                 <tr key={asset.id}>
                   <td>
-                    <div className="font-mono">{asset.asset_id}</div>
+                    <div className="font-mono">{asset.asset_name}</div>
                     <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
                       {asset.required ? "required" : "optional"}
                     </div>

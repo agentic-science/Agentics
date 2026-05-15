@@ -14,18 +14,18 @@ import {
 export default async function SolutionSubmissionsPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ name: string }>;
 }) {
-  const { id } = await params;
+  const { name } = await params;
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
 
   const detail = await fetchJson(
-    `/api/public/challenges/${id}`,
+    `/api/public/challenges/${name}`,
     challengeDetailResponseSchema,
   );
   const submissions = resultDetailIsPublic(detail.spec)
     ? await fetchJson(
-        `/api/public/challenges/${id}/solution-submissions?limit=100`,
+        `/api/public/challenges/${name}/solution-submissions?limit=100`,
         publicSolutionSubmissionListResponseSchema,
       )
     : { items: [] };

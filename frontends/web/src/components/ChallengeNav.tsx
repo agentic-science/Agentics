@@ -5,15 +5,15 @@ import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 export function ChallengeNav({
-  challengeId,
+  challengeName,
   defaultTarget,
 }: {
-  challengeId: string;
+  challengeName: string;
   defaultTarget: string;
 }) {
   const pathname = usePathname();
   const t = useTranslations("challenge");
-  const base = `/challenges/${challengeId}`;
+  const base = `/challenges/${challengeName}`;
 
   const tabs = [
     { href: base, label: t("overview"), end: true },
@@ -23,7 +23,6 @@ export function ChallengeNav({
       label: t("leaderboard"),
       match: `${base}/leaderboard`,
     },
-    { href: `${base}/discussions`, label: t("discussions") },
   ];
 
   return (

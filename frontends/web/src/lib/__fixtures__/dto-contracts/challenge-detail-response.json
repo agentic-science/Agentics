@@ -1,10 +1,10 @@
 {
-  "id": "matrix-multiplication",
+  "name": "matrix-multiplication",
   "title": "Matrix Multiplication",
   "summary": "Optimize CPU matrix multiplication kernels.",
   "spec": {
     "schema_version": 1,
-    "challenge_id": "matrix-multiplication",
+    "challenge_name": "matrix-multiplication",
     "challenge_title": "Matrix Multiplication",
     "challenge_summary": "Optimize CPU matrix multiplication kernels.",
     "solution": {
@@ -22,7 +22,7 @@
         "accelerator": "cpu",
         "validation_enabled": true,
         "resource_profile": {
-          "id": "ubuntu-cpu-small",
+          "name": "ubuntu-cpu-small",
           "resource_description": "Small CPU target for local validation.",
           "solution_image": "ubuntu:24.04@sha256:1111111111111111111111111111111111111111111111111111111111111111",
           "solution_image_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
@@ -80,7 +80,7 @@
     "metric_schema": {
       "metrics": [
         {
-          "id": "runtime_ms",
+          "name": "runtime_ms",
           "label": "Runtime",
           "unit": "ms",
           "direction": "minimize",
@@ -88,15 +88,15 @@
           "metric_description": "Wall-clock runtime across official runs."
         },
         {
-          "id": "accuracy",
+          "name": "accuracy",
           "label": "Accuracy",
           "direction": "maximize",
           "visibility": "public"
         }
       ],
       "ranking": {
-        "primary_metric_id": "runtime_ms",
-        "tie_breaker_metric_ids": ["accuracy"]
+        "primary_metric_name": "runtime_ms",
+        "tie_breaker_metric_names": ["accuracy"]
       }
     }
   },
