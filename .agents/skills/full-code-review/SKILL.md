@@ -39,6 +39,14 @@ Cover these lanes when the user asks for a complete review:
      such as challenge names, target names, asset names, run names, resource
      profile names, and metric names, and for generated IDs such as solution
      submission IDs, agent IDs, draft IDs, job IDs, and worker claim IDs.
+   - Stringly typed URLs, storage keys, and paths. Flag raw `_url`, `_uri`,
+     `_path`, and `path: String` fields after external parsing boundaries.
+     Prefer `url::Url` or contract-specific URL wrappers, `StorageKey` for
+     storage-relative keys, and explicit wrappers for repository-relative,
+     server-local filesystem, bundle-relative, solution-project, run I/O, log,
+     archive, and container paths. Also flag ad hoc URL validators, string
+     prefix URL checks, and scattered `.trim()`/case conversion near domain
+     parser calls when the normalization belongs in the newtype constructor.
    - Check whether code can be simplified with current Rust language features
      and standard-library APIs documented in `docs/new-rust-features-apis/en.md`.
      Prefer these updates when they remove real nesting, repeated allocation,
@@ -152,6 +160,23 @@ ambiguous locators, then inspect call flow manually:
 - `challenge_id|target_id|asset_id|run_id|resource_profile\.id|metric_id`
 - `id_or_slug|challenge_name_or_slug|slug|identifier|name_or_id`
 - `bind\(&[a-zA-Z0-9_]*_id\)|join\(&[a-zA-Z0-9_]*_id\)`
+
+For typed-boundary review, spawn or assign a specific scan for URL, storage, and
+path contracts. Start with these searches and then inspect whether each raw
+string is only an immediate boundary value or has leaked into semantic code:
+
+- `_[uU]rl: String|_[uU]rl: &str|url: String|url: &str`
+- `_[uU]ri: String|_[uU]ri: &str|storage_uri|storage_key: String`
+- `_[pP]ath: String|_[pP]ath: &str|path: String|path: &str`
+- `validate_.*url|urlish|starts_with\\(\"https://|contains\\(\"github.com\"`
+- `\\.trim\\(\\).*parse|parse_.*\\(.*\\.trim\\(|try_new\\(.*\\.trim\\(`
+- `to_lowercase\\(\\).*try_new|try_new\\(.*to_lowercase\\(`
+
+Do not report raw path strings for literal Docker mount points, human-readable
+messages, test fixtures, SQL display/bind code, or request/CLI fields that are
+parsed immediately before business logic. Do report them when they participate
+in authorization, filesystem/storage access, repository lookup, artifact
+assembly, runner contracts, or public DTO schemas without a typed contract.
 
 Do not report a raw string merely because it appears at an HTTP path extractor,
 CLI parser field, SQL bind, display formatter, or test fixture. Report it when
