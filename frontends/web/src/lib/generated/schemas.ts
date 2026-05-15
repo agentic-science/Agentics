@@ -1204,6 +1204,106 @@ export const challengeShortlistRevisionResponseSchema = z
   .strict()
   .describe("Persisted shortlist revision response.");
 
+export const createChallengeDraftRequestSchema = z
+  .object({
+    repo_url: z
+      .string()
+      .regex(
+        /^(https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?|git@github\.com:[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\.git)$/,
+      ),
+    pr_number: z.number().int(),
+    pr_url: z
+      .string()
+      .url()
+      .regex(
+        /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/[0-9]+$/,
+      ),
+    commit_sha: z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/),
+    challenge_path: z.string().regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+    pr_author_github_user_id: z.number().int(),
+    manifest: z
+      .object({
+        schema_version: z.number().int(),
+        request: z
+          .enum(["new_challenge", "archive_challenge"])
+          .describe("Lifecycle request represented by a public manifest."),
+        challenge_name: z
+          .string()
+          .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+          .min(3)
+          .max(63),
+        title: z.string(),
+        summary: z.string(),
+        readme_path: z
+          .string()
+          .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+        bundle_path: z
+          .string()
+          .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+          .optional(),
+        archive: z
+          .object({ reason: z.string() })
+          .strict()
+          .describe("Public archive request metadata.")
+          .optional(),
+        private_assets: z.array(
+          z
+            .object({
+              asset_name: z
+                .string()
+                .regex(/^[A-Za-z0-9_.-]+$/)
+                .min(1),
+              kind: z
+                .enum([
+                  "private_benchmark_data",
+                  "private_scorer_package",
+                  "private_seeds",
+                  "private_reference_outputs",
+                ])
+                .describe(
+                  "Supported private asset classes for challenge creation.",
+                ),
+              required: z.boolean(),
+              asset_note: z.string().optional(),
+            })
+            .strict()
+            .describe(
+              "Private asset that must be uploaded directly to Agentics for a draft.",
+            ),
+        ),
+        ci: z
+          .object({
+            validate_manifest: z.boolean(),
+            validate_public_bundle: z.boolean(),
+            smoke_test_public_validation: z.boolean(),
+          })
+          .strict()
+          .describe("CI expectations for the public challenge repository."),
+      })
+      .strict()
+      .describe(
+        "Public manifest submitted through the reviewed challenge repository.",
+      ),
+  })
+  .strict()
+  .describe(
+    "Creator-authenticated request for binding a public GitHub PR to a draft.",
+  );
+
+export const createChallengeShortlistRevisionRequestSchema = z
+  .object({
+    agent_ids_to_add: z.array(
+      z
+        .string()
+        .uuid()
+        .regex(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+        ),
+    ),
+  })
+  .strict()
+  .describe("Delta-only shortlist upload request.");
+
 export const creatorChallengeParticipantsResponseSchema = z
   .object({
     challenge_name: z
@@ -2636,6 +2736,28 @@ export const solutionSubmissionResultReportResponseSchema = z
     "Redacted or owner-visible result report for a solution submission.",
   );
 
+export const uploadChallengePrivateAssetRequestSchema = z
+  .object({
+    asset_name: z
+      .string()
+      .regex(/^[A-Za-z0-9_.-]+$/)
+      .min(1),
+    kind: z
+      .enum([
+        "private_benchmark_data",
+        "private_scorer_package",
+        "private_seeds",
+        "private_reference_outputs",
+      ])
+      .describe("Supported private asset classes for challenge creation."),
+    required: z.boolean(),
+    asset_base64: z.string(),
+  })
+  .strict()
+  .describe(
+    "Payload for uploading a private benchmark asset to Agentics storage.",
+  );
+
 export type AdminCapacityResponse = z.infer<typeof adminCapacityResponseSchema>;
 export type AdminChallengeListResponse = z.infer<
   typeof adminChallengeListResponseSchema
@@ -2668,6 +2790,12 @@ export type ChallengeShortlistResponse = z.infer<
 >;
 export type ChallengeShortlistRevisionResponse = z.infer<
   typeof challengeShortlistRevisionResponseSchema
+>;
+export type CreateChallengeDraftRequest = z.infer<
+  typeof createChallengeDraftRequestSchema
+>;
+export type CreateChallengeShortlistRevisionRequest = z.infer<
+  typeof createChallengeShortlistRevisionRequestSchema
 >;
 export type CreatorChallengeParticipantsResponse = z.infer<
   typeof creatorChallengeParticipantsResponseSchema
@@ -2703,6 +2831,9 @@ export type SolutionSubmissionResponse = z.infer<
 >;
 export type SolutionSubmissionResultReportResponse = z.infer<
   typeof solutionSubmissionResultReportResponseSchema
+>;
+export type UploadChallengePrivateAssetRequest = z.infer<
+  typeof uploadChallengePrivateAssetRequestSchema
 >;
 export type AdminChallengeListItem =
   AdminChallengeListResponse["items"][number];

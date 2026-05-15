@@ -4,6 +4,8 @@ import {
   type ChallengePrivateAssetResponse,
   type ChallengeShortlistResponse,
   type ChallengeShortlistRevisionResponse,
+  type CreateChallengeDraftRequest,
+  type CreateChallengeShortlistRevisionRequest,
   type CreatorChallengeParticipantsResponse,
   type CreatorChallengeStatsResponse,
   type CreatorMeResponse,
@@ -12,12 +14,16 @@ import {
   challengePrivateAssetResponseSchema,
   challengeShortlistResponseSchema,
   challengeShortlistRevisionResponseSchema,
+  createChallengeDraftRequestSchema,
+  createChallengeShortlistRevisionRequestSchema,
   creatorChallengeParticipantsResponseSchema,
   creatorChallengeStatsResponseSchema,
   creatorMeResponseSchema,
   creatorSessionResponseSchema,
   type GithubOauthLoginResponse,
   githubOauthLoginResponseSchema,
+  type UploadChallengePrivateAssetRequest,
+  uploadChallengePrivateAssetRequestSchema,
 } from "@/lib/schemas";
 
 const CREATOR_CSRF_STORAGE_KEY = "agentics.creator.csrf_token";
@@ -27,31 +33,19 @@ const DEFAULT_CSRF_COOKIE_NAME = "agentics_csrf";
 export type ChallengeCreationManifest = ChallengeDraftResponse["manifest"];
 /** Describes the challenge private asset kind shape used by this module. */
 export type ChallengePrivateAssetKind =
-  ChallengeDraftResponse["private_assets"][number]["kind"];
+  UploadChallengePrivateAssetRequest["kind"];
 
-/** Describes the create challenge draft request shape used by this module. */
-export interface CreateChallengeDraftRequest {
-  repo_url: string;
-  pr_number: number;
-  pr_url: string;
-  commit_sha: string;
-  challenge_path: string;
-  pr_author_github_user_id: number;
-  manifest: ChallengeCreationManifest;
-}
+export type {
+  CreateChallengeDraftRequest,
+  CreateChallengeShortlistRevisionRequest,
+  UploadChallengePrivateAssetRequest,
+};
 
-/** Describes the upload challenge private asset request shape used by this module. */
-export interface UploadChallengePrivateAssetRequest {
-  asset_name: string;
-  kind: ChallengePrivateAssetKind;
-  required: boolean;
-  asset_base64: string;
-}
-
-/** Describes the challenge shortlist revision request shape used by this module. */
-export interface ChallengeShortlistRevisionRequest {
-  agent_ids_to_add: string[];
-}
+export {
+  createChallengeDraftRequestSchema,
+  createChallengeShortlistRevisionRequestSchema,
+  uploadChallengePrivateAssetRequestSchema,
+};
 
 /** Error thrown when a creator-session API request fails. */
 export class CreatorApiError extends Error {
@@ -188,7 +182,7 @@ export async function getChallengeShortlist(
 /** Creates challenge shortlist revision through the API. */
 export async function createChallengeShortlistRevision(
   challengeName: string,
-  request: ChallengeShortlistRevisionRequest,
+  request: CreateChallengeShortlistRevisionRequest,
   csrfToken: string,
 ): Promise<ChallengeShortlistRevisionResponse> {
   return creatorFetchJson(

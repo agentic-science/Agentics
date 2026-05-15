@@ -12,15 +12,16 @@ use shared::models::challenge::{
 };
 use shared::models::challenge_creation::{
     ChallengeDraftCleanupResponse, ChallengeDraftListResponse, ChallengeDraftResponse,
-    ChallengePrivateAssetResponse,
+    ChallengePrivateAssetResponse, CreateChallengeDraftRequest, UploadChallengePrivateAssetRequest,
 };
 use shared::models::request::{
     AdminCapacityResponse, AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse,
     ChallengeShortlistResponse, ChallengeShortlistRevisionResponse,
-    CreatorChallengeParticipantsResponse, CreatorChallengeStatsResponse, DisableAgentResponse,
-    EvaluationJobResponse, HideSolutionSubmissionResponse, LeaderboardResponse,
-    PublicSolutionSubmissionListResponse, RankingContextResponse, ScoreDistributionResponse,
-    SolutionSubmissionArtifactResponse, SolutionSubmissionLogsResponse, SolutionSubmissionResponse,
+    CreateChallengeShortlistRevisionRequest, CreatorChallengeParticipantsResponse,
+    CreatorChallengeStatsResponse, DisableAgentResponse, EvaluationJobResponse,
+    HideSolutionSubmissionResponse, LeaderboardResponse, PublicSolutionSubmissionListResponse,
+    RankingContextResponse, ScoreDistributionResponse, SolutionSubmissionArtifactResponse,
+    SolutionSubmissionLogsResponse, SolutionSubmissionResponse,
     SolutionSubmissionResultReportResponse,
 };
 
@@ -56,6 +57,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     insert_schema::<ChallengeShortlistRevisionResponse>(
         &mut schemas,
         "challengeShortlistRevisionResponseSchema",
+    )?;
+    insert_schema::<CreateChallengeDraftRequest>(
+        &mut schemas,
+        "createChallengeDraftRequestSchema",
+    )?;
+    insert_schema::<CreateChallengeShortlistRevisionRequest>(
+        &mut schemas,
+        "createChallengeShortlistRevisionRequestSchema",
+    )?;
+    insert_schema::<UploadChallengePrivateAssetRequest>(
+        &mut schemas,
+        "uploadChallengePrivateAssetRequestSchema",
     )?;
     insert_schema::<PublishChallengeResponse>(&mut schemas, "publishChallengeResponseSchema")?;
     insert_schema::<CreatorMeResponse>(&mut schemas, "creatorMeResponseSchema")?;

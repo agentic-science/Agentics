@@ -93,14 +93,15 @@ describe("CreatorConsole", () => {
       official_run_count: 0,
     });
     createChallengeShortlistRevisionMock.mockResolvedValue({
-      id: "revision-1",
+      id: "33333333-3333-4333-8333-333333333333",
       challenge_name: "matrix-multiplication",
-      uploader_agent_id: "agent-creator",
+      uploader_agent_id: "11111111-1111-4111-8111-111111111111",
       requested_count: 1,
       added_count: 1,
       sha256:
         "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-      storage_key: "challenge-shortlists/matrix-multiplication/revision-1.json",
+      storage_key:
+        "challenge-shortlists/matrix-multiplication/33333333-3333-4333-8333-333333333333.json",
       created_at: "2026-05-15T00:00:00Z",
     });
     uploadPrivateAssetMock.mockRejectedValue(new Error("not configured"));
@@ -128,7 +129,7 @@ describe("CreatorConsole", () => {
   it("creates a draft with the loaded creator identity and CSRF token", async () => {
     readCreatorCsrfTokenMock.mockReturnValue("csrf-token");
     getCreatorMeMock.mockResolvedValue({
-      agent_id: "agent-creator",
+      agent_id: "11111111-1111-4111-8111-111111111111",
       github_user_id: 123,
       github_login: "octocat",
     });
@@ -155,10 +156,12 @@ describe("CreatorConsole", () => {
       ),
     );
     expect(
-      view.getByText("Challenge draft created: draft-matrix-1"),
+      view.getByText(
+        "Challenge draft created: 44444444-4444-4444-8444-444444444444",
+      ),
     ).toBeTruthy();
     expect(window.localStorage.getItem("agentics.creator.last_draft_id")).toBe(
-      "draft-matrix-1",
+      "44444444-4444-4444-8444-444444444444",
     );
   });
 });
@@ -179,11 +182,11 @@ function fillDraftRequiredFields(view: RenderResult) {
 }
 
 const challengeDraftResponse = {
-  id: "draft-matrix-1",
+  id: "44444444-4444-4444-8444-444444444444",
   challenge_name: "matrix-multiplication",
   request: "new_challenge",
   status: "draft",
-  creator_agent_id: "agent-creator",
+  creator_agent_id: "11111111-1111-4111-8111-111111111111",
   creator_github_user_id: 123,
   creator_github_login: "octocat",
   repo_url: "https://github.com/agentics-reifying/agentics-challenges",

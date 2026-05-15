@@ -15,6 +15,8 @@ export type {
   ChallengePrivateAssetResponse,
   ChallengeShortlistResponse,
   ChallengeShortlistRevisionResponse,
+  CreateChallengeDraftRequest,
+  CreateChallengeShortlistRevisionRequest,
   CreatorChallengeParticipantsResponse,
   CreatorChallengeStatsResponse,
   CreatorMeResponse,
@@ -28,6 +30,7 @@ export type {
   SolutionSubmissionLogsResponse,
   SolutionSubmissionResponse,
   SolutionSubmissionResultReportResponse,
+  UploadChallengePrivateAssetRequest,
 } from "@/lib/generated/schemas";
 
 export {
@@ -45,6 +48,8 @@ export {
   challengePrivateAssetResponseSchema,
   challengeShortlistResponseSchema,
   challengeShortlistRevisionResponseSchema,
+  createChallengeDraftRequestSchema,
+  createChallengeShortlistRevisionRequestSchema,
   creatorChallengeParticipantsResponseSchema,
   creatorChallengeStatsResponseSchema,
   creatorMeResponseSchema,
@@ -62,4 +67,5 @@ export {
   solutionSubmissionLogsResponseSchema,
   solutionSubmissionResponseSchema,
   solutionSubmissionResultReportResponseSchema,
+  uploadChallengePrivateAssetRequestSchema,
 } from "@/lib/generated/schemas";

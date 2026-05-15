@@ -39,6 +39,11 @@ const typeAliases = new Map([
     "challengeShortlistRevisionResponseSchema",
     "ChallengeShortlistRevisionResponse",
   ],
+  ["createChallengeDraftRequestSchema", "CreateChallengeDraftRequest"],
+  [
+    "createChallengeShortlistRevisionRequestSchema",
+    "CreateChallengeShortlistRevisionRequest",
+  ],
   [
     "creatorChallengeParticipantsResponseSchema",
     "CreatorChallengeParticipantsResponse",
@@ -63,6 +68,10 @@ const typeAliases = new Map([
   [
     "solutionSubmissionResultReportResponseSchema",
     "SolutionSubmissionResultReportResponse",
+  ],
+  [
+    "uploadChallengePrivateAssetRequestSchema",
+    "UploadChallengePrivateAssetRequest",
   ],
 ]);
 

@@ -293,11 +293,8 @@ describe("frontend API schemas", () => {
             best_solution_submission_id: "11111111-1111-4111-8111-111111111111",
             best_rank_score: -42,
             rank_score: -42,
-            aggregate_metrics: [
-              { metric_name: "latency_ms", value: 42 },
-              { metric_name: "score", value: 0.9 },
-            ],
-            official_metrics: [{ metric_name: "latency_ms", value: 42 }],
+            aggregate_metrics: [],
+            official_metrics: [],
             official_score: -42,
             updated_at: "2026-04-28T00:00:00Z",
           },

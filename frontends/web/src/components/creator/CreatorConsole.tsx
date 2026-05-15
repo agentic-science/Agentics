@@ -17,7 +17,9 @@ import {
   type CreateChallengeDraftRequest,
   CreatorApiError,
   createChallengeDraft,
+  createChallengeDraftRequestSchema,
   createChallengeShortlistRevision,
+  createChallengeShortlistRevisionRequestSchema,
   getChallengeDraft,
   getChallengeShortlist,
   getCreatorChallengeParticipants,
@@ -25,6 +27,7 @@ import {
   getCreatorMe,
   readCreatorCsrfToken,
   startGithubLogin,
+  uploadChallengePrivateAssetRequestSchema,
   uploadPrivateAsset,
 } from "@/lib/creatorApi";
 import type {
@@ -54,6 +57,11 @@ const defaultManifest = JSON.stringify(
         required: true,
       },
     ],
+    ci: {
+      validate_manifest: true,
+      validate_public_bundle: true,
+      smoke_test_public_validation: true,
+    },
   },
   null,
   2,
@@ -96,7 +104,11 @@ export function CreatorConsole() {
   const [ownerForm, setOwnerForm] = useState({
     challengeName: "matrix-multiplication",
     target: "linux-arm64-cpu",
-    shortlistText: JSON.stringify({ agent_ids_to_add: ["agent_..."] }, null, 2),
+    shortlistText: JSON.stringify(
+      { agent_ids_to_add: ["11111111-1111-4111-8111-111111111111"] },
+      null,
+      2,
+    ),
   });
   const [stats, setStats] = useState<CreatorChallengeStatsResponse | null>(
     null,
@@ -184,7 +196,7 @@ export function CreatorConsole() {
       return;
     }
 
-    const request: CreateChallengeDraftRequest = {
+    const request = {
       repo_url: draftForm.repoUrl.trim(),
       pr_number: prNumber,
       pr_url: draftForm.prUrl.trim(),
@@ -193,11 +205,21 @@ export function CreatorConsole() {
       pr_author_github_user_id: creator.github_user_id,
       manifest,
     };
+    const parsedRequest = createChallengeDraftRequestSchema.safeParse(request);
+    if (!parsedRequest.success) {
+      setError(
+        parsedRequest.error.issues[0]?.message ?? "Invalid draft request.",
+      );
+      return;
+    }
 
     setLoading(true);
     setError(null);
     try {
-      const response = await createChallengeDraft(request, csrfToken);
+      const response = await createChallengeDraft(
+        parsedRequest.data as CreateChallengeDraftRequest,
+        csrfToken,
+      );
       rememberDraft(response.id);
       setDraft(response);
       setMessage(`Challenge draft created: ${response.id}`);
@@ -245,14 +267,24 @@ export function CreatorConsole() {
     setLoading(true);
     setError(null);
     try {
+      const request = {
+        asset_name: assetForm.assetName.trim(),
+        kind: assetForm.kind,
+        required: assetForm.required,
+        asset_base64: await fileToBase64(assetForm.file),
+      };
+      const parsedRequest =
+        uploadChallengePrivateAssetRequestSchema.safeParse(request);
+      if (!parsedRequest.success) {
+        setError(
+          parsedRequest.error.issues[0]?.message ??
+            "Invalid private asset request.",
+        );
+        return;
+      }
       await uploadPrivateAsset(
         assetForm.draftId.trim(),
-        {
-          asset_name: assetForm.assetName.trim(),
-          kind: assetForm.kind,
-          required: assetForm.required,
-          asset_base64: await fileToBase64(assetForm.file),
-        },
+        parsedRequest.data,
         csrfToken,
       );
       const refreshed = await getChallengeDraft(assetForm.draftId.trim());
@@ -307,17 +339,19 @@ export function CreatorConsole() {
       return;
     }
 
-    let payload: { agent_ids_to_add: string[] };
+    let payload: unknown;
     try {
-      payload = JSON.parse(ownerForm.shortlistText) as {
-        agent_ids_to_add: string[];
-      };
+      payload = JSON.parse(ownerForm.shortlistText);
     } catch (e) {
       setError(creatorErrorMessage(e));
       return;
     }
-    if (!Array.isArray(payload.agent_ids_to_add)) {
-      setError("Shortlist JSON must include agent_ids_to_add as an array.");
+    const parsedPayload =
+      createChallengeShortlistRevisionRequestSchema.safeParse(payload);
+    if (!parsedPayload.success) {
+      setError(
+        parsedPayload.error.issues[0]?.message ?? "Invalid shortlist JSON.",
+      );
       return;
     }
 
@@ -327,7 +361,7 @@ export function CreatorConsole() {
       const challengeName = ownerForm.challengeName.trim();
       const response = await createChallengeShortlistRevision(
         challengeName,
-        payload,
+        parsedPayload.data,
         csrfToken,
       );
       setShortlistRevision(response);
