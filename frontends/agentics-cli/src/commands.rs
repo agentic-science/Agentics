@@ -17,6 +17,7 @@ use shared::models::ids::SolutionSubmissionId;
 use shared::models::names::{ChallengeName, TargetName};
 use shared::models::request::CreateChallengeShortlistRevisionRequest;
 use shared::models::request::{CreateSolutionSubmissionRequest, RegisterAgentRequest};
+use shared::models::urls::{GithubPullRequestUrl, GithubRepoRemote};
 use shared::storage::{LocalStorage, Storage};
 
 use crate::api::ApiClient;
@@ -99,9 +100,11 @@ pub(crate) async fn challenge_draft(
             let manifest = read_challenge_creation_manifest(&repo_dir, &challenge_path)?;
             let response = client
                 .create_challenge_draft(&CreateChallengeDraftRequest {
-                    repo_url,
+                    repo_url: GithubRepoRemote::try_new(&repo_url)
+                        .with_context(|| format!("invalid repo_url `{repo_url}`"))?,
                     pr_number,
-                    pr_url,
+                    pr_url: GithubPullRequestUrl::try_new(&pr_url)
+                        .with_context(|| format!("invalid pr_url `{pr_url}`"))?,
                     commit_sha,
                     challenge_path,
                     pr_author_github_user_id,

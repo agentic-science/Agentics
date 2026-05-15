@@ -64,9 +64,9 @@ pub async fn create_challenge_draft(
             creator_agent_id: creator.agent_id.clone(),
             creator_github_user_id: creator.github_user_id,
             creator_github_login: creator.github_login.clone(),
-            repo_url: body.repo_url.trim().to_string(),
+            repo_url: body.repo_url,
             pr_number: body.pr_number,
-            pr_url: body.pr_url.trim().to_string(),
+            pr_url: body.pr_url,
             commit_sha: body.commit_sha.trim().to_string(),
             challenge_path: body.challenge_path.trim().to_string(),
             manifest_sha256,
@@ -597,27 +597,7 @@ fn map_unique_conflict(error: AppError) -> AppError {
 }
 
 fn validate_github_pr_metadata(body: &CreateChallengeDraftRequest) -> Result<()> {
-    validate_urlish(&body.repo_url, "repo_url")?;
-    validate_urlish(&body.pr_url, "pr_url")?;
     validate_commit_sha(&body.commit_sha)?;
-    Ok(())
-}
-
-fn validate_urlish(value: &str, field: &str) -> Result<()> {
-    let value = value.trim();
-    if value.chars().any(|c| c.is_whitespace() || c.is_control()) {
-        return Err(AppError::BadRequest(format!(
-            "{field} must not contain whitespace or control characters"
-        )));
-    }
-    if !(value.starts_with("https://")
-        || value.starts_with("http://")
-        || value.starts_with("git@github.com:"))
-    {
-        return Err(AppError::BadRequest(format!(
-            "{field} must be an HTTP(S) URL or GitHub SSH URL"
-        )));
-    }
     Ok(())
 }
 

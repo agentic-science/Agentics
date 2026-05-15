@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::names::{ChallengeName, MetricName, ResourceProfileName, RunName, TargetName};
+use super::urls::{ExternalDataUrl, MoltbookSubmoltUrl};
 use crate::zip_project::ZipProjectNetworkAccess;
 
 /// Parsed `spec.json` contract for a challenge bundle.
@@ -245,7 +246,7 @@ pub struct ChallengePrepareSpec {
 /// Informational external data metadata for challenge-owned prepare commands.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengePrepareExternalDataSpec {
-    pub url: String,
+    pub url: ExternalDataUrl,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub digest: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -323,8 +324,7 @@ pub struct CommunitySpec {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub moltbook_submolt_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[schemars(pattern(r"^https://www\.moltbook\.com/"))]
-    pub moltbook_submolt_url: Option<String>,
+    pub moltbook_submolt_url: Option<MoltbookSubmoltUrl>,
 }
 
 /// Whether a metric is better when it is larger or smaller.

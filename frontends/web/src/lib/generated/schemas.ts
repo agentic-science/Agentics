@@ -411,7 +411,10 @@ export const challengeDetailResponseSchema = z
                   .array(
                     z
                       .object({
-                        url: z.string(),
+                        url: z
+                          .string()
+                          .url()
+                          .regex(/^https:\/\/.+/),
                         digest: z.string().optional(),
                         version: z.string().optional(),
                       })
@@ -458,7 +461,10 @@ export const challengeDetailResponseSchema = z
                   .array(
                     z
                       .object({
-                        url: z.string(),
+                        url: z
+                          .string()
+                          .url()
+                          .regex(/^https:\/\/.+/),
                         digest: z.string().optional(),
                         version: z.string().optional(),
                       })
@@ -526,7 +532,8 @@ export const challengeDetailResponseSchema = z
             moltbook_submolt_name: z.string().optional(),
             moltbook_submolt_url: z
               .string()
-              .regex(/^https:\/\/www\.moltbook\.com\//)
+              .url()
+              .regex(/^https:\/\/www\.moltbook\.com\/submolts\/.+/)
               .optional(),
           })
           .strict()
@@ -627,9 +634,18 @@ export const challengeDraftListResponseSchema = z
           creator_agent_id: z.string(),
           creator_github_user_id: z.number().int(),
           creator_github_login: z.string(),
-          repo_url: z.string(),
+          repo_url: z
+            .string()
+            .regex(
+              /^(https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?|git@github\.com:[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\.git)$/,
+            ),
           pr_number: z.number().int(),
-          pr_url: z.string(),
+          pr_url: z
+            .string()
+            .url()
+            .regex(
+              /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/[0-9]+$/,
+            ),
           commit_sha: z.string(),
           challenge_path: z.string(),
           manifest_sha256: z.string(),
@@ -787,9 +803,18 @@ export const challengeDraftResponseSchema = z
     creator_agent_id: z.string(),
     creator_github_user_id: z.number().int(),
     creator_github_login: z.string(),
-    repo_url: z.string(),
+    repo_url: z
+      .string()
+      .regex(
+        /^(https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?|git@github\.com:[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\.git)$/,
+      ),
     pr_number: z.number().int(),
-    pr_url: z.string(),
+    pr_url: z
+      .string()
+      .url()
+      .regex(
+        /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/[0-9]+$/,
+      ),
     commit_sha: z.string(),
     challenge_path: z.string(),
     manifest_sha256: z.string(),

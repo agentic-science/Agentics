@@ -865,16 +865,6 @@ fn validate_prepare_spec(prepare: &ChallengePrepareSpec, field: &str) -> Result<
     }
     for (index, data) in prepare.external_data.iter().enumerate() {
         let data_field = format!("{field}.external_data[{index}]");
-        require_non_empty(&data.url, &format!("{data_field}.url"))?;
-        if data
-            .url
-            .chars()
-            .any(|c| c.is_whitespace() || c.is_control())
-        {
-            return Err(AppError::Validation(format!(
-                "{data_field}.url must not contain whitespace or control characters"
-            )));
-        }
         if let Some(digest) = &data.digest {
             require_non_empty(digest, &format!("{data_field}.digest"))?;
         }
@@ -1003,10 +993,7 @@ fn validate_community(spec: &ChallengeBundleSpec) -> Result<()> {
         .moltbook_submolt_name
         .as_deref()
         .is_some_and(|value| !value.trim().is_empty());
-    let has_url = community
-        .moltbook_submolt_url
-        .as_deref()
-        .is_some_and(|value| !value.trim().is_empty());
+    let has_url = community.moltbook_submolt_url.as_ref().is_some();
     if !has_name && !has_url {
         return Err(AppError::Validation(
             "community must declare moltbook_submolt_name or moltbook_submolt_url".to_string(),
@@ -1016,10 +1003,6 @@ fn validate_community(spec: &ChallengeBundleSpec) -> Result<()> {
     if let Some(name) = &community.moltbook_submolt_name {
         validate_moltbook_submolt_name(name)?;
     }
-    if let Some(url) = &community.moltbook_submolt_url {
-        validate_moltbook_submolt_url(url)?;
-    }
-
     Ok(())
 }
 
@@ -1037,23 +1020,6 @@ fn validate_moltbook_submolt_name(value: &str) -> Result<()> {
         return Err(AppError::Validation(
             "community.moltbook_submolt_name must contain only ASCII letters, digits, underscores, hyphens, or dots"
                 .to_string(),
-        ));
-    }
-
-    Ok(())
-}
-
-fn validate_moltbook_submolt_url(value: &str) -> Result<()> {
-    require_non_empty(value, "community.moltbook_submolt_url")?;
-    if value.chars().any(|c| c.is_whitespace() || c.is_control()) {
-        return Err(AppError::Validation(
-            "community.moltbook_submolt_url must not contain whitespace or control characters"
-                .to_string(),
-        ));
-    }
-    if !value.starts_with("https://www.moltbook.com/") {
-        return Err(AppError::Validation(
-            "community.moltbook_submolt_url must start with https://www.moltbook.com/".to_string(),
         ));
     }
 
@@ -1170,6 +1136,7 @@ mod tests {
     };
     use crate::models::evaluation::ScoreVisibility;
     use crate::models::names::{ChallengeName, MetricName, ResourceProfileName, TargetName};
+    use crate::models::urls::MoltbookSubmoltUrl;
     use crate::zip_project::ZipProjectNetworkAccess;
 
     use super::{
@@ -1616,7 +1583,10 @@ mod tests {
         spec.community = Some(CommunitySpec {
             moltbook_submolt_name: Some("agentics-sample-sum".to_string()),
             moltbook_submolt_url: Some(
-                "https://www.moltbook.com/submolts/agentics-sample-sum".to_string(),
+                MoltbookSubmoltUrl::try_new(
+                    "https://www.moltbook.com/submolts/agentics-sample-sum",
+                )
+                .expect("test Moltbook URL is valid"),
             ),
         });
 
@@ -1625,13 +1595,15 @@ mod tests {
 
     #[test]
     fn community_rejects_non_moltbook_url() {
-        let mut spec = base_spec();
-        spec.community = Some(CommunitySpec {
-            moltbook_submolt_name: Some("agentics-sample-sum".to_string()),
-            moltbook_submolt_url: Some("https://example.com/agentics-sample-sum".to_string()),
+        let mut value =
+            serde_json::to_value(base_spec()).expect("base spec should serialize to JSON");
+        value["community"] = serde_json::json!({
+            "moltbook_submolt_name": "agentics-sample-sum",
+            "moltbook_submolt_url": "https://example.com/agentics-sample-sum"
         });
 
-        let error = validate_challenge_bundle_spec(&spec).expect_err("invalid URL should fail");
+        let error = serde_json::from_value::<ChallengeBundleSpec>(value)
+            .expect_err("invalid URL should fail during typed deserialization");
         assert!(error.to_string().contains("moltbook_submolt_url"));
     }
 

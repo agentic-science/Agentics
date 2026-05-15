@@ -309,8 +309,6 @@ impl ValidateRequest for RegisterAgentRequest {
 
 impl ValidateRequest for CreateChallengeDraftRequest {
     fn validate(&self) -> Result<(), String> {
-        require_non_empty(&self.repo_url, "repo_url")?;
-        require_non_empty(&self.pr_url, "pr_url")?;
         require_non_empty(&self.commit_sha, "commit_sha")?;
         require_non_empty(&self.challenge_path, "challenge_path")?;
         if self.pr_number <= 0 {

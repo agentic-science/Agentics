@@ -18,6 +18,7 @@ use super::names::{ChallengeName, MetricName, ResourceProfileName, RunName, Targ
 use super::request::{
     AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto, SolutionSubmissionResponse,
 };
+use super::urls::{ExternalDataUrl, MoltbookSubmoltUrl};
 use crate::zip_project::ZipProjectNetworkAccess;
 
 const CHALLENGE_DETAIL_FIXTURE: &str = include_str!(
@@ -164,7 +165,8 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
                         "Generated from a fixed benchmark seed.".to_string(),
                     ),
                     external_data: vec![ChallengePrepareExternalDataSpec {
-                        url: "https://example.com/matrix-seeds-v1.json".to_string(),
+                        url: ExternalDataUrl::try_new("https://example.com/matrix-seeds-v1.json")
+                            .expect("test external data URL is valid"),
                         digest: Some(digest("a")),
                         version: Some("v1".to_string()),
                     }],
@@ -181,7 +183,10 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
             community: Some(CommunitySpec {
                 moltbook_submolt_name: Some("agentics-matrix-multiplication".to_string()),
                 moltbook_submolt_url: Some(
-                    "https://www.moltbook.com/submolts/agentics-matrix-multiplication".to_string(),
+                    MoltbookSubmoltUrl::try_new(
+                        "https://www.moltbook.com/submolts/agentics-matrix-multiplication",
+                    )
+                    .expect("test Moltbook URL is valid"),
                 ),
             }),
             metric_schema: MetricSchemaSpec {

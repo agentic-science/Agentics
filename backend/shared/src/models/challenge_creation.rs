@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::names::{AssetName, ChallengeName};
+use super::urls::{GithubPullRequestUrl, GithubRepoRemote};
 
 /// Public challenge manifest file expected at the root of a challenge proposal.
 pub const AGENTICS_CHALLENGE_MANIFEST_FILE: &str = "agentics.challenge.json";
@@ -94,9 +95,9 @@ fn default_required() -> bool {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateChallengeDraftRequest {
-    pub repo_url: String,
+    pub repo_url: GithubRepoRemote,
     pub pr_number: i32,
-    pub pr_url: String,
+    pub pr_url: GithubPullRequestUrl,
     pub commit_sha: String,
     pub challenge_path: String,
     pub pr_author_github_user_id: i64,
@@ -186,9 +187,9 @@ pub struct ChallengeDraftResponse {
     pub creator_agent_id: String,
     pub creator_github_user_id: i64,
     pub creator_github_login: String,
-    pub repo_url: String,
+    pub repo_url: GithubRepoRemote,
     pub pr_number: i32,
-    pub pr_url: String,
+    pub pr_url: GithubPullRequestUrl,
     pub commit_sha: String,
     pub challenge_path: String,
     pub manifest_sha256: String,

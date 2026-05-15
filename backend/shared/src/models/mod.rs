@@ -14,6 +14,7 @@ pub mod evaluation;
 pub mod ids;
 pub mod names;
 pub mod request;
+pub mod urls;
 
 #[cfg(test)]
 mod contract_tests;

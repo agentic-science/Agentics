@@ -12,6 +12,7 @@ use crate::models::challenge_creation::{
     ChallengePrivateAssetKind, ChallengePrivateAssetResponse,
 };
 use crate::models::names::{AssetName, ChallengeName};
+use crate::models::urls::{GithubPullRequestUrl, GithubRepoRemote};
 
 use super::challenges::{add_challenge_owner_tx, publish_challenge_tx};
 use super::ids::{
@@ -26,9 +27,9 @@ pub struct CreateChallengeDraftInput {
     pub creator_agent_id: String,
     pub creator_github_user_id: i64,
     pub creator_github_login: String,
-    pub repo_url: String,
+    pub repo_url: GithubRepoRemote,
     pub pr_number: i32,
-    pub pr_url: String,
+    pub pr_url: GithubPullRequestUrl,
     pub commit_sha: String,
     pub challenge_path: String,
     pub manifest_sha256: String,
@@ -136,9 +137,9 @@ pub async fn create_challenge_draft(
     .bind(&input.creator_agent_id)
     .bind(input.creator_github_user_id)
     .bind(&input.creator_github_login)
-    .bind(&input.repo_url)
+    .bind(input.repo_url.as_str())
     .bind(input.pr_number)
-    .bind(&input.pr_url)
+    .bind(input.pr_url.as_str())
     .bind(&input.commit_sha)
     .bind(&input.challenge_path)
     .bind(&input.manifest_sha256)
@@ -772,9 +773,9 @@ fn row_to_draft_response(
         creator_agent_id: uuid_string_from_row(&row, "creator_agent_id")?,
         creator_github_user_id: row.try_get("creator_github_user_id")?,
         creator_github_login: row.try_get("creator_github_login")?,
-        repo_url: row.try_get("repo_url")?,
+        repo_url: github_repo_remote_from_row(&row, "repo_url")?,
         pr_number: row.try_get("pr_number")?,
-        pr_url: row.try_get("pr_url")?,
+        pr_url: github_pull_request_url_from_row(&row, "pr_url")?,
         commit_sha: row.try_get("commit_sha")?,
         challenge_path: row.try_get("challenge_path")?,
         manifest_sha256: row.try_get("manifest_sha256")?,
@@ -809,6 +810,24 @@ fn row_to_private_asset_response(
         uploader_agent_id: uuid_string_from_row(&row, "uploader_agent_id")?,
         created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
     })
+}
+
+fn github_repo_remote_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<GithubRepoRemote> {
+    let value: String = row.try_get(column)?;
+    GithubRepoRemote::try_new(&value)
+        .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
+}
+
+fn github_pull_request_url_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<GithubPullRequestUrl> {
+    let value: String = row.try_get(column)?;
+    GithubPullRequestUrl::try_new(&value)
+        .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
 }
 
 fn row_to_validation_record_response(
