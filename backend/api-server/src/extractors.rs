@@ -14,7 +14,7 @@ use shared::models::challenge_creation::{
     CreateChallengeDraftRequest, ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest,
     ValidateChallengeDraftRequest,
 };
-use shared::models::ids::SolutionSubmissionId;
+use shared::models::ids::{AgentId, ChallengeDraftId, SolutionSubmissionId};
 use shared::models::request::{
     CreateChallengeRequest, CreateChallengeShortlistRevisionRequest,
     CreateSolutionSubmissionRequest, PublishChallengeRequest, RegisterAgentRequest,
@@ -44,6 +44,25 @@ impl FromRequestParts<AppState> for SolutionSubmissionPath {
     }
 }
 
+/// Validated challenge-draft id extracted from a route path.
+#[derive(Debug, Clone)]
+pub struct ChallengeDraftPath(pub ChallengeDraftId);
+
+impl FromRequestParts<AppState> for ChallengeDraftPath {
+    type Rejection = (StatusCode, Json<shared::models::ErrorResponse>);
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let Path(raw) = Path::<String>::from_request_parts(parts, state)
+            .await
+            .map_err(|_| bad_request("challenge_draft_id path parameter is required"))?;
+        let id = ChallengeDraftId::try_new(raw).map_err(|e| bad_request(&e.to_string()))?;
+        Ok(Self(id))
+    }
+}
+
 /// Authenticated agent context extracted from a bearer token.
 ///
 /// Handlers use the agent id for ownership checks and write attribution. The
@@ -52,7 +71,7 @@ impl FromRequestParts<AppState> for SolutionSubmissionPath {
 #[derive(Debug, Clone)]
 pub struct AgentAuth {
     /// Database id of the authenticated agent.
-    pub agent_id: String,
+    pub agent_id: AgentId,
     pub _token_id: String,
     pub _name: String,
 }
@@ -78,7 +97,8 @@ impl FromRequestParts<AppState> for AgentAuth {
             .ok_or_else(|| unauthorized("token 无效或已被撤销"))?;
 
         Ok(AgentAuth {
-            agent_id: agent.agent_id,
+            agent_id: AgentId::try_new(agent.agent_id)
+                .map_err(|_| unauthorized("token 无效或已被撤销"))?,
             _token_id: agent.token_id,
             _name: agent.name,
         })
@@ -144,7 +164,7 @@ impl FromRequestParts<AppState> for AdminAuth {
 #[derive(Debug, Clone)]
 pub struct CreatorAuth {
     pub session_id: String,
-    pub agent_id: String,
+    pub agent_id: AgentId,
     pub github_user_id: i64,
     pub github_login: String,
 }
@@ -174,7 +194,8 @@ impl FromRequestParts<AppState> for CreatorAuth {
 
         Ok(CreatorAuth {
             session_id: session.session_id,
-            agent_id: session.agent_id,
+            agent_id: AgentId::try_new(session.agent_id)
+                .map_err(|_| unauthorized("creator session 无效或已过期"))?,
             github_user_id: session.github_user_id,
             github_login: session.github_login,
         })

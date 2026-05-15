@@ -4,18 +4,20 @@ use sqlx::{PgPool, Row};
 use crate::error::{AppError, Result};
 use crate::models::challenge::ChallengeBundleSpec;
 use crate::models::evaluation::{EvaluationJobPayload, ScoringMode};
-use crate::models::ids::SolutionSubmissionId;
+use crate::models::ids::{EvaluationJobId, SolutionSubmissionId};
 use crate::models::names::{ChallengeName, TargetName};
+use crate::models::paths::ManagedBundlePath;
 
 use super::evaluation_policy::ensure_challenge_supports_eval_type;
 use super::ids::{
-    challenge_name_from_row, solution_submission_id_from_row, target_from_row, uuid_string_from_row,
+    agent_id_from_row, challenge_name_from_row, evaluation_job_id_from_row,
+    solution_submission_id_from_row, target_from_row,
 };
 
 /// Claimed or queued evaluation job with parsed runner payload.
 #[derive(Debug, Clone)]
 pub struct EvaluationJobRecord {
-    pub id: String,
+    pub id: EvaluationJobId,
     pub solution_submission_id: SolutionSubmissionId,
     pub challenge_name: ChallengeName,
     pub target: TargetName,
@@ -82,7 +84,7 @@ pub async fn claim_next_evaluation_job(
     tx.commit().await?;
 
     Ok(Some(EvaluationJobRecord {
-        id: uuid_string_from_row(&r, "id")?,
+        id: evaluation_job_id_from_row(&r, "id")?,
         solution_submission_id,
         challenge_name: challenge_name_from_row(&r, "challenge_name")?,
         target: target_from_row(&r, "target")?,
@@ -96,7 +98,7 @@ pub async fn claim_next_evaluation_job(
 /// Refresh a running job lease owned by one worker.
 pub async fn refresh_evaluation_job_claim(
     pool: &PgPool,
-    job_id: &str,
+    job_id: &EvaluationJobId,
     worker_id: &str,
 ) -> Result<bool> {
     let result = sqlx::query(
@@ -108,7 +110,7 @@ pub async fn refresh_evaluation_job_claim(
           AND status = 'running'
         "#,
     )
-    .bind(job_id)
+    .bind(job_id.as_str())
     .bind(worker_id)
     .execute(pool)
     .await?;
@@ -117,7 +119,7 @@ pub async fn refresh_evaluation_job_claim(
 }
 
 /// Make a staged queued job eligible for worker claiming after its artifact is durable.
-pub async fn mark_evaluation_job_ready(pool: &PgPool, job_id: &str) -> Result<()> {
+pub async fn mark_evaluation_job_ready(pool: &PgPool, job_id: &EvaluationJobId) -> Result<()> {
     let result = sqlx::query(
         r#"
         UPDATE evaluation_jobs
@@ -126,7 +128,7 @@ pub async fn mark_evaluation_job_ready(pool: &PgPool, job_id: &str) -> Result<()
           AND status = 'queued'
         "#,
     )
-    .bind(job_id)
+    .bind(job_id.as_str())
     .execute(pool)
     .await?;
 
@@ -142,7 +144,7 @@ pub async fn mark_evaluation_job_ready(pool: &PgPool, job_id: &str) -> Result<()
 /// Input for queueing a validation or official re-run.
 #[derive(Debug, Clone)]
 pub struct QueueEvaluationJobInput {
-    pub job_id: String,
+    pub job_id: EvaluationJobId,
     pub solution_submission_id: SolutionSubmissionId,
     pub eval_type: ScoringMode,
 }
@@ -160,7 +162,7 @@ pub async fn queue_evaluation_job(
 
     let row = sqlx::query(
         r#"
-        SELECT s.id, s.challenge_name, s.target, s.agent_id::text AS agent_id, s.artifact_path, s.visible_after_eval,
+        SELECT s.id, s.challenge_name, s.target, s.agent_id::text AS agent_id, s.artifact_key, s.visible_after_eval,
                p.bundle_path, p.spec_json
         FROM solution_submissions s
         JOIN challenges p ON p.name = s.challenge_name
@@ -186,13 +188,13 @@ pub async fn queue_evaluation_job(
         &spec,
         &target,
         input.eval_type,
-        &row.try_get::<String, _>("agent_id")?,
+        &agent_id_from_row(&row, "agent_id")?,
     )
     .await?;
 
     let payload = serde_json::to_value(EvaluationJobPayload {
-        artifact_path: row.try_get("artifact_path")?,
-        bundle_path: row.try_get("bundle_path")?,
+        artifact_key: storage_key_from_row(&row, "artifact_key")?,
+        bundle_path: managed_bundle_path_from_row(&row, "bundle_path")?,
         challenge_name: challenge_name.clone(),
         target: target.clone(),
     })
@@ -211,7 +213,7 @@ pub async fn queue_evaluation_job(
         VALUES ($1::uuid, $2::uuid, $3, $4, $5, 'queued', $6, $7)
         "#
     )
-    .bind(&input.job_id)
+    .bind(input.job_id.as_str())
     .bind(input.solution_submission_id.as_str())
     .bind(challenge_name.as_str())
     .bind(target.as_str())
@@ -241,6 +243,24 @@ pub async fn queue_evaluation_job(
         attempt_count: 0,
         payload: serde_json::from_value(payload).map_err(|e| AppError::Internal(e.to_string()))?,
     })
+}
+
+fn storage_key_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<crate::storage::StorageKey> {
+    let value: String = row.try_get(column)?;
+    crate::storage::StorageKey::try_new(&value)
+        .map_err(|e| AppError::Internal(format!("stored invalid storage key in `{column}`: {e}")))
+}
+
+fn managed_bundle_path_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<ManagedBundlePath> {
+    let value: String = row.try_get(column)?;
+    ManagedBundlePath::from_existing_dir(value)
+        .map_err(|e| AppError::Internal(format!("stored invalid {column}: {e}")))
 }
 
 fn map_active_job_conflict(error: sqlx::Error) -> AppError {

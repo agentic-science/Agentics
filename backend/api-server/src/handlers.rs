@@ -23,7 +23,9 @@ use shared::models::challenge::{
     ChallengeSolutionPublicationPolicy, ChallengeVisibility, PublishChallengeResponse,
 };
 use shared::models::evaluation::ScoringMode;
-use shared::models::ids::SolutionSubmissionId;
+use shared::models::ids::{
+    AgentId, ChallengeShortlistRevisionId, EvaluationJobId, SolutionSubmissionId,
+};
 use shared::models::names::{ChallengeName, MetricName, TargetName};
 use shared::models::paths::AdminBundlePath;
 use shared::models::request::{
@@ -59,6 +61,19 @@ const MAX_PUBLIC_LIST_LIMIT: i64 = 100;
 
 fn parse_challenge_name(raw: &str) -> Result<ChallengeName> {
     ChallengeName::try_new(raw.to_string()).map_err(|e| AppError::BadRequest(e.to_string()))
+}
+
+fn new_evaluation_job_id() -> Result<EvaluationJobId> {
+    EvaluationJobId::try_new(Uuid::new_v4().to_string())
+        .map_err(|e| AppError::Internal(format!("generated invalid evaluation job id: {e}")))
+}
+
+fn new_shortlist_revision_id() -> Result<ChallengeShortlistRevisionId> {
+    ChallengeShortlistRevisionId::try_new(Uuid::new_v4().to_string()).map_err(|e| {
+        AppError::Internal(format!(
+            "generated invalid challenge shortlist revision id: {e}"
+        ))
+    })
 }
 
 fn parse_target(raw: &str) -> Result<TargetName> {
@@ -128,7 +143,7 @@ pub async fn register_agent(
 
     Ok((
         StatusCode::CREATED,
-        Json(presenters::present_register_agent(&agent, &token)),
+        Json(presenters::present_register_agent(&agent, &token)?),
     ))
 }
 
@@ -178,7 +193,7 @@ async fn get_challenge_detail_response(
     let challenge = db::get_public_challenge(&state.db, &challenge_name).await?;
     let challenge = challenge.ok_or(AppError::NotFound)?;
 
-    let statement = tokio::fs::read_to_string(&challenge.statement_path).await?;
+    let statement = tokio::fs::read_to_string(challenge.statement_path.as_path()).await?;
     Ok(Json(presenters::present_challenge_detail(
         &challenge, &statement,
     )?))
@@ -238,17 +253,17 @@ async fn create_solution_submission_for_mode(
         .map_err(|e| {
             AppError::Internal(format!("generated invalid solution submission id: {e}"))
         })?;
-    let job_id = Uuid::new_v4().to_string();
-    let artifact_path =
+    let job_id = new_evaluation_job_id()?;
+    let artifact_key =
         StorageKey::try_new(format!("solution-submissions/{solution_submission_id}.zip"))?;
-    let temporary_artifact_path = StorageKey::try_new(format!(
+    let temporary_artifact_key = StorageKey::try_new(format!(
         "_tmp/solution-submissions/{}-{}.zip",
         solution_submission_id,
         Uuid::new_v4()
     ))?;
-    let temporary_artifact_path = state
+    let temporary_artifact_key = state
         .storage
-        .put(&temporary_artifact_path, &artifact_bytes)
+        .put(&temporary_artifact_key, &artifact_bytes)
         .await?;
 
     let quota_limit = match eval_type {
@@ -266,7 +281,7 @@ async fn create_solution_submission_for_mode(
             agent_id: agent.agent_id,
             challenge_name: canonical_challenge_name,
             target,
-            artifact_path: artifact_path.to_string(),
+            artifact_key: artifact_key.clone(),
             language: manifest.runtime.language,
             eval_type,
             explanation: body.explanation.trim().to_string(),
@@ -285,25 +300,25 @@ async fn create_solution_submission_for_mode(
     let solution_submission = match solution_submission {
         Ok(solution_submission) => solution_submission,
         Err(error) => {
-            cleanup_storage_key(&state, &temporary_artifact_path).await;
+            cleanup_storage_key(&state, &temporary_artifact_key).await;
             return Err(error);
         }
     };
 
     if let Err(error) = state
         .storage
-        .promote(&temporary_artifact_path, &artifact_path)
+        .promote(&temporary_artifact_key, &artifact_key)
         .await
     {
         cleanup_solution_submission_record(&state, &solution_submission.id).await;
-        cleanup_storage_key(&state, &temporary_artifact_path).await;
+        cleanup_storage_key(&state, &temporary_artifact_key).await;
         return Err(error);
     }
 
     if let Err(error) = db::mark_evaluation_job_ready(&state.db, &job_id).await {
         cleanup_solution_submission_record(&state, &solution_submission.id).await;
-        cleanup_storage_key(&state, &artifact_path).await;
-        cleanup_storage_key(&state, &temporary_artifact_path).await;
+        cleanup_storage_key(&state, &artifact_key).await;
+        cleanup_storage_key(&state, &temporary_artifact_key).await;
         return Err(error);
     }
 
@@ -311,7 +326,7 @@ async fn create_solution_submission_for_mode(
         StatusCode::CREATED,
         Json(presenters::present_create_solution_submission(
             &solution_submission,
-        )),
+        )?),
     ))
 }
 
@@ -340,7 +355,7 @@ async fn cleanup_storage_key(state: &AppState, storage_key: &StorageKey) {
 
 async fn ensure_submission_quota_available(
     state: &AppState,
-    agent_id: &str,
+    agent_id: &AgentId,
     challenge_name: &ChallengeName,
     target: &TargetName,
     eval_type: ScoringMode,
@@ -592,10 +607,10 @@ pub async fn get_public_artifact(
     }
     ensure_public_solution_artifact_visible(&state.db, &solution_submission.challenge_name).await?;
 
-    let artifact_path = StorageKey::try_new(&solution_submission.artifact_path)?;
-    let artifact_bytes = state.storage.get(&artifact_path).await?;
+    let artifact_key = solution_submission.artifact_key.clone();
+    let artifact_bytes = state.storage.get(&artifact_key).await?;
     let artifact =
-        read_solution_submission_artifact_summary(artifact_path.as_str(), artifact_bytes).await?;
+        read_solution_submission_artifact_summary(artifact_key.as_str(), artifact_bytes).await?;
     Ok(Json(artifact))
 }
 
@@ -1082,7 +1097,7 @@ pub async fn create_challenge_shortlist_revision(
         .map_err(|e| AppError::Internal(format!("failed to encode shortlist revision: {e}")))?;
     let agent_ids_to_add = normalize_shortlist_agent_ids(&body.agent_ids_to_add)?;
 
-    let revision_id = Uuid::new_v4().to_string();
+    let revision_id = new_shortlist_revision_id()?;
     let sha256 = challenge_creation::sha256_digest(&raw_json);
     let storage_key = StorageKey::try_new(format!(
         "challenge-shortlists/{challenge_name}/{revision_id}.json"
@@ -1162,26 +1177,10 @@ fn resolve_target_from_spec(
     )))
 }
 
-fn normalize_shortlist_agent_ids(agent_ids: &[String]) -> Result<Vec<String>> {
+fn normalize_shortlist_agent_ids(agent_ids: &[AgentId]) -> Result<Vec<AgentId>> {
     let mut unique = std::collections::BTreeSet::new();
     for agent_id in agent_ids {
-        let agent_id = agent_id.trim();
-        if agent_id.is_empty() {
-            return Err(AppError::BadRequest(
-                "agent_ids_to_add must not contain empty agent ids".to_string(),
-            ));
-        }
-        let uuid = Uuid::parse_str(agent_id).map_err(|_| {
-            AppError::BadRequest(
-                "agent_ids_to_add must contain canonical UUID agent ids".to_string(),
-            )
-        })?;
-        if uuid.to_string() != agent_id {
-            return Err(AppError::BadRequest(
-                "agent_ids_to_add must contain canonical UUID agent ids".to_string(),
-            ));
-        }
-        unique.insert(agent_id.to_string());
+        unique.insert(agent_id.clone());
     }
     if unique.is_empty() {
         return Err(AppError::BadRequest(
@@ -1266,12 +1265,16 @@ pub async fn publish_challenge(
     let managed_bundle_path =
         copy_admin_bundle_to_managed_storage(&state.config, bundle_path.as_path()).await?;
     let statement_path = managed_bundle_path.join("statement.md");
+    let managed_bundle_path =
+        shared::models::paths::ManagedBundlePath::from_existing_dir(&managed_bundle_path)?;
+    let statement_path =
+        shared::models::paths::ManagedStatementPath::from_existing_file(&statement_path)?;
 
     let challenge = db::publish_challenge(
         &state.db,
         &challenge_name,
-        &managed_bundle_path.to_string_lossy(),
-        &statement_path.to_string_lossy(),
+        &managed_bundle_path,
+        &statement_path,
         &spec,
         &spec.challenge_title,
         &spec.challenge_summary,
@@ -1380,7 +1383,7 @@ pub async fn rejudge(
     let job = db::queue_evaluation_job(
         &state.db,
         &QueueEvaluationJobInput {
-            job_id: Uuid::new_v4().to_string(),
+            job_id: new_evaluation_job_id()?,
             solution_submission_id: id,
             eval_type: ScoringMode::Official,
         },
@@ -1408,7 +1411,7 @@ pub async fn official_run(
     let job = db::queue_evaluation_job(
         &state.db,
         &QueueEvaluationJobInput {
-            job_id: Uuid::new_v4().to_string(),
+            job_id: new_evaluation_job_id()?,
             solution_submission_id: id,
             eval_type: ScoringMode::Official,
         },
@@ -1443,7 +1446,8 @@ pub async fn disable_agent(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<DisableAgentResponse>> {
-    db::disable_agent(&state.db, &id).await?;
+    let id = AgentId::try_new(id).map_err(|e| AppError::BadRequest(e.to_string()))?;
+    db::disable_agent(&state.db, id.as_str()).await?;
     Ok(Json(DisableAgentResponse {
         id,
         status: "disabled".to_string(),
@@ -1495,27 +1499,26 @@ async fn read_solution_submission_logs(
 ) -> Result<Json<SolutionSubmissionLogsResponse>> {
     const MAX_LOG_RESPONSE_BYTES: usize = 200_000;
 
-    let log_path = solution_submission
+    let log_key = solution_submission
         .official_evaluation
         .as_ref()
-        .and_then(|evaluation| evaluation.log_path.clone())
+        .and_then(|evaluation| evaluation.log_key.clone())
         .or_else(|| {
             solution_submission
                 .validation_evaluation
                 .as_ref()
-                .and_then(|evaluation| evaluation.log_path.clone())
+                .and_then(|evaluation| evaluation.log_key.clone())
         });
 
-    let Some(log_path) = log_path else {
+    let Some(log_key) = log_key else {
         return Ok(Json(SolutionSubmissionLogsResponse {
             solution_submission_id: solution_submission.id.clone(),
-            log_path: None,
+            log_key: None,
             content: None,
             truncated: false,
         }));
     };
 
-    let log_key = StorageKey::try_new(&log_path)?;
     let bytes = state.storage.get(&log_key).await?;
     let truncated = bytes.len() > MAX_LOG_RESPONSE_BYTES;
     let visible_bytes = if truncated {
@@ -1529,7 +1532,7 @@ async fn read_solution_submission_logs(
 
     Ok(Json(SolutionSubmissionLogsResponse {
         solution_submission_id: solution_submission.id.clone(),
-        log_path: Some(log_path),
+        log_key: Some(log_key),
         content: Some(content),
         truncated,
     }))

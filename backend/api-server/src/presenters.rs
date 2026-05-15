@@ -4,18 +4,23 @@ use shared::db::{AgentRecord, ChallengeRecord, SolutionSubmissionRecord};
 use shared::error::{AppError, Result};
 use shared::models::challenge::{ChallengeBundleSpec, ChallengeDetailResponse};
 use shared::models::evaluation::{EvaluationDto, ScoringMode};
+use shared::models::ids::AgentId;
 use shared::models::request::{
     CreateSolutionSubmissionResponse, RegisterAgentResponse, SolutionSubmissionResponse,
 };
 
 /// Present a newly registered agent together with its one-time bearer token.
-pub fn present_register_agent(agent: &AgentRecord, token: &str) -> RegisterAgentResponse {
-    RegisterAgentResponse {
-        agent_id: agent.id.clone(),
+pub fn present_register_agent(agent: &AgentRecord, token: &str) -> Result<RegisterAgentResponse> {
+    Ok(RegisterAgentResponse {
+        agent_id: AgentId::try_new(&agent.id).map_err(|e| {
+            AppError::Internal(format!(
+                "database returned invalid registered agent id: {e}"
+            ))
+        })?,
         token: token.to_string(),
         name: agent.name.clone(),
         created_at: agent.created_at.to_rfc3339(),
-    }
+    })
 }
 
 /// Present public challenge details from a published challenge record and statement body.
@@ -38,19 +43,25 @@ pub fn present_challenge_detail(
 /// Present the response returned immediately after solution submission creation.
 pub fn present_create_solution_submission(
     solution_submission: &SolutionSubmissionRecord,
-) -> CreateSolutionSubmissionResponse {
-    CreateSolutionSubmissionResponse {
+) -> Result<CreateSolutionSubmissionResponse> {
+    let evaluation_job_id = solution_submission
+        .evaluation_job_id
+        .clone()
+        .ok_or_else(|| {
+            AppError::Internal(
+                "created solution submission is missing its initial evaluation job id".to_string(),
+            )
+        })?;
+
+    Ok(CreateSolutionSubmissionResponse {
         id: solution_submission.id.clone(),
         status: solution_submission.status.clone(),
         challenge_name: solution_submission.challenge_name.clone(),
         target: solution_submission.target.clone(),
-        artifact_path: solution_submission.artifact_path.clone(),
-        evaluation_job_id: solution_submission
-            .evaluation_job_id
-            .clone()
-            .unwrap_or_default(),
+        artifact_key: solution_submission.artifact_key.clone(),
+        evaluation_job_id,
         created_at: solution_submission.created_at.to_rfc3339(),
-    }
+    })
 }
 
 /// Audience-specific projection for solution submission details.
@@ -63,7 +74,7 @@ pub enum SolutionSubmissionAudience {
 }
 
 impl SolutionSubmissionAudience {
-    fn includes_artifact_path(self) -> bool {
+    fn includes_artifact_key(self) -> bool {
         matches!(self, Self::Owner)
     }
 
@@ -102,8 +113,8 @@ pub fn present_solution_submission(
         parent_solution_submission_id: solution_submission.parent_solution_submission_id.clone(),
         credit_text: solution_submission.credit_text.clone(),
         visible_after_eval: solution_submission.visible_after_eval,
-        artifact_path: if audience.includes_artifact_path() {
-            Some(solution_submission.artifact_path.clone())
+        artifact_key: if audience.includes_artifact_key() {
+            Some(solution_submission.artifact_key.clone())
         } else {
             None
         },
@@ -160,7 +171,7 @@ fn redact_private_benchmark_details(evaluation: &EvaluationDto) -> EvaluationDto
         public_results: Vec::new(),
         validation_summary: None,
         official_summary: None,
-        log_path: None,
+        log_key: None,
         started_at: evaluation.started_at.clone(),
         finished_at: evaluation.finished_at.clone(),
     }

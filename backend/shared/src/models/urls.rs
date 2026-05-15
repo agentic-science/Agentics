@@ -20,6 +20,24 @@ pub const MOLTBOOK_SUBMOLT_URL_ERROR_MESSAGE: &str = "moltbook_submolt_url must 
 /// User-facing validation message for external data URLs.
 pub const EXTERNAL_DATA_URL_ERROR_MESSAGE: &str = "external data url must be an HTTPS URL";
 
+/// Validation message for GitHub OAuth redirect URLs.
+pub const GITHUB_OAUTH_REDIRECT_URL_ERROR_MESSAGE: &str =
+    "github OAuth redirect URL must be an absolute HTTP(S) URL without query or fragment";
+
+/// Validation message for GitHub OAuth authorization endpoint URLs.
+pub const GITHUB_OAUTH_AUTHORIZE_URL_ERROR_MESSAGE: &str =
+    "github OAuth authorize URL must be https://github.com/login/oauth/authorize";
+pub const GITHUB_OAUTH_AUTHORIZATION_URL_ERROR_MESSAGE: &str =
+    "github OAuth authorization URL must be an HTTPS GitHub authorize URL without fragment";
+
+/// Validation message for GitHub OAuth token endpoint URLs.
+pub const GITHUB_OAUTH_TOKEN_URL_ERROR_MESSAGE: &str =
+    "github OAuth token URL must be https://github.com/login/oauth/access_token";
+
+/// Validation message for the GitHub user API URL.
+pub const GITHUB_API_USER_URL_ERROR_MESSAGE: &str =
+    "github API user URL must be https://api.github.com/user";
+
 /// Validation failure for URL-like Agentics contract fields.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UrlFieldError {
@@ -89,7 +107,12 @@ macro_rules! impl_string_url_schema {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum GithubRepoRemote {
     /// HTTPS repository URL such as `https://github.com/agentics-reifying/agentics-challenges`.
-    Https(Url),
+    Https {
+        /// Original validated HTTPS URL.
+        url: Url,
+        /// Canonical owner/repository key for uniqueness and authorization.
+        key: GithubRepoKey,
+    },
     /// SSH repository remote such as `git@github.com:agentics-reifying/agentics-challenges.git`.
     Ssh(GithubSshRepoRemote),
 }
@@ -103,8 +126,16 @@ impl GithubRepoRemote {
     /// Borrow the canonical string representation.
     pub fn as_str(&self) -> &str {
         match self {
-            Self::Https(url) => url.as_str(),
+            Self::Https { url, .. } => url.as_str(),
             Self::Ssh(remote) => remote.as_str(),
+        }
+    }
+
+    /// Return the canonical GitHub owner/repository key.
+    pub fn repository_key(&self) -> &GithubRepoKey {
+        match self {
+            Self::Https { key, .. } => key,
+            Self::Ssh(remote) => remote.repository_key(),
         }
     }
 }
@@ -125,8 +156,8 @@ impl FromStr for GithubRepoRemote {
         }
 
         let url = parse_url(value, GITHUB_REPO_REMOTE_ERROR_MESSAGE)?;
-        validate_github_https_repo_url(&url)?;
-        Ok(Self::Https(url))
+        let key = github_https_repo_key(&url)?;
+        Ok(Self::Https { url, key })
     }
 }
 
@@ -170,6 +201,7 @@ impl JsonSchema for GithubRepoRemote {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct GithubSshRepoRemote {
     value: String,
+    key: GithubRepoKey,
 }
 
 impl GithubSshRepoRemote {
@@ -187,15 +219,46 @@ impl GithubSshRepoRemote {
         let Some(repo) = repo_with_suffix.strip_suffix(".git") else {
             return Err(UrlFieldError::new(GITHUB_REPO_REMOTE_ERROR_MESSAGE));
         };
-        validate_github_path_segment(owner, GITHUB_REPO_REMOTE_ERROR_MESSAGE)?;
-        validate_github_path_segment(repo, GITHUB_REPO_REMOTE_ERROR_MESSAGE)?;
+        let key = GithubRepoKey::try_new(owner, repo)?;
         Ok(Self {
             value: format!("git@github.com:{owner}/{repo}.git"),
+            key,
         })
     }
 
     fn as_str(&self) -> &str {
         &self.value
+    }
+
+    fn repository_key(&self) -> &GithubRepoKey {
+        &self.key
+    }
+}
+
+/// Canonical GitHub repository identity used for duplicate detection.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct GithubRepoKey(String);
+
+impl GithubRepoKey {
+    fn try_new(owner: &str, repo: &str) -> Result<Self, UrlFieldError> {
+        validate_github_path_segment(owner, GITHUB_REPO_REMOTE_ERROR_MESSAGE)?;
+        validate_github_path_segment(repo, GITHUB_REPO_REMOTE_ERROR_MESSAGE)?;
+        Ok(Self(format!(
+            "{}/{}",
+            owner.to_ascii_lowercase(),
+            repo.to_ascii_lowercase()
+        )))
+    }
+
+    /// Borrow the canonical `owner/repo` key.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for GithubRepoKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 
@@ -274,7 +337,7 @@ impl_string_url_serde!(MoltbookSubmoltUrl);
 impl_string_url_schema!(
     MoltbookSubmoltUrl,
     "MoltbookSubmoltUrl",
-    r"^https://www\.moltbook\.com/submolts/.+"
+    r"^https://www\.moltbook\.com/submolts/[^?#]+$"
 );
 
 /// External HTTPS URL referenced by challenge-owned prepare metadata.
@@ -310,24 +373,130 @@ impl FromStr for ExternalDataUrl {
 }
 
 impl_string_url_serde!(ExternalDataUrl);
-impl_string_url_schema!(ExternalDataUrl, "ExternalDataUrl", r"^https://.+");
+impl_string_url_schema!(ExternalDataUrl, "ExternalDataUrl", r"^https://[^?#]+$");
+
+macro_rules! define_url_wrapper {
+    ($type_name:ident, $schema_name:literal, $validator:ident, $message:ident) => {
+        #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+        pub struct $type_name(Url);
+
+        impl $type_name {
+            /// Parse and validate this configured URL.
+            pub fn try_new(value: impl AsRef<str>) -> Result<Self, UrlFieldError> {
+                value.as_ref().parse()
+            }
+
+            /// Borrow the canonical string representation.
+            pub fn as_str(&self) -> &str {
+                self.0.as_str()
+            }
+
+            /// Clone the underlying URL for query construction.
+            pub fn to_url(&self) -> Url {
+                self.0.clone()
+            }
+        }
+
+        impl fmt::Display for $type_name {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str(self.as_str())
+            }
+        }
+
+        impl FromStr for $type_name {
+            type Err = UrlFieldError;
+
+            fn from_str(value: &str) -> Result<Self, Self::Err> {
+                let url = parse_url(value.trim(), $message)?;
+                $validator(&url)?;
+                Ok(Self(url))
+            }
+        }
+
+        impl_string_url_serde!($type_name);
+        impl_string_url_schema!($type_name, $schema_name, r"^https?://[^?#]+$");
+    };
+}
+
+define_url_wrapper!(
+    GithubOauthRedirectUrl,
+    "GithubOauthRedirectUrl",
+    validate_oauth_redirect_url,
+    GITHUB_OAUTH_REDIRECT_URL_ERROR_MESSAGE
+);
+define_url_wrapper!(
+    GithubOauthAuthorizeUrl,
+    "GithubOauthAuthorizeUrl",
+    validate_github_oauth_authorize_url,
+    GITHUB_OAUTH_AUTHORIZE_URL_ERROR_MESSAGE
+);
+define_url_wrapper!(
+    GithubOauthTokenUrl,
+    "GithubOauthTokenUrl",
+    validate_github_oauth_token_url,
+    GITHUB_OAUTH_TOKEN_URL_ERROR_MESSAGE
+);
+define_url_wrapper!(
+    GithubApiUserUrl,
+    "GithubApiUserUrl",
+    validate_github_api_user_url,
+    GITHUB_API_USER_URL_ERROR_MESSAGE
+);
+
+/// GitHub OAuth authorization URL with request query parameters.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct GithubOauthAuthorizationUrl(Url);
+
+impl GithubOauthAuthorizationUrl {
+    /// Validate a generated authorization URL.
+    pub fn try_from_url(url: Url) -> Result<Self, UrlFieldError> {
+        validate_github_oauth_authorization_url(&url)?;
+        Ok(Self(url))
+    }
+
+    /// Borrow the canonical string representation.
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl fmt::Display for GithubOauthAuthorizationUrl {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for GithubOauthAuthorizationUrl {
+    type Err = UrlFieldError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let url = parse_url(value.trim(), GITHUB_OAUTH_AUTHORIZATION_URL_ERROR_MESSAGE)?;
+        Self::try_from_url(url)
+    }
+}
+
+impl_string_url_serde!(GithubOauthAuthorizationUrl);
+impl_string_url_schema!(
+    GithubOauthAuthorizationUrl,
+    "GithubOauthAuthorizationUrl",
+    r"^https://github\.com/login/oauth/authorize\?[^#]+$"
+);
 
 fn parse_url(value: &str, message: &'static str) -> Result<Url, UrlFieldError> {
     reject_whitespace_or_control(value, message)?;
     Url::parse(value).map_err(|_| UrlFieldError::new(message))
 }
 
-fn validate_github_https_repo_url(url: &Url) -> Result<(), UrlFieldError> {
+fn github_https_repo_key(url: &Url) -> Result<GithubRepoKey, UrlFieldError> {
     validate_github_https_base(url, GITHUB_REPO_REMOTE_ERROR_MESSAGE)?;
     let segments = github_path_segments(url, GITHUB_REPO_REMOTE_ERROR_MESSAGE)?;
     let [owner, repo_with_suffix] = segments.as_slice() else {
         return Err(UrlFieldError::new(GITHUB_REPO_REMOTE_ERROR_MESSAGE));
     };
-    validate_github_path_segment(owner, GITHUB_REPO_REMOTE_ERROR_MESSAGE)?;
     let repo = repo_with_suffix
         .strip_suffix(".git")
         .unwrap_or(repo_with_suffix.as_str());
-    validate_github_path_segment(repo, GITHUB_REPO_REMOTE_ERROR_MESSAGE)
+    GithubRepoKey::try_new(owner, repo)
 }
 
 fn validate_github_https_pull_request_url(url: &Url) -> Result<(), UrlFieldError> {
@@ -343,6 +512,74 @@ fn validate_github_https_pull_request_url(url: &Url) -> Result<(), UrlFieldError
     validate_github_path_segment(repo, GITHUB_PULL_REQUEST_URL_ERROR_MESSAGE)?;
     if number.is_empty() || !number.bytes().all(|byte| byte.is_ascii_digit()) {
         return Err(UrlFieldError::new(GITHUB_PULL_REQUEST_URL_ERROR_MESSAGE));
+    }
+    Ok(())
+}
+
+fn validate_oauth_redirect_url(url: &Url) -> Result<(), UrlFieldError> {
+    if !matches!(url.scheme(), "http" | "https")
+        || url.cannot_be_a_base()
+        || url.host_str().is_none()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err(UrlFieldError::new(GITHUB_OAUTH_REDIRECT_URL_ERROR_MESSAGE));
+    }
+    Ok(())
+}
+
+fn validate_github_oauth_authorize_url(url: &Url) -> Result<(), UrlFieldError> {
+    validate_exact_https_url(
+        url,
+        "github.com",
+        "/login/oauth/authorize",
+        GITHUB_OAUTH_AUTHORIZE_URL_ERROR_MESSAGE,
+    )
+}
+
+fn validate_github_oauth_authorization_url(url: &Url) -> Result<(), UrlFieldError> {
+    if url.scheme() != "https"
+        || url.cannot_be_a_base()
+        || url.host_str() != Some("github.com")
+        || url.port().is_some()
+        || url.path() != "/login/oauth/authorize"
+        || url.query().is_none()
+        || url.fragment().is_some()
+    {
+        return Err(UrlFieldError::new(
+            GITHUB_OAUTH_AUTHORIZATION_URL_ERROR_MESSAGE,
+        ));
+    }
+    Ok(())
+}
+
+fn validate_github_oauth_token_url(url: &Url) -> Result<(), UrlFieldError> {
+    validate_exact_https_url(
+        url,
+        "github.com",
+        "/login/oauth/access_token",
+        GITHUB_OAUTH_TOKEN_URL_ERROR_MESSAGE,
+    )
+}
+
+fn validate_github_api_user_url(url: &Url) -> Result<(), UrlFieldError> {
+    validate_exact_https_url(
+        url,
+        "api.github.com",
+        "/user",
+        GITHUB_API_USER_URL_ERROR_MESSAGE,
+    )
+}
+
+fn validate_exact_https_url(
+    url: &Url,
+    host: &str,
+    path: &str,
+    message: &'static str,
+) -> Result<(), UrlFieldError> {
+    validate_https_url(url, message)?;
+    if url.host_str() != Some(host) || url.port().is_some() || url.path() != path {
+        return Err(UrlFieldError::new(message));
     }
     Ok(())
 }
@@ -418,13 +655,22 @@ mod tests {
 
     #[test]
     fn parses_github_repo_remotes() {
-        assert!(
-            GithubRepoRemote::try_new("https://github.com/agentics-reifying/agentics-challenges")
-                .is_ok()
-        );
-        assert!(
+        let https =
+            GithubRepoRemote::try_new("https://github.com/Agentics-Reifying/Agentics-Challenges")
+                .expect("HTTPS remote is valid");
+        let https_with_suffix = GithubRepoRemote::try_new(
+            "https://github.com/agentics-reifying/agentics-challenges.git",
+        )
+        .expect("HTTPS .git remote is valid");
+        let ssh =
             GithubRepoRemote::try_new("git@github.com:agentics-reifying/agentics-challenges.git")
-                .is_ok()
+                .expect("SSH remote is valid");
+
+        assert_eq!(https.repository_key(), https_with_suffix.repository_key());
+        assert_eq!(https.repository_key(), ssh.repository_key());
+        assert_eq!(
+            https.repository_key().as_str(),
+            "agentics-reifying/agentics-challenges"
         );
         assert!(GithubRepoRemote::try_new("http://github.com/owner/repo").is_err());
         assert!(GithubRepoRemote::try_new("https://example.com/owner/repo").is_err());

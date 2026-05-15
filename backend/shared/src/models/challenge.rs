@@ -4,7 +4,9 @@ use serde::{Deserialize, Serialize};
 
 use super::hashes::OciSha256Digest;
 use super::names::{ChallengeName, MetricName, ResourceProfileName, RunName, TargetName};
-use super::paths::{BundleRelativePath, RunInputPath, RunOutputPath};
+use super::paths::{
+    BundleRelativePath, ManagedBundlePath, ManagedStatementPath, RunInputPath, RunOutputPath,
+};
 use super::urls::{ExternalDataUrl, MoltbookSubmoltUrl};
 use crate::zip_project::ZipProjectNetworkAccess;
 
@@ -485,6 +487,6 @@ pub struct AdminChallengeListResponse {
 pub struct PublishChallengeResponse {
     pub challenge_name: ChallengeName,
     pub title: String,
-    pub bundle_path: String,
-    pub statement_path: String,
+    pub bundle_path: ManagedBundlePath,
+    pub statement_path: ManagedStatementPath,
 }

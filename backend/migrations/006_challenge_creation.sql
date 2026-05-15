@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS challenge_drafts (
   creator_github_user_id BIGINT NOT NULL,
   creator_github_login TEXT NOT NULL DEFAULT '',
   repo_url TEXT NOT NULL,
+  repo_key TEXT NOT NULL,
   pr_number INTEGER NOT NULL CHECK (pr_number > 0),
   pr_url TEXT NOT NULL,
   commit_sha TEXT NOT NULL,
@@ -18,7 +19,7 @@ CREATE TABLE IF NOT EXISTS challenge_drafts (
   published_challenge_name TEXT REFERENCES challenges(name) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (repo_url, pr_number, challenge_path)
+  UNIQUE (repo_key, pr_number, challenge_path)
 );
 
 CREATE TABLE IF NOT EXISTS challenge_private_assets (

@@ -222,11 +222,22 @@ export const adminSolutionSubmissionListResponseSchema = z
             .string()
             .regex(/^[A-Za-z0-9_.-]+$/)
             .min(1),
-          agent_id: z.string(),
+          agent_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
           agent_name: z.string(),
           status: z.string(),
           visible_after_eval: z.boolean(),
-          latest_job_id: z.string().optional(),
+          latest_job_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            )
+            .optional(),
           latest_job_status: z.string().optional(),
           latest_job_eval_type: z.string().optional(),
           validation_status: z.string().optional(),
@@ -440,7 +451,7 @@ export const challengeDetailResponseSchema = z
                         url: z
                           .string()
                           .url()
-                          .regex(/^https:\/\/.+/),
+                          .regex(/^https:\/\/[^?#]+$/),
                         digest: z.string().optional(),
                         version: z.string().optional(),
                       })
@@ -494,7 +505,7 @@ export const challengeDetailResponseSchema = z
                         url: z
                           .string()
                           .url()
-                          .regex(/^https:\/\/.+/),
+                          .regex(/^https:\/\/[^?#]+$/),
                         digest: z.string().optional(),
                         version: z.string().optional(),
                       })
@@ -565,7 +576,7 @@ export const challengeDetailResponseSchema = z
             moltbook_submolt_url: z
               .string()
               .url()
-              .regex(/^https:\/\/www\.moltbook\.com\/submolts\/.+/)
+              .regex(/^https:\/\/www\.moltbook\.com\/submolts\/[^?#]+$/)
               .optional(),
           })
           .strict()
@@ -644,7 +655,12 @@ export const challengeDraftListResponseSchema = z
     items: z.array(
       z
         .object({
-          id: z.string(),
+          id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
           challenge_name: z
             .string()
             .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
@@ -663,7 +679,12 @@ export const challengeDraftListResponseSchema = z
               "abandoned",
             ])
             .describe("Draft status used by the review lifecycle."),
-          creator_agent_id: z.string(),
+          creator_agent_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
           creator_github_user_id: z.number().int(),
           creator_github_login: z.string(),
           repo_url: z
@@ -769,8 +790,18 @@ export const challengeDraftListResponseSchema = z
           private_assets: z.array(
             z
               .object({
-                id: z.string(),
-                draft_id: z.string(),
+                id: z
+                  .string()
+                  .uuid()
+                  .regex(
+                    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+                  ),
+                draft_id: z
+                  .string()
+                  .uuid()
+                  .regex(
+                    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+                  ),
                 asset_name: z
                   .string()
                   .regex(/^[A-Za-z0-9_.-]+$/)
@@ -791,7 +822,12 @@ export const challengeDraftListResponseSchema = z
                 storage_key: z
                   .string()
                   .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
-                uploader_agent_id: z.string(),
+                uploader_agent_id: z
+                  .string()
+                  .uuid()
+                  .regex(
+                    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+                  ),
                 created_at: z.string(),
               })
               .strict()
@@ -802,8 +838,18 @@ export const challengeDraftListResponseSchema = z
           validation_records: z.array(
             z
               .object({
-                id: z.string(),
-                draft_id: z.string(),
+                id: z
+                  .string()
+                  .uuid()
+                  .regex(
+                    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+                  ),
+                draft_id: z
+                  .string()
+                  .uuid()
+                  .regex(
+                    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+                  ),
                 status: z
                   .enum(["passed", "failed"])
                   .describe("Validation record status for a challenge draft."),
@@ -831,7 +877,10 @@ export const challengeDraftListResponseSchema = z
 
 export const challengeDraftResponseSchema = z
   .object({
-    id: z.string(),
+    id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
     challenge_name: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
@@ -850,7 +899,10 @@ export const challengeDraftResponseSchema = z
         "abandoned",
       ])
       .describe("Draft status used by the review lifecycle."),
-    creator_agent_id: z.string(),
+    creator_agent_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
     creator_github_user_id: z.number().int(),
     creator_github_login: z.string(),
     repo_url: z
@@ -950,8 +1002,18 @@ export const challengeDraftResponseSchema = z
     private_assets: z.array(
       z
         .object({
-          id: z.string(),
-          draft_id: z.string(),
+          id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
+          draft_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
           asset_name: z
             .string()
             .regex(/^[A-Za-z0-9_.-]+$/)
@@ -972,7 +1034,12 @@ export const challengeDraftResponseSchema = z
           storage_key: z
             .string()
             .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
-          uploader_agent_id: z.string(),
+          uploader_agent_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
           created_at: z.string(),
         })
         .strict()
@@ -983,8 +1050,18 @@ export const challengeDraftResponseSchema = z
     validation_records: z.array(
       z
         .object({
-          id: z.string(),
-          draft_id: z.string(),
+          id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
+          draft_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
           status: z
             .enum(["passed", "failed"])
             .describe("Validation record status for a challenge draft."),
@@ -1038,8 +1115,14 @@ export const challengeListResponseSchema = z
 
 export const challengePrivateAssetResponseSchema = z
   .object({
-    id: z.string(),
-    draft_id: z.string(),
+    id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+    draft_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
     asset_name: z
       .string()
       .regex(/^[A-Za-z0-9_.-]+$/)
@@ -1056,7 +1139,10 @@ export const challengePrivateAssetResponseSchema = z
     size_bytes: z.number().int(),
     sha256: z.string().regex(/^[0-9a-f]{64}$/),
     storage_key: z.string().regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
-    uploader_agent_id: z.string(),
+    uploader_agent_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
     created_at: z.string(),
   })
   .strict()
@@ -1072,9 +1158,19 @@ export const challengeShortlistResponseSchema = z
     items: z.array(
       z
         .object({
-          agent_id: z.string(),
+          agent_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
           agent_name: z.string(),
-          added_by_agent_id: z.string(),
+          added_by_agent_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
           created_at: z.string(),
         })
         .strict()
@@ -1086,13 +1182,19 @@ export const challengeShortlistResponseSchema = z
 
 export const challengeShortlistRevisionResponseSchema = z
   .object({
-    id: z.string(),
+    id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
     challenge_name: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
       .min(3)
       .max(63),
-    uploader_agent_id: z.string(),
+    uploader_agent_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
     requested_count: z.number().int(),
     added_count: z.number().int(),
     sha256: z.string().regex(/^[0-9a-f]{64}$/),
@@ -1117,7 +1219,12 @@ export const creatorChallengeParticipantsResponseSchema = z
     items: z.array(
       z
         .object({
-          agent_id: z.string(),
+          agent_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
           agent_name: z.string(),
           solution_submission_count: z.number().int(),
           best_solution_submission_id: z
@@ -1173,7 +1280,10 @@ export const creatorChallengeStatsResponseSchema = z
 
 export const creatorMeResponseSchema = z
   .object({
-    agent_id: z.string(),
+    agent_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
     github_user_id: z.number().int(),
     github_login: z.string(),
   })
@@ -1182,7 +1292,10 @@ export const creatorMeResponseSchema = z
 
 export const creatorSessionResponseSchema = z
   .object({
-    agent_id: z.string(),
+    agent_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
     github_user_id: z.number().int(),
     github_login: z.string(),
     csrf_token: z.string(),
@@ -1194,13 +1307,22 @@ export const creatorSessionResponseSchema = z
   );
 
 export const disableAgentResponseSchema = z
-  .object({ id: z.string(), status: z.string() })
+  .object({
+    id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+    status: z.string(),
+  })
   .strict()
   .describe("Admin response returned after disabling an agent.");
 
 export const evaluationJobResponseSchema = z
   .object({
-    job_id: z.string(),
+    job_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
     solution_submission_id: z
       .string()
       .uuid()
@@ -1218,7 +1340,13 @@ export const evaluationJobResponseSchema = z
   );
 
 export const githubOauthLoginResponseSchema = z
-  .object({ authorization_url: z.string(), state: z.string() })
+  .object({
+    authorization_url: z
+      .string()
+      .url()
+      .regex(/^https:\/\/github\.com\/login\/oauth\/authorize\?[^#]+$/),
+    state: z.string(),
+  })
   .strict()
   .describe("URL returned to a browser or CLI so it can start GitHub OAuth.");
 
@@ -1253,7 +1381,12 @@ export const leaderboardResponseSchema = z
             .string()
             .regex(/^[A-Za-z0-9_.-]+$/)
             .min(1),
-          agent_id: z.string(),
+          agent_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
           agent_name: z.string(),
           best_solution_submission_id: z
             .string()
@@ -1320,7 +1453,12 @@ export const publicSolutionSubmissionListResponseSchema = z
             .regex(/^[A-Za-z0-9_.-]+$/)
             .min(1),
           challenge_title: z.string(),
-          agent_id: z.string(),
+          agent_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
           agent_name: z.string(),
           status: z.string(),
           explanation: z.string(),
@@ -1408,7 +1546,12 @@ export const rankingContextResponseSchema = z
           .string()
           .regex(/^[A-Za-z0-9_.-]+$/)
           .min(1),
-        agent_id: z.string(),
+        agent_id: z
+          .string()
+          .uuid()
+          .regex(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          ),
         agent_name: z.string(),
         best_solution_submission_id: z
           .string()
@@ -1458,7 +1601,12 @@ export const rankingContextResponseSchema = z
                 .string()
                 .regex(/^[A-Za-z0-9_.-]+$/)
                 .min(1),
-              agent_id: z.string(),
+              agent_id: z
+                .string()
+                .uuid()
+                .regex(
+                  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+                ),
               agent_name: z.string(),
               best_solution_submission_id: z
                 .string()
@@ -1581,7 +1729,10 @@ export const solutionSubmissionLogsResponseSchema = z
       .string()
       .uuid()
       .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
-    log_path: z.string().optional(),
+    log_key: z
+      .string()
+      .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+      .optional(),
     content: z.string().optional(),
     truncated: z.boolean(),
   })
@@ -1604,7 +1755,10 @@ export const solutionSubmissionResponseSchema = z
       .string()
       .regex(/^[A-Za-z0-9_.-]+$/)
       .min(1),
-    agent_id: z.string(),
+    agent_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
     agent_name: z.string().optional(),
     status: z.string(),
     explanation: z.string(),
@@ -1615,10 +1769,18 @@ export const solutionSubmissionResponseSchema = z
       .optional(),
     credit_text: z.string(),
     visible_after_eval: z.boolean(),
-    artifact_path: z.string().optional(),
+    artifact_key: z
+      .string()
+      .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+      .optional(),
     evaluation_job: z
       .object({
-        id: z.string(),
+        id: z
+          .string()
+          .uuid()
+          .regex(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          ),
         target: z
           .string()
           .regex(/^[A-Za-z0-9_.-]+$/)
@@ -1634,7 +1796,12 @@ export const solutionSubmissionResponseSchema = z
       .optional(),
     evaluation: z
       .object({
-        id: z.string(),
+        id: z
+          .string()
+          .uuid()
+          .regex(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          ),
         target: z
           .string()
           .regex(/^[A-Za-z0-9_.-]+$/)
@@ -1739,7 +1906,10 @@ export const solutionSubmissionResponseSchema = z
             "Aggregate score summary for validation or official datasets.",
           )
           .optional(),
-        log_path: z.string().optional(),
+        log_key: z
+          .string()
+          .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+          .optional(),
         started_at: z.string().optional(),
         finished_at: z.string().optional(),
       })
@@ -1748,7 +1918,12 @@ export const solutionSubmissionResponseSchema = z
       .optional(),
     validation_evaluation: z
       .object({
-        id: z.string(),
+        id: z
+          .string()
+          .uuid()
+          .regex(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          ),
         target: z
           .string()
           .regex(/^[A-Za-z0-9_.-]+$/)
@@ -1853,7 +2028,10 @@ export const solutionSubmissionResponseSchema = z
             "Aggregate score summary for validation or official datasets.",
           )
           .optional(),
-        log_path: z.string().optional(),
+        log_key: z
+          .string()
+          .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+          .optional(),
         started_at: z.string().optional(),
         finished_at: z.string().optional(),
       })
@@ -1862,7 +2040,12 @@ export const solutionSubmissionResponseSchema = z
       .optional(),
     official_evaluation: z
       .object({
-        id: z.string(),
+        id: z
+          .string()
+          .uuid()
+          .regex(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          ),
         target: z
           .string()
           .regex(/^[A-Za-z0-9_.-]+$/)
@@ -1967,7 +2150,10 @@ export const solutionSubmissionResponseSchema = z
             "Aggregate score summary for validation or official datasets.",
           )
           .optional(),
-        log_path: z.string().optional(),
+        log_key: z
+          .string()
+          .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+          .optional(),
         started_at: z.string().optional(),
         finished_at: z.string().optional(),
       })
@@ -2002,7 +2188,12 @@ export const solutionSubmissionResultReportResponseSchema = z
           .string()
           .regex(/^[A-Za-z0-9_.-]+$/)
           .min(1),
-        agent_id: z.string(),
+        agent_id: z
+          .string()
+          .uuid()
+          .regex(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          ),
         agent_name: z.string().optional(),
         status: z.string(),
         explanation: z.string(),
@@ -2015,10 +2206,18 @@ export const solutionSubmissionResultReportResponseSchema = z
           .optional(),
         credit_text: z.string(),
         visible_after_eval: z.boolean(),
-        artifact_path: z.string().optional(),
+        artifact_key: z
+          .string()
+          .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+          .optional(),
         evaluation_job: z
           .object({
-            id: z.string(),
+            id: z
+              .string()
+              .uuid()
+              .regex(
+                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+              ),
             target: z
               .string()
               .regex(/^[A-Za-z0-9_.-]+$/)
@@ -2036,7 +2235,12 @@ export const solutionSubmissionResultReportResponseSchema = z
           .optional(),
         evaluation: z
           .object({
-            id: z.string(),
+            id: z
+              .string()
+              .uuid()
+              .regex(
+                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+              ),
             target: z
               .string()
               .regex(/^[A-Za-z0-9_.-]+$/)
@@ -2149,7 +2353,10 @@ export const solutionSubmissionResultReportResponseSchema = z
                 "Aggregate score summary for validation or official datasets.",
               )
               .optional(),
-            log_path: z.string().optional(),
+            log_key: z
+              .string()
+              .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+              .optional(),
             started_at: z.string().optional(),
             finished_at: z.string().optional(),
           })
@@ -2158,7 +2365,12 @@ export const solutionSubmissionResultReportResponseSchema = z
           .optional(),
         validation_evaluation: z
           .object({
-            id: z.string(),
+            id: z
+              .string()
+              .uuid()
+              .regex(
+                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+              ),
             target: z
               .string()
               .regex(/^[A-Za-z0-9_.-]+$/)
@@ -2271,7 +2483,10 @@ export const solutionSubmissionResultReportResponseSchema = z
                 "Aggregate score summary for validation or official datasets.",
               )
               .optional(),
-            log_path: z.string().optional(),
+            log_key: z
+              .string()
+              .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+              .optional(),
             started_at: z.string().optional(),
             finished_at: z.string().optional(),
           })
@@ -2280,7 +2495,12 @@ export const solutionSubmissionResultReportResponseSchema = z
           .optional(),
         official_evaluation: z
           .object({
-            id: z.string(),
+            id: z
+              .string()
+              .uuid()
+              .regex(
+                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+              ),
             target: z
               .string()
               .regex(/^[A-Za-z0-9_.-]+$/)
@@ -2393,7 +2613,10 @@ export const solutionSubmissionResultReportResponseSchema = z
                 "Aggregate score summary for validation or official datasets.",
               )
               .optional(),
-            log_path: z.string().optional(),
+            log_key: z
+              .string()
+              .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+              .optional(),
             started_at: z.string().optional(),
             finished_at: z.string().optional(),
           })

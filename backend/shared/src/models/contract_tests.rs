@@ -14,13 +14,14 @@ use super::evaluation::{
     EvaluationDto, EvaluationStatus, MetricValue, RunMetricResult, ScoreVisibility, ScoringMode,
 };
 use super::hashes::OciSha256Digest;
-use super::ids::SolutionSubmissionId;
+use super::ids::{AgentId, EvaluationId, SolutionSubmissionId};
 use super::names::{ChallengeName, MetricName, ResourceProfileName, RunName, TargetName};
 use super::paths::BundleRelativePath;
 use super::request::{
     AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto, SolutionSubmissionResponse,
 };
 use super::urls::{ExternalDataUrl, MoltbookSubmoltUrl};
+use crate::storage::StorageKey;
 use crate::zip_project::ZipProjectNetworkAccess;
 
 const CHALLENGE_DETAIL_FIXTURE: &str = include_str!(
@@ -252,27 +253,39 @@ fn solution_submission_id(value: &str) -> SolutionSubmissionId {
     SolutionSubmissionId::try_new(value.to_string()).expect("test submission id is valid")
 }
 
+fn agent_id(value: &str) -> AgentId {
+    AgentId::try_new(value).expect("test agent id is valid")
+}
+
+fn evaluation_id(value: &str) -> EvaluationId {
+    EvaluationId::try_new(value).expect("test evaluation id is valid")
+}
+
+fn storage_key(value: &str) -> StorageKey {
+    StorageKey::try_new(value).expect("test storage key is valid")
+}
+
 fn official_solution_submission_response() -> SolutionSubmissionResponse {
     SolutionSubmissionResponse {
         id: solution_submission_id("11111111-1111-4111-8111-111111111111"),
         challenge_name: challenge_name("matrix-multiplication"),
         challenge_title: Some("Matrix Multiplication".to_string()),
         target: target_name("linux-arm64-cpu"),
-        agent_id: "agent-1".to_string(),
+        agent_id: agent_id("22222222-2222-4222-8222-222222222222"),
         agent_name: Some("solver".to_string()),
         status: "completed".to_string(),
         explanation: "Blocked matmul implementation.".to_string(),
         parent_solution_submission_id: None,
         credit_text: String::new(),
         visible_after_eval: true,
-        artifact_path: Some(
-            "solution-submissions/11111111-1111-4111-8111-111111111111.zip".to_string(),
-        ),
+        artifact_key: Some(storage_key(
+            "solution-submissions/11111111-1111-4111-8111-111111111111.zip",
+        )),
         evaluation_job: None,
         evaluation: None,
         validation_evaluation: None,
         official_evaluation: Some(EvaluationDto {
-            id: "evaluation-1".to_string(),
+            id: evaluation_id("33333333-3333-4333-8333-333333333333"),
             target: target_name("linux-arm64-cpu"),
             status: EvaluationStatus::Completed,
             eval_type: ScoringMode::Official,
@@ -298,7 +311,7 @@ fn official_solution_submission_response() -> SolutionSubmissionResponse {
             public_results: vec![],
             validation_summary: None,
             official_summary: None,
-            log_path: None,
+            log_key: None,
             started_at: Some("2026-04-28T00:00:00Z".to_string()),
             finished_at: Some("2026-04-28T00:00:42Z".to_string()),
         }),

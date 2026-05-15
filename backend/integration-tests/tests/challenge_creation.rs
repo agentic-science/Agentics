@@ -14,7 +14,10 @@ use shared::{
     db,
     error::AppError,
     models::{
-        challenge_creation::ChallengePrivateAssetKind, hashes::Sha256Digest, names::AssetName,
+        challenge_creation::ChallengePrivateAssetKind,
+        hashes::Sha256Digest,
+        ids::{AgentId, ChallengeDraftId, ChallengePrivateAssetId},
+        names::AssetName,
     },
     storage::StorageKey,
 };
@@ -64,6 +67,37 @@ async fn challenge_draft_rejects_short_commit_sha(pool: sqlx::PgPool) {
             .expect("error message")
             .contains("commit_sha must be a full")
     );
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn challenge_draft_conflicts_on_canonical_repo_key(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("storage tempdir");
+    let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
+    let config = test_config(storage.path(), seeded_challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+    let creator = create_creator_session(&pool, 1001, "creator").await;
+
+    let _draft = create_draft(&client, &app, &creator, 7, manifest_json()).await;
+
+    let response = creator_auth(
+        client.post(api_url(&app, "/api/creator/challenge-drafts")),
+        &creator,
+    )
+    .json(&json!({
+        "repo_url": "git@github.com:agentics-reifying/agentics-challenges.git",
+        "pr_number": 7,
+        "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/7",
+        "commit_sha": "0123456789abcdef0123456789abcdef00000008",
+        "challenge_path": "challenges/sample-sum",
+        "pr_author_github_user_id": 1001,
+        "manifest": manifest_json()
+    }))
+    .send()
+    .await
+    .expect("duplicate canonical repo draft request");
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
 }
 
 #[sqlx::test(migrations = "../migrations")]
@@ -731,10 +765,13 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
     .json()
     .await
     .expect("draft json");
-    let draft_id = draft["id"].as_str().expect("draft id").to_string();
+    let draft_id =
+        ChallengeDraftId::try_new(draft["id"].as_str().expect("draft id")).expect("valid draft id");
+    let uploader_agent_id = AgentId::try_new(&creator.agent_id).expect("valid creator agent id");
 
     let input_a = db::CreateChallengePrivateAssetInput {
-        asset_row_id: uuid::Uuid::new_v4().to_string(),
+        asset_row_id: ChallengePrivateAssetId::try_new(uuid::Uuid::new_v4().to_string())
+            .expect("generated private asset id is valid"),
         draft_id: draft_id.clone(),
         asset_name: AssetName::try_new("official-cases-a".to_string())
             .expect("test asset name is valid"),
@@ -744,10 +781,11 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
         sha256: Sha256Digest::try_new("a".repeat(64)).expect("test digest is valid"),
         storage_key: StorageKey::try_new("challenge-drafts/test/private-assets/a.bin")
             .expect("test storage key is valid"),
-        uploader_agent_id: creator.agent_id.clone(),
+        uploader_agent_id: uploader_agent_id.clone(),
     };
     let input_b = db::CreateChallengePrivateAssetInput {
-        asset_row_id: uuid::Uuid::new_v4().to_string(),
+        asset_row_id: ChallengePrivateAssetId::try_new(uuid::Uuid::new_v4().to_string())
+            .expect("generated private asset id is valid"),
         draft_id: draft_id.clone(),
         asset_name: AssetName::try_new("official-cases-b".to_string())
             .expect("test asset name is valid"),
@@ -757,7 +795,7 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
         sha256: Sha256Digest::try_new("b".repeat(64)).expect("test digest is valid"),
         storage_key: StorageKey::try_new("challenge-drafts/test/private-assets/b.bin")
             .expect("test storage key is valid"),
-        uploader_agent_id: creator.agent_id.clone(),
+        uploader_agent_id,
     };
 
     let create_a = db::create_challenge_private_asset(&pool, &input_a, 12);
@@ -785,14 +823,14 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
     let stored_count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*)::BIGINT FROM challenge_private_assets WHERE draft_id = $1::uuid",
     )
-    .bind(&draft_id)
+    .bind(draft_id.as_str())
     .fetch_one(&pool)
     .await
     .expect("asset count query");
     let stored_bytes: i64 = sqlx::query_scalar(
         "SELECT COALESCE(SUM(size_bytes), 0)::BIGINT FROM challenge_private_assets WHERE draft_id = $1::uuid",
     )
-    .bind(&draft_id)
+    .bind(draft_id.as_str())
     .fetch_one(&pool)
     .await
     .expect("asset byte query");

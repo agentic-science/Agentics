@@ -3,6 +3,9 @@
 use serde::{Deserialize, Serialize};
 
 use super::hashes::{GitCommitSha, Sha256Digest};
+use super::ids::{
+    AgentId, ChallengeDraftId, ChallengeDraftValidationRecordId, ChallengePrivateAssetId,
+};
 use super::names::{AssetName, ChallengeName};
 use super::paths::RepoRelativePath;
 use super::urls::{GithubPullRequestUrl, GithubRepoRemote};
@@ -154,23 +157,23 @@ impl ChallengeDraftValidationStatus {
 /// API response for one private benchmark asset bound to a draft.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengePrivateAssetResponse {
-    pub id: String,
-    pub draft_id: String,
+    pub id: ChallengePrivateAssetId,
+    pub draft_id: ChallengeDraftId,
     pub asset_name: AssetName,
     pub kind: ChallengePrivateAssetKind,
     pub required: bool,
     pub size_bytes: i64,
     pub sha256: Sha256Digest,
     pub storage_key: StorageKey,
-    pub uploader_agent_id: String,
+    pub uploader_agent_id: AgentId,
     pub created_at: String,
 }
 
 /// API response for one validation record.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeDraftValidationRecordResponse {
-    pub id: String,
-    pub draft_id: String,
+    pub id: ChallengeDraftValidationRecordId,
+    pub draft_id: ChallengeDraftId,
     pub status: ChallengeDraftValidationStatus,
     pub message: String,
     pub repository_path: String,
@@ -183,11 +186,11 @@ pub struct ChallengeDraftValidationRecordResponse {
 /// API response for one challenge draft.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeDraftResponse {
-    pub id: String,
+    pub id: ChallengeDraftId,
     pub challenge_name: ChallengeName,
     pub request: ChallengeCreationRequestKind,
     pub status: ChallengeDraftStatus,
-    pub creator_agent_id: String,
+    pub creator_agent_id: AgentId,
     pub creator_github_user_id: i64,
     pub creator_github_login: String,
     pub repo_url: GithubRepoRemote,

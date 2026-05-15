@@ -5,14 +5,17 @@ use serde_json::Value;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use super::ids::{
-    challenge_name_from_row, optional_solution_submission_id_from_row, uuid_string_from_row,
+    agent_id_from_row, challenge_name_from_row, challenge_shortlist_revision_id_from_row,
+    optional_solution_submission_id_from_row,
 };
 use crate::error::{AppError, Result};
 use crate::models::challenge::{
     AdminChallengeListItemDto, ChallengeBundleSpec, ChallengeListItemDto, PublishChallengeResponse,
 };
 use crate::models::hashes::Sha256Digest;
+use crate::models::ids::{AgentId, ChallengeShortlistRevisionId};
 use crate::models::names::{ChallengeName, TargetName};
+use crate::models::paths::{ManagedBundlePath, ManagedStatementPath};
 use crate::models::request::{
     ChallengeShortlistResponse, ChallengeShortlistRevisionResponse, ChallengeShortlistedAgentDto,
     CreatorChallengeParticipantDto, CreatorChallengeParticipantsResponse,
@@ -26,8 +29,8 @@ pub struct ChallengeRecord {
     pub challenge_name: ChallengeName,
     pub title: String,
     pub summary: String,
-    pub bundle_path: String,
-    pub statement_path: String,
+    pub bundle_path: ManagedBundlePath,
+    pub statement_path: ManagedStatementPath,
     pub spec_json: Value,
 }
 
@@ -114,8 +117,8 @@ pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeLi
 pub async fn publish_challenge(
     pool: &PgPool,
     challenge_name: &ChallengeName,
-    bundle_path: &str,
-    statement_path: &str,
+    bundle_path: &ManagedBundlePath,
+    statement_path: &ManagedStatementPath,
     spec: &ChallengeBundleSpec,
     title: &str,
     summary: &str,
@@ -138,8 +141,8 @@ pub async fn publish_challenge(
 pub async fn publish_challenge_tx(
     tx: &mut Transaction<'_, Postgres>,
     challenge_name: &ChallengeName,
-    bundle_path: &str,
-    statement_path: &str,
+    bundle_path: &ManagedBundlePath,
+    statement_path: &ManagedStatementPath,
     spec: &ChallengeBundleSpec,
     title: &str,
     summary: &str,
@@ -179,8 +182,8 @@ pub async fn publish_challenge_tx(
     .bind(challenge_name.as_str())
     .bind(title)
     .bind(summary)
-    .bind(bundle_path)
-    .bind(statement_path)
+    .bind(bundle_path.as_str()?)
+    .bind(statement_path.as_str()?)
     .bind(&spec_json)
     .bind(parse_optional_time(spec.starts_at.as_deref())?)
     .bind(parse_optional_time(spec.closes_at.as_deref())?)
@@ -202,8 +205,8 @@ pub async fn publish_challenge_tx(
     Ok(PublishChallengeResponse {
         challenge_name: challenge_name_from_row(&row, "challenge_name")?,
         title: row.try_get("title")?,
-        bundle_path: row.try_get("bundle_path")?,
-        statement_path: row.try_get("statement_path")?,
+        bundle_path: managed_bundle_path_from_row(&row, "bundle_path")?,
+        statement_path: managed_statement_path_from_row(&row, "statement_path")?,
     })
 }
 
@@ -249,7 +252,7 @@ pub async fn archive_challenge(pool: &PgPool, challenge_name: &ChallengeName) ->
 pub async fn add_challenge_owner(
     pool: &PgPool,
     challenge_name: &ChallengeName,
-    agent_id: &str,
+    agent_id: &AgentId,
 ) -> Result<()> {
     let mut tx = pool.begin().await?;
     add_challenge_owner_tx(&mut tx, challenge_name, agent_id).await?;
@@ -260,7 +263,7 @@ pub async fn add_challenge_owner(
 pub async fn add_challenge_owner_tx(
     tx: &mut Transaction<'_, Postgres>,
     challenge_name: &ChallengeName,
-    agent_id: &str,
+    agent_id: &AgentId,
 ) -> Result<()> {
     sqlx::query(
         r#"
@@ -270,7 +273,7 @@ pub async fn add_challenge_owner_tx(
         "#,
     )
     .bind(challenge_name.as_str())
-    .bind(agent_id)
+    .bind(agent_id.as_str())
     .execute(&mut **tx)
     .await?;
 
@@ -281,7 +284,7 @@ pub async fn add_challenge_owner_tx(
 pub async fn agent_owns_challenge(
     pool: &PgPool,
     challenge_name: &ChallengeName,
-    agent_id: &str,
+    agent_id: &AgentId,
 ) -> Result<bool> {
     let exists = sqlx::query_scalar::<_, bool>(
         r#"
@@ -293,7 +296,7 @@ pub async fn agent_owns_challenge(
         "#,
     )
     .bind(challenge_name.as_str())
-    .bind(agent_id)
+    .bind(agent_id.as_str())
     .fetch_one(pool)
     .await?;
 
@@ -325,7 +328,7 @@ pub async fn challenge_has_shortlist(
 pub async fn agent_is_shortlisted(
     pool: &PgPool,
     challenge_name: &ChallengeName,
-    agent_id: &str,
+    agent_id: &AgentId,
 ) -> Result<bool> {
     let exists = sqlx::query_scalar::<_, bool>(
         r#"
@@ -337,7 +340,7 @@ pub async fn agent_is_shortlisted(
         "#,
     )
     .bind(challenge_name.as_str())
-    .bind(agent_id)
+    .bind(agent_id.as_str())
     .fetch_one(pool)
     .await?;
 
@@ -347,13 +350,13 @@ pub async fn agent_is_shortlisted(
 /// Input for one shortlist delta revision.
 #[derive(Debug, Clone)]
 pub struct CreateChallengeShortlistRevisionInput {
-    pub revision_id: String,
+    pub revision_id: ChallengeShortlistRevisionId,
     pub challenge_name: ChallengeName,
-    pub uploader_agent_id: String,
+    pub uploader_agent_id: AgentId,
     pub storage_key: StorageKey,
     pub sha256: Sha256Digest,
     pub requested_count: i64,
-    pub agent_ids_to_add: Vec<String>,
+    pub agent_ids_to_add: Vec<AgentId>,
 }
 
 /// Persist a shortlist delta and append any new agent ids to the effective shortlist.
@@ -374,9 +377,9 @@ pub async fn create_challenge_shortlist_revision(
         VALUES ($1::uuid, $2, $3::uuid, $4, $5, $6, 0)
         "#,
     )
-    .bind(&input.revision_id)
+    .bind(input.revision_id.as_str())
     .bind(input.challenge_name.as_str())
-    .bind(&input.uploader_agent_id)
+    .bind(input.uploader_agent_id.as_str())
     .bind(input.storage_key.as_str())
     .bind(input.sha256.to_string())
     .bind(input.requested_count)
@@ -395,9 +398,9 @@ pub async fn create_challenge_shortlist_revision(
             "#,
         )
         .bind(input.challenge_name.as_str())
-        .bind(agent_id)
-        .bind(&input.uploader_agent_id)
-        .bind(&input.revision_id)
+        .bind(agent_id.as_str())
+        .bind(input.uploader_agent_id.as_str())
+        .bind(input.revision_id.as_str())
         .execute(&mut *tx)
         .await?;
         added_count = added_count
@@ -415,7 +418,7 @@ pub async fn create_challenge_shortlist_revision(
         RETURNING id, challenge_name, uploader_agent_id, storage_key, sha256, requested_count, added_count, created_at
         "#,
     )
-    .bind(&input.revision_id)
+    .bind(input.revision_id.as_str())
     .bind(added_count)
     .fetch_one(&mut *tx)
     .await?;
@@ -438,13 +441,13 @@ async fn lock_challenge_shortlist(
 
 async fn ensure_shortlist_agents_exist(
     tx: &mut Transaction<'_, Postgres>,
-    agent_ids: &[String],
+    agent_ids: &[AgentId],
 ) -> Result<()> {
     for agent_id in agent_ids {
         let exists = sqlx::query_scalar::<_, bool>(
             "SELECT EXISTS (SELECT 1 FROM agents WHERE id = $1::uuid)",
         )
-        .bind(agent_id)
+        .bind(agent_id.as_str())
         .fetch_one(&mut **tx)
         .await?;
         if !exists {
@@ -478,9 +481,9 @@ pub async fn list_challenge_shortlist(
         .into_iter()
         .map(|row| {
             Ok(ChallengeShortlistedAgentDto {
-                agent_id: row.try_get("agent_id")?,
+                agent_id: agent_id_from_row(&row, "agent_id")?,
                 agent_name: row.try_get("agent_name")?,
-                added_by_agent_id: row.try_get("added_by_agent_id")?,
+                added_by_agent_id: agent_id_from_row(&row, "added_by_agent_id")?,
                 created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
             })
         })
@@ -647,7 +650,7 @@ pub async fn list_creator_challenge_participants(
         .into_iter()
         .map(|row| {
             Ok(CreatorChallengeParticipantDto {
-                agent_id: row.try_get("agent_id")?,
+                agent_id: agent_id_from_row(&row, "agent_id")?,
                 agent_name: row.try_get("agent_name")?,
                 solution_submission_count: row.try_get("solution_submission_count")?,
                 best_solution_submission_id: optional_solution_submission_id_from_row(
@@ -751,19 +754,37 @@ fn row_to_challenge_record(r: sqlx::postgres::PgRow) -> Result<ChallengeRecord> 
         challenge_name: challenge_name_from_row(&r, "challenge_name")?,
         title: r.try_get("title")?,
         summary: r.try_get("summary")?,
-        bundle_path: r.try_get("bundle_path")?,
-        statement_path: r.try_get("statement_path")?,
+        bundle_path: managed_bundle_path_from_row(&r, "bundle_path")?,
+        statement_path: managed_statement_path_from_row(&r, "statement_path")?,
         spec_json: r.try_get("spec_json")?,
     })
+}
+
+fn managed_bundle_path_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<ManagedBundlePath> {
+    let value: String = row.try_get(column)?;
+    ManagedBundlePath::from_existing_dir(value)
+        .map_err(|e| AppError::Internal(format!("stored invalid {column}: {e}")))
+}
+
+fn managed_statement_path_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<ManagedStatementPath> {
+    let value: String = row.try_get(column)?;
+    ManagedStatementPath::from_existing_file(value)
+        .map_err(|e| AppError::Internal(format!("stored invalid {column}: {e}")))
 }
 
 fn row_to_shortlist_revision_response(
     row: sqlx::postgres::PgRow,
 ) -> Result<ChallengeShortlistRevisionResponse> {
     Ok(ChallengeShortlistRevisionResponse {
-        id: uuid_string_from_row(&row, "id")?,
+        id: challenge_shortlist_revision_id_from_row(&row, "id")?,
         challenge_name: challenge_name_from_row(&row, "challenge_name")?,
-        uploader_agent_id: uuid_string_from_row(&row, "uploader_agent_id")?,
+        uploader_agent_id: agent_id_from_row(&row, "uploader_agent_id")?,
         requested_count: row.try_get("requested_count")?,
         added_count: row.try_get("added_count")?,
         sha256: sha256_digest_from_row(&row, "sha256")?,

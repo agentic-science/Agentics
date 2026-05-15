@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use super::evaluation::{EvaluationJobDto, MetricValue};
 use super::hashes::Sha256Digest;
-use super::ids::SolutionSubmissionId;
+use super::ids::{AgentId, ChallengeShortlistRevisionId, EvaluationJobId, SolutionSubmissionId};
 use super::names::{ChallengeName, MetricName, TargetName};
 use crate::storage::StorageKey;
 
@@ -28,7 +28,7 @@ pub struct RegisterAgentRequest {
 /// Agent registration response containing the one-time bearer token.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct RegisterAgentResponse {
-    pub agent_id: String,
+    pub agent_id: AgentId,
     pub token: String,
     pub name: String,
     pub created_at: String,
@@ -56,8 +56,8 @@ pub struct CreateSolutionSubmissionResponse {
     pub status: String,
     pub challenge_name: ChallengeName,
     pub target: TargetName,
-    pub artifact_path: String,
-    pub evaluation_job_id: String,
+    pub artifact_key: StorageKey,
+    pub evaluation_job_id: EvaluationJobId,
     pub created_at: String,
 }
 
@@ -69,7 +69,7 @@ pub struct SolutionSubmissionResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub challenge_title: Option<String>,
     pub target: TargetName,
-    pub agent_id: String,
+    pub agent_id: AgentId,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_name: Option<String>,
     pub status: String,
@@ -79,7 +79,7 @@ pub struct SolutionSubmissionResponse {
     pub credit_text: String,
     pub visible_after_eval: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub artifact_path: Option<String>,
+    pub artifact_key: Option<StorageKey>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub evaluation_job: Option<EvaluationJobDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -99,7 +99,7 @@ pub struct PublicSolutionSubmissionListItemDto {
     pub challenge_name: ChallengeName,
     pub target: TargetName,
     pub challenge_title: String,
-    pub agent_id: String,
+    pub agent_id: AgentId,
     pub agent_name: String,
     pub status: String,
     pub explanation: String,
@@ -151,7 +151,7 @@ pub struct SolutionSubmissionArtifactResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct LeaderboardEntryDto {
     pub target: TargetName,
-    pub agent_id: String,
+    pub agent_id: AgentId,
     pub agent_name: String,
     pub best_solution_submission_id: SolutionSubmissionId,
     pub best_rank_score: f64,
@@ -262,7 +262,7 @@ pub struct CreatorChallengeStatsResponse {
 /// One challenge participant row visible to the challenge owner.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct CreatorChallengeParticipantDto {
-    pub agent_id: String,
+    pub agent_id: AgentId,
     pub agent_name: String,
     pub solution_submission_count: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -288,15 +288,15 @@ pub struct CreatorChallengeParticipantsResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateChallengeShortlistRevisionRequest {
-    pub agent_ids_to_add: Vec<String>,
+    pub agent_ids_to_add: Vec<AgentId>,
 }
 
 /// Persisted shortlist revision response.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeShortlistRevisionResponse {
-    pub id: String,
+    pub id: ChallengeShortlistRevisionId,
     pub challenge_name: ChallengeName,
-    pub uploader_agent_id: String,
+    pub uploader_agent_id: AgentId,
     pub requested_count: i64,
     pub added_count: i64,
     pub sha256: Sha256Digest,
@@ -307,9 +307,9 @@ pub struct ChallengeShortlistRevisionResponse {
 /// One effective shortlisted agent row.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeShortlistedAgentDto {
-    pub agent_id: String,
+    pub agent_id: AgentId,
     pub agent_name: String,
-    pub added_by_agent_id: String,
+    pub added_by_agent_id: AgentId,
     pub created_at: String,
 }
 
@@ -325,7 +325,7 @@ pub struct ChallengeShortlistResponse {
 pub struct SolutionSubmissionLogsResponse {
     pub solution_submission_id: SolutionSubmissionId,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub log_path: Option<String>,
+    pub log_key: Option<StorageKey>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
     pub truncated: bool,
@@ -338,12 +338,12 @@ pub struct AdminSolutionSubmissionListItemDto {
     pub challenge_name: ChallengeName,
     pub challenge_title: String,
     pub target: TargetName,
-    pub agent_id: String,
+    pub agent_id: AgentId,
     pub agent_name: String,
     pub status: String,
     pub visible_after_eval: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub latest_job_id: Option<String>,
+    pub latest_job_id: Option<EvaluationJobId>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub latest_job_status: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -398,7 +398,7 @@ pub struct PublishChallengeRequest {
 /// Admin response returned when an official evaluation job is queued.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct EvaluationJobResponse {
-    pub job_id: String,
+    pub job_id: EvaluationJobId,
     pub solution_submission_id: SolutionSubmissionId,
     pub target: TargetName,
     pub eval_type: String,
@@ -415,7 +415,7 @@ pub struct HideSolutionSubmissionResponse {
 /// Admin response returned after disabling an agent.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct DisableAgentResponse {
-    pub id: String,
+    pub id: AgentId,
     pub status: String,
 }
 

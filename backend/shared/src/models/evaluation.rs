@@ -3,7 +3,10 @@ use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
 
 use super::challenge::{MetricDirection, MetricSchemaSpec, MetricVisibility};
+use super::ids::{EvaluationId, EvaluationJobId};
 use super::names::{ChallengeName, MetricName, RunName, TargetName};
+use super::paths::ManagedBundlePath;
+use crate::storage::StorageKey;
 
 /// Evaluation surface requested for a solution submission.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
@@ -119,7 +122,7 @@ pub struct RunMetricResult {
 /// API DTO for a persisted evaluation.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct EvaluationDto {
-    pub id: String,
+    pub id: EvaluationId,
     pub target: TargetName,
     pub status: EvaluationStatus,
     pub eval_type: ScoringMode,
@@ -135,7 +138,7 @@ pub struct EvaluationDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub official_summary: Option<ScoreSummary>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub log_path: Option<String>,
+    pub log_key: Option<StorageKey>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub started_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -620,7 +623,7 @@ mod tests {
 /// Minimal job DTO returned when a solution submission queues an evaluation.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct EvaluationJobDto {
-    pub id: String,
+    pub id: EvaluationJobId,
     pub target: TargetName,
     pub status: EvaluationStatus,
 }
@@ -628,8 +631,8 @@ pub struct EvaluationJobDto {
 /// Runner payload persisted on an evaluation job.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct EvaluationJobPayload {
-    pub artifact_path: String,
-    pub bundle_path: String,
+    pub artifact_key: StorageKey,
+    pub bundle_path: ManagedBundlePath,
     pub challenge_name: ChallengeName,
     pub target: TargetName,
 }

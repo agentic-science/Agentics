@@ -230,7 +230,7 @@ pub(crate) fn render_creator_challenge_participants(
                 .iter()
                 .map(|item| {
                     vec![
-                        item.agent_id.clone(),
+                        item.agent_id.to_string(),
                         item.agent_name.clone(),
                         item.solution_submission_count.to_string(),
                         item.best_solution_submission_id
@@ -300,9 +300,9 @@ pub(crate) fn render_challenge_shortlist(
                 .iter()
                 .map(|item| {
                     vec![
-                        item.agent_id.clone(),
+                        item.agent_id.to_string(),
                         item.agent_name.clone(),
-                        item.added_by_agent_id.clone(),
+                        item.added_by_agent_id.to_string(),
                         item.created_at.clone(),
                     ]
                 })
@@ -717,7 +717,7 @@ fn render_create_submission_batch(
                         response.id.to_string(),
                         response.challenge_name.to_string(),
                         response.status.clone(),
-                        response.evaluation_job_id.clone(),
+                        response.evaluation_job_id.to_string(),
                     ]
                 })
                 .collect::<Vec<_>>();
@@ -740,9 +740,12 @@ pub(crate) fn render_solution_submission_logs(
     match format {
         OutputFormat::Json => pretty_json(response),
         OutputFormat::Table => Ok(format!(
-            "solution_submission: {}\nlog_path: {}\ntruncated: {}\n\n{}",
+            "solution_submission: {}\nlog_key: {}\ntruncated: {}\n\n{}",
             response.solution_submission_id,
-            response.log_path.as_deref().unwrap_or("none"),
+            response
+                .log_key
+                .as_ref()
+                .map_or("none", shared::storage::StorageKey::as_str),
             response.truncated,
             response.content.as_deref().unwrap_or("")
         )),

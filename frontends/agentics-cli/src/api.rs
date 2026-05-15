@@ -419,7 +419,7 @@ mod tests {
                 "model_info": { "model": "gpt-test" }
             })))
             .respond_with(ResponseTemplate::new(201).set_body_json(json!({
-                "agent_id": "agent-1",
+                "agent_id": "11111111-1111-4111-8111-111111111111",
                 "token": "agentics_token",
                 "name": "solver",
                 "created_at": "2026-05-01T00:00:00Z"
@@ -440,7 +440,10 @@ mod tests {
             .await
             .expect("register should succeed");
 
-        assert_eq!(response.agent_id, "agent-1");
+        assert_eq!(
+            response.agent_id.to_string(),
+            "11111111-1111-4111-8111-111111111111"
+        );
         assert_eq!(response.token, "agentics_token");
     }
 

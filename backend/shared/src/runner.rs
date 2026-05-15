@@ -48,7 +48,7 @@ pub struct ExecutionResult {
     /// Parsed and normalized `result.json` emitted by the scorer.
     pub result: ScorerRunResult,
     /// Storage-relative path to stdout and stderr captured from runner containers.
-    pub log_path: String,
+    pub log_key: StorageKey,
 }
 
 #[derive(Clone, Copy)]
@@ -163,7 +163,7 @@ pub async fn execute_evaluation_job(
     tokio::fs::create_dir_all(&runs_root).await?;
     tokio::fs::create_dir_all(&scorer_output_root).await?;
 
-    let bundle_dir = Path::new(&payload.bundle_path);
+    let bundle_dir = payload.bundle_path.as_path();
     let spec = crate::challenge_bundle::read_challenge_bundle_spec(bundle_dir).await?;
     if config.require_digest_pinned_images {
         crate::challenge_bundle::validate_digest_pinned_images(&spec)?;
@@ -188,8 +188,7 @@ pub async fn execute_evaluation_job(
         pre_pull_image(docker, &profile.solution_image, target.docker_platform).await?;
         pre_pull_image(docker, &profile.scorer_image, target.docker_platform).await?;
 
-        let artifact_key = StorageKey::try_new(&payload.artifact_path)?;
-        let artifact_bytes = storage.get(&artifact_key).await?;
+        let artifact_bytes = storage.get(&payload.artifact_key).await?;
         let artifact_path = working_root.join("solution.zip");
         tokio::fs::write(&artifact_path, artifact_bytes).await?;
         extract_zip_safe(&artifact_path, &source_root).await?;
@@ -266,7 +265,7 @@ pub async fn execute_evaluation_job(
 
         Ok(ExecutionResult {
             result,
-            log_path: log_path_rel.to_string(),
+            log_key: log_path_rel.clone(),
         })
     }
     .await;

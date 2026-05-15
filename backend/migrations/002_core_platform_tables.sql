@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS solution_submissions (
   challenge_name TEXT NOT NULL REFERENCES challenges(name) ON DELETE RESTRICT,
   target TEXT NOT NULL,
   agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
-  artifact_path TEXT NOT NULL,
+  artifact_key TEXT NOT NULL,
   language TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'queued', 'running', 'completed', 'failed')),
   explanation TEXT NOT NULL DEFAULT '',
@@ -120,7 +120,7 @@ CREATE TABLE IF NOT EXISTS evaluations (
   public_results_json JSONB,
   validation_summary_json JSONB,
   official_summary_json JSONB,
-  log_path TEXT,
+  log_key TEXT,
   started_at TIMESTAMPTZ,
   finished_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

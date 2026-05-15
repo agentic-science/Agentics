@@ -234,6 +234,90 @@ impl fmt::Display for AdminBundlePath {
     }
 }
 
+macro_rules! define_managed_path_type {
+    ($type_name:ident, $schema_name:literal, $constructor:ident, $validator:ident, $field:literal) => {
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        pub struct $type_name(PathBuf);
+
+        impl $type_name {
+            /// Canonicalize and verify a managed platform filesystem path.
+            pub fn $constructor(path: impl AsRef<Path>) -> Result<Self> {
+                $validator(path.as_ref(), $field).map(Self)
+            }
+
+            /// Borrow the canonical filesystem path.
+            pub fn as_path(&self) -> &Path {
+                &self.0
+            }
+
+            /// Borrow the canonical filesystem path as UTF-8 for storage.
+            pub fn as_str(&self) -> Result<&str> {
+                self.0.to_str().ok_or_else(|| {
+                    AppError::Internal(format!("{} is not valid UTF-8", $field))
+                })
+            }
+        }
+
+        impl fmt::Display for $type_name {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "{}", self.0.display())
+            }
+        }
+
+        impl Serialize for $type_name {
+            fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+            where
+                S: Serializer,
+            {
+                let value = self
+                    .0
+                    .to_str()
+                    .ok_or_else(|| serde::ser::Error::custom(format!("{} is not valid UTF-8", $field)))?;
+                serializer.serialize_str(value)
+            }
+        }
+
+        impl<'de> Deserialize<'de> for $type_name {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                let value = String::deserialize(deserializer)?;
+                Self::$constructor(Path::new(&value)).map_err(serde::de::Error::custom)
+            }
+        }
+
+        impl JsonSchema for $type_name {
+            fn inline_schema() -> bool {
+                true
+            }
+
+            fn schema_name() -> Cow<'static, str> {
+                $schema_name.into()
+            }
+
+            fn json_schema(_: &mut SchemaGenerator) -> Schema {
+                json_schema!({ "type": "string" })
+            }
+        }
+    };
+}
+
+define_managed_path_type!(
+    ManagedBundlePath,
+    "ManagedBundlePath",
+    from_existing_dir,
+    canonical_existing_dir_path,
+    "managed bundle path"
+);
+define_managed_path_type!(
+    ManagedStatementPath,
+    "ManagedStatementPath",
+    from_existing_file,
+    canonical_existing_file_path,
+    "managed statement path"
+);
+
 fn canonical_existing_dir(value: &str, field: &str) -> Result<PathBuf> {
     let value = value.trim();
     if value.is_empty() || value.chars().any(|c| c.is_control()) {
@@ -252,6 +336,18 @@ fn canonical_existing_dir_path(path: &Path, field: &str) -> Result<PathBuf> {
         .map_err(|e| AppError::BadRequest(format!("{field} cannot be inspected: {e}")))?;
     if !metadata.is_dir() {
         return Err(AppError::BadRequest(format!("{field} must be a directory")));
+    }
+    Ok(canonical)
+}
+
+fn canonical_existing_file_path(path: &Path, field: &str) -> Result<PathBuf> {
+    let canonical = std::fs::canonicalize(path).map_err(|e| {
+        AppError::BadRequest(format!("{field} does not exist or cannot be resolved: {e}"))
+    })?;
+    let metadata = std::fs::metadata(&canonical)
+        .map_err(|e| AppError::BadRequest(format!("{field} cannot be inspected: {e}")))?;
+    if !metadata.is_file() {
+        return Err(AppError::BadRequest(format!("{field} must be a file")));
     }
     Ok(canonical)
 }

@@ -386,7 +386,9 @@ async fn private_shortlist_challenge_requires_owner_delta_before_artifact_decode
     let challenge_name =
         shared::models::names::ChallengeName::try_new("shortlist-challenge".to_string())
             .expect("test challenge name is valid");
-    shared::db::add_challenge_owner(&pool, &challenge_name, &owner.agent_id)
+    let owner_agent_id =
+        shared::models::ids::AgentId::try_new(&owner.agent_id).expect("valid owner agent id");
+    shared::db::add_challenge_owner(&pool, &challenge_name, &owner_agent_id)
         .await
         .expect("owner should be granted");
 

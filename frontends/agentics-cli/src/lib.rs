@@ -247,7 +247,7 @@ mod tests {
                 "model_info": {}
             })))
             .respond_with(ResponseTemplate::new(201).set_body_json(json!({
-                "agent_id": "agent-1",
+                "agent_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
                 "token": "agentics_token",
                 "name": "solver",
                 "created_at": "2026-05-01T00:00:00Z"
@@ -376,8 +376,8 @@ mod tests {
                 "status": "queued",
                 "challenge_name": "sample-sum",
                 "target": "linux-arm64-cpu",
-                "artifact_path": "solution-submissions/11111111-1111-4111-8111-111111111111.zip",
-                "evaluation_job_id": "job-1",
+                "artifact_key": "solution-submissions/11111111-1111-4111-8111-111111111111.zip",
+                "evaluation_job_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
                 "created_at": "2026-05-01T00:00:00Z"
             })))
             .mount(&server)
@@ -492,16 +492,16 @@ mod tests {
                 "challenge_name": "sample-sum",
                 "challenge_title": "Sample Sum",
                 "target": "linux-arm64-cpu",
-                "agent_id": "agent-1",
+                "agent_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
                 "agent_name": "solver",
                 "status": "queued",
                 "explanation": "",
                 "parent_solution_submission_id": null,
                 "credit_text": "",
                 "visible_after_eval": false,
-                "artifact_path": "solution-submissions/11111111-1111-4111-8111-111111111111.zip",
+                "artifact_key": "solution-submissions/11111111-1111-4111-8111-111111111111.zip",
                 "evaluation_job": {
-                    "id": "job-1",
+                    "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
                     "target": "linux-arm64-cpu",
                     "status": "queued"
                 },
@@ -531,7 +531,7 @@ mod tests {
             .expect("submissions show should succeed");
 
         assert!(output.contains("solution submission: 11111111-1111-4111-8111-111111111111"));
-        assert!(output.contains("evaluation_job: job-1 (queued)"));
+        assert!(output.contains("evaluation_job: bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb (queued)"));
     }
 
     #[tokio::test]
@@ -547,21 +547,21 @@ mod tests {
                 "challenge_name": "sample-sum",
                 "challenge_title": "Sample Sum",
                 "target": "linux-arm64-cpu",
-                "agent_id": "agent-1",
+                "agent_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
                 "agent_name": "solver",
                 "status": "completed",
                 "explanation": "quick check",
                 "parent_solution_submission_id": null,
                 "credit_text": "",
                 "visible_after_eval": false,
-                "artifact_path": "solution-submissions/22222222-2222-4222-8222-222222222222.zip",
+                "artifact_key": "solution-submissions/22222222-2222-4222-8222-222222222222.zip",
                 "evaluation_job": {
-                    "id": "job-1",
+                    "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
                     "target": "linux-arm64-cpu",
                     "status": "completed"
                 },
                 "evaluation": {
-                    "id": "eval-1",
+                    "id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
                     "target": "linux-arm64-cpu",
                     "status": "completed",
                     "eval_type": "validation",
@@ -572,7 +572,7 @@ mod tests {
                     "public_results": []
                 },
                 "validation_evaluation": {
-                    "id": "eval-1",
+                    "id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
                     "target": "linux-arm64-cpu",
                     "status": "completed",
                     "eval_type": "validation",
@@ -654,8 +654,8 @@ mod tests {
                 "status": "queued",
                 "challenge_name": "sample-sum",
                 "target": "linux-arm64-cpu",
-                "artifact_path": "solution-submissions/22222222-2222-4222-8222-222222222222.zip",
-                "evaluation_job_id": "job-1",
+                "artifact_key": "solution-submissions/22222222-2222-4222-8222-222222222222.zip",
+                "evaluation_job_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
                 "created_at": "2026-05-01T00:00:00Z"
             })))
             .mount(&server)
@@ -670,21 +670,21 @@ mod tests {
                 "challenge_name": "sample-sum",
                 "challenge_title": "Sample Sum",
                 "target": "linux-arm64-cpu",
-                "agent_id": "agent-1",
+                "agent_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
                 "agent_name": "solver",
                 "status": "completed",
                 "explanation": "quick check",
                 "parent_solution_submission_id": null,
                 "credit_text": "",
                 "visible_after_eval": false,
-                "artifact_path": "solution-submissions/22222222-2222-4222-8222-222222222222.zip",
+                "artifact_key": "solution-submissions/22222222-2222-4222-8222-222222222222.zip",
                 "evaluation_job": {
-                    "id": "job-1",
+                    "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
                     "target": "linux-arm64-cpu",
                     "status": "completed"
                 },
                 "evaluation": {
-                    "id": "eval-1",
+                    "id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
                     "target": "linux-arm64-cpu",
                     "status": "completed",
                     "eval_type": "validation",
@@ -932,7 +932,7 @@ mod tests {
         let body: serde_json::Value =
             serde_json::from_slice(&requests[0].body).expect("request body");
 
-        assert!(output.contains("challenge_draft: draft-1"));
+        assert!(output.contains("challenge_draft: dddddddd-dddd-4ddd-8ddd-dddddddddddd"));
         assert_eq!(body["manifest"]["request"], "new_challenge");
         assert_eq!(body["challenge_path"], "challenges/sample-sum");
     }
@@ -969,7 +969,7 @@ mod tests {
             STANDARD.encode(b"private zip bytes")
         };
         Mock::given(method("POST"))
-            .and(path("/api/creator/challenge-drafts/draft-1/private-assets"))
+            .and(path("/api/creator/challenge-drafts/dddddddd-dddd-4ddd-8ddd-dddddddddddd/private-assets"))
             .and(header("authorization", "Bearer test-token"))
             .and(body_json(json!({
                 "asset_name": "official-cases",
@@ -978,15 +978,15 @@ mod tests {
                 "asset_base64": encoded_asset
             })))
             .respond_with(ResponseTemplate::new(201).set_body_json(json!({
-                "id": "asset-row-1",
-                "draft_id": "draft-1",
+                "id": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+                "draft_id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
                 "asset_name": "official-cases",
                 "kind": "private_benchmark_data",
                 "required": true,
                 "size_bytes": 17,
                 "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                "storage_key": "challenge-drafts/draft-1/private-assets/official-cases.bin",
-                "uploader_agent_id": "agent-1",
+                "storage_key": "challenge-drafts/dddddddd-dddd-4ddd-8ddd-dddddddddddd/private-assets/official-cases.bin",
+                "uploader_agent_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
                 "created_at": "2026-05-01T00:00:00Z"
             })))
             .mount(&server)
@@ -1007,7 +1007,7 @@ mod tests {
             "challenge-creator",
             "draft",
             "upload-private-asset",
-            "draft-1",
+            "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
             "--asset-name",
             "official-cases",
             "--kind",
@@ -1021,7 +1021,7 @@ mod tests {
             .await
             .expect("asset upload should succeed");
 
-        assert!(output.contains("private_asset: asset-row-1"));
+        assert!(output.contains("private_asset: eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"));
         assert!(output.contains("asset_name: official-cases"));
     }
 
@@ -1033,7 +1033,9 @@ mod tests {
             STANDARD.encode("admin:secret")
         });
         Mock::given(method("POST"))
-            .and(path("/admin/challenge-drafts/draft-1/validate"))
+            .and(path(
+                "/admin/challenge-drafts/dddddddd-dddd-4ddd-8ddd-dddddddddddd/validate",
+            ))
             .and(header("authorization", admin_auth))
             .and(body_json(json!({ "repository_path": "/tmp/challenges" })))
             .respond_with(
@@ -1053,7 +1055,7 @@ mod tests {
             "challenge-creator",
             "draft",
             "validate",
-            "draft-1",
+            "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
             "--repository-path",
             "/tmp/challenges",
             "--admin-username",
@@ -1173,11 +1175,11 @@ mod tests {
 
     fn challenge_draft_json(status: &str) -> serde_json::Value {
         json!({
-            "id": "draft-1",
+            "id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
             "challenge_name": "sample-sum",
             "request": "new_challenge",
             "status": status,
-            "creator_agent_id": "agent-1",
+            "creator_agent_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
             "creator_github_user_id": 1001,
             "creator_github_login": "creator",
             "repo_url": "https://github.com/agentics-reifying/agentics-challenges",

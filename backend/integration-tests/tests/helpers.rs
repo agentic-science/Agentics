@@ -98,10 +98,20 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
         unpublished_challenge_asset_grace_days: 7,
         github_oauth_client_id: Some("test-client-id".to_string()),
         github_oauth_client_secret: Some("test-client-secret".to_string()),
-        github_oauth_redirect_url: Some("http://127.0.0.1/auth/github/callback".to_string()),
-        github_oauth_authorize_url: "https://github.com/login/oauth/authorize".to_string(),
-        github_oauth_token_url: "https://github.com/login/oauth/access_token".to_string(),
-        github_api_user_url: "https://api.github.com/user".to_string(),
+        github_oauth_redirect_url: Some(
+            "http://127.0.0.1/auth/github/callback"
+                .parse()
+                .expect("valid test GitHub OAuth redirect URL"),
+        ),
+        github_oauth_authorize_url: "https://github.com/login/oauth/authorize"
+            .parse()
+            .expect("valid test GitHub OAuth authorize URL"),
+        github_oauth_token_url: "https://github.com/login/oauth/access_token"
+            .parse()
+            .expect("valid test GitHub OAuth token URL"),
+        github_api_user_url: "https://api.github.com/user"
+            .parse()
+            .expect("valid test GitHub API user URL"),
         web_session_cookie_name: "agentics_session".to_string(),
         web_csrf_cookie_name: "agentics_csrf".to_string(),
         web_session_ttl_hours: 24,

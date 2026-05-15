@@ -4,8 +4,9 @@ use crate::error::{AppError, Result};
 use crate::models::evaluation::{
     EvaluationStatus, MetricValue, PublicCaseResult, RunMetricResult, ScoreSummary, ScoringMode,
 };
-use crate::models::ids::SolutionSubmissionId;
+use crate::models::ids::{EvaluationId, EvaluationJobId, SolutionSubmissionId};
 use crate::models::names::TargetName;
+use crate::storage::StorageKey;
 
 use super::leaderboard::{
     update_official_score_for_solution_submission_tx,
@@ -15,9 +16,9 @@ use super::leaderboard::{
 /// Input for creating the evaluation row associated with a claimed job.
 #[derive(Debug, Clone)]
 pub struct MarkEvaluationStartedInput {
-    pub evaluation_id: String,
+    pub evaluation_id: EvaluationId,
     pub solution_submission_id: SolutionSubmissionId,
-    pub job_id: String,
+    pub job_id: EvaluationJobId,
     pub target: TargetName,
     pub eval_type: ScoringMode,
 }
@@ -36,9 +37,9 @@ pub async fn mark_evaluation_started(
         ON CONFLICT (job_id) DO NOTHING
         "#,
     )
-    .bind(&input.evaluation_id)
+    .bind(input.evaluation_id.as_str())
     .bind(input.solution_submission_id.as_str())
-    .bind(&input.job_id)
+    .bind(input.job_id.as_str())
     .bind(input.target.as_str())
     .bind(eval_type_str)
     .execute(pool)
@@ -51,7 +52,7 @@ pub async fn mark_evaluation_started(
 #[derive(Debug, Clone)]
 pub struct PersistedEvaluationResult {
     pub solution_submission_id: SolutionSubmissionId,
-    pub job_id: String,
+    pub job_id: EvaluationJobId,
     pub worker_id: String,
     pub claim_attempt_count: i32,
     pub target: TargetName,
@@ -64,7 +65,7 @@ pub struct PersistedEvaluationResult {
     pub public_results: Vec<PublicCaseResult>,
     pub validation_summary: Option<ScoreSummary>,
     pub official_summary: Option<ScoreSummary>,
-    pub log_path: Option<String>,
+    pub log_key: Option<StorageKey>,
     pub last_error: Option<String>,
 }
 
@@ -100,7 +101,7 @@ pub async fn mark_evaluation_finished(
           AND attempt_count = $5
         "#,
     )
-    .bind(&result.job_id)
+    .bind(result.job_id.as_str())
     .bind(status_str)
     .bind(&result.last_error)
     .bind(&result.worker_id)
@@ -119,12 +120,12 @@ pub async fn mark_evaluation_finished(
         SET status = $2, primary_score = $3, rank_score = $4,
             aggregate_metrics_json = $5, run_metrics_json = $6,
             public_results_json = $7, validation_summary_json = $8,
-            official_summary_json = $9, log_path = $10, finished_at = NOW()
+            official_summary_json = $9, log_key = $10, finished_at = NOW()
         WHERE job_id = $1::uuid
           AND status = 'running'
         "#,
     )
-    .bind(&result.job_id)
+    .bind(result.job_id.as_str())
     .bind(status_str)
     .bind(result.primary_score)
     .bind(result.rank_score)
@@ -133,7 +134,7 @@ pub async fn mark_evaluation_finished(
     .bind(&public_results_json)
     .bind(&validation_summary_json)
     .bind(&official_json)
-    .bind(&result.log_path)
+    .bind(result.log_key.as_ref().map(StorageKey::as_str))
     .execute(&mut *tx)
     .await?;
 

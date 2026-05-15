@@ -145,7 +145,7 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
         serde_json::json!([])
     );
     assert!(solution_submission["evaluation"]["official_summary"].is_null());
-    assert!(solution_submission["evaluation"]["log_path"].is_null());
+    assert!(solution_submission["evaluation"]["log_key"].is_null());
 
     let job_status: (String, String) = sqlx::query_as(
         "SELECT status, eval_type FROM evaluation_jobs WHERE solution_submission_id = $1::uuid",
@@ -1163,12 +1163,12 @@ async fn worker_marks_solution_submission_failed_when_artifact_is_missing(pool: 
     sqlx::query(
         r#"
         UPDATE evaluation_jobs
-        SET payload_json = jsonb_set(payload_json, '{artifact_path}', to_jsonb($2::text))
+        SET payload_json = jsonb_set(payload_json, '{artifact_key}', to_jsonb($2::text))
         WHERE solution_submission_id = $1::uuid
         "#,
     )
     .bind(solution_submission_id)
-    .bind("/tmp/agentics-missing-solution_submission.zip")
+    .bind("missing/agentics-missing-solution-submission.zip")
     .execute(&pool)
     .await
     .expect("failed to corrupt artifact path");

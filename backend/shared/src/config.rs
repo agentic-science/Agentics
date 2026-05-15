@@ -4,6 +4,10 @@ use figment::{Figment, providers::Env};
 use serde::Deserialize;
 use std::str::FromStr;
 
+use crate::models::urls::{
+    GithubApiUserUrl, GithubOauthAuthorizeUrl, GithubOauthRedirectUrl, GithubOauthTokenUrl,
+};
+
 const CONFIG_ENV_PREFIX: &str = "AGENTICS_";
 const DEFAULT_ADMIN_USERNAME: &str = "admin";
 const DEFAULT_ADMIN_PASSWORD: &str = "agentics-admin";
@@ -61,13 +65,13 @@ pub struct Config {
     #[serde(default)]
     pub github_oauth_client_secret: Option<String>,
     #[serde(default)]
-    pub github_oauth_redirect_url: Option<String>,
+    pub github_oauth_redirect_url: Option<GithubOauthRedirectUrl>,
     #[serde(default = "default_github_oauth_authorize_url")]
-    pub github_oauth_authorize_url: String,
+    pub github_oauth_authorize_url: GithubOauthAuthorizeUrl,
     #[serde(default = "default_github_oauth_token_url")]
-    pub github_oauth_token_url: String,
+    pub github_oauth_token_url: GithubOauthTokenUrl,
     #[serde(default = "default_github_api_user_url")]
-    pub github_api_user_url: String,
+    pub github_api_user_url: GithubApiUserUrl,
     #[serde(default = "default_web_session_cookie_name")]
     pub web_session_cookie_name: String,
     #[serde(default = "default_web_csrf_cookie_name")]
@@ -205,16 +209,31 @@ fn default_unpublished_challenge_asset_grace_days() -> i64 {
     7
 }
 
-fn default_github_oauth_authorize_url() -> String {
-    "https://github.com/login/oauth/authorize".to_string()
+#[allow(
+    clippy::expect_used,
+    reason = "static default URLs are validated by type constructors and have no runtime fallback"
+)]
+fn default_github_oauth_authorize_url() -> GithubOauthAuthorizeUrl {
+    GithubOauthAuthorizeUrl::try_new("https://github.com/login/oauth/authorize")
+        .expect("default GitHub OAuth authorize URL must be valid")
 }
 
-fn default_github_oauth_token_url() -> String {
-    "https://github.com/login/oauth/access_token".to_string()
+#[allow(
+    clippy::expect_used,
+    reason = "static default URLs are validated by type constructors and have no runtime fallback"
+)]
+fn default_github_oauth_token_url() -> GithubOauthTokenUrl {
+    GithubOauthTokenUrl::try_new("https://github.com/login/oauth/access_token")
+        .expect("default GitHub OAuth token URL must be valid")
 }
 
-fn default_github_api_user_url() -> String {
-    "https://api.github.com/user".to_string()
+#[allow(
+    clippy::expect_used,
+    reason = "static default URLs are validated by type constructors and have no runtime fallback"
+)]
+fn default_github_api_user_url() -> GithubApiUserUrl {
+    GithubApiUserUrl::try_new("https://api.github.com/user")
+        .expect("default GitHub API user URL must be valid")
 }
 
 fn default_web_session_cookie_name() -> String {
@@ -335,7 +354,9 @@ impl Config {
                 "AGENTICS_GITHUB_OAUTH_CLIENT_SECRET",
             )?;
             validate_required_trimmed(
-                self.github_oauth_redirect_url.as_deref(),
+                self.github_oauth_redirect_url
+                    .as_ref()
+                    .map(GithubOauthRedirectUrl::as_str),
                 "AGENTICS_GITHUB_OAUTH_REDIRECT_URL",
             )?;
         }
@@ -432,10 +453,7 @@ impl Config {
                 .github_oauth_client_secret
                 .as_deref()
                 .is_some_and(|value| !value.trim().is_empty())
-            && self
-                .github_oauth_redirect_url
-                .as_deref()
-                .is_some_and(|value| !value.trim().is_empty())
+            && self.github_oauth_redirect_url.is_some()
     }
 }
 

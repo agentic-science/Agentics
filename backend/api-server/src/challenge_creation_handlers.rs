@@ -6,11 +6,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use axum::{
-    Json,
-    extract::{Path as AxumPath, State},
-    http::StatusCode,
-};
+use axum::{Json, extract::State, http::StatusCode};
 use tracing::warn;
 use uuid::Uuid;
 
@@ -23,16 +19,46 @@ use shared::models::challenge_creation::{
     ValidateChallengeDraftRequest,
 };
 use shared::models::hashes::Sha256Digest;
+use shared::models::ids::{
+    ChallengeDraftAuditEventId, ChallengeDraftId, ChallengeDraftValidationRecordId,
+    ChallengePrivateAssetId,
+};
 use shared::models::names::ChallengeName;
 use shared::models::paths::{RepoRelativePath, RepositoryCheckoutPath};
 use shared::storage::StorageKey;
 use shared::{challenge_bundle, challenge_creation, db};
 
-use crate::extractors::{AdminAuth, CreatorAuth, ValidatedJson};
+use crate::extractors::{AdminAuth, ChallengeDraftPath, CreatorAuth, ValidatedJson};
 use crate::state::AppState;
 
 const CHALLENGE_DRAFT_QUOTA_WINDOW_SECONDS: i64 = 24 * 60 * 60;
 const MAX_PRIVATE_ASSET_FILE_COUNT: usize = 1024;
+
+fn new_challenge_draft_id() -> Result<ChallengeDraftId> {
+    ChallengeDraftId::try_new(Uuid::new_v4().to_string())
+        .map_err(|e| AppError::Internal(format!("failed to create challenge draft id: {e}")))
+}
+
+fn new_private_asset_id() -> Result<ChallengePrivateAssetId> {
+    ChallengePrivateAssetId::try_new(Uuid::new_v4().to_string())
+        .map_err(|e| AppError::Internal(format!("failed to create private asset id: {e}")))
+}
+
+fn new_draft_validation_record_id() -> Result<ChallengeDraftValidationRecordId> {
+    ChallengeDraftValidationRecordId::try_new(Uuid::new_v4().to_string()).map_err(|e| {
+        AppError::Internal(format!(
+            "failed to create challenge draft validation record id: {e}"
+        ))
+    })
+}
+
+fn new_draft_audit_event_id() -> Result<ChallengeDraftAuditEventId> {
+    ChallengeDraftAuditEventId::try_new(Uuid::new_v4().to_string()).map_err(|e| {
+        AppError::Internal(format!(
+            "failed to create challenge draft audit event id: {e}"
+        ))
+    })
+}
 
 /// Create a challenge draft bound to a public GitHub PR and manifest.
 pub async fn create_challenge_draft(
@@ -50,7 +76,7 @@ pub async fn create_challenge_draft(
         )));
     }
     let active_drafts =
-        db::count_active_challenge_drafts_for_agent(&state.db, &creator.agent_id).await?;
+        db::count_active_challenge_drafts_for_agent(&state.db, creator.agent_id.as_str()).await?;
     let max_active_drafts = i64::from(state.config.max_active_challenge_drafts_per_agent);
     if active_drafts >= max_active_drafts {
         return Err(AppError::TooManyRequests(format!(
@@ -62,7 +88,7 @@ pub async fn create_challenge_draft(
     let draft = db::create_challenge_draft(
         &state.db,
         &db::CreateChallengeDraftInput {
-            draft_id: Uuid::new_v4().to_string(),
+            draft_id: new_challenge_draft_id()?,
             creator_agent_id: creator.agent_id.clone(),
             creator_github_user_id: creator.github_user_id,
             creator_github_login: creator.github_login.clone(),
@@ -81,7 +107,7 @@ pub async fn create_challenge_draft(
     db::create_challenge_draft_audit_event(
         &state.db,
         &db::CreateChallengeDraftAuditEventInput {
-            event_id: Uuid::new_v4().to_string(),
+            event_id: new_draft_audit_event_id()?,
             draft_id: draft.id.clone(),
             actor_agent_id: Some(creator.agent_id.clone()),
             actor_admin_username: None,
@@ -103,9 +129,9 @@ pub async fn create_challenge_draft(
 pub async fn get_challenge_draft(
     State(state): State<AppState>,
     creator: CreatorAuth,
-    AxumPath(draft_id): AxumPath<String>,
+    ChallengeDraftPath(draft_id): ChallengeDraftPath,
 ) -> Result<Json<ChallengeDraftResponse>> {
-    let draft = db::get_challenge_draft(&state.db, &draft_id)
+    let draft = db::get_challenge_draft(&state.db, draft_id.as_str())
         .await?
         .ok_or(AppError::NotFound)?;
     if draft.creator_agent_id != creator.agent_id {
@@ -118,10 +144,10 @@ pub async fn get_challenge_draft(
 pub async fn upload_challenge_private_asset(
     State(state): State<AppState>,
     creator: CreatorAuth,
-    AxumPath(draft_id): AxumPath<String>,
+    ChallengeDraftPath(draft_id): ChallengeDraftPath,
     ValidatedJson(body): ValidatedJson<UploadChallengePrivateAssetRequest>,
 ) -> Result<(StatusCode, Json<ChallengePrivateAssetResponse>)> {
-    let draft = db::get_challenge_draft(&state.db, &draft_id)
+    let draft = db::get_challenge_draft(&state.db, draft_id.as_str())
         .await?
         .ok_or(AppError::NotFound)?;
     if draft.creator_agent_id != creator.agent_id {
@@ -186,7 +212,7 @@ pub async fn upload_challenge_private_asset(
     let asset = db::create_challenge_private_asset(
         &state.db,
         &db::CreateChallengePrivateAssetInput {
-            asset_row_id: Uuid::new_v4().to_string(),
+            asset_row_id: new_private_asset_id()?,
             draft_id: draft.id.clone(),
             asset_name: body.asset_name.clone(),
             kind: body.kind,
@@ -213,7 +239,7 @@ pub async fn upload_challenge_private_asset(
         .promote(&temporary_storage_key, &storage_path)
         .await
     {
-        cleanup_challenge_private_asset_record(&state, &asset.id).await;
+        cleanup_challenge_private_asset_record(&state, asset.id.as_str()).await;
         cleanup_storage_key(&state, &temporary_storage_key).await;
         return Err(error);
     }
@@ -221,7 +247,7 @@ pub async fn upload_challenge_private_asset(
     db::create_challenge_draft_audit_event(
         &state.db,
         &db::CreateChallengeDraftAuditEventInput {
-            event_id: Uuid::new_v4().to_string(),
+            event_id: new_draft_audit_event_id()?,
             draft_id: draft.id.clone(),
             actor_agent_id: Some(creator.agent_id.clone()),
             actor_admin_username: None,
@@ -273,10 +299,10 @@ pub async fn list_admin_challenge_drafts(
 pub async fn validate_challenge_draft(
     admin: AdminAuth,
     State(state): State<AppState>,
-    AxumPath(draft_id): AxumPath<String>,
+    ChallengeDraftPath(draft_id): ChallengeDraftPath,
     ValidatedJson(body): ValidatedJson<ValidateChallengeDraftRequest>,
 ) -> Result<Json<ChallengeDraftResponse>> {
-    let draft = db::get_challenge_draft(&state.db, &draft_id)
+    let draft = db::get_challenge_draft(&state.db, draft_id.as_str())
         .await?
         .ok_or(AppError::NotFound)?;
     if !matches!(
@@ -287,7 +313,7 @@ pub async fn validate_challenge_draft(
     }
     let recent_validations = db::count_recent_challenge_draft_validations(
         &state.db,
-        &draft.id,
+        draft.id.as_str(),
         CHALLENGE_DRAFT_QUOTA_WINDOW_SECONDS,
     )
     .await?;
@@ -307,7 +333,7 @@ pub async fn validate_challenge_draft(
             db::record_challenge_draft_validation(
                 &state.db,
                 &db::RecordChallengeDraftValidationInput {
-                    validation_record_id: Uuid::new_v4().to_string(),
+                    validation_record_id: new_draft_validation_record_id()?,
                     draft_id: draft.id.clone(),
                     status: ChallengeDraftValidationStatus::Passed,
                     message: message.clone(),
@@ -320,7 +346,7 @@ pub async fn validate_challenge_draft(
             db::create_challenge_draft_audit_event(
                 &state.db,
                 &db::CreateChallengeDraftAuditEventInput {
-                    event_id: Uuid::new_v4().to_string(),
+                    event_id: new_draft_audit_event_id()?,
                     draft_id: draft.id.clone(),
                     actor_agent_id: None,
                     actor_admin_username: Some(admin.username.clone()),
@@ -333,7 +359,7 @@ pub async fn validate_challenge_draft(
                 },
             )
             .await?;
-            let draft = db::get_challenge_draft(&state.db, &draft.id)
+            let draft = db::get_challenge_draft(&state.db, draft.id.as_str())
                 .await?
                 .ok_or(AppError::NotFound)?;
             Ok(Json(draft))
@@ -343,7 +369,7 @@ pub async fn validate_challenge_draft(
             db::record_challenge_draft_validation(
                 &state.db,
                 &db::RecordChallengeDraftValidationInput {
-                    validation_record_id: Uuid::new_v4().to_string(),
+                    validation_record_id: new_draft_validation_record_id()?,
                     draft_id: draft.id.clone(),
                     status: ChallengeDraftValidationStatus::Failed,
                     message: message.clone(),
@@ -356,7 +382,7 @@ pub async fn validate_challenge_draft(
             db::create_challenge_draft_audit_event(
                 &state.db,
                 &db::CreateChallengeDraftAuditEventInput {
-                    event_id: Uuid::new_v4().to_string(),
+                    event_id: new_draft_audit_event_id()?,
                     draft_id: draft.id.clone(),
                     actor_agent_id: None,
                     actor_admin_username: Some(admin.username.clone()),
@@ -376,14 +402,19 @@ pub async fn validate_challenge_draft(
 pub async fn abandon_challenge_draft(
     admin: AdminAuth,
     State(state): State<AppState>,
-    AxumPath(draft_id): AxumPath<String>,
+    ChallengeDraftPath(draft_id): ChallengeDraftPath,
     ValidatedJson(body): ValidatedJson<ReviewChallengeDraftRequest>,
 ) -> Result<Json<ChallengeDraftResponse>> {
-    db::abandon_challenge_draft(&state.db, &draft_id, non_empty_message(&body.message)).await?;
+    db::abandon_challenge_draft(
+        &state.db,
+        draft_id.as_str(),
+        non_empty_message(&body.message),
+    )
+    .await?;
     db::create_challenge_draft_audit_event(
         &state.db,
         &db::CreateChallengeDraftAuditEventInput {
-            event_id: Uuid::new_v4().to_string(),
+            event_id: new_draft_audit_event_id()?,
             draft_id: draft_id.clone(),
             actor_agent_id: None,
             actor_admin_username: Some(admin.username),
@@ -395,7 +426,7 @@ pub async fn abandon_challenge_draft(
     .await?;
 
     Ok(Json(
-        db::get_challenge_draft(&state.db, &draft_id)
+        db::get_challenge_draft(&state.db, draft_id.as_str())
             .await?
             .ok_or(AppError::NotFound)?,
     ))
@@ -419,7 +450,7 @@ pub async fn cleanup_challenge_drafts(
     let mut purged = 0_i64;
     for asset in purge_candidates {
         state.storage.delete(&asset.storage_key).await?;
-        db::delete_challenge_private_asset(&state.db, &asset.id).await?;
+        db::delete_challenge_private_asset(&state.db, asset.id.as_str()).await?;
         purged = purged
             .checked_add(1)
             .ok_or_else(|| AppError::Internal("private asset purge count overflow".to_string()))?;
@@ -435,22 +466,26 @@ pub async fn cleanup_challenge_drafts(
 pub async fn approve_challenge_draft(
     admin: AdminAuth,
     State(state): State<AppState>,
-    AxumPath(draft_id): AxumPath<String>,
+    ChallengeDraftPath(draft_id): ChallengeDraftPath,
     ValidatedJson(body): ValidatedJson<ReviewChallengeDraftRequest>,
 ) -> Result<Json<ChallengeDraftResponse>> {
-    let draft = db::get_challenge_draft(&state.db, &draft_id)
+    let draft = db::get_challenge_draft(&state.db, draft_id.as_str())
         .await?
         .ok_or(AppError::NotFound)?;
     if draft.status != ChallengeDraftStatus::Validated {
         return Err(AppError::Conflict);
     }
-    db::approve_validated_challenge_draft(&state.db, &draft.id, non_empty_message(&body.message))
-        .await?;
+    db::approve_validated_challenge_draft(
+        &state.db,
+        draft.id.as_str(),
+        non_empty_message(&body.message),
+    )
+    .await?;
     let approved_bundle_sha256 = draft.validation_bundle_sha256;
     db::create_challenge_draft_audit_event(
         &state.db,
         &db::CreateChallengeDraftAuditEventInput {
-            event_id: Uuid::new_v4().to_string(),
+            event_id: new_draft_audit_event_id()?,
             draft_id: draft.id.clone(),
             actor_agent_id: None,
             actor_admin_username: Some(admin.username),
@@ -461,7 +496,7 @@ pub async fn approve_challenge_draft(
     )
     .await?;
     Ok(Json(
-        db::get_challenge_draft(&state.db, &draft.id)
+        db::get_challenge_draft(&state.db, draft.id.as_str())
             .await?
             .ok_or(AppError::NotFound)?,
     ))
@@ -471,10 +506,10 @@ pub async fn approve_challenge_draft(
 pub async fn reject_challenge_draft(
     admin: AdminAuth,
     State(state): State<AppState>,
-    AxumPath(draft_id): AxumPath<String>,
+    ChallengeDraftPath(draft_id): ChallengeDraftPath,
     ValidatedJson(body): ValidatedJson<ReviewChallengeDraftRequest>,
 ) -> Result<Json<ChallengeDraftResponse>> {
-    let draft = db::get_challenge_draft(&state.db, &draft_id)
+    let draft = db::get_challenge_draft(&state.db, draft_id.as_str())
         .await?
         .ok_or(AppError::NotFound)?;
     if draft.status == ChallengeDraftStatus::Published {
@@ -482,7 +517,7 @@ pub async fn reject_challenge_draft(
     }
     db::update_challenge_draft_status(
         &state.db,
-        &draft.id,
+        draft.id.as_str(),
         ChallengeDraftStatus::Rejected,
         non_empty_message(&body.message),
     )
@@ -490,7 +525,7 @@ pub async fn reject_challenge_draft(
     db::create_challenge_draft_audit_event(
         &state.db,
         &db::CreateChallengeDraftAuditEventInput {
-            event_id: Uuid::new_v4().to_string(),
+            event_id: new_draft_audit_event_id()?,
             draft_id: draft.id.clone(),
             actor_agent_id: None,
             actor_admin_username: Some(admin.username),
@@ -501,7 +536,7 @@ pub async fn reject_challenge_draft(
     )
     .await?;
     Ok(Json(
-        db::get_challenge_draft(&state.db, &draft.id)
+        db::get_challenge_draft(&state.db, draft.id.as_str())
             .await?
             .ok_or(AppError::NotFound)?,
     ))
@@ -511,10 +546,10 @@ pub async fn reject_challenge_draft(
 pub async fn publish_challenge_draft(
     admin: AdminAuth,
     State(state): State<AppState>,
-    AxumPath(draft_id): AxumPath<String>,
+    ChallengeDraftPath(draft_id): ChallengeDraftPath,
     ValidatedJson(body): ValidatedJson<ValidateChallengeDraftRequest>,
 ) -> Result<Json<ChallengeDraftResponse>> {
-    let draft = db::get_challenge_draft(&state.db, &draft_id)
+    let draft = db::get_challenge_draft(&state.db, draft_id.as_str())
         .await?
         .ok_or(AppError::NotFound)?;
     if draft.status == ChallengeDraftStatus::Published {
@@ -546,7 +581,7 @@ pub async fn publish_challenge_draft(
                 &db::PublishArchiveChallengeDraftInput {
                     draft_id: draft.id.clone(),
                     challenge_name: manifest.challenge_name.clone(),
-                    audit_event_id: Uuid::new_v4().to_string(),
+                    audit_event_id: new_draft_audit_event_id()?,
                     admin_username: admin.username,
                     repository_path: repository_path.to_string(),
                     bundle_sha256,
@@ -563,18 +598,22 @@ pub async fn publish_challenge_draft(
                 challenge_bundle::validate_digest_pinned_images(&spec)?;
             }
             let statement_path = bundle_path.join("statement.md");
+            let managed_bundle_path =
+                shared::models::paths::ManagedBundlePath::from_existing_dir(&bundle_path)?;
+            let managed_statement_path =
+                shared::models::paths::ManagedStatementPath::from_existing_file(&statement_path)?;
             db::publish_new_challenge_draft(
                 &state.db,
                 &db::PublishNewChallengeDraftInput {
                     draft_id: draft.id.clone(),
                     challenge_name: manifest.challenge_name.clone(),
-                    bundle_path: bundle_path.to_string_lossy().to_string(),
-                    statement_path: statement_path.to_string_lossy().to_string(),
+                    bundle_path: managed_bundle_path,
+                    statement_path: managed_statement_path,
                     spec,
                     title: manifest.title.clone(),
                     summary: manifest.summary.clone(),
                     owner_agent_id: draft.creator_agent_id.clone(),
-                    audit_event_id: Uuid::new_v4().to_string(),
+                    audit_event_id: new_draft_audit_event_id()?,
                     admin_username: admin.username,
                     repository_path: repository_path.to_string(),
                     bundle_sha256,
@@ -585,7 +624,7 @@ pub async fn publish_challenge_draft(
     };
 
     Ok(Json(
-        db::get_challenge_draft(&state.db, &draft.id)
+        db::get_challenge_draft(&state.db, draft.id.as_str())
             .await?
             .ok_or(AppError::NotFound)?,
     ))
@@ -660,7 +699,7 @@ async fn assemble_runtime_bundle(
     let runtime_bundle_path = Path::new(&state.config.storage_root)
         .join("challenge-bundles")
         .join(manifest.challenge_name.as_str())
-        .join(&draft.id);
+        .join(draft.id.as_str());
     challenge_bundle::copy_challenge_bundle_dir(&public_bundle_path, &runtime_bundle_path, true)
         .await?;
 

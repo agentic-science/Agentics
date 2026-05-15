@@ -18,6 +18,8 @@ use shared::models::auth::{
     AdminLoginRequest, AdminSessionResponse, CreatorMeResponse, CreatorSessionResponse,
     GithubOauthCallbackQuery, GithubOauthLoginResponse,
 };
+use shared::models::ids::AgentId;
+use shared::models::urls::GithubOauthAuthorizationUrl;
 
 use crate::extractors::{AdminAuth, CreatorAuth};
 use crate::state::AppState;
@@ -120,7 +122,11 @@ pub async fn github_oauth_login(
         "AGENTICS_GITHUB_OAUTH_CLIENT_ID",
     )?;
     let redirect_url = required_oauth_config(
-        state.config.github_oauth_redirect_url.as_deref(),
+        state
+            .config
+            .github_oauth_redirect_url
+            .as_ref()
+            .map(|url| url.as_str()),
         "AGENTICS_GITHUB_OAUTH_REDIRECT_URL",
     )?;
     let state_token = auth::create_oauth_state();
@@ -138,16 +144,18 @@ pub async fn github_oauth_login(
     )
     .await?;
 
-    let mut authorization_url = Url::parse(&state.config.github_oauth_authorize_url)
-        .map_err(|e| AppError::Internal(format!("invalid GitHub authorize URL: {e}")))?;
+    let mut authorization_url = state.config.github_oauth_authorize_url.to_url();
     authorization_url
         .query_pairs_mut()
         .append_pair("client_id", client_id)
         .append_pair("redirect_uri", redirect_url)
         .append_pair("state", &state_token);
 
+    let authorization_url = GithubOauthAuthorizationUrl::try_from_url(authorization_url)
+        .map_err(|e| AppError::Internal(format!("generated invalid GitHub OAuth URL: {e}")))?;
+
     Ok(Json(GithubOauthLoginResponse {
-        authorization_url: authorization_url.to_string(),
+        authorization_url,
         state: state_token,
     }))
 }
@@ -182,6 +190,8 @@ pub async fn github_oauth_callback(
         github_user.login.trim(),
     )
     .await?;
+    let agent_id = AgentId::try_new(agent_id)
+        .map_err(|e| AppError::Internal(format!("stored invalid GitHub creator agent id: {e}")))?;
 
     let session_token = auth::create_web_session_token();
     let csrf_token = auth::create_csrf_token();
@@ -193,7 +203,7 @@ pub async fn github_oauth_callback(
             session_id: Uuid::new_v4().to_string(),
             session_token_hash: auth::hash_opaque_token(&session_token),
             csrf_token_hash: auth::hash_opaque_token(&csrf_token),
-            agent_id: agent_id.clone(),
+            agent_id: agent_id.as_str().to_string(),
             github_user_id: github_user.id,
             github_login: github_user.login.trim().to_string(),
             expires_at,
@@ -240,7 +250,11 @@ async fn exchange_github_code(state: &AppState, code: &str) -> Result<String> {
         "AGENTICS_GITHUB_OAUTH_CLIENT_SECRET",
     )?;
     let redirect_url = required_oauth_config(
-        state.config.github_oauth_redirect_url.as_deref(),
+        state
+            .config
+            .github_oauth_redirect_url
+            .as_ref()
+            .map(|url| url.as_str()),
         "AGENTICS_GITHUB_OAUTH_REDIRECT_URL",
     )?;
     let token_body = form_urlencoded(&[
@@ -250,7 +264,7 @@ async fn exchange_github_code(state: &AppState, code: &str) -> Result<String> {
         ("redirect_uri", redirect_url),
     ])?;
     let response = reqwest::Client::new()
-        .post(&state.config.github_oauth_token_url)
+        .post(state.config.github_oauth_token_url.as_str())
         .header(reqwest::header::ACCEPT, "application/json")
         .header(reqwest::header::USER_AGENT, GITHUB_USER_AGENT)
         .header(
@@ -286,7 +300,7 @@ async fn exchange_github_code(state: &AppState, code: &str) -> Result<String> {
 
 async fn fetch_github_user(state: &AppState, access_token: &str) -> Result<GithubUserResponse> {
     let response = reqwest::Client::new()
-        .get(&state.config.github_api_user_url)
+        .get(state.config.github_api_user_url.as_str())
         .bearer_auth(access_token)
         .header(reqwest::header::ACCEPT, "application/vnd.github+json")
         .header(reqwest::header::USER_AGENT, GITHUB_USER_AGENT)

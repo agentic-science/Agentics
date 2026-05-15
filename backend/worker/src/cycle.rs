@@ -21,6 +21,7 @@ use shared::db::{
     refresh_evaluation_job_claim, upsert_service_heartbeat,
 };
 use shared::models::evaluation::EvaluationStatus;
+use shared::models::ids::{EvaluationId, EvaluationJobId};
 use shared::runner::{connect_docker, execute_evaluation_job};
 use shared::storage::LocalStorage;
 
@@ -172,11 +173,11 @@ pub async fn run_worker_cycle(
     )
     .await?;
 
-    let evaluation_id = uuid::Uuid::new_v4().to_string();
+    let evaluation_id = EvaluationId::try_new(uuid::Uuid::new_v4().to_string())?;
     let evaluation_inserted = mark_evaluation_started(
         db,
         &shared::db::MarkEvaluationStartedInput {
-            evaluation_id: evaluation_id.clone(),
+            evaluation_id,
             solution_submission_id: job.solution_submission_id.clone(),
             job_id: job.id.clone(),
             target: job.target.clone(),
@@ -205,7 +206,7 @@ pub async fn run_worker_cycle(
     let exec_result = execute_evaluation_job(
         docker,
         config,
-        &job.id,
+        job.id.as_str(),
         job.eval_type,
         &job.payload,
         storage,
@@ -240,7 +241,7 @@ pub async fn run_worker_cycle(
                     public_results: result.result.public_results,
                     validation_summary: result.result.validation_summary,
                     official_summary: result.result.official_summary,
-                    log_path: Some(result.log_path),
+                    log_key: Some(result.log_key),
                     last_error: None,
                 },
             )
@@ -306,7 +307,7 @@ pub async fn run_worker_cycle(
                     public_results: vec![],
                     validation_summary: None,
                     official_summary: None,
-                    log_path: None,
+                    log_key: None,
                     last_error: Some(error_msg.clone()),
                 },
             )
@@ -370,7 +371,7 @@ fn lease_refresh_interval(config: &Config) -> Duration {
 
 async fn refresh_claim_until_stopped(
     db: sqlx::PgPool,
-    job_id: String,
+    job_id: EvaluationJobId,
     worker_id: String,
     refresh_every: Duration,
     mut stop: watch::Receiver<bool>,

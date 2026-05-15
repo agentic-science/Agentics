@@ -540,8 +540,8 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
         let artifact_key = StorageKey::try_new(format!("local-validation/{job_id}/solution.zip"))?;
         let artifact_path = storage.put(&artifact_key, &package.bytes).await?;
         let payload = EvaluationJobPayload {
-            artifact_path: artifact_path.to_string(),
-            bundle_path: bundle_dir.to_string_lossy().to_string(),
+            artifact_key: artifact_path,
+            bundle_path: shared::models::paths::ManagedBundlePath::from_existing_dir(&bundle_dir)?,
             challenge_name: spec.challenge_name.clone(),
             target: target.clone(),
         };

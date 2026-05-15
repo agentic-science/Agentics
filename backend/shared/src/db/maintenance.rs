@@ -6,7 +6,7 @@ use sqlx::PgPool;
 
 use super::ids::{solution_submission_id_from_row, uuid_string_from_row};
 use crate::error::{AppError, Result};
-use crate::models::ids::SolutionSubmissionId;
+use crate::models::ids::{EvaluationJobId, SolutionSubmissionId};
 use crate::models::request::AdminServiceHeartbeatDto;
 
 /// JSON payload stored with each service heartbeat.
@@ -17,13 +17,13 @@ use crate::models::request::AdminServiceHeartbeatDto;
 pub struct HeartbeatPayload {
     pub status: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub job_id: Option<String>,
+    pub job_id: Option<EvaluationJobId>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub solution_submission_id: Option<SolutionSubmissionId>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_completed_job_id: Option<String>,
+    pub last_completed_job_id: Option<EvaluationJobId>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_failed_job_id: Option<String>,
+    pub last_failed_job_id: Option<EvaluationJobId>,
 }
 
 /// Insert or refresh the latest heartbeat for a named service instance.
@@ -115,13 +115,17 @@ pub async fn ensure_challenges_seeded_from_root(
             crate::challenge_bundle::validate_challenge_bundle(&bundle_dir).await?;
             let spec = crate::challenge_bundle::read_challenge_bundle_spec(&bundle_dir).await?;
             let statement_path = bundle_dir.join("statement.md");
+            let managed_bundle_path =
+                crate::models::paths::ManagedBundlePath::from_existing_dir(&bundle_dir)?;
+            let managed_statement_path =
+                crate::models::paths::ManagedStatementPath::from_existing_file(&statement_path)?;
             let challenge_name = &spec.challenge_name;
 
             if crate::db::publish_challenge(
                 pool,
                 challenge_name,
-                bundle_dir.to_string_lossy().as_ref(),
-                statement_path.to_string_lossy().as_ref(),
+                &managed_bundle_path,
+                &managed_statement_path,
                 &spec,
                 &spec.challenge_title,
                 &spec.challenge_summary,
@@ -145,8 +149,8 @@ pub async fn ensure_challenges_seeded_from_root(
                 .bind(challenge_name.as_str())
                 .bind(&spec.challenge_title)
                 .bind(&spec.challenge_summary)
-                .bind(bundle_dir.to_string_lossy().as_ref())
-                .bind(statement_path.to_string_lossy().as_ref())
+                .bind(managed_bundle_path.as_str()?)
+                .bind(managed_statement_path.as_str()?)
                 .bind(serde_json::to_value(&spec).map_err(|e| AppError::Internal(e.to_string()))?)
                 .execute(pool)
                 .await?;

@@ -2,6 +2,7 @@ use sqlx::PgPool;
 
 use crate::error::Result;
 use crate::models::evaluation::ScoringMode;
+use crate::models::ids::AgentId;
 use crate::models::names::{ChallengeName, TargetName};
 
 /// Count evaluation jobs that consumed quota for one agent and challenge.
@@ -10,7 +11,7 @@ use crate::models::names::{ChallengeName, TargetName};
 /// they consume API, storage, and worker capacity once accepted.
 pub async fn count_recent_runs_for_agent_challenge(
     pool: &PgPool,
-    agent_id: &str,
+    agent_id: &AgentId,
     challenge_name: &ChallengeName,
     target: &TargetName,
     eval_type: ScoringMode,
@@ -28,7 +29,7 @@ pub async fn count_recent_runs_for_agent_challenge(
           AND s.created_at >= NOW() - ($5::DOUBLE PRECISION * INTERVAL '1 second')
         "#,
     )
-    .bind(agent_id)
+    .bind(agent_id.as_str())
     .bind(challenge_name.as_str())
     .bind(target.as_str())
     .bind(eval_type.as_str())
@@ -42,7 +43,7 @@ pub async fn count_recent_runs_for_agent_challenge(
 /// Count accepted evaluation jobs for one agent, challenge, target, and mode.
 pub async fn count_lifetime_runs_for_agent_challenge(
     pool: &PgPool,
-    agent_id: &str,
+    agent_id: &AgentId,
     challenge_name: &ChallengeName,
     target: &TargetName,
     eval_type: ScoringMode,
@@ -58,7 +59,7 @@ pub async fn count_lifetime_runs_for_agent_challenge(
           AND j.eval_type = $4
         "#,
     )
-    .bind(agent_id)
+    .bind(agent_id.as_str())
     .bind(challenge_name.as_str())
     .bind(target.as_str())
     .bind(eval_type.as_str())
@@ -71,7 +72,7 @@ pub async fn count_lifetime_runs_for_agent_challenge(
 /// Count validation runs that consumed quota for one agent and challenge.
 pub async fn count_recent_validation_runs_for_agent_challenge(
     pool: &PgPool,
-    agent_id: &str,
+    agent_id: &AgentId,
     challenge_name: &ChallengeName,
     target: &TargetName,
     window_seconds: i64,

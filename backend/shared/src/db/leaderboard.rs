@@ -13,7 +13,7 @@ use crate::models::names::{ChallengeName, MetricName, TargetName};
 use crate::models::request::LeaderboardEntryDto;
 
 use super::challenges::get_published_challenge;
-use super::ids::{solution_submission_id_from_row, target_from_row, uuid_string_from_row};
+use super::ids::{agent_id_from_row, solution_submission_id_from_row, target_from_row};
 use super::json::decode_optional_json;
 
 /// Hide a solution submission and repair or remove the affected leaderboard entry.
@@ -200,7 +200,7 @@ pub async fn list_leaderboard_entries(
 
             Ok(LeaderboardEntryDto {
                 target: target_from_row(&r, "target")?,
-                agent_id: uuid_string_from_row(&r, "agent_id")?,
+                agent_id: agent_id_from_row(&r, "agent_id")?,
                 agent_name: r.try_get("agent_name")?,
                 best_solution_submission_id: solution_submission_id_from_row(
                     &r,

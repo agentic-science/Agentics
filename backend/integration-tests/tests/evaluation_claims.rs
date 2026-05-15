@@ -8,7 +8,7 @@ use helpers::{
 };
 use shared::db::{MarkEvaluationStartedInput, PersistedEvaluationResult};
 use shared::models::evaluation::{EvaluationStatus, MetricValue, ScoreSummary, ScoringMode};
-use shared::models::ids::SolutionSubmissionId;
+use shared::models::ids::{EvaluationId, EvaluationJobId, SolutionSubmissionId};
 use shared::models::names::MetricName;
 
 #[sqlx::test(migrations = "../migrations")]
@@ -142,6 +142,7 @@ async fn refreshed_job_lease_is_not_reaped(pool: sqlx::PgPool) {
     .await
     .expect("failed to mark job running");
 
+    let job_id = EvaluationJobId::try_new(job_id).expect("stored job id is valid");
     let refreshed = shared::db::refresh_evaluation_job_claim(&pool, &job_id, "worker-1")
         .await
         .expect("failed to refresh job lease");
@@ -204,7 +205,7 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
         shared::db::mark_evaluation_started(
             &pool,
             &MarkEvaluationStartedInput {
-                evaluation_id: uuid::Uuid::new_v4().to_string(),
+                evaluation_id: new_evaluation_id(),
                 solution_submission_id: solution_submission_id.clone(),
                 job_id: first_claim.id.clone(),
                 target: first_claim.target.clone(),
@@ -223,7 +224,7 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
         WHERE id = $1::uuid
         "#,
     )
-    .bind(&first_claim.id)
+    .bind(first_claim.id.as_str())
     .execute(&pool)
     .await
     .expect("failed to age first claim");
@@ -243,7 +244,7 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
         !shared::db::mark_evaluation_started(
             &pool,
             &MarkEvaluationStartedInput {
-                evaluation_id: uuid::Uuid::new_v4().to_string(),
+                evaluation_id: new_evaluation_id(),
                 solution_submission_id: solution_submission_id.clone(),
                 job_id: second_claim.id.clone(),
                 target: second_claim.target.clone(),
@@ -270,7 +271,7 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
     let still_running: (String, String, i32) = sqlx::query_as(
         "SELECT status, worker_id, attempt_count FROM evaluation_jobs WHERE id = $1::uuid",
     )
-    .bind(&first_claim.id)
+    .bind(first_claim.id.as_str())
     .fetch_one(&pool)
     .await
     .expect("failed to query running job");
@@ -306,7 +307,7 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
         WHERE j.id = $1::uuid
         "#,
     )
-    .bind(&first_claim.id)
+    .bind(first_claim.id.as_str())
     .fetch_one(&pool)
     .await
     .expect("failed to query final state");
@@ -420,7 +421,7 @@ async fn finish_next_job_with_score(
         shared::db::mark_evaluation_started(
             pool,
             &MarkEvaluationStartedInput {
-                evaluation_id: uuid::Uuid::new_v4().to_string(),
+                evaluation_id: new_evaluation_id(),
                 solution_submission_id: solution_submission_id.clone(),
                 job_id: claim.id.clone(),
                 target: claim.target.clone(),
@@ -477,11 +478,15 @@ fn persisted_result(
             passed: 1,
             total: 1,
         }),
-        log_path: None,
+        log_key: None,
         last_error: if status == EvaluationStatus::Failed {
             Some("stale worker failure".to_string())
         } else {
             None
         },
     }
+}
+
+fn new_evaluation_id() -> EvaluationId {
+    EvaluationId::try_new(uuid::Uuid::new_v4().to_string()).expect("generated evaluation id valid")
 }

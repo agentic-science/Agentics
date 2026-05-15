@@ -5,6 +5,7 @@ use chrono::{DateTime, Utc};
 use crate::error::{AppError, Result};
 use crate::models::challenge::{ChallengeBundleSpec, ChallengeEligibilityType};
 use crate::models::evaluation::ScoringMode;
+use crate::models::ids::AgentId;
 use crate::models::names::{ChallengeName, TargetName};
 
 use super::challenges::{agent_is_shortlisted, challenge_has_shortlist, get_published_challenge};
@@ -28,7 +29,7 @@ pub async fn ensure_published_challenge_supports_eval_type(
     challenge_name: &ChallengeName,
     target: &TargetName,
     eval_type: ScoringMode,
-    agent_id: &str,
+    agent_id: &AgentId,
 ) -> Result<PublishedChallengeAdmission> {
     let challenge = get_published_challenge(pool, challenge_name).await?;
     let challenge =
@@ -57,7 +58,7 @@ pub(super) async fn ensure_challenge_supports_eval_type(
     spec: &ChallengeBundleSpec,
     target: &TargetName,
     eval_type: ScoringMode,
-    agent_id: &str,
+    agent_id: &AgentId,
 ) -> Result<()> {
     ensure_challenge_accepts_submissions(spec)?;
     ensure_challenge_eligibility(pool, challenge_name, spec, agent_id).await?;
@@ -101,7 +102,7 @@ async fn ensure_challenge_eligibility(
     pool: &PgPool,
     challenge_name: &ChallengeName,
     spec: &ChallengeBundleSpec,
-    agent_id: &str,
+    agent_id: &AgentId,
 ) -> Result<()> {
     match spec.eligibility.eligibility_type {
         ChallengeEligibilityType::Open => Ok(()),
