@@ -14,7 +14,6 @@ use shared::models::challenge_creation::{
     ChallengeDraftCleanupResponse, ChallengeDraftListResponse, ChallengeDraftResponse,
     ChallengePrivateAssetResponse,
 };
-use shared::models::request::DiscussionListResponse;
 use shared::models::request::{
     AdminCapacityResponse, AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse,
     ChallengeShortlistResponse, ChallengeShortlistRevisionResponse,
@@ -69,7 +68,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "creatorChallengeStatsResponseSchema",
     )?;
     insert_schema::<DisableAgentResponse>(&mut schemas, "disableAgentResponseSchema")?;
-    insert_schema::<DiscussionListResponse>(&mut schemas, "discussionListResponseSchema")?;
     insert_schema::<EvaluationJobResponse>(&mut schemas, "evaluationJobResponseSchema")?;
     insert_schema::<GithubOauthLoginResponse>(&mut schemas, "githubOauthLoginResponseSchema")?;
     insert_schema::<HideSolutionSubmissionResponse>(

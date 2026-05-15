@@ -1,9 +1,9 @@
 CREATE TABLE IF NOT EXISTS challenge_drafts (
-  id TEXT PRIMARY KEY,
-  challenge_id TEXT NOT NULL,
+  id UUID PRIMARY KEY,
+  challenge_name TEXT NOT NULL,
   request_kind TEXT NOT NULL CHECK (request_kind IN ('new_challenge', 'archive_challenge')),
   status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'validated', 'approved', 'rejected', 'published', 'abandoned')),
-  creator_agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
+  creator_agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
   creator_github_user_id BIGINT NOT NULL,
   creator_github_login TEXT NOT NULL DEFAULT '',
   repo_url TEXT NOT NULL,
@@ -15,29 +15,29 @@ CREATE TABLE IF NOT EXISTS challenge_drafts (
   manifest_json JSONB NOT NULL,
   validation_message TEXT,
   validation_repository_path TEXT,
-  published_challenge_id TEXT REFERENCES challenges(id) ON DELETE SET NULL,
+  published_challenge_name TEXT REFERENCES challenges(name) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (repo_url, pr_number, challenge_path)
 );
 
 CREATE TABLE IF NOT EXISTS challenge_private_assets (
-  id TEXT PRIMARY KEY,
-  draft_id TEXT NOT NULL REFERENCES challenge_drafts(id) ON DELETE CASCADE,
-  asset_id TEXT NOT NULL,
+  id UUID PRIMARY KEY,
+  draft_id UUID NOT NULL REFERENCES challenge_drafts(id) ON DELETE CASCADE,
+  asset_name TEXT NOT NULL,
   kind TEXT NOT NULL CHECK (kind IN ('private_benchmark_data', 'private_scorer_package', 'private_seeds', 'private_reference_outputs')),
   required BOOLEAN NOT NULL DEFAULT FALSE,
   size_bytes BIGINT NOT NULL CHECK (size_bytes >= 0),
   sha256 TEXT NOT NULL,
   storage_uri TEXT NOT NULL,
-  uploader_agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
+  uploader_agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (draft_id, asset_id)
+  UNIQUE (draft_id, asset_name)
 );
 
 CREATE TABLE IF NOT EXISTS challenge_draft_validation_records (
-  id TEXT PRIMARY KEY,
-  draft_id TEXT NOT NULL REFERENCES challenge_drafts(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY,
+  draft_id UUID NOT NULL REFERENCES challenge_drafts(id) ON DELETE CASCADE,
   status TEXT NOT NULL CHECK (status IN ('passed', 'failed')),
   message TEXT NOT NULL DEFAULT '',
   repository_path TEXT NOT NULL,
@@ -46,9 +46,9 @@ CREATE TABLE IF NOT EXISTS challenge_draft_validation_records (
 );
 
 CREATE TABLE IF NOT EXISTS challenge_draft_audit_events (
-  id TEXT PRIMARY KEY,
-  draft_id TEXT NOT NULL REFERENCES challenge_drafts(id) ON DELETE CASCADE,
-  actor_agent_id TEXT REFERENCES agents(id) ON DELETE SET NULL,
+  id UUID PRIMARY KEY,
+  draft_id UUID NOT NULL REFERENCES challenge_drafts(id) ON DELETE CASCADE,
+  actor_agent_id UUID REFERENCES agents(id) ON DELETE SET NULL,
   actor_admin_username TEXT,
   action TEXT NOT NULL,
   message TEXT NOT NULL DEFAULT '',

@@ -124,7 +124,7 @@ struct PrepareRequest<'a> {
 
 #[derive(Debug, serde::Serialize)]
 struct SolutionRunMetadata {
-    run_id: String,
+    run_name: String,
     interface: ChallengeRunInterface,
     exit_code: i64,
     timed_out: bool,
@@ -412,7 +412,7 @@ async fn run_solution_invocations(
         .ok_or_else(|| AppError::Runner("zip_project manifest has no run phase".to_string()))?;
 
     for run in &request.run_manifest.runs {
-        let durable_io_root = request.runs_root.join(&run.run_id);
+        let durable_io_root = request.runs_root.join(run.run_name.as_str());
         let limits = effective_phase_limits(request.profile, &run_phase);
         let io_mount = runner
             .storage
@@ -435,7 +435,7 @@ async fn run_solution_invocations(
         let outcome = run_container(
             runner.docker,
             ContainerRequest {
-                name: container_name(runner.job_id, &format!("run-{}", run.run_id)),
+                name: container_name(runner.job_id, &format!("run-{}", run.run_name)),
                 image: request.profile.solution_image.clone(),
                 cmd: vec![
                     "sh".to_string(),
@@ -447,7 +447,7 @@ async fn run_solution_invocations(
                 ],
                 env: vec![
                     "AGENTICS_PHASE=run".to_string(),
-                    format!("AGENTICS_RUN_ID={}", run.run_id),
+                    format!("AGENTICS_RUN_NAME={}", run.run_name),
                     format!("AGENTICS_INTERFACE={}", run_interface(run.interface)),
                     "AGENTICS_INPUT_DIR=/io/input".to_string(),
                     "AGENTICS_OUTPUT_DIR=/io/output".to_string(),
@@ -468,7 +468,7 @@ async fn run_solution_invocations(
             },
         )
         .await?;
-        append_run_logs(logs, &run.run_id, &outcome.logs);
+        append_run_logs(logs, &run.run_name, &outcome.logs);
         ensure_container_succeeded(ZipProjectPhaseName::Run, &outcome)?;
         write_run_metadata(io_root, run, &outcome).await?;
         ensure_disk_limit(io_root, limits.disk_limit_mb, ZipProjectPhaseName::Run).await?;
@@ -871,14 +871,14 @@ async fn write_run_metadata(
     outcome: &ContainerOutcome,
 ) -> Result<()> {
     let metadata = SolutionRunMetadata {
-        run_id: run.run_id.clone(),
+        run_name: run.run_name.to_string(),
         interface: run.interface,
         exit_code: outcome.exit_code,
         timed_out: outcome.timed_out,
         wall_time_ms: outcome.wall_time_ms,
-        stdout_path: format!("/solution-runs/{}/stdout.txt", run.run_id),
-        stderr_path: format!("/solution-runs/{}/stderr.txt", run.run_id),
-        output_dir: format!("/solution-runs/{}/output", run.run_id),
+        stdout_path: format!("/solution-runs/{}/stdout.txt", run.run_name),
+        stderr_path: format!("/solution-runs/{}/stderr.txt", run.run_name),
+        output_dir: format!("/solution-runs/{}/output", run.run_name),
     };
     let bytes = serde_json::to_vec_pretty(&metadata)
         .map_err(|e| AppError::Internal(format!("serialize run metadata failed: {e}")))?;
@@ -897,7 +897,7 @@ async fn ensure_declared_outputs_exist(run: &ChallengeRunSpec, output_dir: &Path
                     ZipProjectPhaseFailureReason::RunnerError,
                     format!(
                         "run `{}` did not produce declared output file `{output}`",
-                        run.run_id
+                        run.run_name
                     ),
                     None,
                 )
@@ -908,7 +908,7 @@ async fn ensure_declared_outputs_exist(run: &ChallengeRunSpec, output_dir: &Path
                 ZipProjectPhaseFailureReason::RunnerError,
                 format!(
                     "run `{}` declared output file `{output}` is a symlink",
-                    run.run_id
+                    run.run_name
                 ),
                 None,
             ));
@@ -919,7 +919,7 @@ async fn ensure_declared_outputs_exist(run: &ChallengeRunSpec, output_dir: &Path
                 ZipProjectPhaseFailureReason::RunnerError,
                 format!(
                     "run `{}` declared output path `{output}` is not a regular file",
-                    run.run_id
+                    run.run_name
                 ),
                 None,
             ));

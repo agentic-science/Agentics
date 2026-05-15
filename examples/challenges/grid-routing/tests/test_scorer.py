@@ -22,14 +22,14 @@ def run_scorer(tmp_path: Path, *, mode: str, paths_by_instance: dict[str, str]) 
     solution_runs_dir = tmp_path / "solution-runs"
     runs = json.loads(runs_file.read_text(encoding="utf-8"))["runs"]
     for run in runs:
-        run_dir = solution_runs_dir / run["run_id"]
+        run_dir = solution_runs_dir / run["run_name"]
         input_dir = run_dir / "input"
         output_dir = run_dir / "output"
         input_dir.mkdir(parents=True, exist_ok=True)
         output_dir.mkdir(parents=True, exist_ok=True)
         case = run["input_files"][0]["content_json"]
         (input_dir / "case.json").write_text(json.dumps(case), encoding="utf-8")
-        path = paths_by_instance[run["run_id"]]
+        path = paths_by_instance[run["run_name"]]
         (output_dir / "path.txt").write_text(f"{path}\n", encoding="utf-8")
 
     output_path = tmp_path / "result.json"
@@ -72,13 +72,13 @@ def test_validation_mode_returns_public_scores(tmp_path: Path) -> None:
     assert result["primary_score"] == 1
     assert result["rank_score"] == 1
     assert result["aggregate_metrics"] == [
-        {"metric_id": "score", "value": 1},
-        {"metric_id": "passed_cases", "value": 3},
+        {"metric_name": "score", "value": 1},
+        {"metric_name": "passed_cases", "value": 3},
     ]
     assert result["run_metrics"] == [
-        {"run_id": "public-1", "metrics": [{"metric_id": "score", "value": 1}]},
-        {"run_id": "public-2", "metrics": [{"metric_id": "score", "value": 1}]},
-        {"run_id": "public-3", "metrics": [{"metric_id": "score", "value": 1}]},
+        {"run_name": "public-1", "metrics": [{"metric_name": "score", "value": 1}]},
+        {"run_name": "public-2", "metrics": [{"metric_name": "score", "value": 1}]},
+        {"run_name": "public-3", "metrics": [{"metric_name": "score", "value": 1}]},
     ]
     assert len(result["public_results"]) == 3
     assert all(item["status"] == "passed" for item in result["public_results"])
@@ -140,6 +140,6 @@ def test_official_mode_uses_private_benchmark_cases(tmp_path: Path) -> None:
     assert result.get("validation_summary") is None
     assert result["official_summary"] == {"score": 1, "passed": 2, "total": 2}
     assert result["aggregate_metrics"] == [
-        {"metric_id": "score", "value": 1},
-        {"metric_id": "passed_cases", "value": 2},
+        {"metric_name": "score", "value": 1},
+        {"metric_name": "passed_cases", "value": 2},
     ]

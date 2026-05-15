@@ -86,7 +86,7 @@ pub fn normalized_manifest_sha256(manifest: &ChallengeCreationManifest) -> Resul
 /// Return a deterministic digest for the draft content a reviewer validated.
 ///
 /// The digest covers the normalized public manifest, the public bundle tree for
-/// publishable requests, and the uploaded private asset identities. It is not a
+/// publishable requests, and the uploaded private asset nameentities. It is not a
 /// replacement for a future server-side Git checkout at `commit_sha`, but it
 /// gives validation, approval, and publish an exact content identity to compare
 /// within the MVP trust boundary.
@@ -130,9 +130,9 @@ fn draft_review_bundle_sha256_blocking(
     }
 
     let mut assets = private_assets.to_vec();
-    assets.sort_by(|left, right| left.asset_id.cmp(&right.asset_id));
+    assets.sort_by(|left, right| left.asset_name.cmp(&right.asset_name));
     for asset in assets {
-        hash_field(&mut hasher, "asset_id", asset.asset_id.as_bytes());
+        hash_field(&mut hasher, "asset_name", asset.asset_name.as_bytes());
         hash_field(&mut hasher, "asset_kind", asset.kind.as_str().as_bytes());
         hash_field(&mut hasher, "asset_required", &[u8::from(asset.required)]);
         hash_field(&mut hasher, "asset_size", &asset.size_bytes.to_be_bytes());
@@ -235,10 +235,10 @@ async fn validate_public_bundle(
 ) -> Result<()> {
     let bundle_dir = root.join(bundle_path);
     let spec = read_challenge_bundle_spec(&bundle_dir).await?;
-    if spec.challenge_id != manifest.challenge_id {
+    if spec.challenge_name != manifest.challenge_name {
         return Err(AppError::Validation(format!(
-            "bundle challenge_id mismatch: expected {}, got {}",
-            manifest.challenge_id, spec.challenge_id
+            "bundle challenge_name mismatch: expected {}, got {}",
+            manifest.challenge_name, spec.challenge_name
         )));
     }
     if spec.challenge_title != manifest.title {
@@ -307,11 +307,11 @@ fn validate_private_asset_requirements(
 ) -> Result<()> {
     let mut ids = HashSet::with_capacity(private_assets.len());
     for asset in private_assets {
-        validate_identifier(&asset.asset_id, "private_assets[].asset_id")?;
-        if !ids.insert(asset.asset_id.as_str()) {
+        validate_identifier(&asset.asset_name, "private_assets[].asset_name")?;
+        if !ids.insert(asset.asset_name.as_str()) {
             return Err(AppError::Validation(format!(
-                "private_assets contains duplicate asset_id `{}`",
-                asset.asset_id
+                "private_assets contains duplicate asset_name `{}`",
+                asset.asset_name
             )));
         }
         if let Some(note) = &asset.asset_note {
@@ -424,7 +424,7 @@ mod tests {
             .await
             .expect("new challenge should validate");
 
-        assert_eq!(manifest.challenge_id.as_str(), "sample-sum");
+        assert_eq!(manifest.challenge_name.as_str(), "sample-sum");
         cleanup(&repo);
     }
 
@@ -437,7 +437,7 @@ mod tests {
             &json!({
                 "schema_version": 1,
                 "request": "new_version",
-                "challenge_id": "sample-sum",
+                "challenge_name": "sample-sum",
                 "title": "Sample Sum",
                 "summary": "Add numbers",
                 "readme_path": "README.md",
@@ -464,7 +464,7 @@ mod tests {
             &json!({
                 "schema_version": 1,
                 "request": "archive_challenge",
-                "challenge_id": "sample-sum",
+                "challenge_name": "sample-sum",
                 "title": "Sample Sum",
                 "summary": "Add numbers",
                 "readme_path": "README.md",
@@ -498,7 +498,7 @@ mod tests {
         let manifest = ChallengeCreationManifest {
             schema_version: 1,
             request: ChallengeCreationRequestKind::ArchiveChallenge,
-            challenge_id: "sample-sum".parse().expect("valid challenge id"),
+            challenge_name: "sample-sum".parse().expect("valid challenge name"),
             title: "Sample Sum".to_string(),
             summary: "Add numbers".to_string(),
             readme_path: "README.md".to_string(),
@@ -548,7 +548,7 @@ mod tests {
             &json!({
                 "runs": [
                     {
-                        "run_id": "case-1",
+                        "run_name": "case-1",
                         "interface": "stdio",
                         "stdin_json": { "a": 1, "b": 2 },
                         "output_files": []
@@ -561,7 +561,7 @@ mod tests {
             &repo.join(bundle).join("spec.json"),
             &json!({
                 "schema_version": 1,
-                "challenge_id": "sample-sum",
+                "challenge_name": "sample-sum",
                 "challenge_title": "Sample Sum",
                 "challenge_summary": "Add numbers",
                 "solution": {
@@ -579,7 +579,7 @@ mod tests {
                         "accelerator": "cpu",
                         "validation_enabled": true,
                         "resource_profile": {
-                            "id": "agentics-cpu-small",
+                            "name": "agentics-cpu-small",
                             "solution_image": "agentics-linux-arm64-cpu:ubuntu26.04-local",
                             "scorer_image": "agentics-linux-arm64-cpu:ubuntu26.04-local",
                             "timeout_sec": 30,
@@ -614,14 +614,14 @@ mod tests {
                 "metric_schema": {
                     "metrics": [
                         {
-                            "id": "score",
+                            "name": "score",
                             "label": "Score",
                             "direction": "maximize",
                             "visibility": "public"
                         }
                     ],
                     "ranking": {
-                        "primary_metric_id": "score"
+                        "primary_metric_name": "score"
                     }
                 }
             })
@@ -631,14 +631,14 @@ mod tests {
         let manifest = json!({
             "schema_version": 1,
             "request": "new_challenge",
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "title": "Sample Sum",
             "summary": "Add numbers",
             "readme_path": "README.md",
             "bundle_path": bundle,
             "private_assets": [
                 {
-                    "asset_id": "official-cases",
+                    "asset_name": "official-cases",
                     "kind": "private_benchmark_data",
                     "required": true
                 }

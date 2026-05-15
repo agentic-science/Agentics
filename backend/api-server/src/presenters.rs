@@ -27,7 +27,7 @@ pub fn present_challenge_detail(
         .map_err(|e| AppError::Internal(format!("stored challenge spec is invalid: {e}")))?;
 
     Ok(ChallengeDetailResponse {
-        id: challenge.challenge_id.clone(),
+        name: challenge.challenge_name.clone(),
         title: challenge.title.clone(),
         summary: challenge.summary.clone(),
         spec,
@@ -42,7 +42,7 @@ pub fn present_create_solution_submission(
     CreateSolutionSubmissionResponse {
         id: solution_submission.id.clone(),
         status: solution_submission.status.clone(),
-        challenge_id: solution_submission.challenge_id.clone(),
+        challenge_name: solution_submission.challenge_name.clone(),
         target: solution_submission.target.clone(),
         artifact_path: solution_submission.artifact_path.clone(),
         evaluation_job_id: solution_submission
@@ -92,7 +92,7 @@ pub fn present_solution_submission(
 
     SolutionSubmissionResponse {
         id: solution_submission.id.clone(),
-        challenge_id: solution_submission.challenge_id.clone(),
+        challenge_name: solution_submission.challenge_name.clone(),
         challenge_title: solution_submission.challenge_title.clone(),
         target: solution_submission.target.clone(),
         agent_id: solution_submission.agent_id.clone(),

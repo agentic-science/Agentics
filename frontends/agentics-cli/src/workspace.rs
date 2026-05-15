@@ -5,7 +5,7 @@ use std::process::Command;
 use anyhow::{Context, Result, bail};
 use serde::Serialize;
 use shared::models::challenge::ChallengeDetailResponse;
-use shared::models::ids::ChallengeId;
+use shared::models::names::ChallengeName;
 use shared::zip_project::{
     ZIP_PROJECT_MANIFEST_FILE, ZIP_PROJECT_PROTOCOL, ZIP_PROJECT_PROTOCOL_VERSION,
     ZipProjectCommands, ZipProjectDependencies, ZipProjectDependencyPolicy, ZipProjectInterface,
@@ -31,7 +31,7 @@ fi
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct InitSolutionSummary {
     pub workspace_dir: PathBuf,
-    pub challenge_id: ChallengeId,
+    pub challenge_name: ChallengeName,
     pub challenge_title: String,
     pub runtime_profile: String,
     pub interface: String,
@@ -43,7 +43,7 @@ pub(crate) fn init_solution_workspace(
     runtime_profile: SolutionRuntimeProfile,
     interface: SolutionInterface,
 ) -> Result<InitSolutionSummary> {
-    let workspace_dir = dir.unwrap_or_else(|| default_workspace_dir(&challenge.id));
+    let workspace_dir = dir.unwrap_or_else(|| default_workspace_dir(&challenge.name));
     if fs::exists(&workspace_dir)
         .with_context(|| format!("failed to inspect workspace {}", workspace_dir.display()))?
     {
@@ -76,7 +76,7 @@ pub(crate) fn init_solution_workspace(
 
     Ok(InitSolutionSummary {
         workspace_dir,
-        challenge_id: challenge.id.clone(),
+        challenge_name: challenge.name.clone(),
         challenge_title: challenge.title.clone(),
         runtime_profile: runtime_profile.manifest_value().to_string(),
         interface: interface.manifest_value().to_string(),
@@ -121,7 +121,7 @@ fn render_readme(
     format!(
         "# {}\n\nChallenge: `{}`\nStarts at: `{}`\nCloses at: `{}`\nEligibility: `{}`\nRuntime profile: `{}`\nInterface: `{}`\nTargets:\n{}\n\n{}\n\n## Workspace Contract\n\nThis workspace intentionally starts with only `README.md`, `{}`, and a Git repository.\n\nCreate a `run.sh` file at the repository root before committing. The generated pre-commit hook checks that `run.sh` and `{}` exist. Keep `run.sh` aligned with the generated manifest before packaging or submitting.\n",
         challenge.title.trim(),
-        challenge.id,
+        challenge.name,
         challenge.spec.starts_at.as_deref().unwrap_or("none"),
         challenge.spec.closes_at.as_deref().unwrap_or("none"),
         serde_json::to_value(challenge.spec.eligibility.eligibility_type)
@@ -231,10 +231,10 @@ fn install_pre_commit_hook(workspace_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn default_workspace_dir(challenge_id: &ChallengeId) -> PathBuf {
+fn default_workspace_dir(challenge_name: &ChallengeName) -> PathBuf {
     PathBuf::from(format!(
         "{}-solution",
-        sanitize_path_segment(challenge_id.as_str())
+        sanitize_path_segment(challenge_name.as_str())
     ))
 }
 
@@ -361,7 +361,7 @@ mod tests {
         PrivateBenchmarkPolicy, ResourceProfileSpec, ScorerSpec, SolutionSpec, TargetAccelerator,
     };
     use shared::models::evaluation::ScoreVisibility;
-    use shared::models::ids::{ChallengeId, TargetName};
+    use shared::models::names::{ChallengeName, ResourceProfileName, TargetName};
     use shared::zip_project::{
         ZipProjectInterfaceKind, ZipProjectNetworkAccess, parse_zip_project_manifest,
     };
@@ -390,7 +390,7 @@ mod tests {
         let hook = fs::read_to_string(workspace_dir.join(".git/hooks/pre-commit"))
             .expect("hook should be readable");
 
-        assert_eq!(summary.challenge_id.as_str(), "sample-sum");
+        assert_eq!(summary.challenge_name.as_str(), "sample-sum");
         assert_eq!(summary.runtime_profile, "python-cpu");
         assert_eq!(summary.interface, "challenge_defined");
         assert!(readme.contains("# Sample Sum"));
@@ -469,21 +469,21 @@ mod tests {
     }
 
     #[test]
-    fn default_workspace_dir_uses_challenge_id() {
+    fn default_workspace_dir_uses_challenge_name() {
         assert_eq!(
-            default_workspace_dir(&challenge_id("sample-sum")),
+            default_workspace_dir(&challenge_name("sample-sum")),
             std::path::PathBuf::from("sample-sum-solution")
         );
     }
 
     fn challenge_detail() -> ChallengeDetailResponse {
         ChallengeDetailResponse {
-            id: challenge_id("sample-sum"),
+            name: challenge_name("sample-sum"),
             title: "Sample Sum".to_string(),
             summary: "Add numbers".to_string(),
             spec: ChallengeBundleSpec {
                 schema_version: 1,
-                challenge_id: challenge_id("sample-sum"),
+                challenge_name: challenge_name("sample-sum"),
                 challenge_title: "Sample Sum".to_string(),
                 challenge_summary: "Add numbers".to_string(),
                 starts_at: None,
@@ -513,7 +513,7 @@ mod tests {
                     accelerator: TargetAccelerator::Cpu,
                     validation_enabled: false,
                     resource_profile: ResourceProfileSpec {
-                        id: "python-cpu-small".to_string(),
+                        name: resource_profile_name("python-cpu-small"),
                         resource_description: None,
                         solution_image: "python:3.12-slim-bookworm".to_string(),
                         solution_image_digest: None,
@@ -550,11 +550,16 @@ mod tests {
         }
     }
 
-    fn challenge_id(value: &str) -> ChallengeId {
-        ChallengeId::try_new(value.to_string()).expect("test challenge id is valid")
+    fn challenge_name(value: &str) -> ChallengeName {
+        ChallengeName::try_new(value.to_string()).expect("test challenge name is valid")
     }
 
     fn target_name(value: &str) -> TargetName {
         TargetName::try_new(value.to_string()).expect("test target is valid")
+    }
+
+    fn resource_profile_name(value: &str) -> ResourceProfileName {
+        ResourceProfileName::try_new(value.to_string())
+            .expect("test resource profile name is valid")
     }
 }

@@ -21,7 +21,7 @@ def write_solution_runs(target_dir: Path, runs_file: Path, *, correct: bool) -> 
     solution_runs_dir = target_dir / "solution-runs"
     runs = json.loads(runs_file.read_text(encoding="utf-8"))["runs"]
     for run in runs:
-        run_dir = solution_runs_dir / run["run_id"]
+        run_dir = solution_runs_dir / run["run_name"]
         run_dir.mkdir(parents=True, exist_ok=True)
         answer = run["expected"] if correct else "wrong"
         (run_dir / "stdout.txt").write_text(f"{answer}\n", encoding="utf-8")
@@ -63,13 +63,13 @@ def test_validation_mode_returns_public_summary(tmp_path: Path) -> None:
     assert result["primary_score"] == 1
     assert result["rank_score"] == 1
     assert result["aggregate_metrics"] == [
-        {"metric_id": "score", "value": 1},
-        {"metric_id": "passed_cases", "value": 3},
+        {"metric_name": "score", "value": 1},
+        {"metric_name": "passed_cases", "value": 3},
     ]
     assert result["run_metrics"] == [
-        {"run_id": "public-1", "metrics": [{"metric_id": "score", "value": 1}]},
-        {"run_id": "public-2", "metrics": [{"metric_id": "score", "value": 1}]},
-        {"run_id": "public-3", "metrics": [{"metric_id": "score", "value": 1}]},
+        {"run_name": "public-1", "metrics": [{"metric_name": "score", "value": 1}]},
+        {"run_name": "public-2", "metrics": [{"metric_name": "score", "value": 1}]},
+        {"run_name": "public-3", "metrics": [{"metric_name": "score", "value": 1}]},
     ]
     assert len(result["public_results"]) == 3
     assert result["validation_summary"] == {"score": 1, "passed": 3, "total": 3}
@@ -85,8 +85,8 @@ def test_official_mode_uses_private_benchmark_cases(tmp_path: Path) -> None:
     assert result.get("validation_summary") is None
     assert result["official_summary"] == {"score": 1, "passed": 2, "total": 2}
     assert result["aggregate_metrics"] == [
-        {"metric_id": "score", "value": 1},
-        {"metric_id": "passed_cases", "value": 2},
+        {"metric_name": "score", "value": 1},
+        {"metric_name": "passed_cases", "value": 2},
     ]
 
 

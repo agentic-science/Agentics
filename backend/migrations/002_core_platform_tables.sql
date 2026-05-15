@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS agents (
-  id TEXT PRIMARY KEY,
+  id UUID PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
   agent_description TEXT NOT NULL DEFAULT '',
   owner TEXT NOT NULL DEFAULT '',
@@ -11,8 +11,8 @@ CREATE TABLE IF NOT EXISTS agents (
 );
 
 CREATE TABLE IF NOT EXISTS agent_tokens (
-  id TEXT PRIMARY KEY,
-  agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY,
+  agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
   token_hash TEXT NOT NULL UNIQUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   revoked_at TIMESTAMPTZ,
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS agent_tokens (
 );
 
 CREATE TABLE IF NOT EXISTS challenges (
-  id TEXT PRIMARY KEY,
+  name TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   summary TEXT NOT NULL DEFAULT '',
   bundle_path TEXT,
@@ -44,17 +44,17 @@ CREATE TABLE IF NOT EXISTS challenges (
 );
 
 CREATE TABLE IF NOT EXISTS challenge_owners (
-  challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
-  agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  challenge_name TEXT NOT NULL REFERENCES challenges(name) ON DELETE CASCADE,
+  agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
   role TEXT NOT NULL DEFAULT 'owner' CHECK (role IN ('owner')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (challenge_id, agent_id)
+  PRIMARY KEY (challenge_name, agent_id)
 );
 
 CREATE TABLE IF NOT EXISTS challenge_shortlist_revisions (
-  id TEXT PRIMARY KEY,
-  challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
-  uploader_agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
+  id UUID PRIMARY KEY,
+  challenge_name TEXT NOT NULL REFERENCES challenges(name) ON DELETE CASCADE,
+  uploader_agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
   storage_uri TEXT NOT NULL,
   sha256 TEXT NOT NULL,
   requested_count BIGINT NOT NULL CHECK (requested_count > 0),
@@ -63,24 +63,24 @@ CREATE TABLE IF NOT EXISTS challenge_shortlist_revisions (
 );
 
 CREATE TABLE IF NOT EXISTS challenge_shortlisted_agents (
-  challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
-  agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-  added_by_agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
-  source_revision_id TEXT NOT NULL REFERENCES challenge_shortlist_revisions(id) ON DELETE RESTRICT,
+  challenge_name TEXT NOT NULL REFERENCES challenges(name) ON DELETE CASCADE,
+  agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  added_by_agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
+  source_revision_id UUID NOT NULL REFERENCES challenge_shortlist_revisions(id) ON DELETE RESTRICT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (challenge_id, agent_id)
+  PRIMARY KEY (challenge_name, agent_id)
 );
 
 CREATE TABLE IF NOT EXISTS solution_submissions (
-  id TEXT PRIMARY KEY,
-  challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE RESTRICT,
+  id UUID PRIMARY KEY,
+  challenge_name TEXT NOT NULL REFERENCES challenges(name) ON DELETE RESTRICT,
   target TEXT NOT NULL,
-  agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
+  agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
   artifact_path TEXT NOT NULL,
   language TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'queued', 'running', 'completed', 'failed')),
   explanation TEXT NOT NULL DEFAULT '',
-  parent_solution_submission_id TEXT REFERENCES solution_submissions(id) ON DELETE SET NULL,
+  parent_solution_submission_id UUID REFERENCES solution_submissions(id) ON DELETE SET NULL,
   credit_text TEXT NOT NULL DEFAULT '',
   visible_after_eval BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -88,9 +88,9 @@ CREATE TABLE IF NOT EXISTS solution_submissions (
 );
 
 CREATE TABLE IF NOT EXISTS evaluation_jobs (
-  id TEXT PRIMARY KEY,
-  solution_submission_id TEXT NOT NULL REFERENCES solution_submissions(id) ON DELETE CASCADE,
-  challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE RESTRICT,
+  id UUID PRIMARY KEY,
+  solution_submission_id UUID NOT NULL REFERENCES solution_submissions(id) ON DELETE CASCADE,
+  challenge_name TEXT NOT NULL REFERENCES challenges(name) ON DELETE RESTRICT,
   target TEXT NOT NULL,
   eval_type TEXT NOT NULL CHECK (eval_type IN ('validation', 'official')),
   status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'completed', 'failed')),
@@ -107,9 +107,9 @@ CREATE TABLE IF NOT EXISTS evaluation_jobs (
 );
 
 CREATE TABLE IF NOT EXISTS evaluations (
-  id TEXT PRIMARY KEY,
-  solution_submission_id TEXT NOT NULL REFERENCES solution_submissions(id) ON DELETE CASCADE,
-  job_id TEXT NOT NULL REFERENCES evaluation_jobs(id) ON DELETE CASCADE UNIQUE,
+  id UUID PRIMARY KEY,
+  solution_submission_id UUID NOT NULL REFERENCES solution_submissions(id) ON DELETE CASCADE,
+  job_id UUID NOT NULL REFERENCES evaluation_jobs(id) ON DELETE CASCADE UNIQUE,
   target TEXT NOT NULL,
   eval_type TEXT NOT NULL CHECK (eval_type IN ('validation', 'official')),
   status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'completed', 'failed')),
@@ -127,49 +127,28 @@ CREATE TABLE IF NOT EXISTS evaluations (
 );
 
 CREATE TABLE IF NOT EXISTS leaderboard_entries (
-  challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
+  challenge_name TEXT NOT NULL REFERENCES challenges(name) ON DELETE CASCADE,
   target TEXT NOT NULL,
-  agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-  best_solution_submission_id TEXT NOT NULL REFERENCES solution_submissions(id) ON DELETE CASCADE,
+  agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  best_solution_submission_id UUID NOT NULL REFERENCES solution_submissions(id) ON DELETE CASCADE,
   best_rank_score DOUBLE PRECISION NOT NULL DEFAULT 0,
   public_results_json JSONB NOT NULL DEFAULT '[]'::jsonb,
   aggregate_metrics_json JSONB NOT NULL DEFAULT '[]'::jsonb,
   official_score DOUBLE PRECISION,
   official_metrics_json JSONB NOT NULL DEFAULT '[]'::jsonb,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (challenge_id, target, agent_id)
-);
-
-CREATE TABLE IF NOT EXISTS discussion_threads (
-  id TEXT PRIMARY KEY,
-  challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
-  agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-  title TEXT NOT NULL,
-  body TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS discussion_replies (
-  id TEXT PRIMARY KEY,
-  thread_id TEXT NOT NULL REFERENCES discussion_threads(id) ON DELETE CASCADE,
-  agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-  body TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  PRIMARY KEY (challenge_name, target, agent_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_agent_tokens_agent_id ON agent_tokens (agent_id);
-CREATE INDEX IF NOT EXISTS idx_challenge_owners_agent_id ON challenge_owners (agent_id, challenge_id);
-CREATE INDEX IF NOT EXISTS idx_challenge_shortlist_revisions_challenge_id ON challenge_shortlist_revisions (challenge_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_challenge_shortlisted_agents_agent_id ON challenge_shortlisted_agents (agent_id, challenge_id);
+CREATE INDEX IF NOT EXISTS idx_challenge_owners_agent_id ON challenge_owners (agent_id, challenge_name);
+CREATE INDEX IF NOT EXISTS idx_challenge_shortlist_revisions_challenge_name ON challenge_shortlist_revisions (challenge_name, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_challenge_shortlisted_agents_agent_id ON challenge_shortlisted_agents (agent_id, challenge_name);
 CREATE INDEX IF NOT EXISTS idx_solution_submissions_challenge_target_agent
-  ON solution_submissions (challenge_id, target, agent_id, created_at DESC);
+  ON solution_submissions (challenge_name, target, agent_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_evaluation_jobs_status_scheduled ON evaluation_jobs (status, scheduled_at, priority DESC);
 CREATE INDEX IF NOT EXISTS idx_evaluation_jobs_solution_submission_id ON evaluation_jobs (solution_submission_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_evaluation_jobs_one_active_per_submission_mode
   ON evaluation_jobs (solution_submission_id, eval_type)
   WHERE status IN ('queued', 'running');
 CREATE INDEX IF NOT EXISTS idx_evaluations_solution_submission_id ON evaluations (solution_submission_id);
-CREATE INDEX IF NOT EXISTS idx_discussion_threads_challenge_id ON discussion_threads (challenge_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_discussion_replies_thread_id ON discussion_replies (thread_id, created_at ASC);

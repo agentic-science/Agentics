@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use shared::models::ids::{ChallengeId, SolutionSubmissionId, TargetName};
+use shared::models::ids::SolutionSubmissionId;
+use shared::models::names::{AssetName, ChallengeName, MetricName, TargetName};
 
 /// Agent-facing command line for registration, challenge discovery, and
 /// solution submission workflows.
@@ -132,7 +133,7 @@ pub(crate) enum ChallengesCommand {
     /// List published challenges.
     List,
     /// Show challenge metadata and statement.
-    Show { challenge_id: ChallengeId },
+    Show { challenge_name: ChallengeName },
 }
 
 #[derive(Debug, Clone, Args)]
@@ -150,13 +151,13 @@ pub(crate) enum ChallengeCreatorCommand {
     },
     /// Show owner-visible challenge statistics.
     Stats {
-        challenge_id: ChallengeId,
+        challenge_name: ChallengeName,
         #[arg(long)]
         target: Option<TargetName>,
     },
     /// Show owner-visible challenge participants.
     Participants {
-        challenge_id: ChallengeId,
+        challenge_name: ChallengeName,
         #[arg(long)]
         target: Option<TargetName>,
     },
@@ -170,10 +171,10 @@ pub(crate) enum ChallengeCreatorCommand {
 #[derive(Debug, Clone, Subcommand)]
 pub(crate) enum ChallengeShortlistCommand {
     /// Show the effective append-only shortlist union.
-    Show { challenge_id: ChallengeId },
+    Show { challenge_name: ChallengeName },
     /// Upload a delta JSON file with `agent_ids_to_add`.
     Upload {
-        challenge_id: ChallengeId,
+        challenge_name: ChallengeName,
         #[arg(long, value_name = "PATH")]
         file: PathBuf,
     },
@@ -204,7 +205,7 @@ pub(crate) enum ChallengeDraftCommand {
     UploadPrivateAsset {
         draft_id: String,
         #[arg(long)]
-        asset_id: String,
+        asset_name: AssetName,
         #[arg(long, value_enum)]
         kind: ChallengePrivateAssetKindArg,
         #[arg(long, value_name = "PATH")]
@@ -282,9 +283,9 @@ pub(crate) enum ChallengePrivateAssetKindArg {
 #[derive(Debug, Clone, Args)]
 pub(crate) struct InitSolutionArgs {
     /// Challenge id to initialize a solution for.
-    pub challenge_id: ChallengeId,
+    pub challenge_name: ChallengeName,
 
-    /// Target workspace directory. Defaults to <challenge-id>-solution.
+    /// Target workspace directory. Defaults to <challenge-name>-solution.
     #[arg(long, value_name = "PATH")]
     pub dir: Option<PathBuf>,
 
@@ -321,10 +322,10 @@ pub(crate) enum SolutionInterface {
 #[derive(Debug, Clone, Args)]
 pub(crate) struct SubmitArgs {
     /// Challenge id to submit against.
-    pub challenge_id: ChallengeId,
+    pub challenge_name: ChallengeName,
 
     /// Target, for example linux-arm64-cpu.
-    #[arg(long, value_name = "TARGET_ID", conflicts_with = "all_targets")]
+    #[arg(long, value_name = "TARGET", conflicts_with = "all_targets")]
     pub target: Option<TargetName>,
 
     /// Submit once per target declared by the challenge.
@@ -351,10 +352,10 @@ pub(crate) struct SubmitArgs {
 #[derive(Debug, Clone, Args)]
 pub(crate) struct ValidateArgs {
     /// Challenge id to validate against.
-    pub challenge_id: ChallengeId,
+    pub challenge_name: ChallengeName,
 
     /// Target, for example linux-arm64-cpu.
-    #[arg(long, value_name = "TARGET_ID", conflicts_with = "all_targets")]
+    #[arg(long, value_name = "TARGET", conflicts_with = "all_targets")]
     pub target: Option<TargetName>,
 
     /// Create one validation run per target declared by the challenge.
@@ -431,7 +432,7 @@ pub(crate) enum SubmissionsCommand {
     Rank {
         submission_id: SolutionSubmissionId,
         #[arg(long)]
-        challenge: ChallengeId,
+        challenge: ChallengeName,
         #[arg(long)]
         target: TargetName,
     },
@@ -447,7 +448,7 @@ pub(crate) struct LeaderboardArgs {
 pub(crate) enum LeaderboardCommand {
     /// Show a target-scoped leaderboard.
     Show {
-        challenge_id: ChallengeId,
+        challenge_name: ChallengeName,
         #[arg(long)]
         target: TargetName,
     },
@@ -463,10 +464,10 @@ pub(crate) struct MetricsArgs {
 pub(crate) enum MetricsCommand {
     /// Show a score distribution for one target and metric.
     Distribution {
-        challenge_id: ChallengeId,
+        challenge_name: ChallengeName,
         #[arg(long)]
         target: TargetName,
         #[arg(long)]
-        metric: String,
+        metric: MetricName,
     },
 }

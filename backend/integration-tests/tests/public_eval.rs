@@ -20,7 +20,7 @@ fn create_validation_disabled_challenge(root: &Path) {
         &std::fs::read_to_string(&spec_path).expect("failed to read copied spec"),
     )
     .expect("failed to parse copied spec");
-    spec["challenge_id"] = serde_json::json!("validation-disabled");
+    spec["challenge_name"] = serde_json::json!("validation-disabled");
     spec["challenge_title"] = serde_json::json!("Validation Disabled");
     for target in spec["targets"]
         .as_array_mut()
@@ -70,7 +70,7 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "official eval smoke test"
@@ -132,8 +132,8 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
     assert_eq!(
         solution_submission["evaluation"]["aggregate_metrics"],
         serde_json::json!([
-            { "metric_id": "score", "value": 1.0 },
-            { "metric_id": "passed_cases", "value": 2.0 }
+            { "metric_name": "score", "value": 1.0 },
+            { "metric_name": "passed_cases", "value": 2.0 }
         ])
     );
     assert_eq!(
@@ -148,14 +148,14 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
     assert!(solution_submission["evaluation"]["log_path"].is_null());
 
     let job_status: (String, String) = sqlx::query_as(
-        "SELECT status, eval_type FROM evaluation_jobs WHERE solution_submission_id = $1",
+        "SELECT status, eval_type FROM evaluation_jobs WHERE solution_submission_id = $1::uuid",
     )
     .bind(solution_submission_id)
     .fetch_one(&pool)
     .await
     .expect("failed to query evaluation job");
     let evaluation_status: (String, String, f64, f64, serde_json::Value, serde_json::Value) = sqlx::query_as(
-        "SELECT status, eval_type, primary_score, rank_score, aggregate_metrics_json, run_metrics_json FROM evaluations WHERE solution_submission_id = $1",
+        "SELECT status, eval_type, primary_score, rank_score, aggregate_metrics_json, run_metrics_json FROM evaluations WHERE solution_submission_id = $1::uuid",
     )
     .bind(solution_submission_id)
     .fetch_one(&pool)
@@ -174,17 +174,17 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
             1.0,
             1.0,
             serde_json::json!([
-                { "metric_id": "score", "value": 1.0 },
-                { "metric_id": "passed_cases", "value": 2.0 }
+                { "metric_name": "score", "value": 1.0 },
+                { "metric_name": "passed_cases", "value": 2.0 }
             ]),
             serde_json::json!([
                 {
-                    "run_id": "private-benchmark-1",
-                    "metrics": [{ "metric_id": "score", "value": 1.0 }]
+                    "run_name": "private-benchmark-1",
+                    "metrics": [{ "metric_name": "score", "value": 1.0 }]
                 },
                 {
-                    "run_id": "private-benchmark-2",
-                    "metrics": [{ "metric_id": "score", "value": 1.0 }]
+                    "run_name": "private-benchmark-2",
+                    "metrics": [{ "metric_name": "score", "value": 1.0 }]
                 }
             ])
         )
@@ -214,7 +214,7 @@ async fn worker_completes_private_validation_run_without_leaderboard(pool: sqlx:
         .post(api_url(&app, "/api/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "validation smoke test"
@@ -254,8 +254,8 @@ async fn worker_completes_private_validation_run_without_leaderboard(pool: sqlx:
     assert_eq!(
         validation["evaluation"]["aggregate_metrics"],
         serde_json::json!([
-            { "metric_id": "score", "value": 1.0 },
-            { "metric_id": "passed_cases", "value": 3.0 }
+            { "metric_name": "score", "value": 1.0 },
+            { "metric_name": "passed_cases", "value": 3.0 }
         ])
     );
 
@@ -293,7 +293,7 @@ async fn worker_completes_file_mode_validation_run(pool: sqlx::PgPool) {
         .post(api_url(&app, "/api/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "grid-routing",
+            "challenge_name": "grid-routing",
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "file mode validation smoke test"
@@ -327,8 +327,8 @@ async fn worker_completes_file_mode_validation_run(pool: sqlx::PgPool) {
     assert_eq!(
         validation["evaluation"]["run_metrics"][0],
         serde_json::json!({
-            "run_id": "public-1",
-            "metrics": [{ "metric_id": "score", "value": 1.0 }]
+            "run_name": "public-1",
+            "metrics": [{ "metric_name": "score", "value": 1.0 }]
         })
     );
 }
@@ -355,7 +355,7 @@ async fn worker_rejects_symlink_declared_output(pool: sqlx::PgPool) {
         .post(api_url(&app, "/api/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "grid-routing",
+            "challenge_name": "grid-routing",
             "target": "linux-arm64-cpu",
             "artifact_base64": grid_routing_symlink_solution_zip_base64(),
             "explanation": "symlink output should fail before scorer"
@@ -388,7 +388,7 @@ async fn worker_rejects_symlink_declared_output(pool: sqlx::PgPool) {
     assert_eq!(validation["evaluation"]["status"], "failed");
 
     let last_error: String = sqlx::query_scalar(
-        "SELECT last_error FROM evaluation_jobs WHERE solution_submission_id = $1",
+        "SELECT last_error FROM evaluation_jobs WHERE solution_submission_id = $1::uuid",
     )
     .bind(validation_id)
     .fetch_one(&pool)
@@ -425,7 +425,7 @@ async fn worker_reports_build_phase_failure(pool: sqlx::PgPool) {
         .post(api_url(&app, "/api/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "build phase failure smoke test"
@@ -458,12 +458,13 @@ async fn worker_reports_build_phase_failure(pool: sqlx::PgPool) {
     assert_eq!(validation["evaluation"]["status"], "failed");
     assert_eq!(validation["evaluation_job"]["status"], "failed");
 
-    let last_error: (String,) =
-        sqlx::query_as("SELECT last_error FROM evaluation_jobs WHERE solution_submission_id = $1")
-            .bind(validation_id)
-            .fetch_one(&pool)
-            .await
-            .expect("failed to query failed job");
+    let last_error: (String,) = sqlx::query_as(
+        "SELECT last_error FROM evaluation_jobs WHERE solution_submission_id = $1::uuid",
+    )
+    .bind(validation_id)
+    .fetch_one(&pool)
+    .await
+    .expect("failed to query failed job");
     assert!(last_error.0.contains("zip_project phase failed"));
     assert!(last_error.0.contains("\"phase\":\"build\""));
 }
@@ -512,7 +513,7 @@ python main.py
         .post(api_url(&app, "/api/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "run stage internet probe"
@@ -579,7 +580,7 @@ python main.py
         .post(api_url(&app, "/api/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "run workspace readonly probe"
@@ -611,12 +612,13 @@ python main.py
     assert_eq!(validation["status"], "failed");
     assert_eq!(validation["evaluation"]["status"], "failed");
 
-    let last_error: (String,) =
-        sqlx::query_as("SELECT last_error FROM evaluation_jobs WHERE solution_submission_id = $1")
-            .bind(validation_id)
-            .fetch_one(&pool)
-            .await
-            .expect("failed to query failed job");
+    let last_error: (String,) = sqlx::query_as(
+        "SELECT last_error FROM evaluation_jobs WHERE solution_submission_id = $1::uuid",
+    )
+    .bind(validation_id)
+    .fetch_one(&pool)
+    .await
+    .expect("failed to query failed job");
     assert!(last_error.0.contains("\"phase\":\"run\""));
 }
 
@@ -684,7 +686,7 @@ python main.py
         .post(api_url(&app, "/api/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "run writable disk limit probe"
@@ -717,7 +719,7 @@ python main.py
     assert_eq!(validation["evaluation"]["status"], "failed");
 
     let last_error: String = sqlx::query_scalar(
-        "SELECT last_error FROM evaluation_jobs WHERE solution_submission_id = $1",
+        "SELECT last_error FROM evaluation_jobs WHERE solution_submission_id = $1::uuid",
     )
     .bind(validation_id)
     .fetch_one(&pool)
@@ -761,7 +763,7 @@ async fn validation_run_is_rejected_when_challenge_disables_validation(pool: sql
         .post(api_url(&app, "/api/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "validation-disabled",
+            "challenge_name": "validation-disabled",
             "target": "linux-arm64-cpu",
             "artifact_base64": "not-base64",
             "explanation": "should fail before artifact decode"
@@ -817,7 +819,7 @@ async fn validation_run_quota_rejects_and_resets(pool: sqlx::PgPool) {
         .post(api_url(&app, "/api/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "first validation run"
@@ -831,7 +833,7 @@ async fn validation_run_quota_rejects_and_resets(pool: sqlx::PgPool) {
         .post(api_url(&app, "/api/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": "not-base64",
             "explanation": "should fail before artifact decode"
@@ -864,7 +866,7 @@ async fn validation_run_quota_rejects_and_resets(pool: sqlx::PgPool) {
         .post(api_url(&app, "/api/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": reset_artifact_base64,
             "explanation": "validation run after quota reset"
@@ -911,7 +913,7 @@ async fn official_submission_quota_rejects_before_artifact_decode(pool: sqlx::Pg
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "first official run"
@@ -925,7 +927,7 @@ async fn official_submission_quota_rejects_before_artifact_decode(pool: sqlx::Pg
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": "not-base64",
             "explanation": "should fail before artifact decode"
@@ -973,7 +975,7 @@ async fn official_active_queue_limit_rejects_before_artifact_decode(pool: sqlx::
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "fills active queue"
@@ -987,7 +989,7 @@ async fn official_active_queue_limit_rejects_before_artifact_decode(pool: sqlx::
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": "not-base64",
             "explanation": "should fail before artifact decode"
@@ -1027,7 +1029,7 @@ async fn concurrent_official_admission_locks_admit_only_one(pool: sqlx::PgPool) 
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_a,
             "explanation": "concurrent official run A"
@@ -1037,7 +1039,7 @@ async fn concurrent_official_admission_locks_admit_only_one(pool: sqlx::PgPool) 
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_b,
             "explanation": "concurrent official run B"
@@ -1143,7 +1145,7 @@ async fn worker_marks_solution_submission_failed_when_artifact_is_missing(pool: 
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "official eval failure test"
@@ -1162,7 +1164,7 @@ async fn worker_marks_solution_submission_failed_when_artifact_is_missing(pool: 
         r#"
         UPDATE evaluation_jobs
         SET payload_json = jsonb_set(payload_json, '{artifact_path}', to_jsonb($2::text))
-        WHERE solution_submission_id = $1
+        WHERE solution_submission_id = $1::uuid
         "#,
     )
     .bind(solution_submission_id)

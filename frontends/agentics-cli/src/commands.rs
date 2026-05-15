@@ -13,7 +13,8 @@ use shared::models::challenge_creation::{
     ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest, ValidateChallengeDraftRequest,
 };
 use shared::models::evaluation::{EvaluationJobPayload, ScoringMode};
-use shared::models::ids::{ChallengeId, SolutionSubmissionId, TargetName};
+use shared::models::ids::SolutionSubmissionId;
+use shared::models::names::{ChallengeName, TargetName};
 use shared::models::request::CreateChallengeShortlistRevisionRequest;
 use shared::models::request::{CreateSolutionSubmissionRequest, RegisterAgentRequest};
 use shared::storage::{LocalStorage, Storage};
@@ -115,7 +116,7 @@ pub(crate) async fn challenge_draft(
         }
         ChallengeDraftCommand::UploadPrivateAsset {
             draft_id,
-            asset_id,
+            asset_name,
             kind,
             file,
             required,
@@ -126,7 +127,7 @@ pub(crate) async fn challenge_draft(
                 .upload_challenge_private_asset(
                     &draft_id,
                     &UploadChallengePrivateAssetRequest {
-                        asset_id,
+                        asset_name,
                         kind: kind.into(),
                         required,
                         asset_base64: STANDARD.encode(bytes),
@@ -230,17 +231,20 @@ pub(crate) async fn challenge_shortlist(
 ) -> Result<String> {
     let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
     match command {
-        ChallengeShortlistCommand::Show { challenge_id } => {
-            let response = client.get_challenge_shortlist(&challenge_id).await?;
+        ChallengeShortlistCommand::Show { challenge_name } => {
+            let response = client.get_challenge_shortlist(&challenge_name).await?;
             output::render_challenge_shortlist(&response, output_format)
         }
-        ChallengeShortlistCommand::Upload { challenge_id, file } => {
+        ChallengeShortlistCommand::Upload {
+            challenge_name,
+            file,
+        } => {
             let raw = std::fs::read_to_string(&file)
                 .with_context(|| format!("failed to read shortlist delta {}", file.display()))?;
             let request: CreateChallengeShortlistRevisionRequest = serde_json::from_str(&raw)
                 .with_context(|| format!("failed to parse shortlist delta {}", file.display()))?;
             let response = client
-                .create_challenge_shortlist_revision(&challenge_id, &request)
+                .create_challenge_shortlist_revision(&challenge_name, &request)
                 .await?;
             output::render_challenge_shortlist_revision(&response, output_format)
         }
@@ -326,7 +330,7 @@ pub(crate) async fn submit(
     settings: &ResolvedSettings,
 ) -> Result<String> {
     let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-    let challenge = client.get_challenge(&args.challenge_id).await?;
+    let challenge = client.get_challenge(&args.challenge_name).await?;
     let targets = select_targets(
         &challenge,
         args.target.as_ref(),
@@ -335,7 +339,7 @@ pub(crate) async fn submit(
     )?;
     validate_parent_submission_scope(
         &client,
-        &challenge.id,
+        &challenge.name,
         &targets,
         args.all_targets,
         args.parent_solution_submission_id.as_ref(),
@@ -346,7 +350,7 @@ pub(crate) async fn submit(
     let mut responses = Vec::with_capacity(targets.len());
     for target in targets {
         let request = create_solution_submission_request(
-            challenge.id.clone(),
+            challenge.name.clone(),
             target.clone(),
             &package,
             args.explanation.clone(),
@@ -389,7 +393,7 @@ async fn validate_remote(
     settings: &ResolvedSettings,
 ) -> Result<String> {
     let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-    let challenge = client.get_challenge(&args.challenge_id).await?;
+    let challenge = client.get_challenge(&args.challenge_name).await?;
     let targets = select_targets(
         &challenge,
         args.target.as_ref(),
@@ -398,7 +402,7 @@ async fn validate_remote(
     )?;
     validate_parent_submission_scope(
         &client,
-        &challenge.id,
+        &challenge.name,
         &targets,
         args.all_targets,
         args.parent_solution_submission_id.as_ref(),
@@ -409,7 +413,7 @@ async fn validate_remote(
     let mut responses = Vec::with_capacity(targets.len());
     for target in targets {
         let request = create_solution_submission_request(
-            challenge.id.clone(),
+            challenge.name.clone(),
             target.clone(),
             &package,
             args.explanation.clone(),
@@ -472,16 +476,16 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
         .context("--bundle-dir is required for local validation")?;
     let bundle_dir = canonical_dir(bundle_dir, "challenge bundle")?;
     let spec = shared::challenge_bundle::read_challenge_bundle_spec(&bundle_dir).await?;
-    if spec.challenge_id != args.challenge_id {
+    if spec.challenge_name != args.challenge_name {
         bail!(
             "local challenge bundle declares challenge `{}`, but command requested `{}`",
-            spec.challenge_id,
-            args.challenge_id
+            spec.challenge_name,
+            args.challenge_name
         );
     }
 
     let targets = select_targets_from_spec(
-        &spec.challenge_id,
+        &spec.challenge_name,
         &spec,
         args.target.as_ref(),
         args.all_targets,
@@ -526,7 +530,7 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
     };
     let mut target_reports = Vec::with_capacity(targets.len());
     for target in targets {
-        let job_id = local_validation_job_id(&spec.challenge_id, &target)?;
+        let job_id = local_validation_job_id(&spec.challenge_name, &target)?;
         let artifact_path = storage
             .put(
                 &format!("local-validation/{job_id}/solution.zip"),
@@ -536,7 +540,7 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
         let payload = EvaluationJobPayload {
             artifact_path,
             bundle_path: bundle_dir.to_string_lossy().to_string(),
-            challenge_id: spec.challenge_id.clone(),
+            challenge_name: spec.challenge_name.clone(),
             target: target.clone(),
         };
         let log_path = storage_root.join(runner_log_key(&job_id));
@@ -558,7 +562,7 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
             Err(error) => {
                 return Err(local_validation_error(
                     LocalValidationErrorContext {
-                        challenge_id: &spec.challenge_id,
+                        challenge_name: &spec.challenge_name,
                         bundle_dir: &bundle_dir,
                         storage_root: &storage_root,
                         package: &package_report,
@@ -574,7 +578,7 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
     }
 
     let report = output::LocalValidationReport {
-        challenge_id: spec.challenge_id,
+        challenge_name: spec.challenge_name,
         bundle_dir,
         storage_root,
         package: package_report,
@@ -585,7 +589,7 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
 
 #[derive(Debug, Clone, Copy)]
 struct LocalValidationErrorContext<'a> {
-    challenge_id: &'a ChallengeId,
+    challenge_name: &'a ChallengeName,
     bundle_dir: &'a Path,
     storage_root: &'a Path,
     package: &'a output::LocalValidationPackageReport,
@@ -603,7 +607,7 @@ fn local_validation_error(
         String::new()
     } else {
         let report = output::LocalValidationReport {
-            challenge_id: context.challenge_id.clone(),
+            challenge_name: context.challenge_name.clone(),
             bundle_dir: context.bundle_dir.to_path_buf(),
             storage_root: context.storage_root.to_path_buf(),
             package: context.package.clone(),
@@ -646,13 +650,13 @@ fn resolve_local_storage_dir(configured: Option<&Path>) -> Result<PathBuf> {
     Ok(cache_dir.join("agentics").join("local-validation"))
 }
 
-fn local_validation_job_id(challenge_id: &ChallengeId, target: &TargetName) -> Result<String> {
+fn local_validation_job_id(challenge_name: &ChallengeName, target: &TargetName) -> Result<String> {
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .context("system clock is before UNIX_EPOCH")?;
     Ok(format!(
         "local-{}-{}-{}-{}",
-        sanitize_identifier_component(challenge_id.as_str()),
+        sanitize_identifier_component(challenge_name.as_str()),
         sanitize_identifier_component(target.as_str()),
         std::process::id(),
         timestamp.as_nanos()
@@ -687,7 +691,7 @@ fn runner_log_key(job_id: &str) -> PathBuf {
 
 async fn validate_parent_submission_scope(
     client: &ApiClient,
-    challenge_id: &ChallengeId,
+    challenge_name: &ChallengeName,
     targets: &[TargetName],
     all_targets: bool,
     parent_solution_submission_id: Option<&SolutionSubmissionId>,
@@ -709,9 +713,9 @@ async fn validate_parent_submission_scope(
                 "failed to inspect parent solution submission `{parent_solution_submission_id}`"
             )
         })?;
-    if &parent.challenge_id != challenge_id || parent.target != *target {
+    if &parent.challenge_name != challenge_name || parent.target != *target {
         bail!(
-            "parent solution submission `{parent_solution_submission_id}` must belong to challenge `{challenge_id}` target `{target}`"
+            "parent solution submission `{parent_solution_submission_id}` must belong to challenge `{challenge_name}` target `{target}`"
         );
     }
     Ok(())
@@ -769,7 +773,7 @@ fn parse_model_info(raw: &str) -> Result<serde_json::Value> {
 }
 
 fn create_solution_submission_request(
-    challenge_id: ChallengeId,
+    challenge_name: ChallengeName,
     target: TargetName,
     package: &package::SolutionPackage,
     explanation: String,
@@ -777,7 +781,7 @@ fn create_solution_submission_request(
     credit_text: String,
 ) -> CreateSolutionSubmissionRequest {
     CreateSolutionSubmissionRequest {
-        challenge_id,
+        challenge_name,
         target,
         artifact_base64: STANDARD.encode(&package.bytes),
         explanation,
@@ -799,7 +803,7 @@ fn select_targets(
     mode: TargetSelectionMode,
 ) -> Result<Vec<TargetName>> {
     select_targets_from_spec(
-        &challenge.id,
+        &challenge.name,
         &challenge.spec,
         requested_target,
         all_targets,
@@ -808,7 +812,7 @@ fn select_targets(
 }
 
 fn select_targets_from_spec(
-    challenge_id: &ChallengeId,
+    challenge_name: &ChallengeName,
     spec: &ChallengeBundleSpec,
     requested_target: Option<&TargetName>,
     all_targets: bool,
@@ -816,7 +820,7 @@ fn select_targets_from_spec(
 ) -> Result<Vec<TargetName>> {
     if all_targets {
         let targets = spec.targets.iter().collect::<Vec<_>>();
-        validate_selected_targets(challenge_id, &targets, mode)?;
+        validate_selected_targets(challenge_name, &targets, mode)?;
         return Ok(targets.iter().map(|target| target.name.clone()).collect());
     }
 
@@ -824,15 +828,18 @@ fn select_targets_from_spec(
         let target = spec.target(target).ok_or_else(|| {
             anyhow::anyhow!(
                 "challenge `{}` does not support target `{target}`",
-                challenge_id
+                challenge_name
             )
         })?;
-        validate_selected_targets(challenge_id, &[target], mode)?;
+        validate_selected_targets(challenge_name, &[target], mode)?;
         return Ok(vec![target.name.clone()]);
     }
 
     match spec.targets.as_slice() {
-        [] => bail!("challenge `{}` does not declare any targets", challenge_id),
+        [] => bail!(
+            "challenge `{}` does not declare any targets",
+            challenge_name
+        ),
         targets => {
             let available = targets
                 .iter()
@@ -841,14 +848,14 @@ fn select_targets_from_spec(
                 .join(", ");
             bail!(
                 "target is required for challenge `{}`; pass --target <target> or --all-targets. Available targets: {available}",
-                challenge_id
+                challenge_name
             )
         }
     }
 }
 
 fn validate_selected_targets(
-    challenge_id: &ChallengeId,
+    challenge_name: &ChallengeName,
     targets: &[&ChallengeTargetSpec],
     mode: TargetSelectionMode,
 ) -> Result<()> {
@@ -867,7 +874,7 @@ fn validate_selected_targets(
 
     bail!(
         "validation pass is disabled for challenge `{}` target(s): {}; submit officially or ask the challenge owner to enable validation",
-        challenge_id,
+        challenge_name,
         disabled.join(", ")
     )
 }

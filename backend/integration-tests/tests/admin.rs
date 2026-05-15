@@ -44,7 +44,7 @@ async fn admin_read_models_power_operator_console(pool: sqlx::PgPool) {
         .as_array()
         .expect("items")
         .iter()
-        .find(|item| item["id"] == "sample-sum")
+        .find(|item| item["name"] == "sample-sum")
         .expect("sample-sum should be seeded");
     assert_eq!(sample_sum["targets"][0]["name"], "linux-arm64-cpu");
     assert_eq!(sample_sum["targets"][0]["validation_enabled"], true);
@@ -109,7 +109,7 @@ async fn create_challenge_and_publish_contract(pool: sqlx::PgPool) {
             helpers::basic_auth_header(&config.admin_username, &config.admin_password),
         )
         .json(&serde_json::json!({
-            "id": "test-challenge",
+            "name": "test-challenge",
             "title": "Test Challenge",
             "summary": "A test challenge"
         }))
@@ -120,7 +120,7 @@ async fn create_challenge_and_publish_contract(pool: sqlx::PgPool) {
     assert!(response.status().is_success());
 
     let body: serde_json::Value = response.json().await.expect("failed to parse response");
-    assert_eq!(body["id"], "test-challenge");
+    assert_eq!(body["name"], "test-challenge");
     assert_eq!(body["title"], "Test Challenge");
 
     // Publishing still validates bundle paths before writing the benchmark contract.
@@ -161,7 +161,7 @@ async fn publishing_contract_exposes_challenge_policy(pool: sqlx::PgPool) {
         .post(api_url(&app, "/admin/challenges"))
         .header("Authorization", &auth)
         .json(&serde_json::json!({
-            "id": "published-contract",
+            "name": "published-contract",
             "title": "Published Contract",
             "summary": "Published contract challenge"
         }))
@@ -197,7 +197,7 @@ async fn publishing_contract_exposes_challenge_policy(pool: sqlx::PgPool) {
     assert_eq!(public_challenge["summary"], "Published contract summary");
 
     let spec_json: serde_json::Value =
-        sqlx::query_scalar("SELECT spec_json FROM challenges WHERE id = $1")
+        sqlx::query_scalar("SELECT spec_json FROM challenges WHERE name = $1")
             .bind("published-contract")
             .fetch_one(&pool)
             .await
@@ -233,7 +233,7 @@ async fn publishing_existing_contract_is_rejected_without_mutating_it(pool: sqlx
         .post(api_url(&app, "/admin/challenges"))
         .header("Authorization", &auth)
         .json(&serde_json::json!({
-            "id": "immutable-challenge",
+            "name": "immutable-challenge",
             "title": "Immutable Challenge",
             "summary": "Immutable challenge"
         }))
@@ -269,7 +269,7 @@ async fn publishing_existing_contract_is_rejected_without_mutating_it(pool: sqlx
     assert_eq!(duplicate_response.status(), reqwest::StatusCode::CONFLICT);
 
     let row: (String, serde_json::Value) =
-        sqlx::query_as("SELECT bundle_path, spec_json FROM challenges WHERE id = $1")
+        sqlx::query_as("SELECT bundle_path, spec_json FROM challenges WHERE name = $1")
             .bind("immutable-challenge")
             .fetch_one(&pool)
             .await
@@ -320,7 +320,7 @@ async fn publish_rejects_tag_only_images_when_digest_policy_is_enabled(pool: sql
 
 fn write_admin_publish_bundle(
     target: &std::path::Path,
-    challenge_id: &str,
+    challenge_name: &str,
     challenge_title: &str,
     challenge_summary: &str,
 ) {
@@ -329,7 +329,7 @@ fn write_admin_publish_bundle(
     let mut spec: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&spec_path).expect("failed to read spec"))
             .expect("failed to parse spec");
-    spec["challenge_id"] = serde_json::json!(challenge_id);
+    spec["challenge_name"] = serde_json::json!(challenge_name);
     spec["challenge_title"] = serde_json::json!(challenge_title);
     spec["challenge_summary"] = serde_json::json!(challenge_summary);
     std::fs::write(
@@ -346,7 +346,7 @@ async fn admin_routes_require_auth(pool: sqlx::PgPool) {
     let response = reqwest::Client::new()
         .post(api_url(&app, "/admin/challenges"))
         .json(&serde_json::json!({
-            "id": "test-challenge",
+            "name": "test-challenge",
             "title": "Test Challenge"
         }))
         .send()
@@ -416,7 +416,7 @@ async fn admin_session_cookie_authenticates_admin_routes(pool: sqlx::PgPool) {
         .post(api_url(&app, "/admin/challenges"))
         .header(reqwest::header::COOKIE, &session_cookie)
         .json(&serde_json::json!({
-            "id": "session-admin-missing-csrf",
+            "name": "session-admin-missing-csrf",
             "title": "Session Admin Missing CSRF",
             "summary": "Session admin challenge"
         }))
@@ -433,7 +433,7 @@ async fn admin_session_cookie_authenticates_admin_routes(pool: sqlx::PgPool) {
         .header(reqwest::header::COOKIE, &session_cookie)
         .header("x-agentics-csrf-token", csrf_token)
         .json(&serde_json::json!({
-            "id": "session-admin",
+            "name": "session-admin",
             "title": "Session Admin",
             "summary": "Session admin challenge"
         }))
@@ -500,7 +500,7 @@ async fn admin_official_run_bypasses_public_official_queue_limit(pool: sqlx::PgP
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": helpers::solution_zip_base64(&helpers::sample_sum_solution("payload['a'] + payload['b']")),
             "explanation": "fills official queue"
@@ -514,7 +514,7 @@ async fn admin_official_run_bypasses_public_official_queue_limit(pool: sqlx::PgP
         .post(api_url(&app, "/api/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": helpers::solution_zip_base64(&helpers::sample_sum_solution("payload['a'] + payload['b']")),
             "explanation": "admin promotes this validation run"
@@ -533,7 +533,7 @@ async fn admin_official_run_bypasses_public_official_queue_limit(pool: sqlx::PgP
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": "not-base64",
             "explanation": "public official run should still be rejected"

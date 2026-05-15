@@ -1,19 +1,19 @@
 {
   "runs": [
     {
-      "run_id": "public-1",
+      "run_name": "public-1",
       "interface": "stdio",
       "stdin_json": { "a": 1, "b": 2 },
       "expected": "3"
     },
     {
-      "run_id": "public-2",
+      "run_name": "public-2",
       "interface": "stdio",
       "stdin_json": { "a": -5, "b": 12 },
       "expected": "7"
     },
     {
-      "run_id": "public-3",
+      "run_name": "public-3",
       "interface": "stdio",
       "stdin_json": { "a": 4, "b": 6 },
       "expected": "10"

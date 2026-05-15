@@ -59,22 +59,22 @@ async fn request_validation_returns_contract_error_shape(pool: sqlx::PgPool) {
         .expect("failed to decode unknown-field response");
     assert_eq!(unknown_field_body["error"], "bad_request");
 
-    let invalid_challenge_id = client
+    let invalid_challenge_name = client
         .get(api_url(&app, "/api/public/challenges/bad%20id"))
         .send()
         .await
-        .expect("failed to send invalid challenge id request");
-    assert_eq!(invalid_challenge_id.status(), 400);
-    let invalid_challenge_id_body: serde_json::Value = invalid_challenge_id
+        .expect("failed to send invalid challenge name request");
+    assert_eq!(invalid_challenge_name.status(), 400);
+    let invalid_challenge_name_body: serde_json::Value = invalid_challenge_name
         .json()
         .await
-        .expect("failed to decode invalid challenge id response");
-    assert_eq!(invalid_challenge_id_body["error"], "bad_request");
+        .expect("failed to decode invalid challenge name response");
+    assert_eq!(invalid_challenge_name_body["error"], "bad_request");
     assert!(
-        invalid_challenge_id_body["message"]
+        invalid_challenge_name_body["message"]
             .as_str()
             .expect("message should be a string")
-            .contains("challenge_id")
+            .contains("challenge_name")
     );
 }
 
@@ -104,7 +104,7 @@ async fn zip_submission_routes_accept_declared_large_json_bodies(pool: sqlx::PgP
         .post(helpers::api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "missing-challenge",
+            "challenge_name": "missing-challenge",
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64
         }))
@@ -141,7 +141,7 @@ async fn solution_submission_rejects_invalid_target_before_artifact_decode(pool:
         .post(helpers::api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux arm64",
             "artifact_base64": "not-base64"
         }))
@@ -166,7 +166,7 @@ async fn solution_submission_rejects_invalid_target_before_artifact_decode(pool:
         .post(helpers::api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "cpu-linux-ppc64le",
             "artifact_base64": "not-base64"
         }))
@@ -240,7 +240,7 @@ async fn solution_submission_rejects_legacy_round_field_before_artifact_decode(p
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": "not-base64"
         }))
@@ -253,7 +253,7 @@ async fn solution_submission_rejects_legacy_round_field_before_artifact_decode(p
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "round_id": "missing-round",
             "target": "linux-arm64-cpu",
             "artifact_base64": "not-base64"
@@ -277,7 +277,7 @@ async fn solution_submission_rejects_legacy_round_field_before_artifact_decode(p
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "round_id": "Main Round!",
             "target": "linux-arm64-cpu",
             "artifact_base64": "not-base64"
@@ -338,7 +338,7 @@ async fn solution_submission_rejects_unstarted_and_closed_challenges_before_arti
         .expect("failed to decode register response");
     let token = register_response["token"].as_str().expect("missing token");
 
-    for (challenge_id, expected_message) in [
+    for (challenge_name, expected_message) in [
         ("future-challenge", "not started"),
         ("closed-challenge", "closed"),
     ] {
@@ -346,7 +346,7 @@ async fn solution_submission_rejects_unstarted_and_closed_challenges_before_arti
             .post(api_url(&app, "/api/solution-submissions"))
             .header("Authorization", format!("Bearer {token}"))
             .json(&serde_json::json!({
-                "challenge_id": challenge_id,
+                "challenge_name": challenge_name,
                 "target": "linux-arm64-cpu",
                 "artifact_base64": "not-base64"
             }))
@@ -383,9 +383,10 @@ async fn private_shortlist_challenge_requires_owner_delta_before_artifact_decode
     let client = reqwest::Client::new();
     let owner = create_creator_session(&pool, 2001, "shortlist-owner").await;
     let non_owner = create_creator_session(&pool, 2002, "not-owner").await;
-    let challenge_id = shared::models::ids::ChallengeId::try_new("shortlist-challenge".to_string())
-        .expect("test challenge id is valid");
-    shared::db::add_challenge_owner(&pool, &challenge_id, &owner.agent_id)
+    let challenge_name =
+        shared::models::names::ChallengeName::try_new("shortlist-challenge".to_string())
+            .expect("test challenge name is valid");
+    shared::db::add_challenge_owner(&pool, &challenge_name, &owner.agent_id)
         .await
         .expect("owner should be granted");
 
@@ -647,14 +648,14 @@ async fn submit_solution(
     client: &reqwest::Client,
     app: &helpers::TestApp,
     token: &str,
-    challenge_id: &str,
+    challenge_name: &str,
     artifact_base64: &str,
 ) -> reqwest::Response {
     submit_solution_with_target(
         client,
         app,
         token,
-        challenge_id,
+        challenge_name,
         "linux-arm64-cpu",
         artifact_base64,
     )
@@ -665,7 +666,7 @@ async fn submit_solution_with_target(
     client: &reqwest::Client,
     app: &helpers::TestApp,
     token: &str,
-    challenge_id: &str,
+    challenge_name: &str,
     target: &str,
     artifact_base64: &str,
 ) -> reqwest::Response {
@@ -673,7 +674,7 @@ async fn submit_solution_with_target(
         .post(api_url(app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": challenge_id,
+            "challenge_name": challenge_name,
             "target": target,
             "artifact_base64": artifact_base64
         }))
@@ -684,11 +685,11 @@ async fn submit_solution_with_target(
 
 fn write_challenge_window_challenge(
     root: &Path,
-    challenge_id: &str,
+    challenge_name: &str,
     starts_at: Option<&str>,
     closes_at: Option<&str>,
 ) {
-    let bundle_dir = root.join(challenge_id).join("v1");
+    let bundle_dir = root.join(challenge_name).join("v1");
     copy_dir_all(
         &examples_challenges_root().join("sample-sum/v1"),
         &bundle_dir,
@@ -697,8 +698,8 @@ fn write_challenge_window_challenge(
     let mut spec: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&spec_path).expect("failed to read spec"))
             .expect("failed to parse spec");
-    spec["challenge_id"] = serde_json::json!(challenge_id);
-    spec["challenge_title"] = serde_json::json!(challenge_id);
+    spec["challenge_name"] = serde_json::json!(challenge_name);
+    spec["challenge_title"] = serde_json::json!(challenge_name);
     if let Some(starts_at) = starts_at {
         spec["starts_at"] = serde_json::json!(starts_at);
     }
@@ -712,8 +713,8 @@ fn write_challenge_window_challenge(
     .expect("failed to write spec");
 }
 
-fn write_private_shortlist_challenge(root: &Path, challenge_id: &str) {
-    let bundle_dir = root.join(challenge_id).join("v1");
+fn write_private_shortlist_challenge(root: &Path, challenge_name: &str) {
+    let bundle_dir = root.join(challenge_name).join("v1");
     copy_dir_all(
         &examples_challenges_root().join("sample-sum/v1"),
         &bundle_dir,
@@ -722,8 +723,8 @@ fn write_private_shortlist_challenge(root: &Path, challenge_id: &str) {
     let mut spec: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&spec_path).expect("failed to read spec"))
             .expect("failed to parse spec");
-    spec["challenge_id"] = serde_json::json!(challenge_id);
-    spec["challenge_title"] = serde_json::json!(challenge_id);
+    spec["challenge_name"] = serde_json::json!(challenge_name);
+    spec["challenge_title"] = serde_json::json!(challenge_name);
     spec["eligibility"] = serde_json::json!({ "type": "private_shortlist" });
     std::fs::write(
         &spec_path,
@@ -732,8 +733,8 @@ fn write_private_shortlist_challenge(root: &Path, challenge_id: &str) {
     .expect("failed to write spec");
 }
 
-fn write_limited_submission_challenge(root: &Path, challenge_id: &str, official_limit: i64) {
-    let bundle_dir = root.join(challenge_id).join("v1");
+fn write_limited_submission_challenge(root: &Path, challenge_name: &str, official_limit: i64) {
+    let bundle_dir = root.join(challenge_name).join("v1");
     copy_dir_all(
         &examples_challenges_root().join("sample-sum/v1"),
         &bundle_dir,
@@ -742,8 +743,8 @@ fn write_limited_submission_challenge(root: &Path, challenge_id: &str, official_
     let mut spec: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&spec_path).expect("failed to read spec"))
             .expect("failed to parse spec");
-    spec["challenge_id"] = serde_json::json!(challenge_id);
-    spec["challenge_title"] = serde_json::json!(challenge_id);
+    spec["challenge_name"] = serde_json::json!(challenge_name);
+    spec["challenge_title"] = serde_json::json!(challenge_name);
     spec["official_submission_limit"] = serde_json::json!(official_limit);
     std::fs::write(
         &spec_path,

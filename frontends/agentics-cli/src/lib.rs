@@ -74,8 +74,8 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
                     let response = client.list_challenges().await?;
                     output::render_challenge_list(&response, cli.output)
                 }
-                ChallengesCommand::Show { challenge_id } => {
-                    let response = client.get_challenge(&challenge_id).await?;
+                ChallengesCommand::Show { challenge_name } => {
+                    let response = client.get_challenge(&challenge_name).await?;
                     output::render_challenge_detail(&response, cli.output)
                 }
             }
@@ -85,22 +85,22 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
                 commands::challenge_draft(command, cli.output, &settings).await
             }
             ChallengeCreatorCommand::Stats {
-                challenge_id,
+                challenge_name,
                 target,
             } => {
                 let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
                 let response = client
-                    .get_creator_challenge_stats(&challenge_id, target.as_ref())
+                    .get_creator_challenge_stats(&challenge_name, target.as_ref())
                     .await?;
                 output::render_creator_challenge_stats(&response, cli.output)
             }
             ChallengeCreatorCommand::Participants {
-                challenge_id,
+                challenge_name,
                 target,
             } => {
                 let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
                 let response = client
-                    .get_creator_challenge_participants(&challenge_id, target.as_ref())
+                    .get_creator_challenge_participants(&challenge_name, target.as_ref())
                     .await?;
                 output::render_creator_challenge_participants(&response, cli.output)
             }
@@ -110,7 +110,7 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
         },
         Commands::InitSolution(args) => {
             let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-            let challenge = client.get_challenge(&args.challenge_id).await?;
+            let challenge = client.get_challenge(&args.challenge_name).await?;
             let summary = workspace::init_solution_workspace(
                 &challenge,
                 args.dir,
@@ -155,13 +155,13 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
                     if challenge_detail.spec.target(&target).is_none() {
                         anyhow::bail!(
                             "challenge `{}` does not support target `{target}`",
-                            challenge_detail.id
+                            challenge_detail.name
                         );
                     }
                     let response = client
                         .get_solution_submission_ranking_context(
                             &submission_id,
-                            &challenge_detail.id,
+                            &challenge_detail.name,
                             &target,
                         )
                         .await?;
@@ -173,10 +173,10 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
             let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
             match args.command {
                 LeaderboardCommand::Show {
-                    challenge_id,
+                    challenge_name,
                     target,
                 } => {
-                    let response = client.get_leaderboard(&challenge_id, &target).await?;
+                    let response = client.get_leaderboard(&challenge_name, &target).await?;
                     output::render_leaderboard(&response, cli.output)
                 }
             }
@@ -185,12 +185,12 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
             let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
             match args.command {
                 MetricsCommand::Distribution {
-                    challenge_id,
+                    challenge_name,
                     target,
                     metric,
                 } => {
                     let response = client
-                        .get_score_distribution(&challenge_id, &target, &metric)
+                        .get_score_distribution(&challenge_name, &target, &metric)
                         .await?;
                     output::render_score_distribution(&response, cli.output)
                 }
@@ -293,7 +293,7 @@ mod tests {
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "items": [
                     {
-                        "id": "sample-sum",
+                        "name": "sample-sum",
                         "title": "Sample Sum",
                         "summary": "Add numbers",
                         "eligibility": { "type": "open" }
@@ -321,7 +321,7 @@ mod tests {
 
         assert_eq!(
             output,
-            "ID          ELIGIBILITY  TITLE\nsample-sum  open         Sample Sum"
+            "NAME        ELIGIBILITY  TITLE\nsample-sum  open         Sample Sum"
         );
     }
 
@@ -374,7 +374,7 @@ mod tests {
             .respond_with(ResponseTemplate::new(201).set_body_json(json!({
                 "id": "11111111-1111-4111-8111-111111111111",
                 "status": "queued",
-                "challenge_id": "sample-sum",
+                "challenge_name": "sample-sum",
                 "target": "linux-arm64-cpu",
                 "artifact_path": "solution-submissions/11111111-1111-4111-8111-111111111111.zip",
                 "evaluation_job_id": "job-1",
@@ -430,7 +430,7 @@ mod tests {
             serde_json::from_slice(&post.body).expect("request body should be JSON");
 
         assert!(output.contains("Submitted 11111111-1111-4111-8111-111111111111"));
-        assert_eq!(body["challenge_id"], "sample-sum");
+        assert_eq!(body["challenge_name"], "sample-sum");
         assert_eq!(body["target"], "linux-arm64-cpu");
         assert_eq!(body["explanation"], "first attempt");
         assert!(body["artifact_base64"].as_str().expect("artifact").len() > 20);
@@ -489,7 +489,7 @@ mod tests {
             .and(header("authorization", "Bearer test-token"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "id": "11111111-1111-4111-8111-111111111111",
-                "challenge_id": "sample-sum",
+                "challenge_name": "sample-sum",
                 "challenge_title": "Sample Sum",
                 "target": "linux-arm64-cpu",
                 "agent_id": "agent-1",
@@ -544,7 +544,7 @@ mod tests {
             .and(header("authorization", "Bearer test-token"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "id": "22222222-2222-4222-8222-222222222222",
-                "challenge_id": "sample-sum",
+                "challenge_name": "sample-sum",
                 "challenge_title": "Sample Sum",
                 "target": "linux-arm64-cpu",
                 "agent_id": "agent-1",
@@ -652,7 +652,7 @@ mod tests {
             .respond_with(ResponseTemplate::new(201).set_body_json(json!({
                 "id": "22222222-2222-4222-8222-222222222222",
                 "status": "queued",
-                "challenge_id": "sample-sum",
+                "challenge_name": "sample-sum",
                 "target": "linux-arm64-cpu",
                 "artifact_path": "solution-submissions/22222222-2222-4222-8222-222222222222.zip",
                 "evaluation_job_id": "job-1",
@@ -667,7 +667,7 @@ mod tests {
             .and(header("authorization", "Bearer test-token"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "id": "22222222-2222-4222-8222-222222222222",
-                "challenge_id": "sample-sum",
+                "challenge_name": "sample-sum",
                 "challenge_title": "Sample Sum",
                 "target": "linux-arm64-cpu",
                 "agent_id": "agent-1",
@@ -691,8 +691,8 @@ mod tests {
                     "primary_score": 1.0,
                     "rank_score": 1.0,
                     "aggregate_metrics": [
-                        { "metric_id": "score", "value": 1.0 },
-                        { "metric_id": "passed_cases", "value": 2.0 }
+                        { "metric_name": "score", "value": 1.0 },
+                        { "metric_name": "passed_cases", "value": 2.0 }
                     ],
                     "run_metrics": [],
                     "public_results": [],
@@ -762,7 +762,7 @@ mod tests {
         assert!(output.contains("primary_score: 1"));
         assert!(output.contains("rank_score: 1"));
         assert!(output.contains("visible_after_eval: false"));
-        assert_eq!(body["challenge_id"], "sample-sum");
+        assert_eq!(body["challenge_name"], "sample-sum");
         assert_eq!(body["target"], "linux-arm64-cpu");
         assert_eq!(body["explanation"], "quick check");
         assert!(body["artifact_base64"].as_str().expect("artifact").len() > 20);
@@ -948,7 +948,7 @@ mod tests {
             .and(path("/api/creator/challenge-drafts/draft-1/private-assets"))
             .and(header("authorization", "Bearer test-token"))
             .and(body_json(json!({
-                "asset_id": "official-cases",
+                "asset_name": "official-cases",
                 "kind": "private_benchmark_data",
                 "required": true,
                 "asset_base64": encoded_asset
@@ -956,7 +956,7 @@ mod tests {
             .respond_with(ResponseTemplate::new(201).set_body_json(json!({
                 "id": "asset-row-1",
                 "draft_id": "draft-1",
-                "asset_id": "official-cases",
+                "asset_name": "official-cases",
                 "kind": "private_benchmark_data",
                 "required": true,
                 "size_bytes": 17,
@@ -984,7 +984,7 @@ mod tests {
             "draft",
             "upload-private-asset",
             "draft-1",
-            "--asset-id",
+            "--asset-name",
             "official-cases",
             "--kind",
             "private_benchmark_data",
@@ -998,7 +998,7 @@ mod tests {
             .expect("asset upload should succeed");
 
         assert!(output.contains("private_asset: asset-row-1"));
-        assert!(output.contains("asset_id: official-cases"));
+        assert!(output.contains("asset_name: official-cases"));
     }
 
     #[tokio::test]
@@ -1047,12 +1047,12 @@ mod tests {
 
     fn challenge_detail_json(validation_enabled: bool) -> serde_json::Value {
         json!({
-            "id": "sample-sum",
+            "name": "sample-sum",
             "title": "Sample Sum",
             "summary": "Add numbers",
             "spec": {
                 "schema_version": 1,
-                "challenge_id": "sample-sum",
+                "challenge_name": "sample-sum",
                 "challenge_title": "Sample Sum",
                 "challenge_summary": "Add numbers",
                 "eligibility": { "type": "open" },
@@ -1077,7 +1077,7 @@ mod tests {
                         "accelerator": "cpu",
                         "validation_enabled": validation_enabled,
                         "resource_profile": {
-                            "id": "python-cpu-small",
+                            "name": "python-cpu-small",
                             "solution_image": "agentics-linux-arm64-cpu:ubuntu26.04-local",
                             "scorer_image": "agentics-linux-arm64-cpu:ubuntu26.04-local",
                             "timeout_sec": 30,
@@ -1105,13 +1105,13 @@ mod tests {
                 "metric_schema": {
                     "metrics": [
                         {
-                            "id": "score",
+                            "name": "score",
                             "label": "Score",
                             "direction": "maximize",
                             "visibility": "public"
                         },
                         {
-                            "id": "passed_cases",
+                            "name": "passed_cases",
                             "label": "Passed Cases",
                             "unit": "cases",
                             "direction": "maximize",
@@ -1119,8 +1119,8 @@ mod tests {
                         }
                     ],
                     "ranking": {
-                        "primary_metric_id": "score",
-                        "tie_breaker_metric_ids": ["passed_cases"]
+                        "primary_metric_name": "score",
+                        "tie_breaker_metric_names": ["passed_cases"]
                     }
                 }
             },
@@ -1132,14 +1132,14 @@ mod tests {
         json!({
             "schema_version": 1,
             "request": "new_challenge",
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "title": "Sample Sum",
             "summary": "Add numbers",
             "readme_path": "README.md",
             "bundle_path": "v1",
             "private_assets": [
                 {
-                    "asset_id": "official-cases",
+                    "asset_name": "official-cases",
                     "kind": "private_benchmark_data",
                     "required": true
                 }
@@ -1150,7 +1150,7 @@ mod tests {
     fn challenge_draft_json(status: &str) -> serde_json::Value {
         json!({
             "id": "draft-1",
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "request": "new_challenge",
             "status": status,
             "creator_agent_id": "agent-1",

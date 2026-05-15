@@ -2,9 +2,9 @@
 
 use std::path::PathBuf;
 
-use sqlx::{PgPool, Row};
+use sqlx::PgPool;
 
-use super::ids::solution_submission_id_from_row;
+use super::ids::{solution_submission_id_from_row, uuid_string_from_row};
 use crate::error::{AppError, Result};
 use crate::models::ids::SolutionSubmissionId;
 use crate::models::request::AdminServiceHeartbeatDto;
@@ -115,11 +115,11 @@ pub async fn ensure_challenges_seeded_from_root(
             crate::challenge_bundle::validate_challenge_bundle(&bundle_dir).await?;
             let spec = crate::challenge_bundle::read_challenge_bundle_spec(&bundle_dir).await?;
             let statement_path = bundle_dir.join("statement.md");
-            let challenge_id = &spec.challenge_id;
+            let challenge_name = &spec.challenge_name;
 
             if crate::db::publish_challenge(
                 pool,
-                challenge_id,
+                challenge_name,
                 bundle_dir.to_string_lossy().as_ref(),
                 statement_path.to_string_lossy().as_ref(),
                 &spec,
@@ -139,10 +139,10 @@ pub async fn ensure_challenges_seeded_from_root(
                         spec_json = $6,
                         status = 'active',
                         updated_at = NOW()
-                    WHERE id = $1
+                    WHERE name = $1
                     "#,
                 )
-                .bind(challenge_id.as_str())
+                .bind(challenge_name.as_str())
                 .bind(&spec.challenge_title)
                 .bind(&spec.challenge_summary)
                 .bind(bundle_dir.to_string_lossy().as_ref())
@@ -208,7 +208,7 @@ pub async fn reap_stuck_jobs(pool: &PgPool, timeout_minutes: i32) -> Result<Stal
     .await?;
 
     for row in &failed_jobs {
-        let job_id: String = row.try_get("id")?;
+        let job_id = uuid_string_from_row(row, "id")?;
         let solution_submission_id =
             solution_submission_id_from_row(row, "solution_submission_id")?;
         sqlx::query(
@@ -216,7 +216,7 @@ pub async fn reap_stuck_jobs(pool: &PgPool, timeout_minutes: i32) -> Result<Stal
             UPDATE evaluations
             SET status = 'failed',
                 finished_at = NOW()
-            WHERE job_id = $1
+            WHERE job_id = $1::uuid
               AND status = 'running'
             "#,
         )
@@ -230,7 +230,7 @@ pub async fn reap_stuck_jobs(pool: &PgPool, timeout_minutes: i32) -> Result<Stal
             SET status = 'failed',
                 visible_after_eval = FALSE,
                 updated_at = NOW()
-            WHERE id = $1
+            WHERE id = $1::uuid
         "#,
         )
         .bind(solution_submission_id.as_str())

@@ -10,7 +10,11 @@ use helpers::{
     solution_zip_base64, spawn_app_with_config, test_config, zip_project_zip_base64,
 };
 use serde_json::json;
-use shared::{db, error::AppError, models::challenge_creation::ChallengePrivateAssetKind};
+use shared::{
+    db,
+    error::AppError,
+    models::{challenge_creation::ChallengePrivateAssetKind, names::AssetName},
+};
 
 fn creator_auth(
     request: reqwest::RequestBuilder,
@@ -66,7 +70,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
         &creator,
     )
     .json(&json!({
-        "asset_id": "official-cases",
+        "asset_name": "official-cases",
         "kind": "private_benchmark_data",
         "required": false,
         "asset_base64": private_benchmark_asset_zip_base64()
@@ -145,7 +149,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
         &creator,
     )
     .json(&json!({
-        "asset_id": "official-cases",
+        "asset_name": "official-cases",
         "kind": "private_benchmark_data",
         "required": false,
         "asset_base64": private_benchmark_asset_zip_base64()
@@ -189,9 +193,9 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
         .await
         .expect("published json");
     assert_eq!(published["status"], "published");
-    assert_eq!(published["published_challenge_id"], "sample-sum");
+    assert_eq!(published["published_challenge_name"], "sample-sum");
     let bundle_path: String =
-        sqlx::query_scalar("SELECT bundle_path FROM challenges WHERE id = $1")
+        sqlx::query_scalar("SELECT bundle_path FROM challenges WHERE name = $1")
             .bind("sample-sum")
             .fetch_one(&pool)
             .await
@@ -216,7 +220,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
     assert_eq!(public_challenge["spec"]["eligibility"]["type"], "open");
 
     let owner_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*)::BIGINT FROM challenge_owners WHERE challenge_id = $1 AND agent_id = $2",
+        "SELECT COUNT(*)::BIGINT FROM challenge_owners WHERE challenge_name = $1 AND agent_id = $2::uuid",
     )
     .bind("sample-sum")
     .bind(&creator.agent_id)
@@ -240,7 +244,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
     .json()
     .await
     .expect("creator stats json");
-    assert_eq!(stats["challenge_id"], "sample-sum");
+    assert_eq!(stats["challenge_name"], "sample-sum");
     assert_eq!(stats["target"], "linux-arm64-cpu");
     assert_eq!(stats["solution_submission_count"], 0);
 
@@ -296,7 +300,7 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
         &creator,
     )
     .json(&json!({
-        "asset_id": "official-cases",
+        "asset_name": "official-cases",
         "kind": "private_benchmark_data",
         "asset_base64": private_benchmark_asset_zip_base64()
     }))
@@ -351,7 +355,7 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
     assert_eq!(publish_response.status(), reqwest::StatusCode::BAD_REQUEST);
 
     let published_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*)::BIGINT FROM challenges WHERE id = $1 AND spec_json IS NOT NULL",
+        "SELECT COUNT(*)::BIGINT FROM challenges WHERE name = $1 AND spec_json IS NOT NULL",
     )
     .bind("sample-sum")
     .fetch_one(&pool)
@@ -383,7 +387,7 @@ async fn challenge_draft_rejects_new_version_manifest(pool: sqlx::PgPool) {
         "manifest": {
             "schema_version": 1,
             "request": "new_version",
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "title": "Sample Sum",
             "summary": "Add numbers",
             "readme_path": "README.md",
@@ -457,7 +461,7 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
             .as_array()
             .expect("items")
             .iter()
-            .all(|item| item["id"] != "sample-sum")
+            .all(|item| item["name"] != "sample-sum")
     );
 
     client
@@ -472,7 +476,7 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", participant_bearer)
         .json(&json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"))
         }))
@@ -567,7 +571,7 @@ async fn challenge_creator_routes_require_oauth_session_and_csrf(pool: sqlx::PgP
 }
 
 #[sqlx::test(migrations = "../migrations")]
-async fn private_asset_upload_rejects_duplicate_asset_id(pool: sqlx::PgPool) {
+async fn private_asset_upload_rejects_duplicate_asset_name(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
     let config = test_config(storage.path(), seeded_challenges.path());
@@ -606,7 +610,7 @@ async fn private_asset_upload_rejects_duplicate_asset_id(pool: sqlx::PgPool) {
         &creator,
     )
     .json(&json!({
-        "asset_id": "official-cases",
+        "asset_name": "official-cases",
         "kind": "private_benchmark_data",
         "asset_base64": STANDARD.encode(b"[]")
     }))
@@ -629,7 +633,7 @@ async fn private_asset_upload_rejects_duplicate_asset_id(pool: sqlx::PgPool) {
         &creator,
     )
     .json(&json!({
-        "asset_id": "official-cases",
+        "asset_name": "official-cases",
         "kind": "private_benchmark_data",
         "asset_base64": STANDARD.encode(b"[]")
     }))
@@ -655,12 +659,12 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
     let mut manifest = manifest_json();
     manifest["private_assets"] = json!([
         {
-            "asset_id": "official-cases-a",
+            "asset_name": "official-cases-a",
             "kind": "private_benchmark_data",
             "required": false
         },
         {
-            "asset_id": "official-cases-b",
+            "asset_name": "official-cases-b",
             "kind": "private_benchmark_data",
             "required": false
         }
@@ -689,9 +693,10 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
     let draft_id = draft["id"].as_str().expect("draft id").to_string();
 
     let input_a = db::CreateChallengePrivateAssetInput {
-        asset_id_row: uuid::Uuid::new_v4().to_string(),
+        asset_row_id: uuid::Uuid::new_v4().to_string(),
         draft_id: draft_id.clone(),
-        asset_id: "official-cases-a".to_string(),
+        asset_name: AssetName::try_new("official-cases-a".to_string())
+            .expect("test asset name is valid"),
         kind: ChallengePrivateAssetKind::PrivateBenchmarkData,
         required: false,
         size_bytes: 8,
@@ -700,9 +705,10 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
         uploader_agent_id: creator.agent_id.clone(),
     };
     let input_b = db::CreateChallengePrivateAssetInput {
-        asset_id_row: uuid::Uuid::new_v4().to_string(),
+        asset_row_id: uuid::Uuid::new_v4().to_string(),
         draft_id: draft_id.clone(),
-        asset_id: "official-cases-b".to_string(),
+        asset_name: AssetName::try_new("official-cases-b".to_string())
+            .expect("test asset name is valid"),
         kind: ChallengePrivateAssetKind::PrivateBenchmarkData,
         required: false,
         size_bytes: 8,
@@ -734,14 +740,14 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
     assert_eq!(rejected, 1);
 
     let stored_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*)::BIGINT FROM challenge_private_assets WHERE draft_id = $1",
+        "SELECT COUNT(*)::BIGINT FROM challenge_private_assets WHERE draft_id = $1::uuid",
     )
     .bind(&draft_id)
     .fetch_one(&pool)
     .await
     .expect("asset count query");
     let stored_bytes: i64 = sqlx::query_scalar(
-        "SELECT COALESCE(SUM(size_bytes), 0)::BIGINT FROM challenge_private_assets WHERE draft_id = $1",
+        "SELECT COALESCE(SUM(size_bytes), 0)::BIGINT FROM challenge_private_assets WHERE draft_id = $1::uuid",
     )
     .bind(&draft_id)
     .fetch_one(&pool)
@@ -799,7 +805,7 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
         &creator,
     )
     .json(&json!({
-        "asset_id": "official-cases",
+        "asset_name": "official-cases",
         "kind": "private_benchmark_data",
         "asset_base64": STANDARD.encode(b"[]")
     }))
@@ -858,7 +864,7 @@ async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
         &creator,
     )
     .json(&json!({
-        "asset_id": "official-cases",
+        "asset_name": "official-cases",
         "kind": "private_benchmark_data",
         "asset_base64": STANDARD.encode(b"private")
     }))
@@ -888,11 +894,13 @@ async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
         .expect("abandon")
         .error_for_status()
         .expect("abandon should succeed");
-    sqlx::query("UPDATE challenge_drafts SET updated_at = NOW() - INTERVAL '2 days' WHERE id = $1")
-        .bind(draft_id)
-        .execute(&pool)
-        .await
-        .expect("age draft");
+    sqlx::query(
+        "UPDATE challenge_drafts SET updated_at = NOW() - INTERVAL '2 days' WHERE id = $1::uuid",
+    )
+    .bind(draft_id)
+    .execute(&pool)
+    .await
+    .expect("age draft");
 
     let cleanup: serde_json::Value = client
         .post(api_url(&app, "/admin/challenge-drafts/cleanup"))
@@ -929,7 +937,7 @@ async fn create_validate_approve_publish_draft(
             creator,
         )
         .json(&json!({
-            "asset_id": "official-cases",
+            "asset_name": "official-cases",
             "kind": "private_benchmark_data",
             "asset_base64": private_benchmark_asset_zip_base64()
         }))
@@ -1041,7 +1049,7 @@ fn write_public_challenge(repo: &Path) {
         &json!({
             "runs": [
                 {
-                    "run_id": "case-1",
+                    "run_name": "case-1",
                     "interface": "stdio",
                     "stdin_json": { "a": 1, "b": 2 },
                     "expected": "3",
@@ -1056,7 +1064,7 @@ fn write_public_challenge(repo: &Path) {
         &challenge_root.join("v1/spec.json"),
         &json!({
             "schema_version": 1,
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "challenge_title": "Sample Sum",
             "challenge_summary": "Add numbers",
             "solution": {
@@ -1074,7 +1082,7 @@ fn write_public_challenge(repo: &Path) {
                     "accelerator": "cpu",
                     "validation_enabled": true,
                     "resource_profile": {
-                        "id": "agentics-cpu-small",
+                        "name": "agentics-cpu-small",
                         "solution_image": "agentics-linux-arm64-cpu:ubuntu26.04-local",
                         "scorer_image": "agentics-linux-arm64-cpu:ubuntu26.04-local",
                         "timeout_sec": 30,
@@ -1109,14 +1117,14 @@ fn write_public_challenge(repo: &Path) {
             "metric_schema": {
                 "metrics": [
                     {
-                        "id": "score",
+                        "name": "score",
                         "label": "Score",
                         "direction": "maximize",
                         "visibility": "public"
                     }
                 ],
                 "ranking": {
-                    "primary_metric_id": "score"
+                    "primary_metric_name": "score"
                 }
             }
         })
@@ -1140,14 +1148,14 @@ fn manifest_json() -> serde_json::Value {
     json!({
         "schema_version": 1,
         "request": "new_challenge",
-        "challenge_id": "sample-sum",
+        "challenge_name": "sample-sum",
         "title": "Sample Sum",
         "summary": "Add numbers",
         "readme_path": "README.md",
         "bundle_path": "v1",
         "private_assets": [
             {
-                "asset_id": "official-cases",
+                "asset_name": "official-cases",
                 "kind": "private_benchmark_data",
                 "required": true
             }
@@ -1159,7 +1167,7 @@ fn archive_manifest_json() -> serde_json::Value {
     json!({
         "schema_version": 1,
         "request": "archive_challenge",
-        "challenge_id": "sample-sum",
+        "challenge_name": "sample-sum",
         "title": "Sample Sum",
         "summary": "Add numbers",
         "readme_path": "README.md",
@@ -1183,7 +1191,7 @@ fn private_benchmark_asset_zip_base64() -> String {
             json!({
                 "runs": [
                     {
-                        "run_id": "private-benchmark-1",
+                        "run_name": "private-benchmark-1",
                         "interface": "stdio",
                         "stdin_json": { "a": 20, "b": 22 },
                         "expected": "42",
@@ -1222,9 +1230,9 @@ def main() -> int:
     runs = json.loads(Path(args.runs_file).read_text(encoding="utf-8"))["runs"]
     results = []
     for run in runs:
-        stdout = (Path(args.solution_runs_dir) / run["run_id"] / "stdout.txt").read_text(encoding="utf-8").strip()
+        stdout = (Path(args.solution_runs_dir) / run["run_name"] / "stdout.txt").read_text(encoding="utf-8").strip()
         passed = stdout == str(run["expected"])
-        results.append({"case_id": run["run_id"], "status": "passed" if passed else "failed", "score": 1 if passed else 0})
+        results.append({"case_id": run["run_name"], "status": "passed" if passed else "failed", "score": 1 if passed else 0})
     passed_count = sum(1 for result in results if result["status"] == "passed")
     total = len(results)
     score = 0 if total == 0 else passed_count / total
@@ -1233,8 +1241,8 @@ def main() -> int:
         "mode": args.mode,
         "primary_score": score,
         "rank_score": score,
-        "aggregate_metrics": [{"metric_id": "score", "value": score}],
-        "run_metrics": [{"run_id": result["case_id"], "metrics": [{"metric_id": "score", "value": result["score"]}]} for result in results],
+        "aggregate_metrics": [{"metric_name": "score", "value": score}],
+        "run_metrics": [{"run_name": result["case_id"], "metrics": [{"metric_name": "score", "value": result["score"]}]} for result in results],
         "public_results": results if args.mode == "validation" else [],
     }
     if args.mode == "validation":

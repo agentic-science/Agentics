@@ -77,7 +77,7 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
         &creator,
     )
     .json(&serde_json::json!({
-        "asset_id": "official-seed-config",
+        "asset_name": "official-seed-config",
         "kind": "private_seeds",
         "asset_base64": STANDARD.encode(asset_bytes)
     }))
@@ -143,7 +143,7 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {participant_token}"))
         .json(&serde_json::json!({
-            "challenge_id": "matrix-multiplication",
+            "challenge_name": "matrix-multiplication",
             "target": target,
             "artifact_base64": matrix_multiplication_solution_zip_base64(),
             "explanation": "C baseline for matrix multiplication"
@@ -183,7 +183,7 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
     );
     assert_eq!(completed["evaluation"]["eval_type"], "official");
     assert_eq!(
-        completed["evaluation"]["aggregate_metrics"][0]["metric_id"],
+        completed["evaluation"]["aggregate_metrics"][0]["metric_name"],
         "correctness"
     );
     assert_eq!(
@@ -203,7 +203,7 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
     );
 
     let run_metrics_json: serde_json::Value = sqlx::query_scalar(
-        "SELECT run_metrics_json FROM evaluations WHERE solution_submission_id = $1 AND eval_type = 'official'",
+        "SELECT run_metrics_json FROM evaluations WHERE solution_submission_id = $1::uuid AND eval_type = 'official'",
     )
     .bind(submission_id)
     .fetch_one(&pool)
@@ -218,7 +218,7 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
             .as_array()
             .expect("metrics should be an array")
             .iter()
-            .any(|metric| metric["metric_id"] == "wall_time_ms")
+            .any(|metric| metric["metric_name"] == "wall_time_ms")
     }));
 }
 

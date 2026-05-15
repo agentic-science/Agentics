@@ -9,6 +9,7 @@ use helpers::{
 use shared::db::{MarkEvaluationStartedInput, PersistedEvaluationResult};
 use shared::models::evaluation::{EvaluationStatus, MetricValue, ScoreSummary, ScoringMode};
 use shared::models::ids::SolutionSubmissionId;
+use shared::models::names::MetricName;
 
 #[sqlx::test(migrations = "../migrations")]
 async fn stale_running_job_fails_after_max_attempts(pool: sqlx::PgPool) {
@@ -32,7 +33,7 @@ async fn stale_running_job_fails_after_max_attempts(pool: sqlx::PgPool) {
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "stale job"
@@ -56,7 +57,7 @@ async fn stale_running_job_fails_after_max_attempts(pool: sqlx::PgPool) {
             worker_id = 'worker-1',
             claimed_at = NOW() - INTERVAL '10 minutes',
             attempt_count = max_attempts
-        WHERE solution_submission_id = $1
+        WHERE solution_submission_id = $1::uuid
         "#,
     )
     .bind(solution_submission_id.as_str())
@@ -76,7 +77,7 @@ async fn stale_running_job_fails_after_max_attempts(pool: sqlx::PgPool) {
         SELECT j.status, s.status
         FROM evaluation_jobs j
         JOIN solution_submissions s ON s.id = j.solution_submission_id
-        WHERE s.id = $1
+        WHERE s.id = $1::uuid
         "#,
     )
     .bind(solution_submission_id.as_str())
@@ -108,7 +109,7 @@ async fn refreshed_job_lease_is_not_reaped(pool: sqlx::PgPool) {
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "lease refresh"
@@ -132,8 +133,8 @@ async fn refreshed_job_lease_is_not_reaped(pool: sqlx::PgPool) {
             claimed_at = NOW() - INTERVAL '10 minutes',
             attempt_count = 1,
             max_attempts = 2
-        WHERE solution_submission_id = $1
-        RETURNING id
+        WHERE solution_submission_id = $1::uuid
+        RETURNING id::text AS id
         "#,
     )
     .bind(solution_submission_id.as_str())
@@ -176,7 +177,7 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "stale worker finish"
@@ -219,7 +220,7 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
         UPDATE evaluation_jobs
         SET claimed_at = NOW() - INTERVAL '10 minutes',
             max_attempts = 2
-        WHERE id = $1
+        WHERE id = $1::uuid
         "#,
     )
     .bind(&first_claim.id)
@@ -267,7 +268,7 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
             .expect("stale finish should be ignored cleanly")
     );
     let still_running: (String, String, i32) = sqlx::query_as(
-        "SELECT status, worker_id, attempt_count FROM evaluation_jobs WHERE id = $1",
+        "SELECT status, worker_id, attempt_count FROM evaluation_jobs WHERE id = $1::uuid",
     )
     .bind(&first_claim.id)
     .fetch_one(&pool)
@@ -302,7 +303,7 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
         FROM evaluation_jobs j
         JOIN solution_submissions s ON s.id = j.solution_submission_id
         JOIN evaluations e ON e.job_id = j.id
-        WHERE j.id = $1
+        WHERE j.id = $1::uuid
         "#,
     )
     .bind(&first_claim.id)
@@ -350,11 +351,11 @@ async fn losing_official_submission_does_not_overwrite_leaderboard_best_metadata
 
     let row: (String, f64, Option<f64>, serde_json::Value) = sqlx::query_as(
         r#"
-        SELECT best_solution_submission_id, best_rank_score, official_score, official_metrics_json
+        SELECT best_solution_submission_id::text AS best_solution_submission_id, best_rank_score, official_score, official_metrics_json
         FROM leaderboard_entries
-        WHERE challenge_id = 'sample-sum'
+        WHERE challenge_name = 'sample-sum'
           AND target = 'linux-arm64-cpu'
-          AND agent_id = $1
+          AND agent_id = $1::uuid
         "#,
     )
     .bind(
@@ -371,7 +372,7 @@ async fn losing_official_submission_does_not_overwrite_leaderboard_best_metadata
     assert_eq!(row.2, Some(1.0));
     assert_eq!(
         row.3,
-        serde_json::json!([{ "metric_id": "score", "value": 1.0 }])
+        serde_json::json!([{ "metric_name": "score", "value": 1.0 }])
     );
 }
 
@@ -386,7 +387,7 @@ async fn create_official_submission(
         .post(api_url(app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": explanation
@@ -463,7 +464,7 @@ fn persisted_result(
         aggregate_metrics: score
             .map(|value| {
                 vec![MetricValue {
-                    metric_id: "score".to_string(),
+                    metric_name: MetricName::score(),
                     value,
                 }]
             })

@@ -20,7 +20,7 @@ fn create_admin_bundle(root: &Path) -> std::path::PathBuf {
         &std::fs::read_to_string(&spec_path).expect("failed to read copied spec"),
     )
     .expect("failed to parse copied spec");
-    spec["challenge_id"] = serde_json::json!("admin-sum");
+    spec["challenge_name"] = serde_json::json!("admin-sum");
     spec["challenge_title"] = serde_json::json!("Admin Sum");
     spec["challenge_summary"] = serde_json::json!("Official flow test");
     spec["visibility"]["result_detail"] = serde_json::json!("submitter_live_public_live");
@@ -52,7 +52,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
 
     let unauthorized = client
         .post(api_url(&app, "/admin/challenges"))
-        .json(&serde_json::json!({ "id": "admin-sum", "title": "Admin Sum" }))
+        .json(&serde_json::json!({ "name": "admin-sum", "title": "Admin Sum" }))
         .send()
         .await
         .expect("failed to check admin auth");
@@ -62,7 +62,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         .post(api_url(&app, "/admin/challenges"))
         .header("Authorization", &admin_auth)
         .json(&serde_json::json!({
-            "id": "admin-sum",
+            "name": "admin-sum",
             "title": "Admin Sum",
             "summary": "official flow test"
         }))
@@ -111,7 +111,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token_a}"))
         .json(&serde_json::json!({
-            "challenge_id": "admin-sum",
+            "challenge_name": "admin-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": perfect_zip,
             "explanation": "best rank score"
@@ -132,7 +132,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token_b}"))
         .json(&serde_json::json!({
-            "challenge_id": "admin-sum",
+            "challenge_name": "admin-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": private_benchmark_only_zip,
             "explanation": "passes private benchmark only"
@@ -201,7 +201,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         r#"
         SELECT eval_type, status
         FROM evaluation_jobs
-        WHERE solution_submission_id = $1
+        WHERE solution_submission_id = $1::uuid
         ORDER BY created_at ASC
         "#,
     )

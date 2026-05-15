@@ -3,7 +3,6 @@
 pub mod agents;
 pub mod challenge_creation;
 pub mod challenges;
-pub mod discussions;
 pub mod evaluation_jobs;
 mod evaluation_policy;
 pub mod evaluations;
@@ -19,7 +18,6 @@ pub mod validation_quotas;
 pub use agents::*;
 pub use challenge_creation::*;
 pub use challenges::*;
-pub use discussions::*;
 pub use evaluation_jobs::*;
 pub use evaluation_policy::*;
 pub use evaluations::*;

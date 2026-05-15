@@ -45,8 +45,8 @@ pub async fn register_agent(pool: &PgPool, input: &RegisterAgentInput) -> Result
     let row = sqlx::query(
         r#"
         INSERT INTO agents (id, name, agent_description, owner, model_info, status)
-        VALUES ($1, $2, $3, $4, $5, 'active')
-        RETURNING id, name, agent_description, owner, model_info, status, created_at
+        VALUES ($1::uuid, $2, $3, $4, $5, 'active')
+        RETURNING id::text AS id, name, agent_description, owner, model_info, status, created_at
         "#,
     )
     .bind(&input.agent_id)
@@ -57,12 +57,14 @@ pub async fn register_agent(pool: &PgPool, input: &RegisterAgentInput) -> Result
     .fetch_one(&mut *tx)
     .await?;
 
-    sqlx::query("INSERT INTO agent_tokens (id, agent_id, token_hash) VALUES ($1, $2, $3)")
-        .bind(&input.token_id)
-        .bind(&input.agent_id)
-        .bind(&input.token_hash)
-        .execute(&mut *tx)
-        .await?;
+    sqlx::query(
+        "INSERT INTO agent_tokens (id, agent_id, token_hash) VALUES ($1::uuid, $2::uuid, $3)",
+    )
+    .bind(&input.token_id)
+    .bind(&input.agent_id)
+    .bind(&input.token_hash)
+    .execute(&mut *tx)
+    .await?;
 
     tx.commit().await?;
 
@@ -96,7 +98,7 @@ pub async fn authenticate_agent_token(
 
     let row = sqlx::query(
         r#"
-        SELECT a.id AS agent_id, t.id AS token_id, a.name
+        SELECT a.id::text AS agent_id, t.id::text AS token_id, a.name
         FROM agent_tokens t
         JOIN agents a ON a.id = t.agent_id
         WHERE t.token_hash = $1
@@ -114,7 +116,7 @@ pub async fn authenticate_agent_token(
     };
 
     let token_id: String = row.try_get("token_id")?;
-    sqlx::query("UPDATE agent_tokens SET last_used_at = NOW() WHERE id = $1")
+    sqlx::query("UPDATE agent_tokens SET last_used_at = NOW() WHERE id = $1::uuid")
         .bind(&token_id)
         .execute(pool)
         .await?;
@@ -128,7 +130,7 @@ pub async fn authenticate_agent_token(
 
 /// Disable an agent and revoke all of its tokens.
 pub async fn disable_agent(pool: &PgPool, agent_id: &str) -> Result<()> {
-    let row = sqlx::query("UPDATE agents SET status = 'disabled' WHERE id = $1 RETURNING id")
+    let row = sqlx::query("UPDATE agents SET status = 'disabled' WHERE id = $1::uuid RETURNING id")
         .bind(agent_id)
         .fetch_optional(pool)
         .await?;
@@ -138,7 +140,7 @@ pub async fn disable_agent(pool: &PgPool, agent_id: &str) -> Result<()> {
     }
 
     sqlx::query(
-        "UPDATE agent_tokens SET revoked_at = COALESCE(revoked_at, NOW()) WHERE agent_id = $1",
+        "UPDATE agent_tokens SET revoked_at = COALESCE(revoked_at, NOW()) WHERE agent_id = $1::uuid",
     )
     .bind(agent_id)
     .execute(pool)

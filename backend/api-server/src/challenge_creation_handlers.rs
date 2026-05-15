@@ -22,7 +22,7 @@ use shared::models::challenge_creation::{
     CreateChallengeDraftRequest, ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest,
     ValidateChallengeDraftRequest,
 };
-use shared::models::ids::ChallengeId;
+use shared::models::names::ChallengeName;
 use shared::{challenge_bundle, challenge_creation, db};
 
 use crate::extractors::{AdminAuth, CreatorAuth, ValidatedJson};
@@ -39,7 +39,7 @@ pub async fn create_challenge_draft(
 ) -> Result<(StatusCode, Json<ChallengeDraftResponse>)> {
     validate_github_pr_metadata(&body)?;
     challenge_creation::validate_challenge_creation_manifest(&body.manifest)?;
-    validate_challenge_draft_path(&body.challenge_path, &body.manifest.challenge_id)?;
+    validate_challenge_draft_path(&body.challenge_path, &body.manifest.challenge_name)?;
 
     if creator.github_user_id != body.pr_author_github_user_id {
         return Err(AppError::BadRequest(format!(
@@ -119,8 +119,6 @@ pub async fn upload_challenge_private_asset(
     AxumPath(draft_id): AxumPath<String>,
     ValidatedJson(body): ValidatedJson<UploadChallengePrivateAssetRequest>,
 ) -> Result<(StatusCode, Json<ChallengePrivateAssetResponse>)> {
-    validate_private_asset_id(&body.asset_id)?;
-
     let draft = db::get_challenge_draft(&state.db, &draft_id)
         .await?
         .ok_or(AppError::NotFound)?;
@@ -141,17 +139,17 @@ pub async fn upload_challenge_private_asset(
         .manifest
         .private_assets
         .iter()
-        .find(|asset| asset.asset_id == body.asset_id)
+        .find(|asset| asset.asset_name == body.asset_name)
         .ok_or_else(|| {
             AppError::BadRequest(format!(
                 "private asset `{}` is not declared in the challenge manifest",
-                body.asset_id
+                body.asset_name
             ))
         })?;
     if requirement.kind != body.kind {
         return Err(AppError::BadRequest(format!(
             "private asset `{}` kind mismatch",
-            body.asset_id
+            body.asset_name
         )));
     }
 
@@ -171,12 +169,12 @@ pub async fn upload_challenge_private_asset(
     let sha256 = challenge_creation::sha256_hex(&asset_bytes);
     let storage_path = format!(
         "challenge-drafts/{}/private-assets/{}-{}.bin",
-        draft.id, body.asset_id, sha256
+        draft.id, body.asset_name, sha256
     );
     let temporary_storage_path = format!(
         "_tmp/challenge-private-assets/{}-{}-{}.bin",
         draft.id,
-        body.asset_id,
+        body.asset_name,
         Uuid::new_v4()
     );
     let temporary_storage_uri = state
@@ -186,9 +184,9 @@ pub async fn upload_challenge_private_asset(
     let asset = db::create_challenge_private_asset(
         &state.db,
         &db::CreateChallengePrivateAssetInput {
-            asset_id_row: Uuid::new_v4().to_string(),
+            asset_row_id: Uuid::new_v4().to_string(),
             draft_id: draft.id.clone(),
-            asset_id: body.asset_id,
+            asset_name: body.asset_name.clone(),
             kind: body.kind,
             required: requirement.required,
             size_bytes: asset_size_bytes_i64,
@@ -228,7 +226,7 @@ pub async fn upload_challenge_private_asset(
             action: "private_asset_uploaded".to_string(),
             message: "private benchmark asset uploaded".to_string(),
             metadata: serde_json::json!({
-                "asset_id": &asset.asset_id,
+                "asset_name": &asset.asset_name,
                 "kind": asset.kind,
                 "size_bytes": asset.size_bytes,
                 "sha256": &asset.sha256
@@ -543,7 +541,7 @@ pub async fn publish_challenge_draft(
                 &state.db,
                 &db::PublishArchiveChallengeDraftInput {
                     draft_id: draft.id.clone(),
-                    challenge_id: manifest.challenge_id.clone(),
+                    challenge_name: manifest.challenge_name.clone(),
                     audit_event_id: Uuid::new_v4().to_string(),
                     admin_username: admin.username,
                     repository_path: repository_path.to_string(),
@@ -565,7 +563,7 @@ pub async fn publish_challenge_draft(
                 &state.db,
                 &db::PublishNewChallengeDraftInput {
                     draft_id: draft.id.clone(),
-                    challenge_id: manifest.challenge_id.clone(),
+                    challenge_name: manifest.challenge_name.clone(),
                     bundle_path: bundle_path.to_string_lossy().to_string(),
                     statement_path: statement_path.to_string_lossy().to_string(),
                     spec,
@@ -633,32 +631,18 @@ fn validate_commit_sha(value: &str) -> Result<()> {
     Ok(())
 }
 
-fn validate_challenge_draft_path(path: &str, challenge_id: &ChallengeId) -> Result<()> {
+fn validate_challenge_draft_path(path: &str, challenge_name: &ChallengeName) -> Result<()> {
     let path = path.trim();
     if !challenge_bundle::is_safe_relative_path(path) {
         return Err(AppError::BadRequest(
             "challenge_path must be a safe relative path".to_string(),
         ));
     }
-    let expected = format!("challenges/{challenge_id}");
+    let expected = format!("challenges/{challenge_name}");
     if path != expected {
         return Err(AppError::BadRequest(format!(
             "challenge_path must be `{expected}`"
         )));
-    }
-    Ok(())
-}
-
-fn validate_private_asset_id(value: &str) -> Result<()> {
-    if value.trim().is_empty()
-        || !value
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
-    {
-        return Err(AppError::BadRequest(
-            "asset_id must contain only ASCII letters, digits, underscores, hyphens, or dots"
-                .to_string(),
-        ));
     }
     Ok(())
 }
@@ -677,10 +661,10 @@ async fn validate_draft_repository(
             draft.manifest_sha256, manifest_sha256
         )));
     }
-    if manifest.challenge_id != draft.challenge_id {
+    if manifest.challenge_name != draft.challenge_name {
         return Err(AppError::Validation(format!(
-            "manifest challenge_id mismatch: draft has {}, repository has {}",
-            draft.challenge_id, manifest.challenge_id
+            "manifest challenge_name mismatch: draft has {}, repository has {}",
+            draft.challenge_name, manifest.challenge_name
         )));
     }
     let bundle_sha256 = challenge_creation::draft_review_bundle_sha256(
@@ -707,7 +691,7 @@ async fn assemble_runtime_bundle(
 
     let runtime_bundle_path = Path::new(&state.config.storage_root)
         .join("challenge-bundles")
-        .join(manifest.challenge_id.as_str())
+        .join(manifest.challenge_name.as_str())
         .join(&draft.id);
     challenge_bundle::copy_challenge_bundle_dir(&public_bundle_path, &runtime_bundle_path, true)
         .await?;
@@ -717,7 +701,7 @@ async fn assemble_runtime_bundle(
         extract_private_asset_overlay(
             &bytes,
             &runtime_bundle_path,
-            &asset.asset_id,
+            &asset.asset_name,
             state.config.challenge_private_asset_bytes_per_draft,
         )
         .await?;
@@ -734,13 +718,13 @@ fn validate_private_assets_for_publish(
     let uploaded: HashSet<&str> = draft
         .private_assets
         .iter()
-        .map(|asset| asset.asset_id.as_str())
+        .map(|asset| asset.asset_name.as_str())
         .collect();
     for requirement in &manifest.private_assets {
-        if requirement.required && !uploaded.contains(requirement.asset_id.as_str()) {
+        if requirement.required && !uploaded.contains(requirement.asset_name.as_str()) {
             return Err(AppError::BadRequest(format!(
                 "required private asset `{}` has not been uploaded",
-                requirement.asset_id
+                requirement.asset_name
             )));
         }
     }
@@ -765,17 +749,17 @@ fn validate_private_assets_for_publish(
 async fn extract_private_asset_overlay(
     bytes: &[u8],
     target_dir: &Path,
-    asset_id: &str,
+    asset_name: &str,
     max_uncompressed_bytes: u64,
 ) -> Result<()> {
     let bytes = bytes.to_vec();
     let target_dir = target_dir.to_path_buf();
-    let asset_id = asset_id.to_string();
+    let asset_name = asset_name.to_string();
     tokio::task::spawn_blocking(move || {
         extract_private_asset_overlay_blocking(
             &bytes,
             &target_dir,
-            &asset_id,
+            &asset_name,
             max_uncompressed_bytes,
         )
     })
@@ -786,14 +770,14 @@ async fn extract_private_asset_overlay(
 fn extract_private_asset_overlay_blocking(
     bytes: &[u8],
     target_dir: &Path,
-    asset_id: &str,
+    asset_name: &str,
     max_uncompressed_bytes: u64,
 ) -> Result<()> {
     let reader = Cursor::new(bytes);
     let mut archive = zip::ZipArchive::new(reader)?;
     if archive.len() > MAX_PRIVATE_ASSET_FILE_COUNT {
         return Err(AppError::BadRequest(format!(
-            "private asset `{asset_id}` must contain at most {MAX_PRIVATE_ASSET_FILE_COUNT} entries"
+            "private asset `{asset_name}` must contain at most {MAX_PRIVATE_ASSET_FILE_COUNT} entries"
         )));
     }
 
@@ -805,7 +789,7 @@ fn extract_private_asset_overlay_blocking(
             .is_some_and(|mode| mode & 0o170000 == 0o120000)
         {
             return Err(AppError::BadRequest(format!(
-                "private asset `{asset_id}` must not contain symlinks"
+                "private asset `{asset_name}` must not contain symlinks"
             )));
         }
 
@@ -816,7 +800,7 @@ fn extract_private_asset_overlay_blocking(
         let relative_path_string = relative_path.to_string_lossy();
         if !challenge_bundle::is_safe_relative_path(&relative_path_string) {
             return Err(AppError::BadRequest(format!(
-                "private asset `{asset_id}` contains unsafe path `{relative_path_string}`"
+                "private asset `{asset_name}` contains unsafe path `{relative_path_string}`"
             )));
         }
         let output_path = target_dir.join(&relative_path);
@@ -824,11 +808,11 @@ fn extract_private_asset_overlay_blocking(
         total_uncompressed_size = total_uncompressed_size
             .checked_add(file.size())
             .ok_or_else(|| {
-                AppError::BadRequest(format!("private asset `{asset_id}` is too large"))
+                AppError::BadRequest(format!("private asset `{asset_name}` is too large"))
             })?;
         if total_uncompressed_size > max_uncompressed_bytes {
             return Err(AppError::BadRequest(format!(
-                "private asset `{asset_id}` must expand to at most {max_uncompressed_bytes} bytes"
+                "private asset `{asset_name}` must expand to at most {max_uncompressed_bytes} bytes"
             )));
         }
 
@@ -837,7 +821,7 @@ fn extract_private_asset_overlay_blocking(
         } else {
             if output_path.exists() {
                 return Err(AppError::BadRequest(format!(
-                    "private asset `{asset_id}` cannot overwrite bundle file `{relative_path_string}`"
+                    "private asset `{asset_name}` cannot overwrite bundle file `{relative_path_string}`"
                 )));
             }
             if let Some(parent) = output_path.parent() {

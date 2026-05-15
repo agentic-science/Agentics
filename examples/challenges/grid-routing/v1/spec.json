@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "challenge_id": "grid-routing",
+  "challenge_name": "grid-routing",
   "challenge_title": "Grid Routing",
   "challenge_summary": "在二维网格中从 S 到 G 规划一条有效路径，并避开障碍物。",
   "solution": {
@@ -18,7 +18,7 @@
       "accelerator": "cpu",
       "validation_enabled": true,
       "resource_profile": {
-        "id": "agentics-cpu-small",
+        "name": "agentics-cpu-small",
         "solution_image": "agentics-linux-arm64-cpu:ubuntu26.04-local",
         "scorer_image": "agentics-linux-arm64-cpu:ubuntu26.04-local",
         "timeout_sec": 30,
@@ -53,14 +53,14 @@
   "metric_schema": {
     "metrics": [
       {
-        "id": "score",
+        "name": "score",
         "label": "Score",
         "direction": "maximize",
         "visibility": "public",
         "metric_description": "Average route validity score across evaluated file-mode runs."
       },
       {
-        "id": "passed_cases",
+        "name": "passed_cases",
         "label": "Passed Cases",
         "unit": "cases",
         "direction": "maximize",
@@ -69,8 +69,8 @@
       }
     ],
     "ranking": {
-      "primary_metric_id": "score",
-      "tie_breaker_metric_ids": ["passed_cases"]
+      "primary_metric_name": "score",
+      "tie_breaker_metric_names": ["passed_cases"]
     }
   }
 }

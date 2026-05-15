@@ -4,17 +4,20 @@ use sqlx::{PgPool, Row};
 use crate::error::{AppError, Result};
 use crate::models::challenge::ChallengeBundleSpec;
 use crate::models::evaluation::{EvaluationJobPayload, ScoringMode};
-use crate::models::ids::{ChallengeId, SolutionSubmissionId, TargetName};
+use crate::models::ids::SolutionSubmissionId;
+use crate::models::names::{ChallengeName, TargetName};
 
 use super::evaluation_policy::ensure_challenge_supports_eval_type;
-use super::ids::{challenge_id_from_row, solution_submission_id_from_row, target_from_row};
+use super::ids::{
+    challenge_name_from_row, solution_submission_id_from_row, target_from_row, uuid_string_from_row,
+};
 
 /// Claimed or queued evaluation job with parsed runner payload.
 #[derive(Debug, Clone)]
 pub struct EvaluationJobRecord {
     pub id: String,
     pub solution_submission_id: SolutionSubmissionId,
-    pub challenge_id: ChallengeId,
+    pub challenge_name: ChallengeName,
     pub target: TargetName,
     pub eval_type: ScoringMode,
     pub status: String,
@@ -48,7 +51,7 @@ pub async fn claim_next_evaluation_job(
         SET status = 'running', claimed_at = NOW(), worker_id = $1, attempt_count = j.attempt_count + 1
         FROM next_job
         WHERE j.id = next_job.id
-        RETURNING j.id, j.solution_submission_id, j.challenge_id, j.target, j.eval_type, j.status, j.attempt_count, j.payload_json
+        RETURNING j.id, j.solution_submission_id, j.challenge_name, j.target, j.eval_type, j.status, j.attempt_count, j.payload_json
         "#
     )
     .bind(worker_id)
@@ -67,7 +70,7 @@ pub async fn claim_next_evaluation_job(
     let solution_submission_id = solution_submission_id_from_row(&r, "solution_submission_id")?;
 
     sqlx::query(
-        "UPDATE solution_submissions SET status = 'running', updated_at = NOW() WHERE id = $1",
+        "UPDATE solution_submissions SET status = 'running', updated_at = NOW() WHERE id = $1::uuid",
     )
     .bind(solution_submission_id.as_str())
     .execute(&mut *tx)
@@ -79,9 +82,9 @@ pub async fn claim_next_evaluation_job(
     tx.commit().await?;
 
     Ok(Some(EvaluationJobRecord {
-        id: r.try_get("id")?,
+        id: uuid_string_from_row(&r, "id")?,
         solution_submission_id,
-        challenge_id: challenge_id_from_row(&r, "challenge_id")?,
+        challenge_name: challenge_name_from_row(&r, "challenge_name")?,
         target: target_from_row(&r, "target")?,
         eval_type,
         status: r.try_get("status")?,
@@ -100,7 +103,7 @@ pub async fn refresh_evaluation_job_claim(
         r#"
         UPDATE evaluation_jobs
         SET claimed_at = NOW()
-        WHERE id = $1
+        WHERE id = $1::uuid
           AND worker_id = $2
           AND status = 'running'
         "#,
@@ -119,7 +122,7 @@ pub async fn mark_evaluation_job_ready(pool: &PgPool, job_id: &str) -> Result<()
         r#"
         UPDATE evaluation_jobs
         SET scheduled_at = NOW()
-        WHERE id = $1
+        WHERE id = $1::uuid
           AND status = 'queued'
         "#,
     )
@@ -157,11 +160,11 @@ pub async fn queue_evaluation_job(
 
     let row = sqlx::query(
         r#"
-        SELECT s.id, s.challenge_id, s.target, s.agent_id, s.artifact_path, s.visible_after_eval,
+        SELECT s.id, s.challenge_name, s.target, s.agent_id::text AS agent_id, s.artifact_path, s.visible_after_eval,
                p.bundle_path, p.spec_json
         FROM solution_submissions s
-        JOIN challenges p ON p.id = s.challenge_id
-        WHERE s.id = $1
+        JOIN challenges p ON p.name = s.challenge_name
+        WHERE s.id = $1::uuid
           AND p.spec_json IS NOT NULL
         LIMIT 1
         "#,
@@ -176,10 +179,10 @@ pub async fn queue_evaluation_job(
         serde_json::from_value(spec_json).map_err(|e| AppError::Internal(e.to_string()))?;
 
     let target = target_from_row(&row, "target")?;
-    let challenge_id = challenge_id_from_row(&row, "challenge_id")?;
+    let challenge_name = challenge_name_from_row(&row, "challenge_name")?;
     ensure_challenge_supports_eval_type(
         pool,
-        &challenge_id,
+        &challenge_name,
         &spec,
         &target,
         input.eval_type,
@@ -190,7 +193,7 @@ pub async fn queue_evaluation_job(
     let payload = serde_json::to_value(EvaluationJobPayload {
         artifact_path: row.try_get("artifact_path")?,
         bundle_path: row.try_get("bundle_path")?,
-        challenge_id: challenge_id.clone(),
+        challenge_name: challenge_name.clone(),
         target: target.clone(),
     })
     .map_err(|e| AppError::Internal(e.to_string()))?;
@@ -204,13 +207,13 @@ pub async fn queue_evaluation_job(
 
     sqlx::query(
         r#"
-        INSERT INTO evaluation_jobs (id, solution_submission_id, challenge_id, target, eval_type, status, priority, payload_json)
-        VALUES ($1, $2, $3, $4, $5, 'queued', $6, $7)
+        INSERT INTO evaluation_jobs (id, solution_submission_id, challenge_name, target, eval_type, status, priority, payload_json)
+        VALUES ($1::uuid, $2::uuid, $3, $4, $5, 'queued', $6, $7)
         "#
     )
     .bind(&input.job_id)
     .bind(input.solution_submission_id.as_str())
-    .bind(challenge_id.as_str())
+    .bind(challenge_name.as_str())
     .bind(target.as_str())
     .bind(eval_type_str)
     .bind(priority)
@@ -220,7 +223,7 @@ pub async fn queue_evaluation_job(
     .map_err(map_active_job_conflict)?;
 
     sqlx::query(
-        "UPDATE solution_submissions SET status = 'queued', visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1"
+        "UPDATE solution_submissions SET status = 'queued', visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1::uuid"
     )
     .bind(input.solution_submission_id.as_str())
     .execute(&mut *tx)
@@ -231,7 +234,7 @@ pub async fn queue_evaluation_job(
     Ok(EvaluationJobRecord {
         id: input.job_id.clone(),
         solution_submission_id: solution_submission_id_from_row(&row, "id")?,
-        challenge_id,
+        challenge_name,
         target,
         eval_type: input.eval_type,
         status: "queued".to_string(),

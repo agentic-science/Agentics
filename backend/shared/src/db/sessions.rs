@@ -92,11 +92,11 @@ pub async fn upsert_github_creator_agent(
             github_user_id,
             github_login
         )
-        VALUES ($1, $2, '', $3, '{}'::jsonb, 'active', $4, $5)
+        VALUES ($1::uuid, $2, '', $3, '{}'::jsonb, 'active', $4, $5)
         ON CONFLICT (github_user_id) DO UPDATE
         SET github_login = EXCLUDED.github_login,
             owner = EXCLUDED.owner
-        RETURNING id
+        RETURNING id::text AS id
         "#,
     )
     .bind(agent_id)
@@ -163,7 +163,7 @@ pub async fn create_creator_session(
             github_login,
             expires_at
         )
-        VALUES ($1, 'creator', $2, $3, $4, $5, $6, $7)
+        VALUES ($1::uuid, 'creator', $2, $3, $4::uuid, $5, $6, $7)
         "#,
     )
     .bind(&input.session_id)
@@ -191,7 +191,7 @@ pub async fn create_admin_session(pool: &PgPool, input: &CreateAdminSessionInput
             admin_username,
             expires_at
         )
-        VALUES ($1, 'admin', $2, $3, $4, $5)
+        VALUES ($1::uuid, 'admin', $2, $3, $4, $5)
         "#,
     )
     .bind(&input.session_id)
@@ -213,7 +213,7 @@ pub async fn authenticate_creator_session(
     let session_token_hash = crate::auth::hash_opaque_token(session_token);
     let row = sqlx::query(
         r#"
-        SELECT id, agent_id, github_user_id, github_login, csrf_token_hash
+        SELECT id::text AS id, agent_id::text AS agent_id, github_user_id, github_login, csrf_token_hash
         FROM web_sessions
         WHERE session_token_hash = $1
           AND role = 'creator'
@@ -230,7 +230,7 @@ pub async fn authenticate_creator_session(
     };
 
     let session_id: String = row.try_get("id")?;
-    sqlx::query("UPDATE web_sessions SET last_used_at = NOW() WHERE id = $1")
+    sqlx::query("UPDATE web_sessions SET last_used_at = NOW() WHERE id = $1::uuid")
         .bind(&session_id)
         .execute(pool)
         .await?;
@@ -258,7 +258,7 @@ pub async fn authenticate_admin_session(
     let session_token_hash = crate::auth::hash_opaque_token(session_token);
     let row = sqlx::query(
         r#"
-        SELECT id, admin_username, csrf_token_hash
+        SELECT id::text AS id, admin_username, csrf_token_hash
         FROM web_sessions
         WHERE session_token_hash = $1
           AND role = 'admin'
@@ -275,7 +275,7 @@ pub async fn authenticate_admin_session(
     };
 
     let session_id: String = row.try_get("id")?;
-    sqlx::query("UPDATE web_sessions SET last_used_at = NOW() WHERE id = $1")
+    sqlx::query("UPDATE web_sessions SET last_used_at = NOW() WHERE id = $1::uuid")
         .bind(&session_id)
         .execute(pool)
         .await?;

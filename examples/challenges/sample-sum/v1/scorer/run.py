@@ -29,16 +29,16 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
 
 def aggregate_metrics(summary: dict[str, Any]) -> list[dict[str, Any]]:
     return [
-        {"metric_id": "score", "value": summary["score"]},
-        {"metric_id": "passed_cases", "value": summary["passed"]},
+        {"metric_name": "score", "value": summary["score"]},
+        {"metric_name": "passed_cases", "value": summary["passed"]},
     ]
 
 
 def run_metrics(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [
         {
-            "run_id": result["case_id"],
-            "metrics": [{"metric_id": "score", "value": result["score"]}],
+            "run_name": result["case_id"],
+            "metrics": [{"metric_name": "score", "value": result["score"]}],
         }
         for result in results
     ]
@@ -49,12 +49,12 @@ def score_runs(runs_file: Path, solution_runs_dir: Path, logs: list[str]) -> lis
     results: list[dict[str, Any]] = []
 
     for run in runs:
-        run_id = run["run_id"]
-        stdout_path = solution_runs_dir / run_id / "stdout.txt"
+        run_name = run["run_name"]
+        stdout_path = solution_runs_dir / run_name / "stdout.txt"
         if not stdout_path.is_file():
             results.append(
                 {
-                    "case_id": run_id,
+                    "case_id": run_name,
                     "status": "error",
                     "score": 0,
                     "message": "missing stdout.txt",
@@ -65,13 +65,13 @@ def score_runs(runs_file: Path, solution_runs_dir: Path, logs: list[str]) -> lis
         stdout = stdout_path.read_text(encoding="utf-8").strip()
         expected = str(run["expected"])
         if stdout == expected:
-            results.append({"case_id": run_id, "status": "passed", "score": 1})
+            results.append({"case_id": run_name, "status": "passed", "score": 1})
         else:
             message = f"expected {expected}, got {stdout}"
-            logs.append(f"{run_id}: {message}")
+            logs.append(f"{run_name}: {message}")
             results.append(
                 {
-                    "case_id": run_id,
+                    "case_id": run_name,
                     "status": "failed",
                     "score": 0,
                     "message": message,

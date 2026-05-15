@@ -8,7 +8,7 @@ use shared::models::challenge_creation::{
     ChallengeDraftCleanupResponse, ChallengeDraftResponse, ChallengePrivateAssetResponse,
 };
 use shared::models::evaluation::ScorerRunResult;
-use shared::models::ids::{ChallengeId, TargetName};
+use shared::models::names::{ChallengeName, TargetName};
 use shared::models::request::{
     ChallengeShortlistResponse, ChallengeShortlistRevisionResponse,
     CreateSolutionSubmissionResponse, CreatorChallengeParticipantsResponse,
@@ -39,7 +39,7 @@ pub(crate) struct LocalValidationTargetReport {
 
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct LocalValidationReport {
-    pub challenge_id: ChallengeId,
+    pub challenge_name: ChallengeName,
     pub bundle_dir: PathBuf,
     pub storage_root: PathBuf,
     pub package: LocalValidationPackageReport,
@@ -126,7 +126,7 @@ pub(crate) fn render_challenge_draft(
         OutputFormat::Table => Ok(format!(
             "challenge_draft: {}\nchallenge: {}\nrequest: {}\nstatus: {}\nrepo: {}#{}\npath: {}\ncommit: {}\nmanifest_sha256: {}\npublished_challenge: {}\nprivate_assets: {}\nvalidation_records: {}",
             response.id,
-            response.challenge_id,
+            response.challenge_name,
             status_label(&response.request),
             status_label(&response.status),
             response.repo_url,
@@ -135,9 +135,9 @@ pub(crate) fn render_challenge_draft(
             response.commit_sha,
             response.manifest_sha256,
             response
-                .published_challenge_id
+                .published_challenge_name
                 .as_ref()
-                .map_or("none", ChallengeId::as_str),
+                .map_or("none", ChallengeName::as_str),
             response.private_assets.len(),
             response.validation_records.len()
         )),
@@ -151,10 +151,10 @@ pub(crate) fn render_challenge_private_asset(
     match format {
         OutputFormat::Json => pretty_json(response),
         OutputFormat::Table => Ok(format!(
-            "private_asset: {}\ndraft: {}\nasset_id: {}\nkind: {}\nrequired: {}\nsize_bytes: {}\nsha256: {}",
+            "private_asset: {}\ndraft: {}\nasset_name: {}\nkind: {}\nrequired: {}\nsize_bytes: {}\nsha256: {}",
             response.id,
             response.draft_id,
-            response.asset_id,
+            response.asset_name,
             status_label(&response.kind),
             response.required,
             response.size_bytes,
@@ -184,7 +184,7 @@ pub(crate) fn render_creator_challenge_stats(
         OutputFormat::Json => pretty_json(response),
         OutputFormat::Table => Ok(format!(
             "challenge: {}\ntarget: {}\nagents: {}\nsolution_submissions: {}\ncompleted: {}\nfailed: {}\nqueued_or_running: {}\nvalidation_runs: {}\nofficial_runs: {}\nvisible_submissions: {}\nlatest_submission: {}\nlatest_completed_evaluation: {}\nbest_rank_score_min: {}\nbest_rank_score_max: {}\nbest_rank_score_mean: {}",
-            response.challenge_id,
+            response.challenge_name,
             response.target.as_ref().map_or("all", TargetName::as_str),
             response.agent_count,
             response.solution_submission_count,
@@ -250,7 +250,7 @@ pub(crate) fn render_creator_challenge_participants(
                 .collect::<Vec<_>>();
             Ok(format!(
                 "challenge: {}\ntarget: {}\n{}",
-                response.challenge_id,
+                response.challenge_name,
                 response.target.as_ref().map_or("all", TargetName::as_str),
                 render_table(
                     &[
@@ -278,7 +278,7 @@ pub(crate) fn render_challenge_shortlist_revision(
         OutputFormat::Table => Ok(format!(
             "shortlist_revision: {}\nchallenge: {}\nrequested: {}\nadded: {}\nsha256: {}\nstorage_uri: {}\ncreated_at: {}",
             response.id,
-            response.challenge_id,
+            response.challenge_name,
             response.requested_count,
             response.added_count,
             response.sha256,
@@ -309,7 +309,7 @@ pub(crate) fn render_challenge_shortlist(
                 .collect::<Vec<_>>();
             Ok(format!(
                 "challenge: {}\n{}",
-                response.challenge_id,
+                response.challenge_name,
                 render_table(&["AGENT_ID", "NAME", "ADDED_BY", "CREATED_AT"], &rows)
             ))
         }
@@ -332,13 +332,13 @@ pub(crate) fn render_challenge_list(
                 .iter()
                 .map(|challenge| {
                     vec![
-                        challenge.id.to_string(),
+                        challenge.name.to_string(),
                         status_label(&challenge.eligibility.eligibility_type),
                         challenge.title.clone(),
                     ]
                 })
                 .collect::<Vec<_>>();
-            Ok(render_table(&["ID", "ELIGIBILITY", "TITLE"], &rows))
+            Ok(render_table(&["NAME", "ELIGIBILITY", "TITLE"], &rows))
         }
     }
 }
@@ -364,7 +364,7 @@ pub(crate) fn render_challenge_detail(
             Ok(format!(
                 "{} ({})\nsummary: {}\nstarts_at: {}\ncloses_at: {}\neligibility: {}\nleaderboard_visibility: {}\nscore_distribution_visibility: {}\nresult_detail_visibility: {}\nsolution_publication: {}\nsolution_protocol: {} ({})\ntargets:\n{}\ndatasets: public={}, private_benchmark={}\nranking_metric: {}\n\n{}",
                 response.title,
-                response.id,
+                response.name,
                 response.summary,
                 response.spec.starts_at.as_deref().unwrap_or("none"),
                 response.spec.closes_at.as_deref().unwrap_or("none"),
@@ -378,7 +378,7 @@ pub(crate) fn render_challenge_detail(
                 format_targets(&response.spec.targets),
                 response.spec.datasets.public_dir,
                 private_benchmark,
-                response.spec.metric_schema.ranking.primary_metric_id,
+                response.spec.metric_schema.ranking.primary_metric_name,
                 response.statement_markdown.trim()
             ))
         }
@@ -395,7 +395,7 @@ pub(crate) fn render_init_solution(
             "Initialized solution workspace: {}\nchallenge: {} ({})\nruntime_profile: {}\ninterface: {}",
             summary.workspace_dir.display(),
             summary.challenge_title,
-            summary.challenge_id,
+            summary.challenge_name,
             summary.runtime_profile,
             summary.interface
         )),
@@ -420,7 +420,7 @@ pub(crate) fn render_create_solution_submission(
         OutputFormat::Table => Ok(format!(
             "Submitted {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}",
             response.id,
-            response.challenge_id,
+            response.challenge_name,
             response.target,
             response.status,
             response.evaluation_job_id,
@@ -461,7 +461,7 @@ pub(crate) fn render_create_validation_run(
         OutputFormat::Table => Ok(format!(
             "Created validation run {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}",
             response.id,
-            response.challenge_id,
+            response.challenge_name,
             response.target,
             response.status,
             response.evaluation_job_id,
@@ -522,7 +522,7 @@ pub(crate) fn render_solution_submission_status(
             Ok(format!(
                 "solution submission: {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\nvalidation_evaluation: {}\nofficial_evaluation: {}\nvalidation_primary_score: {}\nrank_score: {}\nvisible_after_eval: {}",
                 response.id,
-                response.challenge_id,
+                response.challenge_name,
                 response.target,
                 response.status,
                 evaluation_job,
@@ -567,7 +567,7 @@ pub(crate) fn render_validation_run_status(
             Ok(format!(
                 "validation_run: {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\nvalidation: {}\nprimary_score: {}\nrank_score: {}\nvisible_after_eval: {}",
                 response.id,
-                response.challenge_id,
+                response.challenge_name,
                 response.target,
                 response.status,
                 evaluation_job,
@@ -636,7 +636,7 @@ pub(crate) fn render_local_validation_report(
         OutputFormat::Table => match report.targets.as_slice() {
             [target] => Ok(format!(
                 "Local validation completed\nchallenge: {}\ntarget: {}\nstatus: {}\nprimary_score: {}\nrank_score: {}\nlog: {}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}\nbundle: {}\nstorage: {}",
-                report.challenge_id,
+                report.challenge_name,
                 target.target,
                 status_label(&target.result.status),
                 format_score(target.result.primary_score),
@@ -673,7 +673,7 @@ pub(crate) fn render_local_validation_report(
                     .collect::<Vec<_>>();
                 Ok(format!(
                     "Local validation completed\nchallenge: {}\n{}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}\nbundle: {}\nstorage: {}",
-                    report.challenge_id,
+                    report.challenge_name,
                     render_table(&["TARGET", "STATUS", "PRIMARY", "RANK", "LOG"], &rows),
                     report.package.file_count,
                     report.package.uncompressed_bytes,
@@ -715,7 +715,7 @@ fn render_create_submission_batch(
                     vec![
                         response.target.to_string(),
                         response.id.to_string(),
-                        response.challenge_id.to_string(),
+                        response.challenge_name.to_string(),
                         response.status.clone(),
                         response.evaluation_job_id.clone(),
                     ]
@@ -771,7 +771,7 @@ pub(crate) fn render_ranking_context(
             Ok(format!(
                 "solution_submission: {}\nchallenge: {}\ntarget: {}\nrank: {}\ntotal_ranked: {}\npercentile: {}\nis_agent_best: {}\nnearby:\n{}",
                 response.solution_submission_id,
-                response.challenge_id,
+                response.challenge_name,
                 response.target,
                 response
                     .rank
@@ -815,7 +815,7 @@ pub(crate) fn render_leaderboard(
                 .collect::<Result<Vec<_>>>()?;
             Ok(format!(
                 "challenge: {}\ntarget: {}\n{}",
-                response.challenge_id,
+                response.challenge_name,
                 response.target,
                 render_table(&["RANK", "AGENT", "SUBMISSION", "SCORE", "UPDATED"], &rows)
             ))
@@ -853,9 +853,9 @@ pub(crate) fn render_score_distribution(
                 .collect::<Vec<_>>();
             Ok(format!(
                 "challenge: {}\ntarget: {}\nmetric: {}\ncount: {}\nmin: {}\nmax: {}\nmean: {}\nquantiles:\n{}\nhistogram:\n{}",
-                response.challenge_id,
+                response.challenge_name,
                 response.target,
-                response.metric_id,
+                response.metric_name,
                 response.count,
                 response
                     .min
@@ -974,7 +974,7 @@ mod tests {
         SolutionSpec, TargetAccelerator,
     };
     use shared::models::evaluation::ScoreVisibility;
-    use shared::models::ids::{ChallengeId, TargetName};
+    use shared::models::names::{ChallengeName, ResourceProfileName, TargetName};
     use shared::zip_project::ZipProjectNetworkAccess;
 
     use super::{OutputFormat, render_challenge_detail, render_challenge_list};
@@ -984,7 +984,7 @@ mod tests {
         let output = render_challenge_list(
             &ChallengeListResponse {
                 items: vec![ChallengeListItemDto {
-                    id: challenge_id("sample-sum"),
+                    name: challenge_name("sample-sum"),
                     title: "Sample Sum".to_string(),
                     summary: "Add numbers".to_string(),
                     starts_at: None,
@@ -1000,7 +1000,7 @@ mod tests {
 
         assert_eq!(
             output,
-            "ID          ELIGIBILITY  TITLE\nsample-sum  open         Sample Sum"
+            "NAME        ELIGIBILITY  TITLE\nsample-sum  open         Sample Sum"
         );
     }
 
@@ -1023,12 +1023,12 @@ mod tests {
 
     fn challenge_detail() -> ChallengeDetailResponse {
         ChallengeDetailResponse {
-            id: challenge_id("sample-sum"),
+            name: challenge_name("sample-sum"),
             title: "Sample Sum".to_string(),
             summary: "Add numbers".to_string(),
             spec: ChallengeBundleSpec {
                 schema_version: 1,
-                challenge_id: challenge_id("sample-sum"),
+                challenge_name: challenge_name("sample-sum"),
                 challenge_title: "Sample Sum".to_string(),
                 challenge_summary: "Add numbers".to_string(),
                 starts_at: None,
@@ -1058,7 +1058,7 @@ mod tests {
                     accelerator: TargetAccelerator::Cpu,
                     validation_enabled: false,
                     resource_profile: ResourceProfileSpec {
-                        id: "python-cpu-small".to_string(),
+                        name: resource_profile_name("python-cpu-small"),
                         resource_description: None,
                         solution_image: "python:3.12-slim-bookworm".to_string(),
                         solution_image_digest: None,
@@ -1099,7 +1099,12 @@ mod tests {
         TargetName::try_new(value.to_string()).expect("test target is valid")
     }
 
-    fn challenge_id(value: &str) -> ChallengeId {
-        ChallengeId::try_new(value.to_string()).expect("test challenge id is valid")
+    fn challenge_name(value: &str) -> ChallengeName {
+        ChallengeName::try_new(value.to_string()).expect("test challenge name is valid")
+    }
+
+    fn resource_profile_name(value: &str) -> ResourceProfileName {
+        ResourceProfileName::try_new(value.to_string())
+            .expect("test resource profile name is valid")
     }
 }

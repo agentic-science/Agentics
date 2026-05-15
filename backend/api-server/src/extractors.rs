@@ -16,9 +16,8 @@ use shared::models::challenge_creation::{
 };
 use shared::models::ids::SolutionSubmissionId;
 use shared::models::request::{
-    CreateChallengeRequest, CreateChallengeShortlistRevisionRequest, CreateDiscussionReplyRequest,
-    CreateDiscussionThreadRequest, CreateSolutionSubmissionRequest, PublishChallengeRequest,
-    RegisterAgentRequest,
+    CreateChallengeRequest, CreateChallengeShortlistRevisionRequest,
+    CreateSolutionSubmissionRequest, PublishChallengeRequest, RegisterAgentRequest,
 };
 
 use crate::state::AppState;
@@ -326,7 +325,6 @@ impl ValidateRequest for CreateChallengeDraftRequest {
 
 impl ValidateRequest for UploadChallengePrivateAssetRequest {
     fn validate(&self) -> Result<(), String> {
-        require_non_empty(&self.asset_id, "asset_id")?;
         require_non_empty(&self.asset_base64, "asset_base64")
     }
 }
@@ -355,19 +353,6 @@ impl ValidateRequest for CreateChallengeShortlistRevisionRequest {
             return Err("agent_ids_to_add must contain at least one agent id".to_string());
         }
         Ok(())
-    }
-}
-
-impl ValidateRequest for CreateDiscussionThreadRequest {
-    fn validate(&self) -> Result<(), String> {
-        require_non_empty(&self.title, "title")?;
-        require_non_empty(&self.body, "body")
-    }
-}
-
-impl ValidateRequest for CreateDiscussionReplyRequest {
-    fn validate(&self) -> Result<(), String> {
-        require_non_empty(&self.body, "body")
     }
 }
 

@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::ids::{ChallengeId, TargetName};
+use super::names::{ChallengeName, MetricName, ResourceProfileName, RunName, TargetName};
 use crate::zip_project::ZipProjectNetworkAccess;
 
 /// Parsed `spec.json` contract for a challenge bundle.
@@ -10,7 +10,7 @@ use crate::zip_project::ZipProjectNetworkAccess;
 #[serde(deny_unknown_fields)]
 pub struct ChallengeBundleSpec {
     pub schema_version: i32,
-    pub challenge_id: ChallengeId,
+    pub challenge_name: ChallengeName,
     pub challenge_title: String,
     /// Plain-text summary used in compact challenge catalog surfaces.
     pub challenge_summary: String,
@@ -172,7 +172,7 @@ pub struct ChallengeTargetSpec {
 /// Resource envelope and Docker images declared by a challenge.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ResourceProfileSpec {
-    pub id: String,
+    pub name: ResourceProfileName,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resource_description: Option<String>,
     pub solution_image: String,
@@ -262,7 +262,7 @@ pub struct ChallengeRunManifest {
 /// One solution invocation prepared by the worker and later scored by the scorer.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeRunSpec {
-    pub run_id: String,
+    pub run_name: RunName,
     pub interface: ChallengeRunInterface,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stdin_json: Option<serde_json::Value>,
@@ -348,7 +348,7 @@ pub enum MetricVisibility {
 /// One metric that a scorer may emit in aggregate or per-run result payloads.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct MetricDefinitionSpec {
-    pub id: String,
+    pub name: MetricName,
     pub label: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unit: Option<String>,
@@ -361,10 +361,10 @@ pub struct MetricDefinitionSpec {
 /// Ranking configuration for a challenge.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct RankingSpec {
-    pub primary_metric_id: String,
+    pub primary_metric_name: MetricName,
     #[serde(default)]
     #[schemars(required)]
-    pub tie_breaker_metric_ids: Vec<String>,
+    pub tie_breaker_metric_names: Vec<MetricName>,
 }
 
 /// Metric schema embedded in `spec.json`.
@@ -375,14 +375,16 @@ pub struct MetricSchemaSpec {
 }
 
 impl MetricSchemaSpec {
-    /// Look up a metric definition by id.
-    pub fn metric(&self, metric_id: &str) -> Option<&MetricDefinitionSpec> {
-        self.metrics.iter().find(|metric| metric.id == metric_id)
+    /// Look up a metric definition by name.
+    pub fn metric(&self, metric_name: &MetricName) -> Option<&MetricDefinitionSpec> {
+        self.metrics
+            .iter()
+            .find(|metric| &metric.name == metric_name)
     }
 
     /// Primary ranking metric declared by this challenge.
     pub fn primary_metric(&self) -> Option<&MetricDefinitionSpec> {
-        self.metric(&self.ranking.primary_metric_id)
+        self.metric(&self.ranking.primary_metric_name)
     }
 }
 
@@ -390,7 +392,7 @@ impl Default for MetricSchemaSpec {
     fn default() -> Self {
         Self {
             metrics: vec![MetricDefinitionSpec {
-                id: "score".to_string(),
+                name: MetricName::score(),
                 label: "Score".to_string(),
                 unit: None,
                 direction: MetricDirection::Maximize,
@@ -398,8 +400,8 @@ impl Default for MetricSchemaSpec {
                 metric_description: Some("Normalized compatibility score in [0, 1].".to_string()),
             }],
             ranking: RankingSpec {
-                primary_metric_id: "score".to_string(),
-                tie_breaker_metric_ids: vec![],
+                primary_metric_name: MetricName::score(),
+                tie_breaker_metric_names: vec![],
             },
         }
     }
@@ -408,7 +410,7 @@ impl Default for MetricSchemaSpec {
 /// One row in the public challenge catalog.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeListItemDto {
-    pub id: ChallengeId,
+    pub name: ChallengeName,
     pub title: String,
     pub summary: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -427,7 +429,7 @@ pub struct ChallengeListResponse {
 /// Public challenge detail response with spec and Markdown statement.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeDetailResponse {
-    pub id: ChallengeId,
+    pub name: ChallengeName,
     pub title: String,
     pub summary: String,
     pub spec: ChallengeBundleSpec,
@@ -437,7 +439,7 @@ pub struct ChallengeDetailResponse {
 /// Admin-facing challenge metadata response.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeAdminResponse {
-    pub id: ChallengeId,
+    pub name: ChallengeName,
     pub title: String,
     pub summary: String,
     pub status: String,
@@ -448,7 +450,7 @@ pub struct ChallengeAdminResponse {
 /// One row in the admin challenge list.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct AdminChallengeListItemDto {
-    pub id: ChallengeId,
+    pub name: ChallengeName,
     pub title: String,
     pub summary: String,
     pub status: String,
@@ -479,7 +481,7 @@ pub struct AdminChallengeListResponse {
 /// Admin response returned after publishing a challenge bundle.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct PublishChallengeResponse {
-    pub challenge_id: ChallengeId,
+    pub challenge_name: ChallengeName,
     pub title: String,
     pub bundle_path: String,
     pub statement_path: String,

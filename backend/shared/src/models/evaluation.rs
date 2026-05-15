@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
 
 use super::challenge::{MetricDirection, MetricSchemaSpec, MetricVisibility};
-use super::ids::{ChallengeId, TargetName};
+use super::names::{ChallengeName, MetricName, RunName, TargetName};
 
 /// Evaluation surface requested for a solution submission.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
@@ -103,14 +103,14 @@ pub struct PublicCaseResult {
 /// Numeric value for one declared metric.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct MetricValue {
-    pub metric_id: String,
+    pub metric_name: MetricName,
     pub value: f64,
 }
 
 /// Metric values for one scorer-defined run, case, seed, shard, or scenario.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct RunMetricResult {
-    pub run_id: String,
+    pub run_name: RunName,
     #[serde(default)]
     #[schemars(required)]
     pub metrics: Vec<MetricValue>,
@@ -198,26 +198,22 @@ impl PublicCaseResult {
 }
 
 impl MetricValue {
-    /// Validate metric id shape and finite numeric value.
+    /// Validate metric name shape and finite numeric value.
     pub fn validate(&self, field: &str) -> Result<(), String> {
-        validate_metric_id(&self.metric_id, &format!("{field}.metric_id"))?;
         validate_finite_number(self.value, &format!("{field}.value"))
     }
 }
 
 impl RunMetricResult {
-    /// Validate one per-run metric record without checking challenge-specific ids.
+    /// Validate one per-run metric record without checking challenge-specific names.
     pub fn validate(&self) -> Result<(), String> {
-        if self.run_id.trim().is_empty() {
-            return Err("run_metrics.run_id must not be empty".to_string());
-        }
-        let mut metric_ids = HashSet::with_capacity(self.metrics.len());
+        let mut metric_names = HashSet::with_capacity(self.metrics.len());
         for metric in &self.metrics {
             metric.validate("run_metrics.metrics")?;
-            if !metric_ids.insert(metric.metric_id.as_str()) {
+            if !metric_names.insert(metric.metric_name.as_str()) {
                 return Err(format!(
-                    "run_metrics.metrics contains duplicate metric_id `{}` for run `{}`",
-                    metric.metric_id, self.run_id
+                    "run_metrics.metrics contains duplicate metric_name `{}` for run `{}`",
+                    metric.metric_name, self.run_name
                 ));
             }
         }
@@ -246,13 +242,13 @@ impl ScorerRunResult {
 
         validate_metric_values(&self.aggregate_metrics, "aggregate_metrics")?;
 
-        let mut run_ids = HashSet::with_capacity(self.run_metrics.len());
+        let mut run_names = HashSet::with_capacity(self.run_metrics.len());
         for run in &self.run_metrics {
             run.validate()?;
-            if !run_ids.insert(run.run_id.as_str()) {
+            if !run_names.insert(run.run_name.as_str()) {
                 return Err(format!(
-                    "run_metrics contains duplicate run_id `{}`",
-                    run.run_id
+                    "run_metrics contains duplicate run_name `{}`",
+                    run.run_name
                 ));
             }
         }
@@ -296,17 +292,17 @@ impl ScorerRunResult {
         self.validate_for_metric_schema(schema, mode)?;
 
         if self.aggregate_metrics.is_empty() {
-            if schema.ranking.primary_metric_id != "score" {
+            if schema.ranking.primary_metric_name.as_str() != "score" {
                 if mode == ScoringMode::Validation {
                     return Ok(());
                 }
                 return Err(format!(
                     "aggregate_metrics is required when primary metric is `{}`",
-                    schema.ranking.primary_metric_id
+                    schema.ranking.primary_metric_name
                 ));
             }
             self.aggregate_metrics.push(MetricValue {
-                metric_id: schema.ranking.primary_metric_id.clone(),
+                metric_name: schema.ranking.primary_metric_name.clone(),
                 value: self.primary_score,
             });
         }
@@ -316,14 +312,14 @@ impl ScorerRunResult {
                 .primary_metric()
                 .ok_or_else(|| "metric schema primary metric is missing".to_string())?;
             let Some(primary_value) =
-                self.aggregate_metric_value(&schema.ranking.primary_metric_id)
+                self.aggregate_metric_value(&schema.ranking.primary_metric_name)
             else {
                 if mode == ScoringMode::Validation {
                     return Ok(());
                 }
                 return Err(format!(
                     "aggregate_metrics missing primary metric `{}`",
-                    schema.ranking.primary_metric_id
+                    schema.ranking.primary_metric_name
                 ));
             };
             self.rank_score = Some(match primary_metric.direction {
@@ -335,7 +331,7 @@ impl ScorerRunResult {
         Ok(())
     }
 
-    /// Validate metric ids against the challenge's declared metric schema.
+    /// Validate metric names against the challenge's declared metric schema.
     pub fn validate_for_metric_schema(
         &self,
         schema: &MetricSchemaSpec,
@@ -344,31 +340,31 @@ impl ScorerRunResult {
         let declared = schema
             .metrics
             .iter()
-            .map(|metric| (metric.id.as_str(), metric))
+            .map(|metric| (metric.name.as_str(), metric))
             .collect::<std::collections::HashMap<_, _>>();
         if declared.is_empty() {
             return Err("metric schema must declare at least one metric".to_string());
         }
 
         for metric in &self.aggregate_metrics {
-            let Some(definition) = declared.get(metric.metric_id.as_str()) else {
+            let Some(definition) = declared.get(metric.metric_name.as_str()) else {
                 return Err(format!(
                     "aggregate_metrics references unknown metric `{}`",
-                    metric.metric_id
+                    metric.metric_name
                 ));
             };
-            validate_metric_visibility(mode, definition.visibility, &metric.metric_id)?;
+            validate_metric_visibility(mode, definition.visibility, &metric.metric_name)?;
         }
 
         for run in &self.run_metrics {
             for metric in &run.metrics {
-                let Some(definition) = declared.get(metric.metric_id.as_str()) else {
+                let Some(definition) = declared.get(metric.metric_name.as_str()) else {
                     return Err(format!(
                         "run_metrics references unknown metric `{}`",
-                        metric.metric_id
+                        metric.metric_name
                     ));
                 };
-                validate_metric_visibility(mode, definition.visibility, &metric.metric_id)?;
+                validate_metric_visibility(mode, definition.visibility, &metric.metric_name)?;
             }
         }
 
@@ -377,21 +373,21 @@ impl ScorerRunResult {
             && !self
                 .aggregate_metrics
                 .iter()
-                .any(|metric| metric.metric_id == schema.ranking.primary_metric_id)
+                .any(|metric| metric.metric_name == schema.ranking.primary_metric_name)
         {
             return Err(format!(
                 "aggregate_metrics missing primary metric `{}`",
-                schema.ranking.primary_metric_id
+                schema.ranking.primary_metric_name
             ));
         }
 
         Ok(())
     }
 
-    fn aggregate_metric_value(&self, metric_id: &str) -> Option<f64> {
+    fn aggregate_metric_value(&self, metric_name: &MetricName) -> Option<f64> {
         self.aggregate_metrics
             .iter()
-            .find(|metric| metric.metric_id == metric_id)
+            .find(|metric| &metric.metric_name == metric_name)
             .map(|metric| metric.value)
     }
 }
@@ -413,30 +409,14 @@ fn validate_finite_number(value: f64, field: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn validate_metric_id(value: &str, field: &str) -> Result<(), String> {
-    if value.trim().is_empty() {
-        return Err(format!("{field} must not be empty"));
-    }
-    if !value
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
-    {
-        return Err(format!(
-            "{field} must contain only ASCII letters, digits, underscores, hyphens, or dots"
-        ));
-    }
-
-    Ok(())
-}
-
 fn validate_metric_values(metrics: &[MetricValue], field: &str) -> Result<(), String> {
-    let mut metric_ids = HashSet::with_capacity(metrics.len());
+    let mut metric_names = HashSet::with_capacity(metrics.len());
     for metric in metrics {
         metric.validate(field)?;
-        if !metric_ids.insert(metric.metric_id.as_str()) {
+        if !metric_names.insert(metric.metric_name.as_str()) {
             return Err(format!(
-                "{field} contains duplicate metric_id `{}`",
-                metric.metric_id
+                "{field} contains duplicate metric_name `{}`",
+                metric.metric_name
             ));
         }
     }
@@ -447,11 +427,11 @@ fn validate_metric_values(metrics: &[MetricValue], field: &str) -> Result<(), St
 fn validate_metric_visibility(
     mode: ScoringMode,
     visibility: MetricVisibility,
-    metric_id: &str,
+    metric_name: &MetricName,
 ) -> Result<(), String> {
     if mode == ScoringMode::Validation && visibility == MetricVisibility::Official {
         return Err(format!(
-            "validation results cannot include official-only metric `{metric_id}`"
+            "validation results cannot include official-only metric `{metric_name}`"
         ));
     }
 
@@ -463,10 +443,19 @@ mod tests {
     use crate::models::challenge::{
         MetricDefinitionSpec, MetricDirection, MetricSchemaSpec, MetricVisibility, RankingSpec,
     };
+    use crate::models::names::{MetricName, RunName};
 
     use super::{
         MetricValue, RunMetricResult, ScoreSummary, ScorerRunResult, ScorerRunStatus, ScoringMode,
     };
+
+    fn metric_name(value: &str) -> MetricName {
+        MetricName::try_new(value.to_string()).expect("test metric name is valid")
+    }
+
+    fn run_name(value: &str) -> RunName {
+        RunName::try_new(value.to_string()).expect("test run name is valid")
+    }
 
     fn valid_validation_result() -> ScorerRunResult {
         ScorerRunResult {
@@ -517,7 +506,7 @@ mod tests {
 
         assert_eq!(result.rank_score, Some(1.0));
         assert_eq!(result.aggregate_metrics.len(), 1);
-        assert_eq!(result.aggregate_metrics[0].metric_id, "score");
+        assert_eq!(result.aggregate_metrics[0].metric_name.as_str(), "score");
         assert_eq!(result.aggregate_metrics[0].value, 1.0);
     }
 
@@ -525,7 +514,7 @@ mod tests {
     fn missing_rank_score_derives_from_minimized_primary_metric() {
         let schema = MetricSchemaSpec {
             metrics: vec![MetricDefinitionSpec {
-                id: "latency_ms".to_string(),
+                name: metric_name("latency_ms"),
                 label: "Latency".to_string(),
                 unit: Some("ms".to_string()),
                 direction: MetricDirection::Minimize,
@@ -533,13 +522,13 @@ mod tests {
                 metric_description: None,
             }],
             ranking: RankingSpec {
-                primary_metric_id: "latency_ms".to_string(),
-                tie_breaker_metric_ids: vec![],
+                primary_metric_name: metric_name("latency_ms"),
+                tie_breaker_metric_names: vec![],
             },
         };
         let mut result = valid_validation_result();
         result.aggregate_metrics = vec![MetricValue {
-            metric_id: "latency_ms".to_string(),
+            metric_name: metric_name("latency_ms"),
             value: 42.0,
         }];
 
@@ -554,7 +543,7 @@ mod tests {
     fn unknown_aggregate_metric_is_rejected() {
         let mut result = valid_validation_result();
         result.aggregate_metrics = vec![MetricValue {
-            metric_id: "unknown".to_string(),
+            metric_name: metric_name("unknown"),
             value: 1.0,
         }];
 
@@ -569,7 +558,7 @@ mod tests {
     fn non_finite_metric_value_is_rejected() {
         let mut result = valid_validation_result();
         result.aggregate_metrics = vec![MetricValue {
-            metric_id: "score".to_string(),
+            metric_name: metric_name("score"),
             value: f64::NAN,
         }];
 
@@ -580,13 +569,13 @@ mod tests {
     fn per_run_metrics_are_validated() {
         let mut result = valid_validation_result();
         result.aggregate_metrics = vec![MetricValue {
-            metric_id: "score".to_string(),
+            metric_name: metric_name("score"),
             value: 1.0,
         }];
         result.run_metrics = vec![RunMetricResult {
-            run_id: "case-1".to_string(),
+            run_name: run_name("case-1"),
             metrics: vec![MetricValue {
-                metric_id: "score".to_string(),
+                metric_name: metric_name("score"),
                 value: 1.0,
             }],
         }];
@@ -602,7 +591,7 @@ mod tests {
     fn validation_result_rejects_official_only_metrics() {
         let schema = MetricSchemaSpec {
             metrics: vec![MetricDefinitionSpec {
-                id: "private_quality".to_string(),
+                name: metric_name("private_quality"),
                 label: "Private Quality".to_string(),
                 unit: None,
                 direction: MetricDirection::Maximize,
@@ -610,13 +599,13 @@ mod tests {
                 metric_description: None,
             }],
             ranking: RankingSpec {
-                primary_metric_id: "private_quality".to_string(),
-                tie_breaker_metric_ids: vec![],
+                primary_metric_name: metric_name("private_quality"),
+                tie_breaker_metric_names: vec![],
             },
         };
         let mut result = valid_validation_result();
         result.aggregate_metrics = vec![MetricValue {
-            metric_id: "private_quality".to_string(),
+            metric_name: metric_name("private_quality"),
             value: 0.9,
         }];
 
@@ -641,6 +630,6 @@ pub struct EvaluationJobDto {
 pub struct EvaluationJobPayload {
     pub artifact_path: String,
     pub bundle_path: String,
-    pub challenge_id: ChallengeId,
+    pub challenge_name: ChallengeName,
     pub target: TargetName,
 }

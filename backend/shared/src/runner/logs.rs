@@ -4,8 +4,8 @@ pub(super) fn append_phase_logs(logs: &mut String, phase: ZipProjectPhaseName, c
     append_named_logs(logs, &format!("phase:{}", phase_name(&phase)), content);
 }
 
-pub(super) fn append_run_logs(logs: &mut String, run_id: &str, content: &str) {
-    append_named_logs(logs, &format!("run:{run_id}"), content);
+pub(super) fn append_run_logs(logs: &mut String, run_name: &str, content: &str) {
+    append_named_logs(logs, &format!("run:{run_name}"), content);
 }
 
 pub(super) fn append_named_logs(logs: &mut String, name: &str, content: &str) {

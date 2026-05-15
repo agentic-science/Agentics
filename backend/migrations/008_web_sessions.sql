@@ -1,9 +1,9 @@
 CREATE TABLE IF NOT EXISTS web_sessions (
-  id TEXT PRIMARY KEY,
+  id UUID PRIMARY KEY,
   role TEXT NOT NULL CHECK (role IN ('creator', 'admin')),
   session_token_hash TEXT NOT NULL UNIQUE,
   csrf_token_hash TEXT NOT NULL,
-  agent_id TEXT REFERENCES agents(id) ON DELETE CASCADE,
+  agent_id UUID REFERENCES agents(id) ON DELETE CASCADE,
   github_user_id BIGINT,
   github_login TEXT NOT NULL DEFAULT '',
   admin_username TEXT,

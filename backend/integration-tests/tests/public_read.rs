@@ -44,7 +44,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token_a}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": good_artifact,
             "explanation": "perfect score"
@@ -75,7 +75,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token_b}"))
         .json(&serde_json::json!({
-            "challenge_id": "sample-sum",
+            "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": bad_artifact,
             "explanation": "bad score"
@@ -226,9 +226,9 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         .json()
         .await
         .expect("failed to decode score distribution");
-    assert_eq!(distribution["challenge_id"], "sample-sum");
+    assert_eq!(distribution["challenge_name"], "sample-sum");
     assert_eq!(distribution["target"], "linux-arm64-cpu");
-    assert_eq!(distribution["metric_id"], "score");
+    assert_eq!(distribution["metric_name"], "score");
     assert_eq!(distribution["count"], 2);
     assert_eq!(distribution["min"], 0.0);
     assert_eq!(distribution["max"], 1.0);
@@ -258,7 +258,7 @@ async fn public_artifact_respects_solution_publication_policy(pool: sqlx::PgPool
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
-            "challenge_id": "private-artifact-sum",
+            "challenge_name": "private-artifact-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']")),
             "explanation": "artifact should stay private"
@@ -297,7 +297,7 @@ async fn public_artifact_respects_solution_publication_policy(pool: sqlx::PgPool
 }
 
 #[sqlx::test(migrations = "../migrations")]
-async fn seeded_challenge_summaries_and_discussions_are_public(pool: sqlx::PgPool) {
+async fn seeded_challenge_summaries_and_community_links_are_public(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let config = test_config(storage.path(), &examples_challenges_root());
     let app = spawn_app_with_config(pool.clone(), config).await;
@@ -348,97 +348,10 @@ async fn seeded_challenge_summaries_and_discussions_are_public(pool: sqlx::PgPoo
         sample_sum_challenge["spec"]["community"]["moltbook_submolt_url"],
         "https://www.moltbook.com/submolts/agentics-sample-sum"
     );
-
-    let register_response: serde_json::Value = client
-        .post(api_url(&app, "/api/agents/register"))
-        .json(&serde_json::json!({ "name": "discussion-agent" }))
-        .send()
-        .await
-        .expect("failed to register discussion agent")
-        .json()
-        .await
-        .expect("failed to decode register response");
-    let token = register_response["token"].as_str().expect("missing token");
-
-    let thread_response: serde_json::Value = client
-        .post(api_url(&app, "/api/challenges/sample-sum/discussions"))
-        .header("Authorization", format!("Bearer {token}"))
-        .json(&serde_json::json!({
-            "title": "How to improve score?",
-            "body": "I think the private benchmark cases are all integer addition."
-        }))
-        .send()
-        .await
-        .expect("failed to create thread")
-        .json()
-        .await
-        .expect("failed to decode thread response");
-    let thread_id = thread_response["id"].as_str().expect("missing thread id");
-
-    let reply_response = client
-        .post(api_url(
-            &app,
-            &format!("/api/discussions/{thread_id}/replies"),
-        ))
-        .header("Authorization", format!("Bearer {token}"))
-        .json(&serde_json::json!({
-            "body": "Confirmed, public cases follow the same pattern."
-        }))
-        .send()
-        .await
-        .expect("failed to create reply");
-    assert_eq!(reply_response.status(), 201);
-
-    let second_thread_response = client
-        .post(api_url(&app, "/api/challenges/sample-sum/discussions"))
-        .header("Authorization", format!("Bearer {token}"))
-        .json(&serde_json::json!({
-            "title": "Second discussion",
-            "body": "This exists to verify list limits."
-        }))
-        .send()
-        .await
-        .expect("failed to create second thread");
-    assert_eq!(second_thread_response.status(), 201);
-
-    let discussions: serde_json::Value = client
-        .get(api_url(
-            &app,
-            "/api/public/challenges/sample-sum/discussions",
-        ))
-        .send()
-        .await
-        .expect("failed to list discussions")
-        .json()
-        .await
-        .expect("failed to decode discussions");
-    let items = discussions["items"].as_array().expect("items is array");
-    assert_eq!(items.len(), 2);
-    let original_thread = items
-        .iter()
-        .find(|item| item["title"] == "How to improve score?")
-        .expect("original discussion should be listed");
-    assert_eq!(original_thread["replies"].as_array().unwrap().len(), 1);
-
-    let limited_discussions: serde_json::Value = client
-        .get(api_url(
-            &app,
-            "/api/public/challenges/sample-sum/discussions?limit=1",
-        ))
-        .send()
-        .await
-        .expect("failed to list limited discussions")
-        .json()
-        .await
-        .expect("failed to decode limited discussions");
-    let limited_items = limited_discussions["items"]
-        .as_array()
-        .expect("items is array");
-    assert_eq!(limited_items.len(), 1);
 }
 
-fn write_private_artifact_challenge(root: &Path, challenge_id: &str) {
-    let bundle_dir = root.join(challenge_id).join("v1");
+fn write_private_artifact_challenge(root: &Path, challenge_name: &str) {
+    let bundle_dir = root.join(challenge_name).join("v1");
     copy_dir_all(
         &examples_challenges_root().join("sample-sum/v1"),
         &bundle_dir,
@@ -447,8 +360,8 @@ fn write_private_artifact_challenge(root: &Path, challenge_id: &str) {
     let mut spec: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&spec_path).expect("failed to read spec"))
             .expect("failed to parse spec");
-    spec["challenge_id"] = serde_json::json!(challenge_id);
-    spec["challenge_title"] = serde_json::json!(challenge_id);
+    spec["challenge_name"] = serde_json::json!(challenge_name);
+    spec["challenge_title"] = serde_json::json!(challenge_name);
     spec["solution_publication"] = serde_json::json!("private");
     std::fs::write(
         &spec_path,

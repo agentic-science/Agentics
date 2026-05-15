@@ -13,7 +13,8 @@ use super::challenge::{
 use super::evaluation::{
     EvaluationDto, EvaluationStatus, MetricValue, RunMetricResult, ScoreVisibility, ScoringMode,
 };
-use super::ids::{ChallengeId, SolutionSubmissionId, TargetName};
+use super::ids::SolutionSubmissionId;
+use super::names::{ChallengeName, MetricName, ResourceProfileName, RunName, TargetName};
 use super::request::{
     AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto, SolutionSubmissionResponse,
 };
@@ -89,12 +90,12 @@ fn ensure_no_explicit_nulls(value: &Value, path: &str) -> Result<(), Box<dyn std
 
 fn challenge_detail_response() -> ChallengeDetailResponse {
     ChallengeDetailResponse {
-        id: challenge_id("matrix-multiplication"),
+        name: challenge_name("matrix-multiplication"),
         title: "Matrix Multiplication".to_string(),
         summary: "Optimize CPU matrix multiplication kernels.".to_string(),
         spec: ChallengeBundleSpec {
             schema_version: 1,
-            challenge_id: challenge_id("matrix-multiplication"),
+            challenge_name: challenge_name("matrix-multiplication"),
             challenge_title: "Matrix Multiplication".to_string(),
             challenge_summary: "Optimize CPU matrix multiplication kernels.".to_string(),
             starts_at: None,
@@ -124,7 +125,7 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
                 accelerator: TargetAccelerator::Cpu,
                 validation_enabled: true,
                 resource_profile: ResourceProfileSpec {
-                    id: "ubuntu-cpu-small".to_string(),
+                    name: resource_profile_name("ubuntu-cpu-small"),
                     resource_description: Some(
                         "Small CPU target for local validation.".to_string(),
                     ),
@@ -186,7 +187,7 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
             metric_schema: MetricSchemaSpec {
                 metrics: vec![
                     MetricDefinitionSpec {
-                        id: "runtime_ms".to_string(),
+                        name: metric_name("runtime_ms"),
                         label: "Runtime".to_string(),
                         unit: Some("ms".to_string()),
                         direction: MetricDirection::Minimize,
@@ -196,7 +197,7 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
                         ),
                     },
                     MetricDefinitionSpec {
-                        id: "accuracy".to_string(),
+                        name: metric_name("accuracy"),
                         label: "Accuracy".to_string(),
                         unit: None,
                         direction: MetricDirection::Maximize,
@@ -205,8 +206,8 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
                     },
                 ],
                 ranking: RankingSpec {
-                    primary_metric_id: "runtime_ms".to_string(),
-                    tie_breaker_metric_ids: vec!["accuracy".to_string()],
+                    primary_metric_name: metric_name("runtime_ms"),
+                    tie_breaker_metric_names: vec![metric_name("accuracy")],
                 },
             },
         },
@@ -216,12 +217,24 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
     }
 }
 
-fn challenge_id(value: &str) -> ChallengeId {
-    ChallengeId::try_new(value.to_string()).expect("test challenge id is valid")
+fn challenge_name(value: &str) -> ChallengeName {
+    ChallengeName::try_new(value.to_string()).expect("test challenge name is valid")
 }
 
 fn target_name(value: &str) -> TargetName {
     TargetName::try_new(value.to_string()).expect("test target is valid")
+}
+
+fn metric_name(value: &str) -> MetricName {
+    MetricName::try_new(value.to_string()).expect("test metric name is valid")
+}
+
+fn resource_profile_name(value: &str) -> ResourceProfileName {
+    ResourceProfileName::try_new(value.to_string()).expect("test resource profile name is valid")
+}
+
+fn run_name(value: &str) -> RunName {
+    RunName::try_new(value.to_string()).expect("test run name is valid")
 }
 
 fn solution_submission_id(value: &str) -> SolutionSubmissionId {
@@ -231,7 +244,7 @@ fn solution_submission_id(value: &str) -> SolutionSubmissionId {
 fn official_solution_submission_response() -> SolutionSubmissionResponse {
     SolutionSubmissionResponse {
         id: solution_submission_id("11111111-1111-4111-8111-111111111111"),
-        challenge_id: challenge_id("matrix-multiplication"),
+        challenge_name: challenge_name("matrix-multiplication"),
         challenge_title: Some("Matrix Multiplication".to_string()),
         target: target_name("linux-arm64-cpu"),
         agent_id: "agent-1".to_string(),
@@ -256,18 +269,18 @@ fn official_solution_submission_response() -> SolutionSubmissionResponse {
             rank_score: Some(-42.5),
             aggregate_metrics: vec![
                 MetricValue {
-                    metric_id: "runtime_ms".to_string(),
+                    metric_name: metric_name("runtime_ms"),
                     value: 42.5,
                 },
                 MetricValue {
-                    metric_id: "accuracy".to_string(),
+                    metric_name: metric_name("accuracy"),
                     value: 1.0,
                 },
             ],
             run_metrics: vec![RunMetricResult {
-                run_id: "square-100".to_string(),
+                run_name: run_name("square-100"),
                 metrics: vec![MetricValue {
-                    metric_id: "runtime_ms".to_string(),
+                    metric_name: metric_name("runtime_ms"),
                     value: 17.5,
                 }],
             }],

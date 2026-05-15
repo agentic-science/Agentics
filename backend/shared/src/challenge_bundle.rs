@@ -635,7 +635,6 @@ fn require_supported_image_repository(
 }
 
 fn validate_resource_profile(profile: &ResourceProfileSpec, field: &str) -> Result<()> {
-    require_non_empty(&profile.id, &format!("{field}.id"))?;
     require_non_empty(&profile.solution_image, &format!("{field}.solution_image"))?;
     require_non_empty(&profile.scorer_image, &format!("{field}.scorer_image"))?;
     let solution_reference_digest = validate_image_reference_digest(
@@ -897,13 +896,13 @@ fn validate_challenge_run_manifest(manifest: &ChallengeRunManifest) -> Result<()
         ));
     }
 
-    let mut run_ids = HashSet::with_capacity(manifest.runs.len());
+    let mut run_names = HashSet::with_capacity(manifest.runs.len());
     for run in &manifest.runs {
         validate_challenge_run(run)?;
-        if !run_ids.insert(run.run_id.as_str()) {
+        if !run_names.insert(run.run_name.as_str()) {
             return Err(AppError::Validation(format!(
-                "run manifest contains duplicate run_id `{}`",
-                run.run_id
+                "run manifest contains duplicate run_name `{}`",
+                run.run_name
             )));
         }
     }
@@ -912,7 +911,6 @@ fn validate_challenge_run_manifest(manifest: &ChallengeRunManifest) -> Result<()
 }
 
 fn validate_challenge_run(run: &ChallengeRunSpec) -> Result<()> {
-    require_metric_id(&run.run_id, "runs[].run_id")?;
     if run.stdin_json.is_some() && run.stdin_text.is_some() {
         return Err(AppError::Validation(
             "runs[].stdin_json and runs[].stdin_text cannot both be present".to_string(),
@@ -1070,9 +1068,9 @@ fn validate_metric_schema(spec: &ChallengeBundleSpec) -> Result<()> {
         ));
     }
 
-    let mut ids = HashSet::with_capacity(schema.metrics.len());
+    let mut names = HashSet::with_capacity(schema.metrics.len());
     for metric in &schema.metrics {
-        require_metric_id(&metric.id, "metric_schema.metrics[].id")?;
+        require_metric_name(metric.name.as_str(), "metric_schema.metrics[].name")?;
         require_non_empty(&metric.label, "metric_schema.metrics[].label")?;
         if let Some(unit) = &metric.unit {
             require_non_empty(unit, "metric_schema.metrics[].unit")?;
@@ -1083,42 +1081,45 @@ fn validate_metric_schema(spec: &ChallengeBundleSpec) -> Result<()> {
                 "metric_schema.metrics[].metric_description",
             )?;
         }
-        if !ids.insert(metric.id.as_str()) {
+        if !names.insert(metric.name.as_str()) {
             return Err(AppError::Validation(format!(
-                "metric_schema.metrics contains duplicate id `{}`",
-                metric.id
+                "metric_schema.metrics contains duplicate name `{}`",
+                metric.name
             )));
         }
     }
 
-    require_metric_id(
-        &schema.ranking.primary_metric_id,
-        "metric_schema.ranking.primary_metric_id",
+    require_metric_name(
+        schema.ranking.primary_metric_name.as_str(),
+        "metric_schema.ranking.primary_metric_name",
     )?;
-    if !ids.contains(schema.ranking.primary_metric_id.as_str()) {
+    if !names.contains(schema.ranking.primary_metric_name.as_str()) {
         return Err(AppError::Validation(format!(
-            "metric_schema.ranking.primary_metric_id references unknown metric `{}`",
-            schema.ranking.primary_metric_id
+            "metric_schema.ranking.primary_metric_name references unknown metric `{}`",
+            schema.ranking.primary_metric_name
         )));
     }
 
-    let mut tie_breakers = HashSet::with_capacity(schema.ranking.tie_breaker_metric_ids.len());
-    for metric_id in &schema.ranking.tie_breaker_metric_ids {
-        require_metric_id(metric_id, "metric_schema.ranking.tie_breaker_metric_ids[]")?;
-        if metric_id == &schema.ranking.primary_metric_id {
+    let mut tie_breakers = HashSet::with_capacity(schema.ranking.tie_breaker_metric_names.len());
+    for metric_name in &schema.ranking.tie_breaker_metric_names {
+        require_metric_name(
+            metric_name.as_str(),
+            "metric_schema.ranking.tie_breaker_metric_names[]",
+        )?;
+        if metric_name == &schema.ranking.primary_metric_name {
             return Err(AppError::Validation(
-                "metric_schema.ranking.tie_breaker_metric_ids must not repeat the primary metric"
+                "metric_schema.ranking.tie_breaker_metric_names must not repeat the primary metric"
                     .to_string(),
             ));
         }
-        if !ids.contains(metric_id.as_str()) {
+        if !names.contains(metric_name.as_str()) {
             return Err(AppError::Validation(format!(
-                "metric_schema.ranking.tie_breaker_metric_ids references unknown metric `{metric_id}`"
+                "metric_schema.ranking.tie_breaker_metric_names references unknown metric `{metric_name}`"
             )));
         }
-        if !tie_breakers.insert(metric_id.as_str()) {
+        if !tie_breakers.insert(metric_name.as_str()) {
             return Err(AppError::Validation(format!(
-                "metric_schema.ranking.tie_breaker_metric_ids contains duplicate metric `{metric_id}`"
+                "metric_schema.ranking.tie_breaker_metric_names contains duplicate metric `{metric_name}`"
             )));
         }
     }
@@ -1164,7 +1165,11 @@ fn require_safe_relative_path(value: &str, field: &str) -> Result<()> {
     Ok(())
 }
 
-fn require_metric_id(value: &str, field: &str) -> Result<()> {
+fn require_metric_name(value: &str, field: &str) -> Result<()> {
+    require_name_token(value, field)
+}
+
+fn require_name_token(value: &str, field: &str) -> Result<()> {
     require_non_empty(value, field)?;
     if !value
         .chars()
@@ -1191,7 +1196,7 @@ mod tests {
         ResourceProfileSpec, ScorerSpec, SolutionSpec, TargetAccelerator,
     };
     use crate::models::evaluation::ScoreVisibility;
-    use crate::models::ids::{ChallengeId, TargetName};
+    use crate::models::names::{ChallengeName, MetricName, ResourceProfileName, TargetName};
     use crate::zip_project::ZipProjectNetworkAccess;
 
     use super::{
@@ -1205,7 +1210,7 @@ mod tests {
     fn base_spec() -> ChallengeBundleSpec {
         ChallengeBundleSpec {
             schema_version: 1,
-            challenge_id: challenge_id("sample-sum"),
+            challenge_name: challenge_name("sample-sum"),
             challenge_title: "Sample Sum".to_string(),
             challenge_summary: "Add numbers from worker-managed runs.".to_string(),
             solution: SolutionSpec {
@@ -1222,7 +1227,7 @@ mod tests {
                 accelerator: TargetAccelerator::Cpu,
                 validation_enabled: true,
                 resource_profile: ResourceProfileSpec {
-                    id: "agentics-cpu-small".to_string(),
+                    name: resource_profile_name("agentics-cpu-small"),
                     resource_description: None,
                     solution_image: "agentics-linux-arm64-cpu:ubuntu26.04-local".to_string(),
                     solution_image_digest: None,
@@ -1270,12 +1275,21 @@ mod tests {
         }
     }
 
-    fn challenge_id(value: &str) -> ChallengeId {
-        ChallengeId::try_new(value.to_string()).expect("test challenge id is valid")
+    fn challenge_name(value: &str) -> ChallengeName {
+        ChallengeName::try_new(value.to_string()).expect("test challenge name is valid")
     }
 
     fn target_name(value: &str) -> TargetName {
         TargetName::try_new(value.to_string()).expect("test target is valid")
+    }
+
+    fn metric_name(value: &str) -> MetricName {
+        MetricName::try_new(value.to_string()).expect("test metric name is valid")
+    }
+
+    fn resource_profile_name(value: &str) -> ResourceProfileName {
+        ResourceProfileName::try_new(value.to_string())
+            .expect("test resource profile name is valid")
     }
 
     fn pin_images(spec: &mut ChallengeBundleSpec) {
@@ -1587,13 +1601,13 @@ mod tests {
     #[test]
     fn metric_schema_rejects_unknown_primary_metric() {
         let mut spec = base_spec();
-        spec.metric_schema.ranking.primary_metric_id = "missing".to_string();
+        spec.metric_schema.ranking.primary_metric_name = metric_name("missing");
 
         assert!(validate_challenge_bundle_spec(&spec).is_err());
     }
 
     #[test]
-    fn metric_schema_rejects_duplicate_metric_ids() {
+    fn metric_schema_rejects_duplicate_metric_names() {
         let mut spec = base_spec();
         let mut duplicate = spec.metric_schema.metrics[0].clone();
         duplicate.label = "Duplicate Score".to_string();
@@ -1608,7 +1622,7 @@ mod tests {
         spec.metric_schema
             .metrics
             .push(crate::models::challenge::MetricDefinitionSpec {
-                id: "runtime_ms".to_string(),
+                name: metric_name("runtime_ms"),
                 label: "Runtime".to_string(),
                 unit: Some("ms".to_string()),
                 direction: MetricDirection::Minimize,
@@ -1617,8 +1631,8 @@ mod tests {
             });
         spec.metric_schema
             .ranking
-            .tie_breaker_metric_ids
-            .push("runtime_ms".to_string());
+            .tie_breaker_metric_names
+            .push(metric_name("runtime_ms"));
 
         assert!(validate_challenge_bundle_spec(&spec).is_ok());
     }
@@ -1665,7 +1679,7 @@ mod tests {
         std::fs::create_dir_all(root.join("public")).expect("failed to create public dir");
         std::fs::write(
             root.join("public/runs.json"),
-            r#"{"runs":[{"run_id":"public-1","interface":"stdio","stdin_text":"1"}]}"#,
+            r#"{"runs":[{"run_name":"public-1","interface":"stdio","stdin_text":"1"}]}"#,
         )
         .expect("failed to write public runs");
         std::fs::write(
@@ -1718,7 +1732,7 @@ mod tests {
         create_bundle(&root, &spec);
         std::fs::write(
             root.join("public/runs.json"),
-            r#"{"runs":[{"run_id":"public-1","interface":"file_system","input_files":[{"path":"input.txt","source_path":"public/input.txt"}],"output_files":["answer.txt"]}]}"#,
+            r#"{"runs":[{"run_name":"public-1","interface":"file_system","input_files":[{"path":"input.txt","source_path":"public/input.txt"}],"output_files":["answer.txt"]}]}"#,
         )
         .expect("failed to write source-backed runs");
 

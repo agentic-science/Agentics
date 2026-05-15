@@ -11,10 +11,13 @@ use crate::models::challenge_creation::{
     ChallengeDraftStatus, ChallengeDraftValidationRecordResponse, ChallengeDraftValidationStatus,
     ChallengePrivateAssetKind, ChallengePrivateAssetResponse,
 };
-use crate::models::ids::ChallengeId;
+use crate::models::names::{AssetName, ChallengeName};
 
 use super::challenges::{add_challenge_owner_tx, publish_challenge_tx};
-use super::ids::{challenge_id_from_row, optional_challenge_id_from_row};
+use super::ids::{
+    asset_name_from_row, challenge_name_from_row, optional_challenge_name_from_row,
+    uuid_string_from_row,
+};
 
 /// Input for inserting one GitHub PR-backed challenge draft.
 #[derive(Debug, Clone)]
@@ -35,9 +38,9 @@ pub struct CreateChallengeDraftInput {
 /// Input for persisting one private benchmark asset.
 #[derive(Debug, Clone)]
 pub struct CreateChallengePrivateAssetInput {
-    pub asset_id_row: String,
+    pub asset_row_id: String,
     pub draft_id: String,
-    pub asset_id: String,
+    pub asset_name: AssetName,
     pub kind: ChallengePrivateAssetKind,
     pub required: bool,
     pub size_bytes: i64,
@@ -62,7 +65,7 @@ pub struct CreateChallengeDraftAuditEventInput {
 #[derive(Debug, Clone)]
 pub struct PublishNewChallengeDraftInput {
     pub draft_id: String,
-    pub challenge_id: ChallengeId,
+    pub challenge_name: ChallengeName,
     pub bundle_path: String,
     pub statement_path: String,
     pub spec: ChallengeBundleSpec,
@@ -79,7 +82,7 @@ pub struct PublishNewChallengeDraftInput {
 #[derive(Debug, Clone)]
 pub struct PublishArchiveChallengeDraftInput {
     pub draft_id: String,
-    pub challenge_id: ChallengeId,
+    pub challenge_name: ChallengeName,
     pub audit_event_id: String,
     pub admin_username: String,
     pub repository_path: String,
@@ -109,7 +112,7 @@ pub async fn create_challenge_draft(
         r#"
         INSERT INTO challenge_drafts (
             id,
-            challenge_id,
+            challenge_name,
             request_kind,
             status,
             creator_agent_id,
@@ -123,12 +126,12 @@ pub async fn create_challenge_draft(
             manifest_sha256,
             manifest_json
         )
-        VALUES ($1, $2, $3, 'draft', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        VALUES ($1::uuid, $2, $3, 'draft', $4::uuid, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         RETURNING *
         "#,
     )
     .bind(&input.draft_id)
-    .bind(input.manifest.challenge_id.as_str())
+    .bind(input.manifest.challenge_name.as_str())
     .bind(input.manifest.request.as_str())
     .bind(&input.creator_agent_id)
     .bind(input.creator_github_user_id)
@@ -151,7 +154,7 @@ pub async fn get_challenge_draft(
     pool: &PgPool,
     draft_id: &str,
 ) -> Result<Option<ChallengeDraftResponse>> {
-    let row = sqlx::query("SELECT * FROM challenge_drafts WHERE id = $1")
+    let row = sqlx::query("SELECT * FROM challenge_drafts WHERE id = $1::uuid")
         .bind(draft_id)
         .fetch_optional(pool)
         .await?;
@@ -184,7 +187,7 @@ pub async fn list_challenge_drafts(
 
     let mut drafts = Vec::with_capacity(rows.len());
     for row in rows {
-        let draft_id: String = row.try_get("id")?;
+        let draft_id = uuid_string_from_row(&row, "id")?;
         let assets = list_private_assets_for_draft(pool, &draft_id).await?;
         let validation_records = list_validation_records_for_draft(pool, &draft_id).await?;
         drafts.push(row_to_draft_response(row, assets, validation_records)?);
@@ -198,7 +201,7 @@ pub async fn count_active_challenge_drafts_for_agent(pool: &PgPool, agent_id: &s
         r#"
         SELECT COUNT(*)::BIGINT
         FROM challenge_drafts
-        WHERE creator_agent_id = $1
+        WHERE creator_agent_id = $1::uuid
           AND status IN ('draft', 'validated', 'approved')
         "#,
     )
@@ -219,7 +222,7 @@ pub async fn count_recent_challenge_draft_validations(
         r#"
         SELECT COUNT(*)::BIGINT
         FROM challenge_draft_validation_records
-        WHERE draft_id = $1
+        WHERE draft_id = $1::uuid
           AND created_at >= NOW() - ($2::TEXT || ' seconds')::INTERVAL
         "#,
     )
@@ -260,7 +263,7 @@ pub async fn create_challenge_private_asset(
         INSERT INTO challenge_private_assets (
             id,
             draft_id,
-            asset_id,
+            asset_name,
             kind,
             required,
             size_bytes,
@@ -268,13 +271,13 @@ pub async fn create_challenge_private_asset(
             storage_uri,
             uploader_agent_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9::uuid)
         RETURNING *
         "#,
     )
-    .bind(&input.asset_id_row)
+    .bind(&input.asset_row_id)
     .bind(&input.draft_id)
-    .bind(&input.asset_id)
+    .bind(input.asset_name.as_str())
     .bind(input.kind.as_str())
     .bind(input.required)
     .bind(input.size_bytes)
@@ -297,7 +300,7 @@ async fn sum_private_asset_bytes_for_draft_tx(
         r#"
         SELECT COALESCE(SUM(size_bytes), 0)::BIGINT
         FROM challenge_private_assets
-        WHERE draft_id = $1
+        WHERE draft_id = $1::uuid
         "#,
     )
     .bind(draft_id)
@@ -346,7 +349,7 @@ pub async fn record_challenge_draft_validation(
         INSERT INTO challenge_draft_validation_records (
             id, draft_id, status, message, repository_path, manifest_sha256, bundle_sha256
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7)
         RETURNING *
         "#,
     )
@@ -372,7 +375,7 @@ pub async fn record_challenge_draft_validation(
             validation_repository_path = $4,
             validation_bundle_sha256 = $5,
             updated_at = NOW()
-        WHERE id = $1
+        WHERE id = $1::uuid
           AND status IN ('draft', 'validated')
         "#,
     )
@@ -402,7 +405,7 @@ pub async fn approve_validated_challenge_draft(
             validation_message = COALESCE($2, validation_message),
             approved_bundle_sha256 = validation_bundle_sha256,
             updated_at = NOW()
-        WHERE id = $1
+        WHERE id = $1::uuid
           AND status = 'validated'
           AND validation_bundle_sha256 IS NOT NULL
         "#,
@@ -431,7 +434,7 @@ pub async fn update_challenge_draft_status(
         SET status = $2,
             validation_message = COALESCE($3, validation_message),
             updated_at = NOW()
-        WHERE id = $1
+        WHERE id = $1::uuid
         "#,
     )
     .bind(draft_id)
@@ -458,7 +461,7 @@ pub async fn abandon_challenge_draft(
         SET status = 'abandoned',
             validation_message = COALESCE($2, validation_message),
             updated_at = NOW()
-        WHERE id = $1
+        WHERE id = $1::uuid
           AND status <> 'published'
         "#,
     )
@@ -520,7 +523,7 @@ pub async fn list_unpublished_private_assets_for_purge(
 
 /// Delete a private asset record after its object has been removed.
 pub async fn delete_challenge_private_asset(pool: &PgPool, asset_row_id: &str) -> Result<()> {
-    sqlx::query("DELETE FROM challenge_private_assets WHERE id = $1")
+    sqlx::query("DELETE FROM challenge_private_assets WHERE id = $1::uuid")
         .bind(asset_row_id)
         .execute(pool)
         .await?;
@@ -532,20 +535,20 @@ pub async fn delete_challenge_private_asset(pool: &PgPool, asset_row_id: &str) -
 pub async fn mark_challenge_draft_published(
     pool: &PgPool,
     draft_id: &str,
-    published_challenge_id: Option<&ChallengeId>,
+    published_challenge_name: Option<&ChallengeName>,
 ) -> Result<()> {
     let result = sqlx::query(
         r#"
         UPDATE challenge_drafts
         SET status = 'published',
-            published_challenge_id = $2,
+            published_challenge_name = $2,
             updated_at = NOW()
-        WHERE id = $1
+        WHERE id = $1::uuid
           AND status = 'approved'
         "#,
     )
     .bind(draft_id)
-    .bind(published_challenge_id.map(ChallengeId::as_str))
+    .bind(published_challenge_name.map(ChallengeName::as_str))
     .execute(pool)
     .await?;
 
@@ -563,7 +566,7 @@ pub async fn publish_new_challenge_draft(
     let mut tx = pool.begin().await?;
     let published = publish_challenge_tx(
         &mut tx,
-        &input.challenge_id,
+        &input.challenge_name,
         &input.bundle_path,
         &input.statement_path,
         &input.spec,
@@ -571,8 +574,8 @@ pub async fn publish_new_challenge_draft(
         &input.summary,
     )
     .await?;
-    add_challenge_owner_tx(&mut tx, &published.challenge_id, &input.owner_agent_id).await?;
-    mark_challenge_draft_published_tx(&mut tx, &input.draft_id, Some(&published.challenge_id))
+    add_challenge_owner_tx(&mut tx, &published.challenge_name, &input.owner_agent_id).await?;
+    mark_challenge_draft_published_tx(&mut tx, &input.draft_id, Some(&published.challenge_name))
         .await?;
     create_challenge_draft_audit_event_tx(
         &mut tx,
@@ -584,8 +587,8 @@ pub async fn publish_new_challenge_draft(
             action: "draft_published".to_string(),
             message: "challenge draft published".to_string(),
             metadata: serde_json::json!({
-                "challenge_id": &input.challenge_id,
-                "published_challenge_id": &published.challenge_id,
+                "challenge_name": &input.challenge_name,
+                "published_challenge_name": &published.challenge_name,
                 "repository_path": &input.repository_path,
                 "bundle_sha256": &input.bundle_sha256
             }),
@@ -602,7 +605,7 @@ pub async fn publish_archive_challenge_draft(
     input: &PublishArchiveChallengeDraftInput,
 ) -> Result<()> {
     let mut tx = pool.begin().await?;
-    archive_challenge_tx(&mut tx, &input.challenge_id).await?;
+    archive_challenge_tx(&mut tx, &input.challenge_name).await?;
     mark_challenge_draft_published_tx(&mut tx, &input.draft_id, None).await?;
     create_challenge_draft_audit_event_tx(
         &mut tx,
@@ -614,8 +617,8 @@ pub async fn publish_archive_challenge_draft(
             action: "draft_published".to_string(),
             message: "challenge draft published".to_string(),
             metadata: serde_json::json!({
-                "challenge_id": &input.challenge_id,
-                "published_challenge_id": Value::Null,
+                "challenge_name": &input.challenge_name,
+                "published_challenge_name": Value::Null,
                 "repository_path": &input.repository_path,
                 "bundle_sha256": &input.bundle_sha256
             }),
@@ -629,20 +632,20 @@ pub async fn publish_archive_challenge_draft(
 async fn mark_challenge_draft_published_tx(
     tx: &mut Transaction<'_, Postgres>,
     draft_id: &str,
-    published_challenge_id: Option<&ChallengeId>,
+    published_challenge_name: Option<&ChallengeName>,
 ) -> Result<()> {
     let result = sqlx::query(
         r#"
         UPDATE challenge_drafts
         SET status = 'published',
-            published_challenge_id = $2,
+            published_challenge_name = $2,
             updated_at = NOW()
-        WHERE id = $1
+        WHERE id = $1::uuid
           AND status = 'approved'
         "#,
     )
     .bind(draft_id)
-    .bind(published_challenge_id.map(ChallengeId::as_str))
+    .bind(published_challenge_name.map(ChallengeName::as_str))
     .execute(&mut **tx)
     .await?;
 
@@ -654,17 +657,17 @@ async fn mark_challenge_draft_published_tx(
 
 async fn archive_challenge_tx(
     tx: &mut Transaction<'_, Postgres>,
-    challenge_id: &ChallengeId,
+    challenge_name: &ChallengeName,
 ) -> Result<()> {
     let result = sqlx::query(
         r#"
         UPDATE challenges
         SET status = 'archived',
             updated_at = NOW()
-        WHERE id = $1
+        WHERE name = $1
         "#,
     )
-    .bind(challenge_id.as_str())
+    .bind(challenge_name.as_str())
     .execute(&mut **tx)
     .await?;
 
@@ -694,7 +697,7 @@ async fn create_challenge_draft_audit_event_tx(
         INSERT INTO challenge_draft_audit_events (
             id, draft_id, actor_agent_id, actor_admin_username, action, message, metadata_json
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7)
         "#,
     )
     .bind(&input.event_id)
@@ -718,7 +721,7 @@ async fn list_private_assets_for_draft(
         r#"
         SELECT *
         FROM challenge_private_assets
-        WHERE draft_id = $1
+        WHERE draft_id = $1::uuid
         ORDER BY created_at ASC
         "#,
     )
@@ -739,7 +742,7 @@ async fn list_validation_records_for_draft(
         r#"
         SELECT *
         FROM challenge_draft_validation_records
-        WHERE draft_id = $1
+        WHERE draft_id = $1::uuid
         ORDER BY created_at DESC
         "#,
     )
@@ -762,11 +765,11 @@ fn row_to_draft_response(
         serde_json::from_value(manifest_json).map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(ChallengeDraftResponse {
-        id: row.try_get("id")?,
-        challenge_id: challenge_id_from_row(&row, "challenge_id")?,
+        id: uuid_string_from_row(&row, "id")?,
+        challenge_name: challenge_name_from_row(&row, "challenge_name")?,
         request: parse_request_kind(&row.try_get::<String, _>("request_kind")?)?,
         status: parse_draft_status(&row.try_get::<String, _>("status")?)?,
-        creator_agent_id: row.try_get("creator_agent_id")?,
+        creator_agent_id: uuid_string_from_row(&row, "creator_agent_id")?,
         creator_github_user_id: row.try_get("creator_github_user_id")?,
         creator_github_login: row.try_get("creator_github_login")?,
         repo_url: row.try_get("repo_url")?,
@@ -780,7 +783,10 @@ fn row_to_draft_response(
         approved_bundle_sha256: row.try_get("approved_bundle_sha256")?,
         validation_message: row.try_get("validation_message")?,
         validation_repository_path: row.try_get("validation_repository_path")?,
-        published_challenge_id: optional_challenge_id_from_row(&row, "published_challenge_id")?,
+        published_challenge_name: optional_challenge_name_from_row(
+            &row,
+            "published_challenge_name",
+        )?,
         private_assets,
         validation_records,
         created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
@@ -792,15 +798,15 @@ fn row_to_private_asset_response(
     row: sqlx::postgres::PgRow,
 ) -> Result<ChallengePrivateAssetResponse> {
     Ok(ChallengePrivateAssetResponse {
-        id: row.try_get("id")?,
-        draft_id: row.try_get("draft_id")?,
-        asset_id: row.try_get("asset_id")?,
+        id: uuid_string_from_row(&row, "id")?,
+        draft_id: uuid_string_from_row(&row, "draft_id")?,
+        asset_name: asset_name_from_row(&row, "asset_name")?,
         kind: parse_private_asset_kind(&row.try_get::<String, _>("kind")?)?,
         required: row.try_get("required")?,
         size_bytes: row.try_get("size_bytes")?,
         sha256: row.try_get("sha256")?,
         storage_uri: row.try_get("storage_uri")?,
-        uploader_agent_id: row.try_get("uploader_agent_id")?,
+        uploader_agent_id: uuid_string_from_row(&row, "uploader_agent_id")?,
         created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
     })
 }
@@ -809,8 +815,8 @@ fn row_to_validation_record_response(
     row: sqlx::postgres::PgRow,
 ) -> Result<ChallengeDraftValidationRecordResponse> {
     Ok(ChallengeDraftValidationRecordResponse {
-        id: row.try_get("id")?,
-        draft_id: row.try_get("draft_id")?,
+        id: uuid_string_from_row(&row, "id")?,
+        draft_id: uuid_string_from_row(&row, "draft_id")?,
         status: parse_validation_status(&row.try_get::<String, _>("status")?)?,
         message: row.try_get("message")?,
         repository_path: row.try_get("repository_path")?,

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "challenge_id": "sample-sum",
+  "challenge_name": "sample-sum",
   "challenge_title": "Sample Sum",
   "challenge_summary": "Add numbers across scorer-controlled public and private benchmark runs.",
   "solution": {
@@ -18,7 +18,7 @@
       "accelerator": "cpu",
       "validation_enabled": true,
       "resource_profile": {
-        "id": "agentics-cpu-small",
+        "name": "agentics-cpu-small",
         "solution_image": "agentics-linux-arm64-cpu:ubuntu26.04-local",
         "scorer_image": "agentics-linux-arm64-cpu:ubuntu26.04-local",
         "timeout_sec": 30,
@@ -61,14 +61,14 @@
   "metric_schema": {
     "metrics": [
       {
-        "id": "score",
+        "name": "score",
         "label": "Score",
         "direction": "maximize",
         "visibility": "public",
         "metric_description": "Fraction of runs whose output exactly matches the expected value."
       },
       {
-        "id": "passed_cases",
+        "name": "passed_cases",
         "label": "Passed Cases",
         "unit": "cases",
         "direction": "maximize",
@@ -77,8 +77,8 @@
       }
     ],
     "ranking": {
-      "primary_metric_id": "score",
-      "tie_breaker_metric_ids": ["passed_cases"]
+      "primary_metric_name": "score",
+      "tie_breaker_metric_names": ["passed_cases"]
     }
   }
 }

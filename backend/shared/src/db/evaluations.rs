@@ -4,7 +4,8 @@ use crate::error::{AppError, Result};
 use crate::models::evaluation::{
     EvaluationStatus, MetricValue, PublicCaseResult, RunMetricResult, ScoreSummary, ScoringMode,
 };
-use crate::models::ids::{SolutionSubmissionId, TargetName};
+use crate::models::ids::SolutionSubmissionId;
+use crate::models::names::TargetName;
 
 use super::leaderboard::{
     update_official_score_for_solution_submission_tx,
@@ -31,7 +32,7 @@ pub async fn mark_evaluation_started(
     let result = sqlx::query(
         r#"
         INSERT INTO evaluations (id, solution_submission_id, job_id, target, eval_type, status, started_at)
-        VALUES ($1, $2, $3, $4, $5, 'running', NOW())
+        VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, 'running', NOW())
         ON CONFLICT (job_id) DO NOTHING
         "#,
     )
@@ -93,7 +94,7 @@ pub async fn mark_evaluation_finished(
         r#"
         UPDATE evaluation_jobs
         SET status = $2, finished_at = NOW(), last_error = $3
-        WHERE id = $1
+        WHERE id = $1::uuid
           AND status = 'running'
           AND worker_id = $4
           AND attempt_count = $5
@@ -119,7 +120,7 @@ pub async fn mark_evaluation_finished(
             aggregate_metrics_json = $5, run_metrics_json = $6,
             public_results_json = $7, validation_summary_json = $8,
             official_summary_json = $9, log_path = $10, finished_at = NOW()
-        WHERE job_id = $1
+        WHERE job_id = $1::uuid
           AND status = 'running'
         "#,
     )
@@ -148,7 +149,7 @@ pub async fn mark_evaluation_finished(
                 "failed"
             };
             sqlx::query(
-                "UPDATE solution_submissions SET status = $2, visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1"
+                "UPDATE solution_submissions SET status = $2, visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1::uuid"
             )
             .bind(result.solution_submission_id.as_str())
             .bind(sub_status)
@@ -159,7 +160,7 @@ pub async fn mark_evaluation_finished(
             let visible = result.status == EvaluationStatus::Completed;
             let sub_status = if visible { "completed" } else { "failed" };
             sqlx::query(
-                "UPDATE solution_submissions SET status = $2, visible_after_eval = $3, updated_at = NOW() WHERE id = $1"
+                "UPDATE solution_submissions SET status = $2, visible_after_eval = $3, updated_at = NOW() WHERE id = $1::uuid"
             )
             .bind(result.solution_submission_id.as_str())
             .bind(sub_status)

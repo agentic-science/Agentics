@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::ids::ChallengeId;
+use super::names::{AssetName, ChallengeName};
 
 /// Public challenge manifest file expected at the root of a challenge proposal.
 pub const AGENTICS_CHALLENGE_MANIFEST_FILE: &str = "agentics.challenge.json";
@@ -13,7 +13,7 @@ pub const AGENTICS_CHALLENGE_MANIFEST_FILE: &str = "agentics.challenge.json";
 pub struct ChallengeCreationManifest {
     pub schema_version: i32,
     pub request: ChallengeCreationRequestKind,
-    pub challenge_id: ChallengeId,
+    pub challenge_name: ChallengeName,
     pub title: String,
     pub summary: String,
     pub readme_path: String,
@@ -46,7 +46,7 @@ pub struct ChallengeArchiveRequestSpec {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ChallengePrivateAssetRequirement {
-    pub asset_id: String,
+    pub asset_name: AssetName,
     pub kind: ChallengePrivateAssetKind,
     #[serde(default)]
     pub required: bool,
@@ -152,7 +152,7 @@ impl ChallengeDraftValidationStatus {
 pub struct ChallengePrivateAssetResponse {
     pub id: String,
     pub draft_id: String,
-    pub asset_id: String,
+    pub asset_name: AssetName,
     pub kind: ChallengePrivateAssetKind,
     pub required: bool,
     pub size_bytes: i64,
@@ -180,7 +180,7 @@ pub struct ChallengeDraftValidationRecordResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeDraftResponse {
     pub id: String,
-    pub challenge_id: ChallengeId,
+    pub challenge_name: ChallengeName,
     pub request: ChallengeCreationRequestKind,
     pub status: ChallengeDraftStatus,
     pub creator_agent_id: String,
@@ -202,7 +202,7 @@ pub struct ChallengeDraftResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub validation_repository_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub published_challenge_id: Option<ChallengeId>,
+    pub published_challenge_name: Option<ChallengeName>,
     #[serde(default)]
     pub private_assets: Vec<ChallengePrivateAssetResponse>,
     #[serde(default)]
@@ -221,7 +221,7 @@ pub struct ChallengeDraftListResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UploadChallengePrivateAssetRequest {
-    pub asset_id: String,
+    pub asset_name: AssetName,
     pub kind: ChallengePrivateAssetKind,
     #[serde(default)]
     pub required: bool,
