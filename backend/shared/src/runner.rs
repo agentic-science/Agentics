@@ -23,7 +23,6 @@ use crate::storage::{Storage, StorageKey};
 use crate::zip_project::{
     ZIP_PROJECT_MANIFEST_FILE, ZipProjectManifest, ZipProjectPhaseFailureReason,
     ZipProjectPhaseLimits, ZipProjectPhaseName, ZipProjectResolvedPhase,
-    parse_zip_project_manifest,
 };
 
 mod docker;
@@ -294,7 +293,7 @@ async fn read_solution_manifest(
                 "missing {ZIP_PROJECT_MANIFEST_FILE} in solution submission: {e}"
             ))
         })?;
-    parse_zip_project_manifest(&raw)
+    ZipProjectManifest::parse_json(&raw)
 }
 
 async fn run_setup_and_build(

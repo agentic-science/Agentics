@@ -682,17 +682,9 @@ fn parse_eval_from_row(row: &sqlx::postgres::PgRow, prefix: &str) -> Result<Opti
     let finished_at: Option<DateTime<Utc>> =
         row.try_get(format!("{}_finished_at", prefix).as_str())?;
 
-    let status = match status_str.as_str() {
-        "queued" => EvaluationStatus::Queued,
-        "running" => EvaluationStatus::Running,
-        "completed" => EvaluationStatus::Completed,
-        "failed" => EvaluationStatus::Failed,
-        other => {
-            return Err(AppError::Internal(format!(
-                "unexpected evaluation status `{other}`"
-            )));
-        }
-    };
+    let status = EvaluationStatus::from_storage_value(&status_str).ok_or_else(|| {
+        AppError::Internal(format!("unexpected evaluation status `{status_str}`"))
+    })?;
     let eval_type = ScoringMode::from_storage_value(&eval_type_str).ok_or_else(|| {
         AppError::Internal(format!("unexpected evaluation type `{eval_type_str}`"))
     })?;

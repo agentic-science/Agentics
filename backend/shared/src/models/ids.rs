@@ -4,14 +4,9 @@ use std::borrow::Cow;
 use std::fmt;
 use std::str::FromStr;
 
-use nutype::nutype;
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use uuid::Uuid;
-
-/// User-facing validation message for solution submission ids.
-pub const SOLUTION_SUBMISSION_ID_ERROR_MESSAGE: &str =
-    "solution_submission_id must be a canonical UUID string";
 
 /// Validation failure for generated UUID identifiers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,6 +34,11 @@ macro_rules! define_uuid_id_type {
         pub struct $type_name(String);
 
         impl $type_name {
+            /// Create a new random generated UUID identifier.
+            pub fn generate() -> Self {
+                Self(Uuid::new_v4().to_string())
+            }
+
             /// Parse and canonicalize a generated UUID identifier.
             pub fn try_new(value: impl AsRef<str>) -> Result<Self, UuidIdError> {
                 let value = value.as_ref();
@@ -160,65 +160,11 @@ define_uuid_id_type!(
     "EvaluationId",
     "evaluation_id must be a canonical UUID string"
 );
-
-/// Validation failure for [`SolutionSubmissionId`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SolutionSubmissionIdError;
-
-impl fmt::Display for SolutionSubmissionIdError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(SOLUTION_SUBMISSION_ID_ERROR_MESSAGE)
-    }
-}
-
-impl std::error::Error for SolutionSubmissionIdError {}
-
-#[nutype(
-    sanitize(lowercase),
-    validate(with = validate_solution_submission_id, error = SolutionSubmissionIdError),
-    derive(
-        Debug,
-        Clone,
-        PartialEq,
-        Eq,
-        PartialOrd,
-        Ord,
-        Hash,
-        AsRef,
-        Deref,
-        Display,
-        Serialize,
-        Deserialize,
-        FromStr,
-        TryFrom,
-    ),
-)]
-pub struct SolutionSubmissionId(String);
-
-impl SolutionSubmissionId {
-    /// Borrow the canonical solution submission id string.
-    pub fn as_str(&self) -> &str {
-        self.as_ref()
-    }
-}
-
-impl JsonSchema for SolutionSubmissionId {
-    fn inline_schema() -> bool {
-        true
-    }
-
-    fn schema_name() -> Cow<'static, str> {
-        "SolutionSubmissionId".into()
-    }
-
-    fn json_schema(_: &mut SchemaGenerator) -> Schema {
-        json_schema!({
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-        })
-    }
-}
+define_uuid_id_type!(
+    SolutionSubmissionId,
+    "SolutionSubmissionId",
+    "solution_submission_id must be a canonical UUID string"
+);
 
 /// Check whether a solution submission id is a canonical hyphenated UUID.
 pub fn is_valid_solution_submission_id(value: &str) -> bool {
@@ -226,14 +172,6 @@ pub fn is_valid_solution_submission_id(value: &str) -> bool {
         return false;
     };
     uuid.to_string() == value
-}
-
-fn validate_solution_submission_id(value: &str) -> Result<(), SolutionSubmissionIdError> {
-    if is_valid_solution_submission_id(value) {
-        Ok(())
-    } else {
-        Err(SolutionSubmissionIdError)
-    }
 }
 
 #[cfg(test)]

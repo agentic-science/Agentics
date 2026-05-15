@@ -86,9 +86,10 @@ pub async fn mark_evaluation_finished(
         .map_err(|e| AppError::Internal(e.to_string()))?;
     let run_metrics_json =
         serde_json::to_value(&result.run_metrics).map_err(|e| AppError::Internal(e.to_string()))?;
-    let status_str = match result.status {
-        EvaluationStatus::Completed => "completed",
-        _ => "failed",
+    let status_str = if result.status == EvaluationStatus::Completed {
+        EvaluationStatus::Completed.as_str()
+    } else {
+        EvaluationStatus::Failed.as_str()
     };
 
     let job_update = sqlx::query(
@@ -145,9 +146,9 @@ pub async fn mark_evaluation_finished(
     match result.eval_type {
         ScoringMode::Validation => {
             let sub_status = if result.status == EvaluationStatus::Completed {
-                "completed"
+                EvaluationStatus::Completed.as_str()
             } else {
-                "failed"
+                EvaluationStatus::Failed.as_str()
             };
             sqlx::query(
                 "UPDATE solution_submissions SET status = $2, visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1::uuid"
@@ -159,7 +160,11 @@ pub async fn mark_evaluation_finished(
         }
         ScoringMode::Official => {
             let visible = result.status == EvaluationStatus::Completed;
-            let sub_status = if visible { "completed" } else { "failed" };
+            let sub_status = if visible {
+                EvaluationStatus::Completed.as_str()
+            } else {
+                EvaluationStatus::Failed.as_str()
+            };
             sqlx::query(
                 "UPDATE solution_submissions SET status = $2, visible_after_eval = $3, updated_at = NOW() WHERE id = $1::uuid"
             )

@@ -770,8 +770,7 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
     let uploader_agent_id = AgentId::try_new(&creator.agent_id).expect("valid creator agent id");
 
     let input_a = db::CreateChallengePrivateAssetInput {
-        asset_row_id: ChallengePrivateAssetId::try_new(uuid::Uuid::new_v4().to_string())
-            .expect("generated private asset id is valid"),
+        asset_row_id: ChallengePrivateAssetId::generate(),
         draft_id: draft_id.clone(),
         asset_name: AssetName::try_new("official-cases-a".to_string())
             .expect("test asset name is valid"),
@@ -784,8 +783,7 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
         uploader_agent_id: uploader_agent_id.clone(),
     };
     let input_b = db::CreateChallengePrivateAssetInput {
-        asset_row_id: ChallengePrivateAssetId::try_new(uuid::Uuid::new_v4().to_string())
-            .expect("generated private asset id is valid"),
+        asset_row_id: ChallengePrivateAssetId::generate(),
         draft_id: draft_id.clone(),
         asset_name: AssetName::try_new("official-cases-b".to_string())
             .expect("test asset name is valid"),

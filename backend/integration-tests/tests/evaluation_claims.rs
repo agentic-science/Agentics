@@ -47,7 +47,7 @@ async fn stale_running_job_fails_after_max_attempts(pool: sqlx::PgPool) {
     let solution_submission_id = create_response["id"]
         .as_str()
         .expect("missing solution submission id");
-    let solution_submission_id = SolutionSubmissionId::try_new(solution_submission_id.to_string())
+    let solution_submission_id = SolutionSubmissionId::try_new(solution_submission_id)
         .expect("API returned valid solution submission id");
 
     sqlx::query(
@@ -123,7 +123,7 @@ async fn refreshed_job_lease_is_not_reaped(pool: sqlx::PgPool) {
     let solution_submission_id = create_response["id"]
         .as_str()
         .expect("missing solution submission id");
-    let solution_submission_id = SolutionSubmissionId::try_new(solution_submission_id.to_string())
+    let solution_submission_id = SolutionSubmissionId::try_new(solution_submission_id)
         .expect("API returned valid solution submission id");
     let job_id: String = sqlx::query_scalar(
         r#"
@@ -192,7 +192,7 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
     let solution_submission_id = create_response["id"]
         .as_str()
         .expect("missing solution submission id");
-    let solution_submission_id = SolutionSubmissionId::try_new(solution_submission_id.to_string())
+    let solution_submission_id = SolutionSubmissionId::try_new(solution_submission_id)
         .expect("API returned valid solution submission id");
 
     let first_claim = shared::db::claim_next_evaluation_job(&pool, "worker-a")
@@ -205,7 +205,7 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
         shared::db::mark_evaluation_started(
             &pool,
             &MarkEvaluationStartedInput {
-                evaluation_id: new_evaluation_id(),
+                evaluation_id: EvaluationId::generate(),
                 solution_submission_id: solution_submission_id.clone(),
                 job_id: first_claim.id.clone(),
                 target: first_claim.target.clone(),
@@ -244,7 +244,7 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
         !shared::db::mark_evaluation_started(
             &pool,
             &MarkEvaluationStartedInput {
-                evaluation_id: new_evaluation_id(),
+                evaluation_id: EvaluationId::generate(),
                 solution_submission_id: solution_submission_id.clone(),
                 job_id: second_claim.id.clone(),
                 target: second_claim.target.clone(),
@@ -402,8 +402,7 @@ async fn create_official_submission(
     let id = create_response["id"]
         .as_str()
         .expect("missing solution submission id");
-    SolutionSubmissionId::try_new(id.to_string())
-        .expect("API returned valid solution submission id")
+    SolutionSubmissionId::try_new(id).expect("API returned valid solution submission id")
 }
 
 async fn finish_next_job_with_score(
@@ -421,7 +420,7 @@ async fn finish_next_job_with_score(
         shared::db::mark_evaluation_started(
             pool,
             &MarkEvaluationStartedInput {
-                evaluation_id: new_evaluation_id(),
+                evaluation_id: EvaluationId::generate(),
                 solution_submission_id: solution_submission_id.clone(),
                 job_id: claim.id.clone(),
                 target: claim.target.clone(),
@@ -485,8 +484,4 @@ fn persisted_result(
             None
         },
     }
-}
-
-fn new_evaluation_id() -> EvaluationId {
-    EvaluationId::try_new(uuid::Uuid::new_v4().to_string()).expect("generated evaluation id valid")
 }

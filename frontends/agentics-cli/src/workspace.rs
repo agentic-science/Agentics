@@ -365,7 +365,7 @@ mod tests {
     use shared::models::names::{ChallengeName, ResourceProfileName, TargetName};
     use shared::models::paths::BundleRelativePath;
     use shared::zip_project::{
-        ZipProjectInterfaceKind, ZipProjectNetworkAccess, parse_zip_project_manifest,
+        ZipProjectInterfaceKind, ZipProjectManifest, ZipProjectNetworkAccess,
     };
 
     use super::{default_workspace_dir, init_solution_workspace};
@@ -388,7 +388,8 @@ mod tests {
             fs::read_to_string(workspace_dir.join("README.md")).expect("README should be readable");
         let manifest_raw = fs::read_to_string(workspace_dir.join("agentics.solution.json"))
             .expect("manifest should be readable");
-        let manifest = parse_zip_project_manifest(&manifest_raw).expect("manifest should parse");
+        let manifest =
+            ZipProjectManifest::parse_json(&manifest_raw).expect("manifest should parse");
         let hook = fs::read_to_string(workspace_dir.join(".git/hooks/pre-commit"))
             .expect("hook should be readable");
 
@@ -456,7 +457,8 @@ mod tests {
 
         let manifest_raw = fs::read_to_string(workspace_dir.join("agentics.solution.json"))
             .expect("manifest should be readable");
-        let manifest = parse_zip_project_manifest(&manifest_raw).expect("manifest should parse");
+        let manifest =
+            ZipProjectManifest::parse_json(&manifest_raw).expect("manifest should parse");
 
         assert_eq!(manifest.runtime.language, "rust");
         assert!(manifest.runtime.language_version.is_none());

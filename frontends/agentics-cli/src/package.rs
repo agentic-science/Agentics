@@ -76,7 +76,7 @@ fn package_solution_workspace_with_limits(
     }
     let manifest_raw = std::fs::read_to_string(&manifest_path)
         .with_context(|| format!("failed to read {}", manifest_path.display()))?;
-    let manifest = shared::zip_project::parse_zip_project_manifest(&manifest_raw)?;
+    let manifest = shared::zip_project::ZipProjectManifest::parse_json(&manifest_raw)?;
 
     let run_script = workspace_dir.join(manifest.commands.run.as_path());
     if !fs::exists(&run_script)

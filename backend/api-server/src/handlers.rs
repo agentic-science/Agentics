@@ -59,29 +59,13 @@ const STAGED_EVALUATION_JOB_DELAY_SECONDS: i64 = 315_360_000;
 const DEFAULT_PUBLIC_LIST_LIMIT: i64 = 50;
 const MAX_PUBLIC_LIST_LIMIT: i64 = 100;
 
-fn parse_challenge_name(raw: &str) -> Result<ChallengeName> {
-    ChallengeName::try_new(raw.to_string()).map_err(|e| AppError::BadRequest(e.to_string()))
-}
-
-fn new_evaluation_job_id() -> Result<EvaluationJobId> {
-    EvaluationJobId::try_new(Uuid::new_v4().to_string())
-        .map_err(|e| AppError::Internal(format!("generated invalid evaluation job id: {e}")))
-}
-
-fn new_shortlist_revision_id() -> Result<ChallengeShortlistRevisionId> {
-    ChallengeShortlistRevisionId::try_new(Uuid::new_v4().to_string()).map_err(|e| {
-        AppError::Internal(format!(
-            "generated invalid challenge shortlist revision id: {e}"
-        ))
-    })
-}
-
-fn parse_target(raw: &str) -> Result<TargetName> {
-    TargetName::try_new(raw.to_string()).map_err(|e| AppError::BadRequest(e.to_string()))
-}
-
-fn parse_metric_name(raw: &str) -> Result<MetricName> {
-    MetricName::try_new(raw.to_string()).map_err(|e| AppError::BadRequest(e.to_string()))
+fn parse_request_value<T>(raw: &str) -> Result<T>
+where
+    T: std::str::FromStr,
+    T::Err: std::fmt::Display,
+{
+    raw.parse::<T>()
+        .map_err(|e| AppError::BadRequest(e.to_string()))
 }
 
 // ---------------------------------------------------------------------------
@@ -158,7 +142,7 @@ pub async fn get_agent_challenge(
     State(state): State<AppState>,
     Path(name): Path<String>,
 ) -> Result<Json<shared::models::challenge::ChallengeDetailResponse>> {
-    get_challenge_detail_response(state, parse_challenge_name(&name)?).await
+    get_challenge_detail_response(state, parse_request_value::<ChallengeName>(&name)?).await
 }
 
 /// List published challenges on the public API.
@@ -176,7 +160,7 @@ pub async fn get_challenge(
     State(state): State<AppState>,
     Path(name): Path<String>,
 ) -> Result<Json<shared::models::challenge::ChallengeDetailResponse>> {
-    get_challenge_detail_response(state, parse_challenge_name(&name)?).await
+    get_challenge_detail_response(state, parse_request_value::<ChallengeName>(&name)?).await
 }
 
 /// Shared challenge-detail response path used by public and agent routes.
@@ -241,13 +225,10 @@ async fn create_solution_submission_for_mode(
     if !is_likely_zip(&artifact_bytes) {
         return Err(AppError::BadRequest("artifact 必须是 zip 文件".to_string()));
     }
-    let manifest = shared::zip_project::parse_zip_project_manifest_from_zip_bytes(&artifact_bytes)?;
+    let manifest = shared::zip_project::ZipProjectManifest::from_zip_bytes(&artifact_bytes)?;
 
-    let solution_submission_id = SolutionSubmissionId::try_new(Uuid::new_v4().to_string())
-        .map_err(|e| {
-            AppError::Internal(format!("generated invalid solution submission id: {e}"))
-        })?;
-    let job_id = new_evaluation_job_id()?;
+    let solution_submission_id = SolutionSubmissionId::generate();
+    let job_id = EvaluationJobId::generate();
     let artifact_key =
         StorageKey::try_new(format!("solution-submissions/{solution_submission_id}.zip"))?;
     let temporary_artifact_key = StorageKey::try_new(format!(
@@ -517,7 +498,7 @@ pub async fn list_public_solution_submissions(
     Path(name): Path<String>,
     Query(query): Query<PublicListQuery>,
 ) -> Result<Json<PublicSolutionSubmissionListResponse>> {
-    let challenge_name = parse_challenge_name(&name)?;
+    let challenge_name = parse_request_value::<ChallengeName>(&name)?;
     ensure_public_result_detail_visible(&state.db, &challenge_name).await?;
     let items = db::list_public_solution_submissions_for_challenge(
         &state.db,
@@ -614,7 +595,7 @@ pub async fn get_leaderboard(
     Path(name): Path<String>,
     Query(query): Query<LeaderboardQuery>,
 ) -> Result<Json<LeaderboardResponse>> {
-    let challenge_name = parse_challenge_name(&name)?;
+    let challenge_name = parse_request_value::<ChallengeName>(&name)?;
     let (challenge, spec) = load_challenge_policy(&state.db, &challenge_name).await?;
     ensure_visibility_allows_public(spec.visibility.leaderboard, &spec)?;
     let target = resolve_public_target(&state.db, &challenge_name, query.target.as_deref()).await?;
@@ -633,8 +614,8 @@ pub async fn get_score_distribution(
     Path(name): Path<String>,
     Query(query): Query<ScoreDistributionQuery>,
 ) -> Result<Json<ScoreDistributionResponse>> {
-    let challenge_name = parse_challenge_name(&name)?;
-    let metric_name = parse_metric_name(&query.metric)?;
+    let challenge_name = parse_request_value::<ChallengeName>(&name)?;
+    let metric_name = parse_request_value::<MetricName>(&query.metric)?;
     let (challenge, spec) = load_challenge_policy(&state.db, &challenge_name).await?;
     ensure_visibility_allows_public(spec.visibility.score_distribution, &spec)?;
     let target = resolve_public_target(&state.db, &challenge_name, query.target.as_deref()).await?;
@@ -695,7 +676,7 @@ async fn resolve_public_target(
             .map_err(|e| AppError::Internal(e.to_string()))?;
 
     if let Some(target) = requested_target {
-        let target = parse_target(target)?;
+        let target = parse_request_value::<TargetName>(target)?;
         if spec.target(&target).is_some() {
             return Ok(target);
         }
@@ -1091,7 +1072,7 @@ pub async fn create_challenge_shortlist_revision(
         .map_err(|e| AppError::Internal(format!("failed to encode shortlist revision: {e}")))?;
     let agent_ids_to_add = normalize_shortlist_agent_ids(&body.agent_ids_to_add)?;
 
-    let revision_id = new_shortlist_revision_id()?;
+    let revision_id = ChallengeShortlistRevisionId::generate();
     let sha256 = challenge_creation::sha256_digest(&raw_json);
     let storage_key = StorageKey::try_new(format!(
         "challenge-shortlists/{challenge_name}/{revision_id}.json"
@@ -1139,7 +1120,7 @@ async fn resolve_creator_challenge_scope(
     raw_challenge_name: &str,
     requested_target: Option<&str>,
 ) -> Result<(ChallengeName, Option<TargetName>)> {
-    let challenge_name = parse_challenge_name(raw_challenge_name)?;
+    let challenge_name = parse_request_value::<ChallengeName>(raw_challenge_name)?;
     let challenge = db::get_published_challenge(pool, &challenge_name).await?;
     let challenge = challenge.ok_or(AppError::NotFound)?;
     if !db::agent_owns_challenge(pool, &challenge.challenge_name, &creator.agent_id).await? {
@@ -1162,7 +1143,7 @@ fn resolve_target_from_spec(
 
     let spec: ChallengeBundleSpec =
         serde_json::from_value(spec_json.clone()).map_err(|e| AppError::Internal(e.to_string()))?;
-    let target = parse_target(target)?;
+    let target = parse_request_value::<TargetName>(target)?;
     if spec.target(&target).is_some() {
         return Ok(Some(target));
     }
@@ -1229,7 +1210,7 @@ pub async fn publish_challenge(
     Path(challenge_name): Path<String>,
     ValidatedJson(body): ValidatedJson<PublishChallengeRequest>,
 ) -> Result<(StatusCode, Json<PublishChallengeResponse>)> {
-    let challenge_name = parse_challenge_name(&challenge_name)?;
+    let challenge_name = parse_request_value::<ChallengeName>(&challenge_name)?;
     let bundle_path = if FsPath::new(&body.bundle_path).is_absolute() {
         PathBuf::from(&body.bundle_path)
     } else {
@@ -1377,7 +1358,7 @@ pub async fn rejudge(
     let job = db::queue_evaluation_job(
         &state.db,
         &QueueEvaluationJobInput {
-            job_id: new_evaluation_job_id()?,
+            job_id: EvaluationJobId::generate(),
             solution_submission_id: id,
             eval_type: ScoringMode::Official,
         },
@@ -1405,7 +1386,7 @@ pub async fn official_run(
     let job = db::queue_evaluation_job(
         &state.db,
         &QueueEvaluationJobInput {
-            job_id: new_evaluation_job_id()?,
+            job_id: EvaluationJobId::generate(),
             solution_submission_id: id,
             eval_type: ScoringMode::Official,
         },

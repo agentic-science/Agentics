@@ -34,32 +34,6 @@ use crate::state::AppState;
 const CHALLENGE_DRAFT_QUOTA_WINDOW_SECONDS: i64 = 24 * 60 * 60;
 const MAX_PRIVATE_ASSET_FILE_COUNT: usize = 1024;
 
-fn new_challenge_draft_id() -> Result<ChallengeDraftId> {
-    ChallengeDraftId::try_new(Uuid::new_v4().to_string())
-        .map_err(|e| AppError::Internal(format!("failed to create challenge draft id: {e}")))
-}
-
-fn new_private_asset_id() -> Result<ChallengePrivateAssetId> {
-    ChallengePrivateAssetId::try_new(Uuid::new_v4().to_string())
-        .map_err(|e| AppError::Internal(format!("failed to create private asset id: {e}")))
-}
-
-fn new_draft_validation_record_id() -> Result<ChallengeDraftValidationRecordId> {
-    ChallengeDraftValidationRecordId::try_new(Uuid::new_v4().to_string()).map_err(|e| {
-        AppError::Internal(format!(
-            "failed to create challenge draft validation record id: {e}"
-        ))
-    })
-}
-
-fn new_draft_audit_event_id() -> Result<ChallengeDraftAuditEventId> {
-    ChallengeDraftAuditEventId::try_new(Uuid::new_v4().to_string()).map_err(|e| {
-        AppError::Internal(format!(
-            "failed to create challenge draft audit event id: {e}"
-        ))
-    })
-}
-
 /// Create a challenge draft bound to a public GitHub PR and manifest.
 pub async fn create_challenge_draft(
     State(state): State<AppState>,
@@ -88,7 +62,7 @@ pub async fn create_challenge_draft(
     let draft = db::create_challenge_draft(
         &state.db,
         &db::CreateChallengeDraftInput {
-            draft_id: new_challenge_draft_id()?,
+            draft_id: ChallengeDraftId::generate(),
             creator_agent_id: creator.agent_id.clone(),
             creator_github_user_id: creator.github_user_id,
             creator_github_login: creator.github_login.clone(),
@@ -107,7 +81,7 @@ pub async fn create_challenge_draft(
     db::create_challenge_draft_audit_event(
         &state.db,
         &db::CreateChallengeDraftAuditEventInput {
-            event_id: new_draft_audit_event_id()?,
+            event_id: ChallengeDraftAuditEventId::generate(),
             draft_id: draft.id.clone(),
             actor_agent_id: Some(creator.agent_id.clone()),
             actor_admin_username: None,
@@ -212,7 +186,7 @@ pub async fn upload_challenge_private_asset(
     let asset = db::create_challenge_private_asset(
         &state.db,
         &db::CreateChallengePrivateAssetInput {
-            asset_row_id: new_private_asset_id()?,
+            asset_row_id: ChallengePrivateAssetId::generate(),
             draft_id: draft.id.clone(),
             asset_name: body.asset_name.clone(),
             kind: body.kind,
@@ -247,7 +221,7 @@ pub async fn upload_challenge_private_asset(
     db::create_challenge_draft_audit_event(
         &state.db,
         &db::CreateChallengeDraftAuditEventInput {
-            event_id: new_draft_audit_event_id()?,
+            event_id: ChallengeDraftAuditEventId::generate(),
             draft_id: draft.id.clone(),
             actor_agent_id: Some(creator.agent_id.clone()),
             actor_admin_username: None,
@@ -333,7 +307,7 @@ pub async fn validate_challenge_draft(
             db::record_challenge_draft_validation(
                 &state.db,
                 &db::RecordChallengeDraftValidationInput {
-                    validation_record_id: new_draft_validation_record_id()?,
+                    validation_record_id: ChallengeDraftValidationRecordId::generate(),
                     draft_id: draft.id.clone(),
                     status: ChallengeDraftValidationStatus::Passed,
                     message: message.clone(),
@@ -346,7 +320,7 @@ pub async fn validate_challenge_draft(
             db::create_challenge_draft_audit_event(
                 &state.db,
                 &db::CreateChallengeDraftAuditEventInput {
-                    event_id: new_draft_audit_event_id()?,
+                    event_id: ChallengeDraftAuditEventId::generate(),
                     draft_id: draft.id.clone(),
                     actor_agent_id: None,
                     actor_admin_username: Some(admin.username.clone()),
@@ -369,7 +343,7 @@ pub async fn validate_challenge_draft(
             db::record_challenge_draft_validation(
                 &state.db,
                 &db::RecordChallengeDraftValidationInput {
-                    validation_record_id: new_draft_validation_record_id()?,
+                    validation_record_id: ChallengeDraftValidationRecordId::generate(),
                     draft_id: draft.id.clone(),
                     status: ChallengeDraftValidationStatus::Failed,
                     message: message.clone(),
@@ -382,7 +356,7 @@ pub async fn validate_challenge_draft(
             db::create_challenge_draft_audit_event(
                 &state.db,
                 &db::CreateChallengeDraftAuditEventInput {
-                    event_id: new_draft_audit_event_id()?,
+                    event_id: ChallengeDraftAuditEventId::generate(),
                     draft_id: draft.id.clone(),
                     actor_agent_id: None,
                     actor_admin_username: Some(admin.username.clone()),
@@ -414,7 +388,7 @@ pub async fn abandon_challenge_draft(
     db::create_challenge_draft_audit_event(
         &state.db,
         &db::CreateChallengeDraftAuditEventInput {
-            event_id: new_draft_audit_event_id()?,
+            event_id: ChallengeDraftAuditEventId::generate(),
             draft_id: draft_id.clone(),
             actor_agent_id: None,
             actor_admin_username: Some(admin.username),
@@ -485,7 +459,7 @@ pub async fn approve_challenge_draft(
     db::create_challenge_draft_audit_event(
         &state.db,
         &db::CreateChallengeDraftAuditEventInput {
-            event_id: new_draft_audit_event_id()?,
+            event_id: ChallengeDraftAuditEventId::generate(),
             draft_id: draft.id.clone(),
             actor_agent_id: None,
             actor_admin_username: Some(admin.username),
@@ -525,7 +499,7 @@ pub async fn reject_challenge_draft(
     db::create_challenge_draft_audit_event(
         &state.db,
         &db::CreateChallengeDraftAuditEventInput {
-            event_id: new_draft_audit_event_id()?,
+            event_id: ChallengeDraftAuditEventId::generate(),
             draft_id: draft.id.clone(),
             actor_agent_id: None,
             actor_admin_username: Some(admin.username),
@@ -581,7 +555,7 @@ pub async fn publish_challenge_draft(
                 &db::PublishArchiveChallengeDraftInput {
                     draft_id: draft.id.clone(),
                     challenge_name: manifest.challenge_name.clone(),
-                    audit_event_id: new_draft_audit_event_id()?,
+                    audit_event_id: ChallengeDraftAuditEventId::generate(),
                     admin_username: admin.username,
                     repository_path: repository_path.to_string(),
                     bundle_sha256,
@@ -613,7 +587,7 @@ pub async fn publish_challenge_draft(
                     title: manifest.title.clone(),
                     summary: manifest.summary.clone(),
                     owner_agent_id: draft.creator_agent_id.clone(),
-                    audit_event_id: new_draft_audit_event_id()?,
+                    audit_event_id: ChallengeDraftAuditEventId::generate(),
                     admin_username: admin.username,
                     repository_path: repository_path.to_string(),
                     bundle_sha256,

@@ -136,6 +136,14 @@ Always inspect these platform-specific risks:
   explicitly demand aliases. Before MVP, do not preserve old locator aliases with
   compatibility shims; remove the alias and update API, CLI, web, docs, schemas,
   and tests together.
+- Domain constructors, parsers, and generators should be owned by the domain
+  type. Flag free-standing helpers such as `new_*_id`, `parse_*_name`,
+  `parse_*_status`, or `parse_*_manifest` when they create or parse a specific
+  domain value. Prefer `Type::generate()` for generated IDs, `FromStr`,
+  `TryFrom`, `try_new`, or associated constructors for value parsing, and
+  `from_storage_value` beside persisted enums. Generic HTTP/CLI boundary
+  adapters and database row adapters are acceptable only when they immediately
+  delegate to the domain type and do not encode domain rules themselves.
 - Rust review passes should include a modernization check against
   `docs/new-rust-features-apis/en.md`, especially for `LazyLock`, let chains,
   `std::fs::exists`, `cfg_select!`, collection helpers, duration constructors,
@@ -167,6 +175,20 @@ ambiguous locators, then inspect call flow manually:
 - `challenge_id|target_id|asset_id|run_id|resource_profile\.id|metric_id`
 - `id_or_slug|challenge_name_or_slug|slug|identifier|name_or_id`
 - `bind\(&[a-zA-Z0-9_]*_id\)|join\(&[a-zA-Z0-9_]*_id\)`
+
+For domain helper ownership review, scan for free-standing Rust functions that
+look like constructors, parsers, or generators. Then inspect whether they own
+domain validation that belongs on a type:
+
+- `fn new_[a-zA-Z0-9_]+\\(`
+- `fn parse_[a-zA-Z0-9_]+\\(`
+- `Uuid::new_v4\\(\\).*try_new|try_new\\(.*Uuid::new_v4`
+- `match .*\\.as_str\\(\\).*=>.*Status|unknown .*status`
+
+Do not report protocol boundary helpers such as HTTP response parsing, bearer
+token parsing, test-only helpers, or row adapters whose only job is to extract a
+database column and call the domain type. Do report row adapters that contain
+hard-coded enum string matches or UUID generation outside an ID newtype.
 
 For typed-boundary review, spawn or assign a specific scan for URL, storage, and
 path contracts. Start with these searches and then inspect whether each raw

@@ -227,32 +227,6 @@ pub enum ZipProjectDependencyPolicy {
     ImageProvided,
 }
 
-/// Parse and validate a manifest JSON payload.
-pub fn parse_zip_project_manifest(raw: &str) -> Result<ZipProjectManifest> {
-    let manifest: ZipProjectManifest = serde_json::from_str(raw)
-        .map_err(|e| AppError::Validation(format!("invalid {ZIP_PROJECT_MANIFEST_FILE}: {e}")))?;
-    manifest.validate()?;
-    Ok(manifest)
-}
-
-/// Parse and validate `agentics.solution.json` directly from a ZIP artifact.
-pub fn parse_zip_project_manifest_from_zip_bytes(bytes: &[u8]) -> Result<ZipProjectManifest> {
-    let reader = std::io::Cursor::new(bytes);
-    let mut archive = zip::ZipArchive::new(reader)?;
-    let mut manifest = archive
-        .by_name(ZIP_PROJECT_MANIFEST_FILE)
-        .map_err(|_| AppError::Validation(format!("{ZIP_PROJECT_MANIFEST_FILE} is required")))?;
-    if manifest.size() > 128 * 1024 {
-        return Err(AppError::Validation(format!(
-            "{ZIP_PROJECT_MANIFEST_FILE} must be at most 131072 bytes"
-        )));
-    }
-
-    let mut raw = String::new();
-    manifest.read_to_string(&mut raw)?;
-    parse_zip_project_manifest(&raw)
-}
-
 /// Return whether `value` can be safely joined under a project root.
 pub fn is_safe_relative_path(value: &str) -> bool {
     if value.starts_with('/') {
@@ -262,6 +236,33 @@ pub fn is_safe_relative_path(value: &str) -> bool {
 }
 
 impl ZipProjectManifest {
+    /// Parse and validate a manifest JSON payload.
+    pub fn parse_json(raw: &str) -> Result<Self> {
+        let manifest: Self = serde_json::from_str(raw).map_err(|e| {
+            AppError::Validation(format!("invalid {ZIP_PROJECT_MANIFEST_FILE}: {e}"))
+        })?;
+        manifest.validate()?;
+        Ok(manifest)
+    }
+
+    /// Parse and validate `agentics.solution.json` directly from a ZIP artifact.
+    pub fn from_zip_bytes(bytes: &[u8]) -> Result<Self> {
+        let reader = std::io::Cursor::new(bytes);
+        let mut archive = zip::ZipArchive::new(reader)?;
+        let mut manifest = archive.by_name(ZIP_PROJECT_MANIFEST_FILE).map_err(|_| {
+            AppError::Validation(format!("{ZIP_PROJECT_MANIFEST_FILE} is required"))
+        })?;
+        if manifest.size() > 128 * 1024 {
+            return Err(AppError::Validation(format!(
+                "{ZIP_PROJECT_MANIFEST_FILE} must be at most 131072 bytes"
+            )));
+        }
+
+        let mut raw = String::new();
+        manifest.read_to_string(&mut raw)?;
+        Self::parse_json(&raw)
+    }
+
     /// Validate protocol versioning, metadata, script paths, and dependency references.
     pub fn validate(&self) -> Result<()> {
         if self.protocol != ZIP_PROJECT_PROTOCOL {
@@ -488,9 +489,9 @@ mod tests {
     use crate::models::paths::LogRelativePath;
 
     use super::{
-        ZipProjectDependencyPolicy, ZipProjectInterfaceKind, ZipProjectNetworkAccess,
-        ZipProjectPhaseFailureReason, ZipProjectPhaseFailureReport, ZipProjectPhaseName,
-        parse_zip_project_manifest,
+        ZipProjectDependencyPolicy, ZipProjectInterfaceKind, ZipProjectManifest,
+        ZipProjectNetworkAccess, ZipProjectPhaseFailureReason, ZipProjectPhaseFailureReport,
+        ZipProjectPhaseName,
     };
 
     fn valid_manifest() -> serde_json::Value {
@@ -540,7 +541,7 @@ mod tests {
     #[test]
     fn accepts_valid_zip_project_manifest() {
         let raw = serde_json::to_string(&valid_manifest()).expect("serialize manifest");
-        let manifest = parse_zip_project_manifest(&raw).expect("manifest should parse");
+        let manifest = ZipProjectManifest::parse_json(&raw).expect("manifest should parse");
 
         assert_eq!(manifest.protocol, "zip_project");
         assert_eq!(manifest.protocol_version, 1);
@@ -591,7 +592,7 @@ mod tests {
             .remove("phases");
 
         let manifest =
-            parse_zip_project_manifest(&value.to_string()).expect("defaults should parse");
+            ZipProjectManifest::parse_json(&value.to_string()).expect("defaults should parse");
         let phases = manifest.phase_execution_plan();
 
         assert_eq!(phases[0].name, ZipProjectPhaseName::Setup);
@@ -623,7 +624,7 @@ mod tests {
             .expect("commands object")
             .remove("setup");
 
-        let error = parse_zip_project_manifest(&value.to_string())
+        let error = ZipProjectManifest::parse_json(&value.to_string())
             .expect_err("setup phase without setup command should fail");
         assert!(
             error
@@ -637,8 +638,8 @@ mod tests {
         let mut value = valid_manifest();
         value["phases"]["run"]["timeout_sec"] = json!(0);
 
-        let error =
-            parse_zip_project_manifest(&value.to_string()).expect_err("zero timeout should fail");
+        let error = ZipProjectManifest::parse_json(&value.to_string())
+            .expect_err("zero timeout should fail");
         assert!(
             error
                 .to_string()
@@ -654,7 +655,8 @@ mod tests {
             .expect("commands object")
             .remove("run");
 
-        let error = parse_zip_project_manifest(&value.to_string()).expect_err("run is required");
+        let error =
+            ZipProjectManifest::parse_json(&value.to_string()).expect_err("run is required");
         assert!(error.to_string().contains("missing field `run`"));
     }
 
@@ -664,7 +666,7 @@ mod tests {
         value["protocol_version"] = json!(2);
 
         let error =
-            parse_zip_project_manifest(&value.to_string()).expect_err("version should fail");
+            ZipProjectManifest::parse_json(&value.to_string()).expect_err("version should fail");
         assert!(error.to_string().contains("protocol_version must be 1"));
     }
 
@@ -674,7 +676,7 @@ mod tests {
         value["commands"]["run"] = json!("../run.sh");
 
         let error =
-            parse_zip_project_manifest(&value.to_string()).expect_err("unsafe run path fails");
+            ZipProjectManifest::parse_json(&value.to_string()).expect_err("unsafe run path fails");
         assert!(error.to_string().contains("repo-relative paths"));
     }
 
@@ -683,7 +685,7 @@ mod tests {
         let mut value = valid_manifest();
         value["dependencies"]["lockfiles"] = json!(["requirements.lock", "/tmp/lock"]);
 
-        let error = parse_zip_project_manifest(&value.to_string())
+        let error = ZipProjectManifest::parse_json(&value.to_string())
             .expect_err("absolute dependency path fails");
         assert!(error.to_string().contains("repo-relative paths"));
     }
@@ -693,7 +695,7 @@ mod tests {
         let mut value = valid_manifest();
         value["dependencies"]["vendor_dirs"] = json!(["vendor", "vendor"]);
 
-        let error = parse_zip_project_manifest(&value.to_string())
+        let error = ZipProjectManifest::parse_json(&value.to_string())
             .expect_err("duplicate dependency path fails");
         assert!(
             error
@@ -707,8 +709,8 @@ mod tests {
         let mut value = valid_manifest();
         value["unexpected"] = json!(true);
 
-        let error =
-            parse_zip_project_manifest(&value.to_string()).expect_err("unknown fields should fail");
+        let error = ZipProjectManifest::parse_json(&value.to_string())
+            .expect_err("unknown fields should fail");
         assert!(error.to_string().contains("unknown field"));
     }
 

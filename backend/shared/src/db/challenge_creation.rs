@@ -784,8 +784,8 @@ fn row_to_draft_response(
     Ok(ChallengeDraftResponse {
         id: challenge_draft_id_from_row(&row, "id")?,
         challenge_name: challenge_name_from_row(&row, "challenge_name")?,
-        request: parse_request_kind(&row.try_get::<String, _>("request_kind")?)?,
-        status: parse_draft_status(&row.try_get::<String, _>("status")?)?,
+        request: request_kind_from_row(&row, "request_kind")?,
+        status: draft_status_from_row(&row, "status")?,
         creator_agent_id: agent_id_from_row(&row, "creator_agent_id")?,
         creator_github_user_id: row.try_get("creator_github_user_id")?,
         creator_github_login: row.try_get("creator_github_login")?,
@@ -821,7 +821,7 @@ fn row_to_private_asset_response(
         id: challenge_private_asset_id_from_row(&row, "id")?,
         draft_id: challenge_draft_id_from_row(&row, "draft_id")?,
         asset_name: asset_name_from_row(&row, "asset_name")?,
-        kind: parse_private_asset_kind(&row.try_get::<String, _>("kind")?)?,
+        kind: private_asset_kind_from_row(&row, "kind")?,
         required: row.try_get("required")?,
         size_bytes: row.try_get("size_bytes")?,
         sha256: sha256_digest_from_row(&row, "sha256")?,
@@ -894,7 +894,7 @@ fn row_to_validation_record_response(
     Ok(ChallengeDraftValidationRecordResponse {
         id: challenge_draft_validation_record_id_from_row(&row, "id")?,
         draft_id: challenge_draft_id_from_row(&row, "draft_id")?,
-        status: parse_validation_status(&row.try_get::<String, _>("status")?)?,
+        status: validation_status_from_row(&row, "status")?,
         message: row.try_get("message")?,
         repository_path: row.try_get("repository_path")?,
         manifest_sha256: sha256_digest_from_row(&row, "manifest_sha256")?,
@@ -903,70 +903,38 @@ fn row_to_validation_record_response(
     })
 }
 
-fn parse_request_kind(value: &str) -> Result<ChallengeCreationRequestKind> {
-    match value {
-        "new_challenge" => Ok(ChallengeCreationRequestKind::NewChallenge),
-        "archive_challenge" => Ok(ChallengeCreationRequestKind::ArchiveChallenge),
-        _ => Err(AppError::Internal(format!(
-            "unknown challenge draft request kind `{value}`"
-        ))),
-    }
+fn request_kind_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<ChallengeCreationRequestKind> {
+    let value: String = row.try_get(column)?;
+    ChallengeCreationRequestKind::from_storage_value(&value)
+        .ok_or_else(|| AppError::Internal(format!("unknown stored {column} `{value}`")))
 }
 
-fn parse_draft_status(value: &str) -> Result<ChallengeDraftStatus> {
-    match value {
-        "draft" => Ok(ChallengeDraftStatus::Draft),
-        "validated" => Ok(ChallengeDraftStatus::Validated),
-        "approved" => Ok(ChallengeDraftStatus::Approved),
-        "rejected" => Ok(ChallengeDraftStatus::Rejected),
-        "published" => Ok(ChallengeDraftStatus::Published),
-        "abandoned" => Ok(ChallengeDraftStatus::Abandoned),
-        _ => Err(AppError::Internal(format!(
-            "unknown challenge draft status `{value}`"
-        ))),
-    }
+fn draft_status_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<ChallengeDraftStatus> {
+    let value: String = row.try_get(column)?;
+    ChallengeDraftStatus::from_storage_value(&value)
+        .ok_or_else(|| AppError::Internal(format!("unknown stored {column} `{value}`")))
 }
 
-fn parse_validation_status(value: &str) -> Result<ChallengeDraftValidationStatus> {
-    match value {
-        "passed" => Ok(ChallengeDraftValidationStatus::Passed),
-        "failed" => Ok(ChallengeDraftValidationStatus::Failed),
-        _ => Err(AppError::Internal(format!(
-            "unknown challenge draft validation status `{value}`"
-        ))),
-    }
+fn validation_status_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<ChallengeDraftValidationStatus> {
+    let value: String = row.try_get(column)?;
+    ChallengeDraftValidationStatus::from_storage_value(&value)
+        .ok_or_else(|| AppError::Internal(format!("unknown stored {column} `{value}`")))
 }
 
-fn parse_private_asset_kind(value: &str) -> Result<ChallengePrivateAssetKind> {
-    match value {
-        "private_benchmark_data" => Ok(ChallengePrivateAssetKind::PrivateBenchmarkData),
-        "private_scorer_package" => Ok(ChallengePrivateAssetKind::PrivateScorerPackage),
-        "private_seeds" => Ok(ChallengePrivateAssetKind::PrivateSeeds),
-        "private_reference_outputs" => Ok(ChallengePrivateAssetKind::PrivateReferenceOutputs),
-        _ => Err(AppError::Internal(format!(
-            "unknown private asset kind `{value}`"
-        ))),
-    }
-}
-
-impl ChallengeCreationRequestKind {
-    /// Stable database string for this creation request.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::NewChallenge => "new_challenge",
-            Self::ArchiveChallenge => "archive_challenge",
-        }
-    }
-}
-
-impl ChallengePrivateAssetKind {
-    /// Stable database string for this private asset kind.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::PrivateBenchmarkData => "private_benchmark_data",
-            Self::PrivateScorerPackage => "private_scorer_package",
-            Self::PrivateSeeds => "private_seeds",
-            Self::PrivateReferenceOutputs => "private_reference_outputs",
-        }
-    }
+fn private_asset_kind_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<ChallengePrivateAssetKind> {
+    let value: String = row.try_get(column)?;
+    ChallengePrivateAssetKind::from_storage_value(&value)
+        .ok_or_else(|| AppError::Internal(format!("unknown stored {column} `{value}`")))
 }

@@ -545,7 +545,7 @@ fn validate_supported_image_reference(
     field: &str,
     image_kind: &SupportedTargetImage<'_>,
 ) -> Result<()> {
-    let parsed_image = parse_tagged_image_reference(image, field)?;
+    let parsed_image = TaggedImageReference::parse(image, field)?;
     match image_kind {
         SupportedTargetImage::Cpu => {
             require_supported_image_repository(
@@ -579,38 +579,52 @@ fn validate_supported_image_reference(
     Ok(())
 }
 
-struct ParsedImageReference<'a> {
+struct TaggedImageReference<'a> {
     repository: &'a str,
     tag: &'a str,
+    digest: Option<OciSha256Digest>,
 }
 
-fn parse_tagged_image_reference<'a>(
-    image: &'a str,
-    field: &str,
-) -> Result<ParsedImageReference<'a>> {
-    let image_without_digest = image
-        .rsplit_once('@')
-        .map_or(image, |(reference, _)| reference);
-    let slash_index = image_without_digest.rfind('/');
-    let Some(tag_separator_index) = image_without_digest.rfind(':') else {
-        return Err(AppError::Validation(format!(
-            "{field} must include a supported Agentics image tag"
-        )));
-    };
-    if slash_index.is_some_and(|index| tag_separator_index < index) {
-        return Err(AppError::Validation(format!(
-            "{field} must include a supported Agentics image tag"
-        )));
-    }
-    let (repository, tag_with_separator) = image_without_digest.split_at(tag_separator_index);
-    let tag = tag_with_separator.trim_start_matches(':');
-    if repository.is_empty() || tag.is_empty() {
-        return Err(AppError::Validation(format!(
-            "{field} must include a supported Agentics image repository and tag"
-        )));
+impl<'a> TaggedImageReference<'a> {
+    fn parse(image: &'a str, field: &str) -> Result<Self> {
+        let (image_without_digest, digest) = match image.rsplit_once('@') {
+            Some((reference, digest)) => {
+                let digest = OciSha256Digest::try_new(digest).map_err(|error| {
+                    AppError::Validation(format!("{field} digest is invalid: {error}"))
+                })?;
+                (reference, Some(digest))
+            }
+            None => (image, None),
+        };
+        let slash_index = image_without_digest.rfind('/');
+        let Some(tag_separator_index) = image_without_digest.rfind(':') else {
+            return Err(AppError::Validation(format!(
+                "{field} must include a supported Agentics image tag"
+            )));
+        };
+        if slash_index.is_some_and(|index| tag_separator_index < index) {
+            return Err(AppError::Validation(format!(
+                "{field} must include a supported Agentics image tag"
+            )));
+        }
+        let (repository, tag_with_separator) = image_without_digest.split_at(tag_separator_index);
+        let tag = tag_with_separator.trim_start_matches(':');
+        if repository.is_empty() || tag.is_empty() {
+            return Err(AppError::Validation(format!(
+                "{field} must include a supported Agentics image repository and tag"
+            )));
+        }
+
+        Ok(Self {
+            repository,
+            tag,
+            digest,
+        })
     }
 
-    Ok(ParsedImageReference { repository, tag })
+    fn digest(&self) -> Option<&OciSha256Digest> {
+        self.digest.as_ref()
+    }
 }
 
 fn require_supported_image_repository(
@@ -631,17 +645,17 @@ fn require_supported_image_repository(
 fn validate_resource_profile(profile: &ResourceProfileSpec, field: &str) -> Result<()> {
     require_non_empty(&profile.solution_image, &format!("{field}.solution_image"))?;
     require_non_empty(&profile.scorer_image, &format!("{field}.scorer_image"))?;
-    let solution_reference_digest =
-        parse_image_reference_digest(&profile.solution_image, &format!("{field}.solution_image"))?;
-    let scorer_reference_digest =
-        parse_image_reference_digest(&profile.scorer_image, &format!("{field}.scorer_image"))?;
+    let solution_image =
+        TaggedImageReference::parse(&profile.solution_image, &format!("{field}.solution_image"))?;
+    let scorer_image =
+        TaggedImageReference::parse(&profile.scorer_image, &format!("{field}.scorer_image"))?;
     validate_image_digest(
-        solution_reference_digest.as_ref(),
+        solution_image.digest(),
         profile.solution_image_digest.as_ref(),
         &format!("{field}.solution_image_digest"),
     )?;
     validate_image_digest(
-        scorer_reference_digest.as_ref(),
+        scorer_image.digest(),
         profile.scorer_image_digest.as_ref(),
         &format!("{field}.scorer_image_digest"),
     )?;
@@ -748,22 +762,16 @@ fn require_required_optional_string<'a>(value: &'a Option<String>, field: &str) 
 }
 
 fn require_image_digest_reference(image: &str, field: &str) -> Result<()> {
-    if parse_image_reference_digest(image, field)?.is_none() {
+    if TaggedImageReference::parse(image, field)?
+        .digest()
+        .is_none()
+    {
         return Err(AppError::Validation(format!(
             "{field} must include an immutable @sha256:<digest> reference"
         )));
     }
 
     Ok(())
-}
-
-fn parse_image_reference_digest(image: &str, field: &str) -> Result<Option<OciSha256Digest>> {
-    let Some((_, digest)) = image.rsplit_once('@') else {
-        return Ok(None);
-    };
-    let digest = OciSha256Digest::try_new(digest)
-        .map_err(|error| AppError::Validation(format!("{field} digest is invalid: {error}")))?;
-    Ok(Some(digest))
 }
 
 fn validate_image_digest(

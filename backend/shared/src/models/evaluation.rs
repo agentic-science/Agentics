@@ -82,6 +82,29 @@ pub enum EvaluationStatus {
     Failed,
 }
 
+impl EvaluationStatus {
+    /// Stable database string for an evaluation lifecycle state.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Queued => "queued",
+            Self::Running => "running",
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+        }
+    }
+
+    /// Parse a stable database string for an evaluation lifecycle state.
+    pub fn from_storage_value(value: &str) -> Option<Self> {
+        match value {
+            "queued" => Some(Self::Queued),
+            "running" => Some(Self::Running),
+            "completed" => Some(Self::Completed),
+            "failed" => Some(Self::Failed),
+            _ => None,
+        }
+    }
+}
+
 /// Aggregate score summary for validation or official datasets.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ScoreSummary {

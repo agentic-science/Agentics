@@ -42,6 +42,25 @@ pub enum ChallengeCreationRequestKind {
     ArchiveChallenge,
 }
 
+impl ChallengeCreationRequestKind {
+    /// Stable database string for this creation request.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::NewChallenge => "new_challenge",
+            Self::ArchiveChallenge => "archive_challenge",
+        }
+    }
+
+    /// Parse a stable database string for this creation request.
+    pub fn from_storage_value(value: &str) -> Option<Self> {
+        match value {
+            "new_challenge" => Some(Self::NewChallenge),
+            "archive_challenge" => Some(Self::ArchiveChallenge),
+            _ => None,
+        }
+    }
+}
+
 /// Public archive request metadata.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -69,6 +88,29 @@ pub enum ChallengePrivateAssetKind {
     PrivateScorerPackage,
     PrivateSeeds,
     PrivateReferenceOutputs,
+}
+
+impl ChallengePrivateAssetKind {
+    /// Stable database string for this private asset kind.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::PrivateBenchmarkData => "private_benchmark_data",
+            Self::PrivateScorerPackage => "private_scorer_package",
+            Self::PrivateSeeds => "private_seeds",
+            Self::PrivateReferenceOutputs => "private_reference_outputs",
+        }
+    }
+
+    /// Parse a stable database string for this private asset kind.
+    pub fn from_storage_value(value: &str) -> Option<Self> {
+        match value {
+            "private_benchmark_data" => Some(Self::PrivateBenchmarkData),
+            "private_scorer_package" => Some(Self::PrivateScorerPackage),
+            "private_seeds" => Some(Self::PrivateSeeds),
+            "private_reference_outputs" => Some(Self::PrivateReferenceOutputs),
+            _ => None,
+        }
+    }
 }
 
 /// CI expectations for the public challenge repository.
@@ -134,6 +176,19 @@ impl ChallengeDraftStatus {
             Self::Abandoned => "abandoned",
         }
     }
+
+    /// Parse a stable database string for this draft status.
+    pub fn from_storage_value(value: &str) -> Option<Self> {
+        match value {
+            "draft" => Some(Self::Draft),
+            "validated" => Some(Self::Validated),
+            "approved" => Some(Self::Approved),
+            "rejected" => Some(Self::Rejected),
+            "published" => Some(Self::Published),
+            "abandoned" => Some(Self::Abandoned),
+            _ => None,
+        }
+    }
 }
 
 /// Validation record status for a challenge draft.
@@ -150,6 +205,15 @@ impl ChallengeDraftValidationStatus {
         match self {
             Self::Passed => "passed",
             Self::Failed => "failed",
+        }
+    }
+
+    /// Parse a stable database string for this validation outcome.
+    pub fn from_storage_value(value: &str) -> Option<Self> {
+        match value {
+            "passed" => Some(Self::Passed),
+            "failed" => Some(Self::Failed),
+            _ => None,
         }
     }
 }

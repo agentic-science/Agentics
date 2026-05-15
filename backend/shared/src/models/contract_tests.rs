@@ -250,7 +250,7 @@ fn run_name(value: &str) -> RunName {
 }
 
 fn solution_submission_id(value: &str) -> SolutionSubmissionId {
-    SolutionSubmissionId::try_new(value.to_string()).expect("test submission id is valid")
+    SolutionSubmissionId::try_new(value).expect("test submission id is valid")
 }
 
 fn agent_id(value: &str) -> AgentId {

@@ -173,7 +173,7 @@ pub async fn run_worker_cycle(
     )
     .await?;
 
-    let evaluation_id = EvaluationId::try_new(uuid::Uuid::new_v4().to_string())?;
+    let evaluation_id = EvaluationId::generate();
     let evaluation_inserted = mark_evaluation_started(
         db,
         &shared::db::MarkEvaluationStartedInput {
