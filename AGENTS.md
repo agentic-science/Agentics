@@ -37,6 +37,7 @@ For your information:
 - When changing planned product scope, update both PRDs and both milestone documents in the same change set.
 - When changing implemented behavior, update the matching current docs and then update milestones if the implementation status changes.
 - When changing Rust response DTOs consumed by the web frontend, derive `schemars::JsonSchema`, preserve the optional-field JSON contract, run `bun run generate:schemas` in `frontends/web/`, and keep `frontends/web/src/lib/schemas.ts` as a stable re-export facade.
+- DO NOT skip tests because of trivial reasons (e.g., "a test needs a DB but the DB is not started")
 
 ## Coding Requirements
 
