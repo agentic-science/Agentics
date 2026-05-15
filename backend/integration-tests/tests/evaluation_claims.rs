@@ -11,6 +11,7 @@ use shared::models::evaluation::{EvaluationStatus, MetricValue, ScoreSummary, Sc
 use shared::models::ids::{EvaluationId, EvaluationJobId, SolutionSubmissionId};
 use shared::models::names::MetricName;
 
+/// Verifies that stale running job fails after max attempts.
 #[sqlx::test(migrations = "../migrations")]
 async fn stale_running_job_fails_after_max_attempts(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -87,6 +88,7 @@ async fn stale_running_job_fails_after_max_attempts(pool: sqlx::PgPool) {
     assert_eq!(states, ("failed".to_string(), "failed".to_string()));
 }
 
+/// Verifies that refreshed job lease is not reaped.
 #[sqlx::test(migrations = "../migrations")]
 async fn refreshed_job_lease_is_not_reaped(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -156,6 +158,7 @@ async fn refreshed_job_lease_is_not_reaped(pool: sqlx::PgPool) {
     assert_eq!(result.failed, 0);
 }
 
+/// Verifies that stale worker completion cannot overwrite current claim.
 #[sqlx::test(migrations = "../migrations")]
 async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -324,6 +327,7 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
     );
 }
 
+/// Verifies that losing official submission does not overwrite leaderboard best metadata.
 #[sqlx::test(migrations = "../migrations")]
 async fn losing_official_submission_does_not_overwrite_leaderboard_best_metadata(
     pool: sqlx::PgPool,
@@ -377,6 +381,7 @@ async fn losing_official_submission_does_not_overwrite_leaderboard_best_metadata
     );
 }
 
+/// Creates official submission after validating caller inputs.
 async fn create_official_submission(
     client: &reqwest::Client,
     app: &helpers::TestApp,
@@ -405,6 +410,7 @@ async fn create_official_submission(
     SolutionSubmissionId::try_new(id).expect("API returned valid solution submission id")
 }
 
+/// Handles finish next job with score for this module.
 async fn finish_next_job_with_score(
     pool: &sqlx::PgPool,
     solution_submission_id: &SolutionSubmissionId,
@@ -444,6 +450,7 @@ async fn finish_next_job_with_score(
     );
 }
 
+/// Handles persisted result for this module.
 fn persisted_result(
     job: &shared::db::EvaluationJobRecord,
     worker_id: &str,

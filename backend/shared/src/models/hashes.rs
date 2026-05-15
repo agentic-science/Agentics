@@ -29,6 +29,7 @@ pub const OCI_SHA256_DIGEST_ERROR_MESSAGE: &str =
 pub struct Sha256DigestError;
 
 impl fmt::Display for Sha256DigestError {
+    /// Handles fmt for this module.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(SHA256_DIGEST_ERROR_MESSAGE)
     }
@@ -69,6 +70,7 @@ impl Sha256Digest {
 }
 
 impl fmt::Display for Sha256Digest {
+    /// Handles fmt for this module.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.to_hex())
     }
@@ -77,12 +79,14 @@ impl fmt::Display for Sha256Digest {
 impl FromStr for Sha256Digest {
     type Err = Sha256DigestError;
 
+    /// Handles from str for this module.
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         Self::try_new(value)
     }
 }
 
 impl Serialize for Sha256Digest {
+    /// Handles serialize for this module.
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -92,6 +96,7 @@ impl Serialize for Sha256Digest {
 }
 
 impl<'de> Deserialize<'de> for Sha256Digest {
+    /// Handles deserialize for this module.
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -102,14 +107,17 @@ impl<'de> Deserialize<'de> for Sha256Digest {
 }
 
 impl JsonSchema for Sha256Digest {
+    /// Handles inline schema for this module.
     fn inline_schema() -> bool {
         true
     }
 
+    /// Handles schema name for this module.
     fn schema_name() -> Cow<'static, str> {
         "Sha256Digest".into()
     }
 
+    /// Handles json schema for this module.
     fn json_schema(_: &mut SchemaGenerator) -> Schema {
         json_schema!({
             "type": "string",
@@ -123,6 +131,7 @@ impl JsonSchema for Sha256Digest {
 pub struct OciSha256DigestError;
 
 impl fmt::Display for OciSha256DigestError {
+    /// Handles fmt for this module.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(OCI_SHA256_DIGEST_ERROR_MESSAGE)
     }
@@ -160,6 +169,7 @@ impl OciSha256Digest {
 }
 
 impl fmt::Display for OciSha256Digest {
+    /// Handles fmt for this module.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
@@ -168,12 +178,14 @@ impl fmt::Display for OciSha256Digest {
 impl FromStr for OciSha256Digest {
     type Err = OciSha256DigestError;
 
+    /// Handles from str for this module.
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         Self::try_new(value)
     }
 }
 
 impl Serialize for OciSha256Digest {
+    /// Handles serialize for this module.
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -183,6 +195,7 @@ impl Serialize for OciSha256Digest {
 }
 
 impl<'de> Deserialize<'de> for OciSha256Digest {
+    /// Handles deserialize for this module.
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -193,14 +206,17 @@ impl<'de> Deserialize<'de> for OciSha256Digest {
 }
 
 impl JsonSchema for OciSha256Digest {
+    /// Handles inline schema for this module.
     fn inline_schema() -> bool {
         true
     }
 
+    /// Handles schema name for this module.
     fn schema_name() -> Cow<'static, str> {
         "OciSha256Digest".into()
     }
 
+    /// Handles json schema for this module.
     fn json_schema(_: &mut SchemaGenerator) -> Schema {
         json_schema!({
             "type": "string",
@@ -214,6 +230,7 @@ impl JsonSchema for OciSha256Digest {
 pub struct GitCommitShaError;
 
 impl fmt::Display for GitCommitShaError {
+    /// Handles fmt for this module.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(GIT_COMMIT_SHA_ERROR_MESSAGE)
     }
@@ -244,6 +261,7 @@ impl GitCommitSha {
 }
 
 impl fmt::Display for GitCommitSha {
+    /// Handles fmt for this module.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
@@ -252,12 +270,14 @@ impl fmt::Display for GitCommitSha {
 impl FromStr for GitCommitSha {
     type Err = GitCommitShaError;
 
+    /// Handles from str for this module.
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         Self::try_new(value)
     }
 }
 
 impl Serialize for GitCommitSha {
+    /// Handles serialize for this module.
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -267,6 +287,7 @@ impl Serialize for GitCommitSha {
 }
 
 impl<'de> Deserialize<'de> for GitCommitSha {
+    /// Handles deserialize for this module.
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -277,14 +298,17 @@ impl<'de> Deserialize<'de> for GitCommitSha {
 }
 
 impl JsonSchema for GitCommitSha {
+    /// Handles inline schema for this module.
     fn inline_schema() -> bool {
         true
     }
 
+    /// Handles schema name for this module.
     fn schema_name() -> Cow<'static, str> {
         "GitCommitSha".into()
     }
 
+    /// Handles json schema for this module.
     fn json_schema(_: &mut SchemaGenerator) -> Schema {
         json_schema!({
             "type": "string",
@@ -297,6 +321,7 @@ impl JsonSchema for GitCommitSha {
 mod tests {
     use super::{GitCommitSha, OciSha256Digest, Sha256Digest};
 
+    /// Verifies that validates and canonicalizes sha256 digest.
     #[test]
     fn validates_and_canonicalizes_sha256_digest() {
         let digest = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
@@ -320,6 +345,7 @@ mod tests {
         );
     }
 
+    /// Verifies that serde rejects invalid sha256 digest.
     #[test]
     fn serde_rejects_invalid_sha256_digest() {
         let digest = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
@@ -329,6 +355,7 @@ mod tests {
         assert!(serde_json::from_str::<Sha256Digest>("\"abcdef\"").is_err());
     }
 
+    /// Verifies that validates oci sha256 digest.
     #[test]
     fn validates_oci_sha256_digest() {
         let hex = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
@@ -343,6 +370,7 @@ mod tests {
         assert!(OciSha256Digest::try_new(digest.to_ascii_uppercase()).is_err());
     }
 
+    /// Verifies that serde rejects invalid oci sha256 digest.
     #[test]
     fn serde_rejects_invalid_oci_sha256_digest() {
         let digest = "sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
@@ -352,6 +380,7 @@ mod tests {
         assert!(serde_json::from_str::<OciSha256Digest>("\"abcdef\"").is_err());
     }
 
+    /// Verifies that validates and canonicalizes git commit sha.
     #[test]
     fn validates_and_canonicalizes_git_commit_sha() {
         let sha1 = "0123456789abcdef0123456789abcdef01234567";
@@ -380,6 +409,7 @@ mod tests {
         assert!(GitCommitSha::try_new("g123456789abcdef0123456789abcdef01234567").is_err());
     }
 
+    /// Verifies that serde rejects invalid git commit sha.
     #[test]
     fn serde_rejects_invalid_git_commit_sha() {
         let sha1 = "0123456789abcdef0123456789abcdef01234567";

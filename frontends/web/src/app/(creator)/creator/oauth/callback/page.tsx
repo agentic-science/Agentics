@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { CreatorOAuthCallback } from "@/components/creator/CreatorOAuthCallback";
 
+/** Renders the creator oauth callback page component. */
 export default function CreatorOAuthCallbackPage() {
   return (
     <Suspense

@@ -30,6 +30,7 @@ fi
 "#;
 
 #[derive(Debug, Clone, Serialize)]
+/// Carries init solution summary data across this module boundary.
 pub(crate) struct InitSolutionSummary {
     pub workspace_dir: PathBuf,
     pub challenge_name: ChallengeName,
@@ -38,6 +39,7 @@ pub(crate) struct InitSolutionSummary {
     pub interface: String,
 }
 
+/// Handles init solution workspace for this module.
 pub(crate) fn init_solution_workspace(
     challenge: &ChallengeDetailResponse,
     dir: Option<PathBuf>,
@@ -84,6 +86,7 @@ pub(crate) fn init_solution_workspace(
     })
 }
 
+/// Writes workspace files to the target path.
 fn write_workspace_files(
     challenge: &ChallengeDetailResponse,
     workspace_dir: &Path,
@@ -114,6 +117,7 @@ fn write_workspace_files(
     })
 }
 
+/// Renders readme for user-facing output.
 fn render_readme(
     challenge: &ChallengeDetailResponse,
     runtime_profile: SolutionRuntimeProfile,
@@ -138,6 +142,7 @@ fn render_readme(
     )
 }
 
+/// Handles format targets for this module.
 fn format_targets(challenge: &ChallengeDetailResponse) -> String {
     challenge
         .spec
@@ -156,6 +161,7 @@ fn format_targets(challenge: &ChallengeDetailResponse) -> String {
         .join("\n")
 }
 
+/// Renders manifest for user-facing output.
 fn render_manifest(
     runtime_profile: SolutionRuntimeProfile,
     interface: SolutionInterface,
@@ -191,6 +197,7 @@ fn render_manifest(
     Ok(serde_json::to_string_pretty(&manifest)?)
 }
 
+/// Handles initialize git repository for this module.
 fn initialize_git_repository(workspace_dir: &Path) -> Result<()> {
     let output = Command::new("git")
         .arg("init")
@@ -210,6 +217,7 @@ fn initialize_git_repository(workspace_dir: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Handles install pre commit hook for this module.
 fn install_pre_commit_hook(workspace_dir: &Path) -> Result<()> {
     let hook_path = workspace_dir.join(".git").join("hooks").join("pre-commit");
     fs::write(&hook_path, PRE_COMMIT_HOOK)
@@ -232,6 +240,7 @@ fn install_pre_commit_hook(workspace_dir: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Handles default workspace dir for this module.
 fn default_workspace_dir(challenge_name: &ChallengeName) -> PathBuf {
     PathBuf::from(format!(
         "{}-solution",
@@ -239,6 +248,7 @@ fn default_workspace_dir(challenge_name: &ChallengeName) -> PathBuf {
     ))
 }
 
+/// Handles sanitize path segment for this module.
 fn sanitize_path_segment(value: &str) -> String {
     let sanitized = value
         .chars()
@@ -260,6 +270,7 @@ fn sanitize_path_segment(value: &str) -> String {
     }
 }
 
+/// Carries runtime profile metadata data across this module boundary.
 struct RuntimeProfileMetadata {
     language: &'static str,
     language_version: Option<&'static str>,
@@ -267,6 +278,7 @@ struct RuntimeProfileMetadata {
 }
 
 impl RuntimeProfileMetadata {
+    /// Handles for profile for this module.
     fn for_profile(profile: SolutionRuntimeProfile) -> Self {
         match profile {
             SolutionRuntimeProfile::Python => Self {
@@ -302,6 +314,7 @@ impl RuntimeProfileMetadata {
 }
 
 impl SolutionRuntimeProfile {
+    /// Handles manifest value for this module.
     fn manifest_value(self) -> &'static str {
         match self {
             Self::Python => "python-cpu",
@@ -313,6 +326,7 @@ impl SolutionRuntimeProfile {
 }
 
 impl SolutionInterface {
+    /// Handles manifest value for this module.
     fn manifest_value(self) -> &'static str {
         match self {
             Self::ChallengeDefined => "challenge_defined",
@@ -321,6 +335,7 @@ impl SolutionInterface {
         }
     }
 
+    /// Handles input contract for this module.
     fn input_contract(self) -> &'static str {
         match self {
             Self::ChallengeDefined => "Challenge-defined input prepared by the Agentics runner.",
@@ -329,6 +344,7 @@ impl SolutionInterface {
         }
     }
 
+    /// Handles output contract for this module.
     fn output_contract(self) -> &'static str {
         match self {
             Self::ChallengeDefined => {
@@ -341,6 +357,7 @@ impl SolutionInterface {
 }
 
 impl From<SolutionInterface> for ZipProjectInterfaceKind {
+    /// Handles from for this module.
     fn from(value: SolutionInterface) -> Self {
         match value {
             SolutionInterface::ChallengeDefined => Self::ChallengeDefined,
@@ -371,6 +388,7 @@ mod tests {
     use super::{default_workspace_dir, init_solution_workspace};
     use crate::cli::{SolutionInterface, SolutionRuntimeProfile};
 
+    /// Verifies that init solution creates readme manifest git repo and hook.
     #[test]
     fn init_solution_creates_readme_manifest_git_repo_and_hook() {
         let temp = tempfile::tempdir().expect("tempdir");
@@ -425,6 +443,7 @@ mod tests {
         );
     }
 
+    /// Verifies that init solution rejects existing directory.
     #[test]
     fn init_solution_rejects_existing_directory() {
         let temp = tempfile::tempdir().expect("tempdir");
@@ -442,6 +461,7 @@ mod tests {
         assert!(error.to_string().contains("already exists"));
     }
 
+    /// Verifies that init solution can generate non python manifest profile.
     #[test]
     fn init_solution_can_generate_non_python_manifest_profile() {
         let temp = tempfile::tempdir().expect("tempdir");
@@ -472,6 +492,7 @@ mod tests {
         assert!(manifest.commands.build.is_none());
     }
 
+    /// Verifies that default workspace dir uses challenge name.
     #[test]
     fn default_workspace_dir_uses_challenge_name() {
         assert_eq!(
@@ -480,6 +501,7 @@ mod tests {
         );
     }
 
+    /// Handles challenge detail for this module.
     fn challenge_detail() -> ChallengeDetailResponse {
         ChallengeDetailResponse {
             name: challenge_name("sample-sum"),
@@ -554,19 +576,23 @@ mod tests {
         }
     }
 
+    /// Handles challenge name for this module.
     fn challenge_name(value: &str) -> ChallengeName {
         ChallengeName::try_new(value.to_string()).expect("test challenge name is valid")
     }
 
+    /// Handles target name for this module.
     fn target_name(value: &str) -> TargetName {
         TargetName::try_new(value.to_string()).expect("test target is valid")
     }
 
+    /// Handles resource profile name for this module.
     fn resource_profile_name(value: &str) -> ResourceProfileName {
         ResourceProfileName::try_new(value.to_string())
             .expect("test resource profile name is valid")
     }
 
+    /// Handles bundle path for this module.
     fn bundle_path(value: &str) -> BundleRelativePath {
         BundleRelativePath::try_new(value).expect("test bundle path is valid")
     }

@@ -10,6 +10,7 @@ import {
   storeCreatorCsrfToken,
 } from "@/lib/creatorApi";
 
+/** Renders the creator oauth callback component. */
 export function CreatorOAuthCallback() {
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<"loading" | "success" | "error">(
@@ -67,6 +68,7 @@ export function CreatorOAuthCallback() {
   );
 }
 
+/** Normalizes unknown errors into a displayable message. */
 function oauthErrorMessage(error: unknown): string {
   if (error instanceof CreatorApiError) {
     return error.message;

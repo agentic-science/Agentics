@@ -170,6 +170,7 @@ describe("AdminConsole", () => {
   });
 });
 
+/** Builds the render admin console test fixture. */
 function renderAdminConsole() {
   return render(
     <NextIntlClientProvider locale="en" messages={{}}>

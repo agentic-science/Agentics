@@ -51,12 +51,14 @@ pub struct ExecutionResult {
 }
 
 #[derive(Clone, Copy)]
+/// Carries runner context data across this module boundary.
 struct RunnerContext<'a> {
     docker: &'a Docker,
     storage: &'a RunnerStorage,
     job_id: &'a str,
 }
 
+/// Carries solution run request data across this module boundary.
 struct SolutionRunRequest<'a> {
     profile: &'a ResourceProfileSpec,
     docker_platform: DockerPlatform,
@@ -69,6 +71,7 @@ struct SolutionRunRequest<'a> {
 }
 
 #[derive(Clone, Copy)]
+/// Carries setup build request data across this module boundary.
 struct SetupBuildRequest<'a> {
     profile: &'a ResourceProfileSpec,
     docker_platform: DockerPlatform,
@@ -78,6 +81,7 @@ struct SetupBuildRequest<'a> {
     build_root: &'a Path,
 }
 
+/// Carries scorer request data across this module boundary.
 struct ScorerRequest<'a> {
     eval_type: ScoringMode,
     spec: &'a ChallengeBundleSpec,
@@ -91,6 +95,7 @@ struct ScorerRequest<'a> {
     scorer_output_root: &'a Path,
 }
 
+/// Carries resolved run plan data across this module boundary.
 struct ResolvedRunPlan {
     manifest: ChallengeRunManifest,
     input_source_root: PathBuf,
@@ -98,6 +103,7 @@ struct ResolvedRunPlan {
     prepared_root: Option<PathBuf>,
 }
 
+/// Carries run plan request data across this module boundary.
 struct RunPlanRequest<'a> {
     runner: RunnerContext<'a>,
     spec: &'a ChallengeBundleSpec,
@@ -110,6 +116,7 @@ struct RunPlanRequest<'a> {
     prepared_root: &'a Path,
 }
 
+/// Carries prepare request data across this module boundary.
 struct PrepareRequest<'a> {
     runner: RunnerContext<'a>,
     profile: &'a ResourceProfileSpec,
@@ -123,6 +130,7 @@ struct PrepareRequest<'a> {
 }
 
 #[derive(Debug, serde::Serialize)]
+/// Carries solution run metadata data across this module boundary.
 struct SolutionRunMetadata {
     run_name: String,
     interface: ChallengeRunInterface,
@@ -281,6 +289,7 @@ pub async fn execute_evaluation_job(
     }
 }
 
+/// Reads solution manifest from disk or storage.
 async fn read_solution_manifest(
     source_root: &Path,
     spec: &ChallengeBundleSpec,
@@ -296,6 +305,7 @@ async fn read_solution_manifest(
     ZipProjectManifest::parse_json(&raw)
 }
 
+/// Handles run setup and build for this module.
 async fn run_setup_and_build(
     runner: RunnerContext<'_>,
     request: SetupBuildRequest<'_>,
@@ -341,6 +351,7 @@ async fn run_setup_and_build(
     Ok(())
 }
 
+/// Handles run setup and build bounded for this module.
 async fn run_setup_and_build_bounded(
     runner: RunnerContext<'_>,
     request: SetupBuildRequest<'_>,
@@ -399,6 +410,7 @@ async fn run_setup_and_build_bounded(
     Ok(())
 }
 
+/// Handles run solution invocations for this module.
 async fn run_solution_invocations(
     runner: RunnerContext<'_>,
     request: SolutionRunRequest<'_>,
@@ -479,6 +491,7 @@ async fn run_solution_invocations(
     Ok(())
 }
 
+/// Handles run scorer for this module.
 async fn run_scorer(
     runner: RunnerContext<'_>,
     request: ScorerRequest<'_>,
@@ -545,6 +558,7 @@ async fn run_scorer(
     Ok(())
 }
 
+/// Validates scorer result invariants for this contract.
 fn validate_scorer_result(
     result: &mut ScorerRunResult,
     eval_type: ScoringMode,
@@ -560,11 +574,13 @@ fn validate_scorer_result(
     Ok(())
 }
 
+/// Enumerates run manifest source variants supported by this module.
 enum RunManifestSource<'a> {
     Static(&'a BundleRelativePath),
     Prepared(&'a ChallengePrepareSpec),
 }
 
+/// Handles resolve run plan for this module.
 async fn resolve_run_plan(
     request: RunPlanRequest<'_>,
     logs: &mut String,
@@ -622,6 +638,7 @@ async fn resolve_run_plan(
     }
 }
 
+/// Handles run prepare phase for this module.
 async fn run_prepare_phase(request: PrepareRequest<'_>, logs: &mut String) -> Result<()> {
     let limits = prepare_limits(request.profile, request.prepare);
     let prepared_mount = request
@@ -685,6 +702,7 @@ async fn run_prepare_phase(request: PrepareRequest<'_>, logs: &mut String) -> Re
     Ok(())
 }
 
+/// Handles run manifest source for this module.
 fn run_manifest_source(
     spec: &ChallengeBundleSpec,
     eval_type: ScoringMode,
@@ -715,6 +733,7 @@ fn run_manifest_source(
     }
 }
 
+/// Handles effective phase limits for this module.
 fn effective_phase_limits(
     profile: &ResourceProfileSpec,
     phase: &ZipProjectResolvedPhase,
@@ -734,6 +753,7 @@ fn effective_phase_limits(
     }
 }
 
+/// Handles scorer limits for this module.
 fn scorer_limits(profile: &ResourceProfileSpec) -> ZipProjectPhaseLimits {
     ZipProjectPhaseLimits {
         timeout_sec: profile.timeout_sec,
@@ -745,6 +765,7 @@ fn scorer_limits(profile: &ResourceProfileSpec) -> ZipProjectPhaseLimits {
     }
 }
 
+/// Handles prepare limits for this module.
 fn prepare_limits(
     profile: &ResourceProfileSpec,
     prepare: &ChallengePrepareSpec,
@@ -759,11 +780,13 @@ fn prepare_limits(
     }
 }
 
+/// Handles replace dir all for this module.
 async fn replace_dir_all(source: &Path, destination: &Path) -> Result<()> {
     cleanup_paths([destination.to_path_buf()]).await?;
     copy_dir_all(source, destination).await
 }
 
+/// Handles replace dir all if separate for this module.
 async fn replace_dir_all_if_separate(source: &Path, destination: &Path) -> Result<()> {
     if source == destination {
         return Ok(());
@@ -771,6 +794,7 @@ async fn replace_dir_all_if_separate(source: &Path, destination: &Path) -> Resul
     replace_dir_all(source, destination).await
 }
 
+/// Handles writable phase for solution phase for this module.
 fn writable_phase_for_solution_phase(phase: ZipProjectPhaseName) -> WritablePhase {
     match phase {
         ZipProjectPhaseName::Setup => WritablePhase::SolutionSetup,
@@ -780,6 +804,7 @@ fn writable_phase_for_solution_phase(phase: ZipProjectPhaseName) -> WritablePhas
 }
 
 #[cfg(unix)]
+/// Handles make container writable tree for this module.
 async fn make_container_writable_tree(root: &Path) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
 
@@ -814,10 +839,12 @@ async fn make_container_writable_tree(root: &Path) -> Result<()> {
 }
 
 #[cfg(not(unix))]
+/// Handles make container writable tree for this module.
 async fn make_container_writable_tree(_root: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Handles materialize run io for this module.
 async fn materialize_run_io(
     run: &ChallengeRunSpec,
     input_source_root: &Path,
@@ -837,6 +864,7 @@ async fn materialize_run_io(
     Ok(())
 }
 
+/// Writes run input file to the target path.
 async fn write_run_input_file(
     input_source_root: &Path,
     input_dir: &Path,
@@ -867,6 +895,7 @@ async fn write_run_input_file(
     Ok(())
 }
 
+/// Writes run metadata to the target path.
 async fn write_run_metadata(
     io_root: &Path,
     run: &ChallengeRunSpec,
@@ -888,6 +917,7 @@ async fn write_run_metadata(
     Ok(())
 }
 
+/// Ensures declared outputs exist before continuing.
 async fn ensure_declared_outputs_exist(run: &ChallengeRunSpec, output_dir: &Path) -> Result<()> {
     for output in &run.output_files {
         let output_path = output_dir.join(output.as_path());
@@ -930,6 +960,7 @@ async fn ensure_declared_outputs_exist(run: &ChallengeRunSpec, output_dir: &Path
     Ok(())
 }
 
+/// Handles run interface for this module.
 fn run_interface(interface: ChallengeRunInterface) -> &'static str {
     match interface {
         ChallengeRunInterface::Stdio => "stdio",
@@ -937,6 +968,7 @@ fn run_interface(interface: ChallengeRunInterface) -> &'static str {
     }
 }
 
+/// Handles container name for this module.
 fn container_name(job_id: &str, suffix: &str) -> String {
     let safe_suffix = suffix
         .chars()
@@ -955,6 +987,7 @@ fn container_name(job_id: &str, suffix: &str) -> String {
 mod tests {
     use crate::zip_project::ZipProjectNetworkAccess;
 
+    /// Verifies that network policy clamps to resource profile.
     #[test]
     fn network_policy_clamps_to_resource_profile() {
         assert_eq!(

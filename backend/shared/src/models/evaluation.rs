@@ -410,6 +410,7 @@ impl ScorerRunResult {
         Ok(())
     }
 
+    /// Handles aggregate metric value for this module.
     fn aggregate_metric_value(&self, metric_name: &MetricName) -> Option<f64> {
         self.aggregate_metrics
             .iter()
@@ -418,6 +419,7 @@ impl ScorerRunResult {
     }
 }
 
+/// Validates score invariants for this contract.
 fn validate_score(value: f64, field: &str) -> Result<(), String> {
     validate_finite_number(value, field)?;
     if !(0.0..=1.0).contains(&value) {
@@ -427,6 +429,7 @@ fn validate_score(value: f64, field: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Validates finite number invariants for this contract.
 fn validate_finite_number(value: f64, field: &str) -> Result<(), String> {
     if !value.is_finite() {
         return Err(format!("{field} must be finite"));
@@ -435,6 +438,7 @@ fn validate_finite_number(value: f64, field: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Validates metric values invariants for this contract.
 fn validate_metric_values(metrics: &[MetricValue], field: &str) -> Result<(), String> {
     let mut metric_names = HashSet::with_capacity(metrics.len());
     for metric in metrics {
@@ -450,6 +454,7 @@ fn validate_metric_values(metrics: &[MetricValue], field: &str) -> Result<(), St
     Ok(())
 }
 
+/// Validates metric visibility invariants for this contract.
 fn validate_metric_visibility(
     mode: ScoringMode,
     visibility: MetricVisibility,
@@ -475,14 +480,17 @@ mod tests {
         MetricValue, RunMetricResult, ScoreSummary, ScorerRunResult, ScorerRunStatus, ScoringMode,
     };
 
+    /// Handles metric name for this module.
     fn metric_name(value: &str) -> MetricName {
         MetricName::try_new(value.to_string()).expect("test metric name is valid")
     }
 
+    /// Handles run name for this module.
     fn run_name(value: &str) -> RunName {
         RunName::try_new(value.to_string()).expect("test run name is valid")
     }
 
+    /// Handles valid validation result for this module.
     fn valid_validation_result() -> ScorerRunResult {
         ScorerRunResult {
             status: ScorerRunStatus::Passed,
@@ -502,6 +510,7 @@ mod tests {
         }
     }
 
+    /// Verifies that scorer mode mismatch is rejected.
     #[test]
     fn scorer_mode_mismatch_is_rejected() {
         let mut result = valid_validation_result();
@@ -515,6 +524,7 @@ mod tests {
         assert!(result.validate_for_mode(ScoringMode::Validation).is_err());
     }
 
+    /// Verifies that scorer mode can be absent.
     #[test]
     fn scorer_mode_can_be_absent() {
         let mut result = valid_validation_result();
@@ -523,6 +533,7 @@ mod tests {
         assert!(result.validate_for_mode(ScoringMode::Validation).is_ok());
     }
 
+    /// Verifies that minimal metric output normalizes to primary score.
     #[test]
     fn minimal_metric_output_normalizes_to_primary_score() {
         let mut result = valid_validation_result();
@@ -536,6 +547,7 @@ mod tests {
         assert_eq!(result.aggregate_metrics[0].value, 1.0);
     }
 
+    /// Verifies that missing rank score derives from minimized primary metric.
     #[test]
     fn missing_rank_score_derives_from_minimized_primary_metric() {
         let schema = MetricSchemaSpec {
@@ -565,6 +577,7 @@ mod tests {
         assert_eq!(result.rank_score, Some(-42.0));
     }
 
+    /// Verifies that unknown aggregate metric is rejected.
     #[test]
     fn unknown_aggregate_metric_is_rejected() {
         let mut result = valid_validation_result();
@@ -580,6 +593,7 @@ mod tests {
         );
     }
 
+    /// Verifies that non finite metric value is rejected.
     #[test]
     fn non_finite_metric_value_is_rejected() {
         let mut result = valid_validation_result();
@@ -591,6 +605,7 @@ mod tests {
         assert!(result.validate_for_mode(ScoringMode::Validation).is_err());
     }
 
+    /// Verifies that per run metrics are validated.
     #[test]
     fn per_run_metrics_are_validated() {
         let mut result = valid_validation_result();
@@ -613,6 +628,7 @@ mod tests {
         );
     }
 
+    /// Verifies that validation result rejects official only metrics.
     #[test]
     fn validation_result_rejects_official_only_metrics() {
         let schema = MetricSchemaSpec {

@@ -47,15 +47,19 @@ import {
   publishChallengeResponseSchema,
 } from "@/lib/schemas";
 
+/** Describes the admin tab shape used by this module. */
 type AdminTab =
   | "overview"
   | "challenges"
   | "drafts"
   | "capacity"
   | "operations";
+/** Describes the refresh options shape used by this module. */
 type RefreshOptions = { quiet?: boolean };
+/** Describes the admin refresh shape used by this module. */
 type AdminRefresh = (options?: RefreshOptions) => Promise<void>;
 
+/** Describes the admin data shape used by this module. */
 interface AdminData {
   challenges: AdminChallengeListResponse;
   drafts: ChallengeDraftListResponse;
@@ -72,6 +76,7 @@ const emptyData: AdminData = {
   capacity: null,
 };
 
+/** Renders the admin console component. */
 export function AdminConsole() {
   const locale = useLocale();
   const [credentials, setCredentials] = useState<AdminCredentials>({
@@ -88,6 +93,7 @@ export function AdminConsole() {
 
   const isConfigured = credentials.username.trim() && credentials.password;
 
+  /** Fetches admin data for the current view. */
   const fetchAdminData = async (token: string): Promise<AdminData> => {
     const [challenges, drafts, submissions, heartbeats, capacity] =
       await Promise.all([
@@ -141,6 +147,7 @@ export function AdminConsole() {
     }
   };
 
+  /** Handles sign out for the current session. */
   const signOut = async () => {
     if (!csrfToken) {
       setSessionUsername(null);
@@ -183,6 +190,7 @@ export function AdminConsole() {
     }
   };
 
+  /** Handles status counts behavior for this component. */
   const statusCounts = useMemo(() => {
     return data.submissions.items.reduce<Record<string, number>>(
       (acc, item) => {
@@ -295,6 +303,7 @@ export function AdminConsole() {
   );
 }
 
+/** Renders the credential panel component. */
 function CredentialPanel({
   credentials,
   sessionUsername,
@@ -375,6 +384,7 @@ function CredentialPanel({
   );
 }
 
+/** Renders the overview panel component. */
 function OverviewPanel({
   data,
   statusCounts,
@@ -429,6 +439,7 @@ function OverviewPanel({
   );
 }
 
+/** Renders the stat card component. */
 function StatCard({
   icon,
   label,
@@ -461,6 +472,7 @@ function StatCard({
   );
 }
 
+/** Renders the challenge admin panel component. */
 function ChallengeAdminPanel({
   csrfToken,
   challenges,
@@ -556,6 +568,7 @@ function ChallengeAdminPanel({
   );
 }
 
+/** Renders the capacity panel component. */
 function CapacityPanel({
   capacity,
 }: {
@@ -650,6 +663,7 @@ function CapacityPanel({
   );
 }
 
+/** Renders the target summary component. */
 function TargetSummary({ challenge }: { challenge: AdminChallengeListItem }) {
   const targets = challenge.targets ?? [];
   if (targets.length === 0) {
@@ -674,8 +688,10 @@ function TargetSummary({ challenge }: { challenge: AdminChallengeListItem }) {
   );
 }
 
+/** Renders the mode summary component. */
 function ModeSummary({ challenge }: { challenge: AdminChallengeListItem }) {
   const targets = challenge.targets ?? [];
+  /** Handles validation enabled behavior for this component. */
   const validationEnabled = targets.some((target) => target.validation_enabled);
 
   return (
@@ -700,6 +716,7 @@ function ModeSummary({ challenge }: { challenge: AdminChallengeListItem }) {
   );
 }
 
+/** Renders the challenge shell form component. */
 function ChallengeShellForm({
   csrfToken,
   onRefresh,
@@ -712,6 +729,7 @@ function ChallengeShellForm({
     summary: "",
   });
 
+  /** Submits this form after validating the current local state. */
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     try {
@@ -774,6 +792,7 @@ function ChallengeShellForm({
   );
 }
 
+/** Renders the publish version form component. */
 function PublishVersionForm({
   csrfToken,
   onRefresh,
@@ -782,6 +801,7 @@ function PublishVersionForm({
 }: ActionProps) {
   const [form, setForm] = useState({ challengeName: "", bundlePath: "" });
 
+  /** Submits this form after validating the current local state. */
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     try {
@@ -830,6 +850,7 @@ function PublishVersionForm({
   );
 }
 
+/** Renders the operations panel component. */
 function OperationsPanel({
   csrfToken,
   submissions,
@@ -967,6 +988,7 @@ function OperationsPanel({
   );
 }
 
+/** Renders the submission actions component. */
 function SubmissionActions({
   csrfToken,
   submission,
@@ -980,6 +1002,7 @@ function SubmissionActions({
   onError: (message: string | null) => void;
   onMessage: (message: string | null) => void;
 }) {
+  /** Runs action and refreshes affected data. */
   const runAction = async (
     action: "rejudge" | "official-run" | "hide" | "disable-agent",
   ) => {
@@ -1056,6 +1079,7 @@ function SubmissionActions({
   );
 }
 
+/** Describes the action props shape used by this module. */
 interface ActionProps {
   csrfToken: string;
   onRefresh: AdminRefresh;
@@ -1063,6 +1087,7 @@ interface ActionProps {
   onMessage: (message: string | null) => void;
 }
 
+/** Renders the section title component. */
 function SectionTitle({ icon, title }: { icon: ReactNode; title: string }) {
   return (
     <h2 className="flex items-center gap-2 text-[var(--text-h3)] font-semibold">
@@ -1072,6 +1097,7 @@ function SectionTitle({ icon, title }: { icon: ReactNode; title: string }) {
   );
 }
 
+/** Renders the text input component. */
 function TextInput({
   label,
   value,
@@ -1101,6 +1127,7 @@ function TextInput({
   );
 }
 
+/** Renders the status badge component. */
 function StatusBadge({ status }: { status: string }) {
   const normalized = status.toLowerCase();
   const className =
@@ -1121,6 +1148,7 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`badge ${className}`}>{status}</span>;
 }
 
+/** Normalizes unknown errors into a displayable message. */
 function adminErrorMessage(error: unknown): string {
   if (error instanceof AdminApiError) {
     if (error.status === 401) {

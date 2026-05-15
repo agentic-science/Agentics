@@ -245,6 +245,7 @@ pub async fn queue_evaluation_job(
     })
 }
 
+/// Reads storage key from a database row and validates its domain shape.
 fn storage_key_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -254,6 +255,7 @@ fn storage_key_from_row(
         .map_err(|e| AppError::Internal(format!("stored invalid storage key in `{column}`: {e}")))
 }
 
+/// Reads managed bundle path from a database row and validates its domain shape.
 fn managed_bundle_path_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -263,6 +265,7 @@ fn managed_bundle_path_from_row(
         .map_err(|e| AppError::Internal(format!("stored invalid {column}: {e}")))
 }
 
+/// Handles map active job conflict for this module.
 fn map_active_job_conflict(error: sqlx::Error) -> AppError {
     match error {
         sqlx::Error::Database(db_err)

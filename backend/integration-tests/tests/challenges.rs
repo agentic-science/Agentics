@@ -2,6 +2,7 @@ mod helpers;
 
 use helpers::{api_url, spawn_app};
 
+/// Verifies that list challenges returns empty array.
 #[sqlx::test(migrations = "../migrations")]
 async fn list_challenges_returns_empty_array(pool: sqlx::PgPool) {
     let app = spawn_app(pool).await;

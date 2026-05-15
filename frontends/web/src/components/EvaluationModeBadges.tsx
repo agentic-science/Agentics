@@ -1,5 +1,6 @@
 import { ShieldCheck, Trophy } from "lucide-react";
 
+/** Describes the evaluation mode badges props shape used by this module. */
 interface EvaluationModeBadgesProps {
   validationEnabled: boolean;
   officialEnabled: boolean;
@@ -9,6 +10,7 @@ interface EvaluationModeBadgesProps {
   disabledLabel: string;
 }
 
+/** Renders the evaluation mode badges component. */
 export function EvaluationModeBadges({
   validationEnabled,
   officialEnabled,

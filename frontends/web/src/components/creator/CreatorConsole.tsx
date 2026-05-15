@@ -66,6 +66,7 @@ const assetKinds: ChallengePrivateAssetKind[] = [
   "private_reference_outputs",
 ];
 
+/** Renders the creator console component. */
 export function CreatorConsole() {
   const [creator, setCreator] = useState<CreatorMeResponse | null>(null);
   const [csrfToken, setCsrfToken] = useState("");
@@ -126,6 +127,7 @@ export function CreatorConsole() {
       });
   }, []);
 
+  /** Handles sign in for the current session. */
   const signIn = async () => {
     setLoading(true);
     setError(null);
@@ -138,6 +140,7 @@ export function CreatorConsole() {
     }
   };
 
+  /** Refreshes identity from the backend. */
   const refreshIdentity = async () => {
     setLoading(true);
     setError(null);
@@ -153,6 +156,7 @@ export function CreatorConsole() {
     }
   };
 
+  /** Handles submit draft behavior for this component. */
   const submitDraft = async (event: FormEvent) => {
     event.preventDefault();
     if (!creator) {
@@ -204,6 +208,7 @@ export function CreatorConsole() {
     }
   };
 
+  /** Handles inspect draft behavior for this component. */
   const inspectDraft = async (event: FormEvent) => {
     event.preventDefault();
     if (!draftLookupId.trim()) {
@@ -225,6 +230,7 @@ export function CreatorConsole() {
     }
   };
 
+  /** Uploads asset selected by the user. */
   const uploadAsset = async (event: FormEvent) => {
     event.preventDefault();
     if (!csrfToken) {
@@ -260,6 +266,7 @@ export function CreatorConsole() {
     }
   };
 
+  /** Loads owner surfaces for the selected challenge. */
   const loadOwnerSurfaces = async () => {
     if (!ownerForm.challengeName.trim()) {
       setError("Enter a published challenge name.");
@@ -288,6 +295,7 @@ export function CreatorConsole() {
     }
   };
 
+  /** Uploads shortlist selected by the user. */
   const uploadShortlist = async (event: FormEvent) => {
     event.preventDefault();
     if (!csrfToken) {
@@ -332,6 +340,7 @@ export function CreatorConsole() {
     }
   };
 
+  /** Persists draft in local browser state. */
   const rememberDraft = (id: string) => {
     window.localStorage.setItem(LAST_DRAFT_STORAGE_KEY, id);
     setDraftLookupId(id);
@@ -617,6 +626,7 @@ export function CreatorConsole() {
   );
 }
 
+/** Renders the creator identity panel component. */
 function CreatorIdentityPanel({
   creator,
   loading,
@@ -685,6 +695,7 @@ function CreatorIdentityPanel({
   );
 }
 
+/** Renders the draft detail component. */
 function DraftDetail({ draft }: { draft: ChallengeDraftResponse | null }) {
   if (!draft) {
     return (
@@ -830,6 +841,7 @@ function DraftDetail({ draft }: { draft: ChallengeDraftResponse | null }) {
   );
 }
 
+/** Renders the owner surfaces component. */
 function OwnerSurfaces({
   stats,
   participants,
@@ -987,6 +999,7 @@ function OwnerSurfaces({
   );
 }
 
+/** Renders the section title component. */
 function SectionTitle({ icon, title }: { icon: ReactNode; title: string }) {
   return (
     <h2 className="flex items-center gap-2 text-[var(--text-h3)] font-semibold">
@@ -996,6 +1009,7 @@ function SectionTitle({ icon, title }: { icon: ReactNode; title: string }) {
   );
 }
 
+/** Renders the text input component. */
 function TextInput({
   label,
   value,
@@ -1022,6 +1036,7 @@ function TextInput({
   );
 }
 
+/** Renders the metadata component. */
 function Metadata({ label, value }: { label: string; value: string }) {
   return (
     <div>
@@ -1033,6 +1048,7 @@ function Metadata({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** Renders the status badge component. */
 function StatusBadge({ status }: { status: string }) {
   const normalized = status.toLowerCase();
   const className =
@@ -1050,6 +1066,7 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`badge ${className}`}>{status}</span>;
 }
 
+/** Formats optional score for display. */
 function formatOptionalScore(value: number | undefined): string {
   if (value === undefined) {
     return "—";
@@ -1057,6 +1074,7 @@ function formatOptionalScore(value: number | undefined): string {
   return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(4);
 }
 
+/** Handles short hash behavior for this module. */
 function shortHash(value: string | undefined): string {
   if (!value) {
     return "—";
@@ -1064,6 +1082,7 @@ function shortHash(value: string | undefined): string {
   return value.length > 16 ? value.slice(0, 16) : value;
 }
 
+/** Handles file to base64 behavior for this module. */
 async function fileToBase64(file: File): Promise<string> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const chunks: string[] = [];
@@ -1076,6 +1095,7 @@ async function fileToBase64(file: File): Promise<string> {
   return btoa(chunks.join(""));
 }
 
+/** Normalizes unknown errors into a displayable message. */
 function creatorErrorMessage(error: unknown): string {
   if (error instanceof CreatorApiError) {
     if (error.status === 401) {

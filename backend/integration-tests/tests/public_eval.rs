@@ -10,6 +10,7 @@ use helpers::{
     spawn_app_with_config, test_config, zip_project_zip_base64,
 };
 
+/// Creates validation disabled challenge after validating caller inputs.
 fn create_validation_disabled_challenge(root: &Path) {
     let source = examples_challenges_root().join("sample-sum/v1");
     let bundle_dir = root.join("validation-disabled/v1");
@@ -35,6 +36,7 @@ fn create_validation_disabled_challenge(root: &Path) {
     .expect("failed to write copied spec");
 }
 
+/// Verifies that worker completes official solution submission.
 #[sqlx::test(migrations = "../migrations")]
 async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -191,6 +193,7 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
     );
 }
 
+/// Verifies that worker completes private validation run without leaderboard.
 #[sqlx::test(migrations = "../migrations")]
 async fn worker_completes_private_validation_run_without_leaderboard(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -266,6 +269,7 @@ async fn worker_completes_private_validation_run_without_leaderboard(pool: sqlx:
     assert_eq!(leaderboard_count.0, 0);
 }
 
+/// Verifies that worker completes file mode validation run.
 #[sqlx::test(migrations = "../migrations")]
 async fn worker_completes_file_mode_validation_run(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -333,6 +337,7 @@ async fn worker_completes_file_mode_validation_run(pool: sqlx::PgPool) {
     );
 }
 
+/// Verifies that worker rejects symlink declared output.
 #[sqlx::test(migrations = "../migrations")]
 async fn worker_rejects_symlink_declared_output(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -397,6 +402,7 @@ async fn worker_rejects_symlink_declared_output(pool: sqlx::PgPool) {
     assert!(last_error.contains("declared output file `path.txt` is a symlink"));
 }
 
+/// Verifies that worker reports build phase failure.
 #[sqlx::test(migrations = "../migrations")]
 async fn worker_reports_build_phase_failure(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -469,6 +475,7 @@ async fn worker_reports_build_phase_failure(pool: sqlx::PgPool) {
     assert!(last_error.0.contains("\"phase\":\"build\""));
 }
 
+/// Verifies that worker blocks run stage internet access.
 #[sqlx::test(migrations = "../migrations")]
 async fn worker_blocks_run_stage_internet_access(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -546,6 +553,7 @@ python main.py
     assert_eq!(validation["evaluation"]["validation_summary"]["score"], 1.0);
 }
 
+/// Verifies that worker mounts run workspace read only.
 #[sqlx::test(migrations = "../migrations")]
 async fn worker_mounts_run_workspace_read_only(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -622,6 +630,7 @@ python main.py
     assert!(last_error.0.contains("\"phase\":\"run\""));
 }
 
+/// Verifies that worker enforces run writable disk limit.
 #[sqlx::test(migrations = "../migrations")]
 async fn worker_enforces_run_writable_disk_limit(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -739,6 +748,7 @@ python main.py
     }
 }
 
+/// Verifies that validation run is rejected when challenge disables validation.
 #[sqlx::test(migrations = "../migrations")]
 async fn validation_run_is_rejected_when_challenge_disables_validation(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -795,6 +805,7 @@ async fn validation_run_is_rejected_when_challenge_disables_validation(pool: sql
     assert_eq!(job_count.0, 0);
 }
 
+/// Verifies that validation run quota rejects and resets.
 #[sqlx::test(migrations = "../migrations")]
 async fn validation_run_quota_rejects_and_resets(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -889,6 +900,7 @@ async fn validation_run_quota_rejects_and_resets(pool: sqlx::PgPool) {
     assert_eq!(job_count.0, 2);
 }
 
+/// Verifies that official submission quota rejects before artifact decode.
 #[sqlx::test(migrations = "../migrations")]
 async fn official_submission_quota_rejects_before_artifact_decode(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -950,6 +962,7 @@ async fn official_submission_quota_rejects_before_artifact_decode(pool: sqlx::Pg
     );
 }
 
+/// Verifies that official active queue limit rejects before artifact decode.
 #[sqlx::test(migrations = "../migrations")]
 async fn official_active_queue_limit_rejects_before_artifact_decode(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -1012,6 +1025,7 @@ async fn official_active_queue_limit_rejects_before_artifact_decode(pool: sqlx::
     );
 }
 
+/// Verifies that concurrent official admission locks admit only one.
 #[sqlx::test(migrations = "../migrations")]
 async fn concurrent_official_admission_locks_admit_only_one(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -1067,6 +1081,7 @@ async fn concurrent_official_admission_locks_admit_only_one(pool: sqlx::PgPool) 
     assert_eq!(job_count, 1);
 }
 
+/// Handles register agent token for this module.
 async fn register_agent_token(
     client: &reqwest::Client,
     app: &helpers::TestApp,
@@ -1087,6 +1102,7 @@ async fn register_agent_token(
         .to_string()
 }
 
+/// Handles grid routing symlink solution zip base64 for this module.
 fn grid_routing_symlink_solution_zip_base64() -> String {
     zip_project_zip_base64(vec![
         (

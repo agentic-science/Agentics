@@ -23,10 +23,13 @@ import {
 const CREATOR_CSRF_STORAGE_KEY = "agentics.creator.csrf_token";
 const DEFAULT_CSRF_COOKIE_NAME = "agentics_csrf";
 
+/** Describes the challenge creation manifest shape used by this module. */
 export type ChallengeCreationManifest = ChallengeDraftResponse["manifest"];
+/** Describes the challenge private asset kind shape used by this module. */
 export type ChallengePrivateAssetKind =
   ChallengeDraftResponse["private_assets"][number]["kind"];
 
+/** Describes the create challenge draft request shape used by this module. */
 export interface CreateChallengeDraftRequest {
   repo_url: string;
   pr_number: number;
@@ -37,6 +40,7 @@ export interface CreateChallengeDraftRequest {
   manifest: ChallengeCreationManifest;
 }
 
+/** Describes the upload challenge private asset request shape used by this module. */
 export interface UploadChallengePrivateAssetRequest {
   asset_name: string;
   kind: ChallengePrivateAssetKind;
@@ -44,19 +48,23 @@ export interface UploadChallengePrivateAssetRequest {
   asset_base64: string;
 }
 
+/** Describes the challenge shortlist revision request shape used by this module. */
 export interface ChallengeShortlistRevisionRequest {
   agent_ids_to_add: string[];
 }
 
+/** Error thrown when a creator-session API request fails. */
 export class CreatorApiError extends Error {
   readonly status: number;
 
+  /** Stores the HTTP status alongside the backend error message. */
   constructor(status: number, message: string) {
     super(message);
     this.status = status;
   }
 }
 
+/** Reads creator csrf token from browser state. */
 export function readCreatorCsrfToken(): string {
   if (typeof window === "undefined") {
     return "";
@@ -70,16 +78,19 @@ export function readCreatorCsrfToken(): string {
   return readCookie(DEFAULT_CSRF_COOKIE_NAME);
 }
 
+/** Stores creator csrf token in browser state. */
 export function storeCreatorCsrfToken(csrfToken: string): void {
   if (typeof window !== "undefined") {
     window.sessionStorage.setItem(CREATOR_CSRF_STORAGE_KEY, csrfToken);
   }
 }
 
+/** Fetches creator me for the requested UI scope. */
 export async function getCreatorMe(): Promise<CreatorMeResponse> {
   return creatorFetchJson("/api/creator/me", creatorMeResponseSchema);
 }
 
+/** Starts github login and returns the next navigation target. */
 export async function startGithubLogin(): Promise<GithubOauthLoginResponse> {
   return creatorFetchJson(
     "/api/auth/github/login",
@@ -87,6 +98,7 @@ export async function startGithubLogin(): Promise<GithubOauthLoginResponse> {
   );
 }
 
+/** Completes github login using the returned state. */
 export async function completeGithubLogin(
   code: string,
   state: string,
@@ -98,6 +110,7 @@ export async function completeGithubLogin(
   );
 }
 
+/** Creates challenge draft through the API. */
 export async function createChallengeDraft(
   request: CreateChallengeDraftRequest,
   csrfToken: string,
@@ -113,6 +126,7 @@ export async function createChallengeDraft(
   );
 }
 
+/** Fetches challenge draft for the requested UI scope. */
 export async function getChallengeDraft(
   id: string,
 ): Promise<ChallengeDraftResponse> {
@@ -122,6 +136,7 @@ export async function getChallengeDraft(
   );
 }
 
+/** Uploads private asset through the API. */
 export async function uploadPrivateAsset(
   draftId: string,
   request: UploadChallengePrivateAssetRequest,
@@ -138,6 +153,7 @@ export async function uploadPrivateAsset(
   );
 }
 
+/** Fetches creator challenge stats for the requested UI scope. */
 export async function getCreatorChallengeStats(
   challengeName: string,
   target?: string,
@@ -148,6 +164,7 @@ export async function getCreatorChallengeStats(
   );
 }
 
+/** Fetches creator challenge participants for the requested UI scope. */
 export async function getCreatorChallengeParticipants(
   challengeName: string,
   target?: string,
@@ -158,6 +175,7 @@ export async function getCreatorChallengeParticipants(
   );
 }
 
+/** Fetches challenge shortlist for the requested UI scope. */
 export async function getChallengeShortlist(
   challengeName: string,
 ): Promise<ChallengeShortlistResponse> {
@@ -167,6 +185,7 @@ export async function getChallengeShortlist(
   );
 }
 
+/** Creates challenge shortlist revision through the API. */
 export async function createChallengeShortlistRevision(
   challengeName: string,
   request: ChallengeShortlistRevisionRequest,
@@ -183,6 +202,7 @@ export async function createChallengeShortlistRevision(
   );
 }
 
+/** Handles creator fetch json behavior for this module. */
 async function creatorFetchJson<T>(
   path: string,
   schema: ZodType<T>,
@@ -208,6 +228,7 @@ async function creatorFetchJson<T>(
   if (!response.ok) {
     let message = response.statusText;
     try {
+      /** Handles body behavior for this component. */
       const body = (await response.json()) as { message?: string };
       message = body.message ?? message;
     } catch {
@@ -219,6 +240,7 @@ async function creatorFetchJson<T>(
   return schema.parse(await response.json());
 }
 
+/** Reads cookie from browser state. */
 function readCookie(name: string): string {
   return (
     document.cookie
@@ -229,6 +251,7 @@ function readCookie(name: string): string {
   );
 }
 
+/** Handles creator challenge path behavior for this module. */
 function creatorChallengePath(
   challengeName: string,
   surface: "stats" | "participants",

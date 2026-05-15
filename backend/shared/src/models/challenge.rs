@@ -393,6 +393,7 @@ impl MetricSchemaSpec {
 }
 
 impl Default for MetricSchemaSpec {
+    /// Handles default for this module.
     fn default() -> Self {
         Self {
             metrics: vec![MetricDefinitionSpec {

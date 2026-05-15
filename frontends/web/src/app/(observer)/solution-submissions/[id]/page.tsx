@@ -28,6 +28,7 @@ import {
 } from "@/lib/schemas";
 import { selectSubmissionDisplayEvaluation } from "@/lib/submissionEvaluation";
 
+/** Renders the solution submission page component. */
 export default async function SolutionSubmissionPage({
   params,
 }: {
@@ -383,6 +384,7 @@ export default async function SolutionSubmissionPage({
   );
 }
 
+/** Detects language for presentation. */
 function detectLanguage(path: string): string {
   if (path.endsWith(".py")) return "python";
   if (path.endsWith(".json")) return "json";

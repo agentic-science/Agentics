@@ -7,6 +7,7 @@ use serde_json::json;
 use tracing::error;
 
 #[derive(Debug, thiserror::Error)]
+/// Enumerates app error variants supported by this module.
 pub enum AppError {
     #[error("database error: {0}")]
     Database(#[from] sqlx::Error),
@@ -39,6 +40,7 @@ pub enum AppError {
 }
 
 impl IntoResponse for AppError {
+    /// Handles into response for this module.
     fn into_response(self) -> Response {
         let (status, error, message) = match &self {
             AppError::NotFound => (StatusCode::NOT_FOUND, "not_found", self.to_string()),
@@ -90,6 +92,7 @@ mod tests {
 
     use super::AppError;
 
+    /// Verifies that internal errors are redacted in http responses.
     #[tokio::test]
     async fn internal_errors_are_redacted_in_http_responses() {
         let response =

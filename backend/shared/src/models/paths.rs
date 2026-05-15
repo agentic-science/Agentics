@@ -36,18 +36,21 @@ impl RepoRelativePath {
 }
 
 impl fmt::Display for RepoRelativePath {
+    /// Handles fmt for this module.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }
 }
 
 impl AsRef<str> for RepoRelativePath {
+    /// Returns ref in the representation required by callers.
     fn as_ref(&self) -> &str {
         self.as_str()
     }
 }
 
 impl AsRef<Path> for RepoRelativePath {
+    /// Returns ref in the representation required by callers.
     fn as_ref(&self) -> &Path {
         self.as_path()
     }
@@ -56,12 +59,14 @@ impl AsRef<Path> for RepoRelativePath {
 impl FromStr for RepoRelativePath {
     type Err = AppError;
 
+    /// Handles from str for this module.
     fn from_str(value: &str) -> Result<Self> {
         Self::try_new(value)
     }
 }
 
 impl Serialize for RepoRelativePath {
+    /// Handles serialize for this module.
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -71,6 +76,7 @@ impl Serialize for RepoRelativePath {
 }
 
 impl<'de> Deserialize<'de> for RepoRelativePath {
+    /// Handles deserialize for this module.
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -81,14 +87,17 @@ impl<'de> Deserialize<'de> for RepoRelativePath {
 }
 
 impl JsonSchema for RepoRelativePath {
+    /// Handles inline schema for this module.
     fn inline_schema() -> bool {
         true
     }
 
+    /// Handles schema name for this module.
     fn schema_name() -> Cow<'static, str> {
         "RepoRelativePath".into()
     }
 
+    /// Handles json schema for this module.
     fn json_schema(_: &mut SchemaGenerator) -> Schema {
         json_schema!({
             "type": "string",
@@ -120,18 +129,21 @@ macro_rules! define_relative_path_type {
         }
 
         impl fmt::Display for $type_name {
+            /// Handles fmt for this module.
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 f.write_str(self.as_str())
             }
         }
 
         impl AsRef<str> for $type_name {
+            /// Returns ref in the representation required by callers.
             fn as_ref(&self) -> &str {
                 self.as_str()
             }
         }
 
         impl AsRef<Path> for $type_name {
+            /// Returns ref in the representation required by callers.
             fn as_ref(&self) -> &Path {
                 self.as_path()
             }
@@ -140,12 +152,14 @@ macro_rules! define_relative_path_type {
         impl FromStr for $type_name {
             type Err = AppError;
 
+            /// Handles from str for this module.
             fn from_str(value: &str) -> Result<Self> {
                 Self::try_new(value)
             }
         }
 
         impl Serialize for $type_name {
+            /// Handles serialize for this module.
             fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
             where
                 S: Serializer,
@@ -155,6 +169,7 @@ macro_rules! define_relative_path_type {
         }
 
         impl<'de> Deserialize<'de> for $type_name {
+            /// Handles deserialize for this module.
             fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
             where
                 D: Deserializer<'de>,
@@ -165,14 +180,17 @@ macro_rules! define_relative_path_type {
         }
 
         impl JsonSchema for $type_name {
+            /// Handles inline schema for this module.
             fn inline_schema() -> bool {
                 true
             }
 
+            /// Handles schema name for this module.
             fn schema_name() -> Cow<'static, str> {
                 $schema_name.into()
             }
 
+            /// Handles json schema for this module.
             fn json_schema(_: &mut SchemaGenerator) -> Schema {
                 json_schema!({
                     "type": "string",
@@ -207,6 +225,7 @@ impl RepositoryCheckoutPath {
 }
 
 impl fmt::Display for RepositoryCheckoutPath {
+    /// Handles fmt for this module.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0.display())
     }
@@ -229,6 +248,7 @@ impl AdminBundlePath {
 }
 
 impl fmt::Display for AdminBundlePath {
+    /// Handles fmt for this module.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0.display())
     }
@@ -259,12 +279,14 @@ macro_rules! define_managed_path_type {
         }
 
         impl fmt::Display for $type_name {
+            /// Handles fmt for this module.
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 write!(f, "{}", self.0.display())
             }
         }
 
         impl Serialize for $type_name {
+            /// Handles serialize for this module.
             fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
             where
                 S: Serializer,
@@ -278,6 +300,7 @@ macro_rules! define_managed_path_type {
         }
 
         impl<'de> Deserialize<'de> for $type_name {
+            /// Handles deserialize for this module.
             fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
             where
                 D: Deserializer<'de>,
@@ -288,14 +311,17 @@ macro_rules! define_managed_path_type {
         }
 
         impl JsonSchema for $type_name {
+            /// Handles inline schema for this module.
             fn inline_schema() -> bool {
                 true
             }
 
+            /// Handles schema name for this module.
             fn schema_name() -> Cow<'static, str> {
                 $schema_name.into()
             }
 
+            /// Handles json schema for this module.
             fn json_schema(_: &mut SchemaGenerator) -> Schema {
                 json_schema!({ "type": "string" })
             }
@@ -318,6 +344,7 @@ define_managed_path_type!(
     "managed statement path"
 );
 
+/// Handles canonical existing dir for this module.
 fn canonical_existing_dir(value: &str, field: &str) -> Result<PathBuf> {
     let value = value.trim();
     if value.is_empty() || value.chars().any(|c| c.is_control()) {
@@ -328,6 +355,7 @@ fn canonical_existing_dir(value: &str, field: &str) -> Result<PathBuf> {
     canonical_existing_dir_path(Path::new(value), field)
 }
 
+/// Handles canonical existing dir path for this module.
 fn canonical_existing_dir_path(path: &Path, field: &str) -> Result<PathBuf> {
     let canonical = std::fs::canonicalize(path).map_err(|e| {
         AppError::BadRequest(format!("{field} does not exist or cannot be resolved: {e}"))
@@ -340,6 +368,7 @@ fn canonical_existing_dir_path(path: &Path, field: &str) -> Result<PathBuf> {
     Ok(canonical)
 }
 
+/// Handles canonical existing file path for this module.
 fn canonical_existing_file_path(path: &Path, field: &str) -> Result<PathBuf> {
     let canonical = std::fs::canonicalize(path).map_err(|e| {
         AppError::BadRequest(format!("{field} does not exist or cannot be resolved: {e}"))
@@ -352,6 +381,7 @@ fn canonical_existing_file_path(path: &Path, field: &str) -> Result<PathBuf> {
     Ok(canonical)
 }
 
+/// Validates relative path invariants for this contract.
 fn validate_relative_path(value: &str) -> Result<String> {
     if value.is_empty()
         || value.trim() != value
@@ -415,6 +445,7 @@ mod tests {
         RunOutputPath, ScriptPath,
     };
 
+    /// Verifies that validates repo relative paths.
     #[test]
     fn validates_repo_relative_paths() {
         for value in ["README.md", "v1", "challenges/sample-sum"] {
@@ -425,6 +456,7 @@ mod tests {
         }
     }
 
+    /// Verifies that validates manifest and runner relative paths.
     #[test]
     fn validates_manifest_and_runner_relative_paths() {
         for value in [

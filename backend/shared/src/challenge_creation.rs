@@ -110,6 +110,7 @@ pub fn sha256_digest(bytes: &[u8]) -> Sha256Digest {
     Sha256Digest::from_bytes(hasher.finalize().into())
 }
 
+/// Handles draft review bundle sha256 blocking for this module.
 fn draft_review_bundle_sha256_blocking(
     proposal_root: &Path,
     manifest: &ChallengeCreationManifest,
@@ -144,6 +145,7 @@ fn draft_review_bundle_sha256_blocking(
     Ok(Sha256Digest::from_bytes(hasher.finalize().into()))
 }
 
+/// Handles hash public tree for this module.
 fn hash_public_tree(hasher: &mut Sha256, bundle_root: &Path) -> Result<()> {
     let mut stack = vec![bundle_root.to_path_buf()];
     while let Some(dir) = stack.pop() {
@@ -182,6 +184,7 @@ fn hash_public_tree(hasher: &mut Sha256, bundle_root: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Handles hash file for this module.
 fn hash_file(hasher: &mut Sha256, path: &Path) -> Result<()> {
     use std::io::Read;
 
@@ -204,6 +207,7 @@ fn hash_file(hasher: &mut Sha256, path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Handles hash field for this module.
 fn hash_field(hasher: &mut Sha256, label: &str, bytes: &[u8]) {
     hasher.update((label.len() as u64).to_be_bytes());
     hasher.update(label.as_bytes());
@@ -211,6 +215,7 @@ fn hash_field(hasher: &mut Sha256, label: &str, bytes: &[u8]) {
     hasher.update(bytes);
 }
 
+/// Validates challenge creation repository with manifest invariants for this contract.
 async fn validate_challenge_creation_repository_with_manifest(
     root: &Path,
     manifest: &ChallengeCreationManifest,
@@ -230,6 +235,7 @@ async fn validate_challenge_creation_repository_with_manifest(
     Ok(())
 }
 
+/// Validates public bundle invariants for this contract.
 async fn validate_public_bundle(
     root: &Path,
     manifest: &ChallengeCreationManifest,
@@ -278,6 +284,7 @@ async fn validate_public_bundle(
     Ok(())
 }
 
+/// Handles assert public file exists for this module.
 async fn assert_public_file_exists(path: PathBuf, field: &str) -> Result<()> {
     let meta = tokio::fs::metadata(&path)
         .await
@@ -291,6 +298,7 @@ async fn assert_public_file_exists(path: PathBuf, field: &str) -> Result<()> {
     Ok(())
 }
 
+/// Handles assert public dir exists for this module.
 async fn assert_public_dir_exists(path: PathBuf, field: &str) -> Result<()> {
     let meta = tokio::fs::metadata(&path)
         .await
@@ -304,6 +312,7 @@ async fn assert_public_dir_exists(path: PathBuf, field: &str) -> Result<()> {
     Ok(())
 }
 
+/// Validates private asset requirements invariants for this contract.
 fn validate_private_asset_requirements(
     private_assets: &[ChallengePrivateAssetRequirement],
 ) -> Result<()> {
@@ -322,6 +331,7 @@ fn validate_private_asset_requirements(
     Ok(())
 }
 
+/// Requires non empty and reports a domain error otherwise.
 fn require_non_empty(value: &str, field: &str) -> Result<()> {
     if value.trim().is_empty() {
         return Err(AppError::Validation(format!("{field} must not be empty")));
@@ -329,6 +339,7 @@ fn require_non_empty(value: &str, field: &str) -> Result<()> {
     Ok(())
 }
 
+/// Handles reject private files for this module.
 fn reject_private_files(root: &Path) -> Result<()> {
     let mut stack = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
@@ -362,6 +373,7 @@ fn reject_private_files(root: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Returns whether forbidden public repo name holds.
 fn is_forbidden_public_repo_name(name: &str) -> bool {
     let normalized = name.to_ascii_lowercase();
     matches!(
@@ -394,6 +406,7 @@ mod tests {
 
     use super::*;
 
+    /// Verifies that validates new challenge repository.
     #[tokio::test]
     async fn validates_new_challenge_repository() {
         let repo = temp_repo("new-challenge");
@@ -407,6 +420,7 @@ mod tests {
         cleanup(&repo);
     }
 
+    /// Verifies that rejects new version repository.
     #[tokio::test]
     async fn rejects_new_version_repository() {
         let repo = temp_repo("new-version");
@@ -433,6 +447,7 @@ mod tests {
         cleanup(&repo);
     }
 
+    /// Verifies that validates archive request repository.
     #[tokio::test]
     async fn validates_archive_request_repository() {
         let repo = temp_repo("archive");
@@ -458,6 +473,7 @@ mod tests {
         cleanup(&repo);
     }
 
+    /// Verifies that rejects missing readme.
     #[tokio::test]
     async fn rejects_missing_readme() {
         let repo = temp_repo("missing-readme");
@@ -472,6 +488,7 @@ mod tests {
         cleanup(&repo);
     }
 
+    /// Verifies that rejects invalid lifecycle shape.
     #[test]
     fn rejects_invalid_lifecycle_shape() {
         let manifest = ChallengeCreationManifest {
@@ -492,6 +509,7 @@ mod tests {
         assert!(error.to_string().contains("bundle_path must be omitted"));
     }
 
+    /// Verifies that rejects private material in public repo.
     #[tokio::test]
     async fn rejects_private_material_in_public_repo() {
         let repo = temp_repo("private-leak");
@@ -507,16 +525,19 @@ mod tests {
         cleanup(&repo);
     }
 
+    /// Handles temp repo for this module.
     fn temp_repo(name: &str) -> PathBuf {
         let path = std::env::temp_dir().join(format!("agentics-{name}-{}", Uuid::new_v4()));
         std::fs::create_dir_all(&path).expect("temp repo");
         path
     }
 
+    /// Handles cleanup for this module.
     fn cleanup(path: &Path) {
         drop(std::fs::remove_dir_all(path));
     }
 
+    /// Writes valid public challenge to the target path.
     fn write_valid_public_challenge(repo: &Path) {
         let bundle = "v1";
         std::fs::create_dir_all(repo.join(bundle).join("public")).expect("public dir");
@@ -629,6 +650,7 @@ mod tests {
         );
     }
 
+    /// Writes file to the target path.
     fn write_file(path: &Path, content: &str) {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).expect("parent dir");

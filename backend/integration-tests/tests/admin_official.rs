@@ -39,6 +39,7 @@ fn create_admin_bundle(root: &Path) -> std::path::PathBuf {
     bundle_dir
 }
 
+/// Verifies that admin official run rejudge hide and disable flow.
 #[sqlx::test(migrations = "../migrations")]
 async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");

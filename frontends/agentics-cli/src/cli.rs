@@ -32,12 +32,14 @@ pub(crate) struct Cli {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 #[clap(rename_all = "kebab-case")]
+/// Enumerates output format variants supported by this module.
 pub(crate) enum OutputFormat {
     Table,
     Json,
 }
 
 #[derive(Debug, Clone, Subcommand)]
+/// Enumerates commands variants supported by this module.
 pub(crate) enum Commands {
     /// Register a new agent and store its bearer token by default.
     Register(RegisterArgs),
@@ -64,6 +66,7 @@ pub(crate) enum Commands {
 }
 
 #[derive(Debug, Clone, Args)]
+/// Carries register args data across this module boundary.
 pub(crate) struct RegisterArgs {
     /// Agent display name.
     #[arg(long)]
@@ -87,24 +90,28 @@ pub(crate) struct RegisterArgs {
 }
 
 #[derive(Debug, Clone, Args)]
+/// Carries auth args data across this module boundary.
 pub(crate) struct AuthArgs {
     #[command(subcommand)]
     pub command: AuthCommand,
 }
 
 #[derive(Debug, Clone, Subcommand)]
+/// Enumerates auth command variants supported by this module.
 pub(crate) enum AuthCommand {
     /// Show whether this CLI has a configured bearer token.
     Status,
 }
 
 #[derive(Debug, Clone, Args)]
+/// Carries config args data across this module boundary.
 pub(crate) struct ConfigArgs {
     #[command(subcommand)]
     pub command: ConfigCommand,
 }
 
 #[derive(Debug, Clone, Subcommand)]
+/// Enumerates config command variants supported by this module.
 pub(crate) enum ConfigCommand {
     /// Show the effective config after file, environment, and flag overrides.
     Show,
@@ -118,18 +125,21 @@ pub(crate) enum ConfigCommand {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 #[clap(rename_all = "kebab-case")]
+/// Enumerates config key variants supported by this module.
 pub(crate) enum ConfigKey {
     ApiBaseUrl,
     Token,
 }
 
 #[derive(Debug, Clone, Args)]
+/// Carries challenges args data across this module boundary.
 pub(crate) struct ChallengesArgs {
     #[command(subcommand)]
     pub command: ChallengesCommand,
 }
 
 #[derive(Debug, Clone, Subcommand)]
+/// Enumerates challenges command variants supported by this module.
 pub(crate) enum ChallengesCommand {
     /// List published challenges.
     List,
@@ -138,12 +148,14 @@ pub(crate) enum ChallengesCommand {
 }
 
 #[derive(Debug, Clone, Args)]
+/// Carries challenge creator args data across this module boundary.
 pub(crate) struct ChallengeCreatorArgs {
     #[command(subcommand)]
     pub command: ChallengeCreatorCommand,
 }
 
 #[derive(Debug, Clone, Subcommand)]
+/// Enumerates challenge creator command variants supported by this module.
 pub(crate) enum ChallengeCreatorCommand {
     /// Create or inspect a challenge draft.
     Draft {
@@ -170,6 +182,7 @@ pub(crate) enum ChallengeCreatorCommand {
 }
 
 #[derive(Debug, Clone, Subcommand)]
+/// Enumerates challenge shortlist command variants supported by this module.
 pub(crate) enum ChallengeShortlistCommand {
     /// Show the effective append-only shortlist union.
     Show { challenge_name: ChallengeName },
@@ -182,6 +195,7 @@ pub(crate) enum ChallengeShortlistCommand {
 }
 
 #[derive(Debug, Clone, Subcommand)]
+/// Enumerates challenge draft command variants supported by this module.
 pub(crate) enum ChallengeDraftCommand {
     /// Create a draft from a checked-out challenge repository path.
     Create {
@@ -262,6 +276,7 @@ pub(crate) enum ChallengeDraftCommand {
 }
 
 #[derive(Debug, Clone, Args)]
+/// Carries admin auth args data across this module boundary.
 pub(crate) struct AdminAuthArgs {
     #[arg(long)]
     pub admin_username: String,
@@ -270,6 +285,7 @@ pub(crate) struct AdminAuthArgs {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+/// Enumerates challenge private asset kind arg variants supported by this module.
 pub(crate) enum ChallengePrivateAssetKindArg {
     #[value(name = "private_benchmark_data")]
     BenchmarkData,
@@ -282,6 +298,7 @@ pub(crate) enum ChallengePrivateAssetKindArg {
 }
 
 #[derive(Debug, Clone, Args)]
+/// Carries init solution args data across this module boundary.
 pub(crate) struct InitSolutionArgs {
     /// Challenge id to initialize a solution for.
     pub challenge_name: ChallengeName,
@@ -301,6 +318,7 @@ pub(crate) struct InitSolutionArgs {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 #[clap(rename_all = "kebab-case")]
+/// Enumerates solution runtime profile variants supported by this module.
 pub(crate) enum SolutionRuntimeProfile {
     #[value(name = "python-cpu")]
     Python,
@@ -314,6 +332,7 @@ pub(crate) enum SolutionRuntimeProfile {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 #[clap(rename_all = "kebab-case")]
+/// Enumerates solution interface variants supported by this module.
 pub(crate) enum SolutionInterface {
     ChallengeDefined,
     Stdio,
@@ -321,6 +340,7 @@ pub(crate) enum SolutionInterface {
 }
 
 #[derive(Debug, Clone, Args)]
+/// Carries submit args data across this module boundary.
 pub(crate) struct SubmitArgs {
     /// Challenge id to submit against.
     pub challenge_name: ChallengeName,
@@ -351,6 +371,7 @@ pub(crate) struct SubmitArgs {
 }
 
 #[derive(Debug, Clone, Args)]
+/// Carries validate args data across this module boundary.
 pub(crate) struct ValidateArgs {
     /// Challenge id to validate against.
     pub challenge_name: ChallengeName,
@@ -410,12 +431,14 @@ pub(crate) struct ValidateArgs {
 }
 
 #[derive(Debug, Clone, Args)]
+/// Carries submissions args data across this module boundary.
 pub(crate) struct SubmissionsArgs {
     #[command(subcommand)]
     pub command: SubmissionsCommand,
 }
 
 #[derive(Debug, Clone, Subcommand)]
+/// Enumerates submissions command variants supported by this module.
 pub(crate) enum SubmissionsCommand {
     /// Show a solution submission or validation run.
     Show { submission_id: SolutionSubmissionId },
@@ -440,12 +463,14 @@ pub(crate) enum SubmissionsCommand {
 }
 
 #[derive(Debug, Clone, Args)]
+/// Carries leaderboard args data across this module boundary.
 pub(crate) struct LeaderboardArgs {
     #[command(subcommand)]
     pub command: LeaderboardCommand,
 }
 
 #[derive(Debug, Clone, Subcommand)]
+/// Enumerates leaderboard command variants supported by this module.
 pub(crate) enum LeaderboardCommand {
     /// Show a target-scoped leaderboard.
     Show {
@@ -456,12 +481,14 @@ pub(crate) enum LeaderboardCommand {
 }
 
 #[derive(Debug, Clone, Args)]
+/// Carries metrics args data across this module boundary.
 pub(crate) struct MetricsArgs {
     #[command(subcommand)]
     pub command: MetricsCommand,
 }
 
 #[derive(Debug, Clone, Subcommand)]
+/// Enumerates metrics command variants supported by this module.
 pub(crate) enum MetricsCommand {
     /// Show a score distribution for one target and metric.
     Distribution {

@@ -11,6 +11,7 @@ use helpers::{
     spawn_app_with_config, test_config,
 };
 
+/// Handles creator auth for this module.
 fn creator_auth(
     request: reqwest::RequestBuilder,
     creator: &TestCreatorSession,
@@ -20,6 +21,7 @@ fn creator_auth(
         .header("X-Agentics-CSRF-Token", &creator.csrf_token)
 }
 
+/// Verifies that matrix challenge can be published and solved.
 #[sqlx::test(migrations = "../migrations")]
 async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -222,10 +224,12 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
     }));
 }
 
+/// Handles native cpu target for this module.
 fn native_cpu_target() -> &'static str {
     "linux-arm64-cpu"
 }
 
+/// Handles normalize matrix targets for mvp for this module.
 fn normalize_matrix_targets_for_mvp(challenge_root: &Path) {
     let spec_path = challenge_root.join("v1/spec.json");
     let mut spec: serde_json::Value = serde_json::from_str(
@@ -247,6 +251,7 @@ fn normalize_matrix_targets_for_mvp(challenge_root: &Path) {
     .expect("failed to write normalized matrix spec");
 }
 
+/// Handles generate smoke private asset for this module.
 fn generate_smoke_private_asset(challenge_root: &Path) -> PathBuf {
     let output_zip = challenge_root
         .parent()

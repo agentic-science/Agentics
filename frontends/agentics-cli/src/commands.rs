@@ -29,6 +29,7 @@ use crate::cli::{
 use crate::config::{ApiBaseUrl, CliConfig, ConfigStore, ResolvedSettings};
 use crate::{output, package};
 
+/// Handles register for this module.
 pub(crate) async fn register(
     args: RegisterArgs,
     output_format: cli::OutputFormat,
@@ -56,6 +57,7 @@ pub(crate) async fn register(
     output::render_register_agent(&response, saved_token, settings, output_format)
 }
 
+/// Sets config after applying domain validation.
 pub(crate) fn set_config(
     key: ConfigKey,
     value: &str,
@@ -82,6 +84,7 @@ pub(crate) fn set_config(
     output::render_config_set(updated_key, settings, output_format)
 }
 
+/// Handles challenge draft for this module.
 pub(crate) async fn challenge_draft(
     command: ChallengeDraftCommand,
     output_format: cli::OutputFormat,
@@ -230,6 +233,7 @@ pub(crate) async fn challenge_draft(
     }
 }
 
+/// Handles challenge shortlist for this module.
 pub(crate) async fn challenge_shortlist(
     command: ChallengeShortlistCommand,
     output_format: cli::OutputFormat,
@@ -257,12 +261,14 @@ pub(crate) async fn challenge_shortlist(
     }
 }
 
+/// Enumerates draft review action variants supported by this module.
 enum DraftReviewAction {
     Approve,
     Reject,
     Abandon,
 }
 
+/// Handles review draft for this module.
 async fn review_draft(
     client: &ApiClient,
     output_format: cli::OutputFormat,
@@ -307,6 +313,7 @@ async fn review_draft(
     output::render_challenge_draft(&response, output_format)
 }
 
+/// Reads challenge creation manifest from disk or storage.
 fn read_challenge_creation_manifest(
     repo_dir: &Path,
     challenge_path: &RepoRelativePath,
@@ -320,6 +327,7 @@ fn read_challenge_creation_manifest(
 }
 
 impl From<ChallengePrivateAssetKindArg> for ChallengePrivateAssetKind {
+    /// Handles from for this module.
     fn from(value: ChallengePrivateAssetKindArg) -> Self {
         match value {
             ChallengePrivateAssetKindArg::BenchmarkData => Self::PrivateBenchmarkData,
@@ -330,6 +338,7 @@ impl From<ChallengePrivateAssetKindArg> for ChallengePrivateAssetKind {
     }
 }
 
+/// Handles submit for this module.
 pub(crate) async fn submit(
     args: SubmitArgs,
     output_format: cli::OutputFormat,
@@ -381,6 +390,7 @@ pub(crate) async fn submit(
     output::render_create_solution_submission_batch(&responses, &package, output_format)
 }
 
+/// Handles validate for this module.
 pub(crate) async fn validate(
     args: ValidateArgs,
     output_format: cli::OutputFormat,
@@ -393,6 +403,7 @@ pub(crate) async fn validate(
     }
 }
 
+/// Validates remote invariants for this contract.
 async fn validate_remote(
     args: ValidateArgs,
     output_format: cli::OutputFormat,
@@ -468,6 +479,7 @@ async fn validate_remote(
     output::render_validation_run_status_batch(&final_responses, output_format)
 }
 
+/// Validates local invariants for this contract.
 async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) -> Result<String> {
     if args.no_wait {
         bail!("--no-wait can only be used with --remote validation");
@@ -590,6 +602,7 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
 }
 
 #[derive(Debug, Clone, Copy)]
+/// Carries local validation error context data across this module boundary.
 struct LocalValidationErrorContext<'a> {
     challenge_name: &'a ChallengeName,
     bundle_dir: &'a Path,
@@ -601,6 +614,7 @@ struct LocalValidationErrorContext<'a> {
     log_path: &'a Path,
 }
 
+/// Handles local validation error for this module.
 fn local_validation_error(
     context: LocalValidationErrorContext<'_>,
     error: anyhow::Error,
@@ -626,6 +640,7 @@ fn local_validation_error(
     )
 }
 
+/// Handles canonical dir for this module.
 fn canonical_dir(path: &Path, label: &str) -> Result<PathBuf> {
     let path = path
         .canonicalize()
@@ -636,6 +651,7 @@ fn canonical_dir(path: &Path, label: &str) -> Result<PathBuf> {
     Ok(path)
 }
 
+/// Handles resolve local storage dir for this module.
 fn resolve_local_storage_dir(configured: Option<&Path>) -> Result<PathBuf> {
     if let Some(path) = configured {
         return Ok(if path.is_absolute() {
@@ -652,6 +668,7 @@ fn resolve_local_storage_dir(configured: Option<&Path>) -> Result<PathBuf> {
     Ok(cache_dir.join("agentics").join("local-validation"))
 }
 
+/// Handles local validation job id for this module.
 fn local_validation_job_id(challenge_name: &ChallengeName, target: &TargetName) -> Result<String> {
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -665,6 +682,7 @@ fn local_validation_job_id(challenge_name: &ChallengeName, target: &TargetName) 
     ))
 }
 
+/// Handles sanitize identifier component for this module.
 fn sanitize_identifier_component(value: &str) -> String {
     let sanitized = value
         .chars()
@@ -685,12 +703,14 @@ fn sanitize_identifier_component(value: &str) -> String {
     }
 }
 
+/// Handles runner log key for this module.
 fn runner_log_key(job_id: &str) -> PathBuf {
     PathBuf::from("eval-artifacts")
         .join(job_id)
         .join("runner.log")
 }
 
+/// Validates parent submission scope invariants for this contract.
 async fn validate_parent_submission_scope(
     client: &ApiClient,
     challenge_name: &ChallengeName,
@@ -723,6 +743,7 @@ async fn validate_parent_submission_scope(
     Ok(())
 }
 
+/// Handles batch error with created ids for this module.
 fn batch_error_with_created_ids(
     action: &str,
     responses: &[shared::models::request::CreateSolutionSubmissionResponse],
@@ -750,6 +771,7 @@ fn batch_error_with_created_ids(
     }
 }
 
+/// Handles batch status error for this module.
 fn batch_status_error(
     responses: &[shared::models::request::SolutionSubmissionResponse],
     output_format: cli::OutputFormat,
@@ -767,6 +789,7 @@ fn batch_status_error(
     }
 }
 
+/// Parses model info from an external boundary string.
 fn parse_model_info(raw: &str) -> Result<serde_json::Value> {
     if raw.trim().is_empty() {
         return Ok(serde_json::json!({}));
@@ -774,6 +797,7 @@ fn parse_model_info(raw: &str) -> Result<serde_json::Value> {
     serde_json::from_str(raw).context("--model-info-json must be valid JSON")
 }
 
+/// Creates solution submission request after validating caller inputs.
 fn create_solution_submission_request(
     challenge_name: ChallengeName,
     target: TargetName,
@@ -793,11 +817,13 @@ fn create_solution_submission_request(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Enumerates target selection mode variants supported by this module.
 enum TargetSelectionMode {
     Official,
     Validation,
 }
 
+/// Handles select targets for this module.
 fn select_targets(
     challenge: &ChallengeDetailResponse,
     requested_target: Option<&TargetName>,
@@ -813,6 +839,7 @@ fn select_targets(
     )
 }
 
+/// Handles select targets from spec for this module.
 fn select_targets_from_spec(
     challenge_name: &ChallengeName,
     spec: &ChallengeBundleSpec,
@@ -856,6 +883,7 @@ fn select_targets_from_spec(
     }
 }
 
+/// Validates selected targets invariants for this contract.
 fn validate_selected_targets(
     challenge_name: &ChallengeName,
     targets: &[&ChallengeTargetSpec],
@@ -881,6 +909,7 @@ fn validate_selected_targets(
     )
 }
 
+/// Handles poll validation run for this module.
 async fn poll_validation_run(
     client: &ApiClient,
     validation_run_id: &SolutionSubmissionId,
@@ -902,6 +931,7 @@ async fn poll_validation_run(
     }
 }
 
+/// Handles wait for solution submission for this module.
 pub(crate) async fn wait_for_solution_submission(
     client: &ApiClient,
     solution_submission_id: &SolutionSubmissionId,
@@ -925,6 +955,7 @@ pub(crate) async fn wait_for_solution_submission(
     }
 }
 
+/// Returns whether terminal status holds.
 fn is_terminal_status(status: &str) -> bool {
     matches!(status, "completed" | "failed")
 }

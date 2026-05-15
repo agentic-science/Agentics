@@ -40,12 +40,14 @@ impl StorageKey {
         &self.0
     }
 
+    /// Returns path in the representation required by callers.
     fn as_path(&self) -> &Path {
         Path::new(&self.0)
     }
 }
 
 impl fmt::Display for StorageKey {
+    /// Handles fmt for this module.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }
@@ -54,12 +56,14 @@ impl fmt::Display for StorageKey {
 impl FromStr for StorageKey {
     type Err = AppError;
 
+    /// Handles from str for this module.
     fn from_str(value: &str) -> Result<Self> {
         Self::try_new(value)
     }
 }
 
 impl Serialize for StorageKey {
+    /// Handles serialize for this module.
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -69,6 +73,7 @@ impl Serialize for StorageKey {
 }
 
 impl<'de> Deserialize<'de> for StorageKey {
+    /// Handles deserialize for this module.
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -79,14 +84,17 @@ impl<'de> Deserialize<'de> for StorageKey {
 }
 
 impl JsonSchema for StorageKey {
+    /// Handles inline schema for this module.
     fn inline_schema() -> bool {
         true
     }
 
+    /// Handles schema name for this module.
     fn schema_name() -> Cow<'static, str> {
         "StorageKey".into()
     }
 
+    /// Handles json schema for this module.
     fn json_schema(_: &mut SchemaGenerator) -> Schema {
         json_schema!({
             "type": "string",
@@ -130,11 +138,13 @@ impl LocalStorage {
         }
     }
 
+    /// Handles resolve for this module.
     fn resolve(&self, key: &StorageKey) -> (PathBuf, PathBuf) {
         let key_path = key.as_path().to_path_buf();
         (self.root.join(&key_path), key_path)
     }
 
+    /// Handles reject symlink prefixes for this module.
     fn reject_symlink_prefixes(&self, key: &Path) -> Result<()> {
         let Some(parent) = key.parent() else {
             return Ok(());
@@ -157,6 +167,7 @@ impl LocalStorage {
         Ok(())
     }
 
+    /// Handles reject symlink object for this module.
     fn reject_symlink_object(&self, full: &Path) -> Result<()> {
         if let Ok(metadata) = std::fs::symlink_metadata(full)
             && metadata.file_type().is_symlink()
@@ -172,6 +183,7 @@ impl LocalStorage {
 
 #[async_trait]
 impl Storage for LocalStorage {
+    /// Handles put for this module.
     async fn put(&self, key: &StorageKey, content: &[u8]) -> Result<StorageKey> {
         let (full, key_path) = self.resolve(key);
         self.reject_symlink_prefixes(&key_path)?;
@@ -184,6 +196,7 @@ impl Storage for LocalStorage {
         Ok(key.clone())
     }
 
+    /// Handles promote for this module.
     async fn promote(
         &self,
         temporary_key: &StorageKey,
@@ -213,6 +226,7 @@ impl Storage for LocalStorage {
         Ok(durable_key.clone())
     }
 
+    /// Handles get for this module.
     async fn get(&self, key: &StorageKey) -> Result<Vec<u8>> {
         let (full, key_path) = self.resolve(key);
         self.reject_symlink_prefixes(&key_path)?;
@@ -220,6 +234,7 @@ impl Storage for LocalStorage {
         Ok(tokio::fs::read(&full).await?)
     }
 
+    /// Handles exists for this module.
     async fn exists(&self, key: &StorageKey) -> Result<bool> {
         let (full, key_path) = self.resolve(key);
         self.reject_symlink_prefixes(&key_path)?;
@@ -229,6 +244,7 @@ impl Storage for LocalStorage {
         Ok(false)
     }
 
+    /// Handles delete for this module.
     async fn delete(&self, key: &StorageKey) -> Result<()> {
         let (full, key_path) = self.resolve(key);
         self.reject_symlink_prefixes(&key_path)?;
@@ -242,6 +258,7 @@ impl Storage for LocalStorage {
     }
 }
 
+/// Validates storage key invariants for this contract.
 fn validate_storage_key(value: &str) -> Result<String> {
     if value.is_empty()
         || value.trim() != value
@@ -284,6 +301,7 @@ fn validate_storage_key(value: &str) -> Result<String> {
     Ok(value.to_string())
 }
 
+/// Handles invalid storage key for this module.
 fn invalid_storage_key() -> AppError {
     AppError::BadRequest(
         "storage key must be a non-empty relative path with safe ASCII components and no `.` or `..` components".to_string(),
@@ -297,6 +315,7 @@ mod tests {
     use super::{LocalStorage, Storage, StorageKey};
     use crate::error::AppError;
 
+    /// Verifies that local storage returns relative keys.
     #[tokio::test]
     async fn local_storage_returns_relative_keys() {
         let root = temp_storage_root("relative-keys");
@@ -316,6 +335,7 @@ mod tests {
         drop(std::fs::remove_dir_all(root));
     }
 
+    /// Verifies that local storage rejects absolute and parent keys.
     #[tokio::test]
     async fn local_storage_rejects_absolute_and_parent_keys() {
         let root = temp_storage_root("bad-keys");
@@ -337,6 +357,7 @@ mod tests {
     }
 
     #[cfg(unix)]
+    /// Verifies that local storage rejects symlink prefixes.
     #[tokio::test]
     async fn local_storage_rejects_symlink_prefixes() {
         let root = temp_storage_root("symlink-root");
@@ -352,6 +373,7 @@ mod tests {
         drop(std::fs::remove_dir_all(outside));
     }
 
+    /// Verifies that local storage promotes without overwriting.
     #[tokio::test]
     async fn local_storage_promotes_without_overwriting() {
         let root = temp_storage_root("promote");
@@ -409,10 +431,12 @@ mod tests {
         drop(std::fs::remove_dir_all(root));
     }
 
+    /// Handles storage key for this module.
     fn storage_key(value: &str) -> StorageKey {
         StorageKey::try_new(value).expect("test storage key is valid")
     }
 
+    /// Handles temp storage root for this module.
     fn temp_storage_root(label: &str) -> PathBuf {
         let root =
             std::env::temp_dir().join(format!("agentics-storage-{label}-{}", uuid::Uuid::new_v4()));

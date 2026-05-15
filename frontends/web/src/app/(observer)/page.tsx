@@ -4,6 +4,7 @@ import { getTranslations } from "next-intl/server";
 import { fetchJson } from "@/lib/api";
 import { challengeListResponseSchema } from "@/lib/schemas";
 
+/** Renders the home page component. */
 export default async function HomePage() {
   const t = await getTranslations();
   let challenges: import("@/lib/schemas").ChallengeListResponse;

@@ -1,8 +1,11 @@
 import { formatMetricValue } from "@/lib/format";
 import type { ChallengeDetailResponse } from "@/lib/schemas";
 
+/** Describes the metric schema shape used by this module. */
 type MetricSchema = ChallengeDetailResponse["spec"]["metric_schema"];
+/** Describes the metric definition shape used by this module. */
 type MetricDefinition = MetricSchema["metrics"][number];
+/** Describes the metric value shape used by this module. */
 type MetricValue = { metric_name: string; value: number };
 
 /** Find display metadata for a metric name declared by the challenge bundle. */

@@ -29,6 +29,7 @@ fn creator_auth(
         .header("X-Agentics-CSRF-Token", &creator.csrf_token)
 }
 
+/// Verifies that private asset upload rejects duplicate asset name.
 #[sqlx::test(migrations = "../migrations")]
 async fn private_asset_upload_rejects_duplicate_asset_name(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
@@ -86,6 +87,7 @@ async fn private_asset_upload_rejects_duplicate_asset_name(pool: sqlx::PgPool) {
     );
 }
 
+/// Verifies that private asset quota admission serializes concurrent inserts.
 #[sqlx::test(migrations = "../migrations")]
 async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");

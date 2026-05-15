@@ -2,9 +2,11 @@ import { cookies, headers } from "next/headers";
 import { getRequestConfig } from "next-intl/server";
 
 const locales = ["en", "zh"] as const;
+/** Describes the locale shape used by this module. */
 type Locale = (typeof locales)[number];
 const defaultLocale: Locale = "en";
 
+/** Resolves locale from request context. */
 function resolveLocale(
   acceptLang: string | null,
   cookieLocale: string | null,

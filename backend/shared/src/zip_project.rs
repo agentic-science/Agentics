@@ -133,6 +133,7 @@ impl ZipProjectNetworkAccess {
         }
     }
 
+    /// Handles rank for this module.
     fn rank(self) -> u8 {
         match self {
             Self::Disabled => 0,
@@ -323,6 +324,7 @@ impl ZipProjectManifest {
 }
 
 impl ZipProjectRuntime {
+    /// Handles validate for this module.
     fn validate(&self) -> Result<()> {
         require_non_empty(&self.language, "runtime.language")?;
         if let Some(language_version) = &self.language_version {
@@ -337,12 +339,14 @@ impl ZipProjectRuntime {
 }
 
 impl ZipProjectCommands {
+    /// Handles validate for this module.
     fn validate(&self) -> Result<()> {
         Ok(())
     }
 }
 
 impl ZipProjectPhases {
+    /// Handles validate for this module.
     fn validate(&self, commands: &ZipProjectCommands) -> Result<()> {
         if self.setup.is_some() && commands.setup.is_none() {
             return Err(AppError::Validation(
@@ -368,6 +372,7 @@ impl ZipProjectPhases {
 }
 
 impl ZipProjectPhaseConfig {
+    /// Handles validate for this module.
     fn validate(&self, field: &str) -> Result<()> {
         validate_positive_u64(self.timeout_sec, &format!("{field}.timeout_sec"))?;
         validate_positive_u64(self.memory_limit_mb, &format!("{field}.memory_limit_mb"))?;
@@ -378,6 +383,7 @@ impl ZipProjectPhaseConfig {
         Ok(())
     }
 
+    /// Handles resolve for this module.
     fn resolve(&self, phase: ZipProjectPhaseName) -> ZipProjectPhaseLimits {
         let default_timeout = match phase {
             ZipProjectPhaseName::Setup => DEFAULT_SETUP_TIMEOUT_SEC,
@@ -414,6 +420,7 @@ impl ZipProjectPhaseFailureReport {
 }
 
 impl ZipProjectInterface {
+    /// Handles validate for this module.
     fn validate(&self) -> Result<()> {
         if let Some(input_contract) = &self.input_contract {
             require_non_empty(input_contract, "interface.input_contract")?;
@@ -427,6 +434,7 @@ impl ZipProjectInterface {
 }
 
 impl ZipProjectDependencies {
+    /// Handles validate for this module.
     fn validate(&self) -> Result<()> {
         validate_unique_paths(&self.lockfiles, "dependencies.lockfiles")?;
         validate_unique_paths(&self.vendor_dirs, "dependencies.vendor_dirs")?;
@@ -438,6 +446,7 @@ impl ZipProjectDependencies {
     }
 }
 
+/// Validates unique paths invariants for this contract.
 fn validate_unique_paths<T>(values: &[T], field: &str) -> Result<()>
 where
     T: AsRef<str> + std::fmt::Display,
@@ -454,6 +463,7 @@ where
     Ok(())
 }
 
+/// Requires non empty and reports a domain error otherwise.
 fn require_non_empty(value: &str, field: &str) -> Result<()> {
     if value.trim().is_empty() {
         return Err(AppError::Validation(format!("{field} must not be empty")));
@@ -462,6 +472,7 @@ fn require_non_empty(value: &str, field: &str) -> Result<()> {
     Ok(())
 }
 
+/// Validates positive u64 invariants for this contract.
 fn validate_positive_u64(value: Option<u64>, field: &str) -> Result<()> {
     if value == Some(0) {
         return Err(AppError::Validation(format!(
@@ -472,6 +483,7 @@ fn validate_positive_u64(value: Option<u64>, field: &str) -> Result<()> {
     Ok(())
 }
 
+/// Validates positive u32 invariants for this contract.
 fn validate_positive_u32(value: Option<u32>, field: &str) -> Result<()> {
     if value == Some(0) {
         return Err(AppError::Validation(format!(
@@ -494,6 +506,7 @@ mod tests {
         ZipProjectPhaseName,
     };
 
+    /// Handles valid manifest for this module.
     fn valid_manifest() -> serde_json::Value {
         json!({
             "protocol": "zip_project",
@@ -538,6 +551,7 @@ mod tests {
         })
     }
 
+    /// Verifies that accepts valid zip project manifest.
     #[test]
     fn accepts_valid_zip_project_manifest() {
         let raw = serde_json::to_string(&valid_manifest()).expect("serialize manifest");
@@ -583,6 +597,7 @@ mod tests {
         );
     }
 
+    /// Verifies that resolves default phase limits when overrides are absent.
     #[test]
     fn resolves_default_phase_limits_when_overrides_are_absent() {
         let mut value = valid_manifest();
@@ -616,6 +631,7 @@ mod tests {
         }));
     }
 
+    /// Verifies that rejects phase config without matching optional command.
     #[test]
     fn rejects_phase_config_without_matching_optional_command() {
         let mut value = valid_manifest();
@@ -633,6 +649,7 @@ mod tests {
         );
     }
 
+    /// Verifies that rejects zero phase limit overrides.
     #[test]
     fn rejects_zero_phase_limit_overrides() {
         let mut value = valid_manifest();
@@ -647,6 +664,7 @@ mod tests {
         );
     }
 
+    /// Verifies that rejects missing required run script.
     #[test]
     fn rejects_missing_required_run_script() {
         let mut value = valid_manifest();
@@ -660,6 +678,7 @@ mod tests {
         assert!(error.to_string().contains("missing field `run`"));
     }
 
+    /// Verifies that rejects unsupported protocol version.
     #[test]
     fn rejects_unsupported_protocol_version() {
         let mut value = valid_manifest();
@@ -670,6 +689,7 @@ mod tests {
         assert!(error.to_string().contains("protocol_version must be 1"));
     }
 
+    /// Verifies that rejects unsafe script paths.
     #[test]
     fn rejects_unsafe_script_paths() {
         let mut value = valid_manifest();
@@ -680,6 +700,7 @@ mod tests {
         assert!(error.to_string().contains("repo-relative paths"));
     }
 
+    /// Verifies that rejects invalid dependency paths.
     #[test]
     fn rejects_invalid_dependency_paths() {
         let mut value = valid_manifest();
@@ -690,6 +711,7 @@ mod tests {
         assert!(error.to_string().contains("repo-relative paths"));
     }
 
+    /// Verifies that rejects duplicate dependency paths.
     #[test]
     fn rejects_duplicate_dependency_paths() {
         let mut value = valid_manifest();
@@ -704,6 +726,7 @@ mod tests {
         );
     }
 
+    /// Verifies that rejects unknown manifest fields.
     #[test]
     fn rejects_unknown_manifest_fields() {
         let mut value = valid_manifest();
@@ -714,6 +737,7 @@ mod tests {
         assert!(error.to_string().contains("unknown field"));
     }
 
+    /// Verifies that validates phase failure report payloads.
     #[test]
     fn validates_phase_failure_report_payloads() {
         let report = ZipProjectPhaseFailureReport {

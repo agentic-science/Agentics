@@ -16,6 +16,7 @@ import {
   leaderboardResponseSchema,
 } from "@/lib/schemas";
 
+/** Renders the leaderboard page component. */
 export default async function LeaderboardPage({
   params,
   searchParams,

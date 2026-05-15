@@ -13,6 +13,7 @@ use zip::write::SimpleFileOptions;
 const REQUIRED_MANIFEST: &str = shared::zip_project::ZIP_PROJECT_MANIFEST_FILE;
 
 #[derive(Debug, Clone)]
+/// Carries solution package data across this module boundary.
 pub(crate) struct SolutionPackage {
     pub workspace_dir: PathBuf,
     pub bytes: Vec<u8>,
@@ -21,6 +22,7 @@ pub(crate) struct SolutionPackage {
 }
 
 #[derive(Debug, Clone)]
+/// Carries package file data across this module boundary.
 struct PackageFile {
     path: PathBuf,
     archive_name: String,
@@ -28,6 +30,7 @@ struct PackageFile {
 }
 
 #[derive(Debug, Clone, Copy)]
+/// Carries package limits data across this module boundary.
 struct PackageLimits {
     max_zip_bytes: u64,
     max_file_count: usize,
@@ -43,15 +46,18 @@ impl PackageLimits {
 }
 
 #[derive(Debug)]
+/// Carries collected package files data across this module boundary.
 struct CollectedPackageFiles {
     files: Vec<PackageFile>,
     uncompressed_bytes: u64,
 }
 
+/// Handles package solution workspace for this module.
 pub(crate) fn package_solution_workspace(workspace_dir: &Path) -> Result<SolutionPackage> {
     package_solution_workspace_with_limits(workspace_dir, PackageLimits::DEFAULT)
 }
 
+/// Handles package solution workspace with limits for this module.
 fn package_solution_workspace_with_limits(
     workspace_dir: &Path,
     limits: PackageLimits,
@@ -128,6 +134,7 @@ fn package_solution_workspace_with_limits(
     })
 }
 
+/// Handles collect package files for this module.
 fn collect_package_files(
     workspace_dir: &Path,
     limits: PackageLimits,
@@ -195,6 +202,7 @@ fn collect_package_files(
     })
 }
 
+/// Handles should descend for this module.
 fn should_descend(entry: &DirEntry) -> bool {
     let Some(name) = entry.file_name().to_str() else {
         return false;
@@ -216,6 +224,7 @@ fn should_descend(entry: &DirEntry) -> bool {
     )
 }
 
+/// Writes zip archive to the target path.
 fn write_zip_archive(files: &[PackageFile], limits: PackageLimits) -> Result<Vec<u8>> {
     let cursor = Cursor::new(Vec::new());
     let mut archive = zip::ZipWriter::new(cursor);
@@ -239,6 +248,7 @@ fn write_zip_archive(files: &[PackageFile], limits: PackageLimits) -> Result<Vec
     Ok(archive.finish()?.into_inner())
 }
 
+/// Handles current archive len for this module.
 fn current_archive_len(archive: &zip::ZipWriter<Cursor<Vec<u8>>>) -> Result<u64> {
     let cursor = archive
         .get_ref()
@@ -246,6 +256,7 @@ fn current_archive_len(archive: &zip::ZipWriter<Cursor<Vec<u8>>>) -> Result<u64>
     Ok(cursor.get_ref().len() as u64)
 }
 
+/// Copies file to archive while preserving the module invariants.
 fn copy_file_to_archive<W>(file: &PackageFile, archive: &mut zip::ZipWriter<W>) -> Result<()>
 where
     W: Write + Seek,
@@ -257,6 +268,7 @@ where
         .map(|_| ())
 }
 
+/// Handles archive name for this module.
 fn archive_name(path: &Path) -> Result<String> {
     let mut parts = Vec::new();
     for component in path.components() {
@@ -281,6 +293,7 @@ fn archive_name(path: &Path) -> Result<String> {
     Ok(parts.join("/"))
 }
 
+/// Handles unix permissions for this module.
 fn unix_permissions(metadata: &std::fs::Metadata) -> u32 {
     cfg_select! {
         unix => {
@@ -303,6 +316,7 @@ mod tests {
         PackageLimits, package_solution_workspace, package_solution_workspace_with_limits,
     };
 
+    /// Writes manifest to the target path.
     fn write_manifest(root: &std::path::Path) {
         fs::write(
             root.join("agentics.solution.json"),
@@ -319,6 +333,7 @@ mod tests {
         .expect("manifest");
     }
 
+    /// Verifies that package respects gitignore and excludes git directory.
     #[test]
     fn package_respects_gitignore_and_excludes_git_directory() {
         let temp = tempfile::tempdir().expect("tempdir");
@@ -345,6 +360,7 @@ mod tests {
         );
     }
 
+    /// Verifies that package rejects missing run script.
     #[test]
     fn package_rejects_missing_run_script() {
         let temp = tempfile::tempdir().expect("tempdir");
@@ -356,6 +372,7 @@ mod tests {
         assert!(error.to_string().contains("run.sh must exist"));
     }
 
+    /// Verifies that package rejects ignored run script.
     #[test]
     fn package_rejects_ignored_run_script() {
         let temp = tempfile::tempdir().expect("tempdir");
@@ -369,6 +386,7 @@ mod tests {
         assert!(error.to_string().contains("run.sh is excluded"));
     }
 
+    /// Verifies that package rejects too many files before zip creation.
     #[test]
     fn package_rejects_too_many_files_before_zip_creation() {
         let temp = tempfile::tempdir().expect("tempdir");
@@ -388,6 +406,7 @@ mod tests {
         assert!(error.to_string().contains("at most 2 packageable files"));
     }
 
+    /// Verifies that package rejects too many uncompressed bytes before zip creation.
     #[test]
     fn package_rejects_too_many_uncompressed_bytes_before_zip_creation() {
         let temp = tempfile::tempdir().expect("tempdir");
@@ -411,6 +430,7 @@ mod tests {
         );
     }
 
+    /// Verifies that package rejects too many zip bytes.
     #[test]
     fn package_rejects_too_many_zip_bytes() {
         let temp = tempfile::tempdir().expect("tempdir");
@@ -433,6 +453,7 @@ mod tests {
         );
     }
 
+    /// Handles zip file names for this module.
     fn zip_file_names(bytes: &[u8]) -> Vec<String> {
         let cursor = std::io::Cursor::new(bytes);
         let mut archive = zip::ZipArchive::new(cursor).expect("zip should open");

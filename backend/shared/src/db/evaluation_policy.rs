@@ -52,6 +52,7 @@ pub async fn ensure_published_challenge_supports_eval_type(
     })
 }
 
+/// Ensures challenge supports eval type before continuing.
 pub(super) async fn ensure_challenge_supports_eval_type(
     pool: &PgPool,
     challenge_name: &ChallengeName,
@@ -81,6 +82,7 @@ pub(super) async fn ensure_challenge_supports_eval_type(
     Ok(())
 }
 
+/// Ensures challenge accepts submissions before continuing.
 fn ensure_challenge_accepts_submissions(spec: &ChallengeBundleSpec) -> Result<()> {
     let now = Utc::now();
     if let Some(starts_at) = parse_challenge_time(spec.starts_at.as_deref(), "starts_at")?
@@ -98,6 +100,7 @@ fn ensure_challenge_accepts_submissions(spec: &ChallengeBundleSpec) -> Result<()
     Ok(())
 }
 
+/// Ensures challenge eligibility before continuing.
 async fn ensure_challenge_eligibility(
     pool: &PgPool,
     challenge_name: &ChallengeName,
@@ -123,6 +126,7 @@ async fn ensure_challenge_eligibility(
     }
 }
 
+/// Parses challenge time from an external boundary string.
 fn parse_challenge_time(value: Option<&str>, field: &str) -> Result<Option<DateTime<Utc>>> {
     value
         .map(|value| {

@@ -20,6 +20,7 @@ import {
   publicSolutionSubmissionListResponseSchema,
 } from "@/lib/schemas";
 
+/** Renders the challenge page component. */
 export default async function ChallengePage({
   params,
 }: {

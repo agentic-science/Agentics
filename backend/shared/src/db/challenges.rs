@@ -138,6 +138,7 @@ pub async fn publish_challenge(
     Ok(response)
 }
 
+/// Handles publish challenge tx for this module.
 pub async fn publish_challenge_tx(
     tx: &mut Transaction<'_, Postgres>,
     challenge_name: &ChallengeName,
@@ -210,6 +211,7 @@ pub async fn publish_challenge_tx(
     })
 }
 
+/// Parses optional time from an external boundary string.
 fn parse_optional_time(value: Option<&str>) -> Result<Option<DateTime<Utc>>> {
     value
         .map(|value| {
@@ -220,6 +222,7 @@ fn parse_optional_time(value: Option<&str>) -> Result<Option<DateTime<Utc>>> {
         .transpose()
 }
 
+/// Converts this value to json string.
 fn to_json_string<T: serde::Serialize>(value: T) -> Result<String> {
     let value = serde_json::to_value(value).map_err(|e| AppError::Internal(e.to_string()))?;
     value
@@ -260,6 +263,7 @@ pub async fn add_challenge_owner(
     Ok(())
 }
 
+/// Handles add challenge owner tx for this module.
 pub async fn add_challenge_owner_tx(
     tx: &mut Transaction<'_, Postgres>,
     challenge_name: &ChallengeName,
@@ -428,6 +432,7 @@ pub async fn create_challenge_shortlist_revision(
     Ok(response)
 }
 
+/// Handles lock challenge shortlist for this module.
 async fn lock_challenge_shortlist(
     tx: &mut Transaction<'_, Postgres>,
     challenge_name: &ChallengeName,
@@ -439,6 +444,7 @@ async fn lock_challenge_shortlist(
     Ok(())
 }
 
+/// Ensures shortlist agents exist before continuing.
 async fn ensure_shortlist_agents_exist(
     tx: &mut Transaction<'_, Postgres>,
     agent_ids: &[AgentId],
@@ -749,6 +755,7 @@ pub async fn get_public_challenge(
     row.map(row_to_challenge_record).transpose()
 }
 
+/// Converts a database row into the challenge record model.
 fn row_to_challenge_record(r: sqlx::postgres::PgRow) -> Result<ChallengeRecord> {
     Ok(ChallengeRecord {
         challenge_name: challenge_name_from_row(&r, "challenge_name")?,
@@ -760,6 +767,7 @@ fn row_to_challenge_record(r: sqlx::postgres::PgRow) -> Result<ChallengeRecord> 
     })
 }
 
+/// Reads managed bundle path from a database row and validates its domain shape.
 fn managed_bundle_path_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -769,6 +777,7 @@ fn managed_bundle_path_from_row(
         .map_err(|e| AppError::Internal(format!("stored invalid {column}: {e}")))
 }
 
+/// Reads managed statement path from a database row and validates its domain shape.
 fn managed_statement_path_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -778,6 +787,7 @@ fn managed_statement_path_from_row(
         .map_err(|e| AppError::Internal(format!("stored invalid {column}: {e}")))
 }
 
+/// Converts a database row into the shortlist revision response model.
 fn row_to_shortlist_revision_response(
     row: sqlx::postgres::PgRow,
 ) -> Result<ChallengeShortlistRevisionResponse> {
@@ -793,18 +803,21 @@ fn row_to_shortlist_revision_response(
     })
 }
 
+/// Reads storage key from a database row and validates its domain shape.
 fn storage_key_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<StorageKey> {
     let value: String = row.try_get(column)?;
     StorageKey::try_new(&value)
         .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
 }
 
+/// Reads sha256 digest from a database row and validates its domain shape.
 fn sha256_digest_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<Sha256Digest> {
     let value: String = row.try_get(column)?;
     Sha256Digest::try_new(&value)
         .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
 }
 
+/// Handles optional datetime rfc3339 for this module.
 fn optional_datetime_rfc3339(row: &sqlx::postgres::PgRow, column: &str) -> Result<Option<String>> {
     Ok(row
         .try_get::<Option<DateTime<Utc>>, _>(column)?

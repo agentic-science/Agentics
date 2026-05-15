@@ -1,5 +1,6 @@
 import { JSDOM } from "jsdom";
 
+/** Ensures dom environment before tests run. */
 export function ensureDomEnvironment() {
   if (
     typeof globalThis.window === "undefined" ||
@@ -48,6 +49,7 @@ export function ensureDomEnvironment() {
   installStorage("sessionStorage");
 }
 
+/** Handles install global behavior for this module. */
 function installGlobal(property: string, window: Window) {
   const windowRecord = window as unknown as Record<string, unknown>;
   const value = windowRecord[property];
@@ -61,6 +63,7 @@ function installGlobal(property: string, window: Window) {
   });
 }
 
+/** Handles install storage behavior for this module. */
 function installStorage(property: "localStorage" | "sessionStorage") {
   try {
     void globalThis.window[property].length;
@@ -74,6 +77,7 @@ function installStorage(property: "localStorage" | "sessionStorage") {
   }
 }
 
+/** Creates memory storage through the API. */
 function createMemoryStorage(): Storage {
   const values = new Map<string, string>();
 

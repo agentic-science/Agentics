@@ -9,6 +9,7 @@ use helpers::{
     solution_zip_base64, spawn_app_with_config, test_config,
 };
 
+/// Verifies that public read flow matches public contract.
 #[sqlx::test(migrations = "../migrations")]
 async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -234,6 +235,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     assert_eq!(distribution["max"], 1.0);
 }
 
+/// Verifies that public artifact respects solution publication policy.
 #[sqlx::test(migrations = "../migrations")]
 async fn public_artifact_respects_solution_publication_policy(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -296,6 +298,7 @@ async fn public_artifact_respects_solution_publication_policy(pool: sqlx::PgPool
     assert_eq!(artifact.status(), reqwest::StatusCode::NOT_FOUND);
 }
 
+/// Verifies that seeded challenge summaries and community links are public.
 #[sqlx::test(migrations = "../migrations")]
 async fn seeded_challenge_summaries_and_community_links_are_public(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -350,6 +353,7 @@ async fn seeded_challenge_summaries_and_community_links_are_public(pool: sqlx::P
     );
 }
 
+/// Writes private artifact challenge to the target path.
 fn write_private_artifact_challenge(root: &Path, challenge_name: &str) {
     let bundle_dir = root.join(challenge_name).join("v1");
     copy_dir_all(

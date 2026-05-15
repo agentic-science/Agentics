@@ -23,17 +23,20 @@ use shared::models::request::{
 use crate::config::ApiBaseUrl;
 
 #[derive(Debug)]
+/// Carries api status error data across this module boundary.
 pub(crate) struct ApiStatusError {
     message: String,
 }
 
 impl ApiStatusError {
+    /// Handles new for this module.
     fn new(message: String) -> Self {
         Self { message }
     }
 }
 
 impl std::fmt::Display for ApiStatusError {
+    /// Handles fmt for this module.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.message)
     }
@@ -42,6 +45,7 @@ impl std::fmt::Display for ApiStatusError {
 impl std::error::Error for ApiStatusError {}
 
 #[derive(Debug, Clone)]
+/// Carries api client data across this module boundary.
 pub(crate) struct ApiClient {
     http: Client,
     base_url: Url,
@@ -49,6 +53,7 @@ pub(crate) struct ApiClient {
 }
 
 impl ApiClient {
+    /// Handles new for this module.
     pub(crate) fn new(api_base_url: &ApiBaseUrl, token: Option<String>) -> Result<Self> {
         Ok(Self {
             http: Client::new(),
@@ -57,6 +62,7 @@ impl ApiClient {
         })
     }
 
+    /// Handles register for this module.
     pub(crate) async fn register(
         &self,
         request: &RegisterAgentRequest,
@@ -64,10 +70,12 @@ impl ApiClient {
         self.post_json("/api/agents/register", request, false).await
     }
 
+    /// Lists challenges using the configured query scope.
     pub(crate) async fn list_challenges(&self) -> Result<ChallengeListResponse> {
         self.get_json("/api/public/challenges", false).await
     }
 
+    /// Fetches challenge for the requested scope.
     pub(crate) async fn get_challenge(
         &self,
         challenge_name: &ChallengeName,
@@ -76,6 +84,7 @@ impl ApiClient {
         self.get_json(&path, false).await
     }
 
+    /// Creates solution submission after validating caller inputs.
     pub(crate) async fn create_solution_submission(
         &self,
         request: &CreateSolutionSubmissionRequest,
@@ -84,6 +93,7 @@ impl ApiClient {
             .await
     }
 
+    /// Creates validation run after validating caller inputs.
     pub(crate) async fn create_validation_run(
         &self,
         request: &CreateSolutionSubmissionRequest,
@@ -91,6 +101,7 @@ impl ApiClient {
         self.post_json("/api/validation-runs", request, true).await
     }
 
+    /// Fetches solution submission for the requested scope.
     pub(crate) async fn get_solution_submission(
         &self,
         solution_submission_id: &SolutionSubmissionId,
@@ -99,6 +110,7 @@ impl ApiClient {
         self.get_json(&path, true).await
     }
 
+    /// Fetches validation run for the requested scope.
     pub(crate) async fn get_validation_run(
         &self,
         validation_run_id: &SolutionSubmissionId,
@@ -107,6 +119,7 @@ impl ApiClient {
         self.get_json(&path, true).await
     }
 
+    /// Fetches solution submission logs for the requested scope.
     pub(crate) async fn get_solution_submission_logs(
         &self,
         solution_submission_id: &SolutionSubmissionId,
@@ -115,6 +128,7 @@ impl ApiClient {
         self.get_json(&path, true).await
     }
 
+    /// Fetches solution submission ranking context for the requested scope.
     pub(crate) async fn get_solution_submission_ranking_context(
         &self,
         solution_submission_id: &SolutionSubmissionId,
@@ -127,6 +141,7 @@ impl ApiClient {
         self.get_json(&path, true).await
     }
 
+    /// Fetches leaderboard for the requested scope.
     pub(crate) async fn get_leaderboard(
         &self,
         challenge_name: &ChallengeName,
@@ -136,6 +151,7 @@ impl ApiClient {
         self.get_json(&path, false).await
     }
 
+    /// Fetches score distribution for the requested scope.
     pub(crate) async fn get_score_distribution(
         &self,
         challenge_name: &ChallengeName,
@@ -148,6 +164,7 @@ impl ApiClient {
         self.get_json(&path, false).await
     }
 
+    /// Fetches creator challenge stats for the requested scope.
     pub(crate) async fn get_creator_challenge_stats(
         &self,
         challenge_name: &ChallengeName,
@@ -157,6 +174,7 @@ impl ApiClient {
         self.get_json(&path, true).await
     }
 
+    /// Fetches creator challenge participants for the requested scope.
     pub(crate) async fn get_creator_challenge_participants(
         &self,
         challenge_name: &ChallengeName,
@@ -166,6 +184,7 @@ impl ApiClient {
         self.get_json(&path, true).await
     }
 
+    /// Fetches challenge shortlist for the requested scope.
     pub(crate) async fn get_challenge_shortlist(
         &self,
         challenge_name: &ChallengeName,
@@ -174,6 +193,7 @@ impl ApiClient {
         self.get_json(&path, true).await
     }
 
+    /// Creates challenge shortlist revision after validating caller inputs.
     pub(crate) async fn create_challenge_shortlist_revision(
         &self,
         challenge_name: &ChallengeName,
@@ -183,6 +203,7 @@ impl ApiClient {
         self.post_json(&path, request, true).await
     }
 
+    /// Creates challenge draft after validating caller inputs.
     pub(crate) async fn create_challenge_draft(
         &self,
         request: &CreateChallengeDraftRequest,
@@ -191,6 +212,7 @@ impl ApiClient {
             .await
     }
 
+    /// Fetches challenge draft for the requested scope.
     pub(crate) async fn get_challenge_draft(
         &self,
         draft_id: &str,
@@ -199,6 +221,7 @@ impl ApiClient {
         self.get_json(&path, true).await
     }
 
+    /// Handles upload challenge private asset for this module.
     pub(crate) async fn upload_challenge_private_asset(
         &self,
         draft_id: &str,
@@ -208,6 +231,7 @@ impl ApiClient {
         self.post_json(&path, request, true).await
     }
 
+    /// Validates challenge draft admin invariants for this contract.
     pub(crate) async fn validate_challenge_draft_admin(
         &self,
         draft_id: &str,
@@ -220,6 +244,7 @@ impl ApiClient {
             .await
     }
 
+    /// Handles approve challenge draft admin for this module.
     pub(crate) async fn approve_challenge_draft_admin(
         &self,
         draft_id: &str,
@@ -232,6 +257,7 @@ impl ApiClient {
             .await
     }
 
+    /// Handles reject challenge draft admin for this module.
     pub(crate) async fn reject_challenge_draft_admin(
         &self,
         draft_id: &str,
@@ -244,6 +270,7 @@ impl ApiClient {
             .await
     }
 
+    /// Handles publish challenge draft admin for this module.
     pub(crate) async fn publish_challenge_draft_admin(
         &self,
         draft_id: &str,
@@ -256,6 +283,7 @@ impl ApiClient {
             .await
     }
 
+    /// Handles abandon challenge draft admin for this module.
     pub(crate) async fn abandon_challenge_draft_admin(
         &self,
         draft_id: &str,
@@ -268,6 +296,7 @@ impl ApiClient {
             .await
     }
 
+    /// Handles cleanup challenge drafts admin for this module.
     pub(crate) async fn cleanup_challenge_drafts_admin(
         &self,
         username: &str,
@@ -282,6 +311,7 @@ impl ApiClient {
         .await
     }
 
+    /// Fetches json for the requested scope.
     async fn get_json<T>(&self, path: &str, authenticated: bool) -> Result<T>
     where
         T: DeserializeOwned,
@@ -290,6 +320,7 @@ impl ApiClient {
         parse_response(request.send().await?).await
     }
 
+    /// Handles post json for this module.
     async fn post_json<B, T>(&self, path: &str, body: &B, authenticated: bool) -> Result<T>
     where
         B: Serialize + Sync + ?Sized,
@@ -299,6 +330,7 @@ impl ApiClient {
         parse_response(request.send().await?).await
     }
 
+    /// Handles post json admin for this module.
     async fn post_json_admin<B, T>(
         &self,
         path: &str,
@@ -317,6 +349,7 @@ impl ApiClient {
         parse_response(request.send().await?).await
     }
 
+    /// Handles request for this module.
     fn request(
         &self,
         method: Method,
@@ -336,6 +369,7 @@ impl ApiClient {
         }
     }
 
+    /// Handles endpoint for this module.
     fn endpoint(&self, path: &str) -> Result<Url> {
         self.base_url
             .join(path.trim_start_matches('/'))
@@ -343,6 +377,7 @@ impl ApiClient {
     }
 }
 
+/// Handles creator challenge path for this module.
 fn creator_challenge_path(
     challenge_name: &ChallengeName,
     surface: &str,
@@ -356,6 +391,7 @@ fn creator_challenge_path(
     path
 }
 
+/// Parses response from an external boundary string.
 async fn parse_response<T>(response: reqwest::Response) -> Result<T>
 where
     T: DeserializeOwned,
@@ -407,6 +443,7 @@ mod tests {
 
     use super::ApiClient;
 
+    /// Verifies that register sends expected payload.
     #[tokio::test]
     async fn register_sends_expected_payload() {
         let server = MockServer::start().await;
@@ -447,6 +484,7 @@ mod tests {
         assert_eq!(response.token, "agentics_token");
     }
 
+    /// Verifies that api errors use structured error message.
     #[tokio::test]
     async fn api_errors_use_structured_error_message() {
         let server = MockServer::start().await;

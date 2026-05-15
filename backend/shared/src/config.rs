@@ -111,6 +111,7 @@ pub enum RunnerWritableStorageMode {
 impl FromStr for RunnerWritableStorageMode {
     type Err = anyhow::Error;
 
+    /// Handles from str for this module.
     fn from_str(value: &str) -> anyhow::Result<Self> {
         match value.trim() {
             "unbounded" => Ok(Self::Unbounded),
@@ -122,6 +123,7 @@ impl FromStr for RunnerWritableStorageMode {
     }
 }
 
+/// Handles default database url for this module.
 fn default_database_url() -> String {
     format!(
         "postgres://agentics:agentics@127.0.0.1:{}/agentics",
@@ -129,35 +131,43 @@ fn default_database_url() -> String {
     )
 }
 
+/// Handles default api host for this module.
 fn default_api_host() -> String {
     "127.0.0.1".to_string()
 }
 
+/// Handles default api port for this module.
 fn default_api_port() -> u16 {
     DEFAULT_API_PORT
 }
 
+/// Handles default storage root for this module.
 fn default_storage_root() -> String {
     "storage".to_string()
 }
 
+/// Handles default challenges root for this module.
 fn default_challenges_root() -> String {
     "examples/challenges".to_string()
 }
 
+/// Handles default admin username for this module.
 fn default_admin_username() -> String {
     DEFAULT_ADMIN_USERNAME.to_string()
 }
 
+/// Handles default admin password for this module.
 fn default_admin_password() -> String {
     DEFAULT_ADMIN_PASSWORD.to_string()
 }
 
+/// Handles default cors allowed origins for this module.
 fn default_cors_allowed_origins() -> String {
     let web_port = env_port("AGENTICS_WEB_PORT", DEFAULT_WEB_PORT);
     format!("http://127.0.0.1:{web_port},http://localhost:{web_port}")
 }
 
+/// Handles env port for this module.
 fn env_port(name: &str, default: u16) -> u16 {
     std::env::var(name)
         .ok()
@@ -165,46 +175,57 @@ fn env_port(name: &str, default: u16) -> u16 {
         .unwrap_or(default)
 }
 
+/// Handles default worker poll interval ms for this module.
 fn default_worker_poll_interval_ms() -> u64 {
     3000
 }
 
+/// Handles default worker stale job minutes for this module.
 fn default_worker_stale_job_minutes() -> i32 {
     1
 }
 
+/// Handles default validation runs per agent challenge day for this module.
 fn default_validation_runs_per_agent_challenge_day() -> u32 {
     20
 }
 
+/// Handles default official runs per agent challenge day for this module.
 fn default_official_runs_per_agent_challenge_day() -> u32 {
     5
 }
 
+/// Handles default max active official jobs for this module.
 fn default_max_active_official_jobs() -> u32 {
     20
 }
 
+/// Handles default max active agents for this module.
 fn default_max_active_agents() -> u32 {
     1_000
 }
 
+/// Handles default max active challenge drafts per agent for this module.
 fn default_max_active_challenge_drafts_per_agent() -> u32 {
     10
 }
 
+/// Handles default challenge private asset bytes per draft for this module.
 fn default_challenge_private_asset_bytes_per_draft() -> u64 {
     250 * 1024 * 1024
 }
 
+/// Handles default challenge draft validations per day for this module.
 fn default_challenge_draft_validations_per_day() -> u32 {
     10
 }
 
+/// Handles default challenge draft ttl days for this module.
 fn default_challenge_draft_ttl_days() -> i64 {
     14
 }
 
+/// Handles default unpublished challenge asset grace days for this module.
 fn default_unpublished_challenge_asset_grace_days() -> i64 {
     7
 }
@@ -213,6 +234,7 @@ fn default_unpublished_challenge_asset_grace_days() -> i64 {
     clippy::expect_used,
     reason = "static default URLs are validated by type constructors and have no runtime fallback"
 )]
+/// Handles default github oauth authorize url for this module.
 fn default_github_oauth_authorize_url() -> GithubOauthAuthorizeUrl {
     GithubOauthAuthorizeUrl::try_new("https://github.com/login/oauth/authorize")
         .expect("default GitHub OAuth authorize URL must be valid")
@@ -222,6 +244,7 @@ fn default_github_oauth_authorize_url() -> GithubOauthAuthorizeUrl {
     clippy::expect_used,
     reason = "static default URLs are validated by type constructors and have no runtime fallback"
 )]
+/// Handles default github oauth token url for this module.
 fn default_github_oauth_token_url() -> GithubOauthTokenUrl {
     GithubOauthTokenUrl::try_new("https://github.com/login/oauth/access_token")
         .expect("default GitHub OAuth token URL must be valid")
@@ -231,31 +254,38 @@ fn default_github_oauth_token_url() -> GithubOauthTokenUrl {
     clippy::expect_used,
     reason = "static default URLs are validated by type constructors and have no runtime fallback"
 )]
+/// Handles default github api user url for this module.
 fn default_github_api_user_url() -> GithubApiUserUrl {
     GithubApiUserUrl::try_new("https://api.github.com/user")
         .expect("default GitHub API user URL must be valid")
 }
 
+/// Handles default web session cookie name for this module.
 fn default_web_session_cookie_name() -> String {
     "agentics_session".to_string()
 }
 
+/// Handles default web csrf cookie name for this module.
 fn default_web_csrf_cookie_name() -> String {
     "agentics_csrf".to_string()
 }
 
+/// Handles default web session ttl hours for this module.
 fn default_web_session_ttl_hours() -> i64 {
     24
 }
 
+/// Handles default log level for this module.
 fn default_log_level() -> String {
     "info".to_string()
 }
 
+/// Handles default runner writable storage mode for this module.
 fn default_runner_writable_storage_mode() -> String {
     DEFAULT_RUNNER_WRITABLE_STORAGE_MODE.to_string()
 }
 
+/// Handles default runner writable slot classes mb for this module.
 fn default_runner_writable_slot_classes_mb() -> String {
     DEFAULT_RUNNER_WRITABLE_SLOT_CLASSES_MB.to_string()
 }
@@ -400,10 +430,12 @@ impl Config {
         Ok(())
     }
 
+    /// Handles runner writable storage mode for this module.
     pub fn runner_writable_storage_mode(&self) -> anyhow::Result<RunnerWritableStorageMode> {
         self.runner_writable_storage_mode.parse()
     }
 
+    /// Handles runner writable slot classes mb for this module.
     pub fn runner_writable_slot_classes_mb(&self) -> anyhow::Result<Vec<u64>> {
         let mut classes = Vec::new();
         for raw in self
@@ -439,6 +471,7 @@ impl Config {
             .collect()
     }
 
+    /// Handles uses default admin credentials for this module.
     fn uses_default_admin_credentials(&self) -> bool {
         self.admin_username == DEFAULT_ADMIN_USERNAME
             && self.admin_password == DEFAULT_ADMIN_PASSWORD
@@ -457,6 +490,7 @@ impl Config {
     }
 }
 
+/// Returns whether loopback host holds.
 fn is_loopback_host(host: &str) -> bool {
     let host = host.trim();
     if host.eq_ignore_ascii_case("localhost") {
@@ -468,6 +502,7 @@ fn is_loopback_host(host: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Validates required trimmed invariants for this contract.
 fn validate_required_trimmed(value: Option<&str>, field: &str) -> anyhow::Result<()> {
     if value.is_none_or(|value| value.trim().is_empty()) {
         anyhow::bail!("{field} must be set when GitHub OAuth is configured");
@@ -475,6 +510,7 @@ fn validate_required_trimmed(value: Option<&str>, field: &str) -> anyhow::Result
     Ok(())
 }
 
+/// Validates cookie name invariants for this contract.
 fn validate_cookie_name(value: &str, field: &str) -> anyhow::Result<()> {
     let value = value.trim();
     if value.is_empty() {
@@ -493,11 +529,13 @@ fn validate_cookie_name(value: &str, field: &str) -> anyhow::Result<()> {
 mod tests {
     use super::Config;
 
+    /// Verifies that loopback bind allows local default credentials.
     #[test]
     fn loopback_bind_allows_local_default_credentials() {
         assert!(test_config().validate_api_security().is_ok());
     }
 
+    /// Verifies that default admin credentials are rejected on wildcard bind.
     #[test]
     fn default_admin_credentials_are_rejected_on_wildcard_bind() {
         let mut config = test_config();
@@ -513,6 +551,7 @@ mod tests {
         assert!(config.validate_api_security().is_ok());
     }
 
+    /// Verifies that parses runner writable slot classes.
     #[test]
     fn parses_runner_writable_slot_classes() {
         let config = Config {
@@ -526,6 +565,7 @@ mod tests {
         );
     }
 
+    /// Handles test config for this module.
     fn test_config() -> Config {
         Config {
             database_url: String::new(),

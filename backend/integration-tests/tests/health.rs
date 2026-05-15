@@ -2,6 +2,7 @@ mod helpers;
 
 use helpers::{api_url, spawn_app};
 
+/// Verifies that health check works.
 #[sqlx::test(migrations = "../migrations")]
 async fn health_check_works(pool: sqlx::PgPool) {
     let app = spawn_app(pool).await;

@@ -10,6 +10,7 @@ use helpers::{
     spawn_app_with_config, test_config,
 };
 
+/// Handles creator auth for this module.
 fn creator_auth(
     request: reqwest::RequestBuilder,
     creator: &TestCreatorSession,
@@ -19,6 +20,7 @@ fn creator_auth(
         .header("X-Agentics-CSRF-Token", &creator.csrf_token)
 }
 
+/// Verifies that request validation returns contract error shape.
 #[sqlx::test(migrations = "../migrations")]
 async fn request_validation_returns_contract_error_shape(pool: sqlx::PgPool) {
     let app = spawn_app(pool).await;
@@ -78,6 +80,7 @@ async fn request_validation_returns_contract_error_shape(pool: sqlx::PgPool) {
     );
 }
 
+/// Verifies that zip submission routes accept declared large json bodies.
 #[sqlx::test(migrations = "../migrations")]
 async fn zip_submission_routes_accept_declared_large_json_bodies(pool: sqlx::PgPool) {
     let app = helpers::spawn_app(pool).await;
@@ -119,6 +122,7 @@ async fn zip_submission_routes_accept_declared_large_json_bodies(pool: sqlx::PgP
     );
 }
 
+/// Verifies that solution submission rejects invalid target before artifact decode.
 #[sqlx::test(migrations = "../migrations")]
 async fn solution_submission_rejects_invalid_target_before_artifact_decode(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -192,6 +196,7 @@ async fn solution_submission_rejects_invalid_target_before_artifact_decode(pool:
     assert_eq!(solution_submission_count.0, 0);
 }
 
+/// Verifies that invalid solution submission path ids return bad request.
 #[sqlx::test(migrations = "../migrations")]
 async fn invalid_solution_submission_path_ids_return_bad_request(pool: sqlx::PgPool) {
     let app = helpers::spawn_app(pool).await;
@@ -218,6 +223,7 @@ async fn invalid_solution_submission_path_ids_return_bad_request(pool: sqlx::PgP
     }
 }
 
+/// Verifies that solution submission rejects legacy round field before artifact decode.
 #[sqlx::test(migrations = "../migrations")]
 async fn solution_submission_rejects_legacy_round_field_before_artifact_decode(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -305,6 +311,7 @@ async fn solution_submission_rejects_legacy_round_field_before_artifact_decode(p
     assert_eq!(solution_submission_count.0, 0);
 }
 
+/// Verifies that solution submission rejects unstarted and closed challenges before artifact decode.
 #[sqlx::test(migrations = "../migrations")]
 async fn solution_submission_rejects_unstarted_and_closed_challenges_before_artifact_decode(
     pool: sqlx::PgPool,
@@ -371,6 +378,7 @@ async fn solution_submission_rejects_unstarted_and_closed_challenges_before_arti
     assert_eq!(solution_submission_count.0, 0);
 }
 
+/// Verifies that private shortlist challenge requires owner delta before artifact decode.
 #[sqlx::test(migrations = "../migrations")]
 async fn private_shortlist_challenge_requires_owner_delta_before_artifact_decode(
     pool: sqlx::PgPool,
@@ -529,6 +537,7 @@ async fn private_shortlist_challenge_requires_owner_delta_before_artifact_decode
     assert_eq!(accepted.status(), reqwest::StatusCode::CREATED);
 }
 
+/// Verifies that challenge submission limit rejects before extra artifact work.
 #[sqlx::test(migrations = "../migrations")]
 async fn challenge_submission_limit_rejects_before_extra_artifact_work(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -577,6 +586,7 @@ async fn challenge_submission_limit_rejects_before_extra_artifact_work(pool: sql
     assert_eq!(solution_submission_count.0, 1);
 }
 
+/// Verifies that admin direct publish rejects private shortlist challenge.
 #[sqlx::test(migrations = "../migrations")]
 async fn admin_direct_publish_rejects_private_shortlist_challenge(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -614,11 +624,13 @@ async fn admin_direct_publish_rejects_private_shortlist_challenge(pool: sqlx::Pg
     );
 }
 
+/// Carries api agent data across this module boundary.
 struct ApiAgent {
     agent_id: String,
     token: String,
 }
 
+/// Handles register api agent for this module.
 async fn register_api_agent(
     client: &reqwest::Client,
     app: &helpers::TestApp,
@@ -646,6 +658,7 @@ async fn register_api_agent(
     }
 }
 
+/// Handles submit solution for this module.
 async fn submit_solution(
     client: &reqwest::Client,
     app: &helpers::TestApp,
@@ -664,6 +677,7 @@ async fn submit_solution(
     .await
 }
 
+/// Handles submit solution with target for this module.
 async fn submit_solution_with_target(
     client: &reqwest::Client,
     app: &helpers::TestApp,
@@ -685,6 +699,7 @@ async fn submit_solution_with_target(
         .expect("failed to submit solution")
 }
 
+/// Writes challenge window challenge to the target path.
 fn write_challenge_window_challenge(
     root: &Path,
     challenge_name: &str,
@@ -715,6 +730,7 @@ fn write_challenge_window_challenge(
     .expect("failed to write spec");
 }
 
+/// Writes private shortlist challenge to the target path.
 fn write_private_shortlist_challenge(root: &Path, challenge_name: &str) {
     let bundle_dir = root.join(challenge_name).join("v1");
     copy_dir_all(
@@ -735,6 +751,7 @@ fn write_private_shortlist_challenge(root: &Path, challenge_name: &str) {
     .expect("failed to write spec");
 }
 
+/// Writes limited submission challenge to the target path.
 fn write_limited_submission_challenge(root: &Path, challenge_name: &str, official_limit: i64) {
     let bundle_dir = root.join(challenge_name).join("v1");
     copy_dir_all(

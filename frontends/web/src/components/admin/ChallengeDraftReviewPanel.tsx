@@ -18,9 +18,12 @@ import {
   challengeDraftResponseSchema,
 } from "@/lib/schemas";
 
+/** Describes the refresh options shape used by this module. */
 type RefreshOptions = { quiet?: boolean };
+/** Describes the admin refresh shape used by this module. */
 type AdminRefresh = (options?: RefreshOptions) => Promise<void>;
 
+/** Describes the challenge draft review panel props shape used by this module. */
 interface ChallengeDraftReviewPanelProps {
   csrfToken: string;
   drafts: ChallengeDraftListItem[];
@@ -30,6 +33,7 @@ interface ChallengeDraftReviewPanelProps {
   onMessage: (message: string | null) => void;
 }
 
+/** Renders the challenge draft review panel component. */
 export function ChallengeDraftReviewPanel({
   csrfToken,
   drafts,
@@ -44,6 +48,7 @@ export function ChallengeDraftReviewPanel({
   const [reviewMessage, setReviewMessage] = useState("approved");
   const [busyDraftId, setBusyDraftId] = useState<string | null>(null);
 
+  /** Runs draft action and refreshes affected data. */
   const runDraftAction = async (
     draftId: string,
     action: "validate" | "approve" | "publish" | "reject" | "abandon",
@@ -85,6 +90,7 @@ export function ChallengeDraftReviewPanel({
     }
   };
 
+  /** Cleans up drafts through the admin API. */
   const cleanupDrafts = async () => {
     if (!csrfToken) {
       onError("Sign in before cleaning up stale drafts.");
@@ -276,6 +282,7 @@ export function ChallengeDraftReviewPanel({
   );
 }
 
+/** Renders the section title component. */
 function SectionTitle({ icon, title }: { icon: ReactNode; title: string }) {
   return (
     <h2 className="flex items-center gap-2 text-[var(--text-h3)] font-semibold">
@@ -285,6 +292,7 @@ function SectionTitle({ icon, title }: { icon: ReactNode; title: string }) {
   );
 }
 
+/** Renders the text input component. */
 function TextInput({
   label,
   value,
@@ -308,6 +316,7 @@ function TextInput({
   );
 }
 
+/** Renders the action button component. */
 function ActionButton({
   label,
   icon,
@@ -334,6 +343,7 @@ function ActionButton({
   );
 }
 
+/** Renders the status badge component. */
 function StatusBadge({ status }: { status: string }) {
   const normalized = status.toLowerCase();
   const className =
@@ -350,6 +360,7 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`badge ${className}`}>{status}</span>;
 }
 
+/** Renders the digest component. */
 function Digest({
   label,
   value,
@@ -365,6 +376,7 @@ function Digest({
   );
 }
 
+/** Normalizes unknown errors into a displayable message. */
 function adminErrorMessage(error: unknown): string {
   if (error instanceof AdminApiError) {
     return error.message;

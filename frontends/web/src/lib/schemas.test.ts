@@ -11,6 +11,7 @@ import {
   solutionSubmissionResponseSchema,
 } from "./schemas";
 
+/** Builds the target fixture test fixture. */
 function targetFixture(validationEnabled: boolean) {
   return {
     name: "linux-arm64-cpu",

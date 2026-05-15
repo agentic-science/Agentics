@@ -4,6 +4,7 @@ import createNextIntlPlugin from "next-intl/plugin";
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
 const defaultBackendOrigin = `http://127.0.0.1:${process.env.AGENTICS_API_PORT ?? "3100"}`;
+/** Handles backend origin behavior for this module. */
 const backendOrigin = (
   process.env.AGENTICS_API_BASE_URL ?? defaultBackendOrigin
 ).replace(/\/$/, "");

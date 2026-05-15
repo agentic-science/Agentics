@@ -13,6 +13,7 @@ const allMessages = {
   zh: zhMessages as Record<string, unknown>,
 };
 
+/** Handles generate metadata behavior for this module. */
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("meta");
   return {
@@ -26,6 +27,7 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
+/** Renders the root layout component. */
 export default async function RootLayout({
   children,
 }: Readonly<{

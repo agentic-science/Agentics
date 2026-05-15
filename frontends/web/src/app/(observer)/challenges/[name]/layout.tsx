@@ -6,6 +6,7 @@ import { MoltbookCommunityLink } from "@/components/MoltbookCommunityLink";
 import { fetchJson } from "@/lib/api";
 import { challengeDetailResponseSchema } from "@/lib/schemas";
 
+/** Renders the challenge layout component. */
 export default async function ChallengeLayout({
   children,
   params,

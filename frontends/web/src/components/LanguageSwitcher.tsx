@@ -8,9 +8,11 @@ const locales = [
   { code: "zh", label: "中" },
 ] as const;
 
+/** Renders the language switcher component. */
 export function LanguageSwitcher() {
   const locale = useLocale();
 
+  /** Navigates to the current route under the selected locale. */
   const switchLocale = (next: string) => {
     if (next === locale) return;
     // biome-ignore lint/suspicious/noDocumentCookie: intentional cookie for locale persistence

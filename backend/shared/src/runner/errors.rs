@@ -6,6 +6,7 @@ use crate::zip_project::{
 use super::docker::ContainerOutcome;
 use super::logs::append_log_excerpt;
 
+/// Ensures container succeeded before continuing.
 pub(super) fn ensure_container_succeeded(
     phase: ZipProjectPhaseName,
     outcome: &ContainerOutcome,
@@ -40,6 +41,7 @@ pub(super) fn ensure_container_succeeded(
     Ok(())
 }
 
+/// Ensures prepare succeeded before continuing.
 pub(super) fn ensure_prepare_succeeded(outcome: &ContainerOutcome) -> Result<()> {
     if outcome.timed_out {
         return Err(AppError::Runner(append_log_excerpt(
@@ -56,6 +58,7 @@ pub(super) fn ensure_prepare_succeeded(outcome: &ContainerOutcome) -> Result<()>
     Ok(())
 }
 
+/// Handles phase error for this module.
 pub(super) fn phase_error(
     phase: ZipProjectPhaseName,
     reason: ZipProjectPhaseFailureReason,

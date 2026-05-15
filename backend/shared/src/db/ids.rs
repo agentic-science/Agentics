@@ -8,6 +8,7 @@ use crate::models::ids::{
 };
 use crate::models::names::{AssetName, ChallengeName, TargetName};
 
+/// Reads challenge name from a database row and validates its domain shape.
 pub(in crate::db) fn challenge_name_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -20,6 +21,7 @@ pub(in crate::db) fn challenge_name_from_row(
     })
 }
 
+/// Reads target from a database row and validates its domain shape.
 pub(in crate::db) fn target_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -32,6 +34,7 @@ pub(in crate::db) fn target_from_row(
     })
 }
 
+/// Reads asset name from a database row and validates its domain shape.
 pub(in crate::db) fn asset_name_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -44,6 +47,7 @@ pub(in crate::db) fn asset_name_from_row(
     })
 }
 
+/// Reads solution submission id from a database row and validates its domain shape.
 pub(in crate::db) fn solution_submission_id_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -56,6 +60,7 @@ pub(in crate::db) fn solution_submission_id_from_row(
     })
 }
 
+/// Reads agent id from a database row and validates its domain shape.
 pub(in crate::db) fn agent_id_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -63,6 +68,7 @@ pub(in crate::db) fn agent_id_from_row(
     parse_uuid_id_from_row(row, column, AgentId::try_new, "agent id")
 }
 
+/// Reads challenge draft id from a database row and validates its domain shape.
 pub(in crate::db) fn challenge_draft_id_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -70,6 +76,7 @@ pub(in crate::db) fn challenge_draft_id_from_row(
     parse_uuid_id_from_row(row, column, ChallengeDraftId::try_new, "challenge draft id")
 }
 
+/// Reads challenge private asset id from a database row and validates its domain shape.
 pub(in crate::db) fn challenge_private_asset_id_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -82,6 +89,7 @@ pub(in crate::db) fn challenge_private_asset_id_from_row(
     )
 }
 
+/// Reads challenge draft validation record id from a database row and validates its domain shape.
 pub(in crate::db) fn challenge_draft_validation_record_id_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -94,6 +102,7 @@ pub(in crate::db) fn challenge_draft_validation_record_id_from_row(
     )
 }
 
+/// Reads challenge shortlist revision id from a database row and validates its domain shape.
 pub(in crate::db) fn challenge_shortlist_revision_id_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -106,6 +115,7 @@ pub(in crate::db) fn challenge_shortlist_revision_id_from_row(
     )
 }
 
+/// Reads evaluation job id from a database row and validates its domain shape.
 pub(in crate::db) fn evaluation_job_id_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -113,6 +123,7 @@ pub(in crate::db) fn evaluation_job_id_from_row(
     parse_uuid_id_from_row(row, column, EvaluationJobId::try_new, "evaluation job id")
 }
 
+/// Reads optional challenge name from a database row and validates its domain shape.
 pub(in crate::db) fn optional_challenge_name_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -127,6 +138,7 @@ pub(in crate::db) fn optional_challenge_name_from_row(
         })
 }
 
+/// Reads optional solution submission id from a database row and validates its domain shape.
 pub(in crate::db) fn optional_solution_submission_id_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -141,6 +153,7 @@ pub(in crate::db) fn optional_solution_submission_id_from_row(
         })
 }
 
+/// Reads uuid string from a database row and validates its domain shape.
 pub(in crate::db) fn uuid_string_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -148,6 +161,7 @@ pub(in crate::db) fn uuid_string_from_row(
     uuid_or_string_from_row(row, column)
 }
 
+/// Reads optional uuid string from a database row and validates its domain shape.
 pub(in crate::db) fn optional_uuid_string_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -155,6 +169,7 @@ pub(in crate::db) fn optional_uuid_string_from_row(
     optional_uuid_or_string_from_row(row, column)
 }
 
+/// Reads uuid or string from a database row and validates its domain shape.
 fn uuid_or_string_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<String> {
     if let Ok(value) = row.try_get::<Uuid, _>(column) {
         return Ok(value.to_string());
@@ -162,6 +177,7 @@ fn uuid_or_string_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<
     Ok(row.try_get(column)?)
 }
 
+/// Reads parse uuid id from a database row and validates its domain shape.
 fn parse_uuid_id_from_row<T>(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -174,6 +190,7 @@ fn parse_uuid_id_from_row<T>(
     })
 }
 
+/// Reads optional uuid or string from a database row and validates its domain shape.
 fn optional_uuid_or_string_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,

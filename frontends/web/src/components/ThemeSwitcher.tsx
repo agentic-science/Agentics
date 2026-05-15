@@ -3,9 +3,12 @@
 import { Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 
+/** Describes the theme mode shape used by this module. */
 type ThemeMode = "system" | "light" | "dark";
+/** Describes the resolved theme shape used by this module. */
 type ResolvedTheme = "light" | "dark";
 
+/** Fetches resolved theme for the requested UI scope. */
 function getResolvedTheme(mode: ThemeMode): ResolvedTheme {
   if (mode === "system") {
     return window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -15,6 +18,7 @@ function getResolvedTheme(mode: ThemeMode): ResolvedTheme {
   return mode;
 }
 
+/** Renders the theme switcher component. */
 export function ThemeSwitcher() {
   const [mode, setMode] = useState<ThemeMode>("system");
   const [resolved, setResolved] = useState<ResolvedTheme>("dark");
@@ -41,6 +45,7 @@ export function ThemeSwitcher() {
   useEffect(() => {
     if (!mounted) return;
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    /** Handles handler user interaction. */
     const handler = () => {
       if (mode === "system") {
         const r = mq.matches ? "dark" : "light";
@@ -52,6 +57,7 @@ export function ThemeSwitcher() {
     return () => mq.removeEventListener("change", handler);
   }, [mode, mounted]);
 
+  /** Cycles through the supported theme modes. */
   const cycle = () => {
     const order: ThemeMode[] = ["system", "light", "dark"];
     const idx = order.indexOf(mode);

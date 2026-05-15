@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 
+/** Renders the challenge nav component. */
 export function ChallengeNav({
   challengeName,
   defaultTarget,

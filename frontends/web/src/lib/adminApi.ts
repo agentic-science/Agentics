@@ -7,20 +7,24 @@ import {
 const ADMIN_API_BASE_URL =
   process.env.NEXT_PUBLIC_AGENTICS_API_BASE_URL?.replace(/\/$/, "") ?? "";
 
+/** Describes the admin credentials shape used by this module. */
 export interface AdminCredentials {
   username: string;
   password: string;
 }
 
+/** Error thrown when an authenticated admin API request fails. */
 export class AdminApiError extends Error {
   readonly status: number;
 
+  /** Stores the HTTP status alongside the backend error message. */
   constructor(status: number, message: string) {
     super(message);
     this.status = status;
   }
 }
 
+/** Handles admin fetch json behavior for this module. */
 export async function adminFetchJson<T>(
   path: string,
   schema: ZodType<T>,
@@ -40,6 +44,7 @@ export async function adminFetchJson<T>(
   if (!response.ok) {
     let message = response.statusText;
     try {
+      /** Handles body behavior for this component. */
       const body = (await response.json()) as { message?: string };
       message = body.message ?? message;
     } catch {
@@ -51,6 +56,7 @@ export async function adminFetchJson<T>(
   return schema.parse(await response.json());
 }
 
+/** Handles admin login behavior for this module. */
 export async function adminLogin(
   credentials: AdminCredentials,
 ): Promise<AdminSessionResponse> {
@@ -66,6 +72,7 @@ export async function adminLogin(
   if (!response.ok) {
     let message = response.statusText;
     try {
+      /** Handles body behavior for this component. */
       const body = (await response.json()) as { message?: string };
       message = body.message ?? message;
     } catch {
@@ -77,6 +84,7 @@ export async function adminLogin(
   return adminSessionResponseSchema.parse(await response.json());
 }
 
+/** Handles admin logout behavior for this module. */
 export async function adminLogout(csrfToken: string): Promise<void> {
   const response = await fetch(adminEndpoint("/api/auth/admin/logout"), {
     method: "POST",
@@ -89,6 +97,7 @@ export async function adminLogout(csrfToken: string): Promise<void> {
   if (!response.ok) {
     let message = response.statusText;
     try {
+      /** Handles body behavior for this component. */
       const body = (await response.json()) as { message?: string };
       message = body.message ?? message;
     } catch {
@@ -98,6 +107,7 @@ export async function adminLogout(csrfToken: string): Promise<void> {
   }
 }
 
+/** Handles admin endpoint behavior for this module. */
 function adminEndpoint(path: string): string {
   if (ADMIN_API_BASE_URL) {
     return `${ADMIN_API_BASE_URL}${path}`;

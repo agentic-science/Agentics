@@ -21,6 +21,7 @@ impl UuidIdError {
 }
 
 impl fmt::Display for UuidIdError {
+    /// Handles fmt for this module.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.message)
     }
@@ -62,12 +63,14 @@ macro_rules! define_uuid_id_type {
         }
 
         impl fmt::Display for $type_name {
+            /// Handles fmt for this module.
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 f.write_str(self.as_str())
             }
         }
 
         impl AsRef<str> for $type_name {
+            /// Returns ref in the representation required by callers.
             fn as_ref(&self) -> &str {
                 self.as_str()
             }
@@ -76,12 +79,14 @@ macro_rules! define_uuid_id_type {
         impl FromStr for $type_name {
             type Err = UuidIdError;
 
+            /// Handles from str for this module.
             fn from_str(value: &str) -> Result<Self, Self::Err> {
                 Self::try_new(value)
             }
         }
 
         impl Serialize for $type_name {
+            /// Handles serialize for this module.
             fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
             where
                 S: Serializer,
@@ -91,6 +96,7 @@ macro_rules! define_uuid_id_type {
         }
 
         impl<'de> Deserialize<'de> for $type_name {
+            /// Handles deserialize for this module.
             fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
             where
                 D: Deserializer<'de>,
@@ -101,14 +107,17 @@ macro_rules! define_uuid_id_type {
         }
 
         impl JsonSchema for $type_name {
+            /// Handles inline schema for this module.
             fn inline_schema() -> bool {
                 true
             }
 
+            /// Handles schema name for this module.
             fn schema_name() -> Cow<'static, str> {
                 $schema_name.into()
             }
 
+            /// Handles json schema for this module.
             fn json_schema(_: &mut SchemaGenerator) -> Schema {
                 json_schema!({
                     "type": "string",
@@ -178,6 +187,7 @@ pub fn is_valid_solution_submission_id(value: &str) -> bool {
 mod tests {
     use super::{AgentId, ChallengeDraftId, SolutionSubmissionId, is_valid_solution_submission_id};
 
+    /// Verifies that validates solution submission ids.
     #[test]
     fn validates_solution_submission_ids() {
         let valid = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
@@ -191,6 +201,7 @@ mod tests {
         assert!(SolutionSubmissionId::try_new("f47ac10b58cc4372a5670e02b2c3d479").is_err());
     }
 
+    /// Verifies that serde rejects invalid solution submission ids.
     #[test]
     fn serde_rejects_invalid_solution_submission_ids() {
         let submission: SolutionSubmissionId =
@@ -200,6 +211,7 @@ mod tests {
         assert!(serde_json::from_str::<SolutionSubmissionId>("\"submission-1\"").is_err());
     }
 
+    /// Verifies that generated uuid ids canonicalize hex case.
     #[test]
     fn generated_uuid_ids_canonicalize_hex_case() {
         let canonical = "f47ac10b-58cc-4372-a567-0e02b2c3d479";

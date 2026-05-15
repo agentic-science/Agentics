@@ -7,6 +7,7 @@ use helpers::{
 };
 use shared::config::Config;
 
+/// Verifies that admin read models power operator console.
 #[sqlx::test(migrations = "../migrations")]
 async fn admin_read_models_power_operator_console(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -96,6 +97,7 @@ async fn admin_read_models_power_operator_console(pool: sqlx::PgPool) {
     assert_eq!(heartbeats["items"][0]["payload"]["status"], "idle");
 }
 
+/// Verifies that create challenge and publish contract.
 #[sqlx::test(migrations = "../migrations")]
 async fn create_challenge_and_publish_contract(pool: sqlx::PgPool) {
     let app = spawn_app(pool).await;
@@ -140,6 +142,7 @@ async fn create_challenge_and_publish_contract(pool: sqlx::PgPool) {
     assert!(!response.status().is_success());
 }
 
+/// Verifies that publishing contract exposes challenge policy.
 #[sqlx::test(migrations = "../migrations")]
 async fn publishing_contract_exposes_challenge_policy(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -205,6 +208,7 @@ async fn publishing_contract_exposes_challenge_policy(pool: sqlx::PgPool) {
     assert_eq!(spec_json["eligibility"]["type"], "open");
 }
 
+/// Verifies that publishing existing contract is rejected without mutating it.
 #[sqlx::test(migrations = "../migrations")]
 async fn publishing_existing_contract_is_rejected_without_mutating_it(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -297,6 +301,7 @@ async fn publishing_existing_contract_is_rejected_without_mutating_it(pool: sqlx
     assert_eq!(managed_spec["challenge_summary"], "Original summary");
 }
 
+/// Verifies that publish rejects tag only images when digest policy is enabled.
 #[sqlx::test(migrations = "../migrations")]
 async fn publish_rejects_tag_only_images_when_digest_policy_is_enabled(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -325,6 +330,7 @@ async fn publish_rejects_tag_only_images_when_digest_policy_is_enabled(pool: sql
     );
 }
 
+/// Writes admin publish bundle to the target path.
 fn write_admin_publish_bundle(
     target: &std::path::Path,
     challenge_name: &str,
@@ -346,6 +352,7 @@ fn write_admin_publish_bundle(
     .expect("failed to write spec");
 }
 
+/// Verifies that admin routes require auth.
 #[sqlx::test(migrations = "../migrations")]
 async fn admin_routes_require_auth(pool: sqlx::PgPool) {
     let app = spawn_app(pool).await;
@@ -363,6 +370,7 @@ async fn admin_routes_require_auth(pool: sqlx::PgPool) {
     assert_eq!(response.status(), 401);
 }
 
+/// Verifies that admin session cookie authenticates admin routes.
 #[sqlx::test(migrations = "../migrations")]
 async fn admin_session_cookie_authenticates_admin_routes(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -482,6 +490,7 @@ async fn admin_session_cookie_authenticates_admin_routes(pool: sqlx::PgPool) {
     );
 }
 
+/// Verifies that admin official run bypasses public official queue limit.
 #[sqlx::test(migrations = "../migrations")]
 async fn admin_official_run_bypasses_public_official_queue_limit(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");

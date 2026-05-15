@@ -207,6 +207,7 @@ pub async fn delete_solution_submission(
     Ok(())
 }
 
+/// Handles enforce quota admission for this module.
 async fn enforce_quota_admission(
     tx: &mut Transaction<'_, Postgres>,
     input: &CreateSolutionSubmissionInput,
@@ -288,6 +289,7 @@ async fn enforce_quota_admission(
     Ok(())
 }
 
+/// Handles lock quota scope for this module.
 async fn lock_quota_scope(tx: &mut Transaction<'_, Postgres>, scope: &str) -> Result<()> {
     sqlx::query(
         r#"
@@ -315,6 +317,7 @@ async fn lock_quota_scope(tx: &mut Transaction<'_, Postgres>, scope: &str) -> Re
     Ok(())
 }
 
+/// Handles count recent runs for agent challenge tx for this module.
 async fn count_recent_runs_for_agent_challenge_tx(
     tx: &mut Transaction<'_, Postgres>,
     agent_id: &AgentId,
@@ -346,6 +349,7 @@ async fn count_recent_runs_for_agent_challenge_tx(
     Ok(count)
 }
 
+/// Handles count lifetime runs for agent challenge tx for this module.
 async fn count_lifetime_runs_for_agent_challenge_tx(
     tx: &mut Transaction<'_, Postgres>,
     agent_id: &AgentId,
@@ -374,6 +378,7 @@ async fn count_lifetime_runs_for_agent_challenge_tx(
     Ok(count)
 }
 
+/// Handles count active evaluation jobs tx for this module.
 async fn count_active_evaluation_jobs_tx(
     tx: &mut Transaction<'_, Postgres>,
     eval_type: ScoringMode,
@@ -653,6 +658,7 @@ pub async fn list_public_solution_submissions_for_challenge(
         .collect::<Result<Vec<_>>>()
 }
 
+/// Reads parse eval from a database row and validates its domain shape.
 fn parse_eval_from_row(row: &sqlx::postgres::PgRow, prefix: &str) -> Result<Option<EvaluationDto>> {
     let id_col = format!("{}_id", prefix);
     let id = optional_evaluation_id_from_row(row, id_col.as_str())?;
@@ -722,12 +728,14 @@ fn parse_eval_from_row(row: &sqlx::postgres::PgRow, prefix: &str) -> Result<Opti
     }))
 }
 
+/// Reads storage key from a database row and validates its domain shape.
 fn storage_key_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<StorageKey> {
     let value: String = row.try_get(column)?;
     StorageKey::try_new(&value)
         .map_err(|e| AppError::Internal(format!("stored invalid storage key in `{column}`: {e}")))
 }
 
+/// Reads optional storage key from a database row and validates its domain shape.
 fn optional_storage_key_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -738,6 +746,7 @@ fn optional_storage_key_from_row(
         .map_err(|e| AppError::Internal(format!("stored invalid storage key in `{column}`: {e}")))
 }
 
+/// Reads optional evaluation job id from a database row and validates its domain shape.
 fn optional_evaluation_job_id_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -752,6 +761,7 @@ fn optional_evaluation_job_id_from_row(
         })
 }
 
+/// Reads optional evaluation id from a database row and validates its domain shape.
 fn optional_evaluation_id_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,

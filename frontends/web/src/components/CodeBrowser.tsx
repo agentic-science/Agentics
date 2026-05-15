@@ -3,6 +3,7 @@
 import { Check, Copy, File, FileCode, FileJson, FileText } from "lucide-react";
 import { useState } from "react";
 
+/** Describes the file item shape used by this module. */
 interface FileItem {
   path: string;
   size: number;
@@ -11,6 +12,7 @@ interface FileItem {
   highlightedHtml?: string | null;
 }
 
+/** Fetches file icon for the requested UI scope. */
 function getFileIcon(path: string) {
   if (path.endsWith(".py"))
     return <FileCode className="w-4 h-4 text-[var(--accent-secondary-text)]" />;
@@ -21,6 +23,7 @@ function getFileIcon(path: string) {
   return <File className="w-4 h-4 text-[var(--text-muted)]" />;
 }
 
+/** Fetches language for the requested UI scope. */
 function getLanguage(path: string): string {
   if (path.endsWith(".py")) return "python";
   if (path.endsWith(".json")) return "json";
@@ -32,15 +35,19 @@ function getLanguage(path: string): string {
   return "text";
 }
 
+/** Renders the code browser component. */
 export function CodeBrowser({ files }: { files: FileItem[] }) {
+  /** Handles sorted behavior for this component. */
   const sorted = [...files].sort((a, b) => a.path.localeCompare(b.path));
   const [activePath, setActivePath] = useState<string | null>(
     sorted.find((f) => f.is_text)?.path ?? null,
   );
   const [copied, setCopied] = useState(false);
 
+  /** Handles active file behavior for this component. */
   const activeFile = sorted.find((f) => f.path === activePath);
 
+  /** Handles copy user interaction. */
   const handleCopy = async () => {
     if (!activeFile?.content) return;
     await navigator.clipboard.writeText(activeFile.content);

@@ -4,6 +4,7 @@ mod helpers;
 
 use helpers::{api_url, examples_challenges_root, spawn_app, spawn_app_with_config, test_config};
 
+/// Verifies that register agent and list challenges.
 #[sqlx::test(migrations = "../migrations")]
 async fn register_agent_and_list_challenges(pool: sqlx::PgPool) {
     let app = spawn_app(pool).await;
@@ -51,6 +52,7 @@ async fn register_agent_and_list_challenges(pool: sqlx::PgPool) {
     assert_eq!(response.status(), 401);
 }
 
+/// Verifies that registration respects active agent quota.
 #[sqlx::test(migrations = "../migrations")]
 async fn registration_respects_active_agent_quota(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");

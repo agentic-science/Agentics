@@ -305,6 +305,7 @@ pub async fn create_challenge_private_asset(
     Ok(response)
 }
 
+/// Handles sum private asset bytes for draft tx for this module.
 async fn sum_private_asset_bytes_for_draft_tx(
     tx: &mut Transaction<'_, Postgres>,
     draft_id: &str,
@@ -323,6 +324,7 @@ async fn sum_private_asset_bytes_for_draft_tx(
     Ok(bytes)
 }
 
+/// Handles lock quota scope for this module.
 async fn lock_quota_scope(tx: &mut Transaction<'_, Postgres>, scope: &str) -> Result<()> {
     sqlx::query(
         r#"
@@ -646,6 +648,7 @@ pub async fn publish_archive_challenge_draft(
     Ok(())
 }
 
+/// Marks challenge draft published tx in persistent state.
 async fn mark_challenge_draft_published_tx(
     tx: &mut Transaction<'_, Postgres>,
     draft_id: &str,
@@ -672,6 +675,7 @@ async fn mark_challenge_draft_published_tx(
     Ok(())
 }
 
+/// Handles archive challenge tx for this module.
 async fn archive_challenge_tx(
     tx: &mut Transaction<'_, Postgres>,
     challenge_name: &ChallengeName,
@@ -705,6 +709,7 @@ pub async fn create_challenge_draft_audit_event(
     Ok(())
 }
 
+/// Creates challenge draft audit event tx after validating caller inputs.
 async fn create_challenge_draft_audit_event_tx(
     tx: &mut Transaction<'_, Postgres>,
     input: &CreateChallengeDraftAuditEventInput,
@@ -730,6 +735,7 @@ async fn create_challenge_draft_audit_event_tx(
     Ok(())
 }
 
+/// Lists private assets for draft using the configured query scope.
 async fn list_private_assets_for_draft(
     pool: &PgPool,
     draft_id: &str,
@@ -751,6 +757,7 @@ async fn list_private_assets_for_draft(
         .collect()
 }
 
+/// Lists validation records for draft using the configured query scope.
 async fn list_validation_records_for_draft(
     pool: &PgPool,
     draft_id: &str,
@@ -772,6 +779,7 @@ async fn list_validation_records_for_draft(
         .collect()
 }
 
+/// Converts a database row into the draft response model.
 fn row_to_draft_response(
     row: sqlx::postgres::PgRow,
     private_assets: Vec<ChallengePrivateAssetResponse>,
@@ -814,6 +822,7 @@ fn row_to_draft_response(
     })
 }
 
+/// Converts a database row into the private asset response model.
 fn row_to_private_asset_response(
     row: sqlx::postgres::PgRow,
 ) -> Result<ChallengePrivateAssetResponse> {
@@ -831,6 +840,7 @@ fn row_to_private_asset_response(
     })
 }
 
+/// Reads github repo remote from a database row and validates its domain shape.
 fn github_repo_remote_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -840,6 +850,7 @@ fn github_repo_remote_from_row(
         .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
 }
 
+/// Reads github pull request url from a database row and validates its domain shape.
 fn github_pull_request_url_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -849,18 +860,21 @@ fn github_pull_request_url_from_row(
         .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
 }
 
+/// Reads git commit sha from a database row and validates its domain shape.
 fn git_commit_sha_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<GitCommitSha> {
     let value: String = row.try_get(column)?;
     GitCommitSha::try_new(&value)
         .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
 }
 
+/// Reads sha256 digest from a database row and validates its domain shape.
 fn sha256_digest_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<Sha256Digest> {
     let value: String = row.try_get(column)?;
     Sha256Digest::try_new(&value)
         .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
 }
 
+/// Reads optional sha256 digest from a database row and validates its domain shape.
 fn optional_sha256_digest_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -873,12 +887,14 @@ fn optional_sha256_digest_from_row(
         .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
 }
 
+/// Reads storage key from a database row and validates its domain shape.
 fn storage_key_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<StorageKey> {
     let value: String = row.try_get(column)?;
     StorageKey::try_new(&value)
         .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
 }
 
+/// Reads repo relative path from a database row and validates its domain shape.
 fn repo_relative_path_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -888,6 +904,7 @@ fn repo_relative_path_from_row(
         .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
 }
 
+/// Converts a database row into the validation record response model.
 fn row_to_validation_record_response(
     row: sqlx::postgres::PgRow,
 ) -> Result<ChallengeDraftValidationRecordResponse> {
@@ -903,6 +920,7 @@ fn row_to_validation_record_response(
     })
 }
 
+/// Reads request kind from a database row and validates its domain shape.
 fn request_kind_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -912,6 +930,7 @@ fn request_kind_from_row(
         .ok_or_else(|| AppError::Internal(format!("unknown stored {column} `{value}`")))
 }
 
+/// Reads draft status from a database row and validates its domain shape.
 fn draft_status_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -921,6 +940,7 @@ fn draft_status_from_row(
         .ok_or_else(|| AppError::Internal(format!("unknown stored {column} `{value}`")))
 }
 
+/// Reads validation status from a database row and validates its domain shape.
 fn validation_status_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
@@ -930,6 +950,7 @@ fn validation_status_from_row(
         .ok_or_else(|| AppError::Internal(format!("unknown stored {column} `{value}`")))
 }
 
+/// Reads private asset kind from a database row and validates its domain shape.
 fn private_asset_kind_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,

@@ -13,6 +13,7 @@ use serde_json::json;
 
 use reqwest::StatusCode;
 
+/// Handles creator auth for this module.
 fn creator_auth(
     request: reqwest::RequestBuilder,
     creator: &TestCreatorSession,
@@ -22,6 +23,7 @@ fn creator_auth(
         .header("X-Agentics-CSRF-Token", &creator.csrf_token)
 }
 
+/// Verifies that challenge draft rejects short commit sha.
 #[sqlx::test(migrations = "../migrations")]
 async fn challenge_draft_rejects_short_commit_sha(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
@@ -58,6 +60,7 @@ async fn challenge_draft_rejects_short_commit_sha(pool: sqlx::PgPool) {
     );
 }
 
+/// Verifies that challenge draft conflicts on canonical repo key.
 #[sqlx::test(migrations = "../migrations")]
 async fn challenge_draft_conflicts_on_canonical_repo_key(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
@@ -89,6 +92,7 @@ async fn challenge_draft_conflicts_on_canonical_repo_key(pool: sqlx::PgPool) {
     assert_eq!(response.status(), StatusCode::CONFLICT);
 }
 
+/// Verifies that challenge draft can be validated approved and published.
 #[sqlx::test(migrations = "../migrations")]
 async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
@@ -340,6 +344,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
     assert_eq!(non_owner_stats.status(), reqwest::StatusCode::FORBIDDEN);
 }
 
+/// Verifies that approved draft publish rejects changed review content.
 #[sqlx::test(migrations = "../migrations")]
 async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
@@ -428,6 +433,7 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
     assert_eq!(published_count, 0);
 }
 
+/// Verifies that challenge draft rejects new version manifest.
 #[sqlx::test(migrations = "../migrations")]
 async fn challenge_draft_rejects_new_version_manifest(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
@@ -472,6 +478,7 @@ async fn challenge_draft_rejects_new_version_manifest(pool: sqlx::PgPool) {
     )
 }
 
+/// Verifies that archive draft hides challenge and rejects new submissions.
 #[sqlx::test(migrations = "../migrations")]
 async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
@@ -550,6 +557,7 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
     assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
 }
 
+/// Verifies that challenge draft rejects mismatched pr author.
 #[sqlx::test(migrations = "../migrations")]
 async fn challenge_draft_rejects_mismatched_pr_author(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
@@ -579,6 +587,7 @@ async fn challenge_draft_rejects_mismatched_pr_author(pool: sqlx::PgPool) {
     assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
 }
 
+/// Verifies that challenge creator routes require oauth session and csrf.
 #[sqlx::test(migrations = "../migrations")]
 async fn challenge_creator_routes_require_oauth_session_and_csrf(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
@@ -634,6 +643,7 @@ async fn challenge_creator_routes_require_oauth_session_and_csrf(pool: sqlx::PgP
     assert_eq!(old_self_link_route.status(), reqwest::StatusCode::NOT_FOUND);
 }
 
+/// Verifies that challenge creation quotas reject excess work.
 #[sqlx::test(migrations = "../migrations")]
 async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
@@ -719,6 +729,7 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
     );
 }
 
+/// Verifies that cleanup purges abandoned draft private assets.
 #[sqlx::test(migrations = "../migrations")]
 async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
@@ -794,6 +805,7 @@ async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
     assert!(!storage.path().join(&storage_key).exists());
 }
 
+/// Creates validate approve publish draft after validating caller inputs.
 async fn create_validate_approve_publish_draft(
     client: &reqwest::Client,
     app: &helpers::TestApp,
@@ -866,6 +878,7 @@ async fn create_validate_approve_publish_draft(
         .expect("publish json")
 }
 
+/// Creates draft after validating caller inputs.
 async fn create_draft(
     client: &reqwest::Client,
     app: &helpers::TestApp,
@@ -896,6 +909,7 @@ async fn create_draft(
         .expect("draft json")
 }
 
+/// Handles register agent for this module.
 async fn register_agent(pool: &sqlx::PgPool, name: &str) -> String {
     let token = shared::auth::create_agent_token();
     let token_hash = shared::auth::hash_agent_token(&token);
@@ -916,6 +930,7 @@ async fn register_agent(pool: &sqlx::PgPool, name: &str) -> String {
     token
 }
 
+/// Writes public challenge to the target path.
 fn write_public_challenge(repo: &Path) {
     let challenge_root = repo.join("challenges/sample-sum");
     std::fs::create_dir_all(challenge_root.join("v1/public")).expect("public dir");
@@ -1013,6 +1028,7 @@ fn write_public_challenge(repo: &Path) {
     );
 }
 
+/// Writes archive manifest to the target path.
 fn write_archive_manifest(repo: &Path) {
     let challenge_root = repo.join("challenges/sample-sum");
     write_file(
@@ -1021,6 +1037,7 @@ fn write_archive_manifest(repo: &Path) {
     );
 }
 
+/// Handles manifest json for this module.
 fn manifest_json() -> serde_json::Value {
     json!({
         "schema_version": 1,
@@ -1040,6 +1057,7 @@ fn manifest_json() -> serde_json::Value {
     })
 }
 
+/// Handles archive manifest json for this module.
 fn archive_manifest_json() -> serde_json::Value {
     json!({
         "schema_version": 1,
@@ -1054,6 +1072,7 @@ fn archive_manifest_json() -> serde_json::Value {
     })
 }
 
+/// Writes file to the target path.
 fn write_file(path: &Path, content: &str) {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).expect("parent dir");
@@ -1061,6 +1080,7 @@ fn write_file(path: &Path, content: &str) {
     std::fs::write(path, content).expect("write file");
 }
 
+/// Handles private benchmark asset zip base64 for this module.
 fn private_benchmark_asset_zip_base64() -> String {
     zip_project_zip_base64(vec![
         (

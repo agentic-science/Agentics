@@ -76,6 +76,7 @@ impl Worker {
         }
     }
 
+    /// Handles run cycle for this module.
     async fn run_cycle(&self) -> anyhow::Result<()> {
         run_worker_cycle(
             &self.db,
@@ -88,6 +89,7 @@ impl Worker {
     }
 }
 
+/// Handles worker instance id for this module.
 fn worker_instance_id() -> String {
     match host_label() {
         Some(host) => format!("agentics-worker-{host}-{}", Uuid::new_v4()),
@@ -95,6 +97,7 @@ fn worker_instance_id() -> String {
     }
 }
 
+/// Handles host label for this module.
 fn host_label() -> Option<String> {
     std::env::var("HOSTNAME")
         .or_else(|_| std::env::var("COMPUTERNAME"))
@@ -103,6 +106,7 @@ fn host_label() -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
+/// Handles sanitize worker label for this module.
 fn sanitize_worker_label(value: &str) -> String {
     value
         .chars()
@@ -360,6 +364,7 @@ pub async fn run_worker_cycle(
     Ok(())
 }
 
+/// Handles lease refresh interval for this module.
 fn lease_refresh_interval(config: &Config) -> Duration {
     let stale_minutes = u64::from(config.worker_stale_job_minutes.max(1).unsigned_abs());
     let stale_window = Duration::from_mins(stale_minutes);
@@ -369,6 +374,7 @@ fn lease_refresh_interval(config: &Config) -> Duration {
         .clamp(Duration::from_secs(5), Duration::from_mins(1))
 }
 
+/// Handles refresh claim until stopped for this module.
 async fn refresh_claim_until_stopped(
     db: sqlx::PgPool,
     job_id: EvaluationJobId,
@@ -406,6 +412,7 @@ async fn refresh_claim_until_stopped(
 mod tests {
     use super::{sanitize_worker_label, worker_instance_id};
 
+    /// Verifies that worker instance ids use log safe uuid suffix.
     #[test]
     fn worker_instance_ids_use_log_safe_uuid_suffix() {
         let instance_id = worker_instance_id();
@@ -419,6 +426,7 @@ mod tests {
         assert!(uuid::Uuid::parse_str(uuid_suffix).is_ok());
     }
 
+    /// Verifies that worker host label is log safe.
     #[test]
     fn worker_host_label_is_log_safe() {
         assert_eq!(

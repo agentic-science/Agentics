@@ -8,6 +8,7 @@ use crate::zip_project::{
 
 use super::errors::phase_error;
 
+/// Handles extract zip safe for this module.
 pub(super) async fn extract_zip_safe(artifact_path: &Path, target_dir: &Path) -> Result<()> {
     let artifact_size = tokio::fs::metadata(artifact_path).await?.len();
     if artifact_size > MAX_ZIP_PROJECT_ARTIFACT_BYTES {
@@ -24,6 +25,7 @@ pub(super) async fn extract_zip_safe(artifact_path: &Path, target_dir: &Path) ->
         .map_err(|e| AppError::Internal(format!("zip extraction task failed: {e}")))?
 }
 
+/// Ensures disk limit before continuing.
 pub(super) async fn ensure_disk_limit(
     path: &Path,
     disk_limit_mb: u64,
@@ -47,6 +49,7 @@ pub(super) async fn ensure_disk_limit(
     Ok(())
 }
 
+/// Ensures prepare disk limit before continuing.
 pub(super) async fn ensure_prepare_disk_limit(path: &Path, disk_limit_mb: u64) -> Result<()> {
     let path = path.to_path_buf();
     let bytes = tokio::task::spawn_blocking(move || directory_size(&path))
@@ -63,6 +66,7 @@ pub(super) async fn ensure_prepare_disk_limit(path: &Path, disk_limit_mb: u64) -
     Ok(())
 }
 
+/// Copies dir all while preserving the module invariants.
 pub(super) async fn copy_dir_all(source: &Path, destination: &Path) -> Result<()> {
     let source = source.to_path_buf();
     let destination = destination.to_path_buf();
@@ -71,6 +75,7 @@ pub(super) async fn copy_dir_all(source: &Path, destination: &Path) -> Result<()
         .map_err(|e| AppError::Internal(format!("copy task failed: {e}")))?
 }
 
+/// Handles cleanup paths for this module.
 pub(super) async fn cleanup_paths<const N: usize>(paths: [PathBuf; N]) -> Result<()> {
     for path in paths {
         match tokio::fs::remove_dir_all(path).await {
@@ -82,6 +87,7 @@ pub(super) async fn cleanup_paths<const N: usize>(paths: [PathBuf; N]) -> Result
     Ok(())
 }
 
+/// Handles extract zip safe blocking for this module.
 fn extract_zip_safe_blocking(artifact_path: &Path, target_dir: &Path) -> Result<()> {
     let reader = std::fs::File::open(artifact_path)?;
     let mut archive = zip::ZipArchive::new(reader)?;
@@ -124,6 +130,7 @@ fn extract_zip_safe_blocking(artifact_path: &Path, target_dir: &Path) -> Result<
     Ok(())
 }
 
+/// Handles directory size for this module.
 fn directory_size(path: &Path) -> Result<u64> {
     let mut total = 0u64;
     for entry in std::fs::read_dir(path)? {
@@ -144,6 +151,7 @@ fn directory_size(path: &Path) -> Result<u64> {
     Ok(total)
 }
 
+/// Copies dir all blocking while preserving the module invariants.
 fn copy_dir_all_blocking(source: &Path, destination: &Path) -> Result<()> {
     std::fs::create_dir_all(destination)?;
     for entry in std::fs::read_dir(source)? {
@@ -166,10 +174,12 @@ mod tests {
 
     use super::*;
 
+    /// Handles temp path for this module.
     fn temp_path(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!("agentics-runner-{name}-{}", uuid::Uuid::new_v4()))
     }
 
+    /// Writes zip to the target path.
     fn write_zip(path: &Path, entries: Vec<(String, Vec<u8>)>) {
         let file = std::fs::File::create(path).expect("failed to create test zip");
         let mut archive = zip::ZipWriter::new(file);
@@ -188,6 +198,7 @@ mod tests {
         archive.finish().expect("failed to finish test zip");
     }
 
+    /// Verifies that extract zip safe skips unsafe entry names.
     #[tokio::test]
     async fn extract_zip_safe_skips_unsafe_entry_names() {
         let zip_path = temp_path("unsafe-entry.zip");
@@ -218,6 +229,7 @@ mod tests {
         drop(std::fs::remove_dir_all(target_dir));
     }
 
+    /// Verifies that extract zip safe rejects too many entries.
     #[tokio::test]
     async fn extract_zip_safe_rejects_too_many_entries() {
         let zip_path = temp_path("too-many.zip");
@@ -239,6 +251,7 @@ mod tests {
     }
 
     #[cfg(unix)]
+    /// Verifies that directory size does not follow symlinks.
     #[test]
     fn directory_size_does_not_follow_symlinks() {
         let root = temp_path("symlink-size-root");

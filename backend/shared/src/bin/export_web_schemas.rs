@@ -24,6 +24,7 @@ use shared::models::request::{
     SolutionSubmissionResultReportResponse,
 };
 
+/// Handles main for this module.
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut schemas = BTreeMap::new();
 
@@ -100,6 +101,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Handles insert schema for this module.
 fn insert_schema<T: JsonSchema>(
     schemas: &mut BTreeMap<String, Value>,
     export_name: &str,
@@ -110,6 +112,7 @@ fn insert_schema<T: JsonSchema>(
     Ok(())
 }
 
+/// Handles normalize response schema for this module.
 fn normalize_response_schema(value: &mut Value) {
     match value {
         Value::Array(items) => {
@@ -122,6 +125,7 @@ fn normalize_response_schema(value: &mut Value) {
     }
 }
 
+/// Handles normalize schema object for this module.
 fn normalize_schema_object(object: &mut Map<String, Value>) {
     require_default_serialized_properties(object);
     object.remove("default");
@@ -142,6 +146,7 @@ fn normalize_schema_object(object: &mut Map<String, Value>) {
     }
 }
 
+/// Requires default serialized properties and reports a domain error otherwise.
 fn require_default_serialized_properties(object: &mut Map<String, Value>) {
     let Some(Value::Object(properties)) = object.get("properties") else {
         return;
@@ -176,6 +181,7 @@ fn require_default_serialized_properties(object: &mut Map<String, Value>) {
     }
 }
 
+/// Handles remove null type for this module.
 fn remove_null_type(object: &mut Map<String, Value>, key: &str) {
     let Some(Value::Array(items)) = object.get_mut(key) else {
         return;
@@ -189,6 +195,7 @@ fn remove_null_type(object: &mut Map<String, Value>, key: &str) {
     }
 }
 
+/// Handles remove null from type array for this module.
 fn remove_null_from_type_array(object: &mut Map<String, Value>) {
     let Some(Value::Array(types)) = object.get_mut("type") else {
         return;
@@ -201,6 +208,7 @@ fn remove_null_from_type_array(object: &mut Map<String, Value>) {
     }
 }
 
+/// Handles collapse string const union for this module.
 fn collapse_string_const_union(object: &mut Map<String, Value>, key: &str) {
     let Some(Value::Array(items)) = object.get(key) else {
         return;
@@ -228,6 +236,7 @@ fn collapse_string_const_union(object: &mut Map<String, Value>, key: &str) {
     object.insert("enum".to_string(), Value::Array(variants));
 }
 
+/// Handles merge schema object for this module.
 fn merge_schema_object(target: &mut Map<String, Value>, source: Value) {
     match source {
         Value::Object(source_object) => {
@@ -241,6 +250,7 @@ fn merge_schema_object(target: &mut Map<String, Value>, source: Value) {
     }
 }
 
+/// Returns whether null schema holds.
 fn is_null_schema(value: &Value) -> bool {
     matches!(
         value,

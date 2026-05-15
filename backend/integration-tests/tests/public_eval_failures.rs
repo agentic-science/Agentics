@@ -7,6 +7,7 @@ use helpers::{
     spawn_app_with_config, test_config,
 };
 
+/// Verifies that worker marks solution submission failed when artifact is missing.
 #[sqlx::test(migrations = "../migrations")]
 async fn worker_marks_solution_submission_failed_when_artifact_is_missing(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");

@@ -31,6 +31,7 @@ pub fn create_csrf_token() -> String {
     format!("agentics_csrf_{}", random_url_token(32))
 }
 
+/// Handles random url token for this module.
 fn random_url_token(byte_len: usize) -> String {
     let mut bytes = vec![0u8; byte_len];
     rand::rng().fill_bytes(&mut bytes);
@@ -49,6 +50,7 @@ pub fn hash_opaque_token(token: &str) -> String {
     hex::encode(hasher.finalize())
 }
 
+/// Handles base64 urlencode for this module.
 fn base64_urlencode(input: &[u8]) -> String {
     use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
     URL_SAFE_NO_PAD.encode(input)
@@ -103,6 +105,7 @@ pub fn parse_basic_auth(value: Option<&str>) -> Option<ParsedBasicAuth> {
     })
 }
 
+/// Handles base64 decode for this module.
 fn base64_decode(input: &str) -> Option<String> {
     use base64::{Engine as _, engine::general_purpose::STANDARD};
     let bytes = STANDARD.decode(input).ok()?;
@@ -113,6 +116,7 @@ fn base64_decode(input: &str) -> Option<String> {
 mod tests {
     use super::{create_agent_token, hash_agent_token};
 
+    /// Verifies that creates agentics prefixed tokens.
     #[test]
     fn creates_agentics_prefixed_tokens() {
         let token = create_agent_token();

@@ -9,6 +9,7 @@ use crate::error::{AppError, Result};
 use crate::zip_project::ZipProjectPhaseLimits;
 
 #[derive(Debug, Clone)]
+/// Carries runner storage data across this module boundary.
 pub(super) struct RunnerStorage {
     mode: RunnerWritableStorageMode,
     phase_mount_root: Option<PathBuf>,
@@ -17,6 +18,7 @@ pub(super) struct RunnerStorage {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Enumerates writable phase variants supported by this module.
 pub(super) enum WritablePhase {
     SolutionSetup,
     SolutionBuild,
@@ -26,18 +28,21 @@ pub(super) enum WritablePhase {
 }
 
 #[derive(Debug)]
+/// Enumerates writable mount lease variants supported by this module.
 pub(super) enum WritableMountLease {
     Unbounded(PathBuf),
     Bounded(BoundedSlotLease),
 }
 
 #[derive(Debug)]
+/// Carries bounded slot lease data across this module boundary.
 pub(super) struct BoundedSlotLease {
     work_path: PathBuf,
     _lock_file: fs::File,
 }
 
 impl RunnerStorage {
+    /// Handles from config for this module.
     pub(super) fn from_config(config: &Config) -> Result<Self> {
         Ok(Self {
             mode: config
@@ -51,14 +56,17 @@ impl RunnerStorage {
         })
     }
 
+    /// Handles docker layer quota mb for this module.
     pub(super) fn docker_layer_quota_mb(&self, limits: &ZipProjectPhaseLimits) -> Option<u64> {
         self.docker_layer_quota.then_some(limits.disk_limit_mb)
     }
 
+    /// Handles uses bounded slots for this module.
     pub(super) fn uses_bounded_slots(&self) -> bool {
         self.mode == RunnerWritableStorageMode::XfsProjectQuotaSlots
     }
 
+    /// Handles writable mount for this module.
     pub(super) async fn writable_mount(
         &self,
         fallback_path: &Path,
@@ -84,6 +92,7 @@ impl RunnerStorage {
 }
 
 impl WritableMountLease {
+    /// Handles path for this module.
     pub(super) fn path(&self) -> &Path {
         match self {
             Self::Unbounded(path) => path,
@@ -93,12 +102,14 @@ impl WritableMountLease {
 }
 
 impl BoundedSlotLease {
+    /// Handles path for this module.
     fn path(&self) -> &Path {
         &self.work_path
     }
 }
 
 impl Drop for BoundedSlotLease {
+    /// Handles drop for this module.
     fn drop(&mut self) {
         if let Err(error) = fs::remove_dir_all(&self.work_path)
             && error.kind() != ErrorKind::NotFound
@@ -113,6 +124,7 @@ impl Drop for BoundedSlotLease {
 }
 
 impl WritablePhase {
+    /// Handles dir name for this module.
     fn dir_name(self) -> &'static str {
         match self {
             Self::SolutionSetup => "solution-setup",
@@ -124,6 +136,7 @@ impl WritablePhase {
     }
 }
 
+/// Handles choose slot class for this module.
 fn choose_slot_class(classes: &[u64], disk_limit_mb: u64) -> Result<u64> {
     classes
         .iter()
@@ -136,6 +149,7 @@ fn choose_slot_class(classes: &[u64], disk_limit_mb: u64) -> Result<u64> {
         })
 }
 
+/// Handles acquire slot for this module.
 async fn acquire_slot(
     phase_mount_root: &Path,
     phase: WritablePhase,
@@ -154,6 +168,7 @@ async fn acquire_slot(
     Ok(WritableMountLease::Bounded(lease))
 }
 
+/// Handles acquire slot blocking for this module.
 fn acquire_slot_blocking(
     slot_class_root: &Path,
     phase_label: &str,
@@ -199,6 +214,7 @@ fn acquire_slot_blocking(
     )))
 }
 
+/// Lists slot dirs using the configured query scope.
 fn list_slot_dirs(slot_class_root: &Path) -> Result<Vec<PathBuf>> {
     let mut slots = Vec::new();
     let entries = fs::read_dir(slot_class_root).map_err(|error| {
@@ -223,10 +239,12 @@ fn list_slot_dirs(slot_class_root: &Path) -> Result<Vec<PathBuf>> {
 mod tests {
     use super::*;
 
+    /// Handles temp path for this module.
     fn temp_path(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!("agentics-storage-{name}-{}", uuid::Uuid::new_v4()))
     }
 
+    /// Verifies that chooses smallest sufficient slot class.
     #[test]
     fn chooses_smallest_sufficient_slot_class() {
         assert_eq!(choose_slot_class(&[64, 256, 1024], 64).unwrap(), 64);
@@ -234,6 +252,7 @@ mod tests {
         assert_eq!(choose_slot_class(&[64, 256, 1024], 1024).unwrap(), 1024);
     }
 
+    /// Verifies that rejects limits without slot class.
     #[test]
     fn rejects_limits_without_slot_class() {
         let result = choose_slot_class(&[64, 256], 1024);
@@ -242,6 +261,7 @@ mod tests {
         );
     }
 
+    /// Verifies that bounded slot lease creates and cleans work path.
     #[test]
     fn bounded_slot_lease_creates_and_cleans_work_path() {
         let root = temp_path("lease");

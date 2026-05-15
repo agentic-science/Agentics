@@ -23,6 +23,7 @@ use shared::config::Config;
 use worker::cycle::Worker;
 
 #[tokio::main]
+/// Handles main for this module.
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 

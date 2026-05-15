@@ -34,11 +34,13 @@ const ADMIN_CAPACITY_FIXTURE: &str = include_str!(
     "../../../../frontends/web/src/lib/__fixtures__/dto-contracts/admin-capacity-response.json"
 );
 
+/// Verifies that challenge detail contract matches frontend fixture.
 #[test]
 fn challenge_detail_contract_matches_frontend_fixture() -> Result<(), Box<dyn std::error::Error>> {
     assert_serializes_to_fixture(challenge_detail_response(), CHALLENGE_DETAIL_FIXTURE)
 }
 
+/// Verifies that official solution submission contract matches frontend fixture.
 #[test]
 fn official_solution_submission_contract_matches_frontend_fixture()
 -> Result<(), Box<dyn std::error::Error>> {
@@ -48,11 +50,13 @@ fn official_solution_submission_contract_matches_frontend_fixture()
     )
 }
 
+/// Verifies that admin capacity contract matches frontend fixture.
 #[test]
 fn admin_capacity_contract_matches_frontend_fixture() -> Result<(), Box<dyn std::error::Error>> {
     assert_serializes_to_fixture(admin_capacity_response(), ADMIN_CAPACITY_FIXTURE)
 }
 
+/// Handles assert serializes to fixture for this module.
 fn assert_serializes_to_fixture(
     dto: impl Serialize,
     fixture: &str,
@@ -69,6 +73,7 @@ fn assert_serializes_to_fixture(
     Ok(())
 }
 
+/// Ensures no explicit nulls before continuing.
 fn ensure_no_explicit_nulls(value: &Value, path: &str) -> Result<(), Box<dyn std::error::Error>> {
     match value {
         Value::Null => {
@@ -92,6 +97,7 @@ fn ensure_no_explicit_nulls(value: &Value, path: &str) -> Result<(), Box<dyn std
     Ok(())
 }
 
+/// Handles challenge detail response for this module.
 fn challenge_detail_response() -> ChallengeDetailResponse {
     ChallengeDetailResponse {
         name: challenge_name("matrix-multiplication"),
@@ -225,46 +231,57 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
     }
 }
 
+/// Handles challenge name for this module.
 fn challenge_name(value: &str) -> ChallengeName {
     ChallengeName::try_new(value.to_string()).expect("test challenge name is valid")
 }
 
+/// Handles target name for this module.
 fn target_name(value: &str) -> TargetName {
     TargetName::try_new(value.to_string()).expect("test target is valid")
 }
 
+/// Handles metric name for this module.
 fn metric_name(value: &str) -> MetricName {
     MetricName::try_new(value.to_string()).expect("test metric name is valid")
 }
 
+/// Handles resource profile name for this module.
 fn resource_profile_name(value: &str) -> ResourceProfileName {
     ResourceProfileName::try_new(value.to_string()).expect("test resource profile name is valid")
 }
 
+/// Handles bundle path for this module.
 fn bundle_path(value: &str) -> BundleRelativePath {
     BundleRelativePath::try_new(value).expect("test bundle path is valid")
 }
 
+/// Handles run name for this module.
 fn run_name(value: &str) -> RunName {
     RunName::try_new(value.to_string()).expect("test run name is valid")
 }
 
+/// Handles solution submission id for this module.
 fn solution_submission_id(value: &str) -> SolutionSubmissionId {
     SolutionSubmissionId::try_new(value).expect("test submission id is valid")
 }
 
+/// Handles agent id for this module.
 fn agent_id(value: &str) -> AgentId {
     AgentId::try_new(value).expect("test agent id is valid")
 }
 
+/// Handles evaluation id for this module.
 fn evaluation_id(value: &str) -> EvaluationId {
     EvaluationId::try_new(value).expect("test evaluation id is valid")
 }
 
+/// Handles storage key for this module.
 fn storage_key(value: &str) -> StorageKey {
     StorageKey::try_new(value).expect("test storage key is valid")
 }
 
+/// Handles official solution submission response for this module.
 fn official_solution_submission_response() -> SolutionSubmissionResponse {
     SolutionSubmissionResponse {
         id: solution_submission_id("11111111-1111-4111-8111-111111111111"),
@@ -320,6 +337,7 @@ fn official_solution_submission_response() -> SolutionSubmissionResponse {
     }
 }
 
+/// Handles admin capacity response for this module.
 fn admin_capacity_response() -> AdminCapacityResponse {
     AdminCapacityResponse {
         quota_window_seconds: 86400,
@@ -337,10 +355,12 @@ fn admin_capacity_response() -> AdminCapacityResponse {
     }
 }
 
+/// Handles digest for this module.
 fn digest(fill: &str) -> String {
     format!("sha256:{}", fill.repeat(64))
 }
 
+/// Handles image digest for this module.
 fn image_digest(fill: &str) -> OciSha256Digest {
     OciSha256Digest::try_new(digest(fill)).expect("test OCI digest is valid")
 }

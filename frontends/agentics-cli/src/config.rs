@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 const DEFAULT_API_PORT: u16 = 3100;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+/// Carries cli config data across this module boundary.
 pub(crate) struct CliConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub api_base_url: Option<String>,
@@ -19,12 +20,14 @@ pub(crate) struct CliConfig {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+/// Carries environment data across this module boundary.
 pub(crate) struct Environment {
     pub api_base_url: Option<String>,
     pub token: Option<String>,
 }
 
 impl Environment {
+    /// Handles from process for this module.
     pub(crate) fn from_process() -> Self {
         Self {
             api_base_url: read_non_empty_env("AGENTICS_API_BASE_URL"),
@@ -34,6 +37,7 @@ impl Environment {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Enumerates setting source variants supported by this module.
 pub(crate) enum SettingSource {
     Flag,
     Environment,
@@ -43,6 +47,7 @@ pub(crate) enum SettingSource {
 }
 
 impl fmt::Display for SettingSource {
+    /// Handles fmt for this module.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let label = match self {
             Self::Flag => "flag",
@@ -56,6 +61,7 @@ impl fmt::Display for SettingSource {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Carries resolved settings data across this module boundary.
 pub(crate) struct ResolvedSettings {
     pub api_base_url: ApiBaseUrl,
     pub api_base_url_source: SettingSource,
@@ -65,6 +71,7 @@ pub(crate) struct ResolvedSettings {
 }
 
 impl ResolvedSettings {
+    /// Handles resolve for this module.
     pub(crate) fn resolve(
         flag_api_base_url: Option<&str>,
         flag_token: Option<&str>,
@@ -91,15 +98,18 @@ impl ResolvedSettings {
         })
     }
 
+    /// Handles token configured for this module.
     pub(crate) fn token_configured(&self) -> bool {
         self.token.is_some()
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Carries api base url data across this module boundary.
 pub(crate) struct ApiBaseUrl(Url);
 
 impl ApiBaseUrl {
+    /// Handles try new for this module.
     pub(crate) fn try_new(value: &str) -> Result<Self> {
         let trimmed = value.trim();
         if trimmed.is_empty() {
@@ -124,18 +134,21 @@ impl ApiBaseUrl {
         Ok(Self(url))
     }
 
+    /// Returns url in the representation required by callers.
     pub(crate) fn as_url(&self) -> &Url {
         &self.0
     }
 }
 
 impl fmt::Display for ApiBaseUrl {
+    /// Handles fmt for this module.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let value = self.0.as_str();
         f.write_str(value.strip_suffix('/').unwrap_or(value))
     }
 }
 
+/// Handles default api base url for this module.
 fn default_api_base_url() -> String {
     let api_port = std::env::var("AGENTICS_API_PORT")
         .ok()
@@ -145,25 +158,30 @@ fn default_api_base_url() -> String {
 }
 
 #[derive(Debug, Clone)]
+/// Carries config store data across this module boundary.
 pub(crate) struct ConfigStore {
     path: PathBuf,
 }
 
 impl ConfigStore {
+    /// Handles new for this module.
     pub(crate) fn new(path: PathBuf) -> Self {
         Self { path }
     }
 
+    /// Handles default path for this module.
     pub(crate) fn default_path() -> Result<PathBuf> {
         let config_dir = dirs::config_dir()
             .ok_or_else(|| anyhow!("could not determine a user config directory"))?;
         Ok(config_dir.join("agentics").join("config.toml"))
     }
 
+    /// Handles path for this module.
     pub(crate) fn path(&self) -> &Path {
         &self.path
     }
 
+    /// Handles load for this module.
     pub(crate) fn load(&self) -> Result<CliConfig> {
         if !fs::exists(&self.path)
             .with_context(|| format!("failed to inspect config file {}", self.path.display()))?
@@ -177,6 +195,7 @@ impl ConfigStore {
             .with_context(|| format!("failed to parse config file {}", self.path.display()))
     }
 
+    /// Handles save for this module.
     pub(crate) fn save(&self, config: &CliConfig) -> Result<()> {
         if let Some(parent) = self.path.parent() {
             fs::create_dir_all(parent).with_context(|| {
@@ -190,6 +209,7 @@ impl ConfigStore {
     }
 }
 
+/// Reads non empty env from disk or storage.
 fn read_non_empty_env(name: &str) -> Option<String> {
     std::env::var(name)
         .ok()
@@ -197,6 +217,7 @@ fn read_non_empty_env(name: &str) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
+/// Handles first value with default for this module.
 fn first_value_with_default<'a>(
     flag: Option<&'a str>,
     env: Option<&'a str>,
@@ -215,6 +236,7 @@ fn first_value_with_default<'a>(
     (default, SettingSource::Default)
 }
 
+/// Handles first optional value for this module.
 fn first_optional_value<'a>(
     flag: Option<&'a str>,
     env: Option<&'a str>,
@@ -232,10 +254,12 @@ fn first_optional_value<'a>(
     (None, SettingSource::Missing)
 }
 
+/// Handles non empty for this module.
 fn non_empty(value: Option<&str>) -> Option<&str> {
     value.map(str::trim).filter(|value| !value.is_empty())
 }
 
+/// Writes private file to the target path.
 fn write_private_file(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let temp_path = private_temp_path(path)?;
     let write_result = write_private_temp_file(&temp_path, bytes)
@@ -249,6 +273,7 @@ fn write_private_file(path: &Path, bytes: &[u8]) -> io::Result<()> {
     write_result
 }
 
+/// Handles private temp path for this module.
 fn private_temp_path(path: &Path) -> io::Result<PathBuf> {
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     let file_name = path
@@ -269,6 +294,7 @@ fn private_temp_path(path: &Path) -> io::Result<PathBuf> {
     )))
 }
 
+/// Writes private temp file to the target path.
 fn write_private_temp_file(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let mut options = OpenOptions::new();
     options.create_new(true).write(true);
@@ -286,6 +312,7 @@ fn write_private_temp_file(path: &Path, bytes: &[u8]) -> io::Result<()> {
     file.sync_all()
 }
 
+/// Sets private file permissions after applying domain validation.
 fn set_private_file_permissions(path: &Path) -> io::Result<()> {
     cfg_select! {
         unix => {
@@ -303,6 +330,7 @@ fn set_private_file_permissions(path: &Path) -> io::Result<()> {
 mod tests {
     use super::*;
 
+    /// Verifies that resolves config precedence.
     #[test]
     fn resolves_config_precedence() {
         let file = CliConfig {
@@ -329,6 +357,7 @@ mod tests {
         assert_eq!(settings.token_source, SettingSource::Environment);
     }
 
+    /// Verifies that saves and loads config without null fields.
     #[test]
     fn saves_and_loads_config_without_null_fields() {
         let temp = tempfile::tempdir().expect("tempdir");
@@ -354,6 +383,7 @@ mod tests {
     }
 
     #[cfg(unix)]
+    /// Verifies that save restricts existing config file permissions.
     #[test]
     fn save_restricts_existing_config_file_permissions() {
         use std::os::unix::fs::PermissionsExt;
@@ -380,6 +410,7 @@ mod tests {
         assert_eq!(mode, 0o600);
     }
 
+    /// Verifies that rejects invalid api base url.
     #[test]
     fn rejects_invalid_api_base_url() {
         let error = ApiBaseUrl::try_new("file:///tmp/api").expect_err("must reject file URL");

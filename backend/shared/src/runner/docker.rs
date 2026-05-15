@@ -20,6 +20,7 @@ use crate::models::challenge::{DockerPlatform, TargetAccelerator};
 use crate::zip_project::ZipProjectPhaseLimits;
 
 #[derive(Debug)]
+/// Carries container request data across this module boundary.
 pub(super) struct ContainerRequest {
     pub(super) name: String,
     pub(super) image: String,
@@ -34,6 +35,7 @@ pub(super) struct ContainerRequest {
 }
 
 #[derive(Debug)]
+/// Carries container outcome data across this module boundary.
 pub(super) struct ContainerOutcome {
     pub(super) exit_code: i64,
     pub(super) logs: String,
@@ -41,6 +43,7 @@ pub(super) struct ContainerOutcome {
     pub(super) wall_time_ms: u64,
 }
 
+/// Handles run container for this module.
 pub(super) async fn run_container(
     docker: &Docker,
     request: ContainerRequest,
@@ -179,6 +182,7 @@ pub(super) async fn pre_pull_image(
     Ok(())
 }
 
+/// Handles bind mount for this module.
 pub(super) fn bind_mount(path: &std::path::Path, target: &str, read_only: bool) -> Mount {
     Mount {
         target: Some(target.to_string()),
@@ -189,6 +193,7 @@ pub(super) fn bind_mount(path: &std::path::Path, target: &str, read_only: bool) 
     }
 }
 
+/// Handles run created container for this module.
 async fn run_created_container(
     docker: &Docker,
     container_id: &str,
@@ -244,11 +249,13 @@ async fn run_created_container(
     })
 }
 
+/// Handles duration millis for this module.
 fn duration_millis(duration: Duration) -> u64 {
     let millis = duration.as_millis();
     u64::try_from(millis).unwrap_or(u64::MAX)
 }
 
+/// Handles remove container for this module.
 async fn remove_container(docker: &Docker, container_id: &str) -> Result<()> {
     let remove_opts = RemoveContainerOptionsBuilder::default().force(true).build();
     docker
@@ -258,6 +265,7 @@ async fn remove_container(docker: &Docker, container_id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Handles docker log config for this module.
 fn docker_log_config(limit_bytes: u64) -> HostConfigLogConfig {
     let mut config = std::collections::HashMap::new();
     config.insert("max-size".to_string(), format!("{}b", limit_bytes.max(1)));
@@ -269,6 +277,7 @@ fn docker_log_config(limit_bytes: u64) -> HostConfigLogConfig {
     }
 }
 
+/// Handles docker storage opt for this module.
 fn docker_storage_opt(limit_mb: Option<u64>) -> Option<HashMap<String, String>> {
     limit_mb.map(|limit_mb| {
         let mut storage_opt = HashMap::new();
@@ -277,6 +286,7 @@ fn docker_storage_opt(limit_mb: Option<u64>) -> Option<HashMap<String, String>> 
     })
 }
 
+/// Handles gpu runtime for this module.
 fn gpu_runtime(accelerator: TargetAccelerator) -> Option<String> {
     match accelerator {
         TargetAccelerator::Cpu => None,
@@ -284,6 +294,7 @@ fn gpu_runtime(accelerator: TargetAccelerator) -> Option<String> {
     }
 }
 
+/// Handles gpu device requests for this module.
 fn gpu_device_requests(accelerator: TargetAccelerator) -> Option<Vec<DeviceRequest>> {
     match accelerator {
         TargetAccelerator::Cpu => None,
@@ -296,6 +307,7 @@ fn gpu_device_requests(accelerator: TargetAccelerator) -> Option<Vec<DeviceReque
     }
 }
 
+/// Handles collect container logs for this module.
 async fn collect_container_logs(
     docker: &Docker,
     container_id: &str,
@@ -341,6 +353,7 @@ async fn collect_container_logs(
     Ok((output, truncated))
 }
 
+/// Handles append bounded log bytes for this module.
 fn append_bounded_log_bytes(
     output: &mut Vec<u8>,
     chunk: &[u8],
@@ -365,6 +378,7 @@ fn append_bounded_log_bytes(
 mod tests {
     use super::*;
 
+    /// Verifies that bounded log append truncates by byte limit.
     #[test]
     fn bounded_log_append_truncates_by_byte_limit() {
         let mut output = Vec::new();

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { selectSubmissionDisplayEvaluation } from "./submissionEvaluation";
 
+/** Builds the evaluation test fixture. */
 function evaluation(id: string) {
   return {
     id,

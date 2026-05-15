@@ -51,6 +51,7 @@ impl UrlFieldError {
 }
 
 impl fmt::Display for UrlFieldError {
+    /// Handles fmt for this module.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.message)
     }
@@ -61,6 +62,7 @@ impl std::error::Error for UrlFieldError {}
 macro_rules! impl_string_url_serde {
     ($type_name:ident) => {
         impl Serialize for $type_name {
+            /// Handles serialize for this module.
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
             where
                 S: Serializer,
@@ -70,6 +72,7 @@ macro_rules! impl_string_url_serde {
         }
 
         impl<'de> Deserialize<'de> for $type_name {
+            /// Handles deserialize for this module.
             fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
             where
                 D: Deserializer<'de>,
@@ -84,14 +87,17 @@ macro_rules! impl_string_url_serde {
 macro_rules! impl_string_url_schema {
     ($type_name:ident, $schema_name:literal, $pattern:literal) => {
         impl JsonSchema for $type_name {
+            /// Handles inline schema for this module.
             fn inline_schema() -> bool {
                 true
             }
 
+            /// Handles schema name for this module.
             fn schema_name() -> Cow<'static, str> {
                 $schema_name.into()
             }
 
+            /// Handles json schema for this module.
             fn json_schema(_: &mut SchemaGenerator) -> Schema {
                 json_schema!({
                     "type": "string",
@@ -146,6 +152,7 @@ impl GithubRepoRemote {
 }
 
 impl fmt::Display for GithubRepoRemote {
+    /// Handles fmt for this module.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }
@@ -154,6 +161,7 @@ impl fmt::Display for GithubRepoRemote {
 impl FromStr for GithubRepoRemote {
     type Err = UrlFieldError;
 
+    /// Handles from str for this module.
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let value = value.trim();
         if value.starts_with("git@github.com:") {
@@ -167,6 +175,7 @@ impl FromStr for GithubRepoRemote {
 }
 
 impl Serialize for GithubRepoRemote {
+    /// Handles serialize for this module.
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -176,6 +185,7 @@ impl Serialize for GithubRepoRemote {
 }
 
 impl<'de> Deserialize<'de> for GithubRepoRemote {
+    /// Handles deserialize for this module.
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -186,14 +196,17 @@ impl<'de> Deserialize<'de> for GithubRepoRemote {
 }
 
 impl JsonSchema for GithubRepoRemote {
+    /// Handles inline schema for this module.
     fn inline_schema() -> bool {
         true
     }
 
+    /// Handles schema name for this module.
     fn schema_name() -> Cow<'static, str> {
         "GithubRepoRemote".into()
     }
 
+    /// Handles json schema for this module.
     fn json_schema(_: &mut SchemaGenerator) -> Schema {
         json_schema!({
             "type": "string",
@@ -210,6 +223,7 @@ pub struct GithubSshRepoRemote {
 }
 
 impl GithubSshRepoRemote {
+    /// Handles try new for this module.
     fn try_new(value: &str) -> Result<Self, UrlFieldError> {
         reject_whitespace_or_control(value, GITHUB_REPO_REMOTE_ERROR_MESSAGE)?;
         let Some(rest) = value.strip_prefix("git@github.com:") else {
@@ -231,10 +245,12 @@ impl GithubSshRepoRemote {
         })
     }
 
+    /// Returns str in the representation required by callers.
     fn as_str(&self) -> &str {
         &self.value
     }
 
+    /// Handles repository key for this module.
     fn repository_key(&self) -> &GithubRepoKey {
         &self.key
     }
@@ -249,6 +265,7 @@ impl GithubSshRepoRemote {
 pub struct GithubRepoKey(String);
 
 impl GithubRepoKey {
+    /// Handles try new for this module.
     fn try_new(owner: &str, repo: &str) -> Result<Self, UrlFieldError> {
         validate_github_path_segment(owner, GITHUB_REPO_REMOTE_ERROR_MESSAGE)?;
         validate_github_path_segment(repo, GITHUB_REPO_REMOTE_ERROR_MESSAGE)?;
@@ -266,6 +283,7 @@ impl GithubRepoKey {
 }
 
 impl fmt::Display for GithubRepoKey {
+    /// Handles fmt for this module.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }
@@ -288,6 +306,7 @@ impl GithubPullRequestUrl {
 }
 
 impl fmt::Display for GithubPullRequestUrl {
+    /// Handles fmt for this module.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }
@@ -296,6 +315,7 @@ impl fmt::Display for GithubPullRequestUrl {
 impl FromStr for GithubPullRequestUrl {
     type Err = UrlFieldError;
 
+    /// Handles from str for this module.
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let url = parse_url(value.trim(), GITHUB_PULL_REQUEST_URL_ERROR_MESSAGE)?;
         validate_github_https_pull_request_url(&url)?;
@@ -327,6 +347,7 @@ impl MoltbookSubmoltUrl {
 }
 
 impl fmt::Display for MoltbookSubmoltUrl {
+    /// Handles fmt for this module.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }
@@ -335,6 +356,7 @@ impl fmt::Display for MoltbookSubmoltUrl {
 impl FromStr for MoltbookSubmoltUrl {
     type Err = UrlFieldError;
 
+    /// Handles from str for this module.
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let url = parse_url(value.trim(), MOLTBOOK_SUBMOLT_URL_ERROR_MESSAGE)?;
         validate_moltbook_submolt_url(&url)?;
@@ -366,6 +388,7 @@ impl ExternalDataUrl {
 }
 
 impl fmt::Display for ExternalDataUrl {
+    /// Handles fmt for this module.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }
@@ -374,6 +397,7 @@ impl fmt::Display for ExternalDataUrl {
 impl FromStr for ExternalDataUrl {
     type Err = UrlFieldError;
 
+    /// Handles from str for this module.
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let url = parse_url(value.trim(), EXTERNAL_DATA_URL_ERROR_MESSAGE)?;
         validate_https_url(&url, EXTERNAL_DATA_URL_ERROR_MESSAGE)?;
@@ -407,6 +431,7 @@ macro_rules! define_url_wrapper {
         }
 
         impl fmt::Display for $type_name {
+            /// Handles fmt for this module.
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 f.write_str(self.as_str())
             }
@@ -415,6 +440,7 @@ macro_rules! define_url_wrapper {
         impl FromStr for $type_name {
             type Err = UrlFieldError;
 
+            /// Handles from str for this module.
             fn from_str(value: &str) -> Result<Self, Self::Err> {
                 let url = parse_url(value.trim(), $message)?;
                 $validator(&url)?;
@@ -470,6 +496,7 @@ impl GithubOauthAuthorizationUrl {
 }
 
 impl fmt::Display for GithubOauthAuthorizationUrl {
+    /// Handles fmt for this module.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }
@@ -478,6 +505,7 @@ impl fmt::Display for GithubOauthAuthorizationUrl {
 impl FromStr for GithubOauthAuthorizationUrl {
     type Err = UrlFieldError;
 
+    /// Handles from str for this module.
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let url = parse_url(value.trim(), GITHUB_OAUTH_AUTHORIZATION_URL_ERROR_MESSAGE)?;
         Self::try_from_url(url)
@@ -491,11 +519,13 @@ impl_string_url_schema!(
     r"^https://github\.com/login/oauth/authorize\?[^#]+$"
 );
 
+/// Parses url from an external boundary string.
 fn parse_url(value: &str, message: &'static str) -> Result<Url, UrlFieldError> {
     reject_whitespace_or_control(value, message)?;
     Url::parse(value).map_err(|_| UrlFieldError::new(message))
 }
 
+/// Handles github https repo key for this module.
 fn github_https_repo_key(url: &Url) -> Result<GithubRepoKey, UrlFieldError> {
     validate_github_https_base(url, GITHUB_REPO_REMOTE_ERROR_MESSAGE)?;
     let segments = github_path_segments(url, GITHUB_REPO_REMOTE_ERROR_MESSAGE)?;
@@ -508,6 +538,7 @@ fn github_https_repo_key(url: &Url) -> Result<GithubRepoKey, UrlFieldError> {
     GithubRepoKey::try_new(owner, repo)
 }
 
+/// Validates github https pull request url invariants for this contract.
 fn validate_github_https_pull_request_url(url: &Url) -> Result<(), UrlFieldError> {
     validate_github_https_base(url, GITHUB_PULL_REQUEST_URL_ERROR_MESSAGE)?;
     let segments = github_path_segments(url, GITHUB_PULL_REQUEST_URL_ERROR_MESSAGE)?;
@@ -525,6 +556,7 @@ fn validate_github_https_pull_request_url(url: &Url) -> Result<(), UrlFieldError
     Ok(())
 }
 
+/// Validates oauth redirect url invariants for this contract.
 fn validate_oauth_redirect_url(url: &Url) -> Result<(), UrlFieldError> {
     if !matches!(url.scheme(), "http" | "https")
         || url.cannot_be_a_base()
@@ -537,6 +569,7 @@ fn validate_oauth_redirect_url(url: &Url) -> Result<(), UrlFieldError> {
     Ok(())
 }
 
+/// Validates github oauth authorize url invariants for this contract.
 fn validate_github_oauth_authorize_url(url: &Url) -> Result<(), UrlFieldError> {
     validate_exact_https_url(
         url,
@@ -546,6 +579,7 @@ fn validate_github_oauth_authorize_url(url: &Url) -> Result<(), UrlFieldError> {
     )
 }
 
+/// Validates github oauth authorization url invariants for this contract.
 fn validate_github_oauth_authorization_url(url: &Url) -> Result<(), UrlFieldError> {
     if url.scheme() != "https"
         || url.cannot_be_a_base()
@@ -562,6 +596,7 @@ fn validate_github_oauth_authorization_url(url: &Url) -> Result<(), UrlFieldErro
     Ok(())
 }
 
+/// Validates github oauth token url invariants for this contract.
 fn validate_github_oauth_token_url(url: &Url) -> Result<(), UrlFieldError> {
     validate_exact_https_url(
         url,
@@ -571,6 +606,7 @@ fn validate_github_oauth_token_url(url: &Url) -> Result<(), UrlFieldError> {
     )
 }
 
+/// Validates github api user url invariants for this contract.
 fn validate_github_api_user_url(url: &Url) -> Result<(), UrlFieldError> {
     validate_exact_https_url(
         url,
@@ -580,6 +616,7 @@ fn validate_github_api_user_url(url: &Url) -> Result<(), UrlFieldError> {
     )
 }
 
+/// Validates exact https url invariants for this contract.
 fn validate_exact_https_url(
     url: &Url,
     host: &str,
@@ -593,6 +630,7 @@ fn validate_exact_https_url(
     Ok(())
 }
 
+/// Validates github https base invariants for this contract.
 fn validate_github_https_base(url: &Url, message: &'static str) -> Result<(), UrlFieldError> {
     validate_https_url(url, message)?;
     if url.host_str() != Some("github.com")
@@ -605,6 +643,7 @@ fn validate_github_https_base(url: &Url, message: &'static str) -> Result<(), Ur
     Ok(())
 }
 
+/// Validates moltbook submolt url invariants for this contract.
 fn validate_moltbook_submolt_url(url: &Url) -> Result<(), UrlFieldError> {
     validate_https_url(url, MOLTBOOK_SUBMOLT_URL_ERROR_MESSAGE)?;
     if url.host_str() != Some("www.moltbook.com")
@@ -617,6 +656,7 @@ fn validate_moltbook_submolt_url(url: &Url) -> Result<(), UrlFieldError> {
     Ok(())
 }
 
+/// Validates https url invariants for this contract.
 fn validate_https_url(url: &Url, message: &'static str) -> Result<(), UrlFieldError> {
     if url.scheme() != "https" || url.cannot_be_a_base() || url.host_str().is_none() {
         return Err(UrlFieldError::new(message));
@@ -627,6 +667,7 @@ fn validate_https_url(url: &Url, message: &'static str) -> Result<(), UrlFieldEr
     Ok(())
 }
 
+/// Handles github path segments for this module.
 fn github_path_segments(url: &Url, message: &'static str) -> Result<Vec<String>, UrlFieldError> {
     let Some(segments) = url.path_segments() else {
         return Err(UrlFieldError::new(message));
@@ -638,6 +679,7 @@ fn github_path_segments(url: &Url, message: &'static str) -> Result<Vec<String>,
     Ok(segments)
 }
 
+/// Validates github path segment invariants for this contract.
 fn validate_github_path_segment(value: &str, message: &'static str) -> Result<(), UrlFieldError> {
     if value.is_empty()
         || value == ".git"
@@ -650,6 +692,7 @@ fn validate_github_path_segment(value: &str, message: &'static str) -> Result<()
     Ok(())
 }
 
+/// Handles reject whitespace or control for this module.
 fn reject_whitespace_or_control(value: &str, message: &'static str) -> Result<(), UrlFieldError> {
     if value.is_empty() || value.chars().any(|c| c.is_whitespace() || c.is_control()) {
         Err(UrlFieldError::new(message))
@@ -662,6 +705,7 @@ fn reject_whitespace_or_control(value: &str, message: &'static str) -> Result<()
 mod tests {
     use super::{ExternalDataUrl, GithubPullRequestUrl, GithubRepoRemote, MoltbookSubmoltUrl};
 
+    /// Verifies that parses github repo remotes.
     #[test]
     fn parses_github_repo_remotes() {
         let https =
@@ -686,6 +730,7 @@ mod tests {
         assert!(GithubRepoRemote::try_new("git@github.com:owner/repo").is_err());
     }
 
+    /// Verifies that parses github pull request urls.
     #[test]
     fn parses_github_pull_request_urls() {
         assert!(
@@ -703,6 +748,7 @@ mod tests {
         assert!(GithubPullRequestUrl::try_new("https://github.com/owner/repo/issues/7").is_err());
     }
 
+    /// Verifies that parses challenge external urls.
     #[test]
     fn parses_challenge_external_urls() {
         assert!(ExternalDataUrl::try_new("https://example.com/data.bin").is_ok());
@@ -710,6 +756,7 @@ mod tests {
         assert!(ExternalDataUrl::try_new("https://example.com/data.bin#section").is_err());
     }
 
+    /// Verifies that parses moltbook submolt urls.
     #[test]
     fn parses_moltbook_submolt_urls() {
         assert!(

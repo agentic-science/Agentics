@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
+/** Renders the observer layout component. */
 export default async function ObserverLayout({
   children,
 }: Readonly<{

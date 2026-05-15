@@ -11,6 +11,7 @@ import {
   publicSolutionSubmissionListResponseSchema,
 } from "@/lib/schemas";
 
+/** Renders the solution submissions page component. */
 export default async function SolutionSubmissionsPage({
   params,
 }: {
@@ -39,6 +40,7 @@ export default async function SolutionSubmissionsPage({
     (target) => target.validation_enabled,
   );
 
+  /** Maps submission status values to badge variants. */
   const statusBadgeVariant = (status: string) => {
     switch (status) {
       case "completed":

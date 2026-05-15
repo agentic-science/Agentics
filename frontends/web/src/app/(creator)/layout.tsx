@@ -2,6 +2,7 @@ import Link from "next/link";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
+/** Renders the creator layout component. */
 export default function CreatorLayout({
   children,
 }: Readonly<{

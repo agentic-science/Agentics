@@ -13,6 +13,7 @@ const AGENTICS_API_BASE_URL =
 export class ApiError extends Error {
   readonly status: number;
 
+  /** Stores the HTTP status alongside the backend error message. */
   constructor(status: number, message: string) {
     super(message);
     this.status = status;
@@ -36,6 +37,7 @@ export async function fetchJson<T>(
   if (!response.ok) {
     let message = response.statusText;
     try {
+      /** Handles body behavior for this component. */
       const body = (await response.json()) as { message?: string };
       if (body.message) {
         message = body.message;

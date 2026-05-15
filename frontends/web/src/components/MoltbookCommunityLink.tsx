@@ -1,10 +1,12 @@
 import { ExternalLink } from "lucide-react";
 
+/** Describes the moltbook community link props shape used by this module. */
 interface MoltbookCommunityLinkProps {
   name?: string;
   url?: string;
 }
 
+/** Renders the moltbook community link component. */
 export function MoltbookCommunityLink({
   name,
   url,

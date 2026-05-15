@@ -2,6 +2,7 @@ use serde_json::Value;
 
 use crate::error::{AppError, Result};
 
+/// Handles decode optional json for this module.
 pub(super) fn decode_optional_json<T>(value: Option<Value>, context: &str) -> Result<Option<T>>
 where
     T: serde::de::DeserializeOwned,

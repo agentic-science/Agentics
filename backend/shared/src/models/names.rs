@@ -14,6 +14,7 @@ pub const CHALLENGE_NAME_ERROR_MESSAGE: &str = "challenge_name must be 3-63 lowe
 pub struct ChallengeNameError;
 
 impl fmt::Display for ChallengeNameError {
+    /// Handles fmt for this module.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(CHALLENGE_NAME_ERROR_MESSAGE)
     }
@@ -29,6 +30,7 @@ pub const TARGET_NAME_ERROR_MESSAGE: &str = "target must be non-empty and contai
 pub struct TargetNameError;
 
 impl fmt::Display for TargetNameError {
+    /// Handles fmt for this module.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(TARGET_NAME_ERROR_MESSAGE)
     }
@@ -44,6 +46,7 @@ pub const METRIC_NAME_ERROR_MESSAGE: &str = "metric_name must be non-empty and c
 pub struct MetricNameError;
 
 impl fmt::Display for MetricNameError {
+    /// Handles fmt for this module.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(METRIC_NAME_ERROR_MESSAGE)
     }
@@ -59,6 +62,7 @@ pub const ASSET_NAME_ERROR_MESSAGE: &str = "asset_name must be non-empty and con
 pub struct AssetNameError;
 
 impl fmt::Display for AssetNameError {
+    /// Handles fmt for this module.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(ASSET_NAME_ERROR_MESSAGE)
     }
@@ -74,6 +78,7 @@ pub const RUN_NAME_ERROR_MESSAGE: &str = "run_name must be non-empty and contain
 pub struct RunNameError;
 
 impl fmt::Display for RunNameError {
+    /// Handles fmt for this module.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(RUN_NAME_ERROR_MESSAGE)
     }
@@ -89,6 +94,7 @@ pub const RESOURCE_PROFILE_NAME_ERROR_MESSAGE: &str = "resource_profile.name mus
 pub struct ResourceProfileNameError;
 
 impl fmt::Display for ResourceProfileNameError {
+    /// Handles fmt for this module.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(RESOURCE_PROFILE_NAME_ERROR_MESSAGE)
     }
@@ -116,6 +122,7 @@ impl std::error::Error for ResourceProfileNameError {}
         TryFrom,
     ),
 )]
+/// Carries challenge name data across this module boundary.
 pub struct ChallengeName(String);
 
 impl ChallengeName {
@@ -144,6 +151,7 @@ impl ChallengeName {
         TryFrom,
     ),
 )]
+/// Carries target name data across this module boundary.
 pub struct TargetName(String);
 
 impl TargetName {
@@ -172,6 +180,7 @@ impl TargetName {
         TryFrom,
     ),
 )]
+/// Carries asset name data across this module boundary.
 pub struct AssetName(String);
 
 impl AssetName {
@@ -200,6 +209,7 @@ impl AssetName {
         TryFrom,
     ),
 )]
+/// Carries run name data across this module boundary.
 pub struct RunName(String);
 
 impl RunName {
@@ -231,6 +241,7 @@ impl RunName {
         TryFrom,
     ),
 )]
+/// Carries resource profile name data across this module boundary.
 pub struct ResourceProfileName(String);
 
 impl ResourceProfileName {
@@ -260,6 +271,7 @@ impl ResourceProfileName {
         TryFrom,
     ),
 )]
+/// Carries metric name data across this module boundary.
 pub struct MetricName(String);
 
 impl MetricName {
@@ -273,6 +285,7 @@ impl MetricName {
         clippy::panic,
         reason = "the built-in `score` metric name is a hard-coded valid literal"
     )]
+    /// Handles score for this module.
     pub fn score() -> Self {
         match Self::try_new("score".to_string()) {
             Ok(metric_name) => metric_name,
@@ -282,14 +295,17 @@ impl MetricName {
 }
 
 impl JsonSchema for ChallengeName {
+    /// Handles inline schema for this module.
     fn inline_schema() -> bool {
         true
     }
 
+    /// Handles schema name for this module.
     fn schema_name() -> Cow<'static, str> {
         "ChallengeName".into()
     }
 
+    /// Handles json schema for this module.
     fn json_schema(_: &mut SchemaGenerator) -> Schema {
         json_schema!({
             "type": "string",
@@ -303,14 +319,17 @@ impl JsonSchema for ChallengeName {
 macro_rules! impl_token_json_schema {
     ($type_name:ident, $schema_name:literal) => {
         impl JsonSchema for $type_name {
+            /// Handles inline schema for this module.
             fn inline_schema() -> bool {
                 true
             }
 
+            /// Handles schema name for this module.
             fn schema_name() -> Cow<'static, str> {
                 $schema_name.into()
             }
 
+            /// Handles json schema for this module.
             fn json_schema(_: &mut SchemaGenerator) -> Schema {
                 json_schema!({
                     "type": "string",
@@ -348,6 +367,7 @@ pub fn is_valid_challenge_name(value: &str) -> bool {
         .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || *byte == b'-')
 }
 
+/// Returns whether name token syntax is present.
 fn has_name_token_syntax(value: &str) -> bool {
     !value.is_empty()
         && value
@@ -355,6 +375,7 @@ fn has_name_token_syntax(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'))
 }
 
+/// Validates challenge name invariants for this contract.
 fn validate_challenge_name(value: &str) -> Result<(), ChallengeNameError> {
     if is_valid_challenge_name(value) {
         Ok(())
@@ -363,6 +384,7 @@ fn validate_challenge_name(value: &str) -> Result<(), ChallengeNameError> {
     }
 }
 
+/// Validates target name invariants for this contract.
 fn validate_target_name(value: &str) -> Result<(), TargetNameError> {
     if has_name_token_syntax(value) {
         Ok(())
@@ -371,6 +393,7 @@ fn validate_target_name(value: &str) -> Result<(), TargetNameError> {
     }
 }
 
+/// Validates metric name invariants for this contract.
 fn validate_metric_name(value: &str) -> Result<(), MetricNameError> {
     if has_name_token_syntax(value) {
         Ok(())
@@ -379,6 +402,7 @@ fn validate_metric_name(value: &str) -> Result<(), MetricNameError> {
     }
 }
 
+/// Validates asset name invariants for this contract.
 fn validate_asset_name(value: &str) -> Result<(), AssetNameError> {
     if has_name_token_syntax(value) {
         Ok(())
@@ -387,6 +411,7 @@ fn validate_asset_name(value: &str) -> Result<(), AssetNameError> {
     }
 }
 
+/// Validates run name invariants for this contract.
 fn validate_run_name(value: &str) -> Result<(), RunNameError> {
     if has_name_token_syntax(value) {
         Ok(())
@@ -395,6 +420,7 @@ fn validate_run_name(value: &str) -> Result<(), RunNameError> {
     }
 }
 
+/// Validates resource profile name invariants for this contract.
 fn validate_resource_profile_name(value: &str) -> Result<(), ResourceProfileNameError> {
     if has_name_token_syntax(value) {
         Ok(())
@@ -410,6 +436,7 @@ mod tests {
         is_valid_challenge_name,
     };
 
+    /// Verifies that validates challenge names.
     #[test]
     fn validates_challenge_names() {
         assert!(is_valid_challenge_name("sample-sum"));
@@ -425,6 +452,7 @@ mod tests {
         assert!(ChallengeName::try_new("matrix mult").is_err());
     }
 
+    /// Verifies that validates token names.
     #[test]
     fn validates_token_names() {
         for value in ["linux-arm64-cpu", "score.v1", "cuda_12"] {
@@ -446,6 +474,7 @@ mod tests {
         assert!(MetricName::try_new("runtime ms").is_err());
     }
 
+    /// Verifies that serde rejects invalid names.
     #[test]
     fn serde_rejects_invalid_names() {
         let challenge: ChallengeName =

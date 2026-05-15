@@ -163,6 +163,7 @@ describe("CreatorConsole", () => {
   });
 });
 
+/** Builds the fill draft required fields test fixture. */
 function fillDraftRequiredFields(view: RenderResult) {
   fireEvent.input(view.getByLabelText("PR number"), {
     target: { value: "42" },

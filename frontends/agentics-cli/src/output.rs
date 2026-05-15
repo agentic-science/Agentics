@@ -23,6 +23,7 @@ use crate::package::SolutionPackage;
 use crate::workspace::InitSolutionSummary;
 
 #[derive(Debug, Clone, Serialize)]
+/// Carries local validation package report data across this module boundary.
 pub(crate) struct LocalValidationPackageReport {
     pub workspace_dir: PathBuf,
     pub file_count: usize,
@@ -31,6 +32,7 @@ pub(crate) struct LocalValidationPackageReport {
 }
 
 #[derive(Debug, Clone, Serialize)]
+/// Carries local validation target report data across this module boundary.
 pub(crate) struct LocalValidationTargetReport {
     pub target: TargetName,
     pub log_path: PathBuf,
@@ -38,6 +40,7 @@ pub(crate) struct LocalValidationTargetReport {
 }
 
 #[derive(Debug, Clone, Serialize)]
+/// Carries local validation report data across this module boundary.
 pub(crate) struct LocalValidationReport {
     pub challenge_name: ChallengeName,
     pub bundle_dir: PathBuf,
@@ -46,6 +49,7 @@ pub(crate) struct LocalValidationReport {
     pub targets: Vec<LocalValidationTargetReport>,
 }
 
+/// Renders register agent for user-facing output.
 pub(crate) fn render_register_agent(
     response: &RegisterAgentResponse,
     saved_token: bool,
@@ -73,6 +77,7 @@ pub(crate) fn render_register_agent(
     }
 }
 
+/// Renders auth status for user-facing output.
 pub(crate) fn render_auth_status(
     settings: &ResolvedSettings,
     format: OutputFormat,
@@ -100,6 +105,7 @@ pub(crate) fn render_auth_status(
     }
 }
 
+/// Renders config set for user-facing output.
 pub(crate) fn render_config_set(
     key: &str,
     settings: &ResolvedSettings,
@@ -117,6 +123,7 @@ pub(crate) fn render_config_set(
     }
 }
 
+/// Renders challenge draft for user-facing output.
 pub(crate) fn render_challenge_draft(
     response: &ChallengeDraftResponse,
     format: OutputFormat,
@@ -144,6 +151,7 @@ pub(crate) fn render_challenge_draft(
     }
 }
 
+/// Renders challenge private asset for user-facing output.
 pub(crate) fn render_challenge_private_asset(
     response: &ChallengePrivateAssetResponse,
     format: OutputFormat,
@@ -163,6 +171,7 @@ pub(crate) fn render_challenge_private_asset(
     }
 }
 
+/// Renders challenge draft cleanup for user-facing output.
 pub(crate) fn render_challenge_draft_cleanup(
     response: &ChallengeDraftCleanupResponse,
     format: OutputFormat,
@@ -176,6 +185,7 @@ pub(crate) fn render_challenge_draft_cleanup(
     }
 }
 
+/// Renders creator challenge stats for user-facing output.
 pub(crate) fn render_creator_challenge_stats(
     response: &CreatorChallengeStatsResponse,
     format: OutputFormat,
@@ -218,6 +228,7 @@ pub(crate) fn render_creator_challenge_stats(
     }
 }
 
+/// Renders creator challenge participants for user-facing output.
 pub(crate) fn render_creator_challenge_participants(
     response: &CreatorChallengeParticipantsResponse,
     format: OutputFormat,
@@ -269,6 +280,7 @@ pub(crate) fn render_creator_challenge_participants(
     }
 }
 
+/// Renders challenge shortlist revision for user-facing output.
 pub(crate) fn render_challenge_shortlist_revision(
     response: &ChallengeShortlistRevisionResponse,
     format: OutputFormat,
@@ -288,6 +300,7 @@ pub(crate) fn render_challenge_shortlist_revision(
     }
 }
 
+/// Renders challenge shortlist for user-facing output.
 pub(crate) fn render_challenge_shortlist(
     response: &ChallengeShortlistResponse,
     format: OutputFormat,
@@ -316,6 +329,7 @@ pub(crate) fn render_challenge_shortlist(
     }
 }
 
+/// Renders challenge list for user-facing output.
 pub(crate) fn render_challenge_list(
     response: &ChallengeListResponse,
     format: OutputFormat,
@@ -343,6 +357,7 @@ pub(crate) fn render_challenge_list(
     }
 }
 
+/// Renders challenge detail for user-facing output.
 pub(crate) fn render_challenge_detail(
     response: &ChallengeDetailResponse,
     format: OutputFormat,
@@ -385,6 +400,7 @@ pub(crate) fn render_challenge_detail(
     }
 }
 
+/// Renders init solution for user-facing output.
 pub(crate) fn render_init_solution(
     summary: &InitSolutionSummary,
     format: OutputFormat,
@@ -402,6 +418,7 @@ pub(crate) fn render_init_solution(
     }
 }
 
+/// Renders create solution submission for user-facing output.
 pub(crate) fn render_create_solution_submission(
     response: &CreateSolutionSubmissionResponse,
     package: &SolutionPackage,
@@ -432,6 +449,7 @@ pub(crate) fn render_create_solution_submission(
     }
 }
 
+/// Renders create solution submission batch for user-facing output.
 pub(crate) fn render_create_solution_submission_batch(
     responses: &[CreateSolutionSubmissionResponse],
     package: &SolutionPackage,
@@ -443,6 +461,7 @@ pub(crate) fn render_create_solution_submission_batch(
     }
 }
 
+/// Renders create validation run for user-facing output.
 pub(crate) fn render_create_validation_run(
     response: &CreateSolutionSubmissionResponse,
     package: &SolutionPackage,
@@ -473,6 +492,7 @@ pub(crate) fn render_create_validation_run(
     }
 }
 
+/// Renders create validation run batch for user-facing output.
 pub(crate) fn render_create_validation_run_batch(
     responses: &[CreateSolutionSubmissionResponse],
     package: &SolutionPackage,
@@ -484,6 +504,7 @@ pub(crate) fn render_create_validation_run_batch(
     }
 }
 
+/// Renders solution submission status for user-facing output.
 pub(crate) fn render_solution_submission_status(
     response: &SolutionSubmissionResponse,
     format: OutputFormat,
@@ -536,6 +557,7 @@ pub(crate) fn render_solution_submission_status(
     }
 }
 
+/// Renders validation run status for user-facing output.
 pub(crate) fn render_validation_run_status(
     response: &SolutionSubmissionResponse,
     format: OutputFormat,
@@ -580,6 +602,7 @@ pub(crate) fn render_validation_run_status(
     }
 }
 
+/// Renders validation run status batch for user-facing output.
 pub(crate) fn render_validation_run_status_batch(
     responses: &[SolutionSubmissionResponse],
     format: OutputFormat,
@@ -627,6 +650,7 @@ pub(crate) fn render_validation_run_status_batch(
     }
 }
 
+/// Renders local validation report for user-facing output.
 pub(crate) fn render_local_validation_report(
     report: &LocalValidationReport,
     format: OutputFormat,
@@ -687,6 +711,7 @@ pub(crate) fn render_local_validation_report(
     }
 }
 
+/// Renders create submission batch for user-facing output.
 fn render_create_submission_batch(
     response_key: &str,
     responses: &[CreateSolutionSubmissionResponse],
@@ -733,6 +758,7 @@ fn render_create_submission_batch(
     }
 }
 
+/// Renders solution submission logs for user-facing output.
 pub(crate) fn render_solution_submission_logs(
     response: &SolutionSubmissionLogsResponse,
     format: OutputFormat,
@@ -752,6 +778,7 @@ pub(crate) fn render_solution_submission_logs(
     }
 }
 
+/// Renders ranking context for user-facing output.
 pub(crate) fn render_ranking_context(
     response: &RankingContextResponse,
     format: OutputFormat,
@@ -792,6 +819,7 @@ pub(crate) fn render_ranking_context(
     }
 }
 
+/// Renders leaderboard for user-facing output.
 pub(crate) fn render_leaderboard(
     response: &LeaderboardResponse,
     format: OutputFormat,
@@ -826,6 +854,7 @@ pub(crate) fn render_leaderboard(
     }
 }
 
+/// Renders score distribution for user-facing output.
 pub(crate) fn render_score_distribution(
     response: &ScoreDistributionResponse,
     format: OutputFormat,
@@ -879,6 +908,7 @@ pub(crate) fn render_score_distribution(
     }
 }
 
+/// Handles format targets for this module.
 fn format_targets(targets: &[shared::models::challenge::ChallengeTargetSpec]) -> String {
     if targets.is_empty() {
         return "  <none>".to_string();
@@ -906,10 +936,12 @@ fn format_targets(targets: &[shared::models::challenge::ChallengeTargetSpec]) ->
         .join("\n")
 }
 
+/// Handles pretty json for this module.
 fn pretty_json<T: Serialize>(value: &T) -> Result<String> {
     Ok(serde_json::to_string_pretty(value)?)
 }
 
+/// Handles status label for this module.
 fn status_label<T: Serialize>(status: &T) -> String {
     serde_json::to_value(status)
         .ok()
@@ -917,6 +949,7 @@ fn status_label<T: Serialize>(status: &T) -> String {
         .unwrap_or_else(|| "unknown".to_string())
 }
 
+/// Handles format score for this module.
 fn format_score(score: f64) -> String {
     if score.fract() == 0.0 {
         format!("{score:.0}")
@@ -925,6 +958,7 @@ fn format_score(score: f64) -> String {
     }
 }
 
+/// Renders table for user-facing output.
 fn render_table(headers: &[&str], rows: &[Vec<String>]) -> String {
     let widths = headers
         .iter()
@@ -953,6 +987,7 @@ fn render_table(headers: &[&str], rows: &[Vec<String>]) -> String {
     lines.join("\n")
 }
 
+/// Renders table row for user-facing output.
 fn render_table_row(row: &[String], widths: &[usize]) -> String {
     row.iter()
         .enumerate()
@@ -983,6 +1018,7 @@ mod tests {
 
     use super::{OutputFormat, render_challenge_detail, render_challenge_list};
 
+    /// Verifies that renders challenge list table.
     #[test]
     fn renders_challenge_list_table() {
         let output = render_challenge_list(
@@ -1008,6 +1044,7 @@ mod tests {
         );
     }
 
+    /// Verifies that renders challenge detail table.
     #[test]
     fn renders_challenge_detail_table() {
         let output = render_challenge_detail(&challenge_detail(), OutputFormat::Table)
@@ -1025,6 +1062,7 @@ mod tests {
         assert!(output.ends_with("# Statement\n\nReturn the sum."));
     }
 
+    /// Handles challenge detail for this module.
     fn challenge_detail() -> ChallengeDetailResponse {
         ChallengeDetailResponse {
             name: challenge_name("sample-sum"),
@@ -1099,19 +1137,23 @@ mod tests {
         }
     }
 
+    /// Handles target name for this module.
     fn target_name(value: &str) -> TargetName {
         TargetName::try_new(value.to_string()).expect("test target is valid")
     }
 
+    /// Handles challenge name for this module.
     fn challenge_name(value: &str) -> ChallengeName {
         ChallengeName::try_new(value.to_string()).expect("test challenge name is valid")
     }
 
+    /// Handles resource profile name for this module.
     fn resource_profile_name(value: &str) -> ResourceProfileName {
         ResourceProfileName::try_new(value.to_string())
             .expect("test resource profile name is valid")
     }
 
+    /// Handles bundle path for this module.
     fn bundle_path(value: &str) -> BundleRelativePath {
         BundleRelativePath::try_new(value).expect("test bundle path is valid")
     }

@@ -126,6 +126,7 @@ pub struct ChallengeCreationCiSpec {
 }
 
 impl Default for ChallengeCreationCiSpec {
+    /// Handles default for this module.
     fn default() -> Self {
         Self {
             validate_manifest: true,
@@ -135,6 +136,7 @@ impl Default for ChallengeCreationCiSpec {
     }
 }
 
+/// Handles default required for this module.
 fn default_required() -> bool {
     true
 }

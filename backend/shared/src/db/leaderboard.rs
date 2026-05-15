@@ -224,6 +224,7 @@ pub async fn list_leaderboard_entries(
     Ok(entries)
 }
 
+/// Handles upsert leaderboard entry for solution submission tx for this module.
 pub(super) async fn upsert_leaderboard_entry_for_solution_submission_tx<'a>(
     tx: &mut Transaction<'a, Postgres>,
     solution_submission_id: &SolutionSubmissionId,
@@ -303,6 +304,7 @@ pub(super) async fn upsert_leaderboard_entry_for_solution_submission_tx<'a>(
     Ok(true)
 }
 
+/// Handles update official score for solution submission tx for this module.
 pub(super) async fn update_official_score_for_solution_submission_tx<'a>(
     tx: &mut Transaction<'a, Postgres>,
     solution_submission_id: &SolutionSubmissionId,
@@ -338,6 +340,7 @@ pub(super) async fn update_official_score_for_solution_submission_tx<'a>(
     Ok(())
 }
 
+/// Handles compare leaderboard entries for this module.
 fn compare_leaderboard_entries(
     spec: &ChallengeBundleSpec,
     a: &LeaderboardEntryDto,
@@ -358,6 +361,7 @@ fn compare_leaderboard_entries(
     })
 }
 
+/// Handles compare rank payloads for this module.
 fn compare_rank_payloads(
     spec: &ChallengeBundleSpec,
     a_score: f64,
@@ -387,6 +391,7 @@ fn compare_rank_payloads(
     Ordering::Equal
 }
 
+/// Handles candidate replaces leaderboard entry for this module.
 fn candidate_replaces_leaderboard_entry(
     spec: Option<&ChallengeBundleSpec>,
     current: Option<(f64, Vec<MetricValue>)>,
@@ -410,6 +415,7 @@ fn candidate_replaces_leaderboard_entry(
     should_replace_leaderboard_entry(Some(current_score), candidate_score)
 }
 
+/// Handles metric value for this module.
 fn metric_value(metrics: &[MetricValue], metric_name: &MetricName) -> Option<f64> {
     metrics
         .iter()
@@ -417,6 +423,7 @@ fn metric_value(metrics: &[MetricValue], metric_name: &MetricName) -> Option<f64
         .map(|metric| metric.value)
 }
 
+/// Handles compare metric by direction for this module.
 fn compare_metric_by_direction(
     direction: MetricDirection,
     a: Option<f64>,
@@ -433,10 +440,12 @@ fn compare_metric_by_direction(
     }
 }
 
+/// Handles compare f64 desc for this module.
 fn compare_f64_desc(a: f64, b: f64) -> Ordering {
     b.partial_cmp(&a).unwrap_or(Ordering::Equal)
 }
 
+/// Handles compare f64 asc for this module.
 fn compare_f64_asc(a: f64, b: f64) -> Ordering {
     a.partial_cmp(&b).unwrap_or(Ordering::Equal)
 }

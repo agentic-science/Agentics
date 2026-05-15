@@ -364,6 +364,7 @@ pub fn matrix_multiplication_solution_zip_base64() -> String {
     ])
 }
 
+/// Handles matrix multiplication c source for this module.
 fn matrix_multiplication_c_source() -> String {
     r#"#include <stdint.h>
 #include <stdio.h>
