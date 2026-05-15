@@ -56,6 +56,7 @@ const STAGED_EVALUATION_JOB_DELAY_SECONDS: i64 = 315_360_000;
 const DEFAULT_PUBLIC_LIST_LIMIT: i64 = 50;
 const MAX_PUBLIC_LIST_LIMIT: i64 = 100;
 
+/// Parses a boundary string into a domain type and converts validation failures to API errors.
 fn parse_request_value<T>(raw: &str) -> Result<T>
 where
     T: std::str::FromStr,
@@ -183,6 +184,7 @@ pub async fn create_solution_submission(
     create_solution_submission_for_mode(state, agent, body, ScoringMode::Official).await
 }
 
+/// Creates a submission for either official or validation mode after admission checks pass.
 async fn create_solution_submission_for_mode(
     state: AppState,
     agent: AgentAuth,
@@ -302,6 +304,7 @@ async fn create_solution_submission_for_mode(
     ))
 }
 
+/// Removes a staged submission row after storage or job admission fails.
 async fn cleanup_solution_submission_record(
     state: &AppState,
     solution_submission_id: &SolutionSubmissionId,
@@ -315,6 +318,7 @@ async fn cleanup_solution_submission_record(
     }
 }
 
+/// Removes a staged artifact object after submission admission fails.
 async fn cleanup_storage_key(state: &AppState, storage_key: &StorageKey) {
     if let Err(error) = state.storage.delete(storage_key).await {
         warn!(
@@ -325,6 +329,7 @@ async fn cleanup_storage_key(state: &AppState, storage_key: &StorageKey) {
     }
 }
 
+/// Performs pre-upload quota checks so oversized or abusive requests fail before artifact decode.
 async fn ensure_submission_quota_available(
     state: &AppState,
     agent_id: &AgentId,
@@ -384,6 +389,7 @@ async fn ensure_submission_quota_available(
     Ok(())
 }
 
+/// Selects the challenge-level run limit that applies to the requested scoring mode.
 fn challenge_lifetime_limit(
     admission: &db::PublishedChallengeAdmission,
     eval_type: ScoringMode,
@@ -627,12 +633,14 @@ pub async fn get_score_distribution(
     Ok(Json(response))
 }
 
+/// Query parameters accepted by public list endpoints.
 #[derive(Debug, Clone, Copy, Deserialize)]
 pub struct PublicListQuery {
     limit: Option<i64>,
 }
 
 impl PublicListQuery {
+    /// Returns the requested list limit after applying the public API bounds.
     fn limit(self) -> i64 {
         self.limit
             .unwrap_or(DEFAULT_PUBLIC_LIST_LIMIT)
@@ -640,6 +648,7 @@ impl PublicListQuery {
     }
 }
 
+/// Query parameters accepted by the public leaderboard endpoint.
 #[derive(Debug, Clone, Deserialize)]
 pub struct LeaderboardQuery {
     limit: Option<i64>,
@@ -647,6 +656,7 @@ pub struct LeaderboardQuery {
 }
 
 impl LeaderboardQuery {
+    /// Returns the requested leaderboard size after applying public API bounds.
     fn limit(&self) -> i64 {
         self.limit
             .unwrap_or(DEFAULT_PUBLIC_LIST_LIMIT)
@@ -654,18 +664,21 @@ impl LeaderboardQuery {
     }
 }
 
+/// Query parameters accepted by the public score-distribution endpoint.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ScoreDistributionQuery {
     target: Option<String>,
     metric: String,
 }
 
+/// Query parameters that pin a submission ranking lookup to one challenge target.
 #[derive(Debug, Clone, Deserialize)]
 pub struct RankingContextQuery {
     challenge_name: ChallengeName,
     target: TargetName,
 }
 
+/// Resolves the explicit target requested by a public endpoint against the challenge spec.
 async fn resolve_public_target(
     pool: &sqlx::PgPool,
     challenge_name: &ChallengeName,
@@ -692,6 +705,7 @@ async fn resolve_public_target(
     ))
 }
 
+/// Loads the public challenge record together with its parsed policy-bearing spec.
 async fn load_challenge_policy(
     pool: &sqlx::PgPool,
     challenge_name: &ChallengeName,
@@ -703,6 +717,7 @@ async fn load_challenge_policy(
     Ok((challenge, spec))
 }
 
+/// Enforces whether unauthenticated users may inspect a submission's detailed result report.
 async fn ensure_public_result_detail_visible(
     pool: &sqlx::PgPool,
     challenge_name: &ChallengeName,
@@ -720,6 +735,7 @@ async fn ensure_public_result_detail_visible(
     }
 }
 
+/// Enforces whether unauthenticated users may download a submission artifact.
 async fn ensure_public_solution_artifact_visible(
     pool: &sqlx::PgPool,
     challenge_name: &ChallengeName,
@@ -743,6 +759,7 @@ async fn ensure_public_solution_artifact_visible(
     }
 }
 
+/// Applies challenge visibility policy to an aggregate public surface.
 fn ensure_visibility_allows_public(
     visibility: ChallengeVisibility,
     spec: &ChallengeBundleSpec,
@@ -756,6 +773,7 @@ fn ensure_visibility_allows_public(
     }
 }
 
+/// Returns whether the current wall clock is past the challenge close time.
 fn challenge_has_closed(spec: &ChallengeBundleSpec) -> Result<bool> {
     let Some(closes_at) = spec.closes_at.as_deref() else {
         return Ok(false);
@@ -766,6 +784,7 @@ fn challenge_has_closed(spec: &ChallengeBundleSpec) -> Result<bool> {
     Ok(Utc::now() >= closes_at)
 }
 
+/// Rejects ranking-context requests whose scope does not match the submission record.
 fn ensure_ranking_scope_matches_submission(
     solution_submission: &db::SolutionSubmissionRecord,
     query: &RankingContextQuery,
@@ -781,6 +800,7 @@ fn ensure_ranking_scope_matches_submission(
     Ok(())
 }
 
+/// Builds rank, percentile, and nearby leaderboard rows for one submitted solution.
 async fn build_ranking_context(
     pool: &sqlx::PgPool,
     challenge_name: &ChallengeName,
@@ -948,6 +968,7 @@ pub async fn publish_challenge(
     Ok((StatusCode::CREATED, Json(challenge)))
 }
 
+/// Copies an admin-supplied bundle into content-addressed managed storage.
 async fn copy_admin_bundle_to_managed_storage(
     config: &Config,
     source: &std::path::Path,

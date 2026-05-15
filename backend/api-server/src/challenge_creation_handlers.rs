@@ -240,6 +240,7 @@ pub async fn upload_challenge_private_asset(
     Ok((StatusCode::CREATED, Json(asset)))
 }
 
+/// Deletes the database row created for a private asset when the upload cannot be promoted.
 async fn cleanup_challenge_private_asset_record(state: &AppState, asset_row_id: &str) {
     if let Err(error) = db::delete_challenge_private_asset(&state.db, asset_row_id).await {
         warn!(
@@ -250,6 +251,7 @@ async fn cleanup_challenge_private_asset_record(state: &AppState, asset_row_id: 
     }
 }
 
+/// Deletes a temporary private-asset storage object after a failed upload path.
 async fn cleanup_storage_key(state: &AppState, storage_key: &StorageKey) {
     if let Err(error) = state.storage.delete(storage_key).await {
         warn!(
@@ -604,6 +606,7 @@ pub async fn publish_challenge_draft(
     ))
 }
 
+/// Maps database unique-constraint failures to the API conflict error used by draft creation.
 fn map_unique_conflict(error: AppError) -> AppError {
     match error {
         AppError::Database(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
@@ -613,6 +616,7 @@ fn map_unique_conflict(error: AppError) -> AppError {
     }
 }
 
+/// Ensures a draft path follows the canonical `challenges/{challenge_name}` repository layout.
 fn validate_challenge_draft_path(
     path: &RepoRelativePath,
     challenge_name: &ChallengeName,
@@ -626,6 +630,7 @@ fn validate_challenge_draft_path(
     Ok(())
 }
 
+/// Validates the checked-out proposal against the manifest hash recorded at draft creation.
 async fn validate_draft_repository(
     draft: &ChallengeDraftResponse,
     repository_path: &RepositoryCheckoutPath,
@@ -657,6 +662,7 @@ async fn validate_draft_repository(
     Ok((manifest, bundle_sha256))
 }
 
+/// Builds the managed runtime bundle by combining public bundle files and private overlays.
 async fn assemble_runtime_bundle(
     state: &AppState,
     draft: &ChallengeDraftResponse,
@@ -691,6 +697,7 @@ async fn assemble_runtime_bundle(
     Ok(runtime_bundle_path)
 }
 
+/// Verifies every private asset required by the manifest and bundle shape is present.
 fn validate_private_assets_for_publish(
     draft: &ChallengeDraftResponse,
     manifest: &ChallengeCreationManifest,
@@ -727,6 +734,7 @@ fn validate_private_assets_for_publish(
     Ok(())
 }
 
+/// Extracts one private asset ZIP overlay on a blocking worker thread.
 async fn extract_private_asset_overlay(
     bytes: &[u8],
     target_dir: &Path,
@@ -748,6 +756,7 @@ async fn extract_private_asset_overlay(
     .map_err(|e| AppError::Internal(format!("private asset extraction task failed: {e}")))?
 }
 
+/// Expands a private asset ZIP while enforcing containment, size, and no-overwrite rules.
 fn extract_private_asset_overlay_blocking(
     bytes: &[u8],
     target_dir: &Path,
@@ -816,6 +825,7 @@ fn extract_private_asset_overlay_blocking(
     Ok(())
 }
 
+/// Returns the trimmed message only when it carries non-whitespace content.
 fn non_empty_message(value: &str) -> Option<&str> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
@@ -825,6 +835,7 @@ fn non_empty_message(value: &str) -> Option<&str> {
     }
 }
 
+/// Decodes user-provided base64 payloads after trimming transport whitespace.
 fn base64_decode(input: &str) -> Option<Vec<u8>> {
     use base64::{Engine as _, engine::general_purpose::STANDARD};
     STANDARD.decode(input.trim()).ok()

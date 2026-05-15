@@ -74,14 +74,17 @@ pub enum SolutionSubmissionAudience {
 }
 
 impl SolutionSubmissionAudience {
+    /// Returns whether this audience may see the stored solution artifact key.
     fn includes_artifact_key(self) -> bool {
         matches!(self, Self::Owner)
     }
 
+    /// Returns whether this audience may see the current evaluation job handle.
     fn includes_evaluation_job(self) -> bool {
         matches!(self, Self::Owner)
     }
 
+    /// Returns whether this audience may see validation-mode evaluation details.
     fn includes_validation_details(self) -> bool {
         matches!(self, Self::Owner)
     }
@@ -144,6 +147,7 @@ pub fn present_solution_submission(
     }
 }
 
+/// Projects one persisted evaluation according to audience and benchmark privacy policy.
 fn present_evaluation(
     evaluation: Option<&EvaluationDto>,
     audience: SolutionSubmissionAudience,
@@ -158,6 +162,7 @@ fn present_evaluation(
     }
 }
 
+/// Removes official-run fields that could reveal private benchmark cases or logs.
 fn redact_private_benchmark_details(evaluation: &EvaluationDto) -> EvaluationDto {
     EvaluationDto {
         id: evaluation.id.clone(),

@@ -26,6 +26,7 @@ use tokio::net::TcpListener;
 use tracing::info;
 
 #[tokio::main]
+/// Starts the API server, wires storage/database state, and handles termination signals.
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 

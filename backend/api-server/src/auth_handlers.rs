@@ -27,6 +27,7 @@ use crate::state::AppState;
 const OAUTH_STATE_TTL_MINUTES: i64 = 10;
 const GITHUB_USER_AGENT: &str = "Agentics";
 
+/// Minimal JSON shape returned by GitHub's OAuth token exchange endpoint.
 #[derive(Debug, Deserialize)]
 struct GithubAccessTokenResponse {
     access_token: Option<String>,
@@ -34,6 +35,7 @@ struct GithubAccessTokenResponse {
     error_description: Option<String>,
 }
 
+/// Minimal GitHub user profile needed to bind a creator session.
 #[derive(Debug, Deserialize)]
 struct GithubUserResponse {
     id: i64,
@@ -240,6 +242,7 @@ pub async fn creator_me(creator: CreatorAuth) -> Result<Json<CreatorMeResponse>>
     }))
 }
 
+/// Exchanges a one-time GitHub OAuth code for an access token.
 async fn exchange_github_code(state: &AppState, code: &str) -> Result<String> {
     let client_id = required_oauth_config(
         state.config.github_oauth_client_id.as_deref(),
@@ -298,6 +301,7 @@ async fn exchange_github_code(state: &AppState, code: &str) -> Result<String> {
     })
 }
 
+/// Fetches the GitHub account identity associated with an OAuth access token.
 async fn fetch_github_user(state: &AppState, access_token: &str) -> Result<GithubUserResponse> {
     let response = reqwest::Client::new()
         .get(state.config.github_api_user_url.as_str())
@@ -319,6 +323,7 @@ async fn fetch_github_user(state: &AppState, access_token: &str) -> Result<Githu
         .map_err(|e| AppError::Internal(format!("invalid GitHub user response: {e}")))
 }
 
+/// Reads one required OAuth configuration value with a user-facing error name.
 fn required_oauth_config<'a>(value: Option<&'a str>, name: &str) -> Result<&'a str> {
     let value = value
         .map(str::trim)
@@ -327,6 +332,7 @@ fn required_oauth_config<'a>(value: Option<&'a str>, name: &str) -> Result<&'a s
     Ok(value)
 }
 
+/// Encodes OAuth form fields using the URL crate instead of hand-built escaping.
 fn form_urlencoded(values: &[(&str, &str)]) -> Result<String> {
     let mut url = Url::parse("https://agentics.local/")
         .map_err(|e| AppError::Internal(format!("invalid form helper URL: {e}")))?;
@@ -341,6 +347,7 @@ fn form_urlencoded(values: &[(&str, &str)]) -> Result<String> {
         .ok_or_else(|| AppError::Internal("failed to encode OAuth token request".to_string()))
 }
 
+/// Converts configured session lifetime hours into seconds with overflow checking.
 fn session_ttl_seconds(state: &AppState) -> Result<i64> {
     state
         .config
@@ -349,12 +356,14 @@ fn session_ttl_seconds(state: &AppState) -> Result<i64> {
         .ok_or_else(|| AppError::Internal("web session TTL overflow".to_string()))
 }
 
+/// Computes the absolute expiration time for a newly issued web session.
 fn session_expires_at(ttl_seconds: i64) -> Result<chrono::DateTime<Utc>> {
     Utc::now()
         .checked_add_signed(Duration::seconds(ttl_seconds))
         .ok_or_else(|| AppError::Internal("web session TTL overflow".to_string()))
 }
 
+/// Builds the session and CSRF cookies for a successful browser login.
 fn session_cookies(
     state: &AppState,
     session_token: &str,
@@ -385,6 +394,7 @@ fn session_cookies(
     ]
 }
 
+/// Builds expired cookies that clear browser session state during logout.
 fn expired_session_cookies(state: &AppState) -> [(HeaderName, String); 2] {
     [
         (
@@ -410,6 +420,7 @@ fn expired_session_cookies(state: &AppState) -> [(HeaderName, String); 2] {
     ]
 }
 
+/// Formats one session cookie with the security attributes configured for the deployment.
 fn build_cookie(
     name: &str,
     value: &str,
@@ -427,6 +438,7 @@ fn build_cookie(
     cookie
 }
 
+/// Extracts one cookie value from a raw Cookie header without accepting partial name matches.
 fn cookie_value(cookie_header: Option<&str>, name: &str) -> Option<String> {
     let cookie_header = cookie_header?;
     for pair in cookie_header.split(';') {

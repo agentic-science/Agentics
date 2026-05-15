@@ -215,6 +215,7 @@ pub fn router(config: &Config) -> Router<AppState> {
         .layer(cors_layer(config))
 }
 
+/// Builds the CORS layer from configured browser origins.
 fn cors_layer(config: &Config) -> CorsLayer {
     let origins = config
         .cors_allowed_origin_values()

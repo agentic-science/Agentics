@@ -283,6 +283,7 @@ mod tests {
     }
 
     #[tokio::test]
+    /// Verifies unsafe archive entry names are excluded from artifact previews.
     async fn artifact_summary_skips_unsafe_entry_names() {
         let path = temp_zip_path("unsafe-entry");
         write_zip(
@@ -304,6 +305,7 @@ mod tests {
     }
 
     #[tokio::test]
+    /// Verifies previews reject archives that exceed the configured file-count limit.
     async fn artifact_summary_rejects_too_many_entries() {
         let path = temp_zip_path("too-many");
         let entries = (0..=MAX_ZIP_PROJECT_FILE_COUNT)
@@ -322,6 +324,7 @@ mod tests {
     }
 
     #[tokio::test]
+    /// Verifies large text files are listed without inlining their contents.
     async fn artifact_summary_does_not_inline_large_text_entries() {
         let path = temp_zip_path("large-text");
         write_zip(

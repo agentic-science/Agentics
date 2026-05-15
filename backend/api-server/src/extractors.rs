@@ -32,6 +32,7 @@ pub struct SolutionSubmissionPath(pub SolutionSubmissionId);
 impl FromRequestParts<AppState> for SolutionSubmissionPath {
     type Rejection = (StatusCode, Json<shared::models::ErrorResponse>);
 
+    /// Parses the path segment as a canonical solution-submission id.
     async fn from_request_parts(
         parts: &mut Parts,
         state: &AppState,
@@ -56,6 +57,7 @@ pub struct ChallengeDraftIdPath(pub ChallengeDraftId);
 impl FromRequestParts<AppState> for ChallengeDraftIdPath {
     type Rejection = (StatusCode, Json<shared::models::ErrorResponse>);
 
+    /// Parses the path segment as a canonical challenge-draft id.
     async fn from_request_parts(
         parts: &mut Parts,
         state: &AppState,
@@ -84,6 +86,7 @@ pub struct AgentAuth {
 impl FromRequestParts<AppState> for AgentAuth {
     type Rejection = (StatusCode, axum::Json<shared::models::ErrorResponse>);
 
+    /// Authenticates the bearer token and returns the active agent context.
     async fn from_request_parts(
         parts: &mut Parts,
         state: &AppState,
@@ -123,6 +126,7 @@ pub struct AdminAuth {
 impl FromRequestParts<AppState> for AdminAuth {
     type Rejection = (StatusCode, axum::Json<shared::models::ErrorResponse>);
 
+    /// Authenticates admin requests through Basic auth or session cookies plus CSRF.
     async fn from_request_parts(
         parts: &mut Parts,
         state: &AppState,
@@ -177,6 +181,7 @@ pub struct CreatorAuth {
 impl FromRequestParts<AppState> for CreatorAuth {
     type Rejection = (StatusCode, axum::Json<shared::models::ErrorResponse>);
 
+    /// Authenticates creator web requests through the GitHub-linked session cookie.
     async fn from_request_parts(
         parts: &mut Parts,
         state: &AppState,
@@ -207,22 +212,27 @@ impl FromRequestParts<AppState> for CreatorAuth {
     }
 }
 
+/// Shared interface for database session records that carry CSRF token hashes.
 trait WebSessionCsrf {
+    /// Returns the hashed CSRF token stored with the web session.
     fn csrf_token_hash(&self) -> &str;
 }
 
 impl WebSessionCsrf for AuthenticatedAdminSession {
+    /// Returns the hashed CSRF token for an admin web session.
     fn csrf_token_hash(&self) -> &str {
         &self.csrf_token_hash
     }
 }
 
 impl WebSessionCsrf for shared::db::AuthenticatedCreatorSession {
+    /// Returns the hashed CSRF token for a creator web session.
     fn csrf_token_hash(&self) -> &str {
         &self.csrf_token_hash
     }
 }
 
+/// Validates CSRF headers for state-changing web-session requests.
 fn require_session_csrf<S: WebSessionCsrf>(
     parts: &Parts,
     session: &S,
@@ -242,6 +252,7 @@ fn require_session_csrf<S: WebSessionCsrf>(
     Ok(())
 }
 
+/// Builds a localized unauthorized API rejection.
 fn unauthorized(message: &str) -> (StatusCode, axum::Json<shared::models::ErrorResponse>) {
     (
         StatusCode::UNAUTHORIZED,
@@ -252,6 +263,7 @@ fn unauthorized(message: &str) -> (StatusCode, axum::Json<shared::models::ErrorR
     )
 }
 
+/// Builds a localized forbidden API rejection.
 fn forbidden(message: &str) -> (StatusCode, axum::Json<shared::models::ErrorResponse>) {
     (
         StatusCode::FORBIDDEN,
@@ -262,10 +274,12 @@ fn forbidden(message: &str) -> (StatusCode, axum::Json<shared::models::ErrorResp
     )
 }
 
+/// Returns whether an HTTP method can mutate server state and therefore needs CSRF.
 fn requires_csrf(method: &Method) -> bool {
     !(method == Method::GET || method == Method::HEAD || method == Method::OPTIONS)
 }
 
+/// Extracts one cookie value from a raw Cookie header without accepting partial name matches.
 fn cookie_value(cookie_header: Option<&str>, name: &str) -> Option<String> {
     let cookie_header = cookie_header?;
     for pair in cookie_header.split(';') {
@@ -284,6 +298,7 @@ fn cookie_value(cookie_header: Option<&str>, name: &str) -> Option<String> {
 /// structs. This trait covers semantic checks such as required non-empty
 /// strings while preserving the API's `{ error, message }` error shape.
 pub trait ValidateRequest {
+    /// Performs semantic validation after serde has accepted the request shape.
     fn validate(&self) -> Result<(), String>;
 }
 
@@ -298,6 +313,7 @@ where
 {
     type Rejection = (StatusCode, Json<shared::models::ErrorResponse>);
 
+    /// Deserializes a JSON body and runs the request's semantic validator.
     async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
         let Json(value) = Json::<T>::from_request(req, state)
             .await
@@ -309,6 +325,7 @@ where
     }
 }
 
+/// Builds a structured bad-request rejection for JSON and path validation failures.
 fn bad_request(message: &str) -> (StatusCode, Json<shared::models::ErrorResponse>) {
     (
         StatusCode::BAD_REQUEST,
@@ -319,6 +336,7 @@ fn bad_request(message: &str) -> (StatusCode, Json<shared::models::ErrorResponse
     )
 }
 
+/// Validates that a string request field has visible, non-whitespace content.
 fn require_non_empty(value: &str, field: &str) -> Result<(), String> {
     if value.trim().is_empty() {
         return Err(format!("{field} 不能为空"));
@@ -328,12 +346,14 @@ fn require_non_empty(value: &str, field: &str) -> Result<(), String> {
 }
 
 impl ValidateRequest for RegisterAgentRequest {
+    /// Ensures agent registration provides a display name.
     fn validate(&self) -> Result<(), String> {
         require_non_empty(&self.display_name, "display_name")
     }
 }
 
 impl ValidateRequest for CreateChallengeDraftRequest {
+    /// Ensures GitHub draft metadata has positive numeric identifiers.
     fn validate(&self) -> Result<(), String> {
         if self.pr_number <= 0 {
             return Err("pr_number must be greater than zero".to_string());
@@ -346,30 +366,35 @@ impl ValidateRequest for CreateChallengeDraftRequest {
 }
 
 impl ValidateRequest for UploadChallengePrivateAssetRequest {
+    /// Ensures private asset uploads contain an encoded ZIP payload.
     fn validate(&self) -> Result<(), String> {
         require_non_empty(&self.asset_base64, "asset_base64")
     }
 }
 
 impl ValidateRequest for ValidateChallengeDraftRequest {
+    /// Ensures draft validation references a local checkout path.
     fn validate(&self) -> Result<(), String> {
         require_non_empty(&self.repository_path, "repository_path")
     }
 }
 
 impl ValidateRequest for ReviewChallengeDraftRequest {
+    /// Accepts review decisions because serde has already validated the enum payload.
     fn validate(&self) -> Result<(), String> {
         Ok(())
     }
 }
 
 impl ValidateRequest for CreateSolutionSubmissionRequest {
+    /// Ensures solution submissions contain an encoded artifact payload.
     fn validate(&self) -> Result<(), String> {
         require_non_empty(&self.artifact_base64, "artifact_base64")
     }
 }
 
 impl ValidateRequest for CreateChallengeShortlistRevisionRequest {
+    /// Ensures shortlist updates add at least one agent id.
     fn validate(&self) -> Result<(), String> {
         if self.agent_ids_to_add.is_empty() {
             return Err("agent_ids_to_add must contain at least one agent id".to_string());
@@ -379,6 +404,7 @@ impl ValidateRequest for CreateChallengeShortlistRevisionRequest {
 }
 
 impl ValidateRequest for CreateChallengeRequest {
+    /// Ensures direct admin challenge creation includes public display text.
     fn validate(&self) -> Result<(), String> {
         require_non_empty(&self.title, "title")?;
         require_non_empty(&self.summary, "summary")
@@ -386,6 +412,7 @@ impl ValidateRequest for CreateChallengeRequest {
 }
 
 impl ValidateRequest for PublishChallengeRequest {
+    /// Ensures direct admin publishing references a bundle path.
     fn validate(&self) -> Result<(), String> {
         require_non_empty(&self.bundle_path, "bundle_path")
     }
