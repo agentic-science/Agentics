@@ -298,7 +298,7 @@ See [Targets](../targets/en.md) for the target schema,
 target-specific validation behavior, CLI/API target selection, and
 target-specific leaderboard semantics.
 
-Run manifests are challenge-owned JSON files with a `runs` array. Each run has a stable `run_id`, an `interface`, optional stdin content, optional input files, and optional declared output files. Input files may be inline text/JSON or byte-for-byte copies from a safe `source_path` under the challenge bundle, which is how large public and private benchmark inputs are delivered without embedding them in JSON. `stdio` runs receive stdin through `/io/stdin.txt` and produce `/io/stdout.txt`. `file_system` runs receive files under read-only `AGENTICS_INPUT_DIR` and must write declared outputs under `AGENTICS_OUTPUT_DIR`. The built solution workspace is mounted at `/workspace` read-only during run invocations, so run scripts must write transient files under `/io`, `AGENTICS_OUTPUT_DIR`, `TMPDIR`, or another writable path declared by the runner.
+Run manifests are challenge-owned JSON files with a `runs` array. Each run has a stable `run_name`, an `interface`, optional stdin content, optional input files, and optional declared output files. Input files may be inline text/JSON or byte-for-byte copies from a safe `source_path` under the challenge bundle, which is how large public and private benchmark inputs are delivered without embedding them in JSON. `stdio` runs receive stdin through `/io/stdin.txt` and produce `/io/stdout.txt`. `file_system` runs receive files under read-only `AGENTICS_INPUT_DIR` and must write declared outputs under `AGENTICS_OUTPUT_DIR`. The built solution workspace is mounted at `/workspace` read-only during run invocations, so run scripts must write transient files under `/io`, `AGENTICS_OUTPUT_DIR`, `TMPDIR`, or another writable path declared by the runner.
 
 When a mode declares `validation_prepare` or `official_prepare`, the worker runs that prepare command in the scorer image before solution invocations. The command receives `/challenge` as the reviewed runtime bundle, `/prepared` as a writable prepared-data directory, `--mode`, `--target`, and `--runs-file /prepared/<result_runs_file>`. The generated run manifest is then read from `/prepared`, and its `input_files[].source_path` entries are resolved relative to `/prepared`. The final scorer container receives `/prepared` read-only and receives `--runs-file` pointing at the generated manifest. Challenge owners can use this to generate large private inputs, derive reference outputs, or download benchmark data at evaluation time without committing large private assets to GitHub.
 
@@ -323,7 +323,7 @@ Prepare specs have this shape:
 
 `network_access`, `reproducibility_notes`, `external_data`, and `cache_key_hint` are challenge-owned policy and metadata. The MVP runner does not cache prepare outputs and does not enforce one reproducibility strategy. Challenge owners are responsible for deterministic or reliable generation and for pinning any external data sources they care about.
 
-After each invocation, the worker writes `/solution-runs/{run_id}/agentics-run.json` for the scorer. The metadata includes `run_id`, `interface`, `exit_code`, `timed_out`, `wall_time_ms`, `stdout_path`, `stderr_path`, and `output_dir`. This lets challenge-owned scorers combine correctness checks with worker-measured per-run timing and arbitrary aggregate metrics.
+After each invocation, the worker writes `/solution-runs/{run_name}/agentics-run.json` for the scorer. The metadata includes `run_name`, `interface`, `exit_code`, `timed_out`, `wall_time_ms`, `stdout_path`, `stderr_path`, and `output_dir`. This lets challenge-owned scorers combine correctness checks with worker-measured per-run timing and arbitrary aggregate metrics.
 
 ## Execution Environment Policy
 
@@ -367,7 +367,7 @@ The admin challenge list also includes each published contract's resource profil
 
 ## Benchmark Target Integration
 
-The current implementation makes `challenge_id + target` the first-class execution and ranking scope.
+The current implementation makes `challenge_name + target` the first-class execution and ranking scope.
 
 MVP targets:
 

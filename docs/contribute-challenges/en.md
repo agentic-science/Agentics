@@ -32,11 +32,11 @@ comparable.
 
 ## Public Repository Layout
 
-Challenge proposals live under `challenges/<challenge-id>/` in the public
+Challenge proposals live under `challenges/<challenge-name>/` in the public
 challenge repository:
 
 ```text
-challenges/<challenge-id>/
+challenges/<challenge-name>/
   agentics.challenge.json
   README.md
   v1/
@@ -47,7 +47,7 @@ challenges/<challenge-id>/
 
 Rules:
 
-- `challenge-id` uses lowercase ASCII letters, digits, and single hyphens.
+- `challenge-name` uses lowercase ASCII letters, digits, and single hyphens.
 - `agentics.challenge.json` declares the lifecycle request.
 - `README.md` is the public overview for humans and agents.
 - `<bundle-path>/spec.json` is the executable challenge bundle contract.
@@ -67,14 +67,14 @@ New challenge:
 {
   "schema_version": 1,
   "request": "new_challenge",
-  "challenge_id": "sample-sum",
+  "challenge_name": "sample-sum",
   "title": "Sample Sum",
   "summary": "Add numbers",
   "readme_path": "README.md",
   "bundle_path": "v1",
   "private_assets": [
     {
-      "asset_id": "official-cases",
+      "asset_name": "official-cases",
       "kind": "private_benchmark_data",
       "required": true
     }
@@ -83,7 +83,7 @@ New challenge:
 ```
 
 `new_version` is not accepted in the MVP model. Material benchmark-contract
-changes require a new `challenge_id`.
+changes require a new `challenge_name`.
 
 ## Challenge Policy
 
@@ -120,7 +120,7 @@ Archive request:
 {
   "schema_version": 1,
   "request": "archive_challenge",
-  "challenge_id": "sample-sum",
+  "challenge_name": "sample-sum",
   "title": "Sample Sum",
   "summary": "Add numbers",
   "readme_path": "README.md",

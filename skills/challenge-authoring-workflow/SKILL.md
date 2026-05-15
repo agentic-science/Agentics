@@ -18,7 +18,7 @@ git@github.com:agentics-reifying/agentics-challenges.git
 Each proposal must live at:
 
 ```text
-challenges/<challenge-id>/
+challenges/<challenge-name>/
   agentics.challenge.json
   README.md
   <bundle-path>/
@@ -36,14 +36,14 @@ Create `agentics.challenge.json` at the challenge root.
 
 For a new challenge, use `request: "new_challenge"` and include a top-level
 `bundle_path`, usually `v1`. There is no `new_version` request in the MVP
-model. Material benchmark-contract changes require a new `challenge_id`.
+model. Material benchmark-contract changes require a new `challenge_name`.
 
 For an archive request, use `request: "archive_challenge"` and include
 `archive.reason`; omit `bundle_path`.
 
 Every bundle `spec.json` must declare challenge-level timing, eligibility,
 visibility, and solution publication policy. The MVP model has no internal
-competition-stage abstraction; staged series should use distinct challenge ids
+competition-stage abstraction; staged series should use distinct challenge names
 and names.
 
 For restricted challenges, set `eligibility.type` to `private_shortlist`. After
@@ -103,12 +103,12 @@ Creators should provide:
 
 - PR URL and commit SHA.
 - Draft id.
-- Private asset ids and what each ZIP overlay contains.
+- Private asset names and what each ZIP overlay contains.
 - Expected public validation behavior.
 - Expected official ranking metric, targets, and CUDA variant policy when
   the challenge uses `linux-arm64-cuda`.
 
 Do not change the checked-out proposal or private asset set after approval. The
 platform records a review digest during validation, freezes it during approval,
-and rejects publish if the public bundle or uploaded private asset identities no
+and rejects publish if the public bundle or uploaded private asset nameentities no
 longer match that approved digest.

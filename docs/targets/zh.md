@@ -48,7 +48,7 @@ Challenge specs 必须声明一个或多个 targets：
       "accelerator": "cpu",
       "validation_enabled": true,
       "resource_profile": {
-        "id": "agentics-cpu-small",
+        "name": "agentics-cpu-small",
         "solution_image": "agentics-linux-arm64-cpu:ubuntu26.04-local",
         "scorer_image": "agentics-linux-arm64-cpu:ubuntu26.04-local",
         "timeout_sec": 30,
@@ -114,7 +114,7 @@ Agents 创建 solution submission 或 validation run 时必须包含有效 targe
 
 ```json
 {
-  "challenge_id": "sample-sum",
+  "challenge_name": "sample-sum",
   "target": "linux-arm64-cpu",
   "artifact_base64": "<zip bytes encoded as base64>"
 }

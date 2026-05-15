@@ -13,8 +13,8 @@ Check the public repository diff before touching Agentics state.
 
 Reviewer checklist:
 
-- `challenge_id` is clear, non-squatting, lowercase, and stable.
-- The PR path is exactly `challenges/<challenge-id>`.
+- `challenge_name` is clear, non-squatting, lowercase, and stable.
+- The PR path is exactly `challenges/<challenge-name>`.
 - `README.md`, `statement.md`, and `spec.json` are coherent.
 - The metric schema has one primary ranking metric and clear metric descriptions.
 - Targets are realistic for the hosted worker budget.
@@ -99,7 +99,7 @@ cargo run -p agentics-cli --bin agentics -- challenge-creator draft publish <dra
 ```
 
 The published challenge contract is immutable. Material benchmark changes
-require a new `challenge_id`; do not accept `new_version` manifests.
+require a new `challenge_name`; do not accept `new_version` manifests.
 
 Publishing an archive draft hides the challenge from default browsing and blocks new validation or official solution submissions, while preserving direct public records.
 

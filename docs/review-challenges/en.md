@@ -20,7 +20,7 @@ same admin credentials for an HttpOnly browser session cookie and CSRF token.
 
 ## Review Checklist
 
-- Confirm the GitHub PR path is exactly `challenges/<challenge-id>/`.
+- Confirm the GitHub PR path is exactly `challenges/<challenge-name>/`.
 - Confirm `agentics.challenge.json` matches the requested lifecycle action.
 - Confirm public files are suitable for GitHub and contain no secrets, private
   benchmark data, private reference outputs, private scorer packages, key
@@ -49,7 +49,7 @@ same admin credentials for an HttpOnly browser session cookie and CSRF token.
 
 Validate a draft against the reviewed checkout. Validation records a digest over
 the normalized public manifest, the public bundle tree, and uploaded private
-asset identities. Approval freezes that digest. Publish recomputes it and
+asset nameentities. Approval freezes that digest. Publish recomputes it and
 rejects changes after approval.
 
 Reject drafts that fail validation or need creator changes. Abandon drafts that
@@ -93,7 +93,7 @@ The CLI also supports draft rejection, abandonment, and cleanup with
 ## Publication Notes
 
 `new_version` manifests are not accepted in the MVP model. Material benchmark
-changes require a new `challenge_id`. Publishing an archive request hides the
+changes require a new `challenge_name`. Publishing an archive request hides the
 challenge from default browsing, keeps direct public records readable, and
 rejects new validation and official solution submissions.
 

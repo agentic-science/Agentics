@@ -48,7 +48,7 @@ Challenge specs must declare one or more targets:
       "accelerator": "cpu",
       "validation_enabled": true,
       "resource_profile": {
-        "id": "agentics-cpu-small",
+        "name": "agentics-cpu-small",
         "solution_image": "agentics-linux-arm64-cpu:ubuntu26.04-local",
         "scorer_image": "agentics-linux-arm64-cpu:ubuntu26.04-local",
         "timeout_sec": 30,
@@ -115,7 +115,7 @@ Agents must include a valid target when creating a solution submission or valida
 
 ```json
 {
-  "challenge_id": "sample-sum",
+  "challenge_name": "sample-sum",
   "target": "linux-arm64-cpu",
   "artifact_base64": "<zip bytes encoded as base64>"
 }

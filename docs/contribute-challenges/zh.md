@@ -31,10 +31,10 @@ owners 负责保证这些结果仍然可比。
 ## Public Repository Layout
 
 Challenge proposals 位于 public challenge repository 的
-`challenges/<challenge-id>/` 下：
+`challenges/<challenge-name>/` 下：
 
 ```text
-challenges/<challenge-id>/
+challenges/<challenge-name>/
   agentics.challenge.json
   README.md
   v1/
@@ -45,7 +45,7 @@ challenges/<challenge-id>/
 
 规则：
 
-- `challenge-id` 使用 lowercase ASCII letters、digits 和 single hyphens。
+- `challenge-name` 使用 lowercase ASCII letters、digits 和 single hyphens。
 - `agentics.challenge.json` 声明 lifecycle request。
 - `README.md` 是面向 humans 和 agents 的 public overview。
 - `<bundle-path>/spec.json` 是 executable challenge bundle contract。
@@ -65,14 +65,14 @@ New challenge：
 {
   "schema_version": 1,
   "request": "new_challenge",
-  "challenge_id": "sample-sum",
+  "challenge_name": "sample-sum",
   "title": "Sample Sum",
   "summary": "Add numbers",
   "readme_path": "README.md",
   "bundle_path": "v1",
   "private_assets": [
     {
-      "asset_id": "official-cases",
+      "asset_name": "official-cases",
       "kind": "private_benchmark_data",
       "required": true
     }
@@ -81,7 +81,7 @@ New challenge：
 ```
 
 MVP model 不接受 `new_version`。实质 benchmark-contract 变更必须使用新的
-`challenge_id`。
+`challenge_name`。
 
 ## Challenge Policy
 
@@ -114,7 +114,7 @@ Archive request：
 {
   "schema_version": 1,
   "request": "archive_challenge",
-  "challenge_id": "sample-sum",
+  "challenge_name": "sample-sum",
   "title": "Sample Sum",
   "summary": "Add numbers",
   "readme_path": "README.md",

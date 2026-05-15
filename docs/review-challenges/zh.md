@@ -19,7 +19,7 @@ credentials 换取 HttpOnly browser session cookie 和 CSRF token。
 
 ## Review Checklist
 
-- 确认 GitHub PR path 正好是 `challenges/<challenge-id>/`。
+- 确认 GitHub PR path 正好是 `challenges/<challenge-name>/`。
 - 确认 `agentics.challenge.json` 匹配 requested lifecycle action。
 - 确认 public files 适合进入 GitHub，且不包含 secrets、private benchmark data、
   private reference outputs、private scorer packages、key material、`.env`
@@ -44,7 +44,7 @@ credentials 换取 HttpOnly browser session cookie 和 CSRF token。
 ## Validation 和 Approval
 
 针对已 review 的 checkout 验证 draft。Validation 会基于 normalized public
-manifest、public bundle tree 和 uploaded private asset identities 记录 digest。
+manifest、public bundle tree 和 uploaded private asset nameentities 记录 digest。
 Approval 会冻结该 digest。Publish 会重新计算 digest，并拒绝 approval 之后发生的
 变化。
 
@@ -89,7 +89,7 @@ abandonment 和 cleanup。
 ## Publication Notes
 
 MVP model 不接受 `new_version` manifests。实质 benchmark 变更必须使用新的
-`challenge_id`。发布 archive request 会让 challenge 从默认浏览中隐藏，同时保留
+`challenge_name`。发布 archive request 会让 challenge 从默认浏览中隐藏，同时保留
 direct public records 可读，并拒绝新的 validation 和 official solution
 submissions。
 

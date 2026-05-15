@@ -32,12 +32,13 @@ Cover these lanes when the user asks for a complete review:
    - Non-idiomatic Rust, weak error handling, avoidable `unwrap` or `expect`,
      duplicated logic, excessive coupling, missing regression tests, and
      reinvented functionality that a mature crate should handle.
-   - Stringly typed domain identifiers. Flag stable IDs with validation,
+   - Stringly typed domain identifiers. Flag stable names or IDs with validation,
      authorization, ranking, storage, routing, or security meaning when they are
      represented as raw `String` or `&str` beyond the external parsing
-     boundary. Prefer explicit validated newtypes for challenge IDs, target
-     names, solution submission IDs, agent IDs, asset IDs, metric IDs, and
-     worker claim IDs.
+     boundary. Prefer explicit validated newtypes for human-authored names
+     such as challenge names, target names, asset names, run names, resource
+     profile names, and metric names, and for generated IDs such as solution
+     submission IDs, agent IDs, draft IDs, job IDs, and worker claim IDs.
    - Check whether code can be simplified with current Rust language features
      and standard-library APIs documented in `docs/new-rust-features-apis/en.md`.
      Prefer these updates when they remove real nesting, repeated allocation,
@@ -82,7 +83,7 @@ Cover these lanes when the user asks for a complete review:
 
 Always inspect these platform-specific risks:
 
-- Private benchmark data must not leak through public DTOs, logs, run IDs,
+- Private benchmark data must not leak through public DTOs, logs, run names,
   per-case metrics, scorer messages, artifacts, or frontend render paths.
 - Official evaluations must have quota, rate, queue, and storage controls before
   public deployment.
@@ -107,13 +108,15 @@ Always inspect these platform-specific risks:
   logs.
 - Challenge bundle schemas, CLI packaging rules, web schemas, README examples,
   PRDs, milestones, and skills must stay aligned when behavior changes.
-- Domain identifiers should be explicit, validated, and canonical. Search for
-  raw `String` or `&str` fields named like `*_id`, function parameters such as
-  `challenge_id: &str`, and ambiguous names like `id_or_slug`,
-  `challenge_id_or_slug`, `slug`, `identifier`, or `name_or_id`. Treat these as
-  architectural smells unless they are immediate raw boundary inputs that are
-  parsed into a newtype before any business logic, database lookup,
-  authorization check, queue operation, or filesystem/storage path construction.
+- Domain locators should be explicit, validated, and canonical. Human-authored
+  values must be named `*Name`, not `*Id`; generated opaque values must be
+  named `*Id`. Search for raw `String` or `&str` fields named like `*_id` or
+  `*_name`, function parameters such as `challenge_name: &str`, and ambiguous
+  names like `id_or_slug`, `challenge_name_or_slug`, `slug`, `identifier`, or
+  `name_or_id`. Treat these as architectural smells unless they are immediate
+  raw boundary inputs that are parsed into a newtype before any business logic,
+  database lookup, authorization check, queue operation, or filesystem/storage
+  path construction.
 - Canonical lookup should use one public identifier unless product requirements
   explicitly demand aliases. Before MVP, do not preserve old locator aliases with
   compatibility shims; remove the alias and update API, CLI, web, docs, schemas,
@@ -143,10 +146,11 @@ starting points, then manually judge context:
 For domain modeling review, use targeted searches for stringly typed IDs and
 ambiguous locators, then inspect call flow manually:
 
-- `pub [a-zA-Z0-9_]*_id: String|[a-zA-Z0-9_]*_id: &str`
-- `challenge_id: String|challenge_id: &str|target: String`
-- `solution_submission_id: String|agent_id: String|metric_id: String`
-- `id_or_slug|challenge_id_or_slug|slug|identifier|name_or_id`
+- `pub [a-zA-Z0-9_]*_(id|name): String|[a-zA-Z0-9_]*_(id|name): &str`
+- `challenge_name: String|challenge_name: &str|target: String`
+- `solution_submission_id: String|agent_id: String|metric_name: String`
+- `challenge_id|target_id|asset_id|run_id|resource_profile\.id|metric_id`
+- `id_or_slug|challenge_name_or_slug|slug|identifier|name_or_id`
 - `bind\(&[a-zA-Z0-9_]*_id\)|join\(&[a-zA-Z0-9_]*_id\)`
 
 Do not report a raw string merely because it appears at an HTTP path extractor,

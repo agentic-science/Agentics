@@ -287,7 +287,7 @@ manifest metadata 保留给未来 standardized harnesses 使用。
 Target schema、target-specific validation behavior、CLI/API target selection 和
 target-specific leaderboard semantics 见 [Targets](../targets/zh.md)。
 
-Run manifests 是 challenge-owned JSON files，包含一个 `runs` array。每个 run 有稳定的 `run_id`、`interface`、可选 stdin content、可选 input files 和可选 declared output files。Input files 可以是 inline text/JSON，也可以通过安全的 `source_path` 从 challenge bundle 中按字节复制；这用于交付较大的 public 和 private benchmark inputs，而不是把它们嵌入 JSON。`stdio` runs 通过 `/io/stdin.txt` 接收 stdin，并产生 `/io/stdout.txt`。`file_system` runs 在 read-only `AGENTICS_INPUT_DIR` 下接收文件，并必须在 `AGENTICS_OUTPUT_DIR` 下写出声明的 outputs。Built solution workspace 会在 run invocations 中以 read-only 方式挂载到 `/workspace`，因此 run scripts 必须把 transient files 写到 `/io`、`AGENTICS_OUTPUT_DIR`、`TMPDIR` 或 runner 声明的其他 writable paths。
+Run manifests 是 challenge-owned JSON files，包含一个 `runs` array。每个 run 有稳定的 `run_name`、`interface`、可选 stdin content、可选 input files 和可选 declared output files。Input files 可以是 inline text/JSON，也可以通过安全的 `source_path` 从 challenge bundle 中按字节复制；这用于交付较大的 public 和 private benchmark inputs，而不是把它们嵌入 JSON。`stdio` runs 通过 `/io/stdin.txt` 接收 stdin，并产生 `/io/stdout.txt`。`file_system` runs 在 read-only `AGENTICS_INPUT_DIR` 下接收文件，并必须在 `AGENTICS_OUTPUT_DIR` 下写出声明的 outputs。Built solution workspace 会在 run invocations 中以 read-only 方式挂载到 `/workspace`，因此 run scripts 必须把 transient files 写到 `/io`、`AGENTICS_OUTPUT_DIR`、`TMPDIR` 或 runner 声明的其他 writable paths。
 
 当某个 mode 声明 `validation_prepare` 或 `official_prepare` 时，worker 会在 solution invocations 之前用 scorer image 运行该 prepare command。该命令会收到 `/challenge` 作为已审核 runtime bundle、`/prepared` 作为可写 prepared-data directory、`--mode`、`--target`，以及 `--runs-file /prepared/<result_runs_file>`。Worker 随后从 `/prepared` 读取生成的 run manifest，其中的 `input_files[].source_path` 会相对于 `/prepared` 解析。最终 scorer container 会以 read-only 方式接收 `/prepared`，并通过 `--runs-file` 指向生成的 manifest。Challenge owners 可以用这个机制在 evaluation time 生成大型 private inputs、生成 reference outputs，或者下载 benchmark data，而不必把大型 private assets 提交到 GitHub。
 
@@ -312,7 +312,7 @@ Prepare specs 的形状如下：
 
 `network_access`、`reproducibility_notes`、`external_data` 和 `cache_key_hint` 都是 challenge-owned policy 和 metadata。MVP runner 不缓存 prepare outputs，也不强制一种统一 reproducibility strategy。Challenge owners 需要对 deterministic 或 reliable generation 负责，也需要自行 pin 他们关心的 external data sources。
 
-每次 invocation 结束后，worker 会为 scorer 写入 `/solution-runs/{run_id}/agentics-run.json`。该 metadata 包含 `run_id`、`interface`、`exit_code`、`timed_out`、`wall_time_ms`、`stdout_path`、`stderr_path` 和 `output_dir`。这让 challenge-owned scorer 可以把 correctness checks 与 worker-measured per-run timing 和任意 aggregate metrics 结合起来。
+每次 invocation 结束后，worker 会为 scorer 写入 `/solution-runs/{run_name}/agentics-run.json`。该 metadata 包含 `run_name`、`interface`、`exit_code`、`timed_out`、`wall_time_ms`、`stdout_path`、`stderr_path` 和 `output_dir`。这让 challenge-owned scorer 可以把 correctness checks 与 worker-measured per-run timing 和任意 aggregate metrics 结合起来。
 
 ## Execution Environment Policy
 
@@ -356,7 +356,7 @@ Admin challenge list 还会包含已发布 contract 的 resource profiles、chal
 
 ## Benchmark Target Integration
 
-当前实现已经将 `challenge_id + target` 作为 first-class execution 和 ranking scope。
+当前实现已经将 `challenge_name + target` 作为 first-class execution 和 ranking scope。
 
 MVP targets：
 
