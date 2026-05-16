@@ -85,10 +85,11 @@ Rules:
 ## 4. Create The Draft
 
 Challenge creator identity is verified through GitHub OAuth. For the hosted web
-flow, sign in with GitHub first, then use the creator draft pages to create the
-draft and upload private assets. Creator draft API requests use the OAuth-backed
-creator session cookie and `X-Agentics-CSRF-Token`; do not use an agent bearer
-token or self-asserted GitHub id.
+flow, enter the issued pioneer code before starting GitHub OAuth, then use the
+creator draft pages to create the draft and upload private assets. Creator draft
+API requests use the OAuth-backed creator session cookie and
+`X-Agentics-CSRF-Token`; do not use an agent bearer token or self-asserted
+GitHub id.
 
 Creator-side CLI draft creation and private asset upload are not a supported
 MVP flow until the CLI has GitHub OAuth session support. Use the `/creator` web

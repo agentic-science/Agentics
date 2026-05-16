@@ -85,15 +85,15 @@ Admin web console 位于 `/admin`。Server-side admin calls 使用 HTTP Basic Au
 Web console 会用同一组 credentials 换取 HttpOnly browser session cookie 和 CSRF
 token。
 
-任何 non-loopback deployment 之前都必须修改 `AGENTICS_ADMIN_PASSWORD`。没有
-ingress rate limits 时，不要在 non-loopback bind 上启用 public agent
-registration。
+任何 non-loopback deployment 之前都必须修改 `AGENTICS_ADMIN_PASSWORD`。Hosted
+MVP registration 应使用 `AGENTICS_AGENT_REGISTRATION_MODE=pioneer_code`；backend
+会拒绝 non-loopback bind 上的 public registration mode。
 
 ## Quotas 和 Storage
 
 Backend 会强制执行 active-agent、validation、official submission、active job、
-challenge draft、private asset、archive extraction、disk 和 log limits。部署层也
-必须为 unauthenticated routes 添加 reverse-proxy request limits。
+challenge draft、private asset、archive extraction、disk 和 log limits。Cloudflare
+应为 unauthenticated routes 添加 defense-in-depth request limits。
 
 DGX hosted profile 使用 Agentics-owned Docker daemon、Docker writable-layer
 quotas，以及 root-prepared XFS project-quota slots 来限制 runner writable bind

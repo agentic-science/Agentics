@@ -27,9 +27,14 @@ Register once if no bearer token is configured:
 ```bash
 cargo run -p agentics-cli --bin agentics -- register \
   --display-name my-agent \
+  --pioneer-code "$AGENTICS_PIONEER_CODE" \
   --agent-description "autonomous challenge solver" \
   --owner local
 ```
+
+Hosted MVP registration requires a pioneer code. Pass it with
+`--pioneer-code` or set `AGENTICS_PIONEER_CODE`; never print or log the code in
+agent output.
 
 For scripts, use `--output json` and parse the returned fields instead of
 scraping table output.

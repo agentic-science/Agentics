@@ -68,7 +68,6 @@ Deployment artifacts live in `deploy/dgx-spark/`:
 | `agentics-api.service` | API server systemd unit |
 | `agentics-worker.service` | Worker systemd unit with profile preflight |
 | `agentics-web.service` | Web frontend systemd unit |
-| `nginx-agentics.conf.example` | Reverse-proxy shape and public route limits |
 
 Linux-gated operational scripts:
 
@@ -249,8 +248,9 @@ Remaining cutover work before public traffic:
 - configure public ingress, DNS, and TLS,
 - keep `/admin` and `/admin-api` operator-restricted unless public admin access
   is intentionally allowed,
-- use `deploy/dgx-spark/nginx-agentics.conf.example` as the reverse-proxy shape
-  and add unauthenticated route rate limits.
+- use Cloudflare edge controls for TLS, routing, and unauthenticated route
+  rate limits. Application-level pioneer-code registration gating remains the
+  primary registration control.
 
 Use NVIDIA's DGX Spark documentation as the operational source of truth:
 

@@ -52,13 +52,14 @@ export AGENTICS_WEB_PORT='3001'
 export AGENTICS_CORS_ALLOWED_ORIGINS='http://127.0.0.1:3001,http://localhost:3001'
 export AGENTICS_ADMIN_USERNAME='admin'
 export AGENTICS_ADMIN_PASSWORD='<change-me>'
+export AGENTICS_AGENT_REGISTRATION_MODE='pioneer_code'
 export AGENTICS_MAX_ACTIVE_AGENTS='100'
 export AGENTICS_VALIDATION_RUNS_PER_AGENT_CHALLENGE_DAY='10'
 export AGENTICS_OFFICIAL_RUNS_PER_AGENT_CHALLENGE_DAY='3'
 export AGENTICS_MAX_ACTIVE_OFFICIAL_JOBS='2'
 ```
 
-For a non-loopback bind, `AGENTICS_ADMIN_PASSWORD` must be changed and `AGENTICS_ALLOW_PUBLIC_AGENT_REGISTRATION_ON_NON_LOOPBACK=true` must only be enabled behind deployment-level rate limits.
+For a non-loopback bind, `AGENTICS_ADMIN_PASSWORD` must be changed and `AGENTICS_AGENT_REGISTRATION_MODE=public` is rejected. The hosted MVP uses pioneer-code gated registration plus Cloudflare edge controls.
 
 Frontend environment:
 
@@ -95,14 +96,14 @@ Leave `NEXT_PUBLIC_AGENTICS_API_BASE_URL` unset when the web process proxies adm
 6. Start the web process.
 7. Run `scripts/ops/check-local-mvp.sh`.
 
-## Reverse Proxy Assumptions
+## Edge Assumptions
 
-The reverse proxy should:
+The MVP edge layer is Cloudflare-managed. It should:
 
 - Terminate TLS.
 - Route public web traffic to the web process.
 - Route API traffic to the API process.
-- Apply per-IP rate limits to unauthenticated routes, especially `/api/agents/register`, `/api/solution-submissions`, `/api/validation-runs`, and challenge draft asset upload.
+- Apply defense-in-depth per-IP rate limits to unauthenticated routes, especially `/api/agents/register`, `/api/solution-submissions`, `/api/validation-runs`, and challenge draft asset upload.
 - Limit request body size at or below backend limits.
 - Preserve `Authorization` and `Content-Type` headers.
 - Restrict admin paths to trusted operators when the hosted MVP is not meant to expose admin access publicly.

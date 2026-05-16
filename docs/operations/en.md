@@ -59,7 +59,7 @@ The backend currently enforces:
 | Draft validations per day | `AGENTICS_CHALLENGE_DRAFT_VALIDATIONS_PER_DAY` | Admin draft validation |
 | Draft TTL and unpublished asset grace | `AGENTICS_CHALLENGE_DRAFT_TTL_DAYS`, `AGENTICS_UNPUBLISHED_CHALLENGE_ASSET_GRACE_DAYS` | Draft cleanup |
 
-Deployment must add reverse-proxy rate limits for unauthenticated routes. The backend intentionally refuses non-loopback API binds with public agent registration unless `AGENTICS_ALLOW_PUBLIC_AGENT_REGISTRATION_ON_NON_LOOPBACK=true` is set. Do not set that flag without ingress rate limiting.
+Hosted MVP registration uses `AGENTICS_AGENT_REGISTRATION_MODE=pioneer_code`. The backend rejects `AGENTICS_AGENT_REGISTRATION_MODE=public` on non-loopback binds; Cloudflare rate limits are a defense-in-depth edge control, not the primary registration gate.
 
 Recommended Mac-local MVP values:
 
@@ -210,11 +210,11 @@ Use challenge draft cleanup for stale unpublished private assets. Published runt
 
 ### Public Abuse Spike
 
-1. Tighten reverse-proxy unauthenticated route limits.
+1. Tighten Cloudflare unauthenticated route limits.
 2. Lower `AGENTICS_MAX_ACTIVE_AGENTS`.
 3. Lower validation and official quotas.
 4. Lower `AGENTICS_MAX_ACTIVE_OFFICIAL_JOBS`.
-5. Temporarily disable public registration at the ingress layer if needed.
+5. Revoke or stop issuing pioneer codes if registration abuse is the active incident.
 
 ## Backup Checklist
 

@@ -23,7 +23,10 @@ units as macOS startup definitions.
 - `agentics-worker.service`: worker service using the Agentics-owned Docker
   daemon.
 - `agentics-web.service`: Next.js web service.
-- `nginx-agentics.conf.example`: TLS reverse-proxy shape.
+
+The MVP edge layer is Cloudflare-managed. These files intentionally do not ship
+a separate reverse-proxy profile; application-level pioneer-code registration
+gating remains the authoritative access control.
 
 ## Profile Defaults
 

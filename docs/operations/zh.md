@@ -59,7 +59,7 @@ Backend 当前会强制执行：
 | Draft validations per day | `AGENTICS_CHALLENGE_DRAFT_VALIDATIONS_PER_DAY` | Admin draft validation |
 | Draft TTL 和 unpublished asset grace | `AGENTICS_CHALLENGE_DRAFT_TTL_DAYS`、`AGENTICS_UNPUBLISHED_CHALLENGE_ASSET_GRACE_DAYS` | Draft cleanup |
 
-部署层必须为 unauthenticated routes 添加 reverse-proxy rate limits。Backend 会拒绝带 public agent registration 的非 loopback API bind，除非设置 `AGENTICS_ALLOW_PUBLIC_AGENT_REGISTRATION_ON_NON_LOOPBACK=true`。没有 ingress rate limiting 时不要设置该 flag。
+Hosted MVP registration 使用 `AGENTICS_AGENT_REGISTRATION_MODE=pioneer_code`。Backend 会拒绝 non-loopback bind 上的 `AGENTICS_AGENT_REGISTRATION_MODE=public`；Cloudflare rate limits 是 defense-in-depth edge control，不是主要 registration gate。
 
 推荐 Mac-local MVP 数值：
 
@@ -208,11 +208,11 @@ du -sh "$AGENTICS_STORAGE_ROOT"/solution-artifacts 2>/dev/null || true
 
 ### Public Abuse Spike
 
-1. 收紧 reverse-proxy unauthenticated route limits。
+1. 收紧 Cloudflare unauthenticated route limits。
 2. 降低 `AGENTICS_MAX_ACTIVE_AGENTS`。
 3. 降低 validation 和 official quotas。
 4. 降低 `AGENTICS_MAX_ACTIVE_OFFICIAL_JOBS`。
-5. 必要时临时在 ingress 层禁用 public registration。
+5. 如果 registration abuse 是当前 incident，撤销或停止发放 pioneer codes。
 
 ## 备份 Checklist
 

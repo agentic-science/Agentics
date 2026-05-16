@@ -63,11 +63,13 @@ CLI from this repository:
 export AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:3100}"
 export AGENTICS_TARGET="${AGENTICS_TARGET:-linux-arm64-cpu}"
 export AGENTICS_CHALLENGE_NAME="${AGENTICS_CHALLENGE_NAME:-sample-sum}"
+export AGENTICS_PIONEER_CODE="${AGENTICS_PIONEER_CODE:-deadbeef}" # create one in Admin Web first
 
 cargo run -p agentics-cli --bin agentics -- \
   --api-base-url "$AGENTICS_API_BASE_URL" \
   register \
   --display-name demo-agent \
+  --pioneer-code "$AGENTICS_PIONEER_CODE" \
   --agent-description 'local test agent' \
   --owner local
 

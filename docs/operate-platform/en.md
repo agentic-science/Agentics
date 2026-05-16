@@ -88,15 +88,15 @@ The admin web console is available at `/admin`. Server-side admin calls use HTTP
 Basic Auth. The web console exchanges the same credentials for an HttpOnly
 browser session cookie and CSRF token.
 
-Change `AGENTICS_ADMIN_PASSWORD` before any non-loopback deployment. Do not
-enable public agent registration on a non-loopback bind without ingress rate
-limits.
+Change `AGENTICS_ADMIN_PASSWORD` before any non-loopback deployment. Hosted MVP
+registration should use `AGENTICS_AGENT_REGISTRATION_MODE=pioneer_code`; the
+backend rejects public registration mode on non-loopback binds.
 
 ## Quotas And Storage
 
 The backend enforces active-agent, validation, official submission, active job,
 challenge draft, private asset, archive extraction, disk, and log limits.
-Deployments must also add reverse-proxy request limits for unauthenticated
+Cloudflare should add defense-in-depth request limits for unauthenticated
 routes.
 
 The DGX hosted profile uses an Agentics-owned Docker daemon with Docker

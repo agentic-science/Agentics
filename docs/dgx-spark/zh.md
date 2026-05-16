@@ -66,7 +66,6 @@ Deployment artifacts 位于 `deploy/dgx-spark/`：
 | `agentics-api.service` | API server systemd unit |
 | `agentics-worker.service` | 带 profile preflight 的 worker systemd unit |
 | `agentics-web.service` | Web frontend systemd unit |
-| `nginx-agentics.conf.example` | Reverse-proxy shape 和 public route limits |
 
 Linux-gated operational scripts：
 
@@ -247,8 +246,9 @@ Public traffic 前剩余的 cutover work：
 - 配置 public ingress、DNS 和 TLS；
 - 除非明确允许 public admin access，否则保持 `/admin` 和 `/admin-api`
   operator-restricted；
-- 使用 `deploy/dgx-spark/nginx-agentics.conf.example` 作为 reverse-proxy shape，
-  并为 unauthenticated routes 添加 rate limits。
+- 使用 Cloudflare edge controls 处理 TLS、routing 和 unauthenticated route rate
+  limits。Application-level pioneer-code registration gating 仍是主要 registration
+  control。
 
 DGX Spark 运维应以 NVIDIA 官方文档为准：
 

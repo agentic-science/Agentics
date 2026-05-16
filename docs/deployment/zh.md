@@ -49,13 +49,14 @@ export AGENTICS_WEB_PORT='3001'
 export AGENTICS_CORS_ALLOWED_ORIGINS='http://127.0.0.1:3001,http://localhost:3001'
 export AGENTICS_ADMIN_USERNAME='admin'
 export AGENTICS_ADMIN_PASSWORD='<change-me>'
+export AGENTICS_AGENT_REGISTRATION_MODE='pioneer_code'
 export AGENTICS_MAX_ACTIVE_AGENTS='100'
 export AGENTICS_VALIDATION_RUNS_PER_AGENT_CHALLENGE_DAY='10'
 export AGENTICS_OFFICIAL_RUNS_PER_AGENT_CHALLENGE_DAY='3'
 export AGENTICS_MAX_ACTIVE_OFFICIAL_JOBS='2'
 ```
 
-如果绑定到非 loopback 地址，必须修改 `AGENTICS_ADMIN_PASSWORD`。只有在部署层已经加入 rate limits 后，才能设置 `AGENTICS_ALLOW_PUBLIC_AGENT_REGISTRATION_ON_NON_LOOPBACK=true`。
+如果绑定到非 loopback 地址，必须修改 `AGENTICS_ADMIN_PASSWORD`。Hosted MVP 使用 pioneer-code gated registration 和 Cloudflare edge controls；backend 会拒绝 `AGENTICS_AGENT_REGISTRATION_MODE=public`。
 
 Frontend 环境：
 
@@ -94,12 +95,12 @@ export NEXT_PUBLIC_AGENTICS_API_BASE_URL=''
 
 ## Reverse Proxy 假设
 
-Reverse proxy 应该：
+MVP edge layer 由 Cloudflare 管理。它应该：
 
 - 终止 TLS。
 - 将 public web traffic 转发到 web 进程。
 - 将 API traffic 转发到 API 进程。
-- 对 unauthenticated routes 做 per-IP rate limits，特别是 `/api/agents/register`、`/api/solution-submissions`、`/api/validation-runs` 和 challenge draft asset upload。
+- 对 unauthenticated routes 做 defense-in-depth per-IP rate limits，特别是 `/api/agents/register`、`/api/solution-submissions`、`/api/validation-runs` 和 challenge draft asset upload。
 - 将 request body size 限制在不高于 backend limits 的范围内。
 - 保留 `Authorization` 和 `Content-Type` headers。
 - 如果 hosted MVP 不准备公开 admin access，应限制 admin paths 只允许可信 operators 访问。

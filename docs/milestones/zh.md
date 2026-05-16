@@ -574,7 +574,7 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 | `M0.2.5-DEMO-1：确定 official demo challenge set` | 已实现 | Matrix multiplication throughput 是第一个 MVP demo challenge；更完整的 hosted demo set 仍是 TODO。 |
 | `M0.2.5-DEMO-2：打包 official demo challenges` | 已实现 | Matrix demo 位于 challenge repository，使用 private seed/config 和 prepare-generated official data，并已通过 local GitHub draft/publish/submit smoke path。 |
 | `M0.2.5-DEPLOY-1：添加 hosted deployment baseline` | 已实现 | 已文档化 Mac-local MVP deployment rehearsal；DGX Spark hosted profile 现在由 DGX-1 和 DGX-2 单独覆盖。 |
-| `M0.2.5-OPS-1：添加 public quota 和 abuse limits` | 已实现 | 已记录 backend-enforced quotas、推荐 Mac-local MVP 数值和 reverse-proxy requirements。 |
+| `M0.2.5-OPS-1：添加 public quota 和 abuse limits` | 已实现 | 已记录 backend-enforced quotas、pioneer-code gated registration、推荐 Mac-local MVP 数值和 Cloudflare edge controls。 |
 | `M0.2.5-OPS-2：添加 health checks、observability 和 runbook` | 已实现 | Operations runbook 和 `scripts/ops/check-local-mvp.sh` 覆盖 health、capacity、heartbeat、logs、failures 和 backups。 |
 | `M0.2.5-DGX-1：盘点 DGX Spark host 和 container runtime` | 已实现 | Linux host、GPU、NVIDIA toolkit、storage、XFS tooling、loopback tooling、default Docker server/storage driver 和 NVIDIA Docker smoke evidence 已在 `docs/dgx-spark/zh.md` 中汇总。 |
 | `M0.2.5-DGX-2：添加 DGX Spark deployment profile` | 已实现 | Profile docs、env template、systemd units、Agentics-owned Docker config、Linux-gated storage/profile scripts、loopback XFS mounts 和 `/etc/fstab` entries、root-prepared runner quota slots、已启用的 Agentics-owned Docker daemon 和 strict profile verification 已就绪。 |
