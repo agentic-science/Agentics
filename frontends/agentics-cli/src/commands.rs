@@ -14,9 +14,11 @@ use shared::models::challenge_creation::{
 };
 use shared::models::evaluation::{EvaluationJobPayload, ScoringMode};
 use shared::models::ids::SolutionSubmissionId;
-use shared::models::names::{ChallengeName, TargetName};
+use shared::models::names::{ChallengeName, MetricName, TargetName};
 use shared::models::pioneer_codes::{PioneerCode, PioneerCodeInput};
-use shared::models::request::{CreateSolutionSubmissionRequest, RegisterAgentRequest};
+use shared::models::request::{
+    CreateSolutionSubmissionRequest, RankingContextResponse, RegisterAgentRequest,
+};
 use shared::storage::{LocalStorage, Storage, StorageKey};
 
 use crate::api::ApiClient;
@@ -226,6 +228,162 @@ pub(crate) fn challenge_shortlist(
     bail!(
         "challenge shortlist commands require GitHub OAuth web-session support; use the creator web UI"
     )
+}
+
+/// Builds a challenge statistics view from public challenge result surfaces.
+pub(crate) async fn challenge_stats(
+    challenge_name: ChallengeName,
+    target: TargetName,
+    metric: Option<MetricName>,
+    output_format: cli::OutputFormat,
+    settings: &ResolvedSettings,
+) -> Result<String> {
+    let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
+    let challenge = client.get_challenge(&challenge_name).await?;
+    if challenge.spec.target(&target).is_none() {
+        bail!(
+            "challenge `{}` does not support target `{target}`",
+            challenge.name
+        );
+    }
+    let metric_name = metric.unwrap_or_else(|| {
+        challenge
+            .spec
+            .metric_schema
+            .ranking
+            .primary_metric_name
+            .clone()
+    });
+    let leaderboard = client.get_leaderboard(&challenge_name, &target).await?;
+    let distribution = client
+        .get_score_distribution(&challenge_name, &target, &metric_name)
+        .await?;
+    let submissions = match client
+        .list_public_solution_submissions(&challenge_name, &target, 20)
+        .await
+    {
+        Ok(response) => Some(response),
+        Err(error) if is_visibility_unavailable(&error) => None,
+        Err(error) => return Err(error),
+    };
+    output::render_challenge_stats(
+        &challenge,
+        &leaderboard,
+        &distribution,
+        submissions.as_ref(),
+        &metric_name,
+        output_format,
+    )
+}
+
+/// Lists visible public solution submissions for one challenge target.
+pub(crate) async fn list_public_solution_submissions(
+    challenge_name: ChallengeName,
+    target: TargetName,
+    limit: i64,
+    output_format: cli::OutputFormat,
+    settings: &ResolvedSettings,
+) -> Result<String> {
+    let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
+    let response = client
+        .list_public_solution_submissions(&challenge_name, &target, limit)
+        .await?;
+    output::render_public_solution_submission_list(
+        &response,
+        &challenge_name,
+        &target,
+        output_format,
+    )
+}
+
+/// Fetches a detailed result report and ranking context for one solution submission.
+pub(crate) async fn solution_submission_report(
+    submission_id: SolutionSubmissionId,
+    output_format: cli::OutputFormat,
+    settings: &ResolvedSettings,
+) -> Result<String> {
+    let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
+    let (report, owner_visible_report) = if settings.token_configured() {
+        match client
+            .get_solution_submission_result_report(&submission_id)
+            .await
+        {
+            Ok(report) => (report, true),
+            Err(error) if ApiClient::is_not_found(&error) => (
+                client
+                    .get_public_solution_submission_result_report(&submission_id)
+                    .await?,
+                false,
+            ),
+            Err(error) => return Err(error),
+        }
+    } else {
+        (
+            client
+                .get_public_solution_submission_result_report(&submission_id)
+                .await?,
+            false,
+        )
+    };
+    let solution_submission = &report.solution_submission;
+    let ranking_context = if settings.token_configured() {
+        match client
+            .get_solution_submission_ranking_context(
+                &submission_id,
+                &solution_submission.challenge_name,
+                &solution_submission.target,
+            )
+            .await
+        {
+            Ok(context) => Some(context),
+            Err(error) if is_visibility_unavailable(&error) => {
+                public_ranking_context_or_none(
+                    &client,
+                    &submission_id,
+                    &solution_submission.challenge_name,
+                    &solution_submission.target,
+                )
+                .await?
+            }
+            Err(error) => return Err(error),
+        }
+    } else {
+        public_ranking_context_or_none(
+            &client,
+            &submission_id,
+            &solution_submission.challenge_name,
+            &solution_submission.target,
+        )
+        .await?
+    };
+    output::render_solution_submission_report(
+        &report,
+        ranking_context.as_ref(),
+        owner_visible_report,
+        output_format,
+    )
+}
+
+/// Treats missing or forbidden public surfaces as unavailable optional context.
+fn is_visibility_unavailable(error: &anyhow::Error) -> bool {
+    ApiClient::is_not_found(error) || ApiClient::is_forbidden(error)
+}
+
+/// Fetches public ranking context when challenge visibility allows it.
+async fn public_ranking_context_or_none(
+    client: &ApiClient,
+    submission_id: &SolutionSubmissionId,
+    challenge_name: &ChallengeName,
+    target: &TargetName,
+) -> Result<Option<RankingContextResponse>> {
+    match client
+        .get_public_solution_submission_ranking_context(submission_id, challenge_name, target)
+        .await
+    {
+        Ok(context) => Ok(Some(context)),
+        Err(error) if is_visibility_unavailable(&error) => Ok(None),
+        Err(error) => Err(error),
+    }
 }
 
 /// Resolve the admin password from a non-argv source.

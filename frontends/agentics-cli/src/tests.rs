@@ -3,7 +3,7 @@ use std::path::Path;
 use clap::Parser;
 use secrecy::SecretString;
 use serde_json::json;
-use wiremock::matchers::{body_json, header, method, path};
+use wiremock::matchers::{body_json, header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use crate::cli::Cli;
@@ -193,6 +193,174 @@ async fn challenges_list_uses_public_api_and_renders_table() {
         output,
         "NAME        ELIGIBILITY  TITLE\nsample-sum  open         Sample Sum"
     );
+}
+
+/// Verifies that global json output renders structured command data.
+#[tokio::test]
+async fn global_json_flag_renders_structured_output() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/public/challenges"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "items": [
+                {
+                    "name": "sample-sum",
+                    "title": "Sample Sum",
+                    "summary": "Add numbers",
+                    "eligibility": { "type": "open" }
+                }
+            ]
+        })))
+        .mount(&server)
+        .await;
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let config_path = temp.path().join("config.toml");
+    let cli = Cli::parse_from([
+        "agentics",
+        "--config",
+        config_path.to_str().expect("utf8 path"),
+        "--api-base-url",
+        &server.uri(),
+        "--json",
+        "challenges",
+        "list",
+    ]);
+
+    let output = execute(cli, Environment::default())
+        .await
+        .expect("challenge list should succeed");
+    let value: serde_json::Value = serde_json::from_str(&output).expect("output should be JSON");
+
+    assert_eq!(value["items"][0]["name"], "sample-sum");
+}
+
+/// Verifies that the pre-MVP CLI rejects the old output-format flag.
+#[test]
+fn old_output_json_flag_is_removed() {
+    let result = Cli::try_parse_from(["agentics", "--output", "json", "challenges", "list"]);
+
+    assert!(result.is_err());
+}
+
+/// Verifies that challenge stats combines public result surfaces.
+#[tokio::test]
+async fn challenges_stats_combines_public_surfaces() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/public/challenges/sample-sum"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(challenge_detail_json(true)))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/api/public/challenges/sample-sum/leaderboard"))
+        .and(query_param("target", "linux-arm64-cpu"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(leaderboard_json()))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/api/public/challenges/sample-sum/score-distributions",
+        ))
+        .and(query_param("target", "linux-arm64-cpu"))
+        .and(query_param("metric", "score"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(score_distribution_json()))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/api/public/challenges/sample-sum/solution-submissions",
+        ))
+        .and(query_param("target", "linux-arm64-cpu"))
+        .and(query_param("limit", "20"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(public_submission_list_json()))
+        .mount(&server)
+        .await;
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let config_path = temp.path().join("config.toml");
+    let cli = Cli::parse_from([
+        "agentics",
+        "--config",
+        config_path.to_str().expect("utf8 path"),
+        "--api-base-url",
+        &server.uri(),
+        "challenges",
+        "stats",
+        "sample-sum",
+        "--target",
+        "linux-arm64-cpu",
+    ]);
+
+    let output = execute(cli, Environment::default())
+        .await
+        .expect("challenge stats should succeed");
+
+    assert!(output.contains("challenge: sample-sum (Sample Sum)"));
+    assert!(output.contains("ranked_agents: 2"));
+    assert!(output.contains("visible_submissions: 3"));
+    assert!(output.contains("p90_score: 1.8000"));
+    assert!(output.contains("solver"));
+}
+
+/// Verifies that challenge stats still renders when details are not public.
+#[tokio::test]
+async fn challenges_stats_tolerates_hidden_submission_details() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/public/challenges/sample-sum"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(challenge_detail_json(true)))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/api/public/challenges/sample-sum/leaderboard"))
+        .and(query_param("target", "linux-arm64-cpu"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(leaderboard_json()))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/api/public/challenges/sample-sum/score-distributions",
+        ))
+        .and(query_param("target", "linux-arm64-cpu"))
+        .and(query_param("metric", "score"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(score_distribution_json()))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/api/public/challenges/sample-sum/solution-submissions",
+        ))
+        .and(query_param("target", "linux-arm64-cpu"))
+        .and(query_param("limit", "20"))
+        .respond_with(ResponseTemplate::new(403).set_body_json(json!({
+            "error": "forbidden",
+            "message": "result details are hidden"
+        })))
+        .mount(&server)
+        .await;
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let config_path = temp.path().join("config.toml");
+    let cli = Cli::parse_from([
+        "agentics",
+        "--config",
+        config_path.to_str().expect("utf8 path"),
+        "--api-base-url",
+        &server.uri(),
+        "challenges",
+        "stats",
+        "sample-sum",
+        "--target",
+        "linux-arm64-cpu",
+    ]);
+
+    let output = execute(cli, Environment::default())
+        .await
+        .expect("challenge stats should tolerate hidden submission details");
+
+    assert!(output.contains("ranked_agents: 2"));
+    assert!(output.contains("visible_submissions: unavailable"));
 }
 
 /// Verifies that init solution fetches challenge and creates workspace.
@@ -484,6 +652,135 @@ async fn submissions_show_fetches_validation_run_id() {
 
     assert!(output.contains("solution submission: 22222222-2222-4222-8222-222222222222"));
     assert!(output.contains("validation_evaluation: completed"));
+}
+
+/// Verifies that submissions list uses the public target-scoped API.
+#[tokio::test]
+async fn submissions_list_uses_public_target_api_with_default_limit() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/api/public/challenges/sample-sum/solution-submissions",
+        ))
+        .and(query_param("target", "linux-arm64-cpu"))
+        .and(query_param("limit", "20"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(public_submission_list_json()))
+        .mount(&server)
+        .await;
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let config_path = temp.path().join("config.toml");
+    let cli = Cli::parse_from([
+        "agentics",
+        "--config",
+        config_path.to_str().expect("utf8 path"),
+        "--api-base-url",
+        &server.uri(),
+        "submissions",
+        "list",
+        "sample-sum",
+        "--target",
+        "linux-arm64-cpu",
+    ]);
+
+    let output = execute(cli, Environment::default())
+        .await
+        .expect("submissions list should succeed");
+
+    assert!(output.contains("total_visible: 3"));
+    assert!(output.contains("11111111-1111-4111-8111-111111111111"));
+    assert!(output.contains("solver"));
+}
+
+/// Verifies that public result reports work without a configured token.
+#[tokio::test]
+async fn submissions_report_uses_public_result_report_without_token() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/api/public/solution-submissions/11111111-1111-4111-8111-111111111111/result-report",
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "solution_submission": solution_submission_json()
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/api/public/solution-submissions/11111111-1111-4111-8111-111111111111/ranking-context",
+        ))
+        .and(query_param("challenge_name", "sample-sum"))
+        .and(query_param("target", "linux-arm64-cpu"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(ranking_context_json()))
+        .mount(&server)
+        .await;
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let config_path = temp.path().join("config.toml");
+    let cli = Cli::parse_from([
+        "agentics",
+        "--config",
+        config_path.to_str().expect("utf8 path"),
+        "--api-base-url",
+        &server.uri(),
+        "submissions",
+        "report",
+        "11111111-1111-4111-8111-111111111111",
+    ]);
+
+    let output = execute(cli, Environment::default())
+        .await
+        .expect("submissions report should succeed");
+
+    assert!(output.contains("solution_submission: 11111111-1111-4111-8111-111111111111"));
+    assert!(output.contains("rank: 1"));
+    assert!(output.contains("logs: configure the submitter token"));
+}
+
+/// Verifies that reports still render when ranking context is hidden.
+#[tokio::test]
+async fn submissions_report_tolerates_hidden_public_ranking_context() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/api/public/solution-submissions/11111111-1111-4111-8111-111111111111/result-report",
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "solution_submission": solution_submission_json()
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/api/public/solution-submissions/11111111-1111-4111-8111-111111111111/ranking-context",
+        ))
+        .respond_with(ResponseTemplate::new(403).set_body_json(json!({
+            "error": "forbidden",
+            "message": "leaderboard is hidden"
+        })))
+        .mount(&server)
+        .await;
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let config_path = temp.path().join("config.toml");
+    let cli = Cli::parse_from([
+        "agentics",
+        "--config",
+        config_path.to_str().expect("utf8 path"),
+        "--api-base-url",
+        &server.uri(),
+        "submissions",
+        "report",
+        "11111111-1111-4111-8111-111111111111",
+    ]);
+
+    let output = execute(cli, Environment::default())
+        .await
+        .expect("submissions report should tolerate hidden ranking context");
+
+    assert!(output.contains("solution_submission: 11111111-1111-4111-8111-111111111111"));
+    assert!(output.contains("rank: unranked"));
+    assert!(output.contains("total_ranked: unknown"));
 }
 
 /// Verifies that old status command is removed.
@@ -1050,6 +1347,129 @@ fn challenge_detail_json(validation_enabled: bool) -> serde_json::Value {
             }
         },
         "statement_markdown": "# Sample Sum"
+    })
+}
+
+/// Handles public submission list json for this module.
+fn public_submission_list_json() -> serde_json::Value {
+    json!({
+        "total_count": 3,
+        "items": [
+            {
+                "id": "11111111-1111-4111-8111-111111111111",
+                "challenge_name": "sample-sum",
+                "target": "linux-arm64-cpu",
+                "challenge_title": "Sample Sum",
+                "agent_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "agent_display_name": "solver",
+                "status": "completed",
+                "explanation": "fast solution",
+                "credit_text": "",
+                "official_score": 1.8,
+                "rank_score": 1.8,
+                "aggregate_metrics": [
+                    { "metric_name": "score", "value": 1.8 }
+                ],
+                "official_metrics": [],
+                "created_at": "2026-05-01T00:00:00Z",
+                "updated_at": "2026-05-01T00:00:01Z"
+            }
+        ]
+    })
+}
+
+/// Handles leaderboard json for this module.
+fn leaderboard_json() -> serde_json::Value {
+    json!({
+        "challenge_name": "sample-sum",
+        "target": "linux-arm64-cpu",
+        "items": [
+            {
+                "target": "linux-arm64-cpu",
+                "agent_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "agent_display_name": "solver",
+                "best_solution_submission_id": "11111111-1111-4111-8111-111111111111",
+                "best_rank_score": 1.8,
+                "rank_score": 1.8,
+                "aggregate_metrics": [
+                    { "metric_name": "score", "value": 1.8 }
+                ],
+                "official_metrics": [],
+                "official_score": 1.8,
+                "updated_at": "2026-05-01T00:00:01Z"
+            }
+        ]
+    })
+}
+
+/// Handles score distribution json for this module.
+fn score_distribution_json() -> serde_json::Value {
+    json!({
+        "challenge_name": "sample-sum",
+        "target": "linux-arm64-cpu",
+        "metric_name": "score",
+        "count": 2,
+        "min": 1.0,
+        "max": 1.8,
+        "mean": 1.4,
+        "quantiles": [
+            { "quantile": 0.5, "value": 1.0 },
+            { "quantile": 0.9, "value": 1.8 }
+        ],
+        "histogram": [
+            { "lower": 1.0, "upper": 1.8, "count": 2 }
+        ]
+    })
+}
+
+/// Handles solution submission json for this module.
+fn solution_submission_json() -> serde_json::Value {
+    json!({
+        "id": "11111111-1111-4111-8111-111111111111",
+        "challenge_name": "sample-sum",
+        "challenge_title": "Sample Sum",
+        "target": "linux-arm64-cpu",
+        "agent_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "agent_display_name": "solver",
+        "status": "completed",
+        "explanation": "fast solution",
+        "credit_text": "",
+        "visible_after_eval": true,
+        "official_evaluation": {
+            "id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            "target": "linux-arm64-cpu",
+            "status": "completed",
+            "eval_type": "official",
+            "primary_score": 1.8,
+            "rank_score": 1.8,
+            "aggregate_metrics": [
+                { "metric_name": "score", "value": 1.8 }
+            ],
+            "run_metrics": [],
+            "public_results": []
+        },
+        "created_at": "2026-05-01T00:00:00Z",
+        "updated_at": "2026-05-01T00:00:01Z"
+    })
+}
+
+/// Handles ranking context json for this module.
+fn ranking_context_json() -> serde_json::Value {
+    json!({
+        "challenge_name": "sample-sum",
+        "target": "linux-arm64-cpu",
+        "solution_submission_id": "11111111-1111-4111-8111-111111111111",
+        "rank": 1,
+        "total_ranked": 2,
+        "percentile": 100.0,
+        "is_agent_best": true,
+        "entry": leaderboard_json()["items"][0].clone(),
+        "nearby_entries": [
+            {
+                "rank": 1,
+                "entry": leaderboard_json()["items"][0].clone()
+            }
+        ]
     })
 }
 

@@ -22,16 +22,15 @@ pub(crate) struct Cli {
     #[arg(long, global = true, value_name = "PATH")]
     pub config: Option<PathBuf>,
 
-    /// Render command output as a table or JSON.
-    #[arg(long, global = true, value_enum, default_value_t = OutputFormat::Table)]
-    pub output: OutputFormat,
+    /// Render command output as structured JSON.
+    #[arg(long, global = true)]
+    pub json: bool,
 
     #[command(subcommand)]
     pub command: Commands,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-#[clap(rename_all = "kebab-case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Enumerates output format variants supported by this module.
 pub(crate) enum OutputFormat {
     Table,
@@ -149,6 +148,14 @@ pub(crate) enum ChallengesCommand {
     List,
     /// Show challenge metadata and statement.
     Show { challenge_name: ChallengeName },
+    /// Show target-scoped challenge stats for agent iteration.
+    Stats {
+        challenge_name: ChallengeName,
+        #[arg(long)]
+        target: TargetName,
+        #[arg(long)]
+        metric: Option<MetricName>,
+    },
 }
 
 #[derive(Debug, Clone, Args)]
@@ -444,6 +451,14 @@ pub(crate) struct SubmissionsArgs {
 #[derive(Debug, Clone, Subcommand)]
 /// Enumerates submissions command variants supported by this module.
 pub(crate) enum SubmissionsCommand {
+    /// List visible public solution submissions for a challenge and target.
+    List {
+        challenge_name: ChallengeName,
+        #[arg(long)]
+        target: TargetName,
+        #[arg(long, default_value_t = 20)]
+        limit: i64,
+    },
     /// Show a solution submission or validation run.
     Show { submission_id: SolutionSubmissionId },
     /// Wait until a solution submission reaches a terminal state.
@@ -456,6 +471,8 @@ pub(crate) enum SubmissionsCommand {
     },
     /// Fetch runner logs for a solution submission.
     Logs { submission_id: SolutionSubmissionId },
+    /// Show a detailed result report for a solution submission.
+    Report { submission_id: SolutionSubmissionId },
     /// Show ranking context for a solution submission.
     Rank {
         submission_id: SolutionSubmissionId,

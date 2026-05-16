@@ -12,8 +12,9 @@ use shared::models::ids::SolutionSubmissionId;
 use shared::models::names::{ChallengeName, MetricName, TargetName};
 use shared::models::request::{
     CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse, LeaderboardResponse,
-    RankingContextResponse, RegisterAgentRequest, RegisterAgentResponse, ScoreDistributionResponse,
-    SolutionSubmissionLogsResponse, SolutionSubmissionResponse,
+    PublicSolutionSubmissionListResponse, RankingContextResponse, RegisterAgentRequest,
+    RegisterAgentResponse, ScoreDistributionResponse, SolutionSubmissionLogsResponse,
+    SolutionSubmissionResponse, SolutionSubmissionResultReportResponse,
 };
 
 use crate::config::ApiBaseUrl;
@@ -21,13 +22,24 @@ use crate::config::ApiBaseUrl;
 #[derive(Debug)]
 /// Carries api status error data across this module boundary.
 pub(crate) struct ApiStatusError {
+    status: reqwest::StatusCode,
     message: String,
 }
 
 impl ApiStatusError {
     /// Handles new for this module.
-    fn new(message: String) -> Self {
-        Self { message }
+    fn new(status: reqwest::StatusCode, message: String) -> Self {
+        Self { status, message }
+    }
+
+    /// Returns whether the upstream API reported a missing resource.
+    fn is_not_found(&self) -> bool {
+        self.status == reqwest::StatusCode::NOT_FOUND
+    }
+
+    /// Returns whether the upstream API rejected access to this surface.
+    fn is_forbidden(&self) -> bool {
+        self.status == reqwest::StatusCode::FORBIDDEN
     }
 }
 
@@ -106,6 +118,38 @@ impl ApiClient {
         self.get_json(&path, true).await
     }
 
+    /// Fetches public visible solution submissions for one challenge target.
+    pub(crate) async fn list_public_solution_submissions(
+        &self,
+        challenge_name: &ChallengeName,
+        target: &TargetName,
+        limit: i64,
+    ) -> Result<PublicSolutionSubmissionListResponse> {
+        let path = format!(
+            "/api/public/challenges/{challenge_name}/solution-submissions?target={target}&limit={limit}"
+        );
+        self.get_json(&path, false).await
+    }
+
+    /// Fetches owner-visible result report for the requested submission.
+    pub(crate) async fn get_solution_submission_result_report(
+        &self,
+        solution_submission_id: &SolutionSubmissionId,
+    ) -> Result<SolutionSubmissionResultReportResponse> {
+        let path = format!("/api/solution-submissions/{solution_submission_id}/result-report");
+        self.get_json(&path, true).await
+    }
+
+    /// Fetches public redacted result report for the requested submission.
+    pub(crate) async fn get_public_solution_submission_result_report(
+        &self,
+        solution_submission_id: &SolutionSubmissionId,
+    ) -> Result<SolutionSubmissionResultReportResponse> {
+        let path =
+            format!("/api/public/solution-submissions/{solution_submission_id}/result-report");
+        self.get_json(&path, false).await
+    }
+
     /// Fetches validation run for the requested scope.
     pub(crate) async fn get_validation_run(
         &self,
@@ -135,6 +179,33 @@ impl ApiClient {
             "/api/solution-submissions/{solution_submission_id}/ranking-context?challenge_name={challenge_name}&target={target}"
         );
         self.get_json(&path, true).await
+    }
+
+    /// Fetches public ranking context for a visible solution submission.
+    pub(crate) async fn get_public_solution_submission_ranking_context(
+        &self,
+        solution_submission_id: &SolutionSubmissionId,
+        challenge_name: &ChallengeName,
+        target: &TargetName,
+    ) -> Result<RankingContextResponse> {
+        let path = format!(
+            "/api/public/solution-submissions/{solution_submission_id}/ranking-context?challenge_name={challenge_name}&target={target}"
+        );
+        self.get_json(&path, false).await
+    }
+
+    /// Returns whether an API error represents a missing resource.
+    pub(crate) fn is_not_found(error: &anyhow::Error) -> bool {
+        error
+            .downcast_ref::<ApiStatusError>()
+            .is_some_and(ApiStatusError::is_not_found)
+    }
+
+    /// Returns whether an API error represents a visibility or authorization denial.
+    pub(crate) fn is_forbidden(error: &anyhow::Error) -> bool {
+        error
+            .downcast_ref::<ApiStatusError>()
+            .is_some_and(ApiStatusError::is_forbidden)
     }
 
     /// Fetches leaderboard for the requested scope.
@@ -323,13 +394,16 @@ where
     }
 
     if let Ok(error) = serde_json::from_str::<ErrorResponse>(&body) {
-        return Err(ApiStatusError::new(format!(
-            "Agentics API returned {} {}: {} ({})",
-            status.as_u16(),
-            status.canonical_reason().unwrap_or("error"),
-            error.message,
-            error.error
-        ))
+        return Err(ApiStatusError::new(
+            status,
+            format!(
+                "Agentics API returned {} {}: {} ({})",
+                status.as_u16(),
+                status.canonical_reason().unwrap_or("error"),
+                error.message,
+                error.error
+            ),
+        )
         .into());
     }
 
@@ -338,12 +412,15 @@ where
     } else {
         body
     };
-    Err(ApiStatusError::new(format!(
-        "Agentics API returned {} {}: {}",
-        status.as_u16(),
-        status.canonical_reason().unwrap_or("error"),
-        message
-    ))
+    Err(ApiStatusError::new(
+        status,
+        format!(
+            "Agentics API returned {} {}: {}",
+            status.as_u16(),
+            status.canonical_reason().unwrap_or("error"),
+            message
+        ),
+    )
     .into())
 }
 

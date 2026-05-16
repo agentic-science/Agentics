@@ -49,6 +49,11 @@ pub async fn run_from_env() -> Result<()> {
 pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
     let store = ConfigStore::new(config_path(&cli)?);
     let file_config = store.load()?;
+    let output_format = if cli.json {
+        crate::cli::OutputFormat::Json
+    } else {
+        crate::cli::OutputFormat::Table
+    };
     let settings = ResolvedSettings::resolve(
         cli.api_base_url.as_deref(),
         cli.token.as_deref(),
@@ -59,15 +64,15 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
 
     match cli.command {
         Commands::Register(args) => {
-            commands::register(args, cli.output, &store, file_config, &settings).await
+            commands::register(args, output_format, &store, file_config, &settings).await
         }
         Commands::Auth(args) => match args.command {
-            AuthCommand::Status => output::render_auth_status(&settings, cli.output),
+            AuthCommand::Status => output::render_auth_status(&settings, output_format),
         },
         Commands::Config(args) => match args.command {
-            ConfigCommand::Show => output::render_auth_status(&settings, cli.output),
+            ConfigCommand::Show => output::render_auth_status(&settings, output_format),
             ConfigCommand::Set { key, value } => {
-                commands::set_config(key, &value, cli.output, &store, &settings)
+                commands::set_config(key, &value, output_format, &store, &settings)
             }
         },
         Commands::Challenges(args) => {
@@ -75,17 +80,31 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
             match args.command {
                 ChallengesCommand::List => {
                     let response = client.list_challenges().await?;
-                    output::render_challenge_list(&response, cli.output)
+                    output::render_challenge_list(&response, output_format)
                 }
                 ChallengesCommand::Show { challenge_name } => {
                     let response = client.get_challenge(&challenge_name).await?;
-                    output::render_challenge_detail(&response, cli.output)
+                    output::render_challenge_detail(&response, output_format)
+                }
+                ChallengesCommand::Stats {
+                    challenge_name,
+                    target,
+                    metric,
+                } => {
+                    commands::challenge_stats(
+                        challenge_name,
+                        target,
+                        metric,
+                        output_format,
+                        &settings,
+                    )
+                    .await
                 }
             }
         }
         Commands::ChallengeCreator(args) => match args.command {
             ChallengeCreatorCommand::Draft { command } => {
-                commands::challenge_draft(command, cli.output, &settings).await
+                commands::challenge_draft(command, output_format, &settings).await
             }
             ChallengeCreatorCommand::Stats {
                 challenge_name: _,
@@ -104,7 +123,7 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
                 )
             }
             ChallengeCreatorCommand::Shortlist { command } => {
-                commands::challenge_shortlist(command, cli.output, &settings)
+                commands::challenge_shortlist(command, output_format, &settings)
             }
         },
         Commands::InitSolution(args) => {
@@ -116,16 +135,30 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
                 args.runtime_profile,
                 args.interface,
             )?;
-            output::render_init_solution(&summary, cli.output)
+            output::render_init_solution(&summary, output_format)
         }
-        Commands::Submit(args) => commands::submit(args, cli.output, &settings).await,
-        Commands::Validate(args) => commands::validate(args, cli.output, &settings).await,
+        Commands::Submit(args) => commands::submit(args, output_format, &settings).await,
+        Commands::Validate(args) => commands::validate(args, output_format, &settings).await,
         Commands::Submissions(args) => {
             let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
             match args.command {
+                SubmissionsCommand::List {
+                    challenge_name,
+                    target,
+                    limit,
+                } => {
+                    commands::list_public_solution_submissions(
+                        challenge_name,
+                        target,
+                        limit,
+                        output_format,
+                        &settings,
+                    )
+                    .await
+                }
                 SubmissionsCommand::Show { submission_id } => {
                     let response = client.get_solution_submission(&submission_id).await?;
-                    output::render_solution_submission_status(&response, cli.output)
+                    output::render_solution_submission_status(&response, output_format)
                 }
                 SubmissionsCommand::Wait {
                     submission_id,
@@ -139,11 +172,15 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
                         std::time::Duration::from_secs(timeout_sec),
                     )
                     .await?;
-                    output::render_solution_submission_status(&response, cli.output)
+                    output::render_solution_submission_status(&response, output_format)
                 }
                 SubmissionsCommand::Logs { submission_id } => {
                     let response = client.get_solution_submission_logs(&submission_id).await?;
-                    output::render_solution_submission_logs(&response, cli.output)
+                    output::render_solution_submission_logs(&response, output_format)
+                }
+                SubmissionsCommand::Report { submission_id } => {
+                    commands::solution_submission_report(submission_id, output_format, &settings)
+                        .await
                 }
                 SubmissionsCommand::Rank {
                     submission_id,
@@ -164,7 +201,7 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
                             &target,
                         )
                         .await?;
-                    output::render_ranking_context(&response, cli.output)
+                    output::render_ranking_context(&response, output_format)
                 }
             }
         }
@@ -176,7 +213,7 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
                     target,
                 } => {
                     let response = client.get_leaderboard(&challenge_name, &target).await?;
-                    output::render_leaderboard(&response, cli.output)
+                    output::render_leaderboard(&response, output_format)
                 }
             }
         }
@@ -191,7 +228,7 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
                     let response = client
                         .get_score_distribution(&challenge_name, &target, &metric)
                         .await?;
-                    output::render_score_distribution(&response, cli.output)
+                    output::render_score_distribution(&response, output_format)
                 }
             }
         }

@@ -3,14 +3,15 @@ use std::path::PathBuf;
 use anyhow::Result;
 use serde::Serialize;
 use serde_json::{Map, Value, json};
-use shared::models::challenge::{ChallengeDetailResponse, ChallengeListResponse};
+use shared::models::challenge::{ChallengeDetailResponse, ChallengeListResponse, MetricDirection};
 use shared::models::challenge_creation::{ChallengeDraftCleanupResponse, ChallengeDraftResponse};
 use shared::models::evaluation::ScorerRunResult;
-use shared::models::names::{ChallengeName, TargetName};
+use shared::models::names::{ChallengeName, MetricName, TargetName};
 use shared::models::request::{
-    CreateSolutionSubmissionResponse, LeaderboardResponse, RankingContextResponse,
-    RegisterAgentResponse, ScoreDistributionResponse, SolutionSubmissionLogsResponse,
-    SolutionSubmissionResponse,
+    CreateSolutionSubmissionResponse, LeaderboardResponse, PublicSolutionSubmissionListResponse,
+    RankingContextResponse, RegisterAgentResponse, ScoreDistributionResponse,
+    SolutionSubmissionLogsResponse, SolutionSubmissionResponse,
+    SolutionSubmissionResultReportResponse,
 };
 
 use crate::cli::OutputFormat;
@@ -207,7 +208,6 @@ pub(crate) fn render_challenge_detail(
             } else {
                 "disabled"
             };
-
             Ok(format!(
                 "{} ({})\nsummary: {}\nstarts_at: {}\ncloses_at: {}\neligibility: {}\nleaderboard_visibility: {}\nscore_distribution_visibility: {}\nresult_detail_visibility: {}\nsolution_publication: {}\nsolution_protocol: {} ({})\ntargets:\n{}\ndatasets: public={}, private_benchmark={}\nranking_metric: {}\n\n{}",
                 response.title,
@@ -610,6 +610,150 @@ pub(crate) fn render_solution_submission_logs(
     }
 }
 
+/// Renders public solution submission rows for a challenge target.
+pub(crate) fn render_public_solution_submission_list(
+    response: &PublicSolutionSubmissionListResponse,
+    challenge_name: &ChallengeName,
+    target: &TargetName,
+    format: OutputFormat,
+) -> Result<String> {
+    match format {
+        OutputFormat::Json => pretty_json(response),
+        OutputFormat::Table => {
+            let rows = response
+                .items
+                .iter()
+                .map(|item| {
+                    vec![
+                        item.id.to_string(),
+                        item.agent_display_name.clone(),
+                        item.target.to_string(),
+                        item.status.clone(),
+                        item.rank_score
+                            .map(format_score)
+                            .unwrap_or_else(|| "none".to_string()),
+                        item.official_score
+                            .map(format_score)
+                            .unwrap_or_else(|| "none".to_string()),
+                        item.created_at.clone(),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            Ok(format!(
+                "challenge: {challenge_name}\ntarget: {target}\ntotal_visible: {}\n{}",
+                response.total_count,
+                render_table(
+                    &[
+                        "ID",
+                        "AGENT",
+                        "TARGET",
+                        "STATUS",
+                        "RANK_SCORE",
+                        "OFFICIAL_SCORE",
+                        "CREATED",
+                    ],
+                    &rows,
+                )
+            ))
+        }
+    }
+}
+
+/// Renders a detailed report for a submitted solution.
+pub(crate) fn render_solution_submission_report(
+    response: &SolutionSubmissionResultReportResponse,
+    ranking_context: Option<&RankingContextResponse>,
+    authenticated_logs_available: bool,
+    format: OutputFormat,
+) -> Result<String> {
+    match format {
+        OutputFormat::Json => pretty_json(&json!({
+            "result_report": response,
+            "ranking_context": ranking_context,
+            "authenticated_logs_available": authenticated_logs_available,
+        })),
+        OutputFormat::Table => {
+            let submission = &response.solution_submission;
+            let validation_score = submission
+                .validation_evaluation
+                .as_ref()
+                .and_then(|evaluation| evaluation.primary_score)
+                .map(format_score)
+                .unwrap_or_else(|| "none".to_string());
+            let official_score = submission
+                .official_evaluation
+                .as_ref()
+                .and_then(|evaluation| evaluation.primary_score.or(evaluation.rank_score))
+                .map(format_score)
+                .unwrap_or_else(|| "none".to_string());
+            let rank_score = submission
+                .official_evaluation
+                .as_ref()
+                .or(submission.evaluation.as_ref())
+                .and_then(|evaluation| evaluation.rank_score)
+                .map(format_score)
+                .unwrap_or_else(|| "none".to_string());
+            let metrics = submission
+                .official_evaluation
+                .as_ref()
+                .or(submission.validation_evaluation.as_ref())
+                .or(submission.evaluation.as_ref())
+                .map(|evaluation| {
+                    evaluation
+                        .aggregate_metrics
+                        .iter()
+                        .map(|metric| {
+                            vec![metric.metric_name.to_string(), format_score(metric.value)]
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            let rank = ranking_context
+                .and_then(|context| context.rank)
+                .map(|rank| rank.to_string())
+                .unwrap_or_else(|| "unranked".to_string());
+            let total_ranked = ranking_context
+                .map(|context| context.total_ranked.to_string())
+                .unwrap_or_else(|| "unknown".to_string());
+            let percentile = ranking_context
+                .and_then(|context| context.percentile)
+                .map(format_score)
+                .unwrap_or_else(|| "none".to_string());
+            let is_agent_best = ranking_context
+                .map(|context| context.is_agent_best.to_string())
+                .unwrap_or_else(|| "unknown".to_string());
+            let log_hint = if authenticated_logs_available {
+                format!("agentics submissions logs {}", submission.id)
+            } else {
+                "configure the submitter token to inspect private logs".to_string()
+            };
+
+            Ok(format!(
+                "solution_submission: {}\nchallenge: {}\ntarget: {}\nagent: {}\nstatus: {}\ncreated_at: {}\nupdated_at: {}\nvalidation_primary_score: {}\nofficial_score: {}\nrank_score: {}\nrank: {}\ntotal_ranked: {}\npercentile: {}\nis_agent_best: {}\nmetrics:\n{}\nlogs: {}",
+                submission.id,
+                submission.challenge_name,
+                submission.target,
+                submission
+                    .agent_display_name
+                    .as_deref()
+                    .unwrap_or(submission.agent_id.as_str()),
+                submission.status,
+                submission.created_at,
+                submission.updated_at,
+                validation_score,
+                official_score,
+                rank_score,
+                rank,
+                total_ranked,
+                percentile,
+                is_agent_best,
+                render_table(&["METRIC", "VALUE"], &metrics),
+                log_hint,
+            ))
+        }
+    }
+}
+
 /// Renders ranking context for user-facing output.
 pub(crate) fn render_ranking_context(
     response: &RankingContextResponse,
@@ -646,6 +790,92 @@ pub(crate) fn render_ranking_context(
                     .unwrap_or_else(|| "none".to_string()),
                 response.is_agent_best,
                 render_table(&["RANK", "AGENT", "SUBMISSION", "SCORE"], &nearby)
+            ))
+        }
+    }
+}
+
+/// Renders a target-scoped challenge statistics summary for agent iteration.
+pub(crate) fn render_challenge_stats(
+    challenge: &ChallengeDetailResponse,
+    leaderboard: &LeaderboardResponse,
+    distribution: &ScoreDistributionResponse,
+    submissions: Option<&PublicSolutionSubmissionListResponse>,
+    metric_name: &MetricName,
+    format: OutputFormat,
+) -> Result<String> {
+    let visible_submission_count = submissions.map(|submission_list| submission_list.total_count);
+    match format {
+        OutputFormat::Json => pretty_json(&json!({
+            "challenge": challenge,
+            "target": leaderboard.target,
+            "metric_name": metric_name,
+            "visible_submission_count": visible_submission_count,
+            "ranked_agent_count": distribution.count,
+            "leaderboard": leaderboard,
+            "score_distribution": distribution,
+        })),
+        OutputFormat::Table => {
+            let top_rows = leaderboard
+                .items
+                .iter()
+                .take(5)
+                .enumerate()
+                .map(|(index, entry)| {
+                    let rank = index
+                        .checked_add(1)
+                        .ok_or_else(|| anyhow::anyhow!("leaderboard rank overflow"))?;
+                    Ok(vec![
+                        rank.to_string(),
+                        entry.agent_display_name.clone(),
+                        entry.best_solution_submission_id.to_string(),
+                        format_score(entry.best_rank_score),
+                        entry.updated_at.clone(),
+                    ])
+                })
+                .collect::<Result<Vec<_>>>()?;
+            let median = quantile_value(distribution, 0.5)
+                .map(format_score)
+                .unwrap_or_else(|| "none".to_string());
+            let p90 = quantile_value(distribution, 0.9)
+                .map(format_score)
+                .unwrap_or_else(|| "none".to_string());
+            let best_score = challenge
+                .spec
+                .metric_schema
+                .metric(metric_name)
+                .map(|metric| metric.direction)
+                .map_or(distribution.min, |direction| match direction {
+                    MetricDirection::Maximize => distribution.max,
+                    MetricDirection::Minimize => distribution.min,
+                })
+                .map(format_score)
+                .unwrap_or_else(|| "none".to_string());
+            Ok(format!(
+                "challenge: {} ({})\ntarget: {}\nstatus: {}\nstarts_at: {}\ncloses_at: {}\neligibility: {}\nranking_metric: {}\nranked_agents: {}\nvisible_submissions: {}\nbest_score: {}\nmean_score: {}\nmedian_score: {}\np90_score: {}\ntop:\n{}",
+                challenge.name,
+                challenge.title,
+                leaderboard.target,
+                "published",
+                challenge.spec.starts_at.as_deref().unwrap_or("none"),
+                challenge.spec.closes_at.as_deref().unwrap_or("none"),
+                status_label(&challenge.spec.eligibility.eligibility_type),
+                metric_name,
+                distribution.count,
+                visible_submission_count
+                    .map(|count| count.to_string())
+                    .unwrap_or_else(|| "unavailable".to_string()),
+                best_score,
+                distribution
+                    .mean
+                    .map(format_score)
+                    .unwrap_or_else(|| "none".to_string()),
+                median,
+                p90,
+                render_table(
+                    &["RANK", "AGENT", "SUBMISSION", "SCORE", "UPDATED"],
+                    &top_rows
+                )
             ))
         }
     }
@@ -788,6 +1018,15 @@ fn format_score(score: f64) -> String {
     } else {
         format!("{score:.4}")
     }
+}
+
+/// Looks up an exact quantile value when the API returned it.
+fn quantile_value(response: &ScoreDistributionResponse, expected: f64) -> Option<f64> {
+    response
+        .quantiles
+        .iter()
+        .find(|quantile| (quantile.quantile - expected).abs() < f64::EPSILON)
+        .map(|quantile| quantile.value)
 }
 
 /// Renders table for user-facing output.
