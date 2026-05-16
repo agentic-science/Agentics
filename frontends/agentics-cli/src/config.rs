@@ -25,6 +25,7 @@ pub(crate) struct CliConfig {
 pub(crate) struct Environment {
     pub api_base_url: Option<String>,
     pub token: Option<String>,
+    pub pioneer_code: Option<SecretString>,
     pub admin_password: Option<SecretString>,
 }
 
@@ -34,6 +35,7 @@ impl Environment {
         Self {
             api_base_url: read_non_empty_env("AGENTICS_API_BASE_URL"),
             token: read_non_empty_env("AGENTICS_TOKEN"),
+            pioneer_code: read_non_empty_env("AGENTICS_PIONEER_CODE").map(SecretString::from),
             admin_password: read_non_empty_env("AGENTICS_ADMIN_PASSWORD").map(SecretString::from),
         }
     }
@@ -70,6 +72,7 @@ pub(crate) struct ResolvedSettings {
     pub api_base_url_source: SettingSource,
     pub token: Option<String>,
     pub token_source: SettingSource,
+    pub pioneer_code: Option<SecretString>,
     pub admin_password: Option<SecretString>,
     pub config_path: PathBuf,
 }
@@ -98,6 +101,7 @@ impl ResolvedSettings {
             api_base_url_source,
             token: token.map(ToOwned::to_owned),
             token_source,
+            pioneer_code: env.pioneer_code.clone(),
             admin_password: env.admin_password.clone(),
             config_path,
         })
@@ -345,6 +349,7 @@ mod tests {
         let env = Environment {
             api_base_url: Some("http://env.example".to_string()),
             token: Some("env-token".to_string()),
+            pioneer_code: None,
             admin_password: None,
         };
 

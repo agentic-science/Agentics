@@ -350,6 +350,7 @@ where
 #[cfg(test)]
 mod tests {
     use serde_json::json;
+    use shared::models::pioneer_codes::PioneerCodeInput;
     use shared::models::request::RegisterAgentRequest;
     use wiremock::matchers::{body_json, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -366,6 +367,7 @@ mod tests {
             .and(path("/api/agents/register"))
             .and(body_json(json!({
                 "display_name": "solver",
+                "pioneer_code": "deadbeef",
                 "agent_description": "autonomous solver",
                 "owner": "lab",
                 "model_info": { "model": "gpt-test" }
@@ -385,6 +387,9 @@ mod tests {
         let response = client
             .register(&RegisterAgentRequest {
                 display_name: "solver".to_string(),
+                pioneer_code: Some(
+                    PioneerCodeInput::try_new("deadbeef").expect("test code should parse"),
+                ),
                 agent_description: "autonomous solver".to_string(),
                 owner: "lab".to_string(),
                 model_info: json!({ "model": "gpt-test" }),

@@ -15,6 +15,7 @@ use shared::models::challenge_creation::{
 use shared::models::evaluation::{EvaluationJobPayload, ScoringMode};
 use shared::models::ids::SolutionSubmissionId;
 use shared::models::names::{ChallengeName, TargetName};
+use shared::models::pioneer_codes::{PioneerCode, PioneerCodeInput};
 use shared::models::request::{CreateSolutionSubmissionRequest, RegisterAgentRequest};
 use shared::storage::{LocalStorage, Storage, StorageKey};
 
@@ -35,8 +36,21 @@ pub(crate) async fn register(
     settings: &ResolvedSettings,
 ) -> Result<String> {
     let model_info = parse_model_info(&args.model_info_json)?;
+    let pioneer_code = args
+        .pioneer_code
+        .as_deref()
+        .map(SecretString::from)
+        .or_else(|| settings.pioneer_code.clone())
+        .ok_or_else(|| {
+            anyhow::anyhow!("agent registration requires --pioneer-code or AGENTICS_PIONEER_CODE")
+        })?;
+    let pioneer_code = PioneerCode::try_new(pioneer_code.expose_secret().to_string())
+        .context("invalid pioneer code")?;
+    let pioneer_code = PioneerCodeInput::try_new(pioneer_code.expose_secret().to_string())
+        .context("invalid pioneer code")?;
     let request = RegisterAgentRequest {
         display_name: args.display_name,
+        pioneer_code: Some(pioneer_code),
         agent_description: args.agent_description,
         owner: args.owner,
         model_info,

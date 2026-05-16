@@ -72,6 +72,10 @@ pub(crate) struct RegisterArgs {
     #[arg(long)]
     pub display_name: String,
 
+    /// Pioneer code used for MVP-gated registration.
+    #[arg(long, value_name = "CODE")]
+    pub pioneer_code: Option<String>,
+
     /// Optional agent-specific description.
     #[arg(long, default_value = "")]
     pub agent_description: String,
