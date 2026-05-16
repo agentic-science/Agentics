@@ -1,12 +1,15 @@
 //! Conversion helpers from database records to API DTOs.
 
-use shared::db::{AgentRecord, ChallengeRecord, SolutionSubmissionRecord};
+use shared::db::{
+    AgentRecord, ChallengeRecord, PioneerCodeRecord, PioneerCodeUseRecord, SolutionSubmissionRecord,
+};
 use shared::error::{AppError, Result};
 use shared::models::challenge::{ChallengeBundleSpec, ChallengeDetailResponse};
 use shared::models::evaluation::{EvaluationDto, ScoringMode};
 use shared::models::ids::AgentId;
 use shared::models::request::{
-    CreateSolutionSubmissionResponse, RegisterAgentResponse, SolutionSubmissionResponse,
+    CreateSolutionSubmissionResponse, PioneerCodeDetailResponse, PioneerCodeDto,
+    PioneerCodeListResponse, PioneerCodeUseDto, RegisterAgentResponse, SolutionSubmissionResponse,
 };
 
 /// Present a newly registered agent together with its one-time bearer token.
@@ -21,6 +24,51 @@ pub fn present_register_agent(agent: &AgentRecord, token: &str) -> Result<Regist
         display_name: agent.display_name.clone(),
         created_at: agent.created_at.to_rfc3339(),
     })
+}
+
+/// Present a pioneer-code list for admin review.
+pub fn present_pioneer_code_list(codes: &[PioneerCodeRecord]) -> PioneerCodeListResponse {
+    PioneerCodeListResponse {
+        items: codes.iter().map(present_pioneer_code).collect(),
+    }
+}
+
+/// Present one pioneer-code detail response with its created agents.
+pub fn present_pioneer_code_detail(
+    code: &PioneerCodeRecord,
+    uses: &[PioneerCodeUseRecord],
+) -> PioneerCodeDetailResponse {
+    PioneerCodeDetailResponse {
+        code: present_pioneer_code(code),
+        uses: uses.iter().map(present_pioneer_code_use).collect(),
+    }
+}
+
+/// Present a pioneer-code row without exposing the hashed validation value.
+fn present_pioneer_code(code: &PioneerCodeRecord) -> PioneerCodeDto {
+    PioneerCodeDto {
+        id: code.id.clone(),
+        code_display: code.code_display.clone(),
+        label: code.label.clone(),
+        note: code.note.clone(),
+        max_uses: code.max_uses,
+        use_count: code.use_count,
+        status: code.status.clone(),
+        expires_at: code.expires_at.map(|expires_at| expires_at.to_rfc3339()),
+        created_by_admin_username: code.created_by_admin_username.clone(),
+        created_at: code.created_at.to_rfc3339(),
+        revoked_at: code.revoked_at.map(|revoked_at| revoked_at.to_rfc3339()),
+    }
+}
+
+/// Present an agent account created through a pioneer code.
+fn present_pioneer_code_use(use_record: &PioneerCodeUseRecord) -> PioneerCodeUseDto {
+    PioneerCodeUseDto {
+        agent_id: use_record.agent_id.clone(),
+        agent_display_name: use_record.agent_display_name.clone(),
+        registration_kind: use_record.registration_kind.clone(),
+        used_at: use_record.used_at.to_rfc3339(),
+    }
 }
 
 /// Present public challenge details from a published challenge record and statement body.

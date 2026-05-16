@@ -23,7 +23,7 @@ use uuid::Uuid;
 
 use shared::auth;
 use shared::challenge_bundle;
-use shared::config::Config;
+use shared::config::{AgentRegistrationMode, Config};
 use shared::db::{self, QueueEvaluationJobInput};
 use shared::error::{AppError, Result};
 use shared::models::challenge::{
@@ -31,18 +31,20 @@ use shared::models::challenge::{
     ChallengeSolutionPublicationPolicy, ChallengeVisibility, PublishChallengeResponse,
 };
 use shared::models::evaluation::ScoringMode;
-use shared::models::ids::{AgentId, EvaluationJobId, SolutionSubmissionId};
+use shared::models::ids::{AgentId, AgentPioneerCodeId, EvaluationJobId, SolutionSubmissionId};
 use shared::models::names::{ChallengeName, MetricName, TargetName};
 use shared::models::paths::AdminBundlePath;
+use shared::models::pioneer_codes::PioneerCode;
 use shared::models::request::{
     AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto,
     AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse, CreateChallengeRequest,
-    CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse, DisableAgentResponse,
-    EvaluationJobResponse, HideSolutionSubmissionResponse, LeaderboardResponse,
+    CreatePioneerCodeRequest, CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse,
+    DisableAgentResponse, EvaluationJobResponse, HideSolutionSubmissionResponse,
+    LeaderboardResponse, PioneerCodeDetailResponse, PioneerCodeListResponse,
     PublicSolutionSubmissionListResponse, PublishChallengeRequest, RankedLeaderboardEntryDto,
-    RankingContextResponse, RegisterAgentRequest, RegisterAgentResponse, ScoreDistributionResponse,
-    SolutionSubmissionArtifactResponse, SolutionSubmissionLogsResponse, SolutionSubmissionResponse,
-    SolutionSubmissionResultReportResponse,
+    RankingContextResponse, RegisterAgentRequest, RegisterAgentResponse, RevokePioneerCodeResponse,
+    ScoreDistributionResponse, SolutionSubmissionArtifactResponse, SolutionSubmissionLogsResponse,
+    SolutionSubmissionResponse, SolutionSubmissionResultReportResponse,
 };
 use shared::storage::StorageKey;
 use shared::zip_project::MAX_ZIP_PROJECT_ARTIFACT_BYTES;
@@ -103,19 +105,43 @@ pub async fn register_agent(
     let token = auth::create_agent_token();
     let token_hash = auth::hash_agent_token(&token);
 
-    let agent = db::register_agent(
-        &state.db,
-        &db::RegisterAgentInput {
-            agent_id: Uuid::new_v4().to_string(),
-            token_id: Uuid::new_v4().to_string(),
-            token_hash,
-            display_name: body.display_name.trim().to_string(),
-            agent_description: body.agent_description.trim().to_string(),
-            owner: body.owner.trim().to_string(),
-            model_info: body.model_info,
-        },
-    )
-    .await?;
+    let input = db::RegisterAgentInput {
+        agent_id: Uuid::new_v4().to_string(),
+        token_id: Uuid::new_v4().to_string(),
+        token_hash,
+        display_name: body.display_name.trim().to_string(),
+        agent_description: body.agent_description.trim().to_string(),
+        owner: body.owner.trim().to_string(),
+        model_info: body.model_info,
+    };
+
+    let agent = match state
+        .config
+        .agent_registration_mode()
+        .map_err(|e| AppError::Internal(e.to_string()))?
+    {
+        AgentRegistrationMode::PioneerCode => {
+            let code = body.pioneer_code.as_ref().ok_or_else(|| {
+                AppError::Forbidden(
+                    shared::models::pioneer_codes::INVALID_OR_UNAVAILABLE_PIONEER_CODE.to_string(),
+                )
+            })?;
+            let code = PioneerCode::try_new(code.expose_secret().to_string()).map_err(|_| {
+                AppError::Forbidden(
+                    shared::models::pioneer_codes::INVALID_OR_UNAVAILABLE_PIONEER_CODE.to_string(),
+                )
+            })?;
+            let code_hash = auth::hash_opaque_token(code.expose_secret());
+            db::register_agent_with_pioneer_code(
+                &state.db,
+                &input,
+                &code_hash,
+                db::PioneerCodeRegistrationKind::AgentApi,
+            )
+            .await?
+        }
+        AgentRegistrationMode::Public => db::register_agent(&state.db, &input).await?,
+    };
 
     Ok((
         StatusCode::CREATED,
@@ -887,6 +913,133 @@ async fn build_ranking_context(
 // ---------------------------------------------------------------------------
 // Admin routes
 // ---------------------------------------------------------------------------
+
+/// Create a pioneer code for MVP-gated agent registration.
+pub async fn create_pioneer_code(
+    admin: AdminAuth,
+    State(state): State<AppState>,
+    ValidatedJson(body): ValidatedJson<CreatePioneerCodeRequest>,
+) -> Result<(StatusCode, Json<PioneerCodeDetailResponse>)> {
+    let CreatePioneerCodeRequest {
+        label,
+        code,
+        note,
+        max_uses,
+        expires_at,
+    } = body;
+
+    if max_uses == 0 || max_uses < -1 {
+        return Err(AppError::BadRequest(
+            "max_uses must be a positive integer or -1 for local testing".to_string(),
+        ));
+    }
+    if max_uses == -1 && !state.config.allows_local_registration_testing_knobs() {
+        return Err(AppError::BadRequest(
+            "unlimited pioneer codes are only allowed for loopback local testing".to_string(),
+        ));
+    }
+
+    let (code_display, code_hash, label) = {
+        let code = resolve_pioneer_code_request(code, label.as_deref())?;
+        (
+            code.expose_secret().to_string(),
+            auth::hash_opaque_token(code.expose_secret()),
+            code.label().map(ToOwned::to_owned),
+        )
+    };
+    let expires_at = parse_optional_rfc3339(expires_at.as_deref(), "expires_at")?;
+    let note = note.unwrap_or_default();
+    let record = db::create_pioneer_code(
+        &state.db,
+        &db::CreatePioneerCodeInput {
+            id: AgentPioneerCodeId::generate(),
+            code_hash,
+            code_display,
+            label,
+            note,
+            max_uses,
+            expires_at,
+            created_by_admin_username: admin.username,
+        },
+    )
+    .await
+    .map_err(|e| match e {
+        AppError::Database(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
+            AppError::Conflict
+        }
+        _ => e,
+    })?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(presenters::present_pioneer_code_detail(&record, &[])),
+    ))
+}
+
+/// List pioneer codes and their usage counts for admins.
+pub async fn list_pioneer_codes(
+    _admin: AdminAuth,
+    State(state): State<AppState>,
+) -> Result<Json<PioneerCodeListResponse>> {
+    let codes = db::list_pioneer_codes(&state.db).await?;
+    Ok(Json(presenters::present_pioneer_code_list(&codes)))
+}
+
+/// Fetch one pioneer code with the agents created through it.
+pub async fn get_pioneer_code(
+    _admin: AdminAuth,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<PioneerCodeDetailResponse>> {
+    let id = AgentPioneerCodeId::try_new(id).map_err(|e| AppError::BadRequest(e.to_string()))?;
+    let (code, uses) = db::get_pioneer_code_detail(&state.db, &id).await?;
+    Ok(Json(presenters::present_pioneer_code_detail(&code, &uses)))
+}
+
+/// Revoke a pioneer code and disable all agents created through it.
+pub async fn revoke_pioneer_code(
+    _admin: AdminAuth,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<RevokePioneerCodeResponse>> {
+    let id = AgentPioneerCodeId::try_new(id).map_err(|e| AppError::BadRequest(e.to_string()))?;
+    let outcome = db::revoke_pioneer_code(&state.db, &id).await?;
+    Ok(Json(RevokePioneerCodeResponse {
+        id,
+        status: "revoked".to_string(),
+        revoked_agent_count: outcome.revoked_agent_count,
+        revoked_token_count: outcome.revoked_token_count,
+    }))
+}
+
+/// Resolve admin-supplied or generated pioneer code text.
+fn resolve_pioneer_code_request(
+    code: Option<PioneerCode>,
+    label: Option<&str>,
+) -> Result<PioneerCode> {
+    if let Some(code) = code {
+        if let Some(label) = label
+            && code.label() != Some(label)
+        {
+            return Err(AppError::BadRequest(
+                "label must match the pioneer code prefix when code is supplied".to_string(),
+            ));
+        }
+        return Ok(code);
+    }
+
+    PioneerCode::generate(label).map_err(|e| AppError::BadRequest(e.to_string()))
+}
+
+/// Parse an optional RFC3339 timestamp from an API request field.
+fn parse_optional_rfc3339(raw: Option<&str>, field: &str) -> Result<Option<DateTime<Utc>>> {
+    raw.map(|value| {
+        DateTime::parse_from_rfc3339(value)
+            .map(|value| value.with_timezone(&Utc))
+            .map_err(|e| AppError::BadRequest(format!("{field} must be RFC3339: {e}")))
+    })
+    .transpose()
+}
 
 /// List challenge shells and published benchmark contracts for admins.
 pub async fn list_admin_challenges(

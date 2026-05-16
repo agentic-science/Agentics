@@ -15,6 +15,7 @@ const DEFAULT_ADMIN_PASSWORD: &str = "agentics-admin";
 const DEFAULT_POSTGRES_PORT: u16 = 5432;
 const DEFAULT_API_PORT: u16 = 3100;
 const DEFAULT_WEB_PORT: u16 = 3001;
+const DEFAULT_AGENT_REGISTRATION_MODE: &str = "pioneer_code";
 const DEFAULT_RUNNER_WRITABLE_STORAGE_MODE: &str = "unbounded";
 const DEFAULT_RUNNER_WRITABLE_SLOT_CLASSES_MB: &str = "64,256,1024,4096";
 
@@ -81,8 +82,8 @@ pub struct Config {
     pub web_session_ttl_hours: i64,
     #[serde(default)]
     pub web_session_cookie_secure: bool,
-    #[serde(default)]
-    pub allow_public_agent_registration_on_non_loopback: bool,
+    #[serde(default = "default_agent_registration_mode")]
+    pub agent_registration_mode: String,
     /// Optional Docker host URI used by CI or remote Docker setups.
     #[serde(default)]
     pub docker_host: Option<String>,
@@ -107,6 +108,30 @@ pub enum RunnerWritableStorageMode {
     Unbounded,
     /// Lease root-prepared XFS project-quota slots for writable container paths.
     XfsProjectQuotaSlots,
+}
+
+/// Policy for unauthenticated agent-account registration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AgentRegistrationMode {
+    /// Require a valid pioneer code for every new agent account.
+    PioneerCode,
+    /// Allow code-free registration for local testing and development only.
+    Public,
+}
+
+impl FromStr for AgentRegistrationMode {
+    type Err = anyhow::Error;
+
+    /// Parse the configured agent-registration mode.
+    fn from_str(value: &str) -> anyhow::Result<Self> {
+        match value.trim() {
+            "pioneer_code" => Ok(Self::PioneerCode),
+            "public" => Ok(Self::Public),
+            other => anyhow::bail!(
+                "AGENTICS_AGENT_REGISTRATION_MODE must be `pioneer_code` or `public`, got `{other}`"
+            ),
+        }
+    }
 }
 
 impl FromStr for RunnerWritableStorageMode {
@@ -276,6 +301,11 @@ fn default_web_session_ttl_hours() -> i64 {
     24
 }
 
+/// Default MVP registration mode that requires pioneer codes.
+fn default_agent_registration_mode() -> String {
+    DEFAULT_AGENT_REGISTRATION_MODE.to_string()
+}
+
 /// Handles default log level for this module.
 fn default_log_level() -> String {
     "info".to_string()
@@ -314,10 +344,10 @@ impl Config {
         }
 
         if !is_loopback_host(&self.api_host)
-            && !self.allow_public_agent_registration_on_non_loopback
+            && self.agent_registration_mode()? == AgentRegistrationMode::Public
         {
             anyhow::bail!(
-                "refusing to bind API to `{}` with public agent registration enabled; set AGENTICS_ALLOW_PUBLIC_AGENT_REGISTRATION_ON_NON_LOOPBACK=true only after adding deployment-level rate limits",
+                "refusing to bind API to `{}` with AGENTICS_AGENT_REGISTRATION_MODE=public; public registration is local-development only",
                 self.api_host
             );
         }
@@ -442,6 +472,16 @@ impl Config {
     /// Handles runner writable storage mode for this module.
     pub fn runner_writable_storage_mode(&self) -> anyhow::Result<RunnerWritableStorageMode> {
         self.runner_writable_storage_mode.parse()
+    }
+
+    /// Return the configured agent-registration mode.
+    pub fn agent_registration_mode(&self) -> anyhow::Result<AgentRegistrationMode> {
+        self.agent_registration_mode.parse()
+    }
+
+    /// Return whether local-only testing knobs such as unlimited pioneer codes may be used.
+    pub fn allows_local_registration_testing_knobs(&self) -> bool {
+        is_loopback_host(&self.api_host)
     }
 
     /// Handles runner writable slot classes mb for this module.
@@ -571,9 +611,31 @@ mod tests {
         config.admin_password = SecretString::from("changed");
         assert!(config.validate_api_security().is_err());
 
-        config.allow_public_agent_registration_on_non_loopback = true;
+        config.agent_registration_mode = "pioneer_code".to_string();
         config.web_session_cookie_secure = true;
         assert!(config.validate_api_security().is_ok());
+
+        config.agent_registration_mode = "public".to_string();
+        assert!(config.validate_api_security().is_err());
+    }
+
+    /// Verifies that hosted API binds reject public registration mode.
+    #[test]
+    fn hosted_bind_rejects_public_agent_registration_mode() {
+        let mut config = test_config();
+        config.api_host = "0.0.0.0".to_string();
+        config.admin_password = SecretString::from("changed");
+        config.web_session_cookie_secure = true;
+        config.agent_registration_mode = "public".to_string();
+
+        let error = config
+            .validate_api_security()
+            .expect_err("public mode must stay local-only");
+        assert!(
+            error
+                .to_string()
+                .contains("AGENTICS_AGENT_REGISTRATION_MODE=public")
+        );
     }
 
     /// Verifies that parses runner writable slot classes.
@@ -645,7 +707,7 @@ mod tests {
             web_csrf_cookie_name: super::default_web_csrf_cookie_name(),
             web_session_ttl_hours: super::default_web_session_ttl_hours(),
             web_session_cookie_secure: false,
-            allow_public_agent_registration_on_non_loopback: false,
+            agent_registration_mode: super::default_agent_registration_mode(),
             docker_host: None,
             require_digest_pinned_images: false,
             runner_writable_storage_mode: super::default_runner_writable_storage_mode(),

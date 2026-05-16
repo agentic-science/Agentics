@@ -15,6 +15,7 @@ pub mod hashes;
 pub mod ids;
 pub mod names;
 pub mod paths;
+pub mod pioneer_codes;
 pub mod request;
 pub mod urls;
 

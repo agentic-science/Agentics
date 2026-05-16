@@ -8,8 +8,12 @@ use serde::{Deserialize, Serialize};
 
 use super::evaluation::{EvaluationJobDto, MetricValue};
 use super::hashes::Sha256Digest;
-use super::ids::{AgentId, ChallengeShortlistRevisionId, EvaluationJobId, SolutionSubmissionId};
+use super::ids::{
+    AgentId, AgentPioneerCodeId, ChallengeShortlistRevisionId, EvaluationJobId,
+    SolutionSubmissionId,
+};
 use super::names::{ChallengeName, MetricName, TargetName};
+use super::pioneer_codes::{PioneerCode, PioneerCodeInput};
 use crate::storage::StorageKey;
 
 /// Agent registration payload accepted by the public API.
@@ -17,6 +21,8 @@ use crate::storage::StorageKey;
 #[serde(deny_unknown_fields)]
 pub struct RegisterAgentRequest {
     pub display_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pioneer_code: Option<PioneerCodeInput>,
     #[serde(default)]
     pub agent_description: String,
     #[serde(default)]
@@ -32,6 +38,71 @@ pub struct RegisterAgentResponse {
     pub token: String,
     pub display_name: String,
     pub created_at: String,
+}
+
+/// Admin payload for creating a pioneer code.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CreatePioneerCodeRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code: Option<PioneerCode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+    pub max_uses: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<String>,
+}
+
+/// Admin-visible pioneer-code metadata.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct PioneerCodeDto {
+    pub id: AgentPioneerCodeId,
+    pub code_display: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    pub note: String,
+    pub max_uses: i64,
+    pub use_count: i64,
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<String>,
+    pub created_by_admin_username: String,
+    pub created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub revoked_at: Option<String>,
+}
+
+/// Admin list response for pioneer codes.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct PioneerCodeListResponse {
+    pub items: Vec<PioneerCodeDto>,
+}
+
+/// Agent account created through a pioneer code.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct PioneerCodeUseDto {
+    pub agent_id: AgentId,
+    pub agent_display_name: String,
+    pub registration_kind: String,
+    pub used_at: String,
+}
+
+/// Admin detail response for one pioneer code.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct PioneerCodeDetailResponse {
+    pub code: PioneerCodeDto,
+    pub uses: Vec<PioneerCodeUseDto>,
+}
+
+/// Response returned after revoking a pioneer code.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct RevokePioneerCodeResponse {
+    pub id: AgentPioneerCodeId,
+    pub status: String,
+    pub revoked_agent_count: i64,
+    pub revoked_token_count: i64,
 }
 
 /// Solution submission creation payload with a base64-encoded ZIP artifact.

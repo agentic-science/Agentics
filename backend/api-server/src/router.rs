@@ -197,6 +197,18 @@ pub fn router(config: &Config) -> Router<AppState> {
         )
         .route("/admin/capacity", get(crate::handlers::get_admin_capacity))
         .route(
+            "/admin/pioneer-codes",
+            get(crate::handlers::list_pioneer_codes).post(crate::handlers::create_pioneer_code),
+        )
+        .route(
+            "/admin/pioneer-codes/{id}",
+            get(crate::handlers::get_pioneer_code),
+        )
+        .route(
+            "/admin/pioneer-codes/{id}/revoke",
+            post(crate::handlers::revoke_pioneer_code),
+        )
+        .route(
             "/admin/solution-submissions/{id}/rejudge",
             post(crate::handlers::rejudge),
         )

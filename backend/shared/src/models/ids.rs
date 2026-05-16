@@ -135,6 +135,11 @@ define_uuid_id_type!(
     "agent_id must be a canonical UUID string"
 );
 define_uuid_id_type!(
+    AgentPioneerCodeId,
+    "AgentPioneerCodeId",
+    "agent_pioneer_code_id must be a canonical UUID string"
+);
+define_uuid_id_type!(
     ChallengeDraftId,
     "ChallengeDraftId",
     "challenge_draft_id must be a canonical UUID string"

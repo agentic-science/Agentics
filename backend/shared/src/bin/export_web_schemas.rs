@@ -17,12 +17,13 @@ use shared::models::challenge_creation::{
 use shared::models::request::{
     AdminCapacityResponse, AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse,
     ChallengeShortlistResponse, ChallengeShortlistRevisionResponse,
-    CreateChallengeShortlistRevisionRequest, CreatorChallengeParticipantsResponse,
-    CreatorChallengeStatsResponse, DisableAgentResponse, EvaluationJobResponse,
-    HideSolutionSubmissionResponse, LeaderboardResponse, PublicSolutionSubmissionListResponse,
-    RankingContextResponse, ScoreDistributionResponse, SolutionSubmissionArtifactResponse,
-    SolutionSubmissionLogsResponse, SolutionSubmissionResponse,
-    SolutionSubmissionResultReportResponse,
+    CreateChallengeShortlistRevisionRequest, CreatePioneerCodeRequest,
+    CreatorChallengeParticipantsResponse, CreatorChallengeStatsResponse, DisableAgentResponse,
+    EvaluationJobResponse, HideSolutionSubmissionResponse, LeaderboardResponse,
+    PioneerCodeDetailResponse, PioneerCodeListResponse, PublicSolutionSubmissionListResponse,
+    RankingContextResponse, RegisterAgentRequest, RevokePioneerCodeResponse,
+    ScoreDistributionResponse, SolutionSubmissionArtifactResponse, SolutionSubmissionLogsResponse,
+    SolutionSubmissionResponse, SolutionSubmissionResultReportResponse,
 };
 
 /// Handles main for this module.
@@ -66,6 +67,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &mut schemas,
         "createChallengeShortlistRevisionRequestSchema",
     )?;
+    insert_schema::<CreatePioneerCodeRequest>(&mut schemas, "createPioneerCodeRequestSchema")?;
     insert_schema::<UploadChallengePrivateAssetRequest>(
         &mut schemas,
         "uploadChallengePrivateAssetRequestSchema",
@@ -89,11 +91,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "hideSolutionSubmissionResponseSchema",
     )?;
     insert_schema::<LeaderboardResponse>(&mut schemas, "leaderboardResponseSchema")?;
+    insert_schema::<PioneerCodeDetailResponse>(&mut schemas, "pioneerCodeDetailResponseSchema")?;
+    insert_schema::<PioneerCodeListResponse>(&mut schemas, "pioneerCodeListResponseSchema")?;
     insert_schema::<PublicSolutionSubmissionListResponse>(
         &mut schemas,
         "publicSolutionSubmissionListResponseSchema",
     )?;
     insert_schema::<RankingContextResponse>(&mut schemas, "rankingContextResponseSchema")?;
+    insert_schema::<RegisterAgentRequest>(&mut schemas, "registerAgentRequestSchema")?;
+    insert_schema::<RevokePioneerCodeResponse>(&mut schemas, "revokePioneerCodeResponseSchema")?;
     insert_schema::<ScoreDistributionResponse>(&mut schemas, "scoreDistributionResponseSchema")?;
     insert_schema::<SolutionSubmissionArtifactResponse>(
         &mut schemas,

@@ -17,7 +17,7 @@ use shared::models::challenge_creation::{
 };
 use shared::models::ids::{AgentId, ChallengeDraftId, SolutionSubmissionId};
 use shared::models::request::{
-    CreateChallengeRequest, CreateChallengeShortlistRevisionRequest,
+    CreateChallengeRequest, CreateChallengeShortlistRevisionRequest, CreatePioneerCodeRequest,
     CreateSolutionSubmissionRequest, PublishChallengeRequest, RegisterAgentRequest,
 };
 
@@ -352,6 +352,13 @@ impl ValidateRequest for RegisterAgentRequest {
     /// Ensures agent registration provides a display name.
     fn validate(&self) -> Result<(), String> {
         require_non_empty(&self.display_name, "display_name")
+    }
+}
+
+impl ValidateRequest for CreatePioneerCodeRequest {
+    /// Defers pioneer-code semantics to the handler, which needs runtime config.
+    fn validate(&self) -> Result<(), String> {
+        Ok(())
     }
 }
 

@@ -29,7 +29,8 @@ pub struct TestCreatorSession {
 
 /// Spawn the API server with environment-derived config.
 pub async fn spawn_app(pool: PgPool) -> TestApp {
-    let config = Config::from_env().expect("failed to load config");
+    let mut config = Config::from_env().expect("failed to load config");
+    config.agent_registration_mode = "public".to_string();
     spawn_app_with_config(pool, config).await
 }
 
@@ -117,7 +118,7 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
         web_csrf_cookie_name: "agentics_csrf".to_string(),
         web_session_ttl_hours: 24,
         web_session_cookie_secure: false,
-        allow_public_agent_registration_on_non_loopback: false,
+        agent_registration_mode: "public".to_string(),
         docker_host: std::env::var("AGENTICS_TEST_DOCKER_HOST").ok(),
         require_digest_pinned_images: false,
         runner_writable_storage_mode: std::env::var("AGENTICS_TEST_RUNNER_WRITABLE_STORAGE_MODE")

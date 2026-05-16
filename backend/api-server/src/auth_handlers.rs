@@ -13,6 +13,7 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use shared::auth;
+use shared::config::AgentRegistrationMode;
 use shared::db;
 use shared::error::{AppError, Result};
 use shared::models::auth::{
@@ -20,6 +21,7 @@ use shared::models::auth::{
     GithubOauthCallbackQuery, GithubOauthLoginResponse,
 };
 use shared::models::ids::AgentId;
+use shared::models::pioneer_codes::{PioneerCode, PioneerCodeInput};
 use shared::models::urls::GithubOauthAuthorizationUrl;
 
 use crate::extractors::{AdminAuth, CreatorAuth};
@@ -41,6 +43,12 @@ struct GithubAccessTokenResponse {
 struct GithubUserResponse {
     id: i64,
     login: String,
+}
+
+/// Query parameters accepted when starting GitHub OAuth.
+#[derive(Debug, Deserialize)]
+pub struct GithubOauthLoginQuery {
+    pioneer_code: Option<PioneerCodeInput>,
 }
 
 /// Authenticate an administrator and issue a browser session.
@@ -121,6 +129,7 @@ pub async fn admin_logout(
 /// Start a GitHub OAuth login for challenge creators.
 pub async fn github_oauth_login(
     State(state): State<AppState>,
+    Query(query): Query<GithubOauthLoginQuery>,
 ) -> Result<Json<GithubOauthLoginResponse>> {
     let client_id = required_oauth_config(
         state.config.github_oauth_client_id.as_deref(),
@@ -136,6 +145,26 @@ pub async fn github_oauth_login(
     )?;
     let state_token = auth::create_oauth_state();
     let state_hash = auth::hash_opaque_token(&state_token);
+    let pioneer_code_hash = match state
+        .config
+        .agent_registration_mode()
+        .map_err(|e| AppError::Internal(e.to_string()))?
+    {
+        AgentRegistrationMode::PioneerCode => {
+            let code = query.pioneer_code.as_ref().ok_or_else(|| {
+                AppError::Forbidden(
+                    shared::models::pioneer_codes::INVALID_OR_UNAVAILABLE_PIONEER_CODE.to_string(),
+                )
+            })?;
+            let code = PioneerCode::try_new(code.expose_secret().to_string()).map_err(|_| {
+                AppError::Forbidden(
+                    shared::models::pioneer_codes::INVALID_OR_UNAVAILABLE_PIONEER_CODE.to_string(),
+                )
+            })?;
+            Some(auth::hash_opaque_token(code.expose_secret()))
+        }
+        AgentRegistrationMode::Public => None,
+    };
     let expires_at = Utc::now()
         .checked_add_signed(Duration::minutes(OAUTH_STATE_TTL_MINUTES))
         .ok_or_else(|| AppError::Internal("OAuth state TTL overflow".to_string()))?;
@@ -144,6 +173,7 @@ pub async fn github_oauth_login(
         &state.db,
         &db::CreateGithubOauthStateInput {
             state_hash,
+            pioneer_code_hash,
             expires_at,
         },
     )
@@ -175,9 +205,9 @@ pub async fn github_oauth_callback(
     Json<CreatorSessionResponse>,
 )> {
     let state_hash = auth::hash_opaque_token(&query.state);
-    if !db::consume_github_oauth_state(&state.db, &state_hash).await? {
-        return Err(AppError::Unauthorized);
-    }
+    let oauth_state = db::consume_github_oauth_state(&state.db, &state_hash)
+        .await?
+        .ok_or(AppError::Unauthorized)?;
 
     let access_token = exchange_github_code(&state, &query.code).await?;
     let github_user = fetch_github_user(&state, &access_token).await?;
@@ -188,11 +218,12 @@ pub async fn github_oauth_callback(
     }
 
     let fallback_agent_id = Uuid::new_v4().to_string();
-    let agent_id = db::upsert_github_creator_agent(
+    let agent_id = db::upsert_github_creator_agent_with_pioneer_code(
         &state.db,
         &fallback_agent_id,
         github_user.id,
         github_user.login.trim(),
+        oauth_state.pioneer_code_hash.as_deref(),
     )
     .await?;
     let agent_id = AgentId::try_new(agent_id)

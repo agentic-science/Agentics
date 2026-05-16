@@ -3,6 +3,7 @@
 use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Row};
 
+use crate::db::pioneer_codes::{PioneerCodeRegistrationKind, consume_pioneer_code_for_agent_tx};
 use crate::error::{AppError, Result};
 
 /// Role attached to a browser session.
@@ -66,7 +67,14 @@ pub struct CreateAdminSessionInput {
 #[derive(Debug, Clone)]
 pub struct CreateGithubOauthStateInput {
     pub state_hash: String,
+    pub pioneer_code_hash: Option<String>,
     pub expires_at: DateTime<Utc>,
+}
+
+/// Stored OAuth state consumed by a callback after browser redirect.
+#[derive(Debug, Clone)]
+pub struct ConsumedGithubOauthState {
+    pub pioneer_code_hash: Option<String>,
 }
 
 /// Upsert an internal account row for a verified GitHub creator.
@@ -80,6 +88,65 @@ pub async fn upsert_github_creator_agent(
     github_user_id: i64,
     github_login: &str,
 ) -> Result<String> {
+    upsert_github_creator_agent_with_pioneer_code(
+        pool,
+        agent_id,
+        github_user_id,
+        github_login,
+        None,
+    )
+    .await
+}
+
+/// Upsert an internal GitHub creator account and consume a pioneer code only
+/// when this OAuth identity creates a new agent row.
+pub async fn upsert_github_creator_agent_with_pioneer_code(
+    pool: &PgPool,
+    agent_id: &str,
+    github_user_id: i64,
+    github_login: &str,
+    pioneer_code_hash: Option<&str>,
+) -> Result<String> {
+    let mut tx = pool.begin().await?;
+
+    let existing = sqlx::query(
+        r#"
+        SELECT id::text AS id, status
+        FROM agents
+        WHERE github_user_id = $1
+        FOR UPDATE
+        "#,
+    )
+    .bind(github_user_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    if let Some(row) = existing {
+        let id: String = row.try_get("id")?;
+        let status: String = row.try_get("status")?;
+        if status != "active" {
+            return Err(AppError::Forbidden(
+                "linked GitHub creator agent is disabled".to_string(),
+            ));
+        }
+        sqlx::query(
+            r#"
+            UPDATE agents
+            SET github_login = $1,
+                display_name = $1,
+                owner = $2
+            WHERE id = $3::uuid
+            "#,
+        )
+        .bind(github_login.trim())
+        .bind(format!("github:{github_login}"))
+        .bind(&id)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        return Ok(id);
+    }
+
     let row = sqlx::query(
         r#"
         INSERT INTO agents (
@@ -93,10 +160,6 @@ pub async fn upsert_github_creator_agent(
             github_login
         )
         VALUES ($1::uuid, $2, '', $3, '{}'::jsonb, 'active', $4, $5)
-        ON CONFLICT (github_user_id) DO UPDATE
-        SET github_login = EXCLUDED.github_login,
-            display_name = EXCLUDED.display_name,
-            owner = EXCLUDED.owner
         RETURNING id::text AS id
         "#,
     )
@@ -105,8 +168,20 @@ pub async fn upsert_github_creator_agent(
     .bind(format!("github:{github_login}"))
     .bind(github_user_id)
     .bind(github_login.trim())
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await?;
+
+    if let Some(code_hash) = pioneer_code_hash {
+        consume_pioneer_code_for_agent_tx(
+            &mut tx,
+            code_hash,
+            agent_id,
+            PioneerCodeRegistrationKind::CreatorOauth,
+        )
+        .await?;
+    }
+
+    tx.commit().await?;
 
     Ok(row.try_get("id")?)
 }
@@ -118,11 +193,12 @@ pub async fn create_github_oauth_state(
 ) -> Result<()> {
     sqlx::query(
         r#"
-        INSERT INTO github_oauth_states (state_hash, expires_at)
-        VALUES ($1, $2)
+        INSERT INTO github_oauth_states (state_hash, pioneer_code_hash, expires_at)
+        VALUES ($1, $2, $3)
         "#,
     )
     .bind(&input.state_hash)
+    .bind(&input.pioneer_code_hash)
     .bind(input.expires_at)
     .execute(pool)
     .await?;
@@ -131,20 +207,29 @@ pub async fn create_github_oauth_state(
 }
 
 /// Consume one non-expired GitHub OAuth state token.
-pub async fn consume_github_oauth_state(pool: &PgPool, state_hash: &str) -> Result<bool> {
+pub async fn consume_github_oauth_state(
+    pool: &PgPool,
+    state_hash: &str,
+) -> Result<Option<ConsumedGithubOauthState>> {
     let row = sqlx::query(
         r#"
         DELETE FROM github_oauth_states
         WHERE state_hash = $1
           AND expires_at > NOW()
-        RETURNING state_hash
+        RETURNING pioneer_code_hash
         "#,
     )
     .bind(state_hash)
     .fetch_optional(pool)
     .await?;
 
-    Ok(row.is_some())
+    let Some(row) = row else {
+        return Ok(None);
+    };
+
+    Ok(Some(ConsumedGithubOauthState {
+        pioneer_code_hash: row.try_get("pioneer_code_hash")?,
+    }))
 }
 
 /// Create a browser session for a verified GitHub creator.

@@ -4,6 +4,7 @@ use chrono::{DateTime, Utc};
 use serde_json::Value;
 use sqlx::{PgPool, Row};
 
+use crate::db::pioneer_codes::{PioneerCodeRegistrationKind, consume_pioneer_code_for_agent_tx};
 use crate::error::{AppError, Result};
 
 /// Input for creating an agent and its initial bearer token in one transaction.
@@ -42,6 +43,43 @@ pub struct AuthenticatedAgent {
 pub async fn register_agent(pool: &PgPool, input: &RegisterAgentInput) -> Result<AgentRecord> {
     let mut tx = pool.begin().await?;
 
+    let agent = insert_agent_tx(&mut tx, input).await?;
+    insert_agent_token_tx(&mut tx, input).await?;
+
+    tx.commit().await?;
+
+    Ok(agent)
+}
+
+/// Register an active agent while atomically consuming a pioneer code.
+pub async fn register_agent_with_pioneer_code(
+    pool: &PgPool,
+    input: &RegisterAgentInput,
+    pioneer_code_hash: &str,
+    registration_kind: PioneerCodeRegistrationKind,
+) -> Result<AgentRecord> {
+    let mut tx = pool.begin().await?;
+
+    let agent = insert_agent_tx(&mut tx, input).await?;
+    consume_pioneer_code_for_agent_tx(
+        &mut tx,
+        pioneer_code_hash,
+        &input.agent_id,
+        registration_kind,
+    )
+    .await?;
+    insert_agent_token_tx(&mut tx, input).await?;
+
+    tx.commit().await?;
+
+    Ok(agent)
+}
+
+/// Insert the agent row used by both public and pioneer-code registration.
+async fn insert_agent_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    input: &RegisterAgentInput,
+) -> Result<AgentRecord> {
     let row = sqlx::query(
         r#"
         INSERT INTO agents (id, display_name, agent_description, owner, model_info, status)
@@ -54,19 +92,8 @@ pub async fn register_agent(pool: &PgPool, input: &RegisterAgentInput) -> Result
     .bind(&input.agent_description)
     .bind(&input.owner)
     .bind(&input.model_info)
-    .fetch_one(&mut *tx)
+    .fetch_one(&mut **tx)
     .await?;
-
-    sqlx::query(
-        "INSERT INTO agent_tokens (id, agent_id, token_hash) VALUES ($1::uuid, $2::uuid, $3)",
-    )
-    .bind(&input.token_id)
-    .bind(&input.agent_id)
-    .bind(&input.token_hash)
-    .execute(&mut *tx)
-    .await?;
-
-    tx.commit().await?;
 
     Ok(AgentRecord {
         id: row.try_get("id")?,
@@ -77,6 +104,22 @@ pub async fn register_agent(pool: &PgPool, input: &RegisterAgentInput) -> Result
         status: row.try_get("status")?,
         created_at: row.try_get("created_at")?,
     })
+}
+
+/// Insert the first bearer token for a newly registered agent.
+async fn insert_agent_token_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    input: &RegisterAgentInput,
+) -> Result<()> {
+    sqlx::query(
+        "INSERT INTO agent_tokens (id, agent_id, token_hash) VALUES ($1::uuid, $2::uuid, $3)",
+    )
+    .bind(&input.token_id)
+    .bind(&input.agent_id)
+    .bind(&input.token_hash)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
 }
 
 /// Count currently active agents for coarse registration abuse controls.
