@@ -126,6 +126,19 @@ describe("CreatorConsole", () => {
     expect(createChallengeDraftMock).not.toHaveBeenCalled();
   });
 
+  it("requires a pioneer code before starting GitHub OAuth", async () => {
+    const view = render(<CreatorConsole />);
+
+    fireEvent.click(view.getByRole("button", { name: "Sign in with GitHub" }));
+
+    expect(
+      await view.findByText(
+        "Enter a pioneer code before starting GitHub OAuth.",
+      ),
+    ).toBeTruthy();
+    expect(startGithubLoginMock).not.toHaveBeenCalled();
+  });
+
   it("creates a draft with the loaded creator identity and CSRF token", async () => {
     readCreatorCsrfTokenMock.mockReturnValue("csrf-token");
     getCreatorMeMock.mockResolvedValue({

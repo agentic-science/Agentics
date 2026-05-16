@@ -85,9 +85,12 @@ export async function getCreatorMe(): Promise<CreatorMeResponse> {
 }
 
 /** Starts github login and returns the next navigation target. */
-export async function startGithubLogin(): Promise<GithubOauthLoginResponse> {
+export async function startGithubLogin(
+  pioneerCode: string,
+): Promise<GithubOauthLoginResponse> {
+  const params = new URLSearchParams({ pioneer_code: pioneerCode });
   return creatorFetchJson(
-    "/api/auth/github/login",
+    `/api/auth/github/login?${params.toString()}`,
     githubOauthLoginResponseSchema,
   );
 }

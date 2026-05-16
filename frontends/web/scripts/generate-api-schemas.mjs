@@ -44,6 +44,7 @@ const typeAliases = new Map([
     "createChallengeShortlistRevisionRequestSchema",
     "CreateChallengeShortlistRevisionRequest",
   ],
+  ["createPioneerCodeRequestSchema", "CreatePioneerCodeRequest"],
   [
     "creatorChallengeParticipantsResponseSchema",
     "CreatorChallengeParticipantsResponse",
@@ -53,7 +54,10 @@ const typeAliases = new Map([
   ["creatorSessionResponseSchema", "CreatorSessionResponse"],
   ["githubOauthLoginResponseSchema", "GithubOauthLoginResponse"],
   ["leaderboardResponseSchema", "LeaderboardResponse"],
+  ["pioneerCodeDetailResponseSchema", "PioneerCodeDetailResponse"],
+  ["pioneerCodeListResponseSchema", "PioneerCodeListResponse"],
   ["rankingContextResponseSchema", "RankingContextResponse"],
+  ["revokePioneerCodeResponseSchema", "RevokePioneerCodeResponse"],
   ["scoreDistributionResponseSchema", "ScoreDistributionResponse"],
   [
     "publicSolutionSubmissionListResponseSchema",

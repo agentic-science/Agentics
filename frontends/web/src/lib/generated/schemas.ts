@@ -1304,6 +1304,20 @@ export const createChallengeShortlistRevisionRequestSchema = z
   .strict()
   .describe("Delta-only shortlist upload request.");
 
+export const createPioneerCodeRequestSchema = z
+  .object({
+    label: z.string().optional(),
+    code: z
+      .string()
+      .regex(/^([a-z0-9_]{1,6}-)?[0-9a-f]{8}$/)
+      .optional(),
+    note: z.string().optional(),
+    max_uses: z.number().int(),
+    expires_at: z.string().optional(),
+  })
+  .strict()
+  .describe("Admin payload for creating a pioneer code.");
+
 export const creatorChallengeParticipantsResponseSchema = z
   .object({
     challenge_name: z
@@ -1532,6 +1546,78 @@ export const leaderboardResponseSchema = z
   .strict()
   .describe("Challenge leaderboard response.");
 
+export const pioneerCodeDetailResponseSchema = z
+  .object({
+    code: z
+      .object({
+        id: z
+          .string()
+          .uuid()
+          .regex(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          ),
+        code_display: z.string(),
+        label: z.string().optional(),
+        note: z.string(),
+        max_uses: z.number().int(),
+        use_count: z.number().int(),
+        status: z.string(),
+        expires_at: z.string().optional(),
+        created_by_admin_username: z.string(),
+        created_at: z.string(),
+        revoked_at: z.string().optional(),
+      })
+      .strict()
+      .describe("Admin-visible pioneer-code metadata."),
+    uses: z.array(
+      z
+        .object({
+          agent_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
+          agent_display_name: z.string(),
+          registration_kind: z.string(),
+          used_at: z.string(),
+        })
+        .strict()
+        .describe("Agent account created through a pioneer code."),
+    ),
+  })
+  .strict()
+  .describe("Admin detail response for one pioneer code.");
+
+export const pioneerCodeListResponseSchema = z
+  .object({
+    items: z.array(
+      z
+        .object({
+          id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
+          code_display: z.string(),
+          label: z.string().optional(),
+          note: z.string(),
+          max_uses: z.number().int(),
+          use_count: z.number().int(),
+          status: z.string(),
+          expires_at: z.string().optional(),
+          created_by_admin_username: z.string(),
+          created_at: z.string(),
+          revoked_at: z.string().optional(),
+        })
+        .strict()
+        .describe("Admin-visible pioneer-code metadata."),
+    ),
+  })
+  .strict()
+  .describe("Admin list response for pioneer codes.");
+
 export const publicSolutionSubmissionListResponseSchema = z
   .object({
     items: z.array(
@@ -1758,6 +1844,30 @@ export const rankingContextResponseSchema = z
   .describe(
     "Ranking context for a solution submission in one explicit leaderboard scope.",
   );
+
+export const registerAgentRequestSchema = z
+  .object({
+    display_name: z.string(),
+    pioneer_code: z.string().optional(),
+    agent_description: z.string(),
+    owner: z.string(),
+    model_info: z.any().optional(),
+  })
+  .strict()
+  .describe("Agent registration payload accepted by the public API.");
+
+export const revokePioneerCodeResponseSchema = z
+  .object({
+    id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+    status: z.string(),
+    revoked_agent_count: z.number().int(),
+    revoked_token_count: z.number().int(),
+  })
+  .strict()
+  .describe("Response returned after revoking a pioneer code.");
 
 export const scoreDistributionResponseSchema = z
   .object({
@@ -2797,6 +2907,9 @@ export type CreateChallengeDraftRequest = z.infer<
 export type CreateChallengeShortlistRevisionRequest = z.infer<
   typeof createChallengeShortlistRevisionRequestSchema
 >;
+export type CreatePioneerCodeRequest = z.infer<
+  typeof createPioneerCodeRequestSchema
+>;
 export type CreatorChallengeParticipantsResponse = z.infer<
   typeof creatorChallengeParticipantsResponseSchema
 >;
@@ -2811,8 +2924,17 @@ export type GithubOauthLoginResponse = z.infer<
   typeof githubOauthLoginResponseSchema
 >;
 export type LeaderboardResponse = z.infer<typeof leaderboardResponseSchema>;
+export type PioneerCodeDetailResponse = z.infer<
+  typeof pioneerCodeDetailResponseSchema
+>;
+export type PioneerCodeListResponse = z.infer<
+  typeof pioneerCodeListResponseSchema
+>;
 export type RankingContextResponse = z.infer<
   typeof rankingContextResponseSchema
+>;
+export type RevokePioneerCodeResponse = z.infer<
+  typeof revokePioneerCodeResponseSchema
 >;
 export type ScoreDistributionResponse = z.infer<
   typeof scoreDistributionResponseSchema

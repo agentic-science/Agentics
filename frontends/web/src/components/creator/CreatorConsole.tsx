@@ -120,6 +120,7 @@ export function CreatorConsole() {
   );
   const [shortlistRevision, setShortlistRevision] =
     useState<ChallengeShortlistRevisionResponse | null>(null);
+  const [pioneerCode, setPioneerCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -141,10 +142,14 @@ export function CreatorConsole() {
 
   /** Handles sign in for the current session. */
   const signIn = async () => {
+    if (!pioneerCode.trim()) {
+      setError("Enter a pioneer code before starting GitHub OAuth.");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const response = await startGithubLogin();
+      const response = await startGithubLogin(pioneerCode.trim());
       window.location.href = response.authorization_url;
     } catch (e) {
       setError(creatorErrorMessage(e));
@@ -404,6 +409,8 @@ export function CreatorConsole() {
           <CreatorIdentityPanel
             creator={creator}
             loading={loading}
+            pioneerCode={pioneerCode}
+            onPioneerCodeChange={setPioneerCode}
             onSignIn={signIn}
             onRefresh={refreshIdentity}
           />
@@ -664,11 +671,15 @@ export function CreatorConsole() {
 function CreatorIdentityPanel({
   creator,
   loading,
+  pioneerCode,
+  onPioneerCodeChange,
   onSignIn,
   onRefresh,
 }: {
   creator: CreatorMeResponse | null;
   loading: boolean;
+  pioneerCode: string;
+  onPioneerCodeChange: (value: string) => void;
   onSignIn: () => Promise<void>;
   onRefresh: () => Promise<void>;
 }) {
@@ -714,6 +725,17 @@ function CreatorIdentityPanel({
             GitHub OAuth is required before creating drafts or uploading private
             assets.
           </p>
+          <label className="flex flex-col gap-1">
+            <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
+              Pioneer code
+            </span>
+            <input
+              className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 text-[var(--text-body-sm)] outline-none focus:border-[var(--accent-primary-500)]"
+              value={pioneerCode}
+              onChange={(event) => onPioneerCodeChange(event.target.value)}
+              autoComplete="off"
+            />
+          </label>
           <button
             type="button"
             className="btn btn-primary"

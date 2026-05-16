@@ -97,6 +97,22 @@ describe("AdminConsole", () => {
               },
             ],
           };
+        case "/admin/pioneer-codes":
+          return {
+            items: [
+              {
+                id: "99999999-9999-4999-8999-999999999999",
+                code_display: "jack-deadbeef",
+                label: "jack",
+                note: "test cohort",
+                max_uses: 5,
+                use_count: 1,
+                status: "active",
+                created_by_admin_username: "admin",
+                created_at: "2026-05-15T00:00:00Z",
+              },
+            ],
+          };
         case "/admin/capacity":
           return {
             quota_window_seconds: 86_400,
@@ -167,6 +183,21 @@ describe("AdminConsole", () => {
     ).toBeTruthy();
     expect(view.getByText("1 / 1")).toBeTruthy();
     expect(view.getByText("1/20")).toBeTruthy();
+  });
+
+  it("renders the pioneer-code admin panel", async () => {
+    const view = renderAdminConsole();
+
+    fireEvent.input(view.getByLabelText("Password"), {
+      target: { value: "secret" },
+    });
+    fireEvent.click(view.getByRole("button", { name: "Sign in" }));
+    await view.findByText("Signed in as root");
+
+    fireEvent.click(view.getByRole("button", { name: "Pioneer codes" }));
+
+    expect(await view.findByText("jack-deadbeef")).toBeTruthy();
+    expect(view.getByText("test cohort")).toBeTruthy();
   });
 });
 
