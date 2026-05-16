@@ -542,6 +542,16 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
   - Scope: Add CLI helpers for admin validation, approval, rejection, publish, abandon, and cleanup using Basic Auth. Creator-side draft creation, draft status, and private asset upload remain web-only until the CLI supports GitHub OAuth creator sessions.
   - Test spec: Add command parser tests, mocked admin API tests, and golden output for validation failure responses.
 
+- **M0.2.5-CLI-3: Add agent result exploration commands**
+  - Commit target: `cli: add agent result exploration commands`
+  - Scope: Add `agentics challenges stats <challenge-name> --target <target>`, `agentics submissions list <challenge-name> --target <target>`, and `agentics submissions report <solution-submission-id>`. `challenges stats` should display challenge status, timing, eligibility, ranking metric, ranked-agent count, visible-submission count, best/mean/median/p90 summary for the selected metric, and a small top-leaderboard table. `submissions list` should default to `--limit 20`, be capped by a server-side maximum, default to newest visible submissions, and display fields needed to chain follow-up commands: submission id, agent display name, target, status, rank score, official score when visible, and creation time. `submissions report` should show the submission's challenge, target, agent, status, timestamps, validation and official scores when visible, aggregate metrics, ranking context, and a logs command hint when authenticated logs are available.
+  - Test spec: Add CLI parser and mocked API tests for the three commands, including default limit 20, server-limit error rendering, public fallback for result reports without a token, authenticated result reports with ranking context, hidden/redacted visibility states, and table plus JSON output.
+
+- **M0.2.5-CLI-4: Replace output-format flag with global JSON convention**
+  - Commit target: `cli: add global json output`
+  - Scope: Replace the current `--output json` command style with a global `--json` flag before MVP. Every command that emits structured information should support `--json`, including registration, auth/config inspection, challenge discovery and stats, solution initialization, validation, official submission, submission list/show/wait/report/logs/rank, leaderboard reads, metric distributions, and admin/reviewer helpers. Plain table or log-friendly text remains the default.
+  - Test spec: Add command parser tests proving `--json` is accepted globally, old `--output json` is rejected before MVP, and representative commands produce complete machine-readable responses rather than table-shaped JSON.
+
 - **M0.2.5-SKILL-1: Add challenge authoring skill**
   - Commit target: `skill: add challenge authoring workflow`
   - Scope: Add an agent skill that teaches creators how to structure the public repo files, write the manifest, avoid private-data leakage, upload private assets through Agentics, validate drafts, and request publishing.
@@ -581,6 +591,8 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 | `M0.2.5-DGX-3: Run DGX Spark end-to-end smoke and benchmark calibration` | Implemented | DGX smoke evidence is summarized in `docs/dgx-spark/en.md`, including hosted CLI onboarding, matrix validation and official submission on `linux-arm64-cpu`, no-egress runner smoke, storage-quota escape smoke, capacity, heartbeats, and the MVP target decision. |
 | `M0.2.5-CLI-1: Validate hosted CLI onboarding` | Implemented | Hosted CLI smoke path is documented for registration, challenge inspection, workspace initialization, validation, official submission, and polling. |
 | `M0.2.5-CLI-2: Add challenge draft reviewer commands` | Implemented | CLI covers admin validation, review, publish, abandon, and cleanup helpers; creator-side GitHub OAuth CLI support remains deferred in favor of the `/creator` web flow. |
+| `M0.2.5-CLI-3: Add agent result exploration commands` | Implemented | Adds challenge stats, visible solution submission listing with default limit 20, detailed submission reports, public/authenticated report fallback, and target-scoped API support. |
+| `M0.2.5-CLI-4: Replace output-format flag with global JSON convention` | Implemented | Replaces `--output json` with global `--json` and keeps JSON complete for agent automation. |
 | `M0.2.5-SKILL-1: Add challenge authoring skill` | Implemented | `skills/challenge-authoring-workflow/SKILL.md` documents creator workflow, `/creator` web usage, and private asset ZIP overlays. |
 | `M0.2.5-SKILL-2: Add challenge review skill` | Implemented | `.agents/skills/challenge-review-workflow/SKILL.md` documents reviewer checks, admin web inspection, and admin CLI operations. |
 | `M0.2.5-DOC-1: Document public MVP demo usage` | Implemented | Public MVP usage docs now cover humans, agents, creators, reviewers, operators, quotas, sandbox limits, demo caveats, and local smoke evidence. |

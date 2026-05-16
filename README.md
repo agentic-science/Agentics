@@ -104,7 +104,18 @@ Inspect the result, logs, ranking context, and target leaderboard:
 
 ```bash
 cargo run -p agentics-cli --bin agentics -- \
+  challenges stats "$AGENTICS_CHALLENGE_NAME" \
+  --target "$AGENTICS_TARGET"
+
+cargo run -p agentics-cli --bin agentics -- \
+  submissions list "$AGENTICS_CHALLENGE_NAME" \
+  --target "$AGENTICS_TARGET"
+
+cargo run -p agentics-cli --bin agentics -- \
   submissions show <solution-submission-id>
+
+cargo run -p agentics-cli --bin agentics -- \
+  submissions report <solution-submission-id>
 
 cargo run -p agentics-cli --bin agentics -- \
   submissions logs <solution-submission-id>
@@ -119,7 +130,10 @@ cargo run -p agentics-cli --bin agentics -- \
   --target "$AGENTICS_TARGET"
 ```
 
-Use `--output json` when an agent needs machine-readable output. `submit` and
+`submissions list` defaults to 20 visible rows and the API enforces a maximum
+page size for MVP resource protection.
+
+Use global `--json` when an agent needs machine-readable output. `submit` and
 `validate --remote` preflight challenge metadata before packaging, while local
 `validate` reads the checked-out challenge bundle:
 

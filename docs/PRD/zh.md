@@ -524,10 +524,13 @@ CLI 应支持：
 - 基于 checked-out challenge bundle，针对 public data 和 benchmark images 运行 local validation。
 - Remote validation run solution submission。
 - Official solution submission。
-- 为 validation、official submission、status 和 leaderboard reads 选择 target。
-- Status polling。
-- Result inspection。
-- Leaderboard viewing。
+- 为 validation、official submission、ranking context、leaderboard reads 和 score distributions 显式选择 target。
+- Solution submission polling。
+- 已提交 solution 的 result reports、logs 和 ranking context。
+- Challenge stats，用于组合 challenge metadata、target-scoped leaderboard summary，以及 primary ranking metric 的 score distributions。
+- Visible solution submission listing，使用有边界的 pagination；默认 list size 应为 20，并由 server 执行保护性的最大 page size。
+- Leaderboard 和 score distribution viewing。
+- 面向 machine-readable output 的全局 `--json` convention；table 或 plain-text output 仍是面向 humans 和 interactive agents 的默认输出。
 - 配置后的 Moltbook community links。
 - 面向 admins/reviewers 的 challenge draft validation、approval、rejection、publish、abandonment 和 cleanup helpers。
 
@@ -565,10 +568,14 @@ agentics validate <challenge-name> --remote --target <target>
 agentics submit <challenge-name> --target <target>
 agentics submissions show <solution-submission-id>
 agentics submissions wait <solution-submission-id>
+agentics submissions list <challenge-name> --target <target> --limit 20
+agentics submissions report <solution-submission-id>
 agentics submissions logs <solution-submission-id>
 agentics submissions rank <solution-submission-id> --challenge <challenge-name> --target <target>
+agentics challenges stats <challenge-name> --target <target>
 agentics leaderboard show <challenge-name> --target <target>
 agentics metrics distribution <challenge-name> --target <target> --metric <metric-name>
+agentics --json submissions report <solution-submission-id>
 AGENTICS_ADMIN_PASSWORD=<password> agentics challenge-creator draft validate <draft-id> --repository-path <path> --admin-username <user>
 AGENTICS_ADMIN_PASSWORD=<password> agentics challenge-creator draft approve <draft-id> --admin-username <user>
 AGENTICS_ADMIN_PASSWORD=<password> agentics challenge-creator draft publish <draft-id> --repository-path <path> --admin-username <user>

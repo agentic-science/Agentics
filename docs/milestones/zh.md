@@ -542,6 +542,16 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
   - Scope：添加使用 Basic Auth 的 admin validation、approval、rejection、publish、abandon 和 cleanup CLI helpers。Creator-side draft creation、draft status 和 private asset upload 在 CLI 支持 GitHub OAuth creator sessions 之前保持 web-only。
   - Test spec：添加 command parser tests、mocked admin API tests，以及 validation failure responses 的 golden output。
 
+- **M0.2.5-CLI-3：添加 agent result exploration commands**
+  - Commit target：`cli: add agent result exploration commands`
+  - Scope：添加 `agentics challenges stats <challenge-name> --target <target>`、`agentics submissions list <challenge-name> --target <target>` 和 `agentics submissions report <solution-submission-id>`。`challenges stats` 应展示 challenge status、timing、eligibility、ranking metric、ranked-agent count、visible-submission count、所选 metric 的 best/mean/median/p90 summary，以及一个小型 top-leaderboard table。`submissions list` 应默认使用 `--limit 20`，并由 server-side maximum 限制；默认按 newest visible submissions 排序，并展示可用于继续调用后续 commands 的字段：submission id、agent display name、target、status、rank score、可见时的 official score，以及 creation time。`submissions report` 应展示该 submission 的 challenge、target、agent、status、timestamps、可见时的 validation 和 official scores、aggregate metrics、ranking context，以及 authenticated logs 可用时的 logs command hint。
+  - Test spec：为这三个 commands 添加 CLI parser 和 mocked API tests，覆盖默认 limit 20、server-limit error rendering、无 token 时 result report public fallback、带 token 时 authenticated result report 与 ranking context、hidden/redacted visibility states，以及 table 和 JSON output。
+
+- **M0.2.5-CLI-4：用全局 JSON convention 替换 output-format flag**
+  - Commit target：`cli: add global json output`
+  - Scope：在 MVP 前用全局 `--json` flag 替换当前 `--output json` command style。所有输出 structured information 的 commands 都应支持 `--json`，包括 registration、auth/config inspection、challenge discovery 和 stats、solution initialization、validation、official submission、submission list/show/wait/report/logs/rank、leaderboard reads、metric distributions，以及 admin/reviewer helpers。Plain table 或 log-friendly text 仍是默认输出。
+  - Test spec：添加 command parser tests，证明 `--json` 可全局使用，旧的 `--output json` 在 MVP 前被拒绝，并且 representative commands 产生完整的 machine-readable responses，而不是 table-shaped JSON。
+
 - **M0.2.5-SKILL-1：添加 challenge authoring skill**
   - Commit target：`skill: add challenge authoring workflow`
   - Scope：添加一个 agent skill，指导 creators 如何组织 public repo files、编写 manifest、避免 private-data leakage、通过 Agentics 上传 private assets、validate drafts 并请求 publish。
@@ -581,6 +591,8 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 | `M0.2.5-DGX-3：运行 DGX Spark end-to-end smoke 和 benchmark calibration` | 已实现 | DGX smoke evidence 已在 `docs/dgx-spark/zh.md` 中汇总，包括 hosted CLI onboarding、`linux-arm64-cpu` 上的 matrix validation 和 official submission、no-egress runner smoke、storage-quota escape smoke、capacity、heartbeats 和 MVP target decision。 |
 | `M0.2.5-CLI-1：验证 hosted CLI onboarding` | 已实现 | 已记录 registration、challenge inspection、workspace initialization、validation、official submission 和 polling 的 hosted CLI smoke path。 |
 | `M0.2.5-CLI-2：添加 challenge draft reviewer commands` | 已实现 | CLI 覆盖 admin validation、review、publish、abandon 和 cleanup helpers；creator-side GitHub OAuth CLI support 已推迟，当前使用 `/creator` web flow。 |
+| `M0.2.5-CLI-3：添加 agent result exploration commands` | 已实现 | 添加 challenge stats、默认 limit 为 20 的 visible solution submission listing、detailed submission reports、public/authenticated report fallback 和 target-scoped API support。 |
+| `M0.2.5-CLI-4：用全局 JSON convention 替换 output-format flag` | 已实现 | 已用全局 `--json` 替换 `--output json`，并保持 JSON 对 agent automation 完整可用。 |
 | `M0.2.5-SKILL-1：添加 challenge authoring skill` | 已实现 | `skills/challenge-authoring-workflow/SKILL.md` 记录 creator workflow、`/creator` web usage 和 private asset ZIP overlays。 |
 | `M0.2.5-SKILL-2：添加 challenge review skill` | 已实现 | `.agents/skills/challenge-review-workflow/SKILL.md` 记录 reviewer checks、admin web inspection 和 admin CLI operations。 |
 | `M0.2.5-DOC-1：记录 public MVP demo usage` | 已实现 | Public MVP usage docs 已覆盖 humans、agents、creators、reviewers、operators、quotas、sandbox limits、demo caveats 和 local smoke evidence。 |
