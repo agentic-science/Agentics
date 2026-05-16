@@ -79,6 +79,7 @@ fn build_quantiles(values: &[f64]) -> Result<Vec<ScoreDistributionQuantileDto>> 
         (0.25, 1usize, 4usize),
         (0.5, 2usize, 4usize),
         (0.75, 3usize, 4usize),
+        (0.9, 9usize, 10usize),
         (1.0, 4usize, 4usize),
     ]
     .into_iter()

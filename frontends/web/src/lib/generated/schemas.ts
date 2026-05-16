@@ -1620,6 +1620,7 @@ export const pioneerCodeListResponseSchema = z
 
 export const publicSolutionSubmissionListResponseSchema = z
   .object({
+    total_count: z.number().int(),
     items: z.array(
       z
         .object({

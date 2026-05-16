@@ -55,7 +55,8 @@ use crate::state::AppState;
 
 const SUBMISSION_QUOTA_WINDOW_SECONDS: i64 = 24 * 60 * 60;
 const STAGED_EVALUATION_JOB_DELAY_SECONDS: i64 = 315_360_000;
-const DEFAULT_PUBLIC_LIST_LIMIT: i64 = 50;
+const DEFAULT_PUBLIC_SUBMISSION_LIST_LIMIT: i64 = 20;
+const DEFAULT_PUBLIC_LEADERBOARD_LIMIT: i64 = 50;
 const MAX_PUBLIC_LIST_LIMIT: i64 = 100;
 
 /// Parses a boundary string into a domain type and converts validation failures to API errors.
@@ -537,13 +538,30 @@ pub async fn list_public_solution_submissions(
 ) -> Result<Json<PublicSolutionSubmissionListResponse>> {
     let challenge_name = parse_request_value::<ChallengeName>(&name)?;
     ensure_public_result_detail_visible(&state.db, &challenge_name).await?;
+    let target = match query.target.as_deref() {
+        Some(requested_target) => {
+            Some(resolve_public_target(&state.db, &challenge_name, Some(requested_target)).await?)
+        }
+        None => None,
+    };
+    let limit = query.limit()?;
     let items = db::list_public_solution_submissions_for_challenge(
         &state.db,
         &challenge_name,
-        query.limit(),
+        target.as_ref(),
+        limit,
     )
     .await?;
-    Ok(Json(PublicSolutionSubmissionListResponse { items }))
+    let total_count = db::count_public_solution_submissions_for_challenge(
+        &state.db,
+        &challenge_name,
+        target.as_ref(),
+    )
+    .await?;
+    Ok(Json(PublicSolutionSubmissionListResponse {
+        total_count,
+        items,
+    }))
 }
 
 /// Fetch a public solution submission view without private artifact paths or job metadata.
@@ -638,7 +656,7 @@ pub async fn get_leaderboard(
     ensure_visibility_allows_public(spec.visibility.leaderboard, &spec)?;
     let target = resolve_public_target(&state.db, &challenge_name, query.target.as_deref()).await?;
     let items =
-        db::list_leaderboard_entries(&state.db, &challenge_name, &target, query.limit()).await?;
+        db::list_leaderboard_entries(&state.db, &challenge_name, &target, query.limit()?).await?;
     Ok(Json(LeaderboardResponse {
         challenge_name: challenge.challenge_name,
         target,
@@ -670,17 +688,20 @@ pub async fn get_score_distribution(
 }
 
 /// Query parameters accepted by public list endpoints.
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct PublicListQuery {
     limit: Option<i64>,
+    target: Option<String>,
 }
 
 impl PublicListQuery {
     /// Returns the requested list limit after applying the public API bounds.
-    fn limit(self) -> i64 {
-        self.limit
-            .unwrap_or(DEFAULT_PUBLIC_LIST_LIMIT)
-            .clamp(1, MAX_PUBLIC_LIST_LIMIT)
+    fn limit(&self) -> Result<i64> {
+        bounded_public_limit(
+            self.limit,
+            DEFAULT_PUBLIC_SUBMISSION_LIST_LIMIT,
+            "solution submission list",
+        )
     }
 }
 
@@ -693,11 +714,20 @@ pub struct LeaderboardQuery {
 
 impl LeaderboardQuery {
     /// Returns the requested leaderboard size after applying public API bounds.
-    fn limit(&self) -> i64 {
-        self.limit
-            .unwrap_or(DEFAULT_PUBLIC_LIST_LIMIT)
-            .clamp(1, MAX_PUBLIC_LIST_LIMIT)
+    fn limit(&self) -> Result<i64> {
+        bounded_public_limit(self.limit, DEFAULT_PUBLIC_LEADERBOARD_LIMIT, "leaderboard")
     }
+}
+
+/// Validates a public list limit without silently widening expensive reads.
+fn bounded_public_limit(requested: Option<i64>, default_limit: i64, label: &str) -> Result<i64> {
+    let limit = requested.unwrap_or(default_limit);
+    if !(1..=MAX_PUBLIC_LIST_LIMIT).contains(&limit) {
+        return Err(AppError::BadRequest(format!(
+            "{label} limit must be between 1 and {MAX_PUBLIC_LIST_LIMIT}"
+        )));
+    }
+    Ok(limit)
 }
 
 /// Query parameters accepted by the public score-distribution endpoint.

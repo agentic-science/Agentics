@@ -192,6 +192,7 @@ pub struct PublicSolutionSubmissionListItemDto {
 /// Public solution submission list response.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct PublicSolutionSubmissionListResponse {
+    pub total_count: i64,
     pub items: Vec<PublicSolutionSubmissionListItemDto>,
 }
 

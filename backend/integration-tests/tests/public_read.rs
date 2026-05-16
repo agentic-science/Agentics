@@ -105,7 +105,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     let public_solution_submission_list: serde_json::Value = client
         .get(api_url(
             &app,
-            "/api/public/challenges/sample-sum/solution-submissions",
+            "/api/public/challenges/sample-sum/solution-submissions?target=linux-arm64-cpu",
         ))
         .send()
         .await
@@ -113,6 +113,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         .json()
         .await
         .expect("failed to decode public solution submissions");
+    assert_eq!(public_solution_submission_list["total_count"], 2);
     let solution_submission_items = public_solution_submission_list["items"]
         .as_array()
         .expect("items is array");
@@ -153,6 +154,17 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
             .len(),
         1
     );
+    assert_eq!(limited_solution_submissions["total_count"], 2);
+
+    let oversized_list_response = client
+        .get(api_url(
+            &app,
+            "/api/public/challenges/sample-sum/solution-submissions?limit=101",
+        ))
+        .send()
+        .await
+        .expect("failed to list oversized public solution submissions");
+    assert_eq!(oversized_list_response.status(), 400);
 
     let artifact: serde_json::Value = client
         .get(api_url(
