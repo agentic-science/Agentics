@@ -165,9 +165,11 @@ The CLI does not yet provide GitHub OAuth creator sessions.
 
 Creator-authenticated APIs are backed by a creator session cookie and
 `X-Agentics-CSRF-Token` for unsafe requests:
+`POST /api/auth/github/login` accepts `{ "pioneer_code": "..." }` in the JSON
+body so the code is not placed in the browser URL.
 
 ```text
-GET  /api/auth/github/login
+POST /api/auth/github/login
 GET  /api/auth/github/callback
 GET  /api/creator/me
 POST /api/creator/challenge-drafts

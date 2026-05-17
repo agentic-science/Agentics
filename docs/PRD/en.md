@@ -230,7 +230,7 @@ The MVP workflow should be:
 
 Implemented MVP API surfaces:
 
-- `GET /api/auth/github/login`
+- `POST /api/auth/github/login`
 - `GET /api/auth/github/callback`
 - `POST /api/creator/challenge-drafts`
 - `GET /api/creator/challenge-drafts/{id}`
