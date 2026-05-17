@@ -5,7 +5,7 @@ use crate::models::challenge::{
     ChallengeTargetSpec, DockerPlatform, HardwareProfileSpec, ResourceProfileSpec,
     TargetAccelerator,
 };
-use crate::models::hashes::OciSha256Digest;
+use crate::models::images::ChallengeImageReference;
 
 use super::{require_non_empty, validate_positive_u32, validate_positive_u64};
 
@@ -79,20 +79,20 @@ fn validate_supported_target_images(
 
 /// Validate that an image reference belongs to an Agentics-supported image family.
 fn validate_supported_image_reference(
-    image: &str,
+    image: &ChallengeImageReference,
     field: &str,
     image_kind: &SupportedTargetImage<'_>,
 ) -> Result<()> {
-    let parsed_image = TaggedImageReference::parse(image, field)?;
+    let repository = image.policy_repository();
     match image_kind {
         SupportedTargetImage::Cpu => {
             require_supported_image_repository(
-                parsed_image.repository,
+                repository.as_ref(),
                 SUPPORTED_CPU_IMAGE_REPOSITORIES,
                 "linux-arm64-cpu",
                 field,
             )?;
-            if !parsed_image.tag.starts_with(CPU_IMAGE_TAG_PREFIX) {
+            if !image.tag().starts_with(CPU_IMAGE_TAG_PREFIX) {
                 return Err(AppError::Validation(format!(
                     "{field} tag must start with `{CPU_IMAGE_TAG_PREFIX}` for target `linux-arm64-cpu`"
                 )));
@@ -100,13 +100,13 @@ fn validate_supported_image_reference(
         }
         SupportedTargetImage::Cuda { cuda_variant } => {
             require_supported_image_repository(
-                parsed_image.repository,
+                repository.as_ref(),
                 SUPPORTED_CUDA_IMAGE_REPOSITORIES,
                 "linux-arm64-cuda",
                 field,
             )?;
             let expected_prefix = format!("{cuda_variant}-");
-            if !parsed_image.tag.starts_with(&expected_prefix) {
+            if !image.tag().starts_with(&expected_prefix) {
                 return Err(AppError::Validation(format!(
                     "{field} tag must start with `{expected_prefix}` to match resource_profile.hardware.cuda_variant"
                 )));
@@ -115,57 +115,6 @@ fn validate_supported_image_reference(
     }
 
     Ok(())
-}
-
-/// Parsed Docker image reference pieces needed by Agentics policy validation.
-struct TaggedImageReference<'a> {
-    repository: &'a str,
-    tag: &'a str,
-    digest: Option<OciSha256Digest>,
-}
-
-impl<'a> TaggedImageReference<'a> {
-    /// Parse a tagged Docker image reference with an optional OCI digest suffix.
-    fn parse(image: &'a str, field: &str) -> Result<Self> {
-        let (image_without_digest, digest) = match image.rsplit_once('@') {
-            Some((reference, digest)) => {
-                let digest = OciSha256Digest::try_new(digest).map_err(|error| {
-                    AppError::Validation(format!("{field} digest is invalid: {error}"))
-                })?;
-                (reference, Some(digest))
-            }
-            None => (image, None),
-        };
-        let slash_index = image_without_digest.rfind('/');
-        let Some(tag_separator_index) = image_without_digest.rfind(':') else {
-            return Err(AppError::Validation(format!(
-                "{field} must include a supported Agentics image tag"
-            )));
-        };
-        if slash_index.is_some_and(|index| tag_separator_index < index) {
-            return Err(AppError::Validation(format!(
-                "{field} must include a supported Agentics image tag"
-            )));
-        }
-        let (repository, tag_with_separator) = image_without_digest.split_at(tag_separator_index);
-        let tag = tag_with_separator.trim_start_matches(':');
-        if repository.is_empty() || tag.is_empty() {
-            return Err(AppError::Validation(format!(
-                "{field} must include a supported Agentics image repository and tag"
-            )));
-        }
-
-        Ok(Self {
-            repository,
-            tag,
-            digest,
-        })
-    }
-
-    /// Borrow the optional digest pinned in this image reference.
-    fn digest(&self) -> Option<&OciSha256Digest> {
-        self.digest.as_ref()
-    }
 }
 
 /// Require an image repository from the allowed list for one target family.
@@ -186,22 +135,6 @@ fn require_supported_image_repository(
 
 /// Validate image, timeout, memory, CPU, disk, and hardware fields for a target.
 fn validate_resource_profile(profile: &ResourceProfileSpec, field: &str) -> Result<()> {
-    require_non_empty(&profile.solution_image, &format!("{field}.solution_image"))?;
-    require_non_empty(&profile.scorer_image, &format!("{field}.scorer_image"))?;
-    let solution_image =
-        TaggedImageReference::parse(&profile.solution_image, &format!("{field}.solution_image"))?;
-    let scorer_image =
-        TaggedImageReference::parse(&profile.scorer_image, &format!("{field}.scorer_image"))?;
-    validate_image_digest(
-        solution_image.digest(),
-        profile.solution_image_digest.as_ref(),
-        &format!("{field}.solution_image_digest"),
-    )?;
-    validate_image_digest(
-        scorer_image.digest(),
-        profile.scorer_image_digest.as_ref(),
-        &format!("{field}.scorer_image_digest"),
-    )?;
     validate_positive_u64(profile.timeout_sec, &format!("{field}.timeout_sec"))?;
     validate_positive_u64(profile.memory_limit_mb, &format!("{field}.memory_limit_mb"))?;
     validate_positive_u32(
@@ -309,31 +242,18 @@ fn require_required_optional_string<'a>(value: &'a Option<String>, field: &str) 
 }
 
 /// Require an image reference to include an immutable digest suffix.
-pub(super) fn require_image_digest_reference(image: &str, field: &str) -> Result<()> {
-    if TaggedImageReference::parse(image, field)?
-        .digest()
-        .is_none()
-    {
-        return Err(AppError::Validation(format!(
-            "{field} must include an immutable @sha256:<digest> reference"
-        )));
-    }
-
-    Ok(())
-}
-
-/// Validate that an explicit digest field matches the digest pinned in an image reference.
-fn validate_image_digest(
-    image_reference_digest: Option<&OciSha256Digest>,
-    digest: Option<&OciSha256Digest>,
+pub(super) fn require_image_digest_reference(
+    image: &ChallengeImageReference,
     field: &str,
 ) -> Result<()> {
-    let Some(digest) = digest else {
-        return Ok(());
-    };
-    if image_reference_digest != Some(digest) {
+    if image.is_local() {
         return Err(AppError::Validation(format!(
-            "{field} must match the digest pinned in the image reference"
+            "{field} must use a registry image with an immutable @sha256:<digest> reference"
+        )));
+    }
+    if image.digest().is_none() {
+        return Err(AppError::Validation(format!(
+            "{field} must include an immutable @sha256:<digest> reference"
         )));
     }
 

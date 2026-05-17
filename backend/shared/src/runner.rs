@@ -290,8 +290,18 @@ pub async fn execute_evaluation_job(
             ))
         })?;
         let profile = &target.resource_profile;
-        pre_pull_image(docker, &profile.solution_image, target.docker_platform).await?;
-        pre_pull_image(docker, &profile.scorer_image, target.docker_platform).await?;
+        pre_pull_image(
+            docker,
+            profile.solution_image.docker_reference(),
+            target.docker_platform,
+        )
+        .await?;
+        pre_pull_image(
+            docker,
+            profile.scorer_image.docker_reference(),
+            target.docker_platform,
+        )
+        .await?;
 
         let artifact_bytes = storage.get(&payload.artifact_key).await?;
         let artifact_path = working_root.join("solution.zip");
@@ -455,7 +465,11 @@ async fn run_setup_and_build(
             runner.docker,
             ContainerRequest {
                 name: container_name(runner.attempt, &format!("{:?}", phase.name).to_lowercase()),
-                image: request.profile.solution_image.clone(),
+                image: request
+                    .profile
+                    .solution_image
+                    .docker_reference()
+                    .to_string(),
                 cmd,
                 env: vec![format!("AGENTICS_PHASE={}", phase_name(&phase.name))],
                 mounts: vec![bind_mount(request.build_root, "/workspace", false)],
@@ -522,7 +536,11 @@ async fn run_setup_and_build_bounded(
             runner.docker,
             ContainerRequest {
                 name: container_name(runner.attempt, &format!("{:?}", phase.name).to_lowercase()),
-                image: request.profile.solution_image.clone(),
+                image: request
+                    .profile
+                    .solution_image
+                    .docker_reference()
+                    .to_string(),
                 cmd,
                 env: vec![format!("AGENTICS_PHASE={}", phase_name(&phase.name))],
                 mounts: vec![bind_mount(workspace.path(), "/workspace", false)],
@@ -603,7 +621,7 @@ async fn run_solution_invocations(
             runner.docker,
             ContainerRequest {
                 name: container_name(runner.attempt, &format!("run-{run_alias}")),
-                image: request.profile.solution_image.clone(),
+                image: request.profile.solution_image.docker_reference().to_string(),
                 cmd: vec![
                     "sh".to_string(),
                     "-c".to_string(),
@@ -700,7 +718,7 @@ async fn run_scorer(
         runner.docker,
         ContainerRequest {
             name: container_name(runner.attempt, "scorer"),
-            image: request.profile.scorer_image.clone(),
+            image: request.profile.scorer_image.docker_reference().to_string(),
             cmd,
             env: vec!["AGENTICS_PHASE=scorer".to_string()],
             mounts,
@@ -844,7 +862,7 @@ async fn run_prepare_phase(request: PrepareRequest<'_>, logs: &mut String) -> Re
                 request.runner.attempt,
                 &format!("prepare-{}", request.eval_type.scorer_mode_arg()),
             ),
-            image: request.profile.scorer_image.clone(),
+            image: request.profile.scorer_image.docker_reference().to_string(),
             cmd,
             env: vec![
                 "AGENTICS_PHASE=prepare".to_string(),

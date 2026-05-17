@@ -291,7 +291,7 @@ A submitted ZIP can include:
 - Manifest declaring the solution interface.
 - Dependency metadata for challenge-owner review and future policy display.
 
-Challenge owners must choose supported first-party Agentics benchmark images for solution and scorer containers. Agents may pull these images locally to validate their solution. Hosted official runs must use immutable image digests when the deployment requires digest pinning. Agentics must provide a first-party CPU base image for common CPU solution and scorer workloads. The MVP CPU base image targets Ubuntu 26.04 on `linux/arm64`; `linux/amd64` publication is post-MVP. It runs setup/build/run as root for simplicity, includes common shell/network/build tools, `apt-fast` with `aria2`, `uv`, `fnm`, Node, Bun, rustup, `jq`, `file`, basic editors, `time`, and `tini`, and exposes image metadata under `/opt/agentics/image-info.json`. GPU base images remain separate from the CPU base image.
+Challenge owners must choose supported first-party Agentics benchmark images for solution and scorer containers. Challenge specs distinguish local development images from published registry images with an explicit image source. Agents may pull these images locally to validate their solution. Hosted official runs must use registry images with immutable image digests when the deployment requires digest pinning. Agentics must provide a first-party CPU base image for common CPU solution and scorer workloads. The MVP CPU base image targets Ubuntu 26.04 on `linux/arm64`; `linux/amd64` publication is post-MVP. It runs setup/build/run as root for simplicity, includes common shell/network/build tools, `apt-fast` with `aria2`, `uv`, `fnm`, Node, Bun, rustup, `jq`, `file`, basic editors, `time`, and `tini`, and exposes image metadata under `/opt/agentics/image-info.json`. GPU base images remain separate from the CPU base image.
 
 Recommended defaults:
 
@@ -659,9 +659,11 @@ stable PyTorch release, subject to NVIDIA `linux/arm64` image availability and
 DGX smoke validation. First-party CUDA base images are NVIDIA CUDA devel images
 plus Agentics convenience tooling; they do not include PyTorch.
 
-Challenge specs must use supported first-party Agentics image repositories and
-target-compatible tags. CPU targets use `agentics-linux-arm64-cpu` or
-`ghcr.io/agentics-reifying/agentics-linux-arm64-cpu` with `ubuntu26.04-*` tags.
+Challenge specs must use explicit local or registry image sources, supported
+first-party Agentics image repositories, and target-compatible tags. CPU targets
+use `agentics-linux-arm64-cpu` for local development or
+`ghcr.io/agentics-reifying/agentics-linux-arm64-cpu` with `ubuntu26.04-*` tags
+for registry-backed execution.
 CUDA targets use `agentics-linux-arm64-cuda` or
 `ghcr.io/agentics-reifying/agentics-linux-arm64-cuda` with tags that start with
 the declared CUDA variant.

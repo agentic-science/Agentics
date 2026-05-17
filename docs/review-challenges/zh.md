@@ -38,7 +38,7 @@ credentials 换取 HttpOnly browser session cookie 和 CSRF token。
 - 确认 metrics、ranking direction 和 tie-breakers 明确。
 - 确认 resource limits 和 network policies 适合所选 target。
 - 当 deployment 要求 immutable image references 时，确认 hosted images 使用
-  digest-pinned references。
+  `source: "registry"` 和 digest-pinned references。
 - 确认 private asset overlays 通过 Agentics 上传，而不是提交到 GitHub。
 
 ## Validation 和 Approval

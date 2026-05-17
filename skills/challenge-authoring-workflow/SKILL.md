@@ -55,8 +55,10 @@ If the bundle declares `datasets.private_benchmark_enabled: true`, declare the p
 
 Run manifests may use `input_files[].source_path` for large public or private input files. Public validation source paths must resolve inside the public bundle. Static official source paths usually resolve inside the uploaded private benchmark overlay. Prepare-generated official source paths resolve inside `/prepared`, relative to the generated run manifest's prepared workspace. Keep expected outputs and reference data scorer-owned; do not expose them to solution inputs unless the challenge intentionally makes them public.
 
-Challenge bundles must use supported first-party Agentics images. CPU targets
-must use `agentics-linux-arm64-cpu` or
+Challenge bundles must use supported first-party Agentics images with explicit
+image sources. Local development may use `source: "local"` with
+`agentics-linux-arm64-cpu`; hosted challenge specs must use `source:
+"registry"` with published registry references. CPU registry targets must use
 `ghcr.io/agentics-reifying/agentics-linux-arm64-cpu` with an `ubuntu26.04-*`
 tag. CUDA targets must use `agentics-linux-arm64-cuda` or
 `ghcr.io/agentics-reifying/agentics-linux-arm64-cuda` with a tag that starts
@@ -66,7 +68,8 @@ assume PyTorch is preinstalled, and declare `hardware.kind`, `gpu_model`,
 profile. Current new CUDA variants are `cu126`, `cu130`, and `cu132`. CUDA
 variants share the `linux-arm64-cuda` leaderboard when the hardware target is
 the same, so the challenge owner is responsible for comparability. Hosted
-publication requires digest-pinned image references when
+publication rejects local image sources and requires digest-pinned registry
+image references when
 `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`.
 
 ## 3. Package Private Assets

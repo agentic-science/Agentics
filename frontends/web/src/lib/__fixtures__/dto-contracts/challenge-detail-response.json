@@ -24,10 +24,14 @@
         "resource_profile": {
           "name": "ubuntu-cpu-small",
           "resource_description": "Small CPU target for local validation.",
-          "solution_image": "ubuntu:24.04@sha256:1111111111111111111111111111111111111111111111111111111111111111",
-          "solution_image_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-          "scorer_image": "ubuntu:24.04@sha256:2222222222222222222222222222222222222222222222222222222222222222",
-          "scorer_image_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "solution_image": {
+            "source": "registry",
+            "reference": "ghcr.io/agentics-reifying/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0@sha256:1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          "scorer_image": {
+            "source": "registry",
+            "reference": "ghcr.io/agentics-reifying/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0@sha256:2222222222222222222222222222222222222222222222222222222222222222"
+          },
           "timeout_sec": 60,
           "memory_limit_mb": 2048,
           "cpu_limit_millis": 2000,

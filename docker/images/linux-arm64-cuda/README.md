@@ -118,6 +118,7 @@ docker buildx build \
 Record the built image digest, `/opt/agentics/image-info.json`, and DGX smoke
 output in release notes. Challenge specs must use the supported
 `agentics-linux-arm64-cuda` image repository with a tag that starts with the
-declared CUDA variant, such as `cu130-*`. Hosted challenge specs must use
-digest-pinned `solution_image` and `scorer_image` references after the image is
-published.
+declared CUDA variant, such as `cu130-*`. Local development may use
+`source: "local"` for first-party local tags. Hosted challenge specs must use
+`source: "registry"` and digest-pinned `solution_image` and `scorer_image`
+references after the image is published.

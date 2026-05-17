@@ -132,7 +132,9 @@ First-party Agentics base images 记录在
 `../../docker/images/linux-arm64-cpu/README.md` 和
 `../../docker/images/linux-arm64-cuda/README.md`。Challenge specs 必须引用受支持的
 first-party Agentics images。当 deployment 要求 immutable image references 时，
-hosted active challenge specs 必须使用已发布并 digest-pinned 的 references。
+hosted active challenge specs 必须使用 `source: "registry"` 和已发布并
+digest-pinned 的 references。Local smoke specs 可以使用 `source: "local"` 和
+first-party Agentics local image names。
 
 ## Commands
 

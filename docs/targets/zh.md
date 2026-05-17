@@ -22,10 +22,12 @@ Agentics base-image source directories 按 target 命名：
 - `docker/images/linux-arm64-cuda`：基于 NVIDIA CUDA Ubuntu 24.04 images 的
   first-party CUDA devel base images。
 
-Challenge bundles 必须使用受支持的 first-party Agentics image repositories 和与
-target 匹配的 tags。Linux ARM64 CPU targets 必须使用 `agentics-linux-arm64-cpu` 或
-`ghcr.io/agentics-reifying/agentics-linux-arm64-cpu`，tag 必须为
-`ubuntu26.04-*`。Linux ARM64 CUDA targets 必须使用 `agentics-linux-arm64-cuda` 或
+Challenge bundles 必须用显式 image source 声明 images。Local development 可以使用
+`source: "local"` 和 first-party Agentics local image names。Hosted specs 必须使用
+`source: "registry"` 和已经发布的 registry references。Linux ARM64 CPU targets
+在 local development 中必须使用 `agentics-linux-arm64-cpu`，在 registry-backed
+execution 中必须使用 `ghcr.io/agentics-reifying/agentics-linux-arm64-cpu`，tag
+必须为 `ubuntu26.04-*`。Linux ARM64 CUDA targets 必须使用 `agentics-linux-arm64-cuda` 或
 `ghcr.io/agentics-reifying/agentics-linux-arm64-cuda`，tag 必须以声明的 CUDA
 variant 开头，例如 `cu130-*`。
 
@@ -49,8 +51,14 @@ Challenge specs 必须声明一个或多个 targets：
       "validation_enabled": true,
       "resource_profile": {
         "name": "agentics-cpu-small",
-        "solution_image": "agentics-linux-arm64-cpu:ubuntu26.04-local",
-        "scorer_image": "agentics-linux-arm64-cpu:ubuntu26.04-local",
+        "solution_image": {
+          "source": "local",
+          "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"
+        },
+        "scorer_image": {
+          "source": "local",
+          "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"
+        },
         "timeout_sec": 30,
         "memory_limit_mb": 512,
         "cpu_limit_millis": 1000,
@@ -76,7 +84,7 @@ Challenge specs 必须声明一个或多个 targets：
   `gpu`，并在 `resource_profile.hardware` 中声明 CUDA hardware metadata。
 - AMD64 Linux targets 保留给 post-MVP deployment support。
 - `validation_enabled` 是 target-specific 的。一个 target 可以启用 validation，另一个 target 可以关闭 validation。
-- `resource_profile` 包含该 target 的 Docker images、硬性 resource limits、network policy、可选 image digests、可选 resource description 和可选 hardware metadata。Solution 和 scorer images 必须使用受支持的 first-party Agentics image repositories 和与 target 匹配的 tags。Hosted deployments 应启用 `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`，从而要求 solution 和 scorer images 使用 immutable `@sha256:<digest>` references。
+- `resource_profile` 包含该 target 的 Docker images、硬性 resource limits、network policy、可选 resource description 和可选 hardware metadata。Solution 和 scorer images 必须使用受支持的 first-party Agentics image repositories 和与 target 匹配的 tags。Hosted deployments 应启用 `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`，从而拒绝 local image sources，并要求 registry references 包含 immutable `@sha256:<digest>` suffix。
 - CPU targets 必须使用 first-party Agentics CPU base image。面向 participants 的 setup guidance 是：使用 `apt-fast` 安装 apt packages，使用 `uv` 管理 Python dependencies，使用 `fnm` 切换 Node version，使用 Bun 管理 JavaScript/TypeScript packages，并使用 rustup 安装 Rust toolchain components。
 - 如果任一 target 有 `validation_enabled: true`，bundle 必须声明 `execution.validation_runs`。
 - 如果启用 private benchmark scoring，bundle 必须声明 `execution.official_runs`。

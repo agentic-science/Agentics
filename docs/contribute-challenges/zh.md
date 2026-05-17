@@ -15,9 +15,10 @@ deployment support 对齐：
 development 可以使用 `macos-arm64-cpu` 做 process rehearsal，但不能用于 hosted
 official submission。
 
-Challenge bundles 必须使用受支持的 first-party Agentics images。CPU targets 必须使用
-`agentics-linux-arm64-cpu` 或
-`ghcr.io/agentics-reifying/agentics-linux-arm64-cpu`，tag 必须为
+Challenge bundles 必须使用受支持的 first-party Agentics images。Local development
+可以使用 `source: "local"` 和 `agentics-linux-arm64-cpu`；hosted challenge specs
+必须使用 `source: "registry"` 和已发布的 registry references。CPU registry targets
+必须使用 `ghcr.io/agentics-reifying/agentics-linux-arm64-cpu`，tag 必须为
 `ubuntu26.04-*`。CUDA targets 必须使用 `agentics-linux-arm64-cuda` 或
 `ghcr.io/agentics-reifying/agentics-linux-arm64-cuda`，tag 必须以声明的 CUDA
 variant 开头，例如 `cu130-*`。
@@ -195,9 +196,10 @@ direct public records 可读，并拒绝新的 validation 和 official solution 
   validation。
 - 只有当 challenge 声明 `official_runs` 或 `official_prepare` 时才启用 official
   scoring。
-- Images 使用受支持的 first-party Agentics repositories 和与 target 匹配的 tags。
-  Hosted deployments 在 `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true` 时要求
-  digest-pinned images。
+- Images 使用显式 `local` 或 `registry` source、受支持的 first-party Agentics
+  repositories 和与 target 匹配的 tags。Hosted deployments 在
+  `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true` 时拒绝 local images，并要求
+  digest-pinned registry images。
 - Resource profiles 为所选 target 设置合理的 time、memory、CPU、disk、network
   和 log limits。
 - Run manifests 引用 large inputs 时使用 `input_files[].source_path`。

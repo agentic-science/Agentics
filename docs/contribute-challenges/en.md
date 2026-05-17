@@ -16,8 +16,10 @@ with platform deployment support:
 development may use `macos-arm64-cpu` only for process rehearsal, not hosted
 official submission.
 
-Challenge bundles must use supported first-party Agentics images. CPU targets
-must use `agentics-linux-arm64-cpu` or
+Challenge bundles must use supported first-party Agentics images. Local
+development may use `source: "local"` with `agentics-linux-arm64-cpu`; hosted
+challenge specs must use `source: "registry"` with published registry
+references. CPU registry targets must use
 `ghcr.io/agentics-reifying/agentics-linux-arm64-cpu` with an `ubuntu26.04-*` tag.
 CUDA targets must use `agentics-linux-arm64-cuda` or
 `ghcr.io/agentics-reifying/agentics-linux-arm64-cuda` with a tag that starts with
@@ -203,8 +205,9 @@ validation and official solution submissions.
   `validation_prepare`.
 - Official scoring is enabled only when the challenge declares `official_runs`
   or `official_prepare`.
-- Images use supported first-party Agentics repositories and target-compatible
-  tags. Hosted deployments require digest-pinned images when
+- Images use explicit `local` or `registry` sources, supported first-party
+  Agentics repositories, and target-compatible tags. Hosted deployments reject
+  local images and require digest-pinned registry images when
   `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`.
 - Resource profiles keep time, memory, CPU, disk, network, and log limits
   realistic for the selected target.

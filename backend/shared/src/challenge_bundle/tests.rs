@@ -10,6 +10,9 @@ use crate::models::challenge::{
 };
 use crate::models::evaluation::ScoreVisibility;
 use crate::models::hashes::OciSha256Digest;
+use crate::models::images::{
+    ChallengeImageReference, LocalAgenticsImageReference, OciRegistryImageReference,
+};
 use crate::models::names::{ChallengeName, MetricName, ResourceProfileName, TargetName};
 use crate::models::paths::BundleRelativePath;
 use crate::models::urls::MoltbookSubmoltUrl;
@@ -48,10 +51,8 @@ fn base_spec() -> ChallengeBundleSpec {
             resource_profile: ResourceProfileSpec {
                 name: resource_profile_name("agentics-cpu-small"),
                 resource_description: None,
-                solution_image: "agentics-linux-arm64-cpu:ubuntu26.04-local".to_string(),
-                solution_image_digest: None,
-                scorer_image: "agentics-linux-arm64-cpu:ubuntu26.04-local".to_string(),
-                scorer_image_digest: None,
+                solution_image: local_image("agentics-linux-arm64-cpu:ubuntu26.04-local"),
+                scorer_image: local_image("agentics-linux-arm64-cpu:ubuntu26.04-local"),
                 timeout_sec: 30,
                 memory_limit_mb: 512,
                 cpu_limit_millis: 1000,
@@ -119,15 +120,29 @@ fn bundle_path(value: &str) -> BundleRelativePath {
     BundleRelativePath::try_new(value).expect("test bundle path is valid")
 }
 
+/// Build a local challenge image reference for tests.
+fn local_image(value: &str) -> ChallengeImageReference {
+    ChallengeImageReference::Local {
+        reference: LocalAgenticsImageReference::try_new(value).expect("test local image is valid"),
+    }
+}
+
+/// Build a registry challenge image reference for tests.
+fn registry_image(value: &str) -> ChallengeImageReference {
+    ChallengeImageReference::Registry {
+        reference: OciRegistryImageReference::try_new(value).expect("test registry image is valid"),
+    }
+}
+
 /// Handles pin images for this module.
 fn pin_images(spec: &mut ChallengeBundleSpec) {
     let digest = test_digest();
     for target in &mut spec.targets {
-        let image = format!("agentics-linux-arm64-cpu:ubuntu26.04-local@{digest}");
-        target.resource_profile.solution_image = image.clone();
-        target.resource_profile.solution_image_digest = Some(digest.clone());
-        target.resource_profile.scorer_image = image;
-        target.resource_profile.scorer_image_digest = Some(digest.clone());
+        let image = format!(
+            "ghcr.io/agentics-reifying/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0@{digest}"
+        );
+        target.resource_profile.solution_image = registry_image(&image);
+        target.resource_profile.scorer_image = registry_image(&image);
     }
 }
 
@@ -137,8 +152,8 @@ fn use_cuda_target(target: &mut ChallengeTargetSpec, cuda_variant: &str) {
     target.accelerator = TargetAccelerator::Gpu;
     target.resource_profile.hardware = Some(cuda_hardware());
     let image = format!("agentics-linux-arm64-cuda:{cuda_variant}-ubuntu24.04-local");
-    target.resource_profile.solution_image = image.clone();
-    target.resource_profile.scorer_image = image;
+    target.resource_profile.solution_image = local_image(&image);
+    target.resource_profile.scorer_image = local_image(&image);
 }
 
 /// Handles cuda hardware for this module.
@@ -185,6 +200,35 @@ fn targets_are_required() {
 
     let error = validate_challenge_bundle_spec(&spec).expect_err("empty targets should fail");
     assert!(error.to_string().contains("targets"));
+}
+
+/// Verifies that legacy string image fields are rejected by the source enum contract.
+#[test]
+fn legacy_string_image_field_is_rejected() {
+    let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
+    spec_json["targets"][0]["resource_profile"]["solution_image"] =
+        serde_json::json!("agentics-linux-arm64-cpu:ubuntu26.04-local");
+
+    let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+        .expect_err("legacy image string should fail");
+
+    assert!(
+        error.to_string().contains("invalid type") || error.to_string().contains("source"),
+        "unexpected error: {error}"
+    );
+}
+
+/// Verifies that removed external digest fields are rejected by the resource profile contract.
+#[test]
+fn legacy_image_digest_field_is_rejected() {
+    let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
+    spec_json["targets"][0]["resource_profile"]["solution_image_digest"] =
+        serde_json::json!(test_digest());
+
+    let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+        .expect_err("legacy digest field should fail");
+
+    assert!(error.to_string().contains("solution_image_digest"));
 }
 
 /// Verifies that target name is independent from docker platform.
@@ -236,9 +280,9 @@ fn cuda_target_requires_cuda_hardware_metadata() {
     assert!(error.to_string().contains("hardware.kind"));
 
     spec.targets[0].resource_profile.hardware = Some(cuda_hardware());
-    let image = "agentics-linux-arm64-cuda:cu130-ubuntu24.04-local".to_string();
-    spec.targets[0].resource_profile.solution_image = image.clone();
-    spec.targets[0].resource_profile.scorer_image = image;
+    let image = "agentics-linux-arm64-cuda:cu130-ubuntu24.04-local";
+    spec.targets[0].resource_profile.solution_image = local_image(image);
+    spec.targets[0].resource_profile.scorer_image = local_image(image);
     validate_challenge_bundle_spec(&spec).expect("cuda target should validate");
 }
 
@@ -246,7 +290,8 @@ fn cuda_target_requires_cuda_hardware_metadata() {
 #[test]
 fn cpu_target_rejects_unsupported_image_repository() {
     let mut spec = base_spec();
-    spec.targets[0].resource_profile.solution_image = "python:3.12-slim-bookworm".to_string();
+    spec.targets[0].resource_profile.solution_image =
+        registry_image("ghcr.io/example/not-agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0");
 
     let error = validate_challenge_bundle_spec(&spec)
         .expect_err("unsupported image repository should fail");
@@ -262,9 +307,9 @@ fn cpu_target_rejects_unsupported_image_repository() {
 #[test]
 fn cpu_target_rejects_unsupported_image_tag() {
     let mut spec = base_spec();
-    let image = "agentics-linux-arm64-cpu:bookworm".to_string();
-    spec.targets[0].resource_profile.solution_image = image.clone();
-    spec.targets[0].resource_profile.scorer_image = image;
+    let image = "agentics-linux-arm64-cpu:bookworm";
+    spec.targets[0].resource_profile.solution_image = local_image(image);
+    spec.targets[0].resource_profile.scorer_image = local_image(image);
 
     let error =
         validate_challenge_bundle_spec(&spec).expect_err("unsupported image tag should fail");
@@ -350,19 +395,17 @@ fn digest_pinned_image_policy_accepts_immutable_references() {
     validate_digest_pinned_images(&spec).expect("pinned images should satisfy policy");
 }
 
-/// Verifies that image digest field must match image reference.
+/// Verifies that hosted digest policy rejects local images even when locally valid.
 #[test]
-fn image_digest_field_must_match_image_reference() {
+fn digest_pinned_image_policy_rejects_local_images() {
     let mut spec = base_spec();
-    pin_images(&mut spec);
-    spec.targets[0].resource_profile.solution_image_digest = Some(
-        OciSha256Digest::try_new(format!("sha256:{}", "b".repeat(64)))
-            .expect("test OCI digest is valid"),
-    );
+    spec.targets[0].resource_profile.solution_image =
+        local_image("agentics-linux-arm64-cpu:ubuntu26.04-local");
 
-    let error = validate_challenge_bundle_spec(&spec).expect_err("mismatched digest should fail");
+    let error =
+        validate_digest_pinned_images(&spec).expect_err("local image should fail hosted policy");
 
-    assert!(error.to_string().contains("must match"));
+    assert!(error.to_string().contains("registry image"));
 }
 
 /// Verifies that challenge summary is required.

@@ -379,6 +379,7 @@ mod tests {
         PrivateBenchmarkPolicy, ResourceProfileSpec, ScorerSpec, SolutionSpec, TargetAccelerator,
     };
     use shared::models::evaluation::ScoreVisibility;
+    use shared::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
     use shared::models::names::{ChallengeName, ResourceProfileName, TargetName};
     use shared::models::paths::BundleRelativePath;
     use shared::zip_project::{
@@ -387,6 +388,14 @@ mod tests {
 
     use super::{default_workspace_dir, init_solution_workspace};
     use crate::cli::{SolutionInterface, SolutionRuntimeProfile};
+
+    /// Build a local Agentics image reference for workspace initialization tests.
+    fn local_image(value: &str) -> ChallengeImageReference {
+        ChallengeImageReference::Local {
+            reference: LocalAgenticsImageReference::try_new(value)
+                .expect("test local image is valid"),
+        }
+    }
 
     /// Verifies that init solution creates readme manifest git repo and hook.
     #[test]
@@ -541,10 +550,8 @@ mod tests {
                     resource_profile: ResourceProfileSpec {
                         name: resource_profile_name("python-cpu-small"),
                         resource_description: None,
-                        solution_image: "python:3.12-slim-bookworm".to_string(),
-                        solution_image_digest: None,
-                        scorer_image: "python:3.12-slim-bookworm".to_string(),
-                        scorer_image_digest: None,
+                        solution_image: local_image("agentics-linux-arm64-cpu:ubuntu26.04-local"),
+                        scorer_image: local_image("agentics-linux-arm64-cpu:ubuntu26.04-local"),
                         timeout_sec: 30,
                         memory_limit_mb: 512,
                         cpu_limit_millis: 1000,

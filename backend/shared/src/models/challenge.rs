@@ -4,7 +4,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use super::hashes::OciSha256Digest;
+use super::images::ChallengeImageReference;
 use super::names::{ChallengeName, MetricName, ResourceProfileName, RunName, TargetName};
 use super::paths::{
     BundleRelativePath, ManagedBundlePath, ManagedStatementPath, RunInputPath, RunOutputPath,
@@ -300,16 +300,13 @@ pub struct ChallengeTargetSpec {
 
 /// Resource envelope and Docker images declared by a challenge.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ResourceProfileSpec {
     pub name: ResourceProfileName,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resource_description: Option<String>,
-    pub solution_image: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub solution_image_digest: Option<OciSha256Digest>,
-    pub scorer_image: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub scorer_image_digest: Option<OciSha256Digest>,
+    pub solution_image: ChallengeImageReference,
+    pub scorer_image: ChallengeImageReference,
     pub timeout_sec: u64,
     pub memory_limit_mb: u64,
     pub cpu_limit_millis: u32,

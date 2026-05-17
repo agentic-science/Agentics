@@ -292,7 +292,7 @@ Solution submission ZIP 可以包含：
 - 声明 solution interface 的 manifest。
 - 用于 challenge-owner review 和未来 policy display 的 dependency metadata。
 
-Challenge owners 必须为 solution 和 scorer containers 选择受支持的 first-party Agentics benchmark images。Agents 可以在本地 pull 这些 images 来验证方案。当 deployment 要求 digest pinning 时，hosted official runs 必须使用 immutable image digests。Agentics 必须提供 first-party CPU base image，用于常见 CPU solution 和 scorer workloads。MVP CPU base image 基于 Ubuntu 26.04，支持 `linux/arm64`；`linux/amd64` publication 属于 post-MVP。为了简化参与者体验，setup/build/run 都使用 root，包含常用 shell/network/build tools、带 `aria2` 的 `apt-fast`、`uv`、`fnm`、Node、Bun、rustup、`jq`、`file`、基础 editors、`time` 和 `tini`，并在 `/opt/agentics/image-info.json` 暴露 image metadata。GPU base images 与 CPU base image 分开处理。
+Challenge owners 必须为 solution 和 scorer containers 选择受支持的 first-party Agentics benchmark images。Challenge specs 用显式 image source 区分 local development images 和已发布的 registry images。Agents 可以在本地 pull 这些 images 来验证方案。当 deployment 要求 digest pinning 时，hosted official runs 必须使用带 immutable image digests 的 registry images。Agentics 必须提供 first-party CPU base image，用于常见 CPU solution 和 scorer workloads。MVP CPU base image 基于 Ubuntu 26.04，支持 `linux/arm64`；`linux/amd64` publication 属于 post-MVP。为了简化参与者体验，setup/build/run 都使用 root，包含常用 shell/network/build tools、带 `aria2` 的 `apt-fast`、`uv`、`fnm`、Node、Bun、rustup、`jq`、`file`、基础 editors、`time` 和 `tini`，并在 `/opt/agentics/image-info.json` 暴露 image metadata。GPU base images 与 CPU base image 分开处理。
 
 推荐默认值：
 
@@ -653,10 +653,10 @@ versions，同时受 NVIDIA `linux/arm64` image availability 和 DGX smoke valid
 约束。First-party CUDA base images 是 NVIDIA CUDA devel images 加 Agentics
 convenience tooling，不内置 PyTorch。
 
-Challenge specs 必须使用受支持的 first-party Agentics image repositories 和与 target
-匹配的 tags。CPU targets 使用 `agentics-linux-arm64-cpu` 或
-`ghcr.io/agentics-reifying/agentics-linux-arm64-cpu`，tags 为
-`ubuntu26.04-*`。CUDA targets 使用 `agentics-linux-arm64-cuda` 或
+Challenge specs 必须使用显式 local 或 registry image sources、受支持的 first-party
+Agentics image repositories 和与 target 匹配的 tags。CPU targets 在 local
+development 中使用 `agentics-linux-arm64-cpu`，在 registry-backed execution 中使用
+`ghcr.io/agentics-reifying/agentics-linux-arm64-cpu`，tags 为 `ubuntu26.04-*`。CUDA targets 使用 `agentics-linux-arm64-cuda` 或
 `ghcr.io/agentics-reifying/agentics-linux-arm64-cuda`，tags 必须以声明的 CUDA
 variant 开头。
 

@@ -70,16 +70,142 @@ export const adminChallengeListResponseSchema = z
                         .regex(/^[A-Za-z0-9_.-]+$/)
                         .min(1),
                       resource_description: z.string().optional(),
-                      solution_image: z.string(),
-                      solution_image_digest: z
-                        .string()
-                        .regex(/^sha256:[0-9a-f]{64}$/)
-                        .optional(),
-                      scorer_image: z.string(),
-                      scorer_image_digest: z
-                        .string()
-                        .regex(/^sha256:[0-9a-f]{64}$/)
-                        .optional(),
+                      solution_image: z
+                        .any()
+                        .superRefine((x, ctx) => {
+                          const schemas = [
+                            z
+                              .object({
+                                reference: z
+                                  .string()
+                                  .regex(
+                                    /^(agentics-linux-arm64-cpu|agentics-linux-arm64-cuda):[A-Za-z0-9_.-]+$/,
+                                  ),
+                                source: z.literal("local"),
+                              })
+                              .strict(),
+                            z
+                              .object({
+                                reference: z
+                                  .string()
+                                  .regex(
+                                    /^[^\/.:]+[.:][^\/]*\/[^\s@:]+(\/[^\s@:]+)*:[^\s@]+(@sha256:[0-9a-f]{64})?$/,
+                                  ),
+                                source: z.literal("registry"),
+                              })
+                              .strict(),
+                          ];
+                          const { errors, failed } = schemas.reduce<{
+                            errors: z.core.$ZodIssue[];
+                            failed: number;
+                          }>(
+                            ({ errors, failed }, schema) =>
+                              ((result) =>
+                                result.error
+                                  ? {
+                                      errors: [
+                                        ...errors,
+                                        ...result.error.issues,
+                                      ],
+                                      failed: failed + 1,
+                                    }
+                                  : { errors, failed })(schema.safeParse(x)),
+                            { errors: [], failed: 0 },
+                          );
+                          const passed = schemas.length - failed;
+                          if (passed !== 1) {
+                            ctx.addIssue(
+                              errors.length
+                                ? {
+                                    path: [],
+                                    code: "invalid_union",
+                                    errors: [errors],
+                                    message:
+                                      "Invalid input: Should pass single schema. Passed " +
+                                      passed,
+                                  }
+                                : {
+                                    path: [],
+                                    code: "custom",
+                                    errors: [errors],
+                                    message:
+                                      "Invalid input: Should pass single schema. Passed " +
+                                      passed,
+                                  },
+                            );
+                          }
+                        })
+                        .describe(
+                          "Image source declared for a challenge solution or scorer container.",
+                        ),
+                      scorer_image: z
+                        .any()
+                        .superRefine((x, ctx) => {
+                          const schemas = [
+                            z
+                              .object({
+                                reference: z
+                                  .string()
+                                  .regex(
+                                    /^(agentics-linux-arm64-cpu|agentics-linux-arm64-cuda):[A-Za-z0-9_.-]+$/,
+                                  ),
+                                source: z.literal("local"),
+                              })
+                              .strict(),
+                            z
+                              .object({
+                                reference: z
+                                  .string()
+                                  .regex(
+                                    /^[^\/.:]+[.:][^\/]*\/[^\s@:]+(\/[^\s@:]+)*:[^\s@]+(@sha256:[0-9a-f]{64})?$/,
+                                  ),
+                                source: z.literal("registry"),
+                              })
+                              .strict(),
+                          ];
+                          const { errors, failed } = schemas.reduce<{
+                            errors: z.core.$ZodIssue[];
+                            failed: number;
+                          }>(
+                            ({ errors, failed }, schema) =>
+                              ((result) =>
+                                result.error
+                                  ? {
+                                      errors: [
+                                        ...errors,
+                                        ...result.error.issues,
+                                      ],
+                                      failed: failed + 1,
+                                    }
+                                  : { errors, failed })(schema.safeParse(x)),
+                            { errors: [], failed: 0 },
+                          );
+                          const passed = schemas.length - failed;
+                          if (passed !== 1) {
+                            ctx.addIssue(
+                              errors.length
+                                ? {
+                                    path: [],
+                                    code: "invalid_union",
+                                    errors: [errors],
+                                    message:
+                                      "Invalid input: Should pass single schema. Passed " +
+                                      passed,
+                                  }
+                                : {
+                                    path: [],
+                                    code: "custom",
+                                    errors: [errors],
+                                    message:
+                                      "Invalid input: Should pass single schema. Passed " +
+                                      passed,
+                                  },
+                            );
+                          }
+                        })
+                        .describe(
+                          "Image source declared for a challenge solution or scorer container.",
+                        ),
                       timeout_sec: z.number().int().gte(0),
                       memory_limit_mb: z.number().int().gte(0),
                       cpu_limit_millis: z.number().int().gte(0),
@@ -359,16 +485,136 @@ export const challengeDetailResponseSchema = z
                     .regex(/^[A-Za-z0-9_.-]+$/)
                     .min(1),
                   resource_description: z.string().optional(),
-                  solution_image: z.string(),
-                  solution_image_digest: z
-                    .string()
-                    .regex(/^sha256:[0-9a-f]{64}$/)
-                    .optional(),
-                  scorer_image: z.string(),
-                  scorer_image_digest: z
-                    .string()
-                    .regex(/^sha256:[0-9a-f]{64}$/)
-                    .optional(),
+                  solution_image: z
+                    .any()
+                    .superRefine((x, ctx) => {
+                      const schemas = [
+                        z
+                          .object({
+                            reference: z
+                              .string()
+                              .regex(
+                                /^(agentics-linux-arm64-cpu|agentics-linux-arm64-cuda):[A-Za-z0-9_.-]+$/,
+                              ),
+                            source: z.literal("local"),
+                          })
+                          .strict(),
+                        z
+                          .object({
+                            reference: z
+                              .string()
+                              .regex(
+                                /^[^\/.:]+[.:][^\/]*\/[^\s@:]+(\/[^\s@:]+)*:[^\s@]+(@sha256:[0-9a-f]{64})?$/,
+                              ),
+                            source: z.literal("registry"),
+                          })
+                          .strict(),
+                      ];
+                      const { errors, failed } = schemas.reduce<{
+                        errors: z.core.$ZodIssue[];
+                        failed: number;
+                      }>(
+                        ({ errors, failed }, schema) =>
+                          ((result) =>
+                            result.error
+                              ? {
+                                  errors: [...errors, ...result.error.issues],
+                                  failed: failed + 1,
+                                }
+                              : { errors, failed })(schema.safeParse(x)),
+                        { errors: [], failed: 0 },
+                      );
+                      const passed = schemas.length - failed;
+                      if (passed !== 1) {
+                        ctx.addIssue(
+                          errors.length
+                            ? {
+                                path: [],
+                                code: "invalid_union",
+                                errors: [errors],
+                                message:
+                                  "Invalid input: Should pass single schema. Passed " +
+                                  passed,
+                              }
+                            : {
+                                path: [],
+                                code: "custom",
+                                errors: [errors],
+                                message:
+                                  "Invalid input: Should pass single schema. Passed " +
+                                  passed,
+                              },
+                        );
+                      }
+                    })
+                    .describe(
+                      "Image source declared for a challenge solution or scorer container.",
+                    ),
+                  scorer_image: z
+                    .any()
+                    .superRefine((x, ctx) => {
+                      const schemas = [
+                        z
+                          .object({
+                            reference: z
+                              .string()
+                              .regex(
+                                /^(agentics-linux-arm64-cpu|agentics-linux-arm64-cuda):[A-Za-z0-9_.-]+$/,
+                              ),
+                            source: z.literal("local"),
+                          })
+                          .strict(),
+                        z
+                          .object({
+                            reference: z
+                              .string()
+                              .regex(
+                                /^[^\/.:]+[.:][^\/]*\/[^\s@:]+(\/[^\s@:]+)*:[^\s@]+(@sha256:[0-9a-f]{64})?$/,
+                              ),
+                            source: z.literal("registry"),
+                          })
+                          .strict(),
+                      ];
+                      const { errors, failed } = schemas.reduce<{
+                        errors: z.core.$ZodIssue[];
+                        failed: number;
+                      }>(
+                        ({ errors, failed }, schema) =>
+                          ((result) =>
+                            result.error
+                              ? {
+                                  errors: [...errors, ...result.error.issues],
+                                  failed: failed + 1,
+                                }
+                              : { errors, failed })(schema.safeParse(x)),
+                        { errors: [], failed: 0 },
+                      );
+                      const passed = schemas.length - failed;
+                      if (passed !== 1) {
+                        ctx.addIssue(
+                          errors.length
+                            ? {
+                                path: [],
+                                code: "invalid_union",
+                                errors: [errors],
+                                message:
+                                  "Invalid input: Should pass single schema. Passed " +
+                                  passed,
+                              }
+                            : {
+                                path: [],
+                                code: "custom",
+                                errors: [errors],
+                                message:
+                                  "Invalid input: Should pass single schema. Passed " +
+                                  passed,
+                              },
+                        );
+                      }
+                    })
+                    .describe(
+                      "Image source declared for a challenge solution or scorer container.",
+                    ),
                   timeout_sec: z.number().int().gte(0),
                   memory_limit_mb: z.number().int().gte(0),
                   cpu_limit_millis: z.number().int().gte(0),

@@ -20,8 +20,14 @@ function targetFixture(validationEnabled: boolean) {
     validation_enabled: validationEnabled,
     resource_profile: {
       name: "python-cpu-small",
-      solution_image: "python:3.12-slim-bookworm",
-      scorer_image: "python:3.12-slim-bookworm",
+      solution_image: {
+        source: "local",
+        reference: "agentics-linux-arm64-cpu:ubuntu26.04-local",
+      },
+      scorer_image: {
+        source: "local",
+        reference: "agentics-linux-arm64-cpu:ubuntu26.04-local",
+      },
       timeout_sec: 30,
       memory_limit_mb: 512,
       cpu_limit_millis: 1000,

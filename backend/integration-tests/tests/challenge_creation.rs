@@ -1277,8 +1277,14 @@ fn write_public_challenge(repo: &Path) -> String {
                     "validation_enabled": true,
                     "resource_profile": {
                         "name": "agentics-cpu-small",
-                        "solution_image": "agentics-linux-arm64-cpu:ubuntu26.04-local",
-                        "scorer_image": "agentics-linux-arm64-cpu:ubuntu26.04-local",
+                        "solution_image": {
+                            "source": "local",
+                            "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"
+                        },
+                        "scorer_image": {
+                            "source": "local",
+                            "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"
+                        },
                         "timeout_sec": 30,
                         "memory_limit_mb": 512,
                         "cpu_limit_millis": 1000,

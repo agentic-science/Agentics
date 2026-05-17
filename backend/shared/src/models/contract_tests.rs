@@ -16,6 +16,7 @@ use super::evaluation::{
 };
 use super::hashes::OciSha256Digest;
 use super::ids::{AgentId, EvaluationId, SolutionSubmissionId};
+use super::images::{ChallengeImageReference, OciRegistryImageReference};
 use super::names::{ChallengeName, MetricName, ResourceProfileName, RunName, TargetName};
 use super::paths::BundleRelativePath;
 use super::request::{
@@ -157,10 +158,14 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
                     resource_description: Some(
                         "Small CPU target for local validation.".to_string(),
                     ),
-                    solution_image: format!("ubuntu:24.04@{}", image_digest("1")),
-                    solution_image_digest: Some(image_digest("1")),
-                    scorer_image: format!("ubuntu:24.04@{}", image_digest("2")),
-                    scorer_image_digest: Some(image_digest("2")),
+                    solution_image: registry_image(&format!(
+                        "ghcr.io/agentics-reifying/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0@{}",
+                        image_digest("1")
+                    )),
+                    scorer_image: registry_image(&format!(
+                        "ghcr.io/agentics-reifying/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0@{}",
+                        image_digest("2")
+                    )),
                     timeout_sec: 60,
                     memory_limit_mb: 2048,
                     cpu_limit_millis: 2000,
@@ -382,4 +387,11 @@ fn digest(fill: &str) -> String {
 /// Handles image digest for this module.
 fn image_digest(fill: &str) -> OciSha256Digest {
     OciSha256Digest::try_new(digest(fill)).expect("test OCI digest is valid")
+}
+
+/// Handles registry image for this module.
+fn registry_image(value: &str) -> ChallengeImageReference {
+    ChallengeImageReference::Registry {
+        reference: OciRegistryImageReference::try_new(value).expect("test registry image is valid"),
+    }
 }

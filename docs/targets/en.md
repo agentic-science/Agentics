@@ -22,9 +22,12 @@ Agentics base-image source directories are target named:
 - `docker/images/linux-arm64-cuda`: first-party CUDA devel base images on
   NVIDIA CUDA Ubuntu 24.04 images.
 
-Challenge bundles must use supported first-party Agentics image repositories and
-target-compatible tags. Linux ARM64 CPU targets must use `agentics-linux-arm64-cpu` or
-`ghcr.io/agentics-reifying/agentics-linux-arm64-cpu` with an `ubuntu26.04-*` tag.
+Challenge bundles declare images with an explicit image source. Local
+development may use `source: "local"` with first-party Agentics local image
+names. Hosted specs must use `source: "registry"` with published registry
+references. Linux ARM64 CPU targets must use `agentics-linux-arm64-cpu` for
+local development or `ghcr.io/agentics-reifying/agentics-linux-arm64-cpu` with
+an `ubuntu26.04-*` tag for registry-backed execution.
 Linux ARM64 CUDA targets must use `agentics-linux-arm64-cuda` or
 `ghcr.io/agentics-reifying/agentics-linux-arm64-cuda` with a tag that starts with
 the declared CUDA variant, such as `cu130-*`.
@@ -49,8 +52,14 @@ Challenge specs must declare one or more targets:
       "validation_enabled": true,
       "resource_profile": {
         "name": "agentics-cpu-small",
-        "solution_image": "agentics-linux-arm64-cpu:ubuntu26.04-local",
-        "scorer_image": "agentics-linux-arm64-cpu:ubuntu26.04-local",
+        "solution_image": {
+          "source": "local",
+          "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"
+        },
+        "scorer_image": {
+          "source": "local",
+          "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"
+        },
         "timeout_sec": 30,
         "memory_limit_mb": 512,
         "cpu_limit_millis": 1000,
@@ -76,7 +85,7 @@ Rules:
   `gpu`, and CUDA hardware metadata in `resource_profile.hardware`.
 - AMD64 Linux targets are reserved for post-MVP deployment support.
 - `validation_enabled` is target-specific. Validation can be enabled for one target and disabled for another.
-- `resource_profile` contains the Docker images, hard resource limits, network policy, optional image digests, optional resource description, and optional hardware metadata for that target. The solution and scorer images must use supported first-party Agentics image repositories and target-compatible tags. Hosted deployments should enable `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`, which requires solution and scorer images to use immutable `@sha256:<digest>` references.
+- `resource_profile` contains the Docker images, hard resource limits, network policy, optional resource description, and optional hardware metadata for that target. The solution and scorer images must use supported first-party Agentics image repositories and target-compatible tags. Hosted deployments should enable `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`, which rejects local image sources and requires registry references to include immutable `@sha256:<digest>` suffixes.
 - CPU targets must use the first-party Agentics CPU base image. Its participant-facing setup guidance is to use `apt-fast` for apt packages, `uv` for Python dependencies, `fnm` for Node version changes, Bun for JavaScript/TypeScript package management, and rustup for Rust toolchain components.
 - If any target has `validation_enabled: true`, the bundle must declare `execution.validation_runs`.
 - If private benchmark scoring is enabled, the bundle must declare `execution.official_runs`.

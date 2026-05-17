@@ -40,8 +40,8 @@ same admin credentials for an HttpOnly browser session cookie and CSRF token.
 - Confirm metrics, ranking direction, and tie-breakers are unambiguous.
 - Confirm resource limits and network policies are appropriate for the selected
   target.
-- Confirm hosted images are digest-pinned when the deployment requires immutable
-  image references.
+- Confirm hosted images use `source: "registry"` and are digest-pinned when the
+  deployment requires immutable image references.
 - Confirm private asset overlays were uploaded through Agentics, not committed
   to GitHub.
 

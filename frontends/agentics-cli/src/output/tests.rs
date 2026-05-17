@@ -6,11 +6,19 @@ use shared::models::challenge::{
     PrivateBenchmarkPolicy, ResourceProfileSpec, ScorerSpec, SolutionSpec, TargetAccelerator,
 };
 use shared::models::evaluation::ScoreVisibility;
+use shared::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
 use shared::models::names::{ChallengeName, ResourceProfileName, TargetName};
 use shared::models::paths::BundleRelativePath;
 use shared::zip_project::ZipProjectNetworkAccess;
 
 use super::{OutputFormat, render_challenge_detail, render_challenge_list};
+
+/// Build a local Agentics image reference for CLI rendering tests.
+fn local_image(value: &str) -> ChallengeImageReference {
+    ChallengeImageReference::Local {
+        reference: LocalAgenticsImageReference::try_new(value).expect("test local image is valid"),
+    }
+}
 
 /// Verifies that renders challenge list table.
 #[test]
@@ -49,7 +57,7 @@ fn renders_challenge_detail_table() {
     assert!(output.contains("solution_publication: public"));
     assert!(
             output.contains(
-                "  - linux-arm64-cpu: linux/arm64 cpu, image=python:3.12-slim-bookworm, timeout=30 sec, memory=512 MB, validation=disabled"
+                "  - linux-arm64-cpu: linux/arm64 cpu, image=agentics-linux-arm64-cpu:ubuntu26.04-local, timeout=30 sec, memory=512 MB, validation=disabled"
             )
         );
     assert!(output.contains("ranking_metric: score"));
@@ -96,10 +104,8 @@ fn challenge_detail() -> ChallengeDetailResponse {
                 resource_profile: ResourceProfileSpec {
                     name: resource_profile_name("python-cpu-small"),
                     resource_description: None,
-                    solution_image: "python:3.12-slim-bookworm".to_string(),
-                    solution_image_digest: None,
-                    scorer_image: "python:3.12-slim-bookworm".to_string(),
-                    scorer_image_digest: None,
+                    solution_image: local_image("agentics-linux-arm64-cpu:ubuntu26.04-local"),
+                    scorer_image: local_image("agentics-linux-arm64-cpu:ubuntu26.04-local"),
                     timeout_sec: 30,
                     memory_limit_mb: 512,
                     cpu_limit_millis: 1000,

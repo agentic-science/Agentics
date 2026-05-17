@@ -70,10 +70,11 @@ docker buildx build \
   docker/images/linux-arm64-cpu
 ```
 
-Challenge specs must use the supported `agentics-linux-arm64-cpu` image
-repository with an `ubuntu26.04-*` tag. Hosted challenge specs must use
-digest-pinned `solution_image` and `scorer_image` references after the image is
-published.
+Challenge specs may use `source: "local"` for the local tag above during
+development. Hosted challenge specs must use `source: "registry"` with the
+published `ghcr.io/agentics-reifying/agentics-linux-arm64-cpu` repository, an
+`ubuntu26.04-*` tag, and digest-pinned `solution_image` and `scorer_image`
+references after the image is published.
 
 Do not publish `linux-amd64-cpu` variants until the platform has AMD64 Linux
 deployment capacity. Add a separate target-named image directory when that
