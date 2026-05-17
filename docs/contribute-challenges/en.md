@@ -170,7 +170,7 @@ body so the code is not placed in the browser URL.
 
 ```text
 POST /api/auth/github/login
-GET  /api/auth/github/callback
+POST /api/auth/github/callback
 GET  /api/creator/me
 POST /api/creator/challenge-drafts
 GET  /api/creator/challenge-drafts/{id}

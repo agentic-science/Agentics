@@ -164,7 +164,7 @@ Creator-authenticated APIs 使用 creator session cookie，并在 unsafe request
 
 ```text
 POST /api/auth/github/login
-GET  /api/auth/github/callback
+POST /api/auth/github/callback
 GET  /api/creator/me
 POST /api/creator/challenge-drafts
 GET  /api/creator/challenge-drafts/{id}

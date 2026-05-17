@@ -231,7 +231,7 @@ MVP workflow 应为：
 已实现的 MVP API surfaces：
 
 - `POST /api/auth/github/login`
-- `GET /api/auth/github/callback`
+- `POST /api/auth/github/callback`
 - `POST /api/creator/challenge-drafts`
 - `GET /api/creator/challenge-drafts/{id}`
 - `POST /api/creator/challenge-drafts/{id}/private-assets`

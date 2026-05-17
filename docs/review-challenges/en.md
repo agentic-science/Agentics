@@ -68,6 +68,10 @@ POST /admin/challenge-drafts/{id}/abandon
 POST /admin/challenge-drafts/{id}/publish
 ```
 
+Server-side Basic-auth callers must include
+`X-Agentics-Admin-Automation: true` on unsafe admin requests. Browser admin
+requests should use the session-cookie and CSRF-token flow instead.
+
 ## Admin CLI Helpers
 
 ```bash
