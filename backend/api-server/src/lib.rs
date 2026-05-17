@@ -15,6 +15,7 @@
     )
 )]
 
+pub mod admin_auth_throttle;
 pub mod auth_handlers;
 pub mod challenge_creation_handlers;
 pub mod extractors;

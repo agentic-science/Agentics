@@ -94,6 +94,7 @@ pub async fn create_solution_submission_with_job(
     .await?;
 
     let mut tx = pool.begin().await?;
+    ensure_challenge_is_active_tx(&mut tx, &input.challenge_name).await?;
     enforce_quota_admission(&mut tx, input).await?;
     ensure_parent_solution_submission_matches_scope_tx(
         &mut tx,
@@ -360,12 +361,38 @@ async fn enforce_quota_admission(
         let active = count_active_evaluation_jobs_tx(tx, ScoringMode::Official).await?;
         if active >= max_active {
             return Err(AppError::TooManyRequests(format!(
-                "official evaluation queue is full: {active} of {max_active} official jobs are queued or running"
+                "official evaluation queue is full: {active} of {max_active} official jobs are staged, queued, or running"
             )));
         }
     }
 
     Ok(())
+}
+
+/// Lock the challenge row and confirm it still accepts new submissions.
+async fn ensure_challenge_is_active_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    challenge_name: &ChallengeName,
+) -> Result<()> {
+    let row = sqlx::query(
+        r#"
+        SELECT name
+        FROM challenges
+        WHERE name = $1
+          AND status = 'active'
+          AND spec_json IS NOT NULL
+        FOR UPDATE
+        "#,
+    )
+    .bind(challenge_name.as_str())
+    .fetch_optional(&mut **tx)
+    .await?;
+
+    if row.is_some() {
+        Ok(())
+    } else {
+        Err(AppError::BadRequest("challenge not found".to_string()))
+    }
 }
 
 /// Handles lock quota scope for this module.
@@ -414,7 +441,6 @@ async fn count_recent_runs_for_agent_challenge_tx(
           AND s.challenge_name = $2
           AND s.target = $3
           AND j.eval_type = $4
-          AND j.status <> 'staged'
           AND s.created_at >= NOW() - ($5::DOUBLE PRECISION * INTERVAL '1 second')
         "#,
     )
@@ -446,7 +472,6 @@ async fn count_lifetime_runs_for_agent_challenge_tx(
           AND s.challenge_name = $2
           AND s.target = $3
           AND j.eval_type = $4
-          AND j.status <> 'staged'
         "#,
     )
     .bind(agent_id.as_str())
@@ -469,7 +494,7 @@ async fn count_active_evaluation_jobs_tx(
         SELECT COUNT(*)::BIGINT
         FROM evaluation_jobs
         WHERE eval_type = $1
-          AND status IN ('queued', 'running')
+          AND status IN ('staged', 'queued', 'running')
         "#,
     )
     .bind(eval_type.as_str())

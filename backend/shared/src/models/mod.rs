@@ -11,6 +11,7 @@ pub mod auth;
 pub mod challenge;
 pub mod challenge_creation;
 pub mod evaluation;
+pub mod github;
 pub mod hashes;
 pub mod ids;
 pub mod names;

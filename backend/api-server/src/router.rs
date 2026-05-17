@@ -69,7 +69,7 @@ pub fn router(config: &Config) -> Router<AppState> {
         )
         .route(
             "/api/auth/github/login",
-            get(crate::auth_handlers::github_oauth_login),
+            post(crate::auth_handlers::github_oauth_login),
         )
         .route(
             "/api/auth/github/callback",

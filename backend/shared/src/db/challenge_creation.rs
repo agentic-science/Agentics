@@ -11,6 +11,7 @@ use crate::models::challenge_creation::{
     ChallengeDraftStatus, ChallengeDraftValidationRecordResponse, ChallengeDraftValidationStatus,
     ChallengePrivateAssetKind, ChallengePrivateAssetResponse,
 };
+use crate::models::github::GithubPullRequestNumber;
 use crate::models::hashes::GitCommitSha;
 use crate::models::hashes::Sha256Digest;
 use crate::models::ids::{
@@ -34,10 +35,11 @@ use super::ids::{
 pub struct CreateChallengeDraftInput {
     pub draft_id: ChallengeDraftId,
     pub creator_agent_id: AgentId,
+    pub max_active_drafts: i64,
     pub creator_github_user_id: i64,
     pub creator_github_login: String,
     pub repo_url: GithubRepoRemote,
-    pub pr_number: i32,
+    pub pr_number: GithubPullRequestNumber,
     pub pr_url: GithubPullRequestUrl,
     pub commit_sha: GitCommitSha,
     pub challenge_path: RepoRelativePath,
@@ -126,6 +128,17 @@ pub async fn create_challenge_draft(
 ) -> Result<ChallengeDraftResponse> {
     let manifest_json =
         serde_json::to_value(&input.manifest).map_err(|e| AppError::Internal(e.to_string()))?;
+    let mut tx = pool.begin().await?;
+    let scope = format!("challenge-drafts:agent:{}", input.creator_agent_id);
+    lock_quota_scope(&mut tx, &scope).await?;
+    let active_drafts =
+        count_active_challenge_drafts_for_agent_tx(&mut tx, &input.creator_agent_id).await?;
+    if active_drafts >= input.max_active_drafts {
+        return Err(AppError::TooManyRequests(format!(
+            "challenge draft quota exceeded: {active_drafts} of {} active drafts are already open",
+            input.max_active_drafts
+        )));
+    }
     let row = sqlx::query(
         r#"
         INSERT INTO challenge_drafts (
@@ -157,14 +170,20 @@ pub async fn create_challenge_draft(
     .bind(&input.creator_github_login)
     .bind(input.repo_url.as_str())
     .bind(input.repo_url.repository_key().as_str())
-    .bind(input.pr_number)
+    .bind(input.pr_number.as_i32().map_err(|e| {
+        AppError::Internal(format!(
+            "invalid typed pull request number reached database: {e}"
+        ))
+    })?)
     .bind(input.pr_url.as_str())
     .bind(input.commit_sha.to_string())
     .bind(input.challenge_path.as_str())
     .bind(input.manifest_sha256.to_string())
     .bind(&manifest_json)
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await?;
+
+    tx.commit().await?;
 
     row_to_draft_response(row, Vec::new(), Vec::new())
 }
@@ -216,7 +235,10 @@ pub async fn list_challenge_drafts(
 }
 
 /// Count non-terminal drafts owned by an agent for creator quota enforcement.
-pub async fn count_active_challenge_drafts_for_agent(pool: &PgPool, agent_id: &str) -> Result<i64> {
+async fn count_active_challenge_drafts_for_agent_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    agent_id: &AgentId,
+) -> Result<i64> {
     let count = sqlx::query_scalar::<_, i64>(
         r#"
         SELECT COUNT(*)::BIGINT
@@ -225,8 +247,8 @@ pub async fn count_active_challenge_drafts_for_agent(pool: &PgPool, agent_id: &s
           AND status IN ('draft', 'validated', 'approved')
         "#,
     )
-    .bind(agent_id)
-    .fetch_one(pool)
+    .bind(agent_id.as_str())
+    .fetch_one(&mut **tx)
     .await?;
 
     Ok(count)
@@ -954,7 +976,7 @@ fn row_to_draft_response(
         creator_github_user_id: row.try_get("creator_github_user_id")?,
         creator_github_login: row.try_get("creator_github_login")?,
         repo_url: github_repo_remote_from_row(&row, "repo_url")?,
-        pr_number: row.try_get("pr_number")?,
+        pr_number: github_pull_request_number_from_row(&row, "pr_number")?,
         pr_url: github_pull_request_url_from_row(&row, "pr_url")?,
         commit_sha: git_commit_sha_from_row(&row, "commit_sha")?,
         challenge_path: repo_relative_path_from_row(&row, "challenge_path")?,
@@ -1013,6 +1035,16 @@ fn github_pull_request_url_from_row(
 ) -> Result<GithubPullRequestUrl> {
     let value: String = row.try_get(column)?;
     GithubPullRequestUrl::try_new(&value)
+        .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
+}
+
+/// Reads github pull request number from a database row and validates its domain shape.
+fn github_pull_request_number_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<GithubPullRequestNumber> {
+    let value: i32 = row.try_get(column)?;
+    GithubPullRequestNumber::try_new(value.to_string())
         .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
 }
 

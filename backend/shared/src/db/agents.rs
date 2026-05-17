@@ -7,12 +7,15 @@ use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use crate::db::pioneer_codes::{PioneerCodeRegistrationKind, consume_pioneer_code_for_agent_tx};
 use crate::error::{AppError, Result};
+use crate::models::ids::{AgentId, AgentTokenId};
+
+use super::ids::{agent_id_from_row, agent_token_id_from_row};
 
 /// Input for creating an agent and its initial bearer token in one transaction.
 #[derive(Debug, Clone)]
 pub struct RegisterAgentInput {
-    pub agent_id: String,
-    pub token_id: String,
+    pub agent_id: AgentId,
+    pub token_id: AgentTokenId,
     pub token_hash: String,
     pub display_name: String,
     pub agent_description: String,
@@ -23,7 +26,7 @@ pub struct RegisterAgentInput {
 /// Persisted agent row returned after registration.
 #[derive(Debug, Clone)]
 pub struct AgentRecord {
-    pub id: String,
+    pub id: AgentId,
     pub display_name: String,
     pub agent_description: String,
     pub owner: String,
@@ -35,8 +38,8 @@ pub struct AgentRecord {
 /// Agent identity resolved from a valid, active bearer token.
 #[derive(Debug, Clone)]
 pub struct AuthenticatedAgent {
-    pub agent_id: String,
-    pub token_id: String,
+    pub agent_id: AgentId,
+    pub token_id: AgentTokenId,
     pub display_name: String,
 }
 
@@ -72,7 +75,7 @@ pub async fn register_agent_with_pioneer_code(
     consume_pioneer_code_for_agent_tx(
         &mut tx,
         pioneer_code_hash,
-        &input.agent_id,
+        input.agent_id.as_str(),
         registration_kind,
     )
     .await?;
@@ -147,7 +150,7 @@ async fn insert_agent_tx(
         RETURNING id::text AS id, display_name, agent_description, owner, model_info, status, created_at
         "#,
     )
-    .bind(&input.agent_id)
+    .bind(input.agent_id.as_str())
     .bind(&input.display_name)
     .bind(&input.agent_description)
     .bind(&input.owner)
@@ -156,7 +159,7 @@ async fn insert_agent_tx(
     .await?;
 
     Ok(AgentRecord {
-        id: row.try_get("id")?,
+        id: agent_id_from_row(&row, "id")?,
         display_name: row.try_get("display_name")?,
         agent_description: row.try_get("agent_description")?,
         owner: row.try_get("owner")?,
@@ -174,8 +177,8 @@ async fn insert_agent_token_tx(
     sqlx::query(
         "INSERT INTO agent_tokens (id, agent_id, token_hash) VALUES ($1::uuid, $2::uuid, $3)",
     )
-    .bind(&input.token_id)
-    .bind(&input.agent_id)
+    .bind(input.token_id.as_str())
+    .bind(input.agent_id.as_str())
     .bind(&input.token_hash)
     .execute(&mut **tx)
     .await?;
@@ -218,14 +221,14 @@ pub async fn authenticate_agent_token(
         return Ok(None);
     };
 
-    let token_id: String = row.try_get("token_id")?;
+    let token_id = agent_token_id_from_row(&row, "token_id")?;
     sqlx::query("UPDATE agent_tokens SET last_used_at = NOW() WHERE id = $1::uuid")
-        .bind(&token_id)
+        .bind(token_id.as_str())
         .execute(pool)
         .await?;
 
     Ok(Some(AuthenticatedAgent {
-        agent_id: row.try_get("agent_id")?,
+        agent_id: agent_id_from_row(&row, "agent_id")?,
         token_id,
         display_name: row.try_get("display_name")?,
     }))

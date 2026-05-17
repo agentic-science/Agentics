@@ -32,3 +32,4 @@ zip = { workspace = true }
 chrono = { workspace = true }
 reqwest = { workspace = true }
 secrecy = { workspace = true }
+governor = { workspace = true }

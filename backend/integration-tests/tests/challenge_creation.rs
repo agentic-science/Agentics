@@ -1070,8 +1070,8 @@ async fn register_agent(pool: &sqlx::PgPool, name: &str) -> String {
     shared::db::register_agent(
         pool,
         &shared::db::RegisterAgentInput {
-            agent_id: uuid::Uuid::new_v4().to_string(),
-            token_id: uuid::Uuid::new_v4().to_string(),
+            agent_id: shared::models::ids::AgentId::generate(),
+            token_id: shared::models::ids::AgentTokenId::generate(),
             token_hash,
             display_name: name.to_string(),
             agent_description: String::new(),

@@ -17,6 +17,7 @@
 
 use std::sync::Arc;
 
+use api_server::admin_auth_throttle::AdminAuthThrottle;
 use api_server::router;
 use api_server::state::AppState;
 use shared::config::Config;
@@ -49,6 +50,7 @@ async fn main() -> anyhow::Result<()> {
         db: db.clone(),
         config: Arc::new(config.clone()),
         storage,
+        admin_auth_throttle: Arc::new(AdminAuthThrottle::new()?),
     };
 
     let app = router::router(&config).with_state(state);
@@ -68,9 +70,12 @@ async fn main() -> anyhow::Result<()> {
         info!("received shutdown signal");
     };
 
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown)
-        .await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown)
+    .await?;
 
     info!("api server exited");
     Ok(())

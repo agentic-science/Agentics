@@ -5,6 +5,7 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use api_server::admin_auth_throttle::AdminAuthThrottle;
 use api_server::router;
 use api_server::state::AppState;
 use chrono::{Duration, Utc};
@@ -51,6 +52,9 @@ pub async fn spawn_app_with_config(pool: PgPool, config: Config) -> TestApp {
         db: pool,
         config: Arc::new(config.clone()),
         storage,
+        admin_auth_throttle: Arc::new(
+            AdminAuthThrottle::new().expect("admin auth throttle should initialize"),
+        ),
     };
 
     let app = router::router(&config).with_state(state);
@@ -61,7 +65,12 @@ pub async fn spawn_app_with_config(pool: PgPool, config: Config) -> TestApp {
     let addr = listener.local_addr().unwrap();
 
     tokio::spawn(async move {
-        axum::serve(listener, app).await.unwrap();
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .unwrap();
     });
 
     // Give the spawned server task a chance to bind before the first request.
@@ -170,7 +179,7 @@ pub async fn create_creator_session(
     github_user_id: i64,
     github_login: &str,
 ) -> TestCreatorSession {
-    let fallback_agent_id = uuid::Uuid::new_v4().to_string();
+    let fallback_agent_id = shared::models::ids::AgentId::generate();
     let agent_id = shared::db::upsert_github_creator_agent(
         pool,
         &fallback_agent_id,
@@ -188,7 +197,7 @@ pub async fn create_creator_session(
             session_id: uuid::Uuid::new_v4().to_string(),
             session_token_hash: shared::auth::hash_opaque_token(&session_token),
             csrf_token_hash: shared::auth::hash_opaque_token(&csrf_token),
-            agent_id: agent_id.clone(),
+            agent_id: agent_id.as_str().to_string(),
             github_user_id,
             github_login: github_login.to_string(),
             expires_at: Utc::now()
@@ -200,7 +209,7 @@ pub async fn create_creator_session(
     .expect("creator session should insert");
 
     TestCreatorSession {
-        agent_id,
+        agent_id: agent_id.as_str().to_string(),
         cookie_header: format!("agentics_session={session_token}"),
         csrf_token,
     }

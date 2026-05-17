@@ -135,6 +135,11 @@ define_uuid_id_type!(
     "agent_id must be a canonical UUID string"
 );
 define_uuid_id_type!(
+    AgentTokenId,
+    "AgentTokenId",
+    "agent_token_id must be a canonical UUID string"
+);
+define_uuid_id_type!(
     AgentPioneerCodeId,
     "AgentPioneerCodeId",
     "agent_pioneer_code_id must be a canonical UUID string"
@@ -182,7 +187,7 @@ define_uuid_id_type!(
 
 #[cfg(test)]
 mod tests {
-    use super::{AgentId, ChallengeDraftId, SolutionSubmissionId};
+    use super::{AgentId, AgentTokenId, ChallengeDraftId, SolutionSubmissionId};
 
     /// Verifies that validates solution submission ids.
     #[test]
@@ -214,6 +219,12 @@ mod tests {
         assert_eq!(
             AgentId::try_new("F47AC10B-58CC-4372-A567-0E02B2C3D479")
                 .expect("UUID hex case should canonicalize")
+                .as_str(),
+            canonical
+        );
+        assert_eq!(
+            AgentTokenId::try_new(canonical)
+                .expect("agent token id should parse")
                 .as_str(),
             canonical
         );

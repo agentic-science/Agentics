@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use chrono::{DateTime, Utc};
 use serde_json::Value;
-use sqlx::{PgPool, Postgres, Row, Transaction};
+use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction};
 
 use crate::error::{AppError, Result};
 use crate::models::challenge::{ChallengeBundleSpec, MetricDirection};
@@ -239,7 +239,7 @@ async fn list_leaderboard_entries_inner(
         .ok_or(AppError::NotFound)?;
     let spec = serde_json::from_value::<ChallengeBundleSpec>(challenge.spec_json)
         .map_err(|e| AppError::Internal(format!("stored challenge spec is invalid: {e}")))?;
-    let rows = sqlx::query(
+    let mut query = QueryBuilder::<Postgres>::new(
         r#"
         SELECT
             le.target, le.agent_id, a.display_name AS agent_display_name, le.best_solution_submission_id,
@@ -249,17 +249,45 @@ async fn list_leaderboard_entries_inner(
         JOIN solution_submissions s ON s.id = le.best_solution_submission_id
         JOIN agents a ON a.id = le.agent_id
         JOIN challenges p ON p.name = le.challenge_name
-        WHERE p.name = $1
-          AND le.target = $2
+        WHERE p.name =
+        "#,
+    );
+    query
+        .push_bind(challenge_name.as_str())
+        .push(
+            r#"
+          AND le.target =
+        "#,
+        )
+        .push_bind(target.as_str())
+        .push(
+            r#"
           AND s.visible_after_eval = TRUE
           AND s.status = 'completed'
-        ORDER BY le.best_rank_score DESC, le.updated_at ASC
+        ORDER BY le.best_rank_score DESC
         "#,
-    )
-    .bind(challenge_name.as_str())
-    .bind(target.as_str())
-    .fetch_all(pool)
-    .await?;
+        );
+    for metric_name in &spec.metric_schema.ranking.tie_breaker_metric_names {
+        let Some(definition) = spec.metric_schema.metric(metric_name) else {
+            continue;
+        };
+        query.push(
+            ", (SELECT (metric->>'value')::double precision \
+             FROM jsonb_array_elements(COALESCE(le.aggregate_metrics_json, '[]'::jsonb)) AS metric \
+             WHERE metric->>'metric_name' = ",
+        );
+        query.push_bind(metric_name.as_str());
+        query.push(" LIMIT 1) ");
+        match definition.direction {
+            MetricDirection::Maximize => query.push("DESC NULLS LAST"),
+            MetricDirection::Minimize => query.push("ASC NULLS LAST"),
+        };
+    }
+    query
+        .push(", le.updated_at ASC, a.display_name ASC, le.best_solution_submission_id ASC LIMIT ")
+        .push_bind(requested_limit);
+
+    let rows = query.build().fetch_all(pool).await?;
 
     let mut entries = rows
         .into_iter()
@@ -294,8 +322,6 @@ async fn list_leaderboard_entries_inner(
         })
         .collect::<Result<Vec<_>>>()?;
 
-    entries.sort_by(|a, b| compare_leaderboard_entries(&spec, a, b));
-    entries.truncate(usize::try_from(requested_limit).unwrap_or(usize::MAX));
     if redact_metric_payloads {
         for entry in &mut entries {
             entry.aggregate_metrics.clear();
@@ -420,27 +446,6 @@ pub(super) async fn update_official_score_for_solution_submission_tx<'a>(
     .await?;
 
     Ok(())
-}
-
-/// Handles compare leaderboard entries for this module.
-fn compare_leaderboard_entries(
-    spec: &ChallengeBundleSpec,
-    a: &LeaderboardEntryDto,
-    b: &LeaderboardEntryDto,
-) -> Ordering {
-    compare_rank_payloads(
-        spec,
-        a.rank_score,
-        &a.aggregate_metrics,
-        b.rank_score,
-        &b.aggregate_metrics,
-    )
-    .then_with(|| a.updated_at.cmp(&b.updated_at))
-    .then_with(|| a.agent_display_name.cmp(&b.agent_display_name))
-    .then_with(|| {
-        a.best_solution_submission_id
-            .cmp(&b.best_solution_submission_id)
-    })
 }
 
 /// Handles compare rank payloads for this module.

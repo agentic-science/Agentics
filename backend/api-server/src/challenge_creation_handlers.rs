@@ -50,21 +50,13 @@ pub async fn create_challenge_draft(
             body.pr_author_github_user_id, creator.github_user_id
         )));
     }
-    let active_drafts =
-        db::count_active_challenge_drafts_for_agent(&state.db, creator.agent_id.as_str()).await?;
-    let max_active_drafts = i64::from(state.config.max_active_challenge_drafts_per_agent);
-    if active_drafts >= max_active_drafts {
-        return Err(AppError::TooManyRequests(format!(
-            "challenge draft quota exceeded: {active_drafts} of {max_active_drafts} active drafts are already open"
-        )));
-    }
-
     let manifest_sha256 = challenge_creation::normalized_manifest_sha256(&body.manifest)?;
     let draft = db::create_challenge_draft(
         &state.db,
         &db::CreateChallengeDraftInput {
             draft_id: ChallengeDraftId::generate(),
             creator_agent_id: creator.agent_id.clone(),
+            max_active_drafts: i64::from(state.config.max_active_challenge_drafts_per_agent),
             creator_github_user_id: creator.github_user_id,
             creator_github_login: creator.github_login.clone(),
             repo_url: body.repo_url,

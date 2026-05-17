@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::github::GithubPullRequestNumber;
 use super::hashes::{GitCommitSha, Sha256Digest};
 use super::ids::{
     AgentId, ChallengeDraftId, ChallengeDraftValidationRecordId, ChallengePrivateAssetId,
@@ -146,7 +147,7 @@ fn default_required() -> bool {
 #[serde(deny_unknown_fields)]
 pub struct CreateChallengeDraftRequest {
     pub repo_url: GithubRepoRemote,
-    pub pr_number: i32,
+    pub pr_number: GithubPullRequestNumber,
     pub pr_url: GithubPullRequestUrl,
     pub commit_sha: GitCommitSha,
     pub challenge_path: RepoRelativePath,
@@ -263,7 +264,7 @@ pub struct ChallengeDraftResponse {
     pub creator_github_user_id: i64,
     pub creator_github_login: String,
     pub repo_url: GithubRepoRemote,
-    pub pr_number: i32,
+    pub pr_number: GithubPullRequestNumber,
     pub pr_url: GithubPullRequestUrl,
     pub commit_sha: GitCommitSha,
     pub challenge_path: RepoRelativePath,

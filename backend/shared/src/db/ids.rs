@@ -3,8 +3,8 @@ use uuid::Uuid;
 
 use crate::error::{AppError, Result};
 use crate::models::ids::{
-    AgentId, ChallengeDraftId, ChallengeDraftValidationRecordId, ChallengePrivateAssetId,
-    ChallengeShortlistRevisionId, EvaluationJobId, SolutionSubmissionId,
+    AgentId, AgentTokenId, ChallengeDraftId, ChallengeDraftValidationRecordId,
+    ChallengePrivateAssetId, ChallengeShortlistRevisionId, EvaluationJobId, SolutionSubmissionId,
 };
 use crate::models::names::{AssetName, ChallengeName, TargetName};
 
@@ -66,6 +66,14 @@ pub(in crate::db) fn agent_id_from_row(
     column: &str,
 ) -> Result<AgentId> {
     parse_uuid_id_from_row(row, column, AgentId::try_new, "agent id")
+}
+
+/// Reads agent token id from a database row and validates its domain shape.
+pub(in crate::db) fn agent_token_id_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<AgentTokenId> {
+    parse_uuid_id_from_row(row, column, AgentTokenId::try_new, "agent token id")
 }
 
 /// Reads challenge draft id from a database row and validates its domain shape.

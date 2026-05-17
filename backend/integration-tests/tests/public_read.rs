@@ -76,9 +76,9 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
 
     run_worker_once(&pool, &config).await;
     assert_runner_persisted_only_intended_artifacts(storage.path(), &first_job_id);
-    set_official_primary_score_for_submission(&pool, pending_id, 42.0, 1.0).await;
+    set_official_primary_score_for_submission(&pool, pending_id, 42.0, 1.0, 1).await;
 
-    let second_response = client
+    let second_response: serde_json::Value = client
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token_b}"))
         .json(&serde_json::json!({
@@ -89,8 +89,13 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         }))
         .send()
         .await
-        .expect("failed to create second solution_submission");
-    assert_eq!(second_response.status(), 201);
+        .expect("failed to create second solution_submission")
+        .json()
+        .await
+        .expect("failed to decode second solution_submission");
+    let second_id = second_response["id"]
+        .as_str()
+        .expect("missing second solution submission id");
     run_worker_once(&pool, &config).await;
 
     let public_solution_submission_response = client
@@ -248,6 +253,23 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     assert_eq!(leaderboard_items[1]["agent_display_name"], "leader-b");
     assert_eq!(leaderboard_items[1]["best_rank_score"], 0.0);
 
+    set_official_primary_score_for_submission(&pool, second_id, 7.0, 1.0, 3).await;
+    let tie_break_leaderboard: serde_json::Value = client
+        .get(api_url(
+            &app,
+            "/api/public/challenges/sample-sum/leaderboard?target=linux-arm64-cpu&limit=1",
+        ))
+        .send()
+        .await
+        .expect("failed to get tie-break leaderboard")
+        .json()
+        .await
+        .expect("failed to decode tie-break leaderboard");
+    assert_eq!(
+        tie_break_leaderboard["items"][0]["agent_display_name"], "leader-b",
+        "bounded SQL ordering must apply declared numeric tie-breakers before limit"
+    );
+
     let limited_leaderboard: serde_json::Value = client
         .get(api_url(
             &app,
@@ -282,7 +304,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     assert_eq!(distribution["target"], "linux-arm64-cpu");
     assert_eq!(distribution["metric_name"], "score");
     assert_eq!(distribution["count"], 2);
-    assert_eq!(distribution["min"], 0.0);
+    assert_eq!(distribution["min"], 7.0);
     assert_eq!(distribution["max"], 42.0);
 
     let hidden_distribution = client
@@ -330,6 +352,7 @@ async fn set_official_primary_score_for_submission(
     solution_submission_id: &str,
     primary_score: f64,
     rank_score: f64,
+    passed_cases: i64,
 ) {
     sqlx::query(
         r#"
@@ -338,6 +361,7 @@ async fn set_official_primary_score_for_submission(
             rank_score = $3,
             aggregate_metrics_json = jsonb_build_array(
                 jsonb_build_object('metric_name', 'score', 'value', $2),
+                jsonb_build_object('metric_name', 'passed_cases', 'value', $4),
                 jsonb_build_object('metric_name', 'private_metric', 'value', 999)
             )
         WHERE solution_submission_id = $1::uuid
@@ -347,6 +371,7 @@ async fn set_official_primary_score_for_submission(
     .bind(solution_submission_id)
     .bind(primary_score)
     .bind(rank_score)
+    .bind(passed_cases)
     .execute(pool)
     .await
     .expect("official evaluation should update");
@@ -357,6 +382,7 @@ async fn set_official_primary_score_for_submission(
             official_score = $3,
             aggregate_metrics_json = jsonb_build_array(
                 jsonb_build_object('metric_name', 'score', 'value', $3),
+                jsonb_build_object('metric_name', 'passed_cases', 'value', $4),
                 jsonb_build_object('metric_name', 'private_metric', 'value', 999)
             ),
             official_metrics_json = jsonb_build_array(
@@ -368,6 +394,7 @@ async fn set_official_primary_score_for_submission(
     .bind(solution_submission_id)
     .bind(rank_score)
     .bind(primary_score)
+    .bind(passed_cases)
     .execute(pool)
     .await
     .expect("leaderboard entry should update");

@@ -11,16 +11,19 @@ use shared::db::{
     AuthenticatedAdminSession, authenticate_admin_session, authenticate_agent_token,
     authenticate_creator_session,
 };
+use shared::error::AppError;
+use shared::models::auth::GithubOauthLoginRequest;
 use shared::models::challenge_creation::{
     CreateChallengeDraftRequest, ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest,
     ValidateChallengeDraftRequest,
 };
-use shared::models::ids::{AgentId, ChallengeDraftId, SolutionSubmissionId};
+use shared::models::ids::{AgentId, AgentTokenId, ChallengeDraftId, SolutionSubmissionId};
 use shared::models::request::{
     CreateChallengeRequest, CreateChallengeShortlistRevisionRequest, CreatePioneerCodeRequest,
     CreateSolutionSubmissionRequest, PublishChallengeRequest, RegisterAgentRequest,
 };
 
+use crate::admin_auth_throttle::remote_addr_from_parts;
 use crate::state::AppState;
 
 /// Validated solution-submission id extracted from a route path.
@@ -80,7 +83,7 @@ impl FromRequestParts<AppState> for ChallengeDraftIdPath {
 pub struct AgentAuth {
     /// Database id of the authenticated agent.
     pub agent_id: AgentId,
-    pub _token_id: String,
+    pub _token_id: AgentTokenId,
     pub _display_name: String,
 }
 
@@ -106,8 +109,7 @@ impl FromRequestParts<AppState> for AgentAuth {
             .ok_or_else(|| unauthorized("token 无效或已被撤销"))?;
 
         Ok(AgentAuth {
-            agent_id: AgentId::try_new(agent.agent_id)
-                .map_err(|_| unauthorized("token 无效或已被撤销"))?,
+            agent_id: agent.agent_id,
             _token_id: agent.token_id,
             _display_name: agent.display_name,
         })
@@ -146,6 +148,19 @@ impl FromRequestParts<AppState> for AdminAuth {
                 return Ok(AdminAuth {
                     username: parsed.username,
                 });
+            }
+            let remote_addr = remote_addr_from_parts(parts);
+            if let Err(AppError::TooManyRequests(message)) = state
+                .admin_auth_throttle
+                .record_failed_attempt(&parsed.username, &remote_addr)
+            {
+                return Err((
+                    StatusCode::TOO_MANY_REQUESTS,
+                    axum::Json(shared::models::ErrorResponse {
+                        error: "too_many_requests".to_string(),
+                        message,
+                    }),
+                ));
             }
             return Err(unauthorized("需要有效的 admin basic auth"));
         }
@@ -365,12 +380,16 @@ impl ValidateRequest for CreatePioneerCodeRequest {
 impl ValidateRequest for CreateChallengeDraftRequest {
     /// Ensures GitHub draft metadata has positive numeric identifiers.
     fn validate(&self) -> Result<(), String> {
-        if self.pr_number <= 0 {
-            return Err("pr_number must be greater than zero".to_string());
-        }
         if self.pr_author_github_user_id <= 0 {
             return Err("pr_author_github_user_id must be greater than zero".to_string());
         }
+        Ok(())
+    }
+}
+
+impl ValidateRequest for GithubOauthLoginRequest {
+    /// Defers pioneer-code semantics to the handler, which needs runtime config.
+    fn validate(&self) -> Result<(), String> {
         Ok(())
     }
 }

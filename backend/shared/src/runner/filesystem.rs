@@ -103,7 +103,11 @@ fn extract_zip_safe_blocking(artifact_path: &Path, target_dir: &Path) -> Result<
         let mut file = archive.by_index(i)?;
         let outpath = match file.enclosed_name() {
             Some(path) => target_dir.join(path),
-            None => continue,
+            None => {
+                return Err(AppError::Validation(
+                    "solution archive contains an unsafe ZIP entry path".to_string(),
+                ));
+            }
         };
 
         total_uncompressed_size = total_uncompressed_size
@@ -197,9 +201,9 @@ mod tests {
         archive.finish().expect("failed to finish test zip");
     }
 
-    /// Verifies that extract zip safe skips unsafe entry names.
+    /// Verifies that extract zip safe rejects unsafe entry names.
     #[tokio::test]
-    async fn extract_zip_safe_skips_unsafe_entry_names() {
+    async fn extract_zip_safe_rejects_unsafe_entry_names() {
         let zip_path = temp_path("unsafe-entry.zip");
         let target_dir = temp_path("unsafe-target");
         std::fs::create_dir_all(&target_dir).expect("failed to create target dir");
@@ -212,17 +216,12 @@ mod tests {
             ],
         );
 
-        extract_zip_safe(&zip_path, &target_dir)
+        let error = extract_zip_safe(&zip_path, &target_dir)
             .await
-            .expect("extraction should succeed");
-
-        let extracted_files = std::fs::read_dir(&target_dir)
-            .expect("failed to read target dir")
-            .collect::<std::result::Result<Vec<_>, _>>()
-            .expect("failed to collect target dir entries");
-        assert_eq!(extracted_files.len(), 2);
-        assert!(target_dir.join("main.py").is_file());
-        assert!(target_dir.join("scripts/setup.sh").is_file());
+            .expect_err("unsafe entry should fail extraction");
+        assert!(error.to_string().contains("unsafe ZIP entry path"));
+        assert!(!target_dir.join("main.py").exists());
+        assert!(!target_dir.join("scripts/setup.sh").exists());
 
         drop(std::fs::remove_file(zip_path));
         drop(std::fs::remove_dir_all(target_dir));

@@ -33,7 +33,9 @@ use shared::models::challenge::{
     ChallengeSolutionPublicationPolicy, ChallengeVisibility, PublishChallengeResponse,
 };
 use shared::models::evaluation::{EvaluationJobStatus, ScoringMode};
-use shared::models::ids::{AgentId, AgentPioneerCodeId, EvaluationJobId, SolutionSubmissionId};
+use shared::models::ids::{
+    AgentId, AgentPioneerCodeId, AgentTokenId, EvaluationJobId, SolutionSubmissionId,
+};
 use shared::models::names::{ChallengeName, MetricName, TargetName};
 use shared::models::paths::AdminBundlePath;
 use shared::models::pioneer_codes::PioneerCode;
@@ -105,8 +107,8 @@ pub async fn register_agent(
     let token_hash = auth::hash_agent_token(&token);
 
     let input = db::RegisterAgentInput {
-        agent_id: Uuid::new_v4().to_string(),
-        token_id: Uuid::new_v4().to_string(),
+        agent_id: AgentId::generate(),
+        token_id: AgentTokenId::generate(),
         token_hash,
         display_name: body.display_name.trim().to_string(),
         agent_description: body.agent_description.trim().to_string(),

@@ -7,7 +7,6 @@ use helpers::{
 };
 use reqwest::StatusCode;
 use shared::models::ids::AgentPioneerCodeId;
-use uuid::Uuid;
 
 /// Verifies default MVP registration mode rejects code-free registration and consumes finite codes.
 #[sqlx::test(migrations = "../migrations")]
@@ -180,6 +179,53 @@ async fn finite_pioneer_code_consumption_is_atomic(pool: sqlx::PgPool) {
     assert!(statuses.contains(&StatusCode::FORBIDDEN));
 }
 
+/// Verifies GitHub OAuth starts with a POST body so pioneer codes stay out of URLs.
+#[sqlx::test(migrations = "../migrations")]
+async fn github_oauth_login_start_uses_post_body(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let mut config = test_config(storage.path(), &examples_challenges_root());
+    config.agent_registration_mode = "pioneer_code".to_string();
+    let app = spawn_app_with_config(pool, config.clone()).await;
+    let client = reqwest::Client::new();
+    let auth = basic_auth_header(
+        &config.admin_username,
+        config.expose_admin_password_for_http_basic(),
+    );
+
+    client
+        .post(api_url(&app, "/admin/pioneer-codes"))
+        .header("Authorization", auth)
+        .json(&serde_json::json!({ "code": "deadbeef", "max_uses": 1 }))
+        .send()
+        .await
+        .expect("failed to create pioneer code");
+
+    let get_response = client
+        .get(api_url(
+            &app,
+            "/api/auth/github/login?pioneer_code=deadbeef",
+        ))
+        .send()
+        .await
+        .expect("failed to call old OAuth start route");
+    assert_eq!(get_response.status(), StatusCode::METHOD_NOT_ALLOWED);
+
+    let post_response: serde_json::Value = client
+        .post(api_url(&app, "/api/auth/github/login"))
+        .json(&serde_json::json!({ "pioneer_code": "deadbeef" }))
+        .send()
+        .await
+        .expect("failed to start OAuth login")
+        .json()
+        .await
+        .expect("failed to decode OAuth login response");
+    let authorization_url = post_response["authorization_url"]
+        .as_str()
+        .expect("authorization_url should exist");
+    assert!(authorization_url.starts_with("https://github.com/login/oauth/authorize"));
+    assert!(!authorization_url.contains("pioneer_code"));
+}
+
 /// Verifies creator OAuth account creation uses the same code consumption primitive.
 #[sqlx::test(migrations = "../migrations")]
 async fn creator_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
@@ -202,7 +248,7 @@ async fn creator_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
     .await
     .expect("pioneer code should insert");
 
-    let first_agent_id = Uuid::new_v4().to_string();
+    let first_agent_id = shared::models::ids::AgentId::generate();
     let stored_agent_id = shared::db::upsert_github_creator_agent_with_pioneer_code(
         &pool,
         &first_agent_id,
@@ -215,7 +261,7 @@ async fn creator_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
     .expect("first oauth login should create agent");
     assert_eq!(stored_agent_id, first_agent_id);
 
-    let repeated_agent_id = Uuid::new_v4().to_string();
+    let repeated_agent_id = shared::models::ids::AgentId::generate();
     let repeated = shared::db::upsert_github_creator_agent_with_pioneer_code(
         &pool,
         &repeated_agent_id,
@@ -235,12 +281,12 @@ async fn creator_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
     assert_eq!(uses.len(), 1);
     assert_eq!(uses[0].registration_kind, "creator_oauth");
 
-    shared::db::disable_agent(&pool, &first_agent_id)
+    shared::db::disable_agent(&pool, first_agent_id.as_str())
         .await
         .expect("agent should disable");
     let disabled = shared::db::upsert_github_creator_agent_with_pioneer_code(
         &pool,
-        &Uuid::new_v4().to_string(),
+        &shared::models::ids::AgentId::generate(),
         42,
         "creator-login",
         Some(&code_hash),

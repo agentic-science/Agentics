@@ -2,7 +2,7 @@
 
 use axum::{
     Json,
-    extract::{Query, State},
+    extract::{ConnectInfo, Query, State},
     http::{HeaderMap, HeaderName, StatusCode, header},
     response::AppendHeaders,
 };
@@ -10,7 +10,6 @@ use chrono::{Duration, Utc};
 use reqwest::Url;
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
-use uuid::Uuid;
 
 use shared::auth;
 use shared::config::AgentRegistrationMode;
@@ -18,13 +17,13 @@ use shared::db;
 use shared::error::{AppError, Result};
 use shared::models::auth::{
     AdminLoginRequest, AdminSessionResponse, CreatorMeResponse, CreatorSessionResponse,
-    GithubOauthCallbackQuery, GithubOauthLoginResponse,
+    GithubOauthCallbackQuery, GithubOauthLoginRequest, GithubOauthLoginResponse,
 };
 use shared::models::ids::AgentId;
-use shared::models::pioneer_codes::{PioneerCode, PioneerCodeInput};
+use shared::models::pioneer_codes::PioneerCode;
 use shared::models::urls::GithubOauthAuthorizationUrl;
 
-use crate::extractors::{AdminAuth, CreatorAuth};
+use crate::extractors::{AdminAuth, CreatorAuth, ValidatedJson};
 use crate::pioneer_code_security::{is_invalid_pioneer_code, reject_failed_pioneer_code};
 use crate::state::AppState;
 
@@ -46,15 +45,10 @@ struct GithubUserResponse {
     login: String,
 }
 
-/// Query parameters accepted when starting GitHub OAuth.
-#[derive(Debug, Deserialize)]
-pub struct GithubOauthLoginQuery {
-    pioneer_code: Option<PioneerCodeInput>,
-}
-
 /// Authenticate an administrator and issue a browser session.
 pub async fn admin_login(
     State(state): State<AppState>,
+    ConnectInfo(remote_addr): ConnectInfo<std::net::SocketAddr>,
     Json(request): Json<AdminLoginRequest>,
 ) -> Result<(
     StatusCode,
@@ -62,6 +56,9 @@ pub async fn admin_login(
     Json<AdminSessionResponse>,
 )> {
     if request.username.trim().is_empty() || request.password.expose_secret().is_empty() {
+        state
+            .admin_auth_throttle
+            .record_failed_attempt(&request.username, &remote_addr.ip().to_string())?;
         return Err(AppError::Unauthorized);
     }
     if request.username != state.config.admin_username
@@ -69,6 +66,9 @@ pub async fn admin_login(
             .config
             .admin_password_matches(request.password.expose_secret())
     {
+        state
+            .admin_auth_throttle
+            .record_failed_attempt(&request.username, &remote_addr.ip().to_string())?;
         return Err(AppError::Unauthorized);
     }
     let username = request.username.trim().to_string();
@@ -81,7 +81,7 @@ pub async fn admin_login(
     db::create_admin_session(
         &state.db,
         &db::CreateAdminSessionInput {
-            session_id: Uuid::new_v4().to_string(),
+            session_id: uuid::Uuid::new_v4().to_string(),
             session_token_hash: auth::hash_opaque_token(&session_token),
             csrf_token_hash: auth::hash_opaque_token(&csrf_token),
             admin_username: username.clone(),
@@ -154,7 +154,7 @@ pub async fn admin_session(
 /// Start a GitHub OAuth login for challenge creators.
 pub async fn github_oauth_login(
     State(state): State<AppState>,
-    Query(query): Query<GithubOauthLoginQuery>,
+    ValidatedJson(request): ValidatedJson<GithubOauthLoginRequest>,
 ) -> Result<Json<GithubOauthLoginResponse>> {
     let client_id = required_oauth_config(
         state.config.github_oauth_client_id.as_deref(),
@@ -176,7 +176,7 @@ pub async fn github_oauth_login(
         .map_err(|e| AppError::Internal(e.to_string()))?
     {
         AgentRegistrationMode::PioneerCode => {
-            let Some(code) = query.pioneer_code.as_ref() else {
+            let Some(code) = request.pioneer_code.as_ref() else {
                 return Err(reject_failed_pioneer_code().await);
             };
             let Ok(code) = PioneerCode::try_new(code.expose_secret().to_string()) else {
@@ -238,7 +238,7 @@ pub async fn github_oauth_callback(
         ));
     }
 
-    let fallback_agent_id = Uuid::new_v4().to_string();
+    let fallback_agent_id = AgentId::generate();
     let agent_id = match db::upsert_github_creator_agent_with_pioneer_code(
         &state.db,
         &fallback_agent_id,
@@ -255,8 +255,6 @@ pub async fn github_oauth_callback(
         }
         Err(error) => return Err(error),
     };
-    let agent_id = AgentId::try_new(agent_id)
-        .map_err(|e| AppError::Internal(format!("stored invalid GitHub creator agent id: {e}")))?;
 
     let session_token = auth::create_web_session_token();
     let csrf_token = auth::create_csrf_token();
@@ -265,7 +263,7 @@ pub async fn github_oauth_callback(
     db::create_creator_session(
         &state.db,
         &db::CreateCreatorSessionInput {
-            session_id: Uuid::new_v4().to_string(),
+            session_id: uuid::Uuid::new_v4().to_string(),
             session_token_hash: auth::hash_opaque_token(&session_token),
             csrf_token_hash: auth::hash_opaque_token(&csrf_token),
             agent_id: agent_id.as_str().to_string(),

@@ -8,7 +8,6 @@ use shared::models::challenge::{ChallengeBundleSpec, ChallengeDetailResponse};
 use shared::models::evaluation::{
     EvaluationDto, EvaluationJobStatus, ScoringMode, SolutionSubmissionStatus,
 };
-use shared::models::ids::AgentId;
 use shared::models::pioneer_codes::{PioneerCodeStatus, PioneerCodeUseKind};
 use shared::models::request::{
     CreateSolutionSubmissionResponse, PioneerCodeDetailResponse, PioneerCodeDto,
@@ -18,11 +17,7 @@ use shared::models::request::{
 /// Present a newly registered agent together with its one-time bearer token.
 pub fn present_register_agent(agent: &AgentRecord, token: &str) -> Result<RegisterAgentResponse> {
     Ok(RegisterAgentResponse {
-        agent_id: AgentId::try_new(&agent.id).map_err(|e| {
-            AppError::Internal(format!(
-                "database returned invalid registered agent id: {e}"
-            ))
-        })?,
+        agent_id: agent.id.clone(),
         token: token.to_string(),
         display_name: agent.display_name.clone(),
         created_at: agent.created_at.to_rfc3339(),

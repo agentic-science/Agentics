@@ -6,6 +6,9 @@ use sqlx::{PgPool, Row};
 use crate::db::agents::enforce_active_agent_quota_tx;
 use crate::db::pioneer_codes::{PioneerCodeRegistrationKind, consume_pioneer_code_for_agent_tx};
 use crate::error::{AppError, Result};
+use crate::models::ids::AgentId;
+
+use super::ids::agent_id_from_row;
 
 /// Role attached to a browser session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -86,11 +89,11 @@ pub struct ConsumedGithubOauthState {
 /// keeps foreign-key ownership stable without issuing an agent bearer token.
 pub async fn upsert_github_creator_agent(
     pool: &PgPool,
-    agent_id: &str,
+    agent_id: &AgentId,
     github_user_id: i64,
     github_login: &str,
     max_active_agents: i64,
-) -> Result<String> {
+) -> Result<AgentId> {
     upsert_github_creator_agent_with_pioneer_code(
         pool,
         agent_id,
@@ -106,12 +109,12 @@ pub async fn upsert_github_creator_agent(
 /// when this OAuth identity creates a new agent row.
 pub async fn upsert_github_creator_agent_with_pioneer_code(
     pool: &PgPool,
-    agent_id: &str,
+    agent_id: &AgentId,
     github_user_id: i64,
     github_login: &str,
     pioneer_code_hash: Option<&str>,
     max_active_agents: i64,
-) -> Result<String> {
+) -> Result<AgentId> {
     let mut tx = pool.begin().await?;
 
     let existing = sqlx::query(
@@ -127,7 +130,7 @@ pub async fn upsert_github_creator_agent_with_pioneer_code(
     .await?;
 
     if let Some(row) = existing {
-        let id: String = row.try_get("id")?;
+        let id = agent_id_from_row(&row, "id")?;
         let status: String = row.try_get("status")?;
         if status != "active" {
             return Err(AppError::Forbidden(
@@ -145,7 +148,7 @@ pub async fn upsert_github_creator_agent_with_pioneer_code(
         )
         .bind(github_login.trim())
         .bind(format!("github:{github_login}"))
-        .bind(&id)
+        .bind(id.as_str())
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
@@ -170,7 +173,7 @@ pub async fn upsert_github_creator_agent_with_pioneer_code(
         RETURNING id::text AS id
         "#,
     )
-    .bind(agent_id)
+    .bind(agent_id.as_str())
     .bind(github_login.trim())
     .bind(format!("github:{github_login}"))
     .bind(github_user_id)
@@ -182,7 +185,7 @@ pub async fn upsert_github_creator_agent_with_pioneer_code(
         consume_pioneer_code_for_agent_tx(
             &mut tx,
             code_hash,
-            agent_id,
+            agent_id.as_str(),
             PioneerCodeRegistrationKind::CreatorOauth,
         )
         .await?;
@@ -190,7 +193,7 @@ pub async fn upsert_github_creator_agent_with_pioneer_code(
 
     tx.commit().await?;
 
-    Ok(row.try_get("id")?)
+    agent_id_from_row(&row, "id")
 }
 
 /// Store a GitHub OAuth state token hash for callback validation.

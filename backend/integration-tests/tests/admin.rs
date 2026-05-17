@@ -508,6 +508,64 @@ async fn admin_session_cookie_authenticates_admin_routes(pool: sqlx::PgPool) {
     );
 }
 
+/// Verifies process-local throttling for repeated failed admin authentication.
+#[sqlx::test(migrations = "../migrations")]
+async fn failed_admin_authentication_is_throttled(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = test_config(storage.path(), &examples_challenges_root());
+    let app = spawn_app_with_config(pool, config).await;
+    let client = reqwest::Client::new();
+
+    for _ in 0..5 {
+        let response = client
+            .post(api_url(&app, "/api/auth/admin/login"))
+            .json(&serde_json::json!({
+                "username": "admin",
+                "password": "wrong-password"
+            }))
+            .send()
+            .await
+            .expect("failed admin login should receive response");
+        assert_eq!(response.status(), reqwest::StatusCode::UNAUTHORIZED);
+    }
+
+    let throttled_login = client
+        .post(api_url(&app, "/api/auth/admin/login"))
+        .json(&serde_json::json!({
+            "username": "admin",
+            "password": "wrong-password"
+        }))
+        .send()
+        .await
+        .expect("throttled admin login should receive response");
+    assert_eq!(
+        throttled_login.status(),
+        reqwest::StatusCode::TOO_MANY_REQUESTS
+    );
+
+    let bad_basic = helpers::basic_auth_header("other", "wrong-password");
+    for _ in 0..5 {
+        let response = client
+            .get(api_url(&app, "/admin/challenges"))
+            .header("Authorization", bad_basic.clone())
+            .send()
+            .await
+            .expect("failed basic auth should receive response");
+        assert_eq!(response.status(), reqwest::StatusCode::UNAUTHORIZED);
+    }
+
+    let throttled_basic = client
+        .get(api_url(&app, "/admin/challenges"))
+        .header("Authorization", bad_basic)
+        .send()
+        .await
+        .expect("throttled basic auth should receive response");
+    assert_eq!(
+        throttled_basic.status(),
+        reqwest::StatusCode::TOO_MANY_REQUESTS
+    );
+}
+
 /// Verifies that admin official run bypasses public official queue limit.
 #[sqlx::test(migrations = "../migrations")]
 async fn admin_official_run_bypasses_public_official_queue_limit(pool: sqlx::PgPool) {
