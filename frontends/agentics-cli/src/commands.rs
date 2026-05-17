@@ -13,7 +13,7 @@ use shared::models::challenge_creation::{
     ChallengePrivateAssetKind, ReviewChallengeDraftRequest, ValidateChallengeDraftRequest,
 };
 use shared::models::evaluation::{EvaluationJobPayload, ScoringMode, SolutionSubmissionStatus};
-use shared::models::ids::SolutionSubmissionId;
+use shared::models::ids::{ChallengeDraftId, SolutionSubmissionId};
 use shared::models::names::{ChallengeName, MetricName, TargetName};
 use shared::models::pioneer_codes::{PioneerCode, PioneerCodeInput};
 use shared::models::request::{
@@ -135,7 +135,7 @@ pub(crate) async fn challenge_draft(
                         repository_path: repository_path.to_string_lossy().to_string(),
                     },
                     &admin.admin_username,
-                    admin_password.expose_secret(),
+                    &admin_password,
                 )
                 .await?;
             output::render_challenge_draft(&response, output_format)
@@ -185,7 +185,7 @@ pub(crate) async fn challenge_draft(
                         repository_path: repository_path.to_string_lossy().to_string(),
                     },
                     &admin.admin_username,
-                    admin_password.expose_secret(),
+                    &admin_password,
                 )
                 .await?;
             output::render_challenge_draft(&response, output_format)
@@ -209,10 +209,7 @@ pub(crate) async fn challenge_draft(
         ChallengeDraftCommand::Cleanup { admin } => {
             let admin_password = resolve_admin_password(&admin, settings)?;
             let response = client
-                .cleanup_challenge_drafts_admin(
-                    &admin.admin_username,
-                    admin_password.expose_secret(),
-                )
+                .cleanup_challenge_drafts_admin(&admin.admin_username, &admin_password)
                 .await?;
             output::render_challenge_draft_cleanup(&response, output_format)
         }
@@ -417,7 +414,7 @@ async fn review_draft(
     client: &ApiClient,
     output_format: cli::OutputFormat,
     admin: AdminAuthArgs,
-    draft_id: String,
+    draft_id: ChallengeDraftId,
     message: String,
     action: DraftReviewAction,
     settings: &ResolvedSettings,
@@ -431,7 +428,7 @@ async fn review_draft(
                     &draft_id,
                     &request,
                     &admin.admin_username,
-                    admin_password.expose_secret(),
+                    &admin_password,
                 )
                 .await?
         }
@@ -441,7 +438,7 @@ async fn review_draft(
                     &draft_id,
                     &request,
                     &admin.admin_username,
-                    admin_password.expose_secret(),
+                    &admin_password,
                 )
                 .await?
         }
@@ -451,7 +448,7 @@ async fn review_draft(
                     &draft_id,
                     &request,
                     &admin.admin_username,
-                    admin_password.expose_secret(),
+                    &admin_password,
                 )
                 .await?
         }

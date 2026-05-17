@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use shared::models::hashes::GitCommitSha;
-use shared::models::ids::SolutionSubmissionId;
+use shared::models::ids::{ChallengeDraftId, SolutionSubmissionId};
 use shared::models::names::{AssetName, ChallengeName, MetricName, TargetName};
 
 /// Agent-facing command line for registration, challenge discovery, and
@@ -226,10 +226,10 @@ pub(crate) enum ChallengeDraftCommand {
         pr_author_github_user_id: i64,
     },
     /// Show a draft owned by this agent.
-    Status { draft_id: String },
+    Status { draft_id: ChallengeDraftId },
     /// Upload one private benchmark asset to Agentics storage.
     UploadPrivateAsset {
-        draft_id: String,
+        draft_id: ChallengeDraftId,
         #[arg(long)]
         asset_name: AssetName,
         #[arg(long, value_enum)]
@@ -241,7 +241,7 @@ pub(crate) enum ChallengeDraftCommand {
     },
     /// Admin validation against a checked-out repository path.
     Validate {
-        draft_id: String,
+        draft_id: ChallengeDraftId,
         #[arg(long, value_name = "PATH")]
         repository_path: PathBuf,
         #[command(flatten)]
@@ -249,7 +249,7 @@ pub(crate) enum ChallengeDraftCommand {
     },
     /// Admin approval after validation passes.
     Approve {
-        draft_id: String,
+        draft_id: ChallengeDraftId,
         #[arg(long, default_value = "")]
         message: String,
         #[command(flatten)]
@@ -257,7 +257,7 @@ pub(crate) enum ChallengeDraftCommand {
     },
     /// Admin rejection with optional feedback.
     Reject {
-        draft_id: String,
+        draft_id: ChallengeDraftId,
         #[arg(long, default_value = "")]
         message: String,
         #[command(flatten)]
@@ -265,7 +265,7 @@ pub(crate) enum ChallengeDraftCommand {
     },
     /// Admin publish of an approved draft.
     Publish {
-        draft_id: String,
+        draft_id: ChallengeDraftId,
         #[arg(long, value_name = "PATH")]
         repository_path: PathBuf,
         #[command(flatten)]
@@ -273,7 +273,7 @@ pub(crate) enum ChallengeDraftCommand {
     },
     /// Admin abandon for a closed or withdrawn draft.
     Abandon {
-        draft_id: String,
+        draft_id: ChallengeDraftId,
         #[arg(long, default_value = "")]
         message: String,
         #[command(flatten)]

@@ -195,7 +195,7 @@ pub(super) fn ranking_context_json() -> serde_json::Value {
         "solution_submission_id": "11111111-1111-4111-8111-111111111111",
         "rank": 1,
         "total_ranked": 2,
-        "percentile": 100.0,
+        "percentile": 1.0,
         "is_agent_best": true,
         "entry": leaderboard_json()["items"][0].clone(),
         "nearby_entries": [

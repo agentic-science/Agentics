@@ -683,7 +683,7 @@ pub(crate) fn render_solution_submission_report(
             let official_score = submission
                 .official_evaluation
                 .as_ref()
-                .and_then(|evaluation| evaluation.primary_score.or(evaluation.rank_score))
+                .and_then(|evaluation| evaluation.primary_score)
                 .map(format_score)
                 .unwrap_or_else(|| "none".to_string());
             let rank_score = submission

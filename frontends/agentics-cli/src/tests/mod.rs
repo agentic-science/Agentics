@@ -82,6 +82,43 @@ async fn register_persists_returned_token() {
     );
 }
 
+/// Verifies that malformed success bodies do not leak one-time registration tokens.
+#[tokio::test]
+async fn register_decode_error_redacts_success_body() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/api/agents/register"))
+        .respond_with(
+            ResponseTemplate::new(201)
+                .set_body_string(r#"{"token":"agentics_secret_token","agent_id":"#),
+        )
+        .mount(&server)
+        .await;
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let config_path = temp.path().join("config.toml");
+    let cli = Cli::parse_from([
+        "agentics",
+        "--config",
+        config_path.to_str().expect("utf8 path"),
+        "--api-base-url",
+        &server.uri(),
+        "register",
+        "--display-name",
+        "solver",
+        "--pioneer-code",
+        "deadbeef",
+    ]);
+
+    let error = execute(cli, Environment::default())
+        .await
+        .expect_err("malformed success JSON should fail");
+    let message = format!("{error:#}");
+
+    assert!(!message.contains("agentics_secret_token"));
+    assert!(message.contains("body_bytes="));
+}
+
 /// Verifies that register refuses to send a request without a pioneer code.
 #[tokio::test]
 async fn register_requires_pioneer_code_before_http() {
@@ -880,6 +917,71 @@ async fn submissions_rank_uses_authenticated_context_with_token() {
     assert!(output.contains("rank: 1"));
 }
 
+/// Verifies that ranking context falls back to the public route when owner details are hidden.
+#[tokio::test]
+async fn submissions_rank_falls_back_to_public_context_after_auth_forbidden() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/public/challenges/sample-sum"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(challenge_detail_json(true)))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/api/solution-submissions/11111111-1111-4111-8111-111111111111/ranking-context",
+        ))
+        .and(header("authorization", "Bearer test-token"))
+        .and(query_param("challenge_name", "sample-sum"))
+        .and(query_param("target", "linux-arm64-cpu"))
+        .respond_with(ResponseTemplate::new(403).set_body_json(json!({
+            "error": "forbidden",
+            "message": "ranking context hidden"
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/api/public/solution-submissions/11111111-1111-4111-8111-111111111111/ranking-context",
+        ))
+        .and(query_param("challenge_name", "sample-sum"))
+        .and(query_param("target", "linux-arm64-cpu"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(ranking_context_json()))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let config_path = temp.path().join("config.toml");
+    let cli = Cli::parse_from([
+        "agentics",
+        "--config",
+        config_path.to_str().expect("utf8 path"),
+        "--api-base-url",
+        &server.uri(),
+        "submissions",
+        "rank",
+        "11111111-1111-4111-8111-111111111111",
+        "--challenge",
+        "sample-sum",
+        "--target",
+        "linux-arm64-cpu",
+    ]);
+
+    let output = execute(
+        cli,
+        Environment {
+            token: Some(SecretString::from("test-token")),
+            ..Environment::default()
+        },
+    )
+    .await
+    .expect("submissions rank should fall back to public context");
+
+    assert!(output.contains("solution_submission: 11111111-1111-4111-8111-111111111111"));
+    assert!(output.contains("rank: 1"));
+}
+
 /// Verifies that old status command is removed.
 #[test]
 fn old_status_command_is_removed() {
@@ -906,6 +1008,25 @@ fn invalid_submit_target_fails_during_cli_parse() {
 #[test]
 fn invalid_submission_id_fails_during_cli_parse() {
     let result = Cli::try_parse_from(["agentics", "submissions", "show", "submission-1"]);
+
+    assert!(result.is_err());
+}
+
+/// Verifies that admin challenge-draft commands parse draft IDs before HTTP execution.
+#[test]
+fn invalid_challenge_draft_id_fails_during_cli_parse() {
+    let result = Cli::try_parse_from([
+        "agentics",
+        "challenge-creator",
+        "draft",
+        "validate",
+        "draft-1",
+        "--repository-path",
+        ".",
+        "--admin-username",
+        "admin",
+        "--admin-password-stdin",
+    ]);
 
     assert!(result.is_err());
 }

@@ -9,7 +9,7 @@ use shared::models::challenge_creation::{
     ChallengeDraftCleanupResponse, ChallengeDraftResponse, ReviewChallengeDraftRequest,
     ValidateChallengeDraftRequest,
 };
-use shared::models::ids::SolutionSubmissionId;
+use shared::models::ids::{ChallengeDraftId, SolutionSubmissionId};
 use shared::models::names::{ChallengeName, MetricName, TargetName};
 use shared::models::request::{
     CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse, LeaderboardResponse,
@@ -235,10 +235,10 @@ impl ApiClient {
     /// Validates challenge draft admin invariants for this contract.
     pub(crate) async fn validate_challenge_draft_admin(
         &self,
-        draft_id: &str,
+        draft_id: &ChallengeDraftId,
         request: &ValidateChallengeDraftRequest,
         username: &str,
-        password: &str,
+        password: &SecretString,
     ) -> Result<ChallengeDraftResponse> {
         let path = format!("/admin/challenge-drafts/{draft_id}/validate");
         self.post_json_admin(&path, request, username, password)
@@ -248,10 +248,10 @@ impl ApiClient {
     /// Handles approve challenge draft admin for this module.
     pub(crate) async fn approve_challenge_draft_admin(
         &self,
-        draft_id: &str,
+        draft_id: &ChallengeDraftId,
         request: &ReviewChallengeDraftRequest,
         username: &str,
-        password: &str,
+        password: &SecretString,
     ) -> Result<ChallengeDraftResponse> {
         let path = format!("/admin/challenge-drafts/{draft_id}/approve");
         self.post_json_admin(&path, request, username, password)
@@ -261,10 +261,10 @@ impl ApiClient {
     /// Handles reject challenge draft admin for this module.
     pub(crate) async fn reject_challenge_draft_admin(
         &self,
-        draft_id: &str,
+        draft_id: &ChallengeDraftId,
         request: &ReviewChallengeDraftRequest,
         username: &str,
-        password: &str,
+        password: &SecretString,
     ) -> Result<ChallengeDraftResponse> {
         let path = format!("/admin/challenge-drafts/{draft_id}/reject");
         self.post_json_admin(&path, request, username, password)
@@ -274,10 +274,10 @@ impl ApiClient {
     /// Handles publish challenge draft admin for this module.
     pub(crate) async fn publish_challenge_draft_admin(
         &self,
-        draft_id: &str,
+        draft_id: &ChallengeDraftId,
         request: &ValidateChallengeDraftRequest,
         username: &str,
-        password: &str,
+        password: &SecretString,
     ) -> Result<ChallengeDraftResponse> {
         let path = format!("/admin/challenge-drafts/{draft_id}/publish");
         self.post_json_admin(&path, request, username, password)
@@ -287,10 +287,10 @@ impl ApiClient {
     /// Handles abandon challenge draft admin for this module.
     pub(crate) async fn abandon_challenge_draft_admin(
         &self,
-        draft_id: &str,
+        draft_id: &ChallengeDraftId,
         request: &ReviewChallengeDraftRequest,
         username: &str,
-        password: &str,
+        password: &SecretString,
     ) -> Result<ChallengeDraftResponse> {
         let path = format!("/admin/challenge-drafts/{draft_id}/abandon");
         self.post_json_admin(&path, request, username, password)
@@ -301,7 +301,7 @@ impl ApiClient {
     pub(crate) async fn cleanup_challenge_drafts_admin(
         &self,
         username: &str,
-        password: &str,
+        password: &SecretString,
     ) -> Result<ChallengeDraftCleanupResponse> {
         self.post_json_admin(
             "/admin/challenge-drafts/cleanup",
@@ -337,7 +337,7 @@ impl ApiClient {
         path: &str,
         body: &B,
         username: &str,
-        password: &str,
+        password: &SecretString,
     ) -> Result<T>
     where
         B: Serialize + Sync + ?Sized,
@@ -345,7 +345,7 @@ impl ApiClient {
     {
         let request = self
             .request(Method::POST, path, false)?
-            .basic_auth(username, Some(password))
+            .basic_auth(username, Some(password.expose_secret()))
             .json(body);
         parse_response(request.send().await?).await
     }
@@ -390,8 +390,13 @@ where
         .context("failed to read API response body")?;
 
     if status.is_success() {
-        return serde_json::from_str(&body)
-            .with_context(|| format!("failed to decode successful API response as JSON: {body}"));
+        return serde_json::from_str(&body).with_context(|| {
+            format!(
+                "failed to decode successful API response as JSON: status={} body_bytes={}",
+                status.as_u16(),
+                body.len()
+            )
+        });
     }
 
     if let Ok(error) = serde_json::from_str::<ErrorResponse>(&body) {
