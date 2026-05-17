@@ -84,6 +84,27 @@ export async function adminLogin(
   return adminSessionResponseSchema.parse(await response.json());
 }
 
+/** Restores an admin browser session from the existing cookies. */
+export async function adminSession(): Promise<AdminSessionResponse> {
+  const response = await fetch(adminEndpoint("/api/auth/admin/session"), {
+    method: "GET",
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    let message = response.statusText;
+    try {
+      const body = (await response.json()) as { message?: string };
+      message = body.message ?? message;
+    } catch {
+      // Non-JSON error responses still surface the status text.
+    }
+    throw new AdminApiError(response.status, message);
+  }
+
+  return adminSessionResponseSchema.parse(await response.json());
+}
+
 /** Handles admin logout behavior for this module. */
 export async function adminLogout(csrfToken: string): Promise<void> {
   const response = await fetch(adminEndpoint("/api/auth/admin/logout"), {

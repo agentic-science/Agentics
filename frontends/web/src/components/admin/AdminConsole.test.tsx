@@ -1,7 +1,12 @@
 import { NextIntlClientProvider } from "next-intl";
 import type { Mock } from "vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { adminFetchJson, adminLogin, adminLogout } from "@/lib/adminApi";
+import {
+  adminFetchJson,
+  adminLogin,
+  adminLogout,
+  adminSession,
+} from "@/lib/adminApi";
 import { ensureDomEnvironment } from "../../test/dom";
 
 import { AdminConsole } from "./AdminConsole";
@@ -21,6 +26,7 @@ vi.mock("@/lib/adminApi", () => {
     adminFetchJson: vi.fn(),
     adminLogin: vi.fn(),
     adminLogout: vi.fn(),
+    adminSession: vi.fn(),
   };
 });
 
@@ -32,6 +38,7 @@ const { cleanup, fireEvent, render, waitFor } = await import(
 const adminFetchJsonMock = adminFetchJson as Mock;
 const adminLoginMock = adminLogin as Mock;
 const adminLogoutMock = adminLogout as Mock;
+const adminSessionMock = adminSession as Mock;
 
 describe("AdminConsole", () => {
   beforeEach(() => {
@@ -41,6 +48,9 @@ describe("AdminConsole", () => {
       expires_at: "2026-05-15T00:00:00Z",
     });
     adminLogoutMock.mockResolvedValue(undefined);
+    adminSessionMock.mockRejectedValue(
+      Object.assign(new Error("Unauthorized"), { status: 401 }),
+    );
     adminFetchJsonMock.mockImplementation(async (path: string) => {
       switch (path) {
         case "/admin/challenges":
@@ -183,6 +193,24 @@ describe("AdminConsole", () => {
     ).toBeTruthy();
     expect(view.getByText("1 / 1")).toBeTruthy();
     expect(view.getByText("1/20")).toBeTruthy();
+  });
+
+  it("restores an existing cookie-backed admin session", async () => {
+    adminSessionMock.mockResolvedValueOnce({
+      username: "root",
+      csrf_token: "restored-csrf-token",
+      expires_at: "2026-05-15T01:00:00Z",
+    });
+
+    const view = renderAdminConsole();
+
+    expect(await view.findByText("Signed in as root")).toBeTruthy();
+    expect(adminLoginMock).not.toHaveBeenCalled();
+    expect(adminFetchJsonMock).toHaveBeenCalledWith(
+      "/admin/challenges",
+      expect.anything(),
+      "restored-csrf-token",
+    );
   });
 
   it("renders the pioneer-code admin panel", async () => {

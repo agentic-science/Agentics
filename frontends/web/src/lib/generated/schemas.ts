@@ -43,7 +43,11 @@ export const adminChallengeListResponseSchema = z
             .max(63),
           title: z.string(),
           summary: z.string(),
-          status: z.string(),
+          status: z
+            .enum(["draft", "active", "archived"])
+            .describe(
+              "Persistent lifecycle state for a challenge shell or published benchmark.",
+            ),
           targets: z
             .array(
               z
@@ -229,7 +233,9 @@ export const adminSolutionSubmissionListResponseSchema = z
               /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
             ),
           agent_display_name: z.string(),
-          status: z.string(),
+          status: z
+            .enum(["pending", "queued", "running", "completed", "failed"])
+            .describe("Persistent lifecycle state for a solution submission."),
           visible_after_eval: z.boolean(),
           latest_job_id: z
             .string()
@@ -238,10 +244,28 @@ export const adminSolutionSubmissionListResponseSchema = z
               /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
             )
             .optional(),
-          latest_job_status: z.string().optional(),
-          latest_job_eval_type: z.string().optional(),
-          validation_status: z.string().optional(),
-          official_status: z.string().optional(),
+          latest_job_status: z
+            .enum(["queued", "running", "completed", "failed"])
+            .describe(
+              "Persistent lifecycle state for an evaluation job/result.",
+            )
+            .optional(),
+          latest_job_eval_type: z
+            .enum(["validation", "official"])
+            .describe("Evaluation surface requested for a solution submission.")
+            .optional(),
+          validation_status: z
+            .enum(["queued", "running", "completed", "failed"])
+            .describe(
+              "Persistent lifecycle state for an evaluation job/result.",
+            )
+            .optional(),
+          official_status: z
+            .enum(["queued", "running", "completed", "failed"])
+            .describe(
+              "Persistent lifecycle state for an evaluation job/result.",
+            )
+            .optional(),
           rank_score: z.number().optional(),
           created_at: z.string(),
           updated_at: z.string(),
@@ -264,7 +288,11 @@ export const challengeAdminResponseSchema = z
       .max(63),
     title: z.string(),
     summary: z.string(),
-    status: z.string(),
+    status: z
+      .enum(["draft", "active", "archived"])
+      .describe(
+        "Persistent lifecycle state for a challenge shell or published benchmark.",
+      ),
     created_at: z.string(),
     updated_at: z.string(),
   })
@@ -1349,7 +1377,10 @@ export const creatorChallengeParticipantsResponseSchema = z
             )
             .optional(),
           best_rank_score: z.number().optional(),
-          latest_status: z.string().optional(),
+          latest_status: z
+            .enum(["pending", "queued", "running", "completed", "failed"])
+            .describe("Persistent lifecycle state for a solution submission.")
+            .optional(),
           latest_solution_submission_at: z.string().optional(),
         })
         .strict()
@@ -1426,7 +1457,9 @@ export const disableAgentResponseSchema = z
       .string()
       .uuid()
       .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
-    status: z.string(),
+    status: z
+      .enum(["active", "disabled"])
+      .describe("Persistent lifecycle state for an agent account."),
   })
   .strict()
   .describe("Admin response returned after disabling an agent.");
@@ -1445,8 +1478,12 @@ export const evaluationJobResponseSchema = z
       .string()
       .regex(/^[A-Za-z0-9_.-]+$/)
       .min(1),
-    eval_type: z.string(),
-    status: z.string(),
+    eval_type: z
+      .enum(["validation", "official"])
+      .describe("Evaluation surface requested for a solution submission."),
+    status: z
+      .enum(["queued", "running", "completed", "failed"])
+      .describe("Persistent lifecycle state for an evaluation job/result."),
   })
   .strict()
   .describe(
@@ -1561,7 +1598,9 @@ export const pioneerCodeDetailResponseSchema = z
         note: z.string(),
         max_uses: z.number().int(),
         use_count: z.number().int(),
-        status: z.string(),
+        status: z
+          .enum(["active", "revoked"])
+          .describe("Lifecycle state for an admin-created pioneer code."),
         expires_at: z.string().optional(),
         created_by_admin_username: z.string(),
         created_at: z.string(),
@@ -1579,7 +1618,11 @@ export const pioneerCodeDetailResponseSchema = z
               /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
             ),
           agent_display_name: z.string(),
-          registration_kind: z.string(),
+          registration_kind: z
+            .enum(["agent_api", "creator_oauth"])
+            .describe(
+              "Registration flow recorded for a consumed pioneer code.",
+            ),
           used_at: z.string(),
         })
         .strict()
@@ -1605,7 +1648,9 @@ export const pioneerCodeListResponseSchema = z
           note: z.string(),
           max_uses: z.number().int(),
           use_count: z.number().int(),
-          status: z.string(),
+          status: z
+            .enum(["active", "revoked"])
+            .describe("Lifecycle state for an admin-created pioneer code."),
           expires_at: z.string().optional(),
           created_by_admin_username: z.string(),
           created_at: z.string(),
@@ -1647,7 +1692,9 @@ export const publicSolutionSubmissionListResponseSchema = z
               /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
             ),
           agent_display_name: z.string(),
-          status: z.string(),
+          status: z
+            .enum(["pending", "queued", "running", "completed", "failed"])
+            .describe("Persistent lifecycle state for a solution submission."),
           explanation: z.string(),
           parent_solution_submission_id: z
             .string()
@@ -1863,7 +1910,9 @@ export const revokePioneerCodeResponseSchema = z
       .string()
       .uuid()
       .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
-    status: z.string(),
+    status: z
+      .enum(["active", "revoked"])
+      .describe("Lifecycle state for an admin-created pioneer code."),
     revoked_agent_count: z.number().int(),
     revoked_token_count: z.number().int(),
   })
@@ -1971,7 +2020,9 @@ export const solutionSubmissionResponseSchema = z
       .uuid()
       .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
     agent_display_name: z.string().optional(),
-    status: z.string(),
+    status: z
+      .enum(["pending", "queued", "running", "completed", "failed"])
+      .describe("Persistent lifecycle state for a solution submission."),
     explanation: z.string(),
     parent_solution_submission_id: z
       .string()
@@ -2406,7 +2457,9 @@ export const solutionSubmissionResultReportResponseSchema = z
             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
           ),
         agent_display_name: z.string().optional(),
-        status: z.string(),
+        status: z
+          .enum(["pending", "queued", "running", "completed", "failed"])
+          .describe("Persistent lifecycle state for a solution submission."),
         explanation: z.string(),
         parent_solution_submission_id: z
           .string()
