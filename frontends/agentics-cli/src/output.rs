@@ -573,7 +573,7 @@ fn render_create_submission_batch(
                         response.target.to_string(),
                         response.id.to_string(),
                         response.challenge_name.to_string(),
-                        response.status.clone(),
+                        response.status.to_string(),
                         response.evaluation_job_id.to_string(),
                     ]
                 })
@@ -628,7 +628,7 @@ pub(crate) fn render_public_solution_submission_list(
                         item.id.to_string(),
                         item.agent_display_name.clone(),
                         item.target.to_string(),
-                        item.status.clone(),
+                        item.status.to_string(),
                         item.rank_score
                             .map(format_score)
                             .unwrap_or_else(|| "none".to_string()),
@@ -1073,159 +1073,4 @@ fn render_table_row(row: &[String], widths: &[usize]) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use shared::models::challenge::{
-        ChallengeBundleSpec, ChallengeDetailResponse, ChallengeEligibilitySpec,
-        ChallengeEligibilityType, ChallengeExecutionSpec, ChallengeListItemDto,
-        ChallengeListResponse, ChallengeResultDetailVisibility, ChallengeSolutionPublicationPolicy,
-        ChallengeTargetSpec, ChallengeVisibility, ChallengeVisibilitySpec, DatasetsSpec,
-        DockerPlatform, MetricSchemaSpec, PrivateBenchmarkPolicy, ResourceProfileSpec, ScorerSpec,
-        SolutionSpec, TargetAccelerator,
-    };
-    use shared::models::evaluation::ScoreVisibility;
-    use shared::models::names::{ChallengeName, ResourceProfileName, TargetName};
-    use shared::models::paths::BundleRelativePath;
-    use shared::zip_project::ZipProjectNetworkAccess;
-
-    use super::{OutputFormat, render_challenge_detail, render_challenge_list};
-
-    /// Verifies that renders challenge list table.
-    #[test]
-    fn renders_challenge_list_table() {
-        let output = render_challenge_list(
-            &ChallengeListResponse {
-                items: vec![ChallengeListItemDto {
-                    name: challenge_name("sample-sum"),
-                    title: "Sample Sum".to_string(),
-                    summary: "Add numbers".to_string(),
-                    starts_at: None,
-                    closes_at: None,
-                    eligibility: ChallengeEligibilitySpec {
-                        eligibility_type: ChallengeEligibilityType::Open,
-                    },
-                }],
-            },
-            OutputFormat::Table,
-        )
-        .expect("render should succeed");
-
-        assert_eq!(
-            output,
-            "NAME        ELIGIBILITY  TITLE\nsample-sum  open         Sample Sum"
-        );
-    }
-
-    /// Verifies that renders challenge detail table.
-    #[test]
-    fn renders_challenge_detail_table() {
-        let output = render_challenge_detail(&challenge_detail(), OutputFormat::Table)
-            .expect("render should succeed");
-
-        assert!(output.contains("Sample Sum (sample-sum)"));
-        assert!(output.contains("eligibility: open"));
-        assert!(output.contains("solution_publication: public"));
-        assert!(
-            output.contains(
-                "  - linux-arm64-cpu: linux/arm64 cpu, image=python:3.12-slim-bookworm, timeout=30 sec, memory=512 MB, validation=disabled"
-            )
-        );
-        assert!(output.contains("ranking_metric: score"));
-        assert!(output.ends_with("# Statement\n\nReturn the sum."));
-    }
-
-    /// Handles challenge detail for this module.
-    fn challenge_detail() -> ChallengeDetailResponse {
-        ChallengeDetailResponse {
-            name: challenge_name("sample-sum"),
-            title: "Sample Sum".to_string(),
-            summary: "Add numbers".to_string(),
-            spec: ChallengeBundleSpec {
-                schema_version: 1,
-                challenge_name: challenge_name("sample-sum"),
-                challenge_title: "Sample Sum".to_string(),
-                challenge_summary: "Add numbers".to_string(),
-                starts_at: None,
-                closes_at: None,
-                eligibility: ChallengeEligibilitySpec {
-                    eligibility_type: ChallengeEligibilityType::Open,
-                },
-                validation_submission_limit: None,
-                official_submission_limit: None,
-                visibility: ChallengeVisibilitySpec {
-                    leaderboard: ChallengeVisibility::PublicLive,
-                    score_distribution: ChallengeVisibility::PublicLive,
-                    result_detail: ChallengeResultDetailVisibility::SubmitterLivePublicLive,
-                },
-                solution_publication: ChallengeSolutionPublicationPolicy::Public,
-                solution: SolutionSpec {
-                    protocol: "zip_project".to_string(),
-                    manifest_file: bundle_path("agentics.solution.json"),
-                },
-                scorer: ScorerSpec {
-                    command: vec!["python".to_string(), "scorer/run.py".to_string()],
-                    result_file: bundle_path("result.json"),
-                },
-                targets: vec![ChallengeTargetSpec {
-                    name: target_name("linux-arm64-cpu"),
-                    docker_platform: DockerPlatform::LinuxArm64,
-                    accelerator: TargetAccelerator::Cpu,
-                    validation_enabled: false,
-                    resource_profile: ResourceProfileSpec {
-                        name: resource_profile_name("python-cpu-small"),
-                        resource_description: None,
-                        solution_image: "python:3.12-slim-bookworm".to_string(),
-                        solution_image_digest: None,
-                        scorer_image: "python:3.12-slim-bookworm".to_string(),
-                        scorer_image_digest: None,
-                        timeout_sec: 30,
-                        memory_limit_mb: 512,
-                        cpu_limit_millis: 1000,
-                        disk_limit_mb: 1024,
-                        setup_network_access: ZipProjectNetworkAccess::Enabled,
-                        build_network_access: ZipProjectNetworkAccess::Disabled,
-                        run_network_access: ZipProjectNetworkAccess::Disabled,
-                        scorer_network_access: ZipProjectNetworkAccess::Disabled,
-                        hardware: None,
-                    },
-                }],
-                execution: ChallengeExecutionSpec {
-                    validation_runs: Some(bundle_path("public/runs.json")),
-                    validation_prepare: None,
-                    official_runs: Some(bundle_path("private-benchmark/runs.json")),
-                    official_prepare: None,
-                },
-                datasets: DatasetsSpec {
-                    public_dir: bundle_path("data/public"),
-                    private_benchmark_dir: None,
-                    public_policy: ScoreVisibility::Full,
-                    private_benchmark_policy: PrivateBenchmarkPolicy::ScoreOnly,
-                    private_benchmark_enabled: false,
-                },
-                community: None,
-                metric_schema: MetricSchemaSpec::default(),
-            },
-            statement_markdown: "# Statement\n\nReturn the sum.".to_string(),
-        }
-    }
-
-    /// Handles target name for this module.
-    fn target_name(value: &str) -> TargetName {
-        TargetName::try_new(value.to_string()).expect("test target is valid")
-    }
-
-    /// Handles challenge name for this module.
-    fn challenge_name(value: &str) -> ChallengeName {
-        ChallengeName::try_new(value.to_string()).expect("test challenge name is valid")
-    }
-
-    /// Handles resource profile name for this module.
-    fn resource_profile_name(value: &str) -> ResourceProfileName {
-        ResourceProfileName::try_new(value.to_string())
-            .expect("test resource profile name is valid")
-    }
-
-    /// Handles bundle path for this module.
-    fn bundle_path(value: &str) -> BundleRelativePath {
-        BundleRelativePath::try_new(value).expect("test bundle path is valid")
-    }
-}
+mod tests;

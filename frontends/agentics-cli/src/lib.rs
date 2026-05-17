@@ -194,13 +194,39 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
                             challenge_detail.name
                         );
                     }
-                    let response = client
-                        .get_solution_submission_ranking_context(
-                            &submission_id,
-                            &challenge_detail.name,
-                            &target,
-                        )
-                        .await?;
+                    let response = if settings.token_configured() {
+                        match client
+                            .get_solution_submission_ranking_context(
+                                &submission_id,
+                                &challenge_detail.name,
+                                &target,
+                            )
+                            .await
+                        {
+                            Ok(context) => context,
+                            Err(error)
+                                if ApiClient::is_not_found(&error)
+                                    || ApiClient::is_forbidden(&error) =>
+                            {
+                                client
+                                    .get_public_solution_submission_ranking_context(
+                                        &submission_id,
+                                        &challenge_detail.name,
+                                        &target,
+                                    )
+                                    .await?
+                            }
+                            Err(error) => return Err(error),
+                        }
+                    } else {
+                        client
+                            .get_public_solution_submission_ranking_context(
+                                &submission_id,
+                                &challenge_detail.name,
+                                &target,
+                            )
+                            .await?
+                    };
                     output::render_ranking_context(&response, output_format)
                 }
             }

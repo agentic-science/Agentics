@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use reqwest::{Client, Method, Url};
+use secrecy::{ExposeSecret, SecretString};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use shared::models::ErrorResponse;
@@ -57,12 +58,12 @@ impl std::error::Error for ApiStatusError {}
 pub(crate) struct ApiClient {
     http: Client,
     base_url: Url,
-    token: Option<String>,
+    token: Option<SecretString>,
 }
 
 impl ApiClient {
     /// Handles new for this module.
-    pub(crate) fn new(api_base_url: &ApiBaseUrl, token: Option<String>) -> Result<Self> {
+    pub(crate) fn new(api_base_url: &ApiBaseUrl, token: Option<SecretString>) -> Result<Self> {
         Ok(Self {
             http: Client::new(),
             base_url: api_base_url.as_url().clone(),
@@ -363,7 +364,7 @@ impl ApiClient {
                 .token
                 .as_ref()
                 .context("this command requires a configured bearer token")?;
-            Ok(request.bearer_auth(token))
+            Ok(request.bearer_auth(token.expose_secret()))
         } else {
             Ok(request)
         }

@@ -12,7 +12,7 @@ use shared::models::challenge::{
 use shared::models::challenge_creation::{
     ChallengePrivateAssetKind, ReviewChallengeDraftRequest, ValidateChallengeDraftRequest,
 };
-use shared::models::evaluation::{EvaluationJobPayload, ScoringMode};
+use shared::models::evaluation::{EvaluationJobPayload, ScoringMode, SolutionSubmissionStatus};
 use shared::models::ids::SolutionSubmissionId;
 use shared::models::names::{ChallengeName, MetricName, TargetName};
 use shared::models::pioneer_codes::{PioneerCode, PioneerCodeInput};
@@ -1089,6 +1089,9 @@ pub(crate) async fn wait_for_solution_submission(
 }
 
 /// Returns whether terminal status holds.
-fn is_terminal_status(status: &str) -> bool {
-    matches!(status, "completed" | "failed")
+fn is_terminal_status(status: &SolutionSubmissionStatus) -> bool {
+    matches!(
+        status,
+        SolutionSubmissionStatus::Completed | SolutionSubmissionStatus::Failed
+    )
 }

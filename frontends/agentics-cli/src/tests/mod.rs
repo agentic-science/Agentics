@@ -783,6 +783,103 @@ async fn submissions_report_tolerates_hidden_public_ranking_context() {
     assert!(output.contains("total_ranked: unknown"));
 }
 
+/// Verifies that ranking context can use the public route without a token.
+#[tokio::test]
+async fn submissions_rank_uses_public_context_without_token() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/public/challenges/sample-sum"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(challenge_detail_json(true)))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/api/public/solution-submissions/11111111-1111-4111-8111-111111111111/ranking-context",
+        ))
+        .and(query_param("challenge_name", "sample-sum"))
+        .and(query_param("target", "linux-arm64-cpu"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(ranking_context_json()))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let config_path = temp.path().join("config.toml");
+    let cli = Cli::parse_from([
+        "agentics",
+        "--config",
+        config_path.to_str().expect("utf8 path"),
+        "--api-base-url",
+        &server.uri(),
+        "submissions",
+        "rank",
+        "11111111-1111-4111-8111-111111111111",
+        "--challenge",
+        "sample-sum",
+        "--target",
+        "linux-arm64-cpu",
+    ]);
+
+    let output = execute(cli, Environment::default())
+        .await
+        .expect("submissions rank should use public context");
+
+    assert!(output.contains("solution_submission: 11111111-1111-4111-8111-111111111111"));
+    assert!(output.contains("rank: 1"));
+}
+
+/// Verifies that ranking context uses the authenticated route when a token is configured.
+#[tokio::test]
+async fn submissions_rank_uses_authenticated_context_with_token() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/public/challenges/sample-sum"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(challenge_detail_json(true)))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/api/solution-submissions/11111111-1111-4111-8111-111111111111/ranking-context",
+        ))
+        .and(header("authorization", "Bearer test-token"))
+        .and(query_param("challenge_name", "sample-sum"))
+        .and(query_param("target", "linux-arm64-cpu"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(ranking_context_json()))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let config_path = temp.path().join("config.toml");
+    let cli = Cli::parse_from([
+        "agentics",
+        "--config",
+        config_path.to_str().expect("utf8 path"),
+        "--api-base-url",
+        &server.uri(),
+        "submissions",
+        "rank",
+        "11111111-1111-4111-8111-111111111111",
+        "--challenge",
+        "sample-sum",
+        "--target",
+        "linux-arm64-cpu",
+    ]);
+
+    let output = execute(
+        cli,
+        Environment {
+            token: Some(SecretString::from("test-token")),
+            ..Environment::default()
+        },
+    )
+    .await
+    .expect("submissions rank should use authenticated context");
+
+    assert!(output.contains("solution_submission: 11111111-1111-4111-8111-111111111111"));
+    assert!(output.contains("rank: 1"));
+}
+
 /// Verifies that old status command is removed.
 #[test]
 fn old_status_command_is_removed() {
@@ -1056,463 +1153,7 @@ async fn validate_local_rejects_disabled_target_before_packaging() {
     assert!(error.to_string().contains("validation pass is disabled"));
 }
 
-/// Verifies that challenge creator creates draft from repo manifest.
-#[tokio::test]
-async fn challenge_creator_creates_draft_from_repo_manifest() {
-    let server = MockServer::start().await;
-    Mock::given(method("POST"))
-        .and(path("/api/creator/challenge-drafts"))
-        .and(header("authorization", "Bearer test-token"))
-        .respond_with(ResponseTemplate::new(201).set_body_json(challenge_draft_json("draft")))
-        .mount(&server)
-        .await;
+mod challenge_creator;
+mod fixtures;
 
-    let temp = tempfile::tempdir().expect("tempdir");
-    let challenge_root = temp.path().join("challenges/sample-sum");
-    std::fs::create_dir_all(&challenge_root).expect("challenge root");
-    std::fs::write(
-        challenge_root.join("agentics.challenge.json"),
-        challenge_manifest_json().to_string(),
-    )
-    .expect("manifest");
-    let config_path = temp.path().join("config.toml");
-    let cli = Cli::parse_from([
-        "agentics",
-        "--config",
-        config_path.to_str().expect("utf8 path"),
-        "--api-base-url",
-        &server.uri(),
-        "--token",
-        "test-token",
-        "challenge-creator",
-        "draft",
-        "create",
-        "--repo-url",
-        "https://github.com/agentics-reifying/agentics-challenges",
-        "--pr-number",
-        "7",
-        "--pr-url",
-        "https://github.com/agentics-reifying/agentics-challenges/pull/7",
-        "--commit-sha",
-        "0123456789abcdef0123456789abcdef01234567",
-        "--repo-dir",
-        temp.path().to_str().expect("utf8 path"),
-        "--challenge-path",
-        "challenges/sample-sum",
-        "--pr-author-github-user-id",
-        "1001",
-    ]);
-
-    let error = execute(cli, Environment::default())
-        .await
-        .expect_err("creator draft creation requires web-session auth");
-    let requests = server
-        .received_requests()
-        .await
-        .expect("requests should be recorded");
-
-    assert!(requests.is_empty());
-    assert!(
-        error
-            .to_string()
-            .contains("creator draft creation requires")
-    );
-}
-
-/// Verifies that challenge creator rejects invalid commit sha during cli parse.
-#[test]
-fn challenge_creator_rejects_invalid_commit_sha_during_cli_parse() {
-    let result = Cli::try_parse_from([
-        "agentics",
-        "challenge-creator",
-        "draft",
-        "create",
-        "--repo-url",
-        "https://github.com/agentics-reifying/agentics-challenges",
-        "--pr-number",
-        "7",
-        "--pr-url",
-        "https://github.com/agentics-reifying/agentics-challenges/pull/7",
-        "--commit-sha",
-        "0123456789abcdef",
-        "--challenge-path",
-        "challenges/sample-sum",
-        "--pr-author-github-user-id",
-        "1001",
-    ]);
-
-    assert!(result.is_err());
-}
-
-/// Verifies that challenge creator uploads private asset file.
-#[tokio::test]
-async fn challenge_creator_uploads_private_asset_file() {
-    let server = MockServer::start().await;
-    let encoded_asset = {
-        use base64::{Engine as _, engine::general_purpose::STANDARD};
-        STANDARD.encode(b"private zip bytes")
-    };
-    Mock::given(method("POST"))
-        .and(path("/api/creator/challenge-drafts/dddddddd-dddd-4ddd-8ddd-dddddddddddd/private-assets"))
-        .and(header("authorization", "Bearer test-token"))
-        .and(body_json(json!({
-            "asset_name": "official-cases",
-            "kind": "private_benchmark_data",
-            "required": true,
-            "asset_base64": encoded_asset
-        })))
-        .respond_with(ResponseTemplate::new(201).set_body_json(json!({
-            "id": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
-            "draft_id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
-            "asset_name": "official-cases",
-            "kind": "private_benchmark_data",
-            "required": true,
-            "size_bytes": 17,
-            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            "storage_key": "challenge-drafts/dddddddd-dddd-4ddd-8ddd-dddddddddddd/private-assets/official-cases.bin",
-            "uploader_agent_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-            "created_at": "2026-05-01T00:00:00Z"
-        })))
-        .mount(&server)
-        .await;
-
-    let temp = tempfile::tempdir().expect("tempdir");
-    let config_path = temp.path().join("config.toml");
-    let asset_path = temp.path().join("official-cases.zip");
-    std::fs::write(&asset_path, b"private zip bytes").expect("asset file");
-    let cli = Cli::parse_from([
-        "agentics",
-        "--config",
-        config_path.to_str().expect("utf8 path"),
-        "--api-base-url",
-        &server.uri(),
-        "--token",
-        "test-token",
-        "challenge-creator",
-        "draft",
-        "upload-private-asset",
-        "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
-        "--asset-name",
-        "official-cases",
-        "--kind",
-        "private_benchmark_data",
-        "--file",
-        asset_path.to_str().expect("utf8 path"),
-        "--required",
-    ]);
-
-    let error = execute(cli, Environment::default())
-        .await
-        .expect_err("creator private asset upload requires web-session auth");
-    let requests = server
-        .received_requests()
-        .await
-        .expect("requests should be recorded");
-
-    assert!(requests.is_empty());
-    assert!(
-        error
-            .to_string()
-            .contains("creator private asset upload requires")
-    );
-}
-
-/// Verifies that challenge creator validates draft with admin auth.
-#[tokio::test]
-async fn challenge_creator_validates_draft_with_admin_auth() {
-    let server = MockServer::start().await;
-    let admin_auth = format!("Basic {}", {
-        use base64::{Engine as _, engine::general_purpose::STANDARD};
-        STANDARD.encode("admin:secret")
-    });
-    Mock::given(method("POST"))
-        .and(path(
-            "/admin/challenge-drafts/dddddddd-dddd-4ddd-8ddd-dddddddddddd/validate",
-        ))
-        .and(header("authorization", admin_auth))
-        .and(body_json(json!({ "repository_path": "/tmp/challenges" })))
-        .respond_with(ResponseTemplate::new(200).set_body_json(challenge_draft_json("validated")))
-        .mount(&server)
-        .await;
-
-    let temp = tempfile::tempdir().expect("tempdir");
-    let config_path = temp.path().join("config.toml");
-    let cli = Cli::parse_from([
-        "agentics",
-        "--config",
-        config_path.to_str().expect("utf8 path"),
-        "--api-base-url",
-        &server.uri(),
-        "challenge-creator",
-        "draft",
-        "validate",
-        "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
-        "--repository-path",
-        "/tmp/challenges",
-        "--admin-username",
-        "admin",
-    ]);
-
-    let output = execute(
-        cli,
-        Environment {
-            admin_password: Some(SecretString::from("secret")),
-            ..Environment::default()
-        },
-    )
-    .await
-    .expect("admin validation should succeed");
-
-    assert!(output.contains("status: validated"));
-}
-
-/// Handles challenge detail json for this module.
-fn challenge_detail_json(validation_enabled: bool) -> serde_json::Value {
-    json!({
-        "name": "sample-sum",
-        "title": "Sample Sum",
-        "summary": "Add numbers",
-        "spec": {
-            "schema_version": 1,
-            "challenge_name": "sample-sum",
-            "challenge_title": "Sample Sum",
-            "challenge_summary": "Add numbers",
-            "eligibility": { "type": "open" },
-            "visibility": {
-                "leaderboard": "public_live",
-                "score_distribution": "public_live",
-                "result_detail": "submitter_live_public_live"
-            },
-            "solution_publication": "public",
-            "solution": {
-                "protocol": "zip_project",
-                "manifest_file": "agentics.solution.json"
-            },
-            "scorer": {
-                "command": ["python", "scorer/run.py"],
-                "result_file": "result.json"
-            },
-            "targets": [
-                {
-                    "name": "linux-arm64-cpu",
-                    "docker_platform": "linux/arm64",
-                    "accelerator": "cpu",
-                    "validation_enabled": validation_enabled,
-                    "resource_profile": {
-                        "name": "python-cpu-small",
-                        "solution_image": "agentics-linux-arm64-cpu:ubuntu26.04-local",
-                        "scorer_image": "agentics-linux-arm64-cpu:ubuntu26.04-local",
-                        "timeout_sec": 30,
-                        "memory_limit_mb": 512,
-                        "cpu_limit_millis": 1000,
-                        "disk_limit_mb": 1024,
-                        "setup_network_access": "enabled",
-                        "build_network_access": "disabled",
-                        "run_network_access": "disabled",
-                        "scorer_network_access": "disabled"
-                    }
-                }
-            ],
-            "execution": {
-                "validation_runs": "public/runs.json",
-                "official_runs": "private-benchmark/runs.json"
-            },
-            "datasets": {
-                "public_dir": "public",
-                "private_benchmark_dir": "private-benchmark",
-                "public_policy": "full",
-                "private_benchmark_policy": "score_only",
-                "private_benchmark_enabled": true
-            },
-            "metric_schema": {
-                "metrics": [
-                    {
-                        "name": "score",
-                        "label": "Score",
-                        "direction": "maximize",
-                        "visibility": "public"
-                    },
-                    {
-                        "name": "passed_cases",
-                        "label": "Passed Cases",
-                        "unit": "cases",
-                        "direction": "maximize",
-                        "visibility": "public"
-                    }
-                ],
-                "ranking": {
-                    "primary_metric_name": "score",
-                    "tie_breaker_metric_names": ["passed_cases"]
-                }
-            }
-        },
-        "statement_markdown": "# Sample Sum"
-    })
-}
-
-/// Handles public submission list json for this module.
-fn public_submission_list_json() -> serde_json::Value {
-    json!({
-        "total_count": 3,
-        "items": [
-            {
-                "id": "11111111-1111-4111-8111-111111111111",
-                "challenge_name": "sample-sum",
-                "target": "linux-arm64-cpu",
-                "challenge_title": "Sample Sum",
-                "agent_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-                "agent_display_name": "solver",
-                "status": "completed",
-                "explanation": "fast solution",
-                "credit_text": "",
-                "official_score": 1.8,
-                "rank_score": 1.8,
-                "aggregate_metrics": [
-                    { "metric_name": "score", "value": 1.8 }
-                ],
-                "official_metrics": [],
-                "created_at": "2026-05-01T00:00:00Z",
-                "updated_at": "2026-05-01T00:00:01Z"
-            }
-        ]
-    })
-}
-
-/// Handles leaderboard json for this module.
-fn leaderboard_json() -> serde_json::Value {
-    json!({
-        "challenge_name": "sample-sum",
-        "target": "linux-arm64-cpu",
-        "items": [
-            {
-                "target": "linux-arm64-cpu",
-                "agent_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-                "agent_display_name": "solver",
-                "best_solution_submission_id": "11111111-1111-4111-8111-111111111111",
-                "best_rank_score": 1.8,
-                "rank_score": 1.8,
-                "aggregate_metrics": [
-                    { "metric_name": "score", "value": 1.8 }
-                ],
-                "official_metrics": [],
-                "official_score": 1.8,
-                "updated_at": "2026-05-01T00:00:01Z"
-            }
-        ]
-    })
-}
-
-/// Handles score distribution json for this module.
-fn score_distribution_json() -> serde_json::Value {
-    json!({
-        "challenge_name": "sample-sum",
-        "target": "linux-arm64-cpu",
-        "metric_name": "score",
-        "count": 2,
-        "min": 1.0,
-        "max": 1.8,
-        "mean": 1.4,
-        "quantiles": [
-            { "quantile": 0.5, "value": 1.0 },
-            { "quantile": 0.9, "value": 1.8 }
-        ],
-        "histogram": [
-            { "lower": 1.0, "upper": 1.8, "count": 2 }
-        ]
-    })
-}
-
-/// Handles solution submission json for this module.
-fn solution_submission_json() -> serde_json::Value {
-    json!({
-        "id": "11111111-1111-4111-8111-111111111111",
-        "challenge_name": "sample-sum",
-        "challenge_title": "Sample Sum",
-        "target": "linux-arm64-cpu",
-        "agent_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        "agent_display_name": "solver",
-        "status": "completed",
-        "explanation": "fast solution",
-        "credit_text": "",
-        "visible_after_eval": true,
-        "official_evaluation": {
-            "id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
-            "target": "linux-arm64-cpu",
-            "status": "completed",
-            "eval_type": "official",
-            "primary_score": 1.8,
-            "rank_score": 1.8,
-            "aggregate_metrics": [
-                { "metric_name": "score", "value": 1.8 }
-            ],
-            "run_metrics": [],
-            "public_results": []
-        },
-        "created_at": "2026-05-01T00:00:00Z",
-        "updated_at": "2026-05-01T00:00:01Z"
-    })
-}
-
-/// Handles ranking context json for this module.
-fn ranking_context_json() -> serde_json::Value {
-    json!({
-        "challenge_name": "sample-sum",
-        "target": "linux-arm64-cpu",
-        "solution_submission_id": "11111111-1111-4111-8111-111111111111",
-        "rank": 1,
-        "total_ranked": 2,
-        "percentile": 100.0,
-        "is_agent_best": true,
-        "entry": leaderboard_json()["items"][0].clone(),
-        "nearby_entries": [
-            {
-                "rank": 1,
-                "entry": leaderboard_json()["items"][0].clone()
-            }
-        ]
-    })
-}
-
-/// Handles challenge manifest json for this module.
-fn challenge_manifest_json() -> serde_json::Value {
-    json!({
-        "schema_version": 1,
-        "request": "new_challenge",
-        "challenge_name": "sample-sum",
-        "title": "Sample Sum",
-        "summary": "Add numbers",
-        "readme_path": "README.md",
-        "bundle_path": "v1",
-        "private_assets": [
-            {
-                "asset_name": "official-cases",
-                "kind": "private_benchmark_data",
-                "required": true
-            }
-        ]
-    })
-}
-
-/// Handles challenge draft json for this module.
-fn challenge_draft_json(status: &str) -> serde_json::Value {
-    json!({
-        "id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
-        "challenge_name": "sample-sum",
-        "request": "new_challenge",
-        "status": status,
-        "creator_agent_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        "creator_github_user_id": 1001,
-        "creator_github_login": "creator",
-        "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
-        "pr_number": 7,
-        "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/7",
-        "commit_sha": "0123456789abcdef0123456789abcdef01234567",
-        "challenge_path": "challenges/sample-sum",
-        "manifest_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-        "manifest": challenge_manifest_json(),
-        "private_assets": [],
-        "validation_records": [],
-        "created_at": "2026-05-01T00:00:00Z",
-        "updated_at": "2026-05-01T00:00:00Z"
-    })
-}
+use fixtures::*;

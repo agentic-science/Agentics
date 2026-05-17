@@ -6,12 +6,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, anyhow, bail};
 use reqwest::Url;
-use secrecy::SecretString;
+use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 
 const DEFAULT_API_PORT: u16 = 3100;
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 /// Carries cli config data across this module boundary.
 pub(crate) struct CliConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -20,11 +20,21 @@ pub(crate) struct CliConfig {
     pub token: Option<String>,
 }
 
+impl fmt::Debug for CliConfig {
+    /// Redacts the persisted bearer token when tests or logs format config values.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CliConfig")
+            .field("api_base_url", &self.api_base_url)
+            .field("token", &self.token.as_ref().map(|_| "<redacted>"))
+            .finish()
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 /// Carries environment data across this module boundary.
 pub(crate) struct Environment {
     pub api_base_url: Option<String>,
-    pub token: Option<String>,
+    pub token: Option<SecretString>,
     pub pioneer_code: Option<SecretString>,
     pub admin_password: Option<SecretString>,
 }
@@ -34,7 +44,7 @@ impl Environment {
     pub(crate) fn from_process() -> Self {
         Self {
             api_base_url: read_non_empty_env("AGENTICS_API_BASE_URL"),
-            token: read_non_empty_env("AGENTICS_TOKEN"),
+            token: read_non_empty_env("AGENTICS_TOKEN").map(SecretString::from),
             pioneer_code: read_non_empty_env("AGENTICS_PIONEER_CODE").map(SecretString::from),
             admin_password: read_non_empty_env("AGENTICS_ADMIN_PASSWORD").map(SecretString::from),
         }
@@ -70,7 +80,7 @@ impl fmt::Display for SettingSource {
 pub(crate) struct ResolvedSettings {
     pub api_base_url: ApiBaseUrl,
     pub api_base_url_source: SettingSource,
-    pub token: Option<String>,
+    pub token: Option<SecretString>,
     pub token_source: SettingSource,
     pub pioneer_code: Option<SecretString>,
     pub admin_password: Option<SecretString>,
@@ -93,13 +103,16 @@ impl ResolvedSettings {
             file.api_base_url.as_deref(),
             default_api_base_url.as_str(),
         );
-        let (token, token_source) =
-            first_optional_value(flag_token, env.token.as_deref(), file.token.as_deref());
+        let (token, token_source) = first_optional_value(
+            flag_token,
+            env.token.as_ref().map(ExposeSecret::expose_secret),
+            file.token.as_deref(),
+        );
 
         Ok(Self {
             api_base_url: ApiBaseUrl::try_new(api_base_url)?,
             api_base_url_source,
-            token: token.map(ToOwned::to_owned),
+            token: token.map(|value| SecretString::from(value.to_string())),
             token_source,
             pioneer_code: env.pioneer_code.clone(),
             admin_password: env.admin_password.clone(),
@@ -348,7 +361,7 @@ mod tests {
         };
         let env = Environment {
             api_base_url: Some("http://env.example".to_string()),
-            token: Some("env-token".to_string()),
+            token: Some(SecretString::from("env-token")),
             pioneer_code: None,
             admin_password: None,
         };
@@ -364,7 +377,10 @@ mod tests {
 
         assert_eq!(settings.api_base_url.to_string(), "http://flag.example");
         assert_eq!(settings.api_base_url_source, SettingSource::Flag);
-        assert_eq!(settings.token.as_deref(), Some("env-token"));
+        assert_eq!(
+            settings.token.as_ref().map(ExposeSecret::expose_secret),
+            Some("env-token")
+        );
         assert_eq!(settings.token_source, SettingSource::Environment);
     }
 
@@ -391,6 +407,20 @@ mod tests {
                 token: None,
             }
         );
+    }
+
+    /// Verifies that debug output does not expose persisted CLI bearer tokens.
+    #[test]
+    fn debug_redacts_saved_agent_token() {
+        let config = CliConfig {
+            api_base_url: Some("http://127.0.0.1:3100".to_string()),
+            token: Some("secret-agent-token".to_string()),
+        };
+
+        let debug = format!("{config:?}");
+
+        assert!(!debug.contains("secret-agent-token"));
+        assert!(debug.contains("<redacted>"));
     }
 
     #[cfg(unix)]
