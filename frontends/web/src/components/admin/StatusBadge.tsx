@@ -4,11 +4,17 @@ export function StatusBadge({ status }: { status: string }) {
   const className =
     normalized === "completed" ||
     normalized === "active" ||
-    normalized === "idle"
+    normalized === "idle" ||
+    normalized === "published" ||
+    normalized === "approved" ||
+    normalized === "validated"
       ? "badge-success"
       : normalized === "failed" ||
           normalized === "error" ||
-          normalized === "disabled"
+          normalized === "disabled" ||
+          normalized === "rejected" ||
+          normalized === "revoked" ||
+          normalized === "abandoned"
         ? "badge-error"
         : normalized === "running" ||
             normalized === "queued" ||

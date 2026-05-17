@@ -26,6 +26,18 @@ export function primaryMetric(
   );
 }
 
+/** Build a primary metric value from the redacted official score field. */
+export function primaryMetricFromScore(
+  schema: MetricSchema,
+  score: number | undefined | null,
+): MetricValue | undefined {
+  if (score === undefined || score === null) return undefined;
+  return {
+    metric_name: schema.ranking.primary_metric_name,
+    value: score,
+  };
+}
+
 /** Human-facing metric label with a safe fallback for unknown names. */
 export function metricLabel(schema: MetricSchema, metricName: string): string {
   return metricDefinition(schema, metricName)?.label ?? metricName;

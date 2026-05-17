@@ -9,7 +9,7 @@ import {
   formatDeclaredMetric,
   metricDirectionLabel,
   metricLabel,
-  primaryMetric,
+  primaryMetricFromScore,
 } from "@/lib/metrics";
 import {
   challengeDetailResponseSchema,
@@ -176,9 +176,9 @@ export default async function LeaderboardPage({
             </thead>
             <tbody>
               {leaderboard.items.map((entry, idx) => {
-                const primary = primaryMetric(
+                const primary = primaryMetricFromScore(
                   metricSchema,
-                  entry.aggregate_metrics,
+                  entry.official_score,
                 );
                 const secondary = entry.aggregate_metrics.filter(
                   (metric) =>

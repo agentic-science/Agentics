@@ -72,11 +72,11 @@ describe("AdminConsole", () => {
           return {
             items: [
               {
-                id: "submission-queued",
+                id: "11111111-1111-4111-8111-111111111111",
                 challenge_name: "matrix-multiplication",
                 challenge_title: "Matrix Multiplication",
                 target: "linux-arm64-cpu",
-                agent_id: "agent-1",
+                agent_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
                 agent_display_name: "Agent One",
                 status: "queued",
                 visible_after_eval: false,
@@ -84,11 +84,11 @@ describe("AdminConsole", () => {
                 updated_at: "2026-05-15T00:00:00Z",
               },
               {
-                id: "submission-running",
+                id: "22222222-2222-4222-8222-222222222222",
                 challenge_name: "matrix-multiplication",
                 challenge_title: "Matrix Multiplication",
                 target: "linux-arm64-cpu",
-                agent_id: "agent-2",
+                agent_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
                 agent_display_name: "Agent Two",
                 status: "running",
                 visible_after_eval: false,
@@ -211,6 +211,7 @@ describe("AdminConsole", () => {
       expect.anything(),
       "restored-csrf-token",
     );
+    expect(view.queryByRole("button", { name: "Sign in" })).toBeNull();
   });
 
   it("renders the pioneer-code admin panel", async () => {
@@ -226,6 +227,57 @@ describe("AdminConsole", () => {
 
     expect(await view.findByText("jack-deadbeef")).toBeTruthy();
     expect(view.getByText("test cohort")).toBeTruthy();
+  });
+
+  it("validates pioneer-code create input before posting", async () => {
+    const view = renderAdminConsole();
+
+    fireEvent.input(view.getByLabelText("Password"), {
+      target: { value: "secret" },
+    });
+    fireEvent.click(view.getByRole("button", { name: "Sign in" }));
+    await view.findByText("Signed in as root");
+    fireEvent.click(view.getByRole("button", { name: "Pioneer codes" }));
+
+    fireEvent.input(await view.findByLabelText("Max uses"), {
+      target: { value: "0" },
+    });
+    fireEvent.click(view.getByRole("button", { name: "Create code" }));
+
+    expect(
+      await view.findByText("max_uses must be -1 or a positive integer."),
+    ).toBeTruthy();
+    expect(adminFetchJsonMock).not.toHaveBeenCalledWith(
+      "/admin/pioneer-codes",
+      expect.anything(),
+      "csrf-token",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("requires confirmation before revoking a pioneer code", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const view = renderAdminConsole();
+
+    fireEvent.input(view.getByLabelText("Password"), {
+      target: { value: "secret" },
+    });
+    fireEvent.click(view.getByRole("button", { name: "Sign in" }));
+    await view.findByText("Signed in as root");
+    fireEvent.click(view.getByRole("button", { name: "Pioneer codes" }));
+
+    fireEvent.click(await view.findByRole("button", { name: "Revoke" }));
+
+    expect(confirm).toHaveBeenCalledWith(
+      "Revoke jack-deadbeef and disable 1 created agents?",
+    );
+    expect(adminFetchJsonMock).not.toHaveBeenCalledWith(
+      "/admin/pioneer-codes/99999999-9999-4999-8999-999999999999/revoke",
+      expect.anything(),
+      "csrf-token",
+      expect.anything(),
+    );
+    confirm.mockRestore();
   });
 });
 

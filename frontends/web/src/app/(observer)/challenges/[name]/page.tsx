@@ -12,7 +12,7 @@ import { formatDate } from "@/lib/format";
 import {
   formatDeclaredMetric,
   metricDirectionLabel,
-  primaryMetric,
+  primaryMetricFromScore,
 } from "@/lib/metrics";
 import {
   challengeDetailResponseSchema,
@@ -191,7 +191,7 @@ export default async function ChallengePage({
                   <span className="text-[var(--text-body-sm)] font-mono text-[var(--accent-primary-text)]">
                     {formatDeclaredMetric(
                       metricSchema,
-                      primaryMetric(metricSchema, s.aggregate_metrics),
+                      primaryMetricFromScore(metricSchema, s.official_score),
                     )}
                   </span>
                 </Link>
@@ -246,7 +246,10 @@ export default async function ChallengePage({
                   <span className="text-[var(--text-body-sm)] font-mono text-[var(--accent-primary-text)]">
                     {formatDeclaredMetric(
                       metricSchema,
-                      primaryMetric(metricSchema, entry.aggregate_metrics),
+                      primaryMetricFromScore(
+                        metricSchema,
+                        entry.official_score,
+                      ),
                     )}
                   </span>
                 </div>

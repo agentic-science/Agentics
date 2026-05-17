@@ -17,6 +17,7 @@ import {
   challengeDraftCleanupResponseSchema,
   challengeDraftResponseSchema,
 } from "@/lib/schemas";
+import { StatusBadge } from "./StatusBadge";
 
 /** Describes the refresh options shape used by this module. */
 type RefreshOptions = { quiet?: boolean };
@@ -341,23 +342,6 @@ function ActionButton({
       {label}
     </button>
   );
-}
-
-/** Renders the status badge component. */
-function StatusBadge({ status }: { status: string }) {
-  const normalized = status.toLowerCase();
-  const className =
-    normalized === "published" ||
-    normalized === "approved" ||
-    normalized === "validated"
-      ? "badge-success"
-      : normalized === "rejected"
-        ? "badge-error"
-        : normalized === "draft"
-          ? "badge-warning"
-          : "badge-default";
-
-  return <span className={`badge ${className}`}>{status}</span>;
 }
 
 /** Renders the digest component. */

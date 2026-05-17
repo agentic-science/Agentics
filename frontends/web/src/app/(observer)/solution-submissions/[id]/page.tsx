@@ -20,6 +20,7 @@ import {
   metricDirectionLabel,
   metricLabel,
   primaryMetric,
+  primaryMetricFromScore,
 } from "@/lib/metrics";
 import {
   challengeDetailResponseSchema,
@@ -86,10 +87,12 @@ export default async function SolutionSubmissionPage({
 
   const evalDto = selectSubmissionDisplayEvaluation(submission);
   const metricSchema = detail.spec.metric_schema;
-  const primary = primaryMetric(metricSchema, evalDto?.aggregate_metrics ?? []);
-  const officialPrimary = primaryMetric(
+  const primary =
+    primaryMetric(metricSchema, evalDto?.aggregate_metrics ?? []) ??
+    primaryMetricFromScore(metricSchema, evalDto?.primary_score);
+  const officialPrimary = primaryMetricFromScore(
     metricSchema,
-    submission.official_evaluation?.aggregate_metrics ?? [],
+    submission.official_evaluation?.primary_score,
   );
 
   return (

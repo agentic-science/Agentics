@@ -72,15 +72,17 @@ export function CredentialPanel({
               Sign out
             </button>
           ) : null}
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => void onLogin()}
-            disabled={loading}
-          >
-            <RefreshCw className="w-4 h-4" />
-            {loading ? "Loading" : "Sign in"}
-          </button>
+          {sessionUsername ? null : (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => void onLogin()}
+              disabled={loading}
+            >
+              <RefreshCw className="w-4 h-4" />
+              {loading ? "Loading" : "Sign in"}
+            </button>
+          )}
         </div>
       </div>
     </div>

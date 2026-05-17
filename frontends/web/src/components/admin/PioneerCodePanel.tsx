@@ -16,6 +16,8 @@ import {
 
 type RefreshOptions = { quiet?: boolean };
 type AdminRefresh = (options?: RefreshOptions) => Promise<void>;
+const PIONEER_LABEL_PATTERN = /^[a-z0-9_]{1,6}$/;
+const PIONEER_CODE_PATTERN = /^([a-z0-9_]{1,6}-)?[0-9a-f]{8}$/;
 
 export function PioneerCodePanel({
   csrfToken,
@@ -52,13 +54,34 @@ export function PioneerCodePanel({
       return;
     }
     const maxUses = Number.parseInt(form.maxUses, 10);
+    if (maxUses === 0 || maxUses < -1) {
+      onError("max_uses must be -1 or a positive integer.");
+      return;
+    }
+    const label = form.label.trim();
+    if (label && !PIONEER_LABEL_PATTERN.test(label)) {
+      onError("label must be at most 6 lowercase letters, digits, or _.");
+      return;
+    }
+    const code = form.code.trim();
+    if (code && !PIONEER_CODE_PATTERN.test(code)) {
+      onError(
+        "code must be 8 lowercase hex chars or <label>-<8 lowercase hex chars>.",
+      );
+      return;
+    }
+    const expiresAt = form.expiresAt.trim();
+    if (expiresAt && Number.isNaN(Date.parse(expiresAt))) {
+      onError("expires_at must be an RFC3339 timestamp.");
+      return;
+    }
 
     const parsedRequest = createPioneerCodeRequestSchema.safeParse({
       max_uses: maxUses,
-      ...(form.label.trim() ? { label: form.label.trim() } : {}),
-      ...(form.code.trim() ? { code: form.code.trim() } : {}),
+      ...(label ? { label } : {}),
+      ...(code ? { code } : {}),
       ...(form.note ? { note: form.note } : {}),
-      ...(form.expiresAt.trim() ? { expires_at: form.expiresAt.trim() } : {}),
+      ...(expiresAt ? { expires_at: expiresAt } : {}),
     });
     if (!parsedRequest.success) {
       onError(
@@ -108,6 +131,16 @@ export function PioneerCodePanel({
   const revoke = async (id: string) => {
     if (!csrfToken) {
       onError("Sign in before revoking pioneer codes.");
+      return;
+    }
+    const code = pioneerCodes.items.find((item) => item.id === id);
+    const affectedUses = code?.use_count ?? detail?.uses.length ?? 0;
+    const display = code?.code_display ?? detail?.code.code_display ?? id;
+    if (
+      !window.confirm(
+        `Revoke ${display} and disable ${affectedUses} created agents?`,
+      )
+    ) {
       return;
     }
     try {

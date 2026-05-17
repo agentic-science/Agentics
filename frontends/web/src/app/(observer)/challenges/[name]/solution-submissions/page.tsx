@@ -5,7 +5,7 @@ import { EvaluationModeBadges } from "@/components/EvaluationModeBadges";
 import { fetchJson } from "@/lib/api";
 import { resultDetailIsPublic } from "@/lib/challengeVisibility";
 import { formatDate } from "@/lib/format";
-import { formatDeclaredMetric, primaryMetric } from "@/lib/metrics";
+import { formatDeclaredMetric, primaryMetricFromScore } from "@/lib/metrics";
 import {
   challengeDetailResponseSchema,
   publicSolutionSubmissionListResponseSchema,
@@ -127,7 +127,7 @@ export default async function SolutionSubmissionsPage({
                   <td className="font-mono text-[var(--accent-primary-text)]">
                     {formatDeclaredMetric(
                       metricSchema,
-                      primaryMetric(metricSchema, s.aggregate_metrics),
+                      primaryMetricFromScore(metricSchema, s.official_score),
                     )}
                   </td>
                   <td className="font-mono">
