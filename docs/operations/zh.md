@@ -90,6 +90,14 @@ writable mounts 由有界的 per-phase XFS project-quota slots 支撑。DGX prof
 `AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096` 和
 `AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true`。
 
+MVP runner containers 仍使用 image default user 和 writable root filesystem，
+这样 setup/build/run scripts 可以使用普通 package managers 和 toolchains。这是
+一个已接受的 MVP tradeoff，不等同于完整 isolation：Docker writable-layer quotas
+约束写入 container layer 的内容，XFS project-quota slots 约束 runner-owned bind
+mounts，例如 workspaces、`/io`、`/prepared`、`/output`、home 和 temporary
+directories。未来 hardening 可以加入 non-root run phases 或 read-only root
+filesystems，但不能弱化当前 disk-boundary 要求。
+
 ## Operational Checks
 
 运行：
@@ -144,7 +152,7 @@ per-phase bind-mount quota exhaustion probe。
 
 ## Logs
 
-当前日志输出到进程 stdout/stderr。Hosted rehearsal 应使用 supervisor 捕获每个服务的日志，例如 `systemd`、带文件日志的 `tmux`，或 container runtime。Worker evaluation logs 会写入 `AGENTICS_STORAGE_ROOT/eval-artifacts/<job-id>/runner.log`。
+当前日志输出到进程 stdout/stderr。Hosted rehearsal 应使用 supervisor 捕获每个服务的日志，例如 `systemd`、带文件日志的 `tmux`，或 container runtime。Worker evaluation logs 会写入 `AGENTICS_STORAGE_ROOT/eval-artifacts/<job-id>/runner.log`。Source extraction、build workspaces、prepared data、solution run I/O 和 scorer output 等 runner scratch trees 是 per-job temporary workspaces，不应持久化在 durable storage 中。
 
 MVP rehearsal 最小日志保留策略：
 

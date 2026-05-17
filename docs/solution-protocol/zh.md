@@ -205,7 +205,7 @@ path，则跳过 `setup` 或 `build`。
 
 Parser 会暴露带有 concrete limits 的 ordered phase execution plan。Worker 会使用该 plan 产生 phase-specific logs 和结构化 failure reports。Failure report 包含 failed phase name、reason、message、可选 exit code，以及可选 safe relative log path。
 
-Runner containers 还会使用 Docker-level containment controls：memory 和 CPU limits、swap 限制到 memory limit、PID 和 process ulimits、drop all capabilities、`no-new-privileges`、不发布端口，以及 bounded Docker log files。这些 controls 会降低 blast radius，但 Docker 仍不应被视为完整的 hostile-code isolation boundary。
+Runner containers 还会使用 Docker-level containment controls：memory 和 CPU limits、swap 限制到 memory limit、PID 和 process ulimits、drop all capabilities、`no-new-privileges`、不发布端口，以及 bounded Docker log files。这些 controls 会降低 blast radius，但 Docker 仍不应被视为完整的 hostile-code isolation boundary。MVP 中 runner containers 保持 image default user 和 writable root filesystem，以保留 setup/build/run 灵活性。Operators 必须把这视为由 disk quotas 和 Docker hardening 约束的已接受风险，而不是等同于 read-only/non-root isolation。
 
 Hosted workers 应将 `disk_limit_mb` 视为硬性的 operational contract，而不只是
 post-run accounting check。DGX hosted design 有两层：第一层是 Agentics-owned

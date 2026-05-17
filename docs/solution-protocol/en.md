@@ -213,7 +213,11 @@ Runner containers also use Docker-level containment controls: memory and CPU
 limits, swap limited to the memory limit, PID and process ulimits, all
 capabilities dropped, `no-new-privileges`, no published ports, and bounded Docker
 log files. These controls reduce blast radius, but Docker should still not be
-treated as a complete hostile-code isolation boundary.
+treated as a complete hostile-code isolation boundary. For MVP, runner
+containers keep the image default user and a writable root filesystem to
+preserve setup/build/run flexibility. Operators must treat that as an accepted
+risk that is bounded by disk quotas and Docker hardening, not as equivalent to
+read-only/non-root isolation.
 
 Hosted workers treat `disk_limit_mb` as a hard operational contract, not only a
 post-run accounting check. The DGX hosted design has two layers: Docker

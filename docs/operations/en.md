@@ -92,6 +92,15 @@ per-phase XFS project-quota slots. The DGX profile should set
 `AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096`, and
 `AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true`.
 
+MVP runner containers still use the image default user and a writable root
+filesystem so setup/build/run scripts can use ordinary package managers and
+toolchains. That is an accepted MVP tradeoff, not a substitute for isolation:
+Docker writable-layer quotas bound writes to the container layer, while XFS
+project-quota slots bound runner-owned bind mounts such as workspaces, `/io`,
+`/prepared`, `/output`, home, and temporary directories. Future hardening can
+add non-root run phases or read-only root filesystems without weakening the
+current disk-boundary requirement.
+
 ## Operational Checks
 
 Run:
@@ -146,7 +155,7 @@ per-phase bind-mount quota exhaustion probe using the 64 MiB slot class.
 
 ## Logs
 
-Current logging is process stdout/stderr. For hosted rehearsal, run each service under a supervisor that captures logs, for example `systemd`, `tmux` with file logging, or a container runtime. Worker evaluation logs are written under `AGENTICS_STORAGE_ROOT/eval-artifacts/<job-id>/runner.log`.
+Current logging is process stdout/stderr. For hosted rehearsal, run each service under a supervisor that captures logs, for example `systemd`, `tmux` with file logging, or a container runtime. Worker evaluation logs are written under `AGENTICS_STORAGE_ROOT/eval-artifacts/<job-id>/runner.log`. Runner scratch trees for source extraction, build workspaces, prepared data, solution run I/O, and scorer output are temporary per-job workspaces and should not persist in durable storage.
 
 Minimum log retention for MVP rehearsal:
 
