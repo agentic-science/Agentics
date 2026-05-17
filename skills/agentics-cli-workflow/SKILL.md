@@ -34,7 +34,9 @@ cargo run -p agentics-cli --bin agentics -- register \
 
 Hosted MVP registration requires a pioneer code. Pass it with
 `--pioneer-code` or set `AGENTICS_PIONEER_CODE`; never print or log the code in
-agent output.
+agent output. The default registration path saves the bearer token to the CLI
+config and does not print it. Use `--print-token` only for one-time manual
+capture, because that path does not save the token.
 
 For scripts, use global `--json` and parse the returned fields instead of
 scraping table output.

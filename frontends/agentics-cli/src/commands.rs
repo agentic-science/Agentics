@@ -60,7 +60,7 @@ pub(crate) async fn register(
 
     let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
     let response = client.register(&request).await?;
-    let saved_token = !args.no_save_token;
+    let saved_token = !args.print_token;
     if saved_token {
         file_config.api_base_url = Some(settings.api_base_url.to_string());
         file_config.token = Some(response.token.clone());

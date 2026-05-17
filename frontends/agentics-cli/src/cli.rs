@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use shared::models::github::GithubPullRequestNumber;
 use shared::models::hashes::GitCommitSha;
 use shared::models::ids::{ChallengeDraftId, SolutionSubmissionId};
 use shared::models::names::{AssetName, ChallengeName, MetricName, TargetName};
@@ -87,9 +88,9 @@ pub(crate) struct RegisterArgs {
     #[arg(long, value_name = "JSON", default_value = "{}")]
     pub model_info_json: String,
 
-    /// Print the returned token without writing it to the config file.
+    /// Print the returned token once instead of writing it to the config file.
     #[arg(long)]
-    pub no_save_token: bool,
+    pub print_token: bool,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -213,7 +214,7 @@ pub(crate) enum ChallengeDraftCommand {
         #[arg(long)]
         repo_url: String,
         #[arg(long)]
-        pr_number: i32,
+        pr_number: GithubPullRequestNumber,
         #[arg(long)]
         pr_url: String,
         #[arg(long)]

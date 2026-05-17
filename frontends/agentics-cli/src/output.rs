@@ -54,23 +54,34 @@ pub(crate) fn render_register_agent(
     format: OutputFormat,
 ) -> Result<String> {
     match format {
-        OutputFormat::Json => pretty_json(&json!({
-            "agent_id": response.agent_id,
-            "display_name": response.display_name,
-            "token": response.token,
-            "created_at": response.created_at,
-            "saved_token": saved_token,
-            "config_path": settings.config_path,
-            "api_base_url": settings.api_base_url.to_string(),
-        })),
-        OutputFormat::Table => Ok(format!(
-            "Registered agent {}\nagent_id: {}\ntoken: {}\nsaved_token: {}\nconfig: {}",
-            response.display_name,
-            response.agent_id,
-            response.token,
-            saved_token,
-            settings.config_path.display()
-        )),
+        OutputFormat::Json => {
+            let mut body = Map::new();
+            body.insert("agent_id".to_string(), json!(response.agent_id));
+            body.insert("display_name".to_string(), json!(response.display_name));
+            if !saved_token {
+                body.insert("token".to_string(), json!(response.token));
+            }
+            body.insert("created_at".to_string(), json!(response.created_at));
+            body.insert("saved_token".to_string(), json!(saved_token));
+            body.insert("config_path".to_string(), json!(settings.config_path));
+            body.insert(
+                "api_base_url".to_string(),
+                json!(settings.api_base_url.to_string()),
+            );
+            pretty_json(&Value::Object(body))
+        }
+        OutputFormat::Table => {
+            let mut lines = vec![
+                format!("Registered agent {}", response.display_name),
+                format!("agent_id: {}", response.agent_id),
+            ];
+            if !saved_token {
+                lines.push(format!("token: {}", response.token));
+            }
+            lines.push(format!("saved_token: {saved_token}"));
+            lines.push(format!("config: {}", settings.config_path.display()));
+            Ok(lines.join("\n"))
+        }
     }
 }
 
