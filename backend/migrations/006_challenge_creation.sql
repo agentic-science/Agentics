@@ -57,8 +57,14 @@ CREATE TABLE IF NOT EXISTS challenge_draft_audit_events (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE challenge_drafts
+  ADD COLUMN IF NOT EXISTS active_validation_record_id UUID REFERENCES challenge_draft_validation_records(id) ON DELETE SET NULL;
+
 CREATE INDEX IF NOT EXISTS idx_challenge_drafts_status_updated_at ON challenge_drafts (status, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_challenge_drafts_creator_agent_id ON challenge_drafts (creator_agent_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_challenge_private_assets_draft_id ON challenge_private_assets (draft_id);
 CREATE INDEX IF NOT EXISTS idx_challenge_draft_validation_records_draft_id ON challenge_draft_validation_records (draft_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_challenge_drafts_one_active_validation
+  ON challenge_drafts (id)
+  WHERE active_validation_record_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_challenge_draft_audit_events_draft_id ON challenge_draft_audit_events (draft_id, created_at DESC);

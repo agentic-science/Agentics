@@ -11,6 +11,9 @@ use helpers::{
     solution_zip_base64, spawn_app_with_config, test_config, zip_project_zip_base64,
 };
 use serde_json::json;
+use shared::models::challenge_creation::ChallengeDraftValidationStatus;
+use shared::models::hashes::Sha256Digest;
+use shared::models::ids::{ChallengeDraftId, ChallengeDraftValidationRecordId};
 
 use reqwest::StatusCode;
 
@@ -91,6 +94,131 @@ async fn challenge_draft_conflicts_on_canonical_repo_key(pool: sqlx::PgPool) {
     .expect("duplicate canonical repo draft request");
 
     assert_eq!(response.status(), StatusCode::CONFLICT);
+}
+
+/// Verifies that private assets are rejected before non-ZIP bytes reach durable storage.
+#[sqlx::test(migrations = "../migrations")]
+async fn private_asset_upload_rejects_non_zip_payload(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("storage tempdir");
+    let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
+    let config = test_config(storage.path(), seeded_challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+    let creator = create_creator_session(&pool, 1001, "creator").await;
+    let draft = create_draft(&client, &app, &creator, 8, manifest_json()).await;
+    let draft_id = draft["id"].as_str().expect("draft id");
+
+    let response = creator_auth(
+        client.post(api_url(
+            &app,
+            &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+        )),
+        &creator,
+    )
+    .json(&json!({
+        "asset_name": "official-cases",
+        "kind": "private_benchmark_data",
+        "asset_base64": STANDARD.encode("not a zip")
+    }))
+    .send()
+    .await
+    .expect("non-zip private asset request");
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let stored_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::BIGINT FROM challenge_private_assets WHERE draft_id = $1::uuid",
+    )
+    .bind(draft_id)
+    .fetch_one(&pool)
+    .await
+    .expect("private asset count query should succeed");
+    assert_eq!(stored_count, 0);
+}
+
+/// Verifies that draft validation records must own the current draft validation claim.
+#[sqlx::test(migrations = "../migrations")]
+async fn draft_validation_claim_blocks_overlap_and_approval(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("storage tempdir");
+    let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
+    let repository = tempfile::tempdir().expect("repository tempdir");
+    let config = test_config(storage.path(), seeded_challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let client = reqwest::Client::new();
+    let creator = create_creator_session(&pool, 1001, "creator").await;
+    let admin_auth = basic_auth_header(
+        &config.admin_username,
+        config.expose_admin_password_for_http_basic(),
+    );
+    let draft = create_draft(&client, &app, &creator, 9, manifest_json()).await;
+    let draft_id = ChallengeDraftId::try_new(draft["id"].as_str().expect("draft id"))
+        .expect("draft id should parse");
+    let manifest_sha256 = Sha256Digest::try_new(
+        draft["manifest_sha256"]
+            .as_str()
+            .expect("manifest sha should exist"),
+    )
+    .expect("manifest sha should parse");
+    let first_validation_id = ChallengeDraftValidationRecordId::generate();
+    let second_validation_id = ChallengeDraftValidationRecordId::generate();
+
+    shared::db::begin_challenge_draft_validation(
+        &pool,
+        &shared::db::BeginChallengeDraftValidationInput {
+            validation_record_id: first_validation_id.clone(),
+            draft_id: draft_id.clone(),
+            repository_path: repository.path().to_string_lossy().to_string(),
+            manifest_sha256,
+        },
+        24 * 60 * 60,
+        10,
+    )
+    .await
+    .expect("first validation claim should reserve");
+
+    let overlapping = shared::db::begin_challenge_draft_validation(
+        &pool,
+        &shared::db::BeginChallengeDraftValidationInput {
+            validation_record_id: second_validation_id.clone(),
+            draft_id: draft_id.clone(),
+            repository_path: repository.path().to_string_lossy().to_string(),
+            manifest_sha256,
+        },
+        24 * 60 * 60,
+        10,
+    )
+    .await;
+    assert!(
+        matches!(overlapping, Err(shared::error::AppError::Conflict)),
+        "overlapping validation should conflict"
+    );
+
+    let approve_while_running = client
+        .post(api_url(
+            &app,
+            &format!("/admin/challenge-drafts/{draft_id}/approve"),
+        ))
+        .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
+        .json(&json!({ "message": "too early" }))
+        .send()
+        .await
+        .expect("approve while validation is running");
+    assert_eq!(approve_while_running.status(), StatusCode::CONFLICT);
+
+    let validation_digest =
+        Sha256Digest::try_new("b".repeat(64)).expect("validation digest should parse");
+    shared::db::finish_challenge_draft_validation(
+        &pool,
+        &shared::db::FinishChallengeDraftValidationInput {
+            validation_record_id: first_validation_id,
+            draft_id,
+            status: ChallengeDraftValidationStatus::Passed,
+            message: "passed".to_string(),
+            bundle_sha256: Some(validation_digest),
+        },
+    )
+    .await
+    .expect("current validation claim should finish");
 }
 
 /// Verifies that challenge draft can be validated approved and published.
@@ -860,7 +988,7 @@ async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
     .json(&json!({
         "asset_name": "official-cases",
         "kind": "private_benchmark_data",
-        "asset_base64": STANDARD.encode(b"private")
+        "asset_base64": private_benchmark_asset_zip_base64()
     }))
     .send()
     .await

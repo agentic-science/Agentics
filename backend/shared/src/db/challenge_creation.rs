@@ -265,9 +265,9 @@ pub async fn begin_challenge_draft_validation(
     let scope = format!("challenge-draft:{}:validations", input.draft_id);
     lock_quota_scope(&mut tx, &scope).await?;
 
-    let status: Option<(String,)> = sqlx::query_as(
+    let status: Option<(String, Option<String>)> = sqlx::query_as(
         r#"
-        SELECT status
+        SELECT status, active_validation_record_id::text AS active_validation_record_id
         FROM challenge_drafts
         WHERE id = $1::uuid
         FOR UPDATE
@@ -276,7 +276,7 @@ pub async fn begin_challenge_draft_validation(
     .bind(input.draft_id.as_str())
     .fetch_optional(&mut *tx)
     .await?;
-    let Some((status,)) = status else {
+    let Some((status, active_validation_record_id)) = status else {
         return Err(AppError::NotFound);
     };
     let status = ChallengeDraftStatus::from_storage_value(&status)
@@ -285,6 +285,9 @@ pub async fn begin_challenge_draft_validation(
         status,
         ChallengeDraftStatus::Draft | ChallengeDraftStatus::Validated
     ) {
+        return Err(AppError::Conflict);
+    }
+    if active_validation_record_id.is_some() {
         return Err(AppError::Conflict);
     }
 
@@ -317,6 +320,23 @@ pub async fn begin_challenge_draft_validation(
     .bind(input.manifest_sha256.to_string())
     .fetch_one(&mut *tx)
     .await?;
+
+    let claim = sqlx::query(
+        r#"
+        UPDATE challenge_drafts
+        SET active_validation_record_id = $2::uuid,
+            updated_at = NOW()
+        WHERE id = $1::uuid
+          AND active_validation_record_id IS NULL
+        "#,
+    )
+    .bind(input.draft_id.as_str())
+    .bind(input.validation_record_id.as_str())
+    .execute(&mut *tx)
+    .await?;
+    if claim.rows_affected() != 1 {
+        return Err(AppError::Conflict);
+    }
 
     tx.commit().await?;
     row_to_validation_record_response(row)
@@ -397,6 +417,23 @@ pub async fn create_challenge_private_asset(
     .bind(input.storage_key.as_str())
     .bind(input.uploader_agent_id.as_str())
     .fetch_one(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        UPDATE challenge_drafts
+        SET status = 'draft',
+            validation_message = NULL,
+            validation_repository_path = NULL,
+            validation_bundle_sha256 = NULL,
+            approved_bundle_sha256 = NULL,
+            updated_at = NOW()
+        WHERE id = $1::uuid
+          AND status = 'validated'
+        "#,
+    )
+    .bind(input.draft_id.as_str())
+    .execute(&mut *tx)
     .await?;
 
     let response = row_to_private_asset_response(row)?;
@@ -536,8 +573,10 @@ pub async fn finish_challenge_draft_validation(
                 WHERE id = $1::uuid
             ),
             validation_bundle_sha256 = $4,
+            active_validation_record_id = NULL,
             updated_at = NOW()
         WHERE id = $5::uuid
+          AND active_validation_record_id = $1::uuid
           AND status IN ('draft', 'validated')
         "#,
     )
@@ -549,7 +588,8 @@ pub async fn finish_challenge_draft_validation(
     .execute(&mut *tx)
     .await?;
     if update.rows_affected() == 0 {
-        return Err(AppError::Conflict);
+        tx.commit().await?;
+        return row_to_validation_record_response(row);
     }
 
     tx.commit().await?;
@@ -572,6 +612,7 @@ pub async fn approve_validated_challenge_draft(
         WHERE id = $1::uuid
           AND status = 'validated'
           AND validation_bundle_sha256 IS NOT NULL
+          AND active_validation_record_id IS NULL
         "#,
     )
     .bind(draft_id)
@@ -710,6 +751,7 @@ pub async fn mark_challenge_draft_published(
             updated_at = NOW()
         WHERE id = $1::uuid
           AND status = 'approved'
+          AND active_validation_record_id IS NULL
         "#,
     )
     .bind(draft_id)
@@ -841,6 +883,7 @@ async fn mark_challenge_draft_published_tx(
             updated_at = NOW()
         WHERE id = $1::uuid
           AND status = 'approved'
+          AND active_validation_record_id IS NULL
         "#,
     )
     .bind(draft_id)

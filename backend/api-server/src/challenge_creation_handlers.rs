@@ -161,6 +161,12 @@ pub async fn upload_challenge_private_asset(
     let asset_size_bytes_i64 = i64::try_from(asset_size_bytes).map_err(|_| {
         AppError::BadRequest("private asset size exceeds supported database range".to_string())
     })?;
+    validate_private_asset_zip_upload(
+        &asset_bytes,
+        body.asset_name.as_str(),
+        state.config.challenge_private_asset_bytes_per_draft,
+    )
+    .await?;
     let sha256 = challenge_creation::sha256_digest(&asset_bytes);
     let storage_key = StorageKey::try_new(format!(
         "challenge-drafts/{}/private-assets/{}-{}.bin",
@@ -231,6 +237,99 @@ pub async fn upload_challenge_private_asset(
     .await?;
 
     Ok((StatusCode::CREATED, Json(asset)))
+}
+
+/// Validate a private asset ZIP before the bytes become durable storage state.
+async fn validate_private_asset_zip_upload(
+    bytes: &[u8],
+    asset_name: &str,
+    max_uncompressed_bytes: u64,
+) -> Result<()> {
+    let bytes = bytes.to_vec();
+    let asset_name = asset_name.to_string();
+    tokio::task::spawn_blocking(move || {
+        validate_private_asset_zip_upload_blocking(&bytes, &asset_name, max_uncompressed_bytes)
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("private asset validation task failed: {e}")))?
+}
+
+/// Inspect a private asset ZIP for envelope safety without extracting it.
+fn validate_private_asset_zip_upload_blocking(
+    bytes: &[u8],
+    asset_name: &str,
+    max_uncompressed_bytes: u64,
+) -> Result<()> {
+    let reader = Cursor::new(bytes);
+    let mut archive = zip::ZipArchive::new(reader)?;
+    if archive.len() > MAX_PRIVATE_ASSET_FILE_COUNT {
+        return Err(AppError::BadRequest(format!(
+            "private asset `{asset_name}` must contain at most {MAX_PRIVATE_ASSET_FILE_COUNT} entries"
+        )));
+    }
+
+    let mut total_uncompressed_size = 0u64;
+    let mut seen_paths = HashSet::with_capacity(archive.len());
+    for i in 0..archive.len() {
+        let file = archive.by_index(i)?;
+        validate_private_asset_zip_entry(
+            file,
+            asset_name,
+            &mut total_uncompressed_size,
+            max_uncompressed_bytes,
+            &mut seen_paths,
+        )?;
+    }
+
+    Ok(())
+}
+
+/// Validate one private asset ZIP entry for path, type, duplicate, and size safety.
+fn validate_private_asset_zip_entry<R: std::io::Read>(
+    file: zip::read::ZipFile<'_, R>,
+    asset_name: &str,
+    total_uncompressed_size: &mut u64,
+    max_uncompressed_bytes: u64,
+    seen_paths: &mut HashSet<String>,
+) -> Result<()> {
+    if file
+        .unix_mode()
+        .is_some_and(|mode| mode & 0o170000 == 0o120000)
+    {
+        return Err(AppError::BadRequest(format!(
+            "private asset `{asset_name}` must not contain symlinks"
+        )));
+    }
+
+    let Some(relative_path) = file.enclosed_name() else {
+        return Err(AppError::BadRequest(format!(
+            "private asset `{asset_name}` contains an unsafe ZIP entry path"
+        )));
+    };
+    let relative_path_string = relative_path.to_string_lossy().to_string();
+    if !challenge_bundle::is_safe_relative_path(&relative_path_string) {
+        return Err(AppError::BadRequest(format!(
+            "private asset `{asset_name}` contains unsafe path `{relative_path_string}`"
+        )));
+    }
+    if !seen_paths.insert(relative_path_string.clone()) {
+        return Err(AppError::BadRequest(format!(
+            "private asset `{asset_name}` contains duplicate path `{relative_path_string}`"
+        )));
+    }
+
+    *total_uncompressed_size = total_uncompressed_size
+        .checked_add(file.size())
+        .ok_or_else(|| {
+            AppError::BadRequest(format!("private asset `{asset_name}` is too large"))
+        })?;
+    if *total_uncompressed_size > max_uncompressed_bytes {
+        return Err(AppError::BadRequest(format!(
+            "private asset `{asset_name}` must expand to at most {max_uncompressed_bytes} bytes"
+        )));
+    }
+
+    Ok(())
 }
 
 /// Deletes the database row created for a private asset when the upload cannot be promoted.

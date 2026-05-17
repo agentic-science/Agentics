@@ -2,9 +2,9 @@
 
 mod helpers;
 
-use base64::{Engine as _, engine::general_purpose::STANDARD};
 use helpers::{
     TestCreatorSession, api_url, create_creator_session, spawn_app_with_config, test_config,
+    zip_project_zip_base64,
 };
 use serde_json::json;
 use shared::{
@@ -52,7 +52,7 @@ async fn private_asset_upload_rejects_duplicate_asset_name(pool: sqlx::PgPool) {
     .json(&json!({
         "asset_name": "official-cases",
         "kind": "private_benchmark_data",
-        "asset_base64": STANDARD.encode(b"[]")
+        "asset_base64": private_benchmark_asset_zip_base64()
     }))
     .send()
     .await
@@ -75,7 +75,7 @@ async fn private_asset_upload_rejects_duplicate_asset_name(pool: sqlx::PgPool) {
     .json(&json!({
         "asset_name": "official-cases",
         "kind": "private_benchmark_data",
-        "asset_base64": STANDARD.encode(b"[]")
+        "asset_base64": private_benchmark_asset_zip_base64()
     }))
     .send()
     .await
@@ -85,6 +85,25 @@ async fn private_asset_upload_rejects_duplicate_asset_name(pool: sqlx::PgPool) {
         storage.path().join(&storage_key).exists(),
         "duplicate rejection must not delete the accepted durable asset"
     );
+}
+
+/// Build a small valid private benchmark ZIP overlay for upload tests.
+fn private_benchmark_asset_zip_base64() -> String {
+    zip_project_zip_base64(vec![(
+        "private-benchmark/runs.json",
+        json!({
+            "runs": [
+                {
+                    "run_name": "official-case-1",
+                    "interface": "stdio",
+                    "stdin_json": { "a": 1, "b": 2 },
+                    "expected": "3",
+                    "output_files": []
+                }
+            ]
+        })
+        .to_string(),
+    )])
 }
 
 /// Verifies that private asset quota admission serializes concurrent inserts.
