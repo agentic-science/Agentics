@@ -718,7 +718,7 @@ export const challengeDraftListResponseSchema = z
             .regex(
               /^(https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?|git@github\.com:[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\.git)$/,
             ),
-          pr_number: z.number().int(),
+          pr_number: z.number().int().gte(1).lte(2147483647),
           pr_url: z
             .string()
             .url()
@@ -936,7 +936,7 @@ export const challengeDraftResponseSchema = z
       .regex(
         /^(https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?|git@github\.com:[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\.git)$/,
       ),
-    pr_number: z.number().int(),
+    pr_number: z.number().int().gte(1).lte(2147483647),
     pr_url: z
       .string()
       .url()
@@ -1237,7 +1237,7 @@ export const createChallengeDraftRequestSchema = z
       .regex(
         /^(https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?|git@github\.com:[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\.git)$/,
       ),
-    pr_number: z.number().int(),
+    pr_number: z.number().int().gte(1).lte(2147483647),
     pr_url: z
       .string()
       .url()

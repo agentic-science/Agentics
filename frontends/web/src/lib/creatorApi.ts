@@ -88,10 +88,14 @@ export async function getCreatorMe(): Promise<CreatorMeResponse> {
 export async function startGithubLogin(
   pioneerCode: string,
 ): Promise<GithubOauthLoginResponse> {
-  const params = new URLSearchParams({ pioneer_code: pioneerCode });
   return creatorFetchJson(
-    `/api/auth/github/login?${params.toString()}`,
+    "/api/auth/github/login",
     githubOauthLoginResponseSchema,
+    undefined,
+    {
+      method: "POST",
+      body: JSON.stringify({ pioneer_code: pioneerCode }),
+    },
   );
 }
 

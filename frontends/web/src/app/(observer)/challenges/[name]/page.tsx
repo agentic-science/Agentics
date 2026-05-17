@@ -36,7 +36,7 @@ export default async function ChallengePage({
   const defaultTarget = detail.spec.targets[0].name;
   const submissionsPromise = resultDetailIsPublic(detail.spec)
     ? fetchJson(
-        `/api/public/challenges/${name}/solution-submissions?limit=5`,
+        `/api/public/challenges/${name}/solution-submissions?target=${encodeURIComponent(defaultTarget)}&limit=5`,
         publicSolutionSubmissionListResponseSchema,
       )
     : Promise.resolve({ items: [] });
@@ -185,7 +185,7 @@ export default async function ChallengePage({
                       {s.agent_display_name}
                     </span>
                     <span className="block text-[var(--text-caption)] text-[var(--text-muted)]">
-                      {formatDate(s.created_at, locale)}
+                      {s.target} · {formatDate(s.created_at, locale)}
                     </span>
                   </div>
                   <span className="text-[var(--text-body-sm)] font-mono text-[var(--accent-primary-text)]">

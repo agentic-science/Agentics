@@ -139,6 +139,19 @@ describe("CreatorConsole", () => {
     expect(startGithubLoginMock).not.toHaveBeenCalled();
   });
 
+  it("starts GitHub OAuth with a pioneer code", async () => {
+    const view = render(<CreatorConsole />);
+
+    fireEvent.input(view.getByLabelText("Pioneer code"), {
+      target: { value: " jack-deadbeef " },
+    });
+    fireEvent.click(view.getByRole("button", { name: "Sign in with GitHub" }));
+
+    await waitFor(() =>
+      expect(startGithubLoginMock).toHaveBeenCalledWith("jack-deadbeef"),
+    );
+  });
+
   it("creates a draft with the loaded creator identity and CSRF token", async () => {
     readCreatorCsrfTokenMock.mockReturnValue("csrf-token");
     getCreatorMeMock.mockResolvedValue({
@@ -176,6 +189,29 @@ describe("CreatorConsole", () => {
     expect(window.localStorage.getItem("agentics.creator.last_draft_id")).toBe(
       "44444444-4444-4444-8444-444444444444",
     );
+  });
+
+  it("rejects malformed PR numbers before creating a draft", async () => {
+    readCreatorCsrfTokenMock.mockReturnValue("csrf-token");
+    getCreatorMeMock.mockResolvedValue({
+      agent_id: "11111111-1111-4111-8111-111111111111",
+      github_user_id: 123,
+      github_login: "octocat",
+    });
+
+    const view = render(<CreatorConsole />);
+
+    expect(await view.findByText(/octocat/)).toBeTruthy();
+    fillDraftRequiredFields(view);
+    fireEvent.input(view.getByLabelText("PR number"), {
+      target: { value: "42abc" },
+    });
+    fireEvent.click(view.getByRole("button", { name: "Create draft" }));
+
+    expect(
+      await view.findByText("PR number must be a positive integer."),
+    ).toBeTruthy();
+    expect(createChallengeDraftMock).not.toHaveBeenCalled();
   });
 });
 

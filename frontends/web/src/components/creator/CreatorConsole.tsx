@@ -185,9 +185,14 @@ export function CreatorConsole() {
       return;
     }
 
-    const prNumber = Number.parseInt(draftForm.prNumber, 10);
-    if (!Number.isInteger(prNumber) || prNumber <= 0) {
+    const prNumberText = draftForm.prNumber.trim();
+    if (!/^[1-9]\d*$/.test(prNumberText)) {
       setError("PR number must be a positive integer.");
+      return;
+    }
+    const prNumber = Number(prNumberText);
+    if (!Number.isSafeInteger(prNumber) || prNumber > 2147483647) {
+      setError("PR number is too large.");
       return;
     }
 

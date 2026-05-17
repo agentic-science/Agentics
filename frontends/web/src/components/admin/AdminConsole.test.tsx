@@ -7,6 +7,7 @@ import {
   adminLogout,
   adminSession,
 } from "@/lib/adminApi";
+import { adminChallengeListResponseSchema } from "@/lib/schemas";
 import { ensureDomEnvironment } from "../../test/dom";
 
 import { AdminConsole } from "./AdminConsole";
@@ -54,18 +55,21 @@ describe("AdminConsole", () => {
     adminFetchJsonMock.mockImplementation(async (path: string) => {
       switch (path) {
         case "/admin/challenges":
-          return {
+          return adminChallengeListResponseSchema.parse({
             items: [
               {
-                id: "matrix-multiplication",
+                name: "matrix-multiplication",
                 title: "Matrix Multiplication",
                 summary: "Benchmark matrix multiplication.",
                 status: "active",
                 targets: [],
-                eligibility: { eligibility_type: "open" },
+                eligibility: { type: "open" },
+                private_benchmark_enabled: true,
+                created_at: "2026-05-15T00:00:00Z",
+                updated_at: "2026-05-15T00:00:00Z",
               },
             ],
-          };
+          });
         case "/admin/challenge-drafts":
           return { items: [] };
         case "/admin/solution-submissions":
@@ -193,6 +197,10 @@ describe("AdminConsole", () => {
     ).toBeTruthy();
     expect(view.getByText("1 / 1")).toBeTruthy();
     expect(view.getByText("1/20")).toBeTruthy();
+
+    fireEvent.click(view.getByRole("button", { name: "Challenges" }));
+    expect(view.getByText("matrix-multiplication")).toBeTruthy();
+    expect(view.getByText("open")).toBeTruthy();
   });
 
   it("restores an existing cookie-backed admin session", async () => {

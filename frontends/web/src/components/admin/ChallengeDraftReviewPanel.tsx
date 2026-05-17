@@ -46,7 +46,7 @@ export function ChallengeDraftReviewPanel({
   const [repositoryPath, setRepositoryPath] = useState(
     "challenge-repos/agentics-challenges",
   );
-  const [reviewMessage, setReviewMessage] = useState("approved");
+  const [reviewMessage, setReviewMessage] = useState("");
   const [busyDraftId, setBusyDraftId] = useState<string | null>(null);
 
   /** Runs draft action and refreshes affected data. */
@@ -71,7 +71,7 @@ export function ChallengeDraftReviewPanel({
       const body =
         action === "validate" || action === "publish"
           ? { repository_path: repositoryPath.trim() }
-          : { message: reviewMessage.trim() };
+          : { message: draftReviewMessage(action, reviewMessage) };
       const response = await adminFetchJson(
         `/admin/challenge-drafts/${encodeURIComponent(draftId)}/${action}`,
         challengeDraftResponseSchema,
@@ -281,6 +281,26 @@ export function ChallengeDraftReviewPanel({
       </div>
     </section>
   );
+}
+
+/** Returns an explicit review message that matches the selected action. */
+function draftReviewMessage(
+  action: "approve" | "reject" | "abandon",
+  input: string,
+): string {
+  const message = input.trim();
+  if (message) {
+    return message;
+  }
+
+  switch (action) {
+    case "approve":
+      return "approved";
+    case "reject":
+      return "rejected";
+    case "abandon":
+      return "abandoned";
+  }
 }
 
 /** Renders the section title component. */
