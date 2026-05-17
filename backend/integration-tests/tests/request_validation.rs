@@ -80,6 +80,36 @@ async fn request_validation_returns_contract_error_shape(pool: sqlx::PgPool) {
     );
 }
 
+/// Verifies Basic-auth admin mutations require the automation header.
+#[sqlx::test(migrations = "../migrations")]
+async fn admin_basic_mutation_requires_automation_header(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = helpers::test_config(storage.path(), &helpers::examples_challenges_root());
+    let app = helpers::spawn_app_with_config(pool, config.clone()).await;
+    let client = reqwest::Client::new();
+    let admin_auth = basic_auth_header(
+        &config.admin_username,
+        config.expose_admin_password_for_http_basic(),
+    );
+
+    let response = client
+        .post(helpers::api_url(&app, "/admin/challenge-drafts/cleanup"))
+        .header("Authorization", admin_auth)
+        .send()
+        .await
+        .expect("failed to send admin mutation");
+
+    assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+    let body: serde_json::Value = response.json().await.expect("failed to decode error");
+    assert_eq!(body["error"], "forbidden");
+    assert!(
+        body["message"]
+            .as_str()
+            .expect("message should be a string")
+            .contains("x-agentics-admin-automation")
+    );
+}
+
 /// Verifies that zip submission routes accept declared large json bodies.
 #[sqlx::test(migrations = "../migrations")]
 async fn zip_submission_routes_accept_declared_large_json_bodies(pool: sqlx::PgPool) {
@@ -106,6 +136,7 @@ async fn zip_submission_routes_accept_declared_large_json_bodies(pool: sqlx::PgP
     let response = client
         .post(helpers::api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": "missing-challenge",
             "target": "linux-arm64-cpu",
@@ -144,6 +175,7 @@ async fn solution_submission_rejects_invalid_target_before_artifact_decode(pool:
     let malformed_response = client
         .post(helpers::api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": "sample-sum",
             "target": "linux arm64",
@@ -169,6 +201,7 @@ async fn solution_submission_rejects_invalid_target_before_artifact_decode(pool:
     let response = client
         .post(helpers::api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": "sample-sum",
             "target": "cpu-linux-ppc64le",
@@ -245,6 +278,7 @@ async fn solution_submission_rejects_legacy_round_field_before_artifact_decode(p
     let no_round_field = client
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
@@ -258,6 +292,7 @@ async fn solution_submission_rejects_legacy_round_field_before_artifact_decode(p
     let unknown_round_field = client
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": "sample-sum",
             "round_id": "missing-round",
@@ -282,6 +317,7 @@ async fn solution_submission_rejects_legacy_round_field_before_artifact_decode(p
     let malformed_round_field = client
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": "sample-sum",
             "round_id": "Main Round!",
@@ -352,6 +388,7 @@ async fn solution_submission_rejects_unstarted_and_closed_challenges_before_arti
         let response = client
             .post(api_url(&app, "/api/solution-submissions"))
             .header("Authorization", format!("Bearer {token}"))
+            .header("X-Agentics-Admin-Automation", "true")
             .json(&serde_json::json!({
                 "challenge_name": challenge_name,
                 "target": "linux-arm64-cpu",
@@ -586,9 +623,9 @@ async fn challenge_submission_limit_rejects_before_extra_artifact_work(pool: sql
     assert_eq!(solution_submission_count.0, 1);
 }
 
-/// Verifies that admin direct publish rejects private shortlist challenge.
+/// Verifies that admin direct publish is disabled before bundle-specific validation.
 #[sqlx::test(migrations = "../migrations")]
-async fn admin_direct_publish_rejects_private_shortlist_challenge(pool: sqlx::PgPool) {
+async fn admin_direct_publish_is_disabled(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let challenges = tempfile::tempdir().expect("failed to create challenges tempdir");
     write_private_shortlist_challenge(challenges.path(), "shortlist-direct");
@@ -603,6 +640,7 @@ async fn admin_direct_publish_rejects_private_shortlist_challenge(pool: sqlx::Pg
     let response = client
         .post(api_url(&app, "/admin/challenges/shortlist-direct/publish"))
         .header("Authorization", admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "bundle_path": challenges
                 .path()
@@ -614,7 +652,7 @@ async fn admin_direct_publish_rejects_private_shortlist_challenge(pool: sqlx::Pg
         .await
         .expect("failed to publish private shortlist challenge directly");
 
-    assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+    assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
     let error: serde_json::Value = response
         .json()
         .await
@@ -623,7 +661,7 @@ async fn admin_direct_publish_rejects_private_shortlist_challenge(pool: sqlx::Pg
         error["message"]
             .as_str()
             .expect("message")
-            .contains("private_shortlist")
+            .contains("GitHub-backed challenge draft")
     );
 }
 
@@ -651,6 +689,7 @@ async fn parent_solution_submission_must_match_agent_and_scope(pool: sqlx::PgPoo
     let response = client
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {}", child_agent.token))
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
@@ -737,6 +776,7 @@ async fn submit_solution_with_target(
     client
         .post(api_url(app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": challenge_name,
             "target": target,

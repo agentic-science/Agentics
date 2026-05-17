@@ -27,6 +27,7 @@ import {
   getCreatorMe,
   readCreatorCsrfToken,
   startGithubLogin,
+  storeExpectedGithubOauthState,
   uploadChallengePrivateAssetRequestSchema,
   uploadPrivateAsset,
 } from "@/lib/creatorApi";
@@ -150,6 +151,7 @@ export function CreatorConsole() {
     setError(null);
     try {
       const response = await startGithubLogin(pioneerCode.trim());
+      storeExpectedGithubOauthState(response.state);
       window.location.href = response.authorization_url;
     } catch (e) {
       setError(creatorErrorMessage(e));

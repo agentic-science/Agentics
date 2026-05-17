@@ -1,7 +1,5 @@
 //! HTTP handlers for the public, agent, admin, and health APIs.
 
-use std::path::{Path as FsPath, PathBuf};
-
 mod admin;
 mod artifacts;
 mod creator;
@@ -24,33 +22,30 @@ use tracing::warn;
 use uuid::Uuid;
 
 use shared::auth;
-use shared::challenge_bundle;
-use shared::config::{AgentRegistrationMode, Config};
+use shared::config::AgentRegistrationMode;
 use shared::db::{self, QueueEvaluationJobInput};
 use shared::error::{AppError, Result};
 use shared::models::challenge::{
-    ChallengeBundleSpec, ChallengeEligibilityType, ChallengeResultDetailVisibility,
-    ChallengeSolutionPublicationPolicy, ChallengeVisibility, PublishChallengeResponse,
+    ChallengeBundleSpec, ChallengeResultDetailVisibility, ChallengeSolutionPublicationPolicy,
+    ChallengeVisibility,
 };
 use shared::models::evaluation::{EvaluationJobStatus, ScoringMode};
 use shared::models::ids::{
     AgentId, AgentPioneerCodeId, AgentTokenId, EvaluationJobId, SolutionSubmissionId,
 };
 use shared::models::names::{ChallengeName, MetricName, TargetName};
-use shared::models::paths::AdminBundlePath;
 use shared::models::pioneer_codes::PioneerCode;
 use shared::models::pioneer_codes::PioneerCodeStatus;
 use shared::models::request::{
     AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto,
     AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse, AgentStatus,
-    CreateChallengeRequest, CreatePioneerCodeRequest, CreateSolutionSubmissionRequest,
-    CreateSolutionSubmissionResponse, DisableAgentResponse, EvaluationJobResponse,
-    HideSolutionSubmissionResponse, LeaderboardResponse, PioneerCodeDetailResponse,
-    PioneerCodeListResponse, PublicSolutionSubmissionListResponse, PublishChallengeRequest,
-    RankedLeaderboardEntryDto, RankingContextResponse, RegisterAgentRequest, RegisterAgentResponse,
-    RevokePioneerCodeResponse, ScoreDistributionResponse, SolutionSubmissionArtifactResponse,
-    SolutionSubmissionLogsResponse, SolutionSubmissionResponse,
-    SolutionSubmissionResultReportResponse,
+    CreatePioneerCodeRequest, CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse,
+    DisableAgentResponse, EvaluationJobResponse, HideSolutionSubmissionResponse,
+    LeaderboardResponse, PioneerCodeDetailResponse, PioneerCodeListResponse,
+    PublicSolutionSubmissionListResponse, RankedLeaderboardEntryDto, RankingContextResponse,
+    RegisterAgentRequest, RegisterAgentResponse, RevokePioneerCodeResponse,
+    ScoreDistributionResponse, SolutionSubmissionArtifactResponse, SolutionSubmissionLogsResponse,
+    SolutionSubmissionResponse, SolutionSubmissionResultReportResponse,
 };
 use shared::storage::StorageKey;
 use shared::zip_project::MAX_ZIP_PROJECT_ARTIFACT_BYTES;

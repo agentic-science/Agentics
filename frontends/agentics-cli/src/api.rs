@@ -346,6 +346,7 @@ impl ApiClient {
         let request = self
             .request(Method::POST, path, false)?
             .basic_auth(username, Some(password.expose_secret()))
+            .header("X-Agentics-Admin-Automation", "true")
             .json(body);
         parse_response(request.send().await?).await
     }

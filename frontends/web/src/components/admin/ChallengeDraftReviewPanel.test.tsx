@@ -35,6 +35,7 @@ describe("ChallengeDraftReviewPanel", () => {
   });
 
   it("uses action-specific reject and abandon review messages", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     adminFetchJsonMock.mockResolvedValue({ id: draft.id });
     const onRefresh = vi.fn(async () => {});
     const view = render(
@@ -73,6 +74,7 @@ describe("ChallengeDraftReviewPanel", () => {
         }),
       ),
     );
+    confirm.mockRestore();
   });
 });
 

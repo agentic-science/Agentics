@@ -27,6 +27,7 @@ import {
 } from "@/lib/schemas";
 
 const CREATOR_CSRF_STORAGE_KEY = "agentics.creator.csrf_token";
+const CREATOR_OAUTH_STATE_STORAGE_KEY = "agentics.creator.oauth_state";
 const DEFAULT_CSRF_COOKIE_NAME = "agentics_csrf";
 
 /** Describes the challenge creation manifest shape used by this module. */
@@ -79,6 +80,27 @@ export function storeCreatorCsrfToken(csrfToken: string): void {
   }
 }
 
+/** Stores the expected OAuth state before navigating to GitHub. */
+export function storeExpectedGithubOauthState(state: string): void {
+  if (typeof window !== "undefined") {
+    window.sessionStorage.setItem(CREATOR_OAUTH_STATE_STORAGE_KEY, state);
+  }
+}
+
+/** Consumes the expected OAuth state and returns whether it matches. */
+export function consumeExpectedGithubOauthState(
+  returnedState: string,
+): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  const expected = window.sessionStorage.getItem(
+    CREATOR_OAUTH_STATE_STORAGE_KEY,
+  );
+  window.sessionStorage.removeItem(CREATOR_OAUTH_STATE_STORAGE_KEY);
+  return Boolean(expected) && expected === returnedState;
+}
+
 /** Fetches creator me for the requested UI scope. */
 export async function getCreatorMe(): Promise<CreatorMeResponse> {
   return creatorFetchJson("/api/creator/me", creatorMeResponseSchema);
@@ -104,10 +126,14 @@ export async function completeGithubLogin(
   code: string,
   state: string,
 ): Promise<CreatorSessionResponse> {
-  const params = new URLSearchParams({ code, state });
   return creatorFetchJson(
-    `/api/auth/github/callback?${params.toString()}`,
+    "/api/auth/github/callback",
     creatorSessionResponseSchema,
+    undefined,
+    {
+      method: "POST",
+      body: JSON.stringify({ code, state }),
+    },
   );
 }
 

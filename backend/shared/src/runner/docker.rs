@@ -1,15 +1,16 @@
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use bollard::Docker;
 use bollard::container::LogOutput;
 use bollard::models::{
-    ContainerCreateBody, DeviceRequest, HostConfig, HostConfigLogConfig, Mount, MountTypeEnum,
-    ResourcesUlimits,
+    ContainerCreateBody, ContainerSummaryStateEnum, DeviceRequest, HostConfig, HostConfigLogConfig,
+    Mount, MountTypeEnum, ResourcesUlimits,
 };
 use bollard::query_parameters::{
-    CreateContainerOptionsBuilder, KillContainerOptionsBuilder, LogsOptionsBuilder,
-    RemoveContainerOptionsBuilder, StartContainerOptions, WaitContainerOptionsBuilder,
+    CreateContainerOptionsBuilder, KillContainerOptionsBuilder, ListContainersOptionsBuilder,
+    LogsOptionsBuilder, RemoveContainerOptionsBuilder, StartContainerOptions,
+    WaitContainerOptionsBuilder,
 };
 use futures::StreamExt;
 use tokio::time::timeout;
@@ -18,6 +19,8 @@ use crate::config::Config;
 use crate::error::{AppError, Result};
 use crate::models::challenge::{DockerPlatform, TargetAccelerator};
 use crate::zip_project::ZipProjectPhaseLimits;
+
+const STALE_RUNNER_CONTAINER_MIN_AGE_SECS: i64 = 600;
 
 #[derive(Debug)]
 /// Carries container request data across this module boundary.
@@ -32,6 +35,7 @@ pub(super) struct ContainerRequest {
     pub(super) accelerator: TargetAccelerator,
     pub(super) limits: ZipProjectPhaseLimits,
     pub(super) docker_layer_quota_mb: Option<u64>,
+    pub(super) labels: HashMap<String, String>,
 }
 
 #[derive(Debug)]
@@ -104,7 +108,7 @@ pub(super) async fn run_container(
         working_dir: Some(request.working_dir),
         host_config: Some(host_config),
         labels: Some({
-            let mut labels = std::collections::HashMap::new();
+            let mut labels = request.labels;
             labels.insert("agentics.runner".to_string(), "zip_project".to_string());
             labels
         }),
@@ -137,6 +141,55 @@ pub(super) async fn run_container(
             "{run_err}; additionally failed to remove runner container: {cleanup_err}"
         ))),
     }
+}
+
+/// Remove old stopped Agentics runner containers left by earlier worker attempts.
+pub async fn remove_stopped_runner_containers(docker: &Docker) -> Result<u64> {
+    let mut filters = HashMap::new();
+    filters.insert("label", vec!["agentics.runner=zip_project".to_string()]);
+    let options = ListContainersOptionsBuilder::default()
+        .all(true)
+        .filters(&filters)
+        .build();
+    let containers = docker
+        .list_containers(Some(options))
+        .await
+        .map_err(|e| AppError::Docker(format!("list runner containers failed: {e}")))?;
+
+    let now_secs = current_unix_timestamp_secs();
+    let mut removed = 0u64;
+    for container in containers {
+        if matches!(container.state, Some(ContainerSummaryStateEnum::RUNNING)) {
+            continue;
+        }
+        if !is_stale_runner_container(container.created, now_secs) {
+            continue;
+        }
+        let Some(container_id) = container.id else {
+            continue;
+        };
+        remove_container(docker, &container_id).await?;
+        removed = removed
+            .checked_add(1)
+            .ok_or_else(|| AppError::Internal("removed container count overflow".to_string()))?;
+    }
+
+    Ok(removed)
+}
+
+/// Returns whether a stopped runner container is old enough for startup cleanup.
+fn is_stale_runner_container(created_secs: Option<i64>, now_secs: i64) -> bool {
+    created_secs
+        .and_then(|created| now_secs.checked_sub(created))
+        .is_some_and(|age_secs| age_secs >= STALE_RUNNER_CONTAINER_MIN_AGE_SECS)
+}
+
+/// Reads the current Unix timestamp for stale-container age comparisons.
+fn current_unix_timestamp_secs() -> i64 {
+    let Ok(duration) = SystemTime::now().duration_since(UNIX_EPOCH) else {
+        return 0;
+    };
+    i64::try_from(duration.as_secs()).unwrap_or(i64::MAX)
 }
 
 /// Connect to Docker using `AGENTICS_DOCKER_HOST` when configured, otherwise the local default.

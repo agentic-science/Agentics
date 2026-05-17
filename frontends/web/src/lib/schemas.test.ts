@@ -82,23 +82,9 @@ describe("frontend API schemas", () => {
           targets: [targetFixture(true)],
           execution: {
             validation_runs: "public/runs.json",
-            official_prepare: {
-              command: ["python", "scorer/prepare.py"],
-              result_runs_file: "generated/runs.json",
-              network_access: "enabled",
-              reproducibility_notes: "Generated from private seeds.",
-              external_data: [
-                {
-                  url: "https://example.com/dataset-v1.tar.zst",
-                  digest: "sha256:abc",
-                  version: "v1",
-                },
-              ],
-            },
           },
           datasets: {
             public_dir: "public",
-            private_benchmark_dir: "private-benchmark",
             public_policy: "full",
             private_benchmark_policy: "score_only",
             private_benchmark_enabled: true,

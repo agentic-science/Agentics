@@ -25,6 +25,53 @@ pub const MAX_ZIP_PROJECT_ARTIFACT_BYTES: u64 = 20 * 1024 * 1024;
 pub const MAX_ZIP_PROJECT_FILE_COUNT: usize = 256;
 pub const MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES: u64 = 50 * 1024 * 1024;
 
+/// Validate the ZIP archive envelope before durable storage or extraction.
+pub fn validate_zip_project_archive_envelope(bytes: &[u8]) -> Result<()> {
+    let archive_size = u64::try_from(bytes.len())
+        .map_err(|_| AppError::Validation("solution archive is too large".to_string()))?;
+    if archive_size > MAX_ZIP_PROJECT_ARTIFACT_BYTES {
+        return Err(AppError::Validation(format!(
+            "solution archive must be at most {} bytes",
+            MAX_ZIP_PROJECT_ARTIFACT_BYTES
+        )));
+    }
+
+    let reader = std::io::Cursor::new(bytes);
+    let mut archive = zip::ZipArchive::new(reader)?;
+    if archive.len() > MAX_ZIP_PROJECT_FILE_COUNT {
+        return Err(AppError::Validation(format!(
+            "solution archive must contain at most {} entries",
+            MAX_ZIP_PROJECT_FILE_COUNT
+        )));
+    }
+
+    let mut total_uncompressed_size = 0u64;
+    let mut seen_paths = HashSet::new();
+    for index in 0..archive.len() {
+        let file = archive.by_index(index)?;
+        let path = file.enclosed_name().ok_or_else(|| {
+            AppError::Validation("solution archive contains an unsafe ZIP entry path".to_string())
+        })?;
+        let normalized_path = path.to_string_lossy().to_string();
+        if !seen_paths.insert(normalized_path.clone()) {
+            return Err(AppError::Validation(format!(
+                "solution archive contains duplicate entry `{normalized_path}`"
+            )));
+        }
+        total_uncompressed_size = total_uncompressed_size
+            .checked_add(file.size())
+            .ok_or_else(|| AppError::Validation("solution archive is too large".to_string()))?;
+        if total_uncompressed_size > MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES {
+            return Err(AppError::Validation(format!(
+                "solution archive must expand to at most {} bytes",
+                MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES
+            )));
+        }
+    }
+
+    Ok(())
+}
+
 /// Parsed `agentics.solution.json` manifest for a ZIP project solution.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -248,6 +295,7 @@ impl ZipProjectManifest {
 
     /// Parse and validate `agentics.solution.json` directly from a ZIP artifact.
     pub fn from_zip_bytes(bytes: &[u8]) -> Result<Self> {
+        validate_zip_project_archive_envelope(bytes)?;
         let reader = std::io::Cursor::new(bytes);
         let mut archive = zip::ZipArchive::new(reader)?;
         let mut manifest = archive.by_name(ZIP_PROJECT_MANIFEST_FILE).map_err(|_| {
@@ -496,6 +544,8 @@ fn validate_positive_u32(value: Option<u32>, field: &str) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use std::io::{Cursor, Write};
+
     use serde_json::json;
 
     use crate::models::paths::LogRelativePath;
@@ -503,8 +553,28 @@ mod tests {
     use super::{
         ZipProjectDependencyPolicy, ZipProjectInterfaceKind, ZipProjectManifest,
         ZipProjectNetworkAccess, ZipProjectPhaseFailureReason, ZipProjectPhaseFailureReport,
-        ZipProjectPhaseName,
+        ZipProjectPhaseName, validate_zip_project_archive_envelope,
     };
+
+    /// Builds a test ZIP archive with the supplied stored entries.
+    fn zip_with_entries(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut cursor = Cursor::new(Vec::new());
+        {
+            let mut archive = zip::ZipWriter::new(&mut cursor);
+            let options = zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Stored);
+            for (path, content) in entries {
+                archive
+                    .start_file(path, options)
+                    .expect("test ZIP entry should start");
+                archive
+                    .write_all(content)
+                    .expect("test ZIP entry content should write");
+            }
+            archive.finish().expect("test ZIP should finish");
+        }
+        cursor.into_inner()
+    }
 
     /// Handles valid manifest for this module.
     fn valid_manifest() -> serde_json::Value {
@@ -761,5 +831,25 @@ mod tests {
         let error = serde_json::from_value::<ZipProjectPhaseFailureReport>(invalid)
             .expect_err("unsafe log path should fail during deserialization");
         assert!(error.to_string().contains("repo-relative paths"));
+    }
+
+    /// Verifies archive envelope validation rejects traversal entries.
+    #[test]
+    fn archive_envelope_rejects_unsafe_entry_paths() {
+        let bytes = zip_with_entries(&[("../escape.txt", b"escape")]);
+        let error =
+            validate_zip_project_archive_envelope(&bytes).expect_err("unsafe entry should fail");
+
+        assert!(error.to_string().contains("unsafe ZIP entry path"));
+    }
+
+    /// Verifies archive envelope validation rejects duplicate normalized paths.
+    #[test]
+    fn archive_envelope_rejects_duplicate_entries() {
+        let bytes = zip_with_entries(&[("run.sh", b"one"), ("./run.sh", b"two")]);
+        let error =
+            validate_zip_project_archive_envelope(&bytes).expect_err("duplicate entry should fail");
+
+        assert!(error.to_string().contains("duplicate entry"));
     }
 }

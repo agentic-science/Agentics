@@ -44,6 +44,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     let pending_solution_submission: serde_json::Value = client
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token_a}"))
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
@@ -81,6 +82,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     let second_response: serde_json::Value = client
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token_b}"))
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
@@ -321,8 +323,17 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
 /// Confirms runner scratch work is cleaned instead of persisting private I/O trees.
 fn assert_runner_persisted_only_intended_artifacts(storage_root: &Path, job_id: &str) {
     let durable_job_dir = storage_root.join("eval-artifacts").join(job_id);
+    let log_paths = std::fs::read_dir(&durable_job_dir)
+        .expect("durable job artifact directory should exist")
+        .map(|entry| {
+            entry
+                .expect("durable artifact entry")
+                .path()
+                .join("runner.log")
+        })
+        .collect::<Vec<_>>();
     assert!(
-        durable_job_dir.join("runner.log").exists(),
+        log_paths.iter().any(|path| path.exists()),
         "runner log should remain as the intended durable artifact"
     );
     for private_scratch in [
@@ -338,12 +349,23 @@ fn assert_runner_persisted_only_intended_artifacts(storage_root: &Path, job_id: 
         );
     }
     assert!(
-        !std::env::temp_dir()
-            .join("agentics-eval-artifacts")
-            .join(job_id)
-            .exists(),
+        !runner_temp_workspace_exists(job_id),
         "runner temporary workspace should be removed after evaluation"
     );
+}
+
+/// Returns whether any attempt-scoped temporary workspace remains for a job.
+fn runner_temp_workspace_exists(job_id: &str) -> bool {
+    let root = std::env::temp_dir().join("agentics-eval-artifacts");
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return false;
+    };
+    entries.flatten().any(|entry| {
+        entry
+            .file_name()
+            .to_string_lossy()
+            .starts_with(&format!("{job_id}-"))
+    })
 }
 
 /// Adjusts official score fields so public surfaces must distinguish raw and rank scores.
@@ -424,6 +446,7 @@ async fn public_artifact_respects_solution_publication_policy(pool: sqlx::PgPool
     let submission: serde_json::Value = client
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": "private-artifact-sum",
             "target": "linux-arm64-cpu",

@@ -14,8 +14,9 @@ use crate::models::request::AdminSolutionSubmissionListItemDto;
 use crate::models::request::PublicSolutionSubmissionListItemDto;
 use crate::storage::StorageKey;
 
-use super::challenges::get_published_challenge;
-use super::evaluation_policy::ensure_challenge_supports_eval_type;
+use super::evaluation_policy::{
+    ensure_challenge_supports_eval_type_tx, lock_active_challenge_for_admission_tx,
+};
 use super::ids::{
     agent_id_from_row, challenge_name_from_row, optional_solution_submission_id_from_row,
     optional_uuid_string_from_row, solution_submission_id_from_row, target_from_row,
@@ -78,13 +79,12 @@ pub async fn create_solution_submission_with_job(
     pool: &PgPool,
     input: &CreateSolutionSubmissionInput,
 ) -> Result<SolutionSubmissionRecord> {
-    let challenge = get_published_challenge(pool, &input.challenge_name).await?;
-    let challenge =
-        challenge.ok_or_else(|| AppError::BadRequest("challenge not found".to_string()))?;
+    let mut tx = pool.begin().await?;
+    let challenge = lock_active_challenge_for_admission_tx(&mut tx, &input.challenge_name).await?;
     let spec: ChallengeBundleSpec = serde_json::from_value(challenge.spec_json.clone())
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    ensure_challenge_supports_eval_type(
-        pool,
+    ensure_challenge_supports_eval_type_tx(
+        &mut tx,
         &challenge.challenge_name,
         &spec,
         &input.target,
@@ -92,9 +92,6 @@ pub async fn create_solution_submission_with_job(
         &input.agent_id,
     )
     .await?;
-
-    let mut tx = pool.begin().await?;
-    ensure_challenge_is_active_tx(&mut tx, &input.challenge_name).await?;
     enforce_quota_admission(&mut tx, input).await?;
     ensure_parent_solution_submission_matches_scope_tx(
         &mut tx,
@@ -367,32 +364,6 @@ async fn enforce_quota_admission(
     }
 
     Ok(())
-}
-
-/// Lock the challenge row and confirm it still accepts new submissions.
-async fn ensure_challenge_is_active_tx(
-    tx: &mut Transaction<'_, Postgres>,
-    challenge_name: &ChallengeName,
-) -> Result<()> {
-    let row = sqlx::query(
-        r#"
-        SELECT name
-        FROM challenges
-        WHERE name = $1
-          AND status = 'active'
-          AND spec_json IS NOT NULL
-        FOR UPDATE
-        "#,
-    )
-    .bind(challenge_name.as_str())
-    .fetch_optional(&mut **tx)
-    .await?;
-
-    if row.is_some() {
-        Ok(())
-    } else {
-        Err(AppError::BadRequest("challenge not found".to_string()))
-    }
 }
 
 /// Handles lock quota scope for this module.

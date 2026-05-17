@@ -22,7 +22,10 @@ use shared::db::{
 };
 use shared::models::evaluation::EvaluationStatus;
 use shared::models::ids::{EvaluationId, EvaluationJobId};
-use shared::runner::{connect_docker, execute_evaluation_job};
+use shared::runner::{
+    EvaluationJobExecution, connect_docker, execute_evaluation_job,
+    remove_stopped_runner_containers,
+};
 use shared::storage::LocalStorage;
 
 /// Long-lived evaluation worker with shared database, Docker, and storage handles.
@@ -41,6 +44,13 @@ impl Worker {
         config.validate_runner_storage()?;
         let db = create_pool(&config, 2).await?;
         let docker = connect_docker(&config)?;
+        let removed_containers = remove_stopped_runner_containers(&docker).await?;
+        if removed_containers > 0 {
+            info!(
+                removed_containers,
+                "removed stopped runner containers from previous attempts"
+            );
+        }
         let storage: Arc<dyn shared::storage::Storage> =
             Arc::new(LocalStorage::new(&config.storage_root));
         let worker_id = worker_instance_id();
@@ -209,14 +219,16 @@ pub async fn run_worker_cycle(
         lease_stop_rx,
     ));
 
-    let exec_result = execute_evaluation_job(
+    let exec_result = execute_evaluation_job(EvaluationJobExecution {
         docker,
         config,
-        job.id.as_str(),
-        job.eval_type,
-        &job.payload,
+        job_id: job.id.as_str(),
+        worker_id,
+        attempt_count: job.attempt_count,
+        eval_type: job.eval_type,
+        payload: &job.payload,
         storage,
-    )
+    })
     .await;
     let _ = lease_stop_tx.send(true);
     if let Err(join_err) = lease_task.await {

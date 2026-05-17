@@ -1,17 +1,17 @@
 //! Admin and pioneer-code HTTP handlers.
 
 use super::{
-    AdminAuth, AdminBundlePath, AdminCapacityResponse, AdminCapacityUsageDto,
-    AdminQuotaSettingsDto, AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse,
-    AgentId, AgentPioneerCodeId, AgentStatus, AppError, AppState, ChallengeEligibilityType,
-    ChallengeName, Config, CreateChallengeRequest, CreatePioneerCodeRequest, DateTime,
-    DisableAgentResponse, EvaluationJobId, EvaluationJobResponse, EvaluationJobStatus, FsPath,
-    HideSolutionSubmissionResponse, Json, Path, PathBuf, PioneerCode, PioneerCodeDetailResponse,
-    PioneerCodeListResponse, PioneerCodeStatus, PublishChallengeRequest, PublishChallengeResponse,
-    QueueEvaluationJobInput, Result, RevokePioneerCodeResponse, SUBMISSION_QUOTA_WINDOW_SECONDS,
-    ScoringMode, SolutionSubmissionPath, State, StatusCode, Utc, Uuid, ValidatedJson, auth,
-    challenge_bundle, db, parse_request_value, presenters,
+    AdminAuth, AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto,
+    AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse, AgentId,
+    AgentPioneerCodeId, AgentStatus, AppError, AppState, CreatePioneerCodeRequest, DateTime,
+    DisableAgentResponse, EvaluationJobId, EvaluationJobResponse, EvaluationJobStatus,
+    HideSolutionSubmissionResponse, Json, Path, PioneerCode, PioneerCodeDetailResponse,
+    PioneerCodeListResponse, PioneerCodeStatus, QueueEvaluationJobInput, Result,
+    RevokePioneerCodeResponse, SUBMISSION_QUOTA_WINDOW_SECONDS, ScoringMode,
+    SolutionSubmissionPath, State, StatusCode, Utc, ValidatedJson, auth, db, presenters,
 };
+use shared::models::challenge::PublishChallengeResponse;
+use shared::models::request::{CreateChallengeRequest, PublishChallengeRequest};
 
 // ---------------------------------------------------------------------------
 // Admin routes
@@ -181,114 +181,14 @@ pub async fn create_challenge(
 /// Validate and publish a challenge bundle.
 pub async fn publish_challenge(
     _admin: AdminAuth,
-    State(state): State<AppState>,
-    Path(challenge_name): Path<String>,
-    ValidatedJson(body): ValidatedJson<PublishChallengeRequest>,
+    State(_state): State<AppState>,
+    Path(_challenge_name): Path<String>,
+    ValidatedJson(_body): ValidatedJson<PublishChallengeRequest>,
 ) -> Result<(StatusCode, Json<PublishChallengeResponse>)> {
-    let challenge_name = parse_request_value::<ChallengeName>(&challenge_name)?;
-    let bundle_path = if FsPath::new(&body.bundle_path).is_absolute() {
-        PathBuf::from(&body.bundle_path)
-    } else {
-        FsPath::new(&state.config.challenges_root).join(&body.bundle_path)
-    };
-    let bundle_path = AdminBundlePath::from_existing_dir(&bundle_path)?;
-
-    challenge_bundle::validate_challenge_bundle(bundle_path.as_path()).await?;
-    let spec = challenge_bundle::read_challenge_bundle_spec(bundle_path.as_path()).await?;
-    if state.config.require_digest_pinned_images {
-        challenge_bundle::validate_digest_pinned_images(&spec)?;
-    }
-
-    if spec.challenge_name != challenge_name {
-        return Err(AppError::BadRequest(format!(
-            "challenge bundle id mismatch: expected {}, got {}",
-            challenge_name, spec.challenge_name
-        )));
-    }
-    if spec.eligibility.eligibility_type == ChallengeEligibilityType::PrivateShortlist {
-        return Err(AppError::BadRequest(
-            "private_shortlist challenges must be published through the creator draft flow so an owner can manage the shortlist"
-                .to_string(),
-        ));
-    }
-
-    let managed_bundle_path =
-        copy_admin_bundle_to_managed_storage(&state.config, bundle_path.as_path()).await?;
-    let statement_path = managed_bundle_path.join("statement.md");
-    let managed_bundle_path =
-        shared::models::paths::ManagedBundlePath::from_existing_dir(&managed_bundle_path)?;
-    let statement_path =
-        shared::models::paths::ManagedStatementPath::from_existing_file(&statement_path)?;
-
-    let challenge = db::publish_challenge(
-        &state.db,
-        &challenge_name,
-        &managed_bundle_path,
-        &statement_path,
-        &spec,
-        &spec.challenge_title,
-        &spec.challenge_summary,
-    )
-    .await?;
-
-    Ok((StatusCode::CREATED, Json(challenge)))
-}
-
-/// Copies an admin-supplied bundle into content-addressed managed storage.
-async fn copy_admin_bundle_to_managed_storage(
-    config: &Config,
-    source: &std::path::Path,
-) -> Result<std::path::PathBuf> {
-    let source_digest = challenge_bundle::challenge_bundle_tree_sha256(source).await?;
-    let target = std::path::Path::new(&config.storage_root)
-        .join("challenge-bundles")
-        .join("admin")
-        .join(source_digest.to_string());
-    if !tokio::fs::try_exists(&target).await? {
-        let temp_target = target.with_extension(format!("tmp-{}", Uuid::new_v4()));
-        if tokio::fs::try_exists(&temp_target).await? {
-            tokio::fs::remove_dir_all(&temp_target).await?;
-        }
-        challenge_bundle::copy_challenge_bundle_dir(source, &temp_target, true).await?;
-        let temp_digest = challenge_bundle::challenge_bundle_tree_sha256(&temp_target).await?;
-        if temp_digest != source_digest {
-            tokio::fs::remove_dir_all(&temp_target).await.ok();
-            return Err(AppError::Validation(format!(
-                "managed bundle temporary copy digest mismatch for {}",
-                temp_target.display()
-            )));
-        }
-        match tokio::fs::rename(&temp_target, &target).await {
-            Ok(()) => {}
-            Err(error) if tokio::fs::try_exists(&target).await? => {
-                tokio::fs::remove_dir_all(&temp_target).await.ok();
-                let target_digest = challenge_bundle::challenge_bundle_tree_sha256(&target).await?;
-                if target_digest != source_digest {
-                    return Err(AppError::Validation(format!(
-                        "managed bundle target digest mismatch for {}",
-                        target.display()
-                    )));
-                }
-                tracing::debug!(
-                    target = %target.display(),
-                    error = %error,
-                    "managed bundle target already exists after concurrent copy"
-                );
-            }
-            Err(error) => return Err(error.into()),
-        }
-    }
-
-    challenge_bundle::validate_challenge_bundle(&target).await?;
-    let managed_digest = challenge_bundle::challenge_bundle_tree_sha256(&target).await?;
-    if managed_digest != source_digest {
-        return Err(AppError::Validation(format!(
-            "managed bundle copy digest mismatch for {}",
-            target.display()
-        )));
-    }
-
-    Ok(target)
+    Err(AppError::Forbidden(
+        "direct admin bundle publishing is disabled for MVP; use the GitHub-backed challenge draft review flow"
+            .to_string(),
+    ))
 }
 
 /// List recent solution submissions for admin operations.

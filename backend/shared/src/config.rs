@@ -157,6 +157,27 @@ fn default_database_url() -> SecretString {
     ))
 }
 
+/// Validate one configured CORS origin before the router accepts it.
+fn validate_cors_origin(origin: &str) -> anyhow::Result<()> {
+    origin.parse::<http::HeaderValue>().map_err(|e| {
+        anyhow::anyhow!("AGENTICS_CORS_ALLOWED_ORIGINS contains invalid origin `{origin}`: {e}")
+    })?;
+    let parsed = url::Url::parse(origin).map_err(|e| {
+        anyhow::anyhow!("AGENTICS_CORS_ALLOWED_ORIGINS contains invalid origin `{origin}`: {e}")
+    })?;
+    if !matches!(parsed.scheme(), "http" | "https")
+        || parsed.host_str().is_none()
+        || parsed.path() != "/"
+        || parsed.query().is_some()
+        || parsed.fragment().is_some()
+    {
+        anyhow::bail!(
+            "AGENTICS_CORS_ALLOWED_ORIGINS contains invalid origin `{origin}`: expected an http(s) origin without path, query, or fragment"
+        );
+    }
+    Ok(())
+}
+
 /// Handles default api host for this module.
 fn default_api_host() -> String {
     "127.0.0.1".to_string()
@@ -396,6 +417,9 @@ impl Config {
             anyhow::bail!(
                 "AGENTICS_WEB_SESSION_COOKIE_NAME and AGENTICS_WEB_CSRF_COOKIE_NAME must differ"
             );
+        }
+        for origin in self.cors_allowed_origin_values() {
+            validate_cors_origin(&origin)?;
         }
         if !is_loopback_host(&self.api_host) && !self.web_session_cookie_secure {
             anyhow::bail!(
@@ -656,6 +680,23 @@ mod tests {
             error
                 .to_string()
                 .contains("AGENTICS_AGENT_REGISTRATION_MODE=public")
+        );
+    }
+
+    /// Verifies invalid configured CORS origins fail startup validation.
+    #[test]
+    fn invalid_cors_origin_is_rejected() {
+        let mut config = test_config();
+        config.cors_allowed_origins = "http://localhost:3001,http://bad\nsite".to_string();
+
+        let error = config
+            .validate_api_security()
+            .expect_err("invalid CORS origins should fail startup validation");
+
+        assert!(
+            error
+                .to_string()
+                .contains("AGENTICS_CORS_ALLOWED_ORIGINS contains invalid origin")
         );
     }
 

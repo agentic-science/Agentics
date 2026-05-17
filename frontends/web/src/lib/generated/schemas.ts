@@ -502,64 +502,10 @@ export const challengeDetailResponseSchema = z
                 "Optional scorer-image command that prepares generated benchmark inputs.",
               )
               .optional(),
-            official_runs: z
-              .string()
-              .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
-              .optional(),
-            official_prepare: z
-              .object({
-                command: z.array(z.string()),
-                result_runs_file: z
-                  .string()
-                  .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
-                  .describe(
-                    "Relative path, under the prepared workspace, to the generated run manifest.",
-                  ),
-                network_access: z
-                  .enum(["disabled", "loopback", "enabled"])
-                  .describe("Network access policy requested for a phase."),
-                reproducibility_notes: z
-                  .string()
-                  .describe(
-                    "Challenge-owner notes about seeds, versions, or external data provenance.",
-                  )
-                  .optional(),
-                external_data: z
-                  .array(
-                    z
-                      .object({
-                        url: z
-                          .string()
-                          .url()
-                          .regex(/^https:\/\/[^?#]+$/),
-                        digest: z.string().optional(),
-                        version: z.string().optional(),
-                      })
-                      .strict()
-                      .describe(
-                        "Informational external data metadata for challenge-owned prepare commands.",
-                      ),
-                  )
-                  .describe(
-                    "Informational list of external resources the prepare phase may use.",
-                  )
-                  .optional(),
-                cache_key_hint: z
-                  .string()
-                  .describe(
-                    "Future cache metadata. The v0.2.5 MVP does not cache prepare output.",
-                  )
-                  .optional(),
-              })
-              .strict()
-              .describe(
-                "Optional scorer-image command that prepares generated benchmark inputs.",
-              )
-              .optional(),
           })
           .strict()
           .describe(
-            "Challenge-owned run manifest locations for standardized `zip_project` execution.",
+            "Public execution metadata that excludes official private benchmark locators.",
           ),
         datasets: z
           .object({
@@ -569,13 +515,6 @@ export const challengeDetailResponseSchema = z
               .describe(
                 "Directory containing data that agents may inspect and use for validation.",
               ),
-            private_benchmark_dir: z
-              .string()
-              .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
-              .describe(
-                "Directory containing private benchmark data or private prepare config used by official runs.",
-              )
-              .optional(),
             public_policy: z
               .enum(["full", "score_only"])
               .describe(
@@ -594,7 +533,7 @@ export const challengeDetailResponseSchema = z
           })
           .strict()
           .describe(
-            "Dataset layout and visibility policy declared by a bundle.",
+            "Public dataset metadata with private benchmark paths removed.",
           ),
         community: z
           .object({
@@ -658,7 +597,9 @@ export const challengeDetailResponseSchema = z
           ),
       })
       .strict()
-      .describe("Parsed `spec.json` contract for a challenge bundle."),
+      .describe(
+        "Public projection of a challenge contract safe for unauthenticated clients.",
+      ),
     statement_markdown: z.string(),
   })
   .strict()

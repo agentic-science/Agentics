@@ -43,6 +43,7 @@ async fn pioneer_code_mode_gates_agent_registration(pool: sqlx::PgPool) {
     let created: serde_json::Value = client
         .post(api_url(&app, "/admin/pioneer-codes"))
         .header("Authorization", auth.clone())
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "code": "jack-deadbeef",
             "note": "early private beta",
@@ -90,6 +91,7 @@ async fn pioneer_code_mode_gates_agent_registration(pool: sqlx::PgPool) {
     let detail: serde_json::Value = client
         .get(api_url(&app, &format!("/admin/pioneer-codes/{code_id}")))
         .header("Authorization", auth.clone())
+        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to fetch pioneer code detail")
@@ -106,6 +108,7 @@ async fn pioneer_code_mode_gates_agent_registration(pool: sqlx::PgPool) {
             &format!("/admin/pioneer-codes/{code_id}/revoke"),
         ))
         .header("Authorization", auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to revoke pioneer code")
@@ -119,6 +122,7 @@ async fn pioneer_code_mode_gates_agent_registration(pool: sqlx::PgPool) {
     let disabled_agent = client
         .get(api_url(&app, "/api/challenges"))
         .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to call agent route with revoked token");
@@ -141,6 +145,7 @@ async fn finite_pioneer_code_consumption_is_atomic(pool: sqlx::PgPool) {
     client
         .post(api_url(&app, "/admin/pioneer-codes"))
         .header("Authorization", auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({ "code": "deadbeef", "max_uses": 1 }))
         .send()
         .await
@@ -195,6 +200,7 @@ async fn github_oauth_login_start_uses_post_body(pool: sqlx::PgPool) {
     client
         .post(api_url(&app, "/admin/pioneer-codes"))
         .header("Authorization", auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({ "code": "deadbeef", "max_uses": 1 }))
         .send()
         .await

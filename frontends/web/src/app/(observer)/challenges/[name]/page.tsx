@@ -33,6 +33,13 @@ export default async function ChallengePage({
     `/api/public/challenges/${name}`,
     challengeDetailResponseSchema,
   );
+  if (detail.spec.targets.length === 0) {
+    return (
+      <div className="card text-center py-12 text-[var(--status-error)]">
+        {t("common.error")}: challenge has no configured targets.
+      </div>
+    );
+  }
   const defaultTarget = detail.spec.targets[0].name;
   const submissionsPromise = resultDetailIsPublic(detail.spec)
     ? fetchJson(

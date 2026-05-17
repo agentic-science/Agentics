@@ -2,9 +2,7 @@
 
 mod helpers;
 
-use helpers::{
-    api_url, copy_dir_all, examples_challenges_root, spawn_app, spawn_app_with_config, test_config,
-};
+use helpers::{api_url, examples_challenges_root, spawn_app, spawn_app_with_config, test_config};
 use shared::config::Config;
 
 /// Verifies that admin read models power operator console.
@@ -36,6 +34,7 @@ async fn admin_read_models_power_operator_console(pool: sqlx::PgPool) {
     let challenges: serde_json::Value = client
         .get(api_url(&app, "/admin/challenges"))
         .header("Authorization", auth.clone())
+        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to list admin challenges")
@@ -58,6 +57,7 @@ async fn admin_read_models_power_operator_console(pool: sqlx::PgPool) {
     let submissions: serde_json::Value = client
         .get(api_url(&app, "/admin/solution-submissions"))
         .header("Authorization", auth.clone())
+        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to list admin solution submissions")
@@ -69,6 +69,7 @@ async fn admin_read_models_power_operator_console(pool: sqlx::PgPool) {
     let capacity: serde_json::Value = client
         .get(api_url(&app, "/admin/capacity"))
         .header("Authorization", auth.clone())
+        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to fetch admin capacity")
@@ -90,6 +91,7 @@ async fn admin_read_models_power_operator_console(pool: sqlx::PgPool) {
     let heartbeats: serde_json::Value = client
         .get(api_url(&app, "/admin/service-heartbeats"))
         .header("Authorization", auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to list admin service heartbeats")
@@ -116,6 +118,7 @@ async fn create_challenge_and_publish_contract(pool: sqlx::PgPool) {
                 config.expose_admin_password_for_http_basic(),
             ),
         )
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "name": "test-challenge",
             "title": "Test Challenge",
@@ -131,7 +134,7 @@ async fn create_challenge_and_publish_contract(pool: sqlx::PgPool) {
     assert_eq!(body["name"], "test-challenge");
     assert_eq!(body["title"], "Test Challenge");
 
-    // Publishing still validates bundle paths before writing the benchmark contract.
+    // Legacy direct publishing is disabled for MVP.
     let response = reqwest::Client::new()
         .post(api_url(&app, "/admin/challenges/test-challenge/publish"))
         .header(
@@ -141,6 +144,7 @@ async fn create_challenge_and_publish_contract(pool: sqlx::PgPool) {
                 config.expose_admin_password_for_http_basic(),
             ),
         )
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "bundle_path": "/nonexistent/bundle"
         }))
@@ -148,226 +152,14 @@ async fn create_challenge_and_publish_contract(pool: sqlx::PgPool) {
         .await
         .expect("failed to execute request");
 
-    assert!(!response.status().is_success());
-}
-
-/// Verifies that publishing contract exposes challenge policy.
-#[sqlx::test(migrations = "../migrations")]
-async fn publishing_contract_exposes_challenge_policy(pool: sqlx::PgPool) {
-    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
-    let challenges = tempfile::tempdir().expect("failed to create challenge tempdir");
-    let config = test_config(storage.path(), challenges.path());
-    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
-    let auth = helpers::basic_auth_header(
-        &config.admin_username,
-        config.expose_admin_password_for_http_basic(),
-    );
-    let client = reqwest::Client::new();
-
-    let bundle = challenges.path().join("published-contract/v1");
-    write_admin_publish_bundle(
-        &bundle,
-        "published-contract",
-        "Published Contract",
-        "Published contract summary",
-    );
-
-    client
-        .post(api_url(&app, "/admin/challenges"))
-        .header("Authorization", &auth)
-        .json(&serde_json::json!({
-            "name": "published-contract",
-            "title": "Published Contract",
-            "summary": "Published contract challenge"
-        }))
-        .send()
-        .await
-        .expect("failed to create challenge")
-        .error_for_status()
-        .expect("challenge create should succeed");
-
-    client
-        .post(api_url(
-            &app,
-            "/admin/challenges/published-contract/publish",
-        ))
-        .header("Authorization", &auth)
-        .json(&serde_json::json!({ "bundle_path": bundle.to_string_lossy() }))
-        .send()
-        .await
-        .expect("failed to publish contract")
-        .error_for_status()
-        .expect("publish should succeed");
-
-    let public_challenge: serde_json::Value = client
-        .get(api_url(&app, "/api/public/challenges/published-contract"))
-        .send()
-        .await
-        .expect("failed to fetch public challenge")
-        .json()
-        .await
-        .expect("failed to decode public challenge");
-
-    assert_eq!(public_challenge["spec"]["eligibility"]["type"], "open");
-    assert_eq!(public_challenge["summary"], "Published contract summary");
-
-    let spec_json: serde_json::Value =
-        sqlx::query_scalar("SELECT spec_json FROM challenges WHERE name = $1")
-            .bind("published-contract")
-            .fetch_one(&pool)
-            .await
-            .expect("failed to query published contract");
-    assert_eq!(spec_json["eligibility"]["type"], "open");
-}
-
-/// Verifies that publishing existing contract is rejected without mutating it.
-#[sqlx::test(migrations = "../migrations")]
-async fn publishing_existing_contract_is_rejected_without_mutating_it(pool: sqlx::PgPool) {
-    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
-    let challenges = tempfile::tempdir().expect("failed to create challenge tempdir");
-    let config = test_config(storage.path(), challenges.path());
-    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
-    let auth = helpers::basic_auth_header(
-        &config.admin_username,
-        config.expose_admin_password_for_http_basic(),
-    );
-    let client = reqwest::Client::new();
-
-    let original_bundle = challenges.path().join("immutable-challenge/original");
-    let replacement_bundle = challenges.path().join("immutable-challenge/replacement");
-    write_admin_publish_bundle(
-        &original_bundle,
-        "immutable-challenge",
-        "Immutable Challenge",
-        "Original summary",
-    );
-    write_admin_publish_bundle(
-        &replacement_bundle,
-        "immutable-challenge",
-        "Immutable Challenge",
-        "Replacement summary",
-    );
-
-    client
-        .post(api_url(&app, "/admin/challenges"))
-        .header("Authorization", &auth)
-        .json(&serde_json::json!({
-            "name": "immutable-challenge",
-            "title": "Immutable Challenge",
-            "summary": "Immutable challenge"
-        }))
-        .send()
-        .await
-        .expect("failed to create challenge")
-        .error_for_status()
-        .expect("challenge create should succeed");
-
-    client
-        .post(api_url(
-            &app,
-            "/admin/challenges/immutable-challenge/publish",
-        ))
-        .header("Authorization", &auth)
-        .json(&serde_json::json!({ "bundle_path": original_bundle.to_string_lossy() }))
-        .send()
-        .await
-        .expect("failed to publish original contract")
-        .error_for_status()
-        .expect("original contract publish should succeed");
-
-    let duplicate_response = client
-        .post(api_url(
-            &app,
-            "/admin/challenges/immutable-challenge/publish",
-        ))
-        .header("Authorization", &auth)
-        .json(&serde_json::json!({ "bundle_path": replacement_bundle.to_string_lossy() }))
-        .send()
-        .await
-        .expect("failed to publish duplicate contract");
-    assert_eq!(duplicate_response.status(), reqwest::StatusCode::CONFLICT);
-
-    let row: (String, serde_json::Value) =
-        sqlx::query_as("SELECT bundle_path, spec_json FROM challenges WHERE name = $1")
-            .bind("immutable-challenge")
-            .fetch_one(&pool)
-            .await
-            .expect("failed to query published contract");
-
-    assert_ne!(row.0, original_bundle.to_string_lossy());
-    let managed_bundle_path = std::path::Path::new(&row.0)
-        .canonicalize()
-        .expect("managed bundle path should canonicalize");
-    let storage_root = storage
-        .path()
-        .canonicalize()
-        .expect("storage root should canonicalize");
-    assert!(
-        managed_bundle_path.starts_with(&storage_root),
-        "admin publish should copy bundles into managed storage"
-    );
-    assert_eq!(row.1["challenge_summary"], "Original summary");
-
-    let managed_spec: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(std::path::Path::new(&row.0).join("spec.json"))
-            .expect("failed to read managed spec"),
-    )
-    .expect("failed to decode managed spec");
-    assert_eq!(managed_spec["challenge_summary"], "Original summary");
-}
-
-/// Verifies that publish rejects tag only images when digest policy is enabled.
-#[sqlx::test(migrations = "../migrations")]
-async fn publish_rejects_tag_only_images_when_digest_policy_is_enabled(pool: sqlx::PgPool) {
-    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
-    let mut config = test_config(storage.path(), &examples_challenges_root());
-    config.require_digest_pinned_images = true;
-    let app = spawn_app_with_config(pool, config.clone()).await;
-    let auth = helpers::basic_auth_header(
-        &config.admin_username,
-        config.expose_admin_password_for_http_basic(),
-    );
-
-    let response = reqwest::Client::new()
-        .post(api_url(&app, "/admin/challenges/sample-sum/publish"))
-        .header("Authorization", auth)
-        .json(&serde_json::json!({ "bundle_path": "sample-sum/v1" }))
-        .send()
-        .await
-        .expect("failed to publish tag-only bundle");
-    assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
-    let body: serde_json::Value = response
-        .json()
-        .await
-        .expect("failed to decode digest policy error");
+    assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+    let body: serde_json::Value = response.json().await.expect("failed to parse error");
     assert!(
         body["message"]
             .as_str()
-            .expect("message")
-            .contains("@sha256:<digest>")
+            .expect("error message")
+            .contains("GitHub-backed challenge draft")
     );
-}
-
-/// Writes admin publish bundle to the target path.
-fn write_admin_publish_bundle(
-    target: &std::path::Path,
-    challenge_name: &str,
-    challenge_title: &str,
-    challenge_summary: &str,
-) {
-    copy_dir_all(&examples_challenges_root().join("sample-sum/v1"), target);
-    let spec_path = target.join("spec.json");
-    let mut spec: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(&spec_path).expect("failed to read spec"))
-            .expect("failed to parse spec");
-    spec["challenge_name"] = serde_json::json!(challenge_name);
-    spec["challenge_title"] = serde_json::json!(challenge_title);
-    spec["challenge_summary"] = serde_json::json!(challenge_summary);
-    std::fs::write(
-        &spec_path,
-        serde_json::to_string_pretty(&spec).expect("failed to serialize spec"),
-    )
-    .expect("failed to write spec");
 }
 
 /// Verifies that admin routes require auth.
@@ -548,6 +340,7 @@ async fn failed_admin_authentication_is_throttled(pool: sqlx::PgPool) {
         let response = client
             .get(api_url(&app, "/admin/challenges"))
             .header("Authorization", bad_basic.clone())
+            .header("X-Agentics-Admin-Automation", "true")
             .send()
             .await
             .expect("failed basic auth should receive response");
@@ -557,6 +350,7 @@ async fn failed_admin_authentication_is_throttled(pool: sqlx::PgPool) {
     let throttled_basic = client
         .get(api_url(&app, "/admin/challenges"))
         .header("Authorization", bad_basic)
+        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("throttled basic auth should receive response");
@@ -594,6 +388,7 @@ async fn admin_official_run_bypasses_public_official_queue_limit(pool: sqlx::PgP
     let official = client
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
@@ -608,6 +403,7 @@ async fn admin_official_run_bypasses_public_official_queue_limit(pool: sqlx::PgP
     let validation_response: serde_json::Value = client
         .post(api_url(&app, "/api/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
@@ -627,6 +423,7 @@ async fn admin_official_run_bypasses_public_official_queue_limit(pool: sqlx::PgP
     let public_quota_response = client
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
@@ -644,6 +441,7 @@ async fn admin_official_run_bypasses_public_official_queue_limit(pool: sqlx::PgP
             &format!("/admin/solution-submissions/{validation_id}/official-run"),
         ))
         .header("Authorization", admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to request admin official run");

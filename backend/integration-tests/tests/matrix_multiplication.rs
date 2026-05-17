@@ -29,6 +29,7 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
     let empty_challenges = tempfile::tempdir().expect("failed to create challenges tempdir");
     let repo = tempfile::tempdir().expect("failed to create challenge repo tempdir");
     copy_dir_all(&challenge_repo_root(), repo.path());
+    remove_copied_submodule_git_pointer(repo.path());
     let challenge_root = repo.path().join("challenges/matrix-multiplication");
     normalize_matrix_targets_for_mvp(&challenge_root);
     let private_asset_zip = generate_smoke_private_asset(&challenge_root);
@@ -100,6 +101,7 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
             &format!("/admin/challenge-drafts/{draft_id}/validate"),
         ))
         .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({ "repository_path": repo.path() }))
         .send()
         .await
@@ -113,6 +115,7 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
             &format!("/admin/challenge-drafts/{draft_id}/approve"),
         ))
         .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({ "message": "approved for matrix e2e" }))
         .send()
         .await
@@ -126,6 +129,7 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
             &format!("/admin/challenge-drafts/{draft_id}/publish"),
         ))
         .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({ "repository_path": repo.path() }))
         .send()
         .await
@@ -149,6 +153,7 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
     let submission: serde_json::Value = client
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {participant_token}"))
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": "matrix-multiplication",
             "target": target,
@@ -173,6 +178,7 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
             &format!("/api/solution-submissions/{submission_id}"),
         ))
         .header("Authorization", format!("Bearer {participant_token}"))
+        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to get completed matrix submission")
@@ -223,6 +229,19 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
             .iter()
             .any(|metric| metric["metric_name"] == "wall_time_ms")
     }));
+}
+
+/// Remove the copied submodule `.git` pointer before creating an isolated test repo.
+fn remove_copied_submodule_git_pointer(repo: &Path) {
+    let git_path = repo.join(".git");
+    if !git_path.exists() {
+        return;
+    }
+    if git_path.is_dir() {
+        std::fs::remove_dir_all(&git_path).expect("failed to remove copied .git directory");
+    } else {
+        std::fs::remove_file(&git_path).expect("failed to remove copied .git pointer");
+    }
 }
 
 /// Commit every change in the copied challenge repository and return the new HEAD SHA.

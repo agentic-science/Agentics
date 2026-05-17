@@ -65,6 +65,9 @@ export function ChallengeDraftReviewPanel({
       onError("Repository path is required for validation and publish.");
       return;
     }
+    if (!confirmDraftAction(draftId, action)) {
+      return;
+    }
 
     setBusyDraftId(draftId);
     try {
@@ -95,6 +98,13 @@ export function ChallengeDraftReviewPanel({
   const cleanupDrafts = async () => {
     if (!csrfToken) {
       onError("Sign in before cleaning up stale drafts.");
+      return;
+    }
+    if (
+      !window.confirm(
+        "Clean up stale challenge drafts and delete expired private assets?",
+      )
+    ) {
       return;
     }
 
@@ -300,6 +310,26 @@ function draftReviewMessage(
       return "rejected";
     case "abandon":
       return "abandoned";
+  }
+}
+
+/** Requires an explicit browser confirmation before high-impact draft actions. */
+function confirmDraftAction(
+  draftId: string,
+  action: "validate" | "approve" | "publish" | "reject" | "abandon",
+): boolean {
+  const shortId = draftId.slice(0, 8);
+  switch (action) {
+    case "validate":
+      return true;
+    case "approve":
+      return window.confirm(`Approve draft ${shortId}?`);
+    case "publish":
+      return window.confirm(`Publish draft ${shortId} as a live challenge?`);
+    case "reject":
+      return window.confirm(`Reject draft ${shortId}?`);
+    case "abandon":
+      return window.confirm(`Abandon draft ${shortId}?`);
   }
 }
 

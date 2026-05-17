@@ -126,7 +126,8 @@ fn challenge_detail() -> ChallengeDetailResponse {
             },
             community: None,
             metric_schema: MetricSchemaSpec::default(),
-        },
+        }
+        .into(),
         statement_markdown: "# Statement\n\nReturn the sum.".to_string(),
     }
 }

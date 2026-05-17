@@ -6,6 +6,7 @@
 //! current invocation's input files, while scorer-only reference data stays in
 //! the scorer container.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use bollard::Docker;
@@ -32,15 +33,18 @@ mod filesystem;
 mod logs;
 mod storage;
 
-pub use docker::connect_docker;
+pub use docker::{connect_docker, remove_stopped_runner_containers};
 
 use docker::{ContainerOutcome, ContainerRequest, bind_mount, pre_pull_image, run_container};
 use errors::{ensure_container_succeeded, ensure_prepare_succeeded, phase_error};
 use filesystem::{
     cleanup_paths, copy_dir_all, ensure_disk_limit, ensure_prepare_disk_limit, extract_zip_safe,
 };
-use logs::{append_named_logs, append_phase_logs, append_run_logs, phase_name};
-use storage::{RunnerStorage, WritablePhase};
+use logs::{
+    append_named_logs, append_phase_logs, append_run_logs, include_log_excerpts, phase_name,
+    visible_log_content,
+};
+use storage::{RunnerStorage, WritableMountLease, WritablePhase};
 
 /// Validated scorer result plus the persisted runner log location.
 #[derive(Debug, Clone)]
@@ -57,10 +61,60 @@ struct RunnerContext<'a> {
     docker: &'a Docker,
     storage: &'a RunnerStorage,
     job_id: &'a str,
+    attempt: &'a RunnerAttempt,
+}
+
+impl RunnerContext<'_> {
+    /// Build Docker labels that identify one runner container and its slot owner.
+    fn container_labels(
+        self,
+        phase: &str,
+        writable_mount: Option<&WritableMountLease>,
+    ) -> HashMap<String, String> {
+        let mut labels = HashMap::from([
+            ("agentics.job_id".to_string(), self.job_id.to_string()),
+            (
+                "agentics.worker_id".to_string(),
+                self.attempt.worker_id.clone(),
+            ),
+            (
+                "agentics.attempt_count".to_string(),
+                self.attempt.attempt_count.to_string(),
+            ),
+            ("agentics.phase".to_string(), phase.to_string()),
+        ]);
+        if let Some(writable_mount) = writable_mount {
+            labels.extend(writable_mount.docker_labels());
+        }
+        labels
+    }
+}
+
+/// Identifies one concrete execution attempt for transient runner resources.
+struct RunnerAttempt {
+    worker_id: String,
+    attempt_count: i32,
+    transient_name: String,
+}
+
+impl RunnerAttempt {
+    /// Build an attempt identity safe for Docker names and temporary paths.
+    fn new(job_id: &str, worker_id: &str, attempt_count: i32) -> Self {
+        Self {
+            worker_id: sanitize_name_component(worker_id),
+            attempt_count,
+            transient_name: format!(
+                "{}-attempt-{}",
+                sanitize_name_component(job_id),
+                attempt_count
+            ),
+        }
+    }
 }
 
 /// Carries solution run request data across this module boundary.
 struct SolutionRunRequest<'a> {
+    eval_type: ScoringMode,
     profile: &'a ResourceProfileSpec,
     docker_platform: DockerPlatform,
     accelerator: TargetAccelerator,
@@ -74,6 +128,7 @@ struct SolutionRunRequest<'a> {
 #[derive(Clone, Copy)]
 /// Carries setup build request data across this module boundary.
 struct SetupBuildRequest<'a> {
+    eval_type: ScoringMode,
     profile: &'a ResourceProfileSpec,
     docker_platform: DockerPlatform,
     accelerator: TargetAccelerator,
@@ -143,24 +198,65 @@ struct SolutionRunMetadata {
     output_dir: String,
 }
 
+/// Carries all boundary inputs required to execute one evaluation job.
+pub struct EvaluationJobExecution<'a> {
+    /// Docker client used for phase containers.
+    pub docker: &'a Docker,
+    /// Runtime configuration that constrains runner behavior.
+    pub config: &'a Config,
+    /// Persistent evaluation job identifier.
+    pub job_id: &'a str,
+    /// Worker instance identifier used to make attempts unique.
+    pub worker_id: &'a str,
+    /// One-based attempt count from the evaluation job record.
+    pub attempt_count: i32,
+    /// Scoring mode that controls privacy and log exposure.
+    pub eval_type: ScoringMode,
+    /// Validated job payload produced by the API.
+    pub payload: &'a EvaluationJobPayload,
+    /// Durable artifact storage for inputs and bounded logs.
+    pub storage: &'a dyn Storage,
+}
+
+impl std::fmt::Debug for EvaluationJobExecution<'_> {
+    /// Formats the execution boundary without requiring service handles to be debuggable.
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("EvaluationJobExecution")
+            .field("job_id", &self.job_id)
+            .field("worker_id", &self.worker_id)
+            .field("attempt_count", &self.attempt_count)
+            .field("eval_type", &self.eval_type)
+            .finish_non_exhaustive()
+    }
+}
+
 /// Execute one evaluation job in Docker and return the validated scorer result.
 pub async fn execute_evaluation_job(
-    docker: &Docker,
-    config: &Config,
-    job_id: &str,
-    eval_type: ScoringMode,
-    payload: &EvaluationJobPayload,
-    storage: &dyn Storage,
+    request: EvaluationJobExecution<'_>,
 ) -> Result<ExecutionResult> {
+    let EvaluationJobExecution {
+        docker,
+        config,
+        job_id,
+        worker_id,
+        attempt_count,
+        eval_type,
+        payload,
+        storage,
+    } = request;
+    let attempt = RunnerAttempt::new(job_id, worker_id, attempt_count);
     let working_root = std::env::temp_dir()
         .join("agentics-eval-artifacts")
-        .join(job_id);
+        .join(&attempt.transient_name);
     let source_root = working_root.join("source");
     let build_root = working_root.join("build-workspace");
     let runs_root = working_root.join("solution-runs");
     let prepared_root = working_root.join("prepared");
     let scorer_output_root = working_root.join("scorer-output");
-    let log_key = StorageKey::try_new(format!("eval-artifacts/{job_id}/runner.log"))?;
+    let log_key = StorageKey::try_new(format!(
+        "eval-artifacts/{job_id}/attempt-{attempt_count}/runner.log"
+    ))?;
 
     cleanup_paths([working_root.clone()]).await?;
     tokio::fs::create_dir_all(&working_root).await?;
@@ -181,6 +277,7 @@ pub async fn execute_evaluation_job(
         docker,
         storage: &runner_storage,
         job_id,
+        attempt: &attempt,
     };
 
     let execution = async {
@@ -202,6 +299,7 @@ pub async fn execute_evaluation_job(
         run_setup_and_build(
             runner_context,
             SetupBuildRequest {
+                eval_type,
                 profile,
                 docker_platform: target.docker_platform,
                 accelerator: target.accelerator,
@@ -231,6 +329,7 @@ pub async fn execute_evaluation_job(
         run_solution_invocations(
             runner_context,
             SolutionRunRequest {
+                eval_type,
                 profile,
                 docker_platform: target.docker_platform,
                 accelerator: target.accelerator,
@@ -333,7 +432,7 @@ async fn run_setup_and_build(
         let outcome = run_container(
             runner.docker,
             ContainerRequest {
-                name: container_name(runner.job_id, &format!("{:?}", phase.name).to_lowercase()),
+                name: container_name(runner.attempt, &format!("{:?}", phase.name).to_lowercase()),
                 image: request.profile.solution_image.clone(),
                 cmd,
                 env: vec![format!("AGENTICS_PHASE={}", phase_name(&phase.name))],
@@ -343,11 +442,20 @@ async fn run_setup_and_build(
                 accelerator: request.accelerator,
                 limits: limits.clone(),
                 docker_layer_quota_mb: runner.storage.docker_layer_quota_mb(&limits),
+                labels: runner.container_labels(phase_name(&phase.name), None),
             },
         )
         .await?;
-        append_phase_logs(logs, phase.name, &outcome.logs);
-        ensure_container_succeeded(phase.name, &outcome)?;
+        append_phase_logs(
+            logs,
+            phase.name,
+            visible_log_content(request.eval_type, &outcome.logs),
+        );
+        ensure_container_succeeded(
+            phase.name,
+            &outcome,
+            include_log_excerpts(request.eval_type),
+        )?;
         ensure_disk_limit(request.build_root, limits.disk_limit_mb, phase.name).await?;
     }
 
@@ -378,6 +486,7 @@ async fn run_setup_and_build_bounded(
         let workspace = runner
             .storage
             .writable_mount(
+                runner.docker,
                 request.build_root,
                 writable_phase_for_solution_phase(phase.name),
                 limits.disk_limit_mb,
@@ -390,7 +499,7 @@ async fn run_setup_and_build_bounded(
         let outcome = run_container(
             runner.docker,
             ContainerRequest {
-                name: container_name(runner.job_id, &format!("{:?}", phase.name).to_lowercase()),
+                name: container_name(runner.attempt, &format!("{:?}", phase.name).to_lowercase()),
                 image: request.profile.solution_image.clone(),
                 cmd,
                 env: vec![format!("AGENTICS_PHASE={}", phase_name(&phase.name))],
@@ -400,11 +509,20 @@ async fn run_setup_and_build_bounded(
                 accelerator: request.accelerator,
                 limits: limits.clone(),
                 docker_layer_quota_mb: runner.storage.docker_layer_quota_mb(&limits),
+                labels: runner.container_labels(phase_name(&phase.name), Some(&workspace)),
             },
         )
         .await?;
-        append_phase_logs(logs, phase.name, &outcome.logs);
-        ensure_container_succeeded(phase.name, &outcome)?;
+        append_phase_logs(
+            logs,
+            phase.name,
+            visible_log_content(request.eval_type, &outcome.logs),
+        );
+        ensure_container_succeeded(
+            phase.name,
+            &outcome,
+            include_log_excerpts(request.eval_type),
+        )?;
         ensure_disk_limit(workspace.path(), limits.disk_limit_mb, phase.name).await?;
         replace_dir_all(workspace.path(), request.build_root).await?;
         source_workspace = request.build_root.to_path_buf();
@@ -432,6 +550,7 @@ async fn run_solution_invocations(
         let io_mount = runner
             .storage
             .writable_mount(
+                runner.docker,
                 &durable_io_root,
                 WritablePhase::SolutionRun,
                 limits.disk_limit_mb,
@@ -450,7 +569,7 @@ async fn run_solution_invocations(
         let outcome = run_container(
             runner.docker,
             ContainerRequest {
-                name: container_name(runner.job_id, &format!("run-{}", run.run_name)),
+                name: container_name(runner.attempt, &format!("run-{}", run.run_name)),
                 image: request.profile.solution_image.clone(),
                 cmd: vec![
                     "sh".to_string(),
@@ -480,11 +599,20 @@ async fn run_solution_invocations(
                 accelerator: request.accelerator,
                 limits: limits.clone(),
                 docker_layer_quota_mb: runner.storage.docker_layer_quota_mb(&limits),
+                labels: runner.container_labels("run", Some(&io_mount)),
             },
         )
         .await?;
-        append_run_logs(logs, &run.run_name, &outcome.logs);
-        ensure_container_succeeded(ZipProjectPhaseName::Run, &outcome)?;
+        append_run_logs(
+            logs,
+            &run.run_name,
+            visible_log_content(request.eval_type, &outcome.logs),
+        );
+        ensure_container_succeeded(
+            ZipProjectPhaseName::Run,
+            &outcome,
+            include_log_excerpts(request.eval_type),
+        )?;
         write_run_metadata(io_root, run, &outcome).await?;
         ensure_disk_limit(io_root, limits.disk_limit_mb, ZipProjectPhaseName::Run).await?;
         ensure_declared_outputs_exist(run, &output_dir).await?;
@@ -504,6 +632,7 @@ async fn run_scorer(
     let output_mount = runner
         .storage
         .writable_mount(
+            runner.docker,
             request.scorer_output_root,
             WritablePhase::ScorerScore,
             limits.disk_limit_mb,
@@ -536,7 +665,7 @@ async fn run_scorer(
     let outcome = run_container(
         runner.docker,
         ContainerRequest {
-            name: container_name(runner.job_id, "scorer"),
+            name: container_name(runner.attempt, "scorer"),
             image: request.profile.scorer_image.clone(),
             cmd,
             env: vec!["AGENTICS_PHASE=scorer".to_string()],
@@ -546,10 +675,15 @@ async fn run_scorer(
             accelerator: request.accelerator,
             limits: limits.clone(),
             docker_layer_quota_mb: runner.storage.docker_layer_quota_mb(&limits),
+            labels: runner.container_labels("scorer", Some(&output_mount)),
         },
     )
     .await?;
-    append_named_logs(logs, "scorer", &outcome.logs);
+    append_named_logs(
+        logs,
+        "scorer",
+        visible_log_content(request.eval_type, &outcome.logs),
+    );
     if outcome.timed_out || outcome.exit_code != 0 {
         return Err(AppError::Runner(format!(
             "scorer container failed: exit_code={}, timed_out={}",
@@ -648,6 +782,7 @@ async fn run_prepare_phase(request: PrepareRequest<'_>, logs: &mut String) -> Re
         .runner
         .storage
         .writable_mount(
+            request.runner.docker,
             request.prepared_root,
             WritablePhase::ScorerPrepare,
             limits.disk_limit_mb,
@@ -672,7 +807,7 @@ async fn run_prepare_phase(request: PrepareRequest<'_>, logs: &mut String) -> Re
         request.runner.docker,
         ContainerRequest {
             name: container_name(
-                request.runner.job_id,
+                request.runner.attempt,
                 &format!("prepare-{}", request.eval_type.scorer_mode_arg()),
             ),
             image: request.profile.scorer_image.clone(),
@@ -690,15 +825,18 @@ async fn run_prepare_phase(request: PrepareRequest<'_>, logs: &mut String) -> Re
             accelerator: request.accelerator,
             limits: limits.clone(),
             docker_layer_quota_mb: request.runner.storage.docker_layer_quota_mb(&limits),
+            labels: request
+                .runner
+                .container_labels("prepare", Some(&prepared_mount)),
         },
     )
     .await?;
     append_named_logs(
         logs,
         &format!("prepare-{}", request.eval_type.scorer_mode_arg()),
-        &outcome.logs,
+        visible_log_content(request.eval_type, &outcome.logs),
     );
-    ensure_prepare_succeeded(&outcome)?;
+    ensure_prepare_succeeded(&outcome, include_log_excerpts(request.eval_type))?;
     ensure_prepare_disk_limit(prepared_mount.path(), limits.disk_limit_mb).await?;
     replace_dir_all_if_separate(prepared_mount.path(), request.prepared_root).await?;
 
@@ -1037,9 +1175,15 @@ fn run_interface(interface: ChallengeRunInterface) -> &'static str {
     }
 }
 
-/// Handles container name for this module.
-fn container_name(job_id: &str, suffix: &str) -> String {
-    let safe_suffix = suffix
+/// Build a Docker container name for one attempt-local phase.
+fn container_name(attempt: &RunnerAttempt, suffix: &str) -> String {
+    let safe_suffix = sanitize_name_component(suffix);
+    format!("agentics-{}-{safe_suffix}", attempt.transient_name)
+}
+
+/// Convert arbitrary identifiers into Docker-name-safe components.
+fn sanitize_name_component(value: &str) -> String {
+    value
         .chars()
         .map(|ch| {
             if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.') {
@@ -1048,12 +1192,12 @@ fn container_name(job_id: &str, suffix: &str) -> String {
                 '-'
             }
         })
-        .collect::<String>();
-    format!("agentics-{job_id}-{safe_suffix}")
+        .collect::<String>()
 }
 
 #[cfg(test)]
 mod tests {
+    use super::{RunnerAttempt, container_name};
     use crate::zip_project::ZipProjectNetworkAccess;
 
     /// Verifies that network policy clamps to resource profile.
@@ -1067,5 +1211,19 @@ mod tests {
             ZipProjectNetworkAccess::Loopback.docker_network_mode(),
             "none"
         );
+    }
+
+    /// Verifies retry attempts use distinct transient container identities.
+    #[test]
+    fn retry_attempts_have_distinct_container_names() {
+        let first = RunnerAttempt::new("job/1", "worker a", 1);
+        let second = RunnerAttempt::new("job/1", "worker a", 2);
+
+        assert_ne!(
+            container_name(&first, "run"),
+            container_name(&second, "run")
+        );
+        assert!(container_name(&first, "run").contains("attempt-1"));
+        assert!(container_name(&second, "run").contains("attempt-2"));
     }
 }

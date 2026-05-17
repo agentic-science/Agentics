@@ -100,6 +100,91 @@ impl ChallengeBundleSpec {
     }
 }
 
+/// Public projection of a challenge contract safe for unauthenticated clients.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PublicChallengeBundleSpec {
+    pub schema_version: i32,
+    pub challenge_name: ChallengeName,
+    pub challenge_title: String,
+    /// Plain-text summary used in compact challenge catalog surfaces.
+    pub challenge_summary: String,
+    pub solution: SolutionSpec,
+    pub scorer: ScorerSpec,
+    pub targets: Vec<ChallengeTargetSpec>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub starts_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub closes_at: Option<String>,
+    pub eligibility: ChallengeEligibilitySpec,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub validation_submission_limit: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub official_submission_limit: Option<i64>,
+    pub visibility: ChallengeVisibilitySpec,
+    pub solution_publication: ChallengeSolutionPublicationPolicy,
+    pub execution: PublicChallengeExecutionSpec,
+    pub datasets: PublicDatasetsSpec,
+    /// Optional external community metadata for this challenge.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub community: Option<CommunitySpec>,
+    /// Metric definitions and ranking metadata used to interpret scorer output.
+    #[serde(default)]
+    #[schemars(required)]
+    pub metric_schema: MetricSchemaSpec,
+}
+
+impl PublicChallengeBundleSpec {
+    /// Look up one public target declared by this challenge.
+    pub fn target(&self, target: &TargetName) -> Option<&ChallengeTargetSpec> {
+        self.targets
+            .iter()
+            .find(|candidate| &candidate.name == target)
+    }
+
+    /// Return the only target name when a public challenge is unambiguous.
+    pub fn sole_target(&self) -> Option<&TargetName> {
+        match self.targets.as_slice() {
+            [target] => Some(&target.name),
+            _ => None,
+        }
+    }
+}
+
+impl From<ChallengeBundleSpec> for PublicChallengeBundleSpec {
+    /// Remove private benchmark locator metadata from a full challenge contract.
+    fn from(spec: ChallengeBundleSpec) -> Self {
+        Self {
+            schema_version: spec.schema_version,
+            challenge_name: spec.challenge_name,
+            challenge_title: spec.challenge_title,
+            challenge_summary: spec.challenge_summary,
+            solution: spec.solution,
+            scorer: spec.scorer,
+            targets: spec.targets,
+            starts_at: spec.starts_at,
+            closes_at: spec.closes_at,
+            eligibility: spec.eligibility,
+            validation_submission_limit: spec.validation_submission_limit,
+            official_submission_limit: spec.official_submission_limit,
+            visibility: spec.visibility,
+            solution_publication: spec.solution_publication,
+            execution: PublicChallengeExecutionSpec {
+                validation_runs: spec.execution.validation_runs,
+                validation_prepare: spec.execution.validation_prepare,
+            },
+            datasets: PublicDatasetsSpec {
+                public_dir: spec.datasets.public_dir,
+                public_policy: spec.datasets.public_policy,
+                private_benchmark_policy: spec.datasets.private_benchmark_policy,
+                private_benchmark_enabled: spec.datasets.private_benchmark_enabled,
+            },
+            community: spec.community,
+            metric_schema: spec.metric_schema,
+        }
+    }
+}
+
 /// Eligibility policy for a challenge.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -268,6 +353,15 @@ pub struct ChallengeExecutionSpec {
     pub official_prepare: Option<ChallengePrepareSpec>,
 }
 
+/// Public execution metadata that excludes official private benchmark locators.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct PublicChallengeExecutionSpec {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub validation_runs: Option<BundleRelativePath>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub validation_prepare: Option<ChallengePrepareSpec>,
+}
+
 /// Optional scorer-image command that prepares generated benchmark inputs.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengePrepareSpec {
@@ -346,6 +440,19 @@ pub struct DatasetsSpec {
     /// Directory containing private benchmark data or private prepare config used by official runs.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub private_benchmark_dir: Option<BundleRelativePath>,
+    /// Visibility policy for public validation case results.
+    pub public_policy: super::evaluation::ScoreVisibility,
+    /// Visibility policy for private benchmark results.
+    pub private_benchmark_policy: PrivateBenchmarkPolicy,
+    /// Whether official runs can evaluate against private benchmark data.
+    pub private_benchmark_enabled: bool,
+}
+
+/// Public dataset metadata with private benchmark paths removed.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct PublicDatasetsSpec {
+    /// Directory containing data that agents may inspect and use for validation.
+    pub public_dir: BundleRelativePath,
     /// Visibility policy for public validation case results.
     pub public_policy: super::evaluation::ScoreVisibility,
     /// Visibility policy for private benchmark results.
@@ -476,7 +583,7 @@ pub struct ChallengeDetailResponse {
     pub name: ChallengeName,
     pub title: String,
     pub summary: String,
-    pub spec: ChallengeBundleSpec,
+    pub spec: PublicChallengeBundleSpec,
     pub statement_markdown: String,
 }
 

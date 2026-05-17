@@ -98,7 +98,7 @@ pub fn present_challenge_detail(
         name: challenge.challenge_name.clone(),
         title: challenge.title.clone(),
         summary: challenge.summary.clone(),
-        spec,
+        spec: spec.into(),
         statement_markdown: statement.to_string(),
     })
 }

@@ -32,6 +32,7 @@ async fn register_agent_and_list_challenges(pool: sqlx::PgPool) {
     let response = reqwest::Client::new()
         .get(api_url(&app, "/api/challenges"))
         .header("Authorization", format!("Bearer {}", token))
+        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to execute request");

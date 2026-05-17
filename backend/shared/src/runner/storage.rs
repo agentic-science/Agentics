@@ -2,6 +2,8 @@ use std::fs::{self, OpenOptions};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
+use bollard::Docker;
+use bollard::query_parameters::ListContainersOptionsBuilder;
 use fs2::FileExt;
 
 use crate::config::{Config, RunnerWritableStorageMode};
@@ -37,7 +39,10 @@ pub(super) enum WritableMountLease {
 #[derive(Debug)]
 /// Carries bounded slot lease data across this module boundary.
 pub(super) struct BoundedSlotLease {
+    slot_path: PathBuf,
     work_path: PathBuf,
+    phase_label: String,
+    slot_class_mb: u64,
     _lock_file: fs::File,
 }
 
@@ -69,6 +74,7 @@ impl RunnerStorage {
     /// Handles writable mount for this module.
     pub(super) async fn writable_mount(
         &self,
+        docker: &Docker,
         fallback_path: &Path,
         phase: WritablePhase,
         disk_limit_mb: u64,
@@ -85,7 +91,7 @@ impl RunnerStorage {
                     )
                 })?;
                 let slot_class_mb = choose_slot_class(&self.slot_classes_mb, disk_limit_mb)?;
-                acquire_slot(phase_mount_root, phase, slot_class_mb).await
+                acquire_slot(docker, phase_mount_root, phase, slot_class_mb).await
             }
         }
     }
@@ -99,12 +105,35 @@ impl WritableMountLease {
             Self::Bounded(lease) => lease.path(),
         }
     }
+
+    /// Return Docker labels that bind a runner container to this writable mount.
+    pub(super) fn docker_labels(&self) -> Vec<(String, String)> {
+        match self {
+            Self::Unbounded(_) => Vec::new(),
+            Self::Bounded(lease) => lease.docker_labels(),
+        }
+    }
 }
 
 impl BoundedSlotLease {
     /// Handles path for this module.
     fn path(&self) -> &Path {
         &self.work_path
+    }
+
+    /// Return labels used to detect live containers that still own this slot.
+    fn docker_labels(&self) -> Vec<(String, String)> {
+        vec![
+            (
+                "agentics.slot_path".to_string(),
+                path_label(&self.slot_path),
+            ),
+            ("agentics.slot_phase".to_string(), self.phase_label.clone()),
+            (
+                "agentics.slot_class_mb".to_string(),
+                self.slot_class_mb.to_string(),
+            ),
+        ]
     }
 }
 
@@ -151,6 +180,7 @@ fn choose_slot_class(classes: &[u64], disk_limit_mb: u64) -> Result<u64> {
 
 /// Handles acquire slot for this module.
 async fn acquire_slot(
+    docker: &Docker,
     phase_mount_root: &Path,
     phase: WritablePhase,
     slot_class_mb: u64,
@@ -160,21 +190,7 @@ async fn acquire_slot(
         .join("slots")
         .join(format!("{slot_class_mb}mb"));
     let phase_label = phase.dir_name().to_string();
-    let lease = tokio::task::spawn_blocking(move || {
-        acquire_slot_blocking(&slot_class_root, &phase_label, slot_class_mb)
-    })
-    .await
-    .map_err(|e| AppError::Internal(format!("bounded slot acquisition task failed: {e}")))??;
-    Ok(WritableMountLease::Bounded(lease))
-}
-
-/// Handles acquire slot blocking for this module.
-fn acquire_slot_blocking(
-    slot_class_root: &Path,
-    phase_label: &str,
-    slot_class_mb: u64,
-) -> Result<BoundedSlotLease> {
-    let slots = list_slot_dirs(slot_class_root)?;
+    let slots = list_slot_dirs(&slot_class_root)?;
     if slots.is_empty() {
         return Err(AppError::Runner(format!(
             "no bounded writable slots found for phase `{phase_label}` class {slot_class_mb} MiB at {}",
@@ -183,35 +199,89 @@ fn acquire_slot_blocking(
     }
 
     for slot_path in slots {
-        let lock_path = slot_path.join(".agentics-slot.lock");
-        let lock_file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(&lock_path)?;
-        match lock_file.try_lock_exclusive() {
-            Ok(()) => {
-                let work_path = slot_path.join("work");
-                if let Err(error) = fs::remove_dir_all(&work_path)
-                    && error.kind() != ErrorKind::NotFound
-                {
-                    return Err(AppError::Io(error));
-                }
-                fs::create_dir_all(&work_path)?;
-                return Ok(BoundedSlotLease {
-                    work_path,
-                    _lock_file: lock_file,
-                });
-            }
-            Err(error) if error.kind() == ErrorKind::WouldBlock => {}
-            Err(error) => return Err(AppError::Io(error)),
+        let lock_attempt_slot_path = slot_path.clone();
+        let maybe_lock = tokio::task::spawn_blocking(move || lock_slot(&lock_attempt_slot_path))
+            .await
+            .map_err(|e| AppError::Internal(format!("bounded slot lock task failed: {e}")))??;
+        let Some(lock_file) = maybe_lock else {
+            continue;
+        };
+
+        if slot_has_live_runner_container(docker, &slot_path).await? {
+            drop(lock_file);
+            continue;
         }
+
+        let work_path = slot_path.join("work");
+        let cleanup_work_path = work_path.clone();
+        tokio::task::spawn_blocking(move || reset_slot_work_path(&cleanup_work_path))
+            .await
+            .map_err(|e| AppError::Internal(format!("bounded slot cleanup task failed: {e}")))??;
+
+        return Ok(WritableMountLease::Bounded(BoundedSlotLease {
+            slot_path,
+            work_path,
+            phase_label,
+            slot_class_mb,
+            _lock_file: lock_file,
+        }));
     }
 
     Err(AppError::Runner(format!(
         "all bounded writable slots are busy for phase `{phase_label}` class {slot_class_mb} MiB"
     )))
+}
+
+/// Try to take the filesystem lock for a bounded slot.
+fn lock_slot(slot_path: &Path) -> Result<Option<fs::File>> {
+    let lock_path = slot_path.join(".agentics-slot.lock");
+    let lock_file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&lock_path)?;
+    match lock_file.try_lock_exclusive() {
+        Ok(()) => Ok(Some(lock_file)),
+        Err(error) if error.kind() == ErrorKind::WouldBlock => Ok(None),
+        Err(error) => Err(AppError::Io(error)),
+    }
+}
+
+/// Remove stale work contents and recreate the slot work directory.
+fn reset_slot_work_path(work_path: &Path) -> Result<()> {
+    if let Err(error) = fs::remove_dir_all(work_path)
+        && error.kind() != ErrorKind::NotFound
+    {
+        return Err(AppError::Io(error));
+    }
+    fs::create_dir_all(work_path)?;
+    Ok(())
+}
+
+/// Return whether Docker still has a live runner container for a slot.
+async fn slot_has_live_runner_container(docker: &Docker, slot_path: &Path) -> Result<bool> {
+    let mut filters = std::collections::HashMap::new();
+    filters.insert(
+        "label",
+        vec![
+            "agentics.runner=zip_project".to_string(),
+            format!("agentics.slot_path={}", path_label(slot_path)),
+        ],
+    );
+    let options = ListContainersOptionsBuilder::default()
+        .filters(&filters)
+        .build();
+    let containers = docker
+        .list_containers(Some(options))
+        .await
+        .map_err(|e| AppError::Docker(format!("list runner containers failed: {e}")))?;
+    Ok(!containers.is_empty())
+}
+
+/// Format a filesystem path for stable Docker label comparisons.
+fn path_label(path: &Path) -> String {
+    path.to_string_lossy().to_string()
 }
 
 /// Lists slot dirs using the configured query scope.
@@ -272,8 +342,14 @@ mod tests {
             .expect("failed to write stale file");
 
         {
-            let lease =
-                acquire_slot_blocking(&root, "solution-run", 64).expect("slot should be acquired");
+            let lease = BoundedSlotLease {
+                slot_path: slot.clone(),
+                work_path: slot.join("work"),
+                phase_label: "solution-run".to_string(),
+                slot_class_mb: 64,
+                _lock_file: lock_slot(&slot).expect("slot lock should succeed").unwrap(),
+            };
+            reset_slot_work_path(lease.path()).expect("slot should reset");
             assert!(lease.path().is_dir());
             fs::write(lease.path().join("probe.txt"), b"ok").expect("failed to write probe");
         }

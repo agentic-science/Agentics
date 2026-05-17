@@ -210,12 +210,7 @@ pub(crate) fn render_challenge_detail(
         OutputFormat::Json => pretty_json(response),
         OutputFormat::Table => {
             let private_benchmark = if response.spec.datasets.private_benchmark_enabled {
-                response
-                    .spec
-                    .datasets
-                    .private_benchmark_dir
-                    .as_ref()
-                    .map_or("<configured>", |path| path.as_str())
+                "<configured>"
             } else {
                 "disabled"
             };
@@ -370,9 +365,12 @@ pub(crate) fn render_solution_submission_status(
                 .as_ref()
                 .map(|eval| status_label(&eval.status))
                 .unwrap_or_else(|| "none".to_string());
-            let rank_score = response
-                .evaluation
+            let display_eval = response
+                .official_evaluation
                 .as_ref()
+                .or(response.validation_evaluation.as_ref())
+                .or(response.evaluation.as_ref());
+            let rank_score = display_eval
                 .and_then(|eval| eval.rank_score)
                 .map(format_score)
                 .unwrap_or_else(|| "none".to_string());

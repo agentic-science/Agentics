@@ -8,7 +8,7 @@ use crate::models::ids::{EvaluationJobId, SolutionSubmissionId};
 use crate::models::names::{ChallengeName, TargetName};
 use crate::models::paths::ManagedBundlePath;
 
-use super::evaluation_policy::ensure_challenge_supports_eval_type;
+use super::evaluation_policy::ensure_challenge_supports_eval_type_tx;
 use super::ids::{
     agent_id_from_row, challenge_name_from_row, evaluation_job_id_from_row,
     solution_submission_id_from_row, target_from_row,
@@ -187,6 +187,7 @@ pub async fn queue_evaluation_job(
           AND p.status = 'active'
           AND p.spec_json IS NOT NULL
         LIMIT 1
+        FOR UPDATE OF s, p
         "#,
     )
     .bind(input.solution_submission_id.as_str())
@@ -200,8 +201,8 @@ pub async fn queue_evaluation_job(
 
     let target = target_from_row(&row, "target")?;
     let challenge_name = challenge_name_from_row(&row, "challenge_name")?;
-    ensure_challenge_supports_eval_type(
-        pool,
+    ensure_challenge_supports_eval_type_tx(
+        &mut tx,
         &challenge_name,
         &spec,
         &target,
@@ -299,14 +300,14 @@ fn map_active_job_conflict(error: sqlx::Error) -> AppError {
     }
 }
 
-/// Count queued or running jobs for one evaluation type.
+/// Count jobs that reserve active capacity for one evaluation type.
 pub async fn count_active_evaluation_jobs(pool: &PgPool, eval_type: ScoringMode) -> Result<i64> {
     let count = sqlx::query_scalar::<_, i64>(
         r#"
         SELECT COUNT(*)::BIGINT
         FROM evaluation_jobs
         WHERE eval_type = $1
-          AND status IN ('queued', 'running')
+          AND status IN ('staged', 'queued', 'running')
         "#,
     )
     .bind(eval_type.as_str())

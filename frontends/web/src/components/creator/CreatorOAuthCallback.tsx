@@ -3,27 +3,39 @@
 import { GitPullRequest, LoaderCircle } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CreatorApiError,
   completeGithubLogin,
+  consumeExpectedGithubOauthState,
   storeCreatorCsrfToken,
 } from "@/lib/creatorApi";
 
 /** Renders the creator oauth callback component. */
 export function CreatorOAuthCallback() {
   const searchParams = useSearchParams();
+  const started = useRef(false);
   const [status, setStatus] = useState<"loading" | "success" | "error">(
     "loading",
   );
   const [message, setMessage] = useState("Completing GitHub sign-in.");
 
   useEffect(() => {
+    if (started.current) {
+      return;
+    }
+    started.current = true;
     const code = searchParams.get("code");
     const state = searchParams.get("state");
+    window.history.replaceState(null, "", window.location.pathname);
     if (!code || !state) {
       setStatus("error");
       setMessage("GitHub did not return the required OAuth code and state.");
+      return;
+    }
+    if (!consumeExpectedGithubOauthState(state)) {
+      setStatus("error");
+      setMessage("GitHub OAuth state did not match this browser session.");
       return;
     }
 

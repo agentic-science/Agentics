@@ -2,7 +2,7 @@
 
 use axum::{
     Json,
-    extract::{ConnectInfo, Query, State},
+    extract::{ConnectInfo, State},
     http::{HeaderMap, HeaderName, StatusCode, header},
     response::AppendHeaders,
 };
@@ -182,7 +182,14 @@ pub async fn github_oauth_login(
             let Ok(code) = PioneerCode::try_new(code.expose_secret().to_string()) else {
                 return Err(reject_failed_pioneer_code().await);
             };
-            Some(auth::hash_opaque_token(code.expose_secret()))
+            let code_hash = auth::hash_opaque_token(code.expose_secret());
+            if let Err(error) = db::ensure_pioneer_code_available(&state.db, &code_hash).await {
+                if is_invalid_pioneer_code(&error) {
+                    return Err(reject_failed_pioneer_code().await);
+                }
+                return Err(error);
+            }
+            Some(code_hash)
         }
         AgentRegistrationMode::Public => None,
     };
@@ -219,7 +226,7 @@ pub async fn github_oauth_login(
 /// Complete GitHub OAuth and issue a creator web session.
 pub async fn github_oauth_callback(
     State(state): State<AppState>,
-    Query(query): Query<GithubOauthCallbackQuery>,
+    ValidatedJson(query): ValidatedJson<GithubOauthCallbackQuery>,
 ) -> Result<(
     StatusCode,
     AppendHeaders<[(HeaderName, String); 2]>,

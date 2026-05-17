@@ -164,6 +164,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
             &format!("/admin/challenge-drafts/{draft_id}/validate"),
         ))
         .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
         .send()
         .await
@@ -199,6 +200,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
             &format!("/admin/challenge-drafts/{draft_id}/approve"),
         ))
         .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "message": "looks good" }))
         .send()
         .await
@@ -240,6 +242,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
             &format!("/admin/challenge-drafts/{draft_id}/validate"),
         ))
         .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
         .send()
         .await
@@ -255,6 +258,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
             &format!("/admin/challenge-drafts/{draft_id}/publish"),
         ))
         .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
         .send()
         .await
@@ -393,6 +397,7 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
             &format!("/admin/challenge-drafts/{draft_id}/validate"),
         ))
         .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
         .send()
         .await
@@ -405,6 +410,7 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
             &format!("/admin/challenge-drafts/{draft_id}/approve"),
         ))
         .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "message": "approved" }))
         .send()
         .await
@@ -425,6 +431,7 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
             &format!("/admin/challenge-drafts/{draft_id}/publish"),
         ))
         .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
         .send()
         .await
@@ -553,6 +560,7 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
     let response = client
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", participant_bearer)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({
             "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
@@ -610,6 +618,7 @@ async fn archive_draft_requires_challenge_owner(pool: sqlx::PgPool) {
             &format!("/admin/challenge-drafts/{archive_draft_id}/validate"),
         ))
         .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
         .send()
         .await
@@ -622,6 +631,7 @@ async fn archive_draft_requires_challenge_owner(pool: sqlx::PgPool) {
             &format!("/admin/challenge-drafts/{archive_draft_id}/approve"),
         ))
         .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "message": "approved" }))
         .send()
         .await
@@ -635,6 +645,7 @@ async fn archive_draft_requires_challenge_owner(pool: sqlx::PgPool) {
             &format!("/admin/challenge-drafts/{archive_draft_id}/publish"),
         ))
         .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
         .send()
         .await
@@ -718,6 +729,7 @@ async fn challenge_creator_routes_require_oauth_session_and_csrf(pool: sqlx::PgP
     let old_self_link_route = client
         .post(api_url(&app, "/api/challenge-creator/github-identity"))
         .header("Authorization", "Bearer self-asserted-token")
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({
             "github_user_id": 1001,
             "github_login": "creator"
@@ -796,6 +808,7 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
             &format!("/admin/challenge-drafts/{draft_id}/validate"),
         ))
         .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
         .send()
         .await
@@ -808,6 +821,7 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
             &format!("/admin/challenge-drafts/{draft_id}/validate"),
         ))
         .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
         .send()
         .await
@@ -868,6 +882,7 @@ async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
             &format!("/admin/challenge-drafts/{draft_id}/abandon"),
         ))
         .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "message": "closed PR" }))
         .send()
         .await
@@ -885,6 +900,7 @@ async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
     let cleanup: serde_json::Value = client
         .post(api_url(&app, "/admin/challenge-drafts/cleanup"))
         .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("cleanup")
@@ -949,6 +965,7 @@ async fn create_validate_approve_publish_draft(
             &format!("/admin/challenge-drafts/{draft_id}/validate"),
         ))
         .header("Authorization", flow.admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "repository_path": flow.public_repo.to_string_lossy() }))
         .send()
         .await
@@ -961,6 +978,7 @@ async fn create_validate_approve_publish_draft(
             &format!("/admin/challenge-drafts/{draft_id}/approve"),
         ))
         .header("Authorization", flow.admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "message": "approved" }))
         .send()
         .await
@@ -973,6 +991,7 @@ async fn create_validate_approve_publish_draft(
             &format!("/admin/challenge-drafts/{draft_id}/publish"),
         ))
         .header("Authorization", flow.admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "repository_path": flow.public_repo.to_string_lossy() }))
         .send()
         .await

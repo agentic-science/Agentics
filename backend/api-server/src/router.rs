@@ -17,6 +17,8 @@ use shared::config::Config;
 const ZIP_SUBMISSION_JSON_BODY_LIMIT_BYTES: usize = 32 * 1024 * 1024;
 const PRIVATE_ASSET_JSON_OVERHEAD_BYTES: u64 = 1024 * 1024;
 const X_AGENTICS_CSRF_TOKEN: HeaderName = HeaderName::from_static("x-agentics-csrf-token");
+const X_AGENTICS_ADMIN_AUTOMATION: HeaderName =
+    HeaderName::from_static("x-agentics-admin-automation");
 
 /// Build the application router with public, agent, admin, and health routes.
 pub fn router(config: &Config) -> Router<AppState> {
@@ -73,7 +75,7 @@ pub fn router(config: &Config) -> Router<AppState> {
         )
         .route(
             "/api/auth/github/callback",
-            get(crate::auth_handlers::github_oauth_callback),
+            post(crate::auth_handlers::github_oauth_callback),
         )
         .route(
             "/api/auth/admin/login",
@@ -251,7 +253,12 @@ fn cors_layer(config: &Config) -> CorsLayer {
         .collect::<Vec<_>>();
     let layer = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST])
-        .allow_headers([AUTHORIZATION, CONTENT_TYPE, X_AGENTICS_CSRF_TOKEN])
+        .allow_headers([
+            AUTHORIZATION,
+            CONTENT_TYPE,
+            X_AGENTICS_CSRF_TOKEN,
+            X_AGENTICS_ADMIN_AUTOMATION,
+        ])
         .allow_credentials(true);
 
     if origins.is_empty() {

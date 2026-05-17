@@ -41,6 +41,23 @@ fn challenge_detail_contract_matches_frontend_fixture() -> Result<(), Box<dyn st
     assert_serializes_to_fixture(challenge_detail_response(), CHALLENGE_DETAIL_FIXTURE)
 }
 
+/// Verifies that public challenge detail omits private benchmark locators.
+#[test]
+fn challenge_detail_public_projection_omits_private_benchmark_locators() {
+    let value = serde_json::to_value(challenge_detail_response())
+        .expect("challenge detail response should serialize to JSON");
+    let text = value.to_string();
+
+    assert!(!text.contains("private_benchmark_dir"));
+    assert!(!text.contains("official_runs"));
+    assert!(!text.contains("official_prepare"));
+    assert!(!text.contains("private-benchmark"));
+    assert_eq!(
+        value["spec"]["datasets"]["private_benchmark_enabled"],
+        serde_json::json!(true)
+    );
+}
+
 /// Verifies that official solution submission contract matches frontend fixture.
 #[test]
 fn official_solution_submission_contract_matches_frontend_fixture()
@@ -225,7 +242,8 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
                     tie_breaker_metric_names: vec![metric_name("accuracy")],
                 },
             },
-        },
+        }
+        .into(),
         statement_markdown:
             "# Matrix Multiplication\n\nWrite a solution that multiplies f32 matrices quickly."
                 .to_string(),

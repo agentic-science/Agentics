@@ -45,8 +45,7 @@ fn create_admin_bundle(root: &Path) -> std::path::PathBuf {
 async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let challenges = tempfile::tempdir().expect("failed to create challenges tempdir");
-    let bundle_root = tempfile::tempdir().expect("failed to create bundle tempdir");
-    let bundle_dir = create_admin_bundle(bundle_root.path());
+    create_admin_bundle(challenges.path());
     let config = test_config(storage.path(), challenges.path());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
@@ -54,36 +53,6 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         &config.admin_username,
         config.expose_admin_password_for_http_basic(),
     );
-
-    let unauthorized = client
-        .post(api_url(&app, "/admin/challenges"))
-        .json(&serde_json::json!({ "name": "admin-sum", "title": "Admin Sum" }))
-        .send()
-        .await
-        .expect("failed to check admin auth");
-    assert_eq!(unauthorized.status(), 401);
-
-    let create_challenge = client
-        .post(api_url(&app, "/admin/challenges"))
-        .header("Authorization", &admin_auth)
-        .json(&serde_json::json!({
-            "name": "admin-sum",
-            "title": "Admin Sum",
-            "summary": "official flow test"
-        }))
-        .send()
-        .await
-        .expect("failed to create challenge");
-    assert_eq!(create_challenge.status(), 201);
-
-    let publish_challenge = client
-        .post(api_url(&app, "/admin/challenges/admin-sum/publish"))
-        .header("Authorization", &admin_auth)
-        .json(&serde_json::json!({ "bundle_path": bundle_dir }))
-        .send()
-        .await
-        .expect("failed to publish challenge");
-    assert_eq!(publish_challenge.status(), 201);
 
     let register_a: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
@@ -115,6 +84,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
     let solution_submission_a: serde_json::Value = client
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token_a}"))
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": "admin-sum",
             "target": "linux-arm64-cpu",
@@ -136,6 +106,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
     let solution_submission_b: serde_json::Value = client
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token_b}"))
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": "admin-sum",
             "target": "linux-arm64-cpu",
@@ -184,6 +155,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
             &format!("/admin/solution-submissions/{solution_submission_b_id}/official-run"),
         ))
         .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({}))
         .send()
         .await
@@ -196,6 +168,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
             &format!("/admin/solution-submissions/{solution_submission_b_id}/official-run"),
         ))
         .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({}))
         .send()
         .await
@@ -265,6 +238,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
             &format!("/admin/solution-submissions/{solution_submission_b_id}/rejudge"),
         ))
         .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({}))
         .send()
         .await
@@ -334,6 +308,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
             &format!("/admin/solution-submissions/{solution_submission_a_id}/hide"),
         ))
         .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({}))
         .send()
         .await
@@ -383,6 +358,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
             &format!("/admin/solution-submissions/{solution_submission_b_id}/official-run"),
         ))
         .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({}))
         .send()
         .await
@@ -399,6 +375,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
             &format!("/admin/agents/{agent_b_id}/disable"),
         ))
         .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({}))
         .send()
         .await
@@ -408,6 +385,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
     let disabled_agent_access = client
         .get(api_url(&app, "/api/challenges"))
         .header("Authorization", format!("Bearer {token_b}"))
+        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to check disabled agent access");

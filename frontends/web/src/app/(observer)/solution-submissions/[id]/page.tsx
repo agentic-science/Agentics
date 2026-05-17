@@ -54,7 +54,12 @@ export default async function SolutionSubmissionPage({
       )
     : null;
 
-  // Highlight code with Shiki
+  // Highlight only the initially selected text file during SSR. The browser can
+  // still show unhighlighted text for other files without doing expensive
+  // server-side work for every artifact entry.
+  const initiallyHighlightedPath = artifact?.files.find(
+    (file) => file.is_text && file.content,
+  )?.path;
   const filesWithHighlight = artifact
     ? await Promise.all(
         artifact.files.map(async (file) => {
@@ -68,11 +73,13 @@ export default async function SolutionSubmissionPage({
             };
           }
 
-          const lang = file.language || detectLanguage(file.path);
-          const html = await codeToHtml(file.content, {
-            lang: lang || "text",
-            theme: "github-dark",
-          });
+          const html =
+            file.path === initiallyHighlightedPath
+              ? await codeToHtml(file.content, {
+                  lang: file.language || detectLanguage(file.path) || "text",
+                  theme: "github-dark",
+                })
+              : null;
 
           return {
             path: file.path,

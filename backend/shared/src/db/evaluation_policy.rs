@@ -1,4 +1,4 @@
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use chrono::{DateTime, Utc};
 
@@ -8,7 +8,10 @@ use crate::models::evaluation::ScoringMode;
 use crate::models::ids::AgentId;
 use crate::models::names::{ChallengeName, TargetName};
 
-use super::challenges::{agent_is_shortlisted, challenge_has_shortlist, get_published_challenge};
+use super::challenges::{
+    ChallengeRecord, agent_is_shortlisted, challenge_has_shortlist, get_published_challenge,
+};
+use super::ids::challenge_name_from_row;
 
 /// Published challenge admission data needed by API preflight checks.
 #[derive(Debug, Clone)]
@@ -63,7 +66,15 @@ pub(super) async fn ensure_challenge_supports_eval_type(
 ) -> Result<()> {
     ensure_challenge_accepts_submissions(spec)?;
     ensure_challenge_eligibility(pool, challenge_name, spec, agent_id).await?;
+    ensure_target_supports_eval_type(spec, target, eval_type)
+}
 
+/// Validate target and evaluation-mode support using a parsed challenge contract.
+fn ensure_target_supports_eval_type(
+    spec: &ChallengeBundleSpec,
+    target: &TargetName,
+    eval_type: ScoringMode,
+) -> Result<()> {
     let target = spec.target(target).ok_or_else(|| {
         AppError::BadRequest(format!("challenge does not support target `{target}`"))
     })?;
@@ -80,6 +91,50 @@ pub(super) async fn ensure_challenge_supports_eval_type(
     }
 
     Ok(())
+}
+
+/// Lock an active challenge row for an admission transaction.
+pub(super) async fn lock_active_challenge_for_admission_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    challenge_name: &ChallengeName,
+) -> Result<ChallengeRecord> {
+    let row = sqlx::query(
+        r#"
+        SELECT name AS challenge_name, title, summary, bundle_path, statement_path, spec_json
+        FROM challenges
+        WHERE name = $1
+          AND status = 'active'
+          AND spec_json IS NOT NULL
+        FOR UPDATE
+        "#,
+    )
+    .bind(challenge_name.as_str())
+    .fetch_optional(&mut **tx)
+    .await?;
+
+    let row = row.ok_or_else(|| AppError::BadRequest("challenge not found".to_string()))?;
+    Ok(ChallengeRecord {
+        challenge_name: challenge_name_from_row(&row, "challenge_name")?,
+        title: row.try_get("title")?,
+        summary: row.try_get("summary")?,
+        bundle_path: managed_bundle_path_from_row(&row, "bundle_path")?,
+        statement_path: managed_statement_path_from_row(&row, "statement_path")?,
+        spec_json: row.try_get("spec_json")?,
+    })
+}
+
+/// Authoritatively verify challenge admission while holding the challenge row lock.
+pub(super) async fn ensure_challenge_supports_eval_type_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    challenge_name: &ChallengeName,
+    spec: &ChallengeBundleSpec,
+    target: &TargetName,
+    eval_type: ScoringMode,
+    agent_id: &AgentId,
+) -> Result<()> {
+    ensure_challenge_accepts_submissions(spec)?;
+    ensure_challenge_eligibility_tx(tx, challenge_name, spec, agent_id).await?;
+    ensure_target_supports_eval_type(spec, target, eval_type)
 }
 
 /// Ensures challenge accepts submissions before continuing.
@@ -124,6 +179,78 @@ async fn ensure_challenge_eligibility(
             Ok(())
         }
     }
+}
+
+/// Ensures challenge eligibility inside an admission transaction.
+async fn ensure_challenge_eligibility_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    challenge_name: &ChallengeName,
+    spec: &ChallengeBundleSpec,
+    agent_id: &AgentId,
+) -> Result<()> {
+    match spec.eligibility.eligibility_type {
+        ChallengeEligibilityType::Open => Ok(()),
+        ChallengeEligibilityType::PrivateShortlist => {
+            let has_shortlist = sqlx::query_scalar::<_, bool>(
+                r#"
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM challenge_shortlisted_agents
+                    WHERE challenge_name = $1
+                )
+                "#,
+            )
+            .bind(challenge_name.as_str())
+            .fetch_one(&mut **tx)
+            .await?;
+            if !has_shortlist {
+                return Err(AppError::Forbidden(
+                    "challenge requires a shortlist, but no shortlist has been uploaded yet"
+                        .to_string(),
+                ));
+            }
+
+            let is_shortlisted = sqlx::query_scalar::<_, bool>(
+                r#"
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM challenge_shortlisted_agents
+                    WHERE challenge_name = $1 AND agent_id = $2::uuid
+                )
+                "#,
+            )
+            .bind(challenge_name.as_str())
+            .bind(agent_id.as_str())
+            .fetch_one(&mut **tx)
+            .await?;
+            if !is_shortlisted {
+                return Err(AppError::Forbidden(
+                    "agent is not eligible for this challenge".to_string(),
+                ));
+            }
+            Ok(())
+        }
+    }
+}
+
+/// Read a managed bundle path from a locked challenge row.
+fn managed_bundle_path_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<crate::models::paths::ManagedBundlePath> {
+    let value: String = row.try_get(column)?;
+    crate::models::paths::ManagedBundlePath::from_existing_dir(value)
+        .map_err(|e| AppError::Internal(format!("stored invalid {column}: {e}")))
+}
+
+/// Read a managed statement path from a locked challenge row.
+fn managed_statement_path_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<crate::models::paths::ManagedStatementPath> {
+    let value: String = row.try_get(column)?;
+    crate::models::paths::ManagedStatementPath::from_existing_file(value)
+        .map_err(|e| AppError::Internal(format!("stored invalid {column}: {e}")))
 }
 
 /// Parses challenge time from an external boundary string.

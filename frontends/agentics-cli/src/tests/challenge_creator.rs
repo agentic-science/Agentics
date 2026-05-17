@@ -175,6 +175,7 @@ async fn challenge_creator_validates_draft_with_admin_auth() {
             "/admin/challenge-drafts/dddddddd-dddd-4ddd-8ddd-dddddddddddd/validate",
         ))
         .and(header("authorization", admin_auth))
+        .and(header("x-agentics-admin-automation", "true"))
         .and(body_json(json!({ "repository_path": "/tmp/challenges" })))
         .respond_with(ResponseTemplate::new(200).set_body_json(challenge_draft_json("validated")))
         .mount(&server)

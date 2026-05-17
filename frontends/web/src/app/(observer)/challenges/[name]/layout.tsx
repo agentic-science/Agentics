@@ -34,6 +34,13 @@ export default async function ChallengeLayout({
   }
 
   const community = challenge.spec.community;
+  if (challenge.spec.targets.length === 0) {
+    return (
+      <div className="card text-center py-12 text-[var(--status-error)]">
+        {t("common.error")}: challenge has no configured targets.
+      </div>
+    );
+  }
   const primaryTarget = challenge.spec.targets[0];
   const validationEnabled = challenge.spec.targets.some(
     (target) => target.validation_enabled,

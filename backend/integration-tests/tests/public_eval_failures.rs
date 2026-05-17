@@ -30,6 +30,7 @@ async fn worker_marks_solution_submission_failed_when_artifact_is_missing(pool: 
     let create_response: serde_json::Value = client
         .post(api_url(&app, "/api/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
@@ -67,6 +68,7 @@ async fn worker_marks_solution_submission_failed_when_artifact_is_missing(pool: 
             &format!("/api/solution-submissions/{solution_submission_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to get solution submission");

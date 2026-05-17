@@ -12,6 +12,7 @@ use shared::db::{
     authenticate_creator_session,
 };
 use shared::error::AppError;
+use shared::models::auth::GithubOauthCallbackQuery;
 use shared::models::auth::GithubOauthLoginRequest;
 use shared::models::challenge_creation::{
     CreateChallengeDraftRequest, ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest,
@@ -25,6 +26,8 @@ use shared::models::request::{
 
 use crate::admin_auth_throttle::remote_addr_from_parts;
 use crate::state::AppState;
+
+const X_AGENTICS_ADMIN_AUTOMATION: &str = "x-agentics-admin-automation";
 
 /// Validated solution-submission id extracted from a route path.
 ///
@@ -145,6 +148,7 @@ impl FromRequestParts<AppState> for AdminAuth {
                     .config
                     .admin_password_matches(parsed.password.expose_secret())
             {
+                require_basic_admin_automation_header(parts)?;
                 return Ok(AdminAuth {
                     username: parsed.username,
                 });
@@ -270,6 +274,27 @@ fn require_session_csrf<S: WebSessionCsrf>(
     Ok(())
 }
 
+/// Requires an explicit non-simple header before Basic-auth admin mutations.
+fn require_basic_admin_automation_header(
+    parts: &Parts,
+) -> Result<(), (StatusCode, axum::Json<shared::models::ErrorResponse>)> {
+    if !requires_csrf(&parts.method) {
+        return Ok(());
+    }
+    let allowed = parts
+        .headers
+        .get(X_AGENTICS_ADMIN_AUTOMATION)
+        .and_then(|h| h.to_str().ok())
+        .is_some_and(|value| value == "true" || value == "1");
+    if allowed {
+        Ok(())
+    } else {
+        Err(forbidden(
+            "admin Basic-auth mutations require x-agentics-admin-automation: true",
+        ))
+    }
+}
+
 /// Builds a localized unauthorized API rejection.
 fn unauthorized(message: &str) -> (StatusCode, axum::Json<shared::models::ErrorResponse>) {
     (
@@ -391,6 +416,14 @@ impl ValidateRequest for GithubOauthLoginRequest {
     /// Defers pioneer-code semantics to the handler, which needs runtime config.
     fn validate(&self) -> Result<(), String> {
         Ok(())
+    }
+}
+
+impl ValidateRequest for GithubOauthCallbackQuery {
+    /// Ensures the browser returned both OAuth values before backend exchange.
+    fn validate(&self) -> Result<(), String> {
+        require_non_empty(&self.code, "code")?;
+        require_non_empty(&self.state, "state")
     }
 }
 

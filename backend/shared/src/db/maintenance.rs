@@ -180,6 +180,40 @@ pub struct StaleJobReapResult {
 pub async fn reap_stuck_jobs(pool: &PgPool, timeout_minutes: i32) -> Result<StaleJobReapResult> {
     let mut tx = pool.begin().await?;
 
+    let staged_jobs = sqlx::query(
+        r#"
+        UPDATE evaluation_jobs
+        SET status = 'failed',
+            finished_at = NOW(),
+            last_error = 'staged job was not promoted before timeout',
+            worker_id = NULL,
+            claimed_at = NULL
+        WHERE status = 'staged'
+          AND scheduled_at < NOW() - INTERVAL '1 minute' * $1
+        RETURNING id, solution_submission_id
+        "#,
+    )
+    .bind(timeout_minutes)
+    .fetch_all(&mut *tx)
+    .await?;
+
+    for row in &staged_jobs {
+        let solution_submission_id =
+            solution_submission_id_from_row(row, "solution_submission_id")?;
+        sqlx::query(
+            r#"
+            UPDATE solution_submissions
+            SET status = 'failed',
+                visible_after_eval = FALSE,
+                updated_at = NOW()
+            WHERE id = $1::uuid
+            "#,
+        )
+        .bind(solution_submission_id.as_str())
+        .execute(&mut *tx)
+        .await?;
+    }
+
     let requeued_jobs = sqlx::query(
         r#"
         UPDATE evaluation_jobs
@@ -270,7 +304,7 @@ pub async fn reap_stuck_jobs(pool: &PgPool, timeout_minutes: i32) -> Result<Stal
     Ok(StaleJobReapResult {
         requeued: u64::try_from(requeued_jobs.len())
             .map_err(|_| AppError::Internal("requeued job count overflow".to_string()))?,
-        failed: u64::try_from(failed_jobs.len())
+        failed: u64::try_from(failed_jobs.len().saturating_add(staged_jobs.len()))
             .map_err(|_| AppError::Internal("failed job count overflow".to_string()))?,
     })
 }

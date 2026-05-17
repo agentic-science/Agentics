@@ -196,6 +196,37 @@ pub async fn get_pioneer_code_detail(
     Ok((pioneer_code_record_from_row(&code_row)?, uses))
 }
 
+/// Verify that a pioneer code can currently start a registration flow.
+pub async fn ensure_pioneer_code_available(pool: &PgPool, code_hash: &str) -> Result<()> {
+    let row = sqlx::query(
+        r#"
+        SELECT max_uses, use_count, status, expires_at
+        FROM agent_pioneer_codes
+        WHERE code_hash = $1
+        "#,
+    )
+    .bind(code_hash)
+    .fetch_optional(pool)
+    .await?;
+
+    let Some(row) = row else {
+        return Err(unavailable_pioneer_code());
+    };
+
+    let status: String = row.try_get("status")?;
+    let expires_at: Option<DateTime<Utc>> = row.try_get("expires_at")?;
+    let max_uses: i64 = row.try_get("max_uses")?;
+    let use_count: i64 = row.try_get("use_count")?;
+    if status != "active"
+        || expires_at.is_some_and(|expires_at| Utc::now() >= expires_at)
+        || (max_uses != -1 && use_count >= max_uses)
+    {
+        return Err(unavailable_pioneer_code());
+    }
+
+    Ok(())
+}
+
 /// Consume a pioneer code inside the transaction that creates the agent.
 pub async fn consume_pioneer_code_for_agent_tx(
     tx: &mut Transaction<'_, Postgres>,

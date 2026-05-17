@@ -10,9 +10,10 @@ use super::logs::append_log_excerpt;
 pub(super) fn ensure_container_succeeded(
     phase: ZipProjectPhaseName,
     outcome: &ContainerOutcome,
+    include_log_excerpt: bool,
 ) -> Result<()> {
     if outcome.timed_out {
-        let message = append_log_excerpt("phase timed out", &outcome.logs);
+        let message = append_log_excerpt("phase timed out", &outcome.logs, include_log_excerpt);
         return Err(phase_error(
             phase,
             ZipProjectPhaseFailureReason::TimedOut,
@@ -30,6 +31,7 @@ pub(super) fn ensure_container_succeeded(
         let message = append_log_excerpt(
             &format!("phase exited with status {}", outcome.exit_code),
             &outcome.logs,
+            include_log_excerpt,
         );
         return Err(phase_error(
             phase,
@@ -42,17 +44,22 @@ pub(super) fn ensure_container_succeeded(
 }
 
 /// Ensures prepare succeeded before continuing.
-pub(super) fn ensure_prepare_succeeded(outcome: &ContainerOutcome) -> Result<()> {
+pub(super) fn ensure_prepare_succeeded(
+    outcome: &ContainerOutcome,
+    include_log_excerpt: bool,
+) -> Result<()> {
     if outcome.timed_out {
         return Err(AppError::Runner(append_log_excerpt(
             "prepare phase timed out",
             &outcome.logs,
+            include_log_excerpt,
         )));
     }
     if outcome.exit_code != 0 {
         return Err(AppError::Runner(append_log_excerpt(
             &format!("prepare phase exited with status {}", outcome.exit_code),
             &outcome.logs,
+            include_log_excerpt,
         )));
     }
     Ok(())

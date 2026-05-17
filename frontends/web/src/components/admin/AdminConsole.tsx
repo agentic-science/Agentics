@@ -10,14 +10,11 @@ import {
   GitPullRequest,
   Play,
   RefreshCw,
-  Rocket,
   Server,
   ShieldCheck,
-  UploadCloud,
 } from "lucide-react";
 import { useLocale } from "next-intl";
 import {
-  type FormEvent,
   type ReactNode,
   useCallback,
   useEffect,
@@ -49,14 +46,12 @@ import {
   adminServiceHeartbeatListResponseSchema,
   adminSolutionSubmissionListResponseSchema,
   type ChallengeDraftListResponse,
-  challengeAdminResponseSchema,
   challengeDraftListResponseSchema,
   disableAgentResponseSchema,
   evaluationJobResponseSchema,
   hideSolutionSubmissionResponseSchema,
   type PioneerCodeListResponse,
   pioneerCodeListResponseSchema,
-  publishChallengeResponseSchema,
 } from "@/lib/schemas";
 
 /** Describes the admin tab shape used by this module. */
@@ -337,12 +332,8 @@ export function AdminConsole() {
       ) : null}
       {activeTab === "challenges" ? (
         <ChallengeAdminPanel
-          csrfToken={csrfToken}
           challenges={data.challenges.items}
           locale={locale}
-          onRefresh={refresh}
-          onError={setError}
-          onMessage={setMessage}
         />
       ) : null}
       {activeTab === "drafts" ? (
@@ -472,36 +463,14 @@ function StatCard({
 
 /** Renders the challenge admin panel component. */
 function ChallengeAdminPanel({
-  csrfToken,
   challenges,
   locale,
-  onRefresh,
-  onError,
-  onMessage,
 }: {
-  csrfToken: string;
   challenges: AdminChallengeListItem[];
   locale: string;
-  onRefresh: AdminRefresh;
-  onError: (message: string | null) => void;
-  onMessage: (message: string | null) => void;
 }) {
   return (
-    <section className="grid grid-cols-1 xl:grid-cols-[420px_1fr] gap-6">
-      <div className="flex flex-col gap-5">
-        <ChallengeShellForm
-          csrfToken={csrfToken}
-          onRefresh={onRefresh}
-          onError={onError}
-          onMessage={onMessage}
-        />
-        <PublishVersionForm
-          csrfToken={csrfToken}
-          onRefresh={onRefresh}
-          onError={onError}
-          onMessage={onMessage}
-        />
-      </div>
+    <section className="grid grid-cols-1 gap-6">
       <div className="card overflow-x-auto">
         <div className="flex items-center justify-between gap-4 mb-4">
           <h2 className="text-[var(--text-h3)] font-semibold">
@@ -715,140 +684,6 @@ function ModeSummary({ challenge }: { challenge: AdminChallengeListItem }) {
   );
 }
 
-/** Renders the challenge shell form component. */
-function ChallengeShellForm({
-  csrfToken,
-  onRefresh,
-  onError,
-  onMessage,
-}: ActionProps) {
-  const [form, setForm] = useState({
-    name: "",
-    title: "",
-    summary: "",
-  });
-
-  /** Submits this form after validating the current local state. */
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    try {
-      const body = {
-        name: form.name.trim(),
-        title: form.title.trim(),
-        summary: form.summary.trim(),
-      };
-      const response = await adminFetchJson(
-        "/admin/challenges",
-        challengeAdminResponseSchema,
-        csrfToken,
-        {
-          method: "POST",
-          body: JSON.stringify(body),
-        },
-      );
-      onError(null);
-      onMessage(`Challenge shell saved: ${response.name}`);
-      await onRefresh({ quiet: true });
-    } catch (e) {
-      onError(adminErrorMessage(e));
-    }
-  };
-
-  return (
-    <form className="card flex flex-col gap-4" onSubmit={submit}>
-      <SectionTitle
-        icon={<Rocket className="w-4 h-4" />}
-        title="Challenge shell"
-      />
-      <TextInput
-        label="Challenge Name"
-        value={form.name}
-        onChange={(name) => setForm({ ...form, name })}
-        required
-      />
-      <TextInput
-        label="Title"
-        value={form.title}
-        onChange={(title) => setForm({ ...form, title })}
-        required
-      />
-      <label className="flex flex-col gap-1">
-        <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
-          Summary
-        </span>
-        <textarea
-          className="min-h-24 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 text-[var(--text-body-sm)] outline-none focus:border-[var(--accent-primary-500)]"
-          value={form.summary}
-          onChange={(event) =>
-            setForm({ ...form, summary: event.target.value })
-          }
-        />
-      </label>
-      <button type="submit" className="btn btn-primary">
-        Save shell
-      </button>
-    </form>
-  );
-}
-
-/** Renders the publish version form component. */
-function PublishVersionForm({
-  csrfToken,
-  onRefresh,
-  onError,
-  onMessage,
-}: ActionProps) {
-  const [form, setForm] = useState({ challengeName: "", bundlePath: "" });
-
-  /** Submits this form after validating the current local state. */
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    try {
-      const response = await adminFetchJson(
-        `/admin/challenges/${encodeURIComponent(form.challengeName.trim())}/publish`,
-        publishChallengeResponseSchema,
-        csrfToken,
-        {
-          method: "POST",
-          body: JSON.stringify({ bundle_path: form.bundlePath.trim() }),
-        },
-      );
-      onError(null);
-      onMessage(
-        `Published ${response.challenge_name} from ${response.bundle_path}`,
-      );
-      await onRefresh({ quiet: true });
-    } catch (e) {
-      onError(adminErrorMessage(e));
-    }
-  };
-
-  return (
-    <form className="card flex flex-col gap-4" onSubmit={submit}>
-      <SectionTitle
-        icon={<UploadCloud className="w-4 h-4" />}
-        title="Publish bundle"
-      />
-      <TextInput
-        label="Challenge Name"
-        value={form.challengeName}
-        onChange={(challengeName) => setForm({ ...form, challengeName })}
-        required
-      />
-      <TextInput
-        label="Bundle path"
-        value={form.bundlePath}
-        placeholder="sample-sum/v1"
-        onChange={(bundlePath) => setForm({ ...form, bundlePath })}
-        required
-      />
-      <button type="submit" className="btn btn-primary">
-        Validate and publish
-      </button>
-    </form>
-  );
-}
-
 /** Renders the operations panel component. */
 function OperationsPanel({
   csrfToken,
@@ -1017,6 +852,8 @@ function SubmissionActions({
         );
         onMessage(`Disabled agent ${submission.agent_display_name}.`);
       } else if (action === "hide") {
+        if (!window.confirm(`Hide submission ${submission.id.slice(0, 8)}?`))
+          return;
         await adminFetchJson(
           `/admin/solution-submissions/${encodeURIComponent(submission.id)}/hide`,
           hideSolutionSubmissionResponseSchema,
@@ -1025,6 +862,14 @@ function SubmissionActions({
         );
         onMessage(`Hidden submission ${submission.id.slice(0, 8)}.`);
       } else {
+        const actionLabel =
+          action === "official-run" ? "queue an official run for" : "rejudge";
+        if (
+          !window.confirm(
+            `${actionLabel} submission ${submission.id.slice(0, 8)}?`,
+          )
+        )
+          return;
         const response = await adminFetchJson(
           `/admin/solution-submissions/${encodeURIComponent(submission.id)}/${action}`,
           evaluationJobResponseSchema,
@@ -1078,14 +923,6 @@ function SubmissionActions({
   );
 }
 
-/** Describes the action props shape used by this module. */
-interface ActionProps {
-  csrfToken: string;
-  onRefresh: AdminRefresh;
-  onError: (message: string | null) => void;
-  onMessage: (message: string | null) => void;
-}
-
 /** Renders the section title component. */
 function SectionTitle({ icon, title }: { icon: ReactNode; title: string }) {
   return (
@@ -1093,36 +930,6 @@ function SectionTitle({ icon, title }: { icon: ReactNode; title: string }) {
       <span className="text-[var(--accent-secondary-text)]">{icon}</span>
       {title}
     </h2>
-  );
-}
-
-/** Renders the text input component. */
-function TextInput({
-  label,
-  value,
-  onChange,
-  required,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  required?: boolean;
-  placeholder?: string;
-}) {
-  return (
-    <label className="flex flex-col gap-1">
-      <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
-        {label}
-      </span>
-      <input
-        className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 text-[var(--text-body-sm)] outline-none focus:border-[var(--accent-primary-500)]"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        required={required}
-        placeholder={placeholder}
-      />
-    </label>
   );
 }
 

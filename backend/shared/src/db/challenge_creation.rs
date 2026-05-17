@@ -599,6 +599,7 @@ pub async fn update_challenge_draft_status(
             validation_message = COALESCE($3, validation_message),
             updated_at = NOW()
         WHERE id = $1::uuid
+          AND status IN ('draft', 'validated', 'approved')
         "#,
     )
     .bind(draft_id)
@@ -608,7 +609,7 @@ pub async fn update_challenge_draft_status(
     .await?;
 
     if result.rows_affected() == 0 {
-        return Err(AppError::NotFound);
+        return Err(AppError::Conflict);
     }
     Ok(())
 }
@@ -626,7 +627,7 @@ pub async fn abandon_challenge_draft(
             validation_message = COALESCE($2, validation_message),
             updated_at = NOW()
         WHERE id = $1::uuid
-          AND status <> 'published'
+          AND status IN ('draft', 'validated', 'approved', 'rejected')
         "#,
     )
     .bind(draft_id)
@@ -635,7 +636,7 @@ pub async fn abandon_challenge_draft(
     .await?;
 
     if result.rows_affected() == 0 {
-        return Err(AppError::NotFound);
+        return Err(AppError::Conflict);
     }
     Ok(())
 }

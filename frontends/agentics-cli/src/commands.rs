@@ -6,9 +6,7 @@ use anyhow::{Context, Result, bail};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use secrecy::{ExposeSecret, SecretString};
 use shared::config::Config;
-use shared::models::challenge::{
-    ChallengeBundleSpec, ChallengeDetailResponse, ChallengeTargetSpec,
-};
+use shared::models::challenge::{ChallengeDetailResponse, ChallengeTargetSpec};
 use shared::models::challenge_creation::{
     ChallengePrivateAssetKind, ReviewChallengeDraftRequest, ValidateChallengeDraftRequest,
 };
@@ -634,7 +632,7 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
 
     let targets = select_targets_from_spec(
         &spec.challenge_name,
-        &spec,
+        &spec.targets,
         args.target.as_ref(),
         args.all_targets,
         TargetSelectionMode::Validation,
@@ -688,14 +686,16 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
             target: target.clone(),
         };
         let log_path = storage_root.join(runner_log_key(&job_id));
-        match shared::runner::execute_evaluation_job(
-            &docker,
-            &config,
-            &job_id,
-            ScoringMode::Validation,
-            &payload,
-            &storage,
-        )
+        match shared::runner::execute_evaluation_job(shared::runner::EvaluationJobExecution {
+            docker: &docker,
+            config: &config,
+            job_id: &job_id,
+            worker_id: "local-validation",
+            attempt_count: 1,
+            eval_type: ScoringMode::Validation,
+            payload: &payload,
+            storage: &storage,
+        })
         .await
         {
             Ok(execution) => target_reports.push(output::LocalValidationTargetReport {
@@ -962,7 +962,7 @@ fn select_targets(
 ) -> Result<Vec<TargetName>> {
     select_targets_from_spec(
         &challenge.name,
-        &challenge.spec,
+        &challenge.spec.targets,
         requested_target,
         all_targets,
         mode,
@@ -972,29 +972,32 @@ fn select_targets(
 /// Handles select targets from spec for this module.
 fn select_targets_from_spec(
     challenge_name: &ChallengeName,
-    spec: &ChallengeBundleSpec,
+    targets: &[ChallengeTargetSpec],
     requested_target: Option<&TargetName>,
     all_targets: bool,
     mode: TargetSelectionMode,
 ) -> Result<Vec<TargetName>> {
     if all_targets {
-        let targets = spec.targets.iter().collect::<Vec<_>>();
-        validate_selected_targets(challenge_name, &targets, mode)?;
-        return Ok(targets.iter().map(|target| target.name.clone()).collect());
+        let selected = targets.iter().collect::<Vec<_>>();
+        validate_selected_targets(challenge_name, &selected, mode)?;
+        return Ok(selected.iter().map(|target| target.name.clone()).collect());
     }
 
     if let Some(target) = requested_target {
-        let target = spec.target(target).ok_or_else(|| {
-            anyhow::anyhow!(
-                "challenge `{}` does not support target `{target}`",
-                challenge_name
-            )
-        })?;
+        let target = targets
+            .iter()
+            .find(|candidate| &candidate.name == target)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "challenge `{}` does not support target `{target}`",
+                    challenge_name
+                )
+            })?;
         validate_selected_targets(challenge_name, &[target], mode)?;
         return Ok(vec![target.name.clone()]);
     }
 
-    match spec.targets.as_slice() {
+    match targets {
         [] => bail!(
             "challenge `{}` does not declare any targets",
             challenge_name
