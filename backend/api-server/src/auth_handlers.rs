@@ -8,7 +8,7 @@ use axum::{
 };
 use chrono::{Duration, Utc};
 use reqwest::Url;
-use secrecy::ExposeSecret;
+use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -25,6 +25,7 @@ use shared::models::pioneer_codes::{PioneerCode, PioneerCodeInput};
 use shared::models::urls::GithubOauthAuthorizationUrl;
 
 use crate::extractors::{AdminAuth, CreatorAuth};
+use crate::pioneer_code_security::{is_invalid_pioneer_code, reject_failed_pioneer_code};
 use crate::state::AppState;
 
 const OAUTH_STATE_TTL_MINUTES: i64 = 10;
@@ -33,7 +34,7 @@ const GITHUB_USER_AGENT: &str = "Agentics";
 /// Minimal JSON shape returned by GitHub's OAuth token exchange endpoint.
 #[derive(Debug, Deserialize)]
 struct GithubAccessTokenResponse {
-    access_token: Option<String>,
+    access_token: Option<SecretString>,
     error: Option<String>,
     error_description: Option<String>,
 }
@@ -126,6 +127,30 @@ pub async fn admin_logout(
     ))
 }
 
+/// Return the current admin session when browser cookies are still valid.
+pub async fn admin_session(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<AdminSessionResponse>> {
+    let cookie_header = headers.get(header::COOKIE).and_then(|h| h.to_str().ok());
+    let session_token = cookie_value(cookie_header, &state.config.web_session_cookie_name)
+        .ok_or(AppError::Unauthorized)?;
+    let csrf_token = cookie_value(cookie_header, &state.config.web_csrf_cookie_name)
+        .ok_or(AppError::Unauthorized)?;
+    let session = db::authenticate_admin_session(&state.db, &session_token)
+        .await?
+        .ok_or(AppError::Unauthorized)?;
+    if auth::hash_opaque_token(&csrf_token) != session.csrf_token_hash {
+        return Err(AppError::Unauthorized);
+    }
+
+    Ok(Json(AdminSessionResponse {
+        username: session.admin_username,
+        csrf_token,
+        expires_at: session.expires_at.to_rfc3339(),
+    }))
+}
+
 /// Start a GitHub OAuth login for challenge creators.
 pub async fn github_oauth_login(
     State(state): State<AppState>,
@@ -151,16 +176,12 @@ pub async fn github_oauth_login(
         .map_err(|e| AppError::Internal(e.to_string()))?
     {
         AgentRegistrationMode::PioneerCode => {
-            let code = query.pioneer_code.as_ref().ok_or_else(|| {
-                AppError::Forbidden(
-                    shared::models::pioneer_codes::INVALID_OR_UNAVAILABLE_PIONEER_CODE.to_string(),
-                )
-            })?;
-            let code = PioneerCode::try_new(code.expose_secret().to_string()).map_err(|_| {
-                AppError::Forbidden(
-                    shared::models::pioneer_codes::INVALID_OR_UNAVAILABLE_PIONEER_CODE.to_string(),
-                )
-            })?;
+            let Some(code) = query.pioneer_code.as_ref() else {
+                return Err(reject_failed_pioneer_code().await);
+            };
+            let Ok(code) = PioneerCode::try_new(code.expose_secret().to_string()) else {
+                return Err(reject_failed_pioneer_code().await);
+            };
             Some(auth::hash_opaque_token(code.expose_secret()))
         }
         AgentRegistrationMode::Public => None,
@@ -218,14 +239,22 @@ pub async fn github_oauth_callback(
     }
 
     let fallback_agent_id = Uuid::new_v4().to_string();
-    let agent_id = db::upsert_github_creator_agent_with_pioneer_code(
+    let agent_id = match db::upsert_github_creator_agent_with_pioneer_code(
         &state.db,
         &fallback_agent_id,
         github_user.id,
         github_user.login.trim(),
         oauth_state.pioneer_code_hash.as_deref(),
+        i64::from(state.config.max_active_agents),
     )
-    .await?;
+    .await
+    {
+        Ok(agent_id) => agent_id,
+        Err(error) if is_invalid_pioneer_code(&error) => {
+            return Err(reject_failed_pioneer_code().await);
+        }
+        Err(error) => return Err(error),
+    };
     let agent_id = AgentId::try_new(agent_id)
         .map_err(|e| AppError::Internal(format!("stored invalid GitHub creator agent id: {e}")))?;
 
@@ -277,7 +306,7 @@ pub async fn creator_me(creator: CreatorAuth) -> Result<Json<CreatorMeResponse>>
 }
 
 /// Exchanges a one-time GitHub OAuth code for an access token.
-async fn exchange_github_code(state: &AppState, code: &str) -> Result<String> {
+async fn exchange_github_code(state: &AppState, code: &str) -> Result<SecretString> {
     let client_id = required_oauth_config(
         state.config.github_oauth_client_id.as_deref(),
         "AGENTICS_GITHUB_OAUTH_CLIENT_ID",
@@ -340,10 +369,13 @@ async fn exchange_github_code(state: &AppState, code: &str) -> Result<String> {
 }
 
 /// Fetches the GitHub account identity associated with an OAuth access token.
-async fn fetch_github_user(state: &AppState, access_token: &str) -> Result<GithubUserResponse> {
+async fn fetch_github_user(
+    state: &AppState,
+    access_token: &SecretString,
+) -> Result<GithubUserResponse> {
     let response = reqwest::Client::new()
         .get(state.config.github_api_user_url.as_str())
-        .bearer_auth(access_token)
+        .bearer_auth(access_token.expose_secret())
         .header(reqwest::header::ACCEPT, "application/vnd.github+json")
         .header(reqwest::header::USER_AGENT, GITHUB_USER_AGENT)
         .send()

@@ -9,6 +9,7 @@
 use std::path::{Path, PathBuf};
 
 use bollard::Docker;
+use tokio::io::AsyncWriteExt;
 
 use crate::config::Config;
 use crate::error::{AppError, Result};
@@ -913,7 +914,24 @@ async fn write_run_metadata(
     };
     let bytes = serde_json::to_vec_pretty(&metadata)
         .map_err(|e| AppError::Internal(format!("serialize run metadata failed: {e}")))?;
-    tokio::fs::write(io_root.join("agentics-run.json"), bytes).await?;
+    let metadata_path = io_root.join("agentics-run.json");
+    let mut file = tokio::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&metadata_path)
+        .await
+        .map_err(|e| {
+            phase_error(
+                ZipProjectPhaseName::Run,
+                ZipProjectPhaseFailureReason::RunnerError,
+                format!(
+                    "run `{}` used reserved metadata path `agentics-run.json`: {e}",
+                    run.run_name
+                ),
+                None,
+            )
+        })?;
+    file.write_all(&bytes).await?;
     Ok(())
 }
 
@@ -958,6 +976,55 @@ async fn ensure_declared_outputs_exist(run: &ChallengeRunSpec, output_dir: &Path
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod run_metadata_tests {
+    use std::fs;
+
+    use uuid::Uuid;
+
+    use super::{ContainerOutcome, write_run_metadata};
+    use crate::models::challenge::{ChallengeRunInterface, ChallengeRunSpec};
+    use crate::models::names::RunName;
+
+    /// Verifies that solution-created symlinks cannot redirect worker metadata writes.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn write_run_metadata_rejects_reserved_symlink() {
+        let root =
+            std::env::temp_dir().join(format!("agentics-run-metadata-test-{}", Uuid::new_v4()));
+        fs::create_dir_all(&root).expect("test root should be created");
+        let target = root.join("outside.json");
+        std::os::unix::fs::symlink(&target, root.join("agentics-run.json"))
+            .expect("reserved symlink should be created");
+
+        let run = ChallengeRunSpec {
+            run_name: RunName::try_new("case1").expect("run name should parse"),
+            interface: ChallengeRunInterface::FileSystem,
+            stdin_json: None,
+            stdin_text: None,
+            input_files: Vec::new(),
+            output_files: Vec::new(),
+        };
+        let outcome = ContainerOutcome {
+            exit_code: 0,
+            logs: String::new(),
+            timed_out: false,
+            wall_time_ms: 1,
+        };
+
+        let error = write_run_metadata(&root, &run, &outcome)
+            .await
+            .expect_err("metadata write should reject a pre-existing symlink");
+        assert!(
+            error.to_string().contains("reserved metadata path"),
+            "unexpected error: {error}"
+        );
+        assert!(!target.exists());
+
+        fs::remove_dir_all(root).expect("test root should clean up");
+    }
 }
 
 /// Handles run interface for this module.

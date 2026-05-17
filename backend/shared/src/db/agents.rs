@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use serde_json::Value;
-use sqlx::{PgPool, Row};
+use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use crate::db::pioneer_codes::{PioneerCodeRegistrationKind, consume_pioneer_code_for_agent_tx};
 use crate::error::{AppError, Result};
@@ -40,8 +40,13 @@ pub struct AuthenticatedAgent {
 }
 
 /// Register an active agent and insert its first token.
-pub async fn register_agent(pool: &PgPool, input: &RegisterAgentInput) -> Result<AgentRecord> {
+pub async fn register_agent(
+    pool: &PgPool,
+    input: &RegisterAgentInput,
+    max_active_agents: i64,
+) -> Result<AgentRecord> {
     let mut tx = pool.begin().await?;
+    enforce_active_agent_quota_tx(&mut tx, max_active_agents).await?;
 
     let agent = insert_agent_tx(&mut tx, input).await?;
     insert_agent_token_tx(&mut tx, input).await?;
@@ -57,8 +62,10 @@ pub async fn register_agent_with_pioneer_code(
     input: &RegisterAgentInput,
     pioneer_code_hash: &str,
     registration_kind: PioneerCodeRegistrationKind,
+    max_active_agents: i64,
 ) -> Result<AgentRecord> {
     let mut tx = pool.begin().await?;
+    enforce_active_agent_quota_tx(&mut tx, max_active_agents).await?;
 
     let agent = insert_agent_tx(&mut tx, input).await?;
     consume_pioneer_code_for_agent_tx(
@@ -73,6 +80,58 @@ pub async fn register_agent_with_pioneer_code(
     tx.commit().await?;
 
     Ok(agent)
+}
+
+/// Serialize active-agent quota admission within the registration transaction.
+pub(crate) async fn enforce_active_agent_quota_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    max_active_agents: i64,
+) -> Result<()> {
+    lock_quota_scope(tx, "global:active-agents").await?;
+    let active = count_active_agents_tx(tx).await?;
+    if active >= max_active_agents {
+        return Err(AppError::TooManyRequests(format!(
+            "agent registration quota exceeded: {active} of {max_active_agents} active agents are already registered"
+        )));
+    }
+    Ok(())
+}
+
+/// Lock one quota-admission scope for the lifetime of the current transaction.
+async fn lock_quota_scope(tx: &mut Transaction<'_, Postgres>, scope: &str) -> Result<()> {
+    sqlx::query(
+        r#"
+        INSERT INTO quota_admission_locks (scope)
+        VALUES ($1)
+        ON CONFLICT (scope) DO NOTHING
+        "#,
+    )
+    .bind(scope)
+    .execute(&mut **tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        SELECT scope
+        FROM quota_admission_locks
+        WHERE scope = $1
+        FOR UPDATE
+        "#,
+    )
+    .bind(scope)
+    .fetch_one(&mut **tx)
+    .await?;
+
+    Ok(())
+}
+
+/// Count active agents inside a quota-locked registration transaction.
+async fn count_active_agents_tx(tx: &mut Transaction<'_, Postgres>) -> Result<i64> {
+    let count =
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::BIGINT FROM agents WHERE status = 'active'")
+            .fetch_one(&mut **tx)
+            .await?;
+    Ok(count)
 }
 
 /// Insert the agent row used by both public and pioneer-code registration.

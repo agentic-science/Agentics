@@ -180,23 +180,14 @@ define_uuid_id_type!(
     "solution_submission_id must be a canonical UUID string"
 );
 
-/// Check whether a solution submission id is a canonical hyphenated UUID.
-pub fn is_valid_solution_submission_id(value: &str) -> bool {
-    let Ok(uuid) = Uuid::parse_str(value) else {
-        return false;
-    };
-    uuid.to_string() == value
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{AgentId, ChallengeDraftId, SolutionSubmissionId, is_valid_solution_submission_id};
+    use super::{AgentId, ChallengeDraftId, SolutionSubmissionId};
 
     /// Verifies that validates solution submission ids.
     #[test]
     fn validates_solution_submission_ids() {
         let valid = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
-        assert!(is_valid_solution_submission_id(valid));
         assert!(SolutionSubmissionId::try_new(valid).is_ok());
         let canonical = SolutionSubmissionId::try_new("F47AC10B-58CC-4372-A567-0E02B2C3D479")
             .expect("UUID hex case should canonicalize");

@@ -23,7 +23,7 @@ const DEFAULT_RUNNER_WRITABLE_SLOT_CLASSES_MB: &str = "64,256,1024,4096";
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     #[serde(default = "default_database_url")]
-    pub database_url: String,
+    pub database_url: SecretString,
     #[serde(default = "default_api_host")]
     pub api_host: String,
     #[serde(default = "default_api_port")]
@@ -149,12 +149,12 @@ impl FromStr for RunnerWritableStorageMode {
     }
 }
 
-/// Handles default database url for this module.
-fn default_database_url() -> String {
-    format!(
+/// Build the default local database URL without exposing it through Debug output.
+fn default_database_url() -> SecretString {
+    SecretString::from(format!(
         "postgres://agentics:agentics@127.0.0.1:{}/agentics",
         env_port("AGENTICS_POSTGRES_PORT", DEFAULT_POSTGRES_PORT)
-    )
+    ))
 }
 
 /// Handles default api host for this module.
@@ -431,13 +431,18 @@ impl Config {
     pub fn validate_runner_storage(&self) -> anyhow::Result<()> {
         match self.runner_writable_storage_mode()? {
             RunnerWritableStorageMode::Unbounded => {
-                if !self.runner_docker_layer_quota && !is_loopback_host(&self.api_host) {
+                if !is_loopback_host(&self.api_host) {
                     anyhow::bail!(
-                        "unbounded runner writable storage is allowed only for loopback development; set AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots or AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true for hosted workers"
+                        "unbounded runner writable storage is allowed only for loopback development; set AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots for hosted workers"
                     );
                 }
             }
             RunnerWritableStorageMode::XfsProjectQuotaSlots => {
+                if !self.runner_docker_layer_quota && !is_loopback_host(&self.api_host) {
+                    anyhow::bail!(
+                        "hosted workers with writable container rootfs must set AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true alongside xfs-project-quota-slots"
+                    );
+                }
                 if !cfg!(target_os = "linux") {
                     anyhow::bail!(
                         "AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots is Linux-only"
@@ -600,6 +605,22 @@ mod tests {
         assert!(test_config().validate_api_security().is_ok());
     }
 
+    /// Verifies that derived debug output redacts configured secrets.
+    #[test]
+    fn config_debug_redacts_secrets() {
+        let mut config = test_config();
+        config.database_url = SecretString::from("postgres://agentics:secret@localhost/agentics");
+        config.admin_password = SecretString::from("secret-admin-password");
+        config.github_oauth_client_secret = Some(SecretString::from("secret-oauth-client"));
+
+        let debug = format!("{config:?}");
+
+        assert!(!debug.contains("secret@localhost"));
+        assert!(!debug.contains("secret-admin-password"));
+        assert!(!debug.contains("secret-oauth-client"));
+        assert!(debug.contains("[REDACTED"));
+    }
+
     /// Verifies that default admin credentials are rejected on wildcard bind.
     #[test]
     fn default_admin_credentials_are_rejected_on_wildcard_bind() {
@@ -652,9 +673,9 @@ mod tests {
         );
     }
 
-    /// Verifies that hosted workers cannot silently use unbounded writable storage.
+    /// Verifies that hosted workers must bound bind mounts and writable rootfs.
     #[test]
-    fn hosted_runner_rejects_unbounded_storage_without_layer_quota() {
+    fn hosted_runner_requires_bounded_mounts_and_layer_quota() {
         let mut config = test_config();
         config.api_host = "0.0.0.0".to_string();
 
@@ -668,6 +689,24 @@ mod tests {
         );
 
         config.runner_docker_layer_quota = true;
+        assert!(
+            config.validate_runner_storage().is_err(),
+            "Docker layer quota does not bound phase bind mounts"
+        );
+
+        config.runner_writable_storage_mode = "xfs-project-quota-slots".to_string();
+        config.runner_docker_layer_quota = false;
+        config.runner_phase_mount_root = Some("/agentics-runner-slots".to_string());
+        let error = config
+            .validate_runner_storage()
+            .expect_err("hosted writable rootfs also needs Docker layer quota");
+        assert!(
+            error
+                .to_string()
+                .contains("AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true")
+        );
+
+        config.runner_docker_layer_quota = true;
         assert_eq!(
             config.validate_runner_storage().is_ok(),
             cfg!(target_os = "linux")
@@ -677,7 +716,7 @@ mod tests {
     /// Handles test config for this module.
     fn test_config() -> Config {
         Config {
-            database_url: String::new(),
+            database_url: SecretString::from(""),
             api_host: super::default_api_host(),
             api_port: super::default_api_port(),
             storage_root: String::new(),

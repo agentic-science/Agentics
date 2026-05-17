@@ -1023,6 +1023,7 @@ async fn register_agent(pool: &sqlx::PgPool, name: &str) -> String {
             owner: String::new(),
             model_info: json!({}),
         },
+        1_000,
     )
     .await
     .expect("agent should register");

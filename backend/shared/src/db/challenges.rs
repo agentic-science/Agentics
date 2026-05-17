@@ -10,8 +10,10 @@ use super::ids::{
 };
 use crate::error::{AppError, Result};
 use crate::models::challenge::{
-    AdminChallengeListItemDto, ChallengeBundleSpec, ChallengeListItemDto, PublishChallengeResponse,
+    AdminChallengeListItemDto, ChallengeBundleSpec, ChallengeLifecycleStatus, ChallengeListItemDto,
+    PublishChallengeResponse,
 };
+use crate::models::evaluation::SolutionSubmissionStatus;
 use crate::models::hashes::Sha256Digest;
 use crate::models::ids::{AgentId, ChallengeShortlistRevisionId};
 use crate::models::names::{ChallengeName, TargetName};
@@ -67,7 +69,7 @@ pub async fn create_or_update_challenge(
         name: challenge_name_from_row(&row, "name")?,
         title: row.try_get("title")?,
         summary: row.try_get("summary")?,
-        status: row.try_get("status")?,
+        status: challenge_status_from_row(&row, "status")?,
         created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
         updated_at: row.try_get::<DateTime<Utc>, _>("updated_at")?.to_rfc3339(),
     })
@@ -96,7 +98,7 @@ pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeLi
                 name: challenge_name_from_row(&r, "name")?,
                 title: r.try_get("title")?,
                 summary: r.try_get("summary")?,
-                status: r.try_get("status")?,
+                status: challenge_status_from_row(&r, "status")?,
                 targets: spec.as_ref().map(|spec| spec.targets.clone()),
                 starts_at: spec.as_ref().and_then(|spec| spec.starts_at.clone()),
                 closes_at: spec.as_ref().and_then(|spec| spec.closes_at.clone()),
@@ -664,7 +666,7 @@ pub async fn list_creator_challenge_participants(
                     "best_solution_submission_id",
                 )?,
                 best_rank_score: row.try_get("best_rank_score")?,
-                latest_status: row.try_get("latest_status")?,
+                latest_status: optional_solution_submission_status_from_row(&row, "latest_status")?,
                 latest_solution_submission_at: optional_datetime_rfc3339(
                     &row,
                     "latest_solution_submission_at",
@@ -808,6 +810,31 @@ fn storage_key_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<Sto
     let value: String = row.try_get(column)?;
     StorageKey::try_new(&value)
         .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
+}
+
+/// Reads a challenge lifecycle status and validates its stored value.
+fn challenge_status_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<ChallengeLifecycleStatus> {
+    let value: String = row.try_get(column)?;
+    ChallengeLifecycleStatus::from_storage_value(&value)
+        .ok_or_else(|| AppError::Internal(format!("unexpected challenge status `{value}`")))
+}
+
+/// Reads an optional solution-submission status for creator participant rows.
+fn optional_solution_submission_status_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<Option<SolutionSubmissionStatus>> {
+    let value: Option<String> = row.try_get(column)?;
+    value
+        .map(|value| {
+            SolutionSubmissionStatus::from_storage_value(&value).ok_or_else(|| {
+                AppError::Internal(format!("unexpected solution submission status `{value}`"))
+            })
+        })
+        .transpose()
 }
 
 /// Reads sha256 digest from a database row and validates its domain shape.

@@ -3,6 +3,7 @@
 use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Row};
 
+use crate::db::agents::enforce_active_agent_quota_tx;
 use crate::db::pioneer_codes::{PioneerCodeRegistrationKind, consume_pioneer_code_for_agent_tx};
 use crate::error::{AppError, Result};
 
@@ -39,6 +40,7 @@ pub struct AuthenticatedAdminSession {
     pub session_id: String,
     pub admin_username: String,
     pub csrf_token_hash: String,
+    pub expires_at: DateTime<Utc>,
 }
 
 /// Input for inserting a browser session.
@@ -87,6 +89,7 @@ pub async fn upsert_github_creator_agent(
     agent_id: &str,
     github_user_id: i64,
     github_login: &str,
+    max_active_agents: i64,
 ) -> Result<String> {
     upsert_github_creator_agent_with_pioneer_code(
         pool,
@@ -94,6 +97,7 @@ pub async fn upsert_github_creator_agent(
         github_user_id,
         github_login,
         None,
+        max_active_agents,
     )
     .await
 }
@@ -106,6 +110,7 @@ pub async fn upsert_github_creator_agent_with_pioneer_code(
     github_user_id: i64,
     github_login: &str,
     pioneer_code_hash: Option<&str>,
+    max_active_agents: i64,
 ) -> Result<String> {
     let mut tx = pool.begin().await?;
 
@@ -146,6 +151,8 @@ pub async fn upsert_github_creator_agent_with_pioneer_code(
         tx.commit().await?;
         return Ok(id);
     }
+
+    enforce_active_agent_quota_tx(&mut tx, max_active_agents).await?;
 
     let row = sqlx::query(
         r#"
@@ -344,7 +351,7 @@ pub async fn authenticate_admin_session(
     let session_token_hash = crate::auth::hash_opaque_token(session_token);
     let row = sqlx::query(
         r#"
-        SELECT id::text AS id, admin_username, csrf_token_hash
+        SELECT id::text AS id, admin_username, csrf_token_hash, expires_at
         FROM web_sessions
         WHERE session_token_hash = $1
           AND role = 'admin'
@@ -372,6 +379,7 @@ pub async fn authenticate_admin_session(
             .try_get::<Option<String>, _>("admin_username")?
             .ok_or_else(|| AppError::Internal("admin session missing username".to_string()))?,
         csrf_token_hash: row.try_get("csrf_token_hash")?,
+        expires_at: row.try_get("expires_at")?,
     }))
 }
 

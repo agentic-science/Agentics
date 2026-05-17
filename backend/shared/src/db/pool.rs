@@ -1,5 +1,6 @@
 //! Database pool creation and health checks.
 
+use secrecy::ExposeSecret;
 use sqlx::PgPool;
 
 use crate::config::Config;
@@ -9,7 +10,7 @@ use crate::error::Result;
 pub async fn create_pool(config: &Config, max_connections: u32) -> Result<PgPool> {
     let pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(max_connections)
-        .connect(&config.database_url)
+        .connect(config.database_url.expose_secret())
         .await?;
     Ok(pool)
 }

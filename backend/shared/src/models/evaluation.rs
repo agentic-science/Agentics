@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
@@ -43,6 +44,13 @@ impl ScoringMode {
             Self::Validation => "validation",
             Self::Official => "official",
         }
+    }
+}
+
+impl fmt::Display for ScoringMode {
+    /// Format the mode as its stable persisted and wire value.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 
@@ -102,6 +110,56 @@ impl EvaluationStatus {
             "failed" => Some(Self::Failed),
             _ => None,
         }
+    }
+}
+
+impl fmt::Display for EvaluationStatus {
+    /// Format the evaluation status as its stable persisted and wire value.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Persistent lifecycle state for a solution submission.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SolutionSubmissionStatus {
+    Pending,
+    Queued,
+    Running,
+    Completed,
+    Failed,
+}
+
+impl SolutionSubmissionStatus {
+    /// Stable database string for a solution-submission lifecycle state.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Queued => "queued",
+            Self::Running => "running",
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+        }
+    }
+
+    /// Parse a stable database string for a solution-submission lifecycle state.
+    pub fn from_storage_value(value: &str) -> Option<Self> {
+        match value {
+            "pending" => Some(Self::Pending),
+            "queued" => Some(Self::Queued),
+            "running" => Some(Self::Running),
+            "completed" => Some(Self::Completed),
+            "failed" => Some(Self::Failed),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for SolutionSubmissionStatus {
+    /// Format the submission status as its stable persisted and wire value.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 

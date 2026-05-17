@@ -101,6 +101,33 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         .await
         .expect("failed to decode public solution submission");
     assert_eq!(public_solution_submission["id"], pending_id);
+    assert_eq!(
+        public_solution_submission["evaluation"]["eval_type"],
+        "official"
+    );
+    assert_eq!(public_solution_submission["evaluation"]["rank_score"], 1.0);
+
+    insert_validation_evaluation_for_submission(&pool, pending_id, 0.25).await;
+
+    let public_result_report: serde_json::Value = client
+        .get(api_url(
+            &app,
+            &format!("/api/public/solution-submissions/{pending_id}/result-report"),
+        ))
+        .send()
+        .await
+        .expect("failed to get public result report")
+        .json()
+        .await
+        .expect("failed to decode public result report");
+    assert_eq!(
+        public_result_report["solution_submission"]["evaluation"]["eval_type"], "official",
+        "result reports must prefer official evaluations over validation evaluations"
+    );
+    assert_eq!(
+        public_result_report["solution_submission"]["evaluation"]["rank_score"],
+        1.0
+    );
 
     let public_solution_submission_list: serde_json::Value = client
         .get(api_url(
@@ -132,7 +159,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         .iter()
         .find(|item| item["id"] == pending_id)
         .expect("first solution submission should be listed");
-    assert!(listed_first["validation_score"].is_null());
+    assert_eq!(listed_first["validation_score"], 0.25);
     assert_eq!(listed_first["official_score"], 1.0);
     assert_eq!(listed_first["rank_score"], 1.0);
 
@@ -363,6 +390,82 @@ async fn seeded_challenge_summaries_and_community_links_are_public(pool: sqlx::P
         sample_sum_challenge["spec"]["community"]["moltbook_submolt_url"],
         "https://www.moltbook.com/submolts/agentics-sample-sum"
     );
+}
+
+/// Adds a validation evaluation to an already evaluated official submission for precedence tests.
+async fn insert_validation_evaluation_for_submission(
+    pool: &sqlx::PgPool,
+    solution_submission_id: &str,
+    rank_score: f64,
+) {
+    let job_id = uuid::Uuid::new_v4().to_string();
+    let evaluation_id = uuid::Uuid::new_v4().to_string();
+    sqlx::query(
+        r#"
+        INSERT INTO evaluation_jobs (
+            id,
+            solution_submission_id,
+            challenge_name,
+            target,
+            eval_type,
+            status,
+            payload_json,
+            finished_at
+        )
+        VALUES (
+            $1::uuid,
+            $2::uuid,
+            'sample-sum',
+            'linux-arm64-cpu',
+            'validation',
+            'completed',
+            '{}'::jsonb,
+            NOW()
+        )
+        "#,
+    )
+    .bind(&job_id)
+    .bind(solution_submission_id)
+    .execute(pool)
+    .await
+    .expect("validation job should insert");
+    sqlx::query(
+        r#"
+        INSERT INTO evaluations (
+            id,
+            solution_submission_id,
+            job_id,
+            target,
+            eval_type,
+            status,
+            primary_score,
+            rank_score,
+            aggregate_metrics_json,
+            validation_summary_json,
+            finished_at
+        )
+        VALUES (
+            $1::uuid,
+            $2::uuid,
+            $3::uuid,
+            'linux-arm64-cpu',
+            'validation',
+            'completed',
+            $4,
+            $4,
+            '[{"metric_name":"score","value":0.25}]'::jsonb,
+            '{"score":0.25,"passed":1,"total":4}'::jsonb,
+            NOW()
+        )
+        "#,
+    )
+    .bind(&evaluation_id)
+    .bind(solution_submission_id)
+    .bind(&job_id)
+    .bind(rank_score)
+    .execute(pool)
+    .await
+    .expect("validation evaluation should insert");
 }
 
 /// Writes private artifact challenge to the target path.

@@ -6,7 +6,7 @@ use crate::error::{AppError, Result};
 use crate::models::challenge::ChallengeBundleSpec;
 use crate::models::evaluation::{
     EvaluationDto, EvaluationJobPayload, EvaluationStatus, MetricValue, PublicCaseResult,
-    RunMetricResult, ScoringMode,
+    RunMetricResult, ScoringMode, SolutionSubmissionStatus,
 };
 use crate::models::ids::{AgentId, EvaluationId, EvaluationJobId, SolutionSubmissionId};
 use crate::models::names::{ChallengeName, TargetName};
@@ -574,7 +574,7 @@ pub async fn get_solution_submission_by_id(
         updated_at: r.try_get("updated_at")?,
         evaluation_job_id: optional_evaluation_job_id_from_row(&r, "latest_job_id")?,
         evaluation_job_status: r.try_get::<Option<String>, _>("latest_job_status")?,
-        evaluation: validation_eval.clone().or_else(|| official_eval.clone()),
+        evaluation: official_eval.clone().or_else(|| validation_eval.clone()),
         validation_evaluation: validation_eval,
         official_evaluation: official_eval,
     }))
@@ -645,13 +645,13 @@ pub async fn list_admin_solution_submissions(
                 target: target_from_row(&r, "target")?,
                 agent_id: agent_id_from_row(&r, "agent_id")?,
                 agent_display_name: r.try_get("agent_display_name")?,
-                status: r.try_get("status")?,
+                status: solution_submission_status_from_row(&r, "status")?,
                 visible_after_eval: r.try_get("visible_after_eval")?,
                 latest_job_id: optional_evaluation_job_id_from_row(&r, "latest_job_id")?,
-                latest_job_status: r.try_get("latest_job_status")?,
-                latest_job_eval_type: r.try_get("latest_job_eval_type")?,
-                validation_status: r.try_get("validation_status")?,
-                official_status: r.try_get("official_status")?,
+                latest_job_status: optional_evaluation_status_from_row(&r, "latest_job_status")?,
+                latest_job_eval_type: optional_scoring_mode_from_row(&r, "latest_job_eval_type")?,
+                validation_status: optional_evaluation_status_from_row(&r, "validation_status")?,
+                official_status: optional_evaluation_status_from_row(&r, "official_status")?,
                 rank_score: r.try_get("official_rank_score")?,
                 created_at: r.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
                 updated_at: r.try_get::<DateTime<Utc>, _>("updated_at")?.to_rfc3339(),
@@ -675,8 +675,9 @@ pub async fn list_public_solution_submissions_for_challenge(
             s.parent_solution_submission_id, s.credit_text, s.created_at, s.updated_at,
             COALESCE(pe.primary_score, (pe.validation_summary_json->>'score')::double precision) AS validation_score,
             COALESCE(oe.rank_score, (oe.official_summary_json->>'score')::double precision) AS official_score,
-            COALESCE(pe.rank_score, oe.rank_score, (pe.validation_summary_json->>'score')::double precision, (oe.official_summary_json->>'score')::double precision) AS rank_score,
-            COALESCE(pe.aggregate_metrics_json, '[]'::jsonb) AS aggregate_metrics
+            COALESCE(oe.rank_score, pe.rank_score, (oe.official_summary_json->>'score')::double precision, (pe.validation_summary_json->>'score')::double precision) AS rank_score,
+            COALESCE(oe.aggregate_metrics_json, pe.aggregate_metrics_json, '[]'::jsonb) AS aggregate_metrics,
+            COALESCE(oe.aggregate_metrics_json, '[]'::jsonb) AS official_metrics
         FROM solution_submissions s
         JOIN agents a ON a.id = s.agent_id
         JOIN challenges p ON p.name = s.challenge_name
@@ -687,7 +688,7 @@ pub async fn list_public_solution_submissions_for_challenge(
             ORDER BY created_at DESC LIMIT 1
         ) pe ON TRUE
         LEFT JOIN LATERAL (
-            SELECT primary_score, rank_score, official_summary_json
+            SELECT primary_score, rank_score, aggregate_metrics_json, official_summary_json
             FROM evaluations
             WHERE solution_submission_id = s.id AND eval_type = 'official' AND status = 'completed' AND target = s.target
             ORDER BY created_at DESC LIMIT 1
@@ -719,7 +720,7 @@ pub async fn list_public_solution_submissions_for_challenge(
                 challenge_title: r.try_get("challenge_title")?,
                 agent_id: agent_id_from_row(&r, "agent_id")?,
                 agent_display_name: r.try_get("agent_display_name")?,
-                status: r.try_get("status")?,
+                status: solution_submission_status_from_row(&r, "status")?,
                 explanation: r.try_get("explanation")?,
                 parent_solution_submission_id: optional_solution_submission_id_from_row(
                     &r,
@@ -732,7 +733,11 @@ pub async fn list_public_solution_submissions_for_challenge(
                 official_score: r.try_get::<Option<f64>, _>("official_score")?,
                 rank_score: r.try_get::<Option<f64>, _>("rank_score")?,
                 aggregate_metrics,
-                official_metrics: Vec::new(),
+                official_metrics: decode_optional_json(
+                    r.try_get::<Option<Value>, _>("official_metrics")?,
+                    "solution submission official metrics",
+                )?
+                .unwrap_or_default(),
             })
         })
         .collect::<Result<Vec<_>>>()
@@ -829,6 +834,46 @@ fn parse_eval_from_row(row: &sqlx::postgres::PgRow, prefix: &str) -> Result<Opti
         started_at: started_at.map(|d| d.to_rfc3339()),
         finished_at: finished_at.map(|d| d.to_rfc3339()),
     }))
+}
+
+/// Reads a solution-submission status and validates its persisted value.
+fn solution_submission_status_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<SolutionSubmissionStatus> {
+    let value: String = row.try_get(column)?;
+    SolutionSubmissionStatus::from_storage_value(&value).ok_or_else(|| {
+        AppError::Internal(format!("unexpected solution submission status `{value}`"))
+    })
+}
+
+/// Reads an optional evaluation/job status and validates its persisted value.
+fn optional_evaluation_status_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<Option<EvaluationStatus>> {
+    let value: Option<String> = row.try_get(column)?;
+    value
+        .map(|value| {
+            EvaluationStatus::from_storage_value(&value).ok_or_else(|| {
+                AppError::Internal(format!("unexpected evaluation status `{value}`"))
+            })
+        })
+        .transpose()
+}
+
+/// Reads an optional scoring mode and validates its persisted value.
+fn optional_scoring_mode_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<Option<ScoringMode>> {
+    let value: Option<String> = row.try_get(column)?;
+    value
+        .map(|value| {
+            ScoringMode::from_storage_value(&value)
+                .ok_or_else(|| AppError::Internal(format!("unexpected evaluation type `{value}`")))
+        })
+        .transpose()
 }
 
 /// Reads storage key from a database row and validates its domain shape.

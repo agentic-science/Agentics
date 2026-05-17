@@ -16,6 +16,74 @@ pub const INVALID_OR_UNAVAILABLE_PIONEER_CODE: &str = "invalid or unavailable pi
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PioneerCodeError;
 
+/// Lifecycle state for an admin-created pioneer code.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum PioneerCodeStatus {
+    Active,
+    Revoked,
+}
+
+impl PioneerCodeStatus {
+    /// Stable database string for a pioneer-code lifecycle state.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Active => "active",
+            Self::Revoked => "revoked",
+        }
+    }
+
+    /// Parse a stable database string for a pioneer-code lifecycle state.
+    pub fn from_storage_value(value: &str) -> Option<Self> {
+        match value {
+            "active" => Some(Self::Active),
+            "revoked" => Some(Self::Revoked),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for PioneerCodeStatus {
+    /// Format the pioneer-code status as its stable persisted and wire value.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Registration flow recorded for a consumed pioneer code.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum PioneerCodeUseKind {
+    AgentApi,
+    CreatorOauth,
+}
+
+impl PioneerCodeUseKind {
+    /// Stable database string for a pioneer-code use.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::AgentApi => "agent_api",
+            Self::CreatorOauth => "creator_oauth",
+        }
+    }
+
+    /// Parse the stable database string for a pioneer-code use.
+    pub fn from_storage_value(value: &str) -> Option<Self> {
+        match value {
+            "agent_api" => Some(Self::AgentApi),
+            "creator_oauth" => Some(Self::CreatorOauth),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for PioneerCodeUseKind {
+    /// Format the use kind as its stable persisted and wire value.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 impl fmt::Display for PioneerCodeError {
     /// Writes the stable validation error without revealing code contents.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

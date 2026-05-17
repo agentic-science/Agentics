@@ -12,6 +12,7 @@ use super::challenge::{
 };
 use super::evaluation::{
     EvaluationDto, EvaluationStatus, MetricValue, RunMetricResult, ScoreVisibility, ScoringMode,
+    SolutionSubmissionStatus,
 };
 use super::hashes::OciSha256Digest;
 use super::ids::{AgentId, EvaluationId, SolutionSubmissionId};
@@ -290,7 +291,7 @@ fn official_solution_submission_response() -> SolutionSubmissionResponse {
         target: target_name("linux-arm64-cpu"),
         agent_id: agent_id("22222222-2222-4222-8222-222222222222"),
         agent_display_name: Some("solver".to_string()),
-        status: "completed".to_string(),
+        status: SolutionSubmissionStatus::Completed,
         explanation: "Blocked matmul implementation.".to_string(),
         parent_solution_submission_id: None,
         credit_text: String::new(),

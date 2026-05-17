@@ -209,6 +209,7 @@ async fn creator_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
         42,
         "creator-login",
         Some(&code_hash),
+        1_000,
     )
     .await
     .expect("first oauth login should create agent");
@@ -221,6 +222,7 @@ async fn creator_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
         42,
         "creator-login-renamed",
         Some("not-a-valid-code-hash"),
+        1_000,
     )
     .await
     .expect("repeat oauth login should not consume another code");
@@ -242,6 +244,7 @@ async fn creator_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
         42,
         "creator-login",
         Some(&code_hash),
+        1_000,
     )
     .await
     .expect_err("disabled linked agent should block oauth login");

@@ -4,17 +4,55 @@
 //! stricter TS implementation while still allowing explicitly nullable response
 //! fields to be omitted.
 
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 
-use super::evaluation::{EvaluationJobDto, MetricValue};
+use super::evaluation::{
+    EvaluationJobDto, EvaluationStatus, MetricValue, ScoringMode, SolutionSubmissionStatus,
+};
 use super::hashes::Sha256Digest;
 use super::ids::{
     AgentId, AgentPioneerCodeId, ChallengeShortlistRevisionId, EvaluationJobId,
     SolutionSubmissionId,
 };
 use super::names::{ChallengeName, MetricName, TargetName};
-use super::pioneer_codes::{PioneerCode, PioneerCodeInput};
+use super::pioneer_codes::{PioneerCode, PioneerCodeInput, PioneerCodeStatus, PioneerCodeUseKind};
 use crate::storage::StorageKey;
+
+/// Persistent lifecycle state for an agent account.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentStatus {
+    Active,
+    Disabled,
+}
+
+impl AgentStatus {
+    /// Stable database string for an agent account state.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Active => "active",
+            Self::Disabled => "disabled",
+        }
+    }
+
+    /// Parse the stable database string for an agent account state.
+    pub fn from_storage_value(value: &str) -> Option<Self> {
+        match value {
+            "active" => Some(Self::Active),
+            "disabled" => Some(Self::Disabled),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for AgentStatus {
+    /// Format the agent status as its stable persisted and wire value.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
 
 /// Agent registration payload accepted by the public API.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
@@ -65,7 +103,7 @@ pub struct PioneerCodeDto {
     pub note: String,
     pub max_uses: i64,
     pub use_count: i64,
-    pub status: String,
+    pub status: PioneerCodeStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expires_at: Option<String>,
     pub created_by_admin_username: String,
@@ -85,7 +123,7 @@ pub struct PioneerCodeListResponse {
 pub struct PioneerCodeUseDto {
     pub agent_id: AgentId,
     pub agent_display_name: String,
-    pub registration_kind: String,
+    pub registration_kind: PioneerCodeUseKind,
     pub used_at: String,
 }
 
@@ -100,7 +138,7 @@ pub struct PioneerCodeDetailResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct RevokePioneerCodeResponse {
     pub id: AgentPioneerCodeId,
-    pub status: String,
+    pub status: PioneerCodeStatus,
     pub revoked_agent_count: i64,
     pub revoked_token_count: i64,
 }
@@ -124,7 +162,7 @@ pub struct CreateSolutionSubmissionRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct CreateSolutionSubmissionResponse {
     pub id: SolutionSubmissionId,
-    pub status: String,
+    pub status: SolutionSubmissionStatus,
     pub challenge_name: ChallengeName,
     pub target: TargetName,
     pub artifact_key: StorageKey,
@@ -143,7 +181,7 @@ pub struct SolutionSubmissionResponse {
     pub agent_id: AgentId,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_display_name: Option<String>,
-    pub status: String,
+    pub status: SolutionSubmissionStatus,
     pub explanation: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_solution_submission_id: Option<SolutionSubmissionId>,
@@ -172,7 +210,7 @@ pub struct PublicSolutionSubmissionListItemDto {
     pub challenge_title: String,
     pub agent_id: AgentId,
     pub agent_display_name: String,
-    pub status: String,
+    pub status: SolutionSubmissionStatus,
     pub explanation: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_solution_submission_id: Option<SolutionSubmissionId>,
@@ -342,7 +380,7 @@ pub struct CreatorChallengeParticipantDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub best_rank_score: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub latest_status: Option<String>,
+    pub latest_status: Option<SolutionSubmissionStatus>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub latest_solution_submission_at: Option<String>,
 }
@@ -412,18 +450,18 @@ pub struct AdminSolutionSubmissionListItemDto {
     pub target: TargetName,
     pub agent_id: AgentId,
     pub agent_display_name: String,
-    pub status: String,
+    pub status: SolutionSubmissionStatus,
     pub visible_after_eval: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub latest_job_id: Option<EvaluationJobId>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub latest_job_status: Option<String>,
+    pub latest_job_status: Option<EvaluationStatus>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub latest_job_eval_type: Option<String>,
+    pub latest_job_eval_type: Option<ScoringMode>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub validation_status: Option<String>,
+    pub validation_status: Option<EvaluationStatus>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub official_status: Option<String>,
+    pub official_status: Option<EvaluationStatus>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rank_score: Option<f64>,
     pub created_at: String,
@@ -473,8 +511,8 @@ pub struct EvaluationJobResponse {
     pub job_id: EvaluationJobId,
     pub solution_submission_id: SolutionSubmissionId,
     pub target: TargetName,
-    pub eval_type: String,
-    pub status: String,
+    pub eval_type: ScoringMode,
+    pub status: EvaluationStatus,
 }
 
 /// Admin response returned after toggling solution submission visibility.
@@ -488,7 +526,7 @@ pub struct HideSolutionSubmissionResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct DisableAgentResponse {
     pub id: AgentId,
-    pub status: String,
+    pub status: AgentStatus,
 }
 
 /// Admin-visible quota limits that bound evaluation and registration capacity.

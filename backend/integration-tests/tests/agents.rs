@@ -77,3 +77,47 @@ async fn registration_respects_active_agent_quota(pool: sqlx::PgPool) {
         .expect("failed to register second agent");
     assert_eq!(second.status(), 429);
 }
+
+/// Verifies that concurrent registration cannot over-admit active agents.
+#[sqlx::test(migrations = "../migrations")]
+async fn registration_quota_is_serialized(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let mut config = test_config(storage.path(), &examples_challenges_root());
+    config.max_active_agents = 1;
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+    let first_url = api_url(&app, "/api/agents/register");
+    let second_url = first_url.clone();
+
+    let first_client = client.clone();
+    let first = async move {
+        first_client
+            .post(first_url)
+            .json(&serde_json::json!({ "display_name": "quota-racer-1" }))
+            .send()
+            .await
+            .expect("first registration should return")
+            .status()
+    };
+    let second = async move {
+        client
+            .post(second_url)
+            .json(&serde_json::json!({ "display_name": "quota-racer-2" }))
+            .send()
+            .await
+            .expect("second registration should return")
+            .status()
+    };
+
+    let (first_status, second_status) = tokio::join!(first, second);
+    let statuses = [first_status, second_status];
+    assert!(statuses.contains(&reqwest::StatusCode::CREATED));
+    assert!(statuses.contains(&reqwest::StatusCode::TOO_MANY_REQUESTS));
+
+    let active_count =
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::BIGINT FROM agents WHERE status = 'active'")
+            .fetch_one(&pool)
+            .await
+            .expect("active count should query");
+    assert_eq!(active_count, 1);
+}

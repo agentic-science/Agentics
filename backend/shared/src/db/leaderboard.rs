@@ -73,13 +73,13 @@ pub(super) async fn repair_leaderboard_entry_for_solution_submission_tx<'a>(
             SELECT
                 s.id::text AS id,
                 COALESCE(
-                    ve.rank_score,
                     oe.rank_score,
-                    (ve.validation_summary_json->>'score')::double precision,
-                    (oe.official_summary_json->>'score')::double precision
+                    ve.rank_score,
+                    (oe.official_summary_json->>'score')::double precision,
+                    (ve.validation_summary_json->>'score')::double precision
                 ) AS ranking_score,
-                COALESCE(ve.public_results_json, oe.public_results_json, '[]'::jsonb) AS public_results,
-                COALESCE(ve.aggregate_metrics_json, oe.aggregate_metrics_json, '[]'::jsonb) AS aggregate_metrics,
+                COALESCE(oe.public_results_json, ve.public_results_json, '[]'::jsonb) AS public_results,
+                COALESCE(oe.aggregate_metrics_json, ve.aggregate_metrics_json, '[]'::jsonb) AS aggregate_metrics,
                 COALESCE(oe.rank_score, (oe.official_summary_json->>'score')::double precision) AS official_score,
                 COALESCE(oe.aggregate_metrics_json, '[]'::jsonb) AS official_metrics
             FROM solution_submissions s
@@ -99,10 +99,10 @@ pub(super) async fn repair_leaderboard_entry_for_solution_submission_tx<'a>(
               AND s.target = $4
               AND s.visible_after_eval = TRUE AND s.status = 'completed'
               AND COALESCE(
-                    ve.rank_score,
                     oe.rank_score,
-                    (ve.validation_summary_json->>'score')::double precision,
-                    (oe.official_summary_json->>'score')::double precision
+                    ve.rank_score,
+                    (oe.official_summary_json->>'score')::double precision,
+                    (ve.validation_summary_json->>'score')::double precision
                   ) IS NOT NULL
             ORDER BY ranking_score DESC, s.created_at ASC
             LIMIT 1

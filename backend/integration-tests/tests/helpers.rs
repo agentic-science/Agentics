@@ -78,7 +78,9 @@ pub async fn spawn_app_with_config(pool: PgPool, config: Config) -> TestApp {
 /// Build an isolated config for integration tests.
 pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
     Config {
-        database_url: "postgres://agentics:agentics@127.0.0.1:5432/agentics_test".to_string(),
+        database_url: SecretString::from(
+            "postgres://agentics:agentics@127.0.0.1:5432/agentics_test",
+        ),
         api_host: "127.0.0.1".to_string(),
         api_port: 0,
         storage_root: storage_root.to_string_lossy().to_string(),
@@ -174,6 +176,7 @@ pub async fn create_creator_session(
         &fallback_agent_id,
         github_user_id,
         github_login,
+        1_000,
     )
     .await
     .expect("creator account should upsert");

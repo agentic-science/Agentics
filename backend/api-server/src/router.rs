@@ -83,6 +83,10 @@ pub fn router(config: &Config) -> Router<AppState> {
             "/api/auth/admin/logout",
             post(crate::auth_handlers::admin_logout),
         )
+        .route(
+            "/api/auth/admin/session",
+            get(crate::auth_handlers::admin_session),
+        )
         .route("/api/creator/me", get(crate::auth_handlers::creator_me))
         .route(
             "/api/creator/challenge-drafts",

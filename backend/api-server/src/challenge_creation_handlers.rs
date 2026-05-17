@@ -785,7 +785,9 @@ fn extract_private_asset_overlay_blocking(
         }
 
         let Some(relative_path) = file.enclosed_name() else {
-            continue;
+            return Err(AppError::BadRequest(format!(
+                "private asset `{asset_name}` contains an unsafe ZIP entry path"
+            )));
         };
         let relative_path = relative_path.to_path_buf();
         let relative_path_string = relative_path.to_string_lossy();
@@ -840,4 +842,55 @@ fn non_empty_message(value: &str) -> Option<&str> {
 fn base64_decode(input: &str) -> Option<Vec<u8>> {
     use base64::{Engine as _, engine::general_purpose::STANDARD};
     STANDARD.decode(input.trim()).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::{Cursor, Write};
+
+    use super::extract_private_asset_overlay_blocking;
+
+    /// Builds a small in-memory ZIP archive for private asset extraction tests.
+    fn zip_with_file(path: &str, content: &[u8]) -> Vec<u8> {
+        let mut cursor = Cursor::new(Vec::new());
+        {
+            let mut archive = zip::ZipWriter::new(&mut cursor);
+            let options = zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Stored);
+            archive
+                .start_file(path, options)
+                .expect("test ZIP path should start");
+            archive
+                .write_all(content)
+                .expect("test ZIP content should write");
+            archive.finish().expect("test ZIP should finish");
+        }
+        cursor.into_inner()
+    }
+
+    /// Rejects traversal-like private asset entries instead of silently skipping them.
+    #[test]
+    fn private_asset_overlay_rejects_unsafe_zip_entry_path() {
+        let target = std::env::temp_dir().join(format!(
+            "agentics-private-asset-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&target).expect("target tempdir");
+        let escape_target = target.join("escape.txt");
+        let bytes = zip_with_file("../escape.txt", b"escape");
+
+        let error = extract_private_asset_overlay_blocking(&bytes, &target, "official-cases", 1024)
+            .expect_err("unsafe ZIP path should fail extraction");
+
+        assert!(
+            error
+                .to_string()
+                .contains("contains an unsafe ZIP entry path")
+        );
+        assert!(
+            !escape_target.exists(),
+            "unsafe private asset extraction must not write outside the bundle"
+        );
+        std::fs::remove_dir_all(&target).expect("target tempdir cleanup");
+    }
 }

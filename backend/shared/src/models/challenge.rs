@@ -1,5 +1,7 @@
 //! Challenge bundle and challenge-facing DTOs.
 
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 
 use super::hashes::OciSha256Digest;
@@ -9,6 +11,43 @@ use super::paths::{
 };
 use super::urls::{ExternalDataUrl, MoltbookSubmoltUrl};
 use crate::zip_project::ZipProjectNetworkAccess;
+
+/// Persistent lifecycle state for a challenge shell or published benchmark.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ChallengeLifecycleStatus {
+    Draft,
+    Active,
+    Archived,
+}
+
+impl ChallengeLifecycleStatus {
+    /// Stable database string for a challenge lifecycle state.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Draft => "draft",
+            Self::Active => "active",
+            Self::Archived => "archived",
+        }
+    }
+
+    /// Parse a stable database string for a challenge lifecycle state.
+    pub fn from_storage_value(value: &str) -> Option<Self> {
+        match value {
+            "draft" => Some(Self::Draft),
+            "active" => Some(Self::Active),
+            "archived" => Some(Self::Archived),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for ChallengeLifecycleStatus {
+    /// Format the challenge status as its stable persisted and wire value.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
 
 /// Parsed `spec.json` contract for a challenge bundle.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
@@ -447,7 +486,7 @@ pub struct ChallengeAdminResponse {
     pub name: ChallengeName,
     pub title: String,
     pub summary: String,
-    pub status: String,
+    pub status: ChallengeLifecycleStatus,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -458,7 +497,7 @@ pub struct AdminChallengeListItemDto {
     pub name: ChallengeName,
     pub title: String,
     pub summary: String,
-    pub status: String,
+    pub status: ChallengeLifecycleStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub targets: Option<Vec<ChallengeTargetSpec>>,
     #[serde(skip_serializing_if = "Option::is_none")]
