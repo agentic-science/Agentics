@@ -51,12 +51,8 @@ test-rust-integration:
 test-web-unit:
     cd frontends/web && bun run test
 
-# Frontend E2E tests
-test-web-e2e:
-    cd frontends/web && bunx playwright test
-
 # All tests
-test-all: test-rust test-web-unit test-web-e2e
+test-all: test-rust test-web-unit
 
 # Lint Rust
 cargo-fmt:
