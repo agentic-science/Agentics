@@ -187,7 +187,7 @@ pub async fn reap_stuck_jobs(pool: &PgPool, timeout_minutes: i32) -> Result<Stal
         WHERE status = 'running'
           AND claimed_at < NOW() - INTERVAL '1 minute' * $1
           AND attempt_count < max_attempts
-        RETURNING solution_submission_id
+        RETURNING id, solution_submission_id
         "#,
     )
     .bind(timeout_minutes)
@@ -195,8 +195,13 @@ pub async fn reap_stuck_jobs(pool: &PgPool, timeout_minutes: i32) -> Result<Stal
     .await?;
 
     for row in &requeued_jobs {
+        let job_id = uuid_string_from_row(row, "id")?;
         let solution_submission_id =
             solution_submission_id_from_row(row, "solution_submission_id")?;
+        sqlx::query("DELETE FROM evaluations WHERE job_id = $1::uuid AND status = 'running'")
+            .bind(&job_id)
+            .execute(&mut *tx)
+            .await?;
         sqlx::query(
             r#"
             UPDATE solution_submissions

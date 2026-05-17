@@ -68,10 +68,22 @@ pub(super) async fn repair_leaderboard_entry_for_solution_submission_tx<'a>(
         .map(|e| e.0 == solution_submission_id.as_str())
         .unwrap_or(false)
     {
-        let replacement: Option<(String, f64, Value, Value, Option<f64>, Value)> = sqlx::query_as(
+        let spec_json: Option<(Value,)> =
+            sqlx::query_as("SELECT spec_json FROM challenges WHERE name = $1 LIMIT 1")
+                .bind(&challenge_name)
+                .fetch_optional(&mut **tx)
+                .await?;
+        let Some((spec_json,)) = spec_json else {
+            return Ok(());
+        };
+        let spec = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+            .map_err(|e| AppError::Internal(format!("stored challenge spec is invalid: {e}")))?;
+
+        let replacement_rows = sqlx::query(
             r#"
             SELECT
                 s.id::text AS id,
+                s.created_at,
                 COALESCE(
                     oe.rank_score,
                     ve.rank_score,
@@ -80,7 +92,7 @@ pub(super) async fn repair_leaderboard_entry_for_solution_submission_tx<'a>(
                 ) AS ranking_score,
                 COALESCE(oe.public_results_json, ve.public_results_json, '[]'::jsonb) AS public_results,
                 COALESCE(oe.aggregate_metrics_json, ve.aggregate_metrics_json, '[]'::jsonb) AS aggregate_metrics,
-                COALESCE(oe.rank_score, (oe.official_summary_json->>'score')::double precision) AS official_score,
+                oe.primary_score AS official_score,
                 COALESCE(oe.aggregate_metrics_json, '[]'::jsonb) AS official_metrics
             FROM solution_submissions s
             LEFT JOIN LATERAL (
@@ -90,7 +102,7 @@ pub(super) async fn repair_leaderboard_entry_for_solution_submission_tx<'a>(
                 ORDER BY created_at DESC LIMIT 1
             ) ve ON TRUE
             LEFT JOIN LATERAL (
-                SELECT rank_score, aggregate_metrics_json, official_summary_json, public_results_json
+                SELECT primary_score, rank_score, aggregate_metrics_json, official_summary_json, public_results_json
                 FROM evaluations
                 WHERE solution_submission_id = s.id AND eval_type = 'official' AND status = 'completed' AND target = s.target
                 ORDER BY created_at DESC LIMIT 1
@@ -104,26 +116,48 @@ pub(super) async fn repair_leaderboard_entry_for_solution_submission_tx<'a>(
                     (oe.official_summary_json->>'score')::double precision,
                     (ve.validation_summary_json->>'score')::double precision
                   ) IS NOT NULL
-            ORDER BY ranking_score DESC, s.created_at ASC
-            LIMIT 1
             "#
         )
         .bind(&challenge_name)
         .bind(&agent_id)
         .bind(solution_submission_id.as_str())
         .bind(&target)
-        .fetch_optional(&mut **tx)
+        .fetch_all(&mut **tx)
         .await?;
 
-        if let Some((
-            best_id,
-            best_score,
-            public_results,
-            aggregate_metrics,
-            official_score,
-            official_metrics,
-        )) = replacement
-        {
+        let mut candidates = replacement_rows
+            .into_iter()
+            .map(|row| {
+                let aggregate_metrics = decode_optional_json(
+                    Some(row.try_get::<Value, _>("aggregate_metrics")?),
+                    "leaderboard replacement aggregate metrics",
+                )?
+                .unwrap_or_default();
+                Ok(LeaderboardReplacementCandidate {
+                    id: row.try_get("id")?,
+                    created_at: row.try_get("created_at")?,
+                    rank_score: row.try_get("ranking_score")?,
+                    public_results_json: row.try_get("public_results")?,
+                    aggregate_metrics,
+                    aggregate_metrics_json: row.try_get("aggregate_metrics")?,
+                    official_score: row.try_get("official_score")?,
+                    official_metrics_json: row.try_get("official_metrics")?,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        candidates.sort_by(|a, b| {
+            compare_rank_payloads(
+                &spec,
+                a.rank_score,
+                &a.aggregate_metrics,
+                b.rank_score,
+                &b.aggregate_metrics,
+            )
+            .then_with(|| a.created_at.cmp(&b.created_at))
+            .then_with(|| a.id.cmp(&b.id))
+        });
+
+        if let Some(best) = candidates.into_iter().next() {
             sqlx::query(
                 r#"
                 INSERT INTO leaderboard_entries (
@@ -145,12 +179,12 @@ pub(super) async fn repair_leaderboard_entry_for_solution_submission_tx<'a>(
             .bind(&challenge_name)
             .bind(&target)
             .bind(&agent_id)
-            .bind(&best_id)
-            .bind(best_score)
-            .bind(&public_results)
-            .bind(&aggregate_metrics)
-            .bind(official_score)
-            .bind(&official_metrics)
+            .bind(&best.id)
+            .bind(best.rank_score)
+            .bind(&best.public_results_json)
+            .bind(&best.aggregate_metrics_json)
+            .bind(best.official_score)
+            .bind(&best.official_metrics_json)
             .execute(&mut **tx)
             .await?;
         } else {
@@ -178,14 +212,17 @@ pub async fn list_leaderboard_entries(
     list_leaderboard_entries_inner(pool, challenge_name, target, limit, true).await
 }
 
-/// List visible leaderboard entries with metric payloads retained for aggregation-only APIs.
-pub async fn list_leaderboard_entries_for_distribution(
-    pool: &PgPool,
-    challenge_name: &ChallengeName,
-    target: &TargetName,
-    limit: i64,
-) -> Result<Vec<LeaderboardEntryDto>> {
-    list_leaderboard_entries_inner(pool, challenge_name, target, limit, false).await
+/// Candidate row used when repairing one agent's leaderboard entry after hiding a submission.
+#[derive(Debug)]
+struct LeaderboardReplacementCandidate {
+    id: String,
+    created_at: DateTime<Utc>,
+    rank_score: f64,
+    public_results_json: Value,
+    aggregate_metrics: Vec<MetricValue>,
+    aggregate_metrics_json: Value,
+    official_score: Option<f64>,
+    official_metrics_json: Value,
 }
 
 /// Query, order, and optionally redact the visible leaderboard rows for one target.
@@ -197,7 +234,6 @@ async fn list_leaderboard_entries_inner(
     redact_metric_payloads: bool,
 ) -> Result<Vec<LeaderboardEntryDto>> {
     let requested_limit = limit.max(1);
-    let fetch_limit = requested_limit.saturating_mul(5).clamp(1, 10_000);
     let challenge = get_published_challenge(pool, challenge_name)
         .await?
         .ok_or(AppError::NotFound)?;
@@ -218,12 +254,10 @@ async fn list_leaderboard_entries_inner(
           AND s.visible_after_eval = TRUE
           AND s.status = 'completed'
         ORDER BY le.best_rank_score DESC, le.updated_at ASC
-        LIMIT $3
         "#,
     )
     .bind(challenge_name.as_str())
     .bind(target.as_str())
-    .bind(fetch_limit)
     .fetch_all(pool)
     .await?;
 
@@ -357,7 +391,7 @@ pub(super) async fn update_official_score_for_solution_submission_tx<'a>(
     tx: &mut Transaction<'a, Postgres>,
     solution_submission_id: &SolutionSubmissionId,
     target: &TargetName,
-    official_score: f64,
+    official_score: Option<f64>,
     official_metrics: &[MetricValue],
 ) -> Result<()> {
     let row: Option<(String, String)> = sqlx::query_as(

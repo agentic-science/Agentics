@@ -142,11 +142,7 @@ pub struct PioneerCodeInput(SecretString);
 impl PioneerCodeInput {
     /// Store a raw code candidate without validating its public grammar.
     pub fn try_new(value: impl Into<String>) -> Result<Self, PioneerCodeError> {
-        let value = value.into();
-        if value.is_empty() {
-            return Err(PioneerCodeError);
-        }
-        Ok(Self(SecretString::from(value)))
+        Ok(Self(SecretString::from(value.into())))
     }
 
     /// Expose the raw code only where it must be validated, hashed, or sent.

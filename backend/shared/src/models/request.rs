@@ -9,7 +9,8 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 use super::evaluation::{
-    EvaluationJobDto, EvaluationStatus, MetricValue, ScoringMode, SolutionSubmissionStatus,
+    EvaluationJobDto, EvaluationJobStatus, EvaluationStatus, MetricValue, ScoringMode,
+    SolutionSubmissionStatus,
 };
 use super::hashes::Sha256Digest;
 use super::ids::{
@@ -455,7 +456,7 @@ pub struct AdminSolutionSubmissionListItemDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub latest_job_id: Option<EvaluationJobId>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub latest_job_status: Option<EvaluationStatus>,
+    pub latest_job_status: Option<EvaluationJobStatus>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub latest_job_eval_type: Option<ScoringMode>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -512,7 +513,7 @@ pub struct EvaluationJobResponse {
     pub solution_submission_id: SolutionSubmissionId,
     pub target: TargetName,
     pub eval_type: ScoringMode,
-    pub status: EvaluationStatus,
+    pub status: EvaluationJobStatus,
 }
 
 /// Admin response returned after toggling solution submission visibility.

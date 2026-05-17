@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 /// Parsed bearer-token authorization header.
 #[derive(Debug, Clone)]
 pub struct ParsedBearerToken {
-    pub token: String,
+    pub token: SecretString,
 }
 
 /// Parsed basic-auth authorization header.
@@ -78,7 +78,7 @@ pub fn parse_bearer_token(value: Option<&str>) -> Option<ParsedBearerToken> {
     }
 
     Some(ParsedBearerToken {
-        token: token.to_string(),
+        token: SecretString::from(token),
     })
 }
 

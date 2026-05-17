@@ -1,6 +1,7 @@
 //! Score-distribution builders for public challenge metric views.
 
 use shared::error::{AppError, Result};
+use shared::models::challenge::ChallengeBundleSpec;
 use shared::models::names::{ChallengeName, MetricName, TargetName};
 use shared::models::request::{
     LeaderboardEntryDto, ScoreDistributionBucketDto, ScoreDistributionQuantileDto,
@@ -12,11 +13,13 @@ pub(super) fn build_score_distribution_response(
     challenge_name: ChallengeName,
     target: TargetName,
     metric_name: MetricName,
+    spec: &ChallengeBundleSpec,
     entries: Vec<LeaderboardEntryDto>,
 ) -> Result<ScoreDistributionResponse> {
+    ensure_metric_is_publicly_distributable(&metric_name, spec)?;
     let mut values = entries
         .iter()
-        .filter_map(|entry| metric_value_from_leaderboard_entry(entry, &metric_name))
+        .filter_map(|entry| metric_value_from_leaderboard_entry(entry, &metric_name, spec))
         .filter(|value| value.is_finite())
         .collect::<Vec<_>>();
     values.sort_by(f64::total_cmp);
@@ -59,17 +62,33 @@ pub(super) fn build_score_distribution_response(
 fn metric_value_from_leaderboard_entry(
     entry: &LeaderboardEntryDto,
     metric_name: &MetricName,
+    spec: &ChallengeBundleSpec,
 ) -> Option<f64> {
     match metric_name.as_str() {
         "rank_score" | "best_rank_score" => Some(entry.best_rank_score),
         "official_score" => entry.official_score,
-        _ => entry
-            .aggregate_metrics
-            .iter()
-            .chain(entry.official_metrics.iter())
-            .find(|metric| &metric.metric_name == metric_name)
-            .map(|metric| metric.value),
+        _ if metric_name == &spec.metric_schema.ranking.primary_metric_name => entry.official_score,
+        _ => None,
     }
+}
+
+/// Reject distribution requests that would require private aggregate metrics.
+fn ensure_metric_is_publicly_distributable(
+    metric_name: &MetricName,
+    spec: &ChallengeBundleSpec,
+) -> Result<()> {
+    if matches!(
+        metric_name.as_str(),
+        "rank_score" | "best_rank_score" | "official_score"
+    ) || metric_name == &spec.metric_schema.ranking.primary_metric_name
+    {
+        return Ok(());
+    }
+
+    Err(AppError::Forbidden(
+        "score distribution is available only for rank_score, official_score, or the primary ranking metric"
+            .to_string(),
+    ))
 }
 
 /// Build nearest-rank quantiles used by the public distribution API.

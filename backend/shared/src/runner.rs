@@ -152,19 +152,17 @@ pub async fn execute_evaluation_job(
     payload: &EvaluationJobPayload,
     storage: &dyn Storage,
 ) -> Result<ExecutionResult> {
-    let working_root = Path::new(&config.storage_root)
-        .join("eval-artifacts")
+    let working_root = std::env::temp_dir()
+        .join("agentics-eval-artifacts")
         .join(job_id);
-    let source_root = std::env::temp_dir()
-        .join("agentics-solutions")
-        .join(job_id)
-        .join("source");
+    let source_root = working_root.join("source");
     let build_root = working_root.join("build-workspace");
     let runs_root = working_root.join("solution-runs");
     let prepared_root = working_root.join("prepared");
     let scorer_output_root = working_root.join("scorer-output");
     let log_key = StorageKey::try_new(format!("eval-artifacts/{job_id}/runner.log"))?;
 
+    cleanup_paths([working_root.clone()]).await?;
     tokio::fs::create_dir_all(&working_root).await?;
     tokio::fs::create_dir_all(&source_root).await?;
     tokio::fs::create_dir_all(&build_root).await?;
@@ -278,13 +276,17 @@ pub async fn execute_evaluation_job(
     }
     .await;
 
-    storage.put(&log_key, logs.as_bytes()).await?;
-    let cleanup = cleanup_paths([source_root]).await;
-    match (execution, cleanup) {
-        (Ok(result), Ok(())) => Ok(result),
-        (Ok(_), Err(cleanup_err)) => Err(cleanup_err),
-        (Err(run_err), Ok(())) => Err(run_err),
-        (Err(run_err), Err(cleanup_err)) => Err(AppError::Runner(format!(
+    let log_write = storage.put(&log_key, logs.as_bytes()).await;
+    let cleanup = cleanup_paths([working_root]).await;
+    match (execution, log_write, cleanup) {
+        (Ok(result), Ok(_), Ok(())) => Ok(result),
+        (Ok(_), Err(log_err), Ok(())) => Err(log_err),
+        (Ok(_), Ok(_), Err(cleanup_err)) => Err(cleanup_err),
+        (Ok(_), Err(log_err), Err(cleanup_err)) => Err(AppError::Runner(format!(
+            "{log_err}; additionally failed to clean runner workspace: {cleanup_err}"
+        ))),
+        (Err(run_err), _, Ok(())) => Err(run_err),
+        (Err(run_err), _, Err(cleanup_err)) => Err(AppError::Runner(format!(
             "{run_err}; additionally failed to clean runner workspace: {cleanup_err}"
         ))),
     }

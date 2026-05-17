@@ -1,6 +1,7 @@
 //! Agent registration and authentication queries.
 
 use chrono::{DateTime, Utc};
+use secrecy::{ExposeSecret, SecretString};
 use serde_json::Value;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
@@ -194,9 +195,9 @@ pub async fn count_active_agents(pool: &PgPool) -> Result<i64> {
 /// Authenticate a bearer token and refresh its `last_used_at` timestamp.
 pub async fn authenticate_agent_token(
     pool: &PgPool,
-    token: &str,
+    token: &SecretString,
 ) -> Result<Option<AuthenticatedAgent>> {
-    let token_hash = crate::auth::hash_agent_token(token);
+    let token_hash = crate::auth::hash_agent_token(token.expose_secret());
 
     let row = sqlx::query(
         r#"

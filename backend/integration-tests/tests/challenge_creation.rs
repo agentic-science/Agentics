@@ -3,6 +3,7 @@
 mod helpers;
 
 use std::path::Path;
+use std::process::Command;
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use helpers::{
@@ -98,7 +99,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
     let public_repo = tempfile::tempdir().expect("public repo tempdir");
-    write_public_challenge(public_repo.path());
+    let commit_sha = write_public_challenge(public_repo.path());
 
     let config = test_config(storage.path(), seeded_challenges.path());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
@@ -117,7 +118,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
         "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
         "pr_number": 7,
         "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/7",
-        "commit_sha": "0123456789abcdef0123456789abcdef01234567",
+        "commit_sha": commit_sha,
         "challenge_path": "challenges/sample-sum",
         "pr_author_github_user_id": 1001,
         "manifest": manifest_json()
@@ -353,7 +354,7 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
     let public_repo = tempfile::tempdir().expect("public repo tempdir");
-    write_public_challenge(public_repo.path());
+    let commit_sha = write_public_challenge(public_repo.path());
 
     let config = test_config(storage.path(), seeded_challenges.path());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
@@ -364,7 +365,8 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
         config.expose_admin_password_for_http_basic(),
     );
 
-    let draft = create_draft(&client, &app, &creator, 17, manifest_json()).await;
+    let draft =
+        create_draft_with_commit(&client, &app, &creator, 17, manifest_json(), &commit_sha).await;
     let draft_id = draft["id"].as_str().expect("draft id");
 
     creator_auth(
@@ -490,7 +492,7 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
     let public_repo = tempfile::tempdir().expect("public repo tempdir");
-    write_public_challenge(public_repo.path());
+    let commit_sha = write_public_challenge(public_repo.path());
 
     let config = test_config(storage.path(), seeded_challenges.path());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
@@ -503,24 +505,20 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
         config.expose_admin_password_for_http_basic(),
     );
 
-    create_validate_approve_publish_draft(
-        &client,
-        &app,
-        &creator,
-        &admin_auth,
-        public_repo.path(),
-        31,
-        manifest_json(),
-    )
-    .await;
+    let publish_flow = DraftPublishFlow {
+        client: &client,
+        app: &app,
+        creator: &creator,
+        admin_auth: &admin_auth,
+        public_repo: public_repo.path(),
+    };
+    create_validate_approve_publish_draft(&publish_flow, &commit_sha, 31, manifest_json()).await;
 
     write_archive_manifest(public_repo.path());
+    let archive_commit_sha = commit_all(public_repo.path(), "archive sample-sum");
     create_validate_approve_publish_draft(
-        &client,
-        &app,
-        &creator,
-        &admin_auth,
-        public_repo.path(),
+        &publish_flow,
+        &archive_commit_sha,
         32,
         archive_manifest_json(),
     )
@@ -572,7 +570,7 @@ async fn archive_draft_requires_challenge_owner(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
     let public_repo = tempfile::tempdir().expect("public repo tempdir");
-    write_public_challenge(public_repo.path());
+    let commit_sha = write_public_challenge(public_repo.path());
 
     let config = test_config(storage.path(), seeded_challenges.path());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
@@ -584,21 +582,27 @@ async fn archive_draft_requires_challenge_owner(pool: sqlx::PgPool) {
         config.expose_admin_password_for_http_basic(),
     );
 
-    create_validate_approve_publish_draft(
-        &client,
-        &app,
-        &owner,
-        &admin_auth,
-        public_repo.path(),
-        61,
-        manifest_json(),
-    )
-    .await;
+    let publish_flow = DraftPublishFlow {
+        client: &client,
+        app: &app,
+        creator: &owner,
+        admin_auth: &admin_auth,
+        public_repo: public_repo.path(),
+    };
+    create_validate_approve_publish_draft(&publish_flow, &commit_sha, 61, manifest_json()).await;
 
     write_archive_manifest(public_repo.path());
-    let archive_draft =
-        create_draft_with_author(&client, &app, &non_owner, 62, archive_manifest_json(), 1002)
-            .await;
+    let archive_commit_sha = commit_all(public_repo.path(), "archive sample-sum");
+    let archive_draft = create_draft_with_author_and_commit(
+        &client,
+        &app,
+        &non_owner,
+        62,
+        archive_manifest_json(),
+        1002,
+        &archive_commit_sha,
+    )
+    .await;
     let archive_draft_id = archive_draft["id"].as_str().expect("archive draft id");
     client
         .post(api_url(
@@ -730,7 +734,7 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
     let public_repo = tempfile::tempdir().expect("public repo tempdir");
-    write_public_challenge(public_repo.path());
+    let commit_sha = write_public_challenge(public_repo.path());
 
     let mut config = test_config(storage.path(), seeded_challenges.path());
     config.max_active_challenge_drafts_per_agent = 1;
@@ -744,7 +748,8 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
         config.expose_admin_password_for_http_basic(),
     );
 
-    let draft: serde_json::Value = create_draft(&client, &app, &creator, 41, manifest_json()).await;
+    let draft: serde_json::Value =
+        create_draft_with_commit(&client, &app, &creator, 41, manifest_json(), &commit_sha).await;
     let draft_id = draft["id"].as_str().expect("draft id");
 
     let quota_response = creator_auth(
@@ -892,25 +897,39 @@ async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
     assert!(!storage.path().join(&storage_key).exists());
 }
 
+/// Shared request context for validating, approving, and publishing one draft.
+struct DraftPublishFlow<'a> {
+    client: &'a reqwest::Client,
+    app: &'a helpers::TestApp,
+    creator: &'a TestCreatorSession,
+    admin_auth: &'a str,
+    public_repo: &'a Path,
+}
+
 /// Creates validate approve publish draft after validating caller inputs.
 async fn create_validate_approve_publish_draft(
-    client: &reqwest::Client,
-    app: &helpers::TestApp,
-    creator: &TestCreatorSession,
-    admin_auth: &str,
-    public_repo: &Path,
+    flow: &DraftPublishFlow<'_>,
+    commit_sha: &str,
     pr_number: i32,
     manifest: serde_json::Value,
 ) -> serde_json::Value {
-    let draft = create_draft(client, app, creator, pr_number, manifest).await;
+    let draft = create_draft_with_commit(
+        flow.client,
+        flow.app,
+        flow.creator,
+        pr_number,
+        manifest,
+        commit_sha,
+    )
+    .await;
     let draft_id = draft["id"].as_str().expect("draft id");
     if draft["request"] != "archive_challenge" {
         creator_auth(
-            client.post(api_url(
-                app,
+            flow.client.post(api_url(
+                flow.app,
                 &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
             )),
-            creator,
+            flow.creator,
         )
         .json(&json!({
             "asset_name": "official-cases",
@@ -924,37 +943,37 @@ async fn create_validate_approve_publish_draft(
         .expect("private asset should upload");
     }
 
-    client
+    flow.client
         .post(api_url(
-            app,
+            flow.app,
             &format!("/admin/challenge-drafts/{draft_id}/validate"),
         ))
-        .header("Authorization", admin_auth)
-        .json(&json!({ "repository_path": public_repo.to_string_lossy() }))
+        .header("Authorization", flow.admin_auth)
+        .json(&json!({ "repository_path": flow.public_repo.to_string_lossy() }))
         .send()
         .await
         .expect("validate request")
         .error_for_status()
         .expect("draft should validate");
-    client
+    flow.client
         .post(api_url(
-            app,
+            flow.app,
             &format!("/admin/challenge-drafts/{draft_id}/approve"),
         ))
-        .header("Authorization", admin_auth)
+        .header("Authorization", flow.admin_auth)
         .json(&json!({ "message": "approved" }))
         .send()
         .await
         .expect("approve request")
         .error_for_status()
         .expect("draft should approve");
-    client
+    flow.client
         .post(api_url(
-            app,
+            flow.app,
             &format!("/admin/challenge-drafts/{draft_id}/publish"),
         ))
-        .header("Authorization", admin_auth)
-        .json(&json!({ "repository_path": public_repo.to_string_lossy() }))
+        .header("Authorization", flow.admin_auth)
+        .json(&json!({ "repository_path": flow.public_repo.to_string_lossy() }))
         .send()
         .await
         .expect("publish request")
@@ -976,6 +995,19 @@ async fn create_draft(
     create_draft_with_author(client, app, creator, pr_number, manifest, 1001).await
 }
 
+/// Creates a draft whose reviewed commit is an actual Git checkout commit.
+async fn create_draft_with_commit(
+    client: &reqwest::Client,
+    app: &helpers::TestApp,
+    creator: &TestCreatorSession,
+    pr_number: i32,
+    manifest: serde_json::Value,
+    commit_sha: &str,
+) -> serde_json::Value {
+    create_draft_with_author_and_commit(client, app, creator, pr_number, manifest, 1001, commit_sha)
+        .await
+}
+
 /// Creates a draft with an explicit PR author id for ownership boundary tests.
 async fn create_draft_with_author(
     client: &reqwest::Client,
@@ -985,6 +1017,29 @@ async fn create_draft_with_author(
     manifest: serde_json::Value,
     pr_author_github_user_id: i64,
 ) -> serde_json::Value {
+    let commit_sha = format!("0123456789abcdef0123456789abcdef{pr_number:08x}");
+    create_draft_with_author_and_commit(
+        client,
+        app,
+        creator,
+        pr_number,
+        manifest,
+        pr_author_github_user_id,
+        &commit_sha,
+    )
+    .await
+}
+
+/// Creates a draft with explicit PR author and commit identity.
+async fn create_draft_with_author_and_commit(
+    client: &reqwest::Client,
+    app: &helpers::TestApp,
+    creator: &TestCreatorSession,
+    pr_number: i32,
+    manifest: serde_json::Value,
+    pr_author_github_user_id: i64,
+    commit_sha: &str,
+) -> serde_json::Value {
     creator_auth(
         client.post(api_url(app, "/api/creator/challenge-drafts")),
         creator,
@@ -993,7 +1048,7 @@ async fn create_draft_with_author(
             "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
             "pr_number": pr_number,
             "pr_url": format!("https://github.com/agentics-reifying/agentics-challenges/pull/{pr_number}"),
-            "commit_sha": format!("0123456789abcdef0123456789abcdef{pr_number:08x}"),
+            "commit_sha": commit_sha,
             "challenge_path": "challenges/sample-sum",
             "pr_author_github_user_id": pr_author_github_user_id,
             "manifest": manifest
@@ -1030,8 +1085,8 @@ async fn register_agent(pool: &sqlx::PgPool, name: &str) -> String {
     token
 }
 
-/// Writes public challenge to the target path.
-fn write_public_challenge(repo: &Path) {
+/// Writes public challenge to the target path and returns the committed Git HEAD.
+fn write_public_challenge(repo: &Path) -> String {
     let challenge_root = repo.join("challenges/sample-sum");
     std::fs::create_dir_all(challenge_root.join("v1/public")).expect("public dir");
     write_file(&challenge_root.join("README.md"), "# Sample Sum\n");
@@ -1126,6 +1181,7 @@ fn write_public_challenge(repo: &Path) {
         &challenge_root.join("agentics.challenge.json"),
         &manifest_json().to_string(),
     );
+    commit_all(repo, "create sample-sum")
 }
 
 /// Writes archive manifest to the target path.
@@ -1135,6 +1191,34 @@ fn write_archive_manifest(repo: &Path) {
         &challenge_root.join("agentics.challenge.json"),
         &archive_manifest_json().to_string(),
     );
+}
+
+/// Commit every change in the test repository and return the new HEAD SHA.
+fn commit_all(repo: &Path, message: &str) -> String {
+    run_git(repo, &["init"]);
+    run_git(repo, &["config", "user.email", "tests@example.invalid"]);
+    run_git(repo, &["config", "user.name", "Agentics Tests"]);
+    run_git(repo, &["add", "."]);
+    run_git(repo, &["commit", "--allow-empty", "-m", message]);
+    run_git(repo, &["rev-parse", "HEAD"]).trim().to_string()
+}
+
+/// Run a Git command in a test repository and panic with stderr if it fails.
+fn run_git(repo: &Path, args: &[&str]) -> String {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(args)
+        .output()
+        .expect("git command should start");
+    if !output.status.success() {
+        panic!(
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    String::from_utf8(output.stdout).expect("git output should be UTF-8")
 }
 
 /// Handles manifest json for this module.

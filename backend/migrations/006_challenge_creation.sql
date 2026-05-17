@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS challenge_private_assets (
 CREATE TABLE IF NOT EXISTS challenge_draft_validation_records (
   id UUID PRIMARY KEY,
   draft_id UUID NOT NULL REFERENCES challenge_drafts(id) ON DELETE CASCADE,
-  status TEXT NOT NULL CHECK (status IN ('passed', 'failed')),
+  status TEXT NOT NULL CHECK (status IN ('running', 'passed', 'failed')),
   message TEXT NOT NULL DEFAULT '',
   repository_path TEXT NOT NULL,
   manifest_sha256 TEXT NOT NULL,

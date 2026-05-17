@@ -59,6 +59,10 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     let pending_id = pending_solution_submission["id"]
         .as_str()
         .expect("missing solution submission id");
+    let first_job_id = pending_solution_submission["evaluation_job_id"]
+        .as_str()
+        .expect("missing first evaluation job id")
+        .to_string();
 
     let not_visible_before = client
         .get(api_url(
@@ -71,6 +75,8 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     assert_eq!(not_visible_before.status(), 404);
 
     run_worker_once(&pool, &config).await;
+    assert_runner_persisted_only_intended_artifacts(storage.path(), &first_job_id);
+    set_official_primary_score_for_submission(&pool, pending_id, 42.0, 1.0).await;
 
     let second_response = client
         .post(api_url(&app, "/api/solution-submissions"))
@@ -128,6 +134,10 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         public_result_report["solution_submission"]["evaluation"]["rank_score"],
         1.0
     );
+    assert_eq!(
+        public_result_report["solution_submission"]["evaluation"]["primary_score"], 42.0,
+        "official_score surfaces should preserve raw official primary score separately from rank_score"
+    );
 
     let public_solution_submission_list: serde_json::Value = client
         .get(api_url(
@@ -160,8 +170,10 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         .find(|item| item["id"] == pending_id)
         .expect("first solution submission should be listed");
     assert_eq!(listed_first["validation_score"], 0.25);
-    assert_eq!(listed_first["official_score"], 1.0);
+    assert_eq!(listed_first["official_score"], 42.0);
     assert_eq!(listed_first["rank_score"], 1.0);
+    assert_eq!(listed_first["aggregate_metrics"], serde_json::json!([]));
+    assert_eq!(listed_first["official_metrics"], serde_json::json!([]));
 
     let limited_solution_submissions: serde_json::Value = client
         .get(api_url(
@@ -271,7 +283,94 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     assert_eq!(distribution["metric_name"], "score");
     assert_eq!(distribution["count"], 2);
     assert_eq!(distribution["min"], 0.0);
-    assert_eq!(distribution["max"], 1.0);
+    assert_eq!(distribution["max"], 42.0);
+
+    let hidden_distribution = client
+        .get(api_url(
+            &app,
+            "/api/public/challenges/sample-sum/score-distributions?target=linux-arm64-cpu&metric=private_metric",
+        ))
+        .send()
+        .await
+        .expect("failed to request hidden score distribution");
+    assert_eq!(hidden_distribution.status(), 403);
+}
+
+/// Confirms runner scratch work is cleaned instead of persisting private I/O trees.
+fn assert_runner_persisted_only_intended_artifacts(storage_root: &Path, job_id: &str) {
+    let durable_job_dir = storage_root.join("eval-artifacts").join(job_id);
+    assert!(
+        durable_job_dir.join("runner.log").exists(),
+        "runner log should remain as the intended durable artifact"
+    );
+    for private_scratch in [
+        "source",
+        "build-workspace",
+        "prepared",
+        "solution-runs",
+        "scorer-output",
+    ] {
+        assert!(
+            !durable_job_dir.join(private_scratch).exists(),
+            "runner scratch directory `{private_scratch}` must not be durable storage"
+        );
+    }
+    assert!(
+        !std::env::temp_dir()
+            .join("agentics-eval-artifacts")
+            .join(job_id)
+            .exists(),
+        "runner temporary workspace should be removed after evaluation"
+    );
+}
+
+/// Adjusts official score fields so public surfaces must distinguish raw and rank scores.
+async fn set_official_primary_score_for_submission(
+    pool: &sqlx::PgPool,
+    solution_submission_id: &str,
+    primary_score: f64,
+    rank_score: f64,
+) {
+    sqlx::query(
+        r#"
+        UPDATE evaluations
+        SET primary_score = $2,
+            rank_score = $3,
+            aggregate_metrics_json = jsonb_build_array(
+                jsonb_build_object('metric_name', 'score', 'value', $2),
+                jsonb_build_object('metric_name', 'private_metric', 'value', 999)
+            )
+        WHERE solution_submission_id = $1::uuid
+          AND eval_type = 'official'
+        "#,
+    )
+    .bind(solution_submission_id)
+    .bind(primary_score)
+    .bind(rank_score)
+    .execute(pool)
+    .await
+    .expect("official evaluation should update");
+    sqlx::query(
+        r#"
+        UPDATE leaderboard_entries
+        SET best_rank_score = $2,
+            official_score = $3,
+            aggregate_metrics_json = jsonb_build_array(
+                jsonb_build_object('metric_name', 'score', 'value', $3),
+                jsonb_build_object('metric_name', 'private_metric', 'value', 999)
+            ),
+            official_metrics_json = jsonb_build_array(
+                jsonb_build_object('metric_name', 'private_metric', 'value', 999)
+            )
+        WHERE best_solution_submission_id = $1::uuid
+        "#,
+    )
+    .bind(solution_submission_id)
+    .bind(rank_score)
+    .bind(primary_score)
+    .execute(pool)
+    .await
+    .expect("leaderboard entry should update");
 }
 
 /// Verifies that public artifact respects solution publication policy.

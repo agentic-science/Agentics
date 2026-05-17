@@ -245,10 +245,8 @@ export const adminSolutionSubmissionListResponseSchema = z
             )
             .optional(),
           latest_job_status: z
-            .enum(["queued", "running", "completed", "failed"])
-            .describe(
-              "Persistent lifecycle state for an evaluation job/result.",
-            )
+            .enum(["staged", "queued", "running", "completed", "failed"])
+            .describe("Persistent lifecycle state for an evaluation job.")
             .optional(),
           latest_job_eval_type: z
             .enum(["validation", "official"])
@@ -879,7 +877,7 @@ export const challengeDraftListResponseSchema = z
                     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
                   ),
                 status: z
-                  .enum(["passed", "failed"])
+                  .enum(["running", "passed", "failed"])
                   .describe("Validation record status for a challenge draft."),
                 message: z.string(),
                 repository_path: z.string(),
@@ -1091,7 +1089,7 @@ export const challengeDraftResponseSchema = z
               /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
             ),
           status: z
-            .enum(["passed", "failed"])
+            .enum(["running", "passed", "failed"])
             .describe("Validation record status for a challenge draft."),
           message: z.string(),
           repository_path: z.string(),
@@ -1482,8 +1480,8 @@ export const evaluationJobResponseSchema = z
       .enum(["validation", "official"])
       .describe("Evaluation surface requested for a solution submission."),
     status: z
-      .enum(["queued", "running", "completed", "failed"])
-      .describe("Persistent lifecycle state for an evaluation job/result."),
+      .enum(["staged", "queued", "running", "completed", "failed"])
+      .describe("Persistent lifecycle state for an evaluation job."),
   })
   .strict()
   .describe(
@@ -2048,8 +2046,8 @@ export const solutionSubmissionResponseSchema = z
           .regex(/^[A-Za-z0-9_.-]+$/)
           .min(1),
         status: z
-          .enum(["queued", "running", "completed", "failed"])
-          .describe("Persistent lifecycle state for an evaluation job/result."),
+          .enum(["staged", "queued", "running", "completed", "failed"])
+          .describe("Persistent lifecycle state for an evaluation job."),
       })
       .strict()
       .describe(
@@ -2487,10 +2485,8 @@ export const solutionSubmissionResultReportResponseSchema = z
               .regex(/^[A-Za-z0-9_.-]+$/)
               .min(1),
             status: z
-              .enum(["queued", "running", "completed", "failed"])
-              .describe(
-                "Persistent lifecycle state for an evaluation job/result.",
-              ),
+              .enum(["staged", "queued", "running", "completed", "failed"])
+              .describe("Persistent lifecycle state for an evaluation job."),
           })
           .strict()
           .describe(

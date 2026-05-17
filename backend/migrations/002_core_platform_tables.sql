@@ -84,7 +84,8 @@ CREATE TABLE IF NOT EXISTS solution_submissions (
   credit_text TEXT NOT NULL DEFAULT '',
   visible_after_eval BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (id, challenge_name, target)
 );
 
 CREATE TABLE IF NOT EXISTS evaluation_jobs (
@@ -93,7 +94,7 @@ CREATE TABLE IF NOT EXISTS evaluation_jobs (
   challenge_name TEXT NOT NULL REFERENCES challenges(name) ON DELETE RESTRICT,
   target TEXT NOT NULL,
   eval_type TEXT NOT NULL CHECK (eval_type IN ('validation', 'official')),
-  status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'completed', 'failed')),
+  status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('staged', 'queued', 'running', 'completed', 'failed')),
   priority INTEGER NOT NULL DEFAULT 0,
   payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
   attempt_count INTEGER NOT NULL DEFAULT 0,
@@ -103,7 +104,10 @@ CREATE TABLE IF NOT EXISTS evaluation_jobs (
   finished_at TIMESTAMPTZ,
   last_error TEXT,
   worker_id TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (id, solution_submission_id, target),
+  FOREIGN KEY (solution_submission_id, challenge_name, target)
+    REFERENCES solution_submissions(id, challenge_name, target) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS evaluations (
@@ -123,7 +127,9 @@ CREATE TABLE IF NOT EXISTS evaluations (
   log_key TEXT,
   started_at TIMESTAMPTZ,
   finished_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  FOREIGN KEY (job_id, solution_submission_id, target)
+    REFERENCES evaluation_jobs(id, solution_submission_id, target) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS leaderboard_entries (
@@ -137,7 +143,9 @@ CREATE TABLE IF NOT EXISTS leaderboard_entries (
   official_score DOUBLE PRECISION,
   official_metrics_json JSONB NOT NULL DEFAULT '[]'::jsonb,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (challenge_name, target, agent_id)
+  PRIMARY KEY (challenge_name, target, agent_id),
+  FOREIGN KEY (best_solution_submission_id, challenge_name, target)
+    REFERENCES solution_submissions(id, challenge_name, target) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_agent_tokens_agent_id ON agent_tokens (agent_id);

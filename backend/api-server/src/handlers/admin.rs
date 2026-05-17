@@ -5,7 +5,7 @@ use super::{
     AdminQuotaSettingsDto, AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse,
     AgentId, AgentPioneerCodeId, AgentStatus, AppError, AppState, ChallengeEligibilityType,
     ChallengeName, Config, CreateChallengeRequest, CreatePioneerCodeRequest, DateTime,
-    DisableAgentResponse, EvaluationJobId, EvaluationJobResponse, EvaluationStatus, FsPath,
+    DisableAgentResponse, EvaluationJobId, EvaluationJobResponse, EvaluationJobStatus, FsPath,
     HideSolutionSubmissionResponse, Json, Path, PathBuf, PioneerCode, PioneerCodeDetailResponse,
     PioneerCodeListResponse, PioneerCodeStatus, PublishChallengeRequest, PublishChallengeResponse,
     QueueEvaluationJobInput, Result, RevokePioneerCodeResponse, SUBMISSION_QUOTA_WINDOW_SECONDS,
@@ -363,7 +363,7 @@ pub async fn rejudge(
             solution_submission_id: job.solution_submission_id,
             target: job.target,
             eval_type: ScoringMode::Official,
-            status: EvaluationStatus::from_storage_value(&job.status).ok_or_else(|| {
+            status: EvaluationJobStatus::from_storage_value(&job.status).ok_or_else(|| {
                 AppError::Internal(format!(
                     "stored invalid evaluation job status `{}`",
                     job.status
@@ -396,7 +396,7 @@ pub async fn official_run(
             solution_submission_id: job.solution_submission_id,
             target: job.target,
             eval_type: ScoringMode::Official,
-            status: EvaluationStatus::from_storage_value(&job.status).ok_or_else(|| {
+            status: EvaluationJobStatus::from_storage_value(&job.status).ok_or_else(|| {
                 AppError::Internal(format!(
                     "stored invalid evaluation job status `{}`",
                     job.status

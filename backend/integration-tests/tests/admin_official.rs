@@ -8,6 +8,7 @@ use helpers::{
     api_url, basic_auth_header, copy_dir_all, examples_challenges_root, run_worker_once,
     sample_sum_solution, solution_zip_base64, spawn_app_with_config, test_config,
 };
+use shared::models::names::ChallengeName;
 
 /// Create an admin-published bundle by adapting the legacy `sample-sum` fixture.
 fn create_admin_bundle(root: &Path) -> std::path::PathBuf {
@@ -368,6 +369,28 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
     assert_eq!(
         leaderboard_after_hide["items"][0]["best_solution_submission_id"],
         solution_submission_b_id
+    );
+
+    shared::db::archive_challenge(
+        &pool,
+        &ChallengeName::try_new("admin-sum").expect("test challenge name is valid"),
+    )
+    .await
+    .expect("challenge should archive");
+    let archived_rejudge = client
+        .post(api_url(
+            &app,
+            &format!("/admin/solution-submissions/{solution_submission_b_id}/official-run"),
+        ))
+        .header("Authorization", &admin_auth)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .expect("failed to try official run for archived challenge");
+    assert_eq!(
+        archived_rejudge.status(),
+        404,
+        "archived challenges must reject admin queued official work"
     );
 
     let disable = client

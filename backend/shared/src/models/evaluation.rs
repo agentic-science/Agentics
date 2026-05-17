@@ -120,6 +120,49 @@ impl fmt::Display for EvaluationStatus {
     }
 }
 
+/// Persistent lifecycle state for an evaluation job.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum EvaluationJobStatus {
+    Staged,
+    Queued,
+    Running,
+    Completed,
+    Failed,
+}
+
+impl EvaluationJobStatus {
+    /// Stable database string for an evaluation job lifecycle state.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Staged => "staged",
+            Self::Queued => "queued",
+            Self::Running => "running",
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+        }
+    }
+
+    /// Parse a stable database string for an evaluation job lifecycle state.
+    pub fn from_storage_value(value: &str) -> Option<Self> {
+        match value {
+            "staged" => Some(Self::Staged),
+            "queued" => Some(Self::Queued),
+            "running" => Some(Self::Running),
+            "completed" => Some(Self::Completed),
+            "failed" => Some(Self::Failed),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for EvaluationJobStatus {
+    /// Format the job status as its stable persisted and wire value.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// Persistent lifecycle state for a solution submission.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -722,7 +765,7 @@ mod tests {
 pub struct EvaluationJobDto {
     pub id: EvaluationJobId,
     pub target: TargetName,
-    pub status: EvaluationStatus,
+    pub status: EvaluationJobStatus,
 }
 
 /// Runner payload persisted on an evaluation job.

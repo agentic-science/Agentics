@@ -100,15 +100,22 @@ pub struct PublishArchiveChallengeDraftInput {
     pub bundle_sha256: Sha256Digest,
 }
 
-/// Input for recording one admin validation attempt against a draft.
+/// Input for reserving one draft validation admission slot before expensive work starts.
 #[derive(Debug, Clone)]
-pub struct RecordChallengeDraftValidationInput {
+pub struct BeginChallengeDraftValidationInput {
+    pub validation_record_id: ChallengeDraftValidationRecordId,
+    pub draft_id: ChallengeDraftId,
+    pub repository_path: String,
+    pub manifest_sha256: Sha256Digest,
+}
+
+/// Input for completing a previously reserved draft validation record.
+#[derive(Debug, Clone)]
+pub struct FinishChallengeDraftValidationInput {
     pub validation_record_id: ChallengeDraftValidationRecordId,
     pub draft_id: ChallengeDraftId,
     pub status: ChallengeDraftValidationStatus,
     pub message: String,
-    pub repository_path: String,
-    pub manifest_sha256: Sha256Digest,
     pub bundle_sha256: Option<Sha256Digest>,
 }
 
@@ -225,9 +232,77 @@ pub async fn count_active_challenge_drafts_for_agent(pool: &PgPool, agent_id: &s
     Ok(count)
 }
 
-/// Count validation attempts for one draft inside a rolling window.
-pub async fn count_recent_challenge_draft_validations(
+/// Reserve one validation quota slot and record a running validation attempt.
+pub async fn begin_challenge_draft_validation(
     pool: &PgPool,
+    input: &BeginChallengeDraftValidationInput,
+    window_seconds: i64,
+    validation_limit: i64,
+) -> Result<ChallengeDraftValidationRecordResponse> {
+    let mut tx = pool.begin().await?;
+    let scope = format!("challenge-draft:{}:validations", input.draft_id);
+    lock_quota_scope(&mut tx, &scope).await?;
+
+    let status: Option<(String,)> = sqlx::query_as(
+        r#"
+        SELECT status
+        FROM challenge_drafts
+        WHERE id = $1::uuid
+        FOR UPDATE
+        "#,
+    )
+    .bind(input.draft_id.as_str())
+    .fetch_optional(&mut *tx)
+    .await?;
+    let Some((status,)) = status else {
+        return Err(AppError::NotFound);
+    };
+    let status = ChallengeDraftStatus::from_storage_value(&status)
+        .ok_or_else(|| AppError::Internal(format!("unknown challenge draft status `{status}`")))?;
+    if !matches!(
+        status,
+        ChallengeDraftStatus::Draft | ChallengeDraftStatus::Validated
+    ) {
+        return Err(AppError::Conflict);
+    }
+
+    let recent_validations = count_recent_challenge_draft_validations_tx(
+        &mut tx,
+        input.draft_id.as_str(),
+        window_seconds,
+    )
+    .await?;
+    if recent_validations >= validation_limit {
+        return Err(AppError::TooManyRequests(format!(
+            "challenge draft validation quota exceeded for `{}`: {} of {} validations used in the last 24 hours",
+            input.draft_id, recent_validations, validation_limit
+        )));
+    }
+
+    let row = sqlx::query(
+        r#"
+        INSERT INTO challenge_draft_validation_records (
+            id, draft_id, status, message, repository_path, manifest_sha256, bundle_sha256
+        )
+        VALUES ($1::uuid, $2::uuid, 'running', $3, $4, $5, NULL)
+        RETURNING *
+        "#,
+    )
+    .bind(input.validation_record_id.as_str())
+    .bind(input.draft_id.as_str())
+    .bind("challenge draft validation is running")
+    .bind(&input.repository_path)
+    .bind(input.manifest_sha256.to_string())
+    .fetch_one(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    row_to_validation_record_response(row)
+}
+
+/// Count validation attempts for one draft inside a rolling window under a quota lock.
+async fn count_recent_challenge_draft_validations_tx(
+    tx: &mut Transaction<'_, Postgres>,
     draft_id: &str,
     window_seconds: i64,
 ) -> Result<i64> {
@@ -241,7 +316,7 @@ pub async fn count_recent_challenge_draft_validations(
     )
     .bind(draft_id)
     .bind(window_seconds)
-    .fetch_one(pool)
+    .fetch_one(&mut **tx)
     .await?;
 
     Ok(count)
@@ -389,19 +464,31 @@ async fn lock_quota_scope(tx: &mut Transaction<'_, Postgres>, scope: &str) -> Re
     Ok(())
 }
 
-/// Record a validation outcome and move draft status accordingly.
-pub async fn record_challenge_draft_validation(
+/// Complete a reserved draft validation record and transition the draft status.
+pub async fn finish_challenge_draft_validation(
     pool: &PgPool,
-    input: &RecordChallengeDraftValidationInput,
+    input: &FinishChallengeDraftValidationInput,
 ) -> Result<ChallengeDraftValidationRecordResponse> {
     let mut tx = pool.begin().await?;
+    let next_status = match input.status {
+        ChallengeDraftValidationStatus::Passed => ChallengeDraftStatus::Validated,
+        ChallengeDraftValidationStatus::Failed => ChallengeDraftStatus::Draft,
+        ChallengeDraftValidationStatus::Running => {
+            return Err(AppError::Internal(
+                "running draft validation cannot finish as running".to_string(),
+            ));
+        }
+    };
 
     let row = sqlx::query(
         r#"
-        INSERT INTO challenge_draft_validation_records (
-            id, draft_id, status, message, repository_path, manifest_sha256, bundle_sha256
-        )
-        VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7)
+        UPDATE challenge_draft_validation_records
+        SET status = $3,
+            message = $4,
+            bundle_sha256 = $5
+        WHERE id = $1::uuid
+          AND draft_id = $2::uuid
+          AND status = 'running'
         RETURNING *
         "#,
     )
@@ -409,33 +496,34 @@ pub async fn record_challenge_draft_validation(
     .bind(input.draft_id.as_str())
     .bind(input.status.as_str())
     .bind(&input.message)
-    .bind(&input.repository_path)
-    .bind(input.manifest_sha256.to_string())
     .bind(input.bundle_sha256.map(|digest| digest.to_string()))
-    .fetch_one(&mut *tx)
+    .fetch_optional(&mut *tx)
     .await?;
-
-    let next_status = match input.status {
-        ChallengeDraftValidationStatus::Passed => ChallengeDraftStatus::Validated,
-        ChallengeDraftValidationStatus::Failed => ChallengeDraftStatus::Draft,
+    let Some(row) = row else {
+        return Err(AppError::Conflict);
     };
+
     let update = sqlx::query(
         r#"
         UPDATE challenge_drafts
         SET status = $2,
             validation_message = $3,
-            validation_repository_path = $4,
-            validation_bundle_sha256 = $5,
+            validation_repository_path = (
+                SELECT repository_path
+                FROM challenge_draft_validation_records
+                WHERE id = $1::uuid
+            ),
+            validation_bundle_sha256 = $4,
             updated_at = NOW()
-        WHERE id = $1::uuid
+        WHERE id = $5::uuid
           AND status IN ('draft', 'validated')
         "#,
     )
-    .bind(input.draft_id.as_str())
+    .bind(input.validation_record_id.as_str())
     .bind(next_status.as_str())
     .bind(&input.message)
-    .bind(&input.repository_path)
     .bind(input.bundle_sha256.map(|digest| digest.to_string()))
+    .bind(input.draft_id.as_str())
     .execute(&mut *tx)
     .await?;
     if update.rows_affected() == 0 {
@@ -443,7 +531,6 @@ pub async fn record_challenge_draft_validation(
     }
 
     tx.commit().await?;
-
     row_to_validation_record_response(row)
 }
 

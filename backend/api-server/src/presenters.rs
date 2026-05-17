@@ -6,7 +6,7 @@ use shared::db::{
 use shared::error::{AppError, Result};
 use shared::models::challenge::{ChallengeBundleSpec, ChallengeDetailResponse};
 use shared::models::evaluation::{
-    EvaluationDto, EvaluationStatus, ScoringMode, SolutionSubmissionStatus,
+    EvaluationDto, EvaluationJobStatus, ScoringMode, SolutionSubmissionStatus,
 };
 use shared::models::ids::AgentId;
 use shared::models::pioneer_codes::{PioneerCodeStatus, PioneerCodeUseKind};
@@ -179,7 +179,7 @@ pub fn present_solution_submission(
                 Ok::<_, AppError>(shared::models::evaluation::EvaluationJobDto {
                     id: id.clone(),
                     target: solution_submission.target.clone(),
-                    status: evaluation_status_from_storage(
+                    status: evaluation_job_status_from_storage(
                         solution_submission
                             .evaluation_job_status
                             .as_deref()
@@ -227,10 +227,11 @@ fn solution_submission_status_from_storage(value: &str) -> Result<SolutionSubmis
     })
 }
 
-/// Parse a persisted evaluation/job status for response DTOs.
-fn evaluation_status_from_storage(value: &str) -> Result<EvaluationStatus> {
-    EvaluationStatus::from_storage_value(value)
-        .ok_or_else(|| AppError::Internal(format!("stored invalid evaluation status `{value}`")))
+/// Parse a persisted evaluation job status for response DTOs.
+fn evaluation_job_status_from_storage(value: &str) -> Result<EvaluationJobStatus> {
+    EvaluationJobStatus::from_storage_value(value).ok_or_else(|| {
+        AppError::Internal(format!("stored invalid evaluation job status `{value}`"))
+    })
 }
 
 /// Projects one persisted evaluation according to audience and benchmark privacy policy.

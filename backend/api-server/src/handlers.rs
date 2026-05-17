@@ -32,7 +32,7 @@ use shared::models::challenge::{
     ChallengeBundleSpec, ChallengeEligibilityType, ChallengeResultDetailVisibility,
     ChallengeSolutionPublicationPolicy, ChallengeVisibility, PublishChallengeResponse,
 };
-use shared::models::evaluation::{EvaluationStatus, ScoringMode};
+use shared::models::evaluation::{EvaluationJobStatus, ScoringMode};
 use shared::models::ids::{AgentId, AgentPioneerCodeId, EvaluationJobId, SolutionSubmissionId};
 use shared::models::names::{ChallengeName, MetricName, TargetName};
 use shared::models::paths::AdminBundlePath;
@@ -59,7 +59,6 @@ use crate::presenters;
 use crate::state::AppState;
 
 const SUBMISSION_QUOTA_WINDOW_SECONDS: i64 = 24 * 60 * 60;
-const STAGED_EVALUATION_JOB_DELAY_SECONDS: i64 = 315_360_000;
 const DEFAULT_PUBLIC_SUBMISSION_LIST_LIMIT: i64 = 20;
 const DEFAULT_PUBLIC_LEADERBOARD_LIMIT: i64 = 50;
 const MAX_PUBLIC_LIST_LIMIT: i64 = 100;
@@ -301,7 +300,6 @@ async fn create_solution_submission_for_mode(
             explanation: body.explanation.trim().to_string(),
             parent_solution_submission_id: body.parent_solution_submission_id,
             credit_text: body.credit_text.trim().to_string(),
-            initial_job_delay_seconds: Some(STAGED_EVALUATION_JOB_DELAY_SECONDS),
             quota_admission: db::SolutionSubmissionQuotaAdmission {
                 window_seconds: SUBMISSION_QUOTA_WINDOW_SECONDS,
                 per_agent_challenge_limit: quota_limit,
@@ -335,6 +333,13 @@ async fn create_solution_submission_for_mode(
         cleanup_storage_key(&state, &temporary_artifact_key).await;
         return Err(error);
     }
+    let solution_submission = db::get_solution_submission_by_id(&state.db, &solution_submission.id)
+        .await?
+        .ok_or_else(|| {
+            AppError::Internal(
+                "solution submission disappeared after staged job was marked ready".to_string(),
+            )
+        })?;
 
     Ok((
         StatusCode::CREATED,
@@ -680,13 +685,12 @@ pub async fn get_score_distribution(
     let (challenge, spec) = load_challenge_policy(&state.db, &challenge_name).await?;
     ensure_visibility_allows_public(spec.visibility.score_distribution, &spec)?;
     let target = resolve_public_target(&state.db, &challenge_name, query.target.as_deref()).await?;
-    let entries =
-        db::list_leaderboard_entries_for_distribution(&state.db, &challenge_name, &target, 10_000)
-            .await?;
+    let entries = db::list_leaderboard_entries(&state.db, &challenge_name, &target, 10_000).await?;
     let response = score_distribution::build_score_distribution_response(
         challenge.challenge_name,
         target,
         metric_name,
+        &spec,
         entries,
     )?;
     Ok(Json(response))

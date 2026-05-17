@@ -121,24 +121,40 @@ pub async fn refresh_evaluation_job_claim(
 
 /// Make a staged queued job eligible for worker claiming after its artifact is durable.
 pub async fn mark_evaluation_job_ready(pool: &PgPool, job_id: &EvaluationJobId) -> Result<()> {
-    let result = sqlx::query(
+    let mut tx = pool.begin().await?;
+    let row = sqlx::query(
         r#"
         UPDATE evaluation_jobs
-        SET scheduled_at = NOW()
+        SET status = 'queued', scheduled_at = NOW()
         WHERE id = $1::uuid
-          AND status = 'queued'
+          AND status = 'staged'
+        RETURNING solution_submission_id
         "#,
     )
     .bind(job_id.as_str())
-    .execute(pool)
+    .fetch_optional(&mut *tx)
     .await?;
 
-    if result.rows_affected() != 1 {
+    let Some(row) = row else {
         return Err(AppError::Internal(format!(
-            "staged evaluation job `{job_id}` is not queued"
+            "staged evaluation job `{job_id}` is not staged"
         )));
-    }
+    };
+    let solution_submission_id = solution_submission_id_from_row(&row, "solution_submission_id")?;
 
+    sqlx::query(
+        r#"
+        UPDATE solution_submissions
+        SET status = 'queued', updated_at = NOW()
+        WHERE id = $1::uuid
+          AND status = 'pending'
+        "#,
+    )
+    .bind(solution_submission_id.as_str())
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
     Ok(())
 }
 
@@ -168,6 +184,7 @@ pub async fn queue_evaluation_job(
         FROM solution_submissions s
         JOIN challenges p ON p.name = s.challenge_name
         WHERE s.id = $1::uuid
+          AND p.status = 'active'
           AND p.spec_json IS NOT NULL
         LIMIT 1
         "#,

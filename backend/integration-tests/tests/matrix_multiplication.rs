@@ -3,6 +3,7 @@
 mod helpers;
 
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use helpers::{
@@ -33,6 +34,7 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
     let private_asset_zip = generate_smoke_private_asset(&challenge_root);
     std::fs::remove_dir_all(challenge_root.join("v1/private-benchmark"))
         .expect("failed to remove generated private benchmark dir from public repo");
+    let commit_sha = commit_all(repo.path(), "prepare matrix challenge");
 
     let config = test_config(storage.path(), empty_challenges.path());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
@@ -58,7 +60,7 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
         "repo_url": "git@github.com:agentics-reifying/agentics-challenges.git",
         "pr_number": 1,
         "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/1",
-        "commit_sha": "abcdef1234567890abcdef1234567890abcdef12",
+        "commit_sha": commit_sha,
         "challenge_path": "challenges/matrix-multiplication",
         "pr_author_github_user_id": 42,
         "manifest": manifest
@@ -221,6 +223,34 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
             .iter()
             .any(|metric| metric["metric_name"] == "wall_time_ms")
     }));
+}
+
+/// Commit every change in the copied challenge repository and return the new HEAD SHA.
+fn commit_all(repo: &Path, message: &str) -> String {
+    run_git(repo, &["init"]);
+    run_git(repo, &["config", "user.email", "tests@example.invalid"]);
+    run_git(repo, &["config", "user.name", "Agentics Tests"]);
+    run_git(repo, &["add", "."]);
+    run_git(repo, &["commit", "--allow-empty", "-m", message]);
+    run_git(repo, &["rev-parse", "HEAD"]).trim().to_string()
+}
+
+/// Run a Git command in a test repository and panic with stderr if it fails.
+fn run_git(repo: &Path, args: &[&str]) -> String {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(args)
+        .output()
+        .expect("git command should start");
+    if !output.status.success() {
+        panic!(
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    String::from_utf8(output.stdout).expect("git output should be UTF-8")
 }
 
 /// Handles native cpu target for this module.

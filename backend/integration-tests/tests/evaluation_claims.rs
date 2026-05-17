@@ -158,6 +158,91 @@ async fn refreshed_job_lease_is_not_reaped(pool: sqlx::PgPool) {
     assert_eq!(result.failed, 0);
 }
 
+/// Verifies database constraints keep jobs and evaluations on the submission target.
+#[sqlx::test(migrations = "../migrations")]
+async fn evaluation_rows_cannot_cross_submission_targets(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = test_config(storage.path(), &examples_challenges_root());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "display_name": "target-constraint-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+    let artifact_base64 = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
+    let create_response: serde_json::Value = client
+        .post(api_url(&app, "/api/solution-submissions"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "challenge_name": "sample-sum",
+            "target": "linux-arm64-cpu",
+            "artifact_base64": artifact_base64,
+            "explanation": "target consistency"
+        }))
+        .send()
+        .await
+        .expect("failed to create solution submission")
+        .json()
+        .await
+        .expect("failed to decode create solution submission response");
+    let solution_submission_id = create_response["id"]
+        .as_str()
+        .expect("missing solution submission id");
+    let job_id: String = sqlx::query_scalar(
+        "SELECT id::text FROM evaluation_jobs WHERE solution_submission_id = $1::uuid",
+    )
+    .bind(solution_submission_id)
+    .fetch_one(&pool)
+    .await
+    .expect("created submission should have staged job");
+
+    let wrong_target_job = sqlx::query(
+        r#"
+        INSERT INTO evaluation_jobs (
+            id, solution_submission_id, challenge_name, target, eval_type, status, payload_json
+        )
+        VALUES (
+            $1::uuid, $2::uuid, 'sample-sum', 'linux-amd64-cpu', 'official', 'queued', '{}'::jsonb
+        )
+        "#,
+    )
+    .bind(uuid::Uuid::new_v4().to_string())
+    .bind(solution_submission_id)
+    .execute(&pool)
+    .await;
+    assert!(
+        wrong_target_job.is_err(),
+        "evaluation jobs must not reference a different target than their submission"
+    );
+
+    let wrong_target_evaluation = sqlx::query(
+        r#"
+        INSERT INTO evaluations (
+            id, solution_submission_id, job_id, target, eval_type, status
+        )
+        VALUES (
+            $1::uuid, $2::uuid, $3::uuid, 'linux-amd64-cpu', 'official', 'completed'
+        )
+        "#,
+    )
+    .bind(uuid::Uuid::new_v4().to_string())
+    .bind(solution_submission_id)
+    .bind(job_id)
+    .execute(&pool)
+    .await;
+    assert!(
+        wrong_target_evaluation.is_err(),
+        "evaluations must not reference a different target than their job"
+    );
+}
+
 /// Verifies that stale worker completion cannot overwrite current claim.
 #[sqlx::test(migrations = "../migrations")]
 async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPool) {
@@ -246,6 +331,17 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
     .await
     .expect("failed to query requeued submission");
     assert_eq!(requeued_submission, ("queued".to_string(), false));
+    let stale_running_evaluations: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::BIGINT FROM evaluations WHERE job_id = $1::uuid AND status = 'running'",
+    )
+    .bind(first_claim.id.as_str())
+    .fetch_one(&pool)
+    .await
+    .expect("failed to count stale running evaluations");
+    assert_eq!(
+        stale_running_evaluations, 0,
+        "requeue should clear stale running evaluations before a new worker starts"
+    );
 
     let second_claim = shared::db::claim_next_evaluation_job(&pool, "worker-b")
         .await
@@ -254,7 +350,7 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
     assert_eq!(second_claim.id, first_claim.id);
     assert_eq!(second_claim.attempt_count, 2);
     assert!(
-        !shared::db::mark_evaluation_started(
+        shared::db::mark_evaluation_started(
             &pool,
             &MarkEvaluationStartedInput {
                 evaluation_id: EvaluationId::generate(),
@@ -268,7 +364,7 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
         )
         .await
         .expect("failed to mark second evaluation started"),
-        "a second claim must not reset the original evaluation row"
+        "a requeued job should create a fresh running evaluation for the current claim"
     );
 
     let stale_failure = persisted_result(

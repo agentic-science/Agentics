@@ -5,8 +5,8 @@ use sqlx::{PgPool, Postgres, Row, Transaction};
 use crate::error::{AppError, Result};
 use crate::models::challenge::ChallengeBundleSpec;
 use crate::models::evaluation::{
-    EvaluationDto, EvaluationJobPayload, EvaluationStatus, MetricValue, PublicCaseResult,
-    RunMetricResult, ScoringMode, SolutionSubmissionStatus,
+    EvaluationDto, EvaluationJobPayload, EvaluationJobStatus, EvaluationStatus, MetricValue,
+    PublicCaseResult, RunMetricResult, ScoringMode, SolutionSubmissionStatus,
 };
 use crate::models::ids::{AgentId, EvaluationId, EvaluationJobId, SolutionSubmissionId};
 use crate::models::names::{ChallengeName, TargetName};
@@ -36,7 +36,6 @@ pub struct CreateSolutionSubmissionInput {
     pub explanation: String,
     pub parent_solution_submission_id: Option<SolutionSubmissionId>,
     pub credit_text: String,
-    pub initial_job_delay_seconds: Option<i64>,
     pub quota_admission: SolutionSubmissionQuotaAdmission,
 }
 
@@ -111,7 +110,7 @@ pub async fn create_solution_submission_with_job(
             id, challenge_name, target, agent_id, artifact_key, language,
             status, explanation, parent_solution_submission_id, credit_text, visible_after_eval
         )
-        VALUES ($1::uuid, $2, $3, $4::uuid, $5, $6, 'queued', $7, $8::uuid, $9, FALSE)
+        VALUES ($1::uuid, $2, $3, $4::uuid, $5, $6, 'pending', $7, $8::uuid, $9, FALSE)
         RETURNING
             id, challenge_name, target, agent_id, artifact_key, language,
             status, explanation, parent_solution_submission_id, credit_text, visible_after_eval,
@@ -155,11 +154,8 @@ pub async fn create_solution_submission_with_job(
             id, solution_submission_id, challenge_name, target, eval_type, status, priority, payload_json, scheduled_at
         )
         VALUES (
-            $1::uuid, $2::uuid, $3, $4, $5, 'queued', $6, $7,
-            CASE
-                WHEN $8::BIGINT IS NULL THEN NOW()
-                ELSE NOW() + ($8::DOUBLE PRECISION * INTERVAL '1 second')
-            END
+            $1::uuid, $2::uuid, $3, $4, $5, 'staged', $6, $7,
+            NOW()
         )
         "#,
     )
@@ -170,7 +166,6 @@ pub async fn create_solution_submission_with_job(
     .bind(input.eval_type.as_str())
     .bind(priority)
     .bind(&payload)
-    .bind(input.initial_job_delay_seconds)
     .execute(&mut *tx)
     .await?;
 
@@ -196,7 +191,7 @@ pub async fn create_solution_submission_with_job(
         created_at: row.try_get("created_at")?,
         updated_at: row.try_get("updated_at")?,
         evaluation_job_id: Some(input.job_id.clone()),
-        evaluation_job_status: Some("queued".to_string()),
+        evaluation_job_status: Some("staged".to_string()),
         evaluation: None,
         validation_evaluation: None,
         official_evaluation: None,
@@ -269,7 +264,7 @@ async fn ensure_parent_solution_submission_matches_scope_tx<'a>(
                 .to_string(),
         ));
     }
-    if parent_status != EvaluationStatus::Completed.as_str() || !parent_visible {
+    if parent_status != SolutionSubmissionStatus::Completed.as_str() || !parent_visible {
         return Err(AppError::BadRequest(
             "parent_solution_submission_id must reference a completed visible solution submission"
                 .to_string(),
@@ -419,6 +414,7 @@ async fn count_recent_runs_for_agent_challenge_tx(
           AND s.challenge_name = $2
           AND s.target = $3
           AND j.eval_type = $4
+          AND j.status <> 'staged'
           AND s.created_at >= NOW() - ($5::DOUBLE PRECISION * INTERVAL '1 second')
         "#,
     )
@@ -450,6 +446,7 @@ async fn count_lifetime_runs_for_agent_challenge_tx(
           AND s.challenge_name = $2
           AND s.target = $3
           AND j.eval_type = $4
+          AND j.status <> 'staged'
         "#,
     )
     .bind(agent_id.as_str())
@@ -648,7 +645,10 @@ pub async fn list_admin_solution_submissions(
                 status: solution_submission_status_from_row(&r, "status")?,
                 visible_after_eval: r.try_get("visible_after_eval")?,
                 latest_job_id: optional_evaluation_job_id_from_row(&r, "latest_job_id")?,
-                latest_job_status: optional_evaluation_status_from_row(&r, "latest_job_status")?,
+                latest_job_status: optional_evaluation_job_status_from_row(
+                    &r,
+                    "latest_job_status",
+                )?,
                 latest_job_eval_type: optional_scoring_mode_from_row(&r, "latest_job_eval_type")?,
                 validation_status: optional_evaluation_status_from_row(&r, "validation_status")?,
                 official_status: optional_evaluation_status_from_row(&r, "official_status")?,
@@ -674,10 +674,10 @@ pub async fn list_public_solution_submissions_for_challenge(
             s.agent_id, a.display_name AS agent_display_name, s.status, s.explanation,
             s.parent_solution_submission_id, s.credit_text, s.created_at, s.updated_at,
             COALESCE(pe.primary_score, (pe.validation_summary_json->>'score')::double precision) AS validation_score,
-            COALESCE(oe.rank_score, (oe.official_summary_json->>'score')::double precision) AS official_score,
-            COALESCE(oe.rank_score, pe.rank_score, (oe.official_summary_json->>'score')::double precision, (pe.validation_summary_json->>'score')::double precision) AS rank_score,
-            COALESCE(oe.aggregate_metrics_json, pe.aggregate_metrics_json, '[]'::jsonb) AS aggregate_metrics,
-            COALESCE(oe.aggregate_metrics_json, '[]'::jsonb) AS official_metrics
+            oe.primary_score AS official_score,
+            COALESCE(oe.rank_score, pe.rank_score) AS rank_score,
+            '[]'::jsonb AS aggregate_metrics,
+            '[]'::jsonb AS official_metrics
         FROM solution_submissions s
         JOIN agents a ON a.id = s.agent_id
         JOIN challenges p ON p.name = s.challenge_name
@@ -847,7 +847,22 @@ fn solution_submission_status_from_row(
     })
 }
 
-/// Reads an optional evaluation/job status and validates its persisted value.
+/// Reads an optional evaluation job status and validates its persisted value.
+fn optional_evaluation_job_status_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<Option<EvaluationJobStatus>> {
+    let value: Option<String> = row.try_get(column)?;
+    value
+        .map(|value| {
+            EvaluationJobStatus::from_storage_value(&value).ok_or_else(|| {
+                AppError::Internal(format!("unexpected evaluation job status `{value}`"))
+            })
+        })
+        .transpose()
+}
+
+/// Reads an optional evaluation result status and validates its persisted value.
 fn optional_evaluation_status_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,

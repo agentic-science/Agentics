@@ -4,6 +4,7 @@ use std::{
     collections::HashSet,
     io::Cursor,
     path::{Path, PathBuf},
+    process::Command,
 };
 
 use axum::{Json, extract::State, http::StatusCode};
@@ -18,7 +19,7 @@ use shared::models::challenge_creation::{
     CreateChallengeDraftRequest, ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest,
     ValidateChallengeDraftRequest,
 };
-use shared::models::hashes::Sha256Digest;
+use shared::models::hashes::{GitCommitSha, Sha256Digest};
 use shared::models::ids::{
     ChallengeDraftAuditEventId, ChallengeDraftId, ChallengeDraftValidationRecordId,
     ChallengePrivateAssetId,
@@ -287,34 +288,33 @@ pub async fn validate_challenge_draft(
     ) {
         return Err(AppError::Conflict);
     }
-    let recent_validations = db::count_recent_challenge_draft_validations(
+    let validation_limit = i64::from(state.config.challenge_draft_validations_per_day);
+    let repository_path = RepositoryCheckoutPath::from_existing_dir(&body.repository_path)?;
+    let validation_record_id = ChallengeDraftValidationRecordId::generate();
+    db::begin_challenge_draft_validation(
         &state.db,
-        draft.id.as_str(),
+        &db::BeginChallengeDraftValidationInput {
+            validation_record_id: validation_record_id.clone(),
+            draft_id: draft.id.clone(),
+            repository_path: repository_path.to_string(),
+            manifest_sha256: draft.manifest_sha256,
+        },
         CHALLENGE_DRAFT_QUOTA_WINDOW_SECONDS,
+        validation_limit,
     )
     .await?;
-    let validation_limit = i64::from(state.config.challenge_draft_validations_per_day);
-    if recent_validations >= validation_limit {
-        return Err(AppError::TooManyRequests(format!(
-            "challenge draft validation quota exceeded for `{}`: {} of {} validations used in the last 24 hours",
-            draft.id, recent_validations, validation_limit
-        )));
-    }
-    let repository_path = RepositoryCheckoutPath::from_existing_dir(&body.repository_path)?;
     let validation = validate_draft_repository(&draft, &repository_path).await;
 
     match validation {
         Ok((_, bundle_sha256)) => {
             let message = "challenge draft validation passed".to_string();
-            db::record_challenge_draft_validation(
+            db::finish_challenge_draft_validation(
                 &state.db,
-                &db::RecordChallengeDraftValidationInput {
-                    validation_record_id: ChallengeDraftValidationRecordId::generate(),
+                &db::FinishChallengeDraftValidationInput {
+                    validation_record_id,
                     draft_id: draft.id.clone(),
                     status: ChallengeDraftValidationStatus::Passed,
                     message: message.clone(),
-                    repository_path: repository_path.to_string(),
-                    manifest_sha256: draft.manifest_sha256,
                     bundle_sha256: Some(bundle_sha256),
                 },
             )
@@ -342,15 +342,13 @@ pub async fn validate_challenge_draft(
         }
         Err(error) => {
             let message = error.to_string();
-            db::record_challenge_draft_validation(
+            db::finish_challenge_draft_validation(
                 &state.db,
-                &db::RecordChallengeDraftValidationInput {
-                    validation_record_id: ChallengeDraftValidationRecordId::generate(),
+                &db::FinishChallengeDraftValidationInput {
+                    validation_record_id,
                     draft_id: draft.id.clone(),
                     status: ChallengeDraftValidationStatus::Failed,
                     message: message.clone(),
-                    repository_path: repository_path.to_string(),
-                    manifest_sha256: draft.manifest_sha256,
                     bundle_sha256: None,
                 },
             )
@@ -636,6 +634,7 @@ async fn validate_draft_repository(
     draft: &ChallengeDraftResponse,
     repository_path: &RepositoryCheckoutPath,
 ) -> Result<(ChallengeCreationManifest, Sha256Digest)> {
+    ensure_repository_checkout_matches_commit(repository_path, &draft.commit_sha).await?;
     let proposal_root = repository_path
         .as_path()
         .join(draft.challenge_path.as_path());
@@ -661,6 +660,57 @@ async fn validate_draft_repository(
     )
     .await?;
     Ok((manifest, bundle_sha256))
+}
+
+/// Ensures validation and publication use the exact reviewed Git commit and a clean tree.
+async fn ensure_repository_checkout_matches_commit(
+    repository_path: &RepositoryCheckoutPath,
+    expected_commit: &GitCommitSha,
+) -> Result<()> {
+    let repository_path = repository_path.as_path().to_path_buf();
+    let expected_commit = *expected_commit;
+    tokio::task::spawn_blocking(move || {
+        let head = run_git(&repository_path, &["rev-parse", "--verify", "HEAD"])?;
+        let head = GitCommitSha::try_new(head.trim()).map_err(|e| {
+            AppError::Validation(format!("repository HEAD is not a valid Git commit: {e}"))
+        })?;
+        if head != expected_commit {
+            return Err(AppError::Validation(format!(
+                "repository HEAD commit {} does not match reviewed draft commit {}",
+                head, expected_commit
+            )));
+        }
+
+        let status = run_git(&repository_path, &["status", "--porcelain=v1"])?;
+        if !status.trim().is_empty() {
+            return Err(AppError::Validation(
+                "repository checkout has uncommitted changes; validate and publish from a clean checkout at the reviewed commit"
+                    .to_string(),
+            ));
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("repository Git inspection task failed: {e}")))?
+}
+
+/// Run one Git command inside the reviewed repository checkout and return stdout as UTF-8.
+fn run_git(repository_path: &Path, args: &[&str]) -> Result<String> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(repository_path)
+        .args(args)
+        .output()
+        .map_err(|e| AppError::Validation(format!("failed to inspect repository with git: {e}")))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(AppError::Validation(format!(
+            "failed to inspect repository with git: {}",
+            stderr.trim()
+        )));
+    }
+    String::from_utf8(output.stdout)
+        .map_err(|e| AppError::Validation(format!("git output was not UTF-8: {e}")))
 }
 
 /// Builds the managed runtime bundle by combining public bundle files and private overlays.

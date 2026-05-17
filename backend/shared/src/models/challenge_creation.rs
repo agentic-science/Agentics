@@ -197,6 +197,7 @@ impl ChallengeDraftStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ChallengeDraftValidationStatus {
+    Running,
     Passed,
     Failed,
 }
@@ -205,6 +206,7 @@ impl ChallengeDraftValidationStatus {
     /// Stable database string for this validation outcome.
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::Running => "running",
             Self::Passed => "passed",
             Self::Failed => "failed",
         }
@@ -213,6 +215,7 @@ impl ChallengeDraftValidationStatus {
     /// Parse a stable database string for this validation outcome.
     pub fn from_storage_value(value: &str) -> Option<Self> {
         match value {
+            "running" => Some(Self::Running),
             "passed" => Some(Self::Passed),
             "failed" => Some(Self::Failed),
             _ => None,

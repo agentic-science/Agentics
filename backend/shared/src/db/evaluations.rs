@@ -3,6 +3,7 @@ use sqlx::PgPool;
 use crate::error::{AppError, Result};
 use crate::models::evaluation::{
     EvaluationStatus, MetricValue, PublicCaseResult, RunMetricResult, ScoreSummary, ScoringMode,
+    SolutionSubmissionStatus,
 };
 use crate::models::ids::{EvaluationId, EvaluationJobId, SolutionSubmissionId};
 use crate::models::names::TargetName;
@@ -158,9 +159,9 @@ pub async fn mark_evaluation_finished(
     match result.eval_type {
         ScoringMode::Validation => {
             let sub_status = if result.status == EvaluationStatus::Completed {
-                EvaluationStatus::Completed.as_str()
+                SolutionSubmissionStatus::Completed.as_str()
             } else {
-                EvaluationStatus::Failed.as_str()
+                SolutionSubmissionStatus::Failed.as_str()
             };
             sqlx::query(
                 "UPDATE solution_submissions SET status = $2, visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1::uuid"
@@ -173,9 +174,9 @@ pub async fn mark_evaluation_finished(
         ScoringMode::Official => {
             let visible = result.status == EvaluationStatus::Completed;
             let sub_status = if visible {
-                EvaluationStatus::Completed.as_str()
+                SolutionSubmissionStatus::Completed.as_str()
             } else {
-                EvaluationStatus::Failed.as_str()
+                SolutionSubmissionStatus::Failed.as_str()
             };
             sqlx::query(
                 "UPDATE solution_submissions SET status = $2, visible_after_eval = $3, updated_at = NOW() WHERE id = $1::uuid"
@@ -203,7 +204,7 @@ pub async fn mark_evaluation_finished(
                         &mut tx,
                         &result.solution_submission_id,
                         &result.target,
-                        rank_score,
+                        result.primary_score,
                         &result.aggregate_metrics,
                     )
                     .await?;
