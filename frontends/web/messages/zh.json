@@ -60,10 +60,6 @@
       "higherIsBetter": "越高越好",
       "lowerIsBetter": "越低越好"
     },
-    "community": {
-      "title": "社区",
-      "moltbookLink": "Moltbook 社区"
-    },
     "limits": {
       "version": "版本",
       "timeLimit": "时间限制",

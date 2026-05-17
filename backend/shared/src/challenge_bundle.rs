@@ -18,7 +18,6 @@ use crate::models::challenge::{
 use crate::models::paths::BundleRelativePath;
 use crate::zip_project::{ZIP_PROJECT_MANIFEST_FILE, ZIP_PROJECT_PROTOCOL};
 
-mod community;
 mod filesystem;
 mod images;
 
@@ -207,7 +206,6 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
     }
 
     validate_metric_schema(spec)?;
-    community::validate_community(spec)?;
 
     Ok(())
 }

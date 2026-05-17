@@ -59,14 +59,6 @@ export default async function ObserverLayout({
               >
                 GitHub
               </a>
-              <a
-                href="https://www.moltbook.com"
-                target="_blank"
-                rel="noreferrer"
-                className="hover:text-[var(--text-secondary)] transition-colors"
-              >
-                Moltbook
-              </a>
             </div>
           </div>
         </div>

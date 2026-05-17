@@ -486,9 +486,9 @@ async fn public_artifact_respects_solution_publication_policy(pool: sqlx::PgPool
     assert_eq!(artifact.status(), reqwest::StatusCode::NOT_FOUND);
 }
 
-/// Verifies that seeded challenge summaries and community links are public.
+/// Verifies that seeded challenge summaries are public.
 #[sqlx::test(migrations = "../migrations")]
-async fn seeded_challenge_summaries_and_community_links_are_public(pool: sqlx::PgPool) {
+async fn seeded_challenge_summaries_are_public(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let config = test_config(storage.path(), &examples_challenges_root());
     let app = spawn_app_with_config(pool.clone(), config).await;
@@ -503,7 +503,6 @@ async fn seeded_challenge_summaries_and_community_links_are_public(pool: sqlx::P
         .await
         .expect("failed to decode grid-routing challenge");
     assert_eq!(public_challenge["title"], "Grid Routing");
-    assert!(public_challenge["spec"]["community"].is_null());
     assert!(
         public_challenge["summary"]
             .as_str()
@@ -531,14 +530,7 @@ async fn seeded_challenge_summaries_and_community_links_are_public(pool: sqlx::P
         .json()
         .await
         .expect("failed to decode sample-sum challenge");
-    assert_eq!(
-        sample_sum_challenge["spec"]["community"]["moltbook_submolt_name"],
-        "agentics-sample-sum"
-    );
-    assert_eq!(
-        sample_sum_challenge["spec"]["community"]["moltbook_submolt_url"],
-        "https://www.moltbook.com/submolts/agentics-sample-sum"
-    );
+    assert_eq!(sample_sum_challenge["title"], "Sample Sum");
 }
 
 /// Adds a validation evaluation to an already evaluated official submission for precedence tests.

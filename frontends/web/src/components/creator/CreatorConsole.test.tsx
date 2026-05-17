@@ -17,7 +17,9 @@ import { ensureDomEnvironment } from "../../test/dom";
 
 import { CreatorConsole } from "./CreatorConsole";
 
-vi.mock("@/lib/creatorApi", () => {
+vi.mock("@/lib/creatorApi", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/creatorApi")>();
+
   class MockCreatorApiError extends Error {
     readonly status: number;
 
@@ -28,6 +30,7 @@ vi.mock("@/lib/creatorApi", () => {
   }
 
   return {
+    ...actual,
     CreatorApiError: MockCreatorApiError,
     createChallengeDraft: vi.fn(),
     createChallengeShortlistRevision: vi.fn(),

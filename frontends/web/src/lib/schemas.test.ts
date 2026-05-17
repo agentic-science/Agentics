@@ -95,11 +95,6 @@ describe("frontend API schemas", () => {
             private_benchmark_policy: "score_only",
             private_benchmark_enabled: true,
           },
-          community: {
-            moltbook_submolt_name: "agentics-sample-sum",
-            moltbook_submolt_url:
-              "https://www.moltbook.com/submolts/agentics-sample-sum",
-          },
           metric_schema: {
             metrics: [
               {
@@ -125,59 +120,6 @@ describe("frontend API schemas", () => {
         statement_markdown: "# Sample Sum",
       }),
     ).not.toThrow();
-  });
-
-  it("rejects non-Moltbook community links", () => {
-    const payload = {
-      name: "sample-sum",
-      title: "Sample Sum",
-      summary: "Add two numbers.",
-      spec: {
-        schema_version: 1,
-        challenge_name: "sample-sum",
-        challenge_title: "Sample Sum",
-        challenge_summary: "Add two numbers.",
-        ...challengePolicy,
-        solution: {
-          protocol: "zip_project",
-          manifest_file: "agentics.solution.json",
-        },
-        scorer: {
-          command: ["python", "scorer/run.py"],
-          result_file: "result.json",
-        },
-        targets: [targetFixture(false)],
-        execution: {
-          validation_runs: "public/runs.json",
-        },
-        datasets: {
-          public_dir: "public",
-          public_policy: "full",
-          private_benchmark_policy: "score_only",
-          private_benchmark_enabled: false,
-        },
-        community: {
-          moltbook_submolt_url: "https://example.com/submolts/sample-sum",
-        },
-        metric_schema: {
-          metrics: [
-            {
-              name: "score",
-              label: "Score",
-              direction: "maximize",
-              visibility: "public",
-            },
-          ],
-          ranking: {
-            primary_metric_name: "score",
-            tie_breaker_metric_names: [],
-          },
-        },
-      },
-      statement_markdown: "# Sample Sum",
-    };
-
-    expect(() => challengeDetailResponseSchema.parse(payload)).toThrow();
   });
 
   it("accepts relaxed omission of nullable evaluation fields", () => {

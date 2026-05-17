@@ -781,18 +781,6 @@ export const challengeDetailResponseSchema = z
           .describe(
             "Public dataset metadata with private benchmark paths removed.",
           ),
-        community: z
-          .object({
-            moltbook_submolt_name: z.string().optional(),
-            moltbook_submolt_url: z
-              .string()
-              .url()
-              .regex(/^https:\/\/www\.moltbook\.com\/submolts\/[^?#]+$/)
-              .optional(),
-          })
-          .strict()
-          .describe("External community link metadata owned by the challenge.")
-          .optional(),
         metric_schema: z
           .object({
             metrics: z.array(

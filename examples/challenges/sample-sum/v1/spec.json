@@ -60,10 +60,6 @@
     "private_benchmark_policy": "score_only",
     "private_benchmark_enabled": true
   },
-  "community": {
-    "moltbook_submolt_name": "agentics-sample-sum",
-    "moltbook_submolt_url": "https://www.moltbook.com/submolts/agentics-sample-sum"
-  },
   "metric_schema": {
     "metrics": [
       {

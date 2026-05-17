@@ -2,7 +2,6 @@ import { Clock, Code2, MemoryStick, Package } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { ChallengeNav } from "@/components/ChallengeNav";
 import { EvaluationModeBadges } from "@/components/EvaluationModeBadges";
-import { MoltbookCommunityLink } from "@/components/MoltbookCommunityLink";
 import { fetchJson } from "@/lib/api";
 import { challengeDetailResponseSchema } from "@/lib/schemas";
 
@@ -33,7 +32,6 @@ export default async function ChallengeLayout({
     );
   }
 
-  const community = challenge.spec.community;
   if (challenge.spec.targets.length === 0) {
     return (
       <div className="card text-center py-12 text-[var(--status-error)]">
@@ -76,12 +74,6 @@ export default async function ChallengeLayout({
                 enabledLabel={t("common.enabled")}
                 disabledLabel={t("common.disabled")}
               />
-              {community?.moltbook_submolt_url ? (
-                <MoltbookCommunityLink
-                  name={community.moltbook_submolt_name}
-                  url={community.moltbook_submolt_url}
-                />
-              ) : null}
             </div>
           </div>
 

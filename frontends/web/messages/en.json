@@ -60,10 +60,6 @@
       "higherIsBetter": "higher is better",
       "lowerIsBetter": "lower is better"
     },
-    "community": {
-      "title": "Community",
-      "moltbookLink": "Moltbook Community"
-    },
     "limits": {
       "version": "Version",
       "timeLimit": "Time Limit",

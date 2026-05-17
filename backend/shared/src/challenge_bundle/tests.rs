@@ -4,9 +4,9 @@ use crate::models::challenge::{
     ChallengeBundleSpec, ChallengeEligibilitySpec, ChallengeEligibilityType,
     ChallengeExecutionSpec, ChallengePrepareSpec, ChallengeResultDetailVisibility,
     ChallengeSolutionPublicationPolicy, ChallengeTargetSpec, ChallengeVisibility,
-    ChallengeVisibilitySpec, CommunitySpec, DatasetsSpec, DockerPlatform, HardwareProfileSpec,
-    MetricDirection, MetricSchemaSpec, MetricVisibility, PrivateBenchmarkPolicy,
-    ResourceProfileSpec, ScorerSpec, SolutionSpec, TargetAccelerator,
+    ChallengeVisibilitySpec, DatasetsSpec, DockerPlatform, HardwareProfileSpec, MetricDirection,
+    MetricSchemaSpec, MetricVisibility, PrivateBenchmarkPolicy, ResourceProfileSpec, ScorerSpec,
+    SolutionSpec, TargetAccelerator,
 };
 use crate::models::evaluation::ScoreVisibility;
 use crate::models::hashes::OciSha256Digest;
@@ -15,7 +15,6 @@ use crate::models::images::{
 };
 use crate::models::names::{ChallengeName, MetricName, ResourceProfileName, TargetName};
 use crate::models::paths::BundleRelativePath;
-use crate::models::urls::MoltbookSubmoltUrl;
 use crate::zip_project::ZipProjectNetworkAccess;
 
 use super::{
@@ -90,7 +89,6 @@ fn base_spec() -> ChallengeBundleSpec {
             private_benchmark_policy: PrivateBenchmarkPolicy::ScoreOnly,
             private_benchmark_enabled: true,
         },
-        community: None,
         metric_schema: MetricSchemaSpec::default(),
     }
 }
@@ -190,6 +188,20 @@ fn legacy_rounds_field_is_rejected() {
     let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
         .expect_err("legacy rounds should be an unknown field");
     assert!(error.to_string().contains("rounds"));
+}
+
+/// Verifies that legacy community metadata is rejected.
+#[test]
+fn legacy_community_field_is_rejected() {
+    let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
+    spec_json["community"] = serde_json::json!({
+        "moltbook_submolt_name": "agentics-sample-sum",
+        "moltbook_submolt_url": "https://www.moltbook.com/submolts/agentics-sample-sum"
+    });
+
+    let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+        .expect_err("legacy community metadata should be an unknown field");
+    assert!(error.to_string().contains("community"));
 }
 
 /// Verifies that targets are required.
@@ -535,48 +547,6 @@ fn metric_schema_accepts_tie_breaker_metadata() {
         .push(metric_name("runtime_ms"));
 
     assert!(validate_challenge_bundle_spec(&spec).is_ok());
-}
-
-/// Verifies that community accepts moltbook submolt metadata.
-#[test]
-fn community_accepts_moltbook_submolt_metadata() {
-    let mut spec = base_spec();
-    spec.community = Some(CommunitySpec {
-        moltbook_submolt_name: Some("agentics-sample-sum".to_string()),
-        moltbook_submolt_url: Some(
-            MoltbookSubmoltUrl::try_new("https://www.moltbook.com/submolts/agentics-sample-sum")
-                .expect("test Moltbook URL is valid"),
-        ),
-    });
-
-    assert!(validate_challenge_bundle_spec(&spec).is_ok());
-}
-
-/// Verifies that community rejects non moltbook url.
-#[test]
-fn community_rejects_non_moltbook_url() {
-    let mut value = serde_json::to_value(base_spec()).expect("base spec should serialize to JSON");
-    value["community"] = serde_json::json!({
-        "moltbook_submolt_name": "agentics-sample-sum",
-        "moltbook_submolt_url": "https://example.com/agentics-sample-sum"
-    });
-
-    let error = serde_json::from_value::<ChallengeBundleSpec>(value)
-        .expect_err("invalid URL should fail during typed deserialization");
-    assert!(error.to_string().contains("moltbook_submolt_url"));
-}
-
-/// Verifies that community rejects invalid submolt name.
-#[test]
-fn community_rejects_invalid_submolt_name() {
-    let mut spec = base_spec();
-    spec.community = Some(CommunitySpec {
-        moltbook_submolt_name: Some("agentics sample sum".to_string()),
-        moltbook_submolt_url: None,
-    });
-
-    let error = validate_challenge_bundle_spec(&spec).expect_err("invalid name should fail");
-    assert!(error.to_string().contains("moltbook_submolt_name"));
 }
 
 /// Creates bundle after validating caller inputs.

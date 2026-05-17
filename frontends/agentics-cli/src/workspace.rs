@@ -576,7 +576,6 @@ mod tests {
                     private_benchmark_policy: PrivateBenchmarkPolicy::ScoreOnly,
                     private_benchmark_enabled: false,
                 },
-                community: None,
                 metric_schema: MetricSchemaSpec::default(),
             }
             .into(),

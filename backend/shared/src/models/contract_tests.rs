@@ -5,7 +5,7 @@ use super::challenge::{
     ChallengeBundleSpec, ChallengeDetailResponse, ChallengeEligibilitySpec,
     ChallengeEligibilityType, ChallengeExecutionSpec, ChallengePrepareExternalDataSpec,
     ChallengePrepareSpec, ChallengeResultDetailVisibility, ChallengeSolutionPublicationPolicy,
-    ChallengeTargetSpec, ChallengeVisibility, ChallengeVisibilitySpec, CommunitySpec, DatasetsSpec,
+    ChallengeTargetSpec, ChallengeVisibility, ChallengeVisibilitySpec, DatasetsSpec,
     DockerPlatform, HardwareProfileSpec, MetricDefinitionSpec, MetricDirection, MetricSchemaSpec,
     MetricVisibility, PrivateBenchmarkPolicy, RankingSpec, ResourceProfileSpec, ScorerSpec,
     SolutionSpec, TargetAccelerator,
@@ -22,7 +22,7 @@ use super::paths::BundleRelativePath;
 use super::request::{
     AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto, SolutionSubmissionResponse,
 };
-use super::urls::{ExternalDataUrl, MoltbookSubmoltUrl};
+use super::urls::ExternalDataUrl;
 use crate::storage::StorageKey;
 use crate::zip_project::ZipProjectNetworkAccess;
 
@@ -212,15 +212,6 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
                 private_benchmark_policy: PrivateBenchmarkPolicy::ScoreOnly,
                 private_benchmark_enabled: true,
             },
-            community: Some(CommunitySpec {
-                moltbook_submolt_name: Some("agentics-matrix-multiplication".to_string()),
-                moltbook_submolt_url: Some(
-                    MoltbookSubmoltUrl::try_new(
-                        "https://www.moltbook.com/submolts/agentics-matrix-multiplication",
-                    )
-                    .expect("test Moltbook URL is valid"),
-                ),
-            }),
             metric_schema: MetricSchemaSpec {
                 metrics: vec![
                     MetricDefinitionSpec {

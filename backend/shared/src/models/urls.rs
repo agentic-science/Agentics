@@ -14,9 +14,6 @@ pub const GITHUB_REPO_REMOTE_ERROR_MESSAGE: &str = "repo_url must be a GitHub HT
 /// User-facing validation message for GitHub pull request URLs.
 pub const GITHUB_PULL_REQUEST_URL_ERROR_MESSAGE: &str = "pr_url must be a GitHub HTTPS pull request URL like https://github.com/{owner}/{repo}/pull/{number}";
 
-/// User-facing validation message for Moltbook Submolt URLs.
-pub const MOLTBOOK_SUBMOLT_URL_ERROR_MESSAGE: &str = "moltbook_submolt_url must be an HTTPS Moltbook Submolt URL under https://www.moltbook.com/submolts/";
-
 /// User-facing validation message for external data URLs.
 pub const EXTERNAL_DATA_URL_ERROR_MESSAGE: &str = "external data url must be an HTTPS URL";
 
@@ -330,47 +327,6 @@ impl_string_url_schema!(
     r"^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/pull/[0-9]+$"
 );
 
-/// Moltbook Submolt URL used to connect challenge discussion spaces.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct MoltbookSubmoltUrl(Url);
-
-impl MoltbookSubmoltUrl {
-    /// Parse and validate a Moltbook Submolt URL.
-    pub fn try_new(value: impl AsRef<str>) -> Result<Self, UrlFieldError> {
-        value.as_ref().parse()
-    }
-
-    /// Borrow the canonical string representation.
-    pub fn as_str(&self) -> &str {
-        self.0.as_str()
-    }
-}
-
-impl fmt::Display for MoltbookSubmoltUrl {
-    /// Handles fmt for this module.
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-impl FromStr for MoltbookSubmoltUrl {
-    type Err = UrlFieldError;
-
-    /// Handles from str for this module.
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        let url = parse_url(value.trim(), MOLTBOOK_SUBMOLT_URL_ERROR_MESSAGE)?;
-        validate_moltbook_submolt_url(&url)?;
-        Ok(Self(url))
-    }
-}
-
-impl_string_url_serde!(MoltbookSubmoltUrl);
-impl_string_url_schema!(
-    MoltbookSubmoltUrl,
-    "MoltbookSubmoltUrl",
-    r"^https://www\.moltbook\.com/submolts/[^?#]+$"
-);
-
 /// External HTTPS URL referenced by challenge-owned prepare metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExternalDataUrl(Url);
@@ -643,19 +599,6 @@ fn validate_github_https_base(url: &Url, message: &'static str) -> Result<(), Ur
     Ok(())
 }
 
-/// Validates moltbook submolt url invariants for this contract.
-fn validate_moltbook_submolt_url(url: &Url) -> Result<(), UrlFieldError> {
-    validate_https_url(url, MOLTBOOK_SUBMOLT_URL_ERROR_MESSAGE)?;
-    if url.host_str() != Some("www.moltbook.com")
-        || url.port().is_some()
-        || !url.path().starts_with("/submolts/")
-        || url.path() == "/submolts/"
-    {
-        return Err(UrlFieldError::new(MOLTBOOK_SUBMOLT_URL_ERROR_MESSAGE));
-    }
-    Ok(())
-}
-
 /// Validates https url invariants for this contract.
 fn validate_https_url(url: &Url, message: &'static str) -> Result<(), UrlFieldError> {
     if url.scheme() != "https" || url.cannot_be_a_base() || url.host_str().is_none() {
@@ -703,7 +646,7 @@ fn reject_whitespace_or_control(value: &str, message: &'static str) -> Result<()
 
 #[cfg(test)]
 mod tests {
-    use super::{ExternalDataUrl, GithubPullRequestUrl, GithubRepoRemote, MoltbookSubmoltUrl};
+    use super::{ExternalDataUrl, GithubPullRequestUrl, GithubRepoRemote};
 
     /// Verifies that parses github repo remotes.
     #[test]
@@ -754,15 +697,5 @@ mod tests {
         assert!(ExternalDataUrl::try_new("https://example.com/data.bin").is_ok());
         assert!(ExternalDataUrl::try_new("http://example.com/data.bin").is_err());
         assert!(ExternalDataUrl::try_new("https://example.com/data.bin#section").is_err());
-    }
-
-    /// Verifies that parses moltbook submolt urls.
-    #[test]
-    fn parses_moltbook_submolt_urls() {
-        assert!(
-            MoltbookSubmoltUrl::try_new("https://www.moltbook.com/submolts/sample-sum").is_ok()
-        );
-        assert!(MoltbookSubmoltUrl::try_new("https://www.moltbook.com/about").is_err());
-        assert!(MoltbookSubmoltUrl::try_new("https://example.com/submolts/sample-sum").is_err());
     }
 }

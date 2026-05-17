@@ -9,7 +9,7 @@ use super::names::{ChallengeName, MetricName, ResourceProfileName, RunName, Targ
 use super::paths::{
     BundleRelativePath, ManagedBundlePath, ManagedStatementPath, RunInputPath, RunOutputPath,
 };
-use super::urls::{ExternalDataUrl, MoltbookSubmoltUrl};
+use super::urls::ExternalDataUrl;
 use crate::zip_project::ZipProjectNetworkAccess;
 
 /// Persistent lifecycle state for a challenge shell or published benchmark.
@@ -74,9 +74,6 @@ pub struct ChallengeBundleSpec {
     pub solution_publication: ChallengeSolutionPublicationPolicy,
     pub execution: ChallengeExecutionSpec,
     pub datasets: DatasetsSpec,
-    /// Optional external community metadata for this challenge.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub community: Option<CommunitySpec>,
     /// Metric definitions and ranking metadata used to interpret scorer output.
     #[serde(default)]
     #[schemars(required)]
@@ -125,9 +122,6 @@ pub struct PublicChallengeBundleSpec {
     pub solution_publication: ChallengeSolutionPublicationPolicy,
     pub execution: PublicChallengeExecutionSpec,
     pub datasets: PublicDatasetsSpec,
-    /// Optional external community metadata for this challenge.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub community: Option<CommunitySpec>,
     /// Metric definitions and ranking metadata used to interpret scorer output.
     #[serde(default)]
     #[schemars(required)]
@@ -179,7 +173,6 @@ impl From<ChallengeBundleSpec> for PublicChallengeBundleSpec {
                 private_benchmark_policy: spec.datasets.private_benchmark_policy,
                 private_benchmark_enabled: spec.datasets.private_benchmark_enabled,
             },
-            community: spec.community,
             metric_schema: spec.metric_schema,
         }
     }
@@ -463,15 +456,6 @@ pub struct PublicDatasetsSpec {
 #[serde(rename_all = "snake_case")]
 pub enum PrivateBenchmarkPolicy {
     ScoreOnly,
-}
-
-/// External community link metadata owned by the challenge.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
-pub struct CommunitySpec {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub moltbook_submolt_name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub moltbook_submolt_url: Option<MoltbookSubmoltUrl>,
 }
 
 /// Whether a metric is better when it is larger or smaller.

@@ -326,7 +326,6 @@ mod tests {
                 private_benchmark_policy: PrivateBenchmarkPolicy::ScoreOnly,
                 private_benchmark_enabled: true,
             },
-            community: None,
             metric_schema: MetricSchemaSpec {
                 metrics: vec![MetricDefinitionSpec {
                     name: metric_name("latency_ms"),
