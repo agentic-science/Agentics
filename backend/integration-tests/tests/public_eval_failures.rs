@@ -7,9 +7,9 @@ use helpers::{
     spawn_app_with_config, test_config,
 };
 
-/// Verifies that worker marks solution submission failed when artifact is missing.
+/// Verifies that worker keeps sanitized logs for failed validation runs.
 #[sqlx::test(migrations = "../migrations")]
-async fn worker_marks_solution_submission_failed_when_artifact_is_missing(pool: sqlx::PgPool) {
+async fn worker_keeps_failed_validation_run_logs_when_artifact_is_missing(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let config = test_config(storage.path(), &examples_challenges_root());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
@@ -28,14 +28,14 @@ async fn worker_marks_solution_submission_failed_when_artifact_is_missing(pool: 
 
     let artifact_base64 = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
     let create_response: serde_json::Value = client
-        .post(api_url(&app, "/api/solution-submissions"))
+        .post(api_url(&app, "/api/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
-            "explanation": "official eval failure test"
+            "explanation": "validation eval failure test"
         }))
         .send()
         .await
@@ -43,9 +43,9 @@ async fn worker_marks_solution_submission_failed_when_artifact_is_missing(pool: 
         .json()
         .await
         .expect("failed to decode create solution submission response");
-    let solution_submission_id = create_response["id"]
+    let validation_run_id = create_response["id"]
         .as_str()
-        .expect("missing solution submission id");
+        .expect("missing validation run id");
 
     sqlx::query(
         r#"
@@ -54,7 +54,7 @@ async fn worker_marks_solution_submission_failed_when_artifact_is_missing(pool: 
         WHERE solution_submission_id = $1::uuid
         "#,
     )
-    .bind(solution_submission_id)
+    .bind(validation_run_id)
     .bind("missing/agentics-missing-solution-submission.zip")
     .execute(&pool)
     .await
@@ -65,7 +65,7 @@ async fn worker_marks_solution_submission_failed_when_artifact_is_missing(pool: 
     let solution_submission_response = client
         .get(api_url(
             &app,
-            &format!("/api/solution-submissions/{solution_submission_id}"),
+            &format!("/api/validation-runs/{validation_run_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
@@ -82,9 +82,25 @@ async fn worker_marks_solution_submission_failed_when_artifact_is_missing(pool: 
     assert_eq!(solution_submission["visible_after_eval"], false);
     assert_eq!(solution_submission["evaluation"]["status"], "failed");
     assert!(
+        solution_submission["evaluation"]["log_key"].is_string(),
+        "failed validation evaluations should keep a runner log key"
+    );
+    assert!(
         solution_submission["evaluation"]
             .get("primary_score")
             .is_none()
     );
     assert_eq!(solution_submission["evaluation_job"]["status"], "failed");
+
+    let logs_response = client
+        .get(api_url(
+            &app,
+            &format!("/api/solution-submissions/{validation_run_id}/logs"),
+        ))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
+        .send()
+        .await
+        .expect("failed to get validation failure logs");
+    assert_eq!(logs_response.status(), 200);
 }

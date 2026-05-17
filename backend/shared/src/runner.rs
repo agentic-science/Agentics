@@ -20,6 +20,7 @@ use crate::models::challenge::{
     TargetAccelerator,
 };
 use crate::models::evaluation::{EvaluationJobPayload, ScorerRunResult, ScoringMode};
+use crate::models::names::RunName;
 use crate::models::paths::BundleRelativePath;
 use crate::storage::{Storage, StorageKey};
 use crate::zip_project::{
@@ -122,6 +123,7 @@ struct SolutionRunRequest<'a> {
     run_manifest: &'a ChallengeRunManifest,
     input_source_root: &'a Path,
     build_root: &'a Path,
+    run_work_root: &'a Path,
     runs_root: &'a Path,
 }
 
@@ -251,17 +253,17 @@ pub async fn execute_evaluation_job(
         .join(&attempt.transient_name);
     let source_root = working_root.join("source");
     let build_root = working_root.join("build-workspace");
+    let run_work_root = working_root.join("solution-run-work");
     let runs_root = working_root.join("solution-runs");
     let prepared_root = working_root.join("prepared");
     let scorer_output_root = working_root.join("scorer-output");
-    let log_key = StorageKey::try_new(format!(
-        "eval-artifacts/{job_id}/attempt-{attempt_count}/runner.log"
-    ))?;
+    let log_key = evaluation_runner_log_key(job_id, attempt_count)?;
 
     cleanup_paths([working_root.clone()]).await?;
     tokio::fs::create_dir_all(&working_root).await?;
     tokio::fs::create_dir_all(&source_root).await?;
     tokio::fs::create_dir_all(&build_root).await?;
+    tokio::fs::create_dir_all(&run_work_root).await?;
     tokio::fs::create_dir_all(&runs_root).await?;
     tokio::fs::create_dir_all(&scorer_output_root).await?;
 
@@ -337,6 +339,7 @@ pub async fn execute_evaluation_job(
                 run_manifest: &run_plan.manifest,
                 input_source_root: &run_plan.input_source_root,
                 build_root: &build_root,
+                run_work_root: &run_work_root,
                 runs_root: &runs_root,
             },
             &mut logs,
@@ -384,10 +387,29 @@ pub async fn execute_evaluation_job(
         (Ok(_), Err(log_err), Err(cleanup_err)) => Err(AppError::Runner(format!(
             "{log_err}; additionally failed to clean runner workspace: {cleanup_err}"
         ))),
-        (Err(run_err), _, Ok(())) => Err(run_err),
+        (Err(run_err), _, Ok(())) => Err(sanitize_runner_error(eval_type, run_err)),
         (Err(run_err), _, Err(cleanup_err)) => Err(AppError::Runner(format!(
-            "{run_err}; additionally failed to clean runner workspace: {cleanup_err}"
+            "{}; additionally failed to clean runner workspace: {cleanup_err}",
+            sanitize_runner_error(eval_type, run_err)
         ))),
+    }
+}
+
+/// Return the durable storage key used for one runner log.
+pub fn evaluation_runner_log_key(job_id: &str, attempt_count: i32) -> Result<StorageKey> {
+    StorageKey::try_new(format!(
+        "eval-artifacts/{job_id}/attempt-{attempt_count}/runner.log"
+    ))
+}
+
+/// Remove private official benchmark identifiers from runner errors crossing trust boundaries.
+fn sanitize_runner_error(eval_type: ScoringMode, error: AppError) -> AppError {
+    match eval_type {
+        ScoringMode::Validation => error,
+        ScoringMode::Official => AppError::Runner(
+            "official evaluation failed; runner details are redacted for private benchmark execution"
+                .to_string(),
+        ),
     }
 }
 
@@ -544,14 +566,17 @@ async fn run_solution_invocations(
         .find(|phase| phase.name == ZipProjectPhaseName::Run)
         .ok_or_else(|| AppError::Runner("zip_project manifest has no run phase".to_string()))?;
 
-    for run in &request.run_manifest.runs {
-        let durable_io_root = request.runs_root.join(run.run_name.as_str());
+    for (run_index, run) in request.run_manifest.runs.iter().enumerate() {
+        let run_alias = run_alias(run_index)?;
+        let solution_io_root = request.run_work_root.join(run_alias.as_str());
+        let scorer_run_root = request.runs_root.join(run.run_name.as_str());
+        cleanup_paths([solution_io_root.clone(), scorer_run_root.clone()]).await?;
         let limits = effective_phase_limits(request.profile, &run_phase);
         let io_mount = runner
             .storage
             .writable_mount(
                 runner.docker,
-                &durable_io_root,
+                &solution_io_root,
                 WritablePhase::SolutionRun,
                 limits.disk_limit_mb,
             )
@@ -563,13 +588,21 @@ async fn run_solution_invocations(
         tokio::fs::create_dir_all(&input_dir).await?;
         tokio::fs::create_dir_all(&output_dir).await?;
         tokio::fs::create_dir_all(&tmp_dir).await?;
-        materialize_run_io(run, request.input_source_root, io_root, &input_dir).await?;
+        materialize_run_io(
+            run,
+            run_alias.as_str(),
+            request.eval_type,
+            request.input_source_root,
+            io_root,
+            &input_dir,
+        )
+        .await?;
         make_container_writable_tree(io_root).await?;
 
         let outcome = run_container(
             runner.docker,
             ContainerRequest {
-                name: container_name(runner.attempt, &format!("run-{}", run.run_name)),
+                name: container_name(runner.attempt, &format!("run-{run_alias}")),
                 image: request.profile.solution_image.clone(),
                 cmd: vec![
                     "sh".to_string(),
@@ -581,7 +614,7 @@ async fn run_solution_invocations(
                 ],
                 env: vec![
                     "AGENTICS_PHASE=run".to_string(),
-                    format!("AGENTICS_RUN_NAME={}", run.run_name),
+                    format!("AGENTICS_RUN_NAME={run_alias}"),
                     format!("AGENTICS_INTERFACE={}", run_interface(run.interface)),
                     "AGENTICS_INPUT_DIR=/io/input".to_string(),
                     "AGENTICS_OUTPUT_DIR=/io/output".to_string(),
@@ -605,7 +638,7 @@ async fn run_solution_invocations(
         .await?;
         append_run_logs(
             logs,
-            &run.run_name,
+            run_alias.as_str(),
             visible_log_content(request.eval_type, &outcome.logs),
         );
         ensure_container_succeeded(
@@ -613,10 +646,11 @@ async fn run_solution_invocations(
             &outcome,
             include_log_excerpts(request.eval_type),
         )?;
-        write_run_metadata(io_root, run, &outcome).await?;
+        write_run_metadata(io_root, run, run_alias.as_str(), &outcome).await?;
         ensure_disk_limit(io_root, limits.disk_limit_mb, ZipProjectPhaseName::Run).await?;
-        ensure_declared_outputs_exist(run, &output_dir).await?;
-        replace_dir_all_if_separate(io_root, &durable_io_root).await?;
+        ensure_declared_outputs_exist(run, run_alias.as_str(), &output_dir).await?;
+        copy_scorer_visible_run_tree(io_root, &scorer_run_root, run_alias.as_str()).await?;
+        cleanup_paths([solution_io_root]).await?;
     }
 
     Ok(())
@@ -985,9 +1019,77 @@ async fn make_container_writable_tree(_root: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Build an opaque solution-visible run name for one invocation index.
+fn run_alias(index: usize) -> Result<RunName> {
+    let display_index = index
+        .checked_add(1)
+        .ok_or_else(|| AppError::Internal("run alias index overflowed".to_string()))?;
+    RunName::try_new(format!("run-{display_index:04}"))
+        .map_err(|e| AppError::Internal(format!("generated invalid run alias: {e}")))
+}
+
+/// Copy a solution run tree into the scorer-visible area while rejecting symlinks and devices.
+async fn copy_scorer_visible_run_tree(
+    source: &Path,
+    destination: &Path,
+    visible_run_name: &str,
+) -> Result<()> {
+    let source = source.to_path_buf();
+    let destination = destination.to_path_buf();
+    let visible_run_name = visible_run_name.to_string();
+    tokio::task::spawn_blocking(move || {
+        copy_scorer_visible_run_tree_blocking(&source, &destination, &visible_run_name)
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("scorer output copy task failed: {e}")))?
+}
+
+/// Blocking implementation for scorer-visible run tree sanitization and copy.
+fn copy_scorer_visible_run_tree_blocking(
+    source: &Path,
+    destination: &Path,
+    visible_run_name: &str,
+) -> Result<()> {
+    let mut pending = vec![(source.to_path_buf(), destination.to_path_buf())];
+    while let Some((current_source, current_destination)) = pending.pop() {
+        let metadata = std::fs::symlink_metadata(&current_source)?;
+        if metadata.file_type().is_symlink() {
+            return Err(phase_error(
+                ZipProjectPhaseName::Run,
+                ZipProjectPhaseFailureReason::RunnerError,
+                format!("run `{visible_run_name}` produced a symlink in its output tree"),
+                None,
+            ));
+        }
+        if metadata.is_dir() {
+            std::fs::create_dir_all(&current_destination)?;
+            for entry in std::fs::read_dir(&current_source)? {
+                let entry = entry?;
+                pending.push((entry.path(), current_destination.join(entry.file_name())));
+            }
+        } else if metadata.is_file() {
+            if let Some(parent) = current_destination.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::copy(&current_source, &current_destination)?;
+        } else {
+            return Err(phase_error(
+                ZipProjectPhaseName::Run,
+                ZipProjectPhaseFailureReason::RunnerError,
+                format!("run `{visible_run_name}` produced a non-regular file in its output tree"),
+                None,
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 /// Handles materialize run io for this module.
 async fn materialize_run_io(
     run: &ChallengeRunSpec,
+    visible_run_name: &str,
+    eval_type: ScoringMode,
     input_source_root: &Path,
     io_root: &Path,
     input_dir: &Path,
@@ -1000,7 +1102,14 @@ async fn materialize_run_io(
     };
     tokio::fs::write(io_root.join("stdin.txt"), stdin).await?;
     for input in &run.input_files {
-        write_run_input_file(input_source_root, input_dir, input).await?;
+        write_run_input_file(
+            input_source_root,
+            input_dir,
+            input,
+            visible_run_name,
+            eval_type,
+        )
+        .await?;
     }
     Ok(())
 }
@@ -1010,6 +1119,8 @@ async fn write_run_input_file(
     input_source_root: &Path,
     input_dir: &Path,
     input: &ChallengeRunInputFile,
+    visible_run_name: &str,
+    eval_type: ScoringMode,
 ) -> Result<()> {
     let path = input_dir.join(input.path.as_path());
     if let Some(parent) = path.parent() {
@@ -1019,7 +1130,13 @@ async fn write_run_input_file(
         tokio::fs::copy(input_source_root.join(source_path.as_path()), path)
             .await
             .map_err(|e| {
-                AppError::Runner(format!("copy run input source `{source_path}` failed: {e}"))
+                let source = match eval_type {
+                    ScoringMode::Validation => format!(" source `{source_path}`"),
+                    ScoringMode::Official => String::new(),
+                };
+                AppError::Runner(format!(
+                    "copy run `{visible_run_name}` input{source} failed: {e}"
+                ))
             })?;
         return Ok(());
     }
@@ -1040,6 +1157,7 @@ async fn write_run_input_file(
 async fn write_run_metadata(
     io_root: &Path,
     run: &ChallengeRunSpec,
+    visible_run_name: &str,
     outcome: &ContainerOutcome,
 ) -> Result<()> {
     let metadata = SolutionRunMetadata {
@@ -1065,8 +1183,7 @@ async fn write_run_metadata(
                 ZipProjectPhaseName::Run,
                 ZipProjectPhaseFailureReason::RunnerError,
                 format!(
-                    "run `{}` used reserved metadata path `agentics-run.json`: {e}",
-                    run.run_name
+                    "run `{visible_run_name}` used reserved metadata path `agentics-run.json`: {e}"
                 ),
                 None,
             )
@@ -1076,7 +1193,11 @@ async fn write_run_metadata(
 }
 
 /// Ensures declared outputs exist before continuing.
-async fn ensure_declared_outputs_exist(run: &ChallengeRunSpec, output_dir: &Path) -> Result<()> {
+async fn ensure_declared_outputs_exist(
+    run: &ChallengeRunSpec,
+    visible_run_name: &str,
+    output_dir: &Path,
+) -> Result<()> {
     for output in &run.output_files {
         let output_path = output_dir.join(output.as_path());
         let metadata = tokio::fs::symlink_metadata(&output_path)
@@ -1086,8 +1207,7 @@ async fn ensure_declared_outputs_exist(run: &ChallengeRunSpec, output_dir: &Path
                     ZipProjectPhaseName::Run,
                     ZipProjectPhaseFailureReason::RunnerError,
                     format!(
-                        "run `{}` did not produce declared output file `{output}`",
-                        run.run_name
+                        "run `{visible_run_name}` did not produce declared output file `{output}`"
                     ),
                     None,
                 )
@@ -1096,10 +1216,7 @@ async fn ensure_declared_outputs_exist(run: &ChallengeRunSpec, output_dir: &Path
             return Err(phase_error(
                 ZipProjectPhaseName::Run,
                 ZipProjectPhaseFailureReason::RunnerError,
-                format!(
-                    "run `{}` declared output file `{output}` is a symlink",
-                    run.run_name
-                ),
+                format!("run `{visible_run_name}` declared output file `{output}` is a symlink"),
                 None,
             ));
         }
@@ -1108,8 +1225,7 @@ async fn ensure_declared_outputs_exist(run: &ChallengeRunSpec, output_dir: &Path
                 ZipProjectPhaseName::Run,
                 ZipProjectPhaseFailureReason::RunnerError,
                 format!(
-                    "run `{}` declared output path `{output}` is not a regular file",
-                    run.run_name
+                    "run `{visible_run_name}` declared output path `{output}` is not a regular file"
                 ),
                 None,
             ));
@@ -1124,7 +1240,7 @@ mod run_metadata_tests {
 
     use uuid::Uuid;
 
-    use super::{ContainerOutcome, write_run_metadata};
+    use super::{ContainerOutcome, copy_scorer_visible_run_tree, write_run_metadata};
     use crate::models::challenge::{ChallengeRunInterface, ChallengeRunSpec};
     use crate::models::names::RunName;
 
@@ -1154,7 +1270,7 @@ mod run_metadata_tests {
             wall_time_ms: 1,
         };
 
-        let error = write_run_metadata(&root, &run, &outcome)
+        let error = write_run_metadata(&root, &run, "run-0001", &outcome)
             .await
             .expect_err("metadata write should reject a pre-existing symlink");
         assert!(
@@ -1162,6 +1278,30 @@ mod run_metadata_tests {
             "unexpected error: {error}"
         );
         assert!(!target.exists());
+
+        fs::remove_dir_all(root).expect("test root should clean up");
+    }
+
+    /// Verifies that scorer-facing copies reject undeclared symlinks anywhere in the run tree.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn scorer_visible_run_tree_rejects_extra_symlink() {
+        let root =
+            std::env::temp_dir().join(format!("agentics-run-tree-symlink-test-{}", Uuid::new_v4()));
+        let source = root.join("source");
+        let destination = root.join("destination");
+        fs::create_dir_all(source.join("output")).expect("source output should be created");
+        std::os::unix::fs::symlink("/challenge/private", source.join("output/extra"))
+            .expect("extra symlink should be created");
+
+        let error = copy_scorer_visible_run_tree(&source, &destination, "run-0001")
+            .await
+            .expect_err("scorer-facing copy should reject symlinks");
+        assert!(
+            error.to_string().contains("produced a symlink"),
+            "unexpected error: {error}"
+        );
+        assert!(!destination.join("output/extra").exists());
 
         fs::remove_dir_all(root).expect("test root should clean up");
     }

@@ -23,7 +23,7 @@ use shared::db::{
 use shared::models::evaluation::EvaluationStatus;
 use shared::models::ids::{EvaluationId, EvaluationJobId};
 use shared::runner::{
-    EvaluationJobExecution, connect_docker, execute_evaluation_job,
+    EvaluationJobExecution, connect_docker, evaluation_runner_log_key, execute_evaluation_job,
     remove_stopped_runner_containers,
 };
 use shared::storage::LocalStorage;
@@ -308,6 +308,7 @@ pub async fn run_worker_cycle(
         }
         Err(e) => {
             let error_msg = e.to_string();
+            let log_key = evaluation_runner_log_key(job.id.as_str(), job.attempt_count).ok();
             let persisted = mark_evaluation_finished(
                 db,
                 &PersistedEvaluationResult {
@@ -325,7 +326,7 @@ pub async fn run_worker_cycle(
                     public_results: vec![],
                     validation_summary: None,
                     official_summary: None,
-                    log_key: None,
+                    log_key,
                     last_error: Some(error_msg.clone()),
                 },
             )
