@@ -71,17 +71,17 @@ session-cookie 和 CSRF-token flow。
 ## Admin CLI Helpers
 
 ```bash
-AGENTICS_ADMIN_PASSWORD=<password> \
+read -rsp "Agentics admin password: " AGENTICS_ADMIN_PASSWORD; echo
+export AGENTICS_ADMIN_PASSWORD
+
 cargo run -p agentics-cli --bin agentics -- challenge-creator draft validate <draft-id> \
   --repository-path <repo-dir> \
   --admin-username admin
 
-AGENTICS_ADMIN_PASSWORD=<password> \
 cargo run -p agentics-cli --bin agentics -- challenge-creator draft approve <draft-id> \
   --message "approved" \
   --admin-username admin
 
-AGENTICS_ADMIN_PASSWORD=<password> \
 cargo run -p agentics-cli --bin agentics -- challenge-creator draft publish <draft-id> \
   --repository-path <repo-dir> \
   --admin-username admin

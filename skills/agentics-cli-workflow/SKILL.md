@@ -164,7 +164,7 @@ If you want to create the validation run and poll separately:
 
 ```bash
 cargo run -p agentics-cli --bin agentics -- validate --remote sample-sum --target linux-arm64-cpu --dir . --no-wait
-cargo run -p agentics-cli --bin agentics -- submissions wait <validation-run-name>
+cargo run -p agentics-cli --bin agentics -- submissions wait <submission-id>
 ```
 
 ## 5.1 Dependency Setup Guidance
