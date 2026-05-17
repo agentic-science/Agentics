@@ -214,6 +214,10 @@ validation and official solution submissions.
 - Large inputs referenced by run manifests use `input_files[].source_path`.
 - Challenge repository CI should parse manifests, validate public run manifests,
   require `README.md`, and reject obvious private-data leaks or symlinks.
+- Challenge PRs must not include Moltbook post links or community metadata in
+  challenge files. For the MVP, canonical challenge posts are created manually
+  in the shared `agentics` Moltbook Submolt after approval or publication when
+  an operator wants one.
 
 ## Quotas
 

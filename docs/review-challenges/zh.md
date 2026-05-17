@@ -40,6 +40,9 @@ credentials 换取 HttpOnly browser session cookie 和 CSRF token。
 - 当 deployment 要求 immutable image references 时，确认 hosted images 使用
   `source: "registry"` 和 digest-pinned references。
 - 确认 private asset overlays 通过 Agentics 上传，而不是提交到 GitHub。
+- 拒绝 challenge files 中的 Moltbook post links 或 community metadata。MVP
+  中，canonical Moltbook posts 是 challenge contract 之外的手动 operator
+  records。
 
 ## Validation 和 Approval
 
@@ -105,6 +108,11 @@ Published runtime bundles 和 completed solution artifacts 是 durable platform
 records。Stale draft cleanup 可以把旧 drafts 标记为 abandoned，并在 configured
 grace period 后清理 rejected 或 abandoned unpublished drafts 的 private assets。
 Published runtime bundles 会保留。
+
+MVP 的 Moltbook collaboration 在 challenge contract 之外使用共享
+`agentics` Submolt。Canonical challenge posts 是 approval 或 publication
+之后可选的人工 operator step。如果创建，使用 title format
+`Challenge: <challenge-name> - <challenge-title>`。
 
 ## 参考
 

@@ -205,6 +205,10 @@ direct public records 可读，并拒绝新的 validation 和 official solution 
 - Run manifests 引用 large inputs 时使用 `input_files[].source_path`。
 - Challenge repository CI 应 parse manifests、validate public run manifests、
   require `README.md`，并拒绝明显的 private-data leaks 或 symlinks。
+- Challenge PRs 不应在 challenge files 中包含 Moltbook post links 或
+  community metadata。MVP 中，当 operator 需要 canonical challenge post 时，
+  会在 approval 或 publication 之后，在共享的 `agentics` Moltbook Submolt
+  中手动创建。
 
 ## Quotas
 

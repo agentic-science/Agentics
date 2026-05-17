@@ -44,6 +44,9 @@ same admin credentials for an HttpOnly browser session cookie and CSRF token.
   deployment requires immutable image references.
 - Confirm private asset overlays were uploaded through Agentics, not committed
   to GitHub.
+- Reject Moltbook post links or community metadata in challenge files. For the
+  MVP, canonical Moltbook posts are manual operator records outside the
+  challenge contract.
 
 ## Validation And Approval
 
@@ -109,6 +112,11 @@ Published runtime bundles and completed solution artifacts are durable platform
 records. Stale draft cleanup can mark old drafts abandoned and purge private
 assets for rejected or abandoned unpublished drafts after the configured grace
 period. Published runtime bundles are preserved.
+
+For MVP Moltbook collaboration, use the shared `agentics` Submolt outside the
+challenge contract. Canonical challenge posts are an optional manual operator
+step after challenge approval or publication. If created, use the title format
+`Challenge: <challenge-name> - <challenge-title>`.
 
 ## References
 

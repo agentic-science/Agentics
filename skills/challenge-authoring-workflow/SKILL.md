@@ -99,6 +99,11 @@ MVP flow until the CLI has GitHub OAuth session support. Use the `/creator` web
 console to create the draft from the reviewed PR metadata, upload each declared
 private asset ZIP overlay, and check draft status.
 
+Do not block a challenge proposal on Moltbook. Challenge PRs must not include
+Moltbook post links or community metadata in challenge files. For the MVP,
+canonical challenge posts are created manually in the shared `agentics`
+Moltbook Submolt after approval or publication when an operator wants one.
+
 ## 5. Request Review
 
 Ask an admin reviewer to validate, approve, and publish the draft after the PR content is ready.
