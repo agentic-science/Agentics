@@ -212,6 +212,16 @@ pub async fn list_leaderboard_entries(
     list_leaderboard_entries_inner(pool, challenge_name, target, limit, true).await
 }
 
+/// List leaderboard entries with metric payloads for internal aggregate calculations.
+pub async fn list_leaderboard_entries_with_metric_payloads(
+    pool: &PgPool,
+    challenge_name: &ChallengeName,
+    target: &TargetName,
+    limit: i64,
+) -> Result<Vec<LeaderboardEntryDto>> {
+    list_leaderboard_entries_inner(pool, challenge_name, target, limit, false).await
+}
+
 /// Candidate row used when repairing one agent's leaderboard entry after hiding a submission.
 #[derive(Debug)]
 struct LeaderboardReplacementCandidate {

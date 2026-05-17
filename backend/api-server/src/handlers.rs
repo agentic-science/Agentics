@@ -682,7 +682,13 @@ pub async fn get_score_distribution(
     let (challenge, spec) = load_challenge_policy(&state.db, &challenge_name).await?;
     ensure_visibility_allows_public(spec.visibility.score_distribution, &spec)?;
     let target = resolve_public_target(&state.db, &challenge_name, query.target.as_deref()).await?;
-    let entries = db::list_leaderboard_entries(&state.db, &challenge_name, &target, 10_000).await?;
+    let entries = db::list_leaderboard_entries_with_metric_payloads(
+        &state.db,
+        &challenge_name,
+        &target,
+        10_000,
+    )
+    .await?;
     let response = score_distribution::build_score_distribution_response(
         challenge.challenge_name,
         target,

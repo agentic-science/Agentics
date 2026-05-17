@@ -2,6 +2,7 @@
 
 use shared::error::{AppError, Result};
 use shared::models::challenge::ChallengeBundleSpec;
+use shared::models::evaluation::MetricValue;
 use shared::models::names::{ChallengeName, MetricName, TargetName};
 use shared::models::request::{
     LeaderboardEntryDto, ScoreDistributionBucketDto, ScoreDistributionQuantileDto,
@@ -67,9 +68,20 @@ fn metric_value_from_leaderboard_entry(
     match metric_name.as_str() {
         "rank_score" | "best_rank_score" => Some(entry.best_rank_score),
         "official_score" => entry.official_score,
-        _ if metric_name == &spec.metric_schema.ranking.primary_metric_name => entry.official_score,
+        _ if metric_name == &spec.metric_schema.ranking.primary_metric_name => {
+            metric_value_by_name(&entry.official_metrics, metric_name)
+                .or_else(|| metric_value_by_name(&entry.aggregate_metrics, metric_name))
+        }
         _ => None,
     }
+}
+
+/// Find one metric by name in a scorer aggregate metric payload.
+fn metric_value_by_name(metrics: &[MetricValue], metric_name: &MetricName) -> Option<f64> {
+    metrics
+        .iter()
+        .find(|metric| &metric.metric_name == metric_name)
+        .map(|metric| metric.value)
 }
 
 /// Reject distribution requests that would require private aggregate metrics.
@@ -196,4 +208,194 @@ fn histogram_bucket_index(value: f64, min: f64, width: f64, bucket_count: usize)
     bucket_count
         .checked_sub(1)
         .ok_or_else(|| AppError::Internal("histogram bucket count invalid".to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use shared::models::challenge::{
+        ChallengeBundleSpec, ChallengeEligibilitySpec, ChallengeEligibilityType,
+        ChallengeExecutionSpec, ChallengeResultDetailVisibility,
+        ChallengeSolutionPublicationPolicy, ChallengeTargetSpec, ChallengeVisibility,
+        ChallengeVisibilitySpec, DatasetsSpec, DockerPlatform, MetricDefinitionSpec,
+        MetricDirection, MetricSchemaSpec, MetricVisibility, PrivateBenchmarkPolicy, RankingSpec,
+        ResourceProfileSpec, ScorerSpec, SolutionSpec, TargetAccelerator,
+    };
+    use shared::models::evaluation::{MetricValue, ScoreVisibility};
+    use shared::models::ids::{AgentId, SolutionSubmissionId};
+    use shared::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
+    use shared::models::names::{ChallengeName, MetricName, ResourceProfileName, TargetName};
+    use shared::models::paths::BundleRelativePath;
+    use shared::models::request::LeaderboardEntryDto;
+    use shared::zip_project::ZipProjectNetworkAccess;
+
+    use super::build_score_distribution_response;
+
+    /// Parse a valid challenge name for a focused score-distribution test.
+    fn challenge_name(value: &str) -> ChallengeName {
+        ChallengeName::try_new(value.to_string()).expect("test challenge name is valid")
+    }
+
+    /// Parse a valid metric name for a focused score-distribution test.
+    fn metric_name(value: &str) -> MetricName {
+        MetricName::try_new(value.to_string()).expect("test metric name is valid")
+    }
+
+    /// Parse a valid target name for a focused score-distribution test.
+    fn target_name(value: &str) -> TargetName {
+        TargetName::try_new(value.to_string()).expect("test target name is valid")
+    }
+
+    /// Parse a valid resource profile name for a focused score-distribution test.
+    fn resource_profile_name(value: &str) -> ResourceProfileName {
+        ResourceProfileName::try_new(value.to_string())
+            .expect("test resource profile name is valid")
+    }
+
+    /// Parse a bundle-relative path for a focused score-distribution test.
+    fn bundle_path(value: &str) -> BundleRelativePath {
+        BundleRelativePath::try_new(value).expect("test bundle path is valid")
+    }
+
+    /// Build a local Agentics image reference for focused score-distribution tests.
+    fn local_image(value: &str) -> ChallengeImageReference {
+        ChallengeImageReference::Local {
+            reference: LocalAgenticsImageReference::try_new(value)
+                .expect("test local image is valid"),
+        }
+    }
+
+    /// Build a minimal challenge contract whose primary metric is minimized.
+    fn minimized_metric_spec() -> ChallengeBundleSpec {
+        ChallengeBundleSpec {
+            schema_version: 1,
+            challenge_name: challenge_name("latency-challenge"),
+            challenge_title: "Latency Challenge".to_string(),
+            challenge_summary: "Measure raw latency.".to_string(),
+            solution: SolutionSpec {
+                protocol: "zip_project".to_string(),
+                manifest_file: bundle_path("agentics.solution.json"),
+            },
+            scorer: ScorerSpec {
+                command: vec!["python".to_string(), "scorer/run.py".to_string()],
+                result_file: bundle_path("result.json"),
+            },
+            targets: vec![ChallengeTargetSpec {
+                name: target_name("linux-arm64-cpu"),
+                docker_platform: DockerPlatform::LinuxArm64,
+                accelerator: TargetAccelerator::Cpu,
+                validation_enabled: true,
+                resource_profile: ResourceProfileSpec {
+                    name: resource_profile_name("agentics-cpu-small"),
+                    resource_description: None,
+                    solution_image: local_image("agentics-linux-arm64-cpu:ubuntu26.04-local"),
+                    scorer_image: local_image("agentics-linux-arm64-cpu:ubuntu26.04-local"),
+                    timeout_sec: 30,
+                    memory_limit_mb: 512,
+                    cpu_limit_millis: 1000,
+                    disk_limit_mb: 1024,
+                    setup_network_access: ZipProjectNetworkAccess::Enabled,
+                    build_network_access: ZipProjectNetworkAccess::Disabled,
+                    run_network_access: ZipProjectNetworkAccess::Disabled,
+                    scorer_network_access: ZipProjectNetworkAccess::Disabled,
+                    hardware: None,
+                },
+            }],
+            starts_at: None,
+            closes_at: None,
+            eligibility: ChallengeEligibilitySpec {
+                eligibility_type: ChallengeEligibilityType::Open,
+            },
+            validation_submission_limit: None,
+            official_submission_limit: None,
+            visibility: ChallengeVisibilitySpec {
+                leaderboard: ChallengeVisibility::PublicLive,
+                score_distribution: ChallengeVisibility::PublicLive,
+                result_detail: ChallengeResultDetailVisibility::SubmitterLivePublicLive,
+            },
+            solution_publication: ChallengeSolutionPublicationPolicy::Public,
+            execution: ChallengeExecutionSpec {
+                validation_runs: Some(bundle_path("public/runs.json")),
+                validation_prepare: None,
+                official_runs: Some(bundle_path("private-benchmark/runs.json")),
+                official_prepare: None,
+            },
+            datasets: DatasetsSpec {
+                public_dir: bundle_path("public"),
+                private_benchmark_dir: Some(bundle_path("private-benchmark")),
+                public_policy: ScoreVisibility::Full,
+                private_benchmark_policy: PrivateBenchmarkPolicy::ScoreOnly,
+                private_benchmark_enabled: true,
+            },
+            community: None,
+            metric_schema: MetricSchemaSpec {
+                metrics: vec![MetricDefinitionSpec {
+                    name: metric_name("latency_ms"),
+                    label: "Latency".to_string(),
+                    unit: Some("ms".to_string()),
+                    direction: MetricDirection::Minimize,
+                    visibility: MetricVisibility::Public,
+                    metric_description: None,
+                }],
+                ranking: RankingSpec {
+                    primary_metric_name: metric_name("latency_ms"),
+                    tie_breaker_metric_names: Vec::new(),
+                },
+            },
+        }
+    }
+
+    /// Build one leaderboard entry with distinct raw and normalized scores.
+    fn entry(raw_latency: f64, normalized_rank_score: f64) -> LeaderboardEntryDto {
+        LeaderboardEntryDto {
+            target: target_name("linux-arm64-cpu"),
+            agent_id: AgentId::generate(),
+            agent_display_name: "agent".to_string(),
+            best_solution_submission_id: SolutionSubmissionId::generate(),
+            best_rank_score: normalized_rank_score,
+            rank_score: normalized_rank_score,
+            aggregate_metrics: vec![MetricValue {
+                metric_name: metric_name("latency_ms"),
+                value: raw_latency,
+            }],
+            official_metrics: Vec::new(),
+            official_score: Some(raw_latency),
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+        }
+    }
+
+    /// Verifies primary-metric distributions use raw metric values, not rank values.
+    #[test]
+    fn primary_metric_distribution_uses_raw_metric_values_for_minimized_metrics() {
+        let spec = minimized_metric_spec();
+        let response = build_score_distribution_response(
+            challenge_name("latency-challenge"),
+            target_name("linux-arm64-cpu"),
+            metric_name("latency_ms"),
+            &spec,
+            vec![entry(20.0, -20.0), entry(50.0, -50.0)],
+        )
+        .expect("score distribution should build");
+
+        assert_eq!(response.count, 2);
+        assert_eq!(response.min, Some(20.0));
+        assert_eq!(response.max, Some(50.0));
+    }
+
+    /// Verifies rank-score distributions intentionally use normalized comparator values.
+    #[test]
+    fn rank_score_distribution_uses_normalized_comparator_values() {
+        let spec = minimized_metric_spec();
+        let response = build_score_distribution_response(
+            challenge_name("latency-challenge"),
+            target_name("linux-arm64-cpu"),
+            metric_name("rank_score"),
+            &spec,
+            vec![entry(20.0, -20.0), entry(50.0, -50.0)],
+        )
+        .expect("score distribution should build");
+
+        assert_eq!(response.count, 2);
+        assert_eq!(response.min, Some(-50.0));
+        assert_eq!(response.max, Some(-20.0));
+    }
 }
