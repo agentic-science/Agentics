@@ -24,9 +24,9 @@ Findings must be evidence-backed:
 - Suggest a concrete remediation.
 - Avoid vague comments such as "clean this up" without a target design.
 
-## Required Review Lanes
+## General Review Lanes
 
-Cover these lanes when the user asks for a complete review:
+Cover these project-agnostic lanes when the user asks for a complete review:
 
 1. Backend Rust code quality
    - Non-idiomatic Rust, weak error handling, avoidable `unwrap` or `expect`,
@@ -105,10 +105,32 @@ Always inspect these platform-specific risks:
 
 - Private benchmark data must not leak through public DTOs, logs, run names,
   per-case metrics, scorer messages, artifacts, or frontend render paths.
+- Public projection and redaction should be centralized. Review public
+  submission lists, public submission details, result reports, ranking context,
+  leaderboards, score distributions, frontend rendering, and CLI rendering as
+  one redaction matrix. Do not accept separate ad hoc redaction logic in each
+  route or component when the same private benchmark policy is being enforced.
 - Official evaluations must have quota, rate, queue, and storage controls before
   public deployment.
+- Admission controls must be transactional. Quotas, active challenge checks,
+  draft limits, staged job reservations, shortlist eligibility, owner checks,
+  archive-state gates, and active official-job limits should be enforced in the
+  same database transaction that creates or mutates the durable row. Treat
+  check-then-insert or check-then-queue code as a likely P1 unless a database
+  constraint, lock, or compare-and-swap transition makes the race impossible.
+- Capacity counts must include every state that consumes capacity. For Agentics
+  this usually includes `staged`, `queued`, and `running` jobs, pending draft
+  validations, active drafts, reserved storage, and disabled-but-not-cleaned
+  resources when they still occupy quota.
 - Validation and official modes must be distinct in both product behavior and
   API exposure.
+- Secrets must be traced end to end. Pioneer codes, bearer tokens, admin
+  passwords, OAuth client secrets, OAuth state, database URLs, and one-time
+  registration tokens must not appear in query parameters, logs, debug output,
+  default CLI output, browser storage, generated snapshots, or schema fixtures.
+  Secret-bearing login or registration starts should use POST bodies or headers,
+  not GET query strings. Explicit print-once paths are acceptable only when they
+  do not also persist the secret.
 - Docker is not a sufficient hostile-code boundary by itself. Check container
   capabilities, users, PID limits, ulimits, read-only filesystems, network mode,
   bind mounts, log limits, and cleanup behavior.
@@ -128,6 +150,17 @@ Always inspect these platform-specific risks:
   logs.
 - Challenge bundle schemas, CLI packaging rules, web schemas, README examples,
   PRDs, milestones, and skills must stay aligned when behavior changes.
+- Challenge and solution workflows must be reviewed as workflows, not only as
+  files. Walk through agent registration, creator OAuth login, draft creation,
+  private asset upload, challenge publication, solution submission, worker
+  claim/requeue/complete, public result viewing, leaderboard reads, and score
+  distribution reads. Confirm who is authorized, what transaction protects the
+  state change, what durable rows are written, and what public data becomes
+  visible afterward.
+- Accepted MVP risks must be explicit. If a finding is accepted for MVP, record
+  the risk, the compensating controls, the operational assumption, and the
+  follow-up issue. Do not silently downgrade risks such as short pioneer-code
+  entropy or writable-rootfs runner behavior into "not a problem".
 - Domain locators should be explicit, validated, and canonical. Human-authored
   values must be named `*Name`, not `*Id`; generated opaque values must be
   named `*Id`. Search for raw `String` or `&str` fields named like `*_id` or
@@ -170,6 +203,28 @@ starting points, then manually judge context:
 - `\.ok\(\)|unwrap_or_default|let _ =`
 - `unwrap\(|expect\(|panic!|\[[^\]]+\]`
 - `== Path::new|== "/"|PathBuf.*==`
+
+For database admission and state-machine review, scan for code that checks a
+condition separately from the durable state change it protects. Then inspect
+whether a transaction, lock, unique constraint, or compare-and-swap transition
+actually closes the race:
+
+- `COUNT\\(\\*\\)|count_.*\\(`
+- `INSERT INTO .*solution_submissions|INSERT INTO .*evaluation_jobs|INSERT INTO .*challenge_drafts`
+- `UPDATE .* SET .*status|status = 'staged'|status = 'queued'|status = 'running'`
+- `FOR UPDATE|pg_advisory|ON CONFLICT|WHERE .*status`
+- `begin\\(\\)\\.await|commit\\(\\)\\.await`
+- `challenge.*active|archived|quota|limit|capacity|owner|shortlist`
+
+For secret-lifecycle review, trace each secret from boundary input to storage,
+output, and errors. Search broadly, then manually classify whether the value is
+secret material, a hash, an opaque row id, or a non-secret display value:
+
+- `pioneer_code|token|bearer|password|secret|client_secret|oauth|csrf`
+- `URLSearchParams|query\\(|authorization_url|GET .*login`
+- `println!|eprintln!|tracing::|format!|Debug|to_string\\(\\)`
+- `sessionStorage|localStorage|clipboard|window\\.location`
+- `ExposeSecret|expose_secret|SecretString`
 
 For domain modeling review, use targeted searches for stringly typed IDs and
 ambiguous locators, then inspect call flow manually:
@@ -219,6 +274,22 @@ Do not report a raw string merely because it appears at an HTTP path extractor,
 CLI parser field, SQL bind, display formatter, or test fixture. Report it when
 the raw value crosses into semantic code without validation, or when the same
 logical ID can be looked up through multiple public aliases.
+
+For public-result redaction review, build a table of result-bearing surfaces and
+confirm they share the same private-benchmark policy:
+
+- public challenge solution-submission list
+- public solution-submission detail
+- public result report
+- public ranking context
+- public leaderboard
+- public score distribution
+- observer web render path
+- agentics-cli render path
+
+Report any surface that reads private aggregate metrics, run metrics, logs,
+case-level messages, artifacts, or scorer output without passing through the
+public projection/redaction boundary.
 
 ## Severity Guidance
 
