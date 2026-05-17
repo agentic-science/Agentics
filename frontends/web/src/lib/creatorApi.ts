@@ -28,7 +28,6 @@ import {
 
 const CREATOR_CSRF_STORAGE_KEY = "agentics.creator.csrf_token";
 const CREATOR_OAUTH_STATE_STORAGE_KEY = "agentics.creator.oauth_state";
-const DEFAULT_CSRF_COOKIE_NAME = "agentics_csrf";
 
 /** Describes the challenge creation manifest shape used by this module. */
 export type ChallengeCreationManifest = ChallengeDraftResponse["manifest"];
@@ -59,18 +58,13 @@ export class CreatorApiError extends Error {
   }
 }
 
-/** Reads creator csrf token from browser state. */
+/** Reads creator csrf token from browser session storage. */
 export function readCreatorCsrfToken(): string {
   if (typeof window === "undefined") {
     return "";
   }
 
-  const stored = window.sessionStorage.getItem(CREATOR_CSRF_STORAGE_KEY);
-  if (stored) {
-    return stored;
-  }
-
-  return readCookie(DEFAULT_CSRF_COOKIE_NAME);
+  return window.sessionStorage.getItem(CREATOR_CSRF_STORAGE_KEY) ?? "";
 }
 
 /** Stores creator csrf token in browser state. */
@@ -104,6 +98,16 @@ export function consumeExpectedGithubOauthState(
 /** Fetches creator me for the requested UI scope. */
 export async function getCreatorMe(): Promise<CreatorMeResponse> {
   return creatorFetchJson("/api/creator/me", creatorMeResponseSchema);
+}
+
+/** Fetches creator session bootstrap data including the current csrf token. */
+export async function getCreatorSession(): Promise<CreatorSessionResponse> {
+  const session = await creatorFetchJson(
+    "/api/creator/session",
+    creatorSessionResponseSchema,
+  );
+  storeCreatorCsrfToken(session.csrf_token);
+  return session;
 }
 
 /** Starts github login and returns the next navigation target. */
@@ -265,17 +269,6 @@ async function creatorFetchJson<T>(
   }
 
   return schema.parse(await response.json());
-}
-
-/** Reads cookie from browser state. */
-function readCookie(name: string): string {
-  return (
-    document.cookie
-      .split(";")
-      .map((cookie) => cookie.trim())
-      .find((cookie) => cookie.startsWith(`${name}=`))
-      ?.slice(name.length + 1) ?? ""
-  );
 }
 
 /** Handles creator challenge path behavior for this module. */

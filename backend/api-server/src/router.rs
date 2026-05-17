@@ -91,6 +91,10 @@ pub fn router(config: &Config) -> Router<AppState> {
         )
         .route("/api/creator/me", get(crate::auth_handlers::creator_me))
         .route(
+            "/api/creator/session",
+            get(crate::auth_handlers::creator_session),
+        )
+        .route(
             "/api/creator/challenge-drafts",
             post(crate::challenge_creation_handlers::create_challenge_draft),
         )

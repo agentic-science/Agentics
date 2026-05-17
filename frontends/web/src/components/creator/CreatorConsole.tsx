@@ -24,8 +24,7 @@ import {
   getChallengeShortlist,
   getCreatorChallengeParticipants,
   getCreatorChallengeStats,
-  getCreatorMe,
-  readCreatorCsrfToken,
+  getCreatorSession,
   startGithubLogin,
   storeExpectedGithubOauthState,
   uploadChallengePrivateAssetRequestSchema,
@@ -127,17 +126,20 @@ export function CreatorConsole() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setCsrfToken(readCreatorCsrfToken());
     const lastDraftId = window.localStorage.getItem(LAST_DRAFT_STORAGE_KEY);
     if (lastDraftId) {
       setDraftLookupId(lastDraftId);
       setAssetForm((current) => ({ ...current, draftId: lastDraftId }));
     }
 
-    void getCreatorMe()
-      .then(setCreator)
+    void getCreatorSession()
+      .then((session) => {
+        setCreator(session);
+        setCsrfToken(session.csrf_token);
+      })
       .catch(() => {
         setCreator(null);
+        setCsrfToken("");
       });
   }, []);
 
@@ -164,8 +166,9 @@ export function CreatorConsole() {
     setLoading(true);
     setError(null);
     try {
-      setCreator(await getCreatorMe());
-      setCsrfToken(readCreatorCsrfToken());
+      const session = await getCreatorSession();
+      setCreator(session);
+      setCsrfToken(session.csrf_token);
       setMessage("Creator identity refreshed.");
     } catch (e) {
       setCreator(null);

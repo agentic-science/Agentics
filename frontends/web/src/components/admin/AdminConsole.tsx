@@ -836,11 +836,17 @@ function SubmissionActions({
   onError: (message: string | null) => void;
   onMessage: (message: string | null) => void;
 }) {
+  const [pendingAction, setPendingAction] = useState<
+    "rejudge" | "official-run" | "hide" | "disable-agent" | null
+  >(null);
+
   /** Runs action and refreshes affected data. */
   const runAction = async (
     action: "rejudge" | "official-run" | "hide" | "disable-agent",
   ) => {
+    if (!csrfToken || pendingAction) return;
     try {
+      setPendingAction(action);
       if (action === "disable-agent") {
         if (!window.confirm(`Disable agent ${submission.agent_display_name}?`))
           return;
@@ -882,6 +888,8 @@ function SubmissionActions({
       await onRefresh({ quiet: true });
     } catch (e) {
       onError(adminErrorMessage(e));
+    } finally {
+      setPendingAction(null);
     }
   };
 
@@ -891,6 +899,7 @@ function SubmissionActions({
         type="button"
         className="btn btn-secondary btn-sm"
         onClick={() => runAction("rejudge")}
+        disabled={!csrfToken || pendingAction !== null}
       >
         <RefreshCw className="w-3 h-3" />
         Rejudge
@@ -899,6 +908,7 @@ function SubmissionActions({
         type="button"
         className="btn btn-secondary btn-sm"
         onClick={() => runAction("official-run")}
+        disabled={!csrfToken || pendingAction !== null}
       >
         <Play className="w-3 h-3" />
         Official
@@ -907,6 +917,7 @@ function SubmissionActions({
         type="button"
         className="btn btn-ghost btn-sm"
         onClick={() => runAction("hide")}
+        disabled={!csrfToken || pendingAction !== null}
       >
         <EyeOff className="w-3 h-3" />
         Hide
@@ -915,6 +926,7 @@ function SubmissionActions({
         type="button"
         className="btn btn-ghost btn-sm text-[var(--status-error)]"
         onClick={() => runAction("disable-agent")}
+        disabled={!csrfToken || pendingAction !== null}
       >
         <Ban className="w-3 h-3" />
         Disable agent

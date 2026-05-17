@@ -100,6 +100,7 @@
     "parent": "父提交",
     "time": "时间",
     "empty": "暂无官方提交",
+    "hidden": "该挑战的提交详情暂未公开。",
     "status": {
       "pending": "待处理",
       "queued": "排队中",

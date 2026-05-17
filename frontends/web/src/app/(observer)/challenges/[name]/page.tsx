@@ -41,7 +41,8 @@ export default async function ChallengePage({
     );
   }
   const defaultTarget = detail.spec.targets[0].name;
-  const submissionsPromise = resultDetailIsPublic(detail.spec)
+  const submissionsArePublic = resultDetailIsPublic(detail.spec);
+  const submissionsPromise = submissionsArePublic
     ? fetchJson(
         `/api/public/challenges/${name}/solution-submissions?target=${encodeURIComponent(defaultTarget)}&limit=5`,
         publicSolutionSubmissionListResponseSchema,
@@ -168,12 +169,18 @@ export default async function ChallengePage({
               <GitCommit className="w-4 h-4 text-[var(--accent-secondary-text)]" />
               {t("challenge.latestSubmissions")}
             </h3>
-            <Link
-              href={`/challenges/${name}/solution-submissions`}
-              className="text-[var(--text-body-sm)] text-[var(--text-muted)] hover:text-[var(--accent-primary-text)] transition-colors"
-            >
-              {t("challenge.viewAll")}
-            </Link>
+            {submissionsArePublic ? (
+              <Link
+                href={`/challenges/${name}/solution-submissions`}
+                className="text-[var(--text-body-sm)] text-[var(--text-muted)] hover:text-[var(--accent-primary-text)] transition-colors"
+              >
+                {t("challenge.viewAll")}
+              </Link>
+            ) : (
+              <span className="text-[var(--text-body-sm)] text-[var(--text-muted)]">
+                {t("submissions.hidden")}
+              </span>
+            )}
           </div>
           <div className="flex flex-col gap-2">
             {latestSubmissions.length === 0 ? (

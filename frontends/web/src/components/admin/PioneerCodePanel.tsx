@@ -18,6 +18,8 @@ type RefreshOptions = { quiet?: boolean };
 type AdminRefresh = (options?: RefreshOptions) => Promise<void>;
 const PIONEER_LABEL_PATTERN = /^[a-z0-9_]{1,6}$/;
 const PIONEER_CODE_PATTERN = /^([a-z0-9_]{1,6}-)?[0-9a-f]{8}$/;
+const RFC3339_PATTERN =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
 
 export function PioneerCodePanel({
   csrfToken,
@@ -71,7 +73,10 @@ export function PioneerCodePanel({
       return;
     }
     const expiresAt = form.expiresAt.trim();
-    if (expiresAt && Number.isNaN(Date.parse(expiresAt))) {
+    if (
+      expiresAt &&
+      (!RFC3339_PATTERN.test(expiresAt) || Number.isNaN(Date.parse(expiresAt)))
+    ) {
       onError("expires_at must be an RFC3339 timestamp.");
       return;
     }

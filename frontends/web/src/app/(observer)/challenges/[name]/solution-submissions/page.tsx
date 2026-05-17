@@ -24,7 +24,8 @@ export default async function SolutionSubmissionsPage({
     `/api/public/challenges/${name}`,
     challengeDetailResponseSchema,
   );
-  const submissions = resultDetailIsPublic(detail.spec)
+  const submissionsArePublic = resultDetailIsPublic(detail.spec);
+  const submissions = submissionsArePublic
     ? await fetchJson(
         `/api/public/challenges/${name}/solution-submissions?limit=100`,
         publicSolutionSubmissionListResponseSchema,
@@ -87,7 +88,14 @@ export default async function SolutionSubmissionsPage({
 
       {/* Table */}
       <div className="card overflow-x-auto">
-        {submissions.items.length === 0 ? (
+        {!submissionsArePublic ? (
+          <div className="empty-state py-12">
+            <GitCommit className="empty-state-icon" />
+            <p className="text-[var(--text-muted)]">
+              {t("submissions.hidden")}
+            </p>
+          </div>
+        ) : submissions.items.length === 0 ? (
           <div className="empty-state py-12">
             <GitCommit className="empty-state-icon" />
             <p className="text-[var(--text-muted)]">{t("submissions.empty")}</p>

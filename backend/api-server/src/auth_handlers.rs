@@ -310,6 +310,18 @@ pub async fn creator_me(creator: CreatorAuth) -> Result<Json<CreatorMeResponse>>
     }))
 }
 
+/// Return the current creator identity and CSRF token for browser session bootstrap.
+pub async fn creator_session(creator: CreatorAuth) -> Result<Json<CreatorSessionResponse>> {
+    let csrf_token = creator.csrf_token.ok_or(AppError::Unauthorized)?;
+    Ok(Json(CreatorSessionResponse {
+        agent_id: creator.agent_id,
+        github_user_id: creator.github_user_id,
+        github_login: creator.github_login,
+        csrf_token,
+        expires_at: creator.expires_at.to_rfc3339(),
+    }))
+}
+
 /// Exchanges a one-time GitHub OAuth code for an access token.
 async fn exchange_github_code(state: &AppState, code: &str) -> Result<SecretString> {
     let client_id = required_oauth_config(

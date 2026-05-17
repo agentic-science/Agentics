@@ -198,6 +198,8 @@ pub struct CreatorAuth {
     pub agent_id: AgentId,
     pub github_user_id: i64,
     pub github_login: String,
+    pub csrf_token: Option<String>,
+    pub expires_at: chrono::DateTime<chrono::Utc>,
 }
 
 impl FromRequestParts<AppState> for CreatorAuth {
@@ -223,6 +225,13 @@ impl FromRequestParts<AppState> for CreatorAuth {
             .ok_or_else(|| unauthorized("creator session 无效或已过期"))?;
 
         require_session_csrf(parts, &session)?;
+        let csrf_token = cookie_value(
+            parts
+                .headers
+                .get(header::COOKIE)
+                .and_then(|h| h.to_str().ok()),
+            &state.config.web_csrf_cookie_name,
+        );
 
         Ok(CreatorAuth {
             session_id: session.session_id,
@@ -230,6 +239,8 @@ impl FromRequestParts<AppState> for CreatorAuth {
                 .map_err(|_| unauthorized("creator session 无效或已过期"))?,
             github_user_id: session.github_user_id,
             github_login: session.github_login,
+            csrf_token,
+            expires_at: session.expires_at,
         })
     }
 }

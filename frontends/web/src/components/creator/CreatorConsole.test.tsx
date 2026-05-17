@@ -8,8 +8,7 @@ import {
   getChallengeShortlist,
   getCreatorChallengeParticipants,
   getCreatorChallengeStats,
-  getCreatorMe,
-  readCreatorCsrfToken,
+  getCreatorSession,
   startGithubLogin,
   uploadPrivateAsset,
 } from "@/lib/creatorApi";
@@ -36,8 +35,7 @@ vi.mock("@/lib/creatorApi", () => {
     getChallengeShortlist: vi.fn(),
     getCreatorChallengeParticipants: vi.fn(),
     getCreatorChallengeStats: vi.fn(),
-    getCreatorMe: vi.fn(),
-    readCreatorCsrfToken: vi.fn(),
+    getCreatorSession: vi.fn(),
     startGithubLogin: vi.fn(),
     uploadPrivateAsset: vi.fn(),
   };
@@ -56,8 +54,7 @@ const getChallengeShortlistMock = getChallengeShortlist as Mock;
 const getCreatorChallengeParticipantsMock =
   getCreatorChallengeParticipants as Mock;
 const getCreatorChallengeStatsMock = getCreatorChallengeStats as Mock;
-const getCreatorMeMock = getCreatorMe as Mock;
-const readCreatorCsrfTokenMock = readCreatorCsrfToken as Mock;
+const getCreatorSessionMock = getCreatorSession as Mock;
 const startGithubLoginMock = startGithubLogin as Mock;
 const uploadPrivateAssetMock = uploadPrivateAsset as Mock;
 
@@ -65,8 +62,7 @@ describe("CreatorConsole", () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
-    readCreatorCsrfTokenMock.mockReturnValue("");
-    getCreatorMeMock.mockRejectedValue(new Error("not signed in"));
+    getCreatorSessionMock.mockRejectedValue(new Error("not signed in"));
     startGithubLoginMock.mockResolvedValue({
       authorization_url: "https://github.com/login/oauth/authorize",
     });
@@ -153,11 +149,12 @@ describe("CreatorConsole", () => {
   });
 
   it("creates a draft with the loaded creator identity and CSRF token", async () => {
-    readCreatorCsrfTokenMock.mockReturnValue("csrf-token");
-    getCreatorMeMock.mockResolvedValue({
+    getCreatorSessionMock.mockResolvedValue({
       agent_id: "11111111-1111-4111-8111-111111111111",
       github_user_id: 123,
       github_login: "octocat",
+      csrf_token: "csrf-token",
+      expires_at: "2026-05-16T00:00:00Z",
     });
     createChallengeDraftMock.mockResolvedValue(challengeDraftResponse);
 
@@ -192,11 +189,12 @@ describe("CreatorConsole", () => {
   });
 
   it("rejects malformed PR numbers before creating a draft", async () => {
-    readCreatorCsrfTokenMock.mockReturnValue("csrf-token");
-    getCreatorMeMock.mockResolvedValue({
+    getCreatorSessionMock.mockResolvedValue({
       agent_id: "11111111-1111-4111-8111-111111111111",
       github_user_id: 123,
       github_login: "octocat",
+      csrf_token: "csrf-token",
+      expires_at: "2026-05-16T00:00:00Z",
     });
 
     const view = render(<CreatorConsole />);

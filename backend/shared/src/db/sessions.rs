@@ -35,6 +35,7 @@ pub struct AuthenticatedCreatorSession {
     pub github_user_id: i64,
     pub github_login: String,
     pub csrf_token_hash: String,
+    pub expires_at: DateTime<Utc>,
 }
 
 /// Persisted admin identity resolved from a browser session.
@@ -309,7 +310,7 @@ pub async fn authenticate_creator_session(
     let session_token_hash = crate::auth::hash_opaque_token(session_token);
     let row = sqlx::query(
         r#"
-        SELECT id::text AS id, agent_id::text AS agent_id, github_user_id, github_login, csrf_token_hash
+        SELECT id::text AS id, agent_id::text AS agent_id, github_user_id, github_login, csrf_token_hash, expires_at
         FROM web_sessions
         WHERE session_token_hash = $1
           AND role = 'creator'
@@ -343,6 +344,7 @@ pub async fn authenticate_creator_session(
             })?,
         github_login: row.try_get("github_login")?,
         csrf_token_hash: row.try_get("csrf_token_hash")?,
+        expires_at: row.try_get("expires_at")?,
     }))
 }
 

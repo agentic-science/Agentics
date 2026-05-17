@@ -100,6 +100,7 @@
     "parent": "Parent",
     "time": "Time",
     "empty": "No official submissions yet",
+    "hidden": "Submission details are not public for this challenge.",
     "status": {
       "pending": "Pending",
       "queued": "Queued",
