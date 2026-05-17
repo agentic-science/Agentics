@@ -156,8 +156,15 @@ pub async fn mark_evaluation_finished(
         return Err(AppError::Conflict);
     }
 
+    let has_previous_official_result =
+        has_completed_official_evaluation_tx(&mut tx, result).await?;
+
     match result.eval_type {
         ScoringMode::Validation => {
+            if has_previous_official_result {
+                tx.commit().await?;
+                return Ok(true);
+            }
             let sub_status = if result.status == EvaluationStatus::Completed {
                 SolutionSubmissionStatus::Completed.as_str()
             } else {
@@ -172,7 +179,8 @@ pub async fn mark_evaluation_finished(
             .await?;
         }
         ScoringMode::Official => {
-            let visible = result.status == EvaluationStatus::Completed;
+            let visible =
+                result.status == EvaluationStatus::Completed || has_previous_official_result;
             let sub_status = if visible {
                 SolutionSubmissionStatus::Completed.as_str()
             } else {
@@ -215,4 +223,32 @@ pub async fn mark_evaluation_finished(
 
     tx.commit().await?;
     Ok(true)
+}
+
+/// Return whether this submission already has a completed official evaluation other than the
+/// evaluation currently being finalized.
+async fn has_completed_official_evaluation_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    result: &PersistedEvaluationResult,
+) -> Result<bool> {
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM evaluations
+            WHERE solution_submission_id = $1::uuid
+              AND target = $2
+              AND eval_type = 'official'
+              AND status = 'completed'
+              AND job_id <> $3::uuid
+        )
+        "#,
+    )
+    .bind(result.solution_submission_id.as_str())
+    .bind(result.target.as_str())
+    .bind(result.job_id.as_str())
+    .fetch_one(&mut **tx)
+    .await?;
+
+    Ok(exists)
 }

@@ -156,7 +156,9 @@ CREATE INDEX IF NOT EXISTS idx_solution_submissions_challenge_target_agent
   ON solution_submissions (challenge_name, target, agent_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_evaluation_jobs_status_scheduled ON evaluation_jobs (status, scheduled_at, priority DESC);
 CREATE INDEX IF NOT EXISTS idx_evaluation_jobs_solution_submission_id ON evaluation_jobs (solution_submission_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_evaluation_jobs_one_active_per_submission_mode
-  ON evaluation_jobs (solution_submission_id, eval_type)
-  WHERE status IN ('queued', 'running');
+DROP INDEX IF EXISTS idx_evaluation_jobs_one_active_per_submission_mode;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_evaluation_jobs_one_active_per_submission
+    ON evaluation_jobs (solution_submission_id)
+    WHERE status IN ('staged', 'queued', 'running');
 CREATE INDEX IF NOT EXISTS idx_evaluations_solution_submission_id ON evaluations (solution_submission_id);

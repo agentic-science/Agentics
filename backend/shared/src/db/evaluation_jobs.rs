@@ -1,5 +1,5 @@
 use serde_json::Value;
-use sqlx::{PgPool, Row};
+use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use crate::error::{AppError, Result};
 use crate::models::challenge::ChallengeBundleSpec;
@@ -73,7 +73,12 @@ pub async fn claim_next_evaluation_job(
     let solution_submission_id = solution_submission_id_from_row(&r, "solution_submission_id")?;
 
     sqlx::query(
-        "UPDATE solution_submissions SET status = 'running', updated_at = NOW() WHERE id = $1::uuid",
+        r#"
+        UPDATE solution_submissions
+        SET status = 'running', updated_at = NOW()
+        WHERE id = $1::uuid
+          AND visible_after_eval = FALSE
+        "#,
     )
     .bind(solution_submission_id.as_str())
     .execute(&mut *tx)
@@ -164,13 +169,14 @@ pub struct QueueEvaluationJobInput {
     pub job_id: EvaluationJobId,
     pub solution_submission_id: SolutionSubmissionId,
     pub eval_type: ScoringMode,
+    pub max_active_official_jobs: Option<i64>,
 }
 
 /// Queue an evaluation job for an existing solution submission.
 ///
 /// Official jobs are rejected when the challenge does not enable private benchmark data.
-/// Any queued re-run hides the solution submission until its completion path decides
-/// whether the result should become public.
+/// Queued official re-runs preserve an already visible official result until a newer
+/// official run succeeds.
 pub async fn queue_evaluation_job(
     pool: &PgPool,
     input: &QueueEvaluationJobInput,
@@ -194,6 +200,7 @@ pub async fn queue_evaluation_job(
     .fetch_one(&mut *tx)
     .await
     .map_err(|_| AppError::NotFound)?;
+    let was_visible: bool = row.try_get("visible_after_eval")?;
 
     let spec_json: Value = row.try_get("spec_json")?;
     let spec: ChallengeBundleSpec =
@@ -210,6 +217,7 @@ pub async fn queue_evaluation_job(
         &agent_id_from_row(&row, "agent_id")?,
     )
     .await?;
+    ensure_no_active_job_for_submission_tx(&mut tx, &input.solution_submission_id).await?;
 
     let payload = serde_json::to_value(EvaluationJobPayload {
         artifact_key: storage_key_from_row(&row, "artifact_key")?,
@@ -221,6 +229,15 @@ pub async fn queue_evaluation_job(
 
     let eval_type_str = input.eval_type.as_str();
     let priority = if input.eval_type == ScoringMode::Official {
+        if let Some(max_active) = input.max_active_official_jobs {
+            lock_quota_scope(&mut tx, "global:official-active").await?;
+            let active = count_active_evaluation_jobs_tx(&mut tx, ScoringMode::Official).await?;
+            if active >= max_active {
+                return Err(AppError::TooManyRequests(format!(
+                    "official evaluation queue is full: {active} of {max_active} official jobs are staged, queued, or running"
+                )));
+            }
+        }
         10
     } else {
         0
@@ -243,14 +260,21 @@ pub async fn queue_evaluation_job(
     .await
     .map_err(map_active_job_conflict)?;
 
-    sqlx::query(
-        "UPDATE solution_submissions SET status = 'queued', visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1::uuid"
-    )
-    .bind(input.solution_submission_id.as_str())
-    .execute(&mut *tx)
-    .await?;
-    repair_leaderboard_entry_for_solution_submission_tx(&mut tx, &input.solution_submission_id)
+    if input.eval_type == ScoringMode::Official && was_visible {
+        sqlx::query("UPDATE solution_submissions SET updated_at = NOW() WHERE id = $1::uuid")
+            .bind(input.solution_submission_id.as_str())
+            .execute(&mut *tx)
+            .await?;
+    } else {
+        sqlx::query(
+            "UPDATE solution_submissions SET status = 'queued', visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1::uuid"
+        )
+        .bind(input.solution_submission_id.as_str())
+        .execute(&mut *tx)
         .await?;
+        repair_leaderboard_entry_for_solution_submission_tx(&mut tx, &input.solution_submission_id)
+            .await?;
+    }
 
     tx.commit().await?;
 
@@ -291,13 +315,86 @@ fn map_active_job_conflict(error: sqlx::Error) -> AppError {
     match error {
         sqlx::Error::Database(db_err)
             if db_err.constraint().is_some_and(|constraint| {
-                constraint == "idx_evaluation_jobs_one_active_per_submission_mode"
+                constraint == "idx_evaluation_jobs_one_active_per_submission"
+                    || constraint == "idx_evaluation_jobs_one_active_per_submission_mode"
             }) =>
         {
             AppError::Conflict
         }
         other => AppError::Database(other),
     }
+}
+
+/// Serialize active official-capacity admission through a database lock row.
+async fn lock_quota_scope(tx: &mut Transaction<'_, Postgres>, scope: &str) -> Result<()> {
+    sqlx::query(
+        r#"
+        INSERT INTO quota_admission_locks (scope)
+        VALUES ($1)
+        ON CONFLICT (scope) DO NOTHING
+        "#,
+    )
+    .bind(scope)
+    .execute(&mut **tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        SELECT scope
+        FROM quota_admission_locks
+        WHERE scope = $1
+        FOR UPDATE
+        "#,
+    )
+    .bind(scope)
+    .fetch_one(&mut **tx)
+    .await?;
+
+    Ok(())
+}
+
+/// Count active capacity reservations for one evaluation type inside a transaction.
+async fn count_active_evaluation_jobs_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    eval_type: ScoringMode,
+) -> Result<i64> {
+    let count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)::BIGINT
+        FROM evaluation_jobs
+        WHERE eval_type = $1
+          AND status IN ('staged', 'queued', 'running')
+        "#,
+    )
+    .bind(eval_type.as_str())
+    .fetch_one(&mut **tx)
+    .await?;
+
+    Ok(count)
+}
+
+/// Reject queueing when any evaluation mode already reserves this submission.
+async fn ensure_no_active_job_for_submission_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    solution_submission_id: &SolutionSubmissionId,
+) -> Result<()> {
+    let active = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM evaluation_jobs
+            WHERE solution_submission_id = $1::uuid
+              AND status IN ('staged', 'queued', 'running')
+        )
+        "#,
+    )
+    .bind(solution_submission_id.as_str())
+    .fetch_one(&mut **tx)
+    .await?;
+    if active {
+        return Err(AppError::Conflict);
+    }
+    Ok(())
 }
 
 /// Count jobs that reserve active capacity for one evaluation type.

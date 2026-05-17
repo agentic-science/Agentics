@@ -46,7 +46,8 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let challenges = tempfile::tempdir().expect("failed to create challenges tempdir");
     create_admin_bundle(challenges.path());
-    let config = test_config(storage.path(), challenges.path());
+    let mut config = test_config(storage.path(), challenges.path());
+    config.max_active_official_jobs = 1;
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
     let admin_auth = basic_auth_header(
@@ -175,6 +176,19 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         .expect("failed to queue duplicate official run");
     assert_eq!(duplicate_official_run.status(), 409);
 
+    let capacity_limited_official_run = client
+        .post(api_url(
+            &app,
+            &format!("/admin/solution-submissions/{solution_submission_a_id}/official-run"),
+        ))
+        .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .expect("failed to queue capacity-limited official run");
+    assert_eq!(capacity_limited_official_run.status(), 429);
+
     let official_jobs: Vec<(String, String)> = sqlx::query_as(
         r#"
         SELECT eval_type, status
@@ -245,15 +259,23 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         .expect("failed to queue rejudge");
     assert_eq!(rejudge.status(), 202);
 
-    let not_visible_during_rejudge = client
+    let visible_during_rejudge = client
         .get(api_url(
             &app,
             &format!("/api/public/solution-submissions/{solution_submission_b_id}"),
         ))
         .send()
         .await
-        .expect("failed to check solution submission during rejudge");
-    assert_eq!(not_visible_during_rejudge.status(), 404);
+        .expect("failed to check solution submission during rejudge")
+        .error_for_status()
+        .expect("previous official result should remain visible during rejudge")
+        .json::<serde_json::Value>()
+        .await
+        .expect("failed to decode visible submission during rejudge");
+    assert_eq!(
+        visible_during_rejudge["official_evaluation"]["rank_score"],
+        1.0
+    );
 
     let leaderboard_during_rejudge: serde_json::Value = client
         .get(api_url(
@@ -271,11 +293,14 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
             .as_array()
             .unwrap()
             .len(),
-        1
+        2
     );
-    assert_eq!(
-        leaderboard_during_rejudge["items"][0]["best_solution_submission_id"],
-        solution_submission_a_id
+    assert!(
+        leaderboard_during_rejudge["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|item| item["best_solution_submission_id"] == solution_submission_b_id)
     );
 
     run_worker_once(&pool, &config).await;

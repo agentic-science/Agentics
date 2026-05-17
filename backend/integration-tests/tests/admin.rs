@@ -360,9 +360,9 @@ async fn failed_admin_authentication_is_throttled(pool: sqlx::PgPool) {
     );
 }
 
-/// Verifies that admin official run bypasses public official queue limit.
+/// Verifies that admin official run cannot overlap an active validation job.
 #[sqlx::test(migrations = "../migrations")]
-async fn admin_official_run_bypasses_public_official_queue_limit(pool: sqlx::PgPool) {
+async fn admin_official_run_rejects_submission_with_active_job(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let mut config = test_config(storage.path(), &examples_challenges_root());
     config.max_active_official_jobs = 1;
@@ -445,7 +445,7 @@ async fn admin_official_run_bypasses_public_official_queue_limit(pool: sqlx::PgP
         .send()
         .await
         .expect("failed to request admin official run");
-    assert_eq!(admin_response.status(), 202);
+    assert_eq!(admin_response.status(), 409);
 
     let active_official_jobs: i64 = shared::db::count_active_evaluation_jobs(
         &pool,
@@ -453,5 +453,5 @@ async fn admin_official_run_bypasses_public_official_queue_limit(pool: sqlx::PgP
     )
     .await
     .expect("failed to count official jobs");
-    assert_eq!(active_official_jobs, 2);
+    assert_eq!(active_official_jobs, 1);
 }
