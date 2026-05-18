@@ -34,7 +34,10 @@ mod filesystem;
 mod logs;
 mod storage;
 
-pub use docker::{connect_docker, remove_stopped_runner_containers};
+pub use docker::{
+    RunnerContainerCleanupSummary, connect_docker, reconcile_runner_containers,
+    remove_stopped_runner_containers,
+};
 
 use docker::{ContainerOutcome, ContainerRequest, bind_mount, pre_pull_image, run_container};
 use errors::{ensure_container_succeeded, ensure_prepare_succeeded, phase_error};
@@ -257,6 +260,7 @@ pub async fn execute_evaluation_job(
     let runs_root = working_root.join("solution-runs");
     let prepared_root = working_root.join("prepared");
     let scorer_output_root = working_root.join("scorer-output");
+    let challenge_bundle_root = working_root.join("challenge-bundle");
     let log_key = evaluation_runner_log_key(job_id, attempt_count)?;
 
     cleanup_paths([working_root.clone()]).await?;
@@ -267,7 +271,9 @@ pub async fn execute_evaluation_job(
     tokio::fs::create_dir_all(&runs_root).await?;
     tokio::fs::create_dir_all(&scorer_output_root).await?;
 
-    let bundle_dir = payload.bundle_path.as_path();
+    copy_dir_all(payload.bundle_path.as_path(), &challenge_bundle_root).await?;
+    make_container_readable_tree(&challenge_bundle_root).await?;
+    let bundle_dir = challenge_bundle_root.as_path();
     let spec = crate::challenge_bundle::read_challenge_bundle_spec(bundle_dir).await?;
     if config.require_digest_pinned_images {
         crate::challenge_bundle::validate_digest_pinned_images(&spec)?;
@@ -668,6 +674,7 @@ async fn run_solution_invocations(
         ensure_disk_limit(io_root, limits.disk_limit_mb, ZipProjectPhaseName::Run).await?;
         ensure_declared_outputs_exist(run, run_alias.as_str(), &output_dir).await?;
         copy_scorer_visible_run_tree(io_root, &scorer_run_root, run_alias.as_str()).await?;
+        make_container_readable_tree(&scorer_run_root).await?;
         cleanup_paths([solution_io_root]).await?;
     }
 
@@ -680,6 +687,8 @@ async fn run_scorer(
     request: ScorerRequest<'_>,
     logs: &mut String,
 ) -> Result<()> {
+    make_container_readable_tree(request.bundle_dir).await?;
+    make_container_readable_tree(request.runs_root).await?;
     let limits = scorer_limits(request.profile);
     let output_mount = runner
         .storage
@@ -1031,9 +1040,57 @@ async fn make_container_writable_tree(root: &Path) -> Result<()> {
     .map_err(|e| AppError::Internal(format!("container writable chmod task failed: {e}")))?
 }
 
+#[cfg(unix)]
+/// Handles make container readable tree for read-only Docker bind mounts.
+async fn make_container_readable_tree(root: &Path) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = root.to_path_buf();
+    tokio::task::spawn_blocking(move || -> Result<()> {
+        let mut pending = vec![root];
+        while let Some(path) = pending.pop() {
+            let metadata = std::fs::symlink_metadata(&path)?;
+            if metadata.file_type().is_symlink() {
+                continue;
+            }
+            if !metadata.is_dir() && !metadata.is_file() {
+                continue;
+            }
+
+            let mut permissions = metadata.permissions();
+            let current_mode = permissions.mode();
+            let readable_bits = if metadata.is_dir() {
+                0o755
+            } else if current_mode & 0o111 != 0 {
+                0o555
+            } else {
+                0o444
+            };
+            permissions.set_mode(current_mode | readable_bits);
+            std::fs::set_permissions(&path, permissions)?;
+
+            if metadata.is_dir() {
+                for entry in std::fs::read_dir(&path)? {
+                    let entry = entry?;
+                    pending.push(entry.path());
+                }
+            }
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("container readable chmod task failed: {e}")))?
+}
+
 #[cfg(not(unix))]
 /// Handles make container writable tree for this module.
 async fn make_container_writable_tree(_root: &Path) -> Result<()> {
+    Ok(())
+}
+
+#[cfg(not(unix))]
+/// Handles make container readable tree for read-only Docker bind mounts.
+async fn make_container_readable_tree(_root: &Path) -> Result<()> {
     Ok(())
 }
 

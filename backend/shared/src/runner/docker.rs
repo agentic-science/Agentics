@@ -13,14 +13,17 @@ use bollard::query_parameters::{
     WaitContainerOptionsBuilder,
 };
 use futures::StreamExt;
+use sqlx::PgPool;
 use tokio::time::timeout;
 
 use crate::config::Config;
 use crate::error::{AppError, Result};
 use crate::models::challenge::{DockerPlatform, TargetAccelerator};
+use crate::models::ids::EvaluationJobId;
 use crate::zip_project::ZipProjectPhaseLimits;
 
 const STALE_RUNNER_CONTAINER_MIN_AGE_SECS: i64 = 600;
+const PERMISSION_FIX_TIMEOUT_SECS: u64 = 30;
 
 #[derive(Debug)]
 /// Carries container request data across this module boundary.
@@ -47,11 +50,29 @@ pub(super) struct ContainerOutcome {
     pub(super) wall_time_ms: u64,
 }
 
+/// Summary of Agentics runner container reconciliation work.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RunnerContainerCleanupSummary {
+    pub removed_stopped: u64,
+    pub removed_running: u64,
+}
+
+impl RunnerContainerCleanupSummary {
+    /// Return the total number of containers removed during reconciliation.
+    pub fn total_removed(self) -> u64 {
+        self.removed_stopped.saturating_add(self.removed_running)
+    }
+}
+
 /// Handles run container for this module.
 pub(super) async fn run_container(
     docker: &Docker,
     request: ContainerRequest,
 ) -> Result<ContainerOutcome> {
+    let permission_fix_image = request.image.clone();
+    let permission_fix_platform = request.docker_platform;
+    let permission_fix_mounts = writable_bind_mounts(&request.mounts);
+    let permission_fix_labels = request.labels.clone();
     let memory_bytes = request
         .limits
         .memory_limit_mb
@@ -132,30 +153,204 @@ pub(super) async fn run_container(
         log_limit_bytes,
     )
     .await;
+    let permission_result = repair_bind_mount_permissions(
+        docker,
+        permission_fix_image,
+        permission_fix_platform,
+        permission_fix_mounts,
+        permission_fix_labels,
+    )
+    .await;
     let remove_result = remove_container(docker, &container_id).await;
-    match (run_result, remove_result) {
-        (Ok(result), Ok(())) => Ok(result),
-        (Ok(_), Err(cleanup_err)) => Err(cleanup_err),
-        (Err(run_err), Ok(())) => Err(run_err),
-        (Err(run_err), Err(cleanup_err)) => Err(AppError::Docker(format!(
+    match (run_result, permission_result, remove_result) {
+        (Ok(result), Ok(()), Ok(())) => Ok(result),
+        (Ok(_), Err(permission_err), Ok(())) => Err(permission_err),
+        (Ok(_), Ok(()), Err(cleanup_err)) => Err(cleanup_err),
+        (Ok(_), Err(permission_err), Err(cleanup_err)) => Err(AppError::Docker(format!(
+            "{permission_err}; additionally failed to remove runner container: {cleanup_err}"
+        ))),
+        (Err(run_err), Ok(()), Ok(())) => Err(run_err),
+        (Err(run_err), Err(permission_err), Ok(())) => Err(AppError::Docker(format!(
+            "{run_err}; additionally failed to repair bind mount permissions: {permission_err}"
+        ))),
+        (Err(run_err), Ok(()), Err(cleanup_err)) => Err(AppError::Docker(format!(
             "{run_err}; additionally failed to remove runner container: {cleanup_err}"
+        ))),
+        (Err(run_err), Err(permission_err), Err(cleanup_err)) => Err(AppError::Docker(format!(
+            "{run_err}; additionally failed to repair bind mount permissions: {permission_err}; additionally failed to remove runner container: {cleanup_err}"
         ))),
     }
 }
 
+/// Return writable bind mounts that may need host-side permission repair.
+fn writable_bind_mounts(mounts: &[Mount]) -> Vec<Mount> {
+    mounts
+        .iter()
+        .filter(|mount| {
+            mount.typ == Some(MountTypeEnum::BIND)
+                && mount.read_only != Some(true)
+                && mount.target.is_some()
+        })
+        .cloned()
+        .collect()
+}
+
+/// Use a short sidecar to make files created by root-running images host-cleanable.
+async fn repair_bind_mount_permissions(
+    docker: &Docker,
+    image: String,
+    docker_platform: DockerPlatform,
+    mounts: Vec<Mount>,
+    mut labels: HashMap<String, String>,
+) -> Result<()> {
+    if mounts.is_empty() {
+        return Ok(());
+    }
+    let mut cmd = vec![
+        "sh".to_string(),
+        "-c".to_string(),
+        "for path do if [ -e \"$path\" ]; then chmod -R ugo+rwX \"$path\" || exit 1; fi; done"
+            .to_string(),
+        "agentics-permission-fix".to_string(),
+    ];
+    cmd.extend(
+        mounts
+            .iter()
+            .filter_map(|mount| mount.target.as_ref())
+            .cloned(),
+    );
+    labels.insert("agentics.runner".to_string(), "zip_project".to_string());
+    labels.insert("agentics.phase".to_string(), "permission-fix".to_string());
+
+    let host_config = HostConfig {
+        network_mode: Some("none".to_string()),
+        mounts: Some(mounts),
+        auto_remove: Some(false),
+        security_opt: Some(vec!["no-new-privileges:true".to_string()]),
+        privileged: Some(false),
+        publish_all_ports: Some(false),
+        init: Some(true),
+        ..Default::default()
+    };
+    let container_config = ContainerCreateBody {
+        image: Some(image),
+        cmd: Some(cmd),
+        working_dir: Some("/".to_string()),
+        host_config: Some(host_config),
+        labels: Some(labels),
+        ..Default::default()
+    };
+    let name = format!("agentics-permission-fix-{}", uuid::Uuid::new_v4());
+    let create_opts = CreateContainerOptionsBuilder::default()
+        .name(&name)
+        .platform(docker_platform.as_str())
+        .build();
+    let create_resp = docker
+        .create_container(Some(create_opts), container_config)
+        .await
+        .map_err(|e| AppError::Docker(format!("create permission repair container failed: {e}")))?;
+    let container_id = create_resp.id;
+    let run_result =
+        run_created_container(docker, &container_id, PERMISSION_FIX_TIMEOUT_SECS, 4 * 1024)
+            .await
+            .and_then(|outcome| {
+                if outcome.exit_code == 0 && !outcome.timed_out {
+                    Ok(())
+                } else {
+                    Err(AppError::Docker(format!(
+                        "permission repair container failed: exit_code={}, timed_out={}, logs={}",
+                        outcome.exit_code, outcome.timed_out, outcome.logs
+                    )))
+                }
+            });
+    let remove_result = remove_container(docker, &container_id).await;
+    match (run_result, remove_result) {
+        (Ok(()), Ok(())) => Ok(()),
+        (Ok(()), Err(cleanup_err)) => Err(cleanup_err),
+        (Err(run_err), Ok(())) => Err(run_err),
+        (Err(run_err), Err(cleanup_err)) => Err(AppError::Docker(format!(
+            "{run_err}; additionally failed to remove permission repair container: {cleanup_err}"
+        ))),
+    }
+}
+
+/// Reconcile Docker runner containers against live database job claims.
+pub async fn reconcile_runner_containers(
+    docker: &Docker,
+    pool: &PgPool,
+    stale_minutes: i32,
+) -> Result<RunnerContainerCleanupSummary> {
+    let containers = list_agentics_runner_containers(docker).await?;
+    let now_secs = current_unix_timestamp_secs();
+    let mut summary = RunnerContainerCleanupSummary::default();
+    for container in containers {
+        let Some(container_id) = container.id else {
+            continue;
+        };
+        if !matches!(container.state, Some(ContainerSummaryStateEnum::RUNNING)) {
+            if is_stale_runner_container(container.created, now_secs) {
+                remove_container(docker, &container_id).await?;
+                summary.removed_stopped =
+                    summary.removed_stopped.checked_add(1).ok_or_else(|| {
+                        AppError::Internal("removed stopped container count overflow".to_string())
+                    })?;
+            }
+            continue;
+        }
+
+        let labels = container
+            .labels
+            .as_ref()
+            .and_then(RunnerContainerLabels::parse);
+        let action = if let Some(labels) = labels {
+            let db_claim = load_runner_job_claim(pool, &labels.job_id, stale_minutes).await?;
+            runner_container_action(&labels, db_claim.as_ref())
+        } else {
+            RunnerContainerAction::RemoveRunning
+        };
+
+        match action {
+            RunnerContainerAction::Keep => {}
+            RunnerContainerAction::RemoveRunning => {
+                kill_and_remove_container(docker, &container_id).await?;
+                summary.removed_running =
+                    summary.removed_running.checked_add(1).ok_or_else(|| {
+                        AppError::Internal("removed running container count overflow".to_string())
+                    })?;
+            }
+        }
+    }
+
+    Ok(summary)
+}
+
 /// Remove old stopped Agentics runner containers left by earlier worker attempts.
 pub async fn remove_stopped_runner_containers(docker: &Docker) -> Result<u64> {
+    let containers = list_agentics_runner_containers(docker).await?;
+    remove_stopped_runner_containers_from_list(docker, containers).await
+}
+
+/// List every Docker container carrying the Agentics runner label.
+async fn list_agentics_runner_containers(
+    docker: &Docker,
+) -> Result<Vec<bollard::models::ContainerSummary>> {
     let mut filters = HashMap::new();
     filters.insert("label", vec!["agentics.runner=zip_project".to_string()]);
     let options = ListContainersOptionsBuilder::default()
         .all(true)
         .filters(&filters)
         .build();
-    let containers = docker
+    docker
         .list_containers(Some(options))
         .await
-        .map_err(|e| AppError::Docker(format!("list runner containers failed: {e}")))?;
+        .map_err(|e| AppError::Docker(format!("list runner containers failed: {e}")))
+}
 
+/// Remove stale stopped containers from a pre-fetched Docker container list.
+async fn remove_stopped_runner_containers_from_list(
+    docker: &Docker,
+    containers: Vec<bollard::models::ContainerSummary>,
+) -> Result<u64> {
     let now_secs = current_unix_timestamp_secs();
     let mut removed = 0u64;
     for container in containers {
@@ -175,6 +370,102 @@ pub async fn remove_stopped_runner_containers(docker: &Docker) -> Result<u64> {
     }
 
     Ok(removed)
+}
+
+/// Parsed labels that bind a runner container to one database claim.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RunnerContainerLabels {
+    job_id: EvaluationJobId,
+    worker_id: String,
+    attempt_count: i32,
+}
+
+impl RunnerContainerLabels {
+    /// Parse required runner labels, rejecting malformed or incomplete identities.
+    fn parse(labels: &HashMap<String, String>) -> Option<Self> {
+        let job_id = EvaluationJobId::try_new(labels.get("agentics.job_id")?).ok()?;
+        let worker_id = labels.get("agentics.worker_id")?.to_string();
+        if worker_id.trim().is_empty() {
+            return None;
+        }
+        let attempt_count = labels.get("agentics.attempt_count")?.parse::<i32>().ok()?;
+        if attempt_count <= 0 {
+            return None;
+        }
+        Some(Self {
+            job_id,
+            worker_id,
+            attempt_count,
+        })
+    }
+}
+
+/// Current database claim state for a runner job.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RunnerJobClaim {
+    status: String,
+    worker_id: Option<String>,
+    attempt_count: i32,
+    claim_is_fresh: bool,
+}
+
+/// Cleanup action for one running Agentics runner container.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RunnerContainerAction {
+    Keep,
+    RemoveRunning,
+}
+
+/// Determine whether a running container still matches the durable job claim.
+fn runner_container_action(
+    labels: &RunnerContainerLabels,
+    claim: Option<&RunnerJobClaim>,
+) -> RunnerContainerAction {
+    let Some(claim) = claim else {
+        return RunnerContainerAction::RemoveRunning;
+    };
+    if claim.status == "running"
+        && claim.worker_id.as_deref() == Some(labels.worker_id.as_str())
+        && claim.attempt_count == labels.attempt_count
+        && claim.claim_is_fresh
+    {
+        RunnerContainerAction::Keep
+    } else {
+        RunnerContainerAction::RemoveRunning
+    }
+}
+
+/// Load the database claim corresponding to one runner container label set.
+async fn load_runner_job_claim(
+    pool: &PgPool,
+    job_id: &EvaluationJobId,
+    stale_minutes: i32,
+) -> Result<Option<RunnerJobClaim>> {
+    let row: Option<(String, Option<String>, i32, bool)> = sqlx::query_as(
+        r#"
+        SELECT
+            status,
+            worker_id,
+            attempt_count,
+            claimed_at IS NOT NULL
+              AND claimed_at >= NOW() - INTERVAL '1 minute' * $2 AS claim_is_fresh
+        FROM evaluation_jobs
+        WHERE id = $1::uuid
+        "#,
+    )
+    .bind(job_id.as_str())
+    .bind(stale_minutes.max(1))
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(row.map(
+        |(status, worker_id, attempt_count, claim_is_fresh)| RunnerJobClaim {
+            status,
+            worker_id,
+            attempt_count,
+            claim_is_fresh,
+        },
+    ))
 }
 
 /// Returns whether a stopped runner container is old enough for startup cleanup.
@@ -318,6 +609,22 @@ async fn remove_container(docker: &Docker, container_id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Force-stop and remove one running runner container.
+async fn kill_and_remove_container(docker: &Docker, container_id: &str) -> Result<()> {
+    let kill_opts = KillContainerOptionsBuilder::default()
+        .signal("SIGKILL")
+        .build();
+    if let Err(error) = docker.kill_container(container_id, Some(kill_opts)).await {
+        let message = error.to_string();
+        if !message.contains("is not running") && !message.contains("No such container") {
+            return Err(AppError::Docker(format!(
+                "kill orphaned runner container failed: {error}"
+            )));
+        }
+    }
+    remove_container(docker, container_id).await
+}
+
 /// Handles docker log config for this module.
 fn docker_log_config(limit_bytes: u64) -> HostConfigLogConfig {
     let mut config = std::collections::HashMap::new();
@@ -441,5 +748,102 @@ mod tests {
 
         assert_eq!(output, b"abcd");
         assert!(truncated);
+    }
+
+    /// Verifies permission repair only targets writable bind mounts.
+    #[test]
+    fn writable_bind_mounts_skip_read_only_mounts() {
+        let writable = bind_mount(std::path::Path::new("/tmp/write"), "/workspace", false);
+        let read_only = bind_mount(std::path::Path::new("/tmp/read"), "/challenge", true);
+        let selected = writable_bind_mounts(&[writable, read_only]);
+
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].target.as_deref(), Some("/workspace"));
+    }
+
+    /// Verifies fresh matching claims keep their runner containers.
+    #[test]
+    fn runner_container_action_keeps_fresh_matching_claim() {
+        let labels = runner_labels("worker-a", 2);
+        let claim = RunnerJobClaim {
+            status: "running".to_string(),
+            worker_id: Some("worker-a".to_string()),
+            attempt_count: 2,
+            claim_is_fresh: true,
+        };
+
+        assert_eq!(
+            runner_container_action(&labels, Some(&claim)),
+            RunnerContainerAction::Keep
+        );
+    }
+
+    /// Verifies stale or superseded claims remove running runner containers.
+    #[test]
+    fn runner_container_action_removes_stale_or_superseded_claims() {
+        let labels = runner_labels("worker-a", 2);
+
+        for claim in [
+            RunnerJobClaim {
+                status: "queued".to_string(),
+                worker_id: Some("worker-a".to_string()),
+                attempt_count: 2,
+                claim_is_fresh: true,
+            },
+            RunnerJobClaim {
+                status: "running".to_string(),
+                worker_id: Some("worker-b".to_string()),
+                attempt_count: 2,
+                claim_is_fresh: true,
+            },
+            RunnerJobClaim {
+                status: "running".to_string(),
+                worker_id: Some("worker-a".to_string()),
+                attempt_count: 3,
+                claim_is_fresh: true,
+            },
+            RunnerJobClaim {
+                status: "running".to_string(),
+                worker_id: Some("worker-a".to_string()),
+                attempt_count: 2,
+                claim_is_fresh: false,
+            },
+        ] {
+            assert_eq!(
+                runner_container_action(&labels, Some(&claim)),
+                RunnerContainerAction::RemoveRunning
+            );
+        }
+        assert_eq!(
+            runner_container_action(&labels, None),
+            RunnerContainerAction::RemoveRunning
+        );
+    }
+
+    /// Verifies runner labels reject malformed claim identities.
+    #[test]
+    fn runner_container_labels_reject_malformed_identity() {
+        let mut labels = HashMap::from([
+            (
+                "agentics.job_id".to_string(),
+                uuid::Uuid::new_v4().to_string(),
+            ),
+            ("agentics.worker_id".to_string(), "worker-a".to_string()),
+            ("agentics.attempt_count".to_string(), "0".to_string()),
+        ]);
+        assert!(RunnerContainerLabels::parse(&labels).is_none());
+
+        labels.insert("agentics.attempt_count".to_string(), "1".to_string());
+        labels.insert("agentics.job_id".to_string(), "not-a-uuid".to_string());
+        assert!(RunnerContainerLabels::parse(&labels).is_none());
+    }
+
+    /// Build valid runner labels for classification tests.
+    fn runner_labels(worker_id: &str, attempt_count: i32) -> RunnerContainerLabels {
+        RunnerContainerLabels {
+            job_id: EvaluationJobId::generate(),
+            worker_id: worker_id.to_string(),
+            attempt_count,
+        }
     }
 }

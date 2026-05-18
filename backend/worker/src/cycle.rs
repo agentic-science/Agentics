@@ -24,7 +24,7 @@ use shared::models::evaluation::EvaluationStatus;
 use shared::models::ids::{EvaluationId, EvaluationJobId};
 use shared::runner::{
     EvaluationJobExecution, connect_docker, evaluation_runner_log_key, execute_evaluation_job,
-    remove_stopped_runner_containers,
+    reconcile_runner_containers,
 };
 use shared::storage::LocalStorage;
 
@@ -44,11 +44,14 @@ impl Worker {
         config.validate_runner_storage()?;
         let db = create_pool(&config, 2).await?;
         let docker = connect_docker(&config)?;
-        let removed_containers = remove_stopped_runner_containers(&docker).await?;
-        if removed_containers > 0 {
+        let cleanup =
+            reconcile_runner_containers(&docker, &db, config.worker_stale_job_minutes.max(1))
+                .await?;
+        if cleanup.total_removed() > 0 {
             info!(
-                removed_containers,
-                "removed stopped runner containers from previous attempts"
+                removed_stopped = cleanup.removed_stopped,
+                removed_running = cleanup.removed_running,
+                "reconciled runner containers from previous attempts"
             );
         }
         let storage: Arc<dyn shared::storage::Storage> =
@@ -151,6 +154,15 @@ pub async fn run_worker_cycle(
             requeued = reaped.requeued,
             failed = reaped.failed,
             "reaped stale jobs"
+        );
+    }
+    let cleanup =
+        reconcile_runner_containers(docker, db, config.worker_stale_job_minutes.max(1)).await?;
+    if cleanup.total_removed() > 0 {
+        info!(
+            removed_stopped = cleanup.removed_stopped,
+            removed_running = cleanup.removed_running,
+            "reconciled runner containers"
         );
     }
 
