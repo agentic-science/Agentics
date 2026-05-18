@@ -2,12 +2,66 @@ import { ArrowRight, Bot, FlaskConical, Users } from "lucide-react";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { fetchJson } from "@/lib/api";
-import { challengeListResponseSchema } from "@/lib/schemas";
+import {
+  type ChallengeListResponse,
+  challengeDetailResponseSchema,
+  challengeListResponseSchema,
+  publicSolutionSubmissionListResponseSchema,
+} from "@/lib/schemas";
+
+type HomeStats = {
+  challenges: number;
+  agents: number;
+  submissions: number;
+};
+
+async function loadHomeStats(
+  challenges: ChallengeListResponse,
+): Promise<HomeStats> {
+  const agentIds = new Set<string>();
+  let submissions = 0;
+
+  await Promise.all(
+    challenges.items.map(async (challenge) => {
+      try {
+        const detail = await fetchJson(
+          `/api/public/challenges/${challenge.name}`,
+          challengeDetailResponseSchema,
+        );
+
+        await Promise.all(
+          detail.spec.targets.map(async (target) => {
+            try {
+              const submissionList = await fetchJson(
+                `/api/public/challenges/${challenge.name}/solution-submissions?target=${encodeURIComponent(target.name)}&limit=100`,
+                publicSolutionSubmissionListResponseSchema,
+              );
+              submissions += submissionList.total_count;
+              for (const submission of submissionList.items) {
+                agentIds.add(submission.agent_id);
+              }
+            } catch {
+              // Stats should never block the public challenge catalog.
+            }
+          }),
+        );
+      } catch {
+        // Stats should never block the public challenge catalog.
+      }
+    }),
+  );
+
+  return {
+    challenges: challenges.items.length,
+    agents: agentIds.size,
+    submissions,
+  };
+}
 
 /** Renders the home page component. */
 export default async function HomePage() {
   const t = await getTranslations();
-  let challenges: import("@/lib/schemas").ChallengeListResponse;
+  let challenges: ChallengeListResponse;
   let error: string | null = null;
 
   try {
@@ -19,6 +73,8 @@ export default async function HomePage() {
     error = e instanceof Error ? e.message : t("common.error");
     challenges = { items: [] };
   }
+
+  const stats = await loadHomeStats(challenges);
 
   return (
     <div className="flex flex-col gap-16">
@@ -53,7 +109,7 @@ export default async function HomePage() {
             <div className="card flex flex-col items-center gap-1 py-4 text-center">
               <FlaskConical className="w-5 h-5 text-[var(--accent-secondary-text)]" />
               <span className="text-2xl font-bold font-[var(--font-mono)] text-[var(--text-primary)]">
-                {challenges.items.length}
+                {stats.challenges}
               </span>
               <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
                 {t("home.stats.challenges")}
@@ -62,7 +118,7 @@ export default async function HomePage() {
             <div className="card flex flex-col items-center gap-1 py-4 text-center">
               <Bot className="w-5 h-5 text-[var(--accent-primary-text)]" />
               <span className="text-2xl font-bold font-[var(--font-mono)] text-[var(--text-primary)]">
-                —
+                {stats.agents}
               </span>
               <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
                 {t("home.stats.agents")}
@@ -71,7 +127,7 @@ export default async function HomePage() {
             <div className="card flex flex-col items-center gap-1 py-4 text-center">
               <Users className="w-5 h-5 text-[var(--accent-secondary-text)]" />
               <span className="text-2xl font-bold font-[var(--font-mono)] text-[var(--text-primary)]">
-                —
+                {stats.submissions}
               </span>
               <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
                 {t("home.stats.submissions")}
