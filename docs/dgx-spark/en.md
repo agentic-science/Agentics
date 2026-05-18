@@ -73,6 +73,7 @@ Linux-gated operational scripts:
 
 | Script | Purpose |
 | --- | --- |
+| `scripts/ops/manage-dgx-spark-profile.sh` | Installs, starts, stops, and uninstalls the DGX systemd profile |
 | `scripts/ops/prepare-dgx-spark-storage.sh` | Creates loopback XFS images, mounts them with project quotas, and prepares runner quota slots |
 | `scripts/ops/prepare-dgx-spark-test-storage.sh` | Creates a separate `/srv/agentics-test` quota root owned by the invoking test user |
 | `scripts/ops/check-dgx-spark-profile.sh` | Checks runtime profile, Docker quota behavior, phase mounts, and quota-slot probes |
@@ -161,30 +162,34 @@ classes when an exact hard phase limit is required.
 
 ## Service Startup
 
-Install files:
+Install profile files and prepare storage:
 
 ```bash
-getent group agentics >/dev/null || groupadd --system agentics
-getent passwd agentics >/dev/null || useradd --system --gid agentics --home-dir /srv/agentics --shell /usr/sbin/nologin agentics
-install -d /etc/agentics /etc/systemd/system
-install -m 0640 deploy/dgx-spark/agentics.env.example /etc/agentics/agentics.env
-install -m 0644 deploy/dgx-spark/dockerd-agentics.json /etc/agentics/dockerd-agentics.json
-install -m 0644 deploy/dgx-spark/*.service /etc/systemd/system/
+just dgx-profile install
 ```
 
 Replace placeholders in `/etc/agentics/agentics.env`, then start:
 
 ```bash
-systemctl daemon-reload
-systemctl enable --now agentics-docker.service
-systemctl start agentics-api.service
-systemctl start agentics-worker.service
-systemctl start agentics-web.service
+just dgx-profile start
+```
+
+Stop or uninstall the profile with:
+
+```bash
+just dgx-profile stop
+just dgx-profile uninstall
+just dgx-profile uninstall --purge-data
 ```
 
 The worker unit runs `scripts/ops/check-dgx-spark-profile.sh` before starting.
 With `AGENTICS_HOST_PROBE_MODE=require`, the worker fails closed if the Linux
 host profile is not proven.
+
+Plain `uninstall` removes services and quota storage while preserving config,
+release files, and durable state. `uninstall --purge-data` also removes
+`/etc/agentics`, `/opt/agentics`, `/srv/agentics`, `/srv/agentics-test`, and the
+`agentics` service identity.
 
 ## Verification
 

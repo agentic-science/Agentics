@@ -71,6 +71,7 @@ Linux-gated operational scripts：
 
 | Script | Purpose |
 | --- | --- |
+| `scripts/ops/manage-dgx-spark-profile.sh` | 安装、启动、停止和卸载 DGX systemd profile |
 | `scripts/ops/prepare-dgx-spark-storage.sh` | 创建 loopback XFS images、使用 project quotas 挂载，并准备 runner quota slots |
 | `scripts/ops/prepare-dgx-spark-test-storage.sh` | 创建单独的 `/srv/agentics-test` quota root，并归属给调用测试的用户 |
 | `scripts/ops/check-dgx-spark-profile.sh` | 检查 runtime profile、Docker quota behavior、phase mounts 和 quota-slot probes |
@@ -159,30 +160,34 @@ classes 对齐。
 
 ## Service Startup
 
-安装文件：
+安装 profile files 并准备 storage：
 
 ```bash
-getent group agentics >/dev/null || groupadd --system agentics
-getent passwd agentics >/dev/null || useradd --system --gid agentics --home-dir /srv/agentics --shell /usr/sbin/nologin agentics
-install -d /etc/agentics /etc/systemd/system
-install -m 0640 deploy/dgx-spark/agentics.env.example /etc/agentics/agentics.env
-install -m 0644 deploy/dgx-spark/dockerd-agentics.json /etc/agentics/dockerd-agentics.json
-install -m 0644 deploy/dgx-spark/*.service /etc/systemd/system/
+just dgx-profile install
 ```
 
 替换 `/etc/agentics/agentics.env` 中的 placeholders，然后启动：
 
 ```bash
-systemctl daemon-reload
-systemctl enable --now agentics-docker.service
-systemctl start agentics-api.service
-systemctl start agentics-worker.service
-systemctl start agentics-web.service
+just dgx-profile start
+```
+
+停止或卸载 profile：
+
+```bash
+just dgx-profile stop
+just dgx-profile uninstall
+just dgx-profile uninstall --purge-data
 ```
 
 Worker unit 会在启动前运行 `scripts/ops/check-dgx-spark-profile.sh`。当
 `AGENTICS_HOST_PROBE_MODE=require` 时，如果 Linux host profile 未被证明，worker
 会 fail closed。
+
+普通 `uninstall` 会删除 services 和 quota storage，但保留 config、release files
+和 durable state。`uninstall --purge-data` 还会删除 `/etc/agentics`、
+`/opt/agentics`、`/srv/agentics`、`/srv/agentics-test` 和 `agentics` service
+identity。
 
 ## Verification
 

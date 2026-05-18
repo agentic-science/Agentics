@@ -63,36 +63,25 @@ capacity exists.
    getent group agentics >/dev/null || groupadd --system agentics
    getent passwd agentics >/dev/null || useradd --system --gid agentics --home-dir /srv/agentics --shell /usr/sbin/nologin agentics
    ```
-2. Copy `agentics.env.example` to `/etc/agentics/agentics.env` and replace every
-   placeholder secret and host name.
-3. Prepare the storage layout using the Linux-gated script:
+2. Install the profile files and prepare storage:
 
    ```bash
-   AGENTICS_DGX_CONFIRM=prepare-storage \
-   AGENTICS_DGX_PERSIST_FSTAB=1 \
-   AGENTICS_DGX_PHASE_SLOT_CLASSES_MB='64 256 1024 4096' \
-   AGENTICS_DGX_PHASE_SLOTS_PER_CLASS=4 \
-   scripts/ops/prepare-dgx-spark-storage.sh
+   just dgx-profile install
    ```
 
-   The script creates the Docker data-root loop image, per-phase XFS loop
-   mounts, and root-prepared XFS project-quota slots under each phase mount.
-   The unprivileged worker leases those slots at runtime; it does not set quota
-   limits itself.
+   The install command copies the environment template, Docker daemon config,
+   and systemd units, then prepares the Docker data-root loop image, per-phase
+   XFS loop mounts, and root-prepared XFS project-quota slots.
 
-4. Install `dockerd-agentics.json` as `/etc/agentics/dockerd-agentics.json`.
-5. Install the service files under `/etc/systemd/system/`.
-6. Start services in this order:
+3. Replace every placeholder secret and host name in
+   `/etc/agentics/agentics.env`.
+4. Start services:
 
    ```bash
-   systemctl daemon-reload
-   systemctl enable --now agentics-docker.service
-   systemctl start agentics-api.service
-   systemctl start agentics-worker.service
-   systemctl start agentics-web.service
+   just dgx-profile start
    ```
 
-7. Run the profile check:
+5. Run the profile check:
 
    ```bash
    docker --host unix:///run/agentics/docker.sock pull busybox:1.36
@@ -106,8 +95,21 @@ capacity exists.
      scripts/ops/check-dgx-spark-profile.sh
    ```
 
-8. Run the hosted CLI onboarding smoke path and record DGX-3 evidence in
+6. Run the hosted CLI onboarding smoke path and record DGX-3 evidence in
    `docs/dgx-spark/en.md`.
+
+Stop or uninstall the profile with:
+
+```bash
+just dgx-profile stop
+just dgx-profile uninstall
+just dgx-profile uninstall --purge-data
+```
+
+Plain `uninstall` removes services and quota storage while preserving config,
+release files, and durable state. `uninstall --purge-data` also removes
+`/etc/agentics`, `/opt/agentics`, `/srv/agentics`, `/srv/agentics-test`, and the
+`agentics` service identity.
 
 Developer-run quota-sensitive integration tests should use a separate test
 quota root rather than the hosted worker slots:

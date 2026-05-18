@@ -16,6 +16,10 @@ infra-up:
 infra-down:
     {{platform_db_compose}} down
 
+# Manage the Linux-only DGX Spark systemd deployment profile
+dgx-profile *args:
+    sudo scripts/ops/manage-dgx-spark-profile.sh {{args}}
+
 # Run database migrations
 migrate:
     cd backend && cargo sqlx migrate run
