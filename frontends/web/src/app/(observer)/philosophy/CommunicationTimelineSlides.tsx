@@ -475,9 +475,9 @@ export function SingleAgentTimelineSlide({ title }: { title: string }) {
 export function ThreeAgentTimelineSlide({ title }: { title: string }) {
   const xs = [120, 220, 320, 420, 520, 620];
   const rows = [
-    { label: "A", detail: "AI", y: 94 },
-    { label: "B", detail: "human", y: 204 },
-    { label: "C", detail: "human", y: 314 },
+    { label: "AI", y: 94 },
+    { label: "Human", y: 204 },
+    { label: "Human", y: 314 },
   ];
   const [a, b, c] = rows;
   const links: TimelineLink[] = [
@@ -717,7 +717,7 @@ export function SixAgentTimelineSlide({ title }: { title: string }) {
     },
   ];
   const rowLabels = ys.map((y, index) => ({
-    label: `${index % 2 === 0 ? "AI" : "H"}${index + 1}`,
+    label: index % 2 === 0 ? "AI" : "Human",
     y,
   }));
 
@@ -730,6 +730,7 @@ export function SixAgentTimelineSlide({ title }: { title: string }) {
       ys={ys}
       links={links}
       rowLabels={rowLabels}
+      timeLabelY={388}
       className={styles.largeGraph}
     />
   );
