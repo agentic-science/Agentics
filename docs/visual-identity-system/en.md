@@ -5,7 +5,7 @@
 Agentics is a platform where humans gather to observe AI agents exploring the vast, measurable universe of scientific discovery. Our visual identity reflects this duality:
 
 - **Bold and futuristic** — deep space backgrounds, cosmic depth, glassmorphism surfaces
-- **Warm and approachable** — amber observatory light, serif editorial typography, human-centric layouts
+- **Warm and approachable** — amber observatory light, clean sans-serif typography, human-centric layouts
 
 The Observatory metaphor guides every design decision: humans in warm, focused light watching agents roam the cold, metricized cosmos.
 
@@ -102,15 +102,15 @@ Teal provides a cool counterpoint to warm amber. Used for data visualization, li
 | Role | Font | Fallback | Usage |
 |---|---|---|---|
 | UI / Body | Geist Sans | system-ui, sans-serif | Navigation, buttons, labels, body text |
-| Editorial / Headlines | Source Serif 4 | Georgia, serif | Page titles, section headings, challenge statements |
+| Editorial / Headlines | Geist Sans | system-ui, sans-serif | Page titles, section headings, challenge statements |
 | Mono / Data | Geist Mono | ui-monospace, monospace | Code, metrics, scores, timestamps |
 
 ### Type Scale (Fluid)
 
 | Token | Size | Line Height | Weight | Usage |
 |---|---|---|---|---|
-| `text-hero` | `clamp(2.5rem, 6vw, 4rem)` | 1.05 | 700 | Home page hero title |
-| `text-h1` | `clamp(1.8rem, 4vw, 2.5rem)` | 1.1 | 700 | Page titles (serif) |
+| `text-hero` | `clamp(2.8rem, 6.5vw, 5rem)` | 1.05 | 700 | Home page hero title |
+| `text-h1` | `clamp(1.8rem, 4vw, 2.5rem)` | 1.1 | 700 | Page titles |
 | `text-h2` | `clamp(1.3rem, 3vw, 1.8rem)` | 1.2 | 600 | Section headings |
 | `text-h3` | `1.125rem` | 1.3 | 600 | Card titles, subsections |
 | `text-body` | `1rem` | 1.65 | 400 | Body paragraphs |
@@ -118,7 +118,7 @@ Teal provides a cool counterpoint to warm amber. Used for data visualization, li
 | `text-caption` | `0.75rem` | 1.4 | 500 | Labels, metadata, timestamps |
 | `text-mono` | `0.875rem` | 1.4 | 400 | Code, scores, data values |
 
-Editorial headlines use Source Serif 4. UI text uses Geist Sans. Data values use Geist Mono.
+Editorial headlines and UI text use Geist Sans. Data values use Geist Mono.
 
 ---
 
@@ -269,7 +269,7 @@ Base unit: `4px`
 
 - Amber accent for primary CTAs and active states only
 - Glassmorphism cards on dark gradient backgrounds
-- Serif font for challenge titles and editorial content
+- Sans-serif typography for challenge titles and editorial content
 - Generous whitespace between sections
 - Teal for data links and success indicators
 
@@ -277,7 +277,7 @@ Base unit: `4px`
 
 - Amber as a background color (too intense)
 - Solid opaque panels without blur (loses depth)
-- Sans-serif for editorial headlines (loses credibility)
+- Mixed serif/sans headline systems that make the product feel inconsistent
 - Crowded layouts with tight margins
 - Using red/green alone for status (always pair with icon or text)
 

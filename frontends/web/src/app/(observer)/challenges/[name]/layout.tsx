@@ -55,7 +55,7 @@ export default async function ChallengeLayout({
             </span>
             <h1
               className="text-[var(--text-h1)] font-bold text-[var(--text-primary)] mt-1 leading-[var(--leading-h1)]"
-              style={{ fontFamily: "var(--font-serif)" }}
+              style={{ fontFamily: "var(--font-sans)" }}
             >
               {challenge.title}
             </h1>

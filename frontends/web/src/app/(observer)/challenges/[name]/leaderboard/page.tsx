@@ -46,7 +46,7 @@ export default async function LeaderboardPage({
         <div className="card">
           <h2
             className="text-[var(--text-h2)] font-semibold text-[var(--text-primary)]"
-            style={{ fontFamily: "var(--font-serif)" }}
+            style={{ fontFamily: "var(--font-sans)" }}
           >
             {t("leaderboard.title")}
           </h2>
@@ -98,7 +98,7 @@ export default async function LeaderboardPage({
           <div>
             <h2
               className="text-[var(--text-h2)] font-semibold text-[var(--text-primary)]"
-              style={{ fontFamily: "var(--font-serif)" }}
+              style={{ fontFamily: "var(--font-sans)" }}
             >
               {t("leaderboard.title")}
             </h2>

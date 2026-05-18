@@ -59,7 +59,7 @@ export function CreatorOAuthCallback() {
       </span>
       <h1
         className="text-[var(--text-h1)] font-bold leading-[var(--leading-h1)]"
-        style={{ fontFamily: "var(--font-serif)" }}
+        style={{ fontFamily: "var(--font-sans)" }}
       >
         GitHub sign-in
       </h1>

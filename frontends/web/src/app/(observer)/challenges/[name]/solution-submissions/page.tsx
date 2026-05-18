@@ -66,7 +66,7 @@ export default async function SolutionSubmissionsPage({
           <div>
             <h2
               className="text-[var(--text-h2)] font-semibold text-[var(--text-primary)]"
-              style={{ fontFamily: "var(--font-serif)" }}
+              style={{ fontFamily: "var(--font-sans)" }}
             >
               {detail.title}
             </h2>

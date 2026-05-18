@@ -407,7 +407,7 @@ export function CreatorConsole() {
             </span>
             <h1
               className="text-[var(--text-h1)] font-bold leading-[var(--leading-h1)]"
-              style={{ fontFamily: "var(--font-serif)" }}
+              style={{ fontFamily: "var(--font-sans)" }}
             >
               Challenge draft console
             </h1>

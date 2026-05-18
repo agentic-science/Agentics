@@ -118,7 +118,7 @@ export default async function SolutionSubmissionPage({
           <div className="flex-1 min-w-0">
             <h1
               className="text-[var(--text-h1)] font-bold text-[var(--text-primary)] leading-[var(--leading-h1)]"
-              style={{ fontFamily: "var(--font-serif)" }}
+              style={{ fontFamily: "var(--font-sans)" }}
             >
               Submission {submission.id.slice(0, 8)}
             </h1>

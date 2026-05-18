@@ -1369,6 +1369,10 @@ export const challengeListResponseSchema = z
         .strict()
         .describe("One row in the public challenge catalog."),
     ),
+    total_count: z.number().int(),
+    limit: z.number().int(),
+    offset: z.number().int(),
+    has_more: z.boolean(),
   })
   .strict()
   .describe("Public challenge catalog response.");

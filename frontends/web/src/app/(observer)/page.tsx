@@ -9,6 +9,8 @@ import {
   publicSolutionSubmissionListResponseSchema,
 } from "@/lib/schemas";
 
+const HOME_CHALLENGE_PREVIEW_LIMIT = 12;
+
 type HomeStats = {
   challenges: number;
   agents: number;
@@ -52,7 +54,7 @@ async function loadHomeStats(
   );
 
   return {
-    challenges: challenges.items.length,
+    challenges: challenges.total_count,
     agents: agentIds.size,
     submissions,
   };
@@ -66,12 +68,18 @@ export default async function HomePage() {
 
   try {
     challenges = await fetchJson(
-      "/api/public/challenges",
+      `/api/public/challenges?limit=${HOME_CHALLENGE_PREVIEW_LIMIT}&offset=0`,
       challengeListResponseSchema,
     );
   } catch (e) {
     error = e instanceof Error ? e.message : t("common.error");
-    challenges = { items: [] };
+    challenges = {
+      items: [],
+      total_count: 0,
+      limit: HOME_CHALLENGE_PREVIEW_LIMIT,
+      offset: 0,
+      has_more: false,
+    };
   }
 
   const stats = await loadHomeStats(challenges);
@@ -80,11 +88,8 @@ export default async function HomePage() {
     <div className="flex flex-col gap-16">
       {/* Hero */}
       <section className="relative">
-        <div className="flex flex-col items-center text-center gap-7 pt-8 pb-4">
-          <h1
-            className="font-[var(--font-serif)] text-[var(--text-h1)] font-bold leading-[var(--leading-h1)] tracking-tight text-[var(--text-primary)] max-w-4xl"
-            style={{ fontFamily: "var(--font-serif)" }}
-          >
+        <div className="flex flex-col items-center text-center gap-8 pt-8 pb-4">
+          <h1 className="home-hero-title font-bold tracking-tight text-[var(--text-primary)] max-w-5xl">
             {t("home.heroSubtitle")}
           </h1>
           <p className="text-[var(--text-body)] text-[var(--text-muted)] max-w-5xl leading-[var(--leading-body)]">
@@ -104,7 +109,7 @@ export default async function HomePage() {
         </div>
 
         {/* Stats Row */}
-        <div className="flex justify-center mt-8">
+        <div className="home-stats-row flex justify-center">
           <div className="grid w-full max-w-3xl grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="card flex flex-col items-center gap-1 py-4 text-center">
               <FlaskConical className="w-5 h-5 text-[var(--accent-secondary-text)]" />
@@ -139,11 +144,8 @@ export default async function HomePage() {
 
       {/* Challenges Grid */}
       <section id="challenges" className="scroll-mt-20">
-        <div className="flex flex-col items-center text-center gap-2 mb-6">
-          <h2
-            className="text-[var(--text-h2)] font-semibold text-[var(--text-primary)]"
-            style={{ fontFamily: "var(--font-serif)" }}
-          >
+        <div className="home-section-header flex flex-col items-center text-center gap-4">
+          <h2 className="text-[var(--text-h2)] font-semibold text-[var(--text-primary)]">
             {t("nav.challenges")}
           </h2>
           <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] max-w-2xl">
@@ -160,45 +162,50 @@ export default async function HomePage() {
             <p className="text-[var(--text-muted)]">{t("common.empty")}</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {challenges.items.map((challenge) => (
-              <Link
-                key={challenge.name}
-                href={`/challenges/${challenge.name}`}
-                className="card group flex flex-col gap-3"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent-primary-text)] transition-colors leading-[var(--leading-h3)]">
-                    {challenge.title}
-                  </h3>
-                  <span className="badge badge-default shrink-0">
-                    {challenge.eligibility.type}
-                  </span>
-                </div>
-                <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] leading-[var(--leading-body-sm)] line-clamp-2">
-                  {challenge.summary}
-                </p>
-                <div className="flex items-center gap-2 mt-auto pt-2">
-                  <span className="text-[var(--text-caption)] text-[var(--text-muted)] font-mono">
-                    {challenge.name}
-                  </span>
-                  <ArrowRight className="w-3.5 h-3.5 text-[var(--text-muted)] group-hover:text-[var(--accent-primary-text)] group-hover:translate-x-0.5 transition-all ml-auto" />
-                </div>
-              </Link>
-            ))}
+          <div
+            className={
+              challenges.has_more
+                ? "home-challenge-preview home-challenge-preview-fade"
+                : "home-challenge-preview"
+            }
+          >
+            <div className="home-challenge-grid">
+              {challenges.items.map((challenge) => (
+                <Link
+                  key={challenge.name}
+                  href={`/challenges/${challenge.name}`}
+                  className="home-challenge-card card group flex flex-col gap-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent-primary-text)] transition-colors leading-[var(--leading-h3)]">
+                      {challenge.title}
+                    </h3>
+                    <span className="badge badge-default shrink-0">
+                      {challenge.eligibility.type}
+                    </span>
+                  </div>
+                  <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] leading-[var(--leading-body-sm)] line-clamp-2">
+                    {challenge.summary}
+                  </p>
+                  <div className="flex items-center gap-2 mt-auto pt-2">
+                    <span className="home-challenge-name-chip text-[var(--text-caption)] text-[var(--text-muted)] font-mono">
+                      {challenge.name}
+                    </span>
+                    <ArrowRight className="w-3.5 h-3.5 text-[var(--text-muted)] group-hover:text-[var(--accent-primary-text)] group-hover:translate-x-0.5 transition-all ml-auto" />
+                  </div>
+                </Link>
+              ))}
+            </div>
           </div>
         )}
       </section>
 
       {/* How It Works */}
-      <section className="border-t border-[var(--border-subtle)] pt-12">
-        <h2
-          className="text-center text-[var(--text-h2)] font-semibold text-[var(--text-primary)] mb-10"
-          style={{ fontFamily: "var(--font-serif)" }}
-        >
+      <section>
+        <h2 className="home-how-heading text-center text-[var(--text-h2)] font-semibold text-[var(--text-primary)]">
           {t("home.howItWorks")}
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,24rem),24rem))] justify-center gap-6">
           <div className="card flex flex-col items-center text-center gap-3">
             <div className="w-10 h-10 rounded-full bg-[var(--accent-primary-500)]/10 flex items-center justify-center">
               <span className="text-lg font-bold text-[var(--accent-primary-text)]">

@@ -9,11 +9,10 @@
   --font-sans:
     "Geist Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     Roboto, sans-serif;
-  --font-serif: "Source Serif 4", Georgia, "Noto Serif SC", "Songti SC", serif;
   --font-mono: "Geist Mono", ui-monospace, "IBM Plex Mono", monospace;
 
   /* Type scale (fluid) */
-  --text-hero: clamp(2.5rem, 6vw, 4rem);
+  --text-hero: clamp(2.8rem, 6.5vw, 5rem);
   --text-h1: clamp(1.8rem, 4vw, 2.5rem);
   --text-h2: clamp(1.3rem, 3vw, 1.8rem);
   --text-h3: 1.125rem;
@@ -123,6 +122,10 @@
   --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.5);
   --glow-amber: 0 0 20px rgba(245, 158, 11, 0.15);
   --glow-teal: 0 0 20px rgba(45, 212, 191, 0.12);
+  --header-glass-bg: rgba(8, 11, 20, 0.76);
+  --header-glass-layer: rgba(8, 11, 20, 0.46);
+  --header-glass-highlight: rgba(255, 255, 255, 0.04);
+  --header-glass-filter: blur(16px) saturate(130%);
 }
 
 /* ===================================================================
@@ -162,6 +165,35 @@ html[data-theme="light"] {
   --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.1);
   --glow-amber: 0 0 20px rgba(245, 158, 11, 0.1);
   --glow-teal: 0 0 20px rgba(45, 212, 191, 0.08);
+  --header-glass-bg: rgba(255, 255, 255, 0.82);
+  --header-glass-layer: rgba(255, 255, 255, 0.58);
+  --header-glass-highlight: rgba(255, 255, 255, 0.18);
+  --header-glass-filter: blur(14px) saturate(120%);
+}
+
+html[data-browser-engine="chromium"] {
+  --header-glass-bg: rgba(8, 11, 20, 0.86);
+  --header-glass-layer: rgba(8, 11, 20, 0.64);
+  --header-glass-highlight: rgba(255, 255, 255, 0.035);
+  --header-glass-filter: blur(12px) saturate(125%);
+}
+
+html[data-browser-engine="safari"] {
+  --header-glass-bg: rgba(8, 11, 20, 0.86);
+  --header-glass-layer: rgba(8, 11, 20, 0.7);
+  --header-glass-highlight: rgba(255, 255, 255, 0.025);
+  --header-glass-filter: blur(2px) saturate(105%);
+}
+
+html[data-theme="light"][data-browser-engine="chromium"] {
+  --header-glass-bg: rgba(255, 255, 255, 0.9);
+  --header-glass-layer: rgba(255, 255, 255, 0.72);
+}
+
+html[data-theme="light"][data-browser-engine="safari"] {
+  --header-glass-bg: rgba(255, 255, 255, 0.9);
+  --header-glass-layer: rgba(255, 255, 255, 0.76);
+  --header-glass-filter: blur(2px) saturate(105%);
 }
 
 /* ===================================================================
@@ -231,15 +263,134 @@ input {
   }
 }
 
+.site-header-main {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 27px var(--spacing-6);
+}
+
+@media (max-width: 640px) {
+  .site-header-main {
+    padding: 18px var(--spacing-4);
+  }
+}
+
+/* ===================================================================
+   Observer Home
+   =================================================================== */
+
+.home-hero-title {
+  font-size: var(--text-hero);
+  line-height: var(--leading-hero);
+}
+
+.home-stats-row {
+  margin-top: var(--spacing-16);
+}
+
+.home-section-header {
+  margin-bottom: var(--spacing-12);
+}
+
+.home-challenge-preview {
+  --home-challenge-card-height: 10.5rem;
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+.home-challenge-preview-fade {
+  max-height: calc(
+    (var(--home-challenge-card-height) * 3.65) +
+    (var(--spacing-5) * 3)
+  );
+}
+
+.home-challenge-preview-fade::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: calc(var(--home-challenge-card-height) * 0.78);
+  pointer-events: none;
+  content: "";
+  background: linear-gradient(
+    180deg,
+    rgba(8, 11, 20, 0) 0%,
+    rgba(8, 11, 20, 0.48) 44%,
+    rgba(8, 11, 20, 0.94) 100%
+  );
+}
+
+.home-challenge-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 24rem));
+  justify-content: center;
+  gap: var(--spacing-5);
+}
+
+.home-challenge-card {
+  height: var(--home-challenge-card-height);
+}
+
+.home-challenge-name-chip {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0.125rem 0.45rem;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+@media (max-width: 1100px) {
+  .home-challenge-grid {
+    grid-template-columns: repeat(2, minmax(0, 24rem));
+  }
+}
+
+@media (max-width: 720px) {
+  .home-challenge-grid {
+    grid-template-columns: minmax(0, 24rem);
+  }
+}
+
+.home-how-heading {
+  margin-bottom: calc(var(--spacing-12) + var(--spacing-2));
+}
+
+@media (max-width: 640px) {
+  .home-stats-row {
+    margin-top: var(--spacing-12);
+  }
+}
+
 /* ===================================================================
    Glassmorphism
    =================================================================== */
 
 .glass {
-  background: var(--surface-primary);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border-subtle);
+  position: sticky;
+  top: 0;
+  isolation: isolate;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--header-glass-bg);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
+}
+
+.glass::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  content: "";
+  background:
+    linear-gradient(180deg, var(--header-glass-highlight), transparent 80%),
+    var(--header-glass-layer);
+  backdrop-filter: var(--header-glass-filter);
+  -webkit-backdrop-filter: var(--header-glass-filter);
 }
 
 .glass-strong {
@@ -483,7 +634,7 @@ input {
 .prose h2,
 .prose h3,
 .prose h4 {
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   color: var(--text-primary);
   margin-top: 1.75em;
   margin-bottom: 0.5em;

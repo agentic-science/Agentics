@@ -11,8 +11,8 @@ export default function AdminLayout({
   return (
     <div className="site-shell">
       <header className="glass sticky top-0 z-50">
-        <div className="site-main py-0">
-          <nav className="flex items-center justify-between h-14">
+        <div className="site-header-main">
+          <nav className="flex items-center justify-between h-11">
             <Link href="/admin" className="flex items-center gap-2 group">
               <span className="font-[var(--font-sans)] text-xl font-bold tracking-tight text-[var(--text-primary)] group-hover:text-[var(--accent-primary-text)] transition-colors">
                 Agentics Admin
