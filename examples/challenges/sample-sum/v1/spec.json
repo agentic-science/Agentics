@@ -15,7 +15,7 @@
     {
       "name": "linux-arm64-cpu",
       "docker_platform": "linux/arm64",
-      "accelerator": "cpu",
+      "accelerator": null,
       "validation_enabled": true,
       "resource_profile": {
         "name": "agentics-cpu-small",
@@ -36,12 +36,13 @@
         "run_network_access": "disabled",
         "scorer_network_access": "disabled",
         "resource_description": "Single CPU worker profile for protocol fixtures.",
-        "hardware": {
+        "hardware_metadata": {
           "kind": "cpu"
         }
       }
     }
   ],
+  "starts_at": "2026-01-01T00:00:00Z",
   "eligibility": { "type": "open" },
   "visibility": {
     "leaderboard": "public_live",

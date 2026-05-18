@@ -63,8 +63,8 @@ image sources. Local development may use `source: "local"` with
 tag. CUDA targets must use `agentics-linux-arm64-cuda` or
 `ghcr.io/agentics-reifying/agentics-linux-arm64-cuda` with a tag that starts
 with the declared CUDA variant, such as `cu130-*`. For CUDA challenges, do not
-assume PyTorch is preinstalled, and declare `hardware.kind`, `gpu_model`,
-`gpu_count`, `cuda_variant`, and matching `cuda_version` in the resource
+assume PyTorch is preinstalled, and declare `hardware_metadata.kind`,
+`gpu_model`, `gpu_count`, `cuda_variant`, and matching `cuda_version` in the resource
 profile. Current new CUDA variants are `cu126`, `cu130`, and `cu132`. CUDA
 variants share the `linux-arm64-cuda` leaderboard when the hardware target is
 the same, so the challenge owner is responsible for comparability. Hosted

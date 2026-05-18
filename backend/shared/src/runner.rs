@@ -1459,8 +1459,6 @@ mod tests {
             result_runs_file: BundleRelativePath::try_new("prepared/runs.json").expect("runs path"),
             network_access: ZipProjectNetworkAccess::Enabled,
             reproducibility_notes: None,
-            external_data: Vec::new(),
-            cache_key_hint: None,
         };
 
         let scorer = scorer_limits(&profile);
@@ -1510,7 +1508,7 @@ mod tests {
             build_network_access: ZipProjectNetworkAccess::Disabled,
             run_network_access: ZipProjectNetworkAccess::Loopback,
             scorer_network_access: ZipProjectNetworkAccess::Disabled,
-            hardware: None,
+            hardware_metadata: None,
         }
     }
 }

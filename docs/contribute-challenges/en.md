@@ -26,11 +26,11 @@ CUDA targets must use `agentics-linux-arm64-cuda` or
 the declared CUDA variant, such as `cu130-*`.
 
 For `linux-arm64-cuda`, challenge bundles must declare CUDA hardware metadata:
-`kind: "cuda"`, a concrete `gpu_model`, `gpu_count`, `cuda_variant`, and matching
-`cuda_version`. Current new CUDA variants are `cu126`, `cu130`, and `cu132`.
-CUDA variants share the `linux-arm64-cuda` leaderboard when the hardware target
-is the same. Challenge owners are responsible for keeping those results
-comparable.
+`resource_profile.hardware_metadata.kind: "cuda"`, a concrete `gpu_model`,
+`gpu_count`, `cuda_variant`, and matching `cuda_version`. Current new CUDA
+variants are `cu126`, `cu130`, and `cu132`. CUDA variants share the
+`linux-arm64-cuda` leaderboard when the hardware target is the same. Challenge
+owners are responsible for keeping those results comparable.
 
 ## Public Repository Layout
 
@@ -84,16 +84,17 @@ New challenge:
 }
 ```
 
-`new_version` is not accepted in the MVP model. Material benchmark-contract
-changes require a new `challenge_name`.
+Every `private_assets[]` entry must explicitly set `required` to `true` or
+`false`. `new_version` is not accepted in the MVP model. Material
+benchmark-contract changes require a new `challenge_name`.
 
 ## Challenge Policy
 
 Each bundle `spec.json` declares challenge-level policy, not internal
 competition stages:
 
-- `starts_at` and `closes_at` are optional RFC3339 timestamps. If both are set,
-  `closes_at` must be later than `starts_at`.
+- `starts_at` is a required RFC3339 timestamp. `closes_at` is optional, but if
+  it is set, it must be later than `starts_at`.
 - `eligibility` is either `{ "type": "open" }` or
   `{ "type": "private_shortlist" }`.
 - `validation_submission_limit` and `official_submission_limit` are optional

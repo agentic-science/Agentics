@@ -291,7 +291,7 @@ mod tests {
             targets: vec![ChallengeTargetSpec {
                 name: target_name("linux-arm64-cpu"),
                 docker_platform: DockerPlatform::LinuxArm64,
-                accelerator: TargetAccelerator::Cpu,
+                accelerator: TargetAccelerator::None,
                 validation_enabled: true,
                 resource_profile: ResourceProfileSpec {
                     name: resource_profile_name("agentics-cpu-small"),
@@ -306,10 +306,10 @@ mod tests {
                     build_network_access: ZipProjectNetworkAccess::Disabled,
                     run_network_access: ZipProjectNetworkAccess::Disabled,
                     scorer_network_access: ZipProjectNetworkAccess::Disabled,
-                    hardware: None,
+                    hardware_metadata: None,
                 },
             }],
-            starts_at: None,
+            starts_at: "2026-01-01T00:00:00Z".to_string(),
             closes_at: None,
             eligibility: ChallengeEligibilitySpec {
                 eligibility_type: ChallengeEligibilityType::Open,

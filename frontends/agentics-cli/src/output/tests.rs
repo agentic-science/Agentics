@@ -29,7 +29,7 @@ fn renders_challenge_list_table() {
                 name: challenge_name("sample-sum"),
                 title: "Sample Sum".to_string(),
                 summary: "Add numbers".to_string(),
-                starts_at: None,
+                starts_at: "2026-01-01T00:00:00Z".to_string(),
                 closes_at: None,
                 eligibility: ChallengeEligibilitySpec {
                     eligibility_type: ChallengeEligibilityType::Open,
@@ -56,8 +56,8 @@ fn renders_challenge_detail_table() {
     assert!(output.contains("eligibility: open"));
     assert!(output.contains("solution_publication: public"));
     assert!(
-            output.contains(
-                "  - linux-arm64-cpu: linux/arm64 cpu, image=agentics-linux-arm64-cpu:ubuntu26.04-local, timeout=30 sec, memory=512 MB, validation=disabled"
+        output.contains(
+                "  - linux-arm64-cpu: linux/arm64 none, image=agentics-linux-arm64-cpu:ubuntu26.04-local, timeout=30 sec, memory=512 MB, validation=disabled"
             )
         );
     assert!(output.contains("ranking_metric: score"));
@@ -75,7 +75,7 @@ fn challenge_detail() -> ChallengeDetailResponse {
             challenge_name: challenge_name("sample-sum"),
             challenge_title: "Sample Sum".to_string(),
             challenge_summary: "Add numbers".to_string(),
-            starts_at: None,
+            starts_at: "2026-01-01T00:00:00Z".to_string(),
             closes_at: None,
             eligibility: ChallengeEligibilitySpec {
                 eligibility_type: ChallengeEligibilityType::Open,
@@ -99,7 +99,7 @@ fn challenge_detail() -> ChallengeDetailResponse {
             targets: vec![ChallengeTargetSpec {
                 name: target_name("linux-arm64-cpu"),
                 docker_platform: DockerPlatform::LinuxArm64,
-                accelerator: TargetAccelerator::Cpu,
+                accelerator: TargetAccelerator::None,
                 validation_enabled: false,
                 resource_profile: ResourceProfileSpec {
                     name: resource_profile_name("python-cpu-small"),
@@ -114,7 +114,7 @@ fn challenge_detail() -> ChallengeDetailResponse {
                     build_network_access: ZipProjectNetworkAccess::Disabled,
                     run_network_access: ZipProjectNetworkAccess::Disabled,
                     scorer_network_access: ZipProjectNetworkAccess::Disabled,
-                    hardware: None,
+                    hardware_metadata: None,
                 },
             }],
             execution: ChallengeExecutionSpec {

@@ -18,8 +18,8 @@ Reviewer checklist:
 - `README.md`, `statement.md`, and `spec.json` are coherent.
 - The metric schema has one primary ranking metric and clear metric descriptions.
 - Targets are realistic for the hosted worker budget.
-- Challenge-level `starts_at` and `closes_at`, if present, are RFC3339 and make
-  operational sense for the intended launch.
+- Challenge-level `starts_at` is present, `starts_at` and optional `closes_at`
+  are RFC3339, and the timing makes operational sense for the intended launch.
 - Eligibility is either open or private shortlist. For private shortlist
   challenges, confirm the creator understands they must upload delta-only
   `agent_ids_to_add` JSON after publish before submissions can be admitted.

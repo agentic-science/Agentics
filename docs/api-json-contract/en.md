@@ -27,7 +27,9 @@ generated schemas.
 Use explicit `null` only when the API must distinguish a field that is present
 but intentionally empty from a field that is not included in the response. Any
 exception must be documented next to the Rust DTO field and covered by a
-contract fixture.
+contract fixture. Current exception: `targets[].accelerator` is a required
+nullable field where `null` means no accelerator and `"gpu"` means GPU
+acceleration.
 
 ## Request DTOs
 

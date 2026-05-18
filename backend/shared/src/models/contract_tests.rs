@@ -3,12 +3,12 @@ use serde_json::Value;
 
 use super::challenge::{
     ChallengeBundleSpec, ChallengeDetailResponse, ChallengeEligibilitySpec,
-    ChallengeEligibilityType, ChallengeExecutionSpec, ChallengePrepareExternalDataSpec,
-    ChallengePrepareSpec, ChallengeResultDetailVisibility, ChallengeSolutionPublicationPolicy,
-    ChallengeTargetSpec, ChallengeVisibility, ChallengeVisibilitySpec, DatasetsSpec,
-    DockerPlatform, HardwareProfileSpec, MetricDefinitionSpec, MetricDirection, MetricSchemaSpec,
-    MetricVisibility, PrivateBenchmarkPolicy, RankingSpec, ResourceProfileSpec, ScorerSpec,
-    SolutionSpec, TargetAccelerator,
+    ChallengeEligibilityType, ChallengeExecutionSpec, ChallengePrepareSpec,
+    ChallengeResultDetailVisibility, ChallengeSolutionPublicationPolicy, ChallengeTargetSpec,
+    ChallengeVisibility, ChallengeVisibilitySpec, DatasetsSpec, DockerPlatform,
+    HardwareProfileSpec, MetricDefinitionSpec, MetricDirection, MetricSchemaSpec, MetricVisibility,
+    PrivateBenchmarkPolicy, RankingSpec, ResourceProfileSpec, ScorerSpec, SolutionSpec,
+    TargetAccelerator,
 };
 use super::evaluation::{
     EvaluationDto, EvaluationStatus, MetricValue, RunMetricResult, ScoreVisibility, ScoringMode,
@@ -22,7 +22,6 @@ use super::paths::BundleRelativePath;
 use super::request::{
     AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto, SolutionSubmissionResponse,
 };
-use super::urls::ExternalDataUrl;
 use crate::storage::StorageKey;
 use crate::zip_project::ZipProjectNetworkAccess;
 
@@ -96,6 +95,9 @@ fn assert_serializes_to_fixture(
 fn ensure_no_explicit_nulls(value: &Value, path: &str) -> Result<(), Box<dyn std::error::Error>> {
     match value {
         Value::Null => {
+            if path.ends_with(".accelerator") {
+                return Ok(());
+            }
             return Err(std::io::Error::other(format!(
                 "response DTO fixture contains explicit null at {path}"
             ))
@@ -127,7 +129,7 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
             challenge_name: challenge_name("matrix-multiplication"),
             challenge_title: "Matrix Multiplication".to_string(),
             challenge_summary: "Optimize CPU matrix multiplication kernels.".to_string(),
-            starts_at: None,
+            starts_at: "2026-01-01T00:00:00Z".to_string(),
             closes_at: None,
             eligibility: ChallengeEligibilitySpec {
                 eligibility_type: ChallengeEligibilityType::Open,
@@ -151,7 +153,7 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
             targets: vec![ChallengeTargetSpec {
                 name: target_name("linux-arm64-cpu"),
                 docker_platform: DockerPlatform::LinuxArm64,
-                accelerator: TargetAccelerator::Cpu,
+                accelerator: TargetAccelerator::None,
                 validation_enabled: true,
                 resource_profile: ResourceProfileSpec {
                     name: resource_profile_name("ubuntu-cpu-small"),
@@ -174,7 +176,7 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
                     build_network_access: ZipProjectNetworkAccess::Enabled,
                     run_network_access: ZipProjectNetworkAccess::Disabled,
                     scorer_network_access: ZipProjectNetworkAccess::Disabled,
-                    hardware: Some(HardwareProfileSpec {
+                    hardware_metadata: Some(HardwareProfileSpec {
                         kind: "cpu".to_string(),
                         gpu_model: None,
                         gpu_count: None,
@@ -196,13 +198,6 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
                     reproducibility_notes: Some(
                         "Generated from a fixed benchmark seed.".to_string(),
                     ),
-                    external_data: vec![ChallengePrepareExternalDataSpec {
-                        url: ExternalDataUrl::try_new("https://example.com/matrix-seeds-v1.json")
-                            .expect("test external data URL is valid"),
-                        digest: Some(digest("a")),
-                        version: Some("v1".to_string()),
-                    }],
-                    cache_key_hint: Some("matrix-v1".to_string()),
                 }),
             },
             datasets: DatasetsSpec {

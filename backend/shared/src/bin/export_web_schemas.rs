@@ -148,9 +148,12 @@ fn normalize_response_schema(value: &mut Value) {
 fn normalize_schema_object(object: &mut Map<String, Value>) {
     require_default_serialized_properties(object);
     object.remove("default");
-    remove_null_type(object, "anyOf");
-    remove_null_type(object, "oneOf");
-    remove_null_from_type_array(object);
+    let preserve_null = object.remove("x-agentics-preserve-null").is_some();
+    if !preserve_null {
+        remove_null_type(object, "anyOf");
+        remove_null_type(object, "oneOf");
+        remove_null_from_type_array(object);
+    }
     collapse_string_const_union(object, "anyOf");
     collapse_string_const_union(object, "oneOf");
 

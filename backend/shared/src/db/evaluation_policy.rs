@@ -140,9 +140,8 @@ pub(super) async fn ensure_challenge_supports_eval_type_tx(
 /// Ensures challenge accepts submissions before continuing.
 fn ensure_challenge_accepts_submissions(spec: &ChallengeBundleSpec) -> Result<()> {
     let now = Utc::now();
-    if let Some(starts_at) = parse_challenge_time(spec.starts_at.as_deref(), "starts_at")?
-        && now < starts_at
-    {
+    let starts_at = parse_required_challenge_time(&spec.starts_at, "starts_at")?;
+    if now < starts_at {
         return Err(AppError::Forbidden(
             "challenge has not started yet".to_string(),
         ));
@@ -153,6 +152,13 @@ fn ensure_challenge_accepts_submissions(spec: &ChallengeBundleSpec) -> Result<()
         return Err(AppError::Forbidden("challenge has closed".to_string()));
     }
     Ok(())
+}
+
+/// Parses required challenge time from persisted challenge policy.
+fn parse_required_challenge_time(value: &str, field: &str) -> Result<DateTime<Utc>> {
+    DateTime::parse_from_rfc3339(value)
+        .map(|date| date.with_timezone(&Utc))
+        .map_err(|e| AppError::Internal(format!("{field} is not valid RFC3339: {e}")))
 }
 
 /// Ensures challenge eligibility before continuing.

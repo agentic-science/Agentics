@@ -246,7 +246,7 @@ pub fn write_public_challenge(repo: &Path) -> String {
                 {
                     "name": "linux-arm64-cpu",
                     "docker_platform": "linux/arm64",
-                    "accelerator": "cpu",
+                    "accelerator": null,
                     "validation_enabled": true,
                     "resource_profile": {
                         "name": "agentics-cpu-small",
@@ -269,6 +269,7 @@ pub fn write_public_challenge(repo: &Path) -> String {
                     }
                 }
             ],
+            "starts_at": "2026-01-01T00:00:00Z",
             "eligibility": { "type": "open" },
             "visibility": {
                 "leaderboard": "public_live",

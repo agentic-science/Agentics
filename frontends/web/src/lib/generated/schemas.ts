@@ -60,8 +60,49 @@ export const adminChallengeListResponseSchema = z
                     .enum(["linux/arm64", "linux/amd64"])
                     .describe("Supported Docker platforms for targets."),
                   accelerator: z
-                    .enum(["cpu", "gpu"])
-                    .describe("Accelerator family used by a target."),
+                    .any()
+                    .superRefine((x, ctx) => {
+                      const schemas = [z.null(), z.literal("gpu")];
+                      const { errors, failed } = schemas.reduce<{
+                        errors: z.core.$ZodIssue[];
+                        failed: number;
+                      }>(
+                        ({ errors, failed }, schema) =>
+                          ((result) =>
+                            result.error
+                              ? {
+                                  errors: [...errors, ...result.error.issues],
+                                  failed: failed + 1,
+                                }
+                              : { errors, failed })(schema.safeParse(x)),
+                        { errors: [], failed: 0 },
+                      );
+                      const passed = schemas.length - failed;
+                      if (passed !== 1) {
+                        ctx.addIssue(
+                          errors.length
+                            ? {
+                                path: [],
+                                code: "invalid_union",
+                                errors: [errors],
+                                message:
+                                  "Invalid input: Should pass single schema. Passed " +
+                                  passed,
+                              }
+                            : {
+                                path: [],
+                                code: "custom",
+                                errors: [errors],
+                                message:
+                                  "Invalid input: Should pass single schema. Passed " +
+                                  passed,
+                              },
+                        );
+                      }
+                    })
+                    .describe(
+                      'Required nullable field: JSON null means no accelerator, "gpu" means GPU acceleration.',
+                    ),
                   validation_enabled: z.boolean(),
                   resource_profile: z
                     .object({
@@ -230,7 +271,7 @@ export const adminChallengeListResponseSchema = z
                         .describe(
                           "Network access policy requested for a phase.",
                         ),
-                      hardware: z
+                      hardware_metadata: z
                         .object({
                           kind: z.string(),
                           gpu_model: z.string().optional(),
@@ -476,8 +517,49 @@ export const challengeDetailResponseSchema = z
                 .enum(["linux/arm64", "linux/amd64"])
                 .describe("Supported Docker platforms for targets."),
               accelerator: z
-                .enum(["cpu", "gpu"])
-                .describe("Accelerator family used by a target."),
+                .any()
+                .superRefine((x, ctx) => {
+                  const schemas = [z.null(), z.literal("gpu")];
+                  const { errors, failed } = schemas.reduce<{
+                    errors: z.core.$ZodIssue[];
+                    failed: number;
+                  }>(
+                    ({ errors, failed }, schema) =>
+                      ((result) =>
+                        result.error
+                          ? {
+                              errors: [...errors, ...result.error.issues],
+                              failed: failed + 1,
+                            }
+                          : { errors, failed })(schema.safeParse(x)),
+                    { errors: [], failed: 0 },
+                  );
+                  const passed = schemas.length - failed;
+                  if (passed !== 1) {
+                    ctx.addIssue(
+                      errors.length
+                        ? {
+                            path: [],
+                            code: "invalid_union",
+                            errors: [errors],
+                            message:
+                              "Invalid input: Should pass single schema. Passed " +
+                              passed,
+                          }
+                        : {
+                            path: [],
+                            code: "custom",
+                            errors: [errors],
+                            message:
+                              "Invalid input: Should pass single schema. Passed " +
+                              passed,
+                          },
+                    );
+                  }
+                })
+                .describe(
+                  'Required nullable field: JSON null means no accelerator, "gpu" means GPU acceleration.',
+                ),
               validation_enabled: z.boolean(),
               resource_profile: z
                 .object({
@@ -632,7 +714,7 @@ export const challengeDetailResponseSchema = z
                   scorer_network_access: z
                     .enum(["disabled", "loopback", "enabled"])
                     .describe("Network access policy requested for a phase."),
-                  hardware: z
+                  hardware_metadata: z
                     .object({
                       kind: z.string(),
                       gpu_model: z.string().optional(),
@@ -658,7 +740,7 @@ export const challengeDetailResponseSchema = z
               "One execution and ranking target declared by a challenge.",
             ),
         ),
-        starts_at: z.string().optional(),
+        starts_at: z.string(),
         closes_at: z.string().optional(),
         eligibility: z
           .object({
@@ -715,32 +797,6 @@ export const challengeDetailResponseSchema = z
                   .string()
                   .describe(
                     "Challenge-owner notes about seeds, versions, or external data provenance.",
-                  )
-                  .optional(),
-                external_data: z
-                  .array(
-                    z
-                      .object({
-                        url: z
-                          .string()
-                          .url()
-                          .regex(/^https:\/\/[^?#]+$/),
-                        digest: z.string().optional(),
-                        version: z.string().optional(),
-                      })
-                      .strict()
-                      .describe(
-                        "Informational external data metadata for challenge-owned prepare commands.",
-                      ),
-                  )
-                  .describe(
-                    "Informational list of external resources the prepare phase may use.",
-                  )
-                  .optional(),
-                cache_key_hint: z
-                  .string()
-                  .describe(
-                    "Future cache metadata. The v0.2.5 MVP does not cache prepare output.",
                   )
                   .optional(),
               })
@@ -1299,7 +1355,7 @@ export const challengeListResponseSchema = z
             .max(63),
           title: z.string(),
           summary: z.string(),
-          starts_at: z.string().optional(),
+          starts_at: z.string(),
           closes_at: z.string().optional(),
           eligibility: z
             .object({

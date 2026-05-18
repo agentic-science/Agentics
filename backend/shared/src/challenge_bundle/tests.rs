@@ -45,7 +45,7 @@ fn base_spec() -> ChallengeBundleSpec {
         targets: vec![ChallengeTargetSpec {
             name: target_name("linux-arm64-cpu"),
             docker_platform: DockerPlatform::LinuxArm64,
-            accelerator: TargetAccelerator::Cpu,
+            accelerator: TargetAccelerator::None,
             validation_enabled: true,
             resource_profile: ResourceProfileSpec {
                 name: resource_profile_name("agentics-cpu-small"),
@@ -60,10 +60,10 @@ fn base_spec() -> ChallengeBundleSpec {
                 build_network_access: ZipProjectNetworkAccess::Disabled,
                 run_network_access: ZipProjectNetworkAccess::Disabled,
                 scorer_network_access: ZipProjectNetworkAccess::Disabled,
-                hardware: None,
+                hardware_metadata: None,
             },
         }],
-        starts_at: None,
+        starts_at: "2026-01-01T00:00:00Z".to_string(),
         closes_at: None,
         eligibility: ChallengeEligibilitySpec {
             eligibility_type: ChallengeEligibilityType::Open,
@@ -148,7 +148,7 @@ fn pin_images(spec: &mut ChallengeBundleSpec) {
 fn use_cuda_target(target: &mut ChallengeTargetSpec, cuda_variant: &str) {
     target.name = target_name("linux-arm64-cuda");
     target.accelerator = TargetAccelerator::Gpu;
-    target.resource_profile.hardware = Some(cuda_hardware());
+    target.resource_profile.hardware_metadata = Some(cuda_hardware());
     let image = format!("agentics-linux-arm64-cuda:{cuda_variant}-ubuntu24.04-local");
     target.resource_profile.solution_image = local_image(&image);
     target.resource_profile.scorer_image = local_image(&image);
@@ -243,6 +243,96 @@ fn legacy_image_digest_field_is_rejected() {
     assert!(error.to_string().contains("solution_image_digest"));
 }
 
+/// Verifies that starts_at is now an explicit required challenge-level policy.
+#[test]
+fn starts_at_is_required() {
+    let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
+    spec_json
+        .as_object_mut()
+        .expect("spec should be an object")
+        .remove("starts_at");
+
+    let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+        .expect_err("missing starts_at should fail");
+
+    assert!(error.to_string().contains("starts_at"));
+}
+
+/// Verifies that invalid starts_at timestamps are rejected.
+#[test]
+fn starts_at_must_be_rfc3339() {
+    let mut spec = base_spec();
+    spec.starts_at = "not-a-time".to_string();
+
+    let error = validate_challenge_bundle_spec(&spec).expect_err("invalid starts_at should fail");
+
+    assert!(error.to_string().contains("starts_at"));
+}
+
+/// Verifies that no-accelerator targets must use an explicit JSON null.
+#[test]
+fn accelerator_requires_explicit_null_for_no_accelerator() {
+    let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
+    spec_json["targets"][0]
+        .as_object_mut()
+        .expect("target should be an object")
+        .remove("accelerator");
+
+    let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+        .expect_err("missing accelerator should fail");
+
+    assert!(error.to_string().contains("accelerator"));
+}
+
+/// Verifies that the old cpu accelerator string is rejected.
+#[test]
+fn legacy_cpu_accelerator_string_is_rejected() {
+    let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
+    spec_json["targets"][0]["accelerator"] = serde_json::json!("cpu");
+
+    let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+        .expect_err("legacy cpu accelerator should fail");
+
+    assert!(error.to_string().contains("cpu"));
+}
+
+/// Verifies that old resource_profile.hardware is rejected.
+#[test]
+fn legacy_hardware_field_is_rejected() {
+    let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
+    spec_json["targets"][0]["resource_profile"]["hardware"] = serde_json::json!({
+        "kind": "cpu"
+    });
+
+    let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+        .expect_err("legacy hardware field should fail");
+
+    assert!(error.to_string().contains("hardware"));
+}
+
+/// Verifies removed prepare metadata fields are rejected.
+#[test]
+fn removed_prepare_metadata_fields_are_rejected() {
+    for field in ["external_data", "cache_key_hint"] {
+        let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
+        spec_json["execution"]["official_prepare"] = serde_json::json!({
+            "command": ["python", "scorer/prepare.py"],
+            "result_runs_file": "generated/runs.json",
+            "network_access": "enabled"
+        });
+        spec_json["execution"]["official_prepare"][field] = if field == "external_data" {
+            serde_json::json!([])
+        } else {
+            serde_json::json!("dataset-v1")
+        };
+
+        let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+            .expect_err("removed prepare metadata field should fail");
+
+        assert!(error.to_string().contains(field));
+    }
+}
+
 /// Verifies that target name is independent from docker platform.
 #[test]
 fn target_name_is_independent_from_docker_platform() {
@@ -289,9 +379,9 @@ fn cuda_target_requires_cuda_hardware_metadata() {
 
     let error =
         validate_challenge_bundle_spec(&spec).expect_err("missing cuda hardware should fail");
-    assert!(error.to_string().contains("hardware.kind"));
+    assert!(error.to_string().contains("hardware_metadata.kind"));
 
-    spec.targets[0].resource_profile.hardware = Some(cuda_hardware());
+    spec.targets[0].resource_profile.hardware_metadata = Some(cuda_hardware());
     let image = "agentics-linux-arm64-cuda:cu130-ubuntu24.04-local";
     spec.targets[0].resource_profile.solution_image = local_image(image);
     spec.targets[0].resource_profile.scorer_image = local_image(image);
@@ -357,7 +447,7 @@ fn cuda_target_rejects_unsupported_cuda_variant() {
     let target = &mut spec.targets[0];
     target.name = target_name("linux-arm64-cuda");
     target.accelerator = TargetAccelerator::Gpu;
-    target.resource_profile.hardware = Some(HardwareProfileSpec {
+    target.resource_profile.hardware_metadata = Some(HardwareProfileSpec {
         cuda_variant: Some("cu129".to_string()),
         cuda_version: Some("12.9".to_string()),
         ..cuda_hardware()
@@ -375,7 +465,7 @@ fn cuda_target_rejects_mismatched_cuda_version() {
     let target = &mut spec.targets[0];
     target.name = target_name("linux-arm64-cuda");
     target.accelerator = TargetAccelerator::Gpu;
-    target.resource_profile.hardware = Some(HardwareProfileSpec {
+    target.resource_profile.hardware_metadata = Some(HardwareProfileSpec {
         cuda_variant: Some("cu132".to_string()),
         cuda_version: Some("13.0".to_string()),
         ..cuda_hardware()
@@ -575,8 +665,6 @@ fn prepare_spec() -> ChallengePrepareSpec {
         result_runs_file: bundle_path("generated/runs.json"),
         network_access: ZipProjectNetworkAccess::Disabled,
         reproducibility_notes: Some("Generated from deterministic private seeds.".to_string()),
-        external_data: Vec::new(),
-        cache_key_hint: None,
     }
 }
 

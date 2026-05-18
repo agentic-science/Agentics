@@ -34,13 +34,13 @@ pub(super) fn validate_target(target: &ChallengeTargetSpec, field: &str) -> Resu
     )?;
 
     match target.accelerator {
-        TargetAccelerator::Cpu => {
+        TargetAccelerator::None => {
             validate_supported_target_images(target, SupportedTargetImage::Cpu, field)?
         }
         TargetAccelerator::Gpu => {
             let cuda_variant = validate_cuda_hardware(
-                target.resource_profile.hardware.as_ref(),
-                &format!("{field}.resource_profile.hardware"),
+                target.resource_profile.hardware_metadata.as_ref(),
+                &format!("{field}.resource_profile.hardware_metadata"),
             )?;
             validate_supported_target_images(
                 target,
@@ -108,7 +108,7 @@ fn validate_supported_image_reference(
             let expected_prefix = format!("{cuda_variant}-");
             if !image.tag().starts_with(&expected_prefix) {
                 return Err(AppError::Validation(format!(
-                    "{field} tag must start with `{expected_prefix}` to match resource_profile.hardware.cuda_variant"
+                    "{field} tag must start with `{expected_prefix}` to match resource_profile.hardware_metadata.cuda_variant"
                 )));
             }
         }
@@ -148,8 +148,8 @@ fn validate_resource_profile(profile: &ResourceProfileSpec, field: &str) -> Resu
             &format!("{field}.resource_description"),
         )?;
     }
-    if let Some(hardware) = &profile.hardware {
-        validate_hardware_profile(hardware, &format!("{field}.hardware"))?;
+    if let Some(hardware) = &profile.hardware_metadata {
+        validate_hardware_profile(hardware, &format!("{field}.hardware_metadata"))?;
     }
 
     Ok(())

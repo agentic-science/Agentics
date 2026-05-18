@@ -11,6 +11,7 @@ pub(super) fn challenge_detail_json(validation_enabled: bool) -> serde_json::Val
             "challenge_name": "sample-sum",
             "challenge_title": "Sample Sum",
             "challenge_summary": "Add numbers",
+            "starts_at": "2026-01-01T00:00:00Z",
             "eligibility": { "type": "open" },
             "visibility": {
                 "leaderboard": "public_live",
@@ -30,7 +31,7 @@ pub(super) fn challenge_detail_json(validation_enabled: bool) -> serde_json::Val
                 {
                     "name": "linux-arm64-cpu",
                     "docker_platform": "linux/arm64",
-                    "accelerator": "cpu",
+                    "accelerator": null,
                     "validation_enabled": validation_enabled,
                     "resource_profile": {
                         "name": "python-cpu-small",
@@ -54,12 +55,10 @@ pub(super) fn challenge_detail_json(validation_enabled: bool) -> serde_json::Val
                 }
             ],
             "execution": {
-                "validation_runs": "public/runs.json",
-                "official_runs": "private-benchmark/runs.json"
+                "validation_runs": "public/runs.json"
             },
             "datasets": {
                 "public_dir": "public",
-                "private_benchmark_dir": "private-benchmark",
                 "public_policy": "full",
                 "private_benchmark_policy": "score_only",
                 "private_benchmark_enabled": true

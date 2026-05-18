@@ -183,7 +183,8 @@ Each current challenge bundle declares:
 - `solution.manifest_file: "agentics.solution.json"`.
 - `scorer.command`, an argv array executed in the scorer container.
 - `scorer.result_file`, the result JSON path written under `/output`.
-- `targets`, each with a target, Docker platform, accelerator, validation availability, and a resource profile that includes solution image, scorer image, CPU, memory, disk, timeout, network policy, and optional hardware metadata.
+- Required challenge-level `starts_at`.
+- `targets`, each with a target, Docker platform, required nullable accelerator, validation availability, and a resource profile that includes solution image, scorer image, CPU, memory, disk, timeout, network policy, and optional `hardware_metadata`.
 - `execution.validation_runs` or `execution.validation_prepare` when validation is enabled.
 - `execution.official_runs` or `execution.official_prepare` when private benchmark scoring is enabled.
 
@@ -202,19 +203,11 @@ Prepare specs have this shape:
   "command": ["python", "scorer/prepare.py"],
   "result_runs_file": "generated/runs.json",
   "network_access": "enabled",
-  "reproducibility_notes": "Generated from private seeds.",
-  "external_data": [
-    {
-      "url": "https://example.com/dataset-v1.tar.zst",
-      "digest": "sha256:...",
-      "version": "v1"
-    }
-  ],
-  "cache_key_hint": "dataset-v1"
+  "reproducibility_notes": "Generated from private seeds."
 }
 ```
 
-`network_access`, `reproducibility_notes`, `external_data`, and `cache_key_hint` are challenge-owned policy and metadata. The MVP runner does not cache prepare outputs and does not enforce one reproducibility strategy. Challenge owners are responsible for deterministic or reliable generation and for pinning any external data sources they care about.
+`network_access` and `reproducibility_notes` are challenge-owned policy and metadata. The MVP runner does not cache prepare outputs and does not enforce one reproducibility strategy. Challenge owners are responsible for deterministic or reliable generation and for pinning any external data sources inside their bundle, private assets, or prepare scripts.
 
 After each invocation, the worker copies a sanitized regular-file-only run tree to `/solution-runs/{run_name}` and writes `/solution-runs/{run_name}/agentics-run.json` for the scorer. The metadata includes `run_name`, `interface`, `exit_code`, `timed_out`, `wall_time_ms`, `stdout_path`, `stderr_path`, and `output_dir`. This lets challenge-owned scorers combine correctness checks with worker-measured per-run timing and arbitrary aggregate metrics while preventing submitted solutions from passing symlinks or special files into the scorer container.
 
@@ -282,7 +275,7 @@ Each target owns:
 - Resource profile and network policy.
 - Validation availability.
 - Quota and capacity scope.
-- Optional hardware metadata. CUDA targets require concrete GPU model, GPU
+- Optional `hardware_metadata`. CUDA targets require concrete GPU model, GPU
   count, CUDA variant, and CUDA version metadata.
 
 CUDA variants are resource-profile choices under `linux-arm64-cuda`; they do

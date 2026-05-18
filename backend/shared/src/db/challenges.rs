@@ -100,7 +100,7 @@ pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeLi
                 summary: r.try_get("summary")?,
                 status: challenge_status_from_row(&r, "status")?,
                 targets: spec.as_ref().map(|spec| spec.targets.clone()),
-                starts_at: spec.as_ref().and_then(|spec| spec.starts_at.clone()),
+                starts_at: spec.as_ref().map(|spec| spec.starts_at.clone()),
                 closes_at: spec.as_ref().and_then(|spec| spec.closes_at.clone()),
                 eligibility: spec.as_ref().map(|spec| spec.eligibility.clone()),
                 visibility: spec.as_ref().map(|spec| spec.visibility.clone()),
@@ -188,7 +188,7 @@ pub async fn publish_challenge_tx(
     .bind(bundle_path.as_str()?)
     .bind(statement_path.as_str()?)
     .bind(&spec_json)
-    .bind(parse_optional_time(spec.starts_at.as_deref())?)
+    .bind(parse_required_time(&spec.starts_at)?)
     .bind(parse_optional_time(spec.closes_at.as_deref())?)
     .bind(serde_json::to_value(&spec.eligibility).map_err(|e| AppError::Internal(e.to_string()))?)
     .bind(spec.validation_submission_limit)
@@ -211,6 +211,13 @@ pub async fn publish_challenge_tx(
         bundle_path: managed_bundle_path_from_row(&row, "bundle_path")?,
         statement_path: managed_statement_path_from_row(&row, "statement_path")?,
     })
+}
+
+/// Parses required time from an external boundary string.
+fn parse_required_time(value: &str) -> Result<DateTime<Utc>> {
+    DateTime::parse_from_rfc3339(value)
+        .map(|date| date.with_timezone(&Utc))
+        .map_err(|e| AppError::Validation(format!("invalid challenge timestamp: {e}")))
 }
 
 /// Parses optional time from an external boundary string.

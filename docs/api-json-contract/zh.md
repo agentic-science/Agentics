@@ -25,7 +25,8 @@ Response DTOs 不应为缺失值输出显式 `null`。这样可以保持 wire fo
 
 只有当 API 必须区分“字段存在但有意为空”和“字段未包含在 response 中”时，
 才应使用显式 `null`。任何例外都必须在 Rust DTO field 旁边注明，并由
-contract fixture 覆盖。
+contract fixture 覆盖。当前例外：`targets[].accelerator` 是 required nullable
+field，`null` 表示没有 accelerator，`"gpu"` 表示 GPU acceleration。
 
 ## Request DTOs
 

@@ -9,8 +9,8 @@ A target is the execution platform for a challenge and one dimension of ranking 
 
 For the hosted MVP, supported target specs use:
 
-- Docker platform `linux/arm64` with accelerator `cpu`.
-- Docker platform `linux/arm64` with accelerator `gpu` and CUDA-capable GPU access.
+- Docker platform `linux/arm64` with `accelerator: null`.
+- Docker platform `linux/arm64` with `accelerator: "gpu"` and CUDA-capable GPU access.
 
 `linux/amd64` targets are reserved for post-MVP deployment expansion. The
 target contract records an extensible accelerator field, and CUDA targets use
@@ -48,7 +48,7 @@ Challenge specs must declare one or more targets:
     {
       "name": "linux-arm64-cpu",
       "docker_platform": "linux/arm64",
-      "accelerator": "cpu",
+      "accelerator": null,
       "validation_enabled": true,
       "resource_profile": {
         "name": "agentics-cpu-small",
@@ -80,9 +80,9 @@ Rules:
 - Target `name` values must be unique within a challenge. The name is a
   challenge-local selector; platform support is validated from
   `docker_platform`, `accelerator`, and `resource_profile`.
-- Linux ARM64 CPU targets must use Docker platform `linux/arm64` and accelerator `cpu`.
+- Linux ARM64 CPU targets must use Docker platform `linux/arm64` and explicit `accelerator: null`.
 - Linux ARM64 CUDA targets must use Docker platform `linux/arm64`, accelerator
-  `gpu`, and CUDA hardware metadata in `resource_profile.hardware`.
+  `gpu`, and CUDA hardware metadata in `resource_profile.hardware_metadata`.
 - AMD64 Linux targets are reserved for post-MVP deployment support.
 - `validation_enabled` is target-specific. Validation can be enabled for one target and disabled for another.
 - `resource_profile` contains the Docker images, hard resource limits, network policy, optional resource description, and optional hardware metadata for that target. The solution and scorer images must use supported first-party Agentics image repositories and target-compatible tags. Hosted deployments should enable `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`, which rejects local image sources and requires registry references to include immutable `@sha256:<digest>` suffixes.
@@ -95,7 +95,7 @@ CUDA target hardware metadata must include:
 ```json
 {
   "resource_profile": {
-    "hardware": {
+    "hardware_metadata": {
       "kind": "cuda",
       "gpu_model": "NVIDIA GB10",
       "gpu_count": 1,
@@ -157,7 +157,7 @@ Workers read the selected target from the evaluation job payload. The target con
 - Docker platform used when pulling images.
 - Docker platform used when creating setup, build, run, and scorer containers.
 - Solution and scorer images.
-- Timeout, memory, CPU, disk, network, and log limits.
+- Timeout, memory, CPU, disk, and network policy. Log limits are platform-owned safety policy.
 - Accelerator policy and CUDA hardware metadata for GPU targets.
 
 Private benchmark data remains mounted only in the scorer environment.

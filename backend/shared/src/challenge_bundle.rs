@@ -1,9 +1,8 @@
 //! Helpers for loading and validating filesystem challenge bundles.
 //!
 //! Challenge bundles are the public contract between seeded/admin-authored
-//! challenges and the runner. Validation accepts the relaxed JSON shape used by
-//! the platform: optional nullable fields may be omitted, but contract names are
-//! kept explicit and canonical.
+//! challenges and the runner. Validation keeps contract names explicit and
+//! rejects unknown or stale fields before a bundle can be published.
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -296,9 +295,9 @@ fn validate_targets(spec: &ChallengeBundleSpec) -> Result<()> {
 
 /// Validates challenge policy invariants for this contract.
 fn validate_challenge_policy(spec: &ChallengeBundleSpec) -> Result<()> {
-    let starts_at = parse_optional_rfc3339(spec.starts_at.as_deref(), "starts_at")?;
+    let starts_at = parse_required_rfc3339(&spec.starts_at, "starts_at")?;
     let closes_at = parse_optional_rfc3339(spec.closes_at.as_deref(), "closes_at")?;
-    if let (Some(starts_at), Some(closes_at)) = (starts_at, closes_at)
+    if let Some(closes_at) = closes_at
         && closes_at <= starts_at
     {
         return Err(AppError::Validation(
@@ -319,6 +318,13 @@ fn validate_challenge_policy(spec: &ChallengeBundleSpec) -> Result<()> {
     validate_optional_positive_limit(spec.official_submission_limit, "official_submission_limit")?;
 
     Ok(())
+}
+
+/// Parses required rfc3339 from an external boundary string.
+fn parse_required_rfc3339(value: &str, field: &str) -> Result<DateTime<Utc>> {
+    DateTime::parse_from_rfc3339(value)
+        .map(|date| date.with_timezone(&Utc))
+        .map_err(|e| AppError::Validation(format!("{field} must be RFC3339: {e}")))
 }
 
 /// Parses optional rfc3339 from an external boundary string.
@@ -387,18 +393,6 @@ fn validate_prepare_spec(prepare: &ChallengePrepareSpec, field: &str) -> Result<
     validate_prepare_command(&prepare.command, &format!("{field}.command"))?;
     if let Some(notes) = &prepare.reproducibility_notes {
         require_non_empty(notes, &format!("{field}.reproducibility_notes"))?;
-    }
-    for (index, data) in prepare.external_data.iter().enumerate() {
-        let data_field = format!("{field}.external_data[{index}]");
-        if let Some(digest) = &data.digest {
-            require_non_empty(digest, &format!("{data_field}.digest"))?;
-        }
-        if let Some(version) = &data.version {
-            require_non_empty(version, &format!("{data_field}.version"))?;
-        }
-    }
-    if let Some(cache_key_hint) = &prepare.cache_key_hint {
-        require_non_empty(cache_key_hint, &format!("{field}.cache_key_hint"))?;
     }
 
     Ok(())

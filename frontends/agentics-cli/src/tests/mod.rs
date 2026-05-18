@@ -37,6 +37,7 @@ async fn challenges_list_uses_public_api_and_renders_table() {
                     "name": "sample-sum",
                     "title": "Sample Sum",
                     "summary": "Add numbers",
+                    "starts_at": "2026-01-01T00:00:00Z",
                     "eligibility": { "type": "open" }
                 }
             ]
@@ -78,6 +79,7 @@ async fn global_json_flag_renders_structured_output() {
                     "name": "sample-sum",
                     "title": "Sample Sum",
                     "summary": "Add numbers",
+                    "starts_at": "2026-01-01T00:00:00Z",
                     "eligibility": { "type": "open" }
                 }
             ]
@@ -1144,10 +1146,11 @@ async fn validate_local_rejects_disabled_target_before_packaging() {
     let workspace_dir = temp.path().join("workspace");
     std::fs::create_dir(&bundle_dir).expect("bundle dir");
     std::fs::create_dir(&workspace_dir).expect("workspace dir");
-    let spec = challenge_detail_json(false)
+    let mut spec = challenge_detail_json(false)
         .get("spec")
         .expect("spec")
         .clone();
+    spec["datasets"]["private_benchmark_enabled"] = json!(false);
     std::fs::write(bundle_dir.join("spec.json"), spec.to_string()).expect("spec");
 
     let config_path = temp.path().join("config.toml");

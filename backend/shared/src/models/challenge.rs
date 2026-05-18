@@ -1,15 +1,17 @@
 //! Challenge bundle and challenge-facing DTOs.
 
+use std::borrow::Cow;
 use std::fmt;
 
-use serde::{Deserialize, Serialize};
+use schemars::{Schema, SchemaGenerator, json_schema};
+use serde::de::{Error as DeError, Visitor};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::images::ChallengeImageReference;
 use super::names::{ChallengeName, MetricName, ResourceProfileName, RunName, TargetName};
 use super::paths::{
     BundleRelativePath, ManagedBundlePath, ManagedStatementPath, RunInputPath, RunOutputPath,
 };
-use super::urls::ExternalDataUrl;
 use crate::zip_project::ZipProjectNetworkAccess;
 
 /// Persistent lifecycle state for a challenge shell or published benchmark.
@@ -61,8 +63,7 @@ pub struct ChallengeBundleSpec {
     pub solution: SolutionSpec,
     pub scorer: ScorerSpec,
     pub targets: Vec<ChallengeTargetSpec>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub starts_at: Option<String>,
+    pub starts_at: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub closes_at: Option<String>,
     pub eligibility: ChallengeEligibilitySpec,
@@ -109,8 +110,7 @@ pub struct PublicChallengeBundleSpec {
     pub solution: SolutionSpec,
     pub scorer: ScorerSpec,
     pub targets: Vec<ChallengeTargetSpec>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub starts_at: Option<String>,
+    pub starts_at: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub closes_at: Option<String>,
     pub eligibility: ChallengeEligibilitySpec,
@@ -263,11 +263,10 @@ impl DockerPlatform {
     }
 }
 
-/// Accelerator family used by a target.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
-#[serde(rename_all = "snake_case")]
+/// Accelerator selection used by a target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TargetAccelerator {
-    Cpu,
+    None,
     Gpu,
 }
 
@@ -275,17 +274,109 @@ impl TargetAccelerator {
     /// Stable string form used in user-facing summaries.
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Cpu => "cpu",
+            Self::None => "none",
             Self::Gpu => "gpu",
         }
     }
 }
 
+impl Serialize for TargetAccelerator {
+    /// Serialize no accelerator as explicit JSON null and GPU as the only accelerator string.
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::None => serializer.serialize_none(),
+            Self::Gpu => serializer.serialize_str("gpu"),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for TargetAccelerator {
+    /// Deserialize required nullable accelerator policy from challenge configs.
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct TargetAcceleratorVisitor;
+
+        impl<'de> Visitor<'de> for TargetAcceleratorVisitor {
+            type Value = TargetAccelerator;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str("null for no accelerator or \"gpu\" for GPU acceleration")
+            }
+
+            fn visit_none<E>(self) -> std::result::Result<Self::Value, E>
+            where
+                E: DeError,
+            {
+                Ok(TargetAccelerator::None)
+            }
+
+            fn visit_unit<E>(self) -> std::result::Result<Self::Value, E>
+            where
+                E: DeError,
+            {
+                Ok(TargetAccelerator::None)
+            }
+
+            fn visit_some<D>(self, deserializer: D) -> std::result::Result<Self::Value, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                deserializer.deserialize_any(self)
+            }
+
+            fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
+            where
+                E: DeError,
+            {
+                match value {
+                    "gpu" => Ok(TargetAccelerator::Gpu),
+                    "cpu" => Err(E::custom(
+                        "accelerator must be explicit null when no accelerator is required, not \"cpu\"",
+                    )),
+                    other => Err(E::unknown_variant(other, &["gpu"])),
+                }
+            }
+        }
+
+        deserializer.deserialize_any(TargetAcceleratorVisitor)
+    }
+}
+
+impl schemars::JsonSchema for TargetAccelerator {
+    /// Target accelerator is an inline required nullable field in target specs.
+    fn inline_schema() -> bool {
+        true
+    }
+
+    /// Stable schema name for target accelerator.
+    fn schema_name() -> Cow<'static, str> {
+        Cow::Borrowed("TargetAccelerator")
+    }
+
+    /// JSON schema for `null | "gpu"`.
+    fn json_schema(_generator: &mut SchemaGenerator) -> Schema {
+        json_schema!({
+            "x-agentics-preserve-null": true,
+            "oneOf": [
+                { "type": "null" },
+                { "type": "string", "enum": ["gpu"] }
+            ]
+        })
+    }
+}
+
 /// One execution and ranking target declared by a challenge.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ChallengeTargetSpec {
     pub name: TargetName,
     pub docker_platform: DockerPlatform,
+    /// Required nullable field: JSON null means no accelerator, "gpu" means GPU acceleration.
     pub accelerator: TargetAccelerator,
     pub validation_enabled: bool,
     pub resource_profile: ResourceProfileSpec,
@@ -309,7 +400,7 @@ pub struct ResourceProfileSpec {
     pub run_network_access: ZipProjectNetworkAccess,
     pub scorer_network_access: ZipProjectNetworkAccess,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub hardware: Option<HardwareProfileSpec>,
+    pub hardware_metadata: Option<HardwareProfileSpec>,
 }
 
 /// Optional hardware metadata advertised with a resource profile.
@@ -332,6 +423,7 @@ pub struct HardwareProfileSpec {
 
 /// Challenge-owned run manifest locations for standardized `zip_project` execution.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ChallengeExecutionSpec {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub validation_runs: Option<BundleRelativePath>,
@@ -345,6 +437,7 @@ pub struct ChallengeExecutionSpec {
 
 /// Public execution metadata that excludes official private benchmark locators.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct PublicChallengeExecutionSpec {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub validation_runs: Option<BundleRelativePath>,
@@ -354,6 +447,7 @@ pub struct PublicChallengeExecutionSpec {
 
 /// Optional scorer-image command that prepares generated benchmark inputs.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ChallengePrepareSpec {
     pub command: Vec<String>,
     /// Relative path, under the prepared workspace, to the generated run manifest.
@@ -362,22 +456,6 @@ pub struct ChallengePrepareSpec {
     /// Challenge-owner notes about seeds, versions, or external data provenance.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reproducibility_notes: Option<String>,
-    /// Informational list of external resources the prepare phase may use.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub external_data: Vec<ChallengePrepareExternalDataSpec>,
-    /// Future cache metadata. The v0.2.5 MVP does not cache prepare output.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cache_key_hint: Option<String>,
-}
-
-/// Informational external data metadata for challenge-owned prepare commands.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
-pub struct ChallengePrepareExternalDataSpec {
-    pub url: ExternalDataUrl,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub digest: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub version: Option<String>,
 }
 
 /// Challenge-owned list of scorer-controlled solution invocations.
@@ -545,8 +623,7 @@ pub struct ChallengeListItemDto {
     pub name: ChallengeName,
     pub title: String,
     pub summary: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub starts_at: Option<String>,
+    pub starts_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub closes_at: Option<String>,
     pub eligibility: ChallengeEligibilitySpec,

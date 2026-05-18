@@ -16,7 +16,7 @@ function targetFixture(validationEnabled: boolean) {
   return {
     name: "linux-arm64-cpu",
     docker_platform: "linux/arm64",
-    accelerator: "cpu",
+    accelerator: null,
     validation_enabled: validationEnabled,
     resource_profile: {
       name: "python-cpu-small",
@@ -76,6 +76,7 @@ describe("frontend API schemas", () => {
           challenge_name: "sample-sum",
           challenge_title: "Sample Sum",
           challenge_summary: "Add two numbers.",
+          starts_at: "2026-01-01T00:00:00Z",
           ...challengePolicy,
           solution: {
             protocol: "zip_project",
@@ -255,7 +256,7 @@ describe("frontend API schemas", () => {
                 ...targetFixture(true),
                 resource_profile: {
                   ...targetFixture(true).resource_profile,
-                  hardware: { kind: "cpu" },
+                  hardware_metadata: { kind: "cpu" },
                 },
               },
             ],

@@ -75,7 +75,6 @@ pub struct ChallengeArchiveRequestSpec {
 pub struct ChallengePrivateAssetRequirement {
     pub asset_name: AssetName,
     pub kind: ChallengePrivateAssetKind,
-    #[serde(default)]
     pub required: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub asset_note: Option<String>,

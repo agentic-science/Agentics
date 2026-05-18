@@ -24,10 +24,10 @@ Challenge bundles 必须使用受支持的 first-party Agentics images。Local d
 variant 开头，例如 `cu130-*`。
 
 对于 `linux-arm64-cuda`，challenge bundles 必须声明 CUDA hardware metadata：
-`kind: "cuda"`、具体的 `gpu_model`、`gpu_count`、`cuda_variant`，以及匹配的
-`cuda_version`。当前 new CUDA variants 为 `cu126`、`cu130` 和 `cu132`。如果
-hardware target 相同，CUDA variants 共享 `linux-arm64-cuda` leaderboard。Challenge
-owners 负责保证这些结果仍然可比。
+`resource_profile.hardware_metadata.kind: "cuda"`、具体的 `gpu_model`、
+`gpu_count`、`cuda_variant`，以及匹配的 `cuda_version`。当前 new CUDA variants
+为 `cu126`、`cu130` 和 `cu132`。如果 hardware target 相同，CUDA variants 共享
+`linux-arm64-cuda` leaderboard。Challenge owners 负责保证这些结果仍然可比。
 
 ## Public Repository Layout
 
@@ -81,15 +81,15 @@ New challenge：
 }
 ```
 
-MVP model 不接受 `new_version`。实质 benchmark-contract 变更必须使用新的
-`challenge_name`。
+每个 `private_assets[]` 条目都必须显式设置 `required` 为 `true` 或 `false`。MVP
+model 不接受 `new_version`。实质 benchmark-contract 变更必须使用新的 `challenge_name`。
 
 ## Challenge Policy
 
 每个 bundle `spec.json` 声明 challenge-level policy，而不是内部 competition stages：
 
-- `starts_at` 和 `closes_at` 是可选 RFC3339 timestamps。如果二者都存在，
-  `closes_at` 必须晚于 `starts_at`。
+- `starts_at` 是必填 RFC3339 timestamp。`closes_at` 可选；如果存在，
+  必须晚于 `starts_at`。
 - `eligibility` 为 `{ "type": "open" }` 或
   `{ "type": "private_shortlist" }`。
 - `validation_submission_limit` 和 `official_submission_limit` 是可选的正数

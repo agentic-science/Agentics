@@ -126,7 +126,7 @@ fn render_readme(
         "# {}\n\nChallenge: `{}`\nStarts at: `{}`\nCloses at: `{}`\nEligibility: `{}`\nRuntime profile: `{}`\nInterface: `{}`\nTargets:\n{}\n\n{}\n\n## Workspace Contract\n\nThis workspace intentionally starts with only `README.md`, `{}`, and a Git repository.\n\nCreate a `run.sh` file at the repository root before committing. The generated pre-commit hook checks that `run.sh` and `{}` exist. Keep `run.sh` aligned with the generated manifest before packaging or submitting.\n",
         challenge.title.trim(),
         challenge.name,
-        challenge.spec.starts_at.as_deref().unwrap_or("none"),
+        challenge.spec.starts_at.as_str(),
         challenge.spec.closes_at.as_deref().unwrap_or("none"),
         serde_json::to_value(challenge.spec.eligibility.eligibility_type)
             .ok()
@@ -409,7 +409,7 @@ mod tests {
                 challenge_name: challenge_name("sample-sum"),
                 challenge_title: "Sample Sum".to_string(),
                 challenge_summary: "Add numbers".to_string(),
-                starts_at: None,
+                starts_at: "2026-01-01T00:00:00Z".to_string(),
                 closes_at: None,
                 eligibility: ChallengeEligibilitySpec {
                     eligibility_type: ChallengeEligibilityType::Open,
@@ -433,7 +433,7 @@ mod tests {
                 targets: vec![ChallengeTargetSpec {
                     name: target_name("linux-arm64-cpu"),
                     docker_platform: DockerPlatform::LinuxArm64,
-                    accelerator: TargetAccelerator::Cpu,
+                    accelerator: TargetAccelerator::None,
                     validation_enabled: false,
                     resource_profile: ResourceProfileSpec {
                         name: resource_profile_name("python-cpu-small"),
@@ -448,7 +448,7 @@ mod tests {
                         build_network_access: ZipProjectNetworkAccess::Disabled,
                         run_network_access: ZipProjectNetworkAccess::Disabled,
                         scorer_network_access: ZipProjectNetworkAccess::Disabled,
-                        hardware: None,
+                        hardware_metadata: None,
                     },
                 }],
                 execution: ChallengeExecutionSpec {

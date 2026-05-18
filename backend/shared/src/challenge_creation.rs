@@ -514,6 +514,31 @@ mod tests {
         assert!(error.to_string().contains("bundle_path must be omitted"));
     }
 
+    /// Verifies that private asset required policy is explicit in proposal manifests.
+    #[test]
+    fn private_asset_required_field_is_required() {
+        let manifest = json!({
+            "schema_version": 1,
+            "request": "new_challenge",
+            "challenge_name": "sample-sum",
+            "title": "Sample Sum",
+            "summary": "Add numbers",
+            "readme_path": "README.md",
+            "bundle_path": "v1",
+            "private_assets": [
+                {
+                    "asset_name": "official-cases",
+                    "kind": "private_benchmark_data"
+                }
+            ]
+        });
+
+        let error = serde_json::from_value::<ChallengeCreationManifest>(manifest)
+            .expect_err("missing private asset required flag should fail");
+
+        assert!(error.to_string().contains("required"));
+    }
+
     /// Verifies that rejects private material in public repo.
     #[tokio::test]
     async fn rejects_private_material_in_public_repo() {
@@ -603,7 +628,7 @@ mod tests {
                     {
                         "name": "linux-arm64-cpu",
                         "docker_platform": "linux/arm64",
-                        "accelerator": "cpu",
+                        "accelerator": null,
                         "validation_enabled": true,
                         "resource_profile": {
                             "name": "agentics-cpu-small",
@@ -626,6 +651,7 @@ mod tests {
                         }
                     }
                 ],
+                "starts_at": "2026-01-01T00:00:00Z",
                 "eligibility": { "type": "open" },
                 "visibility": {
                     "leaderboard": "public_live",

@@ -650,7 +650,7 @@ fn docker_storage_opt(limit_mb: Option<u64>) -> Option<HashMap<String, String>> 
 /// Handles gpu runtime for this module.
 fn gpu_runtime(accelerator: TargetAccelerator) -> Option<String> {
     match accelerator {
-        TargetAccelerator::Cpu => None,
+        TargetAccelerator::None => None,
         TargetAccelerator::Gpu => Some("nvidia".to_string()),
     }
 }
@@ -658,7 +658,7 @@ fn gpu_runtime(accelerator: TargetAccelerator) -> Option<String> {
 /// Handles gpu device requests for this module.
 fn gpu_device_requests(accelerator: TargetAccelerator) -> Option<Vec<DeviceRequest>> {
     match accelerator {
-        TargetAccelerator::Cpu => None,
+        TargetAccelerator::None => None,
         TargetAccelerator::Gpu => Some(vec![DeviceRequest {
             driver: Some("nvidia".to_string()),
             count: Some(-1),
