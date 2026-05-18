@@ -126,7 +126,7 @@ html[data-theme="light"] .heroVisual::after {
 
 .slide {
   display: grid;
-  min-height: min(84vh, 820px);
+  min-height: min(67vh, 656px);
   grid-template-columns: minmax(18rem, 0.58fr) minmax(0, 1fr);
   align-items: center;
   gap: clamp(2rem, 5vw, 4rem);
@@ -168,7 +168,7 @@ html[data-theme="light"] .heroVisual::after {
 .visualFrame {
   position: relative;
   display: grid;
-  min-height: clamp(28rem, 58vw, 42rem);
+  min-height: clamp(22rem, 46vw, 34rem);
   place-items: center;
   overflow: hidden;
   border: 1px solid var(--border-subtle);
@@ -297,7 +297,7 @@ html[data-theme="light"] .heroVisual::after {
   }
 
   .visualFrame {
-    min-height: 24rem;
+    min-height: 20rem;
   }
 
   .slide {
