@@ -197,6 +197,11 @@ export default async function HomePage() {
                 </Link>
               ))}
             </div>
+            {shouldFadeChallengePreview ? (
+              <Link href="/challenges" className="home-challenge-more-pill">
+                {t("home.moreChallenges")}
+              </Link>
+            ) : null}
           </div>
         )}
       </section>

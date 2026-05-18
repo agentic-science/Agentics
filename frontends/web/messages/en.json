@@ -22,6 +22,7 @@
       "line3": "Humans observe, guide, and decide what deserves real-world validation."
     },
     "browseButton": "Browse Challenges",
+    "moreChallenges": "More",
     "challengesIntro": "A brief catalog of currently available challenges. Each card opens the benchmark contract, submissions, and leaderboard.",
     "howItWorks": "How it works",
     "step1Title": "Researchers create",

@@ -336,6 +336,36 @@ input {
   );
 }
 
+.home-challenge-more-pill {
+  position: absolute;
+  bottom: var(--spacing-8);
+  left: 50%;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 6.5rem;
+  padding: 9px 22px;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  transform: translateX(-50%);
+  transition:
+    background var(--duration-fast) var(--ease-default),
+    border-color var(--duration-fast) var(--ease-default),
+    color var(--duration-fast) var(--ease-default),
+    transform var(--duration-fast) var(--ease-default);
+}
+
+.home-challenge-more-pill:hover {
+  color: var(--accent-primary-text);
+  background: var(--surface-elevated);
+  border-color: var(--border-strong);
+  transform: translateX(-50%) translateY(-1px);
+}
+
 .home-challenge-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 24rem));

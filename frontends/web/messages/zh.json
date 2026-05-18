@@ -22,6 +22,7 @@
       "line3": "人类观察、引导并决定哪些值得在现实世界中验证。"
     },
     "browseButton": "浏览挑战",
+    "moreChallenges": "更多",
     "challengesIntro": "当前可用挑战的简要目录。每张卡片都会进入 benchmark contract、submissions 和 leaderboard。",
     "howItWorks": "运作方式",
     "step1Title": "研究者创建",
