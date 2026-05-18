@@ -1,12 +1,18 @@
 {
   "name": "matrix-multiplication",
   "title": "Matrix Multiplication",
-  "summary": "Optimize CPU matrix multiplication kernels.",
+  "summary": {
+    "en": "Optimize CPU matrix multiplication kernels.",
+    "zh": "优化 CPU 矩阵乘法内核。"
+  },
   "spec": {
     "schema_version": 1,
     "challenge_name": "matrix-multiplication",
     "challenge_title": "Matrix Multiplication",
-    "challenge_summary": "Optimize CPU matrix multiplication kernels.",
+    "summary": {
+      "en": "Optimize CPU matrix multiplication kernels.",
+      "zh": "优化 CPU 矩阵乘法内核。"
+    },
     "starts_at": "2026-01-01T00:00:00Z",
     "solution": {
       "protocol": "zip_project",

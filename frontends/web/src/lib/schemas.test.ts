@@ -70,12 +70,12 @@ describe("frontend API schemas", () => {
       challengeDetailResponseSchema.parse({
         name: "sample-sum",
         title: "Sample Sum",
-        summary: "Add two numbers.",
+        summary: { en: "Add two numbers.", zh: "数字求和。" },
         spec: {
           schema_version: 1,
           challenge_name: "sample-sum",
           challenge_title: "Sample Sum",
-          challenge_summary: "Add two numbers.",
+          summary: { en: "Add two numbers.", zh: "数字求和。" },
           starts_at: "2026-01-01T00:00:00Z",
           ...challengePolicy,
           solution: {
@@ -248,7 +248,7 @@ describe("frontend API schemas", () => {
           {
             name: "sample-sum",
             title: "Sample Sum",
-            summary: "Add numbers",
+            summary: { en: "Add numbers", zh: "数字求和" },
             status: "active",
             ...challengePolicy,
             targets: [

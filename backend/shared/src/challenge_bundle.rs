@@ -158,7 +158,8 @@ pub fn is_safe_relative_path(value: &str) -> bool {
 /// Validates challenge bundle spec invariants for this contract.
 fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
     require_non_empty(&spec.challenge_title, "challenge_title")?;
-    require_non_empty(&spec.challenge_summary, "challenge_summary")?;
+    require_non_empty(&spec.summary.en, "summary.en")?;
+    require_non_empty(&spec.summary.zh, "summary.zh")?;
 
     if spec.schema_version != 1 {
         return Err(AppError::Validation("schema_version must be 1".to_string()));

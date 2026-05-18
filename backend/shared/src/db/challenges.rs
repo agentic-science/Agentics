@@ -16,6 +16,7 @@ use crate::models::challenge::{
 use crate::models::evaluation::SolutionSubmissionStatus;
 use crate::models::hashes::Sha256Digest;
 use crate::models::ids::{AgentId, ChallengeShortlistRevisionId};
+use crate::models::localization::LocalizedText;
 use crate::models::names::{ChallengeName, TargetName};
 use crate::models::paths::{ManagedBundlePath, ManagedStatementPath};
 use crate::models::request::{
@@ -40,7 +41,7 @@ pub struct PublishedChallengeList {
 pub struct ChallengeRecord {
     pub challenge_name: ChallengeName,
     pub title: String,
-    pub summary: String,
+    pub summary: LocalizedText,
     pub bundle_path: ManagedBundlePath,
     pub statement_path: ManagedStatementPath,
     pub spec_json: Value,
@@ -51,8 +52,9 @@ pub async fn create_or_update_challenge(
     pool: &PgPool,
     name: &ChallengeName,
     title: &str,
-    summary: &str,
+    summary: &LocalizedText,
 ) -> Result<crate::models::challenge::ChallengeAdminResponse> {
+    let summary_json = localized_text_to_json(summary)?;
     let row = sqlx::query(
         r#"
         INSERT INTO challenges (name, title, summary, status)
@@ -67,7 +69,7 @@ pub async fn create_or_update_challenge(
     )
     .bind(name.as_str())
     .bind(title)
-    .bind(summary)
+    .bind(&summary_json)
     .fetch_one(pool)
     .await
     .map_err(|error| match error {
@@ -78,7 +80,7 @@ pub async fn create_or_update_challenge(
     Ok(crate::models::challenge::ChallengeAdminResponse {
         name: challenge_name_from_row(&row, "name")?,
         title: row.try_get("title")?,
-        summary: row.try_get("summary")?,
+        summary: localized_text_from_row(&row, "summary")?,
         status: challenge_status_from_row(&row, "status")?,
         created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
         updated_at: row.try_get::<DateTime<Utc>, _>("updated_at")?.to_rfc3339(),
@@ -107,7 +109,7 @@ pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeLi
             Ok(AdminChallengeListItemDto {
                 name: challenge_name_from_row(&r, "name")?,
                 title: r.try_get("title")?,
-                summary: r.try_get("summary")?,
+                summary: localized_text_from_row(&r, "summary")?,
                 status: challenge_status_from_row(&r, "status")?,
                 targets: spec.as_ref().map(|spec| spec.targets.clone()),
                 starts_at: spec.as_ref().map(|spec| spec.starts_at.clone()),
@@ -133,7 +135,7 @@ pub async fn publish_challenge(
     statement_path: &ManagedStatementPath,
     spec: &ChallengeBundleSpec,
     title: &str,
-    summary: &str,
+    summary: &LocalizedText,
 ) -> Result<PublishChallengeResponse> {
     let mut tx = pool.begin().await?;
     let response = publish_challenge_tx(
@@ -158,9 +160,10 @@ pub async fn publish_challenge_tx(
     statement_path: &ManagedStatementPath,
     spec: &ChallengeBundleSpec,
     title: &str,
-    summary: &str,
+    summary: &LocalizedText,
 ) -> Result<PublishChallengeResponse> {
     let spec_json = serde_json::to_value(spec).map_err(|e| AppError::Internal(e.to_string()))?;
+    let summary_json = localized_text_to_json(summary)?;
 
     let row = sqlx::query(
         r#"
@@ -194,7 +197,7 @@ pub async fn publish_challenge_tx(
     )
     .bind(challenge_name.as_str())
     .bind(title)
-    .bind(summary)
+    .bind(&summary_json)
     .bind(bundle_path.as_str()?)
     .bind(statement_path.as_str()?)
     .bind(&spec_json)
@@ -739,7 +742,7 @@ pub async fn list_published_challenges(
             Ok(ChallengeListItemDto {
                 name: challenge_name_from_row(&r, "name")?,
                 title: r.try_get("title")?,
-                summary: r.try_get("summary")?,
+                summary: localized_text_from_row(&r, "summary")?,
                 starts_at: spec.starts_at,
                 closes_at: spec.closes_at,
                 eligibility: spec.eligibility,
@@ -810,11 +813,26 @@ fn row_to_challenge_record(r: sqlx::postgres::PgRow) -> Result<ChallengeRecord> 
     Ok(ChallengeRecord {
         challenge_name: challenge_name_from_row(&r, "challenge_name")?,
         title: r.try_get("title")?,
-        summary: r.try_get("summary")?,
+        summary: localized_text_from_row(&r, "summary")?,
         bundle_path: managed_bundle_path_from_row(&r, "bundle_path")?,
         statement_path: managed_statement_path_from_row(&r, "statement_path")?,
         spec_json: r.try_get("spec_json")?,
     })
+}
+
+/// Reads localized text from a JSONB database column.
+pub(super) fn localized_text_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<LocalizedText> {
+    let value: Value = row.try_get(column)?;
+    serde_json::from_value(value)
+        .map_err(|e| AppError::Internal(format!("stored {column} is invalid: {e}")))
+}
+
+/// Serialize localized text for JSONB binding.
+fn localized_text_to_json(value: &LocalizedText) -> Result<Value> {
+    serde_json::to_value(value).map_err(|e| AppError::Internal(e.to_string()))
 }
 
 /// Reads managed bundle path from a database row and validates its domain shape.

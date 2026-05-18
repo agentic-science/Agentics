@@ -17,6 +17,7 @@ use super::ids::{
     AgentId, AgentPioneerCodeId, ChallengeShortlistRevisionId, EvaluationJobId,
     SolutionSubmissionId,
 };
+use super::localization::LocalizedText;
 use super::names::{ChallengeName, MetricName, TargetName};
 use super::pioneer_codes::{PioneerCode, PioneerCodeInput, PioneerCodeStatus, PioneerCodeUseKind};
 use crate::storage::StorageKey;
@@ -497,8 +498,7 @@ pub struct AdminServiceHeartbeatListResponse {
 pub struct CreateChallengeRequest {
     pub name: ChallengeName,
     pub title: String,
-    #[serde(default)]
-    pub summary: String,
+    pub summary: LocalizedText,
 }
 
 /// Admin payload for publishing a bundle as a challenge.

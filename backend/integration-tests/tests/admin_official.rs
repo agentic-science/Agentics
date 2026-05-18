@@ -23,7 +23,10 @@ fn create_admin_bundle(root: &Path) -> std::path::PathBuf {
     .expect("failed to parse copied spec");
     spec["challenge_name"] = serde_json::json!("admin-sum");
     spec["challenge_title"] = serde_json::json!("Admin Sum");
-    spec["challenge_summary"] = serde_json::json!("Official flow test");
+    spec["summary"] = serde_json::json!({
+        "en": "Official flow test",
+        "zh": "官方流程测试"
+    });
     spec["visibility"]["result_detail"] = serde_json::json!("submitter_live_public_live");
     std::fs::write(
         &spec_path,

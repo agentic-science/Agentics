@@ -42,7 +42,12 @@ export const adminChallengeListResponseSchema = z
             .min(3)
             .max(63),
           title: z.string(),
-          summary: z.string(),
+          summary: z
+            .object({ en: z.string(), zh: z.string() })
+            .strict()
+            .describe(
+              "English and Chinese text for short public challenge copy.",
+            ),
           status: z
             .enum(["draft", "active", "archived"])
             .describe(
@@ -453,7 +458,10 @@ export const challengeAdminResponseSchema = z
       .min(3)
       .max(63),
     title: z.string(),
-    summary: z.string(),
+    summary: z
+      .object({ en: z.string(), zh: z.string() })
+      .strict()
+      .describe("English and Chinese text for short public challenge copy."),
     status: z
       .enum(["draft", "active", "archived"])
       .describe(
@@ -473,7 +481,10 @@ export const challengeDetailResponseSchema = z
       .min(3)
       .max(63),
     title: z.string(),
-    summary: z.string(),
+    summary: z
+      .object({ en: z.string(), zh: z.string() })
+      .strict()
+      .describe("English and Chinese text for short public challenge copy."),
     spec: z
       .object({
         schema_version: z.number().int(),
@@ -483,10 +494,11 @@ export const challengeDetailResponseSchema = z
           .min(3)
           .max(63),
         challenge_title: z.string(),
-        challenge_summary: z
-          .string()
+        summary: z
+          .object({ en: z.string(), zh: z.string() })
+          .strict()
           .describe(
-            "Plain-text summary used in compact challenge catalog surfaces.",
+            "English and Chinese text for short public challenge copy.",
           ),
         solution: z
           .object({
@@ -977,7 +989,12 @@ export const challengeDraftListResponseSchema = z
                 .min(3)
                 .max(63),
               title: z.string(),
-              summary: z.string(),
+              summary: z
+                .object({ en: z.string(), zh: z.string() })
+                .strict()
+                .describe(
+                  "English and Chinese text for short public challenge copy.",
+                ),
               readme_path: z
                 .string()
                 .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
@@ -1192,7 +1209,12 @@ export const challengeDraftResponseSchema = z
           .min(3)
           .max(63),
         title: z.string(),
-        summary: z.string(),
+        summary: z
+          .object({ en: z.string(), zh: z.string() })
+          .strict()
+          .describe(
+            "English and Chinese text for short public challenge copy.",
+          ),
         readme_path: z
           .string()
           .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
@@ -1354,7 +1376,12 @@ export const challengeListResponseSchema = z
             .min(3)
             .max(63),
           title: z.string(),
-          summary: z.string(),
+          summary: z
+            .object({ en: z.string(), zh: z.string() })
+            .strict()
+            .describe(
+              "English and Chinese text for short public challenge copy.",
+            ),
           starts_at: z.string(),
           closes_at: z.string().optional(),
           eligibility: z
@@ -1497,7 +1524,12 @@ export const createChallengeDraftRequestSchema = z
           .min(3)
           .max(63),
         title: z.string(),
-        summary: z.string(),
+        summary: z
+          .object({ en: z.string(), zh: z.string() })
+          .strict()
+          .describe(
+            "English and Chinese text for short public challenge copy.",
+          ),
         readme_path: z
           .string()
           .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),

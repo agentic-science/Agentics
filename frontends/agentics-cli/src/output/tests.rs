@@ -7,6 +7,7 @@ use shared::models::challenge::{
 };
 use shared::models::evaluation::ScoreVisibility;
 use shared::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
+use shared::models::localization::LocalizedText;
 use shared::models::names::{ChallengeName, ResourceProfileName, TargetName};
 use shared::models::paths::BundleRelativePath;
 use shared::zip_project::ZipProjectNetworkAccess;
@@ -28,7 +29,7 @@ fn renders_challenge_list_table() {
             items: vec![ChallengeListItemDto {
                 name: challenge_name("sample-sum"),
                 title: "Sample Sum".to_string(),
-                summary: "Add numbers".to_string(),
+                summary: localized_summary(),
                 starts_at: "2026-01-01T00:00:00Z".to_string(),
                 closes_at: None,
                 eligibility: ChallengeEligibilitySpec {
@@ -73,12 +74,12 @@ fn challenge_detail() -> ChallengeDetailResponse {
     ChallengeDetailResponse {
         name: challenge_name("sample-sum"),
         title: "Sample Sum".to_string(),
-        summary: "Add numbers".to_string(),
+        summary: localized_summary(),
         spec: ChallengeBundleSpec {
             schema_version: 1,
             challenge_name: challenge_name("sample-sum"),
             challenge_title: "Sample Sum".to_string(),
-            challenge_summary: "Add numbers".to_string(),
+            summary: localized_summary(),
             starts_at: "2026-01-01T00:00:00Z".to_string(),
             closes_at: None,
             eligibility: ChallengeEligibilitySpec {
@@ -144,6 +145,11 @@ fn challenge_detail() -> ChallengeDetailResponse {
 /// Handles target name for this module.
 fn target_name(value: &str) -> TargetName {
     TargetName::try_new(value.to_string()).expect("test target is valid")
+}
+
+/// Build the standard localized challenge summary for output tests.
+fn localized_summary() -> LocalizedText {
+    LocalizedText::new("Add numbers", "数字求和")
 }
 
 /// Handles challenge name for this module.

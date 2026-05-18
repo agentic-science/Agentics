@@ -533,16 +533,26 @@ async fn seeded_challenge_summaries_are_public(pool: sqlx::PgPool) {
         .expect("failed to decode grid-routing challenge");
     assert_eq!(public_challenge["title"], "Grid Routing");
     assert!(
-        public_challenge["summary"]
+        public_challenge["summary"]["zh"]
             .as_str()
             .unwrap()
             .contains("二维网格")
     );
     assert!(
-        public_challenge["summary"]
+        public_challenge["summary"]["zh"]
             .as_str()
             .unwrap()
             .contains("从 S 到 G")
+    );
+    assert!(
+        public_challenge["summary"]["en"]
+            .as_str()
+            .unwrap()
+            .contains("route")
+    );
+    assert_eq!(
+        public_challenge["summary"],
+        public_challenge["spec"]["summary"]
     );
     assert!(
         public_challenge["statement_markdown"]

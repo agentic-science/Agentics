@@ -30,6 +30,7 @@ import {
   uploadChallengePrivateAssetRequestSchema,
   uploadPrivateAsset,
 } from "@/lib/creatorApi";
+import { selectLocalizedText } from "@/lib/localizedText";
 import type {
   ChallengeDraftResponse,
   ChallengeShortlistResponse,
@@ -47,7 +48,10 @@ const defaultManifest = JSON.stringify(
     request: "new_challenge",
     challenge_name: "matrix-multiplication",
     title: "Matrix Multiplication",
-    summary: "Benchmark matrix multiplication solutions.",
+    summary: {
+      en: "Benchmark matrix multiplication solutions.",
+      zh: "评测矩阵乘法解决方案。",
+    },
     readme_path: "README.md",
     bundle_path: "v1",
     private_assets: [
@@ -787,7 +791,10 @@ function DraftDetail({ draft }: { draft: ChallengeDraftResponse | null }) {
               {draft.manifest.title}
             </h2>
             <p className="mt-2 text-[var(--text-body-sm)] text-[var(--text-secondary)]">
-              {draft.manifest.summary}
+              {selectLocalizedText(
+                draft.manifest.summary,
+                currentDocumentLocale(),
+              )}
             </p>
           </div>
           <a
@@ -905,6 +912,11 @@ function DraftDetail({ draft }: { draft: ChallengeDraftResponse | null }) {
       </div>
     </div>
   );
+}
+
+/** Returns the browser document locale without requiring a Next Intl provider. */
+function currentDocumentLocale(): string {
+  return document.documentElement.lang || navigator.language || "en";
 }
 
 /** Renders the owner surfaces component. */

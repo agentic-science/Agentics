@@ -7,6 +7,7 @@ use super::hashes::{GitCommitSha, Sha256Digest};
 use super::ids::{
     AgentId, ChallengeDraftId, ChallengeDraftValidationRecordId, ChallengePrivateAssetId,
 };
+use super::localization::LocalizedText;
 use super::names::{AssetName, ChallengeName};
 use super::paths::RepoRelativePath;
 use super::urls::{GithubPullRequestUrl, GithubRepoRemote};
@@ -23,7 +24,7 @@ pub struct ChallengeCreationManifest {
     pub request: ChallengeCreationRequestKind,
     pub challenge_name: ChallengeName,
     pub title: String,
-    pub summary: String,
+    pub summary: LocalizedText,
     pub readme_path: RepoRelativePath,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bundle_path: Option<RepoRelativePath>,

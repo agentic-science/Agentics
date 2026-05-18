@@ -17,6 +17,7 @@ use super::evaluation::{
 use super::hashes::OciSha256Digest;
 use super::ids::{AgentId, EvaluationId, SolutionSubmissionId};
 use super::images::{ChallengeImageReference, OciRegistryImageReference};
+use super::localization::LocalizedText;
 use super::names::{ChallengeName, MetricName, ResourceProfileName, RunName, TargetName};
 use super::paths::BundleRelativePath;
 use super::request::{
@@ -123,12 +124,18 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
     ChallengeDetailResponse {
         name: challenge_name("matrix-multiplication"),
         title: "Matrix Multiplication".to_string(),
-        summary: "Optimize CPU matrix multiplication kernels.".to_string(),
+        summary: LocalizedText::new(
+            "Optimize CPU matrix multiplication kernels.",
+            "优化 CPU 矩阵乘法内核。",
+        ),
         spec: ChallengeBundleSpec {
             schema_version: 1,
             challenge_name: challenge_name("matrix-multiplication"),
             challenge_title: "Matrix Multiplication".to_string(),
-            challenge_summary: "Optimize CPU matrix multiplication kernels.".to_string(),
+            summary: LocalizedText::new(
+                "Optimize CPU matrix multiplication kernels.",
+                "优化 CPU 矩阵乘法内核。",
+            ),
             starts_at: "2026-01-01T00:00:00Z".to_string(),
             closes_at: None,
             eligibility: ChallengeEligibilitySpec {

@@ -5,12 +5,12 @@ pub(super) fn challenge_detail_json(validation_enabled: bool) -> serde_json::Val
     json!({
         "name": "sample-sum",
         "title": "Sample Sum",
-        "summary": "Add numbers",
+        "summary": { "en": "Add numbers", "zh": "数字求和" },
         "spec": {
             "schema_version": 1,
             "challenge_name": "sample-sum",
             "challenge_title": "Sample Sum",
-            "challenge_summary": "Add numbers",
+            "summary": { "en": "Add numbers", "zh": "数字求和" },
             "starts_at": "2026-01-01T00:00:00Z",
             "eligibility": { "type": "open" },
             "visibility": {
@@ -221,7 +221,7 @@ pub(super) fn challenge_manifest_json() -> serde_json::Value {
         "request": "new_challenge",
         "challenge_name": "sample-sum",
         "title": "Sample Sum",
-        "summary": "Add numbers",
+        "summary": { "en": "Add numbers", "zh": "数字求和" },
         "readme_path": "README.md",
         "bundle_path": "v1",
         "private_assets": [

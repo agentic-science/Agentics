@@ -15,6 +15,7 @@ pub mod github;
 pub mod hashes;
 pub mod ids;
 pub mod images;
+pub mod localization;
 pub mod names;
 pub mod paths;
 pub mod pioneer_codes;

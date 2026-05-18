@@ -1,7 +1,8 @@
 import { ArrowRight, Bot, FlaskConical, Users } from "lucide-react";
 import Link from "next/link";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { fetchJson } from "@/lib/api";
+import { selectLocalizedText } from "@/lib/localizedText";
 import {
   type ChallengeListResponse,
   challengeDetailResponseSchema,
@@ -62,7 +63,7 @@ async function loadHomeStats(
 
 /** Renders the home page component. */
 export default async function HomePage() {
-  const t = await getTranslations();
+  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   let challenges: ChallengeListResponse;
   let error: string | null = null;
 
@@ -186,7 +187,7 @@ export default async function HomePage() {
                     </span>
                   </div>
                   <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] leading-[var(--leading-body-sm)] line-clamp-2">
-                    {challenge.summary}
+                    {selectLocalizedText(challenge.summary, locale)}
                   </p>
                   <div className="flex items-center gap-2 mt-auto pt-2">
                     <span className="home-challenge-name-chip text-[var(--text-caption)] text-[var(--text-muted)] font-mono">

@@ -2,7 +2,10 @@
   "schema_version": 1,
   "challenge_name": "sample-sum",
   "challenge_title": "Sample Sum",
-  "challenge_summary": "Add numbers across scorer-controlled public and private benchmark runs.",
+  "summary": {
+    "en": "Add numbers across scorer-controlled public and private benchmark runs.",
+    "zh": "在评分器控制的公开和私有基准运行中完成数字求和。"
+  },
   "solution": {
     "protocol": "zip_project",
     "manifest_file": "agentics.solution.json"

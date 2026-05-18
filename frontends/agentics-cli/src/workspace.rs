@@ -285,6 +285,7 @@ mod tests {
     };
     use shared::models::evaluation::ScoreVisibility;
     use shared::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
+    use shared::models::localization::LocalizedText;
     use shared::models::names::{ChallengeName, ResourceProfileName, TargetName};
     use shared::models::paths::BundleRelativePath;
     use shared::zip_project::{ZipProjectManifest, ZipProjectNetworkAccess};
@@ -403,12 +404,12 @@ mod tests {
         ChallengeDetailResponse {
             name: challenge_name("sample-sum"),
             title: "Sample Sum".to_string(),
-            summary: "Add numbers".to_string(),
+            summary: localized_summary(),
             spec: ChallengeBundleSpec {
                 schema_version: 1,
                 challenge_name: challenge_name("sample-sum"),
                 challenge_title: "Sample Sum".to_string(),
-                challenge_summary: "Add numbers".to_string(),
+                summary: localized_summary(),
                 starts_at: "2026-01-01T00:00:00Z".to_string(),
                 closes_at: None,
                 eligibility: ChallengeEligibilitySpec {
@@ -474,6 +475,11 @@ mod tests {
     /// Handles challenge name for this module.
     fn challenge_name(value: &str) -> ChallengeName {
         ChallengeName::try_new(value.to_string()).expect("test challenge name is valid")
+    }
+
+    /// Build the standard localized challenge summary for workspace tests.
+    fn localized_summary() -> LocalizedText {
+        LocalizedText::new("Add numbers", "数字求和")
     }
 
     /// Handles target name for this module.

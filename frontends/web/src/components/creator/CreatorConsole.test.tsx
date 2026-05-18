@@ -257,7 +257,10 @@ const challengeDraftResponse = {
     request: "new_challenge",
     challenge_name: "matrix-multiplication",
     title: "Matrix Multiplication",
-    summary: "Benchmark matrix multiplication solutions.",
+    summary: {
+      en: "Benchmark matrix multiplication solutions.",
+      zh: "评测矩阵乘法解决方案。",
+    },
     readme_path: "README.md",
     bundle_path: "v1",
     private_assets: [],

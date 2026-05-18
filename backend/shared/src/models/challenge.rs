@@ -8,6 +8,7 @@ use serde::de::{Error as DeError, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::images::ChallengeImageReference;
+use super::localization::LocalizedText;
 use super::names::{ChallengeName, MetricName, ResourceProfileName, RunName, TargetName};
 use super::paths::{
     BundleRelativePath, ManagedBundlePath, ManagedStatementPath, RunInputPath, RunOutputPath,
@@ -58,8 +59,8 @@ pub struct ChallengeBundleSpec {
     pub schema_version: i32,
     pub challenge_name: ChallengeName,
     pub challenge_title: String,
-    /// Plain-text summary used in compact challenge catalog surfaces.
-    pub challenge_summary: String,
+    /// Localized summary used in compact challenge catalog surfaces.
+    pub summary: LocalizedText,
     pub solution: SolutionSpec,
     pub scorer: ScorerSpec,
     pub targets: Vec<ChallengeTargetSpec>,
@@ -105,8 +106,8 @@ pub struct PublicChallengeBundleSpec {
     pub schema_version: i32,
     pub challenge_name: ChallengeName,
     pub challenge_title: String,
-    /// Plain-text summary used in compact challenge catalog surfaces.
-    pub challenge_summary: String,
+    /// Localized summary used in compact challenge catalog surfaces.
+    pub summary: LocalizedText,
     pub solution: SolutionSpec,
     pub scorer: ScorerSpec,
     pub targets: Vec<ChallengeTargetSpec>,
@@ -152,7 +153,7 @@ impl From<ChallengeBundleSpec> for PublicChallengeBundleSpec {
             schema_version: spec.schema_version,
             challenge_name: spec.challenge_name,
             challenge_title: spec.challenge_title,
-            challenge_summary: spec.challenge_summary,
+            summary: spec.summary,
             solution: spec.solution,
             scorer: spec.scorer,
             targets: spec.targets,
@@ -622,7 +623,7 @@ impl Default for MetricSchemaSpec {
 pub struct ChallengeListItemDto {
     pub name: ChallengeName,
     pub title: String,
-    pub summary: String,
+    pub summary: LocalizedText,
     pub starts_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub closes_at: Option<String>,
@@ -644,7 +645,7 @@ pub struct ChallengeListResponse {
 pub struct ChallengeDetailResponse {
     pub name: ChallengeName,
     pub title: String,
-    pub summary: String,
+    pub summary: LocalizedText,
     pub spec: PublicChallengeBundleSpec,
     pub statement_markdown: String,
 }
@@ -654,7 +655,7 @@ pub struct ChallengeDetailResponse {
 pub struct ChallengeAdminResponse {
     pub name: ChallengeName,
     pub title: String,
-    pub summary: String,
+    pub summary: LocalizedText,
     pub status: ChallengeLifecycleStatus,
     pub created_at: String,
     pub updated_at: String,
@@ -665,7 +666,7 @@ pub struct ChallengeAdminResponse {
 pub struct AdminChallengeListItemDto {
     pub name: ChallengeName,
     pub title: String,
-    pub summary: String,
+    pub summary: LocalizedText,
     pub status: ChallengeLifecycleStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub targets: Option<Vec<ChallengeTargetSpec>>,

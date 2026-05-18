@@ -18,6 +18,7 @@ use crate::models::ids::{
     AgentId, ChallengeDraftAuditEventId, ChallengeDraftId, ChallengeDraftValidationRecordId,
     ChallengePrivateAssetId,
 };
+use crate::models::localization::LocalizedText;
 use crate::models::names::{AssetName, ChallengeName};
 use crate::models::paths::{ManagedBundlePath, ManagedStatementPath, RepoRelativePath};
 use crate::models::urls::{GithubPullRequestUrl, GithubRepoRemote};
@@ -83,7 +84,7 @@ pub struct PublishNewChallengeDraftInput {
     pub statement_path: ManagedStatementPath,
     pub spec: ChallengeBundleSpec,
     pub title: String,
-    pub summary: String,
+    pub summary: LocalizedText,
     pub owner_agent_id: AgentId,
     pub audit_event_id: ChallengeDraftAuditEventId,
     pub admin_username: String,

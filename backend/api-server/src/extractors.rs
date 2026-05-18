@@ -480,7 +480,8 @@ impl ValidateRequest for CreateChallengeRequest {
     /// Ensures direct admin challenge creation includes public display text.
     fn validate(&self) -> Result<(), String> {
         require_non_empty(&self.title, "title")?;
-        require_non_empty(&self.summary, "summary")
+        require_non_empty(&self.summary.en, "summary.en")?;
+        require_non_empty(&self.summary.zh, "summary.zh")
     }
 }
 

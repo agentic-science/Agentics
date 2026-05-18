@@ -60,7 +60,10 @@ describe("AdminConsole", () => {
               {
                 name: "matrix-multiplication",
                 title: "Matrix Multiplication",
-                summary: "Benchmark matrix multiplication.",
+                summary: {
+                  en: "Benchmark matrix multiplication.",
+                  zh: "评测矩阵乘法。",
+                },
                 status: "active",
                 targets: [],
                 eligibility: { type: "open" },

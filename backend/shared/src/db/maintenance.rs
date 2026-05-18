@@ -130,7 +130,7 @@ pub async fn ensure_challenges_seeded_from_root(
                 &managed_statement_path,
                 &spec,
                 &spec.challenge_title,
-                &spec.challenge_summary,
+                &spec.summary,
             )
             .await
             .is_err()
@@ -150,7 +150,10 @@ pub async fn ensure_challenges_seeded_from_root(
                 )
                 .bind(challenge_name.as_str())
                 .bind(&spec.challenge_title)
-                .bind(&spec.challenge_summary)
+                .bind(
+                    serde_json::to_value(&spec.summary)
+                        .map_err(|e| AppError::Internal(e.to_string()))?,
+                )
                 .bind(managed_bundle_path.as_str()?)
                 .bind(managed_statement_path.as_str()?)
                 .bind(serde_json::to_value(&spec).map_err(|e| AppError::Internal(e.to_string()))?)

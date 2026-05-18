@@ -716,7 +716,7 @@ async fn challenge_draft_rejects_new_version_manifest(pool: sqlx::PgPool) {
             "request": "new_version",
             "challenge_name": "sample-sum",
             "title": "Sample Sum",
-            "summary": "Add numbers",
+            "summary": { "en": "Add numbers", "zh": "数字求和" },
             "readme_path": "README.md",
             "version": {
                 "version": "v2",

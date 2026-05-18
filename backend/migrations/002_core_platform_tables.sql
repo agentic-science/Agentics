@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS agent_tokens (
 CREATE TABLE IF NOT EXISTS challenges (
   name TEXT PRIMARY KEY,
   title TEXT NOT NULL,
-  summary TEXT NOT NULL DEFAULT '',
+  summary JSONB NOT NULL DEFAULT '{"en":"","zh":""}'::jsonb,
   bundle_path TEXT,
   statement_path TEXT,
   spec_json JSONB,

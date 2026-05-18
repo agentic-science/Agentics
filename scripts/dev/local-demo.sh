@@ -392,18 +392,18 @@ WITH source AS (
   FROM challenges
   WHERE name = 'sample-sum'
 ),
-fake(name, title, summary, ordinal) AS (
+fake(name, title, summary_en, summary_zh, ordinal) AS (
   VALUES
-    ('demo-ui-alpha', 'Orbital Protein Folding', 'Predict compact protein conformations under synthetic orbital constraints.', 1),
-    ('demo-ui-beta', 'Catalyst Search', 'Find reaction pathways that maximize yield while minimizing unsafe intermediates.', 2),
-    ('demo-ui-gamma', 'Cellular Maze', 'Route signaling molecules through a noisy cellular grid without crossing blocked regions.', 3),
-    ('demo-ui-delta', 'Climate Patch', 'Select localized interventions that reduce simulated heat stress under budget limits.', 4),
-    ('demo-ui-epsilon', 'Lab Scheduler', 'Optimize robotic wet-lab batches while preserving reagent and timing constraints.', 5),
-    ('demo-ui-zeta', 'Spectra Denoising', 'Recover clean spectral peaks from corrupted instrument traces.', 6),
-    ('demo-ui-eta', 'Genome Primer', 'Design primer sets that cover target regions while avoiding off-target matches.', 7),
-    ('demo-ui-theta', 'Graph Molecules', 'Generate candidate molecules that satisfy graph constraints and scoring rules.', 8),
-    ('demo-ui-iota', 'Signal Forecast', 'Forecast sparse experimental signals with uncertainty-aware ranking.', 9),
-    ('demo-ui-kappa', 'Microscopy Segment', 'Segment cell boundaries from noisy microscopy tiles with hidden labels.', 10)
+    ('demo-ui-alpha', 'Orbital Protein Folding', 'Predict compact protein conformations under synthetic orbital constraints.', '在合成轨道约束下预测紧凑蛋白构象。', 1),
+    ('demo-ui-beta', 'Catalyst Search', 'Find reaction pathways that maximize yield while minimizing unsafe intermediates.', '寻找最大化产率并减少不安全中间体的反应路径。', 2),
+    ('demo-ui-gamma', 'Cellular Maze', 'Route signaling molecules through a noisy cellular grid without crossing blocked regions.', '让信号分子穿过嘈杂细胞网格，并避开阻塞区域。', 3),
+    ('demo-ui-delta', 'Climate Patch', 'Select localized interventions that reduce simulated heat stress under budget limits.', '在预算限制下选择局部干预以降低模拟热应激。', 4),
+    ('demo-ui-epsilon', 'Lab Scheduler', 'Optimize robotic wet-lab batches while preserving reagent and timing constraints.', '在保持试剂和时间约束的同时优化机器人湿实验批次。', 5),
+    ('demo-ui-zeta', 'Spectra Denoising', 'Recover clean spectral peaks from corrupted instrument traces.', '从受干扰的仪器轨迹中恢复干净的光谱峰。', 6),
+    ('demo-ui-eta', 'Genome Primer', 'Design primer sets that cover target regions while avoiding off-target matches.', '设计覆盖目标区域并避免脱靶匹配的引物集合。', 7),
+    ('demo-ui-theta', 'Graph Molecules', 'Generate candidate molecules that satisfy graph constraints and scoring rules.', '生成满足图约束和评分规则的候选分子。', 8),
+    ('demo-ui-iota', 'Signal Forecast', 'Forecast sparse experimental signals with uncertainty-aware ranking.', '使用不确定性感知排序预测稀疏实验信号。', 9),
+    ('demo-ui-kappa', 'Microscopy Segment', 'Segment cell boundaries from noisy microscopy tiles with hidden labels.', '在隐藏标签下从噪声显微图块中分割细胞边界。', 10)
 )
 INSERT INTO challenges (
   name, title, summary, bundle_path, statement_path, spec_json,
@@ -414,7 +414,7 @@ INSERT INTO challenges (
 SELECT
   fake.name,
   fake.title,
-  fake.summary,
+  jsonb_build_object('en', fake.summary_en, 'zh', fake.summary_zh),
   source.bundle_path,
   source.statement_path,
   jsonb_set(
@@ -422,7 +422,7 @@ SELECT
       jsonb_set(source.spec_json, '{challenge_name}', to_jsonb(fake.name)),
       '{challenge_title}', to_jsonb(fake.title)
     ),
-    '{challenge_summary}', to_jsonb(fake.summary)
+    '{summary}', jsonb_build_object('en', fake.summary_en, 'zh', fake.summary_zh)
   ),
   source.starts_at,
   source.closes_at,

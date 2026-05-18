@@ -13,6 +13,7 @@ use crate::models::hashes::OciSha256Digest;
 use crate::models::images::{
     ChallengeImageReference, LocalAgenticsImageReference, OciRegistryImageReference,
 };
+use crate::models::localization::LocalizedText;
 use crate::models::names::{ChallengeName, MetricName, ResourceProfileName, TargetName};
 use crate::models::paths::BundleRelativePath;
 use crate::zip_project::ZipProjectNetworkAccess;
@@ -27,13 +28,21 @@ fn test_digest() -> OciSha256Digest {
         .expect("test OCI digest is valid")
 }
 
+/// Build the standard localized challenge summary for bundle tests.
+fn localized_summary() -> LocalizedText {
+    LocalizedText::new(
+        "Add numbers from worker-managed runs.",
+        "在 worker 管理的运行中完成数字求和。",
+    )
+}
+
 /// Handles base spec for this module.
 fn base_spec() -> ChallengeBundleSpec {
     ChallengeBundleSpec {
         schema_version: 1,
         challenge_name: challenge_name("sample-sum"),
         challenge_title: "Sample Sum".to_string(),
-        challenge_summary: "Add numbers from worker-managed runs.".to_string(),
+        summary: localized_summary(),
         solution: SolutionSpec {
             protocol: "zip_project".to_string(),
             manifest_file: bundle_path("agentics.solution.json"),
@@ -510,14 +519,14 @@ fn digest_pinned_image_policy_rejects_local_images() {
     assert!(error.to_string().contains("registry image"));
 }
 
-/// Verifies that challenge summary is required.
+/// Verifies that localized challenge summary is required.
 #[test]
-fn challenge_summary_is_required() {
+fn localized_summary_is_required() {
     let mut spec = base_spec();
-    spec.challenge_summary.clear();
+    spec.summary.en.clear();
 
     let error = validate_challenge_bundle_spec(&spec).expect_err("empty summary should fail");
-    assert!(error.to_string().contains("challenge_summary"));
+    assert!(error.to_string().contains("summary.en"));
 }
 
 /// Verifies that disabled private benchmark may still declare directory.

@@ -10,6 +10,7 @@ use crate::models::names::{ChallengeName, TargetName};
 
 use super::challenges::{
     ChallengeRecord, agent_is_shortlisted, challenge_has_shortlist, get_published_challenge,
+    localized_text_from_row,
 };
 use super::ids::challenge_name_from_row;
 
@@ -116,7 +117,7 @@ pub(super) async fn lock_active_challenge_for_admission_tx(
     Ok(ChallengeRecord {
         challenge_name: challenge_name_from_row(&row, "challenge_name")?,
         title: row.try_get("title")?,
-        summary: row.try_get("summary")?,
+        summary: localized_text_from_row(&row, "summary")?,
         bundle_path: managed_bundle_path_from_row(&row, "bundle_path")?,
         statement_path: managed_statement_path_from_row(&row, "statement_path")?,
         spec_json: row.try_get("spec_json")?,

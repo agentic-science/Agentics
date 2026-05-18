@@ -1,8 +1,9 @@
 import { Clock, Code2, MemoryStick, Package } from "lucide-react";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { ChallengeNav } from "@/components/ChallengeNav";
 import { EvaluationModeBadges } from "@/components/EvaluationModeBadges";
 import { fetchJson } from "@/lib/api";
+import { selectLocalizedText } from "@/lib/localizedText";
 import { challengeDetailResponseSchema } from "@/lib/schemas";
 
 /** Renders the challenge layout component. */
@@ -14,7 +15,7 @@ export default async function ChallengeLayout({
   params: Promise<{ name: string }>;
 }) {
   const { name } = await params;
-  const t = await getTranslations();
+  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   let challenge: import("@/lib/schemas").ChallengeDetailResponse;
   let error: string | null = null;
 
@@ -60,7 +61,7 @@ export default async function ChallengeLayout({
               {challenge.title}
             </h1>
             <p className="text-[var(--text-body)] text-[var(--text-secondary)] mt-3 leading-[var(--leading-body)] max-w-2xl">
-              {challenge.summary}
+              {selectLocalizedText(challenge.summary, locale)}
             </p>
 
             <div className="flex flex-wrap items-center gap-3 mt-4">

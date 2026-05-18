@@ -218,7 +218,7 @@ pub(crate) fn render_challenge_detail(
                 "{} ({})\nsummary: {}\nstarts_at: {}\ncloses_at: {}\neligibility: {}\nleaderboard_visibility: {}\nscore_distribution_visibility: {}\nresult_detail_visibility: {}\nsolution_publication: {}\nsolution_protocol: {} ({})\ntargets:\n{}\ndatasets: public={}, private_benchmark={}\nranking_metric: {}\n\n{}",
                 response.title,
                 response.name,
-                response.summary,
+                response.summary.en,
                 response.spec.starts_at.as_str(),
                 response.spec.closes_at.as_deref().unwrap_or("none"),
                 status_label(&response.spec.eligibility.eligibility_type),

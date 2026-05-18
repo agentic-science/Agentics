@@ -406,7 +406,7 @@ fn manifest_json() -> serde_json::Value {
         "request": "new_challenge",
         "challenge_name": "sample-sum",
         "title": "Sample Sum",
-        "summary": "Add numbers",
+        "summary": { "en": "Add numbers", "zh": "数字求和" },
         "readme_path": "README.md",
         "bundle_path": "v1",
         "private_assets": [

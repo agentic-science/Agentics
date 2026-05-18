@@ -232,6 +232,7 @@ mod tests {
     use shared::models::evaluation::{MetricValue, ScoreVisibility};
     use shared::models::ids::{AgentId, SolutionSubmissionId};
     use shared::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
+    use shared::models::localization::LocalizedText;
     use shared::models::names::{ChallengeName, MetricName, ResourceProfileName, TargetName};
     use shared::models::paths::BundleRelativePath;
     use shared::models::request::LeaderboardEntryDto;
@@ -279,7 +280,7 @@ mod tests {
             schema_version: 1,
             challenge_name: challenge_name("latency-challenge"),
             challenge_title: "Latency Challenge".to_string(),
-            challenge_summary: "Measure raw latency.".to_string(),
+            summary: LocalizedText::new("Measure raw latency.", "测量原始延迟。"),
             solution: SolutionSpec {
                 protocol: "zip_project".to_string(),
                 manifest_file: bundle_path("agentics.solution.json"),

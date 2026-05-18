@@ -122,7 +122,7 @@ async fn create_challenge_and_publish_contract(pool: sqlx::PgPool) {
         .json(&serde_json::json!({
             "name": "test-challenge",
             "title": "Test Challenge",
-            "summary": "A test challenge"
+            "summary": { "en": "A test challenge", "zh": "测试挑战" }
         }))
         .send()
         .await
@@ -243,7 +243,7 @@ async fn admin_session_cookie_authenticates_admin_routes(pool: sqlx::PgPool) {
         .json(&serde_json::json!({
             "name": "session-admin-missing-csrf",
             "title": "Session Admin Missing CSRF",
-            "summary": "Session admin challenge"
+            "summary": { "en": "Session admin challenge", "zh": "会话管理员挑战" }
         }))
         .send()
         .await
@@ -260,7 +260,7 @@ async fn admin_session_cookie_authenticates_admin_routes(pool: sqlx::PgPool) {
         .json(&serde_json::json!({
             "name": "session-admin",
             "title": "Session Admin",
-            "summary": "Session admin challenge"
+            "summary": { "en": "Session admin challenge", "zh": "会话管理员挑战" }
         }))
         .send()
         .await

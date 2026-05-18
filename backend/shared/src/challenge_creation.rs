@@ -45,7 +45,8 @@ pub fn validate_challenge_creation_manifest(manifest: &ChallengeCreationManifest
         return Err(AppError::Validation("schema_version must be 1".to_string()));
     }
     require_non_empty(&manifest.title, "title")?;
-    require_non_empty(&manifest.summary, "summary")?;
+    require_non_empty(&manifest.summary.en, "summary.en")?;
+    require_non_empty(&manifest.summary.zh, "summary.zh")?;
     validate_private_asset_requirements(&manifest.private_assets)?;
 
     match manifest.request {
@@ -255,10 +256,10 @@ async fn validate_public_bundle(
             manifest.title, spec.challenge_title
         )));
     }
-    if spec.challenge_summary != manifest.summary {
+    if spec.summary != manifest.summary {
         return Err(AppError::Validation(format!(
-            "bundle challenge_summary mismatch: expected {}, got {}",
-            manifest.summary, spec.challenge_summary
+            "bundle summary mismatch: expected {}, got {}",
+            manifest.summary, spec.summary
         )));
     }
     assert_public_file_exists(bundle_dir.join("statement.md"), "statement.md").await?;
@@ -409,7 +410,14 @@ mod tests {
     use serde_json::json;
     use uuid::Uuid;
 
+    use crate::models::localization::LocalizedText;
+
     use super::*;
+
+    /// Build the standard localized challenge summary for creation tests.
+    fn localized_summary() -> LocalizedText {
+        LocalizedText::new("Add numbers", "数字求和")
+    }
 
     /// Verifies that validates new challenge repository.
     #[tokio::test]
@@ -437,7 +445,7 @@ mod tests {
                 "request": "new_version",
                 "challenge_name": "sample-sum",
                 "title": "Sample Sum",
-                "summary": "Add numbers",
+                "summary": { "en": "Add numbers", "zh": "数字求和" },
                 "readme_path": "README.md",
                 "bundle_path": "v1"
             })
@@ -465,7 +473,7 @@ mod tests {
                 "request": "archive_challenge",
                 "challenge_name": "sample-sum",
                 "title": "Sample Sum",
-                "summary": "Add numbers",
+                "summary": { "en": "Add numbers", "zh": "数字求和" },
                 "readme_path": "README.md",
                 "archive": { "reason": "Retired by challenge owner" }
             })
@@ -501,7 +509,7 @@ mod tests {
             request: ChallengeCreationRequestKind::ArchiveChallenge,
             challenge_name: "sample-sum".parse().expect("valid challenge name"),
             title: "Sample Sum".to_string(),
-            summary: "Add numbers".to_string(),
+            summary: localized_summary(),
             readme_path: "README.md".parse().expect("valid readme path"),
             bundle_path: Some("v1".parse().expect("valid bundle path")),
             archive: None,
@@ -522,7 +530,7 @@ mod tests {
             "request": "new_challenge",
             "challenge_name": "sample-sum",
             "title": "Sample Sum",
-            "summary": "Add numbers",
+            "summary": { "en": "Add numbers", "zh": "数字求和" },
             "readme_path": "README.md",
             "bundle_path": "v1",
             "private_assets": [
@@ -615,7 +623,7 @@ mod tests {
                 "schema_version": 1,
                 "challenge_name": "sample-sum",
                 "challenge_title": "Sample Sum",
-                "challenge_summary": "Add numbers",
+                "summary": { "en": "Add numbers", "zh": "数字求和" },
                 "solution": {
                     "protocol": "zip_project",
                     "manifest_file": "agentics.solution.json"
@@ -692,7 +700,7 @@ mod tests {
             "request": "new_challenge",
             "challenge_name": "sample-sum",
             "title": "Sample Sum",
-            "summary": "Add numbers",
+            "summary": { "en": "Add numbers", "zh": "数字求和" },
             "readme_path": "README.md",
             "bundle_path": bundle,
             "private_assets": [
