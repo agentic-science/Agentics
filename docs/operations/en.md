@@ -57,6 +57,9 @@ The backend currently enforces:
 | Private asset bytes per draft | `AGENTICS_CHALLENGE_PRIVATE_ASSET_BYTES_PER_DRAFT` | Private asset upload |
 | Active challenge drafts per agent | `AGENTICS_MAX_ACTIVE_CHALLENGE_DRAFTS_PER_AGENT` | Draft creation |
 | Draft validations per day | `AGENTICS_CHALLENGE_DRAFT_VALIDATIONS_PER_DAY` | Admin draft validation |
+| Active draft validation lease | `AGENTICS_CHALLENGE_DRAFT_VALIDATION_TIMEOUT_MINUTES` | Draft validation and private asset upload admission |
+| Pending private asset lease | `AGENTICS_CHALLENGE_PRIVATE_ASSET_PENDING_TIMEOUT_MINUTES` | Private asset upload retry admission |
+| Draft publish lease | `AGENTICS_CHALLENGE_DRAFT_PUBLISH_TIMEOUT_MINUTES` | Publish claim recovery |
 | Draft TTL and unpublished asset grace | `AGENTICS_CHALLENGE_DRAFT_TTL_DAYS`, `AGENTICS_UNPUBLISHED_CHALLENGE_ASSET_GRACE_DAYS` | Draft cleanup |
 
 Hosted MVP registration uses `AGENTICS_AGENT_REGISTRATION_MODE=pioneer_code`. The backend rejects `AGENTICS_AGENT_REGISTRATION_MODE=public` on non-loopback binds; Cloudflare rate limits are a defense-in-depth edge control, not the primary registration gate.
@@ -197,6 +200,13 @@ Minimum log retention for MVP rehearsal:
 ### Jobs Stay Running
 
 Workers refresh claimed job leases while Docker runs. If the worker dies, stale jobs are requeued or failed after `AGENTICS_WORKER_STALE_JOB_MINUTES` and max-attempt logic.
+
+On startup and on each worker cycle, the worker also reconciles Agentics-labeled
+Docker containers against database job claims. Running containers are kept only
+when their `job_id`, `worker_id`, and `attempt_count` labels match a fresh
+`running` job claim. Missing, malformed, stale, superseded, and stopped stale
+runner containers are killed or removed so a crashed worker cannot keep CPU,
+GPU, writable-mount, or Docker-layer quota slots indefinitely.
 
 Actions:
 

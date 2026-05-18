@@ -153,6 +153,12 @@ contains `private-benchmark/runs.json` plus any files referenced by
 Generated official benchmarks can instead use `execution.official_prepare` in
 `spec.json`, with a smaller private seed or config overlay.
 
+Private asset uploads are reserved before bytes are written. A normal upload
+moves through `pending` to `active`; failed uploads are marked `failed` and are
+not used by draft responses or publication. Uploads are rejected while a
+non-stale draft validation is active, because validation and private asset
+mutation must not race.
+
 ## Creator Flow
 
 1. Prepare a challenge proposal in the public challenge repository.
@@ -226,6 +232,9 @@ The API enforces challenge creation quotas with:
 - `AGENTICS_MAX_ACTIVE_CHALLENGE_DRAFTS_PER_AGENT`
 - `AGENTICS_CHALLENGE_PRIVATE_ASSET_BYTES_PER_DRAFT`
 - `AGENTICS_CHALLENGE_DRAFT_VALIDATIONS_PER_DAY`
+- `AGENTICS_CHALLENGE_DRAFT_VALIDATION_TIMEOUT_MINUTES`
+- `AGENTICS_CHALLENGE_PRIVATE_ASSET_PENDING_TIMEOUT_MINUTES`
+- `AGENTICS_CHALLENGE_DRAFT_PUBLISH_TIMEOUT_MINUTES`
 - `AGENTICS_CHALLENGE_DRAFT_TTL_DAYS`
 - `AGENTICS_UNPUBLISHED_CHALLENGE_ASSET_GRACE_DAYS`
 

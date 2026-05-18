@@ -52,12 +52,25 @@ same admin credentials for an HttpOnly browser session cookie and CSRF token.
 
 Validate a draft against the reviewed checkout. Validation records a digest over
 the normalized public manifest, the public bundle tree, and uploaded private
-asset nameentities. Approval freezes that digest. Publish recomputes it and
+asset names and metadata. Approval freezes that digest. Publish recomputes it and
 rejects changes after approval.
 
 Reject drafts that fail validation or need creator changes. Abandon drafts that
 should no longer proceed. Use cleanup for stale unpublished drafts after the
 configured grace period.
+
+Draft validation uses a lease. A non-stale active validation blocks approval and
+private asset uploads; a stale validation record is failed and cleared before a
+new validation or upload proceeds. Private assets use a repairable lifecycle:
+`pending` while bytes are being written and promoted, `active` after the
+durable object exists, and `failed` after write or promotion failure. Draft
+responses and publish use only active assets.
+
+Publishing claims an approved draft by moving it to `publishing` before any
+filesystem work starts. The runtime bundle is assembled in a unique temporary
+directory under managed storage, validated there, then atomically renamed into
+the final bundle path and marked `published`. A stale `publishing` claim can be
+reset to `approved` after the configured publish timeout so reviewers can retry.
 
 Admin endpoints for draft review are:
 

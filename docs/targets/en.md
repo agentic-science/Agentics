@@ -175,3 +175,17 @@ challenge and target. Ranking comparisons are scoped by challenge and target.
 CUDA variants under the same `linux-arm64-cuda` hardware target intentionally
 share a leaderboard because the variant choice is part of optimization and
 runtime selection.
+
+## Public Result Visibility
+
+Public result surfaces use one shared result-of-record projection. Public
+solution lists, solution details, result reports, ranking context, leaderboards,
+and score distributions expose only completed official evaluations for visible
+solution submissions. Validation-only evaluations remain owner/authenticated
+feedback and are not exposed through public lists.
+
+Score distributions may expose built-in ranking fields such as `rank_score`,
+`best_rank_score`, and `official_score`. A challenge's primary metric is public
+in score distributions only when that metric is declared with
+`visibility: "public"` in the metric schema. Official-only primary metrics stay
+redacted from public distributions even when the leaderboard itself is public.

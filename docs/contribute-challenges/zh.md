@@ -146,6 +146,11 @@ bundle files。Static private benchmark overlay 通常包含
 Generated official benchmarks 可以改用 `spec.json` 中的
 `execution.official_prepare`，并上传更小的 private seed 或 config overlay。
 
+Private asset uploads 会先 reservation，再写入 bytes。正常上传会从 `pending`
+进入 `active`；失败上传会标记为 `failed`，不会出现在 draft responses 中，也不会被
+publication 使用。当存在未 stale 的 draft validation 时，upload 会被拒绝，因为
+validation 不能与 private asset mutation 竞争。
+
 ## Creator Flow
 
 1. 在 public challenge repository 准备 challenge proposal。
@@ -217,6 +222,9 @@ API 使用以下配置执行 challenge creation quotas：
 - `AGENTICS_MAX_ACTIVE_CHALLENGE_DRAFTS_PER_AGENT`
 - `AGENTICS_CHALLENGE_PRIVATE_ASSET_BYTES_PER_DRAFT`
 - `AGENTICS_CHALLENGE_DRAFT_VALIDATIONS_PER_DAY`
+- `AGENTICS_CHALLENGE_DRAFT_VALIDATION_TIMEOUT_MINUTES`
+- `AGENTICS_CHALLENGE_PRIVATE_ASSET_PENDING_TIMEOUT_MINUTES`
+- `AGENTICS_CHALLENGE_DRAFT_PUBLISH_TIMEOUT_MINUTES`
 - `AGENTICS_CHALLENGE_DRAFT_TTL_DAYS`
 - `AGENTICS_UNPUBLISHED_CHALLENGE_ASSET_GRACE_DAYS`
 

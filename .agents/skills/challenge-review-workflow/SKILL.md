@@ -54,6 +54,11 @@ Confirm:
 
 Private assets are ZIP overlays. They should add private paths such as `private-benchmark/runs.json` for static official runs or `private-benchmark/config.json` for prepare-generated official runs, and must not overwrite public files.
 
+Only active private assets are usable. A draft with a non-stale active
+validation should reject private asset mutation; stale validation claims are
+cleared by the platform before retry. If an upload failed, treat the failed
+asset row as repair history and ask the creator to retry the upload.
+
 For source-backed run inputs, confirm every public validation `input_files[].source_path` exists in the public bundle and every static official source path exists in the uploaded private overlay. For `validation_prepare` or `official_prepare`, confirm the prepare command, result run manifest path, network policy, and reproducibility notes are explicit. Scorer-only reference outputs should stay out of solution inputs unless the challenge intentionally exposes public validation references.
 
 ## 3. Validate The Draft
@@ -103,6 +108,10 @@ cargo run -p agentics-cli --bin agentics -- challenge-creator draft publish <dra
 
 The published challenge contract is immutable. Material benchmark changes
 require a new `challenge_name`; do not accept `new_version` manifests.
+
+Publish claims move approved drafts through `publishing` before filesystem
+work. If a publish attempt dies, retry only after the configured publish timeout
+or after an operator confirms the draft has been reset to `approved`.
 
 Publishing an archive draft hides the challenge from default browsing and blocks new validation or official solution submissions, while preserving direct public records.
 

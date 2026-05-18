@@ -157,6 +157,13 @@ Rules:
 The phase executor runs `setup`, then `build`, then `run`. `setup` and `build`
 are skipped when their command paths are absent.
 
+Uploaded ZIP artifacts are treated as hostile input at both upload validation
+and worker extraction time. The worker rejects unsafe entry paths, duplicate
+normalized paths, symlink entries, excessive entry counts, and excessive
+expanded size. Extraction creates files with no-overwrite semantics, so a
+duplicate or conflicting archive entry fails instead of replacing an earlier
+file.
+
 ## Phases
 
 ```json
@@ -233,6 +240,14 @@ operators should align resource profiles to slot classes when they need an
 exact hard phase limit. Strict deployment probes are controlled by
 `AGENTICS_HOST_PROBE_MODE=off|warn|require`; Mac-local development can skip
 them, while hosted workers should require them before accepting jobs.
+
+Before scorer and run containers receive read-only bind mounts, the worker
+stages challenge bundles and scorer-visible run outputs into per-attempt
+temporary trees and ensures those temporary copies are container-readable. The
+source challenge checkout and durable uploaded assets are not modified for this
+permission repair. Writable bind mounts are repaired by a short post-run
+sidecar so root-created files remain removable by the worker without wrapping or
+changing the challenge-authored command.
 
 ## Interface
 

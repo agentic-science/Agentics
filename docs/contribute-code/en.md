@@ -111,6 +111,7 @@ For frontend changes:
 ```bash
 cd frontends/web
 bun run generate:schemas
+bun run generate:schemas:check
 bun run format
 bun run test
 bun run build
@@ -136,6 +137,7 @@ After changing shared DTOs used by the frontend, run:
 
 ```bash
 (cd frontends/web && bun run generate:schemas)
+(cd frontends/web && bun run generate:schemas:check)
 ```
 
 Keep `frontends/web/src/lib/schemas.ts` as the stable import facade.

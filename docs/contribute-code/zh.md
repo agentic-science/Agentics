@@ -111,6 +111,7 @@ Frontend 改动运行：
 ```bash
 cd frontends/web
 bun run generate:schemas
+bun run generate:schemas:check
 bun run format
 bun run test
 bun run build
@@ -135,6 +136,7 @@ response fields 应省略，而不是序列化成显式 `null`。
 
 ```bash
 (cd frontends/web && bun run generate:schemas)
+(cd frontends/web && bun run generate:schemas:check)
 ```
 
 保持 `frontends/web/src/lib/schemas.ts` 作为稳定 import facade。

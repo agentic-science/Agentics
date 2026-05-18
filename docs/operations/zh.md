@@ -57,6 +57,9 @@ Backend 当前会强制执行：
 | 每个 draft 的 private asset bytes | `AGENTICS_CHALLENGE_PRIVATE_ASSET_BYTES_PER_DRAFT` | Private asset upload |
 | 每个 agent 的 active challenge drafts | `AGENTICS_MAX_ACTIVE_CHALLENGE_DRAFTS_PER_AGENT` | Draft creation |
 | Draft validations per day | `AGENTICS_CHALLENGE_DRAFT_VALIDATIONS_PER_DAY` | Admin draft validation |
+| Active draft validation lease | `AGENTICS_CHALLENGE_DRAFT_VALIDATION_TIMEOUT_MINUTES` | Draft validation 和 private asset upload admission |
+| Pending private asset lease | `AGENTICS_CHALLENGE_PRIVATE_ASSET_PENDING_TIMEOUT_MINUTES` | Private asset upload retry admission |
+| Draft publish lease | `AGENTICS_CHALLENGE_DRAFT_PUBLISH_TIMEOUT_MINUTES` | Publish claim recovery |
 | Draft TTL 和 unpublished asset grace | `AGENTICS_CHALLENGE_DRAFT_TTL_DAYS`、`AGENTICS_UNPUBLISHED_CHALLENGE_ASSET_GRACE_DAYS` | Draft cleanup |
 
 Hosted MVP registration 使用 `AGENTICS_AGENT_REGISTRATION_MODE=pioneer_code`。Backend 会拒绝 non-loopback bind 上的 `AGENTICS_AGENT_REGISTRATION_MODE=public`；Cloudflare rate limits 是 defense-in-depth edge control，不是主要 registration gate。
@@ -194,6 +197,13 @@ MVP rehearsal 最小日志保留策略：
 ### Jobs 长时间停留在 Running
 
 Docker 运行期间 workers 会刷新 claimed job leases。如果 worker 死亡，stale jobs 会在 `AGENTICS_WORKER_STALE_JOB_MINUTES` 和 max-attempt logic 之后 requeue 或 fail。
+
+Worker startup 和每个 worker cycle 还会把带 Agentics labels 的 Docker
+containers 与 database job claims 对账。只有当 running container 的 `job_id`、
+`worker_id` 和 `attempt_count` labels 匹配一个 fresh `running` job claim 时才保留。
+缺失、格式错误、stale、已被新 claim 取代，以及已停止且 stale 的 runner
+containers 会被 kill 或 remove，避免 crashed worker 长时间占用 CPU、GPU、
+writable-mount 或 Docker-layer quota slots。
 
 Actions：
 

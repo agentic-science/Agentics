@@ -56,12 +56,16 @@ Frontend runtime schemas 从 Rust DTOs 生成：
 ```bash
 cd frontends/web
 bun run generate:schemas
+bun run generate:schemas:check
 ```
 
 该命令会运行 `backend/shared` 的 `export_web_schemas` binary，将 JSON
 Schemas 转成 Zod，并写入 `frontends/web/src/lib/generated/schemas.ts`。
 手写的 `frontends/web/src/lib/schemas.ts` 只作为 frontend imports 的稳定
 re-export facade。
+
+`bun run generate:schemas:check` 是非写入的 freshness check。常规验证中应通过；
+如果 Rust DTO 改动没有重新生成到 frontend schema facade，它应失败。
 
 Generator 必须保留以下映射：
 
@@ -74,3 +78,7 @@ Generator 必须保留以下映射：
 frontend schemas。只有 API contract 有意变化时，才更新 contract fixtures 或
 rendering code。shared Rust 与 frontend contract fixtures 必须覆盖有代表性的
 response DTOs。
+
+Public result DTOs 必须通过 projection 保持 redaction，而不是依赖 frontend
+约定。Public solution submission lists 只暴露 official result-of-record fields；
+validation-only scores 不属于 public list contract。

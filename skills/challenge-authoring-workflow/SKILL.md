@@ -85,6 +85,11 @@ Rules:
 - Include any private files referenced by static official `input_files[].source_path` entries.
 - For prepare-generated official data, document what the prepare phase generates and whether it uses external downloads. Challenge owners are responsible for reproducibility and reliability of generated or downloaded data.
 
+Asset uploads are reserved as `pending`, become `active` only after storage
+promotion succeeds, and are marked `failed` if write or promotion fails. Draft
+responses and publication use only active assets. Uploads are rejected while a
+non-stale draft validation is active.
+
 ## 4. Create The Draft
 
 Challenge creator identity is verified through GitHub OAuth. For the hosted web
@@ -119,5 +124,5 @@ Creators should provide:
 
 Do not change the checked-out proposal or private asset set after approval. The
 platform records a review digest during validation, freezes it during approval,
-and rejects publish if the public bundle or uploaded private asset nameentities no
+and rejects publish if the public bundle or uploaded private asset names no
 longer match that approved digest.

@@ -60,6 +60,7 @@ Frontend runtime schemas are generated from Rust DTOs:
 ```bash
 cd frontends/web
 bun run generate:schemas
+bun run generate:schemas:check
 ```
 
 The command runs `backend/shared`'s `export_web_schemas` binary, converts the
@@ -67,6 +68,10 @@ JSON Schemas into Zod, and writes
 `frontends/web/src/lib/generated/schemas.ts`. The hand-written
 `frontends/web/src/lib/schemas.ts` module is only a stable re-export facade for
 frontend imports.
+
+`bun run generate:schemas:check` is the non-mutating freshness check. It should
+pass in normal verification and fail when Rust DTO changes have not been
+regenerated into the frontend schema facade.
 
 The generator must preserve this mapping:
 
@@ -79,3 +84,7 @@ When changing Rust response DTOs, update derives and serde attributes first,
 regenerate the frontend schemas, then update contract fixtures or rendering code
 only if the API contract intentionally changed. Shared Rust and frontend
 contract fixtures must cover representative response DTOs.
+
+Public result DTOs must stay redacted by projection rather than by frontend
+convention. Public solution submission lists expose official result-of-record
+fields only; validation-only scores are not part of the public list contract.

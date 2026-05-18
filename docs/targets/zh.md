@@ -169,3 +169,17 @@ GET /api/public/challenges/sample-sum/leaderboard?target=linux-arm64-cpu
 ```
 
 Response 会包含 `target`，且每一行都属于同一个 challenge 和 target。Ranking comparisons 按 challenge 和 target 划分。相同 `linux-arm64-cuda` hardware target 下的 CUDA variants 会共享 leaderboard，因为 variant choice 是 optimization 和 runtime selection 的一部分。
+
+## Public Result Visibility
+
+Public result surfaces 使用同一个 result-of-record projection。Public solution
+lists、solution details、result reports、ranking context、leaderboards 和 score
+distributions 只暴露 visible solution submissions 上已完成的 official evaluations。
+Validation-only evaluations 仍是 owner/authenticated feedback，不会通过 public
+lists 暴露。
+
+Score distributions 可以暴露 `rank_score`、`best_rank_score` 和
+`official_score` 等内置 ranking fields。只有当 challenge 的 primary metric 在
+metric schema 中声明为 `visibility: "public"` 时，该 primary metric 才能出现在
+public score distributions 中。即使 leaderboard 本身是 public，official-only
+primary metrics 仍会在 public distributions 中 redacted。

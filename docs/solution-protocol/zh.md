@@ -156,6 +156,12 @@ first-party Agentics local image names。
 Phase executor 会按顺序运行 `setup`、`build`、`run`。如果没有对应 command
 path，则跳过 `setup` 或 `build`。
 
+上传的 ZIP artifacts 在 upload validation 和 worker extraction 两处都被视为
+hostile input。Worker 会拒绝 unsafe entry paths、duplicate normalized paths、
+symlink entries、过多 entry 数量，以及过大的 expanded size。Extraction 使用
+no-overwrite semantics 创建文件，因此 duplicate 或冲突的 archive entry 会失败，而
+不是覆盖先前文件。
+
 ## Phases
 
 ```json
@@ -221,6 +227,13 @@ phases 和 scorer 的两个 phases。Worker 会选择可满足 effective phase
 phase limit，应让 resource profiles 与 slot classes 对齐。Strict deployment probes
 由 `AGENTICS_HOST_PROBE_MODE=off|warn|require` 控制；Mac-local development 可以
 跳过，hosted workers 在接受 jobs 前应强制通过。
+
+在 scorer 和 run containers 获得 read-only bind mounts 之前，worker 会把 challenge
+bundles 和 scorer-visible run outputs staging 到 per-attempt temporary trees，并确保
+这些 temporary copies 对 container 可读。Source challenge checkout 和 durable uploaded
+assets 不会因该 permission repair 被修改。Writable bind mounts 会由短生命周期的
+post-run sidecar 修复权限，让 root-created files 可以被 worker 删除，同时不 wrap 或
+改变 challenge-authored command。
 
 ## Interface
 

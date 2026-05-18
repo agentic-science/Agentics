@@ -47,13 +47,25 @@ credentials 换取 HttpOnly browser session cookie 和 CSRF token。
 ## Validation 和 Approval
 
 针对已 review 的 checkout 验证 draft。Validation 会基于 normalized public
-manifest、public bundle tree 和 uploaded private asset nameentities 记录 digest。
+manifest、public bundle tree 和 uploaded private asset names 与 metadata 记录 digest。
 Approval 会冻结该 digest。Publish 会重新计算 digest，并拒绝 approval 之后发生的
 变化。
 
 Validation 失败或需要 creator 修改的 drafts 应 reject。不再推进的 drafts 应
 abandon。对于超过 configured grace period 的 stale unpublished drafts，使用
 cleanup。
+
+Draft validation 使用 lease。未 stale 的 active validation 会阻止 approval 和
+private asset uploads；stale validation record 会在新的 validation 或 upload
+继续前被标记 failed 并清空。Private assets 使用可修复的 lifecycle：写入和 promote
+bytes 时为 `pending`，durable object 存在后为 `active`，write 或 promote 失败后为
+`failed`。Draft responses 和 publish 只使用 active assets。
+
+Publishing 会先把 approved draft claim 为 `publishing`，再开始任何 filesystem
+work。Runtime bundle 会先在 managed storage 下的唯一 temporary directory 中组装并
+验证，然后 atomically rename 到 final bundle path，并标记为 `published`。超过配置
+publish timeout 的 stale `publishing` claim 可以 reset 回 `approved`，以便 reviewer
+重试。
 
 Draft review admin endpoints：
 
