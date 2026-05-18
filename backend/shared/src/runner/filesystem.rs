@@ -1,5 +1,7 @@
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
+use crate::challenge_bundle::is_safe_relative_path;
 use crate::error::{AppError, Result};
 use crate::zip_project::{
     MAX_ZIP_PROJECT_ARTIFACT_BYTES, MAX_ZIP_PROJECT_FILE_COUNT, MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES,
@@ -99,16 +101,37 @@ fn extract_zip_safe_blocking(artifact_path: &Path, target_dir: &Path) -> Result<
     }
 
     let mut total_uncompressed_size = 0u64;
+    let mut seen_paths = HashSet::with_capacity(archive.len());
     for i in 0..archive.len() {
         let mut file = archive.by_index(i)?;
-        let outpath = match file.enclosed_name() {
-            Some(path) => target_dir.join(path),
+        if file
+            .unix_mode()
+            .is_some_and(|mode| mode & 0o170000 == 0o120000)
+        {
+            return Err(AppError::Validation(
+                "solution archive must not contain symlinks".to_string(),
+            ));
+        }
+        let relative_path = match file.enclosed_name() {
+            Some(path) => path.to_path_buf(),
             None => {
                 return Err(AppError::Validation(
                     "solution archive contains an unsafe ZIP entry path".to_string(),
                 ));
             }
         };
+        let relative_path_string = relative_path.to_string_lossy().to_string();
+        if !is_safe_relative_path(&relative_path_string) {
+            return Err(AppError::Validation(format!(
+                "solution archive contains unsafe path `{relative_path_string}`"
+            )));
+        }
+        if !seen_paths.insert(relative_path_string.clone()) {
+            return Err(AppError::Validation(format!(
+                "solution archive contains duplicate path `{relative_path_string}`"
+            )));
+        }
+        let outpath = target_dir.join(&relative_path);
 
         total_uncompressed_size = total_uncompressed_size
             .checked_add(file.size())
@@ -126,7 +149,10 @@ fn extract_zip_safe_blocking(artifact_path: &Path, target_dir: &Path) -> Result<
             if let Some(parent) = outpath.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            let mut outfile = std::fs::File::create(&outpath)?;
+            let mut outfile = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&outpath)?;
             std::io::copy(&mut file, &mut outfile)?;
         }
     }
@@ -201,6 +227,94 @@ mod tests {
         archive.finish().expect("failed to finish test zip");
     }
 
+    /// Writes a minimal stored ZIP while preserving raw names and Unix mode bits.
+    fn write_raw_stored_zip(path: &Path, entries: Vec<(&str, &[u8], u32)>) {
+        let mut bytes = Vec::new();
+        let mut central_directory = Vec::new();
+        let entry_count = u16::try_from(entries.len()).expect("test ZIP entries fit u16");
+
+        for (name, content, unix_mode) in entries {
+            let local_header_offset =
+                u32::try_from(bytes.len()).expect("test ZIP should fit u32 offsets");
+            let name_bytes = name.as_bytes();
+            let name_len = u16::try_from(name_bytes.len()).expect("test ZIP names are short");
+            let content_len = u32::try_from(content.len()).expect("test ZIP content is small");
+            let crc = crc32(content);
+
+            push_u32(&mut bytes, 0x0403_4b50);
+            push_u16(&mut bytes, 20);
+            push_u16(&mut bytes, 0);
+            push_u16(&mut bytes, 0);
+            push_u16(&mut bytes, 0);
+            push_u16(&mut bytes, 0);
+            push_u32(&mut bytes, crc);
+            push_u32(&mut bytes, content_len);
+            push_u32(&mut bytes, content_len);
+            push_u16(&mut bytes, name_len);
+            push_u16(&mut bytes, 0);
+            bytes.extend_from_slice(name_bytes);
+            bytes.extend_from_slice(content);
+
+            push_u32(&mut central_directory, 0x0201_4b50);
+            push_u16(&mut central_directory, 0x0314);
+            push_u16(&mut central_directory, 20);
+            push_u16(&mut central_directory, 0);
+            push_u16(&mut central_directory, 0);
+            push_u16(&mut central_directory, 0);
+            push_u16(&mut central_directory, 0);
+            push_u32(&mut central_directory, crc);
+            push_u32(&mut central_directory, content_len);
+            push_u32(&mut central_directory, content_len);
+            push_u16(&mut central_directory, name_len);
+            push_u16(&mut central_directory, 0);
+            push_u16(&mut central_directory, 0);
+            push_u16(&mut central_directory, 0);
+            push_u16(&mut central_directory, 0);
+            push_u32(&mut central_directory, unix_mode << 16);
+            push_u32(&mut central_directory, local_header_offset);
+            central_directory.extend_from_slice(name_bytes);
+        }
+
+        let central_directory_offset =
+            u32::try_from(bytes.len()).expect("test ZIP should fit u32 offsets");
+        let central_directory_size =
+            u32::try_from(central_directory.len()).expect("test ZIP should fit u32 sizes");
+        bytes.extend_from_slice(&central_directory);
+        push_u32(&mut bytes, 0x0605_4b50);
+        push_u16(&mut bytes, 0);
+        push_u16(&mut bytes, 0);
+        push_u16(&mut bytes, entry_count);
+        push_u16(&mut bytes, entry_count);
+        push_u32(&mut bytes, central_directory_size);
+        push_u32(&mut bytes, central_directory_offset);
+        push_u16(&mut bytes, 0);
+
+        std::fs::write(path, bytes).expect("failed to write raw test ZIP");
+    }
+
+    /// Append a little-endian u16 to a test ZIP buffer.
+    fn push_u16(bytes: &mut Vec<u8>, value: u16) {
+        bytes.extend_from_slice(&value.to_le_bytes());
+    }
+
+    /// Append a little-endian u32 to a test ZIP buffer.
+    fn push_u32(bytes: &mut Vec<u8>, value: u32) {
+        bytes.extend_from_slice(&value.to_le_bytes());
+    }
+
+    /// Compute CRC-32 for tiny stored ZIP test entries.
+    fn crc32(content: &[u8]) -> u32 {
+        let mut crc = 0xffff_ffffu32;
+        for byte in content {
+            crc ^= u32::from(*byte);
+            for _ in 0..8 {
+                let mask = 0u32.wrapping_sub(crc & 1);
+                crc = (crc >> 1) ^ (0xedb8_8320 & mask);
+            }
+        }
+        !crc
+    }
+
     /// Verifies that extract zip safe rejects unsafe entry names.
     #[tokio::test]
     async fn extract_zip_safe_rejects_unsafe_entry_names() {
@@ -243,6 +357,51 @@ mod tests {
         assert!(
             matches!(result, Err(AppError::Validation(message)) if message.contains("at most"))
         );
+
+        drop(std::fs::remove_file(zip_path));
+        drop(std::fs::remove_dir_all(target_dir));
+    }
+
+    /// Verifies that duplicate entries cannot overwrite earlier extracted files.
+    #[tokio::test]
+    async fn extract_zip_safe_rejects_duplicate_entries() {
+        let zip_path = temp_path("duplicate-entry.zip");
+        let target_dir = temp_path("duplicate-target");
+        std::fs::create_dir_all(&target_dir).expect("failed to create target dir");
+        write_raw_stored_zip(
+            &zip_path,
+            vec![
+                ("main.py", b"print('first')\n", 0o100644),
+                ("./main.py", b"print('second')\n", 0o100644),
+            ],
+        );
+
+        let error = extract_zip_safe(&zip_path, &target_dir)
+            .await
+            .expect_err("duplicate entry should fail extraction");
+        assert!(error.to_string().contains("duplicate path"));
+        assert_eq!(
+            std::fs::read_to_string(target_dir.join("main.py")).expect("first file should exist"),
+            "print('first')\n"
+        );
+
+        drop(std::fs::remove_file(zip_path));
+        drop(std::fs::remove_dir_all(target_dir));
+    }
+
+    /// Verifies that Unix-mode symlink entries are rejected before extraction.
+    #[tokio::test]
+    async fn extract_zip_safe_rejects_symlink_entries() {
+        let zip_path = temp_path("symlink-entry.zip");
+        let target_dir = temp_path("symlink-target");
+        std::fs::create_dir_all(&target_dir).expect("failed to create target dir");
+        write_raw_stored_zip(&zip_path, vec![("link.py", b"main.py", 0o120777)]);
+
+        let error = extract_zip_safe(&zip_path, &target_dir)
+            .await
+            .expect_err("symlink entry should fail extraction");
+        assert!(error.to_string().contains("must not contain symlinks"));
+        assert!(!target_dir.join("link.py").exists());
 
         drop(std::fs::remove_file(zip_path));
         drop(std::fs::remove_dir_all(target_dir));
