@@ -1,14 +1,14 @@
 //! Challenge creation draft lifecycle integration tests.
 
+#[path = "support/challenge_creation.rs"]
+mod challenge_creation_helpers;
 mod helpers;
 
-use std::path::Path;
-use std::process::Command;
-
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+use challenge_creation_helpers::*;
 use helpers::{
-    TestCreatorSession, api_url, basic_auth_header, create_creator_session, sample_sum_solution,
-    solution_zip_base64, spawn_app_with_config, test_config, zip_project_zip_base64,
+    api_url, basic_auth_header, create_creator_session, sample_sum_solution, solution_zip_base64,
+    spawn_app_with_config, test_config,
 };
 use serde_json::json;
 use shared::models::challenge_creation::ChallengeDraftValidationStatus;
@@ -16,16 +16,6 @@ use shared::models::hashes::Sha256Digest;
 use shared::models::ids::{ChallengeDraftId, ChallengeDraftValidationRecordId};
 
 use reqwest::StatusCode;
-
-/// Handles creator auth for this module.
-fn creator_auth(
-    request: reqwest::RequestBuilder,
-    creator: &TestCreatorSession,
-) -> reqwest::RequestBuilder {
-    request
-        .header("Cookie", &creator.cookie_header)
-        .header("X-Agentics-CSRF-Token", &creator.csrf_token)
-}
 
 /// Verifies that challenge draft rejects short commit sha.
 #[sqlx::test(migrations = "../migrations")]
@@ -171,6 +161,7 @@ async fn draft_validation_claim_blocks_overlap_and_approval(pool: sqlx::PgPool) 
         },
         24 * 60 * 60,
         10,
+        30,
     )
     .await
     .expect("first validation claim should reserve");
@@ -185,6 +176,7 @@ async fn draft_validation_claim_blocks_overlap_and_approval(pool: sqlx::PgPool) 
         },
         24 * 60 * 60,
         10,
+        30,
     )
     .await;
     assert!(
@@ -574,6 +566,128 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
     .await
     .expect("published count");
     assert_eq!(published_count, 0);
+}
+
+/// Verifies concurrent publish requests do not corrupt the final runtime bundle.
+#[sqlx::test(migrations = "../migrations")]
+async fn concurrent_publish_requests_leave_one_published_bundle(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("storage tempdir");
+    let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
+    let public_repo = tempfile::tempdir().expect("public repo tempdir");
+    let commit_sha = write_public_challenge(public_repo.path());
+
+    let config = test_config(storage.path(), seeded_challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let client = reqwest::Client::new();
+    let creator = create_creator_session(&pool, 1001, "creator").await;
+    let admin_auth = basic_auth_header(
+        &config.admin_username,
+        config.expose_admin_password_for_http_basic(),
+    );
+
+    let draft =
+        create_draft_with_commit(&client, &app, &creator, 23, manifest_json(), &commit_sha).await;
+    let draft_id = draft["id"].as_str().expect("draft id");
+    creator_auth(
+        client.post(api_url(
+            &app,
+            &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+        )),
+        &creator,
+    )
+    .json(&json!({
+        "asset_name": "official-cases",
+        "kind": "private_benchmark_data",
+        "asset_base64": private_benchmark_asset_zip_base64()
+    }))
+    .send()
+    .await
+    .expect("private asset request")
+    .error_for_status()
+    .expect("private asset should upload");
+    client
+        .post(api_url(
+            &app,
+            &format!("/admin/challenge-drafts/{draft_id}/validate"),
+        ))
+        .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
+        .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
+        .send()
+        .await
+        .expect("validate request")
+        .error_for_status()
+        .expect("draft should validate");
+    client
+        .post(api_url(
+            &app,
+            &format!("/admin/challenge-drafts/{draft_id}/approve"),
+        ))
+        .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
+        .json(&json!({ "message": "approved" }))
+        .send()
+        .await
+        .expect("approve request")
+        .error_for_status()
+        .expect("draft should approve");
+
+    let publish_url = api_url(&app, &format!("/admin/challenge-drafts/{draft_id}/publish"));
+    let repository_path = public_repo.path().to_string_lossy().to_string();
+    let publish_a = client
+        .post(publish_url.clone())
+        .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
+        .json(&json!({ "repository_path": repository_path }));
+    let publish_b = client
+        .post(publish_url)
+        .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
+        .json(&json!({ "repository_path": repository_path }));
+
+    let (response_a, response_b) = tokio::join!(publish_a.send(), publish_b.send());
+    let statuses = [
+        response_a.expect("first publish request").status(),
+        response_b.expect("second publish request").status(),
+    ];
+    assert!(
+        statuses.contains(&reqwest::StatusCode::OK),
+        "one concurrent publish should succeed, got {statuses:?}"
+    );
+    assert!(
+        statuses.iter().all(|status| matches!(
+            *status,
+            reqwest::StatusCode::OK | reqwest::StatusCode::CONFLICT
+        )),
+        "concurrent publish should either succeed or observe the active publish claim: {statuses:?}"
+    );
+
+    let challenge_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*)::BIGINT FROM challenges WHERE name = $1")
+            .bind("sample-sum")
+            .fetch_one(&pool)
+            .await
+            .expect("challenge count");
+    assert_eq!(challenge_count, 1);
+    let bundle_path: String =
+        sqlx::query_scalar("SELECT bundle_path FROM challenges WHERE name = $1")
+            .bind("sample-sum")
+            .fetch_one(&pool)
+            .await
+            .expect("bundle path");
+    assert!(
+        std::path::Path::new(&bundle_path)
+            .join("private-benchmark/runs.json")
+            .exists(),
+        "published bundle should include promoted private benchmark data"
+    );
+    let draft_status: String =
+        sqlx::query_scalar("SELECT status FROM challenge_drafts WHERE id = $1::uuid")
+            .bind(draft_id)
+            .fetch_one(&pool)
+            .await
+            .expect("draft status");
+    assert_eq!(draft_status, "published");
 }
 
 /// Verifies that challenge draft rejects new version manifest.
@@ -1040,453 +1154,3 @@ async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
     assert_eq!(cleanup["purged_private_assets"], 1);
     assert!(!storage.path().join(&storage_key).exists());
 }
-
-/// Shared request context for validating, approving, and publishing one draft.
-struct DraftPublishFlow<'a> {
-    client: &'a reqwest::Client,
-    app: &'a helpers::TestApp,
-    creator: &'a TestCreatorSession,
-    admin_auth: &'a str,
-    public_repo: &'a Path,
-}
-
-/// Creates validate approve publish draft after validating caller inputs.
-async fn create_validate_approve_publish_draft(
-    flow: &DraftPublishFlow<'_>,
-    commit_sha: &str,
-    pr_number: i32,
-    manifest: serde_json::Value,
-) -> serde_json::Value {
-    let draft = create_draft_with_commit(
-        flow.client,
-        flow.app,
-        flow.creator,
-        pr_number,
-        manifest,
-        commit_sha,
-    )
-    .await;
-    let draft_id = draft["id"].as_str().expect("draft id");
-    if draft["request"] != "archive_challenge" {
-        creator_auth(
-            flow.client.post(api_url(
-                flow.app,
-                &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
-            )),
-            flow.creator,
-        )
-        .json(&json!({
-            "asset_name": "official-cases",
-            "kind": "private_benchmark_data",
-            "asset_base64": private_benchmark_asset_zip_base64()
-        }))
-        .send()
-        .await
-        .expect("private asset request")
-        .error_for_status()
-        .expect("private asset should upload");
-    }
-
-    flow.client
-        .post(api_url(
-            flow.app,
-            &format!("/admin/challenge-drafts/{draft_id}/validate"),
-        ))
-        .header("Authorization", flow.admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
-        .json(&json!({ "repository_path": flow.public_repo.to_string_lossy() }))
-        .send()
-        .await
-        .expect("validate request")
-        .error_for_status()
-        .expect("draft should validate");
-    flow.client
-        .post(api_url(
-            flow.app,
-            &format!("/admin/challenge-drafts/{draft_id}/approve"),
-        ))
-        .header("Authorization", flow.admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
-        .json(&json!({ "message": "approved" }))
-        .send()
-        .await
-        .expect("approve request")
-        .error_for_status()
-        .expect("draft should approve");
-    flow.client
-        .post(api_url(
-            flow.app,
-            &format!("/admin/challenge-drafts/{draft_id}/publish"),
-        ))
-        .header("Authorization", flow.admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
-        .json(&json!({ "repository_path": flow.public_repo.to_string_lossy() }))
-        .send()
-        .await
-        .expect("publish request")
-        .error_for_status()
-        .expect("draft should publish")
-        .json()
-        .await
-        .expect("publish json")
-}
-
-/// Creates draft after validating caller inputs.
-async fn create_draft(
-    client: &reqwest::Client,
-    app: &helpers::TestApp,
-    creator: &TestCreatorSession,
-    pr_number: i32,
-    manifest: serde_json::Value,
-) -> serde_json::Value {
-    create_draft_with_author(client, app, creator, pr_number, manifest, 1001).await
-}
-
-/// Creates a draft whose reviewed commit is an actual Git checkout commit.
-async fn create_draft_with_commit(
-    client: &reqwest::Client,
-    app: &helpers::TestApp,
-    creator: &TestCreatorSession,
-    pr_number: i32,
-    manifest: serde_json::Value,
-    commit_sha: &str,
-) -> serde_json::Value {
-    create_draft_with_author_and_commit(client, app, creator, pr_number, manifest, 1001, commit_sha)
-        .await
-}
-
-/// Creates a draft with an explicit PR author id for ownership boundary tests.
-async fn create_draft_with_author(
-    client: &reqwest::Client,
-    app: &helpers::TestApp,
-    creator: &TestCreatorSession,
-    pr_number: i32,
-    manifest: serde_json::Value,
-    pr_author_github_user_id: i64,
-) -> serde_json::Value {
-    let commit_sha = format!("0123456789abcdef0123456789abcdef{pr_number:08x}");
-    create_draft_with_author_and_commit(
-        client,
-        app,
-        creator,
-        pr_number,
-        manifest,
-        pr_author_github_user_id,
-        &commit_sha,
-    )
-    .await
-}
-
-/// Creates a draft with explicit PR author and commit identity.
-async fn create_draft_with_author_and_commit(
-    client: &reqwest::Client,
-    app: &helpers::TestApp,
-    creator: &TestCreatorSession,
-    pr_number: i32,
-    manifest: serde_json::Value,
-    pr_author_github_user_id: i64,
-    commit_sha: &str,
-) -> serde_json::Value {
-    creator_auth(
-        client.post(api_url(app, "/api/creator/challenge-drafts")),
-        creator,
-    )
-        .json(&json!({
-            "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
-            "pr_number": pr_number,
-            "pr_url": format!("https://github.com/agentics-reifying/agentics-challenges/pull/{pr_number}"),
-            "commit_sha": commit_sha,
-            "challenge_path": "challenges/sample-sum",
-            "pr_author_github_user_id": pr_author_github_user_id,
-            "manifest": manifest
-        }))
-        .send()
-        .await
-        .expect("draft request")
-        .error_for_status()
-        .expect("draft should create")
-        .json()
-        .await
-        .expect("draft json")
-}
-
-/// Handles register agent for this module.
-async fn register_agent(pool: &sqlx::PgPool, name: &str) -> String {
-    let token = shared::auth::create_agent_token();
-    let token_hash = shared::auth::hash_agent_token(&token);
-    shared::db::register_agent(
-        pool,
-        &shared::db::RegisterAgentInput {
-            agent_id: shared::models::ids::AgentId::generate(),
-            token_id: shared::models::ids::AgentTokenId::generate(),
-            token_hash,
-            display_name: name.to_string(),
-            agent_description: String::new(),
-            owner: String::new(),
-            model_info: json!({}),
-        },
-        1_000,
-    )
-    .await
-    .expect("agent should register");
-    token
-}
-
-/// Writes public challenge to the target path and returns the committed Git HEAD.
-fn write_public_challenge(repo: &Path) -> String {
-    let challenge_root = repo.join("challenges/sample-sum");
-    std::fs::create_dir_all(challenge_root.join("v1/public")).expect("public dir");
-    write_file(&challenge_root.join("README.md"), "# Sample Sum\n");
-    write_file(&challenge_root.join("v1/statement.md"), "# Sample Sum\n");
-    write_file(
-        &challenge_root.join("v1/public/runs.json"),
-        &json!({
-            "runs": [
-                {
-                    "run_name": "case-1",
-                    "interface": "stdio",
-                    "stdin_json": { "a": 1, "b": 2 },
-                    "expected": "3",
-                    "output_files": []
-                }
-            ]
-        })
-        .to_string(),
-    );
-    write_file(&challenge_root.join("v1/scorer/run.py"), SAMPLE_SUM_SCORER);
-    write_file(
-        &challenge_root.join("v1/spec.json"),
-        &json!({
-            "schema_version": 1,
-            "challenge_name": "sample-sum",
-            "challenge_title": "Sample Sum",
-            "challenge_summary": "Add numbers",
-            "solution": {
-                "protocol": "zip_project",
-                "manifest_file": "agentics.solution.json"
-            },
-            "scorer": {
-                "command": ["python", "scorer/run.py"],
-                "result_file": "result.json"
-            },
-            "targets": [
-                {
-                    "name": "linux-arm64-cpu",
-                    "docker_platform": "linux/arm64",
-                    "accelerator": "cpu",
-                    "validation_enabled": true,
-                    "resource_profile": {
-                        "name": "agentics-cpu-small",
-                        "solution_image": {
-                            "source": "local",
-                            "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"
-                        },
-                        "scorer_image": {
-                            "source": "local",
-                            "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"
-                        },
-                        "timeout_sec": 30,
-                        "memory_limit_mb": 512,
-                        "cpu_limit_millis": 1000,
-                        "disk_limit_mb": 1024,
-                        "setup_network_access": "enabled",
-                        "build_network_access": "disabled",
-                        "run_network_access": "disabled",
-                        "scorer_network_access": "disabled"
-                    }
-                }
-            ],
-            "eligibility": { "type": "open" },
-            "visibility": {
-                "leaderboard": "public_live",
-                "score_distribution": "public_live",
-                "result_detail": "submitter_live_public_live"
-            },
-            "solution_publication": "public",
-            "execution": {
-                "validation_runs": "public/runs.json",
-                "official_runs": "private-benchmark/runs.json"
-            },
-            "datasets": {
-                "public_dir": "public",
-                "private_benchmark_dir": "private-benchmark",
-                "public_policy": "full",
-                "private_benchmark_policy": "score_only",
-                "private_benchmark_enabled": true
-            },
-            "metric_schema": {
-                "metrics": [
-                    {
-                        "name": "score",
-                        "label": "Score",
-                        "direction": "maximize",
-                        "visibility": "public"
-                    }
-                ],
-                "ranking": {
-                    "primary_metric_name": "score"
-                }
-            }
-        })
-        .to_string(),
-    );
-    write_file(
-        &challenge_root.join("agentics.challenge.json"),
-        &manifest_json().to_string(),
-    );
-    commit_all(repo, "create sample-sum")
-}
-
-/// Writes archive manifest to the target path.
-fn write_archive_manifest(repo: &Path) {
-    let challenge_root = repo.join("challenges/sample-sum");
-    write_file(
-        &challenge_root.join("agentics.challenge.json"),
-        &archive_manifest_json().to_string(),
-    );
-}
-
-/// Commit every change in the test repository and return the new HEAD SHA.
-fn commit_all(repo: &Path, message: &str) -> String {
-    run_git(repo, &["init"]);
-    run_git(repo, &["config", "user.email", "tests@example.invalid"]);
-    run_git(repo, &["config", "user.name", "Agentics Tests"]);
-    run_git(repo, &["add", "."]);
-    run_git(repo, &["commit", "--allow-empty", "-m", message]);
-    run_git(repo, &["rev-parse", "HEAD"]).trim().to_string()
-}
-
-/// Run a Git command in a test repository and panic with stderr if it fails.
-fn run_git(repo: &Path, args: &[&str]) -> String {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(repo)
-        .args(args)
-        .output()
-        .expect("git command should start");
-    if !output.status.success() {
-        panic!(
-            "git {:?} failed: {}",
-            args,
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-    String::from_utf8(output.stdout).expect("git output should be UTF-8")
-}
-
-/// Handles manifest json for this module.
-fn manifest_json() -> serde_json::Value {
-    json!({
-        "schema_version": 1,
-        "request": "new_challenge",
-        "challenge_name": "sample-sum",
-        "title": "Sample Sum",
-        "summary": "Add numbers",
-        "readme_path": "README.md",
-        "bundle_path": "v1",
-        "private_assets": [
-            {
-                "asset_name": "official-cases",
-                "kind": "private_benchmark_data",
-                "required": true
-            }
-        ]
-    })
-}
-
-/// Handles archive manifest json for this module.
-fn archive_manifest_json() -> serde_json::Value {
-    json!({
-        "schema_version": 1,
-        "request": "archive_challenge",
-        "challenge_name": "sample-sum",
-        "title": "Sample Sum",
-        "summary": "Add numbers",
-        "readme_path": "README.md",
-        "archive": {
-            "reason": "Retired for MVP lifecycle testing"
-        }
-    })
-}
-
-/// Writes file to the target path.
-fn write_file(path: &Path, content: &str) {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).expect("parent dir");
-    }
-    std::fs::write(path, content).expect("write file");
-}
-
-/// Handles private benchmark asset zip base64 for this module.
-fn private_benchmark_asset_zip_base64() -> String {
-    zip_project_zip_base64(vec![
-        (
-            "private-benchmark/runs.json",
-            json!({
-                "runs": [
-                    {
-                        "run_name": "private-benchmark-1",
-                        "interface": "stdio",
-                        "stdin_json": { "a": 20, "b": 22 },
-                        "expected": "42",
-                        "output_files": []
-                    }
-                ]
-            })
-            .to_string(),
-        ),
-        (
-            "private-benchmark/cases.json",
-            json!({ "cases": [{ "case_name": "private-benchmark-1" }] }).to_string(),
-        ),
-    ])
-}
-
-const SAMPLE_SUM_SCORER: &str = r#"from __future__ import annotations
-
-import argparse
-import json
-from pathlib import Path
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--solution-runs-dir", required=True)
-    parser.add_argument("--output-path", required=True)
-    parser.add_argument("--mode", choices=["validation", "official"], required=True)
-    parser.add_argument("--runs-file", required=True)
-    parser.add_argument("--challenge-dir", required=True)
-    return parser.parse_args()
-
-
-def main() -> int:
-    args = parse_args()
-    runs = json.loads(Path(args.runs_file).read_text(encoding="utf-8"))["runs"]
-    results = []
-    for run in runs:
-        stdout = (Path(args.solution_runs_dir) / run["run_name"] / "stdout.txt").read_text(encoding="utf-8").strip()
-        passed = stdout == str(run["expected"])
-        results.append({"case_name": run["run_name"], "status": "passed" if passed else "failed", "score": 1 if passed else 0})
-    passed_count = sum(1 for result in results if result["status"] == "passed")
-    total = len(results)
-    score = 0 if total == 0 else passed_count / total
-    payload = {
-        "status": "passed" if passed_count == total else "failed",
-        "mode": args.mode,
-        "primary_score": score,
-        "rank_score": score,
-        "aggregate_metrics": [{"metric_name": "score", "value": score}],
-        "run_metrics": [{"run_name": result["case_name"], "metrics": [{"metric_name": "score", "value": result["score"]}]} for result in results],
-        "public_results": results if args.mode == "validation" else [],
-    }
-    if args.mode == "validation":
-        payload["validation_summary"] = {"score": score, "passed": passed_count, "total": total}
-    else:
-        payload["official_summary"] = {"score": score, "passed": passed_count, "total": total}
-    Path(args.output_path).write_text(json.dumps(payload), encoding="utf-8")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
-"#;

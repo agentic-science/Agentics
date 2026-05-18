@@ -124,6 +124,7 @@ pub async fn upload_challenge_private_asset(
         draft.status,
         ChallengeDraftStatus::Rejected
             | ChallengeDraftStatus::Approved
+            | ChallengeDraftStatus::Publishing
             | ChallengeDraftStatus::Published
             | ChallengeDraftStatus::Abandoned
     ) {
@@ -178,14 +179,11 @@ pub async fn upload_challenge_private_asset(
         body.asset_name,
         Uuid::new_v4()
     ))?;
-    let temporary_storage_key = state
-        .storage
-        .put(&temporary_asset_key, &asset_bytes)
-        .await?;
-    let asset = db::create_challenge_private_asset(
+    let asset_row_id = ChallengePrivateAssetId::generate();
+    db::reserve_challenge_private_asset(
         &state.db,
         &db::CreateChallengePrivateAssetInput {
-            asset_row_id: ChallengePrivateAssetId::generate(),
+            asset_row_id: asset_row_id.clone(),
             draft_id: draft.id.clone(),
             asset_name: body.asset_name.clone(),
             kind: body.kind,
@@ -193,17 +191,22 @@ pub async fn upload_challenge_private_asset(
             size_bytes: asset_size_bytes_i64,
             sha256,
             storage_key: storage_key.clone(),
+            temporary_storage_key: temporary_asset_key.clone(),
             uploader_agent_id: creator.agent_id.clone(),
         },
         state.config.challenge_private_asset_bytes_per_draft,
+        state.config.challenge_draft_validation_timeout_minutes,
+        state.config.challenge_private_asset_pending_timeout_minutes,
     )
-    .await;
+    .await
+    .map_err(map_unique_conflict)?;
 
-    let asset = match asset {
-        Ok(asset) => asset,
+    let temporary_storage_key = match state.storage.put(&temporary_asset_key, &asset_bytes).await {
+        Ok(key) => key,
         Err(error) => {
-            cleanup_storage_key(&state, &temporary_storage_key).await;
-            return Err(map_unique_conflict(error));
+            fail_challenge_private_asset_record(&state, &asset_row_id, &error.to_string()).await;
+            cleanup_storage_key(&state, &temporary_asset_key).await;
+            return Err(error);
         }
     };
 
@@ -212,10 +215,17 @@ pub async fn upload_challenge_private_asset(
         .promote(&temporary_storage_key, &storage_key)
         .await
     {
-        cleanup_challenge_private_asset_record(&state, asset.id.as_str()).await;
+        fail_challenge_private_asset_record(&state, &asset_row_id, &error.to_string()).await;
         cleanup_storage_key(&state, &temporary_storage_key).await;
         return Err(error);
     }
+    let asset = match db::activate_challenge_private_asset(&state.db, &asset_row_id).await {
+        Ok(asset) => asset,
+        Err(error) => {
+            cleanup_storage_key(&state, &storage_key).await;
+            return Err(error);
+        }
+    };
 
     db::create_challenge_draft_audit_event(
         &state.db,
@@ -332,13 +342,17 @@ fn validate_private_asset_zip_entry<R: std::io::Read>(
     Ok(())
 }
 
-/// Deletes the database row created for a private asset when the upload cannot be promoted.
-async fn cleanup_challenge_private_asset_record(state: &AppState, asset_row_id: &str) {
-    if let Err(error) = db::delete_challenge_private_asset(&state.db, asset_row_id).await {
+/// Marks the pending private asset failed when storage writes cannot complete.
+async fn fail_challenge_private_asset_record(
+    state: &AppState,
+    asset_row_id: &ChallengePrivateAssetId,
+    message: &str,
+) {
+    if let Err(error) = db::fail_challenge_private_asset(&state.db, asset_row_id, message).await {
         warn!(
-            asset_row_id,
+            asset_row_id = %asset_row_id,
             error = %error,
-            "failed to clean up private asset record after storage promotion failure"
+            "failed to mark private asset upload failed after storage error"
         );
     }
 }
@@ -392,6 +406,7 @@ pub async fn validate_challenge_draft(
         },
         CHALLENGE_DRAFT_QUOTA_WINDOW_SECONDS,
         validation_limit,
+        state.config.challenge_draft_validation_timeout_minutes,
     )
     .await?;
     let validation = validate_draft_repository(&draft, &repository_path).await;
@@ -515,6 +530,9 @@ pub async fn cleanup_challenge_drafts(
     let mut purged = 0_i64;
     for asset in purge_candidates {
         state.storage.delete(&asset.storage_key).await?;
+        if let Some(temporary_storage_key) = &asset.temporary_storage_key {
+            state.storage.delete(temporary_storage_key).await?;
+        }
         db::delete_challenge_private_asset(&state.db, asset.id.as_str()).await?;
         purged = purged
             .checked_add(1)
@@ -614,18 +632,38 @@ pub async fn publish_challenge_draft(
     ChallengeDraftIdPath(draft_id): ChallengeDraftIdPath,
     ValidatedJson(body): ValidatedJson<ValidateChallengeDraftRequest>,
 ) -> Result<Json<ChallengeDraftResponse>> {
-    let draft = db::get_challenge_draft(&state.db, draft_id.as_str())
-        .await?
-        .ok_or(AppError::NotFound)?;
+    let repository_path = RepositoryCheckoutPath::from_existing_dir(&body.repository_path)?;
+    let draft = db::claim_challenge_draft_for_publish(
+        &state.db,
+        draft_id.as_str(),
+        state.config.challenge_draft_publish_timeout_minutes,
+    )
+    .await?;
     if draft.status == ChallengeDraftStatus::Published {
         return Ok(Json(draft));
     }
-    if draft.status != ChallengeDraftStatus::Approved {
-        return Err(AppError::Conflict);
+    let publish_result =
+        publish_claimed_challenge_draft(&state, &admin.username, &draft, &repository_path).await;
+    if let Err(error) = publish_result {
+        db::fail_challenge_draft_publish(&state.db, draft.id.as_str(), &error.to_string()).await?;
+        return Err(error);
     }
 
-    let repository_path = RepositoryCheckoutPath::from_existing_dir(&body.repository_path)?;
-    let (manifest, bundle_sha256) = validate_draft_repository(&draft, &repository_path).await?;
+    Ok(Json(
+        db::get_challenge_draft(&state.db, draft.id.as_str())
+            .await?
+            .ok_or(AppError::NotFound)?,
+    ))
+}
+
+/// Publish a draft that has already been claimed with `publishing` status.
+async fn publish_claimed_challenge_draft(
+    state: &AppState,
+    admin_username: &str,
+    draft: &ChallengeDraftResponse,
+    repository_path: &RepositoryCheckoutPath,
+) -> Result<()> {
+    let (manifest, bundle_sha256) = validate_draft_repository(draft, repository_path).await?;
     let approved_bundle_sha256 = draft
         .approved_bundle_sha256
         .as_ref()
@@ -648,7 +686,7 @@ pub async fn publish_challenge_draft(
                     challenge_name: manifest.challenge_name.clone(),
                     owner_agent_id: draft.creator_agent_id.clone(),
                     audit_event_id: ChallengeDraftAuditEventId::generate(),
-                    admin_username: admin.username,
+                    admin_username: admin_username.to_string(),
                     repository_path: repository_path.to_string(),
                     bundle_sha256,
                 },
@@ -656,44 +694,60 @@ pub async fn publish_challenge_draft(
             .await?;
         }
         ChallengeCreationRequestKind::NewChallenge => {
-            let bundle_path =
-                assemble_runtime_bundle(&state, &draft, &proposal_root, &manifest).await?;
-            challenge_bundle::validate_challenge_bundle(&bundle_path).await?;
-            let spec = challenge_bundle::read_challenge_bundle_spec(&bundle_path).await?;
-            if state.config.require_digest_pinned_images {
-                challenge_bundle::validate_digest_pinned_images(&spec)?;
+            let final_bundle_path = runtime_bundle_path(state, draft, &manifest);
+            let temporary_bundle_path = temporary_runtime_bundle_path(state, draft);
+            let publish_new_result = async {
+                assemble_runtime_bundle(
+                    state,
+                    draft,
+                    &proposal_root,
+                    &manifest,
+                    &temporary_bundle_path,
+                )
+                .await?;
+                challenge_bundle::validate_challenge_bundle(&temporary_bundle_path).await?;
+                let spec =
+                    challenge_bundle::read_challenge_bundle_spec(&temporary_bundle_path).await?;
+                if state.config.require_digest_pinned_images {
+                    challenge_bundle::validate_digest_pinned_images(&spec)?;
+                }
+                promote_runtime_bundle(&temporary_bundle_path, &final_bundle_path).await?;
+                let statement_path = final_bundle_path.join("statement.md");
+                let managed_bundle_path =
+                    shared::models::paths::ManagedBundlePath::from_existing_dir(
+                        &final_bundle_path,
+                    )?;
+                let managed_statement_path =
+                    shared::models::paths::ManagedStatementPath::from_existing_file(
+                        &statement_path,
+                    )?;
+                db::publish_new_challenge_draft(
+                    &state.db,
+                    &db::PublishNewChallengeDraftInput {
+                        draft_id: draft.id.clone(),
+                        challenge_name: manifest.challenge_name.clone(),
+                        bundle_path: managed_bundle_path,
+                        statement_path: managed_statement_path,
+                        spec,
+                        title: manifest.title.clone(),
+                        summary: manifest.summary.clone(),
+                        owner_agent_id: draft.creator_agent_id.clone(),
+                        audit_event_id: ChallengeDraftAuditEventId::generate(),
+                        admin_username: admin_username.to_string(),
+                        repository_path: repository_path.to_string(),
+                        bundle_sha256,
+                    },
+                )
+                .await
             }
-            let statement_path = bundle_path.join("statement.md");
-            let managed_bundle_path =
-                shared::models::paths::ManagedBundlePath::from_existing_dir(&bundle_path)?;
-            let managed_statement_path =
-                shared::models::paths::ManagedStatementPath::from_existing_file(&statement_path)?;
-            db::publish_new_challenge_draft(
-                &state.db,
-                &db::PublishNewChallengeDraftInput {
-                    draft_id: draft.id.clone(),
-                    challenge_name: manifest.challenge_name.clone(),
-                    bundle_path: managed_bundle_path,
-                    statement_path: managed_statement_path,
-                    spec,
-                    title: manifest.title.clone(),
-                    summary: manifest.summary.clone(),
-                    owner_agent_id: draft.creator_agent_id.clone(),
-                    audit_event_id: ChallengeDraftAuditEventId::generate(),
-                    admin_username: admin.username,
-                    repository_path: repository_path.to_string(),
-                    bundle_sha256,
-                },
-            )
-            .await?;
+            .await;
+            if let Err(error) = publish_new_result {
+                cleanup_runtime_bundle(&temporary_bundle_path).await;
+                return Err(error);
+            }
         }
     };
-
-    Ok(Json(
-        db::get_challenge_draft(&state.db, draft.id.as_str())
-            .await?
-            .ok_or(AppError::NotFound)?,
-    ))
+    Ok(())
 }
 
 /// Maps database unique-constraint failures to the API conflict error used by draft creation.
@@ -810,7 +864,8 @@ async fn assemble_runtime_bundle(
     draft: &ChallengeDraftResponse,
     proposal_root: &Path,
     manifest: &ChallengeCreationManifest,
-) -> Result<PathBuf> {
+    runtime_bundle_path: &Path,
+) -> Result<()> {
     let bundle_path = manifest.bundle_path.as_ref().ok_or_else(|| {
         AppError::BadRequest("bundle_path is required for publishable drafts".to_string())
     })?;
@@ -818,25 +873,71 @@ async fn assemble_runtime_bundle(
     let public_spec = challenge_bundle::read_challenge_bundle_spec(&public_bundle_path).await?;
     validate_private_assets_for_publish(draft, manifest, &public_spec)?;
 
-    let runtime_bundle_path = Path::new(&state.config.storage_root)
-        .join("challenge-bundles")
-        .join(manifest.challenge_name.as_str())
-        .join(draft.id.as_str());
-    challenge_bundle::copy_challenge_bundle_dir(&public_bundle_path, &runtime_bundle_path, true)
+    challenge_bundle::copy_challenge_bundle_dir(&public_bundle_path, runtime_bundle_path, true)
         .await?;
 
     for asset in &draft.private_assets {
         let bytes = state.storage.get(&asset.storage_key).await?;
         extract_private_asset_overlay(
             &bytes,
-            &runtime_bundle_path,
+            runtime_bundle_path,
             &asset.asset_name,
             state.config.challenge_private_asset_bytes_per_draft,
         )
         .await?;
     }
 
-    Ok(runtime_bundle_path)
+    Ok(())
+}
+
+/// Final managed runtime-bundle path for a published draft.
+fn runtime_bundle_path(
+    state: &AppState,
+    draft: &ChallengeDraftResponse,
+    manifest: &ChallengeCreationManifest,
+) -> PathBuf {
+    Path::new(&state.config.storage_root)
+        .join("challenge-bundles")
+        .join(manifest.challenge_name.as_str())
+        .join(draft.id.as_str())
+}
+
+/// Attempt-scoped temporary runtime-bundle path under the same storage root.
+fn temporary_runtime_bundle_path(state: &AppState, draft: &ChallengeDraftResponse) -> PathBuf {
+    Path::new(&state.config.storage_root)
+        .join("_tmp")
+        .join("challenge-bundles")
+        .join(format!("{}-{}", draft.id, Uuid::new_v4()))
+}
+
+/// Atomically move a validated temporary bundle into its final managed path.
+async fn promote_runtime_bundle(
+    temporary_bundle_path: &Path,
+    final_bundle_path: &Path,
+) -> Result<()> {
+    if let Some(parent) = final_bundle_path.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+    match tokio::fs::remove_dir_all(final_bundle_path).await {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(AppError::Io(error)),
+    }
+    tokio::fs::rename(temporary_bundle_path, final_bundle_path).await?;
+    Ok(())
+}
+
+/// Best-effort cleanup for failed temporary runtime bundle assembly.
+async fn cleanup_runtime_bundle(path: &Path) {
+    if let Err(error) = tokio::fs::remove_dir_all(path).await
+        && error.kind() != std::io::ErrorKind::NotFound
+    {
+        warn!(
+            path = %path.display(),
+            error = %error,
+            "failed to clean up temporary challenge runtime bundle"
+        );
+    }
 }
 
 /// Verifies every private asset required by the manifest and bundle shape is present.
@@ -914,6 +1015,7 @@ fn extract_private_asset_overlay_blocking(
     }
 
     let mut total_uncompressed_size = 0u64;
+    let mut seen_paths = HashSet::with_capacity(archive.len());
     for i in 0..archive.len() {
         let mut file = archive.by_index(i)?;
         if file
@@ -935,6 +1037,11 @@ fn extract_private_asset_overlay_blocking(
         if !challenge_bundle::is_safe_relative_path(&relative_path_string) {
             return Err(AppError::BadRequest(format!(
                 "private asset `{asset_name}` contains unsafe path `{relative_path_string}`"
+            )));
+        }
+        if !seen_paths.insert(relative_path_string.to_string()) {
+            return Err(AppError::BadRequest(format!(
+                "private asset `{asset_name}` contains duplicate path `{relative_path_string}`"
             )));
         }
         let output_path = target_dir.join(&relative_path);
@@ -961,7 +1068,10 @@ fn extract_private_asset_overlay_blocking(
             if let Some(parent) = output_path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            let mut outfile = std::fs::File::create(&output_path)?;
+            let mut outfile = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&output_path)?;
             std::io::copy(&mut file, &mut outfile)?;
         }
     }

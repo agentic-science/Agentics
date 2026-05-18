@@ -13,7 +13,9 @@ use shared::{
     models::{
         challenge_creation::ChallengePrivateAssetKind,
         hashes::Sha256Digest,
-        ids::{AgentId, ChallengeDraftId, ChallengePrivateAssetId},
+        ids::{
+            AgentId, ChallengeDraftId, ChallengeDraftValidationRecordId, ChallengePrivateAssetId,
+        },
         names::AssetName,
     },
     storage::StorageKey,
@@ -89,12 +91,17 @@ async fn private_asset_upload_rejects_duplicate_asset_name(pool: sqlx::PgPool) {
 
 /// Build a small valid private benchmark ZIP overlay for upload tests.
 fn private_benchmark_asset_zip_base64() -> String {
+    private_benchmark_asset_zip_base64_with_nonce(1)
+}
+
+/// Build a private benchmark ZIP overlay with a unique run name for retry tests.
+fn private_benchmark_asset_zip_base64_with_nonce(nonce: i32) -> String {
     zip_project_zip_base64(vec![(
         "private-benchmark/runs.json",
         json!({
             "runs": [
                 {
-                    "run_name": "official-case-1",
+                    "run_name": format!("official-case-{nonce}"),
                     "interface": "stdio",
                     "stdin_json": { "a": 1, "b": 2 },
                     "expected": "3",
@@ -104,6 +111,68 @@ fn private_benchmark_asset_zip_base64() -> String {
         })
         .to_string(),
     )])
+}
+
+/// Verifies active draft validation blocks asset mutation until its lease expires.
+#[sqlx::test(migrations = "../migrations")]
+async fn private_asset_upload_rejects_active_validation_and_recovers_stale_claim(
+    pool: sqlx::PgPool,
+) {
+    let storage = tempfile::tempdir().expect("storage tempdir");
+    let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
+    let mut config = test_config(storage.path(), seeded_challenges.path());
+    config.challenge_draft_validation_timeout_minutes = 30;
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+    let creator = create_creator_session(&pool, 1001, "creator").await;
+
+    let draft = create_draft(&client, &app, &creator, 11, manifest_json()).await;
+    let draft_id =
+        ChallengeDraftId::try_new(draft["id"].as_str().expect("draft id")).expect("valid draft id");
+    let manifest_sha256 = Sha256Digest::try_new(
+        draft["manifest_sha256"]
+            .as_str()
+            .expect("manifest sha should exist"),
+    )
+    .expect("manifest sha should parse");
+    let validation_record_id = ChallengeDraftValidationRecordId::generate();
+    db::begin_challenge_draft_validation(
+        &pool,
+        &db::BeginChallengeDraftValidationInput {
+            validation_record_id: validation_record_id.clone(),
+            draft_id: draft_id.clone(),
+            repository_path: storage.path().to_string_lossy().to_string(),
+            manifest_sha256,
+        },
+        24 * 60 * 60,
+        10,
+        30,
+    )
+    .await
+    .expect("validation claim should reserve");
+
+    let active_response =
+        upload_private_asset(&client, &app, &creator, draft_id.as_str(), 11).await;
+    assert_eq!(active_response.status(), reqwest::StatusCode::CONFLICT);
+
+    sqlx::query(
+        "UPDATE challenge_draft_validation_records SET created_at = NOW() - INTERVAL '60 minutes' WHERE id = $1::uuid",
+    )
+    .bind(validation_record_id.as_str())
+    .execute(&pool)
+    .await
+    .expect("failed to age validation claim");
+    let recovered_response =
+        upload_private_asset(&client, &app, &creator, draft_id.as_str(), 12).await;
+    assert_eq!(recovered_response.status(), reqwest::StatusCode::CREATED);
+    let active_validation: Option<String> = sqlx::query_scalar(
+        "SELECT active_validation_record_id::text FROM challenge_drafts WHERE id = $1::uuid",
+    )
+    .bind(draft_id.as_str())
+    .fetch_one(&pool)
+    .await
+    .expect("failed to query active validation");
+    assert!(active_validation.is_none());
 }
 
 /// Verifies that private asset quota admission serializes concurrent inserts.
@@ -145,6 +214,8 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
         sha256: Sha256Digest::try_new("a".repeat(64)).expect("test digest is valid"),
         storage_key: StorageKey::try_new("challenge-drafts/test/private-assets/a.bin")
             .expect("test storage key is valid"),
+        temporary_storage_key: StorageKey::try_new("_tmp/challenge-private-assets/a.bin")
+            .expect("test temporary storage key is valid"),
         uploader_agent_id: uploader_agent_id.clone(),
     };
     let input_b = db::CreateChallengePrivateAssetInput {
@@ -158,11 +229,13 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
         sha256: Sha256Digest::try_new("b".repeat(64)).expect("test digest is valid"),
         storage_key: StorageKey::try_new("challenge-drafts/test/private-assets/b.bin")
             .expect("test storage key is valid"),
+        temporary_storage_key: StorageKey::try_new("_tmp/challenge-private-assets/b.bin")
+            .expect("test temporary storage key is valid"),
         uploader_agent_id,
     };
 
-    let create_a = db::create_challenge_private_asset(&pool, &input_a, 12);
-    let create_b = db::create_challenge_private_asset(&pool, &input_b, 12);
+    let create_a = db::reserve_challenge_private_asset(&pool, &input_a, 12, 30, 30);
+    let create_b = db::reserve_challenge_private_asset(&pool, &input_b, 12, 30, 30);
     let (result_a, result_b) = tokio::join!(create_a, create_b);
 
     let mut created = 0;
@@ -199,6 +272,100 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
     .expect("asset byte query");
     assert_eq!(stored_count, 1);
     assert_eq!(stored_bytes, 8);
+}
+
+/// Verifies stale pending asset reservations are failed before a retry reserves the same name.
+#[sqlx::test(migrations = "../migrations")]
+async fn stale_pending_private_asset_reservation_can_be_retried(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("storage tempdir");
+    let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
+    let config = test_config(storage.path(), seeded_challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+    let creator = create_creator_session(&pool, 1001, "creator").await;
+
+    let draft = create_draft(&client, &app, &creator, 12, manifest_json()).await;
+    let draft_id =
+        ChallengeDraftId::try_new(draft["id"].as_str().expect("draft id")).expect("valid draft id");
+    let uploader_agent_id = AgentId::try_new(&creator.agent_id).expect("valid creator agent id");
+
+    let first = private_asset_input(&draft_id, &uploader_agent_id, "official-cases", "first");
+    db::reserve_challenge_private_asset(&pool, &first, 64, 30, 30)
+        .await
+        .expect("first pending asset should reserve");
+    sqlx::query(
+        "UPDATE challenge_private_assets SET created_at = NOW() - INTERVAL '60 minutes' WHERE id = $1::uuid",
+    )
+    .bind(first.asset_row_id.as_str())
+    .execute(&pool)
+    .await
+    .expect("failed to age pending asset");
+
+    let second = private_asset_input(&draft_id, &uploader_agent_id, "official-cases", "second");
+    db::reserve_challenge_private_asset(&pool, &second, 64, 30, 30)
+        .await
+        .expect("stale pending asset should not block retry");
+
+    let states: Vec<String> = sqlx::query_scalar(
+        "SELECT status FROM challenge_private_assets WHERE draft_id = $1::uuid ORDER BY created_at ASC",
+    )
+    .bind(draft_id.as_str())
+    .fetch_all(&pool)
+    .await
+    .expect("failed to query asset states");
+    assert_eq!(states, vec!["failed".to_string(), "pending".to_string()]);
+}
+
+/// Upload a declared private benchmark asset to a draft.
+async fn upload_private_asset(
+    client: &reqwest::Client,
+    app: &helpers::TestApp,
+    creator: &TestCreatorSession,
+    draft_id: &str,
+    nonce: i32,
+) -> reqwest::Response {
+    creator_auth(
+        client.post(api_url(
+            app,
+            &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+        )),
+        creator,
+    )
+    .json(&json!({
+        "asset_name": "official-cases",
+        "kind": "private_benchmark_data",
+        "asset_base64": private_benchmark_asset_zip_base64_with_nonce(nonce)
+    }))
+    .send()
+    .await
+    .expect("private asset request")
+}
+
+/// Build a private asset DB reservation input for direct admission tests.
+fn private_asset_input(
+    draft_id: &ChallengeDraftId,
+    uploader_agent_id: &AgentId,
+    asset_name: &str,
+    key_suffix: &str,
+) -> db::CreateChallengePrivateAssetInput {
+    db::CreateChallengePrivateAssetInput {
+        asset_row_id: ChallengePrivateAssetId::generate(),
+        draft_id: draft_id.clone(),
+        asset_name: AssetName::try_new(asset_name.to_string()).expect("test asset name is valid"),
+        kind: ChallengePrivateAssetKind::PrivateBenchmarkData,
+        required: false,
+        size_bytes: 8,
+        sha256: Sha256Digest::try_new("c".repeat(64)).expect("test digest is valid"),
+        storage_key: StorageKey::try_new(format!(
+            "challenge-drafts/test/private-assets/{key_suffix}.bin"
+        ))
+        .expect("test storage key is valid"),
+        temporary_storage_key: StorageKey::try_new(format!(
+            "_tmp/challenge-private-assets/{key_suffix}.bin"
+        ))
+        .expect("test temporary storage key is valid"),
+        uploader_agent_id: uploader_agent_id.clone(),
+    }
 }
 
 /// Create a draft for the public challenge creation test manifest.

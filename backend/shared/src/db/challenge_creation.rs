@@ -58,6 +58,7 @@ pub struct CreateChallengePrivateAssetInput {
     pub size_bytes: i64,
     pub sha256: Sha256Digest,
     pub storage_key: StorageKey,
+    pub temporary_storage_key: StorageKey,
     pub uploader_agent_id: AgentId,
 }
 
@@ -119,6 +120,14 @@ pub struct FinishChallengeDraftValidationInput {
     pub status: ChallengeDraftValidationStatus,
     pub message: String,
     pub bundle_sha256: Option<Sha256Digest>,
+}
+
+/// Internal private asset cleanup candidate.
+#[derive(Debug, Clone)]
+pub struct ChallengePrivateAssetPurgeRecord {
+    pub id: ChallengePrivateAssetId,
+    pub storage_key: StorageKey,
+    pub temporary_storage_key: Option<StorageKey>,
 }
 
 /// Insert a new challenge draft bound to a GitHub PR.
@@ -244,7 +253,7 @@ async fn count_active_challenge_drafts_for_agent_tx(
         SELECT COUNT(*)::BIGINT
         FROM challenge_drafts
         WHERE creator_agent_id = $1::uuid
-          AND status IN ('draft', 'validated', 'approved')
+          AND status IN ('draft', 'validated', 'approved', 'publishing')
         "#,
     )
     .bind(agent_id.as_str())
@@ -260,6 +269,7 @@ pub async fn begin_challenge_draft_validation(
     input: &BeginChallengeDraftValidationInput,
     window_seconds: i64,
     validation_limit: i64,
+    validation_timeout_minutes: i32,
 ) -> Result<ChallengeDraftValidationRecordResponse> {
     let mut tx = pool.begin().await?;
     let scope = format!("challenge-draft:{}:validations", input.draft_id);
@@ -287,6 +297,23 @@ pub async fn begin_challenge_draft_validation(
     ) {
         return Err(AppError::Conflict);
     }
+    let active_validation_record_id = if active_validation_record_id.is_some() {
+        clear_stale_active_validation_tx(
+            &mut tx,
+            input.draft_id.as_str(),
+            validation_timeout_minutes,
+        )
+        .await?;
+        let refreshed_active: Option<String> = sqlx::query_scalar(
+            "SELECT active_validation_record_id::text FROM challenge_drafts WHERE id = $1::uuid",
+        )
+        .bind(input.draft_id.as_str())
+        .fetch_one(&mut *tx)
+        .await?;
+        refreshed_active
+    } else {
+        active_validation_record_id
+    };
     if active_validation_record_id.is_some() {
         return Err(AppError::Conflict);
     }
@@ -364,11 +391,13 @@ async fn count_recent_challenge_draft_validations_tx(
     Ok(count)
 }
 
-/// Insert a private benchmark asset record for a draft.
-pub async fn create_challenge_private_asset(
+/// Reserve a pending private benchmark asset row before storage writes begin.
+pub async fn reserve_challenge_private_asset(
     pool: &PgPool,
     input: &CreateChallengePrivateAssetInput,
     max_bytes_per_draft: u64,
+    validation_timeout_minutes: i32,
+    pending_timeout_minutes: i32,
 ) -> Result<ChallengePrivateAssetResponse> {
     let max_bytes_per_draft = i64::try_from(max_bytes_per_draft).map_err(|_| {
         AppError::Internal("private asset quota limit exceeds supported range".to_string())
@@ -376,7 +405,13 @@ pub async fn create_challenge_private_asset(
     let mut tx = pool.begin().await?;
     let scope = format!("challenge-draft:{}:private-assets", input.draft_id);
     lock_quota_scope(&mut tx, &scope).await?;
-    ensure_private_asset_upload_allowed_tx(&mut tx, input).await?;
+    auto_fail_stale_pending_private_assets_tx(
+        &mut tx,
+        input.draft_id.as_str(),
+        pending_timeout_minutes,
+    )
+    .await?;
+    ensure_private_asset_upload_allowed_tx(&mut tx, input, validation_timeout_minutes).await?;
 
     let existing_bytes =
         sum_private_asset_bytes_for_draft_tx(&mut tx, input.draft_id.as_str()).await?;
@@ -401,9 +436,11 @@ pub async fn create_challenge_private_asset(
             size_bytes,
             sha256,
             storage_key,
+            temporary_storage_key,
+            status,
             uploader_agent_id
         )
-        VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9::uuid)
+        VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9, 'pending', $10::uuid)
         RETURNING *
         "#,
     )
@@ -415,6 +452,7 @@ pub async fn create_challenge_private_asset(
     .bind(input.size_bytes)
     .bind(input.sha256.to_string())
     .bind(input.storage_key.as_str())
+    .bind(input.temporary_storage_key.as_str())
     .bind(input.uploader_agent_id.as_str())
     .fetch_one(&mut *tx)
     .await?;
@@ -441,14 +479,65 @@ pub async fn create_challenge_private_asset(
     Ok(response)
 }
 
+/// Mark a pending private asset active after its object was promoted.
+pub async fn activate_challenge_private_asset(
+    pool: &PgPool,
+    asset_row_id: &ChallengePrivateAssetId,
+) -> Result<ChallengePrivateAssetResponse> {
+    let row = sqlx::query(
+        r#"
+        UPDATE challenge_private_assets
+        SET status = 'active',
+            temporary_storage_key = NULL,
+            activated_at = NOW(),
+            failed_at = NULL,
+            failure_message = NULL
+        WHERE id = $1::uuid
+          AND status = 'pending'
+        RETURNING *
+        "#,
+    )
+    .bind(asset_row_id.as_str())
+    .fetch_optional(pool)
+    .await?;
+    let Some(row) = row else {
+        return Err(AppError::Conflict);
+    };
+    row_to_private_asset_response(row)
+}
+
+/// Mark a pending private asset failed after storage write or promote failed.
+pub async fn fail_challenge_private_asset(
+    pool: &PgPool,
+    asset_row_id: &ChallengePrivateAssetId,
+    message: &str,
+) -> Result<()> {
+    sqlx::query(
+        r#"
+        UPDATE challenge_private_assets
+        SET status = 'failed',
+            failed_at = NOW(),
+            failure_message = $2
+        WHERE id = $1::uuid
+          AND status = 'pending'
+        "#,
+    )
+    .bind(asset_row_id.as_str())
+    .bind(message)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 /// Lock a draft row and confirm private assets may still be attached.
 async fn ensure_private_asset_upload_allowed_tx(
     tx: &mut Transaction<'_, Postgres>,
     input: &CreateChallengePrivateAssetInput,
+    validation_timeout_minutes: i32,
 ) -> Result<()> {
     let row = sqlx::query(
         r#"
-        SELECT status, creator_agent_id
+        SELECT status, creator_agent_id, active_validation_record_id::text AS active_validation_record_id
         FROM challenge_drafts
         WHERE id = $1::uuid
         FOR UPDATE
@@ -465,6 +554,22 @@ async fn ensure_private_asset_upload_allowed_tx(
     if creator_agent_id != input.uploader_agent_id {
         return Err(AppError::NotFound);
     }
+    if row
+        .try_get::<Option<String>, _>("active_validation_record_id")?
+        .is_some()
+    {
+        clear_stale_active_validation_tx(tx, input.draft_id.as_str(), validation_timeout_minutes)
+            .await?;
+        let active_validation_record_id: Option<String> = sqlx::query_scalar(
+            "SELECT active_validation_record_id::text FROM challenge_drafts WHERE id = $1::uuid",
+        )
+        .bind(input.draft_id.as_str())
+        .fetch_one(&mut **tx)
+        .await?;
+        if active_validation_record_id.is_some() {
+            return Err(AppError::Conflict);
+        }
+    }
     let status = draft_status_from_row(&row, "status")?;
     if !matches!(
         status,
@@ -473,6 +578,87 @@ async fn ensure_private_asset_upload_allowed_tx(
         return Err(AppError::Conflict);
     }
 
+    Ok(())
+}
+
+/// Fail and clear active validation leases that exceeded the configured timeout.
+async fn clear_stale_active_validation_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    draft_id: &str,
+    timeout_minutes: i32,
+) -> Result<()> {
+    let stale_validation_id: Option<String> = sqlx::query_scalar(
+        r#"
+        SELECT v.id::text
+        FROM challenge_drafts d
+        JOIN challenge_draft_validation_records v ON v.id = d.active_validation_record_id
+        WHERE d.id = $1::uuid
+          AND (
+            v.status <> 'running'
+            OR v.created_at < NOW() - INTERVAL '1 minute' * $2
+          )
+        "#,
+    )
+    .bind(draft_id)
+    .bind(timeout_minutes.max(1))
+    .fetch_optional(&mut **tx)
+    .await?;
+    let Some(stale_validation_id) = stale_validation_id else {
+        return Ok(());
+    };
+
+    sqlx::query(
+        r#"
+        UPDATE challenge_draft_validation_records
+        SET status = 'failed',
+            message = 'challenge draft validation lease expired'
+        WHERE id = $1::uuid
+          AND status = 'running'
+        "#,
+    )
+    .bind(&stale_validation_id)
+    .execute(&mut **tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        UPDATE challenge_drafts
+        SET active_validation_record_id = NULL,
+            validation_message = 'challenge draft validation lease expired',
+            updated_at = NOW()
+        WHERE id = $1::uuid
+          AND active_validation_record_id = $2::uuid
+        "#,
+    )
+    .bind(draft_id)
+    .bind(&stale_validation_id)
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(())
+}
+
+/// Fail stale pending private assets before retrying the same asset name.
+async fn auto_fail_stale_pending_private_assets_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    draft_id: &str,
+    timeout_minutes: i32,
+) -> Result<()> {
+    sqlx::query(
+        r#"
+        UPDATE challenge_private_assets
+        SET status = 'failed',
+            failed_at = NOW(),
+            failure_message = 'private asset pending lease expired'
+        WHERE draft_id = $1::uuid
+          AND status = 'pending'
+          AND created_at < NOW() - INTERVAL '1 minute' * $2
+        "#,
+    )
+    .bind(draft_id)
+    .bind(timeout_minutes.max(1))
+    .execute(&mut **tx)
+    .await?;
     Ok(())
 }
 
@@ -486,6 +672,7 @@ async fn sum_private_asset_bytes_for_draft_tx(
         SELECT COALESCE(SUM(size_bytes), 0)::BIGINT
         FROM challenge_private_assets
         WHERE draft_id = $1::uuid
+          AND status IN ('pending', 'active')
         "#,
     )
     .bind(draft_id)
@@ -707,10 +894,10 @@ pub async fn abandon_stale_challenge_drafts(pool: &PgPool, ttl_days: i64) -> Res
 pub async fn list_unpublished_private_assets_for_purge(
     pool: &PgPool,
     grace_days: i64,
-) -> Result<Vec<ChallengePrivateAssetResponse>> {
+) -> Result<Vec<ChallengePrivateAssetPurgeRecord>> {
     let rows = sqlx::query(
         r#"
-        SELECT a.*
+        SELECT a.id, a.storage_key, a.temporary_storage_key
         FROM challenge_private_assets a
         JOIN challenge_drafts d ON d.id = a.draft_id
         WHERE d.status IN ('abandoned', 'rejected')
@@ -723,7 +910,16 @@ pub async fn list_unpublished_private_assets_for_purge(
     .await?;
 
     rows.into_iter()
-        .map(row_to_private_asset_response)
+        .map(|row| {
+            Ok(ChallengePrivateAssetPurgeRecord {
+                id: challenge_private_asset_id_from_row(&row, "id")?,
+                storage_key: storage_key_from_row(&row, "storage_key")?,
+                temporary_storage_key: optional_storage_key_from_row(
+                    &row,
+                    "temporary_storage_key",
+                )?,
+            })
+        })
         .collect()
 }
 
@@ -734,6 +930,108 @@ pub async fn delete_challenge_private_asset(pool: &PgPool, asset_row_id: &str) -
         .execute(pool)
         .await?;
 
+    Ok(())
+}
+
+/// Claim an approved draft for publishing before filesystem work starts.
+pub async fn claim_challenge_draft_for_publish(
+    pool: &PgPool,
+    draft_id: &str,
+    publish_timeout_minutes: i32,
+) -> Result<ChallengeDraftResponse> {
+    let mut tx = pool.begin().await?;
+    let scope = format!("challenge-draft:{draft_id}:publish");
+    lock_quota_scope(&mut tx, &scope).await?;
+    reset_stale_publishing_draft_tx(&mut tx, draft_id, publish_timeout_minutes).await?;
+
+    let current: Option<String> =
+        sqlx::query_scalar("SELECT status FROM challenge_drafts WHERE id = $1::uuid FOR UPDATE")
+            .bind(draft_id)
+            .fetch_optional(&mut *tx)
+            .await?;
+    let Some(current) = current else {
+        return Err(AppError::NotFound);
+    };
+    let current = ChallengeDraftStatus::from_storage_value(&current)
+        .ok_or_else(|| AppError::Internal(format!("unknown challenge draft status `{current}`")))?;
+    match current {
+        ChallengeDraftStatus::Published => {
+            tx.commit().await?;
+            return get_challenge_draft(pool, draft_id)
+                .await?
+                .ok_or(AppError::NotFound);
+        }
+        ChallengeDraftStatus::Approved => {}
+        _ => return Err(AppError::Conflict),
+    }
+
+    let claim = sqlx::query(
+        r#"
+        UPDATE challenge_drafts
+        SET status = 'publishing',
+            updated_at = NOW()
+        WHERE id = $1::uuid
+          AND status = 'approved'
+          AND active_validation_record_id IS NULL
+        "#,
+    )
+    .bind(draft_id)
+    .execute(&mut *tx)
+    .await?;
+    if claim.rows_affected() != 1 {
+        return Err(AppError::Conflict);
+    }
+    tx.commit().await?;
+
+    get_challenge_draft(pool, draft_id)
+        .await?
+        .ok_or(AppError::NotFound)
+}
+
+/// Reset a stale publishing claim back to approved so a reviewer can retry.
+async fn reset_stale_publishing_draft_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    draft_id: &str,
+    timeout_minutes: i32,
+) -> Result<()> {
+    sqlx::query(
+        r#"
+        UPDATE challenge_drafts
+        SET status = 'approved',
+            validation_message = 'previous publish attempt expired',
+            updated_at = NOW()
+        WHERE id = $1::uuid
+          AND status = 'publishing'
+          AND updated_at < NOW() - INTERVAL '1 minute' * $2
+        "#,
+    )
+    .bind(draft_id)
+    .bind(timeout_minutes.max(1))
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+/// Release a publishing claim after filesystem or DB publication fails.
+pub async fn fail_challenge_draft_publish(
+    pool: &PgPool,
+    draft_id: &str,
+    message: &str,
+) -> Result<()> {
+    sqlx::query(
+        r#"
+        UPDATE challenge_drafts
+        SET status = 'approved',
+            validation_message = $2,
+            updated_at = NOW()
+        WHERE id = $1::uuid
+          AND status = 'publishing'
+        "#,
+    )
+    .bind(draft_id)
+    .bind(message)
+    .execute(pool)
+    .await?;
     Ok(())
 }
 
@@ -750,7 +1048,7 @@ pub async fn mark_challenge_draft_published(
             published_challenge_name = $2,
             updated_at = NOW()
         WHERE id = $1::uuid
-          AND status = 'approved'
+          AND status IN ('approved', 'publishing')
           AND active_validation_record_id IS NULL
         "#,
     )
@@ -882,7 +1180,7 @@ async fn mark_challenge_draft_published_tx(
             published_challenge_name = $2,
             updated_at = NOW()
         WHERE id = $1::uuid
-          AND status = 'approved'
+          AND status = 'publishing'
           AND active_validation_record_id IS NULL
         "#,
     )
@@ -967,6 +1265,7 @@ async fn list_private_assets_for_draft(
         SELECT *
         FROM challenge_private_assets
         WHERE draft_id = $1::uuid
+          AND status = 'active'
         ORDER BY created_at ASC
         "#,
     )
@@ -1123,6 +1422,19 @@ fn optional_sha256_digest_from_row(
 fn storage_key_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<StorageKey> {
     let value: String = row.try_get(column)?;
     StorageKey::try_new(&value)
+        .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
+}
+
+/// Reads an optional storage key from a database row and validates its domain shape.
+fn optional_storage_key_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<Option<StorageKey>> {
+    let Some(value) = row.try_get::<Option<String>, _>(column)? else {
+        return Ok(None);
+    };
+    StorageKey::try_new(&value)
+        .map(Some)
         .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
 }
 

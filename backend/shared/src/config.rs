@@ -58,6 +58,12 @@ pub struct Config {
     pub challenge_private_asset_bytes_per_draft: u64,
     #[serde(default = "default_challenge_draft_validations_per_day")]
     pub challenge_draft_validations_per_day: u32,
+    #[serde(default = "default_challenge_draft_validation_timeout_minutes")]
+    pub challenge_draft_validation_timeout_minutes: i32,
+    #[serde(default = "default_challenge_private_asset_pending_timeout_minutes")]
+    pub challenge_private_asset_pending_timeout_minutes: i32,
+    #[serde(default = "default_challenge_draft_publish_timeout_minutes")]
+    pub challenge_draft_publish_timeout_minutes: i32,
     #[serde(default = "default_challenge_draft_ttl_days")]
     pub challenge_draft_ttl_days: i64,
     #[serde(default = "default_unpublished_challenge_asset_grace_days")]
@@ -267,6 +273,21 @@ fn default_challenge_draft_validations_per_day() -> u32 {
     10
 }
 
+/// Handles default challenge draft validation timeout minutes for this module.
+fn default_challenge_draft_validation_timeout_minutes() -> i32 {
+    30
+}
+
+/// Handles default private asset pending timeout minutes for this module.
+fn default_challenge_private_asset_pending_timeout_minutes() -> i32 {
+    30
+}
+
+/// Handles default challenge draft publish timeout minutes for this module.
+fn default_challenge_draft_publish_timeout_minutes() -> i32 {
+    30
+}
+
 /// Handles default challenge draft ttl days for this module.
 fn default_challenge_draft_ttl_days() -> i64 {
     14
@@ -396,6 +417,21 @@ impl Config {
         }
         if self.challenge_draft_validations_per_day == 0 {
             anyhow::bail!("AGENTICS_CHALLENGE_DRAFT_VALIDATIONS_PER_DAY must be greater than zero");
+        }
+        if self.challenge_draft_validation_timeout_minutes <= 0 {
+            anyhow::bail!(
+                "AGENTICS_CHALLENGE_DRAFT_VALIDATION_TIMEOUT_MINUTES must be greater than zero"
+            );
+        }
+        if self.challenge_private_asset_pending_timeout_minutes <= 0 {
+            anyhow::bail!(
+                "AGENTICS_CHALLENGE_PRIVATE_ASSET_PENDING_TIMEOUT_MINUTES must be greater than zero"
+            );
+        }
+        if self.challenge_draft_publish_timeout_minutes <= 0 {
+            anyhow::bail!(
+                "AGENTICS_CHALLENGE_DRAFT_PUBLISH_TIMEOUT_MINUTES must be greater than zero"
+            );
         }
         if self.challenge_draft_ttl_days <= 0 {
             anyhow::bail!("AGENTICS_CHALLENGE_DRAFT_TTL_DAYS must be greater than zero");
@@ -775,6 +811,9 @@ mod tests {
             max_active_challenge_drafts_per_agent: 10,
             challenge_private_asset_bytes_per_draft: 250 * 1024 * 1024,
             challenge_draft_validations_per_day: 10,
+            challenge_draft_validation_timeout_minutes: 30,
+            challenge_private_asset_pending_timeout_minutes: 30,
+            challenge_draft_publish_timeout_minutes: 30,
             challenge_draft_ttl_days: 14,
             unpublished_challenge_asset_grace_days: 7,
             github_oauth_client_id: None,
