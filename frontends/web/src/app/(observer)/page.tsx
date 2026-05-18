@@ -24,21 +24,17 @@ export default async function HomePage() {
     <div className="flex flex-col gap-16">
       {/* Hero */}
       <section className="relative">
-        <div className="flex flex-col items-center text-center gap-6 pt-8 pb-4">
+        <div className="flex flex-col items-center text-center gap-7 pt-8 pb-4">
           <h1
-            className="font-[var(--font-serif)] text-[var(--text-hero)] font-bold leading-[var(--leading-hero)] tracking-tight"
-            style={{ fontFamily: "var(--font-serif)" }}
-          >
-            {t("home.heroTitle")}
-          </h1>
-          <p
-            className="text-[var(--text-h2)] font-medium text-[var(--text-secondary)] leading-[var(--leading-h2)] max-w-2xl"
+            className="font-[var(--font-serif)] text-[var(--text-h1)] font-bold leading-[var(--leading-h1)] tracking-tight text-[var(--text-primary)] max-w-4xl"
             style={{ fontFamily: "var(--font-serif)" }}
           >
             {t("home.heroSubtitle")}
-          </p>
-          <p className="text-[var(--text-body)] text-[var(--text-muted)] max-w-xl leading-[var(--leading-body)]">
-            {t("home.heroDescription")}
+          </h1>
+          <p className="text-[var(--text-body)] text-[var(--text-muted)] max-w-5xl leading-[var(--leading-body)]">
+            <span className="block">{t("home.heroDescription.line1")}</span>
+            <span className="block">{t("home.heroDescription.line2")}</span>
+            <span className="block">{t("home.heroDescription.line3")}</span>
           </p>
           <div className="flex items-center gap-3 mt-2">
             <Link
@@ -52,35 +48,90 @@ export default async function HomePage() {
         </div>
 
         {/* Stats Row */}
-        <div className="grid grid-cols-3 gap-4 max-w-lg mx-auto mt-8">
-          <div className="card flex flex-col items-center gap-1 py-4">
-            <FlaskConical className="w-5 h-5 text-[var(--accent-secondary-text)]" />
-            <span className="text-2xl font-bold font-[var(--font-mono)] text-[var(--text-primary)]">
-              {challenges.items.length}
-            </span>
-            <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
-              {t("home.stats.challenges")}
-            </span>
-          </div>
-          <div className="card flex flex-col items-center gap-1 py-4">
-            <Bot className="w-5 h-5 text-[var(--accent-primary-text)]" />
-            <span className="text-2xl font-bold font-[var(--font-mono)] text-[var(--text-primary)]">
-              —
-            </span>
-            <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
-              {t("home.stats.agents")}
-            </span>
-          </div>
-          <div className="card flex flex-col items-center gap-1 py-4">
-            <Users className="w-5 h-5 text-[var(--accent-secondary-text)]" />
-            <span className="text-2xl font-bold font-[var(--font-mono)] text-[var(--text-primary)]">
-              —
-            </span>
-            <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
-              {t("home.stats.submissions")}
-            </span>
+        <div className="flex justify-center mt-8">
+          <div className="grid w-full max-w-3xl grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="card flex flex-col items-center gap-1 py-4 text-center">
+              <FlaskConical className="w-5 h-5 text-[var(--accent-secondary-text)]" />
+              <span className="text-2xl font-bold font-[var(--font-mono)] text-[var(--text-primary)]">
+                {challenges.items.length}
+              </span>
+              <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
+                {t("home.stats.challenges")}
+              </span>
+            </div>
+            <div className="card flex flex-col items-center gap-1 py-4 text-center">
+              <Bot className="w-5 h-5 text-[var(--accent-primary-text)]" />
+              <span className="text-2xl font-bold font-[var(--font-mono)] text-[var(--text-primary)]">
+                —
+              </span>
+              <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
+                {t("home.stats.agents")}
+              </span>
+            </div>
+            <div className="card flex flex-col items-center gap-1 py-4 text-center">
+              <Users className="w-5 h-5 text-[var(--accent-secondary-text)]" />
+              <span className="text-2xl font-bold font-[var(--font-mono)] text-[var(--text-primary)]">
+                —
+              </span>
+              <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
+                {t("home.stats.submissions")}
+              </span>
+            </div>
           </div>
         </div>
+      </section>
+
+      {/* Challenges Grid */}
+      <section id="challenges" className="scroll-mt-20">
+        <div className="flex flex-col items-center text-center gap-2 mb-6">
+          <h2
+            className="text-[var(--text-h2)] font-semibold text-[var(--text-primary)]"
+            style={{ fontFamily: "var(--font-serif)" }}
+          >
+            {t("nav.challenges")}
+          </h2>
+          <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] max-w-2xl">
+            {t("home.challengesIntro")}
+          </p>
+        </div>
+
+        {error ? (
+          <div className="card text-center py-12 text-[var(--status-error)]">
+            {t("common.error")}: {error}
+          </div>
+        ) : challenges.items.length === 0 ? (
+          <div className="empty-state">
+            <p className="text-[var(--text-muted)]">{t("common.empty")}</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {challenges.items.map((challenge) => (
+              <Link
+                key={challenge.name}
+                href={`/challenges/${challenge.name}`}
+                className="card group flex flex-col gap-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent-primary-text)] transition-colors leading-[var(--leading-h3)]">
+                    {challenge.title}
+                  </h3>
+                  <span className="badge badge-default shrink-0">
+                    {challenge.eligibility.type}
+                  </span>
+                </div>
+                <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] leading-[var(--leading-body-sm)] line-clamp-2">
+                  {challenge.summary}
+                </p>
+                <div className="flex items-center gap-2 mt-auto pt-2">
+                  <span className="text-[var(--text-caption)] text-[var(--text-muted)] font-mono">
+                    {challenge.name}
+                  </span>
+                  <ArrowRight className="w-3.5 h-3.5 text-[var(--text-muted)] group-hover:text-[var(--accent-primary-text)] group-hover:translate-x-0.5 transition-all ml-auto" />
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* How It Works */}
@@ -132,56 +183,6 @@ export default async function HomePage() {
             </p>
           </div>
         </div>
-      </section>
-
-      {/* Challenges Grid */}
-      <section id="challenges" className="scroll-mt-20">
-        <div className="flex items-center justify-between mb-6">
-          <h2
-            className="text-[var(--text-h2)] font-semibold text-[var(--text-primary)]"
-            style={{ fontFamily: "var(--font-serif)" }}
-          >
-            {t("nav.challenges")}
-          </h2>
-        </div>
-
-        {error ? (
-          <div className="card text-center py-12 text-[var(--status-error)]">
-            {t("common.error")}: {error}
-          </div>
-        ) : challenges.items.length === 0 ? (
-          <div className="empty-state">
-            <p className="text-[var(--text-muted)]">{t("common.empty")}</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {challenges.items.map((challenge) => (
-              <Link
-                key={challenge.name}
-                href={`/challenges/${challenge.name}`}
-                className="card group flex flex-col gap-3"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent-primary-text)] transition-colors leading-[var(--leading-h3)]">
-                    {challenge.title}
-                  </h3>
-                  <span className="badge badge-default shrink-0">
-                    {challenge.eligibility.type}
-                  </span>
-                </div>
-                <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] leading-[var(--leading-body-sm)] line-clamp-2">
-                  {challenge.summary}
-                </p>
-                <div className="flex items-center gap-2 mt-auto pt-2">
-                  <span className="text-[var(--text-caption)] text-[var(--text-muted)] font-mono">
-                    {challenge.name}
-                  </span>
-                  <ArrowRight className="w-3.5 h-3.5 text-[var(--text-muted)] group-hover:text-[var(--accent-primary-text)] group-hover:translate-x-0.5 transition-all ml-auto" />
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
       </section>
     </div>
   );

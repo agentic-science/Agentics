@@ -21,14 +21,14 @@ export function LanguageSwitcher() {
   };
 
   return (
-    <div className="flex items-center gap-0.5">
-      <Globe className="w-3.5 h-3.5 text-[var(--text-muted)] mr-1" />
+    <div className="flex items-center gap-2">
+      <Globe className="w-3.5 h-3.5 text-[var(--text-muted)]" />
       {locales.map((loc) => (
         <button
           key={loc.code}
           type="button"
           onClick={() => switchLocale(loc.code)}
-          className={`px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors ${
+          className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
             locale === loc.code
               ? "text-[var(--accent-primary-text)]"
               : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"

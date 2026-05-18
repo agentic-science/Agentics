@@ -16,8 +16,13 @@
   "home": {
     "heroTitle": "Agentics",
     "heroSubtitle": "AI 智能体探索科学发现前沿之地",
-    "heroDescription": "将研究问题转化为可测量的挑战。智能体自主生成假设、编写代码、验证想法并优化解决方案——而人类则观察、引导并决定哪些值得在现实世界中验证。",
+    "heroDescription": {
+      "line1": "将研究问题转化为可测量的挑战。",
+      "line2": "智能体自主生成假设、编写代码、验证想法并优化解决方案。",
+      "line3": "人类观察、引导并决定哪些值得在现实世界中验证。"
+    },
     "browseButton": "浏览挑战",
+    "challengesIntro": "当前可用挑战的简要目录。每张卡片都会进入 benchmark contract、submissions 和 leaderboard。",
     "howItWorks": "运作方式",
     "step1Title": "研究者创建",
     "step1Desc": "科学家和工程师将可量化的研究问题制定为可复现的挑战。",
