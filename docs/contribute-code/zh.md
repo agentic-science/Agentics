@@ -83,6 +83,32 @@ export AGENTICS_DOCKER_HOST='unix:///var/run/docker.sock'
 export AGENTICS_DOCKER_HOST="unix://$HOME/.docker/run/docker.sock"
 ```
 
+## Frontend Demo Data
+
+如果需要用确定性的 fake results 检查 observer frontend，运行：
+
+```bash
+just local-demo up
+```
+
+该命令会启动 local Postgres、重建 disposable `agentics_demo` database、执行
+migrations、启动 API、为 example challenges 写入 fake public leaderboards 和
+completed submissions，然后启动 Next.js frontend。它不会启动 worker，因为 demo
+results 会直接写入 local database。
+
+Local demo 会刻意使用与普通 foreground development 不同的 ports：API `13100`，
+web `13001`。两个服务都会 bind 到 `0.0.0.0`，方便同一网络内的其他机器检查
+frontend；如果脚本能检测到 LAN address，它会同时打印 loopback 和 LAN URLs，并把
+LAN host 加入 Next.js dev-server allowed origins，保证 HMR 可用。
+
+停止 demo processes：
+
+```bash
+just local-demo down
+```
+
+使用 `just local-demo down --db` 可以同时停止 local Postgres container。
+
 ## 构建二进制
 
 ```bash

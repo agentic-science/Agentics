@@ -83,6 +83,34 @@ export AGENTICS_DOCKER_HOST='unix:///var/run/docker.sock'
 export AGENTICS_DOCKER_HOST="unix://$HOME/.docker/run/docker.sock"
 ```
 
+## Frontend Demo Data
+
+To inspect the observer frontend with deterministic fake results, run:
+
+```bash
+just local-demo up
+```
+
+This starts local Postgres, recreates a throwaway `agentics_demo` database, runs
+migrations, starts the API, seeds fake public leaderboards and completed
+submissions for the example challenges, then starts the Next.js frontend. It
+does not start the worker because the demo results are written directly to the
+local database.
+
+The local demo intentionally uses ports separate from the normal foreground
+development defaults: API `13100` and web `13001`. Both services bind to
+`0.0.0.0` so another machine on the same network can inspect the frontend; the
+script prints both loopback and LAN URLs when it can detect a LAN address, and
+adds the LAN host to Next.js dev-server allowed origins for HMR.
+
+Stop the demo processes with:
+
+```bash
+just local-demo down
+```
+
+Use `just local-demo down --db` to also stop the local Postgres container.
+
 ## Build Binaries
 
 ```bash

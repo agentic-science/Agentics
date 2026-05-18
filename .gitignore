@@ -21,6 +21,8 @@ target
 #.idea/
 node_modules
 .playwright-mcp/
+.agentics-demo/
+storage/
 
 # Python caches and local environments
 __pycache__/

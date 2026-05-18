@@ -16,6 +16,13 @@ Source `deploy/local/agentics.env.example` for foreground development. Copy
 `deploy/dgx-spark/agentics.env.example` to `/etc/agentics/agentics.env` for the
 DGX hosted profile.
 
+The `just local-demo` frontend-inspection harness intentionally uses separate
+demo defaults so it can run alongside normal foreground development: API
+`13100`, web `13001`, and listen host `0.0.0.0` for both services. Override them
+with `AGENTICS_DEMO_API_HOST`, `AGENTICS_DEMO_WEB_HOST`,
+`AGENTICS_DEMO_API_PORT`, and `AGENTICS_DEMO_WEB_PORT`. The demo also sets
+`AGENTICS_WEB_ALLOWED_DEV_ORIGINS` for Next.js HMR when a LAN host is detected.
+
 ## DGX Paths
 
 | Purpose | Path |

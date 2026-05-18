@@ -16,6 +16,13 @@ Foreground development 使用 `deploy/local/agentics.env.example`。DGX hosted
 profile 将 `deploy/dgx-spark/agentics.env.example` 复制到
 `/etc/agentics/agentics.env`。
 
+`just local-demo` frontend-inspection harness 会刻意使用单独的 demo defaults，
+以便和普通 foreground development 并行运行：API `13100`、web `13001`，两个服务
+的 listen host 都是 `0.0.0.0`。可通过 `AGENTICS_DEMO_API_HOST`、
+`AGENTICS_DEMO_WEB_HOST`、`AGENTICS_DEMO_API_PORT` 和
+`AGENTICS_DEMO_WEB_PORT` 覆盖。Demo 在检测到 LAN host 时还会设置
+`AGENTICS_WEB_ALLOWED_DEV_ORIGINS`，用于 Next.js HMR。
+
 ## DGX Paths
 
 | Purpose | Path |

@@ -20,6 +20,10 @@ infra-down:
 dgx-profile *args:
     sudo scripts/ops/manage-dgx-spark-profile.sh {{args}}
 
+# Start a local demo stack with seeded fake frontend results
+local-demo *args:
+    scripts/dev/local-demo.sh {{args}}
+
 # Run database migrations
 migrate:
     cd backend && cargo sqlx migrate run

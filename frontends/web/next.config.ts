@@ -9,9 +9,16 @@ const backendOrigin = (
   process.env.AGENTICS_API_BASE_URL ?? defaultBackendOrigin
 ).replace(/\/$/, "");
 
+const configuredAllowedDevOrigins =
+  process.env.AGENTICS_WEB_ALLOWED_DEV_ORIGINS?.split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean) ?? [];
+
 const nextConfig: NextConfig = {
   reactCompiler: true,
-  allowedDevOrigins: ["127.0.0.1"],
+  allowedDevOrigins: [
+    ...new Set(["127.0.0.1", "localhost", ...configuredAllowedDevOrigins]),
+  ],
   async rewrites() {
     return [
       {
