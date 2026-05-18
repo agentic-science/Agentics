@@ -83,6 +83,7 @@ export default async function HomePage() {
   }
 
   const stats = await loadHomeStats(challenges);
+  const shouldFadeChallengePreview = challenges.items.length > 9;
 
   return (
     <div className="flex flex-col gap-16">
@@ -164,7 +165,7 @@ export default async function HomePage() {
         ) : (
           <div
             className={
-              challenges.has_more
+              shouldFadeChallengePreview
                 ? "home-challenge-preview home-challenge-preview-fade"
                 : "home-challenge-preview"
             }

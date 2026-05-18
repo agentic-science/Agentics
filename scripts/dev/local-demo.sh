@@ -23,8 +23,9 @@ Usage:
   scripts/dev/local-demo.sh status
   scripts/dev/local-demo.sh logs
 
-The demo profile starts local Postgres, runs migrations, seeds fake completed
-results, and launches the API plus Next.js frontend for visual inspection.
+The demo profile starts local Postgres, runs migrations, seeds a 12-challenge
+catalog plus fake completed results, and launches the API plus Next.js frontend
+for visual inspection.
 It does not start the worker because results are seeded directly.
 
 Demo defaults intentionally differ from foreground development:
@@ -363,7 +364,7 @@ reset_demo_database() {
 
 seed_demo_results() {
   write_demo_artifacts
-  log "seeding fake public results"
+  log "seeding fake challenge catalog and public results"
   psql_demo <<'SQL'
 DO $$
 BEGIN
@@ -374,6 +375,69 @@ BEGIN
     RAISE EXCEPTION 'grid-routing challenge was not seeded; start the API before seeding demo results';
   END IF;
 END $$;
+
+DELETE FROM challenges
+WHERE name LIKE 'demo-ui-%';
+
+UPDATE challenges
+SET created_at = NOW(), updated_at = NOW()
+WHERE name = 'sample-sum';
+
+UPDATE challenges
+SET created_at = NOW() - INTERVAL '1 second', updated_at = NOW()
+WHERE name = 'grid-routing';
+
+WITH source AS (
+  SELECT *
+  FROM challenges
+  WHERE name = 'sample-sum'
+),
+fake(name, title, summary, ordinal) AS (
+  VALUES
+    ('demo-ui-alpha', 'Orbital Protein Folding', 'Predict compact protein conformations under synthetic orbital constraints.', 1),
+    ('demo-ui-beta', 'Catalyst Search', 'Find reaction pathways that maximize yield while minimizing unsafe intermediates.', 2),
+    ('demo-ui-gamma', 'Cellular Maze', 'Route signaling molecules through a noisy cellular grid without crossing blocked regions.', 3),
+    ('demo-ui-delta', 'Climate Patch', 'Select localized interventions that reduce simulated heat stress under budget limits.', 4),
+    ('demo-ui-epsilon', 'Lab Scheduler', 'Optimize robotic wet-lab batches while preserving reagent and timing constraints.', 5),
+    ('demo-ui-zeta', 'Spectra Denoising', 'Recover clean spectral peaks from corrupted instrument traces.', 6),
+    ('demo-ui-eta', 'Genome Primer', 'Design primer sets that cover target regions while avoiding off-target matches.', 7),
+    ('demo-ui-theta', 'Graph Molecules', 'Generate candidate molecules that satisfy graph constraints and scoring rules.', 8),
+    ('demo-ui-iota', 'Signal Forecast', 'Forecast sparse experimental signals with uncertainty-aware ranking.', 9),
+    ('demo-ui-kappa', 'Microscopy Segment', 'Segment cell boundaries from noisy microscopy tiles with hidden labels.', 10)
+)
+INSERT INTO challenges (
+  name, title, summary, bundle_path, statement_path, spec_json,
+  starts_at, closes_at, eligibility_policy_json, validation_submission_limit,
+  official_submission_limit, leaderboard_visibility, score_distribution_visibility,
+  result_detail_visibility, solution_publication_policy, status, created_at, updated_at
+)
+SELECT
+  fake.name,
+  fake.title,
+  fake.summary,
+  source.bundle_path,
+  source.statement_path,
+  jsonb_set(
+    jsonb_set(
+      jsonb_set(source.spec_json, '{challenge_name}', to_jsonb(fake.name)),
+      '{challenge_title}', to_jsonb(fake.title)
+    ),
+    '{challenge_summary}', to_jsonb(fake.summary)
+  ),
+  source.starts_at,
+  source.closes_at,
+  source.eligibility_policy_json,
+  source.validation_submission_limit,
+  source.official_submission_limit,
+  source.leaderboard_visibility,
+  source.score_distribution_visibility,
+  source.result_detail_visibility,
+  source.solution_publication_policy,
+  'active',
+  NOW() - ((fake.ordinal + 2) || ' seconds')::interval,
+  NOW()
+FROM fake
+CROSS JOIN source;
 
 DELETE FROM leaderboard_entries
 WHERE agent_id IN (
