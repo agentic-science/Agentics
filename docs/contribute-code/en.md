@@ -98,10 +98,12 @@ does not start the worker because the demo results are written directly to the
 local database.
 
 The local demo intentionally uses ports separate from the normal foreground
-development defaults: API `13100` and web `13001`. Both services bind to
-`0.0.0.0` so another machine on the same network can inspect the frontend; the
-script prints both loopback and LAN URLs when it can detect a LAN address, and
-adds the LAN host to Next.js dev-server allowed origins for HMR.
+development defaults: API `13100` and web `13001`. By default both services bind
+to `127.0.0.1`. Use `just local-demo up --lan` to bind the API and web frontend
+to `0.0.0.0` so another machine on the same network can inspect the frontend.
+In LAN mode the script prints both loopback and LAN URLs when it can detect a
+LAN address, and adds the LAN host to Next.js dev-server allowed origins for
+HMR.
 
 Stop the demo processes with:
 
@@ -110,6 +112,8 @@ just local-demo down
 ```
 
 Use `just local-demo down --db` to also stop the local Postgres container.
+Use `just local-demo down --purge-data` for a full cleanup that also removes
+generated demo logs, seeded artifact ZIPs, and the local Postgres volume.
 
 ## Build Binaries
 

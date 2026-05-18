@@ -18,9 +18,11 @@ DGX hosted profile.
 
 The `just local-demo` frontend-inspection harness intentionally uses separate
 demo defaults so it can run alongside normal foreground development: API
-`13100`, web `13001`, and listen host `0.0.0.0` for both services. Override them
-with `AGENTICS_DEMO_API_HOST`, `AGENTICS_DEMO_WEB_HOST`,
-`AGENTICS_DEMO_API_PORT`, and `AGENTICS_DEMO_WEB_PORT`. The demo also sets
+`13100`, web `13001`, and listen host `127.0.0.1` for both services. Run
+`just local-demo up --lan` to bind both services to `0.0.0.0` for same-network
+inspection. Override defaults with `AGENTICS_DEMO_API_HOST`,
+`AGENTICS_DEMO_WEB_HOST`, `AGENTICS_DEMO_API_PORT`, and
+`AGENTICS_DEMO_WEB_PORT`. In LAN mode, the demo also sets
 `AGENTICS_WEB_ALLOWED_DEV_ORIGINS` for Next.js HMR when a LAN host is detected.
 
 ## DGX Paths

@@ -9,16 +9,16 @@ PID_DIR="${RUNTIME_ROOT}/pids"
 LOG_DIR="${RUNTIME_ROOT}/logs"
 DEMO_ADMIN_PASSWORD_FILE="${RUNTIME_ROOT}/admin-password"
 COMPOSE_FILE="${REPO_ROOT}/docker/platform-db/docker-compose.yml"
-DEFAULT_DEMO_API_HOST="0.0.0.0"
-DEFAULT_DEMO_WEB_HOST="0.0.0.0"
+DEFAULT_DEMO_API_HOST="127.0.0.1"
+DEFAULT_DEMO_WEB_HOST="127.0.0.1"
 DEFAULT_DEMO_API_PORT="13100"
 DEFAULT_DEMO_WEB_PORT="13001"
 
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/dev/local-demo.sh up
-  scripts/dev/local-demo.sh down [--db]
+  scripts/dev/local-demo.sh up [--lan]
+  scripts/dev/local-demo.sh down [--db] [--purge-data]
   scripts/dev/local-demo.sh seed
   scripts/dev/local-demo.sh status
   scripts/dev/local-demo.sh logs
@@ -28,10 +28,16 @@ results, and launches the API plus Next.js frontend for visual inspection.
 It does not start the worker because results are seeded directly.
 
 Demo defaults intentionally differ from foreground development:
-  AGENTICS_DEMO_API_HOST=0.0.0.0
-  AGENTICS_DEMO_WEB_HOST=0.0.0.0
+  AGENTICS_DEMO_API_HOST=127.0.0.1
+  AGENTICS_DEMO_WEB_HOST=127.0.0.1
   AGENTICS_DEMO_API_PORT=13100
   AGENTICS_DEMO_WEB_PORT=13001
+
+Use `up --lan` to bind the API and web frontend to `0.0.0.0` for inspection
+from another machine on the same network.
+
+Use `down --purge-data` to remove generated demo logs, PID files, seeded
+artifacts, and the local Postgres volume.
 EOF
 }
 
@@ -86,7 +92,7 @@ configure_demo_admin_password() {
 demo_cors_allowed_origins() {
   local origins="http://127.0.0.1:${AGENTICS_WEB_PORT},http://localhost:${AGENTICS_WEB_PORT}"
   local lan_host="${AGENTICS_DEMO_PUBLIC_HOST:-}"
-  if [ -n "$lan_host" ] && [ "$lan_host" != "127.0.0.1" ] && [ "$lan_host" != "localhost" ]; then
+  if ! host_is_loopback "$AGENTICS_WEB_HOST" && [ -n "$lan_host" ] && [ "$lan_host" != "127.0.0.1" ] && [ "$lan_host" != "localhost" ]; then
     origins="${origins},http://${lan_host}:${AGENTICS_WEB_PORT}"
   fi
   printf '%s\n' "$origins"
@@ -95,20 +101,21 @@ demo_cors_allowed_origins() {
 demo_allowed_dev_origins() {
   local origins="127.0.0.1,localhost"
   local lan_host="${AGENTICS_DEMO_PUBLIC_HOST:-}"
-  if [ -n "$lan_host" ] && [ "$lan_host" != "127.0.0.1" ] && [ "$lan_host" != "localhost" ]; then
+  if ! host_is_loopback "$AGENTICS_WEB_HOST" && [ -n "$lan_host" ] && [ "$lan_host" != "127.0.0.1" ] && [ "$lan_host" != "localhost" ]; then
     origins="${origins},${lan_host}"
   fi
   printf '%s\n' "$origins"
 }
 
 demo_network_web_url() {
-  if [ -n "${AGENTICS_DEMO_PUBLIC_HOST:-}" ]; then
+  if ! host_is_loopback "$AGENTICS_WEB_HOST" && [ -n "${AGENTICS_DEMO_PUBLIC_HOST:-}" ]; then
     printf 'http://%s:%s\n' "$AGENTICS_DEMO_PUBLIC_HOST" "$AGENTICS_WEB_PORT"
   fi
 }
 
-api_host_is_loopback() {
-  case "$AGENTICS_API_HOST" in
+host_is_loopback() {
+  local host="$1"
+  case "$host" in
     localhost|127.*|::1) return 0 ;;
     *) return 1 ;;
   esac
@@ -150,7 +157,7 @@ load_env() {
   export AGENTICS_WEB_ALLOWED_DEV_ORIGINS="${AGENTICS_DEMO_WEB_ALLOWED_DEV_ORIGINS:-${AGENTICS_WEB_ALLOWED_DEV_ORIGINS:-$(demo_allowed_dev_origins)}}"
   export AGENTICS_STORAGE_ROOT="${AGENTICS_STORAGE_ROOT:-storage}"
   export AGENTICS_CHALLENGES_ROOT="${AGENTICS_CHALLENGES_ROOT:-examples/challenges}"
-  if ! api_host_is_loopback; then
+  if ! host_is_loopback "$AGENTICS_API_HOST"; then
     export AGENTICS_WEB_SESSION_COOKIE_SECURE="${AGENTICS_DEMO_WEB_SESSION_COOKIE_SECURE:-true}"
   fi
   configure_demo_admin_password
@@ -165,6 +172,32 @@ storage_root_abs() {
     /*) printf '%s\n' "$AGENTICS_STORAGE_ROOT" ;;
     *) printf '%s/%s\n' "$REPO_ROOT" "$AGENTICS_STORAGE_ROOT" ;;
   esac
+}
+
+safe_remove_demo_tree() {
+  local label="$1"
+  local path="$2"
+  case "$path" in
+    ""|"/"|"$REPO_ROOT")
+      printf '[agentics-demo] refusing to remove unsafe %s path: %s\n' "$label" "$path" >&2
+      exit 1
+      ;;
+    "$REPO_ROOT/.agentics-demo"|"$REPO_ROOT/.agentics-demo/"*|"$REPO_ROOT/storage"|"$REPO_ROOT/storage/"*)
+      if [ -e "$path" ]; then
+        log "removing ${label}: ${path}"
+        rm -rf "$path"
+      fi
+      ;;
+    *)
+      printf '[agentics-demo] refusing to remove %s outside demo-owned paths: %s\n' "$label" "$path" >&2
+      printf '[agentics-demo] remove it manually if this custom path is intentionally disposable.\n' >&2
+      ;;
+  esac
+}
+
+purge_demo_files() {
+  safe_remove_demo_tree "runtime root" "$RUNTIME_ROOT"
+  safe_remove_demo_tree "storage root" "$(storage_root_abs)"
 }
 
 wait_for_db() {
@@ -555,6 +588,18 @@ web_running() {
 }
 
 up() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --lan)
+        export AGENTICS_DEMO_API_HOST="0.0.0.0"
+        export AGENTICS_DEMO_WEB_HOST="0.0.0.0"
+        ;;
+      -h|--help) usage; exit 0 ;;
+      *) printf '[agentics-demo] unknown up argument: %s\n' "$1" >&2; usage >&2; exit 2 ;;
+    esac
+    shift
+  done
+
   load_env
   mkdir -p "$RUNTIME_ROOT" "$PID_DIR" "$LOG_DIR"
   install_dependencies
@@ -601,9 +646,11 @@ EOF
 down() {
   load_env
   local stop_db=0
+  local purge_data=0
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --db) stop_db=1 ;;
+      --purge-data) purge_data=1; stop_db=1 ;;
       -h|--help) usage; exit 0 ;;
       *) printf '[agentics-demo] unknown down argument: %s\n' "$1" >&2; usage >&2; exit 2 ;;
     esac
@@ -613,7 +660,14 @@ down() {
   stop_process api
   if [ "$stop_db" -eq 1 ]; then
     log "stopping Postgres"
-    compose down
+    if [ "$purge_data" -eq 1 ]; then
+      compose down -v
+    else
+      compose down
+    fi
+  fi
+  if [ "$purge_data" -eq 1 ]; then
+    purge_demo_files
   fi
 }
 
