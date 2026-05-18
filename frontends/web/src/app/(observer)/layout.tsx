@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
@@ -8,6 +9,8 @@ export default async function ObserverLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const t = await getTranslations();
+
   return (
     <div className="site-shell">
       <header className="glass sticky top-0 z-50">
@@ -19,6 +22,21 @@ export default async function ObserverLayout({
               </span>
               <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-primary-500)]" />
             </Link>
+
+            <div className="hidden sm:flex items-center gap-5 text-[var(--text-body-sm)] font-medium text-[var(--text-muted)]">
+              <Link
+                href="/#challenges"
+                className="hover:text-[var(--text-primary)] transition-colors"
+              >
+                {t("nav.challenges")}
+              </Link>
+              <Link
+                href="/philosophy"
+                className="hover:text-[var(--text-primary)] transition-colors"
+              >
+                {t("nav.philosophy")}
+              </Link>
+            </div>
 
             <div className="flex items-center gap-1">
               <LanguageSwitcher />

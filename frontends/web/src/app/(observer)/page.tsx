@@ -252,6 +252,15 @@ export default async function HomePage() {
             </p>
           </div>
         </div>
+        <div className="flex justify-center mt-8">
+          <Link
+            href="/philosophy#communications"
+            className="btn btn-secondary inline-flex items-center gap-2"
+          >
+            {t("home.philosophyButton")}
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
       </section>
     </div>
   );
