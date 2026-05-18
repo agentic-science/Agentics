@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agentics Logo Preview</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg-base: #f8fafc;
+        --bg-accent-a: rgba(217, 119, 6, 0.08);
+        --bg-accent-b: rgba(15, 118, 110, 0.07);
+        --surface: #ffffff;
+        --surface-muted: #f1f5f9;
+        --sample-strong: #e2e8f0;
+        --border: rgba(15, 23, 42, 0.1);
+        --text: #0f172a;
+        --muted: #64748b;
+        --shadow: rgba(15, 23, 42, 0.08);
+      }
+
+      body[data-mode="dark"] {
+        color-scheme: dark;
+        --bg-base: #020617;
+        --bg-accent-a: rgba(245, 158, 11, 0.08);
+        --bg-accent-b: rgba(45, 212, 191, 0.07);
+        --surface: rgba(255, 255, 255, 0.04);
+        --surface-muted: rgba(255, 255, 255, 0.07);
+        --sample-strong: #111827;
+        --border: rgba(255, 255, 255, 0.1);
+        --text: #f8fafc;
+        --muted: #94a3b8;
+        --shadow: rgba(0, 0, 0, 0.24);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        color: var(--text);
+        background:
+          radial-gradient(circle at 76% 18%, var(--bg-accent-a), transparent 26%),
+          radial-gradient(circle at 18% 74%, var(--bg-accent-b), transparent 30%),
+          var(--bg-base);
+        font-family: system-ui, sans-serif;
+        transition:
+          background 180ms ease,
+          color 180ms ease;
+      }
+
+      .mode-toggle {
+        position: fixed;
+        top: 24px;
+        right: 24px;
+        z-index: 1;
+        display: inline-flex;
+        gap: 4px;
+        padding: 4px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--surface) 92%, transparent);
+        box-shadow: 0 12px 36px var(--shadow);
+      }
+
+      .mode-toggle button {
+        min-width: 74px;
+        border: 0;
+        border-radius: 999px;
+        padding: 8px 14px;
+        color: var(--muted);
+        background: transparent;
+        font: inherit;
+        font-size: 0.875rem;
+        font-weight: 650;
+        cursor: pointer;
+      }
+
+      .mode-toggle button[aria-pressed="true"] {
+        color: var(--text);
+        background: var(--surface-muted);
+      }
+
+      main {
+        width: min(1120px, calc(100vw - 40px));
+        min-height: 100vh;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 320px;
+        gap: 40px;
+        align-items: center;
+        padding: 48px 0;
+      }
+
+      .hero {
+        display: grid;
+        place-items: center;
+        min-height: min(72vw, 720px);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        background: color-mix(in srgb, var(--surface) 82%, transparent);
+        box-shadow: 0 24px 80px var(--shadow);
+        transition:
+          background 180ms ease,
+          border-color 180ms ease,
+          box-shadow 180ms ease;
+      }
+
+      .hero img {
+        width: min(76%, 620px);
+        height: auto;
+      }
+
+      aside {
+        display: grid;
+        gap: 20px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(2rem, 5vw, 4rem);
+        line-height: 1;
+        letter-spacing: 0;
+      }
+
+      p {
+        margin: 12px 0 0;
+        color: var(--muted);
+        font-size: 1rem;
+        line-height: 1.6;
+      }
+
+      .samples {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+      }
+
+      .sample {
+        display: grid;
+        place-items: center;
+        aspect-ratio: 1;
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        background: var(--surface);
+      }
+
+      .sample:nth-child(2) {
+        background: var(--surface-muted);
+      }
+
+      .sample:nth-child(3) {
+        background: var(--sample-strong);
+      }
+
+      .sample img {
+        width: 68%;
+        height: 68%;
+      }
+
+      .wordmark-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 18px;
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        background: var(--surface);
+      }
+
+      .wordmark-row img {
+        width: 52px;
+        height: 52px;
+      }
+
+      .wordmark {
+        font-size: 1.35rem;
+        font-weight: 700;
+        letter-spacing: 0;
+      }
+
+      @media (max-width: 860px) {
+        .mode-toggle {
+          top: 14px;
+          right: 14px;
+        }
+
+        main {
+          grid-template-columns: 1fr;
+          width: min(720px, calc(100vw - 32px));
+          gap: 28px;
+          padding: 32px 0;
+        }
+
+        .hero {
+          min-height: 58vh;
+          border-radius: 18px;
+        }
+      }
+    </style>
+  </head>
+  <body data-mode="light">
+    <div class="mode-toggle" aria-label="Logo preview mode">
+      <button type="button" data-mode-button="light" aria-pressed="true">Light</button>
+      <button type="button" data-mode-button="dark" aria-pressed="false">Dark</button>
+    </div>
+
+    <main>
+      <section class="hero" aria-label="Large logo preview">
+        <img data-logo src="./logo-lattice-light.svg" alt="Agentics frontier lattice logo" />
+      </section>
+
+      <aside>
+        <div>
+          <h1>Agentics</h1>
+          <p data-copy>Light-mode logo preview on bright product surfaces.</p>
+        </div>
+
+        <div class="wordmark-row">
+          <img data-logo src="./logo-lattice-light.svg" alt="" />
+          <div class="wordmark">Agentics</div>
+        </div>
+
+        <div class="samples" aria-label="Small logo samples">
+          <div class="sample">
+            <img data-logo src="./logo-lattice-light.svg" alt="Logo sample one" />
+          </div>
+          <div class="sample">
+            <img data-logo src="./logo-lattice-light.svg" alt="Logo sample two" />
+          </div>
+          <div class="sample">
+            <img data-logo src="./logo-lattice-light.svg" alt="Logo sample three" />
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <script>
+      const logos = {
+        light: "./logo-lattice-light.svg",
+        dark: "./logo-lattice.svg",
+      };
+
+      const copy = {
+        light: "Light-mode logo preview on bright product surfaces.",
+        dark: "Dark-mode logo preview on deep observatory surfaces.",
+      };
+
+      const buttons = Array.from(document.querySelectorAll("[data-mode-button]"));
+      const logoImages = Array.from(document.querySelectorAll("[data-logo]"));
+      const copyNode = document.querySelector("[data-copy]");
+
+      function setMode(mode) {
+        document.body.dataset.mode = mode;
+        document.documentElement.style.colorScheme = mode;
+
+        for (const button of buttons) {
+          button.setAttribute("aria-pressed", String(button.dataset.modeButton === mode));
+        }
+
+        for (const image of logoImages) {
+          image.src = logos[mode];
+        }
+
+        copyNode.textContent = copy[mode];
+      }
+
+      for (const button of buttons) {
+        button.addEventListener("click", () => setMode(button.dataset.modeButton));
+      }
+    </script>
+  </body>
+</html>

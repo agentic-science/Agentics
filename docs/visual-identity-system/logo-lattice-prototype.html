@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agentics Frontier Lattice Logo Prototype</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg-base: #020617;
+        --bg-end: #0a0f1c;
+        --node: #f8fafc;
+        --node-muted: #94a3b8;
+        --link: #2dd4bf;
+        --frontier: #f59e0b;
+        --frontier-hot: #fbbf24;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(circle at 70% 25%, rgba(245, 158, 11, 0.08), transparent 28%),
+          radial-gradient(circle at 24% 70%, rgba(45, 212, 191, 0.07), transparent 28%),
+          linear-gradient(145deg, var(--bg-base), var(--bg-end));
+        font-family: system-ui, sans-serif;
+      }
+
+      .logo-stage {
+        width: min(82vmin, 720px);
+        aspect-ratio: 1;
+        display: grid;
+        place-items: center;
+      }
+
+      svg {
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+      }
+
+      .ghost-grid {
+        stroke: rgba(148, 163, 184, 0.09);
+        stroke-width: 1;
+      }
+
+      .link {
+        stroke: var(--link);
+        stroke-width: 8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        filter: drop-shadow(0 0 10px rgba(45, 212, 191, 0.22));
+      }
+
+      .link.secondary {
+        stroke-width: 5;
+        opacity: 0.72;
+      }
+
+      .node {
+        fill: var(--node);
+        filter: drop-shadow(0 0 6px rgba(248, 250, 252, 0.28));
+      }
+
+      .node-muted {
+        fill: var(--node-muted);
+        opacity: 0.45;
+      }
+
+      .frontier-glow {
+        fill: rgba(245, 158, 11, 0.16);
+        filter: blur(5px);
+      }
+
+      .frontier-halo {
+        fill: rgba(245, 158, 11, 0.16);
+      }
+
+      .frontier-node {
+        fill: var(--frontier);
+        filter: drop-shadow(0 0 14px rgba(245, 158, 11, 0.55));
+      }
+
+      @media (prefers-reduced-motion: no-preference) {
+        .link {
+          stroke-dasharray: 380;
+          stroke-dashoffset: 380;
+          animation: draw 900ms ease-out forwards;
+        }
+
+        .link.secondary {
+          animation-delay: 120ms;
+        }
+
+        .frontier-node,
+        .frontier-glow,
+        .frontier-halo {
+          transform-origin: 400px 160px;
+          animation: discover 1100ms ease-out 360ms both;
+        }
+      }
+
+      @keyframes draw {
+        to {
+          stroke-dashoffset: 0;
+        }
+      }
+
+      @keyframes discover {
+        0% {
+          opacity: 0;
+          transform: scale(0.76);
+        }
+        70% {
+          opacity: 1;
+          transform: scale(1.06);
+        }
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="logo-stage" aria-label="Agentics frontier lattice logo prototype">
+      <svg viewBox="120 100 340 340" role="img" aria-label="Agentics frontier lattice logo prototype">
+        <desc id="desc">
+          A four by four agent timeline lattice with communication links and an amber discovery node in the top right.
+        </desc>
+
+        <g class="ghost-grid" aria-hidden="true">
+          <path d="M160 160 H400 M160 240 H400 M160 320 H400 M160 400 H400" />
+          <path d="M160 160 V400 M240 160 V400 M320 160 V400 M400 160 V400" />
+        </g>
+
+        <g aria-label="Communication links">
+          <path class="link secondary" d="M160 400 L240 400" />
+          <path class="link secondary" d="M160 160 L240 160" />
+          <path class="link" d="M240 400 L240 320" />
+          <path class="link secondary" d="M240 320 L320 320" />
+          <path class="link secondary" d="M320 240 L320 320" />
+          <path class="link" d="M320 320 L400 240" />
+          <path class="link secondary" d="M320 240 L400 160" />
+          <path class="link" d="M240 240 L320 160" />
+          <path class="link secondary" d="M160 240 L240 240" />
+        </g>
+
+        <g aria-label="Agent timeline points">
+          <circle class="node-muted" cx="160" cy="160" r="9" />
+          <circle class="node" cx="240" cy="160" r="11" />
+          <circle class="node-muted" cx="320" cy="160" r="9" />
+
+          <circle class="node" cx="160" cy="240" r="11" />
+          <circle class="node" cx="240" cy="240" r="11" />
+          <circle class="node" cx="320" cy="240" r="11" />
+          <circle class="node-muted" cx="400" cy="240" r="9" />
+
+          <circle class="node-muted" cx="160" cy="320" r="9" />
+          <circle class="node" cx="240" cy="320" r="11" />
+          <circle class="node" cx="320" cy="320" r="11" />
+          <circle class="node-muted" cx="400" cy="320" r="9" />
+
+          <circle class="node" cx="160" cy="400" r="11" />
+          <circle class="node" cx="240" cy="400" r="11" />
+          <circle class="node-muted" cx="320" cy="400" r="9" />
+          <circle class="node-muted" cx="400" cy="400" r="9" />
+        </g>
+
+        <g aria-label="Discovery node">
+          <circle class="frontier-glow" cx="400" cy="160" r="54" />
+          <circle class="frontier-halo" cx="400" cy="160" r="27" />
+          <circle class="frontier-node" cx="400" cy="160" r="10" />
+        </g>
+      </svg>
+    </main>
+  </body>
+</html>
