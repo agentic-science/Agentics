@@ -633,6 +633,10 @@ pub struct ChallengeListItemDto {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeListResponse {
     pub items: Vec<ChallengeListItemDto>,
+    pub total_count: i64,
+    pub limit: i64,
+    pub offset: i64,
+    pub has_more: bool,
 }
 
 /// Public challenge detail response with spec and Markdown statement.

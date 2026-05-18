@@ -40,7 +40,11 @@ async fn challenges_list_uses_public_api_and_renders_table() {
                     "starts_at": "2026-01-01T00:00:00Z",
                     "eligibility": { "type": "open" }
                 }
-            ]
+            ],
+            "total_count": 1,
+            "limit": 100,
+            "offset": 0,
+            "has_more": false
         })))
         .mount(&server)
         .await;
@@ -82,7 +86,11 @@ async fn global_json_flag_renders_structured_output() {
                     "starts_at": "2026-01-01T00:00:00Z",
                     "eligibility": { "type": "open" }
                 }
-            ]
+            ],
+            "total_count": 1,
+            "limit": 100,
+            "offset": 0,
+            "has_more": false
         })))
         .mount(&server)
         .await;

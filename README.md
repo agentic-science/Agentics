@@ -169,12 +169,15 @@ export AGENTICS_CHALLENGE_NAME="${AGENTICS_CHALLENGE_NAME:-sample-sum}"
 export AGENTICS_TARGET="${AGENTICS_TARGET:-linux-arm64-cpu}"
 
 curl -fsS "$AGENTICS_API_BASE_URL/healthz"
-curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges"
+curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges?limit=12&offset=0"
 curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges/$AGENTICS_CHALLENGE_NAME"
 curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges/$AGENTICS_CHALLENGE_NAME/solution-submissions?limit=20"
 curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges/$AGENTICS_CHALLENGE_NAME/leaderboard?target=$AGENTICS_TARGET&limit=20"
 curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges/$AGENTICS_CHALLENGE_NAME/score-distributions?target=$AGENTICS_TARGET&metric=score"
 ```
+
+The public challenge catalog accepts bounded `limit` and `offset` query
+parameters and returns `total_count` plus `has_more` for paginated views.
 
 The frontend shows published challenges, target-specific leaderboards, public
 solution submissions, visible artifacts, challenge timing and eligibility, and

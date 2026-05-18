@@ -42,6 +42,10 @@ async fn register_agent_and_list_challenges(pool: sqlx::PgPool) {
     let body: serde_json::Value = response.json().await.expect("failed to parse response");
     let items = body["items"].as_array().expect("items should be an array");
     assert!(items.is_empty());
+    assert_eq!(body["total_count"], 0);
+    assert_eq!(body["limit"], 100);
+    assert_eq!(body["offset"], 0);
+    assert_eq!(body["has_more"], false);
 
     // The same route must reject unauthenticated access.
     let response = reqwest::Client::new()
@@ -51,6 +55,61 @@ async fn register_agent_and_list_challenges(pool: sqlx::PgPool) {
         .expect("failed to execute request");
 
     assert_eq!(response.status(), 401);
+}
+
+/// Verifies that the public challenge catalog supports bounded offset pagination.
+#[sqlx::test(migrations = "../migrations")]
+async fn public_challenge_catalog_supports_pagination(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = test_config(storage.path(), &examples_challenges_root());
+    let app = spawn_app_with_config(pool, config).await;
+    let client = reqwest::Client::new();
+
+    let first_page: serde_json::Value = client
+        .get(api_url(&app, "/api/public/challenges?limit=1&offset=0"))
+        .send()
+        .await
+        .expect("failed to list first page")
+        .error_for_status()
+        .expect("first page should succeed")
+        .json()
+        .await
+        .expect("first page JSON should decode");
+    assert_eq!(first_page["items"].as_array().expect("items").len(), 1);
+    assert_eq!(first_page["total_count"], 2);
+    assert_eq!(first_page["limit"], 1);
+    assert_eq!(first_page["offset"], 0);
+    assert_eq!(first_page["has_more"], true);
+
+    let second_page: serde_json::Value = client
+        .get(api_url(&app, "/api/public/challenges?limit=1&offset=1"))
+        .send()
+        .await
+        .expect("failed to list second page")
+        .error_for_status()
+        .expect("second page should succeed")
+        .json()
+        .await
+        .expect("second page JSON should decode");
+    assert_eq!(second_page["items"].as_array().expect("items").len(), 1);
+    assert_eq!(second_page["total_count"], 2);
+    assert_eq!(second_page["limit"], 1);
+    assert_eq!(second_page["offset"], 1);
+    assert_eq!(second_page["has_more"], false);
+
+    let invalid_limit = client
+        .get(api_url(&app, "/api/public/challenges?limit=101"))
+        .send()
+        .await
+        .expect("failed to request invalid limit");
+    assert_eq!(invalid_limit.status(), reqwest::StatusCode::BAD_REQUEST);
+
+    let invalid_offset = client
+        .get(api_url(&app, "/api/public/challenges?offset=-1"))
+        .send()
+        .await
+        .expect("failed to request invalid offset");
+    assert_eq!(invalid_offset.status(), reqwest::StatusCode::BAD_REQUEST);
 }
 
 /// Verifies that registration respects active agent quota.

@@ -56,6 +56,7 @@ use crate::presenters;
 use crate::state::AppState;
 
 const SUBMISSION_QUOTA_WINDOW_SECONDS: i64 = 24 * 60 * 60;
+const DEFAULT_PUBLIC_CHALLENGE_LIST_LIMIT: i64 = 100;
 const DEFAULT_PUBLIC_SUBMISSION_LIST_LIMIT: i64 = 20;
 const DEFAULT_PUBLIC_LEADERBOARD_LIMIT: i64 = 50;
 const MAX_PUBLIC_LIST_LIMIT: i64 = 100;
@@ -155,10 +156,16 @@ pub async fn register_agent(
 pub async fn list_agent_challenges(
     _agent: AgentAuth,
     State(state): State<AppState>,
+    Query(query): Query<ChallengeCatalogQuery>,
 ) -> Result<Json<shared::models::challenge::ChallengeListResponse>> {
-    let challenges = db::list_published_challenges(&state.db).await?;
+    let page = query.page()?;
+    let challenges = db::list_published_challenges(&state.db, page.limit, page.offset).await?;
     Ok(Json(shared::models::challenge::ChallengeListResponse {
-        items: challenges,
+        items: challenges.items,
+        total_count: challenges.total_count,
+        limit: challenges.limit,
+        offset: challenges.offset,
+        has_more: challenges.has_more,
     }))
 }
 
@@ -174,10 +181,16 @@ pub async fn get_agent_challenge(
 /// List published challenges on the public API.
 pub async fn list_challenges(
     State(state): State<AppState>,
+    Query(query): Query<ChallengeCatalogQuery>,
 ) -> Result<Json<shared::models::challenge::ChallengeListResponse>> {
-    let challenges = db::list_published_challenges(&state.db).await?;
+    let page = query.page()?;
+    let challenges = db::list_published_challenges(&state.db, page.limit, page.offset).await?;
     Ok(Json(shared::models::challenge::ChallengeListResponse {
-        items: challenges,
+        items: challenges.items,
+        total_count: challenges.total_count,
+        limit: challenges.limit,
+        offset: challenges.offset,
+        has_more: challenges.has_more,
     }))
 }
 
@@ -439,6 +452,34 @@ fn challenge_lifetime_limit(
     match eval_type {
         ScoringMode::Validation => admission.validation_submission_limit,
         ScoringMode::Official => admission.official_submission_limit,
+    }
+}
+
+/// Bounded pagination parameters for a public collection endpoint.
+#[derive(Debug, Clone, Copy)]
+struct PublicPagination {
+    limit: i64,
+    offset: i64,
+}
+
+/// Query parameters accepted by the public challenge catalog endpoint.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ChallengeCatalogQuery {
+    limit: Option<i64>,
+    offset: Option<i64>,
+}
+
+impl ChallengeCatalogQuery {
+    /// Returns validated challenge-list pagination parameters.
+    fn page(&self) -> Result<PublicPagination> {
+        Ok(PublicPagination {
+            limit: bounded_public_limit(
+                self.limit,
+                DEFAULT_PUBLIC_CHALLENGE_LIST_LIMIT,
+                "challenge list",
+            )?,
+            offset: bounded_public_offset(self.offset, "challenge list")?,
+        })
     }
 }
 
@@ -740,6 +781,17 @@ fn bounded_public_limit(requested: Option<i64>, default_limit: i64, label: &str)
         )));
     }
     Ok(limit)
+}
+
+/// Validates a public list offset without allowing negative pagination cursors.
+fn bounded_public_offset(requested: Option<i64>, label: &str) -> Result<i64> {
+    let offset = requested.unwrap_or(0);
+    if offset < 0 {
+        return Err(AppError::BadRequest(format!(
+            "{label} offset must be greater than or equal to 0"
+        )));
+    }
+    Ok(offset)
 }
 
 /// Query parameters accepted by the public score-distribution endpoint.

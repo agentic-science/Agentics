@@ -35,6 +35,10 @@ fn renders_challenge_list_table() {
                     eligibility_type: ChallengeEligibilityType::Open,
                 },
             }],
+            total_count: 1,
+            limit: 100,
+            offset: 0,
+            has_more: false,
         },
         OutputFormat::Table,
     )

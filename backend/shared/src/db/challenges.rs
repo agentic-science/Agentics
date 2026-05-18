@@ -25,6 +25,16 @@ use crate::models::request::{
 };
 use crate::storage::StorageKey;
 
+/// Published challenge list plus the unbounded count for pagination previews.
+#[derive(Debug, Clone)]
+pub struct PublishedChallengeList {
+    pub items: Vec<ChallengeListItemDto>,
+    pub total_count: i64,
+    pub limit: i64,
+    pub offset: i64,
+    pub has_more: bool,
+}
+
 /// Published challenge joined with challenge metadata.
 #[derive(Debug, Clone)]
 pub struct ChallengeRecord {
@@ -690,20 +700,39 @@ pub async fn list_creator_challenge_participants(
 }
 
 /// List active challenges with their published benchmark contract.
-pub async fn list_published_challenges(pool: &PgPool) -> Result<Vec<ChallengeListItemDto>> {
+pub async fn list_published_challenges(
+    pool: &PgPool,
+    limit: i64,
+    offset: i64,
+) -> Result<PublishedChallengeList> {
+    let total_count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)
+        FROM challenges
+        WHERE status = 'active'
+          AND spec_json IS NOT NULL
+        "#,
+    )
+    .fetch_one(pool)
+    .await?;
+
     let rows = sqlx::query(
         r#"
         SELECT name, title, summary, spec_json
         FROM challenges
         WHERE status = 'active'
           AND spec_json IS NOT NULL
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, name ASC
+        LIMIT $1 OFFSET $2
         "#,
     )
+    .bind(limit)
+    .bind(offset)
     .fetch_all(pool)
     .await?;
 
-    rows.into_iter()
+    let items = rows
+        .into_iter()
         .map(|r| {
             let spec: ChallengeBundleSpec = serde_json::from_value(r.try_get("spec_json")?)
                 .map_err(|e| AppError::Internal(e.to_string()))?;
@@ -716,7 +745,19 @@ pub async fn list_published_challenges(pool: &PgPool) -> Result<Vec<ChallengeLis
                 eligibility: spec.eligibility,
             })
         })
-        .collect::<Result<Vec<_>>>()
+        .collect::<Result<Vec<_>>>()?;
+    let returned_count = i64::try_from(items.len())
+        .map_err(|_| AppError::Internal("challenge list length overflow".to_string()))?;
+    let consumed = offset
+        .checked_add(returned_count)
+        .ok_or_else(|| AppError::Internal("challenge list offset overflow".to_string()))?;
+    Ok(PublishedChallengeList {
+        items,
+        total_count,
+        limit,
+        offset,
+        has_more: consumed < total_count,
+    })
 }
 
 /// Fetch one active challenge by name.
