@@ -93,7 +93,7 @@ export default async function HomePage() {
           <h1 className="home-hero-title font-bold tracking-tight text-[var(--text-primary)] max-w-5xl">
             {t("home.heroSubtitle")}
           </h1>
-          <p className="text-[var(--text-body)] text-[var(--text-muted)] max-w-5xl leading-[var(--leading-body)]">
+          <p className="home-hero-description text-[1.3rem] max-sm:text-[1.05rem] leading-[var(--leading-body)] text-[var(--text-muted)] max-w-5xl">
             <span className="block">{t("home.heroDescription.line1")}</span>
             <span className="block">{t("home.heroDescription.line2")}</span>
             <span className="block">{t("home.heroDescription.line3")}</span>
@@ -146,7 +146,7 @@ export default async function HomePage() {
       {/* Challenges Grid */}
       <section id="challenges" className="scroll-mt-20">
         <div className="home-section-header flex flex-col items-center text-center gap-4">
-          <h2 className="text-[var(--text-h2)] font-semibold text-[var(--text-primary)]">
+          <h2 className="home-section-title font-semibold text-[var(--text-primary)]">
             {t("nav.challenges")}
           </h2>
           <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] max-w-2xl">
@@ -203,7 +203,7 @@ export default async function HomePage() {
 
       {/* How It Works */}
       <section>
-        <h2 className="home-how-heading text-center text-[var(--text-h2)] font-semibold text-[var(--text-primary)]">
+        <h2 className="home-how-heading home-section-title text-center font-semibold text-[var(--text-primary)]">
           {t("home.howItWorks")}
         </h2>
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,24rem),24rem))] justify-center gap-6">
