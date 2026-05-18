@@ -2,6 +2,7 @@
 
 mod helpers;
 
+use std::io::Write as _;
 use std::path::Path;
 
 use helpers::{
@@ -9,6 +10,10 @@ use helpers::{
     run_worker_once, sample_sum_solution, solution_zip_base64, solution_zip_base64_with_scripts,
     spawn_app_with_config, test_config, zip_project_zip_base64,
 };
+
+const QUOTA_TEST_STORAGE_MODE_ENV: &str = "AGENTICS_TEST_RUNNER_WRITABLE_STORAGE_MODE";
+const QUOTA_TEST_PHASE_MOUNT_ROOT_ENV: &str = "AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT";
+const QUOTA_TEST_SLOT_CLASSES_ENV: &str = "AGENTICS_TEST_RUNNER_WRITABLE_SLOT_CLASSES_MB";
 
 /// Creates validation disabled challenge after validating caller inputs.
 fn create_validation_disabled_challenge(root: &Path) {
@@ -34,6 +39,53 @@ fn create_validation_disabled_challenge(root: &Path) {
         serde_json::to_string_pretty(&spec).expect("failed to serialize spec"),
     )
     .expect("failed to write copied spec");
+}
+
+/// Returns true when the local environment can run Linux quota-sensitive tests.
+fn quota_sensitive_runner_env_configured() -> bool {
+    if !cfg!(target_os = "linux") {
+        return false;
+    }
+
+    let storage_mode = std::env::var(QUOTA_TEST_STORAGE_MODE_ENV).ok();
+    let phase_mount_root = std::env::var(QUOTA_TEST_PHASE_MOUNT_ROOT_ENV).ok();
+    let slot_classes = std::env::var(QUOTA_TEST_SLOT_CLASSES_ENV).ok();
+    let missing: Vec<&str> = [
+        (storage_mode.is_none(), QUOTA_TEST_STORAGE_MODE_ENV),
+        (phase_mount_root.is_none(), QUOTA_TEST_PHASE_MOUNT_ROOT_ENV),
+        (slot_classes.is_none(), QUOTA_TEST_SLOT_CLASSES_ENV),
+    ]
+    .into_iter()
+    .filter_map(|(is_missing, name)| is_missing.then_some(name))
+    .collect();
+
+    if !missing.is_empty() {
+        print_quota_test_warning(&format!(
+            "warning: skipping Linux quota-sensitive runner test; set {}=xfs-project-quota-slots, {}=/srv/agentics-test/phase-mounts, and {}=64,256,1024,4096",
+            QUOTA_TEST_STORAGE_MODE_ENV,
+            QUOTA_TEST_PHASE_MOUNT_ROOT_ENV,
+            QUOTA_TEST_SLOT_CLASSES_ENV
+        ));
+        print_quota_test_warning(&format!(
+            "warning: missing environment variable(s): {}",
+            missing.join(", ")
+        ));
+        return false;
+    }
+
+    if storage_mode.as_deref() != Some("xfs-project-quota-slots") {
+        print_quota_test_warning(&format!(
+            "warning: skipping Linux quota-sensitive runner test; {QUOTA_TEST_STORAGE_MODE_ENV} must be xfs-project-quota-slots"
+        ));
+        return false;
+    }
+
+    true
+}
+
+/// Writes a warning directly to stderr so it is visible under the test harness.
+fn print_quota_test_warning(message: &str) {
+    let _ = writeln!(std::io::stderr().lock(), "{message}");
 }
 
 /// Verifies that worker completes official solution submission.
@@ -669,6 +721,10 @@ python main.py
 /// Verifies that worker enforces run writable disk limit.
 #[sqlx::test(migrations = "../migrations")]
 async fn worker_enforces_run_writable_disk_limit(pool: sqlx::PgPool) {
+    if !quota_sensitive_runner_env_configured() {
+        return;
+    }
+
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let config = test_config(storage.path(), &examples_challenges_root());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
@@ -770,13 +826,7 @@ python main.py
         "expected run phase failure, got: {last_error}"
     );
 
-    let bounded_slots = std::env::var("AGENTICS_TEST_RUNNER_WRITABLE_STORAGE_MODE")
-        .is_ok_and(|value| value == "xfs-project-quota-slots");
-    if bounded_slots {
-        assert!(last_error.contains("\"reason\":\"non_zero_exit\""));
-    } else {
-        assert!(last_error.contains("phase exceeded disk limit"));
-    }
+    assert!(last_error.contains("\"reason\":\"non_zero_exit\""));
 }
 
 /// Verifies that validation run is rejected when challenge disables validation.

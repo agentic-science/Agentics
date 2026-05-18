@@ -153,6 +153,20 @@ Strict profile check 会验证 Docker writable-layer quota probe、per-phase mou
 writeability、root-prepared quota slots 是否存在，以及使用 64 MiB slot class 的
 per-phase bind-mount quota exhaustion probe。
 
+在 DGX development host 上做本地验证时，使用由测试用户拥有的独立 test quota
+root：
+
+```bash
+sudo AGENTICS_DGX_TEST_CONFIRM=prepare-test-storage \
+  scripts/ops/prepare-dgx-spark-test-storage.sh
+export AGENTICS_TEST_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots
+export AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics-test/phase-mounts
+export AGENTICS_TEST_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096
+```
+
+不要为了让本地测试通过而修改 `/srv/agentics/phase-mounts` ownership；这些 slots
+属于 hosted worker service user。
+
 ## Logs
 
 当前日志输出到进程 stdout/stderr。Hosted rehearsal 应使用 supervisor 捕获每个服务的日志，例如 `systemd`、带文件日志的 `tmux`，或 container runtime。Worker evaluation logs 会写入 `AGENTICS_STORAGE_ROOT/eval-artifacts/<job-id>/runner.log`。Source extraction、build workspaces、prepared data、solution run I/O 和 scorer output 等 runner scratch trees 是 per-job temporary workspaces，不应持久化在 durable storage 中。

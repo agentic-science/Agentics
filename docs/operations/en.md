@@ -156,6 +156,20 @@ The strict profile check validates the Docker writable-layer quota probe,
 per-phase mount writeability, presence of root-prepared quota slots, and a
 per-phase bind-mount quota exhaustion probe using the 64 MiB slot class.
 
+For local verification on a DGX development host, use a separate test quota
+root owned by the test user:
+
+```bash
+sudo AGENTICS_DGX_TEST_CONFIRM=prepare-test-storage \
+  scripts/ops/prepare-dgx-spark-test-storage.sh
+export AGENTICS_TEST_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots
+export AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics-test/phase-mounts
+export AGENTICS_TEST_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096
+```
+
+Do not change `/srv/agentics/phase-mounts` ownership to make local tests pass;
+those slots belong to the hosted worker service user.
+
 ## Logs
 
 Current logging is process stdout/stderr. For hosted rehearsal, run each service under a supervisor that captures logs, for example `systemd`, `tmux` with file logging, or a container runtime. Worker evaluation logs are written under `AGENTICS_STORAGE_ROOT/eval-artifacts/<job-id>/runner.log`. Runner scratch trees for source extraction, build workspaces, prepared data, solution run I/O, and scorer output are temporary per-job workspaces and should not persist in durable storage.

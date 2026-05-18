@@ -72,6 +72,7 @@ Linux-gated operational scripts：
 | Script | Purpose |
 | --- | --- |
 | `scripts/ops/prepare-dgx-spark-storage.sh` | 创建 loopback XFS images、使用 project quotas 挂载，并准备 runner quota slots |
+| `scripts/ops/prepare-dgx-spark-test-storage.sh` | 创建单独的 `/srv/agentics-test` quota root，并归属给调用测试的用户 |
 | `scripts/ops/check-dgx-spark-profile.sh` | 检查 runtime profile、Docker quota behavior、phase mounts 和 quota-slot probes |
 
 ## Persistent Layout
@@ -206,6 +207,25 @@ sudo -u agentics env \
   AGENTICS_DGX_DOCKER_PULL_POLICY=never \
   scripts/ops/check-dgx-spark-profile.sh
 ```
+
+在 DGX host 上由开发者运行 integration tests 时，应准备一个由测试用户拥有的独立
+quota root，不复用 production runner slots：
+
+```bash
+sudo AGENTICS_DGX_TEST_CONFIRM=prepare-test-storage \
+  scripts/ops/prepare-dgx-spark-test-storage.sh
+```
+
+运行 quota-sensitive integration tests 时设置：
+
+```bash
+export AGENTICS_TEST_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots
+export AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics-test/phase-mounts
+export AGENTICS_TEST_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096
+```
+
+`/srv/agentics-test` 和 `/srv/agentics` 故意分离，这样本地测试权限不会改变 hosted
+worker slot ownership。
 
 然后运行：
 

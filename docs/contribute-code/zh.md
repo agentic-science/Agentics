@@ -126,6 +126,26 @@ scripts/ops/check-local-mvp.sh
 设置 `AGENTICS_ADMIN_PASSWORD` 和 `AGENTICS_WEB_BASE_URL` 后，会包含 admin 和
 web checks。
 
+在 Linux DGX development hosts 上，quota-sensitive runner tests 需要一个由
+测试用户拥有的 XFS quota root。使用与 production `/srv/agentics` runtime tree
+分离的 test root：
+
+```bash
+sudo AGENTICS_DGX_TEST_CONFIRM=prepare-test-storage \
+  scripts/ops/prepare-dgx-spark-test-storage.sh
+```
+
+然后用以下环境变量运行 quota-sensitive integration tests：
+
+```bash
+export AGENTICS_TEST_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots
+export AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics-test/phase-mounts
+export AGENTICS_TEST_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096
+```
+
+这些 test variables 故意指向 `/srv/agentics-test`，这样本地验证不会改变
+production runner slot ownership。
+
 ## API 和 Schema 改动
 
 被 web frontend 消费的 Rust response DTOs 应 derive `schemars::JsonSchema`。

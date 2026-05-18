@@ -45,6 +45,7 @@ gating remains the authoritative access control.
 | Agentics Docker data root | `/srv/agentics/docker-data-root` |
 | Docker data-root loop image | `/srv/agentics/loop-images/docker-data-root.xfs` |
 | Per-phase mount root | `/srv/agentics/phase-mounts` |
+| Developer test quota root | `/srv/agentics-test` |
 | Runner writable storage mode | `xfs-project-quota-slots` |
 | Runner quota slot classes | `64,256,1024,4096` MiB |
 | Probe mode | `AGENTICS_HOST_PROBE_MODE=require` |
@@ -107,6 +108,17 @@ capacity exists.
 
 8. Run the hosted CLI onboarding smoke path and record DGX-3 evidence in
    `docs/dgx-spark/en.md`.
+
+Developer-run quota-sensitive integration tests should use a separate test
+quota root rather than the hosted worker slots:
+
+```bash
+sudo AGENTICS_DGX_TEST_CONFIRM=prepare-test-storage \
+  scripts/ops/prepare-dgx-spark-test-storage.sh
+export AGENTICS_TEST_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots
+export AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics-test/phase-mounts
+export AGENTICS_TEST_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096
+```
 
 The scripts intentionally fail on non-Linux hosts and do not infer strictness
 from `CI=true`.

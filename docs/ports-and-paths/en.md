@@ -32,11 +32,18 @@ DGX hosted profile.
 | Loop image root | `/srv/agentics/loop-images` |
 | Phase mount root | `/srv/agentics/phase-mounts` |
 | Runner quota slots | `/srv/agentics/phase-mounts/<phase>/slots/<size>mb/slot-NNN` |
+| Local test quota root | `/srv/agentics-test` |
+| Local test phase mount root | `/srv/agentics-test/phase-mounts` |
 
 Default DGX quota slot classes are `64`, `256`, `1024`, and `4096` MiB, with
 four slots per class and phase. The worker leases these slots for writable
 container bind mounts and uses Docker `storage_opt.size` for container-layer
 writes.
+
+The `/srv/agentics-test` root is for developer-run quota-sensitive integration
+tests. It must be prepared separately with
+`scripts/ops/prepare-dgx-spark-test-storage.sh` and must not be used by hosted
+workers.
 
 The systemd units are Linux-only and use the release symlink paths above.
 macOS development uses foreground `cargo` and `bun` commands instead.
