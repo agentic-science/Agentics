@@ -266,13 +266,13 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 
 - **M0.2-PROTO-1: Define `zip_project` manifest schema**
   - Commit target: `protocol: add zip_project manifest schema`
-  - Scope: Define required run script, optional setup/build scripts, language/runtime metadata, solution interface, dependency policy, and protocol versioning.
-  - Test spec: Add parser tests for valid manifests, missing required fields, unsupported protocol versions, invalid paths, and unsafe script references.
+  - Scope: Define protocol metadata, optional public note, required run script, optional setup/build scripts, and protocol versioning. Runtime, interface, dependency, and execution-limit policy are not participant-controlled manifest fields.
+  - Test spec: Add parser tests for valid manifests, missing required fields, unsupported protocol versions, invalid paths, unsafe script references, old-field rejection, note length, and note control-character validation.
 
 - **M0.2-PROTO-2: Add setup/build/run phase model**
   - Commit target: `protocol: add setup build run phase model`
-  - Scope: Model separate setup, build, and run phases with independent timeout, memory, CPU, disk, network, and log limits.
-  - Test spec: Add unit tests for default phase limits, override validation, and phase-specific failure reporting.
+  - Scope: Model setup, build, and run phases from manifest-declared scripts while deriving timeout, memory, CPU, disk, and network policy from challenge-owned resource profiles. Container log capture is platform-owned runner configuration, not solution manifest data.
+  - Test spec: Add unit tests for script-to-phase resolution, profile-owned limit selection, platform log caps, and phase-specific failure reporting.
 
 - **M0.2-PROTO-4: Add scorer-owned prepare phase**
   - Commit target: `worker: add challenge prepare phase`
@@ -341,8 +341,8 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 
 - **M0.2-CLI-1: Generate manifest-based solution workspaces**
   - Commit target: `cli: generate zip_project manifests`
-  - Scope: Extend `init-solution` to create manifest-based workspaces for selected language/runtime profiles.
-  - Test spec: Add golden tests for generated workspaces in at least Python and one non-Python runtime profile.
+  - Scope: Extend `init-solution` to create manifest-based workspaces with protocol metadata, empty public note, and a default run script path. Runtime/profile and interface choices remain README scaffolding hints only.
+  - Test spec: Add golden tests for generated workspaces in at least Python and one non-Python README-hint profile.
 
 - **M0.2-CLI-2: Run local validation with benchmark images**
   - Commit target: `cli: add local benchmark image validation`
@@ -363,7 +363,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 
 - **M0.2-WEB-1: Show protocol and resource metadata**
   - Commit target: `web: show protocol and resource metadata`
-  - Scope: Display solution submission protocol version, language/runtime, resource limits, image digest, and hardware profile on challenge and solution submission pages.
+  - Scope: Display solution submission notes, target-owned resource limits, image digest, and hardware profile on challenge and solution submission pages.
   - Test spec: Add rendering tests for CPU-only and GPU-capable challenges.
 
 - **M0.2-WEB-2: Show target-specific leaderboards**
@@ -385,7 +385,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 
 - **M0.2-DOC-1: Document multi-language challenge authoring**
   - Commit target: `docs: document multi-language zip_project authoring`
-  - Scope: Add manifest examples, generated CLI workspace profiles, reference image guidance, setup/build/run contract, two-container solution execution model, scorer/solution data boundaries, internet policy, dependency metadata guidance, multi-run evaluation examples, language examples, and quota/admin capacity notes. Local benchmark-image validation remains a separate CLI milestone.
+  - Scope: Add manifest examples, generated CLI workspace hints, reference image guidance, setup/build/run contract, two-container solution execution model, scorer/solution data boundaries, internet policy, dependency guidance, multi-run evaluation examples, language examples, and quota/admin capacity notes. Local benchmark-image validation remains a separate CLI milestone.
   - Test spec: Validate documented sample ZIPs against parser fixtures and at least one local runner smoke test.
 
 - **M0.2-DOC-2: Document GPU benchmark expectations**
@@ -402,9 +402,9 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 
 | Milestone | Status | Additional note |
 | --- | --- | --- |
-| `M0.2-PROTO-1: Define zip_project manifest schema` | Implemented | Adds strict shared Rust parsing and bilingual docs for `agentics.solution.json`. |
-| `M0.2-PROTO-2: Add setup/build/run phase model` | Implemented | Adds per-phase defaults, override validation, execution plan resolution, and failure-report models. |
-| `M0.2-PROTO-3: Add dependency policy validation` | Deferred | Discarded as a standalone milestone; dependency reproducibility belongs to challenge owners and submitting agents, while Agentics records metadata and execution policy. |
+| `M0.2-PROTO-1: Define zip_project manifest schema` | Implemented | Adds strict shared Rust parsing and bilingual docs for a smaller `agentics.solution.json` containing protocol metadata, a public note, and setup/build/run script paths. |
+| `M0.2-PROTO-2: Add setup/build/run phase model` | Implemented | Resolves setup/build/run phases from script paths while deriving execution limits from challenge-owned resource profiles and platform-owned log capture settings. |
+| `M0.2-PROTO-3: Add dependency policy validation` | Deferred | Discarded as a standalone milestone; dependency reproducibility belongs to challenge owners and submitting agents and is not a participant-controlled manifest policy. |
 | `M0.2-PROTO-4: Add scorer-owned prepare phase` | Implemented | Challenge bundles can generate validation or official run manifests and source-backed inputs in a scorer-owned `/prepared` workspace before solution invocations. |
 | `M0.2-TARGET-1: Define target schema` | Implemented | Challenge bundles now declare `targets` with canonical ARM64 CPU/CUDA targets, Docker platform, accelerator, validation flag, and target-owned resource profile. CUDA targets require hardware model, GPU count, CUDA variant, and matching CUDA version metadata. AMD64 Linux targets are rejected until post-MVP deployment capacity exists. |
 | `M0.2-TARGET-2: Add target-specific evaluation and leaderboards` | Implemented | Solution submissions, jobs, evaluations, quotas, workers, API DTOs, and leaderboard rows now carry `target`; HTTP submissions validate targets before artifact decode. |
@@ -416,15 +416,15 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 | `M0.2-WORKER-4: Add GPU validation and official scheduling hooks` | Planned | Single-DGX CUDA execution uses target accelerator metadata; heterogeneous worker capability flags and GPU-specific scheduling remain planned. |
 | `M0.2-BE-1: Expose resource profiles` | Implemented | Public challenge detail responses expose strict target and resource profile metadata and reject invalid stored specs. |
 | `M0.2-BE-2: Add capacity and quota controls` | Implemented | Enforces validation and official quotas before artifact upload, exposes `/admin/capacity`, and documents admin official-run overrides. Heterogeneous GPU quota remains in the future GPU lane. |
-| `M0.2-CLI-1: Generate manifest-based solution workspaces` | Implemented | `init-solution` now generates validated manifests for `python-cpu`, `rust-cpu`, `node-cpu`, and `generic-cpu` profiles. |
+| `M0.2-CLI-1: Generate manifest-based solution workspaces` | Implemented | `init-solution` now generates smaller manifests with an empty public note and records `python-cpu`, `rust-cpu`, `node-cpu`, and `generic-cpu` as README hints only. |
 | `M0.2-CLI-2: Run local validation with benchmark images` | Implemented | `validate <challenge-name> --bundle-dir <path> --target <target>` runs local validation through the shared Docker runner path, stores local logs in the CLI cache by default, supports `--all-targets`, and preflights target-disabled validation before packaging. |
 | `M0.2-CLI-3: Select targets` | Implemented | `submit` and `validate --remote` support `--target` and `--all-targets`; CLI preflight rejects unsupported targets and target-disabled validation before packaging. |
 | `M0.2-CLI-4: Request GPU validation` | Planned | Dedicated GPU quota UX remains planned; the current CLI can select a CUDA target through `--target`. |
-| `M0.2-WEB-1: Show protocol and resource metadata` | Implemented | Observer challenge pages and frontend schemas display protocol, manifest, scorer command, targets, and resource profile metadata. |
+| `M0.2-WEB-1: Show protocol and resource metadata` | Implemented | Observer challenge pages and frontend schemas display submission notes, scorer command, targets, and resource profile metadata. |
 | `M0.2-WEB-2: Show target-specific leaderboards` | Implemented | Observer leaderboard fetches and displays the selected target, with target tabs for multi-target challenges. |
 | `M0.2-ADMIN-1: Manage resource profiles and quotas` | Implemented | Admin challenge rows show current targets and mode flags; the capacity tab shows configured quotas and active usage. Heterogeneous GPU configuration remains in the future GPU lane. |
 | `M0.2-EXAMPLE-1: Add zip_project protocol fixture challenges and submissions` | Implemented | Adds sample-sum stdio, grid-routing file-mode, and matrix-multiplication multi-invocation fixtures, manifest-based solutions, scorer tests, and worker integration coverage for timing metadata, private source-backed inputs, and run-stage no-egress behavior. |
-| `M0.2-DOC-1: Document multi-language challenge authoring` | Implemented | Documents the canonical protocol, generated CLI profiles, run manifests, resource profiles, execution isolation, dependency metadata, quota controls, admin capacity views, and local benchmark-image validation. |
+| `M0.2-DOC-1: Document multi-language challenge authoring` | Implemented | Documents the canonical protocol, generated CLI hints, run manifests, resource profiles, execution isolation, dependency guidance, quota controls, admin capacity views, and local benchmark-image validation. |
 | `M0.2-DOC-2: Document GPU benchmark expectations` | Implemented | MVP CUDA target policy documents required hardware metadata, active CUDA variants, shared leaderboard behavior under `linux-arm64-cuda`, and challenge-owner comparability responsibility. Heterogeneous GPU scheduling docs remain future work. |
 | `M0.2-DOC-3: Document target authoring` | Implemented | Adds bilingual v0.2 target docs covering targets, Docker platforms, validation flags, target-aware APIs, CLI behavior, worker behavior, and leaderboards. |
 

@@ -940,18 +940,17 @@ fn effective_phase_limits(
     profile: &ResourceProfileSpec,
     phase: &ZipProjectResolvedPhase,
 ) -> ZipProjectPhaseLimits {
-    let max_network = match phase.name {
+    let network_access = match phase.name {
         ZipProjectPhaseName::Setup => profile.setup_network_access,
         ZipProjectPhaseName::Build => profile.build_network_access,
         ZipProjectPhaseName::Run => profile.run_network_access,
     };
     ZipProjectPhaseLimits {
-        timeout_sec: phase.limits.timeout_sec.min(profile.timeout_sec),
-        memory_limit_mb: phase.limits.memory_limit_mb.min(profile.memory_limit_mb),
-        cpu_limit_millis: phase.limits.cpu_limit_millis.min(profile.cpu_limit_millis),
-        disk_limit_mb: phase.limits.disk_limit_mb.min(profile.disk_limit_mb),
-        network_access: phase.limits.network_access.clamp_to(max_network),
-        log_limit_bytes: phase.limits.log_limit_bytes,
+        timeout_sec: profile.timeout_sec,
+        memory_limit_mb: profile.memory_limit_mb,
+        cpu_limit_millis: profile.cpu_limit_millis,
+        disk_limit_mb: profile.disk_limit_mb,
+        network_access,
     }
 }
 
@@ -963,7 +962,6 @@ fn scorer_limits(profile: &ResourceProfileSpec) -> ZipProjectPhaseLimits {
         cpu_limit_millis: profile.cpu_limit_millis,
         disk_limit_mb: profile.disk_limit_mb,
         network_access: profile.scorer_network_access,
-        log_limit_bytes: 1024 * 1024,
     }
 }
 
@@ -978,7 +976,6 @@ fn prepare_limits(
         cpu_limit_millis: profile.cpu_limit_millis,
         disk_limit_mb: profile.disk_limit_mb,
         network_access: prepare.network_access,
-        log_limit_bytes: 1024 * 1024,
     }
 }
 
@@ -1412,8 +1409,15 @@ fn sanitize_name_component(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{RunnerAttempt, container_name};
+    use super::{
+        RunnerAttempt, container_name, effective_phase_limits, prepare_limits, scorer_limits,
+    };
+    use crate::models::challenge::{ChallengePrepareSpec, ResourceProfileSpec};
+    use crate::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
+    use crate::models::names::ResourceProfileName;
+    use crate::models::paths::{BundleRelativePath, ScriptPath};
     use crate::zip_project::ZipProjectNetworkAccess;
+    use crate::zip_project::{ZipProjectPhaseName, ZipProjectResolvedPhase};
 
     /// Verifies that network policy clamps to resource profile.
     #[test]
@@ -1425,6 +1429,49 @@ mod tests {
         assert_eq!(
             ZipProjectNetworkAccess::Loopback.docker_network_mode(),
             "none"
+        );
+    }
+
+    /// Verifies that solution phase limits come directly from the resource profile.
+    #[test]
+    fn solution_phase_limits_come_from_resource_profile() {
+        let profile = resource_profile();
+        let phase = ZipProjectResolvedPhase {
+            name: ZipProjectPhaseName::Run,
+            command: ScriptPath::try_new("run.sh").expect("script path"),
+        };
+
+        let limits = effective_phase_limits(&profile, &phase);
+
+        assert_eq!(limits.timeout_sec, 42);
+        assert_eq!(limits.memory_limit_mb, 2048);
+        assert_eq!(limits.cpu_limit_millis, 2500);
+        assert_eq!(limits.disk_limit_mb, 4096);
+        assert_eq!(limits.network_access, ZipProjectNetworkAccess::Loopback);
+    }
+
+    /// Verifies scorer and prepare phases use challenge-owned network policy.
+    #[test]
+    fn scorer_and_prepare_limits_use_challenge_owned_policy() {
+        let profile = resource_profile();
+        let prepare = ChallengePrepareSpec {
+            command: vec!["python".to_string(), "prepare.py".to_string()],
+            result_runs_file: BundleRelativePath::try_new("prepared/runs.json").expect("runs path"),
+            network_access: ZipProjectNetworkAccess::Enabled,
+            reproducibility_notes: None,
+            external_data: Vec::new(),
+            cache_key_hint: None,
+        };
+
+        let scorer = scorer_limits(&profile);
+        let prepare_limits = prepare_limits(&profile, &prepare);
+
+        assert_eq!(scorer.timeout_sec, profile.timeout_sec);
+        assert_eq!(scorer.network_access, ZipProjectNetworkAccess::Disabled);
+        assert_eq!(prepare_limits.timeout_sec, profile.timeout_sec);
+        assert_eq!(
+            prepare_limits.network_access,
+            ZipProjectNetworkAccess::Enabled
         );
     }
 
@@ -1440,5 +1487,30 @@ mod tests {
         );
         assert!(container_name(&first, "run").contains("attempt-1"));
         assert!(container_name(&second, "run").contains("attempt-2"));
+    }
+
+    /// Build a resource profile for runner limit tests.
+    fn resource_profile() -> ResourceProfileSpec {
+        let image = ChallengeImageReference::Local {
+            reference: LocalAgenticsImageReference::try_new(
+                "agentics-linux-arm64-cpu:ubuntu26.04-local",
+            )
+            .expect("test image"),
+        };
+        ResourceProfileSpec {
+            name: ResourceProfileName::try_new("python-cpu").expect("profile name"),
+            resource_description: None,
+            solution_image: image.clone(),
+            scorer_image: image,
+            timeout_sec: 42,
+            memory_limit_mb: 2048,
+            cpu_limit_millis: 2500,
+            disk_limit_mb: 4096,
+            setup_network_access: ZipProjectNetworkAccess::Enabled,
+            build_network_access: ZipProjectNetworkAccess::Disabled,
+            run_network_access: ZipProjectNetworkAccess::Loopback,
+            scorer_network_access: ZipProjectNetworkAccess::Disabled,
+            hardware: None,
+        }
     }
 }

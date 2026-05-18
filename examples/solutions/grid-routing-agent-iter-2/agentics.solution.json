@@ -1,26 +1,8 @@
 {
   "protocol": "zip_project",
   "protocol_version": 1,
-  "runtime": {
-    "language": "python",
-    "language_version": "3.12",
-    "runtime_profile": "python-cpu"
-  },
+  "note": "",
   "commands": {
     "run": "run.sh"
-  },
-  "phases": {
-    "run": {
-      "timeout_sec": 20,
-      "network_access": "disabled"
-    }
-  },
-  "interface": {
-    "kind": "file_system",
-    "input_contract": "Read case.json from AGENTICS_INPUT_DIR.",
-    "output_contract": "Write path.txt to AGENTICS_OUTPUT_DIR."
-  },
-  "dependencies": {
-    "policy": "image_provided"
   }
 }

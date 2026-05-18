@@ -742,6 +742,9 @@ function OperationsPanel({
                     <div className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
                       {submission.target}
                     </div>
+                    <div className="text-[var(--text-caption)] text-[var(--text-muted)] max-w-[20rem] truncate">
+                      {submission.note || "No note"}
+                    </div>
                   </td>
                   <td>
                     <StatusBadge status={submission.status} />

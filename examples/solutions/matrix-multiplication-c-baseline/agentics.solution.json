@@ -1,31 +1,9 @@
 {
   "protocol": "zip_project",
   "protocol_version": 1,
-  "runtime": {
-    "language": "c",
-    "language_version": "c11",
-    "runtime_profile": "ubuntu-build-cpu"
-  },
+  "note": "",
   "commands": {
     "build": "scripts/build.sh",
     "run": "run.sh"
-  },
-  "phases": {
-    "build": {
-      "timeout_sec": 120,
-      "network_access": "disabled"
-    },
-    "run": {
-      "timeout_sec": 120,
-      "network_access": "disabled"
-    }
-  },
-  "interface": {
-    "kind": "file_system",
-    "input_contract": "input.bin under AGENTICS_INPUT_DIR",
-    "output_contract": "output.bin under AGENTICS_OUTPUT_DIR"
-  },
-  "dependencies": {
-    "policy": "image_provided"
   }
 }

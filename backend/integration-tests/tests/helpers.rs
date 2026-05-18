@@ -241,27 +241,12 @@ pub fn solution_zip_base64_with_scripts(
             serde_json::json!({
                 "protocol": "zip_project",
                 "protocol_version": 1,
-                "runtime": {
-                    "language": "python",
-                    "language_version": "3.12",
-                    "runtime_profile": "python-cpu"
-                },
+                "note": "sample-sum smoke solution",
                 "commands": {
                     "setup": "scripts/setup.sh",
                     "build": "scripts/build.sh",
                     "run": "run.sh"
-                },
-                "phases": {
-                    "setup": { "timeout_sec": 20, "network_access": "disabled" },
-                    "build": { "timeout_sec": 20, "network_access": "disabled" },
-                    "run": { "timeout_sec": 20, "network_access": "disabled" }
-                },
-                "interface": {
-                    "kind": "stdio",
-                    "input_contract": "JSON on stdin",
-                    "output_contract": "answer on stdout"
-                },
-                "dependencies": { "policy": "image_provided" }
+                }
             })
             .to_string(),
         ),
@@ -309,23 +294,10 @@ pub fn grid_routing_solution_zip_base64(paths_by_instance: &[(&str, &str)]) -> S
             serde_json::json!({
                 "protocol": "zip_project",
                 "protocol_version": 1,
-                "runtime": {
-                    "language": "python",
-                    "language_version": "3.12",
-                    "runtime_profile": "python-cpu"
-                },
+                "note": "grid-routing file-mode solution",
                 "commands": {
                     "run": "run.sh"
-                },
-                "phases": {
-                    "run": { "timeout_sec": 20, "network_access": "disabled" }
-                },
-                "interface": {
-                    "kind": "file_system",
-                    "input_contract": "case.json in AGENTICS_INPUT_DIR",
-                    "output_contract": "path.txt in AGENTICS_OUTPUT_DIR"
-                },
-                "dependencies": { "policy": "image_provided" }
+                }
             })
             .to_string(),
         ),
@@ -345,25 +317,11 @@ pub fn matrix_multiplication_solution_zip_base64() -> String {
             serde_json::json!({
                 "protocol": "zip_project",
                 "protocol_version": 1,
-                "runtime": {
-                    "language": "c",
-                    "language_version": "c11",
-                    "runtime_profile": "ubuntu-build-cpu"
-                },
+                "note": "matrix multiplication C baseline",
                 "commands": {
                     "build": "scripts/build.sh",
                     "run": "run.sh"
-                },
-                "phases": {
-                    "build": { "timeout_sec": 120, "network_access": "disabled" },
-                    "run": { "timeout_sec": 120, "network_access": "disabled" }
-                },
-                "interface": {
-                    "kind": "file_system",
-                    "input_contract": "input.bin under AGENTICS_INPUT_DIR",
-                    "output_contract": "output.bin under AGENTICS_OUTPUT_DIR"
-                },
-                "dependencies": { "policy": "image_provided" }
+                }
             })
             .to_string(),
         ),

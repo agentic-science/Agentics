@@ -9,8 +9,7 @@ use shared::models::names::ChallengeName;
 use shared::models::paths::ScriptPath;
 use shared::zip_project::{
     ZIP_PROJECT_MANIFEST_FILE, ZIP_PROJECT_PROTOCOL, ZIP_PROJECT_PROTOCOL_VERSION,
-    ZipProjectCommands, ZipProjectDependencies, ZipProjectDependencyPolicy, ZipProjectInterface,
-    ZipProjectInterfaceKind, ZipProjectManifest, ZipProjectPhases, ZipProjectRuntime,
+    ZipProjectCommands, ZipProjectManifest,
 };
 
 use crate::cli::{SolutionInterface, SolutionRuntimeProfile};
@@ -81,8 +80,8 @@ pub(crate) fn init_solution_workspace(
         workspace_dir,
         challenge_name: challenge.name.clone(),
         challenge_title: challenge.title.clone(),
-        runtime_profile: runtime_profile.manifest_value().to_string(),
-        interface: interface.manifest_value().to_string(),
+        runtime_profile: runtime_profile.display_value().to_string(),
+        interface: interface.display_value().to_string(),
     })
 }
 
@@ -106,7 +105,7 @@ fn write_workspace_files(
     })?;
     fs::write(
         workspace_dir.join(ZIP_PROJECT_MANIFEST_FILE),
-        render_manifest(runtime_profile, interface)?,
+        render_manifest()?,
     )
     .with_context(|| {
         format!(
@@ -133,8 +132,8 @@ fn render_readme(
             .ok()
             .and_then(|value| value.as_str().map(ToOwned::to_owned))
             .unwrap_or_else(|| "unknown".to_string()),
-        runtime_profile.manifest_value(),
-        interface.manifest_value(),
+        runtime_profile.display_value(),
+        interface.display_value(),
         format_targets(challenge),
         challenge.statement_markdown.trim(),
         ZIP_PROJECT_MANIFEST_FILE,
@@ -162,35 +161,15 @@ fn format_targets(challenge: &ChallengeDetailResponse) -> String {
 }
 
 /// Renders manifest for user-facing output.
-fn render_manifest(
-    runtime_profile: SolutionRuntimeProfile,
-    interface: SolutionInterface,
-) -> Result<String> {
-    let profile = RuntimeProfileMetadata::for_profile(runtime_profile);
+fn render_manifest() -> Result<String> {
     let manifest = ZipProjectManifest {
         protocol: ZIP_PROJECT_PROTOCOL.to_string(),
         protocol_version: ZIP_PROJECT_PROTOCOL_VERSION,
-        runtime: ZipProjectRuntime {
-            language: profile.language.to_string(),
-            language_version: profile.language_version.map(ToOwned::to_owned),
-            runtime_profile: Some(runtime_profile.manifest_value().to_string()),
-        },
+        note: String::new(),
         commands: ZipProjectCommands {
             setup: None,
             build: None,
             run: ScriptPath::try_new("run.sh")?,
-        },
-        phases: ZipProjectPhases::default(),
-        interface: ZipProjectInterface {
-            kind: interface.into(),
-            input_contract: Some(interface.input_contract().to_string()),
-            output_contract: Some(interface.output_contract().to_string()),
-        },
-        dependencies: ZipProjectDependencies {
-            policy: ZipProjectDependencyPolicy::ImageProvided,
-            lockfiles: Vec::new(),
-            vendor_dirs: Vec::new(),
-            notes: profile.dependency_notes.map(ToOwned::to_owned),
         },
     };
 
@@ -270,52 +249,9 @@ fn sanitize_path_segment(value: &str) -> String {
     }
 }
 
-/// Carries runtime profile metadata data across this module boundary.
-struct RuntimeProfileMetadata {
-    language: &'static str,
-    language_version: Option<&'static str>,
-    dependency_notes: Option<&'static str>,
-}
-
-impl RuntimeProfileMetadata {
-    /// Handles for profile for this module.
-    fn for_profile(profile: SolutionRuntimeProfile) -> Self {
-        match profile {
-            SolutionRuntimeProfile::Python => Self {
-                language: "python",
-                language_version: Some("3.12"),
-                dependency_notes: Some(
-                    "Default generated manifest assumes dependencies are provided by the challenge image. Add setup/build scripts and lockfiles if your solution needs them.",
-                ),
-            },
-            SolutionRuntimeProfile::Rust => Self {
-                language: "rust",
-                language_version: None,
-                dependency_notes: Some(
-                    "Add setup/build scripts and lockfiles before submitting if the solution needs Cargo dependencies or compilation.",
-                ),
-            },
-            SolutionRuntimeProfile::Node => Self {
-                language: "javascript",
-                language_version: None,
-                dependency_notes: Some(
-                    "Add setup/build scripts and lockfiles before submitting if the solution needs package installation or bundling.",
-                ),
-            },
-            SolutionRuntimeProfile::Generic => Self {
-                language: "generic",
-                language_version: None,
-                dependency_notes: Some(
-                    "Replace runtime metadata with the concrete language and dependency policy used by this solution.",
-                ),
-            },
-        }
-    }
-}
-
 impl SolutionRuntimeProfile {
-    /// Handles manifest value for this module.
-    fn manifest_value(self) -> &'static str {
+    /// Handles display value for this module.
+    fn display_value(self) -> &'static str {
         match self {
             Self::Python => "python-cpu",
             Self::Rust => "rust-cpu",
@@ -326,43 +262,12 @@ impl SolutionRuntimeProfile {
 }
 
 impl SolutionInterface {
-    /// Handles manifest value for this module.
-    fn manifest_value(self) -> &'static str {
+    /// Handles display value for this module.
+    fn display_value(self) -> &'static str {
         match self {
             Self::ChallengeDefined => "challenge_defined",
             Self::Stdio => "stdio",
             Self::FileSystem => "file_system",
-        }
-    }
-
-    /// Handles input contract for this module.
-    fn input_contract(self) -> &'static str {
-        match self {
-            Self::ChallengeDefined => "Challenge-defined input prepared by the Agentics runner.",
-            Self::Stdio => "Input is provided on stdin for each runner invocation.",
-            Self::FileSystem => "Input files are provided under AGENTICS_INPUT_DIR.",
-        }
-    }
-
-    /// Handles output contract for this module.
-    fn output_contract(self) -> &'static str {
-        match self {
-            Self::ChallengeDefined => {
-                "Write output in the format required by the challenge statement."
-            }
-            Self::Stdio => "Write the answer for each invocation to stdout.",
-            Self::FileSystem => "Write declared output files under AGENTICS_OUTPUT_DIR.",
-        }
-    }
-}
-
-impl From<SolutionInterface> for ZipProjectInterfaceKind {
-    /// Handles from for this module.
-    fn from(value: SolutionInterface) -> Self {
-        match value {
-            SolutionInterface::ChallengeDefined => Self::ChallengeDefined,
-            SolutionInterface::Stdio => Self::Stdio,
-            SolutionInterface::FileSystem => Self::FileSystem,
         }
     }
 }
@@ -382,9 +287,7 @@ mod tests {
     use shared::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
     use shared::models::names::{ChallengeName, ResourceProfileName, TargetName};
     use shared::models::paths::BundleRelativePath;
-    use shared::zip_project::{
-        ZipProjectInterfaceKind, ZipProjectManifest, ZipProjectNetworkAccess,
-    };
+    use shared::zip_project::{ZipProjectManifest, ZipProjectNetworkAccess};
 
     use super::{default_workspace_dir, init_solution_workspace};
     use crate::cli::{SolutionInterface, SolutionRuntimeProfile};
@@ -426,16 +329,7 @@ mod tests {
         assert!(readme.contains("# Sample Sum"));
         assert!(readme.contains("Return the sum."));
         assert!(readme.contains("Runtime profile: `python-cpu`"));
-        assert_eq!(manifest.runtime.language, "python");
-        assert_eq!(manifest.runtime.language_version.as_deref(), Some("3.12"));
-        assert_eq!(
-            manifest.runtime.runtime_profile.as_deref(),
-            Some("python-cpu")
-        );
-        assert_eq!(
-            manifest.interface.kind,
-            ZipProjectInterfaceKind::ChallengeDefined
-        );
+        assert_eq!(manifest.note, "");
         assert!(workspace_dir.join(".git").is_dir());
         assert!(hook.contains("run.sh must exist"));
         assert!(hook.contains("agentics.solution.json must exist"));
@@ -489,13 +383,7 @@ mod tests {
         let manifest =
             ZipProjectManifest::parse_json(&manifest_raw).expect("manifest should parse");
 
-        assert_eq!(manifest.runtime.language, "rust");
-        assert!(manifest.runtime.language_version.is_none());
-        assert_eq!(
-            manifest.runtime.runtime_profile.as_deref(),
-            Some("rust-cpu")
-        );
-        assert_eq!(manifest.interface.kind, ZipProjectInterfaceKind::Stdio);
+        assert_eq!(manifest.note, "");
         assert_eq!(manifest.commands.run.as_str(), "run.sh");
         assert!(manifest.commands.setup.is_none());
         assert!(manifest.commands.build.is_none());

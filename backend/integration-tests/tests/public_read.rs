@@ -115,6 +115,10 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         .expect("failed to decode public solution submission");
     assert_eq!(public_solution_submission["id"], pending_id);
     assert_eq!(
+        public_solution_submission["note"],
+        "sample-sum smoke solution"
+    );
+    assert_eq!(
         public_solution_submission["evaluation"]["eval_type"],
         "official"
     );
@@ -162,6 +166,10 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         public_result_report["solution_submission"]["evaluation"]["primary_score"], 42.0,
         "official_score surfaces should preserve raw official primary score separately from rank_score"
     );
+    assert_eq!(
+        public_result_report["solution_submission"]["note"],
+        "sample-sum smoke solution"
+    );
 
     let public_solution_submission_list: serde_json::Value = client
         .get(api_url(
@@ -198,6 +206,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         "public lists must not expose validation scores"
     );
     assert_eq!(listed_first["official_score"], 42.0);
+    assert_eq!(listed_first["note"], "sample-sum smoke solution");
     assert_eq!(listed_first["rank_score"], 1.0);
     assert_eq!(listed_first["aggregate_metrics"], serde_json::json!([]));
     assert_eq!(listed_first["official_metrics"], serde_json::json!([]));

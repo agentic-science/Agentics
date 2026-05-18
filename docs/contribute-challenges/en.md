@@ -215,8 +215,8 @@ validation and official solution submissions.
   Agentics repositories, and target-compatible tags. Hosted deployments reject
   local images and require digest-pinned registry images when
   `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`.
-- Resource profiles keep time, memory, CPU, disk, network, and log limits
-  realistic for the selected target.
+- Resource profiles keep time, memory, CPU, disk, and network policy realistic
+  for the selected target. Container log capture is platform-owned.
 - Large inputs referenced by run manifests use `input_files[].source_path`.
 - Challenge repository CI should parse manifests, validate public run manifests,
   require `README.md`, and reject obvious private-data leaks or symlinks.

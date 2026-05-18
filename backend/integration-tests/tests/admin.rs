@@ -419,6 +419,24 @@ async fn admin_official_run_rejects_submission_with_active_job(pool: sqlx::PgPoo
         .await
         .expect("failed to decode validation response");
     let validation_id = validation_response["id"].as_str().expect("missing id");
+    let admin_submissions: serde_json::Value = client
+        .get(api_url(&app, "/admin/solution-submissions"))
+        .header("Authorization", admin_auth.clone())
+        .header("X-Agentics-Admin-Automation", "true")
+        .send()
+        .await
+        .expect("failed to list admin submissions")
+        .json()
+        .await
+        .expect("failed to decode admin submissions");
+    assert!(
+        admin_submissions["items"]
+            .as_array()
+            .expect("admin submission items")
+            .iter()
+            .any(|item| item["id"] == validation_id && item["note"] == "sample-sum smoke solution"),
+        "admin solution submission list should expose stored manifest note"
+    );
 
     let public_quota_response = client
         .post(api_url(&app, "/api/solution-submissions"))

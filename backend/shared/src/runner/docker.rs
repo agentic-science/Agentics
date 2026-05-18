@@ -24,6 +24,7 @@ use crate::zip_project::ZipProjectPhaseLimits;
 
 const STALE_RUNNER_CONTAINER_MIN_AGE_SECS: i64 = 600;
 const PERMISSION_FIX_TIMEOUT_SECS: u64 = 30;
+const PLATFORM_CONTAINER_LOG_LIMIT_BYTES: u64 = 1024 * 1024;
 
 #[derive(Debug)]
 /// Carries container request data across this module boundary.
@@ -83,7 +84,7 @@ pub(super) async fn run_container(
     let nano_cpus = i64::from(request.limits.cpu_limit_millis)
         .checked_mul(1_000_000)
         .ok_or_else(|| AppError::Runner("CPU limit overflow".to_string()))?;
-    let log_limit_bytes = request.limits.log_limit_bytes;
+    let log_cap_bytes = PLATFORM_CONTAINER_LOG_LIMIT_BYTES;
     let host_config = HostConfig {
         network_mode: Some(
             request
@@ -116,7 +117,7 @@ pub(super) async fn run_container(
         publish_all_ports: Some(false),
         init: Some(true),
         oom_kill_disable: Some(false),
-        log_config: Some(docker_log_config(log_limit_bytes)),
+        log_config: Some(docker_log_config(log_cap_bytes)),
         storage_opt: docker_storage_opt(request.docker_layer_quota_mb),
         runtime: gpu_runtime(request.accelerator),
         device_requests: gpu_device_requests(request.accelerator),
@@ -150,7 +151,7 @@ pub(super) async fn run_container(
         docker,
         &container_id,
         request.limits.timeout_sec,
-        log_limit_bytes,
+        log_cap_bytes,
     )
     .await;
     let permission_result = repair_bind_mount_permissions(
@@ -542,7 +543,7 @@ async fn run_created_container(
     docker: &Docker,
     container_id: &str,
     timeout_sec: u64,
-    log_limit_bytes: u64,
+    log_cap_bytes: u64,
 ) -> Result<ContainerOutcome> {
     docker
         .start_container(container_id, None::<StartContainerOptions>)
@@ -584,7 +585,7 @@ async fn run_created_container(
     };
     let wall_time_ms = duration_millis(started.elapsed());
     let (logs, _logs_truncated) =
-        collect_container_logs(docker, container_id, log_limit_bytes).await?;
+        collect_container_logs(docker, container_id, log_cap_bytes).await?;
     Ok(ContainerOutcome {
         exit_code,
         logs,
@@ -748,6 +749,30 @@ mod tests {
 
         assert_eq!(output, b"abcd");
         assert!(truncated);
+    }
+
+    /// Verifies that Docker logging uses the platform-owned runner cap.
+    #[test]
+    fn docker_log_config_uses_platform_log_cap() {
+        let config = docker_log_config(PLATFORM_CONTAINER_LOG_LIMIT_BYTES);
+
+        assert_eq!(config.typ.as_deref(), Some("json-file"));
+        assert_eq!(
+            config
+                .config
+                .as_ref()
+                .and_then(|values| values.get("max-size"))
+                .map(String::as_str),
+            Some("1048576b")
+        );
+        assert_eq!(
+            config
+                .config
+                .as_ref()
+                .and_then(|values| values.get("max-file"))
+                .map(String::as_str),
+            Some("1")
+        );
     }
 
     /// Verifies permission repair only targets writable bind mounts.

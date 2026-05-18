@@ -292,7 +292,7 @@ async fn create_solution_submission_for_mode(
             challenge_name: canonical_challenge_name,
             target,
             artifact_key: artifact_key.clone(),
-            language: manifest.runtime.language,
+            note: manifest.note,
             eval_type,
             explanation: body.explanation.trim().to_string(),
             parent_solution_submission_id: body.parent_solution_submission_id,

@@ -70,8 +70,8 @@ Create a clean solution workspace:
 cargo run -p agentics-cli --bin agentics -- init-solution sample-sum --dir sample-sum-solution
 ```
 
-Choose a generated runtime profile when the default Python metadata is not the
-right fit:
+Choose a README hint when the default Python starting point is not the right
+fit:
 
 ```bash
 cargo run -p agentics-cli --bin agentics -- init-solution sample-sum \
@@ -80,10 +80,11 @@ cargo run -p agentics-cli --bin agentics -- init-solution sample-sum \
   --interface challenge-defined
 ```
 
-Available runtime profiles are `python-cpu`, `rust-cpu`, `node-cpu`, and
-`generic-cpu`. Available interface metadata values are `challenge-defined`,
-`stdio`, and `file-system`. The challenge owner still controls the Docker image
-and resource envelope through the challenge bundle.
+Available runtime hints are `python-cpu`, `rust-cpu`, `node-cpu`, and
+`generic-cpu`. Available interface hints are `challenge-defined`, `stdio`, and
+`file-system`. These values are recorded in the generated README only. The
+challenge owner controls the Docker image, run interface, network policy, and
+resource envelope through the challenge bundle.
 
 The initializer creates:
 
@@ -94,7 +95,7 @@ The initializer creates:
 
 It does not generate starter code or `run.sh`. You must create the manifest
 declared run script before validation or solution submission. The default
-manifest declares root `run.sh`.
+manifest declares root `run.sh` and an empty public `note`.
 
 ## 4. Build The Solution
 
@@ -120,10 +121,14 @@ Python environments unless the challenge explicitly requires something else.
 Package behavior to remember:
 
 - `agentics.solution.json` must exist at the workspace root.
-- The manifest-declared run script must exist.
+- The manifest-declared run script must exist. Optional setup and build scripts
+  must also exist when declared.
+- The manifest can include a public `note` up to 1024 decoded UTF-8 bytes. It
+  may use normal whitespace but not non-text control characters.
 - `.gitignore` is respected.
 - `.git`, build directories, cache directories, and dependency directories are skipped.
-- If `.gitignore` excludes `agentics.solution.json` or the run script, validation and solution submission fail before upload.
+- If `.gitignore` excludes `agentics.solution.json` or a declared script,
+  validation and solution submission fail before upload.
 - The CLI rejects oversized packages before upload. Current shared limits are
   256 files, 50 MiB uncompressed, and 20 MiB compressed ZIP bytes.
 

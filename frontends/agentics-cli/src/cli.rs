@@ -319,11 +319,11 @@ pub(crate) struct InitSolutionArgs {
     #[arg(long, value_name = "PATH")]
     pub dir: Option<PathBuf>,
 
-    /// Runtime metadata profile to write into agentics.solution.json.
+    /// Runtime profile hint to record in the generated README.
     #[arg(long, value_enum, default_value_t = SolutionRuntimeProfile::Python)]
     pub runtime_profile: SolutionRuntimeProfile,
 
-    /// Solution interface metadata to write into agentics.solution.json.
+    /// Solution interface hint to record in the generated README.
     #[arg(long, value_enum, default_value_t = SolutionInterface::ChallengeDefined)]
     pub interface: SolutionInterface,
 }

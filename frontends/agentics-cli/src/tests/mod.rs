@@ -17,10 +17,8 @@ fn write_solution_manifest(workspace_dir: &Path) {
         json!({
             "protocol": "zip_project",
             "protocol_version": 1,
-            "runtime": { "language": "python" },
-            "commands": { "run": "run.sh" },
-            "interface": { "kind": "stdio" },
-            "dependencies": { "policy": "image_provided" }
+            "note": "",
+            "commands": { "run": "run.sh" }
         })
         .to_string(),
     )
@@ -290,6 +288,7 @@ async fn submit_packages_workspace_and_posts_authenticated_request() {
             "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_key": "solution-submissions/11111111-1111-4111-8111-111111111111.zip",
+            "note": "",
             "evaluation_job_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
             "created_at": "2026-05-01T00:00:00Z"
         })))
@@ -347,6 +346,65 @@ async fn submit_packages_workspace_and_posts_authenticated_request() {
     assert_eq!(body["target"], "linux-arm64-cpu");
     assert_eq!(body["explanation"], "first attempt");
     assert!(body["artifact_base64"].as_str().expect("artifact").len() > 20);
+}
+
+/// Verifies that submit rejects an over-limit manifest note before upload.
+#[tokio::test]
+async fn submit_rejects_over_limit_manifest_note_before_upload() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/public/challenges/sample-sum"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(challenge_detail_json(true)))
+        .mount(&server)
+        .await;
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let workspace_dir = temp.path().join("workspace");
+    std::fs::create_dir(&workspace_dir).expect("workspace dir");
+    std::fs::write(
+        workspace_dir.join("agentics.solution.json"),
+        json!({
+            "protocol": "zip_project",
+            "protocol_version": 1,
+            "note": "a".repeat(1025),
+            "commands": { "run": "run.sh" }
+        })
+        .to_string(),
+    )
+    .expect("manifest");
+    std::fs::write(workspace_dir.join("run.sh"), "#!/usr/bin/env bash\n").expect("run.sh");
+
+    let config_path = temp.path().join("config.toml");
+    let cli = Cli::parse_from([
+        "agentics",
+        "--config",
+        config_path.to_str().expect("utf8 path"),
+        "--api-base-url",
+        &server.uri(),
+        "--token",
+        "test-token",
+        "submit",
+        "sample-sum",
+        "--target",
+        "linux-arm64-cpu",
+        "--dir",
+        workspace_dir.to_str().expect("utf8 path"),
+    ]);
+
+    let error = execute(cli, Environment::default())
+        .await
+        .expect_err("over-limit note should fail before upload");
+    let requests = server
+        .received_requests()
+        .await
+        .expect("requests should be recorded");
+
+    assert!(error.to_string().contains("note must be at most 1024"));
+    assert!(
+        requests
+            .iter()
+            .all(|request| request.url.path() != "/api/solution-submissions")
+    );
 }
 
 /// Verifies that submit rejects unknown target before packaging.
@@ -410,6 +468,7 @@ async fn submissions_show_fetches_authenticated_solution_submission() {
             "agent_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
             "agent_display_name": "solver",
             "status": "queued",
+            "note": "",
             "explanation": "",
             "parent_solution_submission_id": null,
             "credit_text": "",
@@ -466,6 +525,7 @@ async fn submissions_show_fetches_validation_run_id() {
             "agent_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
             "agent_display_name": "solver",
             "status": "completed",
+            "note": "Remote smoke",
             "explanation": "quick check",
             "parent_solution_submission_id": null,
             "credit_text": "",
@@ -885,6 +945,7 @@ async fn validate_remote_posts_validation_run_and_polls_status() {
             "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_key": "solution-submissions/22222222-2222-4222-8222-222222222222.zip",
+            "note": "",
             "evaluation_job_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
             "created_at": "2026-05-01T00:00:00Z"
         })))
@@ -903,6 +964,7 @@ async fn validate_remote_posts_validation_run_and_polls_status() {
             "agent_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
             "agent_display_name": "solver",
             "status": "completed",
+            "note": "Remote smoke",
             "explanation": "quick check",
             "parent_solution_submission_id": null,
             "credit_text": "",

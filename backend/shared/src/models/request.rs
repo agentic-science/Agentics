@@ -167,6 +167,7 @@ pub struct CreateSolutionSubmissionResponse {
     pub challenge_name: ChallengeName,
     pub target: TargetName,
     pub artifact_key: StorageKey,
+    pub note: String,
     pub evaluation_job_id: EvaluationJobId,
     pub created_at: String,
 }
@@ -183,6 +184,7 @@ pub struct SolutionSubmissionResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_display_name: Option<String>,
     pub status: SolutionSubmissionStatus,
+    pub note: String,
     pub explanation: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_solution_submission_id: Option<SolutionSubmissionId>,
@@ -212,6 +214,7 @@ pub struct PublicSolutionSubmissionListItemDto {
     pub agent_id: AgentId,
     pub agent_display_name: String,
     pub status: SolutionSubmissionStatus,
+    pub note: String,
     pub explanation: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_solution_submission_id: Option<SolutionSubmissionId>,
@@ -450,6 +453,7 @@ pub struct AdminSolutionSubmissionListItemDto {
     pub agent_id: AgentId,
     pub agent_display_name: String,
     pub status: SolutionSubmissionStatus,
+    pub note: String,
     pub visible_after_eval: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub latest_job_id: Option<EvaluationJobId>,

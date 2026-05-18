@@ -9,18 +9,12 @@ use std::io::Read;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{AppError, Result};
-use crate::models::paths::{LogRelativePath, ProjectRelativePath, ScriptPath};
+use crate::models::paths::{LogRelativePath, ScriptPath};
 
 pub const ZIP_PROJECT_MANIFEST_FILE: &str = "agentics.solution.json";
 pub const ZIP_PROJECT_PROTOCOL: &str = "zip_project";
 pub const ZIP_PROJECT_PROTOCOL_VERSION: u16 = 1;
-pub const DEFAULT_SETUP_TIMEOUT_SEC: u64 = 300;
-pub const DEFAULT_BUILD_TIMEOUT_SEC: u64 = 600;
-pub const DEFAULT_RUN_TIMEOUT_SEC: u64 = 30;
-pub const DEFAULT_PHASE_MEMORY_LIMIT_MB: u64 = 512;
-pub const DEFAULT_PHASE_CPU_LIMIT_MILLIS: u32 = 1000;
-pub const DEFAULT_PHASE_DISK_LIMIT_MB: u64 = 1024;
-pub const DEFAULT_PHASE_LOG_LIMIT_BYTES: u64 = 1024 * 1024;
+pub const MAX_ZIP_PROJECT_NOTE_BYTES: usize = 1024;
 pub const MAX_ZIP_PROJECT_ARTIFACT_BYTES: u64 = 20 * 1024 * 1024;
 pub const MAX_ZIP_PROJECT_FILE_COUNT: usize = 256;
 pub const MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES: u64 = 50 * 1024 * 1024;
@@ -78,23 +72,9 @@ pub fn validate_zip_project_archive_envelope(bytes: &[u8]) -> Result<()> {
 pub struct ZipProjectManifest {
     pub protocol: String,
     pub protocol_version: u16,
-    pub runtime: ZipProjectRuntime,
-    pub commands: ZipProjectCommands,
     #[serde(default)]
-    pub phases: ZipProjectPhases,
-    pub interface: ZipProjectInterface,
-    pub dependencies: ZipProjectDependencies,
-}
-
-/// Language and runtime metadata declared by the submitting solution.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct ZipProjectRuntime {
-    pub language: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub language_version: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub runtime_profile: Option<String>,
+    pub note: String,
+    pub commands: ZipProjectCommands,
 }
 
 /// Script paths used by the future setup/build/run phase executor.
@@ -108,41 +88,7 @@ pub struct ZipProjectCommands {
     pub run: ScriptPath,
 }
 
-/// Optional per-phase resource and behavior overrides.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema, Default)]
-#[serde(deny_unknown_fields)]
-pub struct ZipProjectPhases {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub setup: Option<ZipProjectPhaseConfig>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub build: Option<ZipProjectPhaseConfig>,
-    #[serde(default)]
-    pub run: ZipProjectPhaseConfig,
-}
-
-/// A partial phase limit override from the manifest.
-///
-/// Missing values are resolved from Agentics protocol defaults. Runtime
-/// configuration and challenge resource profiles can still clamp these values
-/// in later worker/resource milestones.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema, Default)]
-#[serde(deny_unknown_fields)]
-pub struct ZipProjectPhaseConfig {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub timeout_sec: Option<u64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub memory_limit_mb: Option<u64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cpu_limit_millis: Option<u32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub disk_limit_mb: Option<u64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub network_access: Option<ZipProjectNetworkAccess>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub log_limit_bytes: Option<u64>,
-}
-
-/// Concrete limits for one execution phase after defaults are applied.
+/// Concrete limits for one execution phase after challenge-owned policy is applied.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ZipProjectPhaseLimits {
     pub timeout_sec: u64,
@@ -150,7 +96,6 @@ pub struct ZipProjectPhaseLimits {
     pub cpu_limit_millis: u32,
     pub disk_limit_mb: u64,
     pub network_access: ZipProjectNetworkAccess,
-    pub log_limit_bytes: u64,
 }
 
 /// Network access policy requested for a phase.
@@ -204,7 +149,6 @@ pub enum ZipProjectPhaseName {
 pub struct ZipProjectResolvedPhase {
     pub name: ZipProjectPhaseName,
     pub command: ScriptPath,
-    pub limits: ZipProjectPhaseLimits,
 }
 
 /// Structured failure payload for phase-specific execution errors.
@@ -229,50 +173,6 @@ pub enum ZipProjectPhaseFailureReason {
     ResourceLimit,
     MissingCommand,
     RunnerError,
-}
-
-/// How the challenge harness should invoke and communicate with the solution.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct ZipProjectInterface {
-    pub kind: ZipProjectInterfaceKind,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub input_contract: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub output_contract: Option<String>,
-}
-
-/// Invocation styles that a challenge harness may support.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum ZipProjectInterfaceKind {
-    ChallengeDefined,
-    Argv,
-    Stdio,
-    FileSystem,
-    Http,
-}
-
-/// Declared dependency strategy for the submitted ZIP project.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct ZipProjectDependencies {
-    pub policy: ZipProjectDependencyPolicy,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub lockfiles: Vec<ProjectRelativePath>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub vendor_dirs: Vec<ProjectRelativePath>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub notes: Option<String>,
-}
-
-/// Dependency source policy declared by the solution author.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum ZipProjectDependencyPolicy {
-    Vendored,
-    Lockfile,
-    ImageProvided,
 }
 
 /// Return whether `value` can be safely joined under a project root.
@@ -312,7 +212,7 @@ impl ZipProjectManifest {
         Self::parse_json(&raw)
     }
 
-    /// Validate protocol versioning, metadata, script paths, and dependency references.
+    /// Validate protocol versioning, submitter metadata, and script paths.
     pub fn validate(&self) -> Result<()> {
         if self.protocol != ZIP_PROJECT_PROTOCOL {
             return Err(AppError::Validation(format!(
@@ -325,11 +225,8 @@ impl ZipProjectManifest {
             )));
         }
 
-        self.runtime.validate()?;
+        validate_solution_note(&self.note)?;
         self.commands.validate()?;
-        self.phases.validate(&self.commands)?;
-        self.interface.validate()?;
-        self.dependencies.validate()?;
 
         Ok(())
     }
@@ -341,48 +238,20 @@ impl ZipProjectManifest {
             phases.push(ZipProjectResolvedPhase {
                 name: ZipProjectPhaseName::Setup,
                 command: command.clone(),
-                limits: self
-                    .phases
-                    .setup
-                    .as_ref()
-                    .unwrap_or(&ZipProjectPhaseConfig::default())
-                    .resolve(ZipProjectPhaseName::Setup),
             });
         }
         if let Some(command) = &self.commands.build {
             phases.push(ZipProjectResolvedPhase {
                 name: ZipProjectPhaseName::Build,
                 command: command.clone(),
-                limits: self
-                    .phases
-                    .build
-                    .as_ref()
-                    .unwrap_or(&ZipProjectPhaseConfig::default())
-                    .resolve(ZipProjectPhaseName::Build),
             });
         }
         phases.push(ZipProjectResolvedPhase {
             name: ZipProjectPhaseName::Run,
             command: self.commands.run.clone(),
-            limits: self.phases.run.resolve(ZipProjectPhaseName::Run),
         });
 
         phases
-    }
-}
-
-impl ZipProjectRuntime {
-    /// Handles validate for this module.
-    fn validate(&self) -> Result<()> {
-        require_non_empty(&self.language, "runtime.language")?;
-        if let Some(language_version) = &self.language_version {
-            require_non_empty(language_version, "runtime.language_version")?;
-        }
-        if let Some(runtime_profile) = &self.runtime_profile {
-            require_non_empty(runtime_profile, "runtime.runtime_profile")?;
-        }
-
-        Ok(())
     }
 }
 
@@ -390,71 +259,6 @@ impl ZipProjectCommands {
     /// Handles validate for this module.
     fn validate(&self) -> Result<()> {
         Ok(())
-    }
-}
-
-impl ZipProjectPhases {
-    /// Handles validate for this module.
-    fn validate(&self, commands: &ZipProjectCommands) -> Result<()> {
-        if self.setup.is_some() && commands.setup.is_none() {
-            return Err(AppError::Validation(
-                "phases.setup requires commands.setup".to_string(),
-            ));
-        }
-        if self.build.is_some() && commands.build.is_none() {
-            return Err(AppError::Validation(
-                "phases.build requires commands.build".to_string(),
-            ));
-        }
-
-        if let Some(setup) = &self.setup {
-            setup.validate("phases.setup")?;
-        }
-        if let Some(build) = &self.build {
-            build.validate("phases.build")?;
-        }
-        self.run.validate("phases.run")?;
-
-        Ok(())
-    }
-}
-
-impl ZipProjectPhaseConfig {
-    /// Handles validate for this module.
-    fn validate(&self, field: &str) -> Result<()> {
-        validate_positive_u64(self.timeout_sec, &format!("{field}.timeout_sec"))?;
-        validate_positive_u64(self.memory_limit_mb, &format!("{field}.memory_limit_mb"))?;
-        validate_positive_u32(self.cpu_limit_millis, &format!("{field}.cpu_limit_millis"))?;
-        validate_positive_u64(self.disk_limit_mb, &format!("{field}.disk_limit_mb"))?;
-        validate_positive_u64(self.log_limit_bytes, &format!("{field}.log_limit_bytes"))?;
-
-        Ok(())
-    }
-
-    /// Handles resolve for this module.
-    fn resolve(&self, phase: ZipProjectPhaseName) -> ZipProjectPhaseLimits {
-        let default_timeout = match phase {
-            ZipProjectPhaseName::Setup => DEFAULT_SETUP_TIMEOUT_SEC,
-            ZipProjectPhaseName::Build => DEFAULT_BUILD_TIMEOUT_SEC,
-            ZipProjectPhaseName::Run => DEFAULT_RUN_TIMEOUT_SEC,
-        };
-
-        ZipProjectPhaseLimits {
-            timeout_sec: self.timeout_sec.unwrap_or(default_timeout),
-            memory_limit_mb: self
-                .memory_limit_mb
-                .unwrap_or(DEFAULT_PHASE_MEMORY_LIMIT_MB),
-            cpu_limit_millis: self
-                .cpu_limit_millis
-                .unwrap_or(DEFAULT_PHASE_CPU_LIMIT_MILLIS),
-            disk_limit_mb: self.disk_limit_mb.unwrap_or(DEFAULT_PHASE_DISK_LIMIT_MB),
-            network_access: self
-                .network_access
-                .unwrap_or(ZipProjectNetworkAccess::Disabled),
-            log_limit_bytes: self
-                .log_limit_bytes
-                .unwrap_or(DEFAULT_PHASE_LOG_LIMIT_BYTES),
-        }
     }
 }
 
@@ -467,50 +271,6 @@ impl ZipProjectPhaseFailureReport {
     }
 }
 
-impl ZipProjectInterface {
-    /// Handles validate for this module.
-    fn validate(&self) -> Result<()> {
-        if let Some(input_contract) = &self.input_contract {
-            require_non_empty(input_contract, "interface.input_contract")?;
-        }
-        if let Some(output_contract) = &self.output_contract {
-            require_non_empty(output_contract, "interface.output_contract")?;
-        }
-
-        Ok(())
-    }
-}
-
-impl ZipProjectDependencies {
-    /// Handles validate for this module.
-    fn validate(&self) -> Result<()> {
-        validate_unique_paths(&self.lockfiles, "dependencies.lockfiles")?;
-        validate_unique_paths(&self.vendor_dirs, "dependencies.vendor_dirs")?;
-        if let Some(notes) = &self.notes {
-            require_non_empty(notes, "dependencies.notes")?;
-        }
-
-        Ok(())
-    }
-}
-
-/// Validates unique paths invariants for this contract.
-fn validate_unique_paths<T>(values: &[T], field: &str) -> Result<()>
-where
-    T: AsRef<str> + std::fmt::Display,
-{
-    let mut seen = HashSet::with_capacity(values.len());
-    for value in values {
-        if !seen.insert(value.as_ref()) {
-            return Err(AppError::Validation(format!(
-                "{field} contains duplicate path `{value}`"
-            )));
-        }
-    }
-
-    Ok(())
-}
-
 /// Requires non empty and reports a domain error otherwise.
 fn require_non_empty(value: &str, field: &str) -> Result<()> {
     if value.trim().is_empty() {
@@ -520,26 +280,26 @@ fn require_non_empty(value: &str, field: &str) -> Result<()> {
     Ok(())
 }
 
-/// Validates positive u64 invariants for this contract.
-fn validate_positive_u64(value: Option<u64>, field: &str) -> Result<()> {
-    if value == Some(0) {
+/// Validate submitter-visible note text from `agentics.solution.json`.
+pub fn validate_solution_note(note: &str) -> Result<()> {
+    if note.len() > MAX_ZIP_PROJECT_NOTE_BYTES {
         return Err(AppError::Validation(format!(
-            "{field} must be greater than 0"
+            "note must be at most {} UTF-8 bytes",
+            MAX_ZIP_PROJECT_NOTE_BYTES
         )));
+    }
+    if note.chars().any(is_disallowed_note_char) {
+        return Err(AppError::Validation(
+            "note must not contain non-text control characters".to_string(),
+        ));
     }
 
     Ok(())
 }
 
-/// Validates positive u32 invariants for this contract.
-fn validate_positive_u32(value: Option<u32>, field: &str) -> Result<()> {
-    if value == Some(0) {
-        return Err(AppError::Validation(format!(
-            "{field} must be greater than 0"
-        )));
-    }
-
-    Ok(())
+/// Return whether a decoded note character is not safe display text.
+fn is_disallowed_note_char(ch: char) -> bool {
+    ch.is_control() && !matches!(ch, '\n' | '\r' | '\t')
 }
 
 #[cfg(test)]
@@ -551,9 +311,8 @@ mod tests {
     use crate::models::paths::LogRelativePath;
 
     use super::{
-        ZipProjectDependencyPolicy, ZipProjectInterfaceKind, ZipProjectManifest,
-        ZipProjectNetworkAccess, ZipProjectPhaseFailureReason, ZipProjectPhaseFailureReport,
-        ZipProjectPhaseName, validate_zip_project_archive_envelope,
+        MAX_ZIP_PROJECT_NOTE_BYTES, ZipProjectManifest, ZipProjectPhaseFailureReason,
+        ZipProjectPhaseFailureReport, ZipProjectPhaseName, validate_zip_project_archive_envelope,
     };
 
     /// Builds a test ZIP archive with the supplied stored entries.
@@ -581,42 +340,11 @@ mod tests {
         json!({
             "protocol": "zip_project",
             "protocol_version": 1,
-            "runtime": {
-                "language": "python",
-                "language_version": "3.12",
-                "runtime_profile": "python-cpu"
-            },
+            "note": "public note\nwith whitespace",
             "commands": {
                 "setup": "scripts/setup.sh",
                 "build": "scripts/build.sh",
                 "run": "run.sh"
-            },
-            "phases": {
-                "setup": {
-                    "timeout_sec": 120,
-                    "memory_limit_mb": 1024,
-                    "cpu_limit_millis": 1500,
-                    "disk_limit_mb": 2048,
-                    "network_access": "enabled",
-                    "log_limit_bytes": 2097152
-                },
-                "build": {
-                    "timeout_sec": 300,
-                    "network_access": "disabled"
-                },
-                "run": {
-                    "timeout_sec": 45,
-                    "network_access": "loopback"
-                }
-            },
-            "interface": {
-                "kind": "challenge_defined",
-                "input_contract": "Challenge-defined JSON input.",
-                "output_contract": "Challenge-defined stdout output."
-            },
-            "dependencies": {
-                "policy": "lockfile",
-                "lockfiles": ["requirements.lock"]
             }
         })
     }
@@ -629,108 +357,124 @@ mod tests {
 
         assert_eq!(manifest.protocol, "zip_project");
         assert_eq!(manifest.protocol_version, 1);
-        assert_eq!(manifest.runtime.language, "python");
+        assert_eq!(manifest.note, "public note\nwith whitespace");
         assert_eq!(manifest.commands.run.as_str(), "run.sh");
-        assert_eq!(
-            manifest.interface.kind,
-            ZipProjectInterfaceKind::ChallengeDefined
-        );
-        assert_eq!(
-            manifest.dependencies.policy,
-            ZipProjectDependencyPolicy::Lockfile
-        );
 
         let phases = manifest.phase_execution_plan();
         assert_eq!(phases.len(), 3);
         assert_eq!(phases[0].name, ZipProjectPhaseName::Setup);
         assert_eq!(phases[0].command.as_str(), "scripts/setup.sh");
-        assert_eq!(phases[0].limits.timeout_sec, 120);
-        assert_eq!(phases[0].limits.memory_limit_mb, 1024);
-        assert_eq!(phases[0].limits.cpu_limit_millis, 1500);
-        assert_eq!(phases[0].limits.disk_limit_mb, 2048);
-        assert_eq!(
-            phases[0].limits.network_access,
-            ZipProjectNetworkAccess::Enabled
-        );
-        assert_eq!(phases[0].limits.log_limit_bytes, 2_097_152);
         assert_eq!(phases[1].name, ZipProjectPhaseName::Build);
-        assert_eq!(phases[1].limits.timeout_sec, 300);
-        assert_eq!(
-            phases[1].limits.network_access,
-            ZipProjectNetworkAccess::Disabled
-        );
+        assert_eq!(phases[1].command.as_str(), "scripts/build.sh");
         assert_eq!(phases[2].name, ZipProjectPhaseName::Run);
-        assert_eq!(phases[2].limits.timeout_sec, 45);
-        assert_eq!(
-            phases[2].limits.network_access,
-            ZipProjectNetworkAccess::Loopback
-        );
+        assert_eq!(phases[2].command.as_str(), "run.sh");
     }
 
-    /// Verifies that resolves default phase limits when overrides are absent.
+    /// Verifies that note defaults to empty when omitted.
     #[test]
-    fn resolves_default_phase_limits_when_overrides_are_absent() {
+    fn note_defaults_to_empty_when_omitted() {
         let mut value = valid_manifest();
         value
             .as_object_mut()
             .expect("manifest object")
-            .remove("phases");
+            .remove("note");
 
         let manifest =
-            ZipProjectManifest::parse_json(&value.to_string()).expect("defaults should parse");
+            ZipProjectManifest::parse_json(&value.to_string()).expect("manifest should parse");
+
+        assert_eq!(manifest.note, "");
+    }
+
+    /// Verifies that minimal manifest only requires a run command.
+    #[test]
+    fn accepts_minimal_manifest() {
+        let manifest = ZipProjectManifest::parse_json(
+            &json!({
+                "protocol": "zip_project",
+                "protocol_version": 1,
+                "commands": { "run": "run.sh" }
+            })
+            .to_string(),
+        )
+        .expect("minimal manifest should parse");
+
         let phases = manifest.phase_execution_plan();
-
-        assert_eq!(phases[0].name, ZipProjectPhaseName::Setup);
-        assert_eq!(
-            phases[0].limits.timeout_sec,
-            super::DEFAULT_SETUP_TIMEOUT_SEC
-        );
-        assert_eq!(phases[1].name, ZipProjectPhaseName::Build);
-        assert_eq!(
-            phases[1].limits.timeout_sec,
-            super::DEFAULT_BUILD_TIMEOUT_SEC
-        );
-        assert_eq!(phases[2].name, ZipProjectPhaseName::Run);
-        assert_eq!(phases[2].limits.timeout_sec, super::DEFAULT_RUN_TIMEOUT_SEC);
-        assert!(phases.iter().all(|phase| {
-            phase.limits.memory_limit_mb == super::DEFAULT_PHASE_MEMORY_LIMIT_MB
-                && phase.limits.cpu_limit_millis == super::DEFAULT_PHASE_CPU_LIMIT_MILLIS
-                && phase.limits.disk_limit_mb == super::DEFAULT_PHASE_DISK_LIMIT_MB
-                && phase.limits.network_access == ZipProjectNetworkAccess::Disabled
-                && phase.limits.log_limit_bytes == super::DEFAULT_PHASE_LOG_LIMIT_BYTES
-        }));
+        assert_eq!(manifest.note, "");
+        assert_eq!(phases.len(), 1);
+        assert_eq!(phases[0].name, ZipProjectPhaseName::Run);
+        assert_eq!(phases[0].command.as_str(), "run.sh");
     }
 
-    /// Verifies that rejects phase config without matching optional command.
+    /// Verifies that setup and build commands are optional.
     #[test]
-    fn rejects_phase_config_without_matching_optional_command() {
-        let mut value = valid_manifest();
-        value["commands"]
-            .as_object_mut()
-            .expect("commands object")
-            .remove("setup");
+    fn accepts_optional_setup_and_build_commands() {
+        let manifest =
+            ZipProjectManifest::parse_json(&valid_manifest().to_string()).expect("manifest");
 
-        let error = ZipProjectManifest::parse_json(&value.to_string())
-            .expect_err("setup phase without setup command should fail");
-        assert!(
-            error
-                .to_string()
-                .contains("phases.setup requires commands.setup")
+        let phases = manifest.phase_execution_plan();
+        assert_eq!(
+            phases.iter().map(|phase| phase.name).collect::<Vec<_>>(),
+            vec![
+                ZipProjectPhaseName::Setup,
+                ZipProjectPhaseName::Build,
+                ZipProjectPhaseName::Run,
+            ]
         );
     }
 
-    /// Verifies that rejects zero phase limit overrides.
+    /// Verifies that old participant-controlled fields are rejected.
     #[test]
-    fn rejects_zero_phase_limit_overrides() {
+    fn rejects_old_submitter_controlled_manifest_fields() {
         let mut value = valid_manifest();
-        value["phases"]["run"]["timeout_sec"] = json!(0);
+        value["runtime"] = json!({ "language": "python" });
 
         let error = ZipProjectManifest::parse_json(&value.to_string())
-            .expect_err("zero timeout should fail");
+            .expect_err("old runtime field should fail");
+        assert!(error.to_string().contains("unknown field `runtime`"));
+
+        for field in ["phases", "interface", "dependencies"] {
+            let mut value = valid_manifest();
+            value[field] = json!({});
+            let error = ZipProjectManifest::parse_json(&value.to_string())
+                .expect_err("old manifest field should fail");
+            assert!(
+                error
+                    .to_string()
+                    .contains(&format!("unknown field `{field}`")),
+                "unexpected error for {field}: {error}"
+            );
+        }
+    }
+
+    /// Verifies that note rejects too many decoded UTF-8 bytes.
+    #[test]
+    fn rejects_over_limit_note() {
+        let mut value = valid_manifest();
+        value["note"] = json!("a".repeat(MAX_ZIP_PROJECT_NOTE_BYTES + 1));
+
+        let error = ZipProjectManifest::parse_json(&value.to_string())
+            .expect_err("over-limit note should fail");
         assert!(
             error
                 .to_string()
-                .contains("phases.run.timeout_sec must be greater than 0")
+                .contains("note must be at most 1024 UTF-8 bytes")
+        );
+    }
+
+    /// Verifies that note allows normal whitespace and rejects non-text controls.
+    #[test]
+    fn validates_note_control_characters() {
+        let mut value = valid_manifest();
+        value["note"] = json!("line one\nline two\tok\r");
+        ZipProjectManifest::parse_json(&value.to_string()).expect("normal whitespace should parse");
+
+        value["note"] = json!("bad\u{0007}bell");
+        let error = ZipProjectManifest::parse_json(&value.to_string())
+            .expect_err("control character should fail");
+        assert!(
+            error
+                .to_string()
+                .contains("note must not contain non-text control characters")
         );
     }
 
@@ -768,32 +512,6 @@ mod tests {
         let error =
             ZipProjectManifest::parse_json(&value.to_string()).expect_err("unsafe run path fails");
         assert!(error.to_string().contains("repo-relative paths"));
-    }
-
-    /// Verifies that rejects invalid dependency paths.
-    #[test]
-    fn rejects_invalid_dependency_paths() {
-        let mut value = valid_manifest();
-        value["dependencies"]["lockfiles"] = json!(["requirements.lock", "/tmp/lock"]);
-
-        let error = ZipProjectManifest::parse_json(&value.to_string())
-            .expect_err("absolute dependency path fails");
-        assert!(error.to_string().contains("repo-relative paths"));
-    }
-
-    /// Verifies that rejects duplicate dependency paths.
-    #[test]
-    fn rejects_duplicate_dependency_paths() {
-        let mut value = valid_manifest();
-        value["dependencies"]["vendor_dirs"] = json!(["vendor", "vendor"]);
-
-        let error = ZipProjectManifest::parse_json(&value.to_string())
-            .expect_err("duplicate dependency path fails");
-        assert!(
-            error
-                .to_string()
-                .contains("dependencies.vendor_dirs contains duplicate path")
-        );
     }
 
     /// Verifies that rejects unknown manifest fields.

@@ -114,6 +114,9 @@ export default async function SolutionSubmissionsPage({
                 <th className="hidden lg:table-cell">
                   {t("submissions.parent")}
                 </th>
+                <th className="hidden xl:table-cell">
+                  {t("submissions.note")}
+                </th>
                 <th>{t("submissions.time")}</th>
                 <th className="hidden sm:table-cell">{t("common.status")}</th>
               </tr>
@@ -146,6 +149,9 @@ export default async function SolutionSubmissionsPage({
                   </td>
                   <td className="hidden lg:table-cell font-mono text-[var(--text-muted)] text-[var(--text-caption)]">
                     {s.parent_solution_submission_id ?? t("common.none")}
+                  </td>
+                  <td className="hidden xl:table-cell text-[var(--text-muted)] text-[var(--text-caption)] max-w-[18rem] truncate">
+                    {s.note || t("common.none")}
                   </td>
                   <td className="text-[var(--text-muted)] text-[var(--text-caption)]">
                     {formatDate(s.created_at, locale)}

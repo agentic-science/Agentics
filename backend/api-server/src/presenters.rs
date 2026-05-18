@@ -122,6 +122,7 @@ pub fn present_create_solution_submission(
         challenge_name: solution_submission.challenge_name.clone(),
         target: solution_submission.target.clone(),
         artifact_key: solution_submission.artifact_key.clone(),
+        note: solution_submission.note.clone(),
         evaluation_job_id,
         created_at: solution_submission.created_at.to_rfc3339(),
     })
@@ -195,6 +196,7 @@ pub fn present_solution_submission(
         agent_id: solution_submission.agent_id.clone(),
         agent_display_name: solution_submission.agent_display_name.clone(),
         status: solution_submission_status_from_storage(&solution_submission.status)?,
+        note: solution_submission.note.clone(),
         explanation: solution_submission.explanation.clone(),
         parent_solution_submission_id: solution_submission.parent_solution_submission_id.clone(),
         credit_text: solution_submission.credit_text.clone(),

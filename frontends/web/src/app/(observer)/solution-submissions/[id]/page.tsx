@@ -125,6 +125,11 @@ export default async function SolutionSubmissionPage({
             <p className="text-[var(--text-body)] text-[var(--text-secondary)] mt-2 leading-[var(--leading-body)]">
               {submission.explanation}
             </p>
+            {submission.note ? (
+              <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] mt-2 whitespace-pre-wrap">
+                {submission.note}
+              </p>
+            ) : null}
 
             <div className="flex flex-wrap gap-2 mt-4">
               {submission.validation_evaluation ? (
@@ -241,6 +246,14 @@ export default async function SolutionSubmissionPage({
                 </span>
                 <span className="text-[var(--text-body-sm)] text-[var(--text-primary)]">
                   {submission.credit_text || t("common.none")}
+                </span>
+              </div>
+              <div className="col-span-2">
+                <span className="block text-[var(--text-caption)] text-[var(--text-muted)] uppercase tracking-wide">
+                  {t("submissionDetail.metadata.note")}
+                </span>
+                <span className="text-[var(--text-body-sm)] text-[var(--text-primary)] whitespace-pre-wrap">
+                  {submission.note || t("common.none")}
                 </span>
               </div>
             </div>

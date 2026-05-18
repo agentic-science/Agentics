@@ -32,7 +32,7 @@ pub struct CreateSolutionSubmissionInput {
     pub challenge_name: ChallengeName,
     pub target: TargetName,
     pub artifact_key: StorageKey,
-    pub language: String,
+    pub note: String,
     pub eval_type: ScoringMode,
     pub explanation: String,
     pub parent_solution_submission_id: Option<SolutionSubmissionId>,
@@ -59,7 +59,7 @@ pub struct SolutionSubmissionRecord {
     pub agent_display_name: Option<String>,
     pub challenge_title: Option<String>,
     pub artifact_key: StorageKey,
-    pub language: String,
+    pub note: String,
     pub status: String,
     pub explanation: String,
     pub parent_solution_submission_id: Option<SolutionSubmissionId>,
@@ -105,12 +105,12 @@ pub async fn create_solution_submission_with_job(
     let row = sqlx::query(
         r#"
         INSERT INTO solution_submissions (
-            id, challenge_name, target, agent_id, artifact_key, language,
+            id, challenge_name, target, agent_id, artifact_key, note,
             status, explanation, parent_solution_submission_id, credit_text, visible_after_eval
         )
         VALUES ($1::uuid, $2, $3, $4::uuid, $5, $6, 'pending', $7, $8::uuid, $9, FALSE)
         RETURNING
-            id, challenge_name, target, agent_id, artifact_key, language,
+            id, challenge_name, target, agent_id, artifact_key, note,
             status, explanation, parent_solution_submission_id, credit_text, visible_after_eval,
             created_at, updated_at
         "#,
@@ -120,7 +120,7 @@ pub async fn create_solution_submission_with_job(
     .bind(input.target.as_str())
     .bind(input.agent_id.as_str())
     .bind(input.artifact_key.as_str())
-    .bind(&input.language)
+    .bind(&input.note)
     .bind(&input.explanation)
     .bind(
         input
@@ -177,7 +177,7 @@ pub async fn create_solution_submission_with_job(
         agent_display_name: None,
         challenge_title: None,
         artifact_key: storage_key_from_row(&row, "artifact_key")?,
-        language: row.try_get("language")?,
+        note: row.try_get("note")?,
         status: row.try_get("status")?,
         explanation: row.try_get("explanation")?,
         parent_solution_submission_id: optional_solution_submission_id_from_row(
@@ -508,7 +508,7 @@ async fn get_solution_submission_by_id_inner(
         SELECT
             s.id, s.challenge_name, s.target, s.agent_id,
             p.title AS challenge_title, a.display_name AS agent_display_name,
-            s.artifact_key, s.language, s.status, s.explanation,
+            s.artifact_key, s.note, s.status, s.explanation,
             s.parent_solution_submission_id, s.credit_text, s.visible_after_eval,
             s.created_at, s.updated_at,
             j.id AS latest_job_id, j.status AS latest_job_status,
@@ -578,7 +578,7 @@ async fn get_solution_submission_by_id_inner(
         agent_display_name: r.try_get::<Option<String>, _>("agent_display_name")?,
         challenge_title: r.try_get::<Option<String>, _>("challenge_title")?,
         artifact_key: storage_key_from_row(&r, "artifact_key")?,
-        language: r.try_get("language")?,
+        note: r.try_get("note")?,
         status: r.try_get("status")?,
         explanation: r.try_get("explanation")?,
         parent_solution_submission_id: optional_solution_submission_id_from_row(
@@ -611,6 +611,7 @@ pub async fn list_admin_solution_submissions(
             p.title AS challenge_title,
             s.agent_id,
             a.display_name AS agent_display_name,
+            s.note,
             s.status,
             s.visible_after_eval,
             s.created_at,
@@ -662,6 +663,7 @@ pub async fn list_admin_solution_submissions(
                 target: target_from_row(&r, "target")?,
                 agent_id: agent_id_from_row(&r, "agent_id")?,
                 agent_display_name: r.try_get("agent_display_name")?,
+                note: r.try_get("note")?,
                 status: solution_submission_status_from_row(&r, "status")?,
                 visible_after_eval: r.try_get("visible_after_eval")?,
                 latest_job_id: optional_evaluation_job_id_from_row(&r, "latest_job_id")?,
@@ -691,7 +693,7 @@ pub async fn list_public_solution_submissions_for_challenge(
         r#"
         SELECT
             s.id, s.challenge_name, s.target, p.title AS challenge_title,
-            s.agent_id, a.display_name AS agent_display_name, s.status, s.explanation,
+            s.agent_id, a.display_name AS agent_display_name, s.status, s.note, s.explanation,
             s.parent_solution_submission_id, s.credit_text, s.created_at, s.updated_at,
             oe.primary_score AS official_score,
             oe.rank_score AS rank_score,
@@ -734,6 +736,7 @@ pub async fn list_public_solution_submissions_for_challenge(
                 agent_id: agent_id_from_row(&r, "agent_id")?,
                 agent_display_name: r.try_get("agent_display_name")?,
                 status: solution_submission_status_from_row(&r, "status")?,
+                note: r.try_get("note")?,
                 explanation: r.try_get("explanation")?,
                 parent_solution_submission_id: optional_solution_submission_id_from_row(
                     &r,

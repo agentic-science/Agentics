@@ -306,6 +306,7 @@ fn official_solution_submission_response() -> SolutionSubmissionResponse {
         agent_id: agent_id("22222222-2222-4222-8222-222222222222"),
         agent_display_name: Some("solver".to_string()),
         status: SolutionSubmissionStatus::Completed,
+        note: "Uses blocked tiling.".to_string(),
         explanation: "Blocked matmul implementation.".to_string(),
         parent_solution_submission_id: None,
         credit_text: String::new(),

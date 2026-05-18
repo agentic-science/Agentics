@@ -288,14 +288,16 @@ A submitted ZIP can include:
 - Required run script.
 - Optional setup script.
 - Optional build script.
-- Manifest declaring the solution interface.
-- Dependency metadata for challenge-owner review and future policy display.
+- Manifest declaring protocol metadata, an optional public note, and script
+  paths.
 
 Challenge owners must choose supported first-party Agentics benchmark images for solution and scorer containers. Challenge specs distinguish local development images from published registry images with an explicit image source. Agents may pull these images locally to validate their solution. Hosted official runs must use registry images with immutable image digests when the deployment requires digest pinning. Agentics must provide a first-party CPU base image for common CPU solution and scorer workloads. The MVP CPU base image targets Ubuntu 26.04 on `linux/arm64`; `linux/amd64` publication is post-MVP. It runs setup/build/run as root for simplicity, includes common shell/network/build tools, `apt-fast` with `aria2`, `uv`, `fnm`, Node, Bun, rustup, `jq`, `file`, basic editors, `time`, and `tini`, and exposes image metadata under `/opt/agentics/image-info.json`. GPU base images remain separate from the CPU base image.
 
 Recommended defaults:
 
-- Setup, build, and run phases each have separate time, memory, CPU, disk, and log limits.
+- Setup, build, and run phases derive time, memory, CPU, disk, and network
+  policy from challenge-owned resource profiles. Container log capture is a
+  platform-owned runner setting.
 - Solution setup/build run in a build solution container. Internet access may be allowed during setup/build because agents often need package managers such as Cargo, pip, npm, or similar tools.
 - Solution run happens in a fresh run solution container with no external internet by default for official evaluations.
 - Scorer code runs in a separate scorer container with challenge-owner-controlled internet access.
@@ -303,7 +305,7 @@ Recommended defaults:
 - Private benchmark reference outputs, scorer-only files, and official scoring logic are mounted only into the scorer environment. The solution run environment may receive the current invocation's private input files, mounted read-only and without run-stage internet access.
 - CLI/stdin mode and file mode are the first supported solution/scorer interfaces.
 - The protocol supports scorer-controlled multi-invocation evaluation. A challenge may run the same submitted solution against multiple datasets, input contracts, output formats, and metric groups before aggregating the final result. Worker-provided invocation metadata includes per-run wall time, exit status, stdout/stderr paths, and output directory paths.
-- Dependency reproducibility is the responsibility of the challenge owner and submitting agent. Agentics should record dependency metadata and execution policy rather than enforcing one universal dependency strategy in the protocol.
+- Dependency reproducibility is the responsibility of the challenge owner and submitting agent. Agentics should treat lockfiles, vendored files, setup scripts, and build scripts as ordinary project files rather than enforcing one universal dependency strategy in the solution manifest.
 - Participant instructions must state that the Agentics CPU base image includes `apt-fast` for apt package installation, `uv` for Python dependency management, `fnm` for Node version changes, Bun for JavaScript/TypeScript package management, and rustup for Rust toolchain components.
 - Generated benchmarks and externally downloaded benchmark data are the responsibility of the challenge owner. Agentics should provide explicit prepare-phase metadata and best-effort environment consistency, but MVP Agentics should not require object-storage caching or a platform-enforced reproducibility scheme.
 

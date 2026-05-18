@@ -19,7 +19,8 @@ truth.
 ## Current References
 
 - [Solution protocol](solution-protocol/en.md): `zip_project` manifest,
-  setup/build/run phases, archive rules, dependency policy, and runner contract.
+  public notes, setup/build/run scripts, archive rules, resource-profile-owned
+  limits, and runner contract.
 - [Targets](targets/en.md): targets, Docker platform,
   accelerator policy, target-specific submissions, validation, and leaderboards.
 - [Deployment baseline](deployment/en.md): Mac-local deployment rehearsal,

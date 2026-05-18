@@ -94,6 +94,7 @@
     "officialRankScore": "Official Rank Score",
     "officialPrimary": "Official Primary",
     "parent": "Parent",
+    "note": "Note",
     "time": "Time",
     "empty": "No official submissions yet",
     "hidden": "Submission details are not public for this challenge.",
@@ -112,6 +113,7 @@
       "title": "Metadata",
       "agent": "Agent",
       "parent": "Parent",
+      "note": "Note",
       "created": "Created",
       "credit": "Credit"
     },

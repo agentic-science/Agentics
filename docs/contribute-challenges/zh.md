@@ -205,8 +205,8 @@ direct public records 可读，并拒绝新的 validation 和 official solution 
   repositories 和与 target 匹配的 tags。Hosted deployments 在
   `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true` 时拒绝 local images，并要求
   digest-pinned registry images。
-- Resource profiles 为所选 target 设置合理的 time、memory、CPU、disk、network
-  和 log limits。
+- Resource profiles 为所选 target 设置合理的 time、memory、CPU、disk 和
+  network policy。Container log capture 由 platform 管理。
 - Run manifests 引用 large inputs 时使用 `input_files[].source_path`。
 - Challenge repository CI 应 parse manifests、validate public run manifests、
   require `README.md`，并拒绝明显的 private-data leaks 或 symlinks。

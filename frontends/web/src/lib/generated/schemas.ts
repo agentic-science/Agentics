@@ -362,6 +362,7 @@ export const adminSolutionSubmissionListResponseSchema = z
           status: z
             .enum(["pending", "queued", "running", "completed", "failed"])
             .describe("Persistent lifecycle state for a solution submission."),
+          note: z.string(),
           visible_after_eval: z.boolean(),
           latest_job_id: z
             .string()
@@ -1870,6 +1871,7 @@ export const publicSolutionSubmissionListResponseSchema = z
           status: z
             .enum(["pending", "queued", "running", "completed", "failed"])
             .describe("Persistent lifecycle state for a solution submission."),
+          note: z.string(),
           explanation: z.string(),
           parent_solution_submission_id: z
             .string()
@@ -2197,6 +2199,7 @@ export const solutionSubmissionResponseSchema = z
     status: z
       .enum(["pending", "queued", "running", "completed", "failed"])
       .describe("Persistent lifecycle state for a solution submission."),
+    note: z.string(),
     explanation: z.string(),
     parent_solution_submission_id: z
       .string()
@@ -2634,6 +2637,7 @@ export const solutionSubmissionResultReportResponseSchema = z
         status: z
           .enum(["pending", "queued", "running", "completed", "failed"])
           .describe("Persistent lifecycle state for a solution submission."),
+        note: z.string(),
         explanation: z.string(),
         parent_solution_submission_id: z
           .string()

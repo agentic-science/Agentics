@@ -87,6 +87,7 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
     let solution_submission_id = create_response["id"]
         .as_str()
         .expect("missing solution submission id");
+    assert_eq!(create_response["note"], "sample-sum smoke solution");
 
     let unauthenticated_solution_submission_response = client
         .get(api_url(
@@ -129,6 +130,7 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
         .await
         .expect("failed to decode solution submission response");
     assert_eq!(solution_submission["status"], "completed");
+    assert_eq!(solution_submission["note"], "sample-sum smoke solution");
     assert_eq!(solution_submission["visible_after_eval"], true);
     assert_eq!(solution_submission["evaluation"]["status"], "completed");
     assert_eq!(solution_submission["evaluation"]["eval_type"], "official");
@@ -671,6 +673,16 @@ async fn worker_enforces_run_writable_disk_limit(pool: sqlx::PgPool) {
     let config = test_config(storage.path(), &examples_challenges_root());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
+    sqlx::query(
+        r#"
+        UPDATE challenges
+        SET spec_json = jsonb_set(spec_json, '{targets,0,resource_profile,disk_limit_mb}', '64'::jsonb)
+        WHERE name = 'sample-sum'
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect("failed to lower test resource profile disk limit");
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
@@ -694,27 +706,10 @@ python main.py
             serde_json::json!({
                 "protocol": "zip_project",
                 "protocol_version": 1,
-                "runtime": {
-                    "language": "python",
-                    "language_version": "3.12",
-                    "runtime_profile": "python-cpu"
-                },
+                "note": "disk limit probe",
                 "commands": {
                     "run": "run.sh"
-                },
-                "phases": {
-                    "run": {
-                        "timeout_sec": 20,
-                        "disk_limit_mb": 64,
-                        "network_access": "disabled"
-                    }
-                },
-                "interface": {
-                    "kind": "stdio",
-                    "input_contract": "JSON on stdin",
-                    "output_contract": "answer on stdout"
-                },
-                "dependencies": { "policy": "image_provided" }
+                }
             })
             .to_string(),
         ),
@@ -1156,23 +1151,10 @@ fn grid_routing_symlink_solution_zip_base64() -> String {
             serde_json::json!({
                 "protocol": "zip_project",
                 "protocol_version": 1,
-                "runtime": {
-                    "language": "shell",
-                    "language_version": "posix",
-                    "runtime_profile": "python-cpu"
-                },
+                "note": "symlink output probe",
                 "commands": {
                     "run": "run.sh"
-                },
-                "phases": {
-                    "run": { "timeout_sec": 20, "network_access": "disabled" }
-                },
-                "interface": {
-                    "kind": "file_system",
-                    "input_contract": "case.json in AGENTICS_INPUT_DIR",
-                    "output_contract": "path.txt in AGENTICS_OUTPUT_DIR"
-                },
-                "dependencies": { "policy": "image_provided" }
+                }
             })
             .to_string(),
         ),

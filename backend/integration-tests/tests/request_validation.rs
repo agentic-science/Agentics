@@ -7,7 +7,7 @@ use std::path::Path;
 use helpers::{
     TestCreatorSession, api_url, basic_auth_header, copy_dir_all, create_creator_session,
     examples_challenges_root, run_worker_once, sample_sum_solution, solution_zip_base64, spawn_app,
-    spawn_app_with_config, test_config,
+    spawn_app_with_config, test_config, zip_project_zip_base64,
 };
 
 /// Handles creator auth for this module.
@@ -227,6 +227,75 @@ async fn solution_submission_rejects_invalid_target_before_artifact_decode(pool:
             .await
             .expect("failed to query solution submission count");
     assert_eq!(solution_submission_count.0, 0);
+}
+
+/// Verifies that oversized manifest notes are rejected before artifact storage.
+#[sqlx::test(migrations = "../migrations")]
+async fn solution_submission_rejects_oversized_manifest_note_before_storage(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = helpers::test_config(storage.path(), &helpers::examples_challenges_root());
+    let app = helpers::spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(helpers::api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "display_name": "note-limit-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+    let artifact_base64 = zip_project_zip_base64(vec![
+        (
+            "agentics.solution.json",
+            serde_json::json!({
+                "protocol": "zip_project",
+                "protocol_version": 1,
+                "note": "a".repeat(1025),
+                "commands": { "run": "run.sh" }
+            })
+            .to_string(),
+        ),
+        (
+            "run.sh",
+            "#!/usr/bin/env sh\nset -eu\npython main.py\n".to_string(),
+        ),
+        (
+            "main.py",
+            sample_sum_solution("payload['a'] + payload['b']"),
+        ),
+    ]);
+
+    let response = client
+        .post(helpers::api_url(&app, "/api/solution-submissions"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
+        .json(&serde_json::json!({
+            "challenge_name": "sample-sum",
+            "target": "linux-arm64-cpu",
+            "artifact_base64": artifact_base64
+        }))
+        .send()
+        .await
+        .expect("failed to send oversized-note submission");
+    assert_eq!(response.status(), 400);
+    let body: serde_json::Value = response.json().await.expect("failed to decode error");
+    assert!(
+        body["message"]
+            .as_str()
+            .expect("error message")
+            .contains("note must be at most 1024 UTF-8 bytes")
+    );
+
+    let solution_submission_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*)::BIGINT FROM solution_submissions")
+            .fetch_one(&pool)
+            .await
+            .expect("failed to query solution submission count");
+    assert_eq!(solution_submission_count, 0);
+    assert_eq!(regular_file_count(storage.path()), 0);
 }
 
 /// Verifies that invalid solution submission path ids return bad request.
@@ -785,6 +854,27 @@ async fn submit_solution_with_target(
         .send()
         .await
         .expect("failed to submit solution")
+}
+
+/// Count regular files under a test storage root.
+fn regular_file_count(root: &Path) -> usize {
+    let mut count = 0;
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(path) = stack.pop() {
+        let entries = std::fs::read_dir(&path).expect("test storage root should be readable");
+        for entry in entries {
+            let entry = entry.expect("test storage entry should be readable");
+            let file_type = entry
+                .file_type()
+                .expect("test storage entry type should be readable");
+            if file_type.is_dir() {
+                stack.push(entry.path());
+            } else if file_type.is_file() {
+                count += 1;
+            }
+        }
+    }
+    count
 }
 
 /// Writes challenge window challenge to the target path.

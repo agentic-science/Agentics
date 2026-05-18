@@ -266,13 +266,13 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 
 - **M0.2-PROTO-1：定义 `zip_project` manifest schema**
   - Commit target：`protocol: add zip_project manifest schema`
-  - Scope：定义 required run script、optional setup/build scripts、language/runtime metadata、solution interface、dependency policy 和 protocol versioning。
-  - Test spec：为 valid manifests、missing required fields、unsupported protocol versions、invalid paths 和 unsafe script references 添加 parser tests。
+  - Scope：定义 protocol metadata、optional public note、required run script、optional setup/build scripts 和 protocol versioning。Runtime、interface、dependency 和 execution-limit policy 不再是 participant-controlled manifest fields。
+  - Test spec：为 valid manifests、missing required fields、unsupported protocol versions、invalid paths、unsafe script references、old-field rejection、note length 和 note control-character validation 添加 parser tests。
 
 - **M0.2-PROTO-2：添加 setup/build/run phase model**
   - Commit target：`protocol: add setup build run phase model`
-  - Scope：为 setup、build 和 run 阶段建模，分别设置独立 timeout、memory、CPU、disk、network 和 log limits。
-  - Test spec：为 default phase limits、override validation 和 phase-specific failure reporting 添加 unit tests。
+  - Scope：根据 manifest-declared scripts 建模 setup、build 和 run phases，并从 challenge-owned resource profiles 派生 timeout、memory、CPU、disk 和 network policy。Container log capture 是 platform-owned runner configuration，不属于 solution manifest data。
+  - Test spec：为 script-to-phase resolution、profile-owned limit selection、platform log caps 和 phase-specific failure reporting 添加 unit tests。
 
 - **M0.2-PROTO-4：添加 scorer-owned prepare phase**
   - Commit target：`worker: add challenge prepare phase`
@@ -341,8 +341,8 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 
 - **M0.2-CLI-1：生成 manifest-based solution workspaces**
   - Commit target：`cli: generate zip_project manifests`
-  - Scope：扩展 `init-solution`，为选定 language/runtime profiles 创建 manifest-based workspaces。
-  - Test spec：至少为 Python 和一个非 Python runtime profile 的 generated workspaces 添加 golden tests。
+  - Scope：扩展 `init-solution`，创建包含 protocol metadata、empty public note 和 default run script path 的 manifest-based workspaces。Runtime/profile 和 interface choices 只保留为 README scaffolding hints。
+  - Test spec：至少为 Python 和一个非 Python README-hint profile 的 generated workspaces 添加 golden tests。
 
 - **M0.2-CLI-2：使用 benchmark images 运行 local validation**
   - Commit target：`cli: add local benchmark image validation`
@@ -363,7 +363,7 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 
 - **M0.2-WEB-1：展示 protocol 和 resource metadata**
   - Commit target：`web: show protocol and resource metadata`
-  - Scope：在 challenge 和 solution submission pages 展示 solution submission protocol version、language/runtime、resource limits、image digest 和 hardware profile。
+  - Scope：在 challenge 和 solution submission pages 展示 solution submission notes、target-owned resource limits、image digest 和 hardware profile。
   - Test spec：为 CPU-only 和 GPU-capable challenges 添加 rendering tests。
 
 - **M0.2-WEB-2：展示 target-specific leaderboards**
@@ -385,7 +385,7 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 
 - **M0.2-DOC-1：记录 multi-language challenge authoring**
   - Commit target：`docs: document multi-language zip_project authoring`
-  - Scope：添加 manifest examples、generated CLI workspace profiles、reference image guidance、setup/build/run contract、two-container solution execution model、scorer/solution data boundaries、internet policy、dependency metadata guidance、multi-run evaluation examples、language examples，以及 quota/admin capacity notes。Local benchmark-image validation 保持为独立 CLI milestone。
+  - Scope：添加 manifest examples、generated CLI workspace hints、reference image guidance、setup/build/run contract、two-container solution execution model、scorer/solution data boundaries、internet policy、dependency guidance、multi-run evaluation examples、language examples，以及 quota/admin capacity notes。Local benchmark-image validation 保持为独立 CLI milestone。
   - Test spec：使用 parser fixtures 和至少一个 local runner smoke test 验证 documented sample ZIPs。
 
 - **M0.2-DOC-2：记录 GPU benchmark expectations**
@@ -402,9 +402,9 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 
 | 里程碑 | 状态 | 附加说明 |
 | --- | --- | --- |
-| `M0.2-PROTO-1：定义 zip_project manifest schema` | 已实现 | 为 `agentics.solution.json` 添加 strict shared Rust parsing 和双语文档。 |
-| `M0.2-PROTO-2：添加 setup/build/run phase model` | 已实现 | 添加 per-phase defaults、override validation、execution plan resolution 和 failure-report models。 |
-| `M0.2-PROTO-3：添加 dependency policy validation` | 已推迟 | 作为 standalone milestone 废弃；dependency reproducibility 属于 challenge owners 和 submitting agents 的责任，Agentics 记录 metadata 和 execution policy。 |
+| `M0.2-PROTO-1：定义 zip_project manifest schema` | 已实现 | 为更小的 `agentics.solution.json` 添加 strict shared Rust parsing 和双语文档；manifest 只包含 protocol metadata、public note 和 setup/build/run script paths。 |
+| `M0.2-PROTO-2：添加 setup/build/run phase model` | 已实现 | 从 script paths 解析 setup/build/run phases，并从 challenge-owned resource profiles 与 platform-owned log capture settings 派生 execution limits。 |
+| `M0.2-PROTO-3：添加 dependency policy validation` | 已推迟 | 作为 standalone milestone 废弃；dependency reproducibility 属于 challenge owners 和 submitting agents 的责任，不再是 participant-controlled manifest policy。 |
 | `M0.2-PROTO-4：添加 scorer-owned prepare phase` | 已实现 | Challenge bundles 可以在 solution invocations 之前，在 scorer-owned `/prepared` workspace 中生成 validation 或 official run manifests 和 source-backed inputs。 |
 | `M0.2-TARGET-1：定义 target schema` | 已实现 | Challenge bundles 现在声明带有 canonical ARM64 CPU/CUDA targets、Docker platform、accelerator、validation flag 和 target-owned resource profile 的 `targets`。CUDA targets 必须声明 hardware model、GPU count、CUDA variant 和匹配的 CUDA version metadata。AMD64 Linux targets 在 post-MVP deployment capacity 存在前会被拒绝。 |
 | `M0.2-TARGET-2：添加 target-specific evaluations 和 leaderboards` | 已实现 | Solution submissions、jobs、evaluations、quotas、workers、API DTOs 和 leaderboard rows 现在都携带 `target`；HTTP submissions 会在 artifact decode 前校验 target。 |
@@ -416,15 +416,15 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 | `M0.2-WORKER-4：添加 GPU validation 和 official scheduling hooks` | 计划中 | Single-DGX CUDA execution 使用 target accelerator metadata；heterogeneous worker capability flags 和 GPU-specific scheduling 仍是计划中。 |
 | `M0.2-BE-1：暴露 resource profiles` | 已实现 | Public challenge detail responses 暴露 strict target 和 resource profile metadata，并拒绝 invalid stored specs。 |
 | `M0.2-BE-2：添加 capacity 和 quota controls` | 已实现 | 在 artifact upload 前执行 validation 和 official quotas，暴露 `/admin/capacity`，并记录 admin official-run overrides。Heterogeneous GPU quota 保留在未来 GPU lane 中。 |
-| `M0.2-CLI-1：生成 manifest-based solution workspaces` | 已实现 | `init-solution` 现在可为 `python-cpu`、`rust-cpu`、`node-cpu` 和 `generic-cpu` profiles 生成通过校验的 manifests。 |
+| `M0.2-CLI-1：生成 manifest-based solution workspaces` | 已实现 | `init-solution` 现在生成带 empty public note 的更小 manifests，并只把 `python-cpu`、`rust-cpu`、`node-cpu` 和 `generic-cpu` 作为 README hints 记录。 |
 | `M0.2-CLI-2：使用 benchmark images 运行 local validation` | 已实现 | `validate <challenge-name> --bundle-dir <path> --target <target>` 会通过 shared Docker runner path 运行 local validation，默认将 local logs 存入 CLI cache，支持 `--all-targets`，并在 packaging 前 preflight target-disabled validation。 |
 | `M0.2-CLI-3：选择 targets` | 已实现 | `submit` 和 `validate --remote` 支持 `--target` 和 `--all-targets`；CLI preflight 会在 packaging 前拒绝 unsupported targets 和 target-disabled validation。 |
 | `M0.2-CLI-4：请求 GPU validation` | 计划中 | Dedicated GPU quota UX 仍是计划中；当前 CLI 可通过 `--target` 选择 CUDA target。 |
-| `M0.2-WEB-1：展示 protocol 和 resource metadata` | 已实现 | Observer challenge pages 和 frontend schemas 展示 protocol、manifest、scorer command、targets 和 resource profile metadata。 |
+| `M0.2-WEB-1：展示 protocol 和 resource metadata` | 已实现 | Observer challenge pages 和 frontend schemas 展示 submission notes、scorer command、targets 和 resource profile metadata。 |
 | `M0.2-WEB-2：展示 target-specific leaderboards` | 已实现 | Observer leaderboard 会获取并展示 selected target，并为 multi-target challenges 显示 target tabs。 |
 | `M0.2-ADMIN-1：管理 resource profiles 和 quotas` | 已实现 | Admin challenge rows 展示 current targets 和 mode flags；capacity tab 展示 configured quotas 和 active usage。Heterogeneous GPU configuration 保留在未来 GPU lane 中。 |
 | `M0.2-EXAMPLE-1：添加 zip_project protocol fixture challenges 和 submissions` | 已实现 | 添加 sample-sum stdio、grid-routing file-mode 和 matrix-multiplication multi-invocation fixtures、manifest-based solutions、scorer tests，以及覆盖 timing metadata、private source-backed inputs 和 run-stage no-egress behavior 的 worker integration tests。 |
-| `M0.2-DOC-1：记录 multi-language challenge authoring` | 已实现 | 已记录 canonical protocol、generated CLI profiles、run manifests、resource profiles、execution isolation、dependency metadata、quota controls、admin capacity views 和 local benchmark-image validation。 |
+| `M0.2-DOC-1：记录 multi-language challenge authoring` | 已实现 | 已记录 canonical protocol、generated CLI hints、run manifests、resource profiles、execution isolation、dependency guidance、quota controls、admin capacity views 和 local benchmark-image validation。 |
 | `M0.2-DOC-2：记录 GPU benchmark expectations` | 已实现 | MVP CUDA target policy 已记录 required hardware metadata、active CUDA variants、`linux-arm64-cuda` 下的 shared leaderboard behavior，以及 challenge-owner comparability responsibility。Heterogeneous GPU scheduling docs 仍是未来工作。 |
 | `M0.2-DOC-3：记录 target authoring` | 已实现 | 新增双语 v0.2 target docs，覆盖 targets、Docker platforms、validation flags、target-aware APIs、CLI behavior、worker behavior 和 leaderboards。 |
 

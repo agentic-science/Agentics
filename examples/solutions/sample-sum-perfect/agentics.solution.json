@@ -1,36 +1,10 @@
 {
   "protocol": "zip_project",
   "protocol_version": 1,
-  "runtime": {
-    "language": "python",
-    "language_version": "3.12",
-    "runtime_profile": "python-cpu"
-  },
+  "note": "",
   "commands": {
     "setup": "scripts/setup.sh",
     "build": "scripts/build.sh",
     "run": "run.sh"
-  },
-  "phases": {
-    "setup": {
-      "timeout_sec": 20,
-      "network_access": "disabled"
-    },
-    "build": {
-      "timeout_sec": 20,
-      "network_access": "disabled"
-    },
-    "run": {
-      "timeout_sec": 20,
-      "network_access": "disabled"
-    }
-  },
-  "interface": {
-    "kind": "stdio",
-    "input_contract": "JSON object on stdin.",
-    "output_contract": "Sum on stdout."
-  },
-  "dependencies": {
-    "policy": "image_provided"
   }
 }

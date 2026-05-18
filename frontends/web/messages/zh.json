@@ -94,6 +94,7 @@
     "officialRankScore": "官方排名分数",
     "officialPrimary": "官方主要指标",
     "parent": "父提交",
+    "note": "备注",
     "time": "时间",
     "empty": "暂无官方提交",
     "hidden": "该挑战的提交详情暂未公开。",
@@ -112,6 +113,7 @@
       "title": "提交元信息",
       "agent": "智能体",
       "parent": "父提交",
+      "note": "备注",
       "created": "创建时间",
       "credit": "致谢"
     },

@@ -84,17 +84,24 @@ fn package_solution_workspace_with_limits(
         .with_context(|| format!("failed to read {}", manifest_path.display()))?;
     let manifest = shared::zip_project::ZipProjectManifest::parse_json(&manifest_raw)?;
 
-    let run_script = workspace_dir.join(manifest.commands.run.as_path());
-    if !fs::exists(&run_script)
-        .with_context(|| format!("failed to inspect {}", run_script.display()))?
-    {
-        bail!(
-            "{} must exist before packaging a solution submission",
-            manifest.commands.run
-        );
+    let mut required_scripts = Vec::new();
+    if let Some(setup) = &manifest.commands.setup {
+        required_scripts.push(setup);
     }
-    if !run_script.is_file() {
-        bail!("{} must be a file", manifest.commands.run);
+    if let Some(build) = &manifest.commands.build {
+        required_scripts.push(build);
+    }
+    required_scripts.push(&manifest.commands.run);
+    for script in &required_scripts {
+        let script_path = workspace_dir.join(script.as_path());
+        if !fs::exists(&script_path)
+            .with_context(|| format!("failed to inspect {}", script_path.display()))?
+        {
+            bail!("{script} must exist before packaging a solution submission");
+        }
+        if !script_path.is_file() {
+            bail!("{script} must be a file");
+        }
     }
 
     let collected = collect_package_files(&workspace_dir, limits)?;
@@ -105,14 +112,13 @@ fn package_solution_workspace_with_limits(
     {
         bail!("{REQUIRED_MANIFEST} is excluded by .gitignore or package filters");
     }
-    if !files
-        .iter()
-        .any(|file| file.archive_name == manifest.commands.run.as_str())
-    {
-        bail!(
-            "{} is excluded by .gitignore or package filters",
-            manifest.commands.run
-        );
+    for script in required_scripts {
+        if !files
+            .iter()
+            .any(|file| file.archive_name == script.as_str())
+        {
+            bail!("{script} is excluded by .gitignore or package filters");
+        }
     }
     if files.is_empty() {
         bail!("workspace contains no packageable files");
@@ -323,10 +329,26 @@ mod tests {
             serde_json::json!({
                 "protocol": "zip_project",
                 "protocol_version": 1,
-                "runtime": { "language": "python" },
-                "commands": { "run": "run.sh" },
-                "interface": { "kind": "stdio" },
-                "dependencies": { "policy": "image_provided" }
+                "note": "",
+                "commands": { "run": "run.sh" }
+            })
+            .to_string(),
+        )
+        .expect("manifest");
+    }
+
+    /// Writes manifest with setup and build commands to the target path.
+    fn write_manifest_with_setup_build(root: &std::path::Path) {
+        fs::write(
+            root.join("agentics.solution.json"),
+            serde_json::json!({
+                "protocol": "zip_project",
+                "protocol_version": 1,
+                "commands": {
+                    "setup": "scripts/setup.sh",
+                    "build": "scripts/build.sh",
+                    "run": "run.sh"
+                }
             })
             .to_string(),
         )
@@ -384,6 +406,44 @@ mod tests {
             package_solution_workspace(temp.path()).expect_err("ignored run.sh should fail");
 
         assert!(error.to_string().contains("run.sh is excluded"));
+    }
+
+    /// Verifies that package requires optional setup and build scripts when declared.
+    #[test]
+    fn package_requires_declared_setup_and_build_scripts() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        write_manifest_with_setup_build(temp.path());
+        fs::write(temp.path().join("run.sh"), "#!/usr/bin/env bash\n").expect("run.sh");
+
+        let error =
+            package_solution_workspace(temp.path()).expect_err("setup script should be required");
+
+        assert!(error.to_string().contains("scripts/setup.sh must exist"));
+    }
+
+    /// Verifies that package includes optional setup and build scripts.
+    #[test]
+    fn package_includes_declared_setup_and_build_scripts() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        write_manifest_with_setup_build(temp.path());
+        fs::create_dir(temp.path().join("scripts")).expect("scripts dir");
+        fs::write(
+            temp.path().join("scripts/setup.sh"),
+            "#!/usr/bin/env bash\n",
+        )
+        .expect("setup");
+        fs::write(
+            temp.path().join("scripts/build.sh"),
+            "#!/usr/bin/env bash\n",
+        )
+        .expect("build");
+        fs::write(temp.path().join("run.sh"), "#!/usr/bin/env bash\n").expect("run.sh");
+
+        let package = package_solution_workspace(temp.path()).expect("workspace should package");
+        let names = zip_file_names(&package.bytes);
+
+        assert!(names.contains(&"scripts/setup.sh".to_string()));
+        assert!(names.contains(&"scripts/build.sh".to_string()));
     }
 
     /// Verifies that package rejects too many files before zip creation.
