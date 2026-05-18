@@ -89,7 +89,7 @@ export const adminChallengeListResponseSchema = z
                                 reference: z
                                   .string()
                                   .regex(
-                                    /^[^\/.:]+[.:][^\/]*\/[^\s@:]+(\/[^\s@:]+)*:[^\s@]+(@sha256:[0-9a-f]{64})?$/,
+                                    /^[^/.:]+[.:][^/]*\/[^\s@:]+(\/[^\s@:]+)*:[^\s@]+(@sha256:[0-9a-f]{64})?$/,
                                   ),
                                 source: z.literal("registry"),
                               })
@@ -157,7 +157,7 @@ export const adminChallengeListResponseSchema = z
                                 reference: z
                                   .string()
                                   .regex(
-                                    /^[^\/.:]+[.:][^\/]*\/[^\s@:]+(\/[^\s@:]+)*:[^\s@]+(@sha256:[0-9a-f]{64})?$/,
+                                    /^[^/.:]+[.:][^/]*\/[^\s@:]+(\/[^\s@:]+)*:[^\s@]+(@sha256:[0-9a-f]{64})?$/,
                                   ),
                                 source: z.literal("registry"),
                               })
@@ -504,7 +504,7 @@ export const challengeDetailResponseSchema = z
                             reference: z
                               .string()
                               .regex(
-                                /^[^\/.:]+[.:][^\/]*\/[^\s@:]+(\/[^\s@:]+)*:[^\s@]+(@sha256:[0-9a-f]{64})?$/,
+                                /^[^/.:]+[.:][^/]*\/[^\s@:]+(\/[^\s@:]+)*:[^\s@]+(@sha256:[0-9a-f]{64})?$/,
                               ),
                             source: z.literal("registry"),
                           })
@@ -569,7 +569,7 @@ export const challengeDetailResponseSchema = z
                             reference: z
                               .string()
                               .regex(
-                                /^[^\/.:]+[.:][^\/]*\/[^\s@:]+(\/[^\s@:]+)*:[^\s@]+(@sha256:[0-9a-f]{64})?$/,
+                                /^[^/.:]+[.:][^/]*\/[^\s@:]+(\/[^\s@:]+)*:[^\s@]+(@sha256:[0-9a-f]{64})?$/,
                               ),
                             source: z.literal("registry"),
                           })
@@ -875,6 +875,7 @@ export const challengeDraftListResponseSchema = z
               "draft",
               "validated",
               "approved",
+              "publishing",
               "rejected",
               "published",
               "abandoned",
@@ -1095,6 +1096,7 @@ export const challengeDraftResponseSchema = z
         "draft",
         "validated",
         "approved",
+        "publishing",
         "rejected",
         "published",
         "abandoned",
@@ -1877,7 +1879,6 @@ export const publicSolutionSubmissionListResponseSchema = z
             )
             .optional(),
           credit_text: z.string(),
-          validation_score: z.number().optional(),
           official_score: z.number().optional(),
           rank_score: z.number().optional(),
           aggregate_metrics: z.array(
@@ -3104,6 +3105,9 @@ export type AdminSessionResponse = z.infer<typeof adminSessionResponseSchema>;
 export type AdminSolutionSubmissionListResponse = z.infer<
   typeof adminSolutionSubmissionListResponseSchema
 >;
+export type ChallengeAdminResponse = z.infer<
+  typeof challengeAdminResponseSchema
+>;
 export type ChallengeDetailResponse = z.infer<
   typeof challengeDetailResponseSchema
 >;
@@ -3145,8 +3149,13 @@ export type CreatorMeResponse = z.infer<typeof creatorMeResponseSchema>;
 export type CreatorSessionResponse = z.infer<
   typeof creatorSessionResponseSchema
 >;
+export type DisableAgentResponse = z.infer<typeof disableAgentResponseSchema>;
+export type EvaluationJobResponse = z.infer<typeof evaluationJobResponseSchema>;
 export type GithubOauthLoginResponse = z.infer<
   typeof githubOauthLoginResponseSchema
+>;
+export type HideSolutionSubmissionResponse = z.infer<
+  typeof hideSolutionSubmissionResponseSchema
 >;
 export type LeaderboardResponse = z.infer<typeof leaderboardResponseSchema>;
 export type PioneerCodeDetailResponse = z.infer<
@@ -3158,8 +3167,12 @@ export type PioneerCodeListResponse = z.infer<
 export type RankingContextResponse = z.infer<
   typeof rankingContextResponseSchema
 >;
+export type RegisterAgentRequest = z.infer<typeof registerAgentRequestSchema>;
 export type RevokePioneerCodeResponse = z.infer<
   typeof revokePioneerCodeResponseSchema
+>;
+export type PublishChallengeResponse = z.infer<
+  typeof publishChallengeResponseSchema
 >;
 export type ScoreDistributionResponse = z.infer<
   typeof scoreDistributionResponseSchema

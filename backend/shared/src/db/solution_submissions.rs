@@ -480,7 +480,30 @@ pub async fn get_solution_submission_by_id(
     pool: &PgPool,
     solution_submission_id: &SolutionSubmissionId,
 ) -> Result<Option<SolutionSubmissionRecord>> {
-    let row = sqlx::query(
+    get_solution_submission_by_id_inner(pool, solution_submission_id, false).await
+}
+
+/// Fetch one public result-of-record submission with the latest completed official evaluation.
+pub async fn get_public_solution_submission_by_id(
+    pool: &PgPool,
+    solution_submission_id: &SolutionSubmissionId,
+) -> Result<Option<SolutionSubmissionRecord>> {
+    get_solution_submission_by_id_inner(pool, solution_submission_id, true).await
+}
+
+/// Fetch one solution submission while optionally restricting official evaluations to completed
+/// public result-of-record rows.
+async fn get_solution_submission_by_id_inner(
+    pool: &PgPool,
+    solution_submission_id: &SolutionSubmissionId,
+    completed_official_only: bool,
+) -> Result<Option<SolutionSubmissionRecord>> {
+    let official_status_filter = if completed_official_only {
+        "AND status = 'completed'"
+    } else {
+        ""
+    };
+    let query = format!(
         r#"
         SELECT
             s.id, s.challenge_name, s.target, s.agent_id,
@@ -529,15 +552,16 @@ pub async fn get_solution_submission_by_id(
         ) pe ON TRUE
         LEFT JOIN LATERAL (
             SELECT id, target, status, eval_type, primary_score, rank_score, aggregate_metrics_json, run_metrics_json, public_results_json, validation_summary_json, official_summary_json, log_key, started_at, finished_at
-            FROM evaluations WHERE solution_submission_id = s.id AND eval_type = 'official' AND target = s.target ORDER BY created_at DESC LIMIT 1
+            FROM evaluations WHERE solution_submission_id = s.id AND eval_type = 'official' AND target = s.target {official_status_filter} ORDER BY created_at DESC LIMIT 1
         ) oe ON TRUE
         WHERE s.id = $1::uuid
         LIMIT 1
         "#
-    )
-    .bind(solution_submission_id.as_str())
-    .fetch_optional(pool)
-    .await?;
+    );
+    let row = sqlx::query(&query)
+        .bind(solution_submission_id.as_str())
+        .fetch_optional(pool)
+        .await?;
 
     let Some(r) = row else {
         return Ok(None);
@@ -669,20 +693,13 @@ pub async fn list_public_solution_submissions_for_challenge(
             s.id, s.challenge_name, s.target, p.title AS challenge_title,
             s.agent_id, a.display_name AS agent_display_name, s.status, s.explanation,
             s.parent_solution_submission_id, s.credit_text, s.created_at, s.updated_at,
-            COALESCE(pe.primary_score, (pe.validation_summary_json->>'score')::double precision) AS validation_score,
             oe.primary_score AS official_score,
-            COALESCE(oe.rank_score, pe.rank_score) AS rank_score,
+            oe.rank_score AS rank_score,
             '[]'::jsonb AS aggregate_metrics,
             '[]'::jsonb AS official_metrics
         FROM solution_submissions s
         JOIN agents a ON a.id = s.agent_id
         JOIN challenges p ON p.name = s.challenge_name
-        LEFT JOIN LATERAL (
-            SELECT primary_score, rank_score, aggregate_metrics_json, validation_summary_json
-            FROM evaluations
-            WHERE solution_submission_id = s.id AND eval_type = 'validation' AND status = 'completed' AND target = s.target
-            ORDER BY created_at DESC LIMIT 1
-        ) pe ON TRUE
         LEFT JOIN LATERAL (
             SELECT primary_score, rank_score, aggregate_metrics_json, official_summary_json
             FROM evaluations
@@ -725,7 +742,6 @@ pub async fn list_public_solution_submissions_for_challenge(
                 credit_text: r.try_get("credit_text")?,
                 created_at: r.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
                 updated_at: r.try_get::<DateTime<Utc>, _>("updated_at")?.to_rfc3339(),
-                validation_score: r.try_get::<Option<f64>, _>("validation_score")?,
                 official_score: r.try_get::<Option<f64>, _>("official_score")?,
                 rank_score: r.try_get::<Option<f64>, _>("rank_score")?,
                 aggregate_metrics,

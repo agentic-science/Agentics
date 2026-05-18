@@ -121,6 +121,23 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     assert_eq!(public_solution_submission["evaluation"]["rank_score"], 1.0);
 
     insert_validation_evaluation_for_submission(&pool, pending_id, 0.25).await;
+    insert_running_official_evaluation_for_submission(&pool, pending_id, 999.0).await;
+
+    let public_solution_submission_after_rejudge: serde_json::Value = client
+        .get(api_url(
+            &app,
+            &format!("/api/public/solution-submissions/{pending_id}"),
+        ))
+        .send()
+        .await
+        .expect("failed to get public solution submission during rejudge")
+        .json()
+        .await
+        .expect("failed to decode public solution submission during rejudge");
+    assert_eq!(
+        public_solution_submission_after_rejudge["evaluation"]["rank_score"], 1.0,
+        "public detail must keep the latest completed official result during a running rejudge"
+    );
 
     let public_result_report: serde_json::Value = client
         .get(api_url(
@@ -176,7 +193,10 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         .iter()
         .find(|item| item["id"] == pending_id)
         .expect("first solution submission should be listed");
-    assert_eq!(listed_first["validation_score"], 0.25);
+    assert!(
+        listed_first.get("validation_score").is_none(),
+        "public lists must not expose validation scores"
+    );
     assert_eq!(listed_first["official_score"], 42.0);
     assert_eq!(listed_first["rank_score"], 1.0);
     assert_eq!(listed_first["aggregate_metrics"], serde_json::json!([]));
@@ -531,6 +551,86 @@ async fn seeded_challenge_summaries_are_public(pool: sqlx::PgPool) {
         .await
         .expect("failed to decode sample-sum challenge");
     assert_eq!(sample_sum_challenge["title"], "Sample Sum");
+}
+
+/// Adds a running official rejudge after a completed official result.
+async fn insert_running_official_evaluation_for_submission(
+    pool: &sqlx::PgPool,
+    solution_submission_id: &str,
+    rank_score: f64,
+) {
+    let job_id = uuid::Uuid::new_v4().to_string();
+    let evaluation_id = uuid::Uuid::new_v4().to_string();
+    sqlx::query(
+        r#"
+        INSERT INTO evaluation_jobs (
+            id,
+            solution_submission_id,
+            challenge_name,
+            target,
+            eval_type,
+            status,
+            worker_id,
+            attempt_count,
+            payload_json,
+            claimed_at
+        )
+        VALUES (
+            $1::uuid,
+            $2::uuid,
+            'sample-sum',
+            'linux-arm64-cpu',
+            'official',
+            'running',
+            'public-read-rejudge-worker',
+            1,
+            '{}'::jsonb,
+            NOW()
+        )
+        "#,
+    )
+    .bind(&job_id)
+    .bind(solution_submission_id)
+    .execute(pool)
+    .await
+    .expect("running official job should insert");
+    sqlx::query(
+        r#"
+        INSERT INTO evaluations (
+            id,
+            solution_submission_id,
+            job_id,
+            target,
+            eval_type,
+            status,
+            primary_score,
+            rank_score,
+            aggregate_metrics_json,
+            official_summary_json,
+            started_at
+        )
+        VALUES (
+            $1::uuid,
+            $2::uuid,
+            $3::uuid,
+            'linux-arm64-cpu',
+            'official',
+            'running',
+            $4,
+            $4,
+            '[{"metric_name":"score","value":999.0}]'::jsonb,
+            '{"score":999.0,"passed":999,"total":999}'::jsonb,
+            NOW()
+        )
+        "#,
+    )
+    .bind(&evaluation_id)
+    .bind(solution_submission_id)
+    .bind(&job_id)
+    .bind(rank_score)
+    .execute(pool)
+    .await
+    .expect("running official evaluation should insert");
 }
 
 /// Adds a validation evaluation to an already evaluated official submission for precedence tests.

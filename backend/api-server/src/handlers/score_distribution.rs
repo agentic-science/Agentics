@@ -1,7 +1,7 @@
 //! Score-distribution builders for public challenge metric views.
 
 use shared::error::{AppError, Result};
-use shared::models::challenge::ChallengeBundleSpec;
+use shared::models::challenge::{ChallengeBundleSpec, MetricVisibility};
 use shared::models::evaluation::MetricValue;
 use shared::models::names::{ChallengeName, MetricName, TargetName};
 use shared::models::request::{
@@ -92,7 +92,15 @@ fn ensure_metric_is_publicly_distributable(
     if matches!(
         metric_name.as_str(),
         "rank_score" | "best_rank_score" | "official_score"
-    ) || metric_name == &spec.metric_schema.ranking.primary_metric_name
+    ) {
+        return Ok(());
+    }
+
+    if metric_name == &spec.metric_schema.ranking.primary_metric_name
+        && spec
+            .metric_schema
+            .metric(metric_name)
+            .is_some_and(|metric| metric.visibility == MetricVisibility::Public)
     {
         return Ok(());
     }
@@ -212,6 +220,7 @@ fn histogram_bucket_index(value: f64, min: f64, width: f64, bucket_count: usize)
 
 #[cfg(test)]
 mod tests {
+    use shared::error::AppError;
     use shared::models::challenge::{
         ChallengeBundleSpec, ChallengeEligibilitySpec, ChallengeEligibilityType,
         ChallengeExecutionSpec, ChallengeResultDetailVisibility,
@@ -396,5 +405,33 @@ mod tests {
         assert_eq!(response.count, 2);
         assert_eq!(response.min, Some(-50.0));
         assert_eq!(response.max, Some(-20.0));
+    }
+
+    /// Verifies official-only primary metrics are not distributable through the public endpoint.
+    #[test]
+    fn primary_metric_distribution_rejects_official_only_metric() {
+        let mut spec = minimized_metric_spec();
+        spec.metric_schema.metrics[0].visibility = MetricVisibility::Official;
+
+        let error = build_score_distribution_response(
+            challenge_name("latency-challenge"),
+            target_name("linux-arm64-cpu"),
+            metric_name("latency_ms"),
+            &spec,
+            vec![entry(20.0, -20.0)],
+        )
+        .expect_err("official-only primary metric should be rejected");
+        assert!(matches!(error, AppError::Forbidden(_)));
+
+        let response = build_score_distribution_response(
+            challenge_name("latency-challenge"),
+            target_name("linux-arm64-cpu"),
+            metric_name("official_score"),
+            &spec,
+            vec![entry(20.0, -20.0)],
+        )
+        .expect("official_score built-in remains public");
+        assert_eq!(response.count, 1);
+        assert_eq!(response.min, Some(20.0));
     }
 }

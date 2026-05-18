@@ -576,7 +576,7 @@ pub async fn get_public_solution_submission(
     SolutionSubmissionPath(id): SolutionSubmissionPath,
     State(state): State<AppState>,
 ) -> Result<Json<SolutionSubmissionResponse>> {
-    let solution_submission = db::get_solution_submission_by_id(&state.db, &id).await?;
+    let solution_submission = db::get_public_solution_submission_by_id(&state.db, &id).await?;
     let solution_submission = solution_submission.ok_or(AppError::NotFound)?;
     if !solution_submission.visible_after_eval {
         return Err(AppError::NotFound);
@@ -593,7 +593,7 @@ pub async fn get_public_solution_submission_result_report(
     SolutionSubmissionPath(id): SolutionSubmissionPath,
     State(state): State<AppState>,
 ) -> Result<Json<SolutionSubmissionResultReportResponse>> {
-    let solution_submission = db::get_solution_submission_by_id(&state.db, &id).await?;
+    let solution_submission = db::get_public_solution_submission_by_id(&state.db, &id).await?;
     let solution_submission = solution_submission.ok_or(AppError::NotFound)?;
     if !solution_submission.visible_after_eval {
         return Err(AppError::NotFound);
@@ -613,7 +613,7 @@ pub async fn get_public_solution_submission_ranking_context(
     State(state): State<AppState>,
     Query(query): Query<RankingContextQuery>,
 ) -> Result<Json<RankingContextResponse>> {
-    let solution_submission = db::get_solution_submission_by_id(&state.db, &id).await?;
+    let solution_submission = db::get_public_solution_submission_by_id(&state.db, &id).await?;
     let solution_submission = solution_submission.ok_or(AppError::NotFound)?;
     if !solution_submission.visible_after_eval {
         return Err(AppError::NotFound);
@@ -637,7 +637,7 @@ pub async fn get_public_artifact(
     SolutionSubmissionPath(id): SolutionSubmissionPath,
     State(state): State<AppState>,
 ) -> Result<Json<SolutionSubmissionArtifactResponse>> {
-    let solution_submission = db::get_solution_submission_by_id(&state.db, &id).await?;
+    let solution_submission = db::get_public_solution_submission_by_id(&state.db, &id).await?;
     let solution_submission = solution_submission.ok_or(AppError::NotFound)?;
     if !solution_submission.visible_after_eval {
         return Err(AppError::NotFound);

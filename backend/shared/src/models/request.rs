@@ -217,8 +217,6 @@ pub struct PublicSolutionSubmissionListItemDto {
     pub parent_solution_submission_id: Option<SolutionSubmissionId>,
     pub credit_text: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub validation_score: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub official_score: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rank_score: Option<f64>,

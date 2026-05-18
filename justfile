@@ -65,6 +65,9 @@ cargo-clippy:
 web-lint:
     cd frontends/web && bun run lint
 
+web-schema-check:
+    cd frontends/web && bun run generate:schemas:check
+
 web-format:
     cd frontends/web && bun run format
 

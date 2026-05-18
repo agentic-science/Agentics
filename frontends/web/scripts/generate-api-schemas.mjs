@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { jsonSchemaToZod } from "json-schema-to-zod";
@@ -8,6 +8,7 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const webRoot = resolve(scriptDir, "..");
 const repoRoot = resolve(webRoot, "../..");
 const outputPath = resolve(webRoot, "src/lib/generated/schemas.ts");
+const checkMode = process.argv.includes("--check");
 
 const rawSchemas = execFileSync(
   "cargo",
@@ -28,6 +29,7 @@ const typeAliases = new Map([
     "adminSolutionSubmissionListResponseSchema",
     "AdminSolutionSubmissionListResponse",
   ],
+  ["challengeAdminResponseSchema", "ChallengeAdminResponse"],
   ["challengeDetailResponseSchema", "ChallengeDetailResponse"],
   ["challengeDraftCleanupResponseSchema", "ChallengeDraftCleanupResponse"],
   ["challengeDraftListResponseSchema", "ChallengeDraftListResponse"],
@@ -52,12 +54,17 @@ const typeAliases = new Map([
   ["creatorChallengeStatsResponseSchema", "CreatorChallengeStatsResponse"],
   ["creatorMeResponseSchema", "CreatorMeResponse"],
   ["creatorSessionResponseSchema", "CreatorSessionResponse"],
+  ["disableAgentResponseSchema", "DisableAgentResponse"],
+  ["evaluationJobResponseSchema", "EvaluationJobResponse"],
   ["githubOauthLoginResponseSchema", "GithubOauthLoginResponse"],
+  ["hideSolutionSubmissionResponseSchema", "HideSolutionSubmissionResponse"],
   ["leaderboardResponseSchema", "LeaderboardResponse"],
   ["pioneerCodeDetailResponseSchema", "PioneerCodeDetailResponse"],
   ["pioneerCodeListResponseSchema", "PioneerCodeListResponse"],
   ["rankingContextResponseSchema", "RankingContextResponse"],
+  ["registerAgentRequestSchema", "RegisterAgentRequest"],
   ["revokePioneerCodeResponseSchema", "RevokePioneerCodeResponse"],
+  ["publishChallengeResponseSchema", "PublishChallengeResponse"],
   ["scoreDistributionResponseSchema", "ScoreDistributionResponse"],
   [
     "publicSolutionSubmissionListResponseSchema",
@@ -100,13 +107,19 @@ output += `export type AdminChallengeListItem = AdminChallengeListResponse["item
 output += `export type ChallengeDraftListItem = ChallengeDraftListResponse["items"][number];\n`;
 output += `export type AdminSolutionSubmissionListItem = AdminSolutionSubmissionListResponse["items"][number];\n`;
 output = replaceRegexConstructors(output);
+output = formatTypescript(output);
 
 mkdirSync(dirname(outputPath), { recursive: true });
-writeFileSync(outputPath, output);
-execFileSync("bunx", ["biome", "format", "--write", outputPath], {
-  cwd: webRoot,
-  stdio: "inherit",
-});
+if (checkMode) {
+  const existing = readFileSync(outputPath, "utf8");
+  if (existing !== output) {
+    throw new Error(
+      "generated schemas are stale; run `bun run generate:schemas` in frontends/web",
+    );
+  }
+} else {
+  writeFileSync(outputPath, output);
+}
 
 function resolveLocalRefs(node, root) {
   if (Array.isArray(node)) {
@@ -167,6 +180,43 @@ function stripJsonSchemaMetadata(node) {
 function replaceRegexConstructors(source) {
   return source.replaceAll(/new RegExp\("((?:\\.|[^"\\])*)"\)/g, (_, raw) => {
     const pattern = JSON.parse(`"${raw}"`);
-    return `/${pattern.replaceAll("/", "\\/")}/`;
+    return `/${escapeRegexLiteralSlashes(pattern)}/`;
   });
+}
+
+function escapeRegexLiteralSlashes(pattern) {
+  let output = "";
+  let escaped = false;
+  let inCharacterClass = false;
+  for (const char of pattern) {
+    if (escaped) {
+      output += char;
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      output += char;
+      escaped = true;
+      continue;
+    }
+    if (char === "[") {
+      inCharacterClass = true;
+    } else if (char === "]") {
+      inCharacterClass = false;
+    }
+    output += char === "/" && !inCharacterClass ? "\\/" : char;
+  }
+  return output;
+}
+
+function formatTypescript(source) {
+  return execFileSync(
+    "bunx",
+    ["biome", "format", "--stdin-file-path", outputPath],
+    {
+      cwd: webRoot,
+      input: source,
+      encoding: "utf8",
+    },
+  );
 }
