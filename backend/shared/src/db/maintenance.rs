@@ -2,10 +2,12 @@
 
 use std::path::PathBuf;
 
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 
 use super::ids::{solution_submission_id_from_row, uuid_string_from_row};
+use super::leaderboard::repair_leaderboard_entry_for_solution_submission_tx;
 use crate::error::{AppError, Result};
+use crate::models::evaluation::ScoringMode;
 use crate::models::ids::{EvaluationJobId, SolutionSubmissionId};
 use crate::models::request::AdminServiceHeartbeatDto;
 
@@ -190,7 +192,7 @@ pub async fn reap_stuck_jobs(pool: &PgPool, timeout_minutes: i32) -> Result<Stal
             claimed_at = NULL
         WHERE status = 'staged'
           AND scheduled_at < NOW() - INTERVAL '1 minute' * $1
-        RETURNING id, solution_submission_id
+        RETURNING id, solution_submission_id, eval_type
         "#,
     )
     .bind(timeout_minutes)
@@ -221,7 +223,7 @@ pub async fn reap_stuck_jobs(pool: &PgPool, timeout_minutes: i32) -> Result<Stal
         WHERE status = 'running'
           AND claimed_at < NOW() - INTERVAL '1 minute' * $1
           AND attempt_count < max_attempts
-        RETURNING id, solution_submission_id
+        RETURNING id, solution_submission_id, eval_type
         "#,
     )
     .bind(timeout_minutes)
@@ -232,22 +234,22 @@ pub async fn reap_stuck_jobs(pool: &PgPool, timeout_minutes: i32) -> Result<Stal
         let job_id = uuid_string_from_row(row, "id")?;
         let solution_submission_id =
             solution_submission_id_from_row(row, "solution_submission_id")?;
+        let eval_type = eval_type_from_row(row, "eval_type")?;
         sqlx::query("DELETE FROM evaluations WHERE job_id = $1::uuid AND status = 'running'")
             .bind(&job_id)
             .execute(&mut *tx)
             .await?;
-        sqlx::query(
-            r#"
-            UPDATE solution_submissions
-            SET status = 'queued',
-                visible_after_eval = FALSE,
-                updated_at = NOW()
-            WHERE id = $1::uuid
-            "#,
-        )
-        .bind(solution_submission_id.as_str())
-        .execute(&mut *tx)
-        .await?;
+        if preserve_visible_official_result_tx(&mut tx, &solution_submission_id, &job_id, eval_type)
+            .await?
+        {
+            continue;
+        }
+        let was_visible =
+            hide_reaped_solution_submission_tx(&mut tx, &solution_submission_id, "queued").await?;
+        if was_visible {
+            repair_leaderboard_entry_for_solution_submission_tx(&mut tx, &solution_submission_id)
+                .await?;
+        }
     }
 
     let failed_jobs = sqlx::query(
@@ -261,7 +263,7 @@ pub async fn reap_stuck_jobs(pool: &PgPool, timeout_minutes: i32) -> Result<Stal
         WHERE status = 'running'
           AND claimed_at < NOW() - INTERVAL '1 minute' * $1
           AND attempt_count >= max_attempts
-        RETURNING id, solution_submission_id
+        RETURNING id, solution_submission_id, eval_type
         "#,
     )
     .bind(timeout_minutes)
@@ -272,6 +274,7 @@ pub async fn reap_stuck_jobs(pool: &PgPool, timeout_minutes: i32) -> Result<Stal
         let job_id = uuid_string_from_row(row, "id")?;
         let solution_submission_id =
             solution_submission_id_from_row(row, "solution_submission_id")?;
+        let eval_type = eval_type_from_row(row, "eval_type")?;
         sqlx::query(
             r#"
             UPDATE evaluations
@@ -285,18 +288,17 @@ pub async fn reap_stuck_jobs(pool: &PgPool, timeout_minutes: i32) -> Result<Stal
         .execute(&mut *tx)
         .await?;
 
-        sqlx::query(
-            r#"
-            UPDATE solution_submissions
-            SET status = 'failed',
-                visible_after_eval = FALSE,
-                updated_at = NOW()
-            WHERE id = $1::uuid
-        "#,
-        )
-        .bind(solution_submission_id.as_str())
-        .execute(&mut *tx)
-        .await?;
+        if preserve_visible_official_result_tx(&mut tx, &solution_submission_id, &job_id, eval_type)
+            .await?
+        {
+            continue;
+        }
+        let was_visible =
+            hide_reaped_solution_submission_tx(&mut tx, &solution_submission_id, "failed").await?;
+        if was_visible {
+            repair_leaderboard_entry_for_solution_submission_tx(&mut tx, &solution_submission_id)
+                .await?;
+        }
     }
 
     tx.commit().await?;
@@ -307,4 +309,89 @@ pub async fn reap_stuck_jobs(pool: &PgPool, timeout_minutes: i32) -> Result<Stal
         failed: u64::try_from(failed_jobs.len().saturating_add(staged_jobs.len()))
             .map_err(|_| AppError::Internal("failed job count overflow".to_string()))?,
     })
+}
+
+/// Parse one persisted evaluation type from a maintenance query row.
+fn eval_type_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<ScoringMode> {
+    let value: String = row.try_get(column)?;
+    ScoringMode::from_storage_value(&value)
+        .ok_or_else(|| AppError::Internal(format!("unknown stored {column} `{value}`")))
+}
+
+/// Keep an older completed official result visible while a stale official rerun is repaired.
+async fn preserve_visible_official_result_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    solution_submission_id: &SolutionSubmissionId,
+    stale_job_id: &str,
+    eval_type: ScoringMode,
+) -> Result<bool> {
+    if eval_type != ScoringMode::Official {
+        return Ok(false);
+    }
+
+    let has_prior_completed_official = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM evaluations
+            WHERE solution_submission_id = $1::uuid
+              AND eval_type = 'official'
+              AND status = 'completed'
+              AND job_id <> $2::uuid
+        )
+        "#,
+    )
+    .bind(solution_submission_id.as_str())
+    .bind(stale_job_id)
+    .fetch_one(&mut **tx)
+    .await?;
+    if !has_prior_completed_official {
+        return Ok(false);
+    }
+
+    sqlx::query(
+        r#"
+        UPDATE solution_submissions
+        SET status = 'completed',
+            visible_after_eval = TRUE,
+            updated_at = NOW()
+        WHERE id = $1::uuid
+        "#,
+    )
+    .bind(solution_submission_id.as_str())
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(true)
+}
+
+/// Apply the original stale-job fallback and report whether public visibility changed.
+async fn hide_reaped_solution_submission_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    solution_submission_id: &SolutionSubmissionId,
+    next_status: &str,
+) -> Result<bool> {
+    let was_visible = sqlx::query_scalar::<_, bool>(
+        "SELECT visible_after_eval FROM solution_submissions WHERE id = $1::uuid FOR UPDATE",
+    )
+    .bind(solution_submission_id.as_str())
+    .fetch_optional(&mut **tx)
+    .await?
+    .unwrap_or(false);
+
+    sqlx::query(
+        r#"
+        UPDATE solution_submissions
+        SET status = $2,
+            visible_after_eval = FALSE,
+            updated_at = NOW()
+        WHERE id = $1::uuid
+        "#,
+    )
+    .bind(solution_submission_id.as_str())
+    .bind(next_status)
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(was_visible)
 }

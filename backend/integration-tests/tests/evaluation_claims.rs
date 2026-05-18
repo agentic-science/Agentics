@@ -493,6 +493,136 @@ async fn losing_official_submission_does_not_overwrite_leaderboard_best_metadata
     );
 }
 
+/// Verifies concurrent official completions keep the best leaderboard result.
+#[sqlx::test(migrations = "../migrations")]
+async fn concurrent_official_completions_keep_best_leaderboard_result(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = test_config(storage.path(), &examples_challenges_root());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "display_name": "leaderboard-race-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+
+    let winning_submission_id = create_official_submission(&client, &app, token, "winner").await;
+    let losing_submission_id = create_official_submission(&client, &app, token, "loser").await;
+    let winning_claim = claim_and_start_job(&pool, &winning_submission_id, "worker-winner").await;
+    let losing_claim = claim_and_start_job(&pool, &losing_submission_id, "worker-loser").await;
+
+    let winning_result = persisted_result(
+        &winning_claim,
+        "worker-winner",
+        &winning_submission_id,
+        EvaluationStatus::Completed,
+        Some(1.0),
+    );
+    let losing_result = persisted_result(
+        &losing_claim,
+        "worker-loser",
+        &losing_submission_id,
+        EvaluationStatus::Completed,
+        Some(0.25),
+    );
+    let (winning_finished, losing_finished) = tokio::join!(
+        shared::db::mark_evaluation_finished(&pool, &winning_result),
+        shared::db::mark_evaluation_finished(&pool, &losing_result),
+    );
+    assert!(winning_finished.expect("winner should finish"));
+    assert!(losing_finished.expect("loser should finish"));
+
+    let row: (String, f64) = sqlx::query_as(
+        r#"
+        SELECT best_solution_submission_id::text AS best_solution_submission_id, best_rank_score
+        FROM leaderboard_entries
+        WHERE challenge_name = 'sample-sum'
+          AND target = 'linux-arm64-cpu'
+          AND agent_id = $1::uuid
+        "#,
+    )
+    .bind(
+        register_response["agent_id"]
+            .as_str()
+            .expect("missing agent id"),
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("failed to query leaderboard entry");
+    assert_eq!(row.0, winning_submission_id.as_str());
+    assert_eq!(row.1, 1.0);
+}
+
+/// Verifies stale visible official reruns do not erase the previous public result.
+#[sqlx::test(migrations = "../migrations")]
+async fn stale_visible_official_reruns_preserve_prior_public_result(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = test_config(storage.path(), &examples_challenges_root());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "display_name": "visible-rerun-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+
+    let submission_id = create_official_submission(&client, &app, token, "visible rerun").await;
+    finish_next_job_with_score(&pool, &submission_id, "worker-original", 1.0).await;
+
+    let failed_rejudge = start_official_rejudge(&pool, &submission_id, "worker-failed-rerun").await;
+    sqlx::query(
+        r#"
+        UPDATE evaluation_jobs
+        SET claimed_at = NOW() - INTERVAL '10 minutes',
+            max_attempts = attempt_count
+        WHERE id = $1::uuid
+        "#,
+    )
+    .bind(failed_rejudge.id.as_str())
+    .execute(&pool)
+    .await
+    .expect("failed to age failed rejudge");
+    let failed = shared::db::reap_stuck_jobs(&pool, 1)
+        .await
+        .expect("failed to reap stale failed rejudge");
+    assert_eq!(failed.requeued, 0);
+    assert_eq!(failed.failed, 1);
+    assert_visible_submission_and_leaderboard(&pool, &submission_id, 1.0).await;
+
+    let requeued_rejudge =
+        start_official_rejudge(&pool, &submission_id, "worker-requeued-rerun").await;
+    sqlx::query(
+        r#"
+        UPDATE evaluation_jobs
+        SET claimed_at = NOW() - INTERVAL '10 minutes',
+            max_attempts = attempt_count + 1
+        WHERE id = $1::uuid
+        "#,
+    )
+    .bind(requeued_rejudge.id.as_str())
+    .execute(&pool)
+    .await
+    .expect("failed to age requeued rejudge");
+    let requeued = shared::db::reap_stuck_jobs(&pool, 1)
+        .await
+        .expect("failed to reap stale requeued rejudge");
+    assert_eq!(requeued.requeued, 1);
+    assert_eq!(requeued.failed, 0);
+    assert_visible_submission_and_leaderboard(&pool, &submission_id, 1.0).await;
+}
+
 /// Creates official submission after validating caller inputs.
 async fn create_official_submission(
     client: &reqwest::Client,
@@ -523,6 +653,79 @@ async fn create_official_submission(
     SolutionSubmissionId::try_new(id).expect("API returned valid solution submission id")
 }
 
+/// Queue, claim, and mark one official rejudge running for a visible submission.
+async fn start_official_rejudge(
+    pool: &sqlx::PgPool,
+    solution_submission_id: &SolutionSubmissionId,
+    worker_id: &str,
+) -> shared::db::EvaluationJobRecord {
+    let rejudge_id = EvaluationJobId::generate();
+    shared::db::queue_evaluation_job(
+        pool,
+        &shared::db::QueueEvaluationJobInput {
+            job_id: rejudge_id.clone(),
+            solution_submission_id: solution_submission_id.clone(),
+            eval_type: ScoringMode::Official,
+            max_active_official_jobs: None,
+        },
+    )
+    .await
+    .expect("official rejudge should queue");
+    let claim = shared::db::claim_next_evaluation_job(pool, worker_id)
+        .await
+        .expect("failed to claim rejudge")
+        .expect("missing rejudge");
+    assert_eq!(claim.id, rejudge_id);
+    assert_eq!(claim.solution_submission_id, *solution_submission_id);
+    assert!(
+        shared::db::mark_evaluation_started(
+            pool,
+            &MarkEvaluationStartedInput {
+                evaluation_id: EvaluationId::generate(),
+                solution_submission_id: solution_submission_id.clone(),
+                job_id: claim.id.clone(),
+                worker_id: worker_id.to_string(),
+                claim_attempt_count: claim.attempt_count,
+                target: claim.target.clone(),
+                eval_type: claim.eval_type,
+            },
+        )
+        .await
+        .expect("failed to mark rejudge started")
+    );
+    claim
+}
+
+/// Assert the prior public result and leaderboard row are still visible.
+async fn assert_visible_submission_and_leaderboard(
+    pool: &sqlx::PgPool,
+    solution_submission_id: &SolutionSubmissionId,
+    expected_score: f64,
+) {
+    let submission: (String, bool) = sqlx::query_as(
+        "SELECT status, visible_after_eval FROM solution_submissions WHERE id = $1::uuid",
+    )
+    .bind(solution_submission_id.as_str())
+    .fetch_one(pool)
+    .await
+    .expect("failed to query visible submission");
+    assert_eq!(submission, ("completed".to_string(), true));
+
+    let leaderboard: (String, f64) = sqlx::query_as(
+        r#"
+        SELECT best_solution_submission_id::text AS best_solution_submission_id, best_rank_score
+        FROM leaderboard_entries
+        WHERE best_solution_submission_id = $1::uuid
+        "#,
+    )
+    .bind(solution_submission_id.as_str())
+    .fetch_one(pool)
+    .await
+    .expect("failed to query leaderboard");
+    assert_eq!(leaderboard.0, solution_submission_id.as_str());
+    assert_eq!(leaderboard.1, expected_score);
+}
+
 /// Handles finish next job with score for this module.
 async fn finish_next_job_with_score(
     pool: &sqlx::PgPool,
@@ -530,6 +733,27 @@ async fn finish_next_job_with_score(
     worker_id: &str,
     score: f64,
 ) {
+    let claim = claim_and_start_job(pool, solution_submission_id, worker_id).await;
+    let result = persisted_result(
+        &claim,
+        worker_id,
+        solution_submission_id,
+        EvaluationStatus::Completed,
+        Some(score),
+    );
+    assert!(
+        shared::db::mark_evaluation_finished(pool, &result)
+            .await
+            .expect("failed to finish evaluation")
+    );
+}
+
+/// Claim and start the next queued evaluation for a known submission.
+async fn claim_and_start_job(
+    pool: &sqlx::PgPool,
+    solution_submission_id: &SolutionSubmissionId,
+    worker_id: &str,
+) -> shared::db::EvaluationJobRecord {
     let claim = shared::db::claim_next_evaluation_job(pool, worker_id)
         .await
         .expect("failed to claim job")
@@ -551,18 +775,7 @@ async fn finish_next_job_with_score(
         .await
         .expect("failed to mark evaluation started")
     );
-    let result = persisted_result(
-        &claim,
-        worker_id,
-        solution_submission_id,
-        EvaluationStatus::Completed,
-        Some(score),
-    );
-    assert!(
-        shared::db::mark_evaluation_finished(pool, &result)
-            .await
-            .expect("failed to finish evaluation")
-    );
+    claim
 }
 
 /// Handles persisted result for this module.

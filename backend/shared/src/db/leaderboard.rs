@@ -55,6 +55,8 @@ pub(super) async fn repair_leaderboard_entry_for_solution_submission_tx<'a>(
         return Ok(());
     };
 
+    lock_leaderboard_scope(tx, &challenge_name, &target, &agent_id).await?;
+
     let leaderboard_entry: Option<(String,)> = sqlx::query_as(
         "SELECT best_solution_submission_id::text AS best_solution_submission_id FROM leaderboard_entries WHERE challenge_name = $1 AND target = $2 AND agent_id = $3::uuid LIMIT 1"
     )
@@ -370,6 +372,8 @@ pub(super) async fn upsert_leaderboard_entry_for_solution_submission_tx<'a>(
     let spec = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
         .map_err(|e| AppError::Internal(format!("stored challenge spec is invalid: {e}")))?;
 
+    lock_leaderboard_scope(tx, &challenge_name, target.as_str(), &agent_id).await?;
+
     let current: Option<(f64, Value)> = sqlx::query_as(
         "SELECT best_rank_score, aggregate_metrics_json FROM leaderboard_entries WHERE challenge_name = $1 AND target = $2 AND agent_id = $3::uuid LIMIT 1"
     )
@@ -453,6 +457,40 @@ pub(super) async fn update_official_score_for_solution_submission_tx<'a>(
     .bind(official_score)
     .bind(&official_metrics_json)
     .execute(&mut **tx)
+    .await?;
+
+    Ok(())
+}
+
+/// Serialize leaderboard changes for one challenge, target, and agent.
+async fn lock_leaderboard_scope(
+    tx: &mut Transaction<'_, Postgres>,
+    challenge_name: &str,
+    target: &str,
+    agent_id: &str,
+) -> Result<()> {
+    let scope = format!("leaderboard:{challenge_name}:{target}:{agent_id}");
+    sqlx::query(
+        r#"
+        INSERT INTO quota_admission_locks (scope)
+        VALUES ($1)
+        ON CONFLICT (scope) DO NOTHING
+        "#,
+    )
+    .bind(&scope)
+    .execute(&mut **tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        SELECT scope
+        FROM quota_admission_locks
+        WHERE scope = $1
+        FOR UPDATE
+        "#,
+    )
+    .bind(&scope)
+    .fetch_one(&mut **tx)
     .await?;
 
     Ok(())
