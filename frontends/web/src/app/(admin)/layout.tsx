@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 /** Renders the admin layout component. */
@@ -29,9 +28,7 @@ export default function AdminLayout({
               </Link>
             </div>
 
-            <div className="flex items-center gap-1">
-              <LanguageSwitcher />
-              <div className="w-px h-4 bg-[var(--border-subtle)] mx-1" />
+            <div className="flex items-center">
               <ThemeSwitcher />
             </div>
           </nav>
