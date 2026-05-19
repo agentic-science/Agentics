@@ -73,9 +73,10 @@ Publishing claims an approved draft by moving it to `publishing` with a
 publish-claim ID before any filesystem work starts. Only that claim can fail or
 complete the publish attempt. The runtime bundle is assembled in a unique
 temporary directory under managed storage, validated there, then atomically
-renamed into the final bundle path and marked `published`. A stale `publishing`
-claim can be reset to `approved` after the configured publish timeout so
-reviewers can retry.
+renamed into a publish-claim-scoped final bundle path and marked `published`.
+If the database publish step fails, cleanup removes only the final bundle path
+created by that publish claim. A stale `publishing` claim can be reset to
+`approved` after the configured publish timeout so reviewers can retry.
 
 Admin endpoints for draft review are:
 

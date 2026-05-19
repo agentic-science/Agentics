@@ -67,8 +67,10 @@ bytes 时为 `pending`，durable object 存在后为 `active`，write 或 promot
 Publishing 会先用 publish-claim ID 把 approved draft claim 为 `publishing`，再开始任何
 filesystem work。只有该 claim 可以 fail 或 complete 这次 publish attempt。Runtime
 bundle 会先在 managed storage 下的唯一 temporary directory 中组装并验证，然后
-atomically rename 到 final bundle path，并标记为 `published`。超过配置 publish
-timeout 的 stale `publishing` claim 可以 reset 回 `approved`，以便 reviewer 重试。
+atomically rename 到 publish-claim-scoped final bundle path，并标记为
+`published`。如果 database publish step 失败，cleanup 只会删除该 publish
+claim 创建的 final bundle path。超过配置 publish timeout 的 stale
+`publishing` claim 可以 reset 回 `approved`，以便 reviewer 重试。
 
 Draft review admin endpoints：
 

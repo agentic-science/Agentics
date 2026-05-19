@@ -20,8 +20,8 @@ use shared::models::challenge_creation::{
 };
 use shared::models::hashes::{GitCommitSha, Sha256Digest};
 use shared::models::ids::{
-    ChallengeDraftAuditEventId, ChallengeDraftId, ChallengeDraftValidationRecordId,
-    ChallengePrivateAssetId,
+    ChallengeDraftAuditEventId, ChallengeDraftId, ChallengeDraftPublishClaimId,
+    ChallengeDraftValidationRecordId, ChallengePrivateAssetId,
 };
 use shared::models::names::ChallengeName;
 use shared::models::paths::{RepoRelativePath, RepositoryCheckoutPath};
@@ -623,7 +623,7 @@ async fn publish_claimed_challenge_draft(
     state: &AppState,
     admin_username: &str,
     draft: &ChallengeDraftResponse,
-    publish_claim_id: &shared::models::ids::ChallengeDraftPublishClaimId,
+    publish_claim_id: &ChallengeDraftPublishClaimId,
     repository_path: &RepositoryCheckoutPath,
 ) -> Result<()> {
     let (manifest, bundle_sha256) = validate_draft_repository(draft, repository_path).await?;
@@ -658,61 +658,92 @@ async fn publish_claimed_challenge_draft(
             .await?;
         }
         ChallengeCreationRequestKind::NewChallenge => {
-            let final_bundle_path = runtime_bundle_path(state, draft, &manifest);
-            let temporary_bundle_path = temporary_runtime_bundle_path(state, draft);
-            let publish_new_result = async {
-                assemble_runtime_bundle(
-                    state,
+            let final_bundle_path = runtime_bundle_path(state, draft, &manifest, publish_claim_id);
+            let temporary_bundle_path =
+                temporary_runtime_bundle_path(state, draft, publish_claim_id);
+
+            let publish_new_result = prepare_and_publish_new_challenge_draft(
+                state,
+                PublishNewChallengeDraftContext {
+                    admin_username,
                     draft,
-                    &proposal_root,
-                    &manifest,
-                    &temporary_bundle_path,
-                )
-                .await?;
-                challenge_bundle::validate_challenge_bundle(&temporary_bundle_path).await?;
-                let spec =
-                    challenge_bundle::read_challenge_bundle_spec(&temporary_bundle_path).await?;
-                if state.config.require_digest_pinned_images {
-                    challenge_bundle::validate_digest_pinned_images(&spec)?;
-                }
-                promote_runtime_bundle(&temporary_bundle_path, &final_bundle_path).await?;
-                let statement_path = final_bundle_path.join("statement.md");
-                let managed_bundle_path =
-                    shared::models::paths::ManagedBundlePath::from_existing_dir(
-                        &final_bundle_path,
-                    )?;
-                let managed_statement_path =
-                    shared::models::paths::ManagedStatementPath::from_existing_file(
-                        &statement_path,
-                    )?;
-                db::publish_new_challenge_draft(
-                    &state.db,
-                    &db::PublishNewChallengeDraftInput {
-                        draft_id: draft.id.clone(),
-                        publish_claim_id: publish_claim_id.clone(),
-                        challenge_name: manifest.challenge_name.clone(),
-                        bundle_path: managed_bundle_path,
-                        statement_path: managed_statement_path,
-                        spec,
-                        title: manifest.title.clone(),
-                        summary: manifest.summary.clone(),
-                        owner_agent_id: draft.creator_agent_id.clone(),
-                        audit_event_id: ChallengeDraftAuditEventId::generate(),
-                        admin_username: admin_username.to_string(),
-                        repository_path: repository_path.to_string(),
-                        bundle_sha256,
-                    },
-                )
-                .await
-            }
+                    publish_claim_id,
+                    repository_path,
+                    proposal_root: &proposal_root,
+                    manifest: &manifest,
+                    bundle_sha256,
+                    temporary_bundle_path: &temporary_bundle_path,
+                    final_bundle_path: &final_bundle_path,
+                },
+            )
             .await;
             if let Err(error) = publish_new_result {
                 cleanup_runtime_bundle(&temporary_bundle_path).await;
+                cleanup_runtime_bundle(&final_bundle_path).await;
                 return Err(error);
             }
         }
     };
     Ok(())
+}
+
+/// Borrowed inputs for one publish-new-challenge attempt.
+struct PublishNewChallengeDraftContext<'a> {
+    admin_username: &'a str,
+    draft: &'a ChallengeDraftResponse,
+    publish_claim_id: &'a ChallengeDraftPublishClaimId,
+    repository_path: &'a RepositoryCheckoutPath,
+    proposal_root: &'a Path,
+    manifest: &'a ChallengeCreationManifest,
+    bundle_sha256: Sha256Digest,
+    temporary_bundle_path: &'a Path,
+    final_bundle_path: &'a Path,
+}
+
+/// Assemble, validate, promote, and commit a new challenge publish attempt.
+async fn prepare_and_publish_new_challenge_draft(
+    state: &AppState,
+    ctx: PublishNewChallengeDraftContext<'_>,
+) -> Result<()> {
+    assemble_runtime_bundle(
+        state,
+        ctx.draft,
+        ctx.proposal_root,
+        ctx.manifest,
+        ctx.temporary_bundle_path,
+    )
+    .await?;
+    challenge_bundle::validate_challenge_bundle(ctx.temporary_bundle_path).await?;
+    let spec = challenge_bundle::read_challenge_bundle_spec(ctx.temporary_bundle_path).await?;
+    if state.config.require_digest_pinned_images {
+        challenge_bundle::validate_digest_pinned_images(&spec)?;
+    }
+    promote_runtime_bundle(ctx.temporary_bundle_path, ctx.final_bundle_path).await?;
+
+    let statement_path = ctx.final_bundle_path.join("statement.md");
+    let managed_bundle_path =
+        shared::models::paths::ManagedBundlePath::from_existing_dir(ctx.final_bundle_path)?;
+    let managed_statement_path =
+        shared::models::paths::ManagedStatementPath::from_existing_file(&statement_path)?;
+    db::publish_new_challenge_draft(
+        &state.db,
+        &db::PublishNewChallengeDraftInput {
+            draft_id: ctx.draft.id.clone(),
+            publish_claim_id: ctx.publish_claim_id.clone(),
+            challenge_name: ctx.manifest.challenge_name.clone(),
+            bundle_path: managed_bundle_path,
+            statement_path: managed_statement_path,
+            spec,
+            title: ctx.manifest.title.clone(),
+            summary: ctx.manifest.summary.clone(),
+            owner_agent_id: ctx.draft.creator_agent_id.clone(),
+            audit_event_id: ChallengeDraftAuditEventId::generate(),
+            admin_username: ctx.admin_username.to_string(),
+            repository_path: ctx.repository_path.to_string(),
+            bundle_sha256: ctx.bundle_sha256,
+        },
+    )
+    .await
 }
 
 /// Maps database unique-constraint failures to the API conflict error used by draft creation.
@@ -860,19 +891,30 @@ fn runtime_bundle_path(
     state: &AppState,
     draft: &ChallengeDraftResponse,
     manifest: &ChallengeCreationManifest,
+    publish_claim_id: &ChallengeDraftPublishClaimId,
 ) -> PathBuf {
     Path::new(&state.config.storage_root)
         .join("challenge-bundles")
         .join(manifest.challenge_name.as_str())
         .join(draft.id.as_str())
+        .join(publish_claim_id.as_str())
 }
 
 /// Attempt-scoped temporary runtime-bundle path under the same storage root.
-fn temporary_runtime_bundle_path(state: &AppState, draft: &ChallengeDraftResponse) -> PathBuf {
+fn temporary_runtime_bundle_path(
+    state: &AppState,
+    draft: &ChallengeDraftResponse,
+    publish_claim_id: &ChallengeDraftPublishClaimId,
+) -> PathBuf {
     Path::new(&state.config.storage_root)
         .join("_tmp")
         .join("challenge-bundles")
-        .join(format!("{}-{}", draft.id, Uuid::new_v4()))
+        .join(format!(
+            "{}-{}-{}",
+            draft.id,
+            publish_claim_id,
+            Uuid::new_v4()
+        ))
 }
 
 /// Atomically move a validated temporary bundle into its final managed path.
@@ -883,16 +925,14 @@ async fn promote_runtime_bundle(
     if let Some(parent) = final_bundle_path.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
-    match tokio::fs::remove_dir_all(final_bundle_path).await {
-        Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(AppError::Io(error)),
+    if tokio::fs::try_exists(final_bundle_path).await? {
+        return Err(AppError::Conflict);
     }
     tokio::fs::rename(temporary_bundle_path, final_bundle_path).await?;
     Ok(())
 }
 
-/// Best-effort cleanup for failed temporary runtime bundle assembly.
+/// Best-effort cleanup for failed runtime bundle assembly or publish.
 async fn cleanup_runtime_bundle(path: &Path) {
     if let Err(error) = tokio::fs::remove_dir_all(path).await
         && error.kind() != std::io::ErrorKind::NotFound
@@ -900,7 +940,7 @@ async fn cleanup_runtime_bundle(path: &Path) {
         warn!(
             path = %path.display(),
             error = %error,
-            "failed to clean up temporary challenge runtime bundle"
+            "failed to clean up challenge runtime bundle"
         );
     }
 }

@@ -4,6 +4,8 @@
 mod challenge_creation_helpers;
 mod helpers;
 
+use std::path::Path;
+
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use challenge_creation_helpers::*;
 use helpers::{
@@ -691,6 +693,135 @@ async fn concurrent_publish_requests_leave_one_published_bundle(pool: sqlx::PgPo
     assert_eq!(draft_status, "published");
 }
 
+/// Verifies DB publish conflicts clean up the runtime bundle produced by that publish claim.
+#[sqlx::test(migrations = "../migrations")]
+async fn failed_publish_removes_claim_scoped_runtime_bundle(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("storage tempdir");
+    let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
+    let public_repo = tempfile::tempdir().expect("public repo tempdir");
+    let commit_sha = write_public_challenge(public_repo.path());
+
+    let config = test_config(storage.path(), seeded_challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let client = reqwest::Client::new();
+    let creator = create_creator_session(&pool, 1001, "creator").await;
+    let admin_auth = basic_auth_header(
+        &config.admin_username,
+        config.expose_admin_password_for_http_basic(),
+    );
+
+    let draft =
+        create_draft_with_commit(&client, &app, &creator, 24, manifest_json(), &commit_sha).await;
+    let draft_id = draft["id"].as_str().expect("draft id");
+    creator_auth(
+        client.post(api_url(
+            &app,
+            &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+        )),
+        &creator,
+    )
+    .json(&json!({
+        "asset_name": "official-cases",
+        "kind": "private_benchmark_data",
+        "asset_base64": private_benchmark_asset_zip_base64()
+    }))
+    .send()
+    .await
+    .expect("private asset request")
+    .error_for_status()
+    .expect("private asset should upload");
+    client
+        .post(api_url(
+            &app,
+            &format!("/admin/challenge-drafts/{draft_id}/validate"),
+        ))
+        .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
+        .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
+        .send()
+        .await
+        .expect("validate request")
+        .error_for_status()
+        .expect("draft should validate");
+    client
+        .post(api_url(
+            &app,
+            &format!("/admin/challenge-drafts/{draft_id}/approve"),
+        ))
+        .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
+        .json(&json!({ "message": "approved" }))
+        .send()
+        .await
+        .expect("approve request")
+        .error_for_status()
+        .expect("draft should approve");
+
+    let existing_bundle = storage.path().join("existing-bundle");
+    std::fs::create_dir_all(&existing_bundle).expect("existing bundle dir");
+    let existing_statement = existing_bundle.join("statement.md");
+    std::fs::write(&existing_statement, "# Existing\n").expect("existing statement");
+    sqlx::query(
+        r#"
+        INSERT INTO challenges (
+            name, title, summary, bundle_path, statement_path, spec_json, starts_at, status
+        )
+        VALUES (
+            'sample-sum',
+            'Existing Sample Sum',
+            '{"en":"Existing","zh":"Existing"}'::jsonb,
+            $1,
+            $2,
+            '{"already":"published"}'::jsonb,
+            '2026-01-01T00:00:00Z'::timestamptz,
+            'active'
+        )
+        "#,
+    )
+    .bind(existing_bundle.to_string_lossy().to_string())
+    .bind(existing_statement.to_string_lossy().to_string())
+    .execute(&pool)
+    .await
+    .expect("existing active challenge should insert");
+
+    let response = client
+        .post(api_url(
+            &app,
+            &format!("/admin/challenge-drafts/{draft_id}/publish"),
+        ))
+        .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
+        .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
+        .send()
+        .await
+        .expect("publish request");
+    assert_eq!(response.status(), reqwest::StatusCode::CONFLICT);
+
+    let (draft_status, publish_claim_id): (String, Option<String>) = sqlx::query_as(
+        "SELECT status, publish_claim_id::text FROM challenge_drafts WHERE id = $1::uuid",
+    )
+    .bind(draft_id)
+    .fetch_one(&pool)
+    .await
+    .expect("draft status after failed publish");
+    assert_eq!(draft_status, "approved");
+    assert!(publish_claim_id.is_none());
+
+    let draft_bundle_root = storage
+        .path()
+        .join("challenge-bundles")
+        .join("sample-sum")
+        .join(draft_id);
+    assert!(
+        directory_is_empty_or_absent(&draft_bundle_root),
+        "failed DB publish must remove the claim-scoped runtime bundle"
+    );
+    assert!(
+        directory_is_empty_or_absent(&storage.path().join("_tmp").join("challenge-bundles")),
+        "failed DB publish must remove temporary runtime bundle directories"
+    );
+}
+
 /// Verifies stale publish claims cannot complete or fail a newer publish attempt.
 #[sqlx::test(migrations = "../migrations")]
 async fn stale_publish_claim_cannot_mutate_newer_publish_claim(pool: sqlx::PgPool) {
@@ -775,6 +906,15 @@ async fn stale_publish_claim_cannot_mutate_newer_publish_claim(pool: sqlx::PgPoo
     .await
     .expect("failed to query published draft");
     assert_eq!(status_and_claim, ("published".to_string(), None));
+}
+
+/// Returns true for a missing or empty directory, and panics on other filesystem errors.
+fn directory_is_empty_or_absent(path: &Path) -> bool {
+    match std::fs::read_dir(path) {
+        Ok(mut entries) => entries.next().is_none(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
+        Err(error) => panic!("failed to inspect {}: {error}", path.display()),
+    }
 }
 
 /// Verifies that challenge draft rejects new version manifest.
