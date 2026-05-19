@@ -2,6 +2,7 @@
 
 mod helpers;
 
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use helpers::{
     TestCreatorSession, api_url, create_creator_session, spawn_app_with_config, test_config,
     zip_project_zip_base64,
@@ -314,6 +315,98 @@ async fn stale_pending_private_asset_reservation_can_be_retried(pool: sqlx::PgPo
     .await
     .expect("failed to query asset states");
     assert_eq!(states, vec!["failed".to_string(), "pending".to_string()]);
+}
+
+/// Verifies exact retries repair stale pending rows whose durable object was already promoted.
+#[sqlx::test(migrations = "../migrations")]
+async fn stale_pending_private_asset_retry_replaces_unreferenced_object(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("storage tempdir");
+    let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
+    let config = test_config(storage.path(), seeded_challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+    let creator = create_creator_session(&pool, 1001, "creator").await;
+
+    let draft = create_draft(&client, &app, &creator, 14, manifest_json()).await;
+    let draft_id =
+        ChallengeDraftId::try_new(draft["id"].as_str().expect("draft id")).expect("valid draft id");
+    let uploader_agent_id = AgentId::try_new(&creator.agent_id).expect("valid creator agent id");
+    let asset_base64 = private_benchmark_asset_zip_base64();
+    let asset_bytes = STANDARD
+        .decode(&asset_base64)
+        .expect("test asset base64 should decode");
+    let sha256 = shared::challenge_creation::sha256_digest(&asset_bytes);
+    let storage_key = StorageKey::try_new(format!(
+        "challenge-drafts/{}/private-assets/official-cases-{}.bin",
+        draft_id, sha256
+    ))
+    .expect("deterministic private asset storage key should be valid");
+    let first = db::CreateChallengePrivateAssetInput {
+        asset_row_id: ChallengePrivateAssetId::generate(),
+        draft_id: draft_id.clone(),
+        asset_name: AssetName::try_new("official-cases".to_string())
+            .expect("test asset name is valid"),
+        kind: ChallengePrivateAssetKind::PrivateBenchmarkData,
+        required: true,
+        size_bytes: i64::try_from(asset_bytes.len()).expect("test asset size fits"),
+        sha256,
+        storage_key: storage_key.clone(),
+        temporary_storage_key: StorageKey::try_new("_tmp/challenge-private-assets/stale.bin")
+            .expect("test temporary storage key is valid"),
+        uploader_agent_id,
+    };
+    db::reserve_challenge_private_asset(&pool, &first, 10_000_000, 30, 30)
+        .await
+        .expect("first pending asset should reserve");
+    let durable_path = storage.path().join(storage_key.as_str());
+    std::fs::create_dir_all(durable_path.parent().expect("storage key parent"))
+        .expect("storage key parent should create");
+    std::fs::write(&durable_path, &asset_bytes).expect("stale durable object should write");
+    sqlx::query(
+        "UPDATE challenge_private_assets SET created_at = NOW() - INTERVAL '60 minutes' WHERE id = $1::uuid",
+    )
+    .bind(first.asset_row_id.as_str())
+    .execute(&pool)
+    .await
+    .expect("failed to age pending asset");
+
+    let response = creator_auth(
+        client.post(api_url(
+            &app,
+            &format!(
+                "/api/creator/challenge-drafts/{}/private-assets",
+                draft_id.as_str()
+            ),
+        )),
+        &creator,
+    )
+    .json(&json!({
+        "asset_name": "official-cases",
+        "kind": "private_benchmark_data",
+        "asset_base64": asset_base64
+    }))
+    .send()
+    .await
+    .expect("private asset retry request");
+    assert_eq!(response.status(), reqwest::StatusCode::CREATED);
+    let asset: serde_json::Value = response.json().await.expect("asset json");
+    assert_eq!(
+        asset["storage_key"].as_str().expect("storage key"),
+        storage_key.as_str()
+    );
+
+    let states: Vec<String> = sqlx::query_scalar(
+        "SELECT status FROM challenge_private_assets WHERE draft_id = $1::uuid ORDER BY created_at ASC",
+    )
+    .bind(draft_id.as_str())
+    .fetch_all(&pool)
+    .await
+    .expect("failed to query asset states");
+    assert_eq!(states, vec!["failed".to_string(), "active".to_string()]);
+    assert_eq!(
+        std::fs::read(&durable_path).expect("active durable object should exist"),
+        asset_bytes
+    );
 }
 
 /// Verifies private asset lifecycle work refreshes the parent draft activity.

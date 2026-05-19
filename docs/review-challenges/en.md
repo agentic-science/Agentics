@@ -67,7 +67,9 @@ private asset uploads; a stale validation record is failed and cleared before a
 new validation or upload proceeds. Private assets use a repairable lifecycle:
 `pending` while bytes are being written and promoted, `active` after the
 durable object exists, and `failed` after write or promotion failure. Draft
-responses and publish use only active assets.
+responses and publish use only active assets. Exact retries repair stale
+pending uploads that left unreferenced durable objects behind before the row
+became active.
 
 Publishing claims an approved draft by moving it to `publishing` with a
 publish-claim ID before any filesystem work starts. Only that claim can fail or

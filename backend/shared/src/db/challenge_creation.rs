@@ -560,6 +560,27 @@ pub async fn fail_challenge_private_asset(
     Ok(())
 }
 
+/// Return whether a private asset storage key is owned by an active asset row.
+pub async fn private_asset_storage_key_has_active_reference(
+    pool: &PgPool,
+    storage_key: &StorageKey,
+) -> Result<bool> {
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM challenge_private_assets
+            WHERE storage_key = $1
+              AND status = 'active'
+        )
+        "#,
+    )
+    .bind(storage_key.as_str())
+    .fetch_one(pool)
+    .await?;
+    Ok(exists)
+}
+
 /// Lock a draft row and confirm private assets may still be attached.
 async fn ensure_private_asset_upload_allowed_tx(
     tx: &mut Transaction<'_, Postgres>,

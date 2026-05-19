@@ -218,6 +218,12 @@ pub async fn upload_challenge_private_asset(
         }
     };
 
+    if let Err(error) = cleanup_unreferenced_private_asset_object(&state, &storage_key).await {
+        fail_challenge_private_asset_record(&state, &asset_row_id, &error.to_string()).await;
+        cleanup_storage_key(&state, &temporary_storage_key).await;
+        return Err(error);
+    }
+
     if let Err(error) = state
         .storage
         .promote(&temporary_storage_key, &storage_key)
@@ -303,7 +309,22 @@ async fn fail_challenge_private_asset_record(
     }
 }
 
-/// Deletes a temporary private-asset storage object after a failed upload path.
+/// Remove an unreferenced durable object left by a stale pending private asset.
+async fn cleanup_unreferenced_private_asset_object(
+    state: &AppState,
+    storage_key: &StorageKey,
+) -> Result<()> {
+    if !state.storage.exists(storage_key).await? {
+        return Ok(());
+    }
+    if db::private_asset_storage_key_has_active_reference(&state.db, storage_key).await? {
+        return Err(AppError::Conflict);
+    }
+    cleanup_storage_key(state, storage_key).await;
+    Ok(())
+}
+
+/// Deletes a private-asset storage object after a failed or repaired upload path.
 async fn cleanup_storage_key(state: &AppState, storage_key: &StorageKey) {
     if let Err(error) = state.storage.delete(storage_key).await {
         warn!(

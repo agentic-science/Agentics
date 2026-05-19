@@ -170,7 +170,9 @@ not used by draft responses or publication. Uploads are rejected while a
 non-stale draft validation is active, because validation and private asset
 mutation must not race. Private asset reservation, activation, failure, and
 cleanup refresh the parent draft activity timestamp, so stale draft cleanup does
-not abandon a draft while asset work is actively repairing or progressing.
+not abandon a draft while asset work is actively repairing or progressing. If a
+stale pending upload left an unreferenced durable object behind, an exact retry
+repairs it by deleting that unreferenced object before promoting the new upload.
 
 ## Creator Flow
 
