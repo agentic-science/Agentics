@@ -694,6 +694,7 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
             job_id: &job_id,
             worker_id: "local-validation",
             attempt_count: 1,
+            container_scope: shared::runner::RunnerContainerScope::LocalValidation,
             eval_type: ScoringMode::Validation,
             payload: &payload,
             storage: &storage,

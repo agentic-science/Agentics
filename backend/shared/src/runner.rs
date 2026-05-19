@@ -51,6 +51,12 @@ use logs::{
 };
 use storage::{RunnerStorage, WritableMountLease, WritablePhase};
 
+const RUNNER_KIND_LABEL: &str = "agentics.runner";
+const RUNNER_KIND_ZIP_PROJECT: &str = "zip_project";
+const RUNNER_SCOPE_LABEL: &str = "agentics.runner_scope";
+const RUNNER_SCOPE_HOSTED_WORKER: &str = "hosted-worker";
+const RUNNER_SCOPE_LOCAL_VALIDATION: &str = "local-validation";
+
 /// Validated scorer result plus the persisted runner log location.
 #[derive(Debug, Clone)]
 pub struct ExecutionResult {
@@ -67,6 +73,7 @@ struct RunnerContext<'a> {
     storage: &'a RunnerStorage,
     job_id: &'a str,
     attempt: &'a RunnerAttempt,
+    container_scope: RunnerContainerScope,
 }
 
 impl RunnerContext<'_> {
@@ -85,6 +92,10 @@ impl RunnerContext<'_> {
             (
                 "agentics.attempt_count".to_string(),
                 self.attempt.attempt_count.to_string(),
+            ),
+            (
+                RUNNER_SCOPE_LABEL.to_string(),
+                self.container_scope.as_label().to_string(),
             ),
             ("agentics.phase".to_string(), phase.to_string()),
         ]);
@@ -214,6 +225,23 @@ struct SolutionRunMetadata {
     output_dir: String,
 }
 
+/// Docker label scope separating hosted worker containers from CLI local validation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunnerContainerScope {
+    HostedWorker,
+    LocalValidation,
+}
+
+impl RunnerContainerScope {
+    /// Stable Docker label value for this runner container scope.
+    fn as_label(self) -> &'static str {
+        match self {
+            Self::HostedWorker => RUNNER_SCOPE_HOSTED_WORKER,
+            Self::LocalValidation => RUNNER_SCOPE_LOCAL_VALIDATION,
+        }
+    }
+}
+
 /// Carries all boundary inputs required to execute one evaluation job.
 pub struct EvaluationJobExecution<'a> {
     /// Docker client used for phase containers.
@@ -226,6 +254,8 @@ pub struct EvaluationJobExecution<'a> {
     pub worker_id: &'a str,
     /// One-based attempt count from the evaluation job record.
     pub attempt_count: i32,
+    /// Docker cleanup scope for containers created by this execution.
+    pub container_scope: RunnerContainerScope,
     /// Scoring mode that controls privacy and log exposure.
     pub eval_type: ScoringMode,
     /// Validated job payload produced by the API.
@@ -242,6 +272,7 @@ impl std::fmt::Debug for EvaluationJobExecution<'_> {
             .field("job_id", &self.job_id)
             .field("worker_id", &self.worker_id)
             .field("attempt_count", &self.attempt_count)
+            .field("container_scope", &self.container_scope)
             .field("eval_type", &self.eval_type)
             .finish_non_exhaustive()
     }
@@ -257,6 +288,7 @@ pub async fn execute_evaluation_job(
         job_id,
         worker_id,
         attempt_count,
+        container_scope,
         eval_type,
         payload,
         storage,
@@ -311,6 +343,7 @@ pub async fn execute_evaluation_job(
         storage: &runner_storage,
         job_id,
         attempt: &attempt,
+        container_scope,
     };
 
     let execution = async {

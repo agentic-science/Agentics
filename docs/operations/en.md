@@ -234,12 +234,15 @@ to the exact `worker_id` and `attempt_count`, so an older worker attempt cannot
 keep a superseded claim alive. If the worker dies, stale jobs are requeued or
 failed after `AGENTICS_WORKER_STALE_JOB_MINUTES` and max-attempt logic.
 
-On startup and on each worker cycle, the worker also reconciles Agentics-labeled
-Docker containers against database job claims. Running containers are kept only
-when their `job_id`, `worker_id`, and `attempt_count` labels match a fresh
-`running` job claim. Missing, malformed, stale, superseded, and stopped stale
-runner containers are killed or removed so a crashed worker cannot keep CPU,
-GPU, writable-mount, or Docker-layer quota slots indefinitely.
+On startup and on each worker cycle, the worker also reconciles hosted-worker
+Agentics Docker containers against database job claims. The cleanup scope is
+limited to containers labelled `agentics.runner_scope=hosted-worker`, so CLI
+local validation containers on the same Docker host are not touched. Running
+hosted-worker containers are kept only when their `job_id`, `worker_id`, and
+`attempt_count` labels match a fresh `running` job claim. Missing, malformed,
+stale, superseded, and stopped stale runner containers in that hosted scope are
+killed or removed so a crashed worker cannot keep CPU, GPU, writable-mount, or
+Docker-layer quota slots indefinitely.
 
 Actions:
 

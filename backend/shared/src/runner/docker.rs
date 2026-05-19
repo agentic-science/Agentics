@@ -110,7 +110,10 @@ pub(super) async fn run_container(
         host_config: Some(host_config),
         labels: Some({
             let mut labels = request.labels;
-            labels.insert("agentics.runner".to_string(), "zip_project".to_string());
+            labels.insert(
+                super::RUNNER_KIND_LABEL.to_string(),
+                super::RUNNER_KIND_ZIP_PROJECT.to_string(),
+            );
             labels
         }),
         ..Default::default()
@@ -199,7 +202,10 @@ async fn repair_bind_mount_permissions(
             .filter_map(|mount| mount.target.as_ref())
             .cloned(),
     );
-    labels.insert("agentics.runner".to_string(), "zip_project".to_string());
+    labels.insert(
+        super::RUNNER_KIND_LABEL.to_string(),
+        super::RUNNER_KIND_ZIP_PROJECT.to_string(),
+    );
     labels.insert("agentics.phase".to_string(), "permission-fix".to_string());
 
     let host_config = permission_repair_host_config(mounts);
@@ -310,15 +316,42 @@ async fn list_agentics_runner_containers(
     docker: &Docker,
 ) -> Result<Vec<bollard::models::ContainerSummary>> {
     let mut filters = HashMap::new();
-    filters.insert("label", vec!["agentics.runner=zip_project".to_string()]);
+    filters.insert(
+        "label",
+        vec![
+            format!(
+                "{}={}",
+                super::RUNNER_KIND_LABEL,
+                super::RUNNER_KIND_ZIP_PROJECT
+            ),
+            format!(
+                "{}={}",
+                super::RUNNER_SCOPE_LABEL,
+                super::RUNNER_SCOPE_HOSTED_WORKER
+            ),
+        ],
+    );
     let options = ListContainersOptionsBuilder::default()
         .all(true)
         .filters(&filters)
         .build();
-    docker
+    let containers = docker
         .list_containers(Some(options))
         .await
-        .map_err(|e| AppError::Docker(format!("list runner containers failed: {e}")))
+        .map_err(|e| AppError::Docker(format!("list runner containers failed: {e}")))?;
+    Ok(containers
+        .into_iter()
+        .filter(container_has_hosted_runner_scope)
+        .collect())
+}
+
+/// Return true only for containers owned by hosted worker reconciliation.
+fn container_has_hosted_runner_scope(container: &bollard::models::ContainerSummary) -> bool {
+    container
+        .labels
+        .as_ref()
+        .and_then(|labels| labels.get(super::RUNNER_SCOPE_LABEL))
+        .is_some_and(|scope| scope == super::RUNNER_SCOPE_HOSTED_WORKER)
 }
 
 /// Remove stale stopped containers from a pre-fetched Docker container list.
@@ -358,6 +391,11 @@ struct RunnerContainerLabels {
 impl RunnerContainerLabels {
     /// Parse required runner labels, rejecting malformed or incomplete identities.
     fn parse(labels: &HashMap<String, String>) -> Option<Self> {
+        if labels.get(super::RUNNER_SCOPE_LABEL).map(String::as_str)
+            != Some(super::RUNNER_SCOPE_HOSTED_WORKER)
+        {
+            return None;
+        }
         let job_id = EvaluationJobId::try_new(labels.get("agentics.job_id")?).ok()?;
         let worker_id = labels.get("agentics.worker_id")?.to_string();
         if worker_id.trim().is_empty() {
@@ -905,6 +943,10 @@ mod tests {
     fn runner_container_labels_reject_malformed_identity() {
         let mut labels = HashMap::from([
             (
+                crate::runner::RUNNER_SCOPE_LABEL.to_string(),
+                crate::runner::RUNNER_SCOPE_HOSTED_WORKER.to_string(),
+            ),
+            (
                 "agentics.job_id".to_string(),
                 uuid::Uuid::new_v4().to_string(),
             ),
@@ -915,6 +957,16 @@ mod tests {
 
         labels.insert("agentics.attempt_count".to_string(), "1".to_string());
         labels.insert("agentics.job_id".to_string(), "not-a-uuid".to_string());
+        assert!(RunnerContainerLabels::parse(&labels).is_none());
+
+        labels.insert(
+            "agentics.job_id".to_string(),
+            uuid::Uuid::new_v4().to_string(),
+        );
+        labels.insert(
+            crate::runner::RUNNER_SCOPE_LABEL.to_string(),
+            crate::runner::RUNNER_SCOPE_LOCAL_VALIDATION.to_string(),
+        );
         assert!(RunnerContainerLabels::parse(&labels).is_none());
     }
 

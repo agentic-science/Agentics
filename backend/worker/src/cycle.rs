@@ -23,8 +23,8 @@ use shared::db::{
 use shared::models::evaluation::EvaluationStatus;
 use shared::models::ids::{EvaluationId, EvaluationJobId};
 use shared::runner::{
-    EvaluationJobExecution, connect_docker, evaluation_runner_log_key, execute_evaluation_job,
-    reconcile_runner_containers,
+    EvaluationJobExecution, RunnerContainerScope, connect_docker, evaluation_runner_log_key,
+    execute_evaluation_job, reconcile_runner_containers,
 };
 use shared::storage::LocalStorage;
 
@@ -241,6 +241,7 @@ pub async fn run_worker_cycle(
         job_id: job.id.as_str(),
         worker_id,
         attempt_count: job.attempt_count,
+        container_scope: RunnerContainerScope::HostedWorker,
         eval_type: job.eval_type,
         payload: &job.payload,
         storage,
