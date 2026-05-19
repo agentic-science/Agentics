@@ -10,7 +10,6 @@ User=agentics
 Group=agentics
 WorkingDirectory=/opt/agentics/current
 EnvironmentFile=/etc/agentics/agentics.env
-ExecStartPre=/opt/agentics/current/scripts/ops/check-dgx-spark-profile.sh
 ExecStart=/opt/agentics/current/bin/worker
 Restart=on-failure
 RestartSec=5s

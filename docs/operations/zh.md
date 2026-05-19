@@ -85,10 +85,12 @@ Hosted DGX profile 会在 public workers 接受 jobs 前添加 strict storage pr
 
 使用明确的 Agentics flag `AGENTICS_HOST_PROBE_MODE=off|warn|require`，
 不要从 `CI=true` 推断 strictness，因为 CI 可能运行在无法证明 Docker/XFS quota
-behavior 的 hosts 上。在 `require` mode 下，worker startup 应验证 Agentics-owned
-Docker daemon 上的 Docker writable-layer quota enforcement，并验证 runner-owned
-writable mounts 由有界的 per-phase XFS project-quota slots 支撑。DGX profile
-应设置 `AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots`、
+behavior 的 hosts 上。在 `warn` 或 `require` mode 下，worker startup 会运行
+`scripts/ops/check-dgx-spark-profile.sh`；在 `require` mode 下，如果 script 失败或
+无法运行，worker 会 fail closed。该 probe 会验证 Agentics-owned Docker daemon 上的
+Docker writable-layer quota enforcement，并验证 runner-owned writable mounts 由有界的
+per-phase XFS project-quota slots 支撑。DGX profile 应设置
+`AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots`、
 `AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts`、
 `AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096` 和
 `AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true`。默认 platform-owned

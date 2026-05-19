@@ -21,7 +21,7 @@ units as macOS startup definitions.
   and loopback XFS data root.
 - `agentics-api.service`: API server service.
 - `agentics-worker.service`: worker service using the Agentics-owned Docker
-  daemon.
+  daemon. The worker binary enforces `AGENTICS_HOST_PROBE_MODE` during startup.
 - `agentics-web.service`: Next.js web service.
 
 The MVP edge layer is Cloudflare-managed. These files intentionally do not ship

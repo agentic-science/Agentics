@@ -28,6 +28,8 @@ use shared::runner::{
 };
 use shared::storage::LocalStorage;
 
+use crate::host_probe::enforce_host_probe;
+
 /// Long-lived evaluation worker with shared database, Docker, and storage handles.
 #[derive(Debug)]
 pub struct Worker {
@@ -42,6 +44,7 @@ impl Worker {
     /// Build a worker from runtime configuration.
     pub async fn new(config: Arc<Config>) -> anyhow::Result<Self> {
         config.validate_runner_storage()?;
+        enforce_host_probe(&config).await?;
         let db = create_pool(&config, 2).await?;
         let docker = connect_docker(&config)?;
         let cleanup =

@@ -134,6 +134,7 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
         web_session_cookie_secure: false,
         agent_registration_mode: "public".to_string(),
         docker_host: std::env::var("AGENTICS_TEST_DOCKER_HOST").ok(),
+        host_probe_mode: shared::config::HostProbeMode::Off,
         require_digest_pinned_images: false,
         runner_writable_storage_mode: std::env::var("AGENTICS_TEST_RUNNER_WRITABLE_STORAGE_MODE")
             .unwrap_or_else(|_| "unbounded".to_string()),

@@ -66,7 +66,7 @@ Deployment artifacts live in `deploy/dgx-spark/`:
 | `dockerd-agentics.json` | Agentics-owned Docker daemon config |
 | `agentics-docker.service` | Root-owned Docker daemon service |
 | `agentics-api.service` | API server systemd unit |
-| `agentics-worker.service` | Worker systemd unit with profile preflight |
+| `agentics-worker.service` | Worker systemd unit; the worker enforces the configured host probe mode |
 | `agentics-web.service` | Web frontend systemd unit |
 
 Linux-gated operational scripts:
@@ -197,9 +197,10 @@ just dgx-profile uninstall
 just dgx-profile uninstall --purge-data
 ```
 
-The worker unit runs `scripts/ops/check-dgx-spark-profile.sh` before starting.
-With `AGENTICS_HOST_PROBE_MODE=require`, the worker fails closed if the Linux
-host profile is not proven.
+The worker process runs `scripts/ops/check-dgx-spark-profile.sh` during startup
+when `AGENTICS_HOST_PROBE_MODE=warn` or `require`. With
+`AGENTICS_HOST_PROBE_MODE=require`, the worker fails closed if the Linux host
+profile is not proven or the probe script cannot run.
 
 Plain `uninstall` removes services and quota storage while preserving config,
 release files, and durable state. `uninstall --purge-data` also removes

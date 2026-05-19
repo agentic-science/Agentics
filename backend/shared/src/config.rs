@@ -100,6 +100,8 @@ pub struct Config {
     /// Optional Docker host URI used by CI or remote Docker setups.
     #[serde(default)]
     pub docker_host: Option<String>,
+    #[serde(default = "default_host_probe_mode")]
+    pub host_probe_mode: HostProbeMode,
     #[serde(default)]
     pub require_digest_pinned_images: bool,
     #[serde(default = "default_runner_writable_storage_mode")]
@@ -144,6 +146,29 @@ pub enum AgentRegistrationMode {
     PioneerCode,
     /// Allow code-free registration for local testing and development only.
     Public,
+}
+
+/// Worker startup host-profile probe policy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HostProbeMode {
+    /// Do not run hosted profile checks.
+    Off,
+    /// Run hosted profile checks and log failures without blocking startup.
+    Warn,
+    /// Run hosted profile checks and fail worker startup if they fail or are skipped.
+    Require,
+}
+
+impl HostProbeMode {
+    /// Stable environment string for this policy.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Warn => "warn",
+            Self::Require => "require",
+        }
+    }
 }
 
 impl FromStr for AgentRegistrationMode {
@@ -417,6 +442,11 @@ fn default_runner_max_public_results() -> u64 {
 /// Default maximum embedded scorer log bytes accepted in scorer output.
 fn default_runner_max_result_log_bytes() -> u64 {
     DEFAULT_RUNNER_MAX_RESULT_LOG_BYTES
+}
+
+/// Default hosted profile probe mode for local development.
+fn default_host_probe_mode() -> HostProbeMode {
+    HostProbeMode::Off
 }
 
 impl Config {
@@ -845,6 +875,7 @@ mod tests {
     fn runner_output_limit_defaults_are_bounded() {
         let config = test_config();
 
+        assert_eq!(config.host_probe_mode, super::HostProbeMode::Off);
         assert_eq!(config.runner_max_output_files, 8192);
         assert_eq!(config.runner_max_output_dirs, 1024);
         assert_eq!(config.runner_max_output_depth, 32);
@@ -1002,6 +1033,7 @@ mod tests {
             web_session_cookie_secure: false,
             agent_registration_mode: super::default_agent_registration_mode(),
             docker_host: None,
+            host_probe_mode: super::default_host_probe_mode(),
             require_digest_pinned_images: false,
             runner_writable_storage_mode: super::default_runner_writable_storage_mode(),
             runner_phase_mount_root: None,

@@ -86,10 +86,12 @@ runbook.
 
 Use the explicit Agentics flag `AGENTICS_HOST_PROBE_MODE=off|warn|require`
 instead of deriving strictness from `CI=true`, because CI may run on hosts that
-cannot prove Docker/XFS quota behavior. In `require` mode, worker startup should
-verify Docker writable-layer quota enforcement on the Agentics-owned Docker
-daemon and verify that runner-owned writable mounts are backed by bounded
-per-phase XFS project-quota slots. The DGX profile should set
+cannot prove Docker/XFS quota behavior. In `warn` or `require` mode, worker
+startup runs `scripts/ops/check-dgx-spark-profile.sh`; in `require` mode it fails
+closed if the script fails or cannot run. The probe verifies Docker
+writable-layer quota enforcement on the Agentics-owned Docker daemon and verifies
+that runner-owned writable mounts are backed by bounded per-phase XFS
+project-quota slots. The DGX profile should set
 `AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots`,
 `AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts`,
 `AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096`, and

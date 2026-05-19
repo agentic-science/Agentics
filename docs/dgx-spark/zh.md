@@ -64,7 +64,7 @@ Deployment artifacts 位于 `deploy/dgx-spark/`：
 | `dockerd-agentics.json` | Agentics-owned Docker daemon config |
 | `agentics-docker.service` | Root-owned Docker daemon service |
 | `agentics-api.service` | API server systemd unit |
-| `agentics-worker.service` | 带 profile preflight 的 worker systemd unit |
+| `agentics-worker.service` | Worker systemd unit；worker 会强制执行配置的 host probe mode |
 | `agentics-web.service` | Web frontend systemd unit |
 
 Linux-gated operational scripts：
@@ -194,9 +194,10 @@ just dgx-profile uninstall
 just dgx-profile uninstall --purge-data
 ```
 
-Worker unit 会在启动前运行 `scripts/ops/check-dgx-spark-profile.sh`。当
-`AGENTICS_HOST_PROBE_MODE=require` 时，如果 Linux host profile 未被证明，worker
-会 fail closed。
+当 `AGENTICS_HOST_PROBE_MODE=warn` 或 `require` 时，worker process 会在 startup
+期间运行 `scripts/ops/check-dgx-spark-profile.sh`。当
+`AGENTICS_HOST_PROBE_MODE=require` 时，如果 Linux host profile 未被证明或 probe
+script 无法运行，worker 会 fail closed。
 
 普通 `uninstall` 会删除 services 和 quota storage，但保留 config、release files
 和 durable state。`uninstall --purge-data` 还会删除 `/etc/agentics`、
