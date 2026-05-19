@@ -336,6 +336,15 @@ input {
   );
 }
 
+html[data-theme="light"] .home-challenge-preview-fade::after {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.72) 44%,
+    rgba(255, 255, 255, 0.96) 100%
+  );
+}
+
 .home-challenge-more-pill {
   position: absolute;
   bottom: var(--spacing-8);
@@ -862,6 +871,10 @@ input {
   padding: 2px 6px;
   border-radius: var(--radius-sm);
   color: var(--accent-secondary-300);
+}
+
+html[data-theme="light"] .prose :not(pre) > code {
+  color: var(--accent-secondary-text);
 }
 
 .prose pre {

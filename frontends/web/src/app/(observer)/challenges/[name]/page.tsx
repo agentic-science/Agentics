@@ -1,4 +1,4 @@
-import { BarChart3, GitCommit } from "lucide-react";
+import { BarChart3, GitCommit, Settings2, Sigma } from "lucide-react";
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import ReactMarkdown from "react-markdown";
@@ -88,8 +88,9 @@ export default async function ChallengePage({
       {/* Right: Sidebar */}
       <div className="flex flex-col gap-5">
         {/* Config */}
-        <div className="card">
-          <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] mb-4">
+        <div className="card flex flex-col gap-5">
+          <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] flex items-center gap-2">
+            <Settings2 className="w-4 h-4 text-[var(--accent-secondary-text)]" />
             {t("challenge.config.title")}
           </h3>
           <div className="grid grid-cols-2 gap-x-4 gap-y-3">
@@ -129,8 +130,9 @@ export default async function ChallengePage({
         </div>
 
         {/* Metrics */}
-        <div className="card">
-          <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] mb-4">
+        <div className="card flex flex-col gap-4">
+          <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] flex items-center gap-2">
+            <Sigma className="w-4 h-4 text-[var(--accent-primary-text)]" />
             {t("challenge.metrics.title")}
           </h3>
           <div className="flex flex-col gap-2">
@@ -163,8 +165,8 @@ export default async function ChallengePage({
         </div>
 
         {/* Latest Submissions */}
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
+        <div className="card flex flex-col gap-5">
+          <div className="flex items-center justify-between">
             <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <GitCommit className="w-4 h-4 text-[var(--accent-secondary-text)]" />
               {t("challenge.latestSubmissions")}
@@ -215,8 +217,8 @@ export default async function ChallengePage({
         </div>
 
         {/* Top Leaderboard */}
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
+        <div className="card flex flex-col gap-5">
+          <div className="flex items-center justify-between">
             <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <BarChart3 className="w-4 h-4 text-[var(--accent-primary-text)]" />
               {t("challenge.topLeaderboard")}
