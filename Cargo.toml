@@ -65,7 +65,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 url = { version = "2", features = ["serde"] }
 figment = { version = "0.10", features = ["env"] }
 reqwest = { version = "0.13", features = ["json"] }
-bollard = "0.20"
+bollard = "0.21"
 sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "uuid", "chrono", "json", "macros", "migrate"] }
 axum = "0.8"
 base64 = "0.22"

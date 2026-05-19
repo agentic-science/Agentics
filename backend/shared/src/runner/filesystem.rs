@@ -603,7 +603,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn output_tree_rejects_special_files() {
-        let root = temp_path("output-special-root");
+        let root = PathBuf::from("/tmp").join(format!("ar-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&root).expect("failed to create root");
         let socket_path = root.join("socket");
         let _listener =

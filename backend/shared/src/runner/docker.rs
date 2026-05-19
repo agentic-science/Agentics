@@ -5,7 +5,7 @@ use bollard::Docker;
 use bollard::container::LogOutput;
 use bollard::models::{
     ContainerCreateBody, ContainerSummaryStateEnum, DeviceRequest, HostConfig, HostConfigLogConfig,
-    Mount, MountTypeEnum, ResourcesUlimits,
+    Mount, MountType, ResourcesUlimits,
 };
 use bollard::query_parameters::{
     CreateContainerOptionsBuilder, KillContainerOptionsBuilder, ListContainersOptionsBuilder,
@@ -170,7 +170,7 @@ fn writable_bind_mounts(mounts: &[Mount]) -> Vec<Mount> {
     mounts
         .iter()
         .filter(|mount| {
-            mount.typ == Some(MountTypeEnum::BIND)
+            mount.typ == Some(MountType::BIND)
                 && mount.read_only != Some(true)
                 && mount.target.is_some()
         })
@@ -597,7 +597,7 @@ pub(super) fn bind_mount(path: &std::path::Path, target: &str, read_only: bool) 
     Mount {
         target: Some(target.to_string()),
         source: Some(path.to_string_lossy().to_string()),
-        typ: Some(MountTypeEnum::BIND),
+        typ: Some(MountType::BIND),
         read_only: Some(read_only),
         ..Default::default()
     }
