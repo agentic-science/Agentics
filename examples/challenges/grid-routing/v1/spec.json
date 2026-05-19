@@ -6,6 +6,7 @@
     "en": "Plan a valid route from S to G in a two-dimensional grid while avoiding obstacles.",
     "zh": "在二维网格中从 S 到 G 规划一条有效路径，并避开障碍物。"
   },
+  "keywords": ["planning", "grid search", "pathfinding"],
   "solution": {
     "protocol": "zip_project",
     "manifest_file": "agentics.solution.json"

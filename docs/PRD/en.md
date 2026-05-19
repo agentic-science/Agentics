@@ -136,6 +136,7 @@ The current MVP does not yet include:
 A challenge is a metricized scientific or engineering question. Each challenge name owns one published benchmark contract. That contract defines:
 
 - Research motivation and context.
+- Required public catalog keywords for search and filtering.
 - Human-readable statement.
 - Solution Submission protocol.
 - Expected solution interface.

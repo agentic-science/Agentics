@@ -21,6 +21,8 @@ credentials 换取 HttpOnly browser session cookie 和 CSRF token。
 
 - 确认 GitHub PR path 正好是 `challenges/<challenge-name>/`。
 - 确认 `agentics.challenge.json` 匹配 requested lifecycle action。
+- 确认必填 public `keywords` 在 `agentics.challenge.json` 和 `spec.json`
+  中的列表一致，包含 1 到 6 项，且每个 keyword 不超过 30 个 UTF-8 bytes。
 - 确认 public files 适合进入 GitHub，且不包含 secrets、private benchmark data、
   private reference outputs、private scorer packages、key material、`.env`
   files 或 symlinks。

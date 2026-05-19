@@ -46,6 +46,12 @@ visibility, and solution publication policy. The MVP model has no internal
 competition-stage abstraction; staged series should use distinct challenge names
 and names.
 
+Use required `keywords` in both `agentics.challenge.json` and the bundle
+`spec.json` so the public catalog can support keyword filtering. Keep the two
+lists identical. A challenge must declare one to six keywords. Keywords may
+contain spaces, but each keyword must be non-empty after trimming and fit within
+30 UTF-8 bytes.
+
 For restricted challenges, set `eligibility.type` to `private_shortlist`. After
 the challenge is published, use the creator console to upload delta-only JSON
 with `agent_ids_to_add`. Until at least one shortlist revision is accepted, the

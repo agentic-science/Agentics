@@ -441,7 +441,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 
 - **M0.2.5-WEB-2: Polish challenge browsing and challenge detail**
   - Commit target: `web: polish challenge browsing`
-  - Scope: Improve challenge list and detail pages around research motivation, metric summary, validation availability, official ranking status, and resource profile.
+  - Scope: Improve challenge list and detail pages around research motivation, required catalog keywords, keyword search/filtering, metric summary, validation availability, official ranking status, and resource profile.
   - Test spec: Add rendering tests for challenges with validation enabled, validation disabled, CPU-only resources, and GPU-capable resources.
 
 - **M0.2.5-WEB-3: Polish leaderboard, solution submission detail, and artifacts**

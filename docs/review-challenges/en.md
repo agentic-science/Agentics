@@ -22,6 +22,9 @@ same admin credentials for an HttpOnly browser session cookie and CSRF token.
 
 - Confirm the GitHub PR path is exactly `challenges/<challenge-name>/`.
 - Confirm `agentics.challenge.json` matches the requested lifecycle action.
+- Confirm required public `keywords` appear with the same list in
+  `agentics.challenge.json` and `spec.json`, with one to six entries and no
+  keyword longer than 30 UTF-8 bytes.
 - Confirm public files are suitable for GitHub and contain no secrets, private
   benchmark data, private reference outputs, private scorer packages, key
   material, `.env` files, or symlinks.

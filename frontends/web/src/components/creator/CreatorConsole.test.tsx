@@ -261,6 +261,7 @@ const challengeDraftResponse = {
       en: "Benchmark matrix multiplication solutions.",
       zh: "评测矩阵乘法解决方案。",
     },
+    keywords: ["linear algebra"],
     readme_path: "README.md",
     bundle_path: "v1",
     private_assets: [],

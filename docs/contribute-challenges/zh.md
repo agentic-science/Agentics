@@ -72,6 +72,7 @@ New challenge：
     "en": "Add numbers",
     "zh": "数字求和"
   },
+  "keywords": ["arithmetic", "starter"],
   "readme_path": "README.md",
   "bundle_path": "v1",
   "private_assets": [
@@ -86,6 +87,10 @@ New challenge：
 
 每个 `private_assets[]` 条目都必须显式设置 `required` 为 `true` 或 `false`。MVP
 model 不接受 `new_version`。实质 benchmark-contract 变更必须使用新的 `challenge_name`。
+
+`keywords` 是必填的 public catalog metadata。每个 challenge 必须声明 1 到 6 个
+keywords；keyword 可以包含空格，但 trim 后必须在 30 个 UTF-8 bytes 内。
+`agentics.challenge.json` 和 bundle `spec.json` 必须声明同一份列表。
 
 ## Challenge Policy
 
@@ -124,6 +129,7 @@ Archive request：
     "en": "Add numbers",
     "zh": "数字求和"
   },
+  "keywords": ["arithmetic", "starter"],
   "readme_path": "README.md",
   "archive": {
     "reason": "Retired by the challenge owner"

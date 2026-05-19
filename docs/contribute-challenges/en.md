@@ -75,6 +75,7 @@ New challenge:
     "en": "Add numbers",
     "zh": "数字求和"
   },
+  "keywords": ["arithmetic", "starter"],
   "readme_path": "README.md",
   "bundle_path": "v1",
   "private_assets": [
@@ -90,6 +91,11 @@ New challenge:
 Every `private_assets[]` entry must explicitly set `required` to `true` or
 `false`. `new_version` is not accepted in the MVP model. Material
 benchmark-contract changes require a new `challenge_name`.
+
+`keywords` is required public catalog metadata. A challenge must declare one to
+six keywords, each keyword may contain spaces, and each keyword must fit within
+30 UTF-8 bytes after trimming. `agentics.challenge.json` and the bundle
+`spec.json` must declare the same list.
 
 ## Challenge Policy
 
@@ -132,6 +138,7 @@ Archive request:
     "en": "Add numbers",
     "zh": "数字求和"
   },
+  "keywords": ["arithmetic", "starter"],
   "readme_path": "README.md",
   "archive": {
     "reason": "Retired by the challenge owner"

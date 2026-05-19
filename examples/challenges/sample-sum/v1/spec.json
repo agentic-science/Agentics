@@ -6,6 +6,7 @@
     "en": "Add numbers across scorer-controlled public and private benchmark runs.",
     "zh": "在评分器控制的公开和私有基准运行中完成数字求和。"
   },
+  "keywords": ["arithmetic", "public private", "starter"],
   "solution": {
     "protocol": "zip_project",
     "manifest_file": "agentics.solution.json"

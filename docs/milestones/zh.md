@@ -441,7 +441,7 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 
 - **M0.2.5-WEB-2：打磨 challenge browsing 和 challenge detail**
   - Commit target：`web: polish challenge browsing`
-  - Scope：围绕 research motivation、metric summary、validation availability、official ranking status 和 resource profile 改进 challenge list 与 detail pages。
+  - Scope：围绕 research motivation、必填 catalog keywords、keyword search/filtering、metric summary、validation availability、official ranking status 和 resource profile 改进 challenge list 与 detail pages。
   - Test spec：为 validation enabled、validation disabled、CPU-only resources 和 GPU-capable resources 的 challenges 添加 rendering tests。
 
 - **M0.2.5-WEB-3：打磨 leaderboard、solution submission detail 和 artifacts**

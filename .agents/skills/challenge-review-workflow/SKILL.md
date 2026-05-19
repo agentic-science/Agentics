@@ -16,6 +16,9 @@ Reviewer checklist:
 - `challenge_name` is clear, non-squatting, lowercase, and stable.
 - The PR path is exactly `challenges/<challenge-name>`.
 - `README.md`, `statement.md`, and `spec.json` are coherent.
+- Required public `keywords` match between `agentics.challenge.json` and
+  `spec.json`, contain one to six entries, and each keyword fits within 30
+  UTF-8 bytes.
 - The metric schema has one primary ranking metric and clear metric descriptions.
 - Targets are realistic for the hosted worker budget.
 - Challenge-level `starts_at` is present, `starts_at` and optional `closes_at`
