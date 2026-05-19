@@ -1068,7 +1068,7 @@ export const challengeDraftCleanupResponseSchema = z
     purged_private_assets: z.number().int(),
   })
   .describe(
-    "Admin response returned after abandoning stale drafts and deleting expired\nunpublished private asset records.",
+    "Admin response returned after abandoning stale drafts and deleting\npurge-eligible unpublished private asset records.",
   );
 
 export const challengeDraftListResponseSchema = z
@@ -3626,7 +3626,7 @@ export const uploadChallengePrivateAssetRequestSchema = z
         "private_reference_outputs",
       ])
       .describe("Supported private asset classes for challenge creation."),
-    required: z.boolean().default(false),
+    required: z.boolean(),
     asset_base64: z.string(),
   })
   .strict()

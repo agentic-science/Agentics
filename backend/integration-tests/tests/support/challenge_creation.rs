@@ -51,6 +51,7 @@ pub async fn create_validate_approve_publish_draft(
         .json(&json!({
             "asset_name": "official-cases",
             "kind": "private_benchmark_data",
+            "required": false,
             "asset_base64": private_benchmark_asset_zip_base64()
         }))
         .send()

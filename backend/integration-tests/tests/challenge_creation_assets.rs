@@ -55,6 +55,7 @@ async fn private_asset_upload_rejects_duplicate_asset_name(pool: sqlx::PgPool) {
     .json(&json!({
         "asset_name": "official-cases",
         "kind": "private_benchmark_data",
+        "required": false,
         "asset_base64": private_benchmark_asset_zip_base64()
     }))
     .send()
@@ -78,6 +79,7 @@ async fn private_asset_upload_rejects_duplicate_asset_name(pool: sqlx::PgPool) {
     .json(&json!({
         "asset_name": "official-cases",
         "kind": "private_benchmark_data",
+        "required": false,
         "asset_base64": private_benchmark_asset_zip_base64()
     }))
     .send()
@@ -387,6 +389,7 @@ async fn stale_pending_private_asset_retry_replaces_unreferenced_object(pool: sq
     .json(&json!({
         "asset_name": "official-cases",
         "kind": "private_benchmark_data",
+        "required": false,
         "asset_base64": asset_base64
     }))
     .send()
@@ -567,6 +570,7 @@ async fn upload_private_asset(
     .json(&json!({
         "asset_name": "official-cases",
         "kind": "private_benchmark_data",
+        "required": false,
         "asset_base64": private_benchmark_asset_zip_base64_with_nonce(nonce)
     }))
     .send()

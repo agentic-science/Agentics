@@ -101,6 +101,31 @@ async fn private_asset_upload_rejects_non_zip_payload(pool: sqlx::PgPool) {
     let draft = create_draft(&client, &app, &creator, 8, manifest_json()).await;
     let draft_id = draft["id"].as_str().expect("draft id");
 
+    let missing_required_response = creator_auth(
+        client.post(api_url(
+            &app,
+            &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+        )),
+        &creator,
+    )
+    .json(&json!({
+        "asset_name": "official-cases",
+        "kind": "private_benchmark_data",
+        "asset_base64": private_benchmark_asset_zip_base64()
+    }))
+    .send()
+    .await
+    .expect("missing-required private asset request");
+    assert_eq!(missing_required_response.status(), StatusCode::BAD_REQUEST);
+    let missing_required_error = missing_required_response
+        .text()
+        .await
+        .expect("missing-required error body");
+    assert!(
+        missing_required_error.contains("required"),
+        "expected missing required field error, got: {missing_required_error}"
+    );
+
     let response = creator_auth(
         client.post(api_url(
             &app,
@@ -111,6 +136,7 @@ async fn private_asset_upload_rejects_non_zip_payload(pool: sqlx::PgPool) {
     .json(&json!({
         "asset_name": "official-cases",
         "kind": "private_benchmark_data",
+        "required": false,
         "asset_base64": STANDARD.encode("not a zip")
     }))
     .send()
@@ -506,6 +532,7 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
     .json(&json!({
         "asset_name": "official-cases",
         "kind": "private_benchmark_data",
+        "required": false,
         "asset_base64": private_benchmark_asset_zip_base64()
     }))
     .send()
@@ -601,6 +628,7 @@ async fn concurrent_publish_requests_leave_one_published_bundle(pool: sqlx::PgPo
     .json(&json!({
         "asset_name": "official-cases",
         "kind": "private_benchmark_data",
+        "required": false,
         "asset_base64": private_benchmark_asset_zip_base64()
     }))
     .send()
@@ -723,6 +751,7 @@ async fn failed_publish_removes_claim_scoped_runtime_bundle(pool: sqlx::PgPool) 
     .json(&json!({
         "asset_name": "official-cases",
         "kind": "private_benchmark_data",
+        "required": false,
         "asset_base64": private_benchmark_asset_zip_base64()
     }))
     .send()
@@ -1358,6 +1387,7 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
     .json(&json!({
         "asset_name": "official-cases",
         "kind": "private_benchmark_data",
+        "required": false,
         "asset_base64": STANDARD.encode(b"[]")
     }))
     .send()
@@ -1423,6 +1453,7 @@ async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
     .json(&json!({
         "asset_name": "official-cases",
         "kind": "private_benchmark_data",
+        "required": false,
         "asset_base64": private_benchmark_asset_zip_base64()
     }))
     .send()

@@ -363,7 +363,6 @@ pub struct ChallengeDraftListResponse {
 pub struct UploadChallengePrivateAssetRequest {
     pub asset_name: AssetName,
     pub kind: ChallengePrivateAssetKind,
-    #[serde(default)]
     pub required: bool,
     pub asset_base64: String,
 }

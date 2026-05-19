@@ -87,6 +87,7 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
     .json(&serde_json::json!({
         "asset_name": "official-seed-config",
         "kind": "private_seeds",
+        "required": false,
         "asset_base64": STANDARD.encode(asset_bytes)
     }))
     .send()
