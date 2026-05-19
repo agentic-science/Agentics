@@ -10,29 +10,29 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use bollard::Docker;
-use tokio::io::AsyncWriteExt;
 
 use crate::config::Config;
 use crate::error::{AppError, Result};
 use crate::models::challenge::{
-    ChallengeBundleSpec, ChallengePrepareSpec, ChallengeRunInputFile, ChallengeRunInterface,
-    ChallengeRunManifest, ChallengeRunSpec, DockerPlatform, MetricSchemaSpec, ResourceProfileSpec,
-    TargetAccelerator,
+    ChallengeBundleSpec, ChallengePrepareSpec, ChallengeRunManifest, DockerPlatform,
+    MetricSchemaSpec, ResourceProfileSpec, TargetAccelerator,
 };
 use crate::models::evaluation::{EvaluationJobPayload, ScorerRunResult, ScoringMode};
-use crate::models::names::RunName;
 use crate::models::paths::BundleRelativePath;
 use crate::storage::{Storage, StorageKey};
 use crate::zip_project::{
-    ZIP_PROJECT_MANIFEST_FILE, ZipProjectManifest, ZipProjectPhaseFailureReason,
-    ZipProjectPhaseLimits, ZipProjectPhaseName, ZipProjectResolvedPhase,
+    ZIP_PROJECT_MANIFEST_FILE, ZipProjectManifest, ZipProjectPhaseLimits, ZipProjectPhaseName,
+    ZipProjectResolvedPhase,
 };
 
 mod docker;
 mod errors;
 mod filesystem;
 mod logs;
+mod run_io;
 mod storage;
+#[cfg(test)]
+mod tests;
 
 pub use docker::{
     RunnerContainerCleanupSummary, connect_docker, reconcile_runner_containers,
@@ -40,14 +40,18 @@ pub use docker::{
 };
 
 use docker::{ContainerOutcome, ContainerRequest, bind_mount, pre_pull_image, run_container};
-use errors::{ensure_container_succeeded, ensure_prepare_succeeded, phase_error};
+use errors::{ensure_container_succeeded, ensure_prepare_succeeded};
 use filesystem::{
     OutputTreeLimits, cleanup_paths, copy_dir_all, ensure_disk_limit, ensure_prepare_disk_limit,
-    extract_zip_safe, validate_scorer_visible_output_tree,
+    extract_zip_safe,
 };
 use logs::{
     EVALUATION_LOG_BYTES_PER_RUN, EvaluationLogs, append_named_logs, append_phase_logs,
     append_run_logs, include_log_excerpts, phase_name, visible_log_content,
+};
+use run_io::{
+    copy_scorer_visible_run_tree, ensure_declared_outputs_exist, make_container_readable_tree,
+    make_container_writable_tree, materialize_run_io, run_alias, run_interface, write_run_metadata,
 };
 use storage::{RunnerStorage, WritableMountLease, WritablePhase};
 
@@ -217,19 +221,6 @@ struct PrepareRequest<'a> {
     prepare: &'a ChallengePrepareSpec,
     bundle_dir: &'a Path,
     prepared_root: &'a Path,
-}
-
-#[derive(Debug, serde::Serialize)]
-/// Carries solution run metadata data across this module boundary.
-struct SolutionRunMetadata {
-    run_name: String,
-    interface: ChallengeRunInterface,
-    exit_code: i64,
-    timed_out: bool,
-    wall_time_ms: u64,
-    stdout_path: String,
-    stderr_path: String,
-    output_dir: String,
 }
 
 /// Docker label scope separating hosted worker containers from CLI local validation.
@@ -1125,440 +1116,6 @@ fn writable_phase_for_solution_phase(phase: ZipProjectPhaseName) -> WritablePhas
     }
 }
 
-#[cfg(unix)]
-/// Handles make container writable tree for this module.
-async fn make_container_writable_tree(root: &Path) -> Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-
-    let root = root.to_path_buf();
-    tokio::task::spawn_blocking(move || -> Result<()> {
-        let mut pending = vec![root];
-        while let Some(path) = pending.pop() {
-            let metadata = std::fs::symlink_metadata(&path)?;
-            if metadata.file_type().is_symlink() {
-                continue;
-            }
-            if !metadata.is_dir() && !metadata.is_file() {
-                continue;
-            }
-
-            let mut permissions = metadata.permissions();
-            let writable_bits = if metadata.is_dir() { 0o777 } else { 0o666 };
-            permissions.set_mode(permissions.mode() | writable_bits);
-            std::fs::set_permissions(&path, permissions)?;
-
-            if metadata.is_dir() {
-                for entry in std::fs::read_dir(&path)? {
-                    let entry = entry?;
-                    pending.push(entry.path());
-                }
-            }
-        }
-        Ok(())
-    })
-    .await
-    .map_err(|e| AppError::Internal(format!("container writable chmod task failed: {e}")))?
-}
-
-#[cfg(unix)]
-/// Handles make container readable tree for read-only Docker bind mounts.
-async fn make_container_readable_tree(root: &Path) -> Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-
-    let root = root.to_path_buf();
-    tokio::task::spawn_blocking(move || -> Result<()> {
-        let mut pending = vec![root];
-        while let Some(path) = pending.pop() {
-            let metadata = std::fs::symlink_metadata(&path)?;
-            if metadata.file_type().is_symlink() {
-                continue;
-            }
-            if !metadata.is_dir() && !metadata.is_file() {
-                continue;
-            }
-
-            let mut permissions = metadata.permissions();
-            let current_mode = permissions.mode();
-            let readable_bits = if metadata.is_dir() {
-                0o755
-            } else if current_mode & 0o111 != 0 {
-                0o555
-            } else {
-                0o444
-            };
-            permissions.set_mode(current_mode | readable_bits);
-            std::fs::set_permissions(&path, permissions)?;
-
-            if metadata.is_dir() {
-                for entry in std::fs::read_dir(&path)? {
-                    let entry = entry?;
-                    pending.push(entry.path());
-                }
-            }
-        }
-        Ok(())
-    })
-    .await
-    .map_err(|e| AppError::Internal(format!("container readable chmod task failed: {e}")))?
-}
-
-#[cfg(not(unix))]
-/// Handles make container writable tree for this module.
-async fn make_container_writable_tree(_root: &Path) -> Result<()> {
-    Ok(())
-}
-
-#[cfg(not(unix))]
-/// Handles make container readable tree for read-only Docker bind mounts.
-async fn make_container_readable_tree(_root: &Path) -> Result<()> {
-    Ok(())
-}
-
-/// Build an opaque solution-visible run name for one invocation index.
-fn run_alias(index: usize) -> Result<RunName> {
-    let display_index = index
-        .checked_add(1)
-        .ok_or_else(|| AppError::Internal("run alias index overflowed".to_string()))?;
-    RunName::try_new(format!("run-{display_index:04}"))
-        .map_err(|e| AppError::Internal(format!("generated invalid run alias: {e}")))
-}
-
-/// Copy a solution run tree into the scorer-visible area while rejecting symlinks and devices.
-async fn copy_scorer_visible_run_tree(
-    source: &Path,
-    destination: &Path,
-    visible_run_name: &str,
-    limits: OutputTreeLimits,
-) -> Result<()> {
-    let source = source.to_path_buf();
-    let destination = destination.to_path_buf();
-    let visible_run_name = visible_run_name.to_string();
-    tokio::task::spawn_blocking(move || {
-        copy_scorer_visible_run_tree_blocking(&source, &destination, &visible_run_name, limits)
-    })
-    .await
-    .map_err(|e| AppError::Internal(format!("scorer output copy task failed: {e}")))?
-}
-
-/// Blocking implementation for scorer-visible run tree sanitization and copy.
-fn copy_scorer_visible_run_tree_blocking(
-    source: &Path,
-    destination: &Path,
-    visible_run_name: &str,
-    limits: OutputTreeLimits,
-) -> Result<()> {
-    validate_scorer_visible_output_tree(source, visible_run_name, limits)?;
-
-    let mut pending = vec![(source.to_path_buf(), destination.to_path_buf())];
-    while let Some((current_source, current_destination)) = pending.pop() {
-        let metadata = std::fs::symlink_metadata(&current_source)?;
-        if metadata.file_type().is_symlink() {
-            return Err(phase_error(
-                ZipProjectPhaseName::Run,
-                ZipProjectPhaseFailureReason::RunnerError,
-                format!("run `{visible_run_name}` produced a symlink in its output tree"),
-                None,
-            ));
-        }
-        if metadata.is_dir() {
-            std::fs::create_dir_all(&current_destination)?;
-            for entry in std::fs::read_dir(&current_source)? {
-                let entry = entry?;
-                pending.push((entry.path(), current_destination.join(entry.file_name())));
-            }
-        } else if metadata.is_file() {
-            if let Some(parent) = current_destination.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            std::fs::copy(&current_source, &current_destination)?;
-        } else {
-            return Err(phase_error(
-                ZipProjectPhaseName::Run,
-                ZipProjectPhaseFailureReason::RunnerError,
-                format!("run `{visible_run_name}` produced a non-regular file in its output tree"),
-                None,
-            ));
-        }
-    }
-
-    Ok(())
-}
-
-/// Handles materialize run io for this module.
-async fn materialize_run_io(
-    run: &ChallengeRunSpec,
-    visible_run_name: &str,
-    eval_type: ScoringMode,
-    input_source_root: &Path,
-    io_root: &Path,
-    input_dir: &Path,
-) -> Result<()> {
-    let stdin = match (&run.stdin_json, &run.stdin_text) {
-        (Some(value), None) => serde_json::to_string(value)
-            .map_err(|e| AppError::Internal(format!("serialize stdin_json failed: {e}")))?,
-        (None, Some(value)) => value.clone(),
-        _ => String::new(),
-    };
-    tokio::fs::write(io_root.join("stdin.txt"), stdin).await?;
-    for input in &run.input_files {
-        write_run_input_file(
-            input_source_root,
-            input_dir,
-            input,
-            visible_run_name,
-            eval_type,
-        )
-        .await?;
-    }
-    Ok(())
-}
-
-/// Writes run input file to the target path.
-async fn write_run_input_file(
-    input_source_root: &Path,
-    input_dir: &Path,
-    input: &ChallengeRunInputFile,
-    visible_run_name: &str,
-    eval_type: ScoringMode,
-) -> Result<()> {
-    let path = input_dir.join(input.path.as_path());
-    if let Some(parent) = path.parent() {
-        tokio::fs::create_dir_all(parent).await?;
-    }
-    if let Some(source_path) = &input.source_path {
-        tokio::fs::copy(input_source_root.join(source_path.as_path()), path)
-            .await
-            .map_err(|e| {
-                let source = match eval_type {
-                    ScoringMode::Validation => format!(" source `{source_path}`"),
-                    ScoringMode::Official => String::new(),
-                };
-                AppError::Runner(format!(
-                    "copy run `{visible_run_name}` input{source} failed: {e}"
-                ))
-            })?;
-        return Ok(());
-    }
-
-    let content = if let Some(value) = &input.content {
-        value.clone()
-    } else if let Some(value) = &input.content_json {
-        serde_json::to_string(value)
-            .map_err(|e| AppError::Internal(format!("serialize content_json failed: {e}")))?
-    } else {
-        String::new()
-    };
-    tokio::fs::write(path, content).await?;
-    Ok(())
-}
-
-/// Writes run metadata to the target path.
-async fn write_run_metadata(
-    io_root: &Path,
-    run: &ChallengeRunSpec,
-    visible_run_name: &str,
-    outcome: &ContainerOutcome,
-) -> Result<()> {
-    let metadata = SolutionRunMetadata {
-        run_name: run.run_name.to_string(),
-        interface: run.interface,
-        exit_code: outcome.exit_code,
-        timed_out: outcome.timed_out,
-        wall_time_ms: outcome.wall_time_ms,
-        stdout_path: format!("/solution-runs/{}/stdout.txt", run.run_name),
-        stderr_path: format!("/solution-runs/{}/stderr.txt", run.run_name),
-        output_dir: format!("/solution-runs/{}/output", run.run_name),
-    };
-    let bytes = serde_json::to_vec_pretty(&metadata)
-        .map_err(|e| AppError::Internal(format!("serialize run metadata failed: {e}")))?;
-    let metadata_path = io_root.join("agentics-run.json");
-    let mut file = tokio::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&metadata_path)
-        .await
-        .map_err(|e| {
-            phase_error(
-                ZipProjectPhaseName::Run,
-                ZipProjectPhaseFailureReason::RunnerError,
-                format!(
-                    "run `{visible_run_name}` used reserved metadata path `agentics-run.json`: {e}"
-                ),
-                None,
-            )
-        })?;
-    file.write_all(&bytes).await?;
-    Ok(())
-}
-
-/// Ensures declared outputs exist before continuing.
-async fn ensure_declared_outputs_exist(
-    run: &ChallengeRunSpec,
-    visible_run_name: &str,
-    output_dir: &Path,
-) -> Result<()> {
-    for output in &run.output_files {
-        let output_path = output_dir.join(output.as_path());
-        let metadata = tokio::fs::symlink_metadata(&output_path)
-            .await
-            .map_err(|_| {
-                phase_error(
-                    ZipProjectPhaseName::Run,
-                    ZipProjectPhaseFailureReason::RunnerError,
-                    format!(
-                        "run `{visible_run_name}` did not produce declared output file `{output}`"
-                    ),
-                    None,
-                )
-            })?;
-        if metadata.file_type().is_symlink() {
-            return Err(phase_error(
-                ZipProjectPhaseName::Run,
-                ZipProjectPhaseFailureReason::RunnerError,
-                format!("run `{visible_run_name}` declared output file `{output}` is a symlink"),
-                None,
-            ));
-        }
-        if !metadata.is_file() {
-            return Err(phase_error(
-                ZipProjectPhaseName::Run,
-                ZipProjectPhaseFailureReason::RunnerError,
-                format!(
-                    "run `{visible_run_name}` declared output path `{output}` is not a regular file"
-                ),
-                None,
-            ));
-        }
-    }
-    Ok(())
-}
-
-#[cfg(test)]
-mod run_metadata_tests {
-    use std::fs;
-
-    use uuid::Uuid;
-
-    use super::{
-        ContainerOutcome, OutputTreeLimits, copy_scorer_visible_run_tree, write_run_metadata,
-    };
-    use crate::models::challenge::{ChallengeRunInterface, ChallengeRunSpec};
-    use crate::models::names::RunName;
-
-    /// Return generous test output tree limits.
-    fn test_output_limits() -> OutputTreeLimits {
-        OutputTreeLimits {
-            max_files: 8192,
-            max_dirs: 1024,
-            max_depth: 32,
-        }
-    }
-
-    /// Verifies that solution-created symlinks cannot redirect worker metadata writes.
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn write_run_metadata_rejects_reserved_symlink() {
-        let root =
-            std::env::temp_dir().join(format!("agentics-run-metadata-test-{}", Uuid::new_v4()));
-        fs::create_dir_all(&root).expect("test root should be created");
-        let target = root.join("outside.json");
-        std::os::unix::fs::symlink(&target, root.join("agentics-run.json"))
-            .expect("reserved symlink should be created");
-
-        let run = ChallengeRunSpec {
-            run_name: RunName::try_new("case1").expect("run name should parse"),
-            interface: ChallengeRunInterface::FileSystem,
-            stdin_json: None,
-            stdin_text: None,
-            input_files: Vec::new(),
-            output_files: Vec::new(),
-        };
-        let outcome = ContainerOutcome {
-            exit_code: 0,
-            logs: String::new(),
-            timed_out: false,
-            wall_time_ms: 1,
-        };
-
-        let error = write_run_metadata(&root, &run, "run-0001", &outcome)
-            .await
-            .expect_err("metadata write should reject a pre-existing symlink");
-        assert!(
-            error.to_string().contains("reserved metadata path"),
-            "unexpected error: {error}"
-        );
-        assert!(!target.exists());
-
-        fs::remove_dir_all(root).expect("test root should clean up");
-    }
-
-    /// Verifies that scorer-facing copies reject undeclared symlinks anywhere in the run tree.
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn scorer_visible_run_tree_rejects_extra_symlink() {
-        let root =
-            std::env::temp_dir().join(format!("agentics-run-tree-symlink-test-{}", Uuid::new_v4()));
-        let source = root.join("source");
-        let destination = root.join("destination");
-        fs::create_dir_all(source.join("output")).expect("source output should be created");
-        std::os::unix::fs::symlink("/challenge/private", source.join("output/extra"))
-            .expect("extra symlink should be created");
-
-        let error =
-            copy_scorer_visible_run_tree(&source, &destination, "run-0001", test_output_limits())
-                .await
-                .expect_err("scorer-facing copy should reject symlinks");
-        assert!(
-            error.to_string().contains("produced a symlink"),
-            "unexpected error: {error}"
-        );
-        assert!(!destination.join("output/extra").exists());
-
-        fs::remove_dir_all(root).expect("test root should clean up");
-    }
-
-    /// Verifies output tree limits are checked before scorer-facing copy starts.
-    #[tokio::test]
-    async fn scorer_visible_run_tree_limit_rejects_before_copying() {
-        let root =
-            std::env::temp_dir().join(format!("agentics-run-tree-limit-test-{}", Uuid::new_v4()));
-        let source = root.join("source");
-        let destination = root.join("destination");
-        fs::create_dir_all(source.join("output")).expect("source output should be created");
-        fs::write(source.join("stdout.txt"), b"ok").expect("stdout should be created");
-        fs::write(source.join("output/result.txt"), b"ok").expect("output should be created");
-
-        let error = copy_scorer_visible_run_tree(
-            &source,
-            &destination,
-            "run-0001",
-            OutputTreeLimits {
-                max_files: 1,
-                max_dirs: 32,
-                max_depth: 32,
-            },
-        )
-        .await
-        .expect_err("scorer-facing copy should reject excessive files");
-
-        assert!(
-            error.to_string().contains("output file limit"),
-            "unexpected error: {error}"
-        );
-        assert!(!destination.exists());
-
-        fs::remove_dir_all(root).expect("test root should clean up");
-    }
-}
-
-/// Handles run interface for this module.
-fn run_interface(interface: ChallengeRunInterface) -> &'static str {
-    match interface {
-        ChallengeRunInterface::Stdio => "stdio",
-        ChallengeRunInterface::FileSystem => "file_system",
-    }
-}
-
 /// Build a Docker container name for one attempt-local phase.
 fn container_name(attempt: &RunnerAttempt, suffix: &str) -> String {
     let safe_suffix = sanitize_name_component(suffix);
@@ -1577,110 +1134,4 @@ fn sanitize_name_component(value: &str) -> String {
             }
         })
         .collect::<String>()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{
-        RunnerAttempt, container_name, effective_phase_limits, prepare_limits, scorer_limits,
-    };
-    use crate::models::challenge::{ChallengePrepareSpec, ResourceProfileSpec};
-    use crate::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
-    use crate::models::names::ResourceProfileName;
-    use crate::models::paths::{BundleRelativePath, ScriptPath};
-    use crate::zip_project::ZipProjectNetworkAccess;
-    use crate::zip_project::{ZipProjectPhaseName, ZipProjectResolvedPhase};
-
-    /// Verifies that network policy clamps to resource profile.
-    #[test]
-    fn network_policy_clamps_to_resource_profile() {
-        assert_eq!(
-            ZipProjectNetworkAccess::Enabled.clamp_to(ZipProjectNetworkAccess::Disabled),
-            ZipProjectNetworkAccess::Disabled
-        );
-        assert_eq!(
-            ZipProjectNetworkAccess::Loopback.docker_network_mode(),
-            "none"
-        );
-    }
-
-    /// Verifies that solution phase limits come directly from the resource profile.
-    #[test]
-    fn solution_phase_limits_come_from_resource_profile() {
-        let profile = resource_profile();
-        let phase = ZipProjectResolvedPhase {
-            name: ZipProjectPhaseName::Run,
-            command: ScriptPath::try_new("run.sh").expect("script path"),
-        };
-
-        let limits = effective_phase_limits(&profile, &phase);
-
-        assert_eq!(limits.timeout_sec, 42);
-        assert_eq!(limits.memory_limit_mb, 2048);
-        assert_eq!(limits.cpu_limit_millis, 2500);
-        assert_eq!(limits.disk_limit_mb, 4096);
-        assert_eq!(limits.network_access, ZipProjectNetworkAccess::Loopback);
-    }
-
-    /// Verifies scorer and prepare phases use challenge-owned network policy.
-    #[test]
-    fn scorer_and_prepare_limits_use_challenge_owned_policy() {
-        let profile = resource_profile();
-        let prepare = ChallengePrepareSpec {
-            command: vec!["python".to_string(), "prepare.py".to_string()],
-            result_runs_file: BundleRelativePath::try_new("prepared/runs.json").expect("runs path"),
-            network_access: ZipProjectNetworkAccess::Enabled,
-            reproducibility_notes: None,
-        };
-
-        let scorer = scorer_limits(&profile);
-        let prepare_limits = prepare_limits(&profile, &prepare);
-
-        assert_eq!(scorer.timeout_sec, profile.timeout_sec);
-        assert_eq!(scorer.network_access, ZipProjectNetworkAccess::Disabled);
-        assert_eq!(prepare_limits.timeout_sec, profile.timeout_sec);
-        assert_eq!(
-            prepare_limits.network_access,
-            ZipProjectNetworkAccess::Enabled
-        );
-    }
-
-    /// Verifies retry attempts use distinct transient container identities.
-    #[test]
-    fn retry_attempts_have_distinct_container_names() {
-        let first = RunnerAttempt::new("job/1", "worker a", 1);
-        let second = RunnerAttempt::new("job/1", "worker a", 2);
-
-        assert_ne!(
-            container_name(&first, "run"),
-            container_name(&second, "run")
-        );
-        assert!(container_name(&first, "run").contains("attempt-1"));
-        assert!(container_name(&second, "run").contains("attempt-2"));
-    }
-
-    /// Build a resource profile for runner limit tests.
-    fn resource_profile() -> ResourceProfileSpec {
-        let image = ChallengeImageReference::Local {
-            reference: LocalAgenticsImageReference::try_new(
-                "agentics-linux-arm64-cpu:ubuntu26.04-local",
-            )
-            .expect("test image"),
-        };
-        ResourceProfileSpec {
-            name: ResourceProfileName::try_new("python-cpu").expect("profile name"),
-            resource_description: None,
-            solution_image: image.clone(),
-            scorer_image: image,
-            timeout_sec: 42,
-            memory_limit_mb: 2048,
-            cpu_limit_millis: 2500,
-            disk_limit_mb: 4096,
-            setup_network_access: ZipProjectNetworkAccess::Enabled,
-            build_network_access: ZipProjectNetworkAccess::Disabled,
-            run_network_access: ZipProjectNetworkAccess::Loopback,
-            scorer_network_access: ZipProjectNetworkAccess::Disabled,
-            hardware_metadata: None,
-        }
-    }
 }
