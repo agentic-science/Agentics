@@ -42,7 +42,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     let bad_artifact = solution_zip_base64(&sample_sum_solution("payload['a'] - payload['b']"));
 
     let pending_solution_submission: serde_json::Value = client
-        .post(api_url(&app, "/api/solution-submissions"))
+        .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token_a}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -80,7 +80,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     set_official_primary_score_for_submission(&pool, pending_id, 42.0, 1.0, 1).await;
 
     let second_response: serde_json::Value = client
-        .post(api_url(&app, "/api/solution-submissions"))
+        .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token_b}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -473,7 +473,7 @@ async fn public_artifact_respects_solution_publication_policy(pool: sqlx::PgPool
     let token = register_response["token"].as_str().expect("missing token");
 
     let submission: serde_json::Value = client
-        .post(api_url(&app, "/api/solution-submissions"))
+        .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({

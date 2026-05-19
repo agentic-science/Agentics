@@ -121,7 +121,7 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
 
     let artifact_base64 = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
     let create_response: serde_json::Value = client
-        .post(api_url(&app, "/api/solution-submissions"))
+        .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -144,7 +144,7 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
     let unauthenticated_solution_submission_response = client
         .get(api_url(
             &app,
-            &format!("/api/solution-submissions/{solution_submission_id}"),
+            &format!("/api/agent/solution-submissions/{solution_submission_id}"),
         ))
         .send()
         .await
@@ -154,7 +154,7 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
     let other_agent_solution_submission_response = client
         .get(api_url(
             &app,
-            &format!("/api/solution-submissions/{solution_submission_id}"),
+            &format!("/api/agent/solution-submissions/{solution_submission_id}"),
         ))
         .header("Authorization", format!("Bearer {other_token}"))
         .header("X-Agentics-Admin-Automation", "true")
@@ -168,7 +168,7 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
     let solution_submission_response = client
         .get(api_url(
             &app,
-            &format!("/api/solution-submissions/{solution_submission_id}"),
+            &format!("/api/agent/solution-submissions/{solution_submission_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
@@ -206,7 +206,7 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
     let owner_logs: serde_json::Value = client
         .get(api_url(
             &app,
-            &format!("/api/solution-submissions/{solution_submission_id}/logs"),
+            &format!("/api/agent/solution-submissions/{solution_submission_id}/logs"),
         ))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
@@ -290,7 +290,7 @@ async fn worker_completes_private_validation_run_without_leaderboard(pool: sqlx:
 
     let artifact_base64 = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
     let create_response: serde_json::Value = client
-        .post(api_url(&app, "/api/validation-runs"))
+        .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -314,7 +314,7 @@ async fn worker_completes_private_validation_run_without_leaderboard(pool: sqlx:
     let validation_response = client
         .get(api_url(
             &app,
-            &format!("/api/validation-runs/{validation_id}"),
+            &format!("/api/agent/validation-runs/{validation_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
@@ -372,7 +372,7 @@ async fn worker_completes_file_mode_validation_run(pool: sqlx::PgPool) {
         ("public-3", "RRDDRDRDDR"),
     ]);
     let create_response: serde_json::Value = client
-        .post(api_url(&app, "/api/validation-runs"))
+        .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -396,7 +396,7 @@ async fn worker_completes_file_mode_validation_run(pool: sqlx::PgPool) {
     let validation: serde_json::Value = client
         .get(api_url(
             &app,
-            &format!("/api/validation-runs/{validation_id}"),
+            &format!("/api/agent/validation-runs/{validation_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
@@ -437,7 +437,7 @@ async fn worker_rejects_symlink_declared_output(pool: sqlx::PgPool) {
     let token = register_response["token"].as_str().expect("missing token");
 
     let create_response: serde_json::Value = client
-        .post(api_url(&app, "/api/validation-runs"))
+        .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -461,7 +461,7 @@ async fn worker_rejects_symlink_declared_output(pool: sqlx::PgPool) {
     let validation: serde_json::Value = client
         .get(api_url(
             &app,
-            &format!("/api/validation-runs/{validation_id}"),
+            &format!("/api/agent/validation-runs/{validation_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
@@ -510,7 +510,7 @@ async fn worker_reports_build_phase_failure(pool: sqlx::PgPool) {
         "#!/usr/bin/env sh\nset -eu\npython main.py\n",
     );
     let create_response: serde_json::Value = client
-        .post(api_url(&app, "/api/validation-runs"))
+        .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -534,7 +534,7 @@ async fn worker_reports_build_phase_failure(pool: sqlx::PgPool) {
     let validation: serde_json::Value = client
         .get(api_url(
             &app,
-            &format!("/api/validation-runs/{validation_id}"),
+            &format!("/api/agent/validation-runs/{validation_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
@@ -601,7 +601,7 @@ python main.py
         run_sh,
     );
     let create_response: serde_json::Value = client
-        .post(api_url(&app, "/api/validation-runs"))
+        .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -625,7 +625,7 @@ python main.py
     let validation: serde_json::Value = client
         .get(api_url(
             &app,
-            &format!("/api/validation-runs/{validation_id}"),
+            &format!("/api/agent/validation-runs/{validation_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
@@ -671,7 +671,7 @@ python main.py
         run_sh,
     );
     let create_response: serde_json::Value = client
-        .post(api_url(&app, "/api/validation-runs"))
+        .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -695,7 +695,7 @@ python main.py
     let validation: serde_json::Value = client
         .get(api_url(
             &app,
-            &format!("/api/validation-runs/{validation_id}"),
+            &format!("/api/agent/validation-runs/{validation_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
@@ -777,7 +777,7 @@ python main.py
     ]);
 
     let create_response: serde_json::Value = client
-        .post(api_url(&app, "/api/validation-runs"))
+        .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -801,7 +801,7 @@ python main.py
     let validation: serde_json::Value = client
         .get(api_url(
             &app,
-            &format!("/api/validation-runs/{validation_id}"),
+            &format!("/api/agent/validation-runs/{validation_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
@@ -865,7 +865,7 @@ python main.py
     );
 
     let create_response: serde_json::Value = client
-        .post(api_url(&app, "/api/validation-runs"))
+        .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -889,7 +889,7 @@ python main.py
     let validation: serde_json::Value = client
         .get(api_url(
             &app,
-            &format!("/api/validation-runs/{validation_id}"),
+            &format!("/api/agent/validation-runs/{validation_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
@@ -973,7 +973,7 @@ python main.py
     );
 
     let create_response: serde_json::Value = client
-        .post(api_url(&app, "/api/validation-runs"))
+        .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -997,7 +997,7 @@ python main.py
     let validation: serde_json::Value = client
         .get(api_url(
             &app,
-            &format!("/api/validation-runs/{validation_id}"),
+            &format!("/api/agent/validation-runs/{validation_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
@@ -1063,7 +1063,7 @@ printf built > build/generated.txt
     );
 
     let create_response: serde_json::Value = client
-        .post(api_url(&app, "/api/validation-runs"))
+        .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -1087,7 +1087,7 @@ printf built > build/generated.txt
     let validation: serde_json::Value = client
         .get(api_url(
             &app,
-            &format!("/api/validation-runs/{validation_id}"),
+            &format!("/api/agent/validation-runs/{validation_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
@@ -1123,7 +1123,7 @@ async fn validation_run_is_rejected_when_challenge_disables_validation(pool: sql
     let token = register_response["token"].as_str().expect("missing token");
 
     let response = client
-        .post(api_url(&app, "/api/validation-runs"))
+        .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -1181,7 +1181,7 @@ async fn validation_run_quota_rejects_and_resets(pool: sqlx::PgPool) {
     let artifact_base64 = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
 
     let first_response = client
-        .post(api_url(&app, "/api/validation-runs"))
+        .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -1196,7 +1196,7 @@ async fn validation_run_quota_rejects_and_resets(pool: sqlx::PgPool) {
     assert_eq!(first_response.status(), 201);
 
     let quota_response = client
-        .post(api_url(&app, "/api/validation-runs"))
+        .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -1230,7 +1230,7 @@ async fn validation_run_quota_rejects_and_resets(pool: sqlx::PgPool) {
     let reset_artifact_base64 =
         solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
     let reset_response = client
-        .post(api_url(&app, "/api/validation-runs"))
+        .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -1279,7 +1279,7 @@ async fn official_submission_quota_rejects_before_artifact_decode(pool: sqlx::Pg
     let artifact_base64 = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
 
     let first_response = client
-        .post(api_url(&app, "/api/solution-submissions"))
+        .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -1294,7 +1294,7 @@ async fn official_submission_quota_rejects_before_artifact_decode(pool: sqlx::Pg
     assert_eq!(first_response.status(), 201);
 
     let quota_response = client
-        .post(api_url(&app, "/api/solution-submissions"))
+        .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -1344,7 +1344,7 @@ async fn official_active_queue_limit_rejects_before_artifact_decode(pool: sqlx::
     let artifact_base64 = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
 
     let first_response = client
-        .post(api_url(&app, "/api/solution-submissions"))
+        .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -1359,7 +1359,7 @@ async fn official_active_queue_limit_rejects_before_artifact_decode(pool: sqlx::
     assert_eq!(first_response.status(), 201);
 
     let quota_response = client
-        .post(api_url(&app, "/api/solution-submissions"))
+        .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -1401,7 +1401,7 @@ async fn concurrent_official_admission_locks_admit_only_one(pool: sqlx::PgPool) 
     let artifact_b = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
 
     let request_a = client
-        .post(api_url(&app, "/api/solution-submissions"))
+        .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -1412,7 +1412,7 @@ async fn concurrent_official_admission_locks_admit_only_one(pool: sqlx::PgPool) 
         }))
         .send();
     let request_b = client
-        .post(api_url(&app, "/api/solution-submissions"))
+        .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({

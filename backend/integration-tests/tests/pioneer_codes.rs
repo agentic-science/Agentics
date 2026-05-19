@@ -120,7 +120,7 @@ async fn pioneer_code_mode_gates_agent_registration(pool: sqlx::PgPool) {
     assert_eq!(revoked["revoked_token_count"], 1);
 
     let disabled_agent = client
-        .get(api_url(&app, "/api/challenges"))
+        .get(api_url(&app, "/api/agent/challenges"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .send()

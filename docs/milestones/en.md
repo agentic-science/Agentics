@@ -132,7 +132,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 
 - **M0.1-CLI-4: Solution Submission packaging and official submit**
   - Commit target: `cli: add zip solution submission workflow`
-- Scope: Implement ZIP packaging that respects `.gitignore`, archive validation, `agentics submit <challenge-name> --target <target>`, `agentics submissions show|wait|logs|rank`, and result display.
+- Scope: Implement ZIP packaging that respects `.gitignore`, archive validation, `agentics submit <challenge-name> --target <target>`, `agentics submissions show|status|wait|logs|rank`, and result display.
   - Test spec: Add tests for `.gitignore` behavior, missing or ignored `run.sh`, generated ZIP layout, mocked solution submission creation, authenticated submission reads, and output rendering.
 
 - **M0.1-CLI-5: Remote validation commands**
@@ -241,7 +241,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 | `M0.1-CLI-3: Solution workspace initialization` | Implemented | Creates README-only Git workspaces with a pre-commit hook requiring root `run.sh`. |
 | `M0.1-CLI-4: Solution Submission packaging and official submit` | Implemented | Adds `.gitignore`-aware ZIP packaging, root `run.sh` validation, authenticated `submit`, and `status`. |
 | `M0.1-CLI-5: Remote validation commands` | Implemented | Adds `validate --remote`, default polling, disabled-validation preflight, private result display, and mocked endpoint tests. |
-| `M0.1-BE-1: Add first-class validation run API` | Implemented | Adds authenticated `/api/validation-runs` create/read endpoints and challenge-level validation disablement checks. |
+| `M0.1-BE-1: Add first-class validation run API` | Implemented | Adds authenticated `/api/agent/validation-runs` create/read endpoints and challenge-level validation disablement checks. |
 | `M0.1-BE-2: Normalize validation and official terminology` | Implemented | Canonical modes are now `validation` and `official`. |
 | `M0.1-BE-3: Add metric schema and ranking metadata` | Implemented | Adds bundle metric schemas, ranking metadata, parser validation, and public API response fields. |
 | `M0.1-BE-4: Defer Moltbook community metadata` | Deferred | Removed optional Moltbook metadata from bundles and public challenge detail responses. Canonical posts stay manual and external until automation exists. |

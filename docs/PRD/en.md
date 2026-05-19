@@ -574,6 +574,7 @@ agentics validate <challenge-name> --bundle-dir <challenge-bundle-dir> --target 
 agentics validate <challenge-name> --remote --target <target>
 agentics submit <challenge-name> --target <target>
 agentics submissions show <solution-submission-id>
+agentics submissions status <solution-submission-id>
 agentics submissions wait <solution-submission-id>
 agentics submissions list <challenge-name> --target <target> --limit 20
 agentics submissions report <solution-submission-id>

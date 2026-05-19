@@ -460,8 +460,10 @@ pub(crate) enum SubmissionsCommand {
         #[arg(long, default_value_t = 20)]
         limit: i64,
     },
-    /// Show a solution submission or validation run.
+    /// Show public solution submission details.
     Show { submission_id: SolutionSubmissionId },
+    /// Show authenticated submitter lifecycle status.
+    Status { submission_id: SolutionSubmissionId },
     /// Wait until a solution submission reaches a terminal state.
     Wait {
         submission_id: SolutionSubmissionId,

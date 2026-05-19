@@ -98,7 +98,7 @@ impl ApiClient {
         &self,
         request: &CreateSolutionSubmissionRequest,
     ) -> Result<CreateSolutionSubmissionResponse> {
-        self.post_json("/api/solution-submissions", request, true)
+        self.post_json("/api/agent/solution-submissions", request, true)
             .await
     }
 
@@ -107,7 +107,8 @@ impl ApiClient {
         &self,
         request: &CreateSolutionSubmissionRequest,
     ) -> Result<CreateSolutionSubmissionResponse> {
-        self.post_json("/api/validation-runs", request, true).await
+        self.post_json("/api/agent/validation-runs", request, true)
+            .await
     }
 
     /// Fetches solution submission for the requested scope.
@@ -115,8 +116,17 @@ impl ApiClient {
         &self,
         solution_submission_id: &SolutionSubmissionId,
     ) -> Result<SolutionSubmissionResponse> {
-        let path = format!("/api/solution-submissions/{solution_submission_id}");
+        let path = format!("/api/agent/solution-submissions/{solution_submission_id}");
         self.get_json(&path, true).await
+    }
+
+    /// Fetches public visible solution submission details.
+    pub(crate) async fn get_public_solution_submission(
+        &self,
+        solution_submission_id: &SolutionSubmissionId,
+    ) -> Result<SolutionSubmissionResponse> {
+        let path = format!("/api/public/solution-submissions/{solution_submission_id}");
+        self.get_json(&path, false).await
     }
 
     /// Fetches public visible solution submissions for one challenge target.
@@ -137,7 +147,8 @@ impl ApiClient {
         &self,
         solution_submission_id: &SolutionSubmissionId,
     ) -> Result<SolutionSubmissionResultReportResponse> {
-        let path = format!("/api/solution-submissions/{solution_submission_id}/result-report");
+        let path =
+            format!("/api/agent/solution-submissions/{solution_submission_id}/result-report");
         self.get_json(&path, true).await
     }
 
@@ -156,7 +167,7 @@ impl ApiClient {
         &self,
         validation_run_id: &SolutionSubmissionId,
     ) -> Result<SolutionSubmissionResponse> {
-        let path = format!("/api/validation-runs/{validation_run_id}");
+        let path = format!("/api/agent/validation-runs/{validation_run_id}");
         self.get_json(&path, true).await
     }
 
@@ -165,7 +176,7 @@ impl ApiClient {
         &self,
         solution_submission_id: &SolutionSubmissionId,
     ) -> Result<SolutionSubmissionLogsResponse> {
-        let path = format!("/api/solution-submissions/{solution_submission_id}/logs");
+        let path = format!("/api/agent/solution-submissions/{solution_submission_id}/logs");
         self.get_json(&path, true).await
     }
 
@@ -177,7 +188,7 @@ impl ApiClient {
         target: &TargetName,
     ) -> Result<RankingContextResponse> {
         let path = format!(
-            "/api/solution-submissions/{solution_submission_id}/ranking-context?challenge_name={challenge_name}&target={target}"
+            "/api/agent/solution-submissions/{solution_submission_id}/ranking-context?challenge_name={challenge_name}&target={target}"
         );
         self.get_json(&path, true).await
     }

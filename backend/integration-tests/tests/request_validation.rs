@@ -134,7 +134,7 @@ async fn zip_submission_routes_accept_declared_large_json_bodies(pool: sqlx::PgP
     );
 
     let response = client
-        .post(helpers::api_url(&app, "/api/solution-submissions"))
+        .post(helpers::api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -173,7 +173,7 @@ async fn solution_submission_rejects_invalid_target_before_artifact_decode(pool:
     let token = register_response["token"].as_str().expect("missing token");
 
     let malformed_response = client
-        .post(helpers::api_url(&app, "/api/solution-submissions"))
+        .post(helpers::api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -199,7 +199,7 @@ async fn solution_submission_rejects_invalid_target_before_artifact_decode(pool:
     );
 
     let response = client
-        .post(helpers::api_url(&app, "/api/solution-submissions"))
+        .post(helpers::api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -269,7 +269,7 @@ async fn solution_submission_rejects_oversized_manifest_note_before_storage(pool
     ]);
 
     let response = client
-        .post(helpers::api_url(&app, "/api/solution-submissions"))
+        .post(helpers::api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -305,8 +305,8 @@ async fn invalid_solution_submission_path_ids_return_bad_request(pool: sqlx::PgP
     let client = reqwest::Client::new();
 
     for path in [
-        "/api/solution-submissions/not-a-uuid",
-        "/api/solution-submissions/not-a-uuid/logs",
+        "/api/agent/solution-submissions/not-a-uuid",
+        "/api/agent/solution-submissions/not-a-uuid/logs",
     ] {
         let response = client
             .get(helpers::api_url(&app, path))
@@ -345,7 +345,7 @@ async fn solution_submission_rejects_legacy_round_field_before_artifact_decode(p
     let token = register_response["token"].as_str().expect("missing token");
 
     let no_round_field = client
-        .post(api_url(&app, "/api/solution-submissions"))
+        .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -359,7 +359,7 @@ async fn solution_submission_rejects_legacy_round_field_before_artifact_decode(p
     assert_eq!(no_round_field.status(), 400);
 
     let unknown_round_field = client
-        .post(api_url(&app, "/api/solution-submissions"))
+        .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -384,7 +384,7 @@ async fn solution_submission_rejects_legacy_round_field_before_artifact_decode(p
     );
 
     let malformed_round_field = client
-        .post(api_url(&app, "/api/solution-submissions"))
+        .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -455,7 +455,7 @@ async fn solution_submission_rejects_unstarted_and_closed_challenges_before_arti
         ("closed-challenge", "closed"),
     ] {
         let response = client
-            .post(api_url(&app, "/api/solution-submissions"))
+            .post(api_url(&app, "/api/agent/solution-submissions"))
             .header("Authorization", format!("Bearer {token}"))
             .header("X-Agentics-Admin-Automation", "true")
             .json(&serde_json::json!({
@@ -756,7 +756,7 @@ async fn parent_solution_submission_must_match_agent_and_scope(pool: sqlx::PgPoo
     run_worker_once(&pool, &config).await;
 
     let response = client
-        .post(api_url(&app, "/api/solution-submissions"))
+        .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {}", child_agent.token))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -843,7 +843,7 @@ async fn submit_solution_with_target(
     artifact_base64: &str,
 ) -> reqwest::Response {
     client
-        .post(api_url(app, "/api/solution-submissions"))
+        .post(api_url(app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({

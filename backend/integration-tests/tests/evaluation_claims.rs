@@ -31,7 +31,7 @@ async fn stale_running_job_fails_after_max_attempts(pool: sqlx::PgPool) {
     let token = register_response["token"].as_str().expect("missing token");
     let artifact_base64 = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
     let create_response: serde_json::Value = client
-        .post(api_url(&app, "/api/solution-submissions"))
+        .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -109,7 +109,7 @@ async fn refreshed_job_lease_is_not_reaped(pool: sqlx::PgPool) {
     let token = register_response["token"].as_str().expect("missing token");
     let artifact_base64 = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
     let create_response: serde_json::Value = client
-        .post(api_url(&app, "/api/solution-submissions"))
+        .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -192,7 +192,7 @@ async fn evaluation_rows_cannot_cross_submission_targets(pool: sqlx::PgPool) {
     let token = register_response["token"].as_str().expect("missing token");
     let artifact_base64 = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
     let create_response: serde_json::Value = client
-        .post(api_url(&app, "/api/solution-submissions"))
+        .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -278,7 +278,7 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
     let token = register_response["token"].as_str().expect("missing token");
     let artifact_base64 = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
     let create_response: serde_json::Value = client
-        .post(api_url(&app, "/api/solution-submissions"))
+        .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -644,7 +644,7 @@ async fn create_official_submission(
 ) -> SolutionSubmissionId {
     let artifact_base64 = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
     let create_response: serde_json::Value = client
-        .post(api_url(app, "/api/solution-submissions"))
+        .post(api_url(app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({

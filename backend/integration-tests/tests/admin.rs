@@ -386,7 +386,7 @@ async fn admin_official_run_rejects_submission_with_active_job(pool: sqlx::PgPoo
     let token = register_response["token"].as_str().expect("missing token");
 
     let official = client
-        .post(api_url(&app, "/api/solution-submissions"))
+        .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -401,7 +401,7 @@ async fn admin_official_run_rejects_submission_with_active_job(pool: sqlx::PgPoo
     assert_eq!(official.status(), 201);
 
     let validation_response: serde_json::Value = client
-        .post(api_url(&app, "/api/validation-runs"))
+        .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -439,7 +439,7 @@ async fn admin_official_run_rejects_submission_with_active_job(pool: sqlx::PgPoo
     );
 
     let public_quota_response = client
-        .post(api_url(&app, "/api/solution-submissions"))
+        .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({

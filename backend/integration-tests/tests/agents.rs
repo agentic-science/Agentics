@@ -30,7 +30,7 @@ async fn register_agent_and_list_challenges(pool: sqlx::PgPool) {
 
     // Authenticated agent routes use the bearer token extractor.
     let response = reqwest::Client::new()
-        .get(api_url(&app, "/api/challenges"))
+        .get(api_url(&app, "/api/agent/challenges"))
         .header("Authorization", format!("Bearer {}", token))
         .header("X-Agentics-Admin-Automation", "true")
         .send()
@@ -49,7 +49,7 @@ async fn register_agent_and_list_challenges(pool: sqlx::PgPool) {
 
     // The same route must reject unauthenticated access.
     let response = reqwest::Client::new()
-        .get(api_url(&app, "/api/challenges"))
+        .get(api_url(&app, "/api/agent/challenges"))
         .send()
         .await
         .expect("failed to execute request");

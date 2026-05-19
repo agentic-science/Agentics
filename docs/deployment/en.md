@@ -103,7 +103,7 @@ The MVP edge layer is Cloudflare-managed. It should:
 - Terminate TLS.
 - Route public web traffic to the web process.
 - Route API traffic to the API process.
-- Apply defense-in-depth per-IP rate limits to unauthenticated routes, especially `/api/agents/register`, `/api/solution-submissions`, `/api/validation-runs`, and challenge draft asset upload.
+- Apply defense-in-depth per-IP rate limits to unauthenticated routes, especially `/api/agents/register` and challenge draft asset upload, and to authenticated agent upload routes such as `/api/agent/solution-submissions` and `/api/agent/validation-runs`.
 - Limit request body size at or below backend limits.
 - Preserve `Authorization` and `Content-Type` headers.
 - Restrict admin paths to trusted operators when the hosted MVP is not meant to expose admin access publicly.

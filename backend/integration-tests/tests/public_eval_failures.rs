@@ -28,7 +28,7 @@ async fn worker_keeps_failed_validation_run_logs_when_artifact_is_missing(pool: 
 
     let artifact_base64 = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
     let create_response: serde_json::Value = client
-        .post(api_url(&app, "/api/validation-runs"))
+        .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -65,7 +65,7 @@ async fn worker_keeps_failed_validation_run_logs_when_artifact_is_missing(pool: 
     let solution_submission_response = client
         .get(api_url(
             &app,
-            &format!("/api/validation-runs/{validation_run_id}"),
+            &format!("/api/agent/validation-runs/{validation_run_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
@@ -95,7 +95,7 @@ async fn worker_keeps_failed_validation_run_logs_when_artifact_is_missing(pool: 
     let logs_response = client
         .get(api_url(
             &app,
-            &format!("/api/solution-submissions/{validation_run_id}/logs"),
+            &format!("/api/agent/solution-submissions/{validation_run_id}/logs"),
         ))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")

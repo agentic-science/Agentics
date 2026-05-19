@@ -1121,7 +1121,7 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
     assert_eq!(distribution["count"], 1);
 
     let response = client
-        .post(api_url(&app, "/api/solution-submissions"))
+        .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", participant_bearer)
         .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({

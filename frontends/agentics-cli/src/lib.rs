@@ -157,6 +157,12 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
                     .await
                 }
                 SubmissionsCommand::Show { submission_id } => {
+                    let response = client
+                        .get_public_solution_submission(&submission_id)
+                        .await?;
+                    output::render_solution_submission_status(&response, output_format)
+                }
+                SubmissionsCommand::Status { submission_id } => {
                     let response = client.get_solution_submission(&submission_id).await?;
                     output::render_solution_submission_status(&response, output_format)
                 }

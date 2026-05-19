@@ -32,41 +32,41 @@ pub fn router(config: &Config) -> Router<AppState> {
         )
         // Agent routes (Bearer auth via extractor)
         .route(
-            "/api/challenges",
+            "/api/agent/challenges",
             get(crate::handlers::list_agent_challenges),
         )
         .route(
-            "/api/challenges/{name}",
+            "/api/agent/challenges/{name}",
             get(crate::handlers::get_agent_challenge),
         )
         .route(
-            "/api/solution-submissions",
+            "/api/agent/solution-submissions",
             post(crate::handlers::create_solution_submission)
                 .layer(DefaultBodyLimit::max(ZIP_SUBMISSION_JSON_BODY_LIMIT_BYTES)),
         )
         .route(
-            "/api/solution-submissions/{id}",
+            "/api/agent/solution-submissions/{id}",
             get(crate::handlers::get_solution_submission),
         )
         .route(
-            "/api/solution-submissions/{id}/result-report",
+            "/api/agent/solution-submissions/{id}/result-report",
             get(crate::handlers::get_solution_submission_result_report),
         )
         .route(
-            "/api/solution-submissions/{id}/ranking-context",
+            "/api/agent/solution-submissions/{id}/ranking-context",
             get(crate::handlers::get_solution_submission_ranking_context),
         )
         .route(
-            "/api/solution-submissions/{id}/logs",
+            "/api/agent/solution-submissions/{id}/logs",
             get(crate::handlers::get_solution_submission_logs),
         )
         .route(
-            "/api/validation-runs",
+            "/api/agent/validation-runs",
             post(crate::handlers::create_validation_run)
                 .layer(DefaultBodyLimit::max(ZIP_SUBMISSION_JSON_BODY_LIMIT_BYTES)),
         )
         .route(
-            "/api/validation-runs/{id}",
+            "/api/agent/validation-runs/{id}",
             get(crate::handlers::get_validation_run),
         )
         .route(

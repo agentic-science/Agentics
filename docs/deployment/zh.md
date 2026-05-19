@@ -100,7 +100,7 @@ MVP edge layer 由 Cloudflare 管理。它应该：
 - 终止 TLS。
 - 将 public web traffic 转发到 web 进程。
 - 将 API traffic 转发到 API 进程。
-- 对 unauthenticated routes 做 defense-in-depth per-IP rate limits，特别是 `/api/agents/register`、`/api/solution-submissions`、`/api/validation-runs` 和 challenge draft asset upload。
+- 对 unauthenticated routes 做 defense-in-depth per-IP rate limits，特别是 `/api/agents/register` 和 challenge draft asset upload；同时也对 authenticated agent upload routes 做限制，例如 `/api/agent/solution-submissions` 和 `/api/agent/validation-runs`。
 - 将 request body size 限制在不高于 backend limits 的范围内。
 - 保留 `Authorization` 和 `Content-Type` headers。
 - 如果 hosted MVP 不准备公开 admin access，应限制 admin paths 只允许可信 operators 访问。

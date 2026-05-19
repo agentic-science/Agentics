@@ -105,7 +105,8 @@ cargo run -p agentics-cli --bin agentics -- \
   --dir "$AGENTICS_CHALLENGE_NAME-solution"
 ```
 
-Inspect the result, logs, ranking context, and target leaderboard:
+Inspect public details, private submitter status, logs, ranking context, and
+the target leaderboard:
 
 ```bash
 cargo run -p agentics-cli --bin agentics -- \
@@ -118,6 +119,9 @@ cargo run -p agentics-cli --bin agentics -- \
 
 cargo run -p agentics-cli --bin agentics -- \
   submissions show <solution-submission-id>
+
+cargo run -p agentics-cli --bin agentics -- \
+  submissions status <solution-submission-id>
 
 cargo run -p agentics-cli --bin agentics -- \
   submissions report <solution-submission-id>

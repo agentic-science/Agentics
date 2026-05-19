@@ -86,7 +86,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
     ));
 
     let solution_submission_a: serde_json::Value = client
-        .post(api_url(&app, "/api/solution-submissions"))
+        .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token_a}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -108,7 +108,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
     run_worker_once(&pool, &config).await;
 
     let solution_submission_b: serde_json::Value = client
-        .post(api_url(&app, "/api/solution-submissions"))
+        .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token_b}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -411,7 +411,7 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
     assert_eq!(disable.status(), 200);
 
     let disabled_agent_access = client
-        .get(api_url(&app, "/api/challenges"))
+        .get(api_url(&app, "/api/agent/challenges"))
         .header("Authorization", format!("Bearer {token_b}"))
         .header("X-Agentics-Admin-Automation", "true")
         .send()

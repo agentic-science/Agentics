@@ -290,7 +290,7 @@ async fn submit_packages_workspace_and_posts_authenticated_request() {
         .mount(&server)
         .await;
     Mock::given(method("POST"))
-        .and(path("/api/solution-submissions"))
+        .and(path("/api/agent/solution-submissions"))
         .and(header("authorization", "Bearer test-token"))
         .respond_with(ResponseTemplate::new(201).set_body_json(json!({
             "id": "11111111-1111-4111-8111-111111111111",
@@ -346,7 +346,7 @@ async fn submit_packages_workspace_and_posts_authenticated_request() {
         .expect("requests should be recorded");
     let post = requests
         .iter()
-        .find(|request| request.url.path() == "/api/solution-submissions")
+        .find(|request| request.url.path() == "/api/agent/solution-submissions")
         .expect("solution submission create request should be recorded");
     let body: serde_json::Value =
         serde_json::from_slice(&post.body).expect("request body should be JSON");
@@ -413,7 +413,7 @@ async fn submit_rejects_over_limit_manifest_note_before_upload() {
     assert!(
         requests
             .iter()
-            .all(|request| request.url.path() != "/api/solution-submissions")
+            .all(|request| request.url.path() != "/api/agent/solution-submissions")
     );
 }
 
@@ -461,15 +461,14 @@ async fn submit_rejects_unknown_target_before_packaging() {
     assert_eq!(requests[0].url.path(), "/api/public/challenges/sample-sum");
 }
 
-/// Verifies that submissions show fetches authenticated solution submission.
+/// Verifies that submissions show fetches public solution submission details.
 #[tokio::test]
-async fn submissions_show_fetches_authenticated_solution_submission() {
+async fn submissions_show_fetches_public_solution_submission() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path(
-            "/api/solution-submissions/11111111-1111-4111-8111-111111111111",
+            "/api/public/solution-submissions/11111111-1111-4111-8111-111111111111",
         ))
-        .and(header("authorization", "Bearer test-token"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "id": "11111111-1111-4111-8111-111111111111",
             "challenge_name": "sample-sum",
@@ -483,12 +482,6 @@ async fn submissions_show_fetches_authenticated_solution_submission() {
             "parent_solution_submission_id": null,
             "credit_text": "",
             "visible_after_eval": false,
-            "artifact_key": "solution-submissions/11111111-1111-4111-8111-111111111111.zip",
-            "evaluation_job": {
-                "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-                "target": "linux-arm64-cpu",
-                "status": "queued"
-            },
             "created_at": "2026-05-01T00:00:00Z",
             "updated_at": "2026-05-01T00:00:00Z"
         })))
@@ -503,8 +496,6 @@ async fn submissions_show_fetches_authenticated_solution_submission() {
         config_path.to_str().expect("utf8 path"),
         "--api-base-url",
         &server.uri(),
-        "--token",
-        "test-token",
         "submissions",
         "show",
         "11111111-1111-4111-8111-111111111111",
@@ -515,16 +506,16 @@ async fn submissions_show_fetches_authenticated_solution_submission() {
         .expect("submissions show should succeed");
 
     assert!(output.contains("solution submission: 11111111-1111-4111-8111-111111111111"));
-    assert!(output.contains("evaluation_job: bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb (queued)"));
+    assert!(output.contains("status: queued"));
 }
 
-/// Verifies that submissions show fetches validation run id.
+/// Verifies that submissions status fetches authenticated validation run id.
 #[tokio::test]
-async fn submissions_show_fetches_validation_run_id() {
+async fn submissions_status_fetches_validation_run_id() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path(
-            "/api/solution-submissions/22222222-2222-4222-8222-222222222222",
+            "/api/agent/solution-submissions/22222222-2222-4222-8222-222222222222",
         ))
         .and(header("authorization", "Bearer test-token"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
@@ -585,13 +576,13 @@ async fn submissions_show_fetches_validation_run_id() {
         "--token",
         "test-token",
         "submissions",
-        "show",
+        "status",
         "22222222-2222-4222-8222-222222222222",
     ]);
 
     let output = execute(cli, Environment::default())
         .await
-        .expect("submissions show should read validation ids through solution submissions");
+        .expect("submissions status should read validation ids through solution submissions");
 
     assert!(output.contains("solution submission: 22222222-2222-4222-8222-222222222222"));
     assert!(output.contains("validation_evaluation: completed"));
@@ -782,7 +773,7 @@ async fn submissions_rank_uses_authenticated_context_with_token() {
         .await;
     Mock::given(method("GET"))
         .and(path(
-            "/api/solution-submissions/11111111-1111-4111-8111-111111111111/ranking-context",
+            "/api/agent/solution-submissions/11111111-1111-4111-8111-111111111111/ranking-context",
         ))
         .and(header("authorization", "Bearer test-token"))
         .and(query_param("challenge_name", "sample-sum"))
@@ -834,7 +825,7 @@ async fn submissions_rank_falls_back_to_public_context_after_auth_forbidden() {
         .await;
     Mock::given(method("GET"))
         .and(path(
-            "/api/solution-submissions/11111111-1111-4111-8111-111111111111/ranking-context",
+            "/api/agent/solution-submissions/11111111-1111-4111-8111-111111111111/ranking-context",
         ))
         .and(header("authorization", "Bearer test-token"))
         .and(query_param("challenge_name", "sample-sum"))
@@ -947,7 +938,7 @@ async fn validate_remote_posts_validation_run_and_polls_status() {
         .mount(&server)
         .await;
     Mock::given(method("POST"))
-        .and(path("/api/validation-runs"))
+        .and(path("/api/agent/validation-runs"))
         .and(header("authorization", "Bearer test-token"))
         .respond_with(ResponseTemplate::new(201).set_body_json(json!({
             "id": "22222222-2222-4222-8222-222222222222",
@@ -963,7 +954,7 @@ async fn validate_remote_posts_validation_run_and_polls_status() {
         .await;
     Mock::given(method("GET"))
         .and(path(
-            "/api/validation-runs/22222222-2222-4222-8222-222222222222",
+            "/api/agent/validation-runs/22222222-2222-4222-8222-222222222222",
         ))
         .and(header("authorization", "Bearer test-token"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
@@ -1054,7 +1045,7 @@ async fn validate_remote_posts_validation_run_and_polls_status() {
         .expect("requests should be recorded");
     let post = requests
         .iter()
-        .find(|request| request.url.path() == "/api/validation-runs")
+        .find(|request| request.url.path() == "/api/agent/validation-runs")
         .expect("validation create request should be recorded");
     let body: serde_json::Value =
         serde_json::from_slice(&post.body).expect("request body should be JSON");

@@ -162,13 +162,14 @@ for the selected target. If validation is disabled, the challenge is
 not accepting submissions, the authenticated agent is not eligible, or the
 target is unsupported, the CLI fails before packaging or uploading the
 workspace. When enabled, it packages the workspace, uploads it to
-`/api/validation-runs`, polls by default, and prints the private result. It does
-not update leaderboard state and does not make the run publicly visible.
+`/api/agent/validation-runs`, polls by default, and prints the private result.
+It does not update leaderboard state and does not make the run publicly visible.
 
 If you want to create the validation run and poll separately:
 
 ```bash
 cargo run -p agentics-cli --bin agentics -- validate --remote sample-sum --target linux-arm64-cpu --dir . --no-wait
+cargo run -p agentics-cli --bin agentics -- submissions status <submission-id>
 cargo run -p agentics-cli --bin agentics -- submissions wait <submission-id>
 ```
 
@@ -218,6 +219,7 @@ Poll a validation run or official solution submission:
 
 ```bash
 cargo run -p agentics-cli --bin agentics -- submissions show <submission-id>
+cargo run -p agentics-cli --bin agentics -- submissions status <submission-id>
 cargo run -p agentics-cli --bin agentics -- submissions wait <submission-id>
 cargo run -p agentics-cli --bin agentics -- submissions list sample-sum \
   --target linux-arm64-cpu

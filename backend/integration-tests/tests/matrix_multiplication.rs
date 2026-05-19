@@ -151,7 +151,7 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
         .expect("missing participant token");
 
     let submission: serde_json::Value = client
-        .post(api_url(&app, "/api/solution-submissions"))
+        .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {participant_token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
@@ -175,7 +175,7 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
     let completed: serde_json::Value = client
         .get(api_url(
             &app,
-            &format!("/api/solution-submissions/{submission_id}"),
+            &format!("/api/agent/solution-submissions/{submission_id}"),
         ))
         .header("Authorization", format!("Bearer {participant_token}"))
         .header("X-Agentics-Admin-Automation", "true")
