@@ -89,6 +89,9 @@ impl std::error::Error for RunNameError {}
 /// User-facing validation message for resource profile names.
 pub const RESOURCE_PROFILE_NAME_ERROR_MESSAGE: &str = "resource_profile.name must be non-empty and contain only ASCII letters, digits, underscores, hyphens, or dots";
 
+/// User-facing validation message for challenge keywords.
+pub const CHALLENGE_KEYWORD_ERROR_MESSAGE: &str = "challenge keyword must be non-empty after trimming, at most 30 UTF-8 bytes, and must not contain control characters";
+
 /// Validation failure for [`ResourceProfileName`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ResourceProfileNameError;
@@ -101,6 +104,19 @@ impl fmt::Display for ResourceProfileNameError {
 }
 
 impl std::error::Error for ResourceProfileNameError {}
+
+/// Validation failure for [`ChallengeKeyword`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChallengeKeywordError;
+
+impl fmt::Display for ChallengeKeywordError {
+    /// Format the user-facing keyword validation error.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(CHALLENGE_KEYWORD_ERROR_MESSAGE)
+    }
+}
+
+impl std::error::Error for ChallengeKeywordError {}
 
 #[nutype(
     sanitize(trim, lowercase),
@@ -253,6 +269,36 @@ impl ResourceProfileName {
 
 #[nutype(
     sanitize(trim),
+    validate(with = validate_challenge_keyword, error = ChallengeKeywordError),
+    derive(
+        Debug,
+        Clone,
+        PartialEq,
+        Eq,
+        PartialOrd,
+        Ord,
+        Hash,
+        AsRef,
+        Deref,
+        Display,
+        Serialize,
+        Deserialize,
+        FromStr,
+        TryFrom,
+    ),
+)]
+/// Carries one public challenge keyword used for catalog filtering.
+pub struct ChallengeKeyword(String);
+
+impl ChallengeKeyword {
+    /// Borrow the canonical challenge keyword string.
+    pub fn as_str(&self) -> &str {
+        self.as_ref()
+    }
+}
+
+#[nutype(
+    sanitize(trim),
     validate(with = validate_metric_name, error = MetricNameError),
     derive(
         Debug,
@@ -347,6 +393,28 @@ impl_token_json_schema!(AssetName, "AssetName");
 impl_token_json_schema!(RunName, "RunName");
 impl_token_json_schema!(ResourceProfileName, "ResourceProfileName");
 
+impl JsonSchema for ChallengeKeyword {
+    /// Keep keyword schemas inline at every field use site.
+    fn inline_schema() -> bool {
+        true
+    }
+
+    /// Return the schema name used by generated frontend contracts.
+    fn schema_name() -> Cow<'static, str> {
+        "ChallengeKeyword".into()
+    }
+
+    /// Emit the JSON Schema shape for public challenge keywords.
+    fn json_schema(_: &mut SchemaGenerator) -> Schema {
+        json_schema!({
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 30,
+            "description": "Public challenge keyword. Runtime validation enforces a 30 UTF-8 byte maximum and rejects control characters."
+        })
+    }
+}
+
 /// Check whether a challenge name is valid in the public repository namespace.
 pub fn is_valid_challenge_name(value: &str) -> bool {
     let bytes = value.as_bytes();
@@ -429,11 +497,20 @@ fn validate_resource_profile_name(value: &str) -> Result<(), ResourceProfileName
     }
 }
 
+/// Validates one public challenge keyword.
+fn validate_challenge_keyword(value: &str) -> Result<(), ChallengeKeywordError> {
+    if value.is_empty() || value.len() > 30 || value.chars().any(char::is_control) {
+        Err(ChallengeKeywordError)
+    } else {
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        AssetName, ChallengeName, MetricName, ResourceProfileName, RunName, TargetName,
-        is_valid_challenge_name,
+        AssetName, ChallengeKeyword, ChallengeName, MetricName, ResourceProfileName, RunName,
+        TargetName, is_valid_challenge_name,
     };
 
     /// Verifies that validates challenge names.
@@ -497,5 +574,19 @@ mod tests {
             serde_json::from_str("\" runtime_ms \"").expect("metric name should trim");
         assert_eq!(metric.as_str(), "runtime_ms");
         assert!(serde_json::from_str::<MetricName>("\"runtime ms\"").is_err());
+    }
+
+    /// Verifies that challenge keywords allow short Unicode phrases.
+    #[test]
+    fn validates_challenge_keywords() {
+        let keyword = ChallengeKeyword::try_new(" protein folding ")
+            .expect("keyword phrases should trim edge whitespace");
+        assert_eq!(keyword.as_str(), "protein folding");
+        assert!(ChallengeKeyword::try_new("AI".to_string()).is_ok());
+        assert!(ChallengeKeyword::try_new("图搜索".to_string()).is_ok());
+        assert!(ChallengeKeyword::try_new("".to_string()).is_err());
+        assert!(ChallengeKeyword::try_new("bad\nkeyword".to_string()).is_err());
+        assert!(ChallengeKeyword::try_new("abcdefghijklmnopqrstuvwxyz12345".to_string()).is_err());
+        assert!(ChallengeKeyword::try_new("多字节多字节多字节多字节".to_string()).is_err());
     }
 }

@@ -18,7 +18,9 @@ use super::hashes::OciSha256Digest;
 use super::ids::{AgentId, EvaluationId, SolutionSubmissionId};
 use super::images::{ChallengeImageReference, OciRegistryImageReference};
 use super::localization::LocalizedText;
-use super::names::{ChallengeName, MetricName, ResourceProfileName, RunName, TargetName};
+use super::names::{
+    ChallengeKeyword, ChallengeName, MetricName, ResourceProfileName, RunName, TargetName,
+};
 use super::paths::BundleRelativePath;
 use super::request::{
     AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto, SolutionSubmissionResponse,
@@ -128,6 +130,11 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
             "Optimize CPU matrix multiplication kernels.",
             "优化 CPU 矩阵乘法内核。",
         ),
+        keywords: vec![
+            challenge_keyword("linear algebra"),
+            challenge_keyword("performance"),
+            challenge_keyword("matrix"),
+        ],
         spec: ChallengeBundleSpec {
             schema_version: 1,
             challenge_name: challenge_name("matrix-multiplication"),
@@ -136,6 +143,11 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
                 "Optimize CPU matrix multiplication kernels.",
                 "优化 CPU 矩阵乘法内核。",
             ),
+            keywords: vec![
+                challenge_keyword("linear algebra"),
+                challenge_keyword("performance"),
+                challenge_keyword("matrix"),
+            ],
             starts_at: "2026-01-01T00:00:00Z".to_string(),
             closes_at: None,
             eligibility: ChallengeEligibilitySpec {
@@ -251,6 +263,11 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
 /// Handles challenge name for this module.
 fn challenge_name(value: &str) -> ChallengeName {
     ChallengeName::try_new(value.to_string()).expect("test challenge name is valid")
+}
+
+/// Build a valid public challenge keyword for contract tests.
+fn challenge_keyword(value: &str) -> ChallengeKeyword {
+    ChallengeKeyword::try_new(value.to_string()).expect("test challenge keyword is valid")
 }
 
 /// Handles target name for this module.

@@ -45,6 +45,17 @@ export const adminChallengeListResponseSchema = z
             .describe(
               "English and Chinese text for short public challenge copy.",
             ),
+          keywords: z
+            .array(
+              z
+                .string()
+                .min(1)
+                .max(30)
+                .describe(
+                  "Public challenge keyword. Runtime validation enforces a 30 UTF-8 byte maximum and rejects control characters.",
+                ),
+            )
+            .default([]),
           status: z
             .enum(["draft", "active", "archived"])
             .describe(
@@ -564,6 +575,17 @@ export const challengeAdminResponseSchema = z
       .object({ en: z.string(), zh: z.string() })
       .strict()
       .describe("English and Chinese text for short public challenge copy."),
+    keywords: z
+      .array(
+        z
+          .string()
+          .min(1)
+          .max(30)
+          .describe(
+            "Public challenge keyword. Runtime validation enforces a 30 UTF-8 byte maximum and rejects control characters.",
+          ),
+      )
+      .default([]),
     status: z
       .enum(["draft", "active", "archived"])
       .describe(
@@ -586,6 +608,18 @@ export const challengeDetailResponseSchema = z
       .object({ en: z.string(), zh: z.string() })
       .strict()
       .describe("English and Chinese text for short public challenge copy."),
+    keywords: z
+      .array(
+        z
+          .string()
+          .min(1)
+          .max(30)
+          .describe(
+            "Public challenge keyword. Runtime validation enforces a 30 UTF-8 byte maximum and rejects control characters.",
+          ),
+      )
+      .min(1)
+      .max(6),
     spec: z
       .object({
         schema_version: z.number().int(),
@@ -600,6 +634,21 @@ export const challengeDetailResponseSchema = z
           .strict()
           .describe(
             "English and Chinese text for short public challenge copy.",
+          ),
+        keywords: z
+          .array(
+            z
+              .string()
+              .min(1)
+              .max(30)
+              .describe(
+                "Public challenge keyword. Runtime validation enforces a 30 UTF-8 byte maximum and rejects control characters.",
+              ),
+          )
+          .min(1)
+          .max(6)
+          .describe(
+            "Required public keywords used by catalog search and filtering.",
           ),
         solution: z
           .object({
@@ -1146,6 +1195,18 @@ export const challengeDraftListResponseSchema = z
                 .describe(
                   "English and Chinese text for short public challenge copy.",
                 ),
+              keywords: z
+                .array(
+                  z
+                    .string()
+                    .min(1)
+                    .max(30)
+                    .describe(
+                      "Public challenge keyword. Runtime validation enforces a 30 UTF-8 byte maximum and rejects control characters.",
+                    ),
+                )
+                .min(1)
+                .max(6),
               readme_path: z
                 .string()
                 .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
@@ -1371,6 +1432,18 @@ export const challengeDraftResponseSchema = z
           .describe(
             "English and Chinese text for short public challenge copy.",
           ),
+        keywords: z
+          .array(
+            z
+              .string()
+              .min(1)
+              .max(30)
+              .describe(
+                "Public challenge keyword. Runtime validation enforces a 30 UTF-8 byte maximum and rejects control characters.",
+              ),
+          )
+          .min(1)
+          .max(6),
         readme_path: z
           .string()
           .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
@@ -1542,6 +1615,18 @@ export const challengeListResponseSchema = z
             .describe(
               "English and Chinese text for short public challenge copy.",
             ),
+          keywords: z
+            .array(
+              z
+                .string()
+                .min(1)
+                .max(30)
+                .describe(
+                  "Public challenge keyword. Runtime validation enforces a 30 UTF-8 byte maximum and rejects control characters.",
+                ),
+            )
+            .min(1)
+            .max(6),
           starts_at: z.string(),
           closes_at: z.string().optional(),
           eligibility: z
@@ -1684,6 +1769,18 @@ export const createChallengeDraftRequestSchema = z
           .describe(
             "English and Chinese text for short public challenge copy.",
           ),
+        keywords: z
+          .array(
+            z
+              .string()
+              .min(1)
+              .max(30)
+              .describe(
+                "Public challenge keyword. Runtime validation enforces a 30 UTF-8 byte maximum and rejects control characters.",
+              ),
+          )
+          .min(1)
+          .max(6),
         readme_path: z
           .string()
           .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),

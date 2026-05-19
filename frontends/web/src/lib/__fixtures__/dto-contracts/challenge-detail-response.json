@@ -5,6 +5,7 @@
     "en": "Optimize CPU matrix multiplication kernels.",
     "zh": "优化 CPU 矩阵乘法内核。"
   },
+  "keywords": ["linear algebra", "performance", "matrix"],
   "spec": {
     "schema_version": 1,
     "challenge_name": "matrix-multiplication",
@@ -13,6 +14,7 @@
       "en": "Optimize CPU matrix multiplication kernels.",
       "zh": "优化 CPU 矩阵乘法内核。"
     },
+    "keywords": ["linear algebra", "performance", "matrix"],
     "starts_at": "2026-01-01T00:00:00Z",
     "solution": {
       "protocol": "zip_project",

@@ -80,6 +80,13 @@ async fn public_challenge_catalog_supports_pagination(pool: sqlx::PgPool) {
     assert_eq!(first_page["limit"], 1);
     assert_eq!(first_page["offset"], 0);
     assert_eq!(first_page["has_more"], true);
+    assert!(
+        first_page["items"][0]["keywords"]
+            .as_array()
+            .expect("keywords should be an array")
+            .len()
+            <= 6
+    );
 
     let second_page: serde_json::Value = client
         .get(api_url(&app, "/api/public/challenges?limit=1&offset=1"))
@@ -110,6 +117,66 @@ async fn public_challenge_catalog_supports_pagination(pool: sqlx::PgPool) {
         .await
         .expect("failed to request invalid offset");
     assert_eq!(invalid_offset.status(), reqwest::StatusCode::BAD_REQUEST);
+
+    let searched: serde_json::Value = client
+        .get(api_url(&app, "/api/public/challenges?q=route&limit=10"))
+        .send()
+        .await
+        .expect("failed to search challenge catalog")
+        .error_for_status()
+        .expect("search should succeed")
+        .json()
+        .await
+        .expect("search JSON should decode");
+    assert_eq!(searched["total_count"], 1);
+    assert_eq!(searched["items"][0]["name"], "grid-routing");
+
+    let keyword_filtered: serde_json::Value = client
+        .get(api_url(
+            &app,
+            "/api/public/challenges?keyword=grid%20search&limit=10",
+        ))
+        .send()
+        .await
+        .expect("failed to filter challenge catalog by keyword")
+        .error_for_status()
+        .expect("keyword filter should succeed")
+        .json()
+        .await
+        .expect("keyword JSON should decode");
+    assert_eq!(keyword_filtered["total_count"], 1);
+    assert_eq!(keyword_filtered["items"][0]["name"], "grid-routing");
+
+    let multi_keyword_filtered: serde_json::Value = client
+        .get(api_url(
+            &app,
+            "/api/public/challenges?keyword=planning&keyword=grid%20search&limit=10",
+        ))
+        .send()
+        .await
+        .expect("failed to filter challenge catalog by multiple keywords")
+        .error_for_status()
+        .expect("multiple keyword filter should succeed")
+        .json()
+        .await
+        .expect("multiple keyword JSON should decode");
+    assert_eq!(multi_keyword_filtered["total_count"], 1);
+    assert_eq!(multi_keyword_filtered["items"][0]["name"], "grid-routing");
+
+    let mismatched_keywords: serde_json::Value = client
+        .get(api_url(
+            &app,
+            "/api/public/challenges?keyword=planning&keyword=arithmetic&limit=10",
+        ))
+        .send()
+        .await
+        .expect("failed to filter challenge catalog by mismatched keywords")
+        .error_for_status()
+        .expect("mismatched keyword filter should succeed")
+        .json()
+        .await
+        .expect("mismatched keyword JSON should decode");
+    assert_eq!(mismatched_keywords["total_count"], 0);
 }
 
 /// Verifies that registration respects active agent quota.

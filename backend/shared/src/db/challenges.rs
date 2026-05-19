@@ -17,7 +17,7 @@ use crate::models::evaluation::SolutionSubmissionStatus;
 use crate::models::hashes::Sha256Digest;
 use crate::models::ids::{AgentId, ChallengeShortlistRevisionId};
 use crate::models::localization::LocalizedText;
-use crate::models::names::{ChallengeName, TargetName};
+use crate::models::names::{ChallengeKeyword, ChallengeName, TargetName};
 use crate::models::paths::{ManagedBundlePath, ManagedStatementPath};
 use crate::models::request::{
     ChallengeShortlistResponse, ChallengeShortlistRevisionResponse, ChallengeShortlistedAgentDto,
@@ -34,6 +34,13 @@ pub struct PublishedChallengeList {
     pub limit: i64,
     pub offset: i64,
     pub has_more: bool,
+}
+
+/// Search and keyword filters applied before public challenge pagination.
+#[derive(Debug, Clone, Default)]
+pub struct ChallengeCatalogFilters {
+    pub search: Option<String>,
+    pub keywords: Vec<ChallengeKeyword>,
 }
 
 /// Published challenge joined with challenge metadata.
@@ -81,6 +88,7 @@ pub async fn create_or_update_challenge(
         name: challenge_name_from_row(&row, "name")?,
         title: row.try_get("title")?,
         summary: localized_text_from_row(&row, "summary")?,
+        keywords: Vec::new(),
         status: challenge_status_from_row(&row, "status")?,
         created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
         updated_at: row.try_get::<DateTime<Utc>, _>("updated_at")?.to_rfc3339(),
@@ -110,6 +118,10 @@ pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeLi
                 name: challenge_name_from_row(&r, "name")?,
                 title: r.try_get("title")?,
                 summary: localized_text_from_row(&r, "summary")?,
+                keywords: spec
+                    .as_ref()
+                    .map(|challenge_spec| challenge_spec.keywords.clone())
+                    .unwrap_or_default(),
                 status: challenge_status_from_row(&r, "status")?,
                 targets: spec.as_ref().map(|spec| spec.targets.clone()),
                 starts_at: spec.as_ref().map(|spec| spec.starts_at.clone()),
@@ -707,15 +719,48 @@ pub async fn list_published_challenges(
     pool: &PgPool,
     limit: i64,
     offset: i64,
+    filters: &ChallengeCatalogFilters,
 ) -> Result<PublishedChallengeList> {
+    let search = filters.search.as_deref();
+    let keywords = filters
+        .keywords
+        .iter()
+        .map(|keyword| keyword.as_str().to_string())
+        .collect::<Vec<_>>();
     let total_count = sqlx::query_scalar::<_, i64>(
         r#"
         SELECT COUNT(*)
         FROM challenges
         WHERE status = 'active'
           AND spec_json IS NOT NULL
+          AND (
+            $1::text IS NULL
+            OR POSITION(LOWER($1) IN LOWER(name)) > 0
+            OR POSITION(LOWER($1) IN LOWER(title)) > 0
+            OR POSITION(LOWER($1) IN LOWER(COALESCE(summary->>'en', ''))) > 0
+            OR POSITION(LOWER($1) IN LOWER(COALESCE(summary->>'zh', ''))) > 0
+            OR EXISTS (
+              SELECT 1
+              FROM jsonb_array_elements_text(COALESCE(spec_json->'keywords', '[]'::jsonb)) AS stored(keyword)
+              WHERE POSITION(LOWER($1) IN LOWER(stored.keyword)) > 0
+            )
+          )
+          AND (
+            cardinality($2::text[]) = 0
+            OR NOT EXISTS (
+              SELECT 1
+              FROM unnest($2::text[]) AS requested(keyword)
+              WHERE NOT EXISTS (
+                SELECT 1
+                FROM jsonb_array_elements_text(COALESCE(spec_json->'keywords', '[]'::jsonb)) AS stored(keyword)
+                WHERE LOWER(stored.keyword) = LOWER(requested.keyword)
+              )
+            )
+          )
         "#,
     )
+    .bind(search)
+    .bind(&keywords)
     .fetch_one(pool)
     .await?;
 
@@ -725,10 +770,36 @@ pub async fn list_published_challenges(
         FROM challenges
         WHERE status = 'active'
           AND spec_json IS NOT NULL
+          AND (
+            $1::text IS NULL
+            OR POSITION(LOWER($1) IN LOWER(name)) > 0
+            OR POSITION(LOWER($1) IN LOWER(title)) > 0
+            OR POSITION(LOWER($1) IN LOWER(COALESCE(summary->>'en', ''))) > 0
+            OR POSITION(LOWER($1) IN LOWER(COALESCE(summary->>'zh', ''))) > 0
+            OR EXISTS (
+              SELECT 1
+              FROM jsonb_array_elements_text(COALESCE(spec_json->'keywords', '[]'::jsonb)) AS stored(keyword)
+              WHERE POSITION(LOWER($1) IN LOWER(stored.keyword)) > 0
+            )
+          )
+          AND (
+            cardinality($2::text[]) = 0
+            OR NOT EXISTS (
+              SELECT 1
+              FROM unnest($2::text[]) AS requested(keyword)
+              WHERE NOT EXISTS (
+                SELECT 1
+                FROM jsonb_array_elements_text(COALESCE(spec_json->'keywords', '[]'::jsonb)) AS stored(keyword)
+                WHERE LOWER(stored.keyword) = LOWER(requested.keyword)
+              )
+            )
+          )
         ORDER BY created_at DESC, name ASC
-        LIMIT $1 OFFSET $2
+        LIMIT $3 OFFSET $4
         "#,
     )
+    .bind(search)
+    .bind(&keywords)
     .bind(limit)
     .bind(offset)
     .fetch_all(pool)
@@ -743,6 +814,7 @@ pub async fn list_published_challenges(
                 name: challenge_name_from_row(&r, "name")?,
                 title: r.try_get("title")?,
                 summary: localized_text_from_row(&r, "summary")?,
+                keywords: spec.keywords,
                 starts_at: spec.starts_at,
                 closes_at: spec.closes_at,
                 eligibility: spec.eligibility,

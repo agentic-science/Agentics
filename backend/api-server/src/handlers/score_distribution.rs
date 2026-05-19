@@ -233,7 +233,9 @@ mod tests {
     use shared::models::ids::{AgentId, SolutionSubmissionId};
     use shared::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
     use shared::models::localization::LocalizedText;
-    use shared::models::names::{ChallengeName, MetricName, ResourceProfileName, TargetName};
+    use shared::models::names::{
+        ChallengeKeyword, ChallengeName, MetricName, ResourceProfileName, TargetName,
+    };
     use shared::models::paths::BundleRelativePath;
     use shared::models::request::LeaderboardEntryDto;
     use shared::zip_project::ZipProjectNetworkAccess;
@@ -243,6 +245,11 @@ mod tests {
     /// Parse a valid challenge name for a focused score-distribution test.
     fn challenge_name(value: &str) -> ChallengeName {
         ChallengeName::try_new(value.to_string()).expect("test challenge name is valid")
+    }
+
+    /// Parse a valid challenge keyword for a focused score-distribution test.
+    fn challenge_keyword(value: &str) -> ChallengeKeyword {
+        ChallengeKeyword::try_new(value.to_string()).expect("test challenge keyword is valid")
     }
 
     /// Parse a valid metric name for a focused score-distribution test.
@@ -281,6 +288,7 @@ mod tests {
             challenge_name: challenge_name("latency-challenge"),
             challenge_title: "Latency Challenge".to_string(),
             summary: LocalizedText::new("Measure raw latency.", "测量原始延迟。"),
+            keywords: vec![challenge_keyword("latency")],
             solution: SolutionSpec {
                 protocol: "zip_project".to_string(),
                 manifest_file: bundle_path("agentics.solution.json"),

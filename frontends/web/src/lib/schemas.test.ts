@@ -71,11 +71,13 @@ describe("frontend API schemas", () => {
         name: "sample-sum",
         title: "Sample Sum",
         summary: { en: "Add two numbers.", zh: "数字求和。" },
+        keywords: ["arithmetic"],
         spec: {
           schema_version: 1,
           challenge_name: "sample-sum",
           challenge_title: "Sample Sum",
           summary: { en: "Add two numbers.", zh: "数字求和。" },
+          keywords: ["arithmetic"],
           starts_at: "2026-01-01T00:00:00Z",
           ...challengePolicy,
           solution: {

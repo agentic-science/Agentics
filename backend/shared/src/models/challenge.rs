@@ -9,7 +9,9 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::images::ChallengeImageReference;
 use super::localization::LocalizedText;
-use super::names::{ChallengeName, MetricName, ResourceProfileName, RunName, TargetName};
+use super::names::{
+    ChallengeKeyword, ChallengeName, MetricName, ResourceProfileName, RunName, TargetName,
+};
 use super::paths::{
     BundleRelativePath, ManagedBundlePath, ManagedStatementPath, RunInputPath, RunOutputPath,
 };
@@ -52,6 +54,12 @@ impl fmt::Display for ChallengeLifecycleStatus {
     }
 }
 
+/// Minimum public keywords that a challenge must declare.
+pub const MIN_CHALLENGE_KEYWORDS: usize = 1;
+
+/// Maximum public keywords that a challenge may declare.
+pub const MAX_CHALLENGE_KEYWORDS: usize = 6;
+
 /// Parsed `spec.json` contract for a challenge bundle.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -61,6 +69,9 @@ pub struct ChallengeBundleSpec {
     pub challenge_title: String,
     /// Localized summary used in compact challenge catalog surfaces.
     pub summary: LocalizedText,
+    /// Required public keywords used by catalog search and filtering.
+    #[schemars(length(min = 1, max = 6))]
+    pub keywords: Vec<ChallengeKeyword>,
     pub solution: SolutionSpec,
     pub scorer: ScorerSpec,
     pub targets: Vec<ChallengeTargetSpec>,
@@ -108,6 +119,9 @@ pub struct PublicChallengeBundleSpec {
     pub challenge_title: String,
     /// Localized summary used in compact challenge catalog surfaces.
     pub summary: LocalizedText,
+    /// Required public keywords used by catalog search and filtering.
+    #[schemars(length(min = 1, max = 6))]
+    pub keywords: Vec<ChallengeKeyword>,
     pub solution: SolutionSpec,
     pub scorer: ScorerSpec,
     pub targets: Vec<ChallengeTargetSpec>,
@@ -154,6 +168,7 @@ impl From<ChallengeBundleSpec> for PublicChallengeBundleSpec {
             challenge_name: spec.challenge_name,
             challenge_title: spec.challenge_title,
             summary: spec.summary,
+            keywords: spec.keywords,
             solution: spec.solution,
             scorer: spec.scorer,
             targets: spec.targets,
@@ -624,6 +639,8 @@ pub struct ChallengeListItemDto {
     pub name: ChallengeName,
     pub title: String,
     pub summary: LocalizedText,
+    #[schemars(length(min = 1, max = 6))]
+    pub keywords: Vec<ChallengeKeyword>,
     pub starts_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub closes_at: Option<String>,
@@ -646,6 +663,8 @@ pub struct ChallengeDetailResponse {
     pub name: ChallengeName,
     pub title: String,
     pub summary: LocalizedText,
+    #[schemars(length(min = 1, max = 6))]
+    pub keywords: Vec<ChallengeKeyword>,
     pub spec: PublicChallengeBundleSpec,
     pub statement_markdown: String,
 }
@@ -656,6 +675,8 @@ pub struct ChallengeAdminResponse {
     pub name: ChallengeName,
     pub title: String,
     pub summary: LocalizedText,
+    #[serde(default)]
+    pub keywords: Vec<ChallengeKeyword>,
     pub status: ChallengeLifecycleStatus,
     pub created_at: String,
     pub updated_at: String,
@@ -667,6 +688,8 @@ pub struct AdminChallengeListItemDto {
     pub name: ChallengeName,
     pub title: String,
     pub summary: LocalizedText,
+    #[serde(default)]
+    pub keywords: Vec<ChallengeKeyword>,
     pub status: ChallengeLifecycleStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub targets: Option<Vec<ChallengeTargetSpec>>,

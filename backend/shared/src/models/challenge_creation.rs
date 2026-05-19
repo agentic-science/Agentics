@@ -8,7 +8,7 @@ use super::ids::{
     AgentId, ChallengeDraftId, ChallengeDraftValidationRecordId, ChallengePrivateAssetId,
 };
 use super::localization::LocalizedText;
-use super::names::{AssetName, ChallengeName};
+use super::names::{AssetName, ChallengeKeyword, ChallengeName};
 use super::paths::RepoRelativePath;
 use super::urls::{GithubPullRequestUrl, GithubRepoRemote};
 use crate::storage::StorageKey;
@@ -25,6 +25,8 @@ pub struct ChallengeCreationManifest {
     pub challenge_name: ChallengeName,
     pub title: String,
     pub summary: LocalizedText,
+    #[schemars(length(min = 1, max = 6))]
+    pub keywords: Vec<ChallengeKeyword>,
     pub readme_path: RepoRelativePath,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bundle_path: Option<RepoRelativePath>,

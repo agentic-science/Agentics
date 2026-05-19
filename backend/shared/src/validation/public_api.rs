@@ -100,7 +100,7 @@ mod tests {
     };
     use crate::models::evaluation::ScoreVisibility;
     use crate::models::localization::LocalizedText;
-    use crate::models::names::{ChallengeName, TargetName};
+    use crate::models::names::{ChallengeKeyword, ChallengeName, TargetName};
     use crate::models::paths::BundleRelativePath;
     use crate::zip_project::ZIP_PROJECT_PROTOCOL;
 
@@ -113,6 +113,10 @@ mod tests {
         TargetName::try_new(value.to_string()).expect("target")
     }
 
+    fn challenge_keyword(value: &str) -> ChallengeKeyword {
+        ChallengeKeyword::try_new(value.to_string()).expect("keyword")
+    }
+
     fn spec() -> ChallengeBundleSpec {
         let public: PublicChallengeBundleSpec =
             serde_json::from_value(serde_json::json!({
@@ -120,6 +124,7 @@ mod tests {
                 "challenge_name": "sample-sum",
                 "challenge_title": "Sample Sum",
                 "summary": {"en": "Sum numbers", "zh": "Sum numbers zh"},
+                "keywords": ["arithmetic"],
                 "solution": {"protocol": ZIP_PROJECT_PROTOCOL, "manifest_file": "agentics.solution.json"},
                 "scorer": {"command": ["python", "score.py"], "result_file": "result.json"},
                 "targets": [{
@@ -170,6 +175,7 @@ mod tests {
                 en: "Sum numbers".to_string(),
                 zh: "Sum numbers zh".to_string(),
             },
+            keywords: vec![challenge_keyword("arithmetic")],
             solution: SolutionSpec {
                 protocol: ZIP_PROJECT_PROTOCOL.to_string(),
                 manifest_file: BundleRelativePath::try_new("agentics.solution.json")

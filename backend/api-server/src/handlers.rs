@@ -13,12 +13,13 @@ pub use creator::{
 
 use axum::{
     Json,
-    extract::{Path, Query, State},
+    extract::{Path, Query, RawQuery, State},
     http::StatusCode,
 };
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use tracing::warn;
+use url::form_urlencoded;
 use uuid::Uuid;
 
 use shared::auth;
@@ -33,7 +34,7 @@ use shared::models::evaluation::{EvaluationJobStatus, ScoringMode};
 use shared::models::ids::{
     AgentId, AgentPioneerCodeId, AgentTokenId, EvaluationJobId, SolutionSubmissionId,
 };
-use shared::models::names::{ChallengeName, MetricName, TargetName};
+use shared::models::names::{ChallengeKeyword, ChallengeName, MetricName, TargetName};
 use shared::models::pioneer_codes::PioneerCode;
 use shared::models::pioneer_codes::PioneerCodeStatus;
 use shared::models::request::{
@@ -155,10 +156,13 @@ pub async fn register_agent(
 pub async fn list_agent_challenges(
     _agent: AgentAuth,
     State(state): State<AppState>,
-    Query(query): Query<ChallengeCatalogQuery>,
+    RawQuery(raw_query): RawQuery,
 ) -> Result<Json<shared::models::challenge::ChallengeListResponse>> {
+    let query = ChallengeCatalogQuery::from_raw(raw_query.as_deref())?;
     let page = query.page()?;
-    let challenges = db::list_published_challenges(&state.db, page.limit, page.offset).await?;
+    let filters = query.filters()?;
+    let challenges =
+        db::list_published_challenges(&state.db, page.limit, page.offset, &filters).await?;
     Ok(Json(shared::models::challenge::ChallengeListResponse {
         items: challenges.items,
         total_count: challenges.total_count,
@@ -180,10 +184,13 @@ pub async fn get_agent_challenge(
 /// List published challenges on the public API.
 pub async fn list_challenges(
     State(state): State<AppState>,
-    Query(query): Query<ChallengeCatalogQuery>,
+    RawQuery(raw_query): RawQuery,
 ) -> Result<Json<shared::models::challenge::ChallengeListResponse>> {
+    let query = ChallengeCatalogQuery::from_raw(raw_query.as_deref())?;
     let page = query.page()?;
-    let challenges = db::list_published_challenges(&state.db, page.limit, page.offset).await?;
+    let filters = query.filters()?;
+    let challenges =
+        db::list_published_challenges(&state.db, page.limit, page.offset, &filters).await?;
     Ok(Json(shared::models::challenge::ChallengeListResponse {
         items: challenges.items,
         total_count: challenges.total_count,
@@ -445,13 +452,41 @@ fn challenge_lifetime_limit(
 }
 
 /// Query parameters accepted by the public challenge catalog endpoint.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default)]
 pub struct ChallengeCatalogQuery {
     limit: Option<i64>,
     offset: Option<i64>,
+    q: Option<String>,
+    keyword: Vec<String>,
 }
 
 impl ChallengeCatalogQuery {
+    /// Parse raw URL query parameters while preserving repeated keyword filters.
+    fn from_raw(raw: Option<&str>) -> Result<Self> {
+        let mut query = Self::default();
+        let Some(raw) = raw else {
+            return Ok(query);
+        };
+        for (key, value) in form_urlencoded::parse(raw.as_bytes()) {
+            match key.as_ref() {
+                "limit" => {
+                    query.limit = Some(parse_i64_query_param(&value, "limit")?);
+                }
+                "offset" => {
+                    query.offset = Some(parse_i64_query_param(&value, "offset")?);
+                }
+                "q" => {
+                    query.q = Some(value.into_owned());
+                }
+                "keyword" => {
+                    query.keyword.push(value.into_owned());
+                }
+                _ => {}
+            }
+        }
+        Ok(query)
+    }
+
     /// Returns validated challenge-list pagination parameters.
     fn page(&self) -> Result<PublicPagination> {
         public_api::public_pagination(
@@ -461,6 +496,48 @@ impl ChallengeCatalogQuery {
             "challenge list",
         )
     }
+
+    /// Returns validated search and keyword filters for challenge catalog queries.
+    fn filters(&self) -> Result<db::ChallengeCatalogFilters> {
+        let search = normalized_challenge_search(self.q.as_deref())?;
+        let keywords = self
+            .keyword
+            .iter()
+            .map(|raw| ChallengeKeyword::try_new(raw.clone()))
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|e| AppError::Validation(e.to_string()))?;
+        if keywords.len() > 6 {
+            return Err(AppError::Validation(
+                "challenge catalog filters accept at most 6 keywords".to_string(),
+            ));
+        }
+        Ok(db::ChallengeCatalogFilters { search, keywords })
+    }
+}
+
+/// Parse a signed integer query parameter for public catalog pagination.
+fn parse_i64_query_param(value: &str, field: &str) -> Result<i64> {
+    value
+        .parse()
+        .map_err(|_| AppError::BadRequest(format!("{field} must be an integer")))
+}
+
+/// Normalize a public challenge catalog text search query.
+fn normalized_challenge_search(raw: Option<&str>) -> Result<Option<String>> {
+    let Some(raw) = raw else {
+        return Ok(None);
+    };
+    let normalized = raw.trim();
+    if normalized.is_empty() {
+        return Ok(None);
+    }
+    if normalized.len() > 120 || normalized.chars().any(char::is_control) {
+        return Err(AppError::Validation(
+            "challenge search query must be at most 120 UTF-8 bytes and contain no control characters"
+                .to_string(),
+        ));
+    }
+    Ok(Some(normalized.to_string()))
 }
 
 /// Create a private validation run, store its ZIP artifact, and queue validation evaluation.

@@ -7,6 +7,7 @@ use sha2::{Digest, Sha256};
 
 use crate::challenge_bundle::{read_challenge_bundle_spec, read_challenge_run_manifest};
 use crate::error::{AppError, Result};
+use crate::models::challenge::{MAX_CHALLENGE_KEYWORDS, MIN_CHALLENGE_KEYWORDS};
 use crate::models::challenge_creation::{
     AGENTICS_CHALLENGE_MANIFEST_FILE, ChallengeCreationManifest, ChallengeCreationRequestKind,
     ChallengePrivateAssetRequirement, ChallengePrivateAssetResponse,
@@ -48,6 +49,7 @@ pub fn validate_challenge_creation_manifest(manifest: &ChallengeCreationManifest
     require_non_empty(&manifest.title, "title")?;
     require_non_empty(&manifest.summary.en, "summary.en")?;
     require_non_empty(&manifest.summary.zh, "summary.zh")?;
+    validate_manifest_keywords(manifest)?;
     validate_private_asset_requirements(&manifest.private_assets)?;
 
     match manifest.request {
@@ -263,6 +265,11 @@ async fn validate_public_bundle(
             manifest.summary, spec.summary
         )));
     }
+    if spec.keywords != manifest.keywords {
+        return Err(AppError::Validation(
+            "bundle keywords must match agentics.challenge.json keywords".to_string(),
+        ));
+    }
     assert_public_file_exists(bundle_dir.join("statement.md"), "statement.md").await?;
     assert_public_dir_exists(
         bundle_dir.join(spec.datasets.public_dir.as_path()),
@@ -290,6 +297,25 @@ async fn validate_public_bundle(
             .await?;
     }
 
+    Ok(())
+}
+
+/// Validate public challenge keywords in the proposal manifest.
+fn validate_manifest_keywords(manifest: &ChallengeCreationManifest) -> Result<()> {
+    if !(MIN_CHALLENGE_KEYWORDS..=MAX_CHALLENGE_KEYWORDS).contains(&manifest.keywords.len()) {
+        return Err(AppError::Validation(format!(
+            "keywords must contain between {MIN_CHALLENGE_KEYWORDS} and {MAX_CHALLENGE_KEYWORDS} entries"
+        )));
+    }
+    let mut seen = HashSet::new();
+    for keyword in &manifest.keywords {
+        let normalized = keyword.as_str().to_lowercase();
+        if !seen.insert(normalized) {
+            return Err(AppError::Validation(format!(
+                "duplicate challenge keyword `{keyword}`"
+            )));
+        }
+    }
     Ok(())
 }
 
@@ -431,6 +457,34 @@ mod tests {
         cleanup(&repo);
     }
 
+    /// Verifies that new challenge proposals must declare catalog keywords.
+    #[tokio::test]
+    async fn rejects_new_challenge_without_keywords() {
+        let repo = temp_repo("new-challenge-no-keywords");
+        write_valid_public_challenge(&repo);
+        write_file(
+            &repo.join(AGENTICS_CHALLENGE_MANIFEST_FILE),
+            &json!({
+                "schema_version": 1,
+                "request": "new_challenge",
+                "challenge_name": "sample-sum",
+                "title": "Sample Sum",
+                "summary": { "en": "Add numbers", "zh": "数字求和" },
+                "keywords": [],
+                "readme_path": "README.md",
+                "bundle_path": "v1"
+            })
+            .to_string(),
+        );
+
+        let error = validate_challenge_creation_repository(&repo)
+            .await
+            .expect_err("empty keywords should fail");
+
+        assert!(error.to_string().contains("keywords must contain between"));
+        cleanup(&repo);
+    }
+
     /// Verifies that rejects new version repository.
     #[tokio::test]
     async fn rejects_new_version_repository() {
@@ -444,6 +498,7 @@ mod tests {
                 "challenge_name": "sample-sum",
                 "title": "Sample Sum",
                 "summary": { "en": "Add numbers", "zh": "数字求和" },
+                "keywords": ["arithmetic"],
                 "readme_path": "README.md",
                 "bundle_path": "v1"
             })
@@ -472,6 +527,7 @@ mod tests {
                 "challenge_name": "sample-sum",
                 "title": "Sample Sum",
                 "summary": { "en": "Add numbers", "zh": "数字求和" },
+                "keywords": ["arithmetic"],
                 "readme_path": "README.md",
                 "archive": { "reason": "Retired by challenge owner" }
             })
@@ -508,6 +564,7 @@ mod tests {
             challenge_name: "sample-sum".parse().expect("valid challenge name"),
             title: "Sample Sum".to_string(),
             summary: localized_summary(),
+            keywords: vec!["arithmetic".parse().expect("valid keyword")],
             readme_path: "README.md".parse().expect("valid readme path"),
             bundle_path: Some("v1".parse().expect("valid bundle path")),
             archive: None,
@@ -622,6 +679,7 @@ mod tests {
                 "challenge_name": "sample-sum",
                 "challenge_title": "Sample Sum",
                 "summary": { "en": "Add numbers", "zh": "数字求和" },
+                "keywords": ["arithmetic"],
                 "solution": {
                     "protocol": "zip_project",
                     "manifest_file": "agentics.solution.json"
@@ -699,6 +757,7 @@ mod tests {
             "challenge_name": "sample-sum",
             "title": "Sample Sum",
             "summary": { "en": "Add numbers", "zh": "数字求和" },
+            "keywords": ["arithmetic"],
             "readme_path": "README.md",
             "bundle_path": bundle,
             "private_assets": [

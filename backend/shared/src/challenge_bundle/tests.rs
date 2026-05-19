@@ -14,7 +14,9 @@ use crate::models::images::{
     ChallengeImageReference, LocalAgenticsImageReference, OciRegistryImageReference,
 };
 use crate::models::localization::LocalizedText;
-use crate::models::names::{ChallengeName, MetricName, ResourceProfileName, TargetName};
+use crate::models::names::{
+    ChallengeKeyword, ChallengeName, MetricName, ResourceProfileName, TargetName,
+};
 use crate::models::paths::BundleRelativePath;
 use crate::zip_project::ZipProjectNetworkAccess;
 
@@ -43,6 +45,7 @@ fn base_spec() -> ChallengeBundleSpec {
         challenge_name: challenge_name("sample-sum"),
         challenge_title: "Sample Sum".to_string(),
         summary: localized_summary(),
+        keywords: vec![challenge_keyword("arithmetic")],
         solution: SolutionSpec {
             protocol: "zip_project".to_string(),
             manifest_file: bundle_path("agentics.solution.json"),
@@ -105,6 +108,11 @@ fn base_spec() -> ChallengeBundleSpec {
 /// Handles challenge name for this module.
 fn challenge_name(value: &str) -> ChallengeName {
     ChallengeName::try_new(value.to_string()).expect("test challenge name is valid")
+}
+
+/// Build a valid public challenge keyword for bundle tests.
+fn challenge_keyword(value: &str) -> ChallengeKeyword {
+    ChallengeKeyword::try_new(value.to_string()).expect("test challenge keyword is valid")
 }
 
 /// Handles target name for this module.
@@ -221,6 +229,16 @@ fn targets_are_required() {
 
     let error = validate_challenge_bundle_spec(&spec).expect_err("empty targets should fail");
     assert!(error.to_string().contains("targets"));
+}
+
+/// Verifies that challenge catalog keywords are required.
+#[test]
+fn keywords_are_required() {
+    let mut spec = base_spec();
+    spec.keywords.clear();
+
+    let error = validate_challenge_bundle_spec(&spec).expect_err("empty keywords should fail");
+    assert!(error.to_string().contains("keywords must contain between"));
 }
 
 /// Verifies that legacy string image fields are rejected by the source enum contract.

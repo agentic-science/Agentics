@@ -12,7 +12,8 @@ use chrono::{DateTime, Utc};
 use crate::error::{AppError, Result};
 use crate::models::challenge::{
     ChallengeBundleSpec, ChallengePrepareSpec, ChallengeRunInputFile, ChallengeRunManifest,
-    ChallengeRunSpec, ChallengeSolutionPublicationPolicy, PrivateBenchmarkPolicy,
+    ChallengeRunSpec, ChallengeSolutionPublicationPolicy, MAX_CHALLENGE_KEYWORDS,
+    MIN_CHALLENGE_KEYWORDS, PrivateBenchmarkPolicy,
 };
 use crate::models::paths::BundleRelativePath;
 use crate::validation::{targets, text};
@@ -164,6 +165,7 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
     require_non_empty(&spec.challenge_title, "challenge_title")?;
     require_non_empty(&spec.summary.en, "summary.en")?;
     require_non_empty(&spec.summary.zh, "summary.zh")?;
+    validate_challenge_keywords(spec)?;
 
     if spec.schema_version != 1 {
         return Err(AppError::Validation("schema_version must be 1".to_string()));
@@ -211,6 +213,25 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
 
     validate_metric_schema(spec)?;
 
+    Ok(())
+}
+
+/// Validates challenge keyword cardinality and duplicate semantics.
+fn validate_challenge_keywords(spec: &ChallengeBundleSpec) -> Result<()> {
+    if !(MIN_CHALLENGE_KEYWORDS..=MAX_CHALLENGE_KEYWORDS).contains(&spec.keywords.len()) {
+        return Err(AppError::Validation(format!(
+            "keywords must contain between {MIN_CHALLENGE_KEYWORDS} and {MAX_CHALLENGE_KEYWORDS} entries"
+        )));
+    }
+    let mut seen = HashSet::new();
+    for keyword in &spec.keywords {
+        let normalized = keyword.as_str().to_lowercase();
+        if !seen.insert(normalized) {
+            return Err(AppError::Validation(format!(
+                "duplicate challenge keyword `{keyword}`"
+            )));
+        }
+    }
     Ok(())
 }
 
