@@ -116,13 +116,20 @@ struct RunnerAttempt {
 impl RunnerAttempt {
     /// Build an attempt identity safe for Docker names and temporary paths.
     fn new(job_id: &str, worker_id: &str, attempt_count: i32) -> Self {
+        let nonce = uuid::Uuid::new_v4()
+            .simple()
+            .to_string()
+            .chars()
+            .take(12)
+            .collect::<String>();
         Self {
             worker_id: sanitize_name_component(worker_id),
             attempt_count,
             transient_name: format!(
-                "{}-attempt-{}",
+                "{}-attempt-{}-{}",
                 sanitize_name_component(job_id),
-                attempt_count
+                attempt_count,
+                nonce
             ),
         }
     }

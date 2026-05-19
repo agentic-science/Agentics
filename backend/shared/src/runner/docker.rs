@@ -538,12 +538,14 @@ fn hardened_container_host_config(
 
 /// Build permission-repair host config with only writable bind mounts exposed.
 fn permission_repair_host_config(mounts: Vec<Mount>) -> HostConfig {
-    hardened_container_host_config(
+    let mut config = hardened_container_host_config(
         "none".to_string(),
         mounts,
         PERMISSION_FIX_LOG_LIMIT_BYTES,
         true,
-    )
+    );
+    config.cap_add = Some(vec!["FOWNER".to_string()]);
+    config
 }
 
 /// Return resource ulimits shared across runner and helper containers.
@@ -868,6 +870,7 @@ mod tests {
         assert_eq!(config.init, Some(true));
         assert_eq!(config.oom_kill_disable, Some(false));
         assert_eq!(config.readonly_rootfs, Some(true));
+        assert_eq!(config.cap_add.as_deref(), Some(&["FOWNER".to_string()][..]));
         assert_eq!(
             config
                 .log_config

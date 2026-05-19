@@ -244,6 +244,12 @@ stale, superseded, and stopped stale runner containers in that hosted scope are
 killed or removed so a crashed worker cannot keep CPU, GPU, writable-mount, or
 Docker-layer quota slots indefinitely.
 
+After each runner container exits, a short permission-repair sidecar makes
+writable bind mounts host-cleanable. It runs with no network, a read-only root
+filesystem, only the writable bind mounts attached, all capabilities dropped
+except the minimal `FOWNER` capability needed to chmod host-owned files, and the
+same Agentics hosted-worker label scope.
+
 Actions:
 
 1. Inspect `/admin/solution-submissions`.
