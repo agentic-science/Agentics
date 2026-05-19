@@ -391,6 +391,10 @@ input {
   transform: translateY(-1px);
 }
 
+.home-philosophy-cta {
+  margin-top: calc(var(--spacing-12) + var(--spacing-5));
+}
+
 .home-challenge-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 24rem));

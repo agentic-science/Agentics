@@ -253,7 +253,7 @@ export default async function HomePage() {
             </p>
           </div>
         </div>
-        <div className="flex justify-center mt-14">
+        <div className="home-philosophy-cta flex justify-center">
           <Link
             href="/philosophy#communications"
             className="home-philosophy-pill"
