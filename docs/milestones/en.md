@@ -483,8 +483,8 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 
 - **M0.2.5-CREATE-6: Add stale draft cleanup and challenge creation quotas**
   - Commit target: `api: add challenge draft cleanup and quotas`
-  - Scope: Mark drafts tied to closed unmerged PRs as abandoned, expire inactive drafts, purge unpublished draft private assets after a grace period, and enforce MVP quotas for draft count, private asset size, validation frequency, queued validation jobs, and worker concurrency.
-  - Test spec: Add tests for abandoned and expired drafts, grace-period asset purge, published asset preservation, quota boundaries, quota error responses, and admin override behavior.
+  - Scope: Mark drafts tied to closed unmerged PRs and inactive active unpublished drafts as abandoned, preserve explicit rejected review outcomes, purge unpublished draft private assets after a grace period, and enforce MVP quotas for draft count, private asset size, validation frequency, queued validation jobs, and worker concurrency.
+  - Test spec: Add tests for abandoned draft cleanup, rejected-state preservation, grace-period asset purge, published asset preservation, quota boundaries, quota error responses, and admin override behavior.
 
 ### Demo Challenges
 

@@ -483,8 +483,8 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 
 - **M0.2.5-CREATE-6：添加 stale draft cleanup 和 challenge creation quotas**
   - Commit target：`api: add challenge draft cleanup and quotas`
-  - Scope：将绑定 closed unmerged PRs 的 drafts 标记为 abandoned，使 inactive drafts 过期，在 grace period 后 purge unpublished draft private assets，并执行 draft count、private asset size、validation frequency、queued validation jobs 和 worker concurrency 的 MVP quotas。
-  - Test spec：为 abandoned 和 expired drafts、grace-period asset purge、published asset preservation、quota boundaries、quota error responses 和 admin override behavior 添加 tests。
+  - Scope：将绑定 closed unmerged PRs 的 drafts 以及 inactive active unpublished drafts 标记为 abandoned，保留明确 rejected 的 review outcomes，在 grace period 后 purge unpublished draft private assets，并执行 draft count、private asset size、validation frequency、queued validation jobs 和 worker concurrency 的 MVP quotas。
+  - Test spec：为 abandoned draft cleanup、rejected-state preservation、grace-period asset purge、published asset preservation、quota boundaries、quota error responses 和 admin override behavior 添加 tests。
 
 ### Demo Challenges
 
