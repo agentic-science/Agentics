@@ -8,6 +8,23 @@ use crate::zip_project::{
 
 use super::errors::phase_error;
 
+/// Platform-owned limits for the scorer-visible run tree.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct OutputTreeLimits {
+    pub(super) max_files: u64,
+    pub(super) max_dirs: u64,
+    pub(super) max_depth: u64,
+}
+
+/// Counted filesystem usage for a runner-owned tree.
+#[derive(Debug, Default, Clone, Copy)]
+struct TreeUsage {
+    bytes: u64,
+    files: u64,
+    dirs: u64,
+    max_depth: u64,
+}
+
 /// Handles extract zip safe for this module.
 pub(super) async fn extract_zip_safe(artifact_path: &Path, target_dir: &Path) -> Result<()> {
     let artifact_path = artifact_path.to_path_buf();
@@ -83,23 +100,149 @@ pub(super) async fn cleanup_paths<const N: usize>(paths: [PathBuf; N]) -> Result
 
 /// Handles directory size for this module.
 fn directory_size(path: &Path) -> Result<u64> {
-    let mut total = 0u64;
-    for entry in std::fs::read_dir(path)? {
-        let entry = entry?;
-        let metadata = entry.path().symlink_metadata()?;
+    inspect_tree(path, None, None).map(|usage| usage.bytes)
+}
+
+/// Validate scorer-visible output tree bounds before copying it to the scorer.
+pub(super) fn validate_scorer_visible_output_tree(
+    path: &Path,
+    visible_run_name: &str,
+    limits: OutputTreeLimits,
+) -> Result<()> {
+    inspect_tree(
+        path,
+        Some((visible_run_name, limits)),
+        Some(visible_run_name),
+    )
+    .map(|_| ())
+}
+
+/// Inspect a filesystem tree without following symlinks.
+fn inspect_tree(
+    path: &Path,
+    output_limits: Option<(&str, OutputTreeLimits)>,
+    reject_non_regular_for_run: Option<&str>,
+) -> Result<TreeUsage> {
+    let mut usage = TreeUsage::default();
+    let mut pending = vec![(path.to_path_buf(), 0u64)];
+
+    while let Some((current, depth)) = pending.pop() {
+        let metadata = std::fs::symlink_metadata(&current)?;
         let file_type = metadata.file_type();
-        if file_type.is_dir() {
-            total = total
-                .checked_add(directory_size(&entry.path())?)
+
+        if file_type.is_symlink() {
+            if let Some(visible_run_name) = reject_non_regular_for_run {
+                return Err(non_regular_output_error(
+                    visible_run_name,
+                    "produced a symlink in its output tree",
+                ));
+            }
+            usage.bytes = usage
+                .bytes
+                .checked_add(metadata.len())
                 .ok_or_else(|| AppError::Runner("directory size overflow".to_string()))?;
+            continue;
+        }
+
+        usage.max_depth = usage.max_depth.max(depth);
+        if let Some((visible_run_name, limits)) = output_limits
+            && depth > limits.max_depth
+        {
+            return Err(output_limit_error(
+                visible_run_name,
+                "depth",
+                depth,
+                limits.max_depth,
+                "levels",
+            ));
+        }
+
+        if metadata.is_dir() {
+            usage.dirs = usage
+                .dirs
+                .checked_add(1)
+                .ok_or_else(|| AppError::Runner("directory count overflow".to_string()))?;
+            if let Some((visible_run_name, limits)) = output_limits
+                && usage.dirs > limits.max_dirs
+            {
+                return Err(output_limit_error(
+                    visible_run_name,
+                    "directory",
+                    usage.dirs,
+                    limits.max_dirs,
+                    "directories",
+                ));
+            }
+
+            let child_depth = depth
+                .checked_add(1)
+                .ok_or_else(|| AppError::Runner("directory depth overflow".to_string()))?;
+            for entry in std::fs::read_dir(&current)? {
+                let entry = entry?;
+                pending.push((entry.path(), child_depth));
+            }
+        } else if metadata.is_file() {
+            usage.files = usage
+                .files
+                .checked_add(1)
+                .ok_or_else(|| AppError::Runner("file count overflow".to_string()))?;
+            if let Some((visible_run_name, limits)) = output_limits
+                && usage.files > limits.max_files
+            {
+                return Err(output_limit_error(
+                    visible_run_name,
+                    "file",
+                    usage.files,
+                    limits.max_files,
+                    "files",
+                ));
+            }
+            usage.bytes = usage
+                .bytes
+                .checked_add(metadata.len())
+                .ok_or_else(|| AppError::Runner("directory size overflow".to_string()))?;
+        } else if let Some(visible_run_name) = reject_non_regular_for_run {
+            return Err(non_regular_output_error(
+                visible_run_name,
+                "produced a non-regular file in its output tree",
+            ));
         } else {
-            // Count symlink directory entries as links, never as their host targets.
-            total = total
+            usage.bytes = usage
+                .bytes
                 .checked_add(metadata.len())
                 .ok_or_else(|| AppError::Runner("directory size overflow".to_string()))?;
         }
     }
-    Ok(total)
+
+    Ok(usage)
+}
+
+/// Build a resource-limit error for scorer-visible run tree bounds.
+fn output_limit_error(
+    visible_run_name: &str,
+    limit_name: &str,
+    actual: u64,
+    limit: u64,
+    unit: &str,
+) -> AppError {
+    phase_error(
+        ZipProjectPhaseName::Run,
+        ZipProjectPhaseFailureReason::ResourceLimit,
+        format!(
+            "run `{visible_run_name}` exceeded output {limit_name} limit: {actual} > {limit} {unit}"
+        ),
+        None,
+    )
+}
+
+/// Build a non-regular-file output error.
+fn non_regular_output_error(visible_run_name: &str, message: &str) -> AppError {
+    phase_error(
+        ZipProjectPhaseName::Run,
+        ZipProjectPhaseFailureReason::RunnerError,
+        format!("run `{visible_run_name}` {message}"),
+        None,
+    )
 }
 
 /// Copies dir all blocking while preserving the module invariants.
@@ -346,6 +489,138 @@ mod tests {
         );
 
         drop(std::fs::remove_file(outside));
+        drop(std::fs::remove_dir_all(root));
+    }
+
+    /// Verifies byte accounting still sums regular file payloads.
+    #[test]
+    fn directory_size_counts_regular_file_bytes() {
+        let root = temp_path("regular-file-size-root");
+        std::fs::create_dir_all(root.join("nested")).expect("failed to create nested dir");
+        std::fs::write(root.join("one.bin"), vec![b'a'; 7]).expect("failed to write first file");
+        std::fs::write(root.join("nested/two.bin"), vec![b'b'; 11])
+            .expect("failed to write nested file");
+
+        let bytes = directory_size(&root).expect("directory size should succeed");
+
+        assert_eq!(bytes, 18);
+        drop(std::fs::remove_dir_all(root));
+    }
+
+    /// Verifies output tree validation rejects excessive regular files.
+    #[test]
+    fn output_tree_rejects_too_many_files() {
+        let root = temp_path("too-many-output-files");
+        std::fs::create_dir_all(&root).expect("failed to create root");
+        std::fs::write(root.join("one.txt"), b"1").expect("failed to write first file");
+        std::fs::write(root.join("two.txt"), b"2").expect("failed to write second file");
+
+        let error = validate_scorer_visible_output_tree(
+            &root,
+            "run-0001",
+            OutputTreeLimits {
+                max_files: 1,
+                max_dirs: 8,
+                max_depth: 8,
+            },
+        )
+        .expect_err("output tree should reject excessive files");
+
+        assert!(error.to_string().contains("output file limit"));
+        drop(std::fs::remove_dir_all(root));
+    }
+
+    /// Verifies output tree validation rejects excessive directories.
+    #[test]
+    fn output_tree_rejects_too_many_directories() {
+        let root = temp_path("too-many-output-dirs");
+        std::fs::create_dir_all(root.join("a")).expect("failed to create first dir");
+        std::fs::create_dir_all(root.join("b")).expect("failed to create second dir");
+
+        let error = validate_scorer_visible_output_tree(
+            &root,
+            "run-0001",
+            OutputTreeLimits {
+                max_files: 8,
+                max_dirs: 2,
+                max_depth: 8,
+            },
+        )
+        .expect_err("output tree should reject excessive directories");
+
+        assert!(error.to_string().contains("output directory limit"));
+        drop(std::fs::remove_dir_all(root));
+    }
+
+    /// Verifies output tree validation rejects excessive path depth.
+    #[test]
+    fn output_tree_rejects_excessive_depth() {
+        let root = temp_path("too-deep-output");
+        std::fs::create_dir_all(root.join("a/b")).expect("failed to create deep dir");
+
+        let error = validate_scorer_visible_output_tree(
+            &root,
+            "run-0001",
+            OutputTreeLimits {
+                max_files: 8,
+                max_dirs: 8,
+                max_depth: 1,
+            },
+        )
+        .expect_err("output tree should reject excessive depth");
+
+        assert!(error.to_string().contains("output depth limit"));
+        drop(std::fs::remove_dir_all(root));
+    }
+
+    /// Verifies output tree validation rejects symlinks.
+    #[cfg(unix)]
+    #[test]
+    fn output_tree_rejects_symlinks() {
+        let root = temp_path("output-symlink-root");
+        let outside = temp_path("output-symlink-target.txt");
+        std::fs::create_dir_all(&root).expect("failed to create root");
+        std::fs::write(&outside, b"outside").expect("failed to write outside file");
+        std::os::unix::fs::symlink(&outside, root.join("link")).expect("failed to create symlink");
+
+        let error = validate_scorer_visible_output_tree(
+            &root,
+            "run-0001",
+            OutputTreeLimits {
+                max_files: 8,
+                max_dirs: 8,
+                max_depth: 8,
+            },
+        )
+        .expect_err("output tree should reject symlinks");
+
+        assert!(error.to_string().contains("produced a symlink"));
+        drop(std::fs::remove_file(outside));
+        drop(std::fs::remove_dir_all(root));
+    }
+
+    /// Verifies output tree validation rejects special files.
+    #[cfg(unix)]
+    #[test]
+    fn output_tree_rejects_special_files() {
+        let root = temp_path("output-special-root");
+        std::fs::create_dir_all(&root).expect("failed to create root");
+        let socket_path = root.join("socket");
+        let _listener =
+            std::os::unix::net::UnixListener::bind(&socket_path).expect("failed to bind socket");
+
+        let error = validate_scorer_visible_output_tree(
+            &root,
+            "run-0001",
+            OutputTreeLimits {
+                max_files: 8,
+                max_dirs: 8,
+                max_depth: 8,
+            },
+        )
+        .expect_err("output tree should reject special files");
+
+        assert!(error.to_string().contains("non-regular file"));
         drop(std::fs::remove_dir_all(root));
     }
 }

@@ -139,6 +139,12 @@ Manifest 不声明 time、memory、CPU、disk、network 或 log limits。所选 
 
 Challenge-owned prepare specs 会单独选择 prepare `network_access`。Container log capture 使用 platform-owned runner cap，而不是 submitter-controlled manifest data。
 
+Worker 还会对 scorer-visible output tree 应用 platform-owned limits。默认每个 run
+tree 最多包含 `8192` 个 regular files、`1024` 个 directories（包含 root），以及
+`32` 层深度。这些 limits 用来保护 scorer 和 artifact handling，不由 participant
+控制。它们不会限制 setup/build dependency trees；dependency-heavy challenges 应使用
+更大的 `disk_limit_mb` profiles，让 hosted worker 选择更大的 quota slots。
+
 Parser 会从 `commands` 暴露 ordered phase execution plan。Worker 会把该 plan 与所选 target resource profile 组合，产生 phase-specific logs 和结构化 failure reports。Failure report 包含 failed phase name、reason、message、可选 exit code，以及可选 safe relative log path。
 
 Runner containers 还会使用 Docker-level containment controls：memory 和 CPU limits、swap 限制到 memory limit、PID 和 process ulimits、drop all capabilities、`no-new-privileges`、不发布端口，以及 bounded Docker log files。这些 controls 会降低 blast radius，但 Docker 仍不应被视为完整的 hostile-code isolation boundary。MVP 中 runner containers 保持 image default user 和 writable root filesystem，以保留 setup/build/run 灵活性。Operators 必须把这视为由 disk quotas 和 Docker hardening 约束的已接受风险，而不是等同于 read-only/non-root isolation。
@@ -150,7 +156,10 @@ Docker daemon，其 data root 位于启用 project quotas 的 loopback XFS image
 loopback filesystem images 下使用 root-prepared XFS project-quota slots，覆盖
 setup/build workspace scratch、run `/io`、prepare `/prepared`、scorer
 `/output`、home 和 temporary paths 等 writable mounts。这会覆盖 solution 的三个
-phases 和 scorer 的两个 phases。Worker 会选择可满足 effective phase
+phases 和 scorer 的两个 phases。DGX slots 同时执行 byte quotas 和 inode quotas；
+默认 inode policy 是每 MiB `256` 个 inodes，因此默认 `64`、`256`、`1024` 和
+`4096` MiB slots 分别允许 `16384`、`65536`、`262144` 和 `1048576` 个 inodes。
+Worker 会选择可满足 effective phase
 `disk_limit_mb` 的最小 configured slot class；如果 operator 需要 exact hard
 phase limit，应让 resource profiles 与 slot classes 对齐。Strict deployment probes
 由 `AGENTICS_HOST_PROBE_MODE=off|warn|require` 控制；Mac-local development 可以

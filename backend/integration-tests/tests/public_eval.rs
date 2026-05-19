@@ -829,6 +829,278 @@ python main.py
     assert!(last_error.contains("\"reason\":\"non_zero_exit\""));
 }
 
+/// Verifies that worker enforces platform-owned output file count limits.
+#[sqlx::test(migrations = "../migrations")]
+async fn worker_rejects_excessive_run_output_files(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = test_config(storage.path(), &examples_challenges_root());
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "display_name": "run-output-file-limit-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+
+    let run_sh = r#"#!/usr/bin/env sh
+set -eu
+i=0
+while [ "$i" -lt 8193 ]; do
+  : > "$AGENTICS_OUTPUT_DIR/file-$i.txt"
+  i=$((i + 1))
+done
+python main.py
+"#;
+    let artifact_base64 = solution_zip_base64_with_scripts(
+        &sample_sum_solution("payload['a'] + payload['b']"),
+        "#!/usr/bin/env sh\nset -eu\nprintf setup > .setup-marker\n",
+        "#!/usr/bin/env sh\nset -eu\nmkdir -p build\nprintf built > build/generated.txt\n",
+        run_sh,
+    );
+
+    let create_response: serde_json::Value = client
+        .post(api_url(&app, "/api/validation-runs"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
+        .json(&serde_json::json!({
+            "challenge_name": "sample-sum",
+            "target": "linux-arm64-cpu",
+            "artifact_base64": artifact_base64,
+            "explanation": "run output file limit probe"
+        }))
+        .send()
+        .await
+        .expect("failed to create validation run")
+        .json()
+        .await
+        .expect("failed to decode create validation response");
+    let validation_id = create_response["id"]
+        .as_str()
+        .expect("missing validation id");
+
+    run_worker_once(&pool, &config).await;
+
+    let validation: serde_json::Value = client
+        .get(api_url(
+            &app,
+            &format!("/api/validation-runs/{validation_id}"),
+        ))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
+        .send()
+        .await
+        .expect("failed to get validation run")
+        .json()
+        .await
+        .expect("failed to decode validation response");
+    assert_eq!(validation["status"], "failed");
+    assert_eq!(validation["evaluation"]["status"], "failed");
+
+    let last_error: String = sqlx::query_scalar(
+        "SELECT last_error FROM evaluation_jobs WHERE solution_submission_id = $1::uuid",
+    )
+    .bind(validation_id)
+    .fetch_one(&pool)
+    .await
+    .expect("failed to query failed job");
+    assert!(
+        last_error.contains("output file limit"),
+        "unexpected last_error: {last_error}"
+    );
+    assert!(
+        last_error.contains("resource_limit"),
+        "unexpected last_error: {last_error}"
+    );
+}
+
+/// Verifies quota-backed Linux runner slots enforce inode limits when configured.
+#[sqlx::test(migrations = "../migrations")]
+async fn worker_enforces_run_writable_inode_limit(pool: sqlx::PgPool) {
+    if !quota_sensitive_runner_env_configured() {
+        return;
+    }
+
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let mut config = test_config(storage.path(), &examples_challenges_root());
+    config.runner_max_output_files = 100_000;
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let client = reqwest::Client::new();
+    sqlx::query(
+        r#"
+        UPDATE challenges
+        SET spec_json = jsonb_set(spec_json, '{targets,0,resource_profile,disk_limit_mb}', '64'::jsonb)
+        WHERE name = 'sample-sum'
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect("failed to lower test resource profile disk limit");
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "display_name": "run-inode-limit-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+
+    let run_sh = r#"#!/usr/bin/env sh
+set -eu
+i=0
+while [ "$i" -lt 17000 ]; do
+  if ! touch "$TMPDIR/inode-$i"; then
+    echo "inode quota hit"
+    exit 37
+  fi
+  i=$((i + 1))
+done
+python main.py
+"#;
+    let artifact_base64 = solution_zip_base64_with_scripts(
+        &sample_sum_solution("payload['a'] + payload['b']"),
+        "#!/usr/bin/env sh\nset -eu\nprintf setup > .setup-marker\n",
+        "#!/usr/bin/env sh\nset -eu\nmkdir -p build\nprintf built > build/generated.txt\n",
+        run_sh,
+    );
+
+    let create_response: serde_json::Value = client
+        .post(api_url(&app, "/api/validation-runs"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
+        .json(&serde_json::json!({
+            "challenge_name": "sample-sum",
+            "target": "linux-arm64-cpu",
+            "artifact_base64": artifact_base64,
+            "explanation": "run writable inode limit probe"
+        }))
+        .send()
+        .await
+        .expect("failed to create validation run")
+        .json()
+        .await
+        .expect("failed to decode create validation response");
+    let validation_id = create_response["id"]
+        .as_str()
+        .expect("missing validation id");
+
+    run_worker_once(&pool, &config).await;
+
+    let validation: serde_json::Value = client
+        .get(api_url(
+            &app,
+            &format!("/api/validation-runs/{validation_id}"),
+        ))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
+        .send()
+        .await
+        .expect("failed to get validation run")
+        .json()
+        .await
+        .expect("failed to decode validation response");
+    assert_eq!(validation["status"], "failed");
+    assert_eq!(validation["evaluation"]["status"], "failed");
+
+    let last_error: String = sqlx::query_scalar(
+        "SELECT last_error FROM evaluation_jobs WHERE solution_submission_id = $1::uuid",
+    )
+    .bind(validation_id)
+    .fetch_one(&pool)
+    .await
+    .expect("failed to query failed job");
+    assert!(
+        last_error.contains("inode quota hit")
+            || last_error.contains("No space left on device")
+            || last_error.contains("Disk quota exceeded"),
+        "unexpected last_error: {last_error}"
+    );
+}
+
+/// Verifies setup/build dependency trees are not capped by scorer-visible output limits.
+#[sqlx::test(migrations = "../migrations")]
+async fn setup_build_file_count_is_not_limited_by_output_cap(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let mut config = test_config(storage.path(), &examples_challenges_root());
+    config.runner_max_output_files = 8;
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "display_name": "dependency-file-count-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+
+    let build_sh = r#"#!/usr/bin/env sh
+set -eu
+mkdir -p build/deps
+i=0
+while [ "$i" -lt 16 ]; do
+  : > "build/deps/file-$i.txt"
+  i=$((i + 1))
+done
+printf built > build/generated.txt
+"#;
+    let artifact_base64 = solution_zip_base64_with_scripts(
+        &sample_sum_solution("payload['a'] + payload['b']"),
+        "#!/usr/bin/env sh\nset -eu\nprintf setup > .setup-marker\n",
+        build_sh,
+        "#!/usr/bin/env sh\nset -eu\ntest -f build/generated.txt\npython main.py\n",
+    );
+
+    let create_response: serde_json::Value = client
+        .post(api_url(&app, "/api/validation-runs"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
+        .json(&serde_json::json!({
+            "challenge_name": "sample-sum",
+            "target": "linux-arm64-cpu",
+            "artifact_base64": artifact_base64,
+            "explanation": "dependency tree should not hit output file cap"
+        }))
+        .send()
+        .await
+        .expect("failed to create validation run")
+        .json()
+        .await
+        .expect("failed to decode create validation response");
+    let validation_id = create_response["id"]
+        .as_str()
+        .expect("missing validation id");
+
+    run_worker_once(&pool, &config).await;
+
+    let validation: serde_json::Value = client
+        .get(api_url(
+            &app,
+            &format!("/api/validation-runs/{validation_id}"),
+        ))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
+        .send()
+        .await
+        .expect("failed to get validation run")
+        .json()
+        .await
+        .expect("failed to decode validation response");
+    assert_eq!(validation["status"], "completed");
+    assert_eq!(validation["evaluation"]["validation_summary"]["score"], 1.0);
+}
+
 /// Verifies that validation run is rejected when challenge disables validation.
 #[sqlx::test(migrations = "../migrations")]
 async fn validation_run_is_rejected_when_challenge_disables_validation(pool: sqlx::PgPool) {

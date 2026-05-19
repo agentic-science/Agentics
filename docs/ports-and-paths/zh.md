@@ -45,7 +45,10 @@ profile 将 `deploy/dgx-spark/agentics.env.example` 复制到
 
 DGX 默认 quota slot classes 为 `64`、`256`、`1024` 和 `4096` MiB，每个 phase
 和 class 有四个 slots。Worker 会为 writable container bind mounts 租用这些
-slots，并使用 Docker `storage_opt.size` 约束 container-layer writes。
+slots，并使用 Docker `storage_opt.size` 约束 container-layer writes。Slots 还会按默认
+每 MiB `256` 个 inodes 设置 inode hard limits：默认 classes 分别是 `16384`、
+`65536`、`262144` 和 `1048576` 个 inodes。Scorer-visible run trees 另行限制为
+`8192` 个 files、`1024` 个 directories 和 `32` 层 depth。
 
 `/srv/agentics-test` 用于开发者运行 quota-sensitive integration tests。它必须用
 `scripts/ops/prepare-dgx-spark-test-storage.sh` 单独准备，且 hosted workers 不应使用。

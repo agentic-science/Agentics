@@ -8,6 +8,8 @@ PHASE_MOUNT_ROOT="${AGENTICS_DGX_PHASE_MOUNT_ROOT:-${STATE_ROOT}/phase-mounts}"
 RUNNER_STORAGE_MODE="${AGENTICS_RUNNER_WRITABLE_STORAGE_MODE:-unbounded}"
 RUNNER_PHASE_MOUNT_ROOT="${AGENTICS_RUNNER_PHASE_MOUNT_ROOT:-${PHASE_MOUNT_ROOT}}"
 RUNNER_SLOT_CLASSES_MB="${AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB:-64,256,1024,4096}"
+PHASE_SLOT_INODES_PER_MB="${AGENTICS_DGX_PHASE_SLOT_INODES_PER_MB:-256}"
+PHASE_SLOTS_PER_CLASS="${AGENTICS_DGX_PHASE_SLOTS_PER_CLASS:-4}"
 DOCKER_HOST_URI="${AGENTICS_DOCKER_HOST:-unix:///run/agentics/docker.sock}"
 PROBE_IMAGE="${AGENTICS_DGX_PROBE_IMAGE:-busybox:1.36}"
 PULL_POLICY="${AGENTICS_DGX_DOCKER_PULL_POLICY:-never}"
@@ -39,6 +41,13 @@ require_command() {
   fi
 }
 
+is_positive_integer() {
+  case "$1" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  [ "$1" -gt 0 ]
+}
+
 check_xfs_prjquota_mount() {
   local path="$1"
   local label="$2"
@@ -65,7 +74,12 @@ check_runner_quota_slots() {
   local phase
   local class_mb
   local slot_class_path
-  local first_slot
+  local slot_index
+  local slot_name
+  local slot_path
+  local expected_inode_limit
+  local metadata
+  local project_id
 
   if [ "$RUNNER_STORAGE_MODE" != "xfs-project-quota-slots" ]; then
     record_failure "AGENTICS_RUNNER_WRITABLE_STORAGE_MODE should be xfs-project-quota-slots for DGX hosted workers"
@@ -77,24 +91,70 @@ check_runner_quota_slots() {
 
   for phase in $PHASES; do
     for class_mb in $(runner_slot_classes); do
+      if ! is_positive_integer "$class_mb"; then
+        record_failure "AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB contains invalid entry: ${class_mb}"
+        continue
+      fi
       slot_class_path="${RUNNER_PHASE_MOUNT_ROOT}/${phase}/slots/${class_mb}mb"
       if [ ! -d "$slot_class_path" ]; then
         record_failure "bounded runner slot class is missing: ${slot_class_path}"
         continue
       fi
-      first_slot="$(find "$slot_class_path" -maxdepth 1 -type d -name 'slot-*' | sort | head -n 1)"
-      if [ -z "$first_slot" ]; then
-        record_failure "bounded runner slot class has no slots: ${slot_class_path}"
-        continue
-      fi
-      if [ ! -f "${first_slot}/.agentics-slot.json" ]; then
-        record_failure "bounded runner slot metadata is missing: ${first_slot}/.agentics-slot.json"
-      fi
-      if [ ! -w "$first_slot" ]; then
-        record_failure "bounded runner slot is not writable by the worker user: ${first_slot}"
-      fi
+      slot_index=1
+      while [ "$slot_index" -le "$PHASE_SLOTS_PER_CLASS" ]; do
+        slot_name="$(printf 'slot-%03d' "$slot_index")"
+        slot_path="${slot_class_path}/${slot_name}"
+        if [ ! -d "$slot_path" ]; then
+          record_failure "bounded runner slot is missing: ${slot_path}"
+          slot_index=$((slot_index + 1))
+          continue
+        fi
+        if [ ! -f "${slot_path}/.agentics-slot.json" ]; then
+          record_failure "bounded runner slot metadata is missing: ${slot_path}/.agentics-slot.json"
+        else
+          metadata="$(cat "${slot_path}/.agentics-slot.json" 2>/dev/null || true)"
+          expected_inode_limit=$((class_mb * PHASE_SLOT_INODES_PER_MB))
+          case "$metadata" in
+            *"\"inodes_per_mb\":${PHASE_SLOT_INODES_PER_MB}"*) ;;
+            *) record_failure "bounded runner slot metadata has wrong inodes_per_mb for ${slot_path}; expected ${PHASE_SLOT_INODES_PER_MB}" ;;
+          esac
+          case "$metadata" in
+            *"\"inode_hard_limit\":${expected_inode_limit}"*) ;;
+            *) record_failure "bounded runner slot metadata has wrong inode_hard_limit for ${slot_path}; expected ${expected_inode_limit}" ;;
+          esac
+          project_id="$(printf '%s\n' "$metadata" | sed -n 's/.*"project_id":\([0-9][0-9]*\).*/\1/p')"
+          if [ -z "$project_id" ]; then
+            record_failure "bounded runner slot metadata is missing project_id: ${slot_path}/.agentics-slot.json"
+          else
+            check_project_inode_quota "${RUNNER_PHASE_MOUNT_ROOT}/${phase}" "$project_id" "$expected_inode_limit" "$slot_path"
+          fi
+        fi
+        if [ ! -w "$slot_path" ]; then
+          record_failure "bounded runner slot is not writable by the worker user: ${slot_path}"
+        fi
+        slot_index=$((slot_index + 1))
+      done
     done
   done
+}
+
+check_project_inode_quota() {
+  local mount_path="$1"
+  local project_id="$2"
+  local expected_inode_limit="$3"
+  local slot_path="$4"
+  local report
+  local hard_limit
+
+  report="$(xfs_quota -x -c "quota -p -i -n -N ${project_id}" "$mount_path" 2>/dev/null || true)"
+  if [ -z "$report" ]; then
+    record_failure "cannot read project inode quota for ${slot_path}"
+    return
+  fi
+  hard_limit="$(printf '%s\n' "$report" | awk -v id="$project_id" '$1 == "#" id || $1 == id { print $4; exit }')"
+  if [ "$hard_limit" != "$expected_inode_limit" ]; then
+    record_failure "bounded runner slot inode hard limit is ${hard_limit:-<missing>} for ${slot_path}; expected ${expected_inode_limit}"
+  fi
 }
 
 docker_cmd() {
@@ -110,6 +170,15 @@ if [ "$MODE" != "warn" ] && [ "$MODE" != "require" ]; then
   record_failure "AGENTICS_HOST_PROBE_MODE must be off, warn, or require"
 fi
 
+if ! is_positive_integer "$PHASE_SLOT_INODES_PER_MB"; then
+  record_failure "AGENTICS_DGX_PHASE_SLOT_INODES_PER_MB must be a positive integer"
+  PHASE_SLOT_INODES_PER_MB=256
+fi
+if ! is_positive_integer "$PHASE_SLOTS_PER_CLASS"; then
+  record_failure "AGENTICS_DGX_PHASE_SLOTS_PER_CLASS must be a positive integer"
+  PHASE_SLOTS_PER_CLASS=4
+fi
+
 if [ "$(uname -s)" != "Linux" ]; then
   record_failure "DGX Spark profile checks are Linux-only; detected $(uname -s)"
 else
@@ -118,8 +187,10 @@ fi
 
 require_command "${DOCKER_CMD[0]}"
 require_command findmnt
-require_command find
 require_command df
+require_command xfs_quota
+require_command awk
+require_command sed
 
 if [ "$DOCKER_HOST_URI" != "unix:///run/agentics/docker.sock" ]; then
   record_failure "AGENTICS_DOCKER_HOST should target the Agentics-owned daemon: unix:///run/agentics/docker.sock"

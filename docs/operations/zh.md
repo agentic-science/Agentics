@@ -91,15 +91,20 @@ writable mounts 由有界的 per-phase XFS project-quota slots 支撑。DGX prof
 应设置 `AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots`、
 `AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts`、
 `AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096` 和
-`AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true`。
+`AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true`。默认 platform-owned
+scorer-visible output caps 是 `AGENTICS_RUNNER_MAX_OUTPUT_FILES=8192`、
+`AGENTICS_RUNNER_MAX_OUTPUT_DIRS=1024` 和
+`AGENTICS_RUNNER_MAX_OUTPUT_DEPTH=32`。
 
 MVP runner containers 仍使用 image default user 和 writable root filesystem，
 这样 setup/build/run scripts 可以使用普通 package managers 和 toolchains。这是
 一个已接受的 MVP tradeoff，不等同于完整 isolation：Docker writable-layer quotas
 约束写入 container layer 的内容，XFS project-quota slots 约束 runner-owned bind
 mounts，例如 workspaces、`/io`、`/prepared`、`/output`、home 和 temporary
-directories。未来 hardening 可以加入 non-root run phases 或 read-only root
-filesystems，但不能弱化当前 disk-boundary 要求。
+directories。DGX slots 还会设置 inode hard limit，默认每 MiB `256` 个 inodes，
+因此 dependency installs 会被约束，但不会把 scorer-visible output file cap 应用到
+setup/build workspaces。未来 hardening 可以加入 non-root run phases 或 read-only
+root filesystems，但不能弱化当前 disk-boundary 要求。
 
 ## Operational Checks
 
@@ -144,14 +149,15 @@ sudo -u agentics env \
   AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots \
   AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts \
   AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096 \
+  AGENTICS_DGX_PHASE_SLOT_INODES_PER_MB=256 \
   AGENTICS_DGX_RUN_MUTATING_PROBES=1 \
   AGENTICS_DGX_DOCKER_PULL_POLICY=never \
   scripts/ops/check-dgx-spark-profile.sh
 ```
 
 Strict profile check 会验证 Docker writable-layer quota probe、per-phase mount
-writeability、root-prepared quota slots 是否存在，以及使用 64 MiB slot class 的
-per-phase bind-mount quota exhaustion probe。
+writeability、root-prepared quota slot metadata、configured inode hard limits，
+以及使用 64 MiB slot class 的 per-phase bind-mount quota exhaustion probe。
 
 在 DGX development host 上做本地验证时，使用由测试用户拥有的独立 test quota
 root：

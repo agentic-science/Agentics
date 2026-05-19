@@ -18,6 +18,9 @@ const DEFAULT_WEB_PORT: u16 = 3001;
 const DEFAULT_AGENT_REGISTRATION_MODE: &str = "pioneer_code";
 const DEFAULT_RUNNER_WRITABLE_STORAGE_MODE: &str = "unbounded";
 const DEFAULT_RUNNER_WRITABLE_SLOT_CLASSES_MB: &str = "64,256,1024,4096";
+const DEFAULT_RUNNER_MAX_OUTPUT_FILES: u64 = 8192;
+const DEFAULT_RUNNER_MAX_OUTPUT_DIRS: u64 = 1024;
+const DEFAULT_RUNNER_MAX_OUTPUT_DEPTH: u64 = 32;
 
 /// Application configuration loaded from `AGENTICS_*` environment variables.
 #[derive(Debug, Clone, Deserialize)]
@@ -103,6 +106,12 @@ pub struct Config {
     pub runner_writable_slot_classes_mb: String,
     #[serde(default)]
     pub runner_docker_layer_quota: bool,
+    #[serde(default = "default_runner_max_output_files")]
+    pub runner_max_output_files: u64,
+    #[serde(default = "default_runner_max_output_dirs")]
+    pub runner_max_output_dirs: u64,
+    #[serde(default = "default_runner_max_output_depth")]
+    pub runner_max_output_depth: u64,
     #[serde(default = "default_log_level")]
     pub log_level: String,
 }
@@ -363,6 +372,21 @@ fn default_runner_writable_slot_classes_mb() -> String {
     DEFAULT_RUNNER_WRITABLE_SLOT_CLASSES_MB.to_string()
 }
 
+/// Default maximum regular files accepted in one scorer-visible run tree.
+fn default_runner_max_output_files() -> u64 {
+    DEFAULT_RUNNER_MAX_OUTPUT_FILES
+}
+
+/// Default maximum directories accepted in one scorer-visible run tree.
+fn default_runner_max_output_dirs() -> u64 {
+    DEFAULT_RUNNER_MAX_OUTPUT_DIRS
+}
+
+/// Default maximum path depth accepted in one scorer-visible run tree.
+fn default_runner_max_output_depth() -> u64 {
+    DEFAULT_RUNNER_MAX_OUTPUT_DEPTH
+}
+
 impl Config {
     /// Load configuration from `AGENTICS_*` environment variables with defaults.
     pub fn from_env() -> anyhow::Result<Self> {
@@ -489,6 +513,8 @@ impl Config {
 
     /// Validate worker-only storage settings before claiming evaluation jobs.
     pub fn validate_runner_storage(&self) -> anyhow::Result<()> {
+        self.validate_runner_output_limits()?;
+
         match self.runner_writable_storage_mode()? {
             RunnerWritableStorageMode::Unbounded => {
                 if !is_loopback_host(&self.api_host) {
@@ -531,6 +557,20 @@ impl Config {
             anyhow::bail!("AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true is Linux-only");
         }
 
+        Ok(())
+    }
+
+    /// Validate platform-owned output tree limits.
+    fn validate_runner_output_limits(&self) -> anyhow::Result<()> {
+        if self.runner_max_output_files == 0 {
+            anyhow::bail!("AGENTICS_RUNNER_MAX_OUTPUT_FILES must be greater than zero");
+        }
+        if self.runner_max_output_dirs == 0 {
+            anyhow::bail!("AGENTICS_RUNNER_MAX_OUTPUT_DIRS must be greater than zero");
+        }
+        if self.runner_max_output_depth == 0 {
+            anyhow::bail!("AGENTICS_RUNNER_MAX_OUTPUT_DEPTH must be greater than zero");
+        }
         Ok(())
     }
 
@@ -750,6 +790,51 @@ mod tests {
         );
     }
 
+    /// Verifies platform-owned runner output limit defaults.
+    #[test]
+    fn runner_output_limit_defaults_are_bounded() {
+        let config = test_config();
+
+        assert_eq!(config.runner_max_output_files, 8192);
+        assert_eq!(config.runner_max_output_dirs, 1024);
+        assert_eq!(config.runner_max_output_depth, 32);
+        assert!(config.validate_runner_storage().is_ok());
+    }
+
+    /// Verifies zero runner output limits are rejected.
+    #[test]
+    fn runner_output_limits_must_be_positive() {
+        for (mut config, expected) in [
+            (
+                Config {
+                    runner_max_output_files: 0,
+                    ..test_config()
+                },
+                "AGENTICS_RUNNER_MAX_OUTPUT_FILES",
+            ),
+            (
+                Config {
+                    runner_max_output_dirs: 0,
+                    ..test_config()
+                },
+                "AGENTICS_RUNNER_MAX_OUTPUT_DIRS",
+            ),
+            (
+                Config {
+                    runner_max_output_depth: 0,
+                    ..test_config()
+                },
+                "AGENTICS_RUNNER_MAX_OUTPUT_DEPTH",
+            ),
+        ] {
+            config.api_host = "127.0.0.1".to_string();
+            let error = config
+                .validate_runner_storage()
+                .expect_err("zero limit should be rejected");
+            assert!(error.to_string().contains(expected));
+        }
+    }
+
     /// Verifies that hosted workers must bound bind mounts and writable rootfs.
     #[test]
     fn hosted_runner_requires_bounded_mounts_and_layer_quota() {
@@ -833,6 +918,9 @@ mod tests {
             runner_phase_mount_root: None,
             runner_writable_slot_classes_mb: super::default_runner_writable_slot_classes_mb(),
             runner_docker_layer_quota: false,
+            runner_max_output_files: super::default_runner_max_output_files(),
+            runner_max_output_dirs: super::default_runner_max_output_dirs(),
+            runner_max_output_depth: super::default_runner_max_output_depth(),
             log_level: "info".to_string(),
         }
     }

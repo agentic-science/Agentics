@@ -29,6 +29,7 @@ PHASES="${AGENTICS_DGX_PHASES:-solution-setup solution-build solution-run scorer
 PHASE_SLOT_CLASSES_MB="${AGENTICS_DGX_PHASE_SLOT_CLASSES_MB:-${AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB:-64 256 1024 4096}}"
 PHASE_SLOTS_PER_CLASS="${AGENTICS_DGX_PHASE_SLOTS_PER_CLASS:-4}"
 PHASE_PROJECT_ID_BASE="${AGENTICS_DGX_PHASE_PROJECT_ID_BASE:-100000}"
+PHASE_SLOT_INODES_PER_MB="${AGENTICS_DGX_PHASE_SLOT_INODES_PER_MB:-256}"
 PERSIST_FSTAB="${AGENTICS_DGX_PERSIST_FSTAB:-0}"
 
 require_command() {
@@ -100,16 +101,19 @@ ensure_quota_slot() {
   local slot_name
   local slot_class_path
   local slot_path
+  local inode_hard_limit
 
   ensure_positive_integer "$class_mb" "phase slot class"
+  ensure_positive_integer "$PHASE_SLOT_INODES_PER_MB" "AGENTICS_DGX_PHASE_SLOT_INODES_PER_MB"
   slot_name="$(printf 'slot-%03d' "$slot_index")"
   slot_class_path="${mount_path}/slots/${class_mb}mb"
   slot_path="${slot_class_path}/${slot_name}"
+  inode_hard_limit=$((class_mb * PHASE_SLOT_INODES_PER_MB))
   install -d -m 0755 "$slot_class_path" "$slot_path"
   xfs_quota -x -c "project -s -p ${slot_path} ${project_id}" "$mount_path"
-  xfs_quota -x -c "limit -p bhard=${class_mb}m ${project_id}" "$mount_path"
+  xfs_quota -x -c "limit -p bhard=${class_mb}m ihard=${inode_hard_limit} ${project_id}" "$mount_path"
   cat >"${slot_path}/.agentics-slot.json" <<EOF
-{"phase":"${phase}","slot_class_mb":${class_mb},"slot_index":${slot_index},"project_id":${project_id}}
+{"phase":"${phase}","slot_class_mb":${class_mb},"slot_index":${slot_index},"project_id":${project_id},"inodes_per_mb":${PHASE_SLOT_INODES_PER_MB},"inode_hard_limit":${inode_hard_limit}}
 EOF
   if getent passwd "$SERVICE_USER" >/dev/null 2>&1 && getent group "$SERVICE_GROUP" >/dev/null 2>&1; then
     chown -R "${SERVICE_USER}:${SERVICE_GROUP}" "$slot_path"
@@ -143,6 +147,7 @@ require_command mkfs.xfs
 require_command mount
 require_command truncate
 require_command xfs_quota
+ensure_positive_integer "$PHASE_SLOT_INODES_PER_MB" "AGENTICS_DGX_PHASE_SLOT_INODES_PER_MB"
 if [ "$PERSIST_FSTAB" = "1" ]; then
   require_command awk
 fi
@@ -174,6 +179,7 @@ Docker data root: $DOCKER_DATA_ROOT
 Phase mount root: $PHASE_MOUNT_ROOT
 Phase quota slot classes: $(phase_slot_classes)
 Phase quota slots per class: $PHASE_SLOTS_PER_CLASS
+Phase slot inode hard limit: ${PHASE_SLOT_INODES_PER_MB} inodes per MiB
 EOF
 
 if [ "$PERSIST_FSTAB" = "1" ]; then

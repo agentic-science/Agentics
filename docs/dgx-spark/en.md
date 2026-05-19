@@ -33,7 +33,7 @@ The first inventory was captured on `MapleSpark` on May 12-13, 2026.
 | Driver-reported CUDA | `13.0` |
 | NVIDIA container toolkit | `nvidia-container-toolkit 1.19.0-1`, `libnvidia-container1 1.19.0-1` |
 | Agentics Docker daemon | `unix:///run/agentics/docker.sock`, `overlay2` on XFS, data root `/srv/agentics/docker-data-root`, named `nvidia` runtime visible |
-| Runner quota slots | 64 MiB, 256 MiB, 1 GiB, and 4 GiB XFS project-quota slots for each runner phase, four slots per class |
+| Runner quota slots | 64 MiB, 256 MiB, 1 GiB, and 4 GiB XFS project-quota slots for each runner phase, four slots per class, with 256 inodes per MiB |
 
 Run the repeatable Linux-gated inventory check on the DGX host:
 
@@ -126,6 +126,9 @@ AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots
 AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts
 AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096
 AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true
+AGENTICS_RUNNER_MAX_OUTPUT_FILES=8192
+AGENTICS_RUNNER_MAX_OUTPUT_DIRS=1024
+AGENTICS_RUNNER_MAX_OUTPUT_DEPTH=32
 ```
 
 Use a non-default `AGENTICS_ADMIN_PASSWORD` before exposing the hosted profile.
@@ -140,6 +143,7 @@ AGENTICS_DGX_CONFIRM=prepare-storage \
 AGENTICS_DGX_PERSIST_FSTAB=1 \
 AGENTICS_DGX_PHASE_SLOT_CLASSES_MB='64 256 1024 4096' \
 AGENTICS_DGX_PHASE_SLOTS_PER_CLASS=4 \
+AGENTICS_DGX_PHASE_SLOT_INODES_PER_MB=256 \
 scripts/ops/prepare-dgx-spark-storage.sh
 ```
 
@@ -154,11 +158,14 @@ On `MapleSpark`, the DGX-2 run mounted:
 - Five phase mounts, 20 GiB each, for solution setup/build/run and scorer
   prepare/score.
 - Four quota slots per class and phase for 64 MiB, 256 MiB, 1024 MiB, and
-  4096 MiB limits.
+  4096 MiB limits. With the default `256` inodes per MiB, those slots have
+  inode hard limits of 16384, 65536, 262144, and 1048576.
 
 The worker chooses the smallest configured slot class that is at least the
 effective phase `disk_limit_mb`. Align challenge resource profiles to slot
-classes when an exact hard phase limit is required.
+classes when an exact hard phase limit is required. The separate scorer-visible
+run tree cap defaults to 8192 files, 1024 directories, and depth 32; setup/build
+dependency installs are governed by the XFS byte and inode quota instead.
 
 ## Service Startup
 

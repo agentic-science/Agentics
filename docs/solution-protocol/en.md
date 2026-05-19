@@ -142,6 +142,13 @@ The manifest does not declare time, memory, CPU, disk, network, or log limits. T
 
 Challenge-owned prepare specs separately choose their prepare `network_access`. Container log capture is bounded by a platform-owned runner cap rather than by submitter-controlled manifest data.
 
+The worker also applies platform-owned scorer-visible output tree limits. By
+default, one run tree may contain at most `8192` regular files, `1024`
+directories including the root, and depth `32`. These limits protect scorer and
+artifact handling and are not participant-controlled. They do not cap
+setup/build dependency trees; dependency-heavy challenges should use larger
+`disk_limit_mb` profiles so the hosted worker selects larger quota slots.
+
 The parser exposes an ordered phase execution plan from `commands`. The worker combines that plan with the selected target resource profile to produce phase-specific logs and structured failure reports. Failure reports carry the failed phase name, reason, message, optional exit code, and optional safe relative log path.
 
 Runner containers also use Docker-level containment controls: memory and CPU
@@ -161,7 +168,10 @@ on a loopback XFS image mounted with project quotas, and root-prepared XFS
 project-quota slots under separate per-phase loopback filesystem images for
 writable mounts such as setup/build workspace scratch, run `/io`, prepare
 `/prepared`, scorer `/output`, home, and temporary paths. This covers all three
-solution phases and both scorer phases. The worker chooses the smallest
+solution phases and both scorer phases. The DGX slots enforce both byte quotas
+and inode quotas; the default inode policy is `256` inodes per MiB, so the
+default `64`, `256`, `1024`, and `4096` MiB slots allow `16384`, `65536`,
+`262144`, and `1048576` inodes respectively. The worker chooses the smallest
 configured slot class that can satisfy the effective phase `disk_limit_mb`;
 operators should align resource profiles to slot classes when they need an
 exact hard phase limit. Strict deployment probes are controlled by

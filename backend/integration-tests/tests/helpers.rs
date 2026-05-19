@@ -144,6 +144,9 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
         .unwrap_or_else(|_| "64,256,1024,4096".to_string()),
         runner_docker_layer_quota: std::env::var("AGENTICS_TEST_RUNNER_DOCKER_LAYER_QUOTA")
             .is_ok_and(|value| value == "true"),
+        runner_max_output_files: 8192,
+        runner_max_output_dirs: 1024,
+        runner_max_output_depth: 32,
         log_level: "error".to_string(),
     }
 }

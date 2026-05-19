@@ -90,6 +90,7 @@ capacity exists.
      AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots \
      AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts \
      AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096 \
+     AGENTICS_DGX_PHASE_SLOT_INODES_PER_MB=256 \
      AGENTICS_DGX_RUN_MUTATING_PROBES=1 \
      AGENTICS_DGX_DOCKER_PULL_POLICY=never \
      scripts/ops/check-dgx-spark-profile.sh

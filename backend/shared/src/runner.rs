@@ -42,7 +42,8 @@ pub use docker::{
 use docker::{ContainerOutcome, ContainerRequest, bind_mount, pre_pull_image, run_container};
 use errors::{ensure_container_succeeded, ensure_prepare_succeeded, phase_error};
 use filesystem::{
-    cleanup_paths, copy_dir_all, ensure_disk_limit, ensure_prepare_disk_limit, extract_zip_safe,
+    OutputTreeLimits, cleanup_paths, copy_dir_all, ensure_disk_limit, ensure_prepare_disk_limit,
+    extract_zip_safe, validate_scorer_visible_output_tree,
 };
 use logs::{
     append_named_logs, append_phase_logs, append_run_logs, include_log_excerpts, phase_name,
@@ -128,6 +129,7 @@ struct SolutionRunRequest<'a> {
     build_root: &'a Path,
     run_work_root: &'a Path,
     runs_root: &'a Path,
+    output_limits: OutputTreeLimits,
 }
 
 #[derive(Clone, Copy)]
@@ -281,6 +283,11 @@ pub async fn execute_evaluation_job(
     let result_path = scorer_output_root.join(spec.scorer.result_file.as_path());
     let mut logs = String::new();
     let runner_storage = RunnerStorage::from_config(config)?;
+    let output_limits = OutputTreeLimits {
+        max_files: config.runner_max_output_files,
+        max_dirs: config.runner_max_output_dirs,
+        max_depth: config.runner_max_output_depth,
+    };
     let runner_context = RunnerContext {
         docker,
         storage: &runner_storage,
@@ -357,6 +364,7 @@ pub async fn execute_evaluation_job(
                 build_root: &build_root,
                 run_work_root: &run_work_root,
                 runs_root: &runs_root,
+                output_limits,
             },
             &mut logs,
         )
@@ -673,7 +681,13 @@ async fn run_solution_invocations(
         write_run_metadata(io_root, run, run_alias.as_str(), &outcome).await?;
         ensure_disk_limit(io_root, limits.disk_limit_mb, ZipProjectPhaseName::Run).await?;
         ensure_declared_outputs_exist(run, run_alias.as_str(), &output_dir).await?;
-        copy_scorer_visible_run_tree(io_root, &scorer_run_root, run_alias.as_str()).await?;
+        copy_scorer_visible_run_tree(
+            io_root,
+            &scorer_run_root,
+            run_alias.as_str(),
+            request.output_limits,
+        )
+        .await?;
         make_container_readable_tree(&scorer_run_root).await?;
         cleanup_paths([solution_io_root]).await?;
     }
@@ -1105,12 +1119,13 @@ async fn copy_scorer_visible_run_tree(
     source: &Path,
     destination: &Path,
     visible_run_name: &str,
+    limits: OutputTreeLimits,
 ) -> Result<()> {
     let source = source.to_path_buf();
     let destination = destination.to_path_buf();
     let visible_run_name = visible_run_name.to_string();
     tokio::task::spawn_blocking(move || {
-        copy_scorer_visible_run_tree_blocking(&source, &destination, &visible_run_name)
+        copy_scorer_visible_run_tree_blocking(&source, &destination, &visible_run_name, limits)
     })
     .await
     .map_err(|e| AppError::Internal(format!("scorer output copy task failed: {e}")))?
@@ -1121,7 +1136,10 @@ fn copy_scorer_visible_run_tree_blocking(
     source: &Path,
     destination: &Path,
     visible_run_name: &str,
+    limits: OutputTreeLimits,
 ) -> Result<()> {
+    validate_scorer_visible_output_tree(source, visible_run_name, limits)?;
+
     let mut pending = vec![(source.to_path_buf(), destination.to_path_buf())];
     while let Some((current_source, current_destination)) = pending.pop() {
         let metadata = std::fs::symlink_metadata(&current_source)?;
@@ -1312,9 +1330,20 @@ mod run_metadata_tests {
 
     use uuid::Uuid;
 
-    use super::{ContainerOutcome, copy_scorer_visible_run_tree, write_run_metadata};
+    use super::{
+        ContainerOutcome, OutputTreeLimits, copy_scorer_visible_run_tree, write_run_metadata,
+    };
     use crate::models::challenge::{ChallengeRunInterface, ChallengeRunSpec};
     use crate::models::names::RunName;
+
+    /// Return generous test output tree limits.
+    fn test_output_limits() -> OutputTreeLimits {
+        OutputTreeLimits {
+            max_files: 8192,
+            max_dirs: 1024,
+            max_depth: 32,
+        }
+    }
 
     /// Verifies that solution-created symlinks cannot redirect worker metadata writes.
     #[cfg(unix)]
@@ -1366,14 +1395,48 @@ mod run_metadata_tests {
         std::os::unix::fs::symlink("/challenge/private", source.join("output/extra"))
             .expect("extra symlink should be created");
 
-        let error = copy_scorer_visible_run_tree(&source, &destination, "run-0001")
-            .await
-            .expect_err("scorer-facing copy should reject symlinks");
+        let error =
+            copy_scorer_visible_run_tree(&source, &destination, "run-0001", test_output_limits())
+                .await
+                .expect_err("scorer-facing copy should reject symlinks");
         assert!(
             error.to_string().contains("produced a symlink"),
             "unexpected error: {error}"
         );
         assert!(!destination.join("output/extra").exists());
+
+        fs::remove_dir_all(root).expect("test root should clean up");
+    }
+
+    /// Verifies output tree limits are checked before scorer-facing copy starts.
+    #[tokio::test]
+    async fn scorer_visible_run_tree_limit_rejects_before_copying() {
+        let root =
+            std::env::temp_dir().join(format!("agentics-run-tree-limit-test-{}", Uuid::new_v4()));
+        let source = root.join("source");
+        let destination = root.join("destination");
+        fs::create_dir_all(source.join("output")).expect("source output should be created");
+        fs::write(source.join("stdout.txt"), b"ok").expect("stdout should be created");
+        fs::write(source.join("output/result.txt"), b"ok").expect("output should be created");
+
+        let error = copy_scorer_visible_run_tree(
+            &source,
+            &destination,
+            "run-0001",
+            OutputTreeLimits {
+                max_files: 1,
+                max_dirs: 32,
+                max_depth: 32,
+            },
+        )
+        .await
+        .expect_err("scorer-facing copy should reject excessive files");
+
+        assert!(
+            error.to_string().contains("output file limit"),
+            "unexpected error: {error}"
+        );
+        assert!(!destination.exists());
 
         fs::remove_dir_all(root).expect("test root should clean up");
     }

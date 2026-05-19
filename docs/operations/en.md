@@ -93,16 +93,21 @@ per-phase XFS project-quota slots. The DGX profile should set
 `AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots`,
 `AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts`,
 `AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096`, and
-`AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true`.
+`AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true`. The default platform-owned
+scorer-visible output caps are `AGENTICS_RUNNER_MAX_OUTPUT_FILES=8192`,
+`AGENTICS_RUNNER_MAX_OUTPUT_DIRS=1024`, and
+`AGENTICS_RUNNER_MAX_OUTPUT_DEPTH=32`.
 
 MVP runner containers still use the image default user and a writable root
 filesystem so setup/build/run scripts can use ordinary package managers and
 toolchains. That is an accepted MVP tradeoff, not a substitute for isolation:
 Docker writable-layer quotas bound writes to the container layer, while XFS
 project-quota slots bound runner-owned bind mounts such as workspaces, `/io`,
-`/prepared`, `/output`, home, and temporary directories. Future hardening can
-add non-root run phases or read-only root filesystems without weakening the
-current disk-boundary requirement.
+`/prepared`, `/output`, home, and temporary directories. DGX slots also set an
+inode hard limit, defaulting to `256` inodes per MiB, so dependency installs are
+bounded without applying the scorer-visible output file cap to setup/build
+workspaces. Future hardening can add non-root run phases or read-only root
+filesystems without weakening the current disk-boundary requirement.
 
 ## Operational Checks
 
@@ -147,14 +152,16 @@ sudo -u agentics env \
   AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots \
   AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts \
   AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096 \
+  AGENTICS_DGX_PHASE_SLOT_INODES_PER_MB=256 \
   AGENTICS_DGX_RUN_MUTATING_PROBES=1 \
   AGENTICS_DGX_DOCKER_PULL_POLICY=never \
   scripts/ops/check-dgx-spark-profile.sh
 ```
 
 The strict profile check validates the Docker writable-layer quota probe,
-per-phase mount writeability, presence of root-prepared quota slots, and a
-per-phase bind-mount quota exhaustion probe using the 64 MiB slot class.
+per-phase mount writeability, root-prepared quota slot metadata, configured
+inode hard limits, and a per-phase bind-mount quota exhaustion probe using the
+64 MiB slot class.
 
 For local verification on a DGX development host, use a separate test quota
 root owned by the test user:

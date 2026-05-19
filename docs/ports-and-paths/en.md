@@ -47,7 +47,10 @@ inspection. Override defaults with `AGENTICS_DEMO_API_HOST`,
 Default DGX quota slot classes are `64`, `256`, `1024`, and `4096` MiB, with
 four slots per class and phase. The worker leases these slots for writable
 container bind mounts and uses Docker `storage_opt.size` for container-layer
-writes.
+writes. Slots also carry inode hard limits at the default `256` inodes per MiB:
+`16384`, `65536`, `262144`, and `1048576` inodes for the default classes.
+Scorer-visible run trees are separately capped at `8192` files, `1024`
+directories, and depth `32`.
 
 The `/srv/agentics-test` root is for developer-run quota-sensitive integration
 tests. It must be prepared separately with

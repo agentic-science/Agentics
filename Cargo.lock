@@ -21,7 +21,7 @@ dependencies = [
 
 [[package]]
 name = "agentics-cli"
-version = "0.0.0"
+version = "0.2.5"
 dependencies = [
  "anyhow",
  "base64",
@@ -122,7 +122,7 @@ checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
 name = "api-server"
-version = "0.0.0"
+version = "0.2.5"
 dependencies = [
  "anyhow",
  "axum",
@@ -1778,7 +1778,7 @@ dependencies = [
 
 [[package]]
 name = "integration-tests"
-version = "0.0.0"
+version = "0.2.5"
 dependencies = [
  "anyhow",
  "api-server",
@@ -3143,7 +3143,7 @@ dependencies = [
 
 [[package]]
 name = "shared"
-version = "0.0.0"
+version = "0.2.5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4645,7 +4645,7 @@ dependencies = [
 
 [[package]]
 name = "worker"
-version = "0.0.0"
+version = "0.2.5"
 dependencies = [
  "anyhow",
  "bollard",
