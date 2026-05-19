@@ -5,7 +5,7 @@ use serde::Serialize;
 use serde_json::{Map, Value, json};
 use shared::models::challenge::{ChallengeDetailResponse, ChallengeListResponse, MetricDirection};
 use shared::models::challenge_creation::{ChallengeDraftCleanupResponse, ChallengeDraftResponse};
-use shared::models::evaluation::ScorerRunResult;
+use shared::models::evaluation::{EvaluationDto, ScorerRunResult};
 use shared::models::names::{ChallengeName, MetricName, TargetName};
 use shared::models::request::{
     CreateSolutionSubmissionResponse, LeaderboardResponse, PublicSolutionSubmissionListResponse,
@@ -365,11 +365,7 @@ pub(crate) fn render_solution_submission_status(
                 .as_ref()
                 .map(|eval| status_label(&eval.status))
                 .unwrap_or_else(|| "none".to_string());
-            let display_eval = response
-                .official_evaluation
-                .as_ref()
-                .or(response.validation_evaluation.as_ref())
-                .or(response.evaluation.as_ref());
+            let display_eval = select_submission_display_evaluation(response);
             let rank_score = display_eval
                 .and_then(|eval| eval.rank_score)
                 .map(format_score)
@@ -398,6 +394,17 @@ pub(crate) fn render_solution_submission_status(
     }
 }
 
+/// Select the CLI display evaluation for a solution submission.
+fn select_submission_display_evaluation(
+    submission: &SolutionSubmissionResponse,
+) -> Option<&EvaluationDto> {
+    submission
+        .official_evaluation
+        .as_ref()
+        .or(submission.validation_evaluation.as_ref())
+        .or(submission.evaluation.as_ref())
+}
+
 /// Renders validation run status for user-facing output.
 pub(crate) fn render_validation_run_status(
     response: &SolutionSubmissionResponse,
@@ -412,9 +419,9 @@ pub(crate) fn render_validation_run_status(
                 .map(|job| format!("{} ({})", job.id, status_label(&job.status)))
                 .unwrap_or_else(|| "none".to_string());
             let validation_eval = response
-                .evaluation
+                .validation_evaluation
                 .as_ref()
-                .or(response.validation_evaluation.as_ref());
+                .or(response.evaluation.as_ref());
             let validation_status = validation_eval
                 .map(|eval| status_label(&eval.status))
                 .unwrap_or_else(|| "none".to_string());
@@ -695,18 +702,11 @@ pub(crate) fn render_solution_submission_report(
                 .and_then(|evaluation| evaluation.primary_score)
                 .map(format_score)
                 .unwrap_or_else(|| "none".to_string());
-            let rank_score = submission
-                .official_evaluation
-                .as_ref()
-                .or(submission.evaluation.as_ref())
+            let rank_score = select_submission_display_evaluation(submission)
                 .and_then(|evaluation| evaluation.rank_score)
                 .map(format_score)
                 .unwrap_or_else(|| "none".to_string());
-            let metrics = submission
-                .official_evaluation
-                .as_ref()
-                .or(submission.validation_evaluation.as_ref())
-                .or(submission.evaluation.as_ref())
+            let metrics = select_submission_display_evaluation(submission)
                 .map(|evaluation| {
                     evaluation
                         .aggregate_metrics

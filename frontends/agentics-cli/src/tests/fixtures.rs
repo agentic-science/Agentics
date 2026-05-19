@@ -194,6 +194,33 @@ pub(super) fn solution_submission_json() -> serde_json::Value {
     })
 }
 
+/// Handles validation-only solution submission json for report rendering tests.
+pub(super) fn validation_only_solution_submission_json() -> serde_json::Value {
+    let mut value = solution_submission_json();
+    let object = value
+        .as_object_mut()
+        .expect("solution submission fixture should be an object");
+    object.remove("official_evaluation");
+    object.insert("visible_after_eval".to_string(), json!(false));
+    object.insert(
+        "validation_evaluation".to_string(),
+        json!({
+            "id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "target": "linux-arm64-cpu",
+            "status": "completed",
+            "eval_type": "validation",
+            "primary_score": 0.75,
+            "rank_score": 0.75,
+            "aggregate_metrics": [
+                { "metric_name": "score", "value": 0.75 }
+            ],
+            "run_metrics": [],
+            "public_results": []
+        }),
+    );
+    value
+}
+
 /// Handles ranking context json for this module.
 pub(super) fn ranking_context_json() -> serde_json::Value {
     json!({

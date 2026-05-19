@@ -671,6 +671,66 @@ async fn submissions_report_uses_public_result_report_without_token() {
     assert!(output.contains("logs: configure the submitter token"));
 }
 
+/// Verifies reports use validation rank score when no official evaluation exists.
+#[tokio::test]
+async fn submissions_report_uses_validation_rank_score_without_official_eval() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/api/agent/solution-submissions/11111111-1111-4111-8111-111111111111/result-report",
+        ))
+        .and(header("authorization", "Bearer test-token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "solution_submission": validation_only_solution_submission_json()
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/api/agent/solution-submissions/11111111-1111-4111-8111-111111111111/ranking-context",
+        ))
+        .and(header("authorization", "Bearer test-token"))
+        .respond_with(ResponseTemplate::new(403).set_body_json(json!({
+            "error": "forbidden",
+            "message": "leaderboard is hidden"
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/api/public/solution-submissions/11111111-1111-4111-8111-111111111111/ranking-context",
+        ))
+        .respond_with(ResponseTemplate::new(403).set_body_json(json!({
+            "error": "forbidden",
+            "message": "leaderboard is hidden"
+        })))
+        .mount(&server)
+        .await;
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let config_path = temp.path().join("config.toml");
+    let cli = Cli::parse_from([
+        "agentics",
+        "--config",
+        config_path.to_str().expect("utf8 path"),
+        "--api-base-url",
+        &server.uri(),
+        "--token",
+        "test-token",
+        "submissions",
+        "report",
+        "11111111-1111-4111-8111-111111111111",
+    ]);
+
+    let output = execute(cli, Environment::default())
+        .await
+        .expect("submissions report should use validation evaluation");
+
+    assert!(output.contains("validation_primary_score: 0.75"));
+    assert!(output.contains("official_score: none"));
+    assert!(output.contains("rank_score: 0.75"));
+}
+
 /// Verifies that reports still render when ranking context is hidden.
 #[tokio::test]
 async fn submissions_report_tolerates_hidden_public_ranking_context() {
