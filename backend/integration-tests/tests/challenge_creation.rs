@@ -749,6 +749,12 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
     let creator = create_creator_session(&pool, 1001, "creator").await;
     let participant_token = register_agent(&pool, "participant-agent").await;
     let participant_bearer = format!("Bearer {participant_token}");
+    let participant_agent_id: uuid::Uuid =
+        sqlx::query_scalar("SELECT id FROM agents WHERE display_name = $1")
+            .bind("participant-agent")
+            .fetch_one(&pool)
+            .await
+            .expect("participant agent id");
     let admin_auth = basic_auth_header(
         &config.admin_username,
         config.expose_admin_password_for_http_basic(),
@@ -762,6 +768,43 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
         public_repo: public_repo.path(),
     };
     create_validate_approve_publish_draft(&publish_flow, &commit_sha, 31, manifest_json()).await;
+
+    let archived_submission_id = uuid::Uuid::new_v4();
+    sqlx::query(
+        r#"
+        INSERT INTO solution_submissions (
+            id, challenge_name, target, agent_id, artifact_key, status,
+            explanation, credit_text, visible_after_eval, note
+        )
+        VALUES ($1, 'sample-sum', 'linux-arm64-cpu', $2, $3, 'completed',
+                'archived public surface probe', '', TRUE, '')
+        "#,
+    )
+    .bind(archived_submission_id)
+    .bind(participant_agent_id)
+    .bind(format!("solution-submissions/{archived_submission_id}.zip"))
+    .execute(&pool)
+    .await
+    .expect("seed visible submission");
+    sqlx::query(
+        r#"
+        INSERT INTO leaderboard_entries (
+            challenge_name, target, agent_id, best_solution_submission_id,
+            best_rank_score, public_results_json, aggregate_metrics_json,
+            official_score, official_metrics_json
+        )
+        VALUES (
+            'sample-sum', 'linux-arm64-cpu', $1, $2,
+            0.95, '[]'::jsonb, $3, 0.95, $3
+        )
+        "#,
+    )
+    .bind(participant_agent_id)
+    .bind(archived_submission_id)
+    .bind(json!([{ "metric_name": "score", "value": 0.95 }]))
+    .execute(&pool)
+    .await
+    .expect("seed leaderboard entry");
 
     write_archive_manifest(public_repo.path());
     let archive_commit_sha = commit_all(public_repo.path(), "archive sample-sum");
@@ -798,6 +841,57 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
         .expect("archived detail")
         .error_for_status()
         .expect("archived direct detail should remain readable");
+
+    let leaderboard: serde_json::Value = client
+        .get(api_url(
+            &app,
+            "/api/public/challenges/sample-sum/leaderboard?target=linux-arm64-cpu",
+        ))
+        .send()
+        .await
+        .expect("archived leaderboard")
+        .error_for_status()
+        .expect("archived leaderboard should remain readable")
+        .json()
+        .await
+        .expect("leaderboard json");
+    let archived_submission_id_string = archived_submission_id.to_string();
+    assert_eq!(
+        leaderboard["items"][0]["best_solution_submission_id"].as_str(),
+        Some(archived_submission_id_string.as_str())
+    );
+
+    let ranking_context: serde_json::Value = client
+        .get(api_url(
+            &app,
+            &format!(
+                "/api/public/solution-submissions/{archived_submission_id}/ranking-context?challenge_name=sample-sum&target=linux-arm64-cpu"
+            ),
+        ))
+        .send()
+        .await
+        .expect("archived ranking context")
+        .error_for_status()
+        .expect("archived ranking context should remain readable")
+        .json()
+        .await
+        .expect("ranking context json");
+    assert_eq!(ranking_context["rank"], 1);
+
+    let distribution: serde_json::Value = client
+        .get(api_url(
+            &app,
+            "/api/public/challenges/sample-sum/score-distributions?target=linux-arm64-cpu&metric=score",
+        ))
+        .send()
+        .await
+        .expect("archived score distribution")
+        .error_for_status()
+        .expect("archived score distribution should remain readable")
+        .json()
+        .await
+        .expect("score distribution json");
+    assert_eq!(distribution["count"], 1);
 
     let response = client
         .post(api_url(&app, "/api/solution-submissions"))

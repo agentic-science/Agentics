@@ -11,7 +11,7 @@ use crate::models::ids::SolutionSubmissionId;
 use crate::models::names::{ChallengeName, MetricName, TargetName};
 use crate::models::request::LeaderboardEntryDto;
 
-use super::challenges::get_published_challenge;
+use super::challenges::get_public_challenge;
 use super::ids::{agent_id_from_row, solution_submission_id_from_row, target_from_row};
 use super::json::decode_optional_json;
 
@@ -246,7 +246,7 @@ async fn list_leaderboard_entries_inner(
     redact_metric_payloads: bool,
 ) -> Result<Vec<LeaderboardEntryDto>> {
     let requested_limit = limit.max(1);
-    let challenge = get_published_challenge(pool, challenge_name)
+    let challenge = get_public_challenge(pool, challenge_name)
         .await?
         .ok_or(AppError::NotFound)?;
     let spec = serde_json::from_value::<ChallengeBundleSpec>(challenge.spec_json)
