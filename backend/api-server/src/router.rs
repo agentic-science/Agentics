@@ -178,6 +178,10 @@ pub fn router(config: &Config) -> Router<AppState> {
             post(crate::challenge_creation_handlers::cleanup_challenge_drafts),
         )
         .route(
+            "/admin/challenge-drafts/{id}/private-assets",
+            get(crate::challenge_creation_handlers::list_admin_challenge_draft_private_assets),
+        )
+        .route(
             "/admin/challenge-drafts/{id}/validate",
             post(crate::challenge_creation_handlers::validate_challenge_draft),
         )

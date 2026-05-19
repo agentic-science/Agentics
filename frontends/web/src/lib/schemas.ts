@@ -2,6 +2,7 @@ export type {
   AdminCapacityResponse,
   AdminChallengeListItem,
   AdminChallengeListResponse,
+  AdminChallengePrivateAssetListResponse,
   AdminLoginRequest,
   AdminServiceHeartbeatListResponse,
   AdminSessionResponse,
@@ -49,6 +50,7 @@ export type {
 export {
   adminCapacityResponseSchema,
   adminChallengeListResponseSchema,
+  adminChallengePrivateAssetListResponseSchema,
   adminLoginRequestSchema,
   adminServiceHeartbeatListResponseSchema,
   adminSessionResponseSchema,

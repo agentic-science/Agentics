@@ -69,7 +69,8 @@ new validation or upload proceeds. Private assets use a repairable lifecycle:
 durable object exists, and `failed` after write or promotion failure. Draft
 responses and publish use only active assets. Exact retries repair stale
 pending uploads that left unreferenced durable objects behind before the row
-became active.
+became active. Reviewers can inspect all private asset lifecycle rows, including
+pending and failed rows, through the admin private asset endpoint.
 
 Publishing claims an approved draft by moving it to `publishing` with a
 publish-claim ID before any filesystem work starts. Only that claim can fail or
@@ -85,6 +86,7 @@ Admin endpoints for draft review are:
 ```text
 GET  /admin/challenge-drafts
 POST /admin/challenge-drafts/cleanup
+GET  /admin/challenge-drafts/{id}/private-assets
 POST /admin/challenge-drafts/{id}/validate
 POST /admin/challenge-drafts/{id}/approve
 POST /admin/challenge-drafts/{id}/reject

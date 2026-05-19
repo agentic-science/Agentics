@@ -1,7 +1,9 @@
 import type { ZodType } from "zod";
 import {
+  type AdminChallengePrivateAssetListResponse,
   type AdminLoginRequest,
   type AdminSessionResponse,
+  adminChallengePrivateAssetListResponseSchema,
   adminLoginRequestSchema,
   adminSessionResponseSchema,
 } from "@/lib/schemas";
@@ -103,6 +105,18 @@ export async function adminSession(): Promise<AdminSessionResponse> {
   }
 
   return adminSessionResponseSchema.parse(await response.json());
+}
+
+/** Lists every private asset lifecycle record for a challenge draft. */
+export async function listAdminChallengeDraftPrivateAssets(
+  draftId: string,
+  csrfToken: string,
+): Promise<AdminChallengePrivateAssetListResponse> {
+  return adminFetchJson(
+    `/admin/challenge-drafts/${draftId}/private-assets`,
+    adminChallengePrivateAssetListResponseSchema,
+    csrfToken,
+  );
 }
 
 /** Handles admin logout behavior for this module. */

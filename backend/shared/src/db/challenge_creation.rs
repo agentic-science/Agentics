@@ -7,9 +7,10 @@ use sqlx::{PgPool, Postgres, Row, Transaction};
 use crate::error::{AppError, Result};
 use crate::models::challenge::ChallengeBundleSpec;
 use crate::models::challenge_creation::{
-    ChallengeCreationManifest, ChallengeCreationRequestKind, ChallengeDraftResponse,
-    ChallengeDraftStatus, ChallengeDraftValidationRecordResponse, ChallengeDraftValidationStatus,
-    ChallengePrivateAssetKind, ChallengePrivateAssetResponse,
+    AdminChallengePrivateAssetResponse, ChallengeCreationManifest, ChallengeCreationRequestKind,
+    ChallengeDraftResponse, ChallengeDraftStatus, ChallengeDraftValidationRecordResponse,
+    ChallengeDraftValidationStatus, ChallengePrivateAssetKind, ChallengePrivateAssetResponse,
+    ChallengePrivateAssetStatus,
 };
 use crate::models::github::GithubPullRequestNumber;
 use crate::models::hashes::GitCommitSha;
@@ -1358,7 +1359,29 @@ async fn create_challenge_draft_audit_event_tx(
     Ok(())
 }
 
-/// Lists private assets for draft using the configured query scope.
+/// List all private asset lifecycle records for an admin draft review.
+pub async fn list_challenge_private_asset_states(
+    pool: &PgPool,
+    draft_id: &str,
+) -> Result<Vec<AdminChallengePrivateAssetResponse>> {
+    let rows = sqlx::query(
+        r#"
+        SELECT *
+        FROM challenge_private_assets
+        WHERE draft_id = $1::uuid
+        ORDER BY created_at ASC
+        "#,
+    )
+    .bind(draft_id)
+    .fetch_all(pool)
+    .await?;
+
+    rows.into_iter()
+        .map(row_to_admin_private_asset_response)
+        .collect()
+}
+
+/// Lists active private assets for draft using the configured query scope.
 async fn list_private_assets_for_draft(
     pool: &PgPool,
     draft_id: &str,
@@ -1461,6 +1484,35 @@ fn row_to_private_asset_response(
         storage_key: storage_key_from_row(&row, "storage_key")?,
         uploader_agent_id: agent_id_from_row(&row, "uploader_agent_id")?,
         created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
+    })
+}
+
+/// Converts a database row into the admin private asset lifecycle response model.
+fn row_to_admin_private_asset_response(
+    row: sqlx::postgres::PgRow,
+) -> Result<AdminChallengePrivateAssetResponse> {
+    let activated_at = row
+        .try_get::<Option<DateTime<Utc>>, _>("activated_at")?
+        .map(|value| value.to_rfc3339());
+    let failed_at = row
+        .try_get::<Option<DateTime<Utc>>, _>("failed_at")?
+        .map(|value| value.to_rfc3339());
+    Ok(AdminChallengePrivateAssetResponse {
+        id: challenge_private_asset_id_from_row(&row, "id")?,
+        draft_id: challenge_draft_id_from_row(&row, "draft_id")?,
+        asset_name: asset_name_from_row(&row, "asset_name")?,
+        kind: private_asset_kind_from_row(&row, "kind")?,
+        required: row.try_get("required")?,
+        status: private_asset_status_from_row(&row, "status")?,
+        size_bytes: row.try_get("size_bytes")?,
+        sha256: sha256_digest_from_row(&row, "sha256")?,
+        storage_key: storage_key_from_row(&row, "storage_key")?,
+        temporary_storage_key: optional_storage_key_from_row(&row, "temporary_storage_key")?,
+        uploader_agent_id: agent_id_from_row(&row, "uploader_agent_id")?,
+        created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
+        activated_at,
+        failed_at,
+        failure_message: row.try_get("failure_message")?,
     })
 }
 
@@ -1594,6 +1646,16 @@ fn validation_status_from_row(
 ) -> Result<ChallengeDraftValidationStatus> {
     let value: String = row.try_get(column)?;
     ChallengeDraftValidationStatus::from_storage_value(&value)
+        .ok_or_else(|| AppError::Internal(format!("unknown stored {column} `{value}`")))
+}
+
+/// Reads private asset status from a database row and validates its domain shape.
+fn private_asset_status_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<ChallengePrivateAssetStatus> {
+    let value: String = row.try_get(column)?;
+    ChallengePrivateAssetStatus::from_storage_value(&value)
         .ok_or_else(|| AppError::Internal(format!("unknown stored {column} `{value}`")))
 }
 

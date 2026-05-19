@@ -4,8 +4,8 @@ mod helpers;
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use helpers::{
-    TestCreatorSession, api_url, create_creator_session, spawn_app_with_config, test_config,
-    zip_project_zip_base64,
+    TestCreatorSession, api_url, basic_auth_header, create_creator_session, spawn_app_with_config,
+    test_config, zip_project_zip_base64,
 };
 use serde_json::json;
 use shared::{
@@ -323,6 +323,10 @@ async fn stale_pending_private_asset_retry_replaces_unreferenced_object(pool: sq
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
     let config = test_config(storage.path(), seeded_challenges.path());
+    let admin_auth = basic_auth_header(
+        &config.admin_username,
+        config.expose_admin_password_for_http_basic(),
+    );
     let app = spawn_app_with_config(pool.clone(), config).await;
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
@@ -406,6 +410,36 @@ async fn stale_pending_private_asset_retry_replaces_unreferenced_object(pool: sq
     assert_eq!(
         std::fs::read(&durable_path).expect("active durable object should exist"),
         asset_bytes
+    );
+
+    let admin_assets: serde_json::Value = client
+        .get(api_url(
+            &app,
+            &format!(
+                "/admin/challenge-drafts/{}/private-assets",
+                draft_id.as_str()
+            ),
+        ))
+        .header("Authorization", &admin_auth)
+        .send()
+        .await
+        .expect("admin private asset lifecycle request")
+        .error_for_status()
+        .expect("admin should read private asset lifecycle")
+        .json()
+        .await
+        .expect("admin private asset lifecycle json");
+    let items = admin_assets["items"].as_array().expect("items array");
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0]["status"], "failed");
+    assert_eq!(
+        items[0]["failure_message"],
+        "private asset pending lease expired"
+    );
+    assert_eq!(items[1]["status"], "active");
+    assert_eq!(
+        items[1]["storage_key"].as_str().expect("storage key"),
+        storage_key.as_str()
     );
 }
 

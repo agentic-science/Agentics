@@ -14,8 +14,9 @@ use crate::models::challenge::{
     ChallengeListResponse, PublishChallengeResponse,
 };
 use crate::models::challenge_creation::{
-    ChallengeDraftCleanupResponse, ChallengeDraftListResponse, ChallengeDraftResponse,
-    ChallengePrivateAssetResponse, CreateChallengeDraftRequest, UploadChallengePrivateAssetRequest,
+    AdminChallengePrivateAssetListResponse, ChallengeDraftCleanupResponse,
+    ChallengeDraftListResponse, ChallengeDraftResponse, ChallengePrivateAssetResponse,
+    CreateChallengeDraftRequest, UploadChallengePrivateAssetRequest,
 };
 use crate::models::request::{
     AdminCapacityResponse, AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse,
@@ -35,6 +36,10 @@ pub fn export_web_schemas() -> Result<BTreeMap<String, Value>, serde_json::Error
 
     insert_schema::<AdminCapacityResponse>(&mut schemas, "adminCapacityResponseSchema")?;
     insert_schema::<AdminChallengeListResponse>(&mut schemas, "adminChallengeListResponseSchema")?;
+    insert_schema::<AdminChallengePrivateAssetListResponse>(
+        &mut schemas,
+        "adminChallengePrivateAssetListResponseSchema",
+    )?;
     insert_schema::<AdminLoginRequest>(&mut schemas, "adminLoginRequestSchema")?;
     insert_schema::<AdminServiceHeartbeatListResponse>(
         &mut schemas,

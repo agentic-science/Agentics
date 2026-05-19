@@ -64,7 +64,8 @@ private asset uploads；stale validation record 会在新的 validation 或 uplo
 bytes 时为 `pending`，durable object 存在后为 `active`，write 或 promote 失败后为
 `failed`。Draft responses 和 publish 只使用 active assets。如果 stale pending
 upload 在 row 变为 active 前留下未被引用的 durable object，完全相同的 retry 会先修复该
-object。
+object。Reviewers 可以通过 admin private asset endpoint 检查所有 private asset
+lifecycle rows，包括 pending 和 failed rows。
 
 Publishing 会先用 publish-claim ID 把 approved draft claim 为 `publishing`，再开始任何
 filesystem work。只有该 claim 可以 fail 或 complete 这次 publish attempt。Runtime
@@ -79,6 +80,7 @@ Draft review admin endpoints：
 ```text
 GET  /admin/challenge-drafts
 POST /admin/challenge-drafts/cleanup
+GET  /admin/challenge-drafts/{id}/private-assets
 POST /admin/challenge-drafts/{id}/validate
 POST /admin/challenge-drafts/{id}/approve
 POST /admin/challenge-drafts/{id}/reject

@@ -12,11 +12,11 @@ use uuid::Uuid;
 
 use shared::error::{AppError, Result};
 use shared::models::challenge_creation::{
-    ChallengeCreationManifest, ChallengeCreationRequestKind, ChallengeDraftCleanupResponse,
-    ChallengeDraftListResponse, ChallengeDraftResponse, ChallengeDraftStatus,
-    ChallengeDraftValidationStatus, ChallengePrivateAssetKind, ChallengePrivateAssetResponse,
-    CreateChallengeDraftRequest, ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest,
-    ValidateChallengeDraftRequest,
+    AdminChallengePrivateAssetListResponse, ChallengeCreationManifest,
+    ChallengeCreationRequestKind, ChallengeDraftCleanupResponse, ChallengeDraftListResponse,
+    ChallengeDraftResponse, ChallengeDraftStatus, ChallengeDraftValidationStatus,
+    ChallengePrivateAssetKind, ChallengePrivateAssetResponse, CreateChallengeDraftRequest,
+    ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest, ValidateChallengeDraftRequest,
 };
 use shared::models::hashes::{GitCommitSha, Sha256Digest};
 use shared::models::ids::{
@@ -342,6 +342,19 @@ pub async fn list_admin_challenge_drafts(
 ) -> Result<Json<ChallengeDraftListResponse>> {
     let items = db::list_challenge_drafts(&state.db, 100).await?;
     Ok(Json(ChallengeDraftListResponse { items }))
+}
+
+/// List every private asset lifecycle record for one draft for admin review.
+pub async fn list_admin_challenge_draft_private_assets(
+    _admin: AdminAuth,
+    State(state): State<AppState>,
+    ChallengeDraftIdPath(draft_id): ChallengeDraftIdPath,
+) -> Result<Json<AdminChallengePrivateAssetListResponse>> {
+    db::get_challenge_draft(&state.db, draft_id.as_str())
+        .await?
+        .ok_or(AppError::NotFound)?;
+    let items = db::list_challenge_private_asset_states(&state.db, draft_id.as_str()).await?;
+    Ok(Json(AdminChallengePrivateAssetListResponse { items }))
 }
 
 /// Validate a draft against a checked-out challenge repository path.

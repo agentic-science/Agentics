@@ -336,6 +336,72 @@ export const adminChallengeListResponseSchema = z
   })
   .describe("Admin challenge list response.");
 
+export const adminChallengePrivateAssetListResponseSchema = z
+  .object({
+    items: z.array(
+      z
+        .object({
+          id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
+          draft_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
+          asset_name: z
+            .string()
+            .regex(/^[A-Za-z0-9_.-]+$/)
+            .min(1),
+          kind: z
+            .enum([
+              "private_benchmark_data",
+              "private_scorer_package",
+              "private_seeds",
+              "private_reference_outputs",
+            ])
+            .describe(
+              "Supported private asset classes for challenge creation.",
+            ),
+          required: z.boolean(),
+          status: z
+            .enum(["pending", "active", "failed"])
+            .describe(
+              "Internal lifecycle status for one private asset upload record.",
+            ),
+          size_bytes: z.number().int(),
+          sha256: z.string().regex(/^[0-9a-f]{64}$/),
+          storage_key: z
+            .string()
+            .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+          temporary_storage_key: z
+            .string()
+            .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+            .optional(),
+          uploader_agent_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
+          created_at: z.string(),
+          activated_at: z.string().optional(),
+          failed_at: z.string().optional(),
+          failure_message: z.string().optional(),
+        })
+        .describe(
+          "Admin-only response for one private asset upload lifecycle record.",
+        ),
+    ),
+  })
+  .describe(
+    "Admin-only list response for private asset upload lifecycle records.",
+  );
+
 export const adminLoginRequestSchema = z
   .object({ username: z.string(), password: z.string() })
   .strict()
@@ -3571,6 +3637,9 @@ export const uploadChallengePrivateAssetRequestSchema = z
 export type AdminCapacityResponse = z.infer<typeof adminCapacityResponseSchema>;
 export type AdminChallengeListResponse = z.infer<
   typeof adminChallengeListResponseSchema
+>;
+export type AdminChallengePrivateAssetListResponse = z.infer<
+  typeof adminChallengePrivateAssetListResponseSchema
 >;
 export type AdminLoginRequest = z.infer<typeof adminLoginRequestSchema>;
 export type AdminServiceHeartbeatListResponse = z.infer<
