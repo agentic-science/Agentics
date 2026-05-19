@@ -37,7 +37,18 @@ References:
 - `backend/shared/src/runner.rs:663`
 - `backend/api-server/src/handlers/artifacts.rs:81`
 
-Recommended fix: add platform-owned maximums for run count, `result.json` bytes, aggregate stored log bytes per evaluation, and artifact read streaming/truncation. These must not be participant-controlled submission config.
+Recommended fix: add platform-owned maximums for run count, `result.json` bytes, aggregate stored log bytes per evaluation, result-embedded logs, public result entries, and artifact read streaming/truncation. These must not be participant-controlled submission config.
+
+MVP default numbers:
+
+- Per-container captured stdout/stderr: `1048576` bytes. Keep the current `1 MiB` per-container Docker log cap.
+- Run invocations per evaluation: at most `12`.
+- Aggregate persisted runner log bytes per evaluation: `run_count * 1048576` bytes, capped by the validated run count. With the MVP run-count limit this is at most `12 MiB`. Official runs still persist redaction notices rather than raw private benchmark logs.
+- `result.json` raw bytes before parse: `4194304` bytes.
+- `public_results` entries in `result.json`: at most `1024`.
+- Scorer `logs` embedded in `result.json`: at most `262144` total UTF-8 bytes. Scorers should use stdout/stderr for logs; `result.logs` is a compact structured diagnostic channel.
+
+Implementation notes: check `result.json` size before `read_to_string`; replace the current unbounded `String` runner-log accumulator with a bounded accumulator that appends a truncation notice; validate static and prepare-generated run manifest lengths; validate `public_results.len()` and total `result.logs` bytes during scorer result validation; keep the existing owner log API response cap as a separate transport limit.
 
 ### P2: Permission-repair containers use weaker containment than runner containers
 
@@ -199,7 +210,24 @@ References:
 - `frontends/agentics-cli/src/api.rs:113`
 - `frontends/web/src/app/(observer)/solution-submissions/[id]/page.tsx:41`
 
-Recommended fix: split CLI commands into public and owner scopes, or make `submissions show` use the public endpoint by default and add an explicit owner command for authenticated private state.
+Current public endpoint:
+
+- `GET /api/public/solution-submissions/{id}`
+- Handler/client naming should stay explicit: `get_public_solution_submission`.
+
+Current Bearer-authenticated agent routes are not consistently scoped under `/api/agent`:
+
+- `GET /api/challenges`
+- `GET /api/challenges/{name}`
+- `POST /api/solution-submissions`
+- `GET /api/solution-submissions/{id}`
+- `GET /api/solution-submissions/{id}/result-report`
+- `GET /api/solution-submissions/{id}/ranking-context`
+- `GET /api/solution-submissions/{id}/logs`
+- `POST /api/validation-runs`
+- `GET /api/validation-runs/{id}`
+
+Recommended fix: move the Bearer-authenticated agent API to `/api/agent/...` before MVP, without compatibility aliases. Use `/api/agent/challenges`, `/api/agent/solution-submissions`, and `/api/agent/validation-runs`. Keep creator-owned challenge APIs under `/api/creator/...`, because those use GitHub OAuth creator sessions and represent challenge creator/owner workflow rather than submitting-agent workflow. Make `agentics submissions show <solution-submission-id>` use the public endpoint by default and work without authentication. Add an explicit submitting-agent command, recommended name `agentics submissions status <solution-submission-id>`, for the authenticated `/api/agent/solution-submissions/{id}` lifecycle/status view. Keep `submissions wait` and `submissions logs` submitting-agent authenticated, because they operate on private lifecycle/log surfaces. This keeps the simple observer command name attached to the public API while preserving an obvious command for submitter-private state.
 
 ### P2: Web auth request DTO schemas are missing from generated schema facade
 
@@ -246,7 +274,19 @@ References:
 - `backend/migrations/012_challenge_draft_repair_states.sql:4`
 - `backend/shared/src/db/challenge_creation.rs:873`
 
-Recommended fix: update both PRDs to the implemented state machine or add the missing `expired` state with guarded transitions. Do not leave roadmap docs and DB state constraints divergent.
+Current implemented draft statuses are:
+
+- `draft`
+- `validated`
+- `approved`
+- `publishing`
+- `rejected`
+- `published`
+- `abandoned`
+
+`rejected` and `abandoned` should remain distinct. `rejected` means an admin/reviewer made an explicit review decision that the submitted draft should not publish as-is, with reviewer feedback preserved. `abandoned` means the workflow is no longer active for lifecycle reasons, such as closed unmerged PR, creator withdrawal, or stale inactive unpublished draft. Both may become eligible for unpublished private asset purge after the configured grace period, but stale cleanup should not rewrite `rejected` drafts to `abandoned` because that loses the review outcome.
+
+Recommended fix: remove `expired` from both PRDs and document the implemented state machine. Do not add an `expired` status. Do not add `closed` for MVP. Transition closed unmerged PRs, creator withdrawals, and stale active unpublished drafts to `abandoned`, with the reason captured in the audit event and validation/status message. Update stale cleanup so it only marks active unpublished statuses as `abandoned`, not `rejected`.
 
 ### P2: Digest-pinned hosted image policy remains opt-in
 
@@ -284,7 +324,7 @@ References:
 - `backend/integration-tests/tests/challenge_creation.rs:1030`
 - `backend/api-server/src/challenge_creation_handlers.rs:152`
 
-Recommended fix: keep the separate test quota root, but make Linux runs print explicit warnings when quota env vars are absent. Adjust private asset quota tests so they exercise DB quota reservation rather than only request-size validation.
+Recommended fix: keep the separate test quota root, but make Linux quota-sensitive tests fail when required quota environment variables are absent, malformed, or point to unbounded storage. Non-Linux platforms may skip these Linux-only quota tests. On Linux, the failure should name the missing variables and point to `scripts/ops/prepare-dgx-spark-test-storage.sh`, because a passing Linux run must prove the quota invariant rather than only print a warning. Adjust private asset quota tests so they exercise DB quota reservation rather than only request-size validation.
 
 ### P3: CLI result report rank score omits validation evaluation
 
