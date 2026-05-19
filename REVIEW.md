@@ -10,6 +10,31 @@ Accepted MVP risks that are intentionally out of scope for this review:
 - GitHub PR ownership is client-asserted.
 - Pioneer codes are stored and re-exposed as live secrets.
 
+Resolution status as of current `main`:
+
+- No actionable review finding in this document remains open.
+- Runner resource safety now has byte, inode, file-count, directory-count,
+  depth, run-count, `result.json`, `public_results`, embedded result-log, and
+  persisted runner-log limits. New runner and DGX quota environment variables
+  are documented in the operator, DGX, solution protocol, and ports/paths docs.
+- Runner lifecycle/security findings are resolved: permission-repair containers
+  share the hardened Docker policy, hosted probe enforcement is wired, worker
+  lease refresh is attempt-scoped, hosted Docker reconciliation ignores local
+  validation containers, and archived public read surfaces are consistent.
+- Challenge draft/private asset/publish findings are resolved: publish claims
+  carry claim identity, failed publish cleanup is claim-scoped, GitHub PR fields
+  are cross-validated, private assets have observable `pending|active|failed`
+  lifecycle state, stale pending retries repair unreferenced storage, upload and
+  manifest `required` fields are explicit, and publish enforces required assets.
+- Public API, CLI, web schema, PRD, and test hygiene findings are resolved:
+  authenticated agent routes are under `/api/agent`, `submissions show` uses the
+  public endpoint, auth request schemas are generated and consumed, inactive
+  admin/creator language toggles were removed, the obsolete `expired` draft
+  state text was removed, upload-side ZIP symlink validation is shared, Linux
+  quota tests fail without bounded test storage, CLI report projection uses the
+  shared evaluation selector, low-value tests were removed or folded into useful
+  coverage, and the oversized runner/challenge/public-eval files were split.
+
 ## Findings
 
 ### P1: Runner writable outputs are quota-limited by bytes only
