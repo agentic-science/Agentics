@@ -11,6 +11,7 @@ use helpers::{
     spawn_app_with_config, test_config,
 };
 use serde_json::json;
+use shared::error::AppError;
 use shared::models::challenge_creation::ChallengeDraftValidationStatus;
 use shared::models::hashes::Sha256Digest;
 use shared::models::ids::{ChallengeDraftId, ChallengeDraftValidationRecordId};
@@ -688,6 +689,92 @@ async fn concurrent_publish_requests_leave_one_published_bundle(pool: sqlx::PgPo
             .await
             .expect("draft status");
     assert_eq!(draft_status, "published");
+}
+
+/// Verifies stale publish claims cannot complete or fail a newer publish attempt.
+#[sqlx::test(migrations = "../migrations")]
+async fn stale_publish_claim_cannot_mutate_newer_publish_claim(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("storage tempdir");
+    let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
+    let public_repo = tempfile::tempdir().expect("public repo tempdir");
+    write_public_challenge(public_repo.path());
+
+    let config = test_config(storage.path(), seeded_challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+    let creator = create_creator_session(&pool, 1001, "creator").await;
+
+    let draft = create_draft(&client, &app, &creator, 34, manifest_json()).await;
+    let draft_id = draft["id"].as_str().expect("draft id");
+    sqlx::query(
+        r#"
+        UPDATE challenge_drafts
+        SET status = 'approved',
+            approved_bundle_sha256 = manifest_sha256,
+            validation_repository_path = $2
+        WHERE id = $1::uuid
+        "#,
+    )
+    .bind(draft_id)
+    .bind(public_repo.path().to_string_lossy().to_string())
+    .execute(&pool)
+    .await
+    .expect("failed to approve draft directly");
+
+    let first = shared::db::claim_challenge_draft_for_publish(&pool, draft_id, 30)
+        .await
+        .expect("first publish claim should reserve");
+    let first_claim = first
+        .publish_claim_id
+        .expect("first publish claim id should exist");
+    sqlx::query(
+        "UPDATE challenge_drafts SET updated_at = NOW() - INTERVAL '60 minutes' WHERE id = $1::uuid",
+    )
+    .bind(draft_id)
+    .execute(&pool)
+    .await
+    .expect("failed to age publish claim");
+
+    let second = shared::db::claim_challenge_draft_for_publish(&pool, draft_id, 30)
+        .await
+        .expect("second publish claim should reserve after stale reset");
+    let second_claim = second
+        .publish_claim_id
+        .expect("second publish claim id should exist");
+    assert_ne!(first_claim, second_claim);
+
+    let stale_fail =
+        shared::db::fail_challenge_draft_publish(&pool, draft_id, &first_claim, "stale failure")
+            .await
+            .expect_err("stale claim should not fail newer publish");
+    assert!(matches!(stale_fail, AppError::Conflict));
+
+    let stale_complete =
+        shared::db::mark_challenge_draft_published(&pool, draft_id, &first_claim, None)
+            .await
+            .expect_err("stale claim should not complete newer publish");
+    assert!(matches!(stale_complete, AppError::Conflict));
+
+    let claim_after_stale: Option<String> = sqlx::query_scalar(
+        "SELECT publish_claim_id::text FROM challenge_drafts WHERE id = $1::uuid",
+    )
+    .bind(draft_id)
+    .fetch_one(&pool)
+    .await
+    .expect("failed to query publish claim");
+    assert_eq!(claim_after_stale.as_deref(), Some(second_claim.as_str()));
+
+    shared::db::mark_challenge_draft_published(&pool, draft_id, &second_claim, None)
+        .await
+        .expect("newer claim should complete publish");
+    let status_and_claim: (String, Option<String>) = sqlx::query_as(
+        "SELECT status, publish_claim_id::text FROM challenge_drafts WHERE id = $1::uuid",
+    )
+    .bind(draft_id)
+    .fetch_one(&pool)
+    .await
+    .expect("failed to query published draft");
+    assert_eq!(status_and_claim, ("published".to_string(), None));
 }
 
 /// Verifies that challenge draft rejects new version manifest.

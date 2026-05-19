@@ -165,6 +165,11 @@ define_uuid_id_type!(
     "challenge_draft_audit_event_id must be a canonical UUID string"
 );
 define_uuid_id_type!(
+    ChallengeDraftPublishClaimId,
+    "ChallengeDraftPublishClaimId",
+    "challenge_draft_publish_claim_id must be a canonical UUID string"
+);
+define_uuid_id_type!(
     ChallengeShortlistRevisionId,
     "ChallengeShortlistRevisionId",
     "challenge_shortlist_revision_id must be a canonical UUID string"

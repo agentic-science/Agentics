@@ -69,11 +69,13 @@ new validation or upload proceeds. Private assets use a repairable lifecycle:
 durable object exists, and `failed` after write or promotion failure. Draft
 responses and publish use only active assets.
 
-Publishing claims an approved draft by moving it to `publishing` before any
-filesystem work starts. The runtime bundle is assembled in a unique temporary
-directory under managed storage, validated there, then atomically renamed into
-the final bundle path and marked `published`. A stale `publishing` claim can be
-reset to `approved` after the configured publish timeout so reviewers can retry.
+Publishing claims an approved draft by moving it to `publishing` with a
+publish-claim ID before any filesystem work starts. Only that claim can fail or
+complete the publish attempt. The runtime bundle is assembled in a unique
+temporary directory under managed storage, validated there, then atomically
+renamed into the final bundle path and marked `published`. A stale `publishing`
+claim can be reset to `approved` after the configured publish timeout so
+reviewers can retry.
 
 Admin endpoints for draft review are:
 

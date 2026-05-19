@@ -15,8 +15,8 @@ use crate::models::github::GithubPullRequestNumber;
 use crate::models::hashes::GitCommitSha;
 use crate::models::hashes::Sha256Digest;
 use crate::models::ids::{
-    AgentId, ChallengeDraftAuditEventId, ChallengeDraftId, ChallengeDraftValidationRecordId,
-    ChallengePrivateAssetId,
+    AgentId, ChallengeDraftAuditEventId, ChallengeDraftId, ChallengeDraftPublishClaimId,
+    ChallengeDraftValidationRecordId, ChallengePrivateAssetId,
 };
 use crate::models::localization::LocalizedText;
 use crate::models::names::{AssetName, ChallengeName};
@@ -79,6 +79,7 @@ pub struct CreateChallengeDraftAuditEventInput {
 #[derive(Debug, Clone)]
 pub struct PublishNewChallengeDraftInput {
     pub draft_id: ChallengeDraftId,
+    pub publish_claim_id: ChallengeDraftPublishClaimId,
     pub challenge_name: ChallengeName,
     pub bundle_path: ManagedBundlePath,
     pub statement_path: ManagedStatementPath,
@@ -96,12 +97,20 @@ pub struct PublishNewChallengeDraftInput {
 #[derive(Debug, Clone)]
 pub struct PublishArchiveChallengeDraftInput {
     pub draft_id: ChallengeDraftId,
+    pub publish_claim_id: ChallengeDraftPublishClaimId,
     pub challenge_name: ChallengeName,
     pub owner_agent_id: AgentId,
     pub audit_event_id: ChallengeDraftAuditEventId,
     pub admin_username: String,
     pub repository_path: String,
     pub bundle_sha256: Sha256Digest,
+}
+
+/// Draft record claimed for a single publish attempt.
+#[derive(Debug, Clone)]
+pub struct ClaimedChallengeDraftForPublish {
+    pub draft: ChallengeDraftResponse,
+    pub publish_claim_id: Option<ChallengeDraftPublishClaimId>,
 }
 
 /// Input for reserving one draft validation admission slot before expensive work starts.
@@ -977,7 +986,7 @@ pub async fn claim_challenge_draft_for_publish(
     pool: &PgPool,
     draft_id: &str,
     publish_timeout_minutes: i32,
-) -> Result<ChallengeDraftResponse> {
+) -> Result<ClaimedChallengeDraftForPublish> {
     let mut tx = pool.begin().await?;
     let scope = format!("challenge-draft:{draft_id}:publish");
     lock_quota_scope(&mut tx, &scope).await?;
@@ -996,18 +1005,24 @@ pub async fn claim_challenge_draft_for_publish(
     match current {
         ChallengeDraftStatus::Published => {
             tx.commit().await?;
-            return get_challenge_draft(pool, draft_id)
+            let draft = get_challenge_draft(pool, draft_id)
                 .await?
-                .ok_or(AppError::NotFound);
+                .ok_or(AppError::NotFound)?;
+            return Ok(ClaimedChallengeDraftForPublish {
+                draft,
+                publish_claim_id: None,
+            });
         }
         ChallengeDraftStatus::Approved => {}
         _ => return Err(AppError::Conflict),
     }
 
+    let publish_claim_id = ChallengeDraftPublishClaimId::generate();
     let claim = sqlx::query(
         r#"
         UPDATE challenge_drafts
         SET status = 'publishing',
+            publish_claim_id = $2::uuid,
             updated_at = NOW()
         WHERE id = $1::uuid
           AND status = 'approved'
@@ -1015,6 +1030,7 @@ pub async fn claim_challenge_draft_for_publish(
         "#,
     )
     .bind(draft_id)
+    .bind(publish_claim_id.as_str())
     .execute(&mut *tx)
     .await?;
     if claim.rows_affected() != 1 {
@@ -1022,9 +1038,13 @@ pub async fn claim_challenge_draft_for_publish(
     }
     tx.commit().await?;
 
-    get_challenge_draft(pool, draft_id)
+    let draft = get_challenge_draft(pool, draft_id)
         .await?
-        .ok_or(AppError::NotFound)
+        .ok_or(AppError::NotFound)?;
+    Ok(ClaimedChallengeDraftForPublish {
+        draft,
+        publish_claim_id: Some(publish_claim_id),
+    })
 }
 
 /// Reset a stale publishing claim back to approved so a reviewer can retry.
@@ -1037,6 +1057,7 @@ async fn reset_stale_publishing_draft_tx(
         r#"
         UPDATE challenge_drafts
         SET status = 'approved',
+            publish_claim_id = NULL,
             validation_message = 'previous publish attempt expired',
             updated_at = NOW()
         WHERE id = $1::uuid
@@ -1055,22 +1076,29 @@ async fn reset_stale_publishing_draft_tx(
 pub async fn fail_challenge_draft_publish(
     pool: &PgPool,
     draft_id: &str,
+    publish_claim_id: &ChallengeDraftPublishClaimId,
     message: &str,
 ) -> Result<()> {
-    sqlx::query(
+    let result = sqlx::query(
         r#"
         UPDATE challenge_drafts
         SET status = 'approved',
+            publish_claim_id = NULL,
             validation_message = $2,
             updated_at = NOW()
         WHERE id = $1::uuid
           AND status = 'publishing'
+          AND publish_claim_id = $3::uuid
         "#,
     )
     .bind(draft_id)
     .bind(message)
+    .bind(publish_claim_id.as_str())
     .execute(pool)
     .await?;
+    if result.rows_affected() == 0 {
+        return Err(AppError::Conflict);
+    }
     Ok(())
 }
 
@@ -1078,6 +1106,7 @@ pub async fn fail_challenge_draft_publish(
 pub async fn mark_challenge_draft_published(
     pool: &PgPool,
     draft_id: &str,
+    publish_claim_id: &ChallengeDraftPublishClaimId,
     published_challenge_name: Option<&ChallengeName>,
 ) -> Result<()> {
     let result = sqlx::query(
@@ -1085,14 +1114,17 @@ pub async fn mark_challenge_draft_published(
         UPDATE challenge_drafts
         SET status = 'published',
             published_challenge_name = $2,
+            publish_claim_id = NULL,
             updated_at = NOW()
         WHERE id = $1::uuid
-          AND status IN ('approved', 'publishing')
+          AND status = 'publishing'
+          AND publish_claim_id = $3::uuid
           AND active_validation_record_id IS NULL
         "#,
     )
     .bind(draft_id)
     .bind(published_challenge_name.map(ChallengeName::as_str))
+    .bind(publish_claim_id.as_str())
     .execute(pool)
     .await?;
 
@@ -1122,6 +1154,7 @@ pub async fn publish_new_challenge_draft(
     mark_challenge_draft_published_tx(
         &mut tx,
         input.draft_id.as_str(),
+        &input.publish_claim_id,
         Some(&published.challenge_name),
     )
     .await?;
@@ -1155,7 +1188,13 @@ pub async fn publish_archive_challenge_draft(
     let mut tx = pool.begin().await?;
     ensure_agent_owns_challenge_tx(&mut tx, &input.challenge_name, &input.owner_agent_id).await?;
     archive_challenge_tx(&mut tx, &input.challenge_name).await?;
-    mark_challenge_draft_published_tx(&mut tx, input.draft_id.as_str(), None).await?;
+    mark_challenge_draft_published_tx(
+        &mut tx,
+        input.draft_id.as_str(),
+        &input.publish_claim_id,
+        None,
+    )
+    .await?;
     create_challenge_draft_audit_event_tx(
         &mut tx,
         &CreateChallengeDraftAuditEventInput {
@@ -1210,6 +1249,7 @@ async fn ensure_agent_owns_challenge_tx(
 async fn mark_challenge_draft_published_tx(
     tx: &mut Transaction<'_, Postgres>,
     draft_id: &str,
+    publish_claim_id: &ChallengeDraftPublishClaimId,
     published_challenge_name: Option<&ChallengeName>,
 ) -> Result<()> {
     let result = sqlx::query(
@@ -1217,14 +1257,17 @@ async fn mark_challenge_draft_published_tx(
         UPDATE challenge_drafts
         SET status = 'published',
             published_challenge_name = $2,
+            publish_claim_id = NULL,
             updated_at = NOW()
         WHERE id = $1::uuid
           AND status = 'publishing'
+          AND publish_claim_id = $3::uuid
           AND active_validation_record_id IS NULL
         "#,
     )
     .bind(draft_id)
     .bind(published_challenge_name.map(ChallengeName::as_str))
+    .bind(publish_claim_id.as_str())
     .execute(&mut **tx)
     .await?;
 

@@ -64,11 +64,11 @@ private asset uploads；stale validation record 会在新的 validation 或 uplo
 bytes 时为 `pending`，durable object 存在后为 `active`，write 或 promote 失败后为
 `failed`。Draft responses 和 publish 只使用 active assets。
 
-Publishing 会先把 approved draft claim 为 `publishing`，再开始任何 filesystem
-work。Runtime bundle 会先在 managed storage 下的唯一 temporary directory 中组装并
-验证，然后 atomically rename 到 final bundle path，并标记为 `published`。超过配置
-publish timeout 的 stale `publishing` claim 可以 reset 回 `approved`，以便 reviewer
-重试。
+Publishing 会先用 publish-claim ID 把 approved draft claim 为 `publishing`，再开始任何
+filesystem work。只有该 claim 可以 fail 或 complete 这次 publish attempt。Runtime
+bundle 会先在 managed storage 下的唯一 temporary directory 中组装并验证，然后
+atomically rename 到 final bundle path，并标记为 `published`。超过配置 publish
+timeout 的 stale `publishing` claim 可以 reset 回 `approved`，以便 reviewer 重试。
 
 Draft review admin endpoints：
 

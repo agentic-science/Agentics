@@ -579,19 +579,35 @@ pub async fn publish_challenge_draft(
     ValidatedJson(body): ValidatedJson<ValidateChallengeDraftRequest>,
 ) -> Result<Json<ChallengeDraftResponse>> {
     let repository_path = RepositoryCheckoutPath::from_existing_dir(&body.repository_path)?;
-    let draft = db::claim_challenge_draft_for_publish(
+    let claim = db::claim_challenge_draft_for_publish(
         &state.db,
         draft_id.as_str(),
         state.config.challenge_draft_publish_timeout_minutes,
     )
     .await?;
+    let draft = claim.draft;
     if draft.status == ChallengeDraftStatus::Published {
         return Ok(Json(draft));
     }
-    let publish_result =
-        publish_claimed_challenge_draft(&state, &admin.username, &draft, &repository_path).await;
+    let publish_claim_id = claim.publish_claim_id.ok_or_else(|| {
+        AppError::Internal("publishing draft claim missing publish claim id".to_string())
+    })?;
+    let publish_result = publish_claimed_challenge_draft(
+        &state,
+        &admin.username,
+        &draft,
+        &publish_claim_id,
+        &repository_path,
+    )
+    .await;
     if let Err(error) = publish_result {
-        db::fail_challenge_draft_publish(&state.db, draft.id.as_str(), &error.to_string()).await?;
+        db::fail_challenge_draft_publish(
+            &state.db,
+            draft.id.as_str(),
+            &publish_claim_id,
+            &error.to_string(),
+        )
+        .await?;
         return Err(error);
     }
 
@@ -607,6 +623,7 @@ async fn publish_claimed_challenge_draft(
     state: &AppState,
     admin_username: &str,
     draft: &ChallengeDraftResponse,
+    publish_claim_id: &shared::models::ids::ChallengeDraftPublishClaimId,
     repository_path: &RepositoryCheckoutPath,
 ) -> Result<()> {
     let (manifest, bundle_sha256) = validate_draft_repository(draft, repository_path).await?;
@@ -629,6 +646,7 @@ async fn publish_claimed_challenge_draft(
                 &state.db,
                 &db::PublishArchiveChallengeDraftInput {
                     draft_id: draft.id.clone(),
+                    publish_claim_id: publish_claim_id.clone(),
                     challenge_name: manifest.challenge_name.clone(),
                     owner_agent_id: draft.creator_agent_id.clone(),
                     audit_event_id: ChallengeDraftAuditEventId::generate(),
@@ -671,6 +689,7 @@ async fn publish_claimed_challenge_draft(
                     &state.db,
                     &db::PublishNewChallengeDraftInput {
                         draft_id: draft.id.clone(),
+                        publish_claim_id: publish_claim_id.clone(),
                         challenge_name: manifest.challenge_name.clone(),
                         bundle_path: managed_bundle_path,
                         statement_path: managed_statement_path,
