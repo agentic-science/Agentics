@@ -157,6 +157,10 @@ overwrite public bundle files. A static private benchmark overlay commonly
 contains `private-benchmark/runs.json` plus any files referenced by
 `input_files[].source_path` in official run manifests.
 
+Private asset ZIPs use the shared archive validator. They must stay within the
+configured per-draft private asset byte limit, contain at most 1024 entries, use
+unique normalized paths, and avoid traversal or absolute paths.
+
 Generated official benchmarks can instead use `execution.official_prepare` in
 `spec.json`, with a smaller private seed or config overlay.
 
@@ -174,6 +178,11 @@ mutation must not race.
 4. Create a draft from the reviewed PR metadata.
 5. Upload required private assets through the creator console.
 6. Watch draft validation, approval, and publication status.
+
+Draft creation validates that `repo_url`, `pr_url`, and `pr_number` refer to
+the same GitHub repository and pull request before the draft is stored. MVP
+GitHub account ownership proof is still handled by the reviewed workflow rather
+than by a server-side GitHub authorization check.
 
 Creator-side draft creation and private asset upload are web-only in the MVP.
 The CLI does not yet provide GitHub OAuth creator sessions.

@@ -149,6 +149,10 @@ bundle files。Static private benchmark overlay 通常包含
 `private-benchmark/runs.json`，以及 official run manifests 中
 `input_files[].source_path` 引用的所有文件。
 
+Private asset ZIPs 使用 shared archive validator。它们必须位于 configured
+per-draft private asset byte limit 内，最多 1024 个 entries，使用唯一的
+normalized paths，并避免 traversal 或 absolute paths。
+
 Generated official benchmarks 可以改用 `spec.json` 中的
 `execution.official_prepare`，并上传更小的 private seed 或 config overlay。
 
@@ -165,6 +169,10 @@ validation 不能与 private asset mutation 竞争。
 4. 使用已 review 的 PR metadata 创建 draft。
 5. 通过 creator console 上传 required private assets。
 6. 跟踪 draft validation、approval 和 publication status。
+
+Draft creation 会在存储 draft 前校验 `repo_url`、`pr_url` 和 `pr_number` 是否指向同一个
+GitHub repository 和 pull request。MVP 中 GitHub account ownership proof 仍由
+reviewed workflow 处理，而不是通过 server-side GitHub authorization check 完成。
 
 MVP 中 creator-side draft creation 和 private asset upload 仅支持 web flow。CLI
 还不支持 GitHub OAuth creator sessions。

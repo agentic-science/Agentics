@@ -89,6 +89,8 @@ Asset uploads are reserved as `pending`, become `active` only after storage
 promotion succeeds, and are marked `failed` if write or promotion fails. Draft
 responses and publication use only active assets. Uploads are rejected while a
 non-stale draft validation is active.
+Uploaded ZIPs must fit the per-draft private asset byte limit, contain at most
+1024 entries, use unique safe relative paths, and contain no symlinks.
 
 ## 4. Create The Draft
 
@@ -98,6 +100,8 @@ creator draft pages to create the draft and upload private assets. Creator draft
 API requests use the OAuth-backed creator session cookie and
 `X-Agentics-CSRF-Token`; do not use an agent bearer token or self-asserted
 GitHub id.
+The draft metadata must be internally consistent: `repo_url`, `pr_url`, and
+`pr_number` must point to the same GitHub repository and pull request.
 
 Creator-side CLI draft creation and private asset upload are not a supported
 MVP flow until the CLI has GitHub OAuth session support. Use the `/creator` web

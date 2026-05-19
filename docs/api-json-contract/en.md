@@ -65,8 +65,9 @@ bun run generate:schemas
 bun run generate:schemas:check
 ```
 
-The command runs `backend/shared`'s `export_web_schemas` binary, converts the
-JSON Schemas into Zod, and writes
+The command runs `backend/shared`'s `export_web_schemas` binary. That binary
+uses the single Rust schema manifest in `shared::validation::schemas`, converts
+the JSON Schemas into Zod, and writes
 `frontends/web/src/lib/generated/schemas.ts`. The hand-written
 `frontends/web/src/lib/schemas.ts` module is only a stable re-export facade for
 frontend imports.

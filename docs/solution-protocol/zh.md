@@ -84,6 +84,12 @@ Setup、build 和 run command paths 会在 solution container 内用 POSIX `sh`
 
 API 会把 decoded note 与 solution submission 一起存储，并在 create response、owner/public detail、public submission list 和 admin submission list 中暴露。CLI 会在 package、submit 或 remote validation upload 前校验同一 note limit，但 API 仍是 authoritative。
 
+Solution ZIP archives 在 CLI、API、worker extraction path 和 public artifact
+preview 中使用同一 shared envelope policy 校验。Archive compressed size 最多 20
+MiB，最多 256 个 entries，展开后最多 50 MiB；entry paths 必须是 safe relative
+paths，不能有 duplicate normalized paths，也不能包含 symlinks。Extraction 使用
+create-new file writes，archive entries 不能覆盖 platform-owned files。
+
 First-party Agentics base images 记录在
 `../../docker/images/linux-arm64-cpu/README.md` 和
 `../../docker/images/linux-arm64-cuda/README.md`。Challenge specs 必须引用受支持的

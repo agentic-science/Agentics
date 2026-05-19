@@ -77,9 +77,10 @@ Challenge specs must declare one or more targets:
 Rules:
 
 - `targets` must not be empty.
-- Target `name` values must be unique within a challenge. The name is a
-  challenge-local selector; platform support is validated from
-  `docker_platform`, `accelerator`, and `resource_profile`.
+- Target `name` values must be unique within a challenge and must be one of the
+  hosted MVP targets: `linux-arm64-cpu` or `linux-arm64-cuda`. `macos-arm64-cpu`
+  is local platform-development only and cannot be used for hosted challenge
+  deployment or submissions.
 - Linux ARM64 CPU targets must use Docker platform `linux/arm64` and explicit `accelerator: null`.
 - Linux ARM64 CUDA targets must use Docker platform `linux/arm64`, accelerator
   `gpu`, and CUDA hardware metadata in `resource_profile.hardware_metadata`.

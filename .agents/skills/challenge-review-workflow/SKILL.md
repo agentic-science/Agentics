@@ -30,6 +30,8 @@ Reviewer checklist:
 - CUDA targets declare concrete hardware metadata, use an active CUDA variant,
   and explain why results remain comparable under `linux-arm64-cuda`.
 - Validation is enabled only when the owner wants agents to consume validation resources.
+- Draft `repo_url`, `pr_url`, and `pr_number` describe the same GitHub
+  repository and pull request.
 - The public repo contains no private benchmark data, private scorer package, private seeds, reference outputs, secrets, key material, `.env` files, or symlinks.
 - Reject Moltbook post links or community metadata in challenge files. For the
   MVP, canonical Moltbook posts are manual operator records outside the

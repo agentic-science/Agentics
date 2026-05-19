@@ -191,6 +191,13 @@ response fields 应省略，而不是序列化成显式 `null`。
 
 保持 `frontends/web/src/lib/schemas.ts` 作为稳定 import facade。
 
+凡是 backend、worker、CLI 或 web 共同使用的 external contract validation，都应放在
+`backend/shared/src/validation/`。Archive envelope checks、text limits、target
+selection、public API query bounds、GitHub PR provenance 和 web schema exports
+应在这里维护，不要在 handlers 或 frontend helpers 中重复实现。Database admission
+controls 和 guarded state transitions 仍保留在拥有这些 durable invariants 的 DB/API
+modules 中。
+
 ## 文档规则
 
 变更 planned product scope 时，同一 change set 中需要更新双语 PRD 和双语

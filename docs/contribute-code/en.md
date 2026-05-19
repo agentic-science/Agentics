@@ -194,6 +194,13 @@ After changing shared DTOs used by the frontend, run:
 
 Keep `frontends/web/src/lib/schemas.ts` as the stable import facade.
 
+External contract validation that is shared by backend, worker, CLI, or web
+belongs in `backend/shared/src/validation/`. Keep archive envelope checks, text
+limits, target selection, public API query bounds, GitHub PR provenance, and
+web schema exports there instead of duplicating them in handlers or frontend
+helpers. Database admission controls and guarded state transitions stay with the
+DB/API modules that own those durable invariants.
+
 ## Documentation Rules
 
 When changing planned product scope, update both PRDs and both milestone docs in

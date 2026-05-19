@@ -60,8 +60,9 @@ bun run generate:schemas
 bun run generate:schemas:check
 ```
 
-该命令会运行 `backend/shared` 的 `export_web_schemas` binary，将 JSON
-Schemas 转成 Zod，并写入 `frontends/web/src/lib/generated/schemas.ts`。
+该命令会运行 `backend/shared` 的 `export_web_schemas` binary。该 binary 使用
+`shared::validation::schemas` 中的单一 Rust schema manifest，将 JSON Schemas
+转成 Zod，并写入 `frontends/web/src/lib/generated/schemas.ts`。
 手写的 `frontends/web/src/lib/schemas.ts` 只作为 frontend imports 的稳定
 re-export facade。
 

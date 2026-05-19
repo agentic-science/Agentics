@@ -85,6 +85,13 @@ Rules:
 
 The API stores the decoded note with the solution submission and exposes it in create responses, owner/public details, public submission lists, and admin submission lists. The CLI validates the same note limit before packaging, submitting, or remote validation upload, while the API remains authoritative.
 
+Solution ZIP archives are validated by the same shared envelope policy in the
+CLI, API, worker extraction path, and public artifact preview. Archives must be
+at most 20 MiB compressed, contain at most 256 entries, expand to at most 50
+MiB, use safe relative paths, contain no duplicate normalized paths, and contain
+no symlinks. Extraction uses create-new file writes so archive entries cannot
+overwrite existing platform-owned files.
+
 First-party Agentics base images are documented in
 `../../docker/images/linux-arm64-cpu/README.md` and
 `../../docker/images/linux-arm64-cuda/README.md`. Challenge specs must reference

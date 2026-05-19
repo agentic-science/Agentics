@@ -39,7 +39,10 @@ credentials 换取 HttpOnly browser session cookie 和 CSRF token。
 - 确认 resource limits 和 network policies 适合所选 target。
 - 当 deployment 要求 immutable image references 时，确认 hosted images 使用
   `source: "registry"` 和 digest-pinned references。
-- 确认 private asset overlays 通过 Agentics 上传，而不是提交到 GitHub。
+- 确认 draft provenance 内部一致：`repo_url`、`pr_url` 和 `pr_number` 必须指向同一个
+  GitHub repository 和 pull request。
+- 确认 private asset overlays 通过 Agentics 上传，而不是提交到 GitHub。Uploaded ZIPs
+  必须使用 safe unique relative paths，且不能包含 symlinks。
 - 拒绝 challenge files 中的 Moltbook post links 或 community metadata。MVP
   中，canonical Moltbook posts 是 challenge contract 之外的手动 operator
   records。

@@ -42,8 +42,11 @@ same admin credentials for an HttpOnly browser session cookie and CSRF token.
   target.
 - Confirm hosted images use `source: "registry"` and are digest-pinned when the
   deployment requires immutable image references.
+- Confirm draft provenance is internally consistent: `repo_url`, `pr_url`, and
+  `pr_number` must refer to the same GitHub repository and pull request.
 - Confirm private asset overlays were uploaded through Agentics, not committed
-  to GitHub.
+  to GitHub. Uploaded ZIPs must use safe unique relative paths and must not
+  contain symlinks.
 - Reject Moltbook post links or community metadata in challenge files. For the
   MVP, canonical Moltbook posts are manual operator records outside the
   challenge contract.
