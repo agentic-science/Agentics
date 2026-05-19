@@ -316,6 +316,64 @@ async fn stale_pending_private_asset_reservation_can_be_retried(pool: sqlx::PgPo
     assert_eq!(states, vec!["failed".to_string(), "pending".to_string()]);
 }
 
+/// Verifies private asset lifecycle work refreshes the parent draft activity.
+#[sqlx::test(migrations = "../migrations")]
+async fn private_asset_lifecycle_refreshes_draft_activity(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("storage tempdir");
+    let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
+    let config = test_config(storage.path(), seeded_challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+    let creator = create_creator_session(&pool, 1001, "creator").await;
+
+    let mut manifest = manifest_json();
+    manifest["private_assets"] = json!([
+        {
+            "asset_name": "official-cases-a",
+            "kind": "private_benchmark_data",
+            "required": false
+        },
+        {
+            "asset_name": "official-cases-b",
+            "kind": "private_benchmark_data",
+            "required": false
+        }
+    ]);
+    let draft = create_draft(&client, &app, &creator, 13, manifest).await;
+    let draft_id =
+        ChallengeDraftId::try_new(draft["id"].as_str().expect("draft id")).expect("valid draft id");
+    let uploader_agent_id = AgentId::try_new(&creator.agent_id).expect("valid creator agent id");
+
+    age_draft_for_cleanup(&pool, &draft_id).await;
+    let input_a = private_asset_input(&draft_id, &uploader_agent_id, "official-cases-a", "first");
+    db::reserve_challenge_private_asset(&pool, &input_a, 64, 30, 30)
+        .await
+        .expect("pending asset should reserve");
+    assert_draft_survives_stale_cleanup(&pool, &draft_id).await;
+
+    age_draft_for_cleanup(&pool, &draft_id).await;
+    db::activate_challenge_private_asset(&pool, &input_a.asset_row_id)
+        .await
+        .expect("pending asset should activate");
+    assert_draft_survives_stale_cleanup(&pool, &draft_id).await;
+
+    let input_b = private_asset_input(&draft_id, &uploader_agent_id, "official-cases-b", "second");
+    db::reserve_challenge_private_asset(&pool, &input_b, 64, 30, 30)
+        .await
+        .expect("second pending asset should reserve");
+    age_draft_for_cleanup(&pool, &draft_id).await;
+    db::fail_challenge_private_asset(&pool, &input_b.asset_row_id, "test failure")
+        .await
+        .expect("pending asset should fail");
+    assert_draft_survives_stale_cleanup(&pool, &draft_id).await;
+
+    age_draft_for_cleanup(&pool, &draft_id).await;
+    db::delete_challenge_private_asset(&pool, input_a.asset_row_id.as_str())
+        .await
+        .expect("active asset should delete");
+    assert_draft_survives_stale_cleanup(&pool, &draft_id).await;
+}
+
 /// Upload a declared private benchmark asset to a draft.
 async fn upload_private_asset(
     client: &reqwest::Client,
@@ -339,6 +397,31 @@ async fn upload_private_asset(
     .send()
     .await
     .expect("private asset request")
+}
+
+/// Age a draft enough that stale cleanup would abandon it without a later activity write.
+async fn age_draft_for_cleanup(pool: &sqlx::PgPool, draft_id: &ChallengeDraftId) {
+    sqlx::query(
+        "UPDATE challenge_drafts SET updated_at = NOW() - INTERVAL '2 days' WHERE id = $1::uuid",
+    )
+    .bind(draft_id.as_str())
+    .execute(pool)
+    .await
+    .expect("failed to age draft");
+}
+
+/// Run stale cleanup and verify the draft remained active.
+async fn assert_draft_survives_stale_cleanup(pool: &sqlx::PgPool, draft_id: &ChallengeDraftId) {
+    db::abandon_stale_challenge_drafts(pool, 1)
+        .await
+        .expect("stale cleanup should run");
+    let status: String =
+        sqlx::query_scalar("SELECT status FROM challenge_drafts WHERE id = $1::uuid")
+            .bind(draft_id.as_str())
+            .fetch_one(pool)
+            .await
+            .expect("failed to query draft status");
+    assert_eq!(status, "draft");
 }
 
 /// Build a private asset DB reservation input for direct admission tests.

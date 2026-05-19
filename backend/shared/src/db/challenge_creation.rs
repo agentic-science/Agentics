@@ -461,14 +461,14 @@ pub async fn reserve_challenge_private_asset(
     sqlx::query(
         r#"
         UPDATE challenge_drafts
-        SET status = 'draft',
-            validation_message = NULL,
-            validation_repository_path = NULL,
-            validation_bundle_sha256 = NULL,
-            approved_bundle_sha256 = NULL,
+        SET status = CASE WHEN status = 'validated' THEN 'draft' ELSE status END,
+            validation_message = CASE WHEN status = 'validated' THEN NULL ELSE validation_message END,
+            validation_repository_path = CASE WHEN status = 'validated' THEN NULL ELSE validation_repository_path END,
+            validation_bundle_sha256 = CASE WHEN status = 'validated' THEN NULL ELSE validation_bundle_sha256 END,
+            approved_bundle_sha256 = CASE WHEN status = 'validated' THEN NULL ELSE approved_bundle_sha256 END,
             updated_at = NOW()
         WHERE id = $1::uuid
-          AND status = 'validated'
+          AND status IN ('draft', 'validated')
         "#,
     )
     .bind(input.draft_id.as_str())
@@ -485,6 +485,7 @@ pub async fn activate_challenge_private_asset(
     pool: &PgPool,
     asset_row_id: &ChallengePrivateAssetId,
 ) -> Result<ChallengePrivateAssetResponse> {
+    let mut tx = pool.begin().await?;
     let row = sqlx::query(
         r#"
         UPDATE challenge_private_assets
@@ -499,12 +500,26 @@ pub async fn activate_challenge_private_asset(
         "#,
     )
     .bind(asset_row_id.as_str())
-    .fetch_optional(pool)
+    .fetch_optional(&mut *tx)
     .await?;
     let Some(row) = row else {
         return Err(AppError::Conflict);
     };
-    row_to_private_asset_response(row)
+    sqlx::query(
+        r#"
+        UPDATE challenge_drafts d
+        SET updated_at = NOW()
+        FROM challenge_private_assets a
+        WHERE a.id = $1::uuid
+          AND d.id = a.draft_id
+        "#,
+    )
+    .bind(asset_row_id.as_str())
+    .execute(&mut *tx)
+    .await?;
+    let response = row_to_private_asset_response(row)?;
+    tx.commit().await?;
+    Ok(response)
 }
 
 /// Mark a pending private asset failed after storage write or promote failed.
@@ -515,12 +530,18 @@ pub async fn fail_challenge_private_asset(
 ) -> Result<()> {
     sqlx::query(
         r#"
-        UPDATE challenge_private_assets
-        SET status = 'failed',
-            failed_at = NOW(),
-            failure_message = $2
-        WHERE id = $1::uuid
-          AND status = 'pending'
+        WITH failed AS (
+            UPDATE challenge_private_assets
+            SET status = 'failed',
+                failed_at = NOW(),
+                failure_message = $2
+            WHERE id = $1::uuid
+              AND status = 'pending'
+            RETURNING draft_id
+        )
+        UPDATE challenge_drafts d
+        SET updated_at = NOW()
+        WHERE d.id IN (SELECT draft_id FROM failed)
         "#,
     )
     .bind(asset_row_id.as_str())
@@ -647,13 +668,19 @@ async fn auto_fail_stale_pending_private_assets_tx(
 ) -> Result<()> {
     sqlx::query(
         r#"
-        UPDATE challenge_private_assets
-        SET status = 'failed',
-            failed_at = NOW(),
-            failure_message = 'private asset pending lease expired'
-        WHERE draft_id = $1::uuid
-          AND status = 'pending'
-          AND created_at < NOW() - INTERVAL '1 minute' * $2
+        WITH failed AS (
+            UPDATE challenge_private_assets
+            SET status = 'failed',
+                failed_at = NOW(),
+                failure_message = 'private asset pending lease expired'
+            WHERE draft_id = $1::uuid
+              AND status = 'pending'
+              AND created_at < NOW() - INTERVAL '1 minute' * $2
+            RETURNING draft_id
+        )
+        UPDATE challenge_drafts d
+        SET updated_at = NOW()
+        WHERE d.id IN (SELECT draft_id FROM failed)
         "#,
     )
     .bind(draft_id)
@@ -926,10 +953,21 @@ pub async fn list_unpublished_private_assets_for_purge(
 
 /// Delete a private asset record after its object has been removed.
 pub async fn delete_challenge_private_asset(pool: &PgPool, asset_row_id: &str) -> Result<()> {
-    sqlx::query("DELETE FROM challenge_private_assets WHERE id = $1::uuid")
-        .bind(asset_row_id)
-        .execute(pool)
-        .await?;
+    sqlx::query(
+        r#"
+        WITH deleted AS (
+            DELETE FROM challenge_private_assets
+            WHERE id = $1::uuid
+            RETURNING draft_id
+        )
+        UPDATE challenge_drafts d
+        SET updated_at = NOW()
+        WHERE d.id IN (SELECT draft_id FROM deleted)
+        "#,
+    )
+    .bind(asset_row_id)
+    .execute(pool)
+    .await?;
 
     Ok(())
 }

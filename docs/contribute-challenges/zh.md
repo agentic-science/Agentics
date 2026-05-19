@@ -159,7 +159,9 @@ Generated official benchmarks 可以改用 `spec.json` 中的
 Private asset uploads 会先 reservation，再写入 bytes。正常上传会从 `pending`
 进入 `active`；失败上传会标记为 `failed`，不会出现在 draft responses 中，也不会被
 publication 使用。当存在未 stale 的 draft validation 时，upload 会被拒绝，因为
-validation 不能与 private asset mutation 竞争。
+validation 不能与 private asset mutation 竞争。Private asset reservation、
+activation、failure 和 cleanup 会刷新 parent draft activity timestamp，因此 stale draft
+cleanup 不会在 asset work 正在修复或推进时把 draft 标记为 abandoned。
 
 ## Creator Flow
 

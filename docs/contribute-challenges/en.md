@@ -168,7 +168,9 @@ Private asset uploads are reserved before bytes are written. A normal upload
 moves through `pending` to `active`; failed uploads are marked `failed` and are
 not used by draft responses or publication. Uploads are rejected while a
 non-stale draft validation is active, because validation and private asset
-mutation must not race.
+mutation must not race. Private asset reservation, activation, failure, and
+cleanup refresh the parent draft activity timestamp, so stale draft cleanup does
+not abandon a draft while asset work is actively repairing or progressing.
 
 ## Creator Flow
 
