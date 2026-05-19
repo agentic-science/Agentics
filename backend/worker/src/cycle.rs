@@ -230,6 +230,7 @@ pub async fn run_worker_cycle(
         db.clone(),
         job.id.clone(),
         worker_id.to_string(),
+        job.attempt_count,
         lease_refresh_interval(config),
         lease_stop_rx,
     ));
@@ -409,6 +410,7 @@ async fn refresh_claim_until_stopped(
     db: sqlx::PgPool,
     job_id: EvaluationJobId,
     worker_id: String,
+    attempt_count: i32,
     refresh_every: Duration,
     mut stop: watch::Receiver<bool>,
 ) {
@@ -418,14 +420,14 @@ async fn refresh_claim_until_stopped(
     loop {
         tokio::select! {
             _ = ticker.tick() => {
-                match refresh_evaluation_job_claim(&db, &job_id, &worker_id).await {
+                match refresh_evaluation_job_claim(&db, &job_id, &worker_id, attempt_count).await {
                     Ok(true) => {}
                     Ok(false) => {
-                        error!(job_id = %job_id, worker_id = %worker_id, "job lease no longer belongs to worker");
+                        error!(job_id = %job_id, worker_id = %worker_id, attempt_count, "job lease no longer belongs to worker attempt");
                         break;
                     }
                     Err(e) => {
-                        error!(job_id = %job_id, worker_id = %worker_id, error = %e, "failed to refresh job lease");
+                        error!(job_id = %job_id, worker_id = %worker_id, attempt_count, error = %e, "failed to refresh job lease");
                     }
                 }
             }

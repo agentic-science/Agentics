@@ -106,6 +106,7 @@ pub async fn refresh_evaluation_job_claim(
     pool: &PgPool,
     job_id: &EvaluationJobId,
     worker_id: &str,
+    attempt_count: i32,
 ) -> Result<bool> {
     let result = sqlx::query(
         r#"
@@ -113,11 +114,13 @@ pub async fn refresh_evaluation_job_claim(
         SET claimed_at = NOW()
         WHERE id = $1::uuid
           AND worker_id = $2
+          AND attempt_count = $3
           AND status = 'running'
         "#,
     )
     .bind(job_id.as_str())
     .bind(worker_id)
+    .bind(attempt_count)
     .execute(pool)
     .await?;
 

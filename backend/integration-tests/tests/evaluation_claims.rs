@@ -147,7 +147,19 @@ async fn refreshed_job_lease_is_not_reaped(pool: sqlx::PgPool) {
     .expect("failed to mark job running");
 
     let job_id = EvaluationJobId::try_new(job_id).expect("stored job id is valid");
-    let refreshed = shared::db::refresh_evaluation_job_claim(&pool, &job_id, "worker-1")
+    let stale_attempt_refreshed =
+        shared::db::refresh_evaluation_job_claim(&pool, &job_id, "worker-1", 2)
+            .await
+            .expect("failed to reject stale attempt refresh");
+    assert!(!stale_attempt_refreshed);
+
+    let wrong_worker_refreshed =
+        shared::db::refresh_evaluation_job_claim(&pool, &job_id, "worker-2", 1)
+            .await
+            .expect("failed to reject wrong worker refresh");
+    assert!(!wrong_worker_refreshed);
+
+    let refreshed = shared::db::refresh_evaluation_job_claim(&pool, &job_id, "worker-1", 1)
         .await
         .expect("failed to refresh job lease");
     assert!(refreshed);

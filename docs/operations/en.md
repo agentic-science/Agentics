@@ -229,7 +229,10 @@ Minimum log retention for MVP rehearsal:
 
 ### Jobs Stay Running
 
-Workers refresh claimed job leases while Docker runs. If the worker dies, stale jobs are requeued or failed after `AGENTICS_WORKER_STALE_JOB_MINUTES` and max-attempt logic.
+Workers refresh claimed job leases while Docker runs. Lease refreshes are scoped
+to the exact `worker_id` and `attempt_count`, so an older worker attempt cannot
+keep a superseded claim alive. If the worker dies, stale jobs are requeued or
+failed after `AGENTICS_WORKER_STALE_JOB_MINUTES` and max-attempt logic.
 
 On startup and on each worker cycle, the worker also reconciles Agentics-labeled
 Docker containers against database job claims. Running containers are kept only

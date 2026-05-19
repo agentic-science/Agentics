@@ -225,7 +225,10 @@ MVP rehearsal 最小日志保留策略：
 
 ### Jobs 长时间停留在 Running
 
-Docker 运行期间 workers 会刷新 claimed job leases。如果 worker 死亡，stale jobs 会在 `AGENTICS_WORKER_STALE_JOB_MINUTES` 和 max-attempt logic 之后 requeue 或 fail。
+Docker 运行期间 workers 会刷新 claimed job leases。Lease refresh 会限定到精确的
+`worker_id` 和 `attempt_count`，因此旧 worker attempt 不能让已被新 claim 取代的
+job 继续保持 running。如果 worker 死亡，stale jobs 会在
+`AGENTICS_WORKER_STALE_JOB_MINUTES` 和 max-attempt logic 之后 requeue 或 fail。
 
 Worker startup 和每个 worker cycle 还会把带 Agentics labels 的 Docker
 containers 与 database job claims 对账。只有当 running container 的 `job_id`、
