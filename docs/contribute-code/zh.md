@@ -173,6 +173,10 @@ export AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics-test/phase-mounts
 export AGENTICS_TEST_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096
 ```
 
+在 Linux 上，如果这些变量缺失、格式错误，或没有指向已准备好的 bounded test quota
+root，quota-sensitive integration tests 会 fail fast。非 Linux hosts 会跳过这些
+Linux-only quota probes。
+
 这些 test variables 故意指向 `/srv/agentics-test`，这样本地验证不会改变
 production runner slot ownership。
 
