@@ -46,3 +46,4 @@ htmlcov/
 build/
 dist/
 *.egg-info/
+tree.txt
