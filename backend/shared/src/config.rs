@@ -626,16 +626,14 @@ impl Config {
 
     /// Return whether this configuration must enforce immutable hosted images.
     pub fn requires_digest_pinned_images(&self) -> bool {
-        self.require_digest_pinned_images
-            || self.host_probe_mode == HostProbeMode::Require
-            || self.runner_writable_storage_mode.trim() == "xfs-project-quota-slots"
+        self.require_digest_pinned_images || self.host_probe_mode == HostProbeMode::Require
     }
 
     /// Reject hosted profiles that try to opt out of immutable image references.
     fn validate_hosted_image_policy(&self) -> anyhow::Result<()> {
         if self.requires_digest_pinned_images() && !self.require_digest_pinned_images {
             anyhow::bail!(
-                "AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES must be true for hosted profiles using AGENTICS_HOST_PROBE_MODE=require or AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots"
+                "AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES must be true for hosted profiles using AGENTICS_HOST_PROBE_MODE=require"
             );
         }
         Ok(())
@@ -1035,19 +1033,14 @@ mod tests {
         probe_config.require_digest_pinned_images = true;
         assert!(probe_config.validate_api_security().is_ok());
 
-        let slot_config = Config {
+        let local_quota_config = Config {
             runner_writable_storage_mode: "xfs-project-quota-slots".to_string(),
             ..test_config()
         };
-        let error = slot_config
-            .validate_api_security()
-            .expect_err("quota-slot hosted profile implies immutable images");
         assert!(
-            error
-                .to_string()
-                .contains("AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES")
+            !local_quota_config.requires_digest_pinned_images(),
+            "local quota-backed tests can still use local images when hosted probes are off"
         );
-        assert!(slot_config.requires_digest_pinned_images());
     }
 
     /// Handles test config for this module.

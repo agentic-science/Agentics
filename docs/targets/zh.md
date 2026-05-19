@@ -83,7 +83,7 @@ Challenge specs 必须声明一个或多个 targets：
   `gpu`，并在 `resource_profile.hardware_metadata` 中声明 CUDA hardware metadata。
 - AMD64 Linux targets 保留给 post-MVP deployment support。
 - `validation_enabled` 是 target-specific 的。一个 target 可以启用 validation，另一个 target 可以关闭 validation。
-- `resource_profile` 包含该 target 的 Docker images、硬性 resource limits、network policy、可选 resource description 和可选 hardware metadata。Solution 和 scorer images 必须使用受支持的 first-party Agentics image repositories 和与 target 匹配的 tags。Hosted deployments 必须设置 `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`；hosted startup 会拒绝禁用该配置的 profiles，并且 hosted challenge specs 必须使用包含 immutable `@sha256:<digest>` suffix 的 registry references。
+- `resource_profile` 包含该 target 的 Docker images、硬性 resource limits、network policy、可选 resource description 和可选 hardware metadata。Solution 和 scorer images 必须使用受支持的 first-party Agentics image repositories 和与 target 匹配的 tags。Hosted deployments 必须设置 `AGENTICS_HOST_PROBE_MODE=require` 和 `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`；hosted startup 会拒绝要求 hosted probes 但禁用 image digest pinning 的 profiles，并且 hosted challenge specs 必须使用包含 immutable `@sha256:<digest>` suffix 的 registry references。
 - CPU targets 必须使用 first-party Agentics CPU base image。面向 participants 的 setup guidance 是：使用 `apt-fast` 安装 apt packages，使用 `uv` 管理 Python dependencies，使用 `fnm` 切换 Node version，使用 Bun 管理 JavaScript/TypeScript packages，并使用 rustup 安装 Rust toolchain components。
 - 如果任一 target 有 `validation_enabled: true`，bundle 必须声明 `execution.validation_runs`。
 - 如果启用 private benchmark scoring，bundle 必须声明 `execution.official_runs`。
