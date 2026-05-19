@@ -112,6 +112,9 @@ inode hard limit, defaulting to `256` inodes per MiB, so dependency installs are
 bounded without applying the scorer-visible output file cap to setup/build
 workspaces. Future hardening can add non-root run phases or read-only root
 filesystems without weakening the current disk-boundary requirement.
+Permission-repair sidecars use the same Docker hardening baseline as runner
+containers, keep networking disabled, mount their root filesystem read-only, and
+write only to the runner-owned bind mounts they repair.
 
 ## Operational Checks
 

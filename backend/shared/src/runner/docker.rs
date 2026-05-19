@@ -25,6 +25,7 @@ use crate::zip_project::ZipProjectPhaseLimits;
 const STALE_RUNNER_CONTAINER_MIN_AGE_SECS: i64 = 600;
 const PERMISSION_FIX_TIMEOUT_SECS: u64 = 30;
 const PLATFORM_CONTAINER_LOG_LIMIT_BYTES: u64 = 1024 * 1024;
+const PERMISSION_FIX_LOG_LIMIT_BYTES: u64 = 4 * 1024;
 
 #[derive(Debug)]
 /// Carries container request data across this module boundary.
@@ -85,44 +86,22 @@ pub(super) async fn run_container(
         .checked_mul(1_000_000)
         .ok_or_else(|| AppError::Runner("CPU limit overflow".to_string()))?;
     let log_cap_bytes = PLATFORM_CONTAINER_LOG_LIMIT_BYTES;
-    let host_config = HostConfig {
-        network_mode: Some(
-            request
-                .limits
-                .network_access
-                .docker_network_mode()
-                .to_string(),
-        ),
-        mounts: Some(request.mounts),
-        auto_remove: Some(false),
-        memory: Some(memory),
-        memory_swap: Some(memory),
-        nano_cpus: Some(nano_cpus),
-        pids_limit: Some(256),
-        ulimits: Some(vec![
-            ResourcesUlimits {
-                name: Some("nofile".to_string()),
-                soft: Some(1024),
-                hard: Some(1024),
-            },
-            ResourcesUlimits {
-                name: Some("nproc".to_string()),
-                soft: Some(256),
-                hard: Some(256),
-            },
-        ]),
-        cap_drop: Some(vec!["ALL".to_string()]),
-        security_opt: Some(vec!["no-new-privileges:true".to_string()]),
-        privileged: Some(false),
-        publish_all_ports: Some(false),
-        init: Some(true),
-        oom_kill_disable: Some(false),
-        log_config: Some(docker_log_config(log_cap_bytes)),
-        storage_opt: docker_storage_opt(request.docker_layer_quota_mb),
-        runtime: gpu_runtime(request.accelerator),
-        device_requests: gpu_device_requests(request.accelerator),
-        ..Default::default()
-    };
+    let mut host_config = hardened_container_host_config(
+        request
+            .limits
+            .network_access
+            .docker_network_mode()
+            .to_string(),
+        request.mounts,
+        log_cap_bytes,
+        false,
+    );
+    host_config.memory = Some(memory);
+    host_config.memory_swap = Some(memory);
+    host_config.nano_cpus = Some(nano_cpus);
+    host_config.storage_opt = docker_storage_opt(request.docker_layer_quota_mb);
+    host_config.runtime = gpu_runtime(request.accelerator);
+    host_config.device_requests = gpu_device_requests(request.accelerator);
     let container_config = ContainerCreateBody {
         image: Some(request.image),
         cmd: Some(request.cmd),
@@ -223,16 +202,7 @@ async fn repair_bind_mount_permissions(
     labels.insert("agentics.runner".to_string(), "zip_project".to_string());
     labels.insert("agentics.phase".to_string(), "permission-fix".to_string());
 
-    let host_config = HostConfig {
-        network_mode: Some("none".to_string()),
-        mounts: Some(mounts),
-        auto_remove: Some(false),
-        security_opt: Some(vec!["no-new-privileges:true".to_string()]),
-        privileged: Some(false),
-        publish_all_ports: Some(false),
-        init: Some(true),
-        ..Default::default()
-    };
+    let host_config = permission_repair_host_config(mounts);
     let container_config = ContainerCreateBody {
         image: Some(image),
         cmd: Some(cmd),
@@ -251,19 +221,23 @@ async fn repair_bind_mount_permissions(
         .await
         .map_err(|e| AppError::Docker(format!("create permission repair container failed: {e}")))?;
     let container_id = create_resp.id;
-    let run_result =
-        run_created_container(docker, &container_id, PERMISSION_FIX_TIMEOUT_SECS, 4 * 1024)
-            .await
-            .and_then(|outcome| {
-                if outcome.exit_code == 0 && !outcome.timed_out {
-                    Ok(())
-                } else {
-                    Err(AppError::Docker(format!(
-                        "permission repair container failed: exit_code={}, timed_out={}, logs={}",
-                        outcome.exit_code, outcome.timed_out, outcome.logs
-                    )))
-                }
-            });
+    let run_result = run_created_container(
+        docker,
+        &container_id,
+        PERMISSION_FIX_TIMEOUT_SECS,
+        PERMISSION_FIX_LOG_LIMIT_BYTES,
+    )
+    .await
+    .and_then(|outcome| {
+        if outcome.exit_code == 0 && !outcome.timed_out {
+            Ok(())
+        } else {
+            Err(AppError::Docker(format!(
+                "permission repair container failed: exit_code={}, timed_out={}, logs={}",
+                outcome.exit_code, outcome.timed_out, outcome.logs
+            )))
+        }
+    });
     let remove_result = remove_container(docker, &container_id).await;
     match (run_result, remove_result) {
         (Ok(()), Ok(())) => Ok(()),
@@ -497,6 +471,57 @@ pub fn connect_docker(config: &Config) -> Result<Docker> {
         None => Docker::connect_with_defaults()
             .map_err(|e| AppError::Docker(format!("failed to connect to Docker: {e}"))),
     }
+}
+
+/// Build the Docker hardening baseline shared by runner and helper containers.
+fn hardened_container_host_config(
+    network_mode: String,
+    mounts: Vec<Mount>,
+    log_cap_bytes: u64,
+    readonly_rootfs: bool,
+) -> HostConfig {
+    HostConfig {
+        network_mode: Some(network_mode),
+        mounts: Some(mounts),
+        auto_remove: Some(false),
+        pids_limit: Some(256),
+        ulimits: Some(container_ulimits()),
+        cap_drop: Some(vec!["ALL".to_string()]),
+        security_opt: Some(vec!["no-new-privileges:true".to_string()]),
+        privileged: Some(false),
+        publish_all_ports: Some(false),
+        init: Some(true),
+        oom_kill_disable: Some(false),
+        log_config: Some(docker_log_config(log_cap_bytes)),
+        readonly_rootfs: Some(readonly_rootfs),
+        ..Default::default()
+    }
+}
+
+/// Build permission-repair host config with only writable bind mounts exposed.
+fn permission_repair_host_config(mounts: Vec<Mount>) -> HostConfig {
+    hardened_container_host_config(
+        "none".to_string(),
+        mounts,
+        PERMISSION_FIX_LOG_LIMIT_BYTES,
+        true,
+    )
+}
+
+/// Return resource ulimits shared across runner and helper containers.
+fn container_ulimits() -> Vec<ResourcesUlimits> {
+    vec![
+        ResourcesUlimits {
+            name: Some("nofile".to_string()),
+            soft: Some(1024),
+            hard: Some(1024),
+        },
+        ResourcesUlimits {
+            name: Some("nproc".to_string()),
+            soft: Some(256),
+            hard: Some(256),
+        },
+    ]
 }
 
 /// Pull an image before creating a runner container.
@@ -784,6 +809,36 @@ mod tests {
 
         assert_eq!(selected.len(), 1);
         assert_eq!(selected[0].target.as_deref(), Some("/workspace"));
+    }
+
+    /// Verifies permission-repair sidecars use the runner hardening baseline.
+    #[test]
+    fn permission_repair_host_config_is_hardened() {
+        let mount = bind_mount(std::path::Path::new("/tmp/write"), "/workspace", false);
+        let config = permission_repair_host_config(vec![mount]);
+
+        assert_eq!(config.network_mode.as_deref(), Some("none"));
+        assert_eq!(config.auto_remove, Some(false));
+        assert_eq!(config.pids_limit, Some(256));
+        assert_eq!(config.cap_drop.as_deref(), Some(&["ALL".to_string()][..]));
+        assert_eq!(
+            config.security_opt.as_deref(),
+            Some(&["no-new-privileges:true".to_string()][..])
+        );
+        assert_eq!(config.privileged, Some(false));
+        assert_eq!(config.publish_all_ports, Some(false));
+        assert_eq!(config.init, Some(true));
+        assert_eq!(config.oom_kill_disable, Some(false));
+        assert_eq!(config.readonly_rootfs, Some(true));
+        assert_eq!(
+            config
+                .log_config
+                .as_ref()
+                .and_then(|log_config| log_config.config.as_ref())
+                .and_then(|values| values.get("max-size"))
+                .map(String::as_str),
+            Some("4096b")
+        );
     }
 
     /// Verifies fresh matching claims keep their runner containers.

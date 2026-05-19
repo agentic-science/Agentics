@@ -109,6 +109,9 @@ directories。DGX slots 还会设置 inode hard limit，默认每 MiB `256` 个 
 因此 dependency installs 会被约束，但不会把 scorer-visible output file cap 应用到
 setup/build workspaces。未来 hardening 可以加入 non-root run phases 或 read-only
 root filesystems，但不能弱化当前 disk-boundary 要求。
+Permission-repair sidecars 使用与 runner containers 相同的 Docker hardening
+baseline，保持 network disabled，将 root filesystem 设为 read-only，并且只写入它们
+要修复的 runner-owned bind mounts。
 
 ## Operational Checks
 
