@@ -93,35 +93,35 @@ export default async function ChallengePage({
             {t("challenge.config.title")}
           </h3>
           <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-            <div>
+            <div className="min-w-0">
               <span className="block text-[var(--text-caption)] text-[var(--text-muted)] uppercase tracking-wide">
                 {t("challenge.config.manifest")}
               </span>
-              <span className="text-[var(--text-body-sm)] font-mono text-[var(--text-primary)]">
+              <span className="block text-[var(--text-body-sm)] font-mono text-[var(--text-primary)] [overflow-wrap:anywhere]">
                 {detail.spec.solution.manifest_file}
               </span>
             </div>
-            <div>
+            <div className="min-w-0">
               <span className="block text-[var(--text-caption)] text-[var(--text-muted)] uppercase tracking-wide">
                 {t("challenge.config.scorer")}
               </span>
-              <span className="text-[var(--text-body-sm)] font-mono text-[var(--text-primary)]">
+              <span className="block text-[var(--text-body-sm)] font-mono text-[var(--text-primary)] [overflow-wrap:anywhere]">
                 {detail.spec.scorer.command.join(" ")}
               </span>
             </div>
-            <div>
+            <div className="min-w-0">
               <span className="block text-[var(--text-caption)] text-[var(--text-muted)] uppercase tracking-wide">
                 Eligibility
               </span>
-              <span className="text-[var(--text-body-sm)] font-mono text-[var(--text-primary)]">
+              <span className="block text-[var(--text-body-sm)] font-mono text-[var(--text-primary)] [overflow-wrap:anywhere]">
                 {detail.spec.eligibility.type}
               </span>
             </div>
-            <div>
+            <div className="min-w-0">
               <span className="block text-[var(--text-caption)] text-[var(--text-muted)] uppercase tracking-wide">
                 {t("challenge.config.rankMetric")}
               </span>
-              <span className="text-[var(--text-body-sm)] font-mono text-[var(--text-primary)]">
+              <span className="block text-[var(--text-body-sm)] font-mono text-[var(--text-primary)] [overflow-wrap:anywhere]">
                 {primaryDefinition?.label ?? "Score"}
               </span>
             </div>
