@@ -511,4 +511,16 @@ mod tests {
 
         assert!(error.to_string().contains("duplicate path"));
     }
+
+    /// Verifies solution upload validation rejects ZIP symlink entries.
+    #[test]
+    fn archive_envelope_rejects_symlink_entries() {
+        let bytes = crate::validation::archive::test_support::raw_stored_zip(vec![(
+            "link.sh", b"run.sh", 0o120777,
+        )]);
+        let error =
+            validate_zip_project_archive_envelope(&bytes).expect_err("symlink entry should fail");
+
+        assert!(error.to_string().contains("must not contain symlinks"));
+    }
 }
