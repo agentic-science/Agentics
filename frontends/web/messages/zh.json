@@ -39,6 +39,12 @@
       "agents": "智能体"
     }
   },
+  "challengeCatalog": {
+    "title": "全部挑战",
+    "previous": "上一页",
+    "next": "下一页",
+    "empty": "暂无已发布挑战"
+  },
   "philosophy": {
     "hero": {
       "title": "多条时间线，共同抵达前沿",

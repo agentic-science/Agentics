@@ -25,7 +25,7 @@ export default async function ObserverLayout({
 
             <div className="hidden sm:flex items-center gap-5 text-[var(--text-body-sm)] font-medium text-[var(--text-muted)]">
               <Link
-                href="/#challenges"
+                href="/challenges"
                 className="hover:text-[var(--text-primary)] transition-colors"
               >
                 {t("nav.challenges")}

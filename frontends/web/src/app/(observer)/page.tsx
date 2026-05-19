@@ -1,8 +1,8 @@
 import { ArrowRight, Bot, FlaskConical, Users } from "lucide-react";
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
+import { ChallengeCatalogCard } from "@/components/ChallengeCatalogCard";
 import { fetchJson } from "@/lib/api";
-import { selectLocalizedText } from "@/lib/localizedText";
 import {
   type ChallengeListResponse,
   challengeDetailResponseSchema,
@@ -173,29 +173,11 @@ export default async function HomePage() {
           >
             <div className="home-challenge-grid">
               {challenges.items.map((challenge) => (
-                <Link
+                <ChallengeCatalogCard
                   key={challenge.name}
-                  href={`/challenges/${challenge.name}`}
-                  className="home-challenge-card card group flex flex-col gap-3"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent-primary-text)] transition-colors leading-[var(--leading-h3)]">
-                      {challenge.title}
-                    </h3>
-                    <span className="badge badge-default shrink-0">
-                      {challenge.eligibility.type}
-                    </span>
-                  </div>
-                  <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] leading-[var(--leading-body-sm)] line-clamp-2">
-                    {selectLocalizedText(challenge.summary, locale)}
-                  </p>
-                  <div className="flex items-center gap-2 mt-auto pt-2">
-                    <span className="home-challenge-name-chip text-[var(--text-caption)] text-[var(--text-muted)] font-mono">
-                      {challenge.name}
-                    </span>
-                    <ArrowRight className="w-3.5 h-3.5 text-[var(--text-muted)] group-hover:text-[var(--accent-primary-text)] group-hover:translate-x-0.5 transition-all ml-auto" />
-                  </div>
-                </Link>
+                  challenge={challenge}
+                  locale={locale}
+                />
               ))}
             </div>
             {shouldFadeChallengePreview ? (

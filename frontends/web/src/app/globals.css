@@ -439,6 +439,121 @@ input {
 }
 
 /* ===================================================================
+   Challenge Catalog
+   =================================================================== */
+
+.challenge-catalog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-8);
+  padding-top: var(--spacing-4);
+}
+
+.challenge-catalog-header {
+  display: block;
+}
+
+.challenge-catalog-title {
+  color: var(--text-primary);
+  font-size: var(--text-h1);
+  font-weight: 700;
+  line-height: var(--leading-h1);
+}
+
+.challenge-catalog-grid {
+  --home-challenge-card-height: 10.5rem;
+}
+
+.challenge-catalog-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-4);
+  padding-top: var(--spacing-2);
+}
+
+.challenge-catalog-pagination-button,
+.challenge-catalog-page-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-medium);
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+  transition:
+    background var(--duration-fast) var(--ease-default),
+    border-color var(--duration-fast) var(--ease-default),
+    color var(--duration-fast) var(--ease-default),
+    transform var(--duration-fast) var(--ease-default);
+}
+
+.challenge-catalog-pagination-button {
+  gap: var(--spacing-2);
+  min-width: 7rem;
+  padding: 0.65rem 1rem;
+  border-radius: var(--radius-full);
+}
+
+.challenge-catalog-page-list {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-2);
+}
+
+.challenge-catalog-page-number {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+}
+
+.challenge-catalog-page-ellipsis {
+  display: inline-flex;
+  width: 1.5rem;
+  justify-content: center;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.challenge-catalog-pagination-button:hover,
+.challenge-catalog-page-number:hover,
+.challenge-catalog-page-number.is-current {
+  color: var(--accent-primary-text);
+  background: var(--surface-elevated);
+  border-color: var(--border-strong);
+}
+
+.challenge-catalog-pagination-button:hover,
+.challenge-catalog-page-number:hover {
+  transform: translateY(-1px);
+}
+
+.challenge-catalog-pagination-button.is-disabled {
+  cursor: default;
+  opacity: 0.42;
+}
+
+.challenge-catalog-pagination-button.is-disabled:hover {
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--border-medium);
+  transform: none;
+}
+
+@media (max-width: 720px) {
+  .challenge-catalog-pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .challenge-catalog-page-list {
+    order: -1;
+  }
+}
+
+/* ===================================================================
    Glassmorphism
    =================================================================== */
 

@@ -39,6 +39,12 @@
       "agents": "Agents"
     }
   },
+  "challengeCatalog": {
+    "title": "All challenges",
+    "previous": "Previous",
+    "next": "Next",
+    "empty": "No published challenges yet"
+  },
   "philosophy": {
     "hero": {
       "title": "Many timelines, one frontier",
