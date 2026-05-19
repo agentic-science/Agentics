@@ -21,6 +21,10 @@ const DEFAULT_RUNNER_WRITABLE_SLOT_CLASSES_MB: &str = "64,256,1024,4096";
 const DEFAULT_RUNNER_MAX_OUTPUT_FILES: u64 = 8192;
 const DEFAULT_RUNNER_MAX_OUTPUT_DIRS: u64 = 1024;
 const DEFAULT_RUNNER_MAX_OUTPUT_DEPTH: u64 = 32;
+const DEFAULT_RUNNER_MAX_RUNS: u64 = crate::challenge_bundle::MAX_CHALLENGE_RUNS_PER_EVALUATION;
+const DEFAULT_RUNNER_MAX_RESULT_JSON_BYTES: u64 = 4 * 1024 * 1024;
+const DEFAULT_RUNNER_MAX_PUBLIC_RESULTS: u64 = 1024;
+const DEFAULT_RUNNER_MAX_RESULT_LOG_BYTES: u64 = 256 * 1024;
 
 /// Application configuration loaded from `AGENTICS_*` environment variables.
 #[derive(Debug, Clone, Deserialize)]
@@ -112,6 +116,14 @@ pub struct Config {
     pub runner_max_output_dirs: u64,
     #[serde(default = "default_runner_max_output_depth")]
     pub runner_max_output_depth: u64,
+    #[serde(default = "default_runner_max_runs")]
+    pub runner_max_runs: u64,
+    #[serde(default = "default_runner_max_result_json_bytes")]
+    pub runner_max_result_json_bytes: u64,
+    #[serde(default = "default_runner_max_public_results")]
+    pub runner_max_public_results: u64,
+    #[serde(default = "default_runner_max_result_log_bytes")]
+    pub runner_max_result_log_bytes: u64,
     #[serde(default = "default_log_level")]
     pub log_level: String,
 }
@@ -387,6 +399,26 @@ fn default_runner_max_output_depth() -> u64 {
     DEFAULT_RUNNER_MAX_OUTPUT_DEPTH
 }
 
+/// Default maximum solution invocations accepted in one evaluation.
+fn default_runner_max_runs() -> u64 {
+    DEFAULT_RUNNER_MAX_RUNS
+}
+
+/// Default maximum raw scorer result JSON bytes accepted before parsing.
+fn default_runner_max_result_json_bytes() -> u64 {
+    DEFAULT_RUNNER_MAX_RESULT_JSON_BYTES
+}
+
+/// Default maximum public case result entries accepted in scorer output.
+fn default_runner_max_public_results() -> u64 {
+    DEFAULT_RUNNER_MAX_PUBLIC_RESULTS
+}
+
+/// Default maximum embedded scorer log bytes accepted in scorer output.
+fn default_runner_max_result_log_bytes() -> u64 {
+    DEFAULT_RUNNER_MAX_RESULT_LOG_BYTES
+}
+
 impl Config {
     /// Load configuration from `AGENTICS_*` environment variables with defaults.
     pub fn from_env() -> anyhow::Result<Self> {
@@ -570,6 +602,24 @@ impl Config {
         }
         if self.runner_max_output_depth == 0 {
             anyhow::bail!("AGENTICS_RUNNER_MAX_OUTPUT_DEPTH must be greater than zero");
+        }
+        if self.runner_max_runs == 0 {
+            anyhow::bail!("AGENTICS_RUNNER_MAX_RUNS must be greater than zero");
+        }
+        if self.runner_max_runs > crate::challenge_bundle::MAX_CHALLENGE_RUNS_PER_EVALUATION {
+            anyhow::bail!(
+                "AGENTICS_RUNNER_MAX_RUNS must be at most {}",
+                crate::challenge_bundle::MAX_CHALLENGE_RUNS_PER_EVALUATION
+            );
+        }
+        if self.runner_max_result_json_bytes == 0 {
+            anyhow::bail!("AGENTICS_RUNNER_MAX_RESULT_JSON_BYTES must be greater than zero");
+        }
+        if self.runner_max_public_results == 0 {
+            anyhow::bail!("AGENTICS_RUNNER_MAX_PUBLIC_RESULTS must be greater than zero");
+        }
+        if self.runner_max_result_log_bytes == 0 {
+            anyhow::bail!("AGENTICS_RUNNER_MAX_RESULT_LOG_BYTES must be greater than zero");
         }
         Ok(())
     }
@@ -798,12 +848,16 @@ mod tests {
         assert_eq!(config.runner_max_output_files, 8192);
         assert_eq!(config.runner_max_output_dirs, 1024);
         assert_eq!(config.runner_max_output_depth, 32);
+        assert_eq!(config.runner_max_runs, 12);
+        assert_eq!(config.runner_max_result_json_bytes, 4 * 1024 * 1024);
+        assert_eq!(config.runner_max_public_results, 1024);
+        assert_eq!(config.runner_max_result_log_bytes, 256 * 1024);
         assert!(config.validate_runner_storage().is_ok());
     }
 
-    /// Verifies zero runner output limits are rejected.
+    /// Verifies invalid runner output and result limits are rejected.
     #[test]
-    fn runner_output_limits_must_be_positive() {
+    fn runner_output_and_result_limits_must_be_valid() {
         for (mut config, expected) in [
             (
                 Config {
@@ -825,6 +879,41 @@ mod tests {
                     ..test_config()
                 },
                 "AGENTICS_RUNNER_MAX_OUTPUT_DEPTH",
+            ),
+            (
+                Config {
+                    runner_max_runs: 0,
+                    ..test_config()
+                },
+                "AGENTICS_RUNNER_MAX_RUNS",
+            ),
+            (
+                Config {
+                    runner_max_runs: 13,
+                    ..test_config()
+                },
+                "AGENTICS_RUNNER_MAX_RUNS",
+            ),
+            (
+                Config {
+                    runner_max_result_json_bytes: 0,
+                    ..test_config()
+                },
+                "AGENTICS_RUNNER_MAX_RESULT_JSON_BYTES",
+            ),
+            (
+                Config {
+                    runner_max_public_results: 0,
+                    ..test_config()
+                },
+                "AGENTICS_RUNNER_MAX_PUBLIC_RESULTS",
+            ),
+            (
+                Config {
+                    runner_max_result_log_bytes: 0,
+                    ..test_config()
+                },
+                "AGENTICS_RUNNER_MAX_RESULT_LOG_BYTES",
             ),
         ] {
             config.api_host = "127.0.0.1".to_string();
@@ -921,6 +1010,10 @@ mod tests {
             runner_max_output_files: super::default_runner_max_output_files(),
             runner_max_output_dirs: super::default_runner_max_output_dirs(),
             runner_max_output_depth: super::default_runner_max_output_depth(),
+            runner_max_runs: super::default_runner_max_runs(),
+            runner_max_result_json_bytes: super::default_runner_max_result_json_bytes(),
+            runner_max_public_results: super::default_runner_max_public_results(),
+            runner_max_result_log_bytes: super::default_runner_max_result_log_bytes(),
             log_level: "info".to_string(),
         }
     }

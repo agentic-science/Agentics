@@ -723,6 +723,38 @@ async fn source_backed_run_inputs_must_exist_under_bundle_root() {
     assert!(present_result.is_ok());
 }
 
+/// Verifies that run manifests cannot declare more than the platform run cap.
+#[tokio::test]
+async fn run_manifest_rejects_too_many_runs() {
+    let root = std::env::temp_dir().join(format!(
+        "agentics-bundle-too-many-runs-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let mut spec = base_spec();
+    spec.datasets.private_benchmark_enabled = false;
+    create_bundle(&root, &spec);
+    let runs = (0..=crate::challenge_bundle::MAX_CHALLENGE_RUNS_PER_EVALUATION)
+        .map(|index| {
+            serde_json::json!({
+                "run_name": format!("public-{index}"),
+                "interface": "stdio",
+                "stdin_text": "1"
+            })
+        })
+        .collect::<Vec<_>>();
+    std::fs::write(
+        root.join("public/runs.json"),
+        serde_json::json!({ "runs": runs }).to_string(),
+    )
+    .expect("failed to write too-large run manifest");
+
+    let result = validate_challenge_bundle(&root).await;
+    drop(std::fs::remove_dir_all(root));
+
+    let error = result.expect_err("too many runs should be rejected");
+    assert!(error.to_string().contains("at most 12 runs"));
+}
+
 /// Verifies that enabled private benchmark bundle requires directory.
 #[tokio::test]
 async fn enabled_private_benchmark_bundle_requires_directory() {

@@ -149,6 +149,14 @@ artifact handling and are not participant-controlled. They do not cap
 setup/build dependency trees; dependency-heavy challenges should use larger
 `disk_limit_mb` profiles so the hosted worker selects larger quota slots.
 
+Challenge-owned run manifests may declare at most `12` runs. Runner logs are
+persisted with a cap of one MiB per concrete run, so the default maximum for one
+evaluation is 12 MiB. Scorer `result.json` is capped at 4 MiB before parsing.
+Within `result.json`, `public_results` may contain at most `1024` entries and
+embedded `logs` may contain at most 256 KiB of UTF-8 text. Participants and
+challenge scorers should use stdout/stderr for larger diagnostics instead of
+embedding large log payloads in `result.json`.
+
 The parser exposes an ordered phase execution plan from `commands`. The worker combines that plan with the selected target resource profile to produce phase-specific logs and structured failure reports. Failure reports carry the failed phase name, reason, message, optional exit code, and optional safe relative log path.
 
 Runner containers also use Docker-level containment controls: memory and CPU

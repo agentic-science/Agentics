@@ -350,6 +350,37 @@ impl RunMetricResult {
 }
 
 impl ScorerRunResult {
+    /// Validate platform-owned size limits before result persistence.
+    pub fn validate_size_limits(
+        &self,
+        max_public_results: u64,
+        max_result_log_bytes: u64,
+    ) -> Result<(), String> {
+        let public_result_count = u64::try_from(self.public_results.len())
+            .map_err(|_| "public_results count exceeds supported range".to_string())?;
+        if public_result_count > max_public_results {
+            return Err(format!(
+                "public_results contains too many entries: {public_result_count} > {max_public_results}"
+            ));
+        }
+
+        let mut log_bytes = 0u64;
+        for log in &self.logs {
+            let len = u64::try_from(log.len())
+                .map_err(|_| "result.logs byte length exceeds supported range".to_string())?;
+            log_bytes = log_bytes
+                .checked_add(len)
+                .ok_or_else(|| "result.logs byte length overflow".to_string())?;
+            if log_bytes > max_result_log_bytes {
+                return Err(format!(
+                    "result.logs exceeds byte limit: {log_bytes} > {max_result_log_bytes} bytes"
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
     /// Validate scorer output against the evaluation mode that was actually run.
     ///
     /// If the scorer included a `mode`, it must match `mode`; older scorer
@@ -578,7 +609,8 @@ mod tests {
     use crate::models::names::{MetricName, RunName};
 
     use super::{
-        MetricValue, RunMetricResult, ScoreSummary, ScorerRunResult, ScorerRunStatus, ScoringMode,
+        MetricValue, RunMetricResult, ScoreSummary, ScorerCaseStatus, ScorerRunResult,
+        ScorerRunStatus, ScoringMode,
     };
 
     /// Handles metric name for this module.
@@ -757,6 +789,39 @@ mod tests {
                 .normalize_metrics(&schema, ScoringMode::Validation)
                 .is_err()
         );
+    }
+
+    /// Verifies platform size limits reject result payload expansion.
+    #[test]
+    fn scorer_result_size_limits_are_enforced() {
+        let mut result = valid_validation_result();
+        result.public_results = vec![
+            super::PublicCaseResult {
+                case_name: "case-1".to_string(),
+                status: ScorerCaseStatus::Passed,
+                score: 1.0,
+                message: None,
+            },
+            super::PublicCaseResult {
+                case_name: "case-2".to_string(),
+                status: ScorerCaseStatus::Passed,
+                score: 1.0,
+                message: None,
+            },
+        ];
+
+        let public_result_error = result
+            .validate_size_limits(1, 1024)
+            .expect_err("public result count should be capped");
+        assert!(public_result_error.contains("public_results"));
+
+        let mut result = valid_validation_result();
+        result.logs = vec!["abcd".to_string(), "efgh".to_string()];
+
+        let log_error = result
+            .validate_size_limits(1024, 7)
+            .expect_err("embedded result logs should be capped");
+        assert!(log_error.contains("result.logs"));
     }
 }
 

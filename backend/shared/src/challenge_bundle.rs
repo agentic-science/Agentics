@@ -23,6 +23,9 @@ mod images;
 
 pub use filesystem::{challenge_bundle_tree_sha256, copy_challenge_bundle_dir};
 
+/// Hard maximum number of solution invocations in one evaluation.
+pub const MAX_CHALLENGE_RUNS_PER_EVALUATION: u64 = 12;
+
 /// Read `spec.json` from a bundle directory and validate its contract fields.
 pub async fn read_challenge_bundle_spec(bundle_dir: &Path) -> Result<ChallengeBundleSpec> {
     let spec_path = bundle_dir.join("spec.json");
@@ -407,6 +410,14 @@ fn validate_challenge_run_manifest(manifest: &ChallengeRunManifest) -> Result<()
         return Err(AppError::Validation(
             "run manifest must declare at least one run".to_string(),
         ));
+    }
+    if u64::try_from(manifest.runs.len())
+        .map(|count| count > MAX_CHALLENGE_RUNS_PER_EVALUATION)
+        .unwrap_or(true)
+    {
+        return Err(AppError::Validation(format!(
+            "run manifest must declare at most {MAX_CHALLENGE_RUNS_PER_EVALUATION} runs"
+        )));
     }
 
     let mut run_names = HashSet::with_capacity(manifest.runs.len());

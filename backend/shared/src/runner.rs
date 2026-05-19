@@ -46,8 +46,8 @@ use filesystem::{
     extract_zip_safe, validate_scorer_visible_output_tree,
 };
 use logs::{
-    append_named_logs, append_phase_logs, append_run_logs, include_log_excerpts, phase_name,
-    visible_log_content,
+    EVALUATION_LOG_BYTES_PER_RUN, EvaluationLogs, append_named_logs, append_phase_logs,
+    append_run_logs, include_log_excerpts, phase_name, visible_log_content,
 };
 use storage::{RunnerStorage, WritableMountLease, WritablePhase};
 
@@ -179,6 +179,15 @@ struct RunPlanRequest<'a> {
     prepared_root: &'a Path,
 }
 
+/// Platform-owned limits applied to one runner evaluation.
+#[derive(Clone, Copy)]
+struct EvaluationLimitConfig {
+    max_runs: u64,
+    max_result_json_bytes: u64,
+    max_public_results: u64,
+    max_result_log_bytes: u64,
+}
+
 /// Carries prepare request data across this module boundary.
 struct PrepareRequest<'a> {
     runner: RunnerContext<'a>,
@@ -281,7 +290,16 @@ pub async fn execute_evaluation_job(
         crate::challenge_bundle::validate_digest_pinned_images(&spec)?;
     }
     let result_path = scorer_output_root.join(spec.scorer.result_file.as_path());
-    let mut logs = String::new();
+    let limits = EvaluationLimitConfig {
+        max_runs: config.runner_max_runs,
+        max_result_json_bytes: config.runner_max_result_json_bytes,
+        max_public_results: config.runner_max_public_results,
+        max_result_log_bytes: config.runner_max_result_log_bytes,
+    };
+    let max_log_bytes = EVALUATION_LOG_BYTES_PER_RUN
+        .checked_mul(limits.max_runs)
+        .ok_or_else(|| AppError::Runner("evaluation log limit overflow".to_string()))?;
+    let mut logs = EvaluationLogs::new(max_log_bytes);
     let runner_storage = RunnerStorage::from_config(config)?;
     let output_limits = OutputTreeLimits {
         max_files: config.runner_max_output_files,
@@ -351,6 +369,7 @@ pub async fn execute_evaluation_job(
             &mut logs,
         )
         .await?;
+        configure_run_count_limits(&run_plan.manifest, limits, &mut logs)?;
         run_solution_invocations(
             runner_context,
             SolutionRunRequest {
@@ -388,12 +407,11 @@ pub async fn execute_evaluation_job(
         )
         .await?;
 
-        let result_raw = tokio::fs::read_to_string(&result_path)
-            .await
-            .map_err(|e| AppError::Runner(format!("missing result.json: {e}")))?;
+        let result_raw =
+            read_limited_result_json(&result_path, limits.max_result_json_bytes).await?;
         let mut result: ScorerRunResult = serde_json::from_str(&result_raw)
             .map_err(|e| AppError::Runner(format!("invalid result.json: {e}")))?;
-        validate_scorer_result(&mut result, eval_type, &spec.metric_schema)?;
+        validate_scorer_result(&mut result, eval_type, &spec.metric_schema, limits)?;
 
         Ok(ExecutionResult {
             result,
@@ -457,7 +475,7 @@ async fn read_solution_manifest(
 async fn run_setup_and_build(
     runner: RunnerContext<'_>,
     request: SetupBuildRequest<'_>,
-    logs: &mut String,
+    logs: &mut EvaluationLogs,
 ) -> Result<()> {
     if runner.storage.uses_bounded_slots() {
         return run_setup_and_build_bounded(runner, request, logs).await;
@@ -516,7 +534,7 @@ async fn run_setup_and_build(
 async fn run_setup_and_build_bounded(
     runner: RunnerContext<'_>,
     request: SetupBuildRequest<'_>,
-    logs: &mut String,
+    logs: &mut EvaluationLogs,
 ) -> Result<()> {
     let phases = request
         .manifest
@@ -589,7 +607,7 @@ async fn run_setup_and_build_bounded(
 async fn run_solution_invocations(
     runner: RunnerContext<'_>,
     request: SolutionRunRequest<'_>,
-    logs: &mut String,
+    logs: &mut EvaluationLogs,
 ) -> Result<()> {
     let run_phase = request
         .manifest
@@ -699,7 +717,7 @@ async fn run_solution_invocations(
 async fn run_scorer(
     runner: RunnerContext<'_>,
     request: ScorerRequest<'_>,
-    logs: &mut String,
+    logs: &mut EvaluationLogs,
 ) -> Result<()> {
     make_container_readable_tree(request.bundle_dir).await?;
     make_container_readable_tree(request.runs_root).await?;
@@ -775,7 +793,11 @@ fn validate_scorer_result(
     result: &mut ScorerRunResult,
     eval_type: ScoringMode,
     metric_schema: &MetricSchemaSpec,
+    limits: EvaluationLimitConfig,
 ) -> Result<()> {
+    result
+        .validate_size_limits(limits.max_public_results, limits.max_result_log_bytes)
+        .map_err(|e| AppError::Runner(format!("invalid result.json: {e}")))?;
     result
         .validate_for_mode(eval_type)
         .map_err(|e| AppError::Runner(format!("invalid result.json: {e}")))?;
@@ -784,6 +806,53 @@ fn validate_scorer_result(
         .map_err(|e| AppError::Runner(format!("invalid result.json: {e}")))?;
     result.mode = Some(eval_type);
     Ok(())
+}
+
+/// Apply run-count limits and shrink log storage to the concrete run count.
+fn configure_run_count_limits(
+    run_manifest: &ChallengeRunManifest,
+    limits: EvaluationLimitConfig,
+    logs: &mut EvaluationLogs,
+) -> Result<()> {
+    let run_count = u64::try_from(run_manifest.runs.len())
+        .map_err(|_| AppError::Runner("run count exceeds supported range".to_string()))?;
+    if run_count == 0 {
+        return Err(AppError::Runner(
+            "run manifest must declare at least one run".to_string(),
+        ));
+    }
+    if run_count > limits.max_runs {
+        return Err(AppError::Runner(format!(
+            "run manifest exceeded runner run limit: {run_count} > {} runs",
+            limits.max_runs
+        )));
+    }
+    let log_limit = run_count
+        .checked_mul(EVALUATION_LOG_BYTES_PER_RUN)
+        .ok_or_else(|| AppError::Runner("evaluation log limit overflow".to_string()))?;
+    logs.set_limit(log_limit);
+    Ok(())
+}
+
+/// Read scorer result JSON only after proving its raw byte size is bounded.
+async fn read_limited_result_json(path: &Path, max_bytes: u64) -> Result<String> {
+    let metadata = tokio::fs::metadata(path)
+        .await
+        .map_err(|e| AppError::Runner(format!("missing result.json: {e}")))?;
+    if !metadata.is_file() {
+        return Err(AppError::Runner(
+            "result.json is not a regular file".to_string(),
+        ));
+    }
+    let size = metadata.len();
+    if size > max_bytes {
+        return Err(AppError::Runner(format!(
+            "result.json exceeded size limit: {size} > {max_bytes} bytes"
+        )));
+    }
+    tokio::fs::read_to_string(path)
+        .await
+        .map_err(|e| AppError::Runner(format!("invalid result.json bytes: {e}")))
 }
 
 /// Enumerates run manifest source variants supported by this module.
@@ -795,7 +864,7 @@ enum RunManifestSource<'a> {
 /// Handles resolve run plan for this module.
 async fn resolve_run_plan(
     request: RunPlanRequest<'_>,
-    logs: &mut String,
+    logs: &mut EvaluationLogs,
 ) -> Result<ResolvedRunPlan> {
     match run_manifest_source(request.spec, request.eval_type)? {
         RunManifestSource::Static(manifest_path) => {
@@ -851,7 +920,7 @@ async fn resolve_run_plan(
 }
 
 /// Handles run prepare phase for this module.
-async fn run_prepare_phase(request: PrepareRequest<'_>, logs: &mut String) -> Result<()> {
+async fn run_prepare_phase(request: PrepareRequest<'_>, logs: &mut EvaluationLogs) -> Result<()> {
     let limits = prepare_limits(request.profile, request.prepare);
     let prepared_mount = request
         .runner

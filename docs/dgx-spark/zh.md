@@ -127,6 +127,10 @@ AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true
 AGENTICS_RUNNER_MAX_OUTPUT_FILES=8192
 AGENTICS_RUNNER_MAX_OUTPUT_DIRS=1024
 AGENTICS_RUNNER_MAX_OUTPUT_DEPTH=32
+AGENTICS_RUNNER_MAX_RUNS=12
+AGENTICS_RUNNER_MAX_RESULT_JSON_BYTES=4194304
+AGENTICS_RUNNER_MAX_PUBLIC_RESULTS=1024
+AGENTICS_RUNNER_MAX_RESULT_LOG_BYTES=262144
 ```
 
 公开 hosted profile 前必须使用非默认 `AGENTICS_ADMIN_PASSWORD`。开放 creator
@@ -163,7 +167,10 @@ Worker 会选择不小于 effective phase `disk_limit_mb` 的最小 configured s
 class。如果需要 exact hard phase limit，应让 challenge resource profiles 与 slot
 classes 对齐。单独的 scorer-visible run tree cap 默认为 8192 个 files、1024 个
 directories 和 32 层 depth；setup/build dependency installs 由 XFS byte 和 inode
-quota 约束。
+quota 约束。每次 evaluation 最多运行 12 个 solution invocations。持久化 runner
+logs 按实际 run count 每个 1 MiB 限制，`result.json` 在解析前限制为 4 MiB，
+public scorer feedback 限制为 1024 个 entries，embedded scorer result logs 限制为
+256 KiB。
 
 ## Service Startup
 

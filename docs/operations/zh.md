@@ -94,7 +94,11 @@ writable mounts 由有界的 per-phase XFS project-quota slots 支撑。DGX prof
 `AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true`。默认 platform-owned
 scorer-visible output caps 是 `AGENTICS_RUNNER_MAX_OUTPUT_FILES=8192`、
 `AGENTICS_RUNNER_MAX_OUTPUT_DIRS=1024` 和
-`AGENTICS_RUNNER_MAX_OUTPUT_DEPTH=32`。
+`AGENTICS_RUNNER_MAX_OUTPUT_DEPTH=32`。Result 和 log payload caps 是
+`AGENTICS_RUNNER_MAX_RUNS=12`、`AGENTICS_RUNNER_MAX_RESULT_JSON_BYTES=4194304`、
+`AGENTICS_RUNNER_MAX_PUBLIC_RESULTS=1024` 和
+`AGENTICS_RUNNER_MAX_RESULT_LOG_BYTES=262144`。持久化 runner logs 会按实际 run
+count 乘以 1 MiB 限制，因此默认最大值是 12 MiB。
 
 MVP runner containers 仍使用 image default user 和 writable root filesystem，
 这样 setup/build/run scripts 可以使用普通 package managers 和 toolchains。这是

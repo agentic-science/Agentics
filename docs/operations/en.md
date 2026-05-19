@@ -96,7 +96,11 @@ per-phase XFS project-quota slots. The DGX profile should set
 `AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true`. The default platform-owned
 scorer-visible output caps are `AGENTICS_RUNNER_MAX_OUTPUT_FILES=8192`,
 `AGENTICS_RUNNER_MAX_OUTPUT_DIRS=1024`, and
-`AGENTICS_RUNNER_MAX_OUTPUT_DEPTH=32`.
+`AGENTICS_RUNNER_MAX_OUTPUT_DEPTH=32`. Result and log payload caps are
+`AGENTICS_RUNNER_MAX_RUNS=12`, `AGENTICS_RUNNER_MAX_RESULT_JSON_BYTES=4194304`,
+`AGENTICS_RUNNER_MAX_PUBLIC_RESULTS=1024`, and
+`AGENTICS_RUNNER_MAX_RESULT_LOG_BYTES=262144`. Persisted runner logs are capped
+at the concrete run count times 1 MiB, so the default maximum is 12 MiB.
 
 MVP runner containers still use the image default user and a writable root
 filesystem so setup/build/run scripts can use ordinary package managers and

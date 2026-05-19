@@ -145,6 +145,13 @@ tree 最多包含 `8192` 个 regular files、`1024` 个 directories（包含 roo
 控制。它们不会限制 setup/build dependency trees；dependency-heavy challenges 应使用
 更大的 `disk_limit_mb` profiles，让 hosted worker 选择更大的 quota slots。
 
+Challenge-owned run manifests 最多声明 `12` 个 runs。Runner logs 按每个实际 run
+1 MiB 的上限持久化，因此单次 evaluation 默认最大为 12 MiB。Scorer `result.json`
+在解析前限制为 4 MiB。在 `result.json` 内，`public_results` 最多包含 `1024` 个
+entries，embedded `logs` 最多包含 256 KiB UTF-8 text。Participants 和 challenge
+scorers 如果需要更大的 diagnostics，应使用 stdout/stderr，而不是把大日志塞进
+`result.json`。
+
 Parser 会从 `commands` 暴露 ordered phase execution plan。Worker 会把该 plan 与所选 target resource profile 组合，产生 phase-specific logs 和结构化 failure reports。Failure report 包含 failed phase name、reason、message、可选 exit code，以及可选 safe relative log path。
 
 Runner containers 还会使用 Docker-level containment controls：memory 和 CPU limits、swap 限制到 memory limit、PID 和 process ulimits、drop all capabilities、`no-new-privileges`、不发布端口，以及 bounded Docker log files。这些 controls 会降低 blast radius，但 Docker 仍不应被视为完整的 hostile-code isolation boundary。MVP 中 runner containers 保持 image default user 和 writable root filesystem，以保留 setup/build/run 灵活性。Operators 必须把这视为由 disk quotas 和 Docker hardening 约束的已接受风险，而不是等同于 read-only/non-root isolation。
