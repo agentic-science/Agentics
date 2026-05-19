@@ -1,6 +1,8 @@
 import type { ZodType } from "zod";
 import {
+  type AdminLoginRequest,
   type AdminSessionResponse,
+  adminLoginRequestSchema,
   adminSessionResponseSchema,
 } from "@/lib/schemas";
 
@@ -8,10 +10,7 @@ const ADMIN_API_BASE_URL =
   process.env.NEXT_PUBLIC_AGENTICS_API_BASE_URL?.replace(/\/$/, "") ?? "";
 
 /** Describes the admin credentials shape used by this module. */
-export interface AdminCredentials {
-  username: string;
-  password: string;
-}
+export type AdminCredentials = AdminLoginRequest;
 
 /** Error thrown when an authenticated admin API request fails. */
 export class AdminApiError extends Error {
@@ -60,13 +59,14 @@ export async function adminFetchJson<T>(
 export async function adminLogin(
   credentials: AdminCredentials,
 ): Promise<AdminSessionResponse> {
+  const request = adminLoginRequestSchema.parse(credentials);
   const response = await fetch(adminEndpoint("/api/auth/admin/login"), {
     method: "POST",
     credentials: "include",
     headers: {
       "content-type": "application/json",
     },
-    body: JSON.stringify(credentials),
+    body: JSON.stringify(request),
   });
 
   if (!response.ok) {

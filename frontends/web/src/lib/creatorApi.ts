@@ -20,7 +20,11 @@ import {
   creatorChallengeStatsResponseSchema,
   creatorMeResponseSchema,
   creatorSessionResponseSchema,
+  type GithubOauthCallbackQuery,
+  type GithubOauthLoginRequest,
   type GithubOauthLoginResponse,
+  githubOauthCallbackQuerySchema,
+  githubOauthLoginRequestSchema,
   githubOauthLoginResponseSchema,
   type UploadChallengePrivateAssetRequest,
   uploadChallengePrivateAssetRequestSchema,
@@ -114,13 +118,16 @@ export async function getCreatorSession(): Promise<CreatorSessionResponse> {
 export async function startGithubLogin(
   pioneerCode: string,
 ): Promise<GithubOauthLoginResponse> {
+  const request = githubOauthLoginRequestSchema.parse({
+    ...(pioneerCode ? { pioneer_code: pioneerCode } : {}),
+  } satisfies GithubOauthLoginRequest);
   return creatorFetchJson(
     "/api/auth/github/login",
     githubOauthLoginResponseSchema,
     undefined,
     {
       method: "POST",
-      body: JSON.stringify({ pioneer_code: pioneerCode }),
+      body: JSON.stringify(request),
     },
   );
 }
@@ -130,13 +137,17 @@ export async function completeGithubLogin(
   code: string,
   state: string,
 ): Promise<CreatorSessionResponse> {
+  const request = githubOauthCallbackQuerySchema.parse({
+    code,
+    state,
+  } satisfies GithubOauthCallbackQuery);
   return creatorFetchJson(
     "/api/auth/github/callback",
     creatorSessionResponseSchema,
     undefined,
     {
       method: "POST",
-      body: JSON.stringify({ code, state }),
+      body: JSON.stringify(request),
     },
   );
 }
