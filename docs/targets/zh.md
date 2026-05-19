@@ -33,9 +33,8 @@ variant 开头，例如 `cu130-*`。
 
 CUDA base images 不内置 PyTorch。CUDA variants 跟随 latest stable PyTorch
 支持的 CUDA versions，同时受 NVIDIA `linux/arm64` image availability 和 DGX
-smoke validation 约束。当 hosted deployment 要求
-`AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true` 时，published challenge specs 必须使用
-digest-pinned solution 和 scorer images。
+smoke validation 约束。Published hosted challenge specs 必须使用 digest-pinned
+solution 和 scorer images。
 
 ## Schema
 
@@ -84,7 +83,7 @@ Challenge specs 必须声明一个或多个 targets：
   `gpu`，并在 `resource_profile.hardware_metadata` 中声明 CUDA hardware metadata。
 - AMD64 Linux targets 保留给 post-MVP deployment support。
 - `validation_enabled` 是 target-specific 的。一个 target 可以启用 validation，另一个 target 可以关闭 validation。
-- `resource_profile` 包含该 target 的 Docker images、硬性 resource limits、network policy、可选 resource description 和可选 hardware metadata。Solution 和 scorer images 必须使用受支持的 first-party Agentics image repositories 和与 target 匹配的 tags。Hosted deployments 应启用 `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`，从而拒绝 local image sources，并要求 registry references 包含 immutable `@sha256:<digest>` suffix。
+- `resource_profile` 包含该 target 的 Docker images、硬性 resource limits、network policy、可选 resource description 和可选 hardware metadata。Solution 和 scorer images 必须使用受支持的 first-party Agentics image repositories 和与 target 匹配的 tags。Hosted deployments 必须设置 `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`；hosted startup 会拒绝禁用该配置的 profiles，并且 hosted challenge specs 必须使用包含 immutable `@sha256:<digest>` suffix 的 registry references。
 - CPU targets 必须使用 first-party Agentics CPU base image。面向 participants 的 setup guidance 是：使用 `apt-fast` 安装 apt packages，使用 `uv` 管理 Python dependencies，使用 `fnm` 切换 Node version，使用 Bun 管理 JavaScript/TypeScript packages，并使用 rustup 安装 Rust toolchain components。
 - 如果任一 target 有 `validation_enabled: true`，bundle 必须声明 `execution.validation_runs`。
 - 如果启用 private benchmark scoring，bundle 必须声明 `execution.official_runs`。

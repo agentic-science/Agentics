@@ -749,7 +749,7 @@ async fn prepare_and_publish_new_challenge_draft(
     .await?;
     challenge_bundle::validate_challenge_bundle(ctx.temporary_bundle_path).await?;
     let spec = challenge_bundle::read_challenge_bundle_spec(ctx.temporary_bundle_path).await?;
-    if state.config.require_digest_pinned_images {
+    if state.config.requires_digest_pinned_images() {
         challenge_bundle::validate_digest_pinned_images(&spec)?;
     }
     promote_runtime_bundle(ctx.temporary_bundle_path, ctx.final_bundle_path).await?;

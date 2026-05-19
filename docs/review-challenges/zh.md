@@ -37,8 +37,8 @@ credentials 换取 HttpOnly browser session cookie 和 CSRF token。
   private data 或 generated benchmark preparation。
 - 确认 metrics、ranking direction 和 tie-breakers 明确。
 - 确认 resource limits 和 network policies 适合所选 target。
-- 当 deployment 要求 immutable image references 时，确认 hosted images 使用
-  `source: "registry"` 和 digest-pinned references。
+- 确认 hosted images 使用 `source: "registry"` 和 digest-pinned immutable
+  references。
 - 确认 draft provenance 内部一致：`repo_url`、`pr_url` 和 `pr_number` 必须指向同一个
   GitHub repository 和 pull request。
 - 确认 private asset overlays 通过 Agentics 上传，而不是提交到 GitHub。Uploaded ZIPs

@@ -34,9 +34,8 @@ the declared CUDA variant, such as `cu130-*`.
 
 The CUDA base images intentionally do not include PyTorch. CUDA variants follow
 CUDA versions supported by the latest stable PyTorch release, subject to NVIDIA
-`linux/arm64` image availability and DGX smoke validation. Published challenge
-specs must use digest-pinned solution and scorer images when hosted deployment
-requires `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`.
+`linux/arm64` image availability and DGX smoke validation. Published hosted
+challenge specs must use digest-pinned solution and scorer images.
 
 ## Schema
 
@@ -86,7 +85,7 @@ Rules:
   `gpu`, and CUDA hardware metadata in `resource_profile.hardware_metadata`.
 - AMD64 Linux targets are reserved for post-MVP deployment support.
 - `validation_enabled` is target-specific. Validation can be enabled for one target and disabled for another.
-- `resource_profile` contains the Docker images, hard resource limits, network policy, optional resource description, and optional hardware metadata for that target. The solution and scorer images must use supported first-party Agentics image repositories and target-compatible tags. Hosted deployments should enable `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`, which rejects local image sources and requires registry references to include immutable `@sha256:<digest>` suffixes.
+- `resource_profile` contains the Docker images, hard resource limits, network policy, optional resource description, and optional hardware metadata for that target. The solution and scorer images must use supported first-party Agentics image repositories and target-compatible tags. Hosted deployments must set `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`; hosted startup rejects profiles that disable it, and hosted challenge specs must use registry references with immutable `@sha256:<digest>` suffixes.
 - CPU targets must use the first-party Agentics CPU base image. Its participant-facing setup guidance is to use `apt-fast` for apt packages, `uv` for Python dependencies, `fnm` for Node version changes, Bun for JavaScript/TypeScript package management, and rustup for Rust toolchain components.
 - If any target has `validation_enabled: true`, the bundle must declare `execution.validation_runs`.
 - If private benchmark scoring is enabled, the bundle must declare `execution.official_runs`.

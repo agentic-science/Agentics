@@ -325,7 +325,7 @@ pub async fn execute_evaluation_job(
     make_container_readable_tree(&challenge_bundle_root).await?;
     let bundle_dir = challenge_bundle_root.as_path();
     let spec = crate::challenge_bundle::read_challenge_bundle_spec(bundle_dir).await?;
-    if config.require_digest_pinned_images {
+    if config.requires_digest_pinned_images() {
         crate::challenge_bundle::validate_digest_pinned_images(&spec)?;
     }
     let result_path = scorer_output_root.join(spec.scorer.result_file.as_path());

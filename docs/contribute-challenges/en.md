@@ -232,9 +232,8 @@ validation and official solution submissions.
 - Official scoring is enabled only when the challenge declares `official_runs`
   or `official_prepare`.
 - Images use explicit `local` or `registry` sources, supported first-party
-  Agentics repositories, and target-compatible tags. Hosted deployments reject
-  local images and require digest-pinned registry images when
-  `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`.
+  Agentics repositories, and target-compatible tags. Hosted deployments must
+  reject local images and require digest-pinned registry images.
 - Resource profiles keep time, memory, CPU, disk, and network policy realistic
   for the selected target. Container log capture is platform-owned.
 - Large inputs referenced by run manifests use `input_files[].source_path`.

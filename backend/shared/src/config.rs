@@ -569,6 +569,7 @@ impl Config {
                 "AGENTICS_GITHUB_OAUTH_REDIRECT_URL",
             )?;
         }
+        self.validate_hosted_image_policy()?;
 
         Ok(())
     }
@@ -576,6 +577,7 @@ impl Config {
     /// Validate worker-only storage settings before claiming evaluation jobs.
     pub fn validate_runner_storage(&self) -> anyhow::Result<()> {
         self.validate_runner_output_limits()?;
+        self.validate_hosted_image_policy()?;
 
         match self.runner_writable_storage_mode()? {
             RunnerWritableStorageMode::Unbounded => {
@@ -619,6 +621,23 @@ impl Config {
             anyhow::bail!("AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true is Linux-only");
         }
 
+        Ok(())
+    }
+
+    /// Return whether this configuration must enforce immutable hosted images.
+    pub fn requires_digest_pinned_images(&self) -> bool {
+        self.require_digest_pinned_images
+            || self.host_probe_mode == HostProbeMode::Require
+            || self.runner_writable_storage_mode.trim() == "xfs-project-quota-slots"
+    }
+
+    /// Reject hosted profiles that try to opt out of immutable image references.
+    fn validate_hosted_image_policy(&self) -> anyhow::Result<()> {
+        if self.requires_digest_pinned_images() && !self.require_digest_pinned_images {
+            anyhow::bail!(
+                "AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES must be true for hosted profiles using AGENTICS_HOST_PROBE_MODE=require or AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots"
+            );
+        }
         Ok(())
     }
 
@@ -960,6 +979,7 @@ mod tests {
     fn hosted_runner_requires_bounded_mounts_and_layer_quota() {
         let mut config = test_config();
         config.api_host = "0.0.0.0".to_string();
+        config.require_digest_pinned_images = true;
 
         let error = config
             .validate_runner_storage()
@@ -993,6 +1013,41 @@ mod tests {
             config.validate_runner_storage().is_ok(),
             cfg!(target_os = "linux")
         );
+    }
+
+    /// Verifies hosted profiles cannot disable digest-pinned image enforcement.
+    #[test]
+    fn hosted_profiles_require_digest_pinned_images() {
+        let mut probe_config = Config {
+            host_probe_mode: super::HostProbeMode::Require,
+            ..test_config()
+        };
+        let error = probe_config
+            .validate_api_security()
+            .expect_err("required hosted probes imply immutable images");
+        assert!(
+            error
+                .to_string()
+                .contains("AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES")
+        );
+        assert!(probe_config.requires_digest_pinned_images());
+
+        probe_config.require_digest_pinned_images = true;
+        assert!(probe_config.validate_api_security().is_ok());
+
+        let slot_config = Config {
+            runner_writable_storage_mode: "xfs-project-quota-slots".to_string(),
+            ..test_config()
+        };
+        let error = slot_config
+            .validate_api_security()
+            .expect_err("quota-slot hosted profile implies immutable images");
+        assert!(
+            error
+                .to_string()
+                .contains("AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES")
+        );
+        assert!(slot_config.requires_digest_pinned_images());
     }
 
     /// Handles test config for this module.
