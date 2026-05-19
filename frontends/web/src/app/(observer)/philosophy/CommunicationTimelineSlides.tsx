@@ -381,7 +381,7 @@ function TimelineGraph({
         ))}
       </g>
       {rowLabels?.map((row) => (
-        <g key={row.label}>
+        <g key={`${row.label}-${row.y}`}>
           <text
             className={`${styles.agentLabel} ${styles.agentLabelStrong}`}
             x="52"
@@ -620,7 +620,7 @@ export function SixAgentTimelineSlide({ title }: { title: string }) {
       weight: "strong",
     },
     {
-      id: "six-h6-ai5",
+      id: "six-h6-ai5-early",
       from: { x: xs[1], y: ys[5] },
       to: { x: xs[2], y: ys[4] },
       kind: "draw",
@@ -677,7 +677,7 @@ export function SixAgentTimelineSlide({ title }: { title: string }) {
       at: at(3),
     },
     {
-      id: "six-h6-ai5",
+      id: "six-h6-ai5-late",
       from: { x: xs[3], y: ys[5] },
       to: { x: xs[4], y: ys[4] },
       kind: "draw",
