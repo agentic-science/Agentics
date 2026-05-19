@@ -23,6 +23,7 @@ use shared::models::request::{
     CreateChallengeRequest, CreateChallengeShortlistRevisionRequest, CreatePioneerCodeRequest,
     CreateSolutionSubmissionRequest, PublishChallengeRequest, RegisterAgentRequest,
 };
+use shared::validation::text;
 
 use crate::admin_auth_throttle::remote_addr_from_parts;
 use crate::state::AppState;
@@ -392,11 +393,10 @@ fn bad_request(message: &str) -> (StatusCode, Json<shared::models::ErrorResponse
 
 /// Validates that a string request field has visible, non-whitespace content.
 fn require_non_empty(value: &str, field: &str) -> Result<(), String> {
-    if value.trim().is_empty() {
-        return Err(format!("{field} 不能为空"));
-    }
-
-    Ok(())
+    text::require_non_empty(value, field).map_err(|error| match error {
+        AppError::Validation(message) => message,
+        other => other.to_string(),
+    })
 }
 
 impl ValidateRequest for RegisterAgentRequest {

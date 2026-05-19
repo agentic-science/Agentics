@@ -1,30 +1,22 @@
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use crate::challenge_bundle::is_safe_relative_path;
 use crate::error::{AppError, Result};
+use crate::validation::archive::extract_zip_file_to_dir;
 use crate::zip_project::{
-    MAX_ZIP_PROJECT_ARTIFACT_BYTES, MAX_ZIP_PROJECT_FILE_COUNT, MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES,
-    ZipProjectPhaseFailureReason, ZipProjectPhaseName,
+    ZipProjectPhaseFailureReason, ZipProjectPhaseName, zip_project_archive_policy,
 };
 
 use super::errors::phase_error;
 
 /// Handles extract zip safe for this module.
 pub(super) async fn extract_zip_safe(artifact_path: &Path, target_dir: &Path) -> Result<()> {
-    let artifact_size = tokio::fs::metadata(artifact_path).await?.len();
-    if artifact_size > MAX_ZIP_PROJECT_ARTIFACT_BYTES {
-        return Err(AppError::Validation(format!(
-            "solution archive must be at most {} bytes",
-            MAX_ZIP_PROJECT_ARTIFACT_BYTES
-        )));
-    }
-
     let artifact_path = artifact_path.to_path_buf();
     let target_dir = target_dir.to_path_buf();
-    tokio::task::spawn_blocking(move || extract_zip_safe_blocking(&artifact_path, &target_dir))
-        .await
-        .map_err(|e| AppError::Internal(format!("zip extraction task failed: {e}")))?
+    tokio::task::spawn_blocking(move || {
+        extract_zip_file_to_dir(&artifact_path, &target_dir, &zip_project_archive_policy())
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("zip extraction task failed: {e}")))?
 }
 
 /// Ensures disk limit before continuing.
@@ -89,77 +81,6 @@ pub(super) async fn cleanup_paths<const N: usize>(paths: [PathBuf; N]) -> Result
     Ok(())
 }
 
-/// Handles extract zip safe blocking for this module.
-fn extract_zip_safe_blocking(artifact_path: &Path, target_dir: &Path) -> Result<()> {
-    let reader = std::fs::File::open(artifact_path)?;
-    let mut archive = zip::ZipArchive::new(reader)?;
-    if archive.len() > MAX_ZIP_PROJECT_FILE_COUNT {
-        return Err(AppError::Validation(format!(
-            "solution archive must contain at most {} entries",
-            MAX_ZIP_PROJECT_FILE_COUNT
-        )));
-    }
-
-    let mut total_uncompressed_size = 0u64;
-    let mut seen_paths = HashSet::with_capacity(archive.len());
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i)?;
-        if file
-            .unix_mode()
-            .is_some_and(|mode| mode & 0o170000 == 0o120000)
-        {
-            return Err(AppError::Validation(
-                "solution archive must not contain symlinks".to_string(),
-            ));
-        }
-        let relative_path = match file.enclosed_name() {
-            Some(path) => path.to_path_buf(),
-            None => {
-                return Err(AppError::Validation(
-                    "solution archive contains an unsafe ZIP entry path".to_string(),
-                ));
-            }
-        };
-        let relative_path_string = relative_path.to_string_lossy().to_string();
-        if !is_safe_relative_path(&relative_path_string) {
-            return Err(AppError::Validation(format!(
-                "solution archive contains unsafe path `{relative_path_string}`"
-            )));
-        }
-        if !seen_paths.insert(relative_path_string.clone()) {
-            return Err(AppError::Validation(format!(
-                "solution archive contains duplicate path `{relative_path_string}`"
-            )));
-        }
-        let outpath = target_dir.join(&relative_path);
-
-        total_uncompressed_size = total_uncompressed_size
-            .checked_add(file.size())
-            .ok_or_else(|| AppError::Validation("solution archive is too large".to_string()))?;
-        if total_uncompressed_size > MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES {
-            return Err(AppError::Validation(format!(
-                "solution archive must expand to at most {} bytes",
-                MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES
-            )));
-        }
-
-        if file.is_dir() {
-            std::fs::create_dir_all(&outpath)?;
-        } else {
-            if let Some(parent) = outpath.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            let mut outfile = std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&outpath)?;
-            std::io::copy(&mut file, &mut outfile)?;
-        }
-    }
-
-    Ok(())
-}
-
 /// Handles directory size for this module.
 fn directory_size(path: &Path) -> Result<u64> {
     let mut total = 0u64;
@@ -200,6 +121,8 @@ fn copy_dir_all_blocking(source: &Path, destination: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use std::io::Write;
+
+    use crate::zip_project::MAX_ZIP_PROJECT_FILE_COUNT;
 
     use super::*;
 
@@ -333,7 +256,7 @@ mod tests {
         let error = extract_zip_safe(&zip_path, &target_dir)
             .await
             .expect_err("unsafe entry should fail extraction");
-        assert!(error.to_string().contains("unsafe ZIP entry path"));
+        assert!(error.to_string().contains("unsafe path"));
         assert!(!target_dir.join("main.py").exists());
         assert!(!target_dir.join("scripts/setup.sh").exists());
 
@@ -371,8 +294,8 @@ mod tests {
         write_raw_stored_zip(
             &zip_path,
             vec![
-                ("main.py", b"print('first')\n", 0o100644),
-                ("./main.py", b"print('second')\n", 0o100644),
+                ("scripts/main.py", b"print('first')\n", 0o100644),
+                ("scripts\\main.py", b"print('second')\n", 0o100644),
             ],
         );
 
@@ -380,10 +303,7 @@ mod tests {
             .await
             .expect_err("duplicate entry should fail extraction");
         assert!(error.to_string().contains("duplicate path"));
-        assert_eq!(
-            std::fs::read_to_string(target_dir.join("main.py")).expect("first file should exist"),
-            "print('first')\n"
-        );
+        assert!(!target_dir.join("scripts/main.py").exists());
 
         drop(std::fs::remove_file(zip_path));
         drop(std::fs::remove_dir_all(target_dir));

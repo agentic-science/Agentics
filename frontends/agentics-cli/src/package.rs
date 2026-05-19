@@ -1,9 +1,11 @@
 use std::fs::{self, File};
 use std::io::{Cursor, Seek, Write};
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use ignore::{DirEntry, WalkBuilder};
+use shared::validation::archive::NormalizedArchivePath;
+use shared::zip_project::validate_zip_project_archive_envelope;
 use shared::zip_project::{
     MAX_ZIP_PROJECT_ARTIFACT_BYTES, MAX_ZIP_PROJECT_FILE_COUNT, MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES,
 };
@@ -131,6 +133,7 @@ fn package_solution_workspace_with_limits(
             limits.max_zip_bytes
         );
     }
+    validate_zip_project_archive_envelope(&bytes)?;
 
     Ok(SolutionPackage {
         workspace_dir,
@@ -276,27 +279,7 @@ where
 
 /// Handles archive name for this module.
 fn archive_name(path: &Path) -> Result<String> {
-    let mut parts = Vec::new();
-    for component in path.components() {
-        match component {
-            Component::Normal(value) => {
-                let value = value
-                    .to_str()
-                    .with_context(|| format!("path is not valid UTF-8: {}", path.display()))?;
-                parts.push(value);
-            }
-            Component::CurDir => {}
-            Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
-                bail!("invalid package path: {}", path.display());
-            }
-        }
-    }
-
-    if parts.is_empty() {
-        bail!("empty package path");
-    }
-
-    Ok(parts.join("/"))
+    Ok(NormalizedArchivePath::from_relative_path(path, "solution package path")?.to_string())
 }
 
 /// Handles unix permissions for this module.

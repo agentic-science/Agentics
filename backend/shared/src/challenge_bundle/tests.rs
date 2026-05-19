@@ -342,14 +342,16 @@ fn removed_prepare_metadata_fields_are_rejected() {
     }
 }
 
-/// Verifies that target name is independent from docker platform.
+/// Verifies that hosted challenge target names must use the MVP allowlist.
 #[test]
-fn target_name_is_independent_from_docker_platform() {
+fn target_name_must_use_mvp_allowlist() {
     let mut spec = base_spec();
     spec.targets[0].name = target_name("main");
 
-    validate_challenge_bundle_spec(&spec)
-        .expect("target name should not be coupled to docker platform");
+    let error =
+        validate_challenge_bundle_spec(&spec).expect_err("unsupported target names should fail");
+
+    assert!(error.to_string().contains("not supported for MVP"));
 }
 
 /// Verifies that amd64 targets are reserved for post mvp.

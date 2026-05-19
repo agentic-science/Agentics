@@ -15,6 +15,7 @@ use crate::models::challenge::{
     ChallengeRunSpec, ChallengeSolutionPublicationPolicy, PrivateBenchmarkPolicy,
 };
 use crate::models::paths::BundleRelativePath;
+use crate::validation::{targets, text};
 use crate::zip_project::{ZIP_PROJECT_MANIFEST_FILE, ZIP_PROJECT_PROTOCOL};
 
 mod filesystem;
@@ -282,6 +283,7 @@ fn validate_targets(spec: &ChallengeBundleSpec) -> Result<()> {
     let mut target_names = HashSet::with_capacity(spec.targets.len());
     for (index, target) in spec.targets.iter().enumerate() {
         let field = format!("targets[{index}]");
+        targets::validate_submission_target_policy(target, &field)?;
         images::validate_target(target, &field)?;
         if !target_names.insert(target.name.as_str()) {
             return Err(AppError::Validation(format!(
@@ -563,11 +565,7 @@ fn validate_metric_schema(spec: &ChallengeBundleSpec) -> Result<()> {
 
 /// Requires non empty and reports a domain error otherwise.
 fn require_non_empty(value: &str, field: &str) -> Result<()> {
-    if value.trim().is_empty() {
-        return Err(AppError::Validation(format!("{field} must not be empty")));
-    }
-
-    Ok(())
+    text::require_non_empty(value, field)
 }
 
 /// Validates positive u64 invariants for this contract.

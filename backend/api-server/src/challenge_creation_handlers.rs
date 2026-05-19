@@ -2,7 +2,6 @@
 
 use std::{
     collections::HashSet,
-    io::Cursor,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -27,6 +26,10 @@ use shared::models::ids::{
 use shared::models::names::ChallengeName;
 use shared::models::paths::{RepoRelativePath, RepositoryCheckoutPath};
 use shared::storage::StorageKey;
+use shared::validation::archive::{
+    ArchiveEnvelopePolicy, extract_zip_bytes_to_dir, inspect_zip_bytes,
+};
+use shared::validation::github::GithubPullRequestRef;
 use shared::{challenge_bundle, challenge_creation, db};
 
 use crate::extractors::{AdminAuth, ChallengeDraftIdPath, CreatorAuth, ValidatedJson};
@@ -43,6 +46,11 @@ pub async fn create_challenge_draft(
 ) -> Result<(StatusCode, Json<ChallengeDraftResponse>)> {
     challenge_creation::validate_challenge_creation_manifest(&body.manifest)?;
     validate_challenge_draft_path(&body.challenge_path, &body.manifest.challenge_name)?;
+    GithubPullRequestRef::try_new(
+        body.repo_url.clone(),
+        body.pr_url.clone(),
+        body.pr_number.clone(),
+    )?;
 
     if creator.github_user_id != body.pr_author_github_user_id {
         return Err(AppError::BadRequest(format!(
@@ -270,75 +278,13 @@ fn validate_private_asset_zip_upload_blocking(
     asset_name: &str,
     max_uncompressed_bytes: u64,
 ) -> Result<()> {
-    let reader = Cursor::new(bytes);
-    let mut archive = zip::ZipArchive::new(reader)?;
-    if archive.len() > MAX_PRIVATE_ASSET_FILE_COUNT {
-        return Err(AppError::BadRequest(format!(
-            "private asset `{asset_name}` must contain at most {MAX_PRIVATE_ASSET_FILE_COUNT} entries"
-        )));
-    }
-
-    let mut total_uncompressed_size = 0u64;
-    let mut seen_paths = HashSet::with_capacity(archive.len());
-    for i in 0..archive.len() {
-        let file = archive.by_index(i)?;
-        validate_private_asset_zip_entry(
-            file,
-            asset_name,
-            &mut total_uncompressed_size,
-            max_uncompressed_bytes,
-            &mut seen_paths,
-        )?;
-    }
-
-    Ok(())
-}
-
-/// Validate one private asset ZIP entry for path, type, duplicate, and size safety.
-fn validate_private_asset_zip_entry<R: std::io::Read>(
-    file: zip::read::ZipFile<'_, R>,
-    asset_name: &str,
-    total_uncompressed_size: &mut u64,
-    max_uncompressed_bytes: u64,
-    seen_paths: &mut HashSet<String>,
-) -> Result<()> {
-    if file
-        .unix_mode()
-        .is_some_and(|mode| mode & 0o170000 == 0o120000)
-    {
-        return Err(AppError::BadRequest(format!(
-            "private asset `{asset_name}` must not contain symlinks"
-        )));
-    }
-
-    let Some(relative_path) = file.enclosed_name() else {
-        return Err(AppError::BadRequest(format!(
-            "private asset `{asset_name}` contains an unsafe ZIP entry path"
-        )));
-    };
-    let relative_path_string = relative_path.to_string_lossy().to_string();
-    if !challenge_bundle::is_safe_relative_path(&relative_path_string) {
-        return Err(AppError::BadRequest(format!(
-            "private asset `{asset_name}` contains unsafe path `{relative_path_string}`"
-        )));
-    }
-    if !seen_paths.insert(relative_path_string.clone()) {
-        return Err(AppError::BadRequest(format!(
-            "private asset `{asset_name}` contains duplicate path `{relative_path_string}`"
-        )));
-    }
-
-    *total_uncompressed_size = total_uncompressed_size
-        .checked_add(file.size())
-        .ok_or_else(|| {
-            AppError::BadRequest(format!("private asset `{asset_name}` is too large"))
-        })?;
-    if *total_uncompressed_size > max_uncompressed_bytes {
-        return Err(AppError::BadRequest(format!(
-            "private asset `{asset_name}` must expand to at most {max_uncompressed_bytes} bytes"
-        )));
-    }
-
+    let policy = ArchiveEnvelopePolicy::new(
+        format!("private asset `{asset_name}`"),
+        max_uncompressed_bytes,
+        MAX_PRIVATE_ASSET_FILE_COUNT,
+        max_uncompressed_bytes,
+    );
+    inspect_zip_bytes(bytes, &policy)?;
     Ok(())
 }
 
@@ -1006,77 +952,13 @@ fn extract_private_asset_overlay_blocking(
     asset_name: &str,
     max_uncompressed_bytes: u64,
 ) -> Result<()> {
-    let reader = Cursor::new(bytes);
-    let mut archive = zip::ZipArchive::new(reader)?;
-    if archive.len() > MAX_PRIVATE_ASSET_FILE_COUNT {
-        return Err(AppError::BadRequest(format!(
-            "private asset `{asset_name}` must contain at most {MAX_PRIVATE_ASSET_FILE_COUNT} entries"
-        )));
-    }
-
-    let mut total_uncompressed_size = 0u64;
-    let mut seen_paths = HashSet::with_capacity(archive.len());
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i)?;
-        if file
-            .unix_mode()
-            .is_some_and(|mode| mode & 0o170000 == 0o120000)
-        {
-            return Err(AppError::BadRequest(format!(
-                "private asset `{asset_name}` must not contain symlinks"
-            )));
-        }
-
-        let Some(relative_path) = file.enclosed_name() else {
-            return Err(AppError::BadRequest(format!(
-                "private asset `{asset_name}` contains an unsafe ZIP entry path"
-            )));
-        };
-        let relative_path = relative_path.to_path_buf();
-        let relative_path_string = relative_path.to_string_lossy();
-        if !challenge_bundle::is_safe_relative_path(&relative_path_string) {
-            return Err(AppError::BadRequest(format!(
-                "private asset `{asset_name}` contains unsafe path `{relative_path_string}`"
-            )));
-        }
-        if !seen_paths.insert(relative_path_string.to_string()) {
-            return Err(AppError::BadRequest(format!(
-                "private asset `{asset_name}` contains duplicate path `{relative_path_string}`"
-            )));
-        }
-        let output_path = target_dir.join(&relative_path);
-
-        total_uncompressed_size = total_uncompressed_size
-            .checked_add(file.size())
-            .ok_or_else(|| {
-                AppError::BadRequest(format!("private asset `{asset_name}` is too large"))
-            })?;
-        if total_uncompressed_size > max_uncompressed_bytes {
-            return Err(AppError::BadRequest(format!(
-                "private asset `{asset_name}` must expand to at most {max_uncompressed_bytes} bytes"
-            )));
-        }
-
-        if file.is_dir() {
-            std::fs::create_dir_all(&output_path)?;
-        } else {
-            if output_path.exists() {
-                return Err(AppError::BadRequest(format!(
-                    "private asset `{asset_name}` cannot overwrite bundle file `{relative_path_string}`"
-                )));
-            }
-            if let Some(parent) = output_path.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            let mut outfile = std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&output_path)?;
-            std::io::copy(&mut file, &mut outfile)?;
-        }
-    }
-
-    Ok(())
+    let policy = ArchiveEnvelopePolicy::new(
+        format!("private asset `{asset_name}`"),
+        max_uncompressed_bytes,
+        MAX_PRIVATE_ASSET_FILE_COUNT,
+        max_uncompressed_bytes,
+    );
+    extract_zip_bytes_to_dir(bytes, target_dir, &policy)
 }
 
 /// Returns the trimmed message only when it carries non-whitespace content.
@@ -1133,11 +1015,7 @@ mod tests {
         let error = extract_private_asset_overlay_blocking(&bytes, &target, "official-cases", 1024)
             .expect_err("unsafe ZIP path should fail extraction");
 
-        assert!(
-            error
-                .to_string()
-                .contains("contains an unsafe ZIP entry path")
-        );
+        assert!(error.to_string().contains("contains unsafe path"));
         assert!(
             !escape_target.exists(),
             "unsafe private asset extraction must not write outside the bundle"

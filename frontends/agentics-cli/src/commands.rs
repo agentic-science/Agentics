@@ -6,7 +6,7 @@ use anyhow::{Context, Result, bail};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use secrecy::{ExposeSecret, SecretString};
 use shared::config::Config;
-use shared::models::challenge::{ChallengeDetailResponse, ChallengeTargetSpec};
+use shared::models::challenge::ChallengeDetailResponse;
 use shared::models::challenge_creation::{
     ChallengePrivateAssetKind, ReviewChallengeDraftRequest, ValidateChallengeDraftRequest,
 };
@@ -18,6 +18,7 @@ use shared::models::request::{
     CreateSolutionSubmissionRequest, RankingContextResponse, RegisterAgentRequest,
 };
 use shared::storage::{LocalStorage, Storage, StorageKey};
+use shared::validation::targets::{self, TargetSelectionMode};
 
 use crate::api::ApiClient;
 use crate::cli::{
@@ -630,13 +631,14 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
         );
     }
 
-    let targets = select_targets_from_spec(
+    let targets = targets::select_targets_from_spec(
         &spec.challenge_name,
         &spec.targets,
         args.target.as_ref(),
         args.all_targets,
         TargetSelectionMode::Validation,
-    )?;
+    )
+    .map_err(|error| anyhow::anyhow!(error.to_string()))?;
     let package = package::package_solution_workspace(&args.dir)?;
     let storage_root = resolve_local_storage_dir(args.local_storage_dir.as_deref())?;
     tokio::fs::create_dir_all(&storage_root)
@@ -946,13 +948,6 @@ fn create_solution_submission_request(
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-/// Enumerates target selection mode variants supported by this module.
-enum TargetSelectionMode {
-    Official,
-    Validation,
-}
-
 /// Handles select targets for this module.
 fn select_targets(
     challenge: &ChallengeDetailResponse,
@@ -960,86 +955,14 @@ fn select_targets(
     all_targets: bool,
     mode: TargetSelectionMode,
 ) -> Result<Vec<TargetName>> {
-    select_targets_from_spec(
+    targets::select_targets_from_spec(
         &challenge.name,
         &challenge.spec.targets,
         requested_target,
         all_targets,
         mode,
     )
-}
-
-/// Handles select targets from spec for this module.
-fn select_targets_from_spec(
-    challenge_name: &ChallengeName,
-    targets: &[ChallengeTargetSpec],
-    requested_target: Option<&TargetName>,
-    all_targets: bool,
-    mode: TargetSelectionMode,
-) -> Result<Vec<TargetName>> {
-    if all_targets {
-        let selected = targets.iter().collect::<Vec<_>>();
-        validate_selected_targets(challenge_name, &selected, mode)?;
-        return Ok(selected.iter().map(|target| target.name.clone()).collect());
-    }
-
-    if let Some(target) = requested_target {
-        let target = targets
-            .iter()
-            .find(|candidate| &candidate.name == target)
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "challenge `{}` does not support target `{target}`",
-                    challenge_name
-                )
-            })?;
-        validate_selected_targets(challenge_name, &[target], mode)?;
-        return Ok(vec![target.name.clone()]);
-    }
-
-    match targets {
-        [] => bail!(
-            "challenge `{}` does not declare any targets",
-            challenge_name
-        ),
-        targets => {
-            let available = targets
-                .iter()
-                .map(|target| target.name.as_str())
-                .collect::<Vec<_>>()
-                .join(", ");
-            bail!(
-                "target is required for challenge `{}`; pass --target <target> or --all-targets. Available targets: {available}",
-                challenge_name
-            )
-        }
-    }
-}
-
-/// Validates selected targets invariants for this contract.
-fn validate_selected_targets(
-    challenge_name: &ChallengeName,
-    targets: &[&ChallengeTargetSpec],
-    mode: TargetSelectionMode,
-) -> Result<()> {
-    if mode != TargetSelectionMode::Validation {
-        return Ok(());
-    }
-
-    let disabled = targets
-        .iter()
-        .filter(|target| !target.validation_enabled)
-        .map(|target| target.name.as_str())
-        .collect::<Vec<_>>();
-    if disabled.is_empty() {
-        return Ok(());
-    }
-
-    bail!(
-        "validation pass is disabled for challenge `{}` target(s): {}; submit officially or ask the challenge owner to enable validation",
-        challenge_name,
-        disabled.join(", ")
-    )
+    .map_err(|error| anyhow::anyhow!(error.to_string()))
 }
 
 /// Handles poll validation run for this module.

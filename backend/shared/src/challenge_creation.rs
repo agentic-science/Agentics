@@ -13,6 +13,7 @@ use crate::models::challenge_creation::{
 };
 use crate::models::hashes::Sha256Digest;
 use crate::models::paths::RepoRelativePath;
+use crate::validation::text;
 
 /// Read `agentics.challenge.json` from a proposal root.
 pub async fn read_challenge_creation_manifest(root: &Path) -> Result<ChallengeCreationManifest> {
@@ -341,10 +342,7 @@ fn validate_private_asset_requirements(
 
 /// Requires non empty and reports a domain error otherwise.
 fn require_non_empty(value: &str, field: &str) -> Result<()> {
-    if value.trim().is_empty() {
-        return Err(AppError::Validation(format!("{field} must not be empty")));
-    }
-    Ok(())
+    text::require_non_empty(value, field)
 }
 
 /// Handles reject private files for this module.

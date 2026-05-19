@@ -48,7 +48,10 @@ use shared::models::request::{
     SolutionSubmissionResponse, SolutionSubmissionResultReportResponse,
 };
 use shared::storage::StorageKey;
-use shared::zip_project::MAX_ZIP_PROJECT_ARTIFACT_BYTES;
+use shared::validation::public_api::{
+    self, DEFAULT_PUBLIC_CHALLENGE_LIST_LIMIT, DEFAULT_PUBLIC_LEADERBOARD_LIMIT,
+    DEFAULT_PUBLIC_SUBMISSION_LIST_LIMIT, PublicPagination,
+};
 
 use crate::extractors::{AdminAuth, AgentAuth, SolutionSubmissionPath, ValidatedJson};
 use crate::pioneer_code_security::{is_invalid_pioneer_code, reject_failed_pioneer_code};
@@ -56,10 +59,6 @@ use crate::presenters;
 use crate::state::AppState;
 
 const SUBMISSION_QUOTA_WINDOW_SECONDS: i64 = 24 * 60 * 60;
-const DEFAULT_PUBLIC_CHALLENGE_LIST_LIMIT: i64 = 100;
-const DEFAULT_PUBLIC_SUBMISSION_LIST_LIMIT: i64 = 20;
-const DEFAULT_PUBLIC_LEADERBOARD_LIMIT: i64 = 50;
-const MAX_PUBLIC_LIST_LIMIT: i64 = 100;
 
 /// Parses a boundary string into a domain type and converts validation failures to API errors.
 fn parse_request_value<T>(raw: &str) -> Result<T>
@@ -263,16 +262,6 @@ async fn create_solution_submission_for_mode(
     .await?;
 
     let artifact_bytes = artifacts::base64_decode(&body.artifact_base64).ok_or(AppError::Base64)?;
-    if artifact_bytes.len() as u64 > MAX_ZIP_PROJECT_ARTIFACT_BYTES {
-        return Err(AppError::BadRequest(format!(
-            "artifact zip must be at most {} bytes",
-            MAX_ZIP_PROJECT_ARTIFACT_BYTES
-        )));
-    }
-
-    if !artifacts::is_likely_zip(&artifact_bytes) {
-        return Err(AppError::BadRequest("artifact 必须是 zip 文件".to_string()));
-    }
     let manifest = shared::zip_project::ZipProjectManifest::from_zip_bytes(&artifact_bytes)?;
 
     let solution_submission_id = SolutionSubmissionId::generate();
@@ -455,13 +444,6 @@ fn challenge_lifetime_limit(
     }
 }
 
-/// Bounded pagination parameters for a public collection endpoint.
-#[derive(Debug, Clone, Copy)]
-struct PublicPagination {
-    limit: i64,
-    offset: i64,
-}
-
 /// Query parameters accepted by the public challenge catalog endpoint.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ChallengeCatalogQuery {
@@ -472,14 +454,12 @@ pub struct ChallengeCatalogQuery {
 impl ChallengeCatalogQuery {
     /// Returns validated challenge-list pagination parameters.
     fn page(&self) -> Result<PublicPagination> {
-        Ok(PublicPagination {
-            limit: bounded_public_limit(
-                self.limit,
-                DEFAULT_PUBLIC_CHALLENGE_LIST_LIMIT,
-                "challenge list",
-            )?,
-            offset: bounded_public_offset(self.offset, "challenge list")?,
-        })
+        public_api::public_pagination(
+            self.limit,
+            self.offset,
+            DEFAULT_PUBLIC_CHALLENGE_LIST_LIMIT,
+            "challenge list",
+        )
     }
 }
 
@@ -585,13 +565,9 @@ pub async fn list_public_solution_submissions(
     Query(query): Query<PublicListQuery>,
 ) -> Result<Json<PublicSolutionSubmissionListResponse>> {
     let challenge_name = parse_request_value::<ChallengeName>(&name)?;
-    ensure_public_result_detail_visible(&state.db, &challenge_name).await?;
-    let target = match query.target.as_deref() {
-        Some(requested_target) => {
-            Some(resolve_public_target(&state.db, &challenge_name, Some(requested_target)).await?)
-        }
-        None => None,
-    };
+    let (_challenge, spec) = load_challenge_policy(&state.db, &challenge_name).await?;
+    ensure_public_result_detail_visible_for_spec(&spec)?;
+    let target = public_api::resolve_optional_public_target(&spec, query.target.as_deref())?;
     let limit = query.limit()?;
     let items = db::list_public_solution_submissions_for_challenge(
         &state.db,
@@ -662,6 +638,7 @@ pub async fn get_public_solution_submission_ranking_context(
     ensure_ranking_scope_matches_submission(&solution_submission, &query)?;
     let (_challenge, spec) =
         load_challenge_policy(&state.db, &solution_submission.challenge_name).await?;
+    public_api::resolve_required_public_target(&spec, Some(query.target.as_str()))?;
     ensure_visibility_allows_public(spec.visibility.leaderboard, &spec)?;
     let response = build_ranking_context(
         &state.db,
@@ -702,7 +679,7 @@ pub async fn get_leaderboard(
     let challenge_name = parse_request_value::<ChallengeName>(&name)?;
     let (challenge, spec) = load_challenge_policy(&state.db, &challenge_name).await?;
     ensure_visibility_allows_public(spec.visibility.leaderboard, &spec)?;
-    let target = resolve_public_target(&state.db, &challenge_name, query.target.as_deref()).await?;
+    let target = public_api::resolve_required_public_target(&spec, query.target.as_deref())?;
     let items =
         db::list_leaderboard_entries(&state.db, &challenge_name, &target, query.limit()?).await?;
     Ok(Json(LeaderboardResponse {
@@ -722,7 +699,7 @@ pub async fn get_score_distribution(
     let metric_name = parse_request_value::<MetricName>(&query.metric)?;
     let (challenge, spec) = load_challenge_policy(&state.db, &challenge_name).await?;
     ensure_visibility_allows_public(spec.visibility.score_distribution, &spec)?;
-    let target = resolve_public_target(&state.db, &challenge_name, query.target.as_deref()).await?;
+    let target = public_api::resolve_required_public_target(&spec, query.target.as_deref())?;
     let entries = db::list_leaderboard_entries_with_metric_payloads(
         &state.db,
         &challenge_name,
@@ -750,7 +727,7 @@ pub struct PublicListQuery {
 impl PublicListQuery {
     /// Returns the requested list limit after applying the public API bounds.
     fn limit(&self) -> Result<i64> {
-        bounded_public_limit(
+        public_api::bounded_public_limit(
             self.limit,
             DEFAULT_PUBLIC_SUBMISSION_LIST_LIMIT,
             "solution submission list",
@@ -768,30 +745,12 @@ pub struct LeaderboardQuery {
 impl LeaderboardQuery {
     /// Returns the requested leaderboard size after applying public API bounds.
     fn limit(&self) -> Result<i64> {
-        bounded_public_limit(self.limit, DEFAULT_PUBLIC_LEADERBOARD_LIMIT, "leaderboard")
+        public_api::bounded_public_limit(
+            self.limit,
+            DEFAULT_PUBLIC_LEADERBOARD_LIMIT,
+            "leaderboard",
+        )
     }
-}
-
-/// Validates a public list limit without silently widening expensive reads.
-fn bounded_public_limit(requested: Option<i64>, default_limit: i64, label: &str) -> Result<i64> {
-    let limit = requested.unwrap_or(default_limit);
-    if !(1..=MAX_PUBLIC_LIST_LIMIT).contains(&limit) {
-        return Err(AppError::BadRequest(format!(
-            "{label} limit must be between 1 and {MAX_PUBLIC_LIST_LIMIT}"
-        )));
-    }
-    Ok(limit)
-}
-
-/// Validates a public list offset without allowing negative pagination cursors.
-fn bounded_public_offset(requested: Option<i64>, label: &str) -> Result<i64> {
-    let offset = requested.unwrap_or(0);
-    if offset < 0 {
-        return Err(AppError::BadRequest(format!(
-            "{label} offset must be greater than or equal to 0"
-        )));
-    }
-    Ok(offset)
 }
 
 /// Query parameters accepted by the public score-distribution endpoint.
@@ -806,33 +765,6 @@ pub struct ScoreDistributionQuery {
 pub struct RankingContextQuery {
     challenge_name: ChallengeName,
     target: TargetName,
-}
-
-/// Resolves the explicit target requested by a public endpoint against the challenge spec.
-async fn resolve_public_target(
-    pool: &sqlx::PgPool,
-    challenge_name: &ChallengeName,
-    requested_target: Option<&str>,
-) -> Result<TargetName> {
-    let challenge = db::get_published_challenge(pool, challenge_name).await?;
-    let challenge = challenge.ok_or(AppError::NotFound)?;
-    let spec: shared::models::challenge::ChallengeBundleSpec =
-        serde_json::from_value(challenge.spec_json)
-            .map_err(|e| AppError::Internal(e.to_string()))?;
-
-    if let Some(target) = requested_target {
-        let target = parse_request_value::<TargetName>(target)?;
-        if spec.target(&target).is_some() {
-            return Ok(target);
-        }
-        return Err(AppError::BadRequest(format!(
-            "challenge does not support target `{target}`"
-        )));
-    }
-
-    Err(AppError::BadRequest(
-        "target query parameter is required".to_string(),
-    ))
 }
 
 /// Loads the public challenge record together with its parsed policy-bearing spec.
@@ -853,10 +785,15 @@ async fn ensure_public_result_detail_visible(
     challenge_name: &ChallengeName,
 ) -> Result<()> {
     let (_challenge, spec) = load_challenge_policy(pool, challenge_name).await?;
+    ensure_public_result_detail_visible_for_spec(&spec)
+}
+
+/// Enforces whether unauthenticated users may inspect detailed results for a parsed spec.
+fn ensure_public_result_detail_visible_for_spec(spec: &ChallengeBundleSpec) -> Result<()> {
     match spec.visibility.result_detail {
         ChallengeResultDetailVisibility::SubmitterLivePublicLive => Ok(()),
         ChallengeResultDetailVisibility::SubmitterLivePublicAfterClose
-            if challenge_has_closed(&spec)? =>
+            if challenge_has_closed(spec)? =>
         {
             Ok(())
         }

@@ -300,6 +300,17 @@ impl GithubPullRequestUrl {
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
+
+    /// Return the canonical GitHub owner/repository key.
+    pub fn repository_key(&self) -> Result<GithubRepoKey, UrlFieldError> {
+        github_pull_request_parts(&self.0)
+            .map(|(owner, repo, _number)| GithubRepoKey(format!("{owner}/{repo}")))
+    }
+
+    /// Return the canonical decimal pull request number.
+    pub fn number(&self) -> Result<String, UrlFieldError> {
+        github_pull_request_parts(&self.0).map(|(_owner, _repo, number)| number)
+    }
 }
 
 impl fmt::Display for GithubPullRequestUrl {
@@ -497,6 +508,11 @@ fn github_https_repo_key(url: &Url) -> Result<GithubRepoKey, UrlFieldError> {
 /// Validates github https pull request url invariants for this contract.
 fn validate_github_https_pull_request_url(url: &Url) -> Result<(), UrlFieldError> {
     validate_github_https_base(url, GITHUB_PULL_REQUEST_URL_ERROR_MESSAGE)?;
+    github_pull_request_parts(url).map(|_| ())
+}
+
+/// Return canonical repository and pull-request number parts from a validated PR URL.
+fn github_pull_request_parts(url: &Url) -> Result<(String, String, String), UrlFieldError> {
     let segments = github_path_segments(url, GITHUB_PULL_REQUEST_URL_ERROR_MESSAGE)?;
     let [owner, repo, pull, number] = segments.as_slice() else {
         return Err(UrlFieldError::new(GITHUB_PULL_REQUEST_URL_ERROR_MESSAGE));
@@ -509,7 +525,11 @@ fn validate_github_https_pull_request_url(url: &Url) -> Result<(), UrlFieldError
     if number.is_empty() || !number.bytes().all(|byte| byte.is_ascii_digit()) {
         return Err(UrlFieldError::new(GITHUB_PULL_REQUEST_URL_ERROR_MESSAGE));
     }
-    Ok(())
+    Ok((
+        owner.to_ascii_lowercase(),
+        repo.to_ascii_lowercase(),
+        number.to_string(),
+    ))
 }
 
 /// Validates oauth redirect url invariants for this contract.

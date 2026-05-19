@@ -25,4 +25,5 @@ pub mod leaderboard;
 pub mod models;
 pub mod runner;
 pub mod storage;
+pub mod validation;
 pub mod zip_project;

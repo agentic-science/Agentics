@@ -8,9 +8,8 @@ use shared::models::request::{
     SolutionSubmissionArtifactFileDto, SolutionSubmissionArtifactResponse,
     SolutionSubmissionLogsResponse,
 };
-use shared::zip_project::{
-    MAX_ZIP_PROJECT_ARTIFACT_BYTES, MAX_ZIP_PROJECT_FILE_COUNT, MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES,
-};
+use shared::validation::archive::inspect_zip_bytes;
+use shared::zip_project::zip_project_archive_policy;
 
 use crate::state::AppState;
 
@@ -23,29 +22,11 @@ pub(super) fn base64_decode(input: &str) -> Option<Vec<u8>> {
     STANDARD.decode(input.trim()).ok()
 }
 
-/// Return whether a byte buffer starts with a known ZIP file signature.
-pub(super) fn is_likely_zip(bytes: &[u8]) -> bool {
-    if bytes.len() < 4 {
-        return false;
-    }
-    bytes.starts_with(&[0x50, 0x4b, 0x03, 0x04])
-        || bytes.starts_with(&[0x50, 0x4b, 0x05, 0x06])
-        || bytes.starts_with(&[0x50, 0x4b, 0x07, 0x08])
-}
-
 /// Summarize a solution submission ZIP for safe public code browsing.
 pub(super) async fn read_solution_submission_artifact_summary(
     artifact_key: &str,
     artifact_bytes: Vec<u8>,
 ) -> Result<SolutionSubmissionArtifactResponse> {
-    let archive_size = artifact_bytes.len() as u64;
-    if archive_size > MAX_ZIP_PROJECT_ARTIFACT_BYTES {
-        return Err(AppError::BadRequest(format!(
-            "artifact zip must be at most {} bytes",
-            MAX_ZIP_PROJECT_ARTIFACT_BYTES
-        )));
-    }
-
     let artifact_key = artifact_key.to_string();
     tokio::task::spawn_blocking(move || {
         read_solution_submission_artifact_summary_blocking(&artifact_key, artifact_bytes)
@@ -102,47 +83,25 @@ fn read_solution_submission_artifact_summary_blocking(
     artifact_key: &str,
     artifact_bytes: Vec<u8>,
 ) -> Result<SolutionSubmissionArtifactResponse> {
-    let archive_size = artifact_bytes.len();
+    let envelope = inspect_zip_bytes(&artifact_bytes, &zip_project_archive_policy())?;
+    let archive_size = envelope.archive_size();
     let reader = std::io::Cursor::new(artifact_bytes);
     let mut archive = zip::ZipArchive::new(reader)?;
 
-    if archive.len() > MAX_ZIP_PROJECT_FILE_COUNT {
-        return Err(AppError::BadRequest(format!(
-            "artifact zip must contain at most {} entries",
-            MAX_ZIP_PROJECT_FILE_COUNT
-        )));
-    }
-
     let mut files = Vec::new();
-    let mut total_uncompressed_size = 0u64;
     let mut total_inline_text_bytes = 0u64;
 
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i)?;
-        if file.is_dir() {
+    for entry in envelope.entries() {
+        if entry.is_dir() {
             continue;
         }
 
-        let entry_path = file
-            .enclosed_name()
-            .map(|path| path.to_string_lossy().to_string());
-        let Some(entry_path) = entry_path else {
-            continue;
-        };
-
-        let size = file.size();
-        total_uncompressed_size = total_uncompressed_size
-            .checked_add(size)
-            .ok_or_else(|| AppError::BadRequest("artifact zip is too large".to_string()))?;
-        if total_uncompressed_size > MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES {
-            return Err(AppError::BadRequest(format!(
-                "artifact zip must expand to at most {} bytes",
-                MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES
-            )));
-        }
+        let mut file = archive.by_index(entry.index())?;
+        let entry_path = entry.path().as_str().to_string();
+        let size = entry.size();
 
         let mut buf = Vec::new();
-        let compressed_size = i64::try_from(file.compressed_size()).map_err(|_| {
+        let compressed_size = i64::try_from(entry.compressed_size()).map_err(|_| {
             AppError::BadRequest(
                 "artifact ZIP entry compressed size exceeds supported range".to_string(),
             )
@@ -202,7 +161,7 @@ fn read_solution_submission_artifact_summary_blocking(
         file_count: i64::try_from(files.len()).map_err(|_| {
             AppError::BadRequest("artifact ZIP file count exceeds supported range".to_string())
         })?,
-        total_uncompressed_size: i64::try_from(total_uncompressed_size).map_err(|_| {
+        total_uncompressed_size: i64::try_from(envelope.expanded_size()).map_err(|_| {
             AppError::BadRequest("artifact ZIP expanded size exceeds supported range".to_string())
         })?,
         files,
@@ -251,6 +210,7 @@ mod tests {
     use std::io::Write;
     use std::path::PathBuf;
 
+    use shared::zip_project::MAX_ZIP_PROJECT_FILE_COUNT;
     use uuid::Uuid;
 
     use super::*;
@@ -280,8 +240,8 @@ mod tests {
     }
 
     #[tokio::test]
-    /// Verifies unsafe archive entry names are excluded from artifact previews.
-    async fn artifact_summary_skips_unsafe_entry_names() {
+    /// Verifies unsafe archive entry names are rejected from artifact previews.
+    async fn artifact_summary_rejects_unsafe_entry_names() {
         let path = temp_zip_path("unsafe-entry");
         write_zip(
             &path,
@@ -292,13 +252,11 @@ mod tests {
         );
 
         let bytes = std::fs::read(&path).expect("failed to read test zip");
-        let summary = read_solution_submission_artifact_summary(&path.to_string_lossy(), bytes)
-            .await
-            .expect("summary should succeed");
+        let result =
+            read_solution_submission_artifact_summary(&path.to_string_lossy(), bytes).await;
         drop(std::fs::remove_file(path));
 
-        assert_eq!(summary.file_count, 1);
-        assert_eq!(summary.files[0].path, "main.py");
+        assert!(matches!(result, Err(AppError::Validation(message)) if message.contains("unsafe")));
     }
 
     #[tokio::test]
@@ -316,7 +274,7 @@ mod tests {
         drop(std::fs::remove_file(path));
 
         assert!(
-            matches!(result, Err(AppError::BadRequest(message)) if message.contains("at most"))
+            matches!(result, Err(AppError::Validation(message)) if message.contains("at most"))
         );
     }
 

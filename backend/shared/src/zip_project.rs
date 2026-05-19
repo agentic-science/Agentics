@@ -3,13 +3,14 @@
 //! This module defines manifest parsing plus the setup/build/run phase model
 //! that the worker will consume in later execution milestones.
 
-use std::collections::HashSet;
 use std::io::Read;
 
 use serde::{Deserialize, Serialize};
 
 use crate::error::{AppError, Result};
 use crate::models::paths::{LogRelativePath, ScriptPath};
+use crate::validation::archive::{ArchiveEnvelopePolicy, inspect_zip_bytes};
+use crate::validation::text;
 
 pub const ZIP_PROJECT_MANIFEST_FILE: &str = "agentics.solution.json";
 pub const ZIP_PROJECT_PROTOCOL: &str = "zip_project";
@@ -21,49 +22,18 @@ pub const MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES: u64 = 50 * 1024 * 1024;
 
 /// Validate the ZIP archive envelope before durable storage or extraction.
 pub fn validate_zip_project_archive_envelope(bytes: &[u8]) -> Result<()> {
-    let archive_size = u64::try_from(bytes.len())
-        .map_err(|_| AppError::Validation("solution archive is too large".to_string()))?;
-    if archive_size > MAX_ZIP_PROJECT_ARTIFACT_BYTES {
-        return Err(AppError::Validation(format!(
-            "solution archive must be at most {} bytes",
-            MAX_ZIP_PROJECT_ARTIFACT_BYTES
-        )));
-    }
-
-    let reader = std::io::Cursor::new(bytes);
-    let mut archive = zip::ZipArchive::new(reader)?;
-    if archive.len() > MAX_ZIP_PROJECT_FILE_COUNT {
-        return Err(AppError::Validation(format!(
-            "solution archive must contain at most {} entries",
-            MAX_ZIP_PROJECT_FILE_COUNT
-        )));
-    }
-
-    let mut total_uncompressed_size = 0u64;
-    let mut seen_paths = HashSet::new();
-    for index in 0..archive.len() {
-        let file = archive.by_index(index)?;
-        let path = file.enclosed_name().ok_or_else(|| {
-            AppError::Validation("solution archive contains an unsafe ZIP entry path".to_string())
-        })?;
-        let normalized_path = path.to_string_lossy().to_string();
-        if !seen_paths.insert(normalized_path.clone()) {
-            return Err(AppError::Validation(format!(
-                "solution archive contains duplicate entry `{normalized_path}`"
-            )));
-        }
-        total_uncompressed_size = total_uncompressed_size
-            .checked_add(file.size())
-            .ok_or_else(|| AppError::Validation("solution archive is too large".to_string()))?;
-        if total_uncompressed_size > MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES {
-            return Err(AppError::Validation(format!(
-                "solution archive must expand to at most {} bytes",
-                MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES
-            )));
-        }
-    }
-
+    inspect_zip_bytes(bytes, &zip_project_archive_policy())?;
     Ok(())
+}
+
+/// Shared archive envelope policy for `zip_project` solution ZIPs.
+pub fn zip_project_archive_policy() -> ArchiveEnvelopePolicy {
+    ArchiveEnvelopePolicy::new(
+        "solution archive",
+        MAX_ZIP_PROJECT_ARTIFACT_BYTES,
+        MAX_ZIP_PROJECT_FILE_COUNT,
+        MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES,
+    )
 }
 
 /// Parsed `agentics.solution.json` manifest for a ZIP project solution.
@@ -175,14 +145,6 @@ pub enum ZipProjectPhaseFailureReason {
     RunnerError,
 }
 
-/// Return whether `value` can be safely joined under a project root.
-pub fn is_safe_relative_path(value: &str) -> bool {
-    if value.starts_with('/') {
-        return false;
-    }
-    value.split(['/', '\\']).all(|s| !s.is_empty() && s != "..")
-}
-
 impl ZipProjectManifest {
     /// Parse and validate a manifest JSON payload.
     pub fn parse_json(raw: &str) -> Result<Self> {
@@ -273,33 +235,12 @@ impl ZipProjectPhaseFailureReport {
 
 /// Requires non empty and reports a domain error otherwise.
 fn require_non_empty(value: &str, field: &str) -> Result<()> {
-    if value.trim().is_empty() {
-        return Err(AppError::Validation(format!("{field} must not be empty")));
-    }
-
-    Ok(())
+    text::require_non_empty(value, field)
 }
 
 /// Validate submitter-visible note text from `agentics.solution.json`.
 pub fn validate_solution_note(note: &str) -> Result<()> {
-    if note.len() > MAX_ZIP_PROJECT_NOTE_BYTES {
-        return Err(AppError::Validation(format!(
-            "note must be at most {} UTF-8 bytes",
-            MAX_ZIP_PROJECT_NOTE_BYTES
-        )));
-    }
-    if note.chars().any(is_disallowed_note_char) {
-        return Err(AppError::Validation(
-            "note must not contain non-text control characters".to_string(),
-        ));
-    }
-
-    Ok(())
-}
-
-/// Return whether a decoded note character is not safe display text.
-fn is_disallowed_note_char(ch: char) -> bool {
-    ch.is_control() && !matches!(ch, '\n' | '\r' | '\t')
+    text::validate_solution_note(note, MAX_ZIP_PROJECT_NOTE_BYTES)
 }
 
 #[cfg(test)]
@@ -558,16 +499,16 @@ mod tests {
         let error =
             validate_zip_project_archive_envelope(&bytes).expect_err("unsafe entry should fail");
 
-        assert!(error.to_string().contains("unsafe ZIP entry path"));
+        assert!(error.to_string().contains("unsafe path"));
     }
 
     /// Verifies archive envelope validation rejects duplicate normalized paths.
     #[test]
     fn archive_envelope_rejects_duplicate_entries() {
-        let bytes = zip_with_entries(&[("run.sh", b"one"), ("./run.sh", b"two")]);
+        let bytes = zip_with_entries(&[("dir/run.sh", b"one"), ("dir\\run.sh", b"two")]);
         let error =
             validate_zip_project_archive_envelope(&bytes).expect_err("duplicate entry should fail");
 
-        assert!(error.to_string().contains("duplicate entry"));
+        assert!(error.to_string().contains("duplicate path"));
     }
 }

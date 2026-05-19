@@ -2,8 +2,7 @@
 
 use crate::error::{AppError, Result};
 use crate::models::challenge::{
-    ChallengeTargetSpec, DockerPlatform, HardwareProfileSpec, ResourceProfileSpec,
-    TargetAccelerator,
+    ChallengeTargetSpec, HardwareProfileSpec, ResourceProfileSpec, TargetAccelerator,
 };
 use crate::models::images::ChallengeImageReference;
 
@@ -23,20 +22,17 @@ const CPU_IMAGE_TAG_PREFIX: &str = "ubuntu26.04-";
 
 /// Validate a target's platform, hardware, and supported image references.
 pub(super) fn validate_target(target: &ChallengeTargetSpec, field: &str) -> Result<()> {
-    if target.docker_platform == DockerPlatform::LinuxAmd64 {
-        return Err(AppError::Validation(format!(
-            "{field}.docker_platform `linux/amd64` is reserved for post-MVP deployment support"
-        )));
-    }
     validate_resource_profile(
         &target.resource_profile,
         &format!("{field}.resource_profile"),
     )?;
 
     match target.accelerator {
-        TargetAccelerator::None => {
-            validate_supported_target_images(target, SupportedTargetImage::Cpu, field)?
-        }
+        TargetAccelerator::None => validate_supported_target_images(
+            target,
+            SupportedAcceleratorImage::NoAccelerator,
+            field,
+        )?,
         TargetAccelerator::Gpu => {
             let cuda_variant = validate_cuda_hardware(
                 target.resource_profile.hardware_metadata.as_ref(),
@@ -44,7 +40,7 @@ pub(super) fn validate_target(target: &ChallengeTargetSpec, field: &str) -> Resu
             )?;
             validate_supported_target_images(
                 target,
-                SupportedTargetImage::Cuda { cuda_variant },
+                SupportedAcceleratorImage::Accelerator { cuda_variant },
                 field,
             )?;
         }
@@ -54,15 +50,15 @@ pub(super) fn validate_target(target: &ChallengeTargetSpec, field: &str) -> Resu
 }
 
 /// Supported Agentics image families for one target kind.
-enum SupportedTargetImage<'a> {
-    Cpu,
-    Cuda { cuda_variant: &'a str },
+enum SupportedAcceleratorImage<'a> {
+    NoAccelerator,
+    Accelerator { cuda_variant: &'a str },
 }
 
 /// Validate both solution and scorer image references for a target.
 fn validate_supported_target_images(
     target: &ChallengeTargetSpec,
-    image_kind: SupportedTargetImage<'_>,
+    image_kind: SupportedAcceleratorImage<'_>,
     field: &str,
 ) -> Result<()> {
     validate_supported_image_reference(
@@ -81,11 +77,11 @@ fn validate_supported_target_images(
 fn validate_supported_image_reference(
     image: &ChallengeImageReference,
     field: &str,
-    image_kind: &SupportedTargetImage<'_>,
+    image_kind: &SupportedAcceleratorImage<'_>,
 ) -> Result<()> {
     let repository = image.policy_repository();
     match image_kind {
-        SupportedTargetImage::Cpu => {
+        SupportedAcceleratorImage::NoAccelerator => {
             require_supported_image_repository(
                 repository.as_ref(),
                 SUPPORTED_CPU_IMAGE_REPOSITORIES,
@@ -98,7 +94,7 @@ fn validate_supported_image_reference(
                 )));
             }
         }
-        SupportedTargetImage::Cuda { cuda_variant } => {
+        SupportedAcceleratorImage::Accelerator { cuda_variant } => {
             require_supported_image_repository(
                 repository.as_ref(),
                 SUPPORTED_CUDA_IMAGE_REPOSITORIES,
