@@ -383,8 +383,8 @@ pub struct ReviewChallengeDraftRequest {
     pub message: String,
 }
 
-/// Admin response returned after abandoning stale drafts and deleting expired
-/// unpublished private asset records.
+/// Admin response returned after abandoning stale drafts and deleting
+/// purge-eligible unpublished private asset records.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeDraftCleanupResponse {
     pub abandoned_drafts: i64,

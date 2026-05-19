@@ -257,8 +257,9 @@ Challenge deletion and private asset purge should be deferred. Unpublished draft
 The MVP draft cleanup policy should stay simple:
 
 - Drafts tied to closed unmerged PRs become `abandoned`.
-- Drafts with no activity for a configured period become `expired`.
-- Private assets attached to `abandoned` or `expired` drafts are purged after a short grace period.
+- Drafts in active unpublished states with no activity for a configured period become `abandoned`.
+- Drafts explicitly rejected by a reviewer stay `rejected` so the review outcome and feedback are preserved.
+- Private assets attached to `abandoned` or `rejected` drafts are purged after a short grace period.
 - Published assets are never purged by draft cleanup.
 
 Runtime quotas should be enforced by Agentics, not by a private GitHub repository. The MVP should use global or per-user limits for draft count, private asset size, validation frequency, queued validation jobs, and worker concurrency. A private repository may document admin policy, but the backend must enforce the runtime state from configuration and database records.

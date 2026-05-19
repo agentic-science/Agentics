@@ -934,9 +934,9 @@ pub async fn abandon_stale_challenge_drafts(pool: &PgPool, ttl_days: i64) -> Res
         r#"
         UPDATE challenge_drafts
         SET status = 'abandoned',
-            validation_message = COALESCE(validation_message, 'draft expired due to inactivity'),
+            validation_message = COALESCE(validation_message, 'draft abandoned due to inactivity'),
             updated_at = NOW()
-        WHERE status IN ('draft', 'validated', 'approved', 'rejected')
+        WHERE status IN ('draft', 'validated', 'approved')
           AND updated_at < NOW() - ($1::TEXT || ' days')::INTERVAL
         "#,
     )

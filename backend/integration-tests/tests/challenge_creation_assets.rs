@@ -501,6 +501,54 @@ async fn private_asset_lifecycle_refreshes_draft_activity(pool: sqlx::PgPool) {
     assert_draft_survives_stale_cleanup(&pool, &draft_id).await;
 }
 
+/// Verifies stale cleanup preserves explicit reviewer rejection outcomes.
+#[sqlx::test(migrations = "../migrations")]
+async fn stale_cleanup_preserves_rejected_draft_review_outcome(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("storage tempdir");
+    let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
+    let config = test_config(storage.path(), seeded_challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+    let creator = create_creator_session(&pool, 1001, "creator").await;
+
+    let draft = create_draft(&client, &app, &creator, 14, manifest_json()).await;
+    let draft_id =
+        ChallengeDraftId::try_new(draft["id"].as_str().expect("draft id")).expect("valid draft id");
+
+    sqlx::query(
+        r#"
+        UPDATE challenge_drafts
+        SET status = 'rejected',
+            validation_message = 'reviewer rejected this draft',
+            updated_at = NOW() - INTERVAL '2 days'
+        WHERE id = $1::uuid
+        "#,
+    )
+    .bind(draft_id.as_str())
+    .execute(&pool)
+    .await
+    .expect("failed to reject and age draft");
+
+    let abandoned = db::abandon_stale_challenge_drafts(&pool, 1)
+        .await
+        .expect("stale cleanup should run");
+    assert_eq!(abandoned, 0);
+
+    let row: (String, Option<String>) = sqlx::query_as(
+        "SELECT status, validation_message FROM challenge_drafts WHERE id = $1::uuid",
+    )
+    .bind(draft_id.as_str())
+    .fetch_one(&pool)
+    .await
+    .expect("failed to query draft status");
+    assert_eq!(row.0, "rejected");
+    assert_eq!(
+        row.1.as_deref(),
+        Some("reviewer rejected this draft"),
+        "stale cleanup must not erase review feedback"
+    );
+}
+
 /// Upload a declared private benchmark asset to a draft.
 async fn upload_private_asset(
     client: &reqwest::Client,

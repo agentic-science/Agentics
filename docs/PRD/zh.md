@@ -258,8 +258,9 @@ Challenge deletion 和 private asset purge 应推迟实现。Unpublished drafts 
 MVP draft cleanup policy 应保持简单：
 
 - 绑定 closed unmerged PRs 的 drafts 变为 `abandoned`。
-- 在配置周期内没有 activity 的 drafts 变为 `expired`。
-- 绑定到 `abandoned` 或 `expired` drafts 的 private assets 会在短 grace period 后被 purge。
+- 处于 active unpublished states 且在配置周期内没有 activity 的 drafts 变为 `abandoned`。
+- Reviewer 明确 reject 的 drafts 保持 `rejected`，以保留 review outcome 和 feedback。
+- 绑定到 `abandoned` 或 `rejected` drafts 的 private assets 会在短 grace period 后被 purge。
 - Published assets 永远不会通过 draft cleanup 被 purge。
 
 Runtime quotas 应由 Agentics 执行，而不是由 private GitHub repository 执行。MVP 应使用 global 或 per-user limits 管理 draft count、private asset size、validation frequency、queued validation jobs 和 worker concurrency。Private repository 可以记录 admin policy，但 backend 必须基于 configuration 和 database records 执行 runtime state。
