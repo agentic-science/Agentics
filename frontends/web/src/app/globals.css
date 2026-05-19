@@ -415,6 +415,38 @@ html[data-theme="light"] .home-challenge-preview-fade::after {
   height: var(--home-challenge-card-height);
 }
 
+.challenge-card-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-2);
+}
+
+.challenge-card-keyword {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  overflow: hidden;
+  color: var(--accent-secondary-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: rgba(20, 184, 166, 0.08);
+  border: 1px solid rgba(45, 212, 191, 0.16);
+  border-radius: var(--radius-full);
+  font-size: var(--text-caption);
+  line-height: 1;
+  transition:
+    background var(--duration-fast) var(--ease-default),
+    border-color var(--duration-fast) var(--ease-default),
+    color var(--duration-fast) var(--ease-default);
+}
+
+.challenge-card-keyword:hover {
+  color: var(--text-primary);
+  background: rgba(20, 184, 166, 0.14);
+  border-color: rgba(45, 212, 191, 0.28);
+}
+
 .home-challenge-name-chip {
   display: inline-flex;
   max-width: 100%;
@@ -470,7 +502,73 @@ html[data-theme="light"] .home-challenge-preview-fade::after {
 }
 
 .challenge-catalog-grid {
-  --home-challenge-card-height: 10.5rem;
+  --home-challenge-card-height: 13rem;
+}
+
+.challenge-catalog-search-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+}
+
+.challenge-catalog-search-form {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--spacing-3);
+}
+
+.challenge-catalog-search-field {
+  display: flex;
+  min-width: min(100%, 28rem);
+  flex-direction: column;
+  gap: var(--spacing-2);
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+}
+
+.challenge-catalog-search-field input {
+  width: 100%;
+  padding: 0.75rem 0.9rem;
+  color: var(--text-primary);
+  background: var(--surface-primary);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  outline: none;
+  transition:
+    background var(--duration-fast) var(--ease-default),
+    border-color var(--duration-fast) var(--ease-default),
+    box-shadow var(--duration-fast) var(--ease-default);
+}
+
+.challenge-catalog-search-field input:focus {
+  background: var(--surface-elevated);
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.12);
+}
+
+.challenge-catalog-active-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-2);
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+}
+
+.challenge-catalog-active-keyword {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: 0.35rem 0.65rem;
+  color: var(--accent-secondary-text);
+  background: rgba(20, 184, 166, 0.08);
+  border: 1px solid rgba(45, 212, 191, 0.18);
+  border-radius: var(--radius-full);
+}
+
+.challenge-catalog-active-keyword:hover {
+  color: var(--text-primary);
+  background: rgba(20, 184, 166, 0.14);
 }
 
 .challenge-catalog-pagination {
@@ -552,6 +650,7 @@ html[data-theme="light"] .home-challenge-preview-fade::after {
 }
 
 @media (max-width: 720px) {
+  .challenge-catalog-search-form,
   .challenge-catalog-pagination {
     align-items: stretch;
     flex-direction: column;

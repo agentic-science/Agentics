@@ -34,8 +34,98 @@ function parseCatalogPage(searchParams: SearchParams) {
 }
 
 /** Builds the canonical challenge catalog URL for a one-indexed page. */
-function challengeCatalogHref(page: number) {
-  return page <= 1 ? "/challenges" : `/challenges?page=${page}`;
+function challengeCatalogHref(
+  page: number,
+  filters: { q?: string; keywords?: string[] } = {},
+) {
+  const params = new URLSearchParams();
+  if (page > 1) {
+    params.set("page", page.toString());
+  }
+  if (filters.q) {
+    params.set("q", filters.q);
+  }
+  for (const keyword of filters.keywords ?? []) {
+    params.append("keyword", keyword);
+  }
+  const query = params.toString();
+  return query ? `/challenges?${query}` : "/challenges";
+}
+
+/** Builds API query parameters for a filtered challenge catalog request. */
+function challengeCatalogApiQuery(
+  page: number,
+  filters: { q?: string; keywords: string[] },
+) {
+  const params = new URLSearchParams({
+    limit: CHALLENGE_CATALOG_PAGE_SIZE.toString(),
+    offset: ((page - 1) * CHALLENGE_CATALOG_PAGE_SIZE).toString(),
+  });
+  if (filters.q) {
+    params.set("q", filters.q);
+  }
+  for (const keyword of filters.keywords) {
+    params.append("keyword", keyword);
+  }
+  return params.toString();
+}
+
+/** Collects one or more URL query values from a Next.js search param. */
+function searchParamValues(value: string | string[] | undefined) {
+  if (!value) {
+    return [];
+  }
+  return Array.isArray(value) ? value : [value];
+}
+
+/** Returns a trim-normalized value for query strings and form defaults. */
+function normalizedQueryValue(value: string | undefined) {
+  const trimmed = value?.trim() ?? "";
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+/** Deduplicates selected keyword filters while preserving display text. */
+function selectedKeywords(searchParams: SearchParams) {
+  const keywords: string[] = [];
+  const seen = new Set<string>();
+  for (const rawKeyword of searchParamValues(searchParams.keyword)) {
+    const keyword = rawKeyword.trim();
+    const key = keyword.toLocaleLowerCase();
+    if (keyword && !seen.has(key)) {
+      seen.add(key);
+      keywords.push(keyword);
+    }
+  }
+  return keywords;
+}
+
+/** Adds one keyword to the current catalog filter set and resets pagination. */
+function addKeywordHref(
+  q: string | undefined,
+  keywords: string[],
+  keyword: string,
+) {
+  const nextKeywords = keywords.some(
+    (existing) => existing.toLocaleLowerCase() === keyword.toLocaleLowerCase(),
+  )
+    ? keywords
+    : [...keywords, keyword];
+  return challengeCatalogHref(1, { q, keywords: nextKeywords });
+}
+
+/** Removes one keyword from the current catalog filter set and resets pagination. */
+function removeKeywordHref(
+  q: string | undefined,
+  keywords: string[],
+  keyword: string,
+) {
+  return challengeCatalogHref(1, {
+    q,
+    keywords: keywords.filter(
+      (existing) =>
+        existing.toLocaleLowerCase() !== keyword.toLocaleLowerCase(),
+    ),
+  });
 }
 
 /** Builds compact numbered pagination with stable ellipsis slots. */
@@ -75,13 +165,16 @@ export default async function ChallengeCatalogPage({
     getLocale(),
   ]);
   const page = parseCatalogPage(params);
+  const q = normalizedQueryValue(firstSearchParamValue(params.q));
+  const keywords = selectedKeywords(params);
+  const filters = { q, keywords };
   const offset = (page - 1) * CHALLENGE_CATALOG_PAGE_SIZE;
   let challenges: ChallengeListResponse;
   let error: string | null = null;
 
   try {
     challenges = await fetchJson(
-      `/api/public/challenges?limit=${CHALLENGE_CATALOG_PAGE_SIZE}&offset=${offset}`,
+      `/api/public/challenges?${challengeCatalogApiQuery(page, filters)}`,
       challengeListResponseSchema,
     );
   } catch (e) {
@@ -100,10 +193,11 @@ export default async function ChallengeCatalogPage({
     Math.ceil(challenges.total_count / CHALLENGE_CATALOG_PAGE_SIZE),
   );
   if (!error && page > totalPages) {
-    redirect(challengeCatalogHref(totalPages));
+    redirect(challengeCatalogHref(totalPages, filters));
   }
 
   const paginationSlots = buildPaginationSlots(page, totalPages);
+  const hasActiveFilters = Boolean(q) || keywords.length > 0;
 
   return (
     <div className="challenge-catalog">
@@ -114,6 +208,47 @@ export default async function ChallengeCatalogPage({
             {t("challengeCatalog.title")}
           </h1>
         </div>
+      </section>
+
+      <section className="challenge-catalog-search-panel">
+        <form action="/challenges" className="challenge-catalog-search-form">
+          <label className="challenge-catalog-search-field">
+            <span>{t("challengeCatalog.searchLabel")}</span>
+            <input
+              type="search"
+              name="q"
+              defaultValue={q ?? ""}
+              placeholder={t("challengeCatalog.searchPlaceholder")}
+            />
+          </label>
+          {keywords.map((keyword) => (
+            <input key={keyword} type="hidden" name="keyword" value={keyword} />
+          ))}
+          <button type="submit" className="btn btn-primary">
+            {t("challengeCatalog.searchButton")}
+          </button>
+          {hasActiveFilters ? (
+            <Link href="/challenges" className="btn btn-secondary">
+              {t("challengeCatalog.clearFilters")}
+            </Link>
+          ) : null}
+        </form>
+
+        {keywords.length > 0 ? (
+          <div className="challenge-catalog-active-keywords">
+            <span>{t("challengeCatalog.activeKeywords")}</span>
+            {keywords.map((keyword) => (
+              <Link
+                key={keyword}
+                href={removeKeywordHref(q, keywords, keyword)}
+                className="challenge-catalog-active-keyword"
+              >
+                {keyword}
+                <span aria-hidden="true">×</span>
+              </Link>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       {error ? (
@@ -134,6 +269,8 @@ export default async function ChallengeCatalogPage({
                 key={challenge.name}
                 challenge={challenge}
                 locale={locale}
+                showKeywords
+                keywordHref={(keyword) => addKeywordHref(q, keywords, keyword)}
               />
             ))}
           </div>
@@ -143,7 +280,7 @@ export default async function ChallengeCatalogPage({
       <nav className="challenge-catalog-pagination" aria-label="Pagination">
         {page > 1 ? (
           <Link
-            href={challengeCatalogHref(page - 1)}
+            href={challengeCatalogHref(page - 1, filters)}
             className="challenge-catalog-pagination-button"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -161,7 +298,7 @@ export default async function ChallengeCatalogPage({
             typeof slot === "number" ? (
               <Link
                 key={slot}
-                href={challengeCatalogHref(slot)}
+                href={challengeCatalogHref(slot, filters)}
                 aria-current={slot === page ? "page" : undefined}
                 className={
                   slot === page
@@ -181,7 +318,7 @@ export default async function ChallengeCatalogPage({
 
         {challenges.has_more ? (
           <Link
-            href={challengeCatalogHref(page + 1)}
+            href={challengeCatalogHref(page + 1, filters)}
             className="challenge-catalog-pagination-button"
           >
             {t("challengeCatalog.next")}

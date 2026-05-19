@@ -41,6 +41,11 @@
   },
   "challengeCatalog": {
     "title": "全部挑战",
+    "searchLabel": "搜索",
+    "searchPlaceholder": "搜索标题、摘要和关键词",
+    "searchButton": "搜索",
+    "clearFilters": "清除",
+    "activeKeywords": "关键词",
     "previous": "上一页",
     "next": "下一页",
     "empty": "暂无已发布挑战"

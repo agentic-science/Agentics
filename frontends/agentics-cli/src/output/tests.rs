@@ -8,7 +8,7 @@ use shared::models::challenge::{
 use shared::models::evaluation::ScoreVisibility;
 use shared::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
 use shared::models::localization::LocalizedText;
-use shared::models::names::{ChallengeName, ResourceProfileName, TargetName};
+use shared::models::names::{ChallengeKeyword, ChallengeName, ResourceProfileName, TargetName};
 use shared::models::paths::BundleRelativePath;
 use shared::zip_project::ZipProjectNetworkAccess;
 
@@ -30,6 +30,7 @@ fn renders_challenge_list_table() {
                 name: challenge_name("sample-sum"),
                 title: "Sample Sum".to_string(),
                 summary: localized_summary(),
+                keywords: vec![challenge_keyword("arithmetic")],
                 starts_at: "2026-01-01T00:00:00Z".to_string(),
                 closes_at: None,
                 eligibility: ChallengeEligibilitySpec {
@@ -47,7 +48,7 @@ fn renders_challenge_list_table() {
 
     assert_eq!(
         output,
-        "NAME        ELIGIBILITY  TITLE\nsample-sum  open         Sample Sum"
+        "NAME        ELIGIBILITY  KEYWORDS    TITLE\nsample-sum  open         arithmetic  Sample Sum"
     );
 }
 
@@ -75,11 +76,13 @@ fn challenge_detail() -> ChallengeDetailResponse {
         name: challenge_name("sample-sum"),
         title: "Sample Sum".to_string(),
         summary: localized_summary(),
+        keywords: vec![challenge_keyword("arithmetic")],
         spec: ChallengeBundleSpec {
             schema_version: 1,
             challenge_name: challenge_name("sample-sum"),
             challenge_title: "Sample Sum".to_string(),
             summary: localized_summary(),
+            keywords: vec![challenge_keyword("arithmetic")],
             starts_at: "2026-01-01T00:00:00Z".to_string(),
             closes_at: None,
             eligibility: ChallengeEligibilitySpec {
@@ -155,6 +158,11 @@ fn localized_summary() -> LocalizedText {
 /// Handles challenge name for this module.
 fn challenge_name(value: &str) -> ChallengeName {
     ChallengeName::try_new(value.to_string()).expect("test challenge name is valid")
+}
+
+/// Build a valid public challenge keyword for output tests.
+fn challenge_keyword(value: &str) -> ChallengeKeyword {
+    ChallengeKeyword::try_new(value.to_string()).expect("test challenge keyword is valid")
 }
 
 /// Handles resource profile name for this module.

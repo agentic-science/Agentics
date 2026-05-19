@@ -192,11 +192,15 @@ pub(crate) fn render_challenge_list(
                     vec![
                         challenge.name.to_string(),
                         status_label(&challenge.eligibility.eligibility_type),
+                        format_keywords(&challenge.keywords),
                         challenge.title.clone(),
                     ]
                 })
                 .collect::<Vec<_>>();
-            Ok(render_table(&["NAME", "ELIGIBILITY", "TITLE"], &rows))
+            Ok(render_table(
+                &["NAME", "ELIGIBILITY", "KEYWORDS", "TITLE"],
+                &rows,
+            ))
         }
     }
 }
@@ -215,10 +219,11 @@ pub(crate) fn render_challenge_detail(
                 "disabled"
             };
             Ok(format!(
-                "{} ({})\nsummary: {}\nstarts_at: {}\ncloses_at: {}\neligibility: {}\nleaderboard_visibility: {}\nscore_distribution_visibility: {}\nresult_detail_visibility: {}\nsolution_publication: {}\nsolution_protocol: {} ({})\ntargets:\n{}\ndatasets: public={}, private_benchmark={}\nranking_metric: {}\n\n{}",
+                "{} ({})\nsummary: {}\nkeywords: {}\nstarts_at: {}\ncloses_at: {}\neligibility: {}\nleaderboard_visibility: {}\nscore_distribution_visibility: {}\nresult_detail_visibility: {}\nsolution_publication: {}\nsolution_protocol: {} ({})\ntargets:\n{}\ndatasets: public={}, private_benchmark={}\nranking_metric: {}\n\n{}",
                 response.title,
                 response.name,
                 response.summary.en,
+                format_keywords(&response.keywords),
                 response.spec.starts_at.as_str(),
                 response.spec.closes_at.as_deref().unwrap_or("none"),
                 status_label(&response.spec.eligibility.eligibility_type),
@@ -1005,6 +1010,19 @@ fn format_targets(targets: &[shared::models::challenge::ChallengeTargetSpec]) ->
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// Format public challenge keywords for compact CLI output.
+fn format_keywords(keywords: &[shared::models::names::ChallengeKeyword]) -> String {
+    if keywords.is_empty() {
+        "none".to_string()
+    } else {
+        keywords
+            .iter()
+            .map(shared::models::names::ChallengeKeyword::as_str)
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
 }
 
 /// Handles pretty json for this module.

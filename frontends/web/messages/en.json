@@ -41,6 +41,11 @@
   },
   "challengeCatalog": {
     "title": "All challenges",
+    "searchLabel": "Search",
+    "searchPlaceholder": "Search titles, summaries, and keywords",
+    "searchButton": "Search",
+    "clearFilters": "Clear",
+    "activeKeywords": "Keywords",
     "previous": "Previous",
     "next": "Next",
     "empty": "No published challenges yet"
