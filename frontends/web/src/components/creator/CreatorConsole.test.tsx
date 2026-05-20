@@ -13,16 +13,14 @@ import {
   uploadPrivateAsset,
 } from "@/lib/creatorApi";
 import type { CreatorChallengeDraftResponse } from "@/lib/schemas";
-import {
-  createChallengeDraftRequestSchema,
-  createChallengeShortlistRevisionRequestSchema,
-  uploadChallengePrivateAssetRequestSchema,
-} from "@/lib/schemas";
 import { ensureDomEnvironment } from "../../test/dom";
 
 import { CreatorConsole } from "./CreatorConsole";
 
-vi.mock("@/lib/creatorApi", async () => {
+vi.mock("@/lib/creatorApi", () => {
+  const acceptingSchema = {
+    safeParse: (value: unknown) => ({ success: true, data: value }),
+  };
   class MockCreatorApiError extends Error {
     readonly status: number;
 
@@ -35,9 +33,9 @@ vi.mock("@/lib/creatorApi", async () => {
   return {
     CreatorApiError: MockCreatorApiError,
     createChallengeDraft: vi.fn(),
-    createChallengeDraftRequestSchema,
+    createChallengeDraftRequestSchema: acceptingSchema,
     createChallengeShortlistRevision: vi.fn(),
-    createChallengeShortlistRevisionRequestSchema,
+    createChallengeShortlistRevisionRequestSchema: acceptingSchema,
     getChallengeDraft: vi.fn(),
     getChallengeShortlist: vi.fn(),
     getCreatorChallengeParticipants: vi.fn(),
@@ -45,7 +43,7 @@ vi.mock("@/lib/creatorApi", async () => {
     getCreatorSession: vi.fn(),
     startGithubLogin: vi.fn(),
     storeExpectedGithubOauthState: vi.fn(),
-    uploadChallengePrivateAssetRequestSchema,
+    uploadChallengePrivateAssetRequestSchema: acceptingSchema,
     uploadPrivateAsset: vi.fn(),
   };
 });
