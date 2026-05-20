@@ -60,9 +60,10 @@ Validation 失败或需要 creator 修改的 drafts 应 reject。不再推进的
 abandon。对于超过 configured grace period 的 stale unpublished drafts，使用
 cleanup。
 
-Draft validation 使用 lease。未 stale 的 active validation 会阻止 approval 和
-private asset uploads；stale validation record 会在新的 validation 或 upload
-继续前被标记 failed 并清空。Private assets 使用可修复的 lifecycle：写入和 promote
+Draft validation 使用 lease。未 stale 的 active validation 会阻止 approval、
+rejection、abandonment 和 private asset uploads；stale validation record 会在新的
+validation 或 upload 继续前被标记 failed 并清空。Private assets 使用可修复的
+lifecycle：写入和 promote
 bytes 时为 `pending`，durable object 存在后为 `active`，write 或 promote 失败后为
 `failed`。Draft responses 和 publish 只使用 active assets。如果 stale pending
 upload 在 row 变为 active 前留下未被引用的 durable object，完全相同的 retry 会先修复该

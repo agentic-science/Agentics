@@ -564,7 +564,7 @@ pub async fn finish_challenge_draft_validation(
     .await?;
     if update.rows_affected() == 0 {
         tx.commit().await?;
-        return row_to_validation_record_response(row);
+        return Err(AppError::Conflict);
     }
 
     tx.commit().await?;
@@ -616,6 +616,7 @@ pub async fn update_challenge_draft_status(
             updated_at = NOW()
         WHERE id = $1::uuid
           AND status IN ('draft', 'validated', 'approved')
+          AND active_validation_record_id IS NULL
         "#,
     )
     .bind(draft_id)
@@ -644,6 +645,7 @@ pub async fn abandon_challenge_draft(
             updated_at = NOW()
         WHERE id = $1::uuid
           AND status IN ('draft', 'validated', 'approved', 'rejected')
+          AND active_validation_record_id IS NULL
         "#,
     )
     .bind(draft_id)

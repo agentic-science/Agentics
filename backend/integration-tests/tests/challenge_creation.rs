@@ -226,6 +226,32 @@ async fn draft_validation_claim_blocks_overlap_and_approval(pool: sqlx::PgPool) 
         .expect("approve while validation is running");
     assert_eq!(approve_while_running.status(), StatusCode::CONFLICT);
 
+    let reject_while_running = client
+        .post(api_url(
+            &app,
+            &format!("/admin/challenge-drafts/{draft_id}/reject"),
+        ))
+        .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
+        .json(&json!({ "message": "wait for validation" }))
+        .send()
+        .await
+        .expect("reject while validation is running");
+    assert_eq!(reject_while_running.status(), StatusCode::CONFLICT);
+
+    let abandon_while_running = client
+        .post(api_url(
+            &app,
+            &format!("/admin/challenge-drafts/{draft_id}/abandon"),
+        ))
+        .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
+        .json(&json!({ "message": "wait for validation" }))
+        .send()
+        .await
+        .expect("abandon while validation is running");
+    assert_eq!(abandon_while_running.status(), StatusCode::CONFLICT);
+
     let validation_digest =
         Sha256Digest::try_new("b".repeat(64)).expect("validation digest should parse");
     shared::db::finish_challenge_draft_validation(

@@ -65,9 +65,10 @@ Reject drafts that fail validation or need creator changes. Abandon drafts that
 should no longer proceed. Use cleanup for stale unpublished drafts after the
 configured grace period.
 
-Draft validation uses a lease. A non-stale active validation blocks approval and
-private asset uploads; a stale validation record is failed and cleared before a
-new validation or upload proceeds. Private assets use a repairable lifecycle:
+Draft validation uses a lease. A non-stale active validation blocks approval,
+rejection, abandonment, and private asset uploads; a stale validation record is
+failed and cleared before a new validation or upload proceeds. Private assets use
+a repairable lifecycle:
 `pending` while bytes are being written and promoted, `active` after the
 durable object exists, and `failed` after write or promotion failure. Draft
 responses and publish use only active assets. Exact retries repair stale
