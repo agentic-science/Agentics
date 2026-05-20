@@ -1,0 +1,66 @@
+.graph {
+  --timeline-link: var(--accent-secondary-400);
+
+  width: min(100%, 820px);
+  height: auto;
+  overflow: visible;
+}
+
+html[data-theme="light"] .graph {
+  --timeline-link: var(--accent-secondary-text);
+}
+
+.gridLine {
+  stroke: var(--border-medium);
+  stroke-width: 1;
+  opacity: 0.55;
+}
+
+.timeLabel,
+.agentLabel {
+  fill: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0;
+}
+
+.agentLabelStrong {
+  fill: var(--text-secondary);
+  font-weight: 650;
+}
+
+.node {
+  fill: var(--text-primary);
+}
+
+.nodeMuted {
+  fill: var(--text-muted);
+  opacity: 0.55;
+}
+
+.nodeAmber {
+  fill: var(--accent-primary-500);
+}
+
+.activeNodeHalo {
+  fill: var(--text-primary);
+}
+
+.discoveryHalo {
+  fill: var(--accent-primary-500);
+}
+
+.timelinePath {
+  fill: none;
+  stroke: var(--timeline-link);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.timelinePathDraw {
+  stroke-width: 7;
+}
+
+.timelinePathFade {
+  stroke-width: 5;
+}
