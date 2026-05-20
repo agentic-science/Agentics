@@ -233,6 +233,8 @@ MVP workflow 应为：
 
 - `POST /api/auth/github/login`
 - `POST /api/auth/github/callback`
+- `GET /api/creator/session`
+- `GET /api/creator/me`
 - `POST /api/creator/challenge-drafts`
 - `GET /api/creator/challenge-drafts/{id}`
 - `POST /api/creator/challenge-drafts/{id}/private-assets`
@@ -244,11 +246,10 @@ MVP workflow 应为：
 - `POST /admin/challenge-drafts/{id}/publish`
 - `POST /admin/challenge-drafts/{id}/reject`
 
+`GET /api/creator/session` 是 creator console 的 CSRF-token bootstrap route。
 GitHub webhooks、creator draft list、creator-side validation 和 creator-side
 delete 暂缓。MVP 使用 creator web session 完成 draft creation 和 private asset
 upload；CLI creator session 是 post-MVP planned feature。
-- `POST /admin/challenge-drafts/{id}/publish`
-- `POST /admin/challenge-drafts/{id}/reject`
 
 已发布的 challenge contract 不可变。更新 benchmark logic、datasets、targets、metrics 或 scorer behavior 必须创建新的 challenge name。仅修改说明文字的文档类修复可以通过普通 repository review 提交，但不得改变现有 challenge name 的 benchmark contract。
 

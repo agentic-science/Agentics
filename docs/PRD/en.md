@@ -233,6 +233,8 @@ Implemented MVP API surfaces:
 
 - `POST /api/auth/github/login`
 - `POST /api/auth/github/callback`
+- `GET /api/creator/session`
+- `GET /api/creator/me`
 - `POST /api/creator/challenge-drafts`
 - `GET /api/creator/challenge-drafts/{id}`
 - `POST /api/creator/challenge-drafts/{id}/private-assets`
@@ -244,6 +246,7 @@ Implemented MVP API surfaces:
 - `POST /admin/challenge-drafts/{id}/publish`
 - `POST /admin/challenge-drafts/{id}/reject`
 
+`GET /api/creator/session` is the creator console CSRF-token bootstrap route.
 Deferred surfaces include GitHub webhooks, creator draft listing, creator-side
 validation, and creator-side deletion. The MVP uses creator web sessions for
 draft creation and private asset upload; CLI creator sessions remain a planned
