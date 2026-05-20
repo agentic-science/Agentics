@@ -114,8 +114,10 @@ project-quota slots bound runner-owned bind mounts such as workspaces, `/io`,
 `/prepared`, `/output`, home, and temporary directories. DGX slots also set an
 inode hard limit, defaulting to `256` inodes per MiB, so dependency installs are
 bounded without applying the scorer-visible output file cap to setup/build
-workspaces. Future hardening can add non-root run phases or read-only root
-filesystems without weakening the current disk-boundary requirement.
+workspaces. Retained build, prepare, and scorer-visible run trees stay backed by
+their leased runner slots until dependent phases finish. Future hardening can add
+non-root run phases or read-only root filesystems without weakening the current
+disk-boundary requirement.
 Permission-repair sidecars use the same Docker hardening baseline as runner
 containers, keep networking disabled, mount their root filesystem read-only, and
 write only to the runner-owned bind mounts they repair.

@@ -43,7 +43,7 @@ use docker::{ContainerOutcome, ContainerRequest, bind_mount, pre_pull_image, run
 use errors::{ensure_container_succeeded, ensure_prepare_succeeded};
 use filesystem::{
     OutputTreeLimits, cleanup_paths, copy_dir_all, ensure_disk_limit, ensure_prepare_disk_limit,
-    extract_zip_safe,
+    extract_zip_safe, validate_scorer_visible_output_tree,
 };
 use logs::{
     EVALUATION_LOG_BYTES_PER_RUN, EvaluationLogs, append_named_logs, append_phase_logs,
@@ -139,6 +139,42 @@ impl RunnerAttempt {
     }
 }
 
+/// Keeps a retained runner tree alive when it is backed by a bounded slot lease.
+struct RetainedRunnerTree {
+    path: PathBuf,
+    _lease: Option<WritableMountLease>,
+}
+
+impl RetainedRunnerTree {
+    /// Return the host path used for subsequent read-only mounts.
+    fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// Build a retained tree from an existing runtime path.
+    fn runtime_path(path: &Path) -> Self {
+        Self {
+            path: path.to_path_buf(),
+            _lease: None,
+        }
+    }
+
+    /// Build a retained tree that keeps its writable mount lease alive.
+    fn leased(lease: WritableMountLease) -> Self {
+        let path = lease.path().to_path_buf();
+        Self {
+            path,
+            _lease: Some(lease),
+        }
+    }
+}
+
+/// Keeps one scorer-visible run tree alive until the scorer finishes.
+struct RetainedRunTree {
+    run_name: String,
+    tree: RetainedRunnerTree,
+}
+
 /// Carries solution run request data across this module boundary.
 struct SolutionRunRequest<'a> {
     eval_type: ScoringMode,
@@ -148,7 +184,7 @@ struct SolutionRunRequest<'a> {
     manifest: &'a ZipProjectManifest,
     run_manifest: &'a ChallengeRunManifest,
     input_source_root: &'a Path,
-    build_root: &'a Path,
+    build_root: &'a RetainedRunnerTree,
     run_work_root: &'a Path,
     runs_root: &'a Path,
     output_limits: OutputTreeLimits,
@@ -177,6 +213,7 @@ struct ScorerRequest<'a> {
     bundle_dir: &'a Path,
     prepared_root: Option<&'a Path>,
     runs_root: &'a Path,
+    retained_run_trees: &'a [RetainedRunTree],
     scorer_output_root: &'a Path,
 }
 
@@ -185,7 +222,7 @@ struct ResolvedRunPlan {
     manifest: ChallengeRunManifest,
     input_source_root: PathBuf,
     run_manifest_container_path: String,
-    prepared_root: Option<PathBuf>,
+    prepared_root: Option<RetainedRunnerTree>,
 }
 
 /// Carries run plan request data across this module boundary.
@@ -373,7 +410,7 @@ pub async fn execute_evaluation_job(
         tokio::fs::write(&artifact_path, artifact_bytes).await?;
         extract_zip_safe(&artifact_path, &source_root).await?;
         let manifest = read_solution_manifest(&source_root, &spec).await?;
-        run_setup_and_build(
+        let build_workspace = run_setup_and_build(
             runner_context,
             SetupBuildRequest {
                 eval_type,
@@ -404,7 +441,7 @@ pub async fn execute_evaluation_job(
         )
         .await?;
         configure_run_count_limits(&run_plan.manifest, limits, &mut logs)?;
-        run_solution_invocations(
+        let retained_run_trees = run_solution_invocations(
             runner_context,
             SolutionRunRequest {
                 eval_type,
@@ -414,7 +451,7 @@ pub async fn execute_evaluation_job(
                 manifest: &manifest,
                 run_manifest: &run_plan.manifest,
                 input_source_root: &run_plan.input_source_root,
-                build_root: &build_root,
+                build_root: &build_workspace,
                 run_work_root: &run_work_root,
                 runs_root: &runs_root,
                 output_limits,
@@ -433,8 +470,12 @@ pub async fn execute_evaluation_job(
                 accelerator: target.accelerator,
                 run_manifest_container_path: &run_plan.run_manifest_container_path,
                 bundle_dir,
-                prepared_root: run_plan.prepared_root.as_deref(),
+                prepared_root: run_plan
+                    .prepared_root
+                    .as_ref()
+                    .map(RetainedRunnerTree::path),
                 runs_root: &runs_root,
+                retained_run_trees: &retained_run_trees,
                 scorer_output_root: &scorer_output_root,
             },
             &mut logs,
@@ -510,7 +551,7 @@ async fn run_setup_and_build(
     runner: RunnerContext<'_>,
     request: SetupBuildRequest<'_>,
     logs: &mut EvaluationLogs,
-) -> Result<()> {
+) -> Result<RetainedRunnerTree> {
     if runner.storage.uses_bounded_slots() {
         return run_setup_and_build_bounded(runner, request, logs).await;
     }
@@ -561,7 +602,7 @@ async fn run_setup_and_build(
         ensure_disk_limit(request.build_root, limits.disk_limit_mb, phase.name).await?;
     }
 
-    Ok(())
+    Ok(RetainedRunnerTree::runtime_path(request.build_root))
 }
 
 /// Handles run setup and build bounded for this module.
@@ -569,7 +610,7 @@ async fn run_setup_and_build_bounded(
     runner: RunnerContext<'_>,
     request: SetupBuildRequest<'_>,
     logs: &mut EvaluationLogs,
-) -> Result<()> {
+) -> Result<RetainedRunnerTree> {
     let phases = request
         .manifest
         .phase_execution_plan()
@@ -579,10 +620,10 @@ async fn run_setup_and_build_bounded(
 
     if phases.is_empty() {
         replace_dir_all(request.source_root, request.build_root).await?;
-        return Ok(());
+        return Ok(RetainedRunnerTree::runtime_path(request.build_root));
     }
 
-    let mut source_workspace = request.source_root.to_path_buf();
+    let mut retained_workspace: Option<RetainedRunnerTree> = None;
     for phase in phases {
         let limits = effective_phase_limits(request.profile, &phase);
         let workspace = runner
@@ -594,7 +635,11 @@ async fn run_setup_and_build_bounded(
                 limits.disk_limit_mb,
             )
             .await?;
-        copy_dir_all(&source_workspace, workspace.path()).await?;
+        let source_workspace = retained_workspace
+            .as_ref()
+            .map(RetainedRunnerTree::path)
+            .unwrap_or(request.source_root);
+        copy_dir_all(source_workspace, workspace.path()).await?;
         make_container_writable_tree(workspace.path()).await?;
 
         let cmd = vec!["sh".to_string(), format!("/workspace/{}", phase.command)];
@@ -630,11 +675,12 @@ async fn run_setup_and_build_bounded(
             include_log_excerpts(request.eval_type),
         )?;
         ensure_disk_limit(workspace.path(), limits.disk_limit_mb, phase.name).await?;
-        replace_dir_all(workspace.path(), request.build_root).await?;
-        source_workspace = request.build_root.to_path_buf();
+        retained_workspace = Some(RetainedRunnerTree::leased(workspace));
     }
 
-    Ok(())
+    retained_workspace.ok_or_else(|| {
+        AppError::Internal("setup/build phase list unexpectedly ended empty".to_string())
+    })
 }
 
 /// Handles run solution invocations for this module.
@@ -642,7 +688,7 @@ async fn run_solution_invocations(
     runner: RunnerContext<'_>,
     request: SolutionRunRequest<'_>,
     logs: &mut EvaluationLogs,
-) -> Result<()> {
+) -> Result<Vec<RetainedRunTree>> {
     let run_phase = request
         .manifest
         .phase_execution_plan()
@@ -650,6 +696,7 @@ async fn run_solution_invocations(
         .find(|phase| phase.name == ZipProjectPhaseName::Run)
         .ok_or_else(|| AppError::Runner("zip_project manifest has no run phase".to_string()))?;
 
+    let mut retained_run_trees = Vec::with_capacity(request.run_manifest.runs.len());
     for (run_index, run) in request.run_manifest.runs.iter().enumerate() {
         let run_alias = run_alias(run_index)?;
         let solution_io_root = request.run_work_root.join(run_alias.as_str());
@@ -665,7 +712,7 @@ async fn run_solution_invocations(
                 limits.disk_limit_mb,
             )
             .await?;
-        let io_root = io_mount.path();
+        let io_root = io_mount.path().to_path_buf();
         let input_dir = io_root.join("input");
         let output_dir = io_root.join("output");
         let tmp_dir = io_root.join("tmp");
@@ -677,11 +724,11 @@ async fn run_solution_invocations(
             run_alias.as_str(),
             request.eval_type,
             request.input_source_root,
-            io_root,
+            &io_root,
             &input_dir,
         )
         .await?;
-        make_container_writable_tree(io_root).await?;
+        make_container_writable_tree(&io_root).await?;
 
         let outcome = run_container(
             runner.docker,
@@ -707,8 +754,8 @@ async fn run_solution_invocations(
                     "PYTHONDONTWRITEBYTECODE=1".to_string(),
                 ],
                 mounts: vec![
-                    bind_mount(request.build_root, "/workspace", true),
-                    bind_mount(io_root, "/io", false),
+                    bind_mount(request.build_root.path(), "/workspace", true),
+                    bind_mount(&io_root, "/io", false),
                     bind_mount(&input_dir, "/io/input", true),
                 ],
                 working_dir: "/workspace".to_string(),
@@ -730,21 +777,35 @@ async fn run_solution_invocations(
             &outcome,
             include_log_excerpts(request.eval_type),
         )?;
-        write_run_metadata(io_root, run, run_alias.as_str(), &outcome).await?;
-        ensure_disk_limit(io_root, limits.disk_limit_mb, ZipProjectPhaseName::Run).await?;
+        write_run_metadata(&io_root, run, run_alias.as_str(), &outcome).await?;
+        ensure_disk_limit(&io_root, limits.disk_limit_mb, ZipProjectPhaseName::Run).await?;
         ensure_declared_outputs_exist(run, run_alias.as_str(), &output_dir).await?;
-        copy_scorer_visible_run_tree(
-            io_root,
-            &scorer_run_root,
-            run_alias.as_str(),
-            request.output_limits,
-        )
-        .await?;
-        make_container_readable_tree(&scorer_run_root).await?;
-        cleanup_paths([solution_io_root]).await?;
+        if runner.storage.uses_bounded_slots() {
+            validate_scorer_visible_output_tree(
+                &io_root,
+                run_alias.as_str(),
+                request.output_limits,
+            )?;
+            make_container_readable_tree(&io_root).await?;
+            tokio::fs::create_dir_all(&scorer_run_root).await?;
+            retained_run_trees.push(RetainedRunTree {
+                run_name: run.run_name.as_str().to_string(),
+                tree: RetainedRunnerTree::leased(io_mount),
+            });
+        } else {
+            copy_scorer_visible_run_tree(
+                &io_root,
+                &scorer_run_root,
+                run_alias.as_str(),
+                request.output_limits,
+            )
+            .await?;
+            make_container_readable_tree(&scorer_run_root).await?;
+            cleanup_paths([solution_io_root]).await?;
+        }
     }
 
-    Ok(())
+    Ok(retained_run_trees)
 }
 
 /// Handles run scorer for this module.
@@ -786,6 +847,13 @@ async fn run_scorer(
         bind_mount(request.runs_root, "/solution-runs", true),
         bind_mount(output_mount.path(), "/output", false),
     ];
+    for run_tree in request.retained_run_trees {
+        mounts.push(bind_mount(
+            run_tree.tree.path(),
+            &format!("/solution-runs/{}", run_tree.run_name),
+            true,
+        ));
+    }
     if let Some(prepared_root) = request.prepared_root {
         mounts.push(bind_mount(prepared_root, "/prepared", true));
     }
@@ -915,7 +983,7 @@ async fn resolve_run_plan(
             })
         }
         RunManifestSource::Prepared(prepare) => {
-            run_prepare_phase(
+            let retained_prepared_root = run_prepare_phase(
                 PrepareRequest {
                     runner: request.runner,
                     profile: request.profile,
@@ -930,8 +998,8 @@ async fn resolve_run_plan(
                 logs,
             )
             .await?;
-            let manifest_path = request
-                .prepared_root
+            let manifest_path = retained_prepared_root
+                .path()
                 .join(prepare.result_runs_file.as_path());
             let manifest = crate::challenge_bundle::read_challenge_run_manifest_file(
                 &manifest_path,
@@ -939,22 +1007,25 @@ async fn resolve_run_plan(
             )
             .await?;
             crate::challenge_bundle::validate_challenge_run_manifest_sources(
-                request.prepared_root,
+                retained_prepared_root.path(),
                 &manifest,
             )
             .await?;
             Ok(ResolvedRunPlan {
                 manifest,
-                input_source_root: request.prepared_root.to_path_buf(),
+                input_source_root: retained_prepared_root.path().to_path_buf(),
                 run_manifest_container_path: format!("/prepared/{}", prepare.result_runs_file),
-                prepared_root: Some(request.prepared_root.to_path_buf()),
+                prepared_root: Some(retained_prepared_root),
             })
         }
     }
 }
 
 /// Handles run prepare phase for this module.
-async fn run_prepare_phase(request: PrepareRequest<'_>, logs: &mut EvaluationLogs) -> Result<()> {
+async fn run_prepare_phase(
+    request: PrepareRequest<'_>,
+    logs: &mut EvaluationLogs,
+) -> Result<RetainedRunnerTree> {
     let limits = prepare_limits(request.profile, request.prepare);
     let prepared_mount = request
         .runner
@@ -1016,9 +1087,9 @@ async fn run_prepare_phase(request: PrepareRequest<'_>, logs: &mut EvaluationLog
     );
     ensure_prepare_succeeded(&outcome, include_log_excerpts(request.eval_type))?;
     ensure_prepare_disk_limit(prepared_mount.path(), limits.disk_limit_mb).await?;
-    replace_dir_all_if_separate(prepared_mount.path(), request.prepared_root).await?;
+    make_container_readable_tree(prepared_mount.path()).await?;
 
-    Ok(())
+    Ok(RetainedRunnerTree::leased(prepared_mount))
 }
 
 /// Handles run manifest source for this module.
