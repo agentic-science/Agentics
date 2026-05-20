@@ -669,6 +669,7 @@ fn manifest_json() -> serde_json::Value {
         "challenge_name": "sample-sum",
         "title": "Sample Sum",
         "summary": { "en": "Add numbers", "zh": "数字求和" },
+        "keywords": ["math"],
         "readme_path": "README.md",
         "bundle_path": "v1",
         "private_assets": [

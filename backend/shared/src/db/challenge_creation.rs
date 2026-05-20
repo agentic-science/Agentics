@@ -28,8 +28,9 @@ mod assets;
 mod rows;
 
 pub use assets::{
-    activate_challenge_private_asset, fail_challenge_private_asset,
-    private_asset_storage_key_has_active_reference, reserve_challenge_private_asset,
+    activate_challenge_private_asset, activate_challenge_private_asset_with_audit,
+    fail_challenge_private_asset, private_asset_storage_key_has_active_reference,
+    reserve_challenge_private_asset,
 };
 pub use rows::list_challenge_private_asset_states;
 use rows::{
@@ -153,7 +154,13 @@ pub struct ChallengePrivateAssetPurgeRecord {
 pub async fn create_challenge_draft(
     pool: &PgPool,
     input: &CreateChallengeDraftInput,
+    audit_event: &CreateChallengeDraftAuditEventInput,
 ) -> Result<ChallengeDraftResponse> {
+    if audit_event.draft_id != input.draft_id {
+        return Err(AppError::Internal(
+            "draft creation audit event targets a different draft".to_string(),
+        ));
+    }
     let manifest_json =
         serde_json::to_value(&input.manifest).map_err(|e| AppError::Internal(e.to_string()))?;
     let mut tx = pool.begin().await?;
@@ -211,6 +218,7 @@ pub async fn create_challenge_draft(
     .fetch_one(&mut *tx)
     .await?;
 
+    create_challenge_draft_audit_event_tx(&mut tx, audit_event).await?;
     tx.commit().await?;
 
     row_to_draft_response(row, Vec::new(), Vec::new())
@@ -1065,7 +1073,7 @@ pub async fn create_challenge_draft_audit_event(
 }
 
 /// Creates challenge draft audit event tx after validating caller inputs.
-async fn create_challenge_draft_audit_event_tx(
+pub(super) async fn create_challenge_draft_audit_event_tx(
     tx: &mut Transaction<'_, Postgres>,
     input: &CreateChallengeDraftAuditEventInput,
 ) -> Result<()> {

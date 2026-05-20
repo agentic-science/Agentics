@@ -60,10 +60,14 @@ pub async fn create_challenge_draft(
         )));
     }
     let manifest_sha256 = challenge_creation::normalized_manifest_sha256(&body.manifest)?;
+    let draft_id = ChallengeDraftId::generate();
+    let repo_url = body.repo_url.clone();
+    let pr_number = body.pr_number.clone();
+    let commit_sha = body.commit_sha;
     let draft = db::create_challenge_draft(
         &state.db,
         &db::CreateChallengeDraftInput {
-            draft_id: ChallengeDraftId::generate(),
+            draft_id: draft_id.clone(),
             creator_agent_id: creator.agent_id.clone(),
             max_active_drafts: i64::from(state.config.max_active_challenge_drafts_per_agent),
             creator_github_user_id: creator.github_user_id,
@@ -76,27 +80,22 @@ pub async fn create_challenge_draft(
             manifest_sha256,
             manifest: body.manifest,
         },
-    )
-    .await
-    .map_err(map_unique_conflict)?;
-
-    db::create_challenge_draft_audit_event(
-        &state.db,
         &db::CreateChallengeDraftAuditEventInput {
             event_id: ChallengeDraftAuditEventId::generate(),
-            draft_id: draft.id.clone(),
+            draft_id,
             actor_agent_id: Some(creator.agent_id.clone()),
             actor_admin_username: None,
             action: "draft_created".to_string(),
             message: "challenge draft created from GitHub PR".to_string(),
             metadata: serde_json::json!({
-                "repo_url": &draft.repo_url,
-                "pr_number": draft.pr_number,
-                "commit_sha": &draft.commit_sha
+                "repo_url": repo_url,
+                "pr_number": pr_number,
+                "commit_sha": commit_sha
             }),
         },
     )
-    .await?;
+    .await
+    .map_err(map_unique_conflict)?;
 
     Ok((StatusCode::CREATED, Json(draft.into())))
 }
@@ -234,32 +233,20 @@ pub async fn upload_challenge_private_asset(
         cleanup_storage_key(&state, &temporary_storage_key).await;
         return Err(error);
     }
-    let asset = match db::activate_challenge_private_asset(&state.db, &asset_row_id).await {
+    let asset = match db::activate_challenge_private_asset_with_audit(
+        &state.db,
+        &asset_row_id,
+        ChallengeDraftAuditEventId::generate(),
+        &creator.agent_id,
+    )
+    .await
+    {
         Ok(asset) => asset,
         Err(error) => {
             cleanup_storage_key(&state, &storage_key).await;
             return Err(error);
         }
     };
-
-    db::create_challenge_draft_audit_event(
-        &state.db,
-        &db::CreateChallengeDraftAuditEventInput {
-            event_id: ChallengeDraftAuditEventId::generate(),
-            draft_id: draft.id.clone(),
-            actor_agent_id: Some(creator.agent_id.clone()),
-            actor_admin_username: None,
-            action: "private_asset_uploaded".to_string(),
-            message: "private benchmark asset uploaded".to_string(),
-            metadata: serde_json::json!({
-                "asset_name": &asset.asset_name,
-                "kind": asset.kind,
-                "size_bytes": asset.size_bytes,
-                "sha256": &asset.sha256
-            }),
-        },
-    )
-    .await?;
 
     Ok((StatusCode::CREATED, Json(asset)))
 }
