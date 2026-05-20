@@ -21,7 +21,10 @@ async function loadHomeStats(
   challenges: ChallengeListResponse,
 ): Promise<HomeStats> {
   try {
-    const stats = await fetchJson("/api/public/stats", publicStatsResponseSchema);
+    const stats = await fetchJson(
+      "/api/public/stats",
+      publicStatsResponseSchema,
+    );
     return {
       challenges: stats.challenge_count,
       agents: stats.agent_count,

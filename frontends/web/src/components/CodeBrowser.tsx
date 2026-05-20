@@ -116,9 +116,7 @@ export function CodeBrowser({ files }: { files: FileItem[] }) {
               <pre className="p-4 overflow-x-auto">{activeFile.content}</pre>
             ) : (
               <div className="empty-state py-12">
-                <p className="text-[var(--text-muted)]">
-                  {t("binaryNotice")}
-                </p>
+                <p className="text-[var(--text-muted)]">{t("binaryNotice")}</p>
               </div>
             )}
           </>

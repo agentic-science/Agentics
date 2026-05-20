@@ -25,6 +25,7 @@ import { ChallengeDraftReviewPanel } from "@/components/admin/ChallengeDraftRevi
 import { CredentialPanel } from "@/components/admin/CredentialPanel";
 import { PioneerCodePanel } from "@/components/admin/PioneerCodePanel";
 import { StatusBadge } from "@/components/admin/StatusBadge";
+import { ConsoleSectionTitle as SectionTitle } from "@/components/ConsolePrimitives";
 import {
   AdminApiError,
   type AdminCredentials,
@@ -935,16 +936,6 @@ function SubmissionActions({
         Disable agent
       </button>
     </div>
-  );
-}
-
-/** Renders the section title component. */
-function SectionTitle({ icon, title }: { icon: ReactNode; title: string }) {
-  return (
-    <h2 className="flex items-center gap-2 text-[var(--text-h3)] font-semibold">
-      <span className="text-[var(--accent-secondary-text)]">{icon}</span>
-      {title}
-    </h2>
   );
 }
 

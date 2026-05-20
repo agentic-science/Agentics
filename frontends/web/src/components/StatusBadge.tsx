@@ -48,4 +48,5 @@ export function StatusBadge({
     </span>
   );
 }
+
 import type { ReactNode } from "react";

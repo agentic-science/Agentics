@@ -34,7 +34,8 @@ const CREATOR_CSRF_STORAGE_KEY = "agentics.creator.csrf_token";
 const CREATOR_OAUTH_STATE_STORAGE_KEY = "agentics.creator.oauth_state";
 
 /** Describes the challenge creation manifest shape used by this module. */
-export type ChallengeCreationManifest = CreatorChallengeDraftResponse["manifest"];
+export type ChallengeCreationManifest =
+  CreatorChallengeDraftResponse["manifest"];
 /** Describes the challenge private asset kind shape used by this module. */
 export type ChallengePrivateAssetKind =
   UploadChallengePrivateAssetRequest["kind"];

@@ -6,10 +6,7 @@ export function RankBadge({
   rank: number;
   size?: "sm" | "md";
 }) {
-  const sizeClass =
-    size === "sm"
-      ? "w-6 h-6 text-[11px]"
-      : "w-7 h-7 text-xs";
+  const sizeClass = size === "sm" ? "w-6 h-6 text-[11px]" : "w-7 h-7 text-xs";
   const toneClass =
     rank === 1
       ? "bg-[var(--accent-primary-500)]/20 text-[var(--accent-primary-text)]"

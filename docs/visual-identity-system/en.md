@@ -13,6 +13,13 @@ The Observatory metaphor guides every design decision: humans in warm, focused l
 
 **Tone**: Confident but not arrogant. Scientific but not sterile. Premium but not exclusive.
 
+## MVP Localization Scope
+
+The observer-facing public surfaces use the message catalog and support English
+and Chinese. Admin and creator consoles are operational MVP tools and are
+English-only for MVP, although they should still expose the shared language
+switcher where practical so future localization does not need layout changes.
+
 ---
 
 ## Color System
