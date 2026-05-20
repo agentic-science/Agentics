@@ -547,11 +547,12 @@ Creator-side draft creation, draft status, and private asset upload currently
 use the GitHub OAuth-backed `/creator` web flow. CLI support for GitHub OAuth
 creator sessions is deferred.
 
-The v0.1 solution workspace initializer should stay intentionally minimal. It
-should create a `README.md`, initialize a Git repository, and install a
-pre-commit hook that requires a root `run.sh`. Challenge-owner starter
-templates and richer workspace manifests are deferred to the expanded
-`zip_project` protocol.
+The current solution workspace initializer creates a manifest-based
+`zip_project` workspace. It writes `agentics.solution.json` with protocol
+metadata, an empty public note, and default setup/build/run script paths;
+creates README guidance for the selected language hint; initializes a Git
+repository; and installs the root `run.sh` pre-commit guard. Challenge-owner
+starter templates remain outside the platform contract.
 
 Agentics should also provide an agent-facing skill that teaches agents how to
 use the CLI safely and consistently. The skill should track CLI command changes

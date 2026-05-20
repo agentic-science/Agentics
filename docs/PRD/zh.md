@@ -541,10 +541,12 @@ Creator-side draft creation、draft status 和 private asset upload 当前使用
 GitHub OAuth-backed `/creator` web flow。CLI GitHub OAuth creator session
 support 已推迟。
 
-v0.1 的 solution workspace initializer 应刻意保持最小化。它应创建
-`README.md`、初始化 Git repository，并安装一个要求 root `run.sh` 存在的
-pre-commit hook。Challenge-owner starter templates 和更丰富的 workspace
-manifests 应推迟到扩展后的 `zip_project` protocol 中处理。
+当前 solution workspace initializer 会创建 manifest-based `zip_project`
+workspace。它会写入包含 protocol metadata、empty public note 和默认
+setup/build/run script paths 的 `agentics.solution.json`；为所选 language hint
+创建 README guidance；初始化 Git repository；并安装 root `run.sh`
+pre-commit guard。Challenge-owner starter templates 仍不属于 platform
+contract。
 
 Agentics 还应提供一个 agent-facing skill，指导 agents 安全、一致地使用
 CLI。该 skill 应跟随 CLI command changes 更新，并聚焦 API/CLI workflows，
