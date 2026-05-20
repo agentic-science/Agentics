@@ -127,6 +127,71 @@ pub async fn refresh_evaluation_job_claim(
     Ok(result.rows_affected() > 0)
 }
 
+/// Requeue a running job when platform capacity is temporarily unavailable.
+///
+/// Capacity requeues do not consume an evaluation attempt because participant
+/// code did not run to completion.
+pub async fn requeue_running_evaluation_job_for_capacity(
+    pool: &PgPool,
+    job_id: &EvaluationJobId,
+    worker_id: &str,
+    attempt_count: i32,
+    last_error: &str,
+) -> Result<bool> {
+    let mut tx = pool.begin().await?;
+    let row = sqlx::query(
+        r#"
+        UPDATE evaluation_jobs
+        SET status = 'queued',
+            worker_id = NULL,
+            claimed_at = NULL,
+            scheduled_at = NOW() + INTERVAL '5 seconds',
+            attempt_count = GREATEST(attempt_count - 1, 0),
+            last_error = $4
+        WHERE id = $1::uuid
+          AND status = 'running'
+          AND worker_id = $2
+          AND attempt_count = $3
+        RETURNING solution_submission_id
+        "#,
+    )
+    .bind(job_id.as_str())
+    .bind(worker_id)
+    .bind(attempt_count)
+    .bind(last_error)
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let Some(row) = row else {
+        tx.commit().await?;
+        return Ok(false);
+    };
+
+    sqlx::query("DELETE FROM evaluations WHERE job_id = $1::uuid AND status = 'running'")
+        .bind(job_id.as_str())
+        .execute(&mut *tx)
+        .await?;
+
+    let solution_submission_id = solution_submission_id_from_row(&row, "solution_submission_id")?;
+    let visible_after_eval = sqlx::query_scalar::<_, bool>(
+        "SELECT visible_after_eval FROM solution_submissions WHERE id = $1::uuid FOR UPDATE",
+    )
+    .bind(solution_submission_id.as_str())
+    .fetch_one(&mut *tx)
+    .await?;
+    if !visible_after_eval {
+        sqlx::query(
+            "UPDATE solution_submissions SET status = 'queued', visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1::uuid"
+        )
+        .bind(solution_submission_id.as_str())
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
+    Ok(true)
+}
+
 /// Make a staged queued job eligible for worker claiming after its artifact is durable.
 pub async fn mark_evaluation_job_ready(pool: &PgPool, job_id: &EvaluationJobId) -> Result<()> {
     let mut tx = pool.begin().await?;

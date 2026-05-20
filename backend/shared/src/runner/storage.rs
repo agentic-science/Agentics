@@ -198,6 +198,7 @@ async fn acquire_slot(
         )));
     }
 
+    let mut cleanup_failures = 0usize;
     for slot_path in slots {
         let lock_attempt_slot_path = slot_path.clone();
         let maybe_lock = tokio::task::spawn_blocking(move || lock_slot(&lock_attempt_slot_path))
@@ -214,9 +215,24 @@ async fn acquire_slot(
 
         let work_path = slot_path.join("work");
         let cleanup_work_path = work_path.clone();
-        tokio::task::spawn_blocking(move || reset_slot_work_path(&cleanup_work_path))
-            .await
-            .map_err(|e| AppError::Internal(format!("bounded slot cleanup task failed: {e}")))??;
+        let cleanup_result =
+            tokio::task::spawn_blocking(move || reset_slot_work_path(&cleanup_work_path))
+                .await
+                .map_err(|e| {
+                    AppError::Internal(format!("bounded slot cleanup task failed: {e}"))
+                })?;
+        if let Err(error) = cleanup_result {
+            cleanup_failures = cleanup_failures.saturating_add(1);
+            tracing::error!(
+                slot_path = %slot_path.display(),
+                phase = %phase_label,
+                slot_class_mb,
+                error = %error,
+                "bounded runner slot cleanup failed; leaving slot unavailable"
+            );
+            drop(lock_file);
+            continue;
+        }
 
         return Ok(WritableMountLease::Bounded(BoundedSlotLease {
             slot_path,
@@ -227,7 +243,13 @@ async fn acquire_slot(
         }));
     }
 
-    Err(AppError::Runner(format!(
+    if cleanup_failures > 0 {
+        return Err(AppError::RunnerCapacity(format!(
+            "bounded writable slots are unavailable for phase `{phase_label}` class {slot_class_mb} MiB; {cleanup_failures} slot cleanup attempt(s) failed and need operator repair"
+        )));
+    }
+
+    Err(AppError::RunnerCapacity(format!(
         "all bounded writable slots are busy for phase `{phase_label}` class {slot_class_mb} MiB"
     )))
 }

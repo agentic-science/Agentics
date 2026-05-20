@@ -951,7 +951,7 @@ fn configure_run_count_limits(
 
 /// Read scorer result JSON only after proving its raw byte size is bounded.
 async fn read_limited_result_json(path: &Path, max_bytes: u64) -> Result<String> {
-    let metadata = tokio::fs::metadata(path)
+    let metadata = tokio::fs::symlink_metadata(path)
         .await
         .map_err(|e| AppError::Runner(format!("missing result.json: {e}")))?;
     if !metadata.is_file() {

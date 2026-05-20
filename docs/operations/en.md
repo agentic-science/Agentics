@@ -259,6 +259,13 @@ filesystem, only the writable bind mounts attached, all capabilities dropped
 except the minimal `FOWNER` capability needed to chmod host-owned files, and the
 same Agentics hosted-worker label scope.
 
+If bounded writable slots are temporarily busy or a stale slot cannot be cleaned
+because root-owned files survived an interrupted repair, the worker treats that
+as platform capacity pressure. It requeues the running job with a short backoff
+instead of marking the evaluation failed. Cleanup failures are logged as
+operator-visible capacity degradation so the affected slot can be repaired
+without penalizing the participant submission.
+
 Actions:
 
 1. Inspect `/admin/solution-submissions`.

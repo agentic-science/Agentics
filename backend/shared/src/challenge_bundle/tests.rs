@@ -773,6 +773,29 @@ async fn run_manifest_rejects_too_many_runs() {
     assert!(error.to_string().contains("at most 12 runs"));
 }
 
+/// Verifies that run names cannot escape scorer-visible filesystem paths.
+#[tokio::test]
+async fn run_manifest_rejects_parent_directory_run_name() {
+    let root = std::env::temp_dir().join(format!(
+        "agentics-bundle-unsafe-run-name-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let mut spec = base_spec();
+    spec.datasets.private_benchmark_enabled = false;
+    create_bundle(&root, &spec);
+    std::fs::write(
+        root.join("public/runs.json"),
+        r#"{"runs":[{"run_name":"..","interface":"stdio","stdin_text":"1"}]}"#,
+    )
+    .expect("failed to write unsafe run manifest");
+
+    let result = validate_challenge_bundle(&root).await;
+    drop(std::fs::remove_dir_all(root));
+
+    let error = result.expect_err("parent-directory run names should be rejected");
+    assert!(error.to_string().contains("run_name"));
+}
+
 /// Verifies that enabled private benchmark bundle requires directory.
 #[tokio::test]
 async fn enabled_private_benchmark_bundle_requires_directory() {

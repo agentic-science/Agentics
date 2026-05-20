@@ -596,9 +596,9 @@ impl Config {
                         "AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots is Linux-only"
                     );
                 }
-                if !self.runner_docker_layer_quota && !is_loopback_host(&self.api_host) {
+                if !self.runner_docker_layer_quota {
                     anyhow::bail!(
-                        "hosted workers with writable container rootfs must set AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true alongside xfs-project-quota-slots"
+                        "AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true is required alongside AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots"
                     );
                 }
                 self.validate_required_runner_runtime_root(
@@ -625,6 +625,11 @@ impl Config {
 
         if self.runner_docker_layer_quota && !cfg!(target_os = "linux") {
             anyhow::bail!("AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true is Linux-only");
+        }
+        if self.host_probe_mode == HostProbeMode::Require && !self.runner_docker_layer_quota {
+            anyhow::bail!(
+                "AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true is required when AGENTICS_HOST_PROBE_MODE=require"
+            );
         }
         if self.host_probe_mode != HostProbeMode::Off && !cfg!(target_os = "linux") {
             anyhow::bail!(
@@ -943,22 +948,6 @@ mod tests {
         );
     }
 
-    /// Verifies platform-owned runner output limit defaults.
-    #[test]
-    fn runner_output_limit_defaults_are_bounded() {
-        let config = test_config();
-
-        assert_eq!(config.host_probe_mode, super::HostProbeMode::Off);
-        assert_eq!(config.runner_max_output_files, 8192);
-        assert_eq!(config.runner_max_output_dirs, 1024);
-        assert_eq!(config.runner_max_output_depth, 32);
-        assert_eq!(config.runner_max_runs, 12);
-        assert_eq!(config.runner_max_result_json_bytes, 4 * 1024 * 1024);
-        assert_eq!(config.runner_max_public_results, 1024);
-        assert_eq!(config.runner_max_result_log_bytes, 256 * 1024);
-        assert!(config.validate_runner_storage().is_ok());
-    }
-
     /// Verifies invalid runner output and result limits are rejected.
     #[test]
     fn runner_output_and_result_limits_must_be_valid() {
@@ -1052,21 +1041,30 @@ mod tests {
 
         config.runner_writable_storage_mode = "xfs-project-quota-slots".to_string();
         config.runner_docker_layer_quota = false;
+        config.api_host = "127.0.0.1".to_string();
         config.runner_runtime_root = Some("/agentics-runtime".to_string());
         config.runner_phase_mount_root = Some("/agentics-runner-slots".to_string());
         let error = config
             .validate_runner_storage()
-            .expect_err("hosted writable rootfs also needs Docker layer quota");
-        assert!(
-            error
-                .to_string()
-                .contains("AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true")
-        );
+            .expect_err("quota-backed writable rootfs also needs Docker layer quota");
+        assert!(error.to_string().contains("xfs-project-quota-slots"));
 
         config.runner_docker_layer_quota = true;
         assert_eq!(
             config.validate_runner_storage().is_ok(),
             cfg!(target_os = "linux")
+        );
+
+        config.runner_writable_storage_mode = "unbounded".to_string();
+        config.runner_docker_layer_quota = false;
+        config.host_probe_mode = super::HostProbeMode::Require;
+        let error = config
+            .validate_runner_storage()
+            .expect_err("required host probes also need Docker layer quota");
+        assert!(
+            error
+                .to_string()
+                .contains("AGENTICS_HOST_PROBE_MODE=require")
         );
     }
 

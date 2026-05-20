@@ -18,8 +18,10 @@ use shared::db::pool::create_pool;
 use shared::db::{
     HeartbeatPayload, PersistedEvaluationResult, claim_next_evaluation_job,
     mark_evaluation_finished, mark_evaluation_started, reap_stuck_jobs,
-    refresh_evaluation_job_claim, upsert_service_heartbeat,
+    refresh_evaluation_job_claim, requeue_running_evaluation_job_for_capacity,
+    upsert_service_heartbeat,
 };
+use shared::error::AppError;
 use shared::models::evaluation::EvaluationStatus;
 use shared::models::ids::{EvaluationId, EvaluationJobId};
 use shared::runner::{
@@ -322,6 +324,44 @@ pub async fn run_worker_cycle(
                 primary_score = %primary_score,
                 "evaluation completed"
             );
+        }
+        Err(AppError::RunnerCapacity(error_msg)) => {
+            let requeued = requeue_running_evaluation_job_for_capacity(
+                db,
+                &job.id,
+                worker_id,
+                job.attempt_count,
+                &error_msg,
+            )
+            .await?;
+            if !requeued {
+                warn!(
+                    job_id = %job.id,
+                    worker_id,
+                    attempt_count = job.attempt_count,
+                    error = %error_msg,
+                    "ignored capacity requeue from stale worker claim"
+                );
+            } else {
+                warn!(
+                    job_id = %job.id,
+                    solution_submission_id = %job.solution_submission_id,
+                    error = %error_msg,
+                    "evaluation requeued because runner capacity is temporarily unavailable"
+                );
+            }
+            upsert_service_heartbeat(
+                db,
+                worker_id,
+                &HeartbeatPayload {
+                    status: "idle".to_string(),
+                    job_id: None,
+                    solution_submission_id: None,
+                    last_completed_job_id: None,
+                    last_failed_job_id: None,
+                },
+            )
+            .await?;
         }
         Err(e) => {
             let error_msg = e.to_string();
