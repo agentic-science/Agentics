@@ -38,6 +38,7 @@ pub(super) struct ContainerRequest {
     pub(super) working_dir: String,
     pub(super) docker_platform: DockerPlatform,
     pub(super) accelerator: TargetAccelerator,
+    pub(super) accelerator_count: Option<u32>,
     pub(super) limits: ZipProjectPhaseLimits,
     pub(super) docker_layer_quota_mb: Option<u64>,
     pub(super) labels: HashMap<String, String>,
@@ -100,8 +101,9 @@ pub(super) async fn run_container(
     host_config.memory_swap = Some(memory);
     host_config.nano_cpus = Some(nano_cpus);
     host_config.storage_opt = docker_storage_opt(request.docker_layer_quota_mb);
-    host_config.runtime = gpu_runtime(request.accelerator);
-    host_config.device_requests = gpu_device_requests(request.accelerator);
+    host_config.runtime = accelerator_runtime(request.accelerator);
+    host_config.device_requests =
+        accelerator_device_requests(request.accelerator, request.accelerator_count)?;
     let container_config = ContainerCreateBody {
         image: Some(request.image),
         cmd: Some(request.cmd),
@@ -712,24 +714,36 @@ fn docker_storage_opt(limit_mb: Option<u64>) -> Option<HashMap<String, String>> 
     })
 }
 
-/// Handles gpu runtime for this module.
-fn gpu_runtime(accelerator: TargetAccelerator) -> Option<String> {
+/// Handles accelerator runtime for this module.
+fn accelerator_runtime(accelerator: TargetAccelerator) -> Option<String> {
     match accelerator {
         TargetAccelerator::None => None,
         TargetAccelerator::Gpu => Some("nvidia".to_string()),
     }
 }
 
-/// Handles gpu device requests for this module.
-fn gpu_device_requests(accelerator: TargetAccelerator) -> Option<Vec<DeviceRequest>> {
+/// Handles accelerator device requests for this module.
+fn accelerator_device_requests(
+    accelerator: TargetAccelerator,
+    accelerator_count: Option<u32>,
+) -> Result<Option<Vec<DeviceRequest>>> {
     match accelerator {
-        TargetAccelerator::None => None,
-        TargetAccelerator::Gpu => Some(vec![DeviceRequest {
-            driver: Some("nvidia".to_string()),
-            count: Some(-1),
-            capabilities: Some(vec![vec!["gpu".to_string()]]),
-            ..Default::default()
-        }]),
+        TargetAccelerator::None => Ok(None),
+        TargetAccelerator::Gpu => {
+            let count = accelerator_count.ok_or_else(|| {
+                AppError::Runner(
+                    "accelerator `gpu` requires resource_profile.hardware_metadata.gpu_count"
+                        .to_string(),
+                )
+            })?;
+            let count = i64::from(count);
+            Ok(Some(vec![DeviceRequest {
+                driver: Some("nvidia".to_string()),
+                count: Some(count),
+                capabilities: Some(vec![vec!["gpu".to_string()]]),
+                ..Default::default()
+            }]))
+        }
     }
 }
 
@@ -849,6 +863,31 @@ mod tests {
 
         assert_eq!(selected.len(), 1);
         assert_eq!(selected[0].target.as_deref(), Some("/workspace"));
+    }
+
+    /// Verifies accelerator requests enforce the declared profile count.
+    #[test]
+    fn accelerator_device_requests_use_declared_count() {
+        let requests = accelerator_device_requests(TargetAccelerator::Gpu, Some(2))
+            .expect("declared accelerator count should build device request")
+            .expect("gpu accelerator should request devices");
+
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].count, Some(2));
+        assert_eq!(requests[0].driver.as_deref(), Some("nvidia"));
+        assert_eq!(
+            requests[0].capabilities.as_deref(),
+            Some(&[vec!["gpu".to_string()]][..])
+        );
+
+        let error = accelerator_device_requests(TargetAccelerator::Gpu, None)
+            .expect_err("gpu accelerator requires a declared count");
+        assert!(error.to_string().contains("gpu_count"));
+        assert!(
+            accelerator_device_requests(TargetAccelerator::None, Some(2))
+                .expect("no accelerator should ignore accelerator count")
+                .is_none()
+        );
     }
 
     /// Verifies permission-repair sidecars use the runner hardening baseline.

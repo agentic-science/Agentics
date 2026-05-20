@@ -583,6 +583,10 @@ async fn run_setup_and_build(
                 working_dir: "/workspace".to_string(),
                 docker_platform: request.docker_platform,
                 accelerator: request.accelerator,
+                accelerator_count: effective_accelerator_count(
+                    request.profile,
+                    request.accelerator,
+                )?,
                 limits: limits.clone(),
                 docker_layer_quota_mb: runner.storage.docker_layer_quota_mb(&limits),
                 labels: runner.container_labels(phase_name(&phase.name), None),
@@ -658,6 +662,10 @@ async fn run_setup_and_build_bounded(
                 working_dir: "/workspace".to_string(),
                 docker_platform: request.docker_platform,
                 accelerator: request.accelerator,
+                accelerator_count: effective_accelerator_count(
+                    request.profile,
+                    request.accelerator,
+                )?,
                 limits: limits.clone(),
                 docker_layer_quota_mb: runner.storage.docker_layer_quota_mb(&limits),
                 labels: runner.container_labels(phase_name(&phase.name), Some(&workspace)),
@@ -761,6 +769,10 @@ async fn run_solution_invocations(
                 working_dir: "/workspace".to_string(),
                 docker_platform: request.docker_platform,
                 accelerator: request.accelerator,
+                accelerator_count: effective_accelerator_count(
+                    request.profile,
+                    request.accelerator,
+                )?,
                 limits: limits.clone(),
                 docker_layer_quota_mb: runner.storage.docker_layer_quota_mb(&limits),
                 labels: runner.container_labels("run", Some(&io_mount)),
@@ -868,6 +880,7 @@ async fn run_scorer(
             working_dir: "/challenge".to_string(),
             docker_platform: request.docker_platform,
             accelerator: request.accelerator,
+            accelerator_count: effective_accelerator_count(request.profile, request.accelerator)?,
             limits: limits.clone(),
             docker_layer_quota_mb: runner.storage.docker_layer_quota_mb(&limits),
             labels: runner.container_labels("scorer", Some(&output_mount)),
@@ -1072,6 +1085,7 @@ async fn run_prepare_phase(
             working_dir: "/challenge".to_string(),
             docker_platform: request.docker_platform,
             accelerator: request.accelerator,
+            accelerator_count: effective_accelerator_count(request.profile, request.accelerator)?,
             limits: limits.clone(),
             docker_layer_quota_mb: request.runner.storage.docker_layer_quota_mb(&limits),
             labels: request
@@ -1119,6 +1133,36 @@ fn run_manifest_source(
                     "challenge does not declare official runs or official prepare".to_string(),
                 ))
             }
+        }
+    }
+}
+
+/// Return the enforced accelerator count for one container request.
+fn effective_accelerator_count(
+    profile: &ResourceProfileSpec,
+    accelerator: TargetAccelerator,
+) -> Result<Option<u32>> {
+    match accelerator {
+        TargetAccelerator::None => Ok(None),
+        TargetAccelerator::Gpu => {
+            let hardware = profile.hardware_metadata.as_ref().ok_or_else(|| {
+                AppError::Runner(
+                    "accelerator `gpu` requires resource_profile.hardware_metadata".to_string(),
+                )
+            })?;
+            let count = hardware.gpu_count.ok_or_else(|| {
+                AppError::Runner(
+                    "accelerator `gpu` requires resource_profile.hardware_metadata.gpu_count"
+                        .to_string(),
+                )
+            })?;
+            if count == 0 {
+                return Err(AppError::Runner(
+                    "resource_profile.hardware_metadata.gpu_count must be greater than zero"
+                        .to_string(),
+                ));
+            }
+            Ok(Some(count))
         }
     }
 }

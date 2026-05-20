@@ -108,8 +108,9 @@ CUDA target hardware metadata 必须包含：
 
 必填字段为 `kind`、`gpu_model`、`gpu_count`、`cuda_variant` 和
 `cuda_version`。`gpu_memory_gb` 和 `driver_minimum` 可选，但如果存在则必须有效。
-当前 new CUDA targets 接受 `cu126` 对应 CUDA 12.6、`cu130` 对应 CUDA 13.0，
-以及 `cu132` 对应 CUDA 13.2。
+Worker 在为 accelerator targets 创建 Docker containers 时会强制执行 `gpu_count`，
+而不是暴露 host 上的所有 GPUs。当前 new CUDA targets 接受 `cu126` 对应 CUDA
+12.6、`cu130` 对应 CUDA 13.0，以及 `cu132` 对应 CUDA 13.2。
 
 CUDA variants 是 `linux-arm64-cuda` 下的 resource-profile choices，而不是单独的
 targets。如果 hardware target 相同，它们共享同一个 target leaderboard。Challenge
