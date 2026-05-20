@@ -16,7 +16,8 @@ use shared::models::challenge_creation::{
     ChallengeCreationRequestKind, ChallengeDraftCleanupResponse, ChallengeDraftListResponse,
     ChallengeDraftResponse, ChallengeDraftStatus, ChallengeDraftValidationStatus,
     ChallengePrivateAssetKind, ChallengePrivateAssetResponse, CreateChallengeDraftRequest,
-    ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest, ValidateChallengeDraftRequest,
+    CreatorChallengeDraftResponse, ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest,
+    ValidateChallengeDraftRequest,
 };
 use shared::models::hashes::{GitCommitSha, Sha256Digest};
 use shared::models::ids::{
@@ -43,7 +44,7 @@ pub async fn create_challenge_draft(
     State(state): State<AppState>,
     creator: CreatorAuth,
     ValidatedJson(body): ValidatedJson<CreateChallengeDraftRequest>,
-) -> Result<(StatusCode, Json<ChallengeDraftResponse>)> {
+) -> Result<(StatusCode, Json<CreatorChallengeDraftResponse>)> {
     challenge_creation::validate_challenge_creation_manifest(&body.manifest)?;
     validate_challenge_draft_path(&body.challenge_path, &body.manifest.challenge_name)?;
     GithubPullRequestRef::try_new(
@@ -97,7 +98,7 @@ pub async fn create_challenge_draft(
     )
     .await?;
 
-    Ok((StatusCode::CREATED, Json(draft)))
+    Ok((StatusCode::CREATED, Json(draft.into())))
 }
 
 /// Fetch a challenge draft owned by the authenticated agent.
@@ -105,14 +106,14 @@ pub async fn get_challenge_draft(
     State(state): State<AppState>,
     creator: CreatorAuth,
     ChallengeDraftIdPath(draft_id): ChallengeDraftIdPath,
-) -> Result<Json<ChallengeDraftResponse>> {
+) -> Result<Json<CreatorChallengeDraftResponse>> {
     let draft = db::get_challenge_draft(&state.db, draft_id.as_str())
         .await?
         .ok_or(AppError::NotFound)?;
     if draft.creator_agent_id != creator.agent_id {
         return Err(AppError::NotFound);
     }
-    Ok(Json(draft))
+    Ok(Json(draft.into()))
 }
 
 /// Upload a private benchmark asset for a draft owned by the authenticated agent.

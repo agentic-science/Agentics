@@ -180,6 +180,9 @@ unreferenced object，再 promote 新上传。
 5. 通过 creator console 上传 required private assets。
 6. 跟踪 draft validation、approval 和 publication status。
 
+Creator draft detail responses 会显示 validation status、messages 和 bundle
+digests，但不会暴露 reviewer/admin server checkout paths。
+
 Draft creation 会在存储 draft 前校验 `repo_url`、`pr_url` 和 `pr_number` 是否指向同一个
 GitHub repository 和 pull request。MVP 中 GitHub account ownership proof 仍由
 reviewed workflow 处理，而不是通过 server-side GitHub authorization check 完成。

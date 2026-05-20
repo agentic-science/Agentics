@@ -32,9 +32,9 @@ import {
 } from "@/lib/creatorApi";
 import { selectLocalizedText } from "@/lib/localizedText";
 import type {
-  ChallengeDraftResponse,
   ChallengeShortlistResponse,
   ChallengeShortlistRevisionResponse,
+  CreatorChallengeDraftResponse,
   CreatorChallengeParticipantsResponse,
   CreatorChallengeStatsResponse,
   CreatorMeResponse,
@@ -83,7 +83,7 @@ const assetKinds: ChallengePrivateAssetKind[] = [
 export function CreatorConsole() {
   const [creator, setCreator] = useState<CreatorMeResponse | null>(null);
   const [csrfToken, setCsrfToken] = useState("");
-  const [draft, setDraft] = useState<ChallengeDraftResponse | null>(null);
+  const [draft, setDraft] = useState<CreatorChallengeDraftResponse | null>(null);
   const [draftLookupId, setDraftLookupId] = useState("");
   const [draftForm, setDraftForm] = useState({
     repoUrl: "https://github.com/agentics-reifying/agentics-challenges",
@@ -767,7 +767,7 @@ function CreatorIdentityPanel({
 }
 
 /** Renders the draft detail component. */
-function DraftDetail({ draft }: { draft: ChallengeDraftResponse | null }) {
+function DraftDetail({ draft }: { draft: CreatorChallengeDraftResponse | null }) {
   if (!draft) {
     return (
       <div className="card">

@@ -342,6 +342,42 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
             .len(),
         64
     );
+    assert!(
+        validated["validation_repository_path"].is_string(),
+        "admin validation response should keep checkout path"
+    );
+    assert!(
+        validated["validation_records"][0]["repository_path"].is_string(),
+        "admin validation records should keep checkout path"
+    );
+
+    let creator_visible_draft: serde_json::Value = creator_auth(
+        client.get(api_url(
+            &app,
+            &format!("/api/creator/challenge-drafts/{draft_id}"),
+        )),
+        &creator,
+    )
+    .send()
+    .await
+    .expect("creator draft detail request")
+    .error_for_status()
+    .expect("creator draft detail should be visible")
+    .json()
+    .await
+    .expect("creator draft detail json");
+    assert!(
+        creator_visible_draft
+            .get("validation_repository_path")
+            .is_none(),
+        "creator draft detail must not expose validation checkout path"
+    );
+    assert!(
+        creator_visible_draft["validation_records"][0]
+            .get("repository_path")
+            .is_none(),
+        "creator validation records must not expose checkout paths"
+    );
 
     let approved: serde_json::Value = client
         .post(api_url(

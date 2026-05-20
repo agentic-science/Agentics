@@ -1868,6 +1868,236 @@ export const createPioneerCodeRequestSchema = z
   .strict()
   .describe("Admin payload for creating a pioneer code.");
 
+export const creatorChallengeDraftResponseSchema = z
+  .object({
+    id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+    challenge_name: z
+      .string()
+      .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+      .min(3)
+      .max(63),
+    request: z
+      .enum(["new_challenge", "archive_challenge"])
+      .describe("Lifecycle request represented by a public manifest."),
+    status: z
+      .enum([
+        "draft",
+        "validated",
+        "approved",
+        "publishing",
+        "rejected",
+        "published",
+        "abandoned",
+      ])
+      .describe("Draft status used by the review lifecycle."),
+    creator_agent_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+    creator_github_user_id: z.number().int(),
+    creator_github_login: z.string(),
+    repo_url: z
+      .string()
+      .regex(
+        /^(https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?|git@github\.com:[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\.git)$/,
+      ),
+    pr_number: z.number().int().gte(1).lte(2147483647),
+    pr_url: z
+      .string()
+      .url()
+      .regex(
+        /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/[0-9]+$/,
+      ),
+    commit_sha: z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/),
+    challenge_path: z.string().regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+    manifest_sha256: z.string().regex(/^[0-9a-f]{64}$/),
+    manifest: z
+      .object({
+        schema_version: z.number().int(),
+        request: z
+          .enum(["new_challenge", "archive_challenge"])
+          .describe("Lifecycle request represented by a public manifest."),
+        challenge_name: z
+          .string()
+          .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+          .min(3)
+          .max(63),
+        title: z.string(),
+        summary: z
+          .object({ en: z.string(), zh: z.string() })
+          .strict()
+          .describe(
+            "English and Chinese text for short public challenge copy.",
+          ),
+        keywords: z
+          .array(
+            z
+              .string()
+              .min(1)
+              .max(30)
+              .describe(
+                "Public challenge keyword. Runtime validation enforces a 30 UTF-8 byte maximum and rejects control characters.",
+              ),
+          )
+          .min(1)
+          .max(6),
+        readme_path: z
+          .string()
+          .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+        bundle_path: z
+          .string()
+          .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+          .optional(),
+        archive: z
+          .object({ reason: z.string() })
+          .strict()
+          .describe("Public archive request metadata.")
+          .optional(),
+        private_assets: z
+          .array(
+            z
+              .object({
+                asset_name: z
+                  .string()
+                  .regex(/^[A-Za-z0-9_.-]+$/)
+                  .min(1),
+                kind: z
+                  .enum([
+                    "private_benchmark_data",
+                    "private_scorer_package",
+                    "private_seeds",
+                    "private_reference_outputs",
+                  ])
+                  .describe(
+                    "Supported private asset classes for challenge creation.",
+                  ),
+                required: z.boolean(),
+                asset_note: z.string().optional(),
+              })
+              .strict()
+              .describe(
+                "Private asset that must be uploaded directly to Agentics for a draft.",
+              ),
+          )
+          .default([]),
+        ci: z
+          .object({
+            validate_manifest: z.boolean().default(true),
+            validate_public_bundle: z.boolean().default(true),
+            smoke_test_public_validation: z.boolean().default(false),
+          })
+          .strict()
+          .describe("CI expectations for the public challenge repository.")
+          .optional(),
+      })
+      .strict()
+      .describe(
+        "Public manifest submitted through the reviewed challenge repository.",
+      ),
+    validation_bundle_sha256: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional(),
+    approved_bundle_sha256: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional(),
+    validation_message: z.string().optional(),
+    published_challenge_name: z
+      .string()
+      .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+      .min(3)
+      .max(63)
+      .optional(),
+    private_assets: z
+      .array(
+        z
+          .object({
+            id: z
+              .string()
+              .uuid()
+              .regex(
+                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+              ),
+            draft_id: z
+              .string()
+              .uuid()
+              .regex(
+                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+              ),
+            asset_name: z
+              .string()
+              .regex(/^[A-Za-z0-9_.-]+$/)
+              .min(1),
+            kind: z
+              .enum([
+                "private_benchmark_data",
+                "private_scorer_package",
+                "private_seeds",
+                "private_reference_outputs",
+              ])
+              .describe(
+                "Supported private asset classes for challenge creation.",
+              ),
+            required: z.boolean(),
+            size_bytes: z.number().int(),
+            sha256: z.string().regex(/^[0-9a-f]{64}$/),
+            storage_key: z
+              .string()
+              .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+            uploader_agent_id: z
+              .string()
+              .uuid()
+              .regex(
+                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+              ),
+            created_at: z.string(),
+          })
+          .describe(
+            "API response for one private benchmark asset bound to a draft.",
+          ),
+      )
+      .default([]),
+    validation_records: z
+      .array(
+        z
+          .object({
+            id: z
+              .string()
+              .uuid()
+              .regex(
+                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+              ),
+            draft_id: z
+              .string()
+              .uuid()
+              .regex(
+                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+              ),
+            status: z
+              .enum(["running", "passed", "failed"])
+              .describe("Validation record status for a challenge draft."),
+            message: z.string(),
+            manifest_sha256: z.string().regex(/^[0-9a-f]{64}$/),
+            bundle_sha256: z
+              .string()
+              .regex(/^[0-9a-f]{64}$/)
+              .optional(),
+            created_at: z.string(),
+          })
+          .describe(
+            "Creator-facing validation record response without server-local checkout paths.",
+          ),
+      )
+      .default([]),
+    created_at: z.string(),
+    updated_at: z.string(),
+  })
+  .describe("Creator-facing response for one challenge draft.");
+
 export const creatorChallengeParticipantsResponseSchema = z
   .object({
     challenge_name: z
@@ -3779,6 +4009,9 @@ export type CreateChallengeShortlistRevisionRequest = z.infer<
 >;
 export type CreatePioneerCodeRequest = z.infer<
   typeof createPioneerCodeRequestSchema
+>;
+export type CreatorChallengeDraftResponse = z.infer<
+  typeof creatorChallengeDraftResponseSchema
 >;
 export type CreatorChallengeParticipantsResponse = z.infer<
   typeof creatorChallengeParticipantsResponseSchema

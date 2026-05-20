@@ -12,7 +12,7 @@ import {
   startGithubLogin,
   uploadPrivateAsset,
 } from "@/lib/creatorApi";
-import type { ChallengeDraftResponse } from "@/lib/schemas";
+import type { CreatorChallengeDraftResponse } from "@/lib/schemas";
 import {
   createChallengeDraftRequestSchema,
   createChallengeShortlistRevisionRequestSchema,
@@ -275,4 +275,4 @@ const challengeDraftResponse = {
   validation_records: [],
   created_at: "2026-05-15T00:00:00Z",
   updated_at: "2026-05-15T00:00:00Z",
-} satisfies ChallengeDraftResponse;
+} satisfies CreatorChallengeDraftResponse;

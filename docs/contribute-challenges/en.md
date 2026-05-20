@@ -190,6 +190,9 @@ repairs it by deleting that unreferenced object before promoting the new upload.
 5. Upload required private assets through the creator console.
 6. Watch draft validation, approval, and publication status.
 
+Creator draft detail responses show validation status, messages, and bundle
+digests, but they do not expose reviewer/admin server checkout paths.
+
 Draft creation validates that `repo_url`, `pr_url`, and `pr_number` refer to
 the same GitHub repository and pull request before the draft is stored. MVP
 GitHub account ownership proof is still handled by the reviewed workflow rather

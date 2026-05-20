@@ -235,6 +235,7 @@ pub fn write_public_challenge(repo: &Path) -> String {
             "challenge_name": "sample-sum",
             "challenge_title": "Sample Sum",
             "summary": { "en": "Add numbers", "zh": "数字求和" },
+            "keywords": ["arithmetic", "smoke"],
             "solution": {
                 "protocol": "zip_project",
                 "manifest_file": "agentics.solution.json"
@@ -357,6 +358,7 @@ pub fn manifest_json() -> serde_json::Value {
         "challenge_name": "sample-sum",
         "title": "Sample Sum",
         "summary": { "en": "Add numbers", "zh": "数字求和" },
+        "keywords": ["arithmetic", "smoke"],
         "readme_path": "README.md",
         "bundle_path": "v1",
         "private_assets": [
@@ -377,6 +379,7 @@ pub fn archive_manifest_json() -> serde_json::Value {
         "challenge_name": "sample-sum",
         "title": "Sample Sum",
         "summary": { "en": "Add numbers", "zh": "数字求和" },
+        "keywords": ["arithmetic", "smoke"],
         "readme_path": "README.md",
         "archive": {
             "reason": "Retired for MVP lifecycle testing"
