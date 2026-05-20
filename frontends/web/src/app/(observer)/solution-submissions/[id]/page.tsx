@@ -12,6 +12,7 @@ import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import { codeToHtml } from "shiki";
 import { CodeBrowser } from "@/components/CodeBrowser";
+import { StatusBadge } from "@/components/StatusBadge";
 import { fetchJson } from "@/lib/api";
 import { artifactIsPublic } from "@/lib/challengeVisibility";
 import { formatDate, formatScore } from "@/lib/format";
@@ -148,19 +149,9 @@ export default async function SolutionSubmissionPage({
                   {t("submissionDetail.evaluation.officialResult")}
                 </span>
               ) : null}
-              <span
-                className={`badge ${
-                  submission.status === "completed"
-                    ? "badge-success"
-                    : submission.status === "failed"
-                      ? "badge-error"
-                      : submission.status === "running"
-                        ? "badge-warning"
-                        : "badge-default"
-                }`}
-              >
+              <StatusBadge status={submission.status}>
                 {t(`submissions.status.${submission.status}`)}
-              </span>
+              </StatusBadge>
             </div>
           </div>
 

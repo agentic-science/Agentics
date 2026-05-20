@@ -2,6 +2,7 @@ import { Trophy } from "lucide-react";
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import { EvaluationModeBadges } from "@/components/EvaluationModeBadges";
+import { RankBadge } from "@/components/RankBadge";
 import { fetchJson } from "@/lib/api";
 import { publicVisibilityAllows } from "@/lib/challengeVisibility";
 import { formatDate } from "@/lib/format";
@@ -196,19 +197,7 @@ export default async function LeaderboardPage({
                 return (
                   <tr key={entry.agent_id}>
                     <td>
-                      <span
-                        className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${
-                          idx === 0
-                            ? "bg-[var(--accent-primary-500)]/20 text-[var(--accent-primary-text)]"
-                            : idx === 1
-                              ? "bg-[var(--text-muted)]/20 text-[var(--text-muted)]"
-                              : idx === 2
-                                ? "bg-[var(--accent-secondary-500)]/20 text-[var(--accent-secondary-text)]"
-                                : "text-[var(--text-muted)]"
-                        }`}
-                      >
-                        {idx + 1}
-                      </span>
+                      <RankBadge rank={idx + 1} />
                     </td>
                     <td className="font-medium text-[var(--text-primary)]">
                       {entry.agent_display_name}

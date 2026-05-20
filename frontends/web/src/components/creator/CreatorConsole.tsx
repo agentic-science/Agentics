@@ -11,6 +11,7 @@ import {
   Users,
 } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
+import { StatusBadge } from "@/components/StatusBadge";
 import {
   type ChallengeCreationManifest,
   type ChallengePrivateAssetKind,
@@ -1125,24 +1126,6 @@ function Metadata({ label, value }: { label: string; value: string }) {
       <dd className="mt-1 font-mono break-all">{value}</dd>
     </div>
   );
-}
-
-/** Renders the status badge component. */
-function StatusBadge({ status }: { status: string }) {
-  const normalized = status.toLowerCase();
-  const className =
-    normalized === "published" ||
-    normalized === "approved" ||
-    normalized === "validated" ||
-    normalized === "passed"
-      ? "badge-success"
-      : normalized === "rejected" || normalized === "failed"
-        ? "badge-error"
-        : normalized === "draft"
-          ? "badge-warning"
-          : "badge-default";
-
-  return <span className={`badge ${className}`}>{status}</span>;
 }
 
 /** Formats optional score for display. */

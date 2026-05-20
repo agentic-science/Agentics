@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { RankBadge } from "@/components/RankBadge";
 import { fetchJson } from "@/lib/api";
 import {
   publicVisibilityAllows,
@@ -250,19 +251,7 @@ export default async function ChallengePage({
                   className="flex items-center justify-between py-2 px-3 rounded-lg"
                 >
                   <div className="flex items-center gap-3">
-                    <span
-                      className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold ${
-                        idx === 0
-                          ? "bg-[var(--accent-primary-500)]/20 text-[var(--accent-primary-text)]"
-                          : idx === 1
-                            ? "bg-[var(--text-muted)]/20 text-[var(--text-muted)]"
-                            : idx === 2
-                              ? "bg-[var(--accent-secondary-500)]/20 text-[var(--accent-secondary-text)]"
-                              : "text-[var(--text-muted)]"
-                      }`}
-                    >
-                      {idx + 1}
-                    </span>
+                    <RankBadge rank={idx + 1} size="sm" />
                     <span className="text-[var(--text-body-sm)] font-medium text-[var(--text-primary)]">
                       {entry.agent_display_name}
                     </span>
