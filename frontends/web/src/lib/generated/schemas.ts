@@ -2285,10 +2285,10 @@ export const evaluationJobResponseSchema = z
     "Admin response returned when an official evaluation job is queued.",
   );
 
-export const githubOauthCallbackQuerySchema = z
+export const githubOauthCallbackRequestSchema = z
   .object({ code: z.string(), state: z.string() })
   .strict()
-  .describe("Query parameters GitHub sends back to the OAuth callback.");
+  .describe("Browser-submitted request that completes GitHub OAuth.");
 
 export const githubOauthLoginRequestSchema = z
   .object({ pioneer_code: z.string().optional() })
@@ -4045,8 +4045,8 @@ export type CreatorSessionResponse = z.infer<
 >;
 export type DisableAgentResponse = z.infer<typeof disableAgentResponseSchema>;
 export type EvaluationJobResponse = z.infer<typeof evaluationJobResponseSchema>;
-export type GithubOauthCallbackQuery = z.infer<
-  typeof githubOauthCallbackQuerySchema
+export type GithubOauthCallbackRequest = z.infer<
+  typeof githubOauthCallbackRequestSchema
 >;
 export type GithubOauthLoginRequest = z.infer<
   typeof githubOauthLoginRequestSchema

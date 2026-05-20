@@ -20,10 +20,10 @@ import {
   creatorChallengeStatsResponseSchema,
   creatorMeResponseSchema,
   creatorSessionResponseSchema,
-  type GithubOauthCallbackQuery,
+  type GithubOauthCallbackRequest,
   type GithubOauthLoginRequest,
   type GithubOauthLoginResponse,
-  githubOauthCallbackQuerySchema,
+  githubOauthCallbackRequestSchema,
   githubOauthLoginRequestSchema,
   githubOauthLoginResponseSchema,
   type UploadChallengePrivateAssetRequest,
@@ -137,10 +137,10 @@ export async function completeGithubLogin(
   code: string,
   state: string,
 ): Promise<CreatorSessionResponse> {
-  const request = githubOauthCallbackQuerySchema.parse({
+  const request = githubOauthCallbackRequestSchema.parse({
     code,
     state,
-  } satisfies GithubOauthCallbackQuery);
+  } satisfies GithubOauthCallbackRequest);
   return creatorFetchJson(
     "/api/auth/github/callback",
     creatorSessionResponseSchema,

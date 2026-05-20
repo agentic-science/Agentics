@@ -17,7 +17,7 @@ use shared::db;
 use shared::error::{AppError, Result};
 use shared::models::auth::{
     AdminLoginRequest, AdminSessionResponse, CreatorMeResponse, CreatorSessionResponse,
-    GithubOauthCallbackQuery, GithubOauthLoginRequest, GithubOauthLoginResponse,
+    GithubOauthCallbackRequest, GithubOauthLoginRequest, GithubOauthLoginResponse,
 };
 use shared::models::ids::AgentId;
 use shared::models::pioneer_codes::PioneerCode;
@@ -226,18 +226,18 @@ pub async fn github_oauth_login(
 /// Complete GitHub OAuth and issue a creator web session.
 pub async fn github_oauth_callback(
     State(state): State<AppState>,
-    ValidatedJson(query): ValidatedJson<GithubOauthCallbackQuery>,
+    ValidatedJson(request): ValidatedJson<GithubOauthCallbackRequest>,
 ) -> Result<(
     StatusCode,
     AppendHeaders<[(HeaderName, String); 2]>,
     Json<CreatorSessionResponse>,
 )> {
-    let state_hash = auth::hash_opaque_token(&query.state);
+    let state_hash = auth::hash_opaque_token(&request.state);
     let oauth_state = db::consume_github_oauth_state(&state.db, &state_hash)
         .await?
         .ok_or(AppError::Unauthorized)?;
 
-    let access_token = exchange_github_code(&state, &query.code).await?;
+    let access_token = exchange_github_code(&state, &request.code).await?;
     let github_user = fetch_github_user(&state, &access_token).await?;
     if github_user.id <= 0 || github_user.login.trim().is_empty() {
         return Err(AppError::BadRequest(

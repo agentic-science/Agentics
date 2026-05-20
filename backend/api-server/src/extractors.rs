@@ -12,7 +12,7 @@ use shared::db::{
     authenticate_creator_session,
 };
 use shared::error::AppError;
-use shared::models::auth::GithubOauthCallbackQuery;
+use shared::models::auth::GithubOauthCallbackRequest;
 use shared::models::auth::GithubOauthLoginRequest;
 use shared::models::challenge_creation::{
     CreateChallengeDraftRequest, ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest,
@@ -430,7 +430,7 @@ impl ValidateRequest for GithubOauthLoginRequest {
     }
 }
 
-impl ValidateRequest for GithubOauthCallbackQuery {
+impl ValidateRequest for GithubOauthCallbackRequest {
     /// Ensures the browser returned both OAuth values before backend exchange.
     fn validate(&self) -> Result<(), String> {
         require_non_empty(&self.code, "code")?;

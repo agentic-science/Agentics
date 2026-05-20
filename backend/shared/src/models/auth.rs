@@ -38,10 +38,10 @@ pub struct GithubOauthLoginResponse {
     pub state: String,
 }
 
-/// Query parameters GitHub sends back to the OAuth callback.
+/// Browser-submitted request that completes GitHub OAuth.
 #[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct GithubOauthCallbackQuery {
+pub struct GithubOauthCallbackRequest {
     pub code: String,
     pub state: String,
 }
