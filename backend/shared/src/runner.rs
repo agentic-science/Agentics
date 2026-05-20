@@ -292,7 +292,10 @@ pub async fn execute_evaluation_job(
         storage,
     } = request;
     let attempt = RunnerAttempt::new(job_id, worker_id, attempt_count);
-    let working_root = std::env::temp_dir()
+    let runner_runtime_root = config
+        .runner_runtime_root()
+        .map_err(|error| AppError::Runner(error.to_string()))?;
+    let working_root = runner_runtime_root
         .join("agentics-eval-artifacts")
         .join(&attempt.transient_name);
     let source_root = working_root.join("source");

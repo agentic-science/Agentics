@@ -36,6 +36,7 @@ inspection. Override defaults with `AGENTICS_DEMO_API_HOST`,
 | Persistent state root | `/srv/agentics` |
 | Challenge root | `/srv/agentics/challenges` |
 | Storage root | `/srv/agentics/storage` |
+| Runner runtime root | `/srv/agentics/runtime` |
 | Agentics Docker socket | `/run/agentics/docker.sock` |
 | Agentics Docker data root | `/srv/agentics/docker-data-root` |
 | Loop image root | `/srv/agentics/loop-images` |

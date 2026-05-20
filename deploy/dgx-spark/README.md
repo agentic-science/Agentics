@@ -89,6 +89,7 @@ capacity exists.
    sudo -u agentics env \
      AGENTICS_HOST_PROBE_MODE=require \
      AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots \
+     AGENTICS_RUNNER_RUNTIME_ROOT=/srv/agentics/runtime \
      AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts \
      AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096 \
      AGENTICS_DGX_PHASE_SLOT_INODES_PER_MB=256 \
@@ -120,6 +121,7 @@ quota root rather than the hosted worker slots:
 sudo AGENTICS_DGX_TEST_CONFIRM=prepare-test-storage \
   scripts/ops/prepare-dgx-spark-test-storage.sh
 export AGENTICS_TEST_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots
+export AGENTICS_TEST_RUNNER_RUNTIME_ROOT=/srv/agentics-test/runtime
 export AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics-test/phase-mounts
 export AGENTICS_TEST_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096
 ```

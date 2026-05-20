@@ -93,6 +93,7 @@ writable-layer quota enforcement on the Agentics-owned Docker daemon and verifie
 that runner-owned writable mounts are backed by bounded per-phase XFS
 project-quota slots. The DGX profile should set
 `AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots`,
+`AGENTICS_RUNNER_RUNTIME_ROOT=/srv/agentics/runtime`,
 `AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts`,
 `AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096`, and
 `AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true`. The default platform-owned
@@ -107,7 +108,8 @@ at the concrete run count times 1 MiB, so the default maximum is 12 MiB.
 MVP runner containers still use the image default user and a writable root
 filesystem so setup/build/run scripts can use ordinary package managers and
 toolchains. That is an accepted MVP tradeoff, not a substitute for isolation:
-Docker writable-layer quotas bound writes to the container layer, while XFS
+Docker writable-layer quotas bound writes to the container layer, the runtime
+root keeps transient Docker bind sources in a daemon-visible host path, and XFS
 project-quota slots bound runner-owned bind mounts such as workspaces, `/io`,
 `/prepared`, `/output`, home, and temporary directories. DGX slots also set an
 inode hard limit, defaulting to `256` inodes per MiB, so dependency installs are
@@ -159,6 +161,7 @@ docker --host unix:///run/agentics/docker.sock pull busybox:1.36
 sudo -u agentics env \
   AGENTICS_HOST_PROBE_MODE=require \
   AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots \
+  AGENTICS_RUNNER_RUNTIME_ROOT=/srv/agentics/runtime \
   AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts \
   AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096 \
   AGENTICS_DGX_PHASE_SLOT_INODES_PER_MB=256 \
@@ -179,6 +182,7 @@ root owned by the test user:
 sudo AGENTICS_DGX_TEST_CONFIRM=prepare-test-storage \
   scripts/ops/prepare-dgx-spark-test-storage.sh
 export AGENTICS_TEST_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots
+export AGENTICS_TEST_RUNNER_RUNTIME_ROOT=/srv/agentics-test/runtime
 export AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics-test/phase-mounts
 export AGENTICS_TEST_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096
 ```

@@ -136,8 +136,9 @@ evaluation jobs:
   `score` phases.
 - Configure the worker with
   `AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots`,
-  `AGENTICS_RUNNER_PHASE_MOUNT_ROOT`, `AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB`,
-  and `AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true`.
+  `AGENTICS_RUNNER_RUNTIME_ROOT`, `AGENTICS_RUNNER_PHASE_MOUNT_ROOT`,
+  `AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB`, and
+  `AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true`.
 - Gate strict probes with `AGENTICS_HOST_PROBE_MODE=off|warn|require`, not the
   generic `CI` variable.
 - Keep Mac-local development permissive. The strict storage probe belongs to

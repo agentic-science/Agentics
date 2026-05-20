@@ -3,6 +3,7 @@
 use figment::{Figment, providers::Env};
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use crate::models::urls::{
@@ -106,6 +107,8 @@ pub struct Config {
     pub require_digest_pinned_images: bool,
     #[serde(default = "default_runner_writable_storage_mode")]
     pub runner_writable_storage_mode: String,
+    #[serde(default)]
+    pub runner_runtime_root: Option<String>,
     #[serde(default)]
     pub runner_phase_mount_root: Option<String>,
     #[serde(default = "default_runner_writable_slot_classes_mb")]
@@ -588,16 +591,19 @@ impl Config {
                 }
             }
             RunnerWritableStorageMode::XfsProjectQuotaSlots => {
-                if !self.runner_docker_layer_quota && !is_loopback_host(&self.api_host) {
-                    anyhow::bail!(
-                        "hosted workers with writable container rootfs must set AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true alongside xfs-project-quota-slots"
-                    );
-                }
                 if !cfg!(target_os = "linux") {
                     anyhow::bail!(
                         "AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots is Linux-only"
                     );
                 }
+                if !self.runner_docker_layer_quota && !is_loopback_host(&self.api_host) {
+                    anyhow::bail!(
+                        "hosted workers with writable container rootfs must set AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true alongside xfs-project-quota-slots"
+                    );
+                }
+                self.validate_required_runner_runtime_root(
+                    "AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots",
+                )?;
                 let mount_root = self
                     .runner_phase_mount_root
                     .as_deref()
@@ -619,6 +625,24 @@ impl Config {
 
         if self.runner_docker_layer_quota && !cfg!(target_os = "linux") {
             anyhow::bail!("AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true is Linux-only");
+        }
+        if self.host_probe_mode != HostProbeMode::Off && !cfg!(target_os = "linux") {
+            anyhow::bail!(
+                "AGENTICS_HOST_PROBE_MODE={} is Linux-only",
+                self.host_probe_mode.as_str()
+            );
+        }
+        if self.host_probe_mode != HostProbeMode::Off {
+            self.validate_required_runner_runtime_root("AGENTICS_HOST_PROBE_MODE is enabled")?;
+        }
+        if let Some(runtime_root) = self
+            .runner_runtime_root
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            && !Path::new(runtime_root).is_absolute()
+        {
+            anyhow::bail!("AGENTICS_RUNNER_RUNTIME_ROOT must be an absolute path");
         }
 
         Ok(())
@@ -674,6 +698,38 @@ impl Config {
     /// Handles runner writable storage mode for this module.
     pub fn runner_writable_storage_mode(&self) -> anyhow::Result<RunnerWritableStorageMode> {
         self.runner_writable_storage_mode.parse()
+    }
+
+    /// Return the host-visible root for transient runner artifacts.
+    pub fn runner_runtime_root(&self) -> anyhow::Result<PathBuf> {
+        let Some(runtime_root) = self
+            .runner_runtime_root
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        else {
+            return Ok(std::env::temp_dir());
+        };
+        if !Path::new(runtime_root).is_absolute() {
+            anyhow::bail!("AGENTICS_RUNNER_RUNTIME_ROOT must be an absolute path");
+        }
+        Ok(PathBuf::from(runtime_root))
+    }
+
+    /// Require a Docker-daemon-visible runner runtime root for hosted paths.
+    fn validate_required_runner_runtime_root(&self, reason: &str) -> anyhow::Result<()> {
+        let runtime_root = self
+            .runner_runtime_root
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                anyhow::anyhow!("AGENTICS_RUNNER_RUNTIME_ROOT must be set when {reason}")
+            })?;
+        if !Path::new(runtime_root).is_absolute() {
+            anyhow::bail!("AGENTICS_RUNNER_RUNTIME_ROOT must be an absolute path");
+        }
+        Ok(())
     }
 
     /// Return the configured agent-registration mode.
@@ -996,6 +1052,7 @@ mod tests {
 
         config.runner_writable_storage_mode = "xfs-project-quota-slots".to_string();
         config.runner_docker_layer_quota = false;
+        config.runner_runtime_root = Some("/agentics-runtime".to_string());
         config.runner_phase_mount_root = Some("/agentics-runner-slots".to_string());
         let error = config
             .validate_runner_storage()
@@ -1011,6 +1068,41 @@ mod tests {
             config.validate_runner_storage().is_ok(),
             cfg!(target_os = "linux")
         );
+    }
+
+    /// Verifies quota-backed runner storage requires a host-visible runtime root.
+    #[test]
+    fn quota_backed_runner_requires_runtime_root() {
+        let config = Config {
+            runner_writable_storage_mode: "xfs-project-quota-slots".to_string(),
+            runner_docker_layer_quota: true,
+            runner_phase_mount_root: Some("/agentics-runner-slots".to_string()),
+            ..test_config()
+        };
+        let error = config
+            .validate_runner_storage()
+            .expect_err("quota-backed storage must require a runtime root");
+        if cfg!(target_os = "linux") {
+            assert!(error.to_string().contains("AGENTICS_RUNNER_RUNTIME_ROOT"));
+        } else {
+            assert!(error.to_string().contains("Linux-only"));
+        }
+
+        let config = Config {
+            runner_writable_storage_mode: "xfs-project-quota-slots".to_string(),
+            runner_docker_layer_quota: true,
+            runner_runtime_root: Some("relative-runtime".to_string()),
+            runner_phase_mount_root: Some("/agentics-runner-slots".to_string()),
+            ..test_config()
+        };
+        let error = config
+            .validate_runner_storage()
+            .expect_err("runtime root must be absolute");
+        if cfg!(target_os = "linux") {
+            assert!(error.to_string().contains("absolute"));
+        } else {
+            assert!(error.to_string().contains("Linux-only"));
+        }
     }
 
     /// Verifies hosted profiles cannot disable digest-pinned image enforcement.
@@ -1084,6 +1176,7 @@ mod tests {
             host_probe_mode: super::default_host_probe_mode(),
             require_digest_pinned_images: false,
             runner_writable_storage_mode: super::default_runner_writable_storage_mode(),
+            runner_runtime_root: None,
             runner_phase_mount_root: None,
             runner_writable_slot_classes_mb: super::default_runner_writable_slot_classes_mb(),
             runner_docker_layer_quota: false,

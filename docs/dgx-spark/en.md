@@ -76,7 +76,7 @@ Linux-gated operational scripts:
 | `scripts/ops/manage-dgx-spark-profile.sh` | Installs, starts, stops, and uninstalls the DGX systemd profile |
 | `scripts/ops/prepare-dgx-spark-storage.sh` | Creates loopback XFS images, mounts them with project quotas, and prepares runner quota slots |
 | `scripts/ops/prepare-dgx-spark-test-storage.sh` | Creates a separate `/srv/agentics-test` quota root owned by the invoking test user |
-| `scripts/ops/check-dgx-spark-profile.sh` | Checks runtime profile, Docker quota behavior, phase mounts, and quota-slot probes |
+| `scripts/ops/check-dgx-spark-profile.sh` | Checks runtime profile, Docker runtime-root visibility, Docker quota behavior, phase mounts, and quota-slot probes |
 
 ## Persistent Layout
 
@@ -123,6 +123,7 @@ AGENTICS_DOCKER_HOST=unix:///run/agentics/docker.sock
 AGENTICS_HOST_PROBE_MODE=require
 AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true
 AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots
+AGENTICS_RUNNER_RUNTIME_ROOT=/srv/agentics/runtime
 AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts
 AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096
 AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true
@@ -224,6 +225,7 @@ docker --host unix:///run/agentics/docker.sock pull busybox:1.36
 sudo -u agentics env \
   AGENTICS_HOST_PROBE_MODE=require \
   AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots \
+  AGENTICS_RUNNER_RUNTIME_ROOT=/srv/agentics/runtime \
   AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts \
   AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096 \
   AGENTICS_DGX_RUN_MUTATING_PROBES=1 \
@@ -243,6 +245,7 @@ Run quota-sensitive integration tests with:
 
 ```bash
 export AGENTICS_TEST_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots
+export AGENTICS_TEST_RUNNER_RUNTIME_ROOT=/srv/agentics-test/runtime
 export AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics-test/phase-mounts
 export AGENTICS_TEST_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096
 ```
