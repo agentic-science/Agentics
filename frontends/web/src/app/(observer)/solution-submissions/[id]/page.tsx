@@ -37,6 +37,10 @@ export default async function SolutionSubmissionPage({
 }) {
   const { id } = await params;
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
+  const metricDirectionLabels = {
+    maximize: t("challenge.metrics.higherIsBetter"),
+    minimize: t("challenge.metrics.lowerIsBetter"),
+  };
 
   const submission = await fetchJson(
     `/api/public/solution-submissions/${id}`,
@@ -279,7 +283,10 @@ export default async function SolutionSubmissionPage({
                       <span className="block text-[var(--text-caption)] text-[var(--text-muted)]">
                         {definition?.label ?? metric.metric_name}
                         {definition
-                          ? ` · ${metricDirectionLabel(definition.direction)}`
+                          ? ` · ${metricDirectionLabel(
+                              definition.direction,
+                              metricDirectionLabels,
+                            )}`
                           : ""}
                       </span>
                       <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">

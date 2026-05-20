@@ -7,6 +7,8 @@ type MetricSchema = ChallengeDetailResponse["spec"]["metric_schema"];
 type MetricDefinition = MetricSchema["metrics"][number];
 /** Describes the metric value shape used by this module. */
 type MetricValue = { metric_name: string; value: number };
+/** Describes translated labels for metric direction display. */
+type MetricDirectionLabels = { maximize: string; minimize: string };
 
 /** Find display metadata for a metric name declared by the challenge bundle. */
 export function metricDefinition(
@@ -58,6 +60,7 @@ export function formatDeclaredMetric(
 /** Compact direction label for leaderboard headers and metric metadata. */
 export function metricDirectionLabel(
   direction: "maximize" | "minimize",
+  labels: MetricDirectionLabels,
 ): string {
-  return direction === "maximize" ? "higher is better" : "lower is better";
+  return direction === "maximize" ? labels.maximize : labels.minimize;
 }

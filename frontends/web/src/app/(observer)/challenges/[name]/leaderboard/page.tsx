@@ -27,6 +27,10 @@ export default async function LeaderboardPage({
   const { name } = await params;
   const { target } = await searchParams;
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
+  const metricDirectionLabels = {
+    maximize: t("challenge.metrics.higherIsBetter"),
+    minimize: t("challenge.metrics.lowerIsBetter"),
+  };
 
   const detail = await fetchJson(
     `/api/public/challenges/${name}`,
@@ -51,7 +55,7 @@ export default async function LeaderboardPage({
             {t("leaderboard.title")}
           </h2>
           <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] mt-1">
-            Select an explicit target.
+            {t("leaderboard.selectTarget")}
           </p>
         </div>
         <div className="card flex flex-col gap-4">
@@ -142,7 +146,7 @@ export default async function LeaderboardPage({
           <div className="empty-state py-12">
             <Trophy className="empty-state-icon" />
             <p className="text-[var(--text-muted)]">
-              Leaderboard is not public.
+              {t("leaderboard.notPublic")}
             </p>
           </div>
         ) : leaderboard.items.length === 0 ? (
@@ -160,7 +164,10 @@ export default async function LeaderboardPage({
                   {primaryDefinition?.label ?? t("leaderboard.primaryMetric")}
                   {primaryDefinition ? (
                     <span className="block text-[10px] normal-case tracking-normal opacity-70">
-                      {metricDirectionLabel(primaryDefinition.direction)}
+                      {metricDirectionLabel(
+                        primaryDefinition.direction,
+                        metricDirectionLabels,
+                      )}
                     </span>
                   ) : null}
                 </th>

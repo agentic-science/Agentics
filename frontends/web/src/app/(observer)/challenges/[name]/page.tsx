@@ -28,6 +28,10 @@ export default async function ChallengePage({
 }) {
   const { name } = await params;
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
+  const metricDirectionLabels = {
+    maximize: t("challenge.metrics.higherIsBetter"),
+    minimize: t("challenge.metrics.lowerIsBetter"),
+  };
 
   const detail = await fetchJson(
     `/api/public/challenges/${name}`,
@@ -146,7 +150,11 @@ export default async function ChallengePage({
                     {metric.label}
                   </span>
                   <span className="block text-[var(--text-caption)] text-[var(--text-muted)]">
-                    {metric.name} · {metricDirectionLabel(metric.direction)}
+                    {metric.name} ·{" "}
+                    {metricDirectionLabel(
+                      metric.direction,
+                      metricDirectionLabels,
+                    )}
                     {metric.unit ? ` · ${metric.unit}` : ""}
                   </span>
                 </div>
