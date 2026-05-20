@@ -178,6 +178,10 @@ distributions 只暴露 visible solution submissions 上已完成的 official ev
 Validation-only evaluations 仍是 owner/authenticated feedback，不会通过 public
 lists 暴露。
 
+Public leaderboard 和 ranking-context DTO 不包含原始 `aggregate_metrics` 或
+`official_metrics` arrays。这些 metric payloads 仍是 backend-internal 数据，只用于
+计算排序和允许公开的 score distributions。
+
 Score distributions 可以暴露 `rank_score`、`best_rank_score` 和
 `official_score` 等内置 ranking fields。只有当 challenge 的 primary metric 在
 metric schema 中声明为 `visibility: "public"` 时，该 primary metric 才能出现在

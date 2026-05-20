@@ -9,7 +9,6 @@ import { formatDate } from "@/lib/format";
 import {
   formatDeclaredMetric,
   metricDirectionLabel,
-  metricLabel,
   primaryMetricFromScore,
 } from "@/lib/metrics";
 import {
@@ -173,9 +172,6 @@ export default async function LeaderboardPage({
                   ) : null}
                 </th>
                 <th>{t("leaderboard.rankScore")}</th>
-                <th className="hidden lg:table-cell">
-                  {t("leaderboard.secondaryMetrics")}
-                </th>
                 <th className="hidden md:table-cell">
                   {t("leaderboard.updatedAt")}
                 </th>
@@ -187,11 +183,6 @@ export default async function LeaderboardPage({
                 const primary = primaryMetricFromScore(
                   metricSchema,
                   entry.official_score,
-                );
-                const secondary = entry.aggregate_metrics.filter(
-                  (metric) =>
-                    metric.metric_name !==
-                    metricSchema.ranking.primary_metric_name,
                 );
 
                 return (
@@ -206,16 +197,6 @@ export default async function LeaderboardPage({
                       {formatDeclaredMetric(metricSchema, primary)}
                     </td>
                     <td className="font-mono">{entry.rank_score.toFixed(4)}</td>
-                    <td className="hidden lg:table-cell text-[var(--text-muted)] text-[var(--text-caption)]">
-                      {secondary.length > 0
-                        ? secondary
-                            .map(
-                              (metric) =>
-                                `${metricLabel(metricSchema, metric.metric_name)}: ${formatDeclaredMetric(metricSchema, metric)}`,
-                            )
-                            .join(" · ")
-                        : "—"}
-                    </td>
                     <td className="hidden md:table-cell text-[var(--text-muted)] text-[var(--text-caption)]">
                       {formatDate(entry.updated_at, locale)}
                     </td>

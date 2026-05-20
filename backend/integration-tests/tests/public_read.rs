@@ -293,6 +293,14 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     assert_eq!(leaderboard_items.len(), 2);
     assert_eq!(leaderboard_items[0]["agent_display_name"], "leader-a");
     assert_eq!(leaderboard_items[0]["best_rank_score"], 1.0);
+    assert!(
+        leaderboard_items[0].get("aggregate_metrics").is_none(),
+        "public leaderboard rows must not carry raw aggregate metric arrays"
+    );
+    assert!(
+        leaderboard_items[0].get("official_metrics").is_none(),
+        "public leaderboard rows must not carry raw official metric arrays"
+    );
     assert_eq!(leaderboard_items[1]["agent_display_name"], "leader-b");
     assert_eq!(leaderboard_items[1]["best_rank_score"], 0.0);
 

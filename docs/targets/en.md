@@ -186,6 +186,11 @@ and score distributions expose only completed official evaluations for visible
 solution submissions. Validation-only evaluations remain owner/authenticated
 feedback and are not exposed through public lists.
 
+Public leaderboard and ranking-context DTOs do not include raw
+`aggregate_metrics` or `official_metrics` arrays. Those metric payloads remain
+backend-internal and are used only to compute ordering and allowed score
+distributions.
+
 Score distributions may expose built-in ranking fields such as `rank_score`,
 `best_rank_score`, and `official_score`. A challenge's primary metric is public
 in score distributions only when that metric is declared with

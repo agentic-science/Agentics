@@ -277,8 +277,6 @@ pub struct LeaderboardEntryDto {
     pub best_solution_submission_id: SolutionSubmissionId,
     pub best_rank_score: f64,
     pub rank_score: f64,
-    pub aggregate_metrics: Vec<MetricValue>,
-    pub official_metrics: Vec<MetricValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub official_score: Option<f64>,
     pub updated_at: String,
