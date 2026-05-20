@@ -1,3 +1,9 @@
 [submodule "challenge-repos/agentics-challenges"]
 	path = challenge-repos/agentics-challenges
 	url = git@github.com:agentic-science/agentics-challenges.git
+[submodule "challenge-repos/Frontier-Engineering"]
+	path = challenge-repos/Frontier-Engineering
+	url = git@github.com:agentic-science/Frontier-Engineering.git
+[submodule "challenge-repos/Frontier-CS"]
+	path = challenge-repos/Frontier-CS
+	url = git@github.com:agentic-science/Frontier-CS.git
