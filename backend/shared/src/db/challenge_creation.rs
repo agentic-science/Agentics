@@ -1,7 +1,7 @@
 //! Challenge draft, GitHub identity, private asset, and review lifecycle queries.
 
 use serde_json::Value;
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use crate::error::{AppError, Result};
 use crate::models::challenge::ChallengeBundleSpec;
@@ -28,8 +28,9 @@ mod assets;
 mod rows;
 
 pub use assets::{
-    activate_challenge_private_asset, fail_challenge_private_asset,
-    private_asset_storage_key_has_active_reference, reserve_challenge_private_asset,
+    activate_challenge_private_asset, activate_challenge_private_asset_with_audit,
+    fail_challenge_private_asset, private_asset_storage_key_has_active_reference,
+    reserve_challenge_private_asset,
 };
 pub use rows::list_challenge_private_asset_states;
 use rows::{
@@ -153,7 +154,13 @@ pub struct ChallengePrivateAssetPurgeRecord {
 pub async fn create_challenge_draft(
     pool: &PgPool,
     input: &CreateChallengeDraftInput,
+    audit_event: &CreateChallengeDraftAuditEventInput,
 ) -> Result<ChallengeDraftResponse> {
+    if audit_event.draft_id != input.draft_id {
+        return Err(AppError::Internal(
+            "draft creation audit event targets a different draft".to_string(),
+        ));
+    }
     let manifest_json =
         serde_json::to_value(&input.manifest).map_err(|e| AppError::Internal(e.to_string()))?;
     let mut tx = pool.begin().await?;
@@ -211,6 +218,7 @@ pub async fn create_challenge_draft(
     .fetch_one(&mut *tx)
     .await?;
 
+    create_challenge_draft_audit_event_tx(&mut tx, audit_event).await?;
     tx.commit().await?;
 
     row_to_draft_response(row, Vec::new(), Vec::new())
@@ -502,6 +510,7 @@ pub(super) async fn lock_quota_scope(
 pub async fn finish_challenge_draft_validation(
     pool: &PgPool,
     input: &FinishChallengeDraftValidationInput,
+    audit_event: &CreateChallengeDraftAuditEventInput,
 ) -> Result<ChallengeDraftValidationRecordResponse> {
     let mut tx = pool.begin().await?;
     let next_status = match input.status {
@@ -564,8 +573,10 @@ pub async fn finish_challenge_draft_validation(
     .await?;
     if update.rows_affected() == 0 {
         tx.commit().await?;
-        return row_to_validation_record_response(row);
+        return Err(AppError::Conflict);
     }
+
+    create_challenge_draft_audit_event_tx(&mut tx, audit_event).await?;
 
     tx.commit().await?;
     row_to_validation_record_response(row)
@@ -601,6 +612,59 @@ pub async fn approve_validated_challenge_draft(
     Ok(())
 }
 
+/// Approve a validated draft and audit the exact digest approved in one transaction.
+pub async fn approve_validated_challenge_draft_with_audit(
+    pool: &PgPool,
+    draft_id: &ChallengeDraftId,
+    expected_validation_bundle_sha256: &Sha256Digest,
+    message: Option<&str>,
+    admin_username: String,
+    event_id: ChallengeDraftAuditEventId,
+) -> Result<()> {
+    let mut tx = pool.begin().await?;
+    let row = sqlx::query(
+        r#"
+        UPDATE challenge_drafts
+        SET status = 'approved',
+            validation_message = COALESCE($2, validation_message),
+            approved_bundle_sha256 = validation_bundle_sha256,
+            updated_at = NOW()
+        WHERE id = $1::uuid
+          AND status = 'validated'
+          AND validation_bundle_sha256 IS NOT NULL
+          AND validation_bundle_sha256 = $3
+          AND active_validation_record_id IS NULL
+        RETURNING approved_bundle_sha256
+        "#,
+    )
+    .bind(draft_id.as_str())
+    .bind(message)
+    .bind(expected_validation_bundle_sha256.to_string())
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let Some(row) = row else {
+        return Err(AppError::Conflict);
+    };
+    let approved_bundle_sha256: Option<String> = row.try_get("approved_bundle_sha256")?;
+    create_challenge_draft_audit_event_tx(
+        &mut tx,
+        &CreateChallengeDraftAuditEventInput {
+            event_id,
+            draft_id: draft_id.clone(),
+            actor_agent_id: None,
+            actor_admin_username: Some(admin_username),
+            action: "draft_approved".to_string(),
+            message: message.unwrap_or_default().to_string(),
+            metadata: serde_json::json!({ "approved_bundle_sha256": approved_bundle_sha256 }),
+        },
+    )
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
 /// Move a draft to a review status.
 pub async fn update_challenge_draft_status(
     pool: &PgPool,
@@ -616,6 +680,7 @@ pub async fn update_challenge_draft_status(
             updated_at = NOW()
         WHERE id = $1::uuid
           AND status IN ('draft', 'validated', 'approved')
+          AND active_validation_record_id IS NULL
         "#,
     )
     .bind(draft_id)
@@ -627,6 +692,40 @@ pub async fn update_challenge_draft_status(
     if result.rows_affected() == 0 {
         return Err(AppError::Conflict);
     }
+    Ok(())
+}
+
+/// Move a draft to a review status and append its audit event atomically.
+pub async fn update_challenge_draft_status_with_audit(
+    pool: &PgPool,
+    draft_id: &ChallengeDraftId,
+    status: ChallengeDraftStatus,
+    message: Option<&str>,
+    audit_event: &CreateChallengeDraftAuditEventInput,
+) -> Result<()> {
+    let mut tx = pool.begin().await?;
+    let result = sqlx::query(
+        r#"
+        UPDATE challenge_drafts
+        SET status = $2,
+            validation_message = COALESCE($3, validation_message),
+            updated_at = NOW()
+        WHERE id = $1::uuid
+          AND status IN ('draft', 'validated', 'approved')
+          AND active_validation_record_id IS NULL
+        "#,
+    )
+    .bind(draft_id.as_str())
+    .bind(status.as_str())
+    .bind(message)
+    .execute(&mut *tx)
+    .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::Conflict);
+    }
+    create_challenge_draft_audit_event_tx(&mut tx, audit_event).await?;
+    tx.commit().await?;
     Ok(())
 }
 
@@ -644,6 +743,7 @@ pub async fn abandon_challenge_draft(
             updated_at = NOW()
         WHERE id = $1::uuid
           AND status IN ('draft', 'validated', 'approved', 'rejected')
+          AND active_validation_record_id IS NULL
         "#,
     )
     .bind(draft_id)
@@ -654,6 +754,38 @@ pub async fn abandon_challenge_draft(
     if result.rows_affected() == 0 {
         return Err(AppError::Conflict);
     }
+    Ok(())
+}
+
+/// Mark one draft abandoned and append its audit event atomically.
+pub async fn abandon_challenge_draft_with_audit(
+    pool: &PgPool,
+    draft_id: &ChallengeDraftId,
+    message: Option<&str>,
+    audit_event: &CreateChallengeDraftAuditEventInput,
+) -> Result<()> {
+    let mut tx = pool.begin().await?;
+    let result = sqlx::query(
+        r#"
+        UPDATE challenge_drafts
+        SET status = 'abandoned',
+            validation_message = COALESCE($2, validation_message),
+            updated_at = NOW()
+        WHERE id = $1::uuid
+          AND status IN ('draft', 'validated', 'approved', 'rejected')
+          AND active_validation_record_id IS NULL
+        "#,
+    )
+    .bind(draft_id.as_str())
+    .bind(message)
+    .execute(&mut *tx)
+    .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::Conflict);
+    }
+    create_challenge_draft_audit_event_tx(&mut tx, audit_event).await?;
+    tx.commit().await?;
     Ok(())
 }
 
@@ -1063,7 +1195,7 @@ pub async fn create_challenge_draft_audit_event(
 }
 
 /// Creates challenge draft audit event tx after validating caller inputs.
-async fn create_challenge_draft_audit_event_tx(
+pub(super) async fn create_challenge_draft_audit_event_tx(
     tx: &mut Transaction<'_, Postgres>,
     input: &CreateChallengeDraftAuditEventInput,
 ) -> Result<()> {

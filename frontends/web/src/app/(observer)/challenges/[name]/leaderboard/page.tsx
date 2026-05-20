@@ -2,13 +2,13 @@ import { Trophy } from "lucide-react";
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import { EvaluationModeBadges } from "@/components/EvaluationModeBadges";
+import { RankBadge } from "@/components/RankBadge";
 import { fetchJson } from "@/lib/api";
 import { publicVisibilityAllows } from "@/lib/challengeVisibility";
 import { formatDate } from "@/lib/format";
 import {
   formatDeclaredMetric,
   metricDirectionLabel,
-  metricLabel,
   primaryMetricFromScore,
 } from "@/lib/metrics";
 import {
@@ -27,6 +27,10 @@ export default async function LeaderboardPage({
   const { name } = await params;
   const { target } = await searchParams;
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
+  const metricDirectionLabels = {
+    maximize: t("challenge.metrics.higherIsBetter"),
+    minimize: t("challenge.metrics.lowerIsBetter"),
+  };
 
   const detail = await fetchJson(
     `/api/public/challenges/${name}`,
@@ -51,7 +55,7 @@ export default async function LeaderboardPage({
             {t("leaderboard.title")}
           </h2>
           <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] mt-1">
-            Select an explicit target.
+            {t("leaderboard.selectTarget")}
           </p>
         </div>
         <div className="card flex flex-col gap-4">
@@ -142,7 +146,7 @@ export default async function LeaderboardPage({
           <div className="empty-state py-12">
             <Trophy className="empty-state-icon" />
             <p className="text-[var(--text-muted)]">
-              Leaderboard is not public.
+              {t("leaderboard.notPublic")}
             </p>
           </div>
         ) : leaderboard.items.length === 0 ? (
@@ -160,14 +164,14 @@ export default async function LeaderboardPage({
                   {primaryDefinition?.label ?? t("leaderboard.primaryMetric")}
                   {primaryDefinition ? (
                     <span className="block text-[10px] normal-case tracking-normal opacity-70">
-                      {metricDirectionLabel(primaryDefinition.direction)}
+                      {metricDirectionLabel(
+                        primaryDefinition.direction,
+                        metricDirectionLabels,
+                      )}
                     </span>
                   ) : null}
                 </th>
                 <th>{t("leaderboard.rankScore")}</th>
-                <th className="hidden lg:table-cell">
-                  {t("leaderboard.secondaryMetrics")}
-                </th>
                 <th className="hidden md:table-cell">
                   {t("leaderboard.updatedAt")}
                 </th>
@@ -180,28 +184,11 @@ export default async function LeaderboardPage({
                   metricSchema,
                   entry.official_score,
                 );
-                const secondary = entry.aggregate_metrics.filter(
-                  (metric) =>
-                    metric.metric_name !==
-                    metricSchema.ranking.primary_metric_name,
-                );
 
                 return (
                   <tr key={entry.agent_id}>
                     <td>
-                      <span
-                        className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${
-                          idx === 0
-                            ? "bg-[var(--accent-primary-500)]/20 text-[var(--accent-primary-text)]"
-                            : idx === 1
-                              ? "bg-[var(--text-muted)]/20 text-[var(--text-muted)]"
-                              : idx === 2
-                                ? "bg-[var(--accent-secondary-500)]/20 text-[var(--accent-secondary-text)]"
-                                : "text-[var(--text-muted)]"
-                        }`}
-                      >
-                        {idx + 1}
-                      </span>
+                      <RankBadge rank={idx + 1} />
                     </td>
                     <td className="font-medium text-[var(--text-primary)]">
                       {entry.agent_display_name}
@@ -210,16 +197,6 @@ export default async function LeaderboardPage({
                       {formatDeclaredMetric(metricSchema, primary)}
                     </td>
                     <td className="font-mono">{entry.rank_score.toFixed(4)}</td>
-                    <td className="hidden lg:table-cell text-[var(--text-muted)] text-[var(--text-caption)]">
-                      {secondary.length > 0
-                        ? secondary
-                            .map(
-                              (metric) =>
-                                `${metricLabel(metricSchema, metric.metric_name)}: ${formatDeclaredMetric(metricSchema, metric)}`,
-                            )
-                            .join(" · ")
-                        : "—"}
-                    </td>
                     <td className="hidden md:table-cell text-[var(--text-muted)] text-[var(--text-caption)]">
                       {formatDate(entry.updated_at, locale)}
                     </td>

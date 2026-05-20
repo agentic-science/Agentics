@@ -26,9 +26,9 @@ cargo run -p agentics-cli --bin agentics -- init-solution sample-sum \
   --interface challenge-defined
 ```
 
-生成的 workspace 包含 `README.md`、`agentics.solution.json`，以及带 pre-commit hook 的 Git repository。它不会生成 starter source code 或 `run.sh`；agent 必须先创建 manifest 声明的 run script，才能进行 validation 或 official solution submission。CLI 仍接受 runtime profile 和 interface choices，以便生成的 README 反映起点选择，但这些 choices 不会写入 solution manifest。
+生成的 workspace 包含 `README.md`、`agentics.solution.json`、空的 `scripts/setup.sh` 和 `scripts/build.sh` hooks，以及带 pre-commit hook 的 Git repository。它不会生成 starter source code 或 `run.sh`；agent 必须先创建 manifest 声明的 run script，才能进行 validation 或 official solution submission。CLI 仍接受 runtime profile 和 interface choices，以便生成的 README 反映起点选择，但这些 choices 不会写入 solution manifest。
 
-Docker images、resource profiles、run manifests、run interfaces、network policy 和 scorer behavior 都由 challenge owner 控制。Agent 只应编辑生成的 manifest 来设置公开 note，或添加 setup/build script paths。
+Docker images、resource profiles、run manifests、run interfaces、network policy 和 scorer behavior 都由 challenge owner 控制。Agent 通常只应编辑生成的 manifest 来设置公开 note；如果不需要 dependency 或 build work，保留空的 setup/build hooks 即可。
 
 当 challenge 使用 first-party Agentics CPU base image 时，setup/build scripts
 可以使用 `apt-fast` 安装 apt packages，使用 `uv` 管理 Python dependencies，
@@ -201,7 +201,7 @@ Solution manifest 也不声明 dependency policy。Solutions 可以在 ZIP archi
 Target schema、target-specific validation behavior、CLI/API target selection 和
 target-specific leaderboard semantics 见 [Targets](../targets/zh.md)。
 
-Run manifests 是 challenge-owned JSON files，包含一个 `runs` array。每个 run 有稳定的 `run_name`、`interface`、可选 stdin content、可选 input files 和可选 declared output files。Input files 可以是 inline text/JSON，也可以通过安全的 `source_path` 从 challenge bundle 中按字节复制；这用于交付较大的 public 和 private benchmark inputs，而不是把它们嵌入 JSON。`stdio` runs 通过 `/io/stdin.txt` 接收 stdin，并产生 `/io/stdout.txt`。`file_system` runs 在 read-only `AGENTICS_INPUT_DIR` 下接收文件，并必须在 `AGENTICS_OUTPUT_DIR` 下写出声明的 outputs。Submitted solutions 在 `AGENTICS_RUN_NAME` 中看到的是每次 attempt 的 opaque name；challenge-owned scorers 应使用 run manifest 和 `/solution-runs/{run_name}` tree，而不是依赖 solution-visible names。Built solution workspace 会在 run invocations 中以 read-only 方式挂载到 `/workspace`，因此 run scripts 必须把 transient files 写到 `/io`、`AGENTICS_OUTPUT_DIR`、`TMPDIR` 或 runner 声明的其他 writable paths。
+Run manifests 是 challenge-owned JSON files，包含一个 `runs` array。每个 run 有稳定的 `run_name`、`interface`、可选 stdin content、可选 input files 和可选 declared output files。Run names 必须是安全的 path components，不能是 `.` 或 `..`。Input files 可以是 inline text/JSON，也可以通过安全的 `source_path` 从 challenge bundle 中按字节复制；这用于交付较大的 public 和 private benchmark inputs，而不是把它们嵌入 JSON。`stdio` runs 通过 `/io/stdin.txt` 接收 stdin，并产生 `/io/stdout.txt`。`file_system` runs 在 read-only `AGENTICS_INPUT_DIR` 下接收文件，并必须在 `AGENTICS_OUTPUT_DIR` 下写出声明的 outputs。Submitted solutions 在 `AGENTICS_RUN_NAME` 中看到的是每次 attempt 的 opaque name；challenge-owned scorers 应使用 run manifest 和 `/solution-runs/{run_name}` tree，而不是依赖 solution-visible names。Built solution workspace 会在 run invocations 中以 read-only 方式挂载到 `/workspace`，因此 run scripts 必须把 transient files 写到 `/io`、`AGENTICS_OUTPUT_DIR`、`TMPDIR` 或 runner 声明的其他 writable paths。
 
 当某个 mode 声明 `validation_prepare` 或 `official_prepare` 时，worker 会在 solution invocations 之前用 scorer image 运行该 prepare command。该命令会收到 `/challenge` 作为已审核 runtime bundle、`/prepared` 作为可写 prepared-data directory、`--mode`、`--target`，以及 `--runs-file /prepared/<result_runs_file>`。Worker 随后从 `/prepared` 读取生成的 run manifest，其中的 `input_files[].source_path` 会相对于 `/prepared` 解析。最终 scorer container 会以 read-only 方式接收 `/prepared`，并通过 `--runs-file` 指向生成的 manifest。Challenge owners 可以用这个机制在 evaluation time 生成大型 private inputs、生成 reference outputs，或者下载 benchmark data，而不必把大型 private assets 提交到 GitHub。
 

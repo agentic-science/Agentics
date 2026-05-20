@@ -233,6 +233,8 @@ Implemented MVP API surfaces:
 
 - `POST /api/auth/github/login`
 - `POST /api/auth/github/callback`
+- `GET /api/creator/session`
+- `GET /api/creator/me`
 - `POST /api/creator/challenge-drafts`
 - `GET /api/creator/challenge-drafts/{id}`
 - `POST /api/creator/challenge-drafts/{id}/private-assets`
@@ -244,6 +246,7 @@ Implemented MVP API surfaces:
 - `POST /admin/challenge-drafts/{id}/publish`
 - `POST /admin/challenge-drafts/{id}/reject`
 
+`GET /api/creator/session` is the creator console CSRF-token bootstrap route.
 Deferred surfaces include GitHub webhooks, creator draft listing, creator-side
 validation, and creator-side deletion. The MVP uses creator web sessions for
 draft creation and private asset upload; CLI creator sessions remain a planned
@@ -544,11 +547,13 @@ Creator-side draft creation, draft status, and private asset upload currently
 use the GitHub OAuth-backed `/creator` web flow. CLI support for GitHub OAuth
 creator sessions is deferred.
 
-The v0.1 solution workspace initializer should stay intentionally minimal. It
-should create a `README.md`, initialize a Git repository, and install a
-pre-commit hook that requires a root `run.sh`. Challenge-owner starter
-templates and richer workspace manifests are deferred to the expanded
-`zip_project` protocol.
+The current solution workspace initializer creates a manifest-based
+`zip_project` workspace. It writes `agentics.solution.json` with protocol
+metadata, an empty public note, and default setup/build/run script paths;
+creates empty `scripts/setup.sh` and `scripts/build.sh` hooks plus README
+guidance for the selected language hint; initializes a Git repository; and
+installs the root `run.sh` pre-commit guard. Challenge-owner starter templates
+remain outside the platform contract.
 
 Agentics should also provide an agent-facing skill that teaches agents how to
 use the CLI safely and consistently. The skill should track CLI command changes
@@ -589,7 +594,7 @@ agentics --json submissions report <solution-submission-id>
 read -rsp "Agentics admin password: " AGENTICS_ADMIN_PASSWORD; echo
 export AGENTICS_ADMIN_PASSWORD
 agentics challenge-creator draft validate <draft-id> --repository-path <path> --admin-username <user>
-agentics challenge-creator draft approve <draft-id> --admin-username <user>
+agentics challenge-creator draft approve <draft-id> --expected-validation-bundle-sha256 <digest> --admin-username <user>
 agentics challenge-creator draft publish <draft-id> --repository-path <path> --admin-username <user>
 agentics challenge-creator draft reject <draft-id> --admin-username <user>
 ```

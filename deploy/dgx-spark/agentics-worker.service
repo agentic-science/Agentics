@@ -16,7 +16,7 @@ RestartSec=5s
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=/srv/agentics/storage /srv/agentics/phase-mounts/solution-setup /srv/agentics/phase-mounts/solution-build /srv/agentics/phase-mounts/solution-run /srv/agentics/phase-mounts/scorer-prepare /srv/agentics/phase-mounts/scorer-score /run/agentics
+ReadWritePaths=/srv/agentics/storage /srv/agentics/runtime /srv/agentics/phase-mounts/solution-setup /srv/agentics/phase-mounts/solution-build /srv/agentics/phase-mounts/solution-run /srv/agentics/phase-mounts/scorer-prepare /srv/agentics/phase-mounts/scorer-score /run/agentics
 
 [Install]
 WantedBy=multi-user.target

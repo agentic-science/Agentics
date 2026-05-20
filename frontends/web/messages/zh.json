@@ -130,6 +130,8 @@
     "updatedAt": "更新时间",
     "submission": "提交",
     "empty": "暂无官方排名结果",
+    "selectTarget": "请选择一个明确的目标。",
+    "notPublic": "排行榜尚未公开。",
     "direction": {
       "maximize": "最大化",
       "minimize": "最小化"

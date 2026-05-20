@@ -71,7 +71,7 @@ impl fmt::Display for AssetNameError {
 impl std::error::Error for AssetNameError {}
 
 /// User-facing validation message for challenge run names.
-pub const RUN_NAME_ERROR_MESSAGE: &str = "run_name must be non-empty and contain only ASCII letters, digits, underscores, hyphens, or dots";
+pub const RUN_NAME_ERROR_MESSAGE: &str = "run_name must be non-empty, must not be `.` or `..`, and must contain only ASCII letters, digits, underscores, hyphens, or dots";
 
 /// Validation failure for [`RunName`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -390,8 +390,31 @@ macro_rules! impl_token_json_schema {
 impl_token_json_schema!(TargetName, "TargetName");
 impl_token_json_schema!(MetricName, "MetricName");
 impl_token_json_schema!(AssetName, "AssetName");
-impl_token_json_schema!(RunName, "RunName");
 impl_token_json_schema!(ResourceProfileName, "ResourceProfileName");
+
+impl JsonSchema for RunName {
+    /// Handles inline schema for this module.
+    fn inline_schema() -> bool {
+        true
+    }
+
+    /// Handles schema name for this module.
+    fn schema_name() -> Cow<'static, str> {
+        "RunName".into()
+    }
+
+    /// Handles json schema for this module.
+    fn json_schema(_: &mut SchemaGenerator) -> Schema {
+        json_schema!({
+            "type": "string",
+            "minLength": 1,
+            "not": {
+                "enum": [".", ".."]
+            },
+            "pattern": "^[A-Za-z0-9_.-]+$"
+        })
+    }
+}
 
 impl JsonSchema for ChallengeKeyword {
     /// Keep keyword schemas inline at every field use site.
@@ -481,7 +504,7 @@ fn validate_asset_name(value: &str) -> Result<(), AssetNameError> {
 
 /// Validates run name invariants for this contract.
 fn validate_run_name(value: &str) -> Result<(), RunNameError> {
-    if has_name_token_syntax(value) {
+    if has_name_token_syntax(value) && !matches!(value, "." | "..") {
         Ok(())
     } else {
         Err(RunNameError)
@@ -545,6 +568,13 @@ mod tests {
             assert!(AssetName::try_new(value).is_err());
             assert!(RunName::try_new(value).is_err());
             assert!(ResourceProfileName::try_new(value).is_err());
+        }
+        for value in [".", ".."] {
+            assert!(TargetName::try_new(value).is_ok());
+            assert!(MetricName::try_new(value).is_ok());
+            assert!(AssetName::try_new(value).is_ok());
+            assert!(RunName::try_new(value).is_err());
+            assert!(ResourceProfileName::try_new(value).is_ok());
         }
         let metric = MetricName::try_new(" runtime_ms ").expect("metric names trim edge spaces");
         assert_eq!(metric.as_str(), "runtime_ms");

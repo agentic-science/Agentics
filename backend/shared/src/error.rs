@@ -35,6 +35,8 @@ pub enum AppError {
     Docker(String),
     #[error("runner error: {0}")]
     Runner(String),
+    #[error("runner capacity unavailable: {0}")]
+    RunnerCapacity(String),
     #[error("base64 decode error")]
     Base64,
 }
@@ -68,7 +70,8 @@ impl IntoResponse for AppError {
             | AppError::Internal(_)
             | AppError::Io(_)
             | AppError::Docker(_)
-            | AppError::Runner(_) => {
+            | AppError::Runner(_)
+            | AppError::RunnerCapacity(_) => {
                 error!(error = %self, "internal application error");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,

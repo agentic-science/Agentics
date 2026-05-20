@@ -10,10 +10,11 @@ import {
   getCreatorChallengeStats,
   getCreatorSession,
   startGithubLogin,
+  storeExpectedGithubOauthState,
   uploadPrivateAsset,
 } from "@/lib/creatorApi";
-import type { ChallengeDraftResponse } from "@/lib/schemas";
 import {
+  type CreatorChallengeDraftResponse,
   createChallengeDraftRequestSchema,
   createChallengeShortlistRevisionRequestSchema,
   uploadChallengePrivateAssetRequestSchema,
@@ -22,7 +23,7 @@ import { ensureDomEnvironment } from "../../test/dom";
 
 import { CreatorConsole } from "./CreatorConsole";
 
-vi.mock("@/lib/creatorApi", async () => {
+vi.mock("@/lib/creatorApi", () => {
   class MockCreatorApiError extends Error {
     readonly status: number;
 
@@ -44,7 +45,9 @@ vi.mock("@/lib/creatorApi", async () => {
     getCreatorChallengeStats: vi.fn(),
     getCreatorSession: vi.fn(),
     startGithubLogin: vi.fn(),
-    storeExpectedGithubOauthState: vi.fn(),
+    storeExpectedGithubOauthState: vi.fn((state: string) => {
+      window.sessionStorage.setItem("agentics.creator.oauth_state", state);
+    }),
     uploadChallengePrivateAssetRequestSchema,
     uploadPrivateAsset: vi.fn(),
   };
@@ -65,6 +68,7 @@ const getCreatorChallengeParticipantsMock =
 const getCreatorChallengeStatsMock = getCreatorChallengeStats as Mock;
 const getCreatorSessionMock = getCreatorSession as Mock;
 const startGithubLoginMock = startGithubLogin as Mock;
+const storeExpectedGithubOauthStateMock = storeExpectedGithubOauthState as Mock;
 const uploadPrivateAssetMock = uploadPrivateAsset as Mock;
 
 describe("CreatorConsole", () => {
@@ -74,6 +78,7 @@ describe("CreatorConsole", () => {
     getCreatorSessionMock.mockRejectedValue(new Error("not signed in"));
     startGithubLoginMock.mockResolvedValue({
       authorization_url: "https://github.com/login/oauth/authorize",
+      state: "oauth-state",
     });
     getChallengeDraftMock.mockRejectedValue(new Error("not configured"));
     getChallengeShortlistMock.mockResolvedValue({
@@ -131,29 +136,30 @@ describe("CreatorConsole", () => {
     expect(createChallengeDraftMock).not.toHaveBeenCalled();
   });
 
-  it("requires a pioneer code before starting GitHub OAuth", async () => {
+  it("starts GitHub OAuth without a pioneer code for returning creators", async () => {
     const view = render(<CreatorConsole />);
 
     fireEvent.click(view.getByRole("button", { name: "Sign in with GitHub" }));
 
-    expect(
-      await view.findByText(
-        "Enter a pioneer code before starting GitHub OAuth.",
-      ),
-    ).toBeTruthy();
-    expect(startGithubLoginMock).not.toHaveBeenCalled();
+    await waitFor(() => expect(startGithubLoginMock).toHaveBeenCalledWith(""));
+    expect(storeExpectedGithubOauthStateMock).toHaveBeenCalledWith(
+      "oauth-state",
+    );
   });
 
   it("starts GitHub OAuth with a pioneer code", async () => {
     const view = render(<CreatorConsole />);
 
-    fireEvent.input(view.getByLabelText("Pioneer code"), {
+    fireEvent.input(view.getByLabelText("Pioneer code for new creators"), {
       target: { value: " jack-deadbeef " },
     });
     fireEvent.click(view.getByRole("button", { name: "Sign in with GitHub" }));
 
     await waitFor(() =>
       expect(startGithubLoginMock).toHaveBeenCalledWith("jack-deadbeef"),
+    );
+    expect(storeExpectedGithubOauthStateMock).toHaveBeenCalledWith(
+      "oauth-state",
     );
   });
 
@@ -275,4 +281,4 @@ const challengeDraftResponse = {
   validation_records: [],
   created_at: "2026-05-15T00:00:00Z",
   updated_at: "2026-05-15T00:00:00Z",
-} satisfies ChallengeDraftResponse;
+} satisfies CreatorChallengeDraftResponse;

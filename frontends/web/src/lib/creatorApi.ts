@@ -1,29 +1,29 @@
 import type { ZodType } from "zod";
 import {
-  type ChallengeDraftResponse,
   type ChallengePrivateAssetResponse,
   type ChallengeShortlistResponse,
   type ChallengeShortlistRevisionResponse,
   type CreateChallengeDraftRequest,
   type CreateChallengeShortlistRevisionRequest,
+  type CreatorChallengeDraftResponse,
   type CreatorChallengeParticipantsResponse,
   type CreatorChallengeStatsResponse,
   type CreatorMeResponse,
   type CreatorSessionResponse,
-  challengeDraftResponseSchema,
   challengePrivateAssetResponseSchema,
   challengeShortlistResponseSchema,
   challengeShortlistRevisionResponseSchema,
   createChallengeDraftRequestSchema,
   createChallengeShortlistRevisionRequestSchema,
+  creatorChallengeDraftResponseSchema,
   creatorChallengeParticipantsResponseSchema,
   creatorChallengeStatsResponseSchema,
   creatorMeResponseSchema,
   creatorSessionResponseSchema,
-  type GithubOauthCallbackQuery,
+  type GithubOauthCallbackRequest,
   type GithubOauthLoginRequest,
   type GithubOauthLoginResponse,
-  githubOauthCallbackQuerySchema,
+  githubOauthCallbackRequestSchema,
   githubOauthLoginRequestSchema,
   githubOauthLoginResponseSchema,
   type UploadChallengePrivateAssetRequest,
@@ -34,7 +34,8 @@ const CREATOR_CSRF_STORAGE_KEY = "agentics.creator.csrf_token";
 const CREATOR_OAUTH_STATE_STORAGE_KEY = "agentics.creator.oauth_state";
 
 /** Describes the challenge creation manifest shape used by this module. */
-export type ChallengeCreationManifest = ChallengeDraftResponse["manifest"];
+export type ChallengeCreationManifest =
+  CreatorChallengeDraftResponse["manifest"];
 /** Describes the challenge private asset kind shape used by this module. */
 export type ChallengePrivateAssetKind =
   UploadChallengePrivateAssetRequest["kind"];
@@ -137,10 +138,10 @@ export async function completeGithubLogin(
   code: string,
   state: string,
 ): Promise<CreatorSessionResponse> {
-  const request = githubOauthCallbackQuerySchema.parse({
+  const request = githubOauthCallbackRequestSchema.parse({
     code,
     state,
-  } satisfies GithubOauthCallbackQuery);
+  } satisfies GithubOauthCallbackRequest);
   return creatorFetchJson(
     "/api/auth/github/callback",
     creatorSessionResponseSchema,
@@ -156,10 +157,10 @@ export async function completeGithubLogin(
 export async function createChallengeDraft(
   request: CreateChallengeDraftRequest,
   csrfToken: string,
-): Promise<ChallengeDraftResponse> {
+): Promise<CreatorChallengeDraftResponse> {
   return creatorFetchJson(
     "/api/creator/challenge-drafts",
-    challengeDraftResponseSchema,
+    creatorChallengeDraftResponseSchema,
     csrfToken,
     {
       method: "POST",
@@ -171,10 +172,10 @@ export async function createChallengeDraft(
 /** Fetches challenge draft for the requested UI scope. */
 export async function getChallengeDraft(
   id: string,
-): Promise<ChallengeDraftResponse> {
+): Promise<CreatorChallengeDraftResponse> {
   return creatorFetchJson(
     `/api/creator/challenge-drafts/${encodeURIComponent(id)}`,
-    challengeDraftResponseSchema,
+    creatorChallengeDraftResponseSchema,
   );
 }
 

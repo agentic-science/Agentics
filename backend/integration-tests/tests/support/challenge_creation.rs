@@ -61,7 +61,8 @@ pub async fn create_validate_approve_publish_draft(
         .expect("private asset should upload");
     }
 
-    flow.client
+    let validated: serde_json::Value = flow
+        .client
         .post(api_url(
             flow.app,
             &format!("/admin/challenge-drafts/{draft_id}/validate"),
@@ -73,7 +74,10 @@ pub async fn create_validate_approve_publish_draft(
         .await
         .expect("validate request")
         .error_for_status()
-        .expect("draft should validate");
+        .expect("draft should validate")
+        .json()
+        .await
+        .expect("validated draft json");
     flow.client
         .post(api_url(
             flow.app,
@@ -81,7 +85,10 @@ pub async fn create_validate_approve_publish_draft(
         ))
         .header("Authorization", flow.admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
-        .json(&json!({ "message": "approved" }))
+        .json(&json!({
+            "message": "approved",
+            "expected_validation_bundle_sha256": validated["validation_bundle_sha256"]
+        }))
         .send()
         .await
         .expect("approve request")
@@ -235,6 +242,7 @@ pub fn write_public_challenge(repo: &Path) -> String {
             "challenge_name": "sample-sum",
             "challenge_title": "Sample Sum",
             "summary": { "en": "Add numbers", "zh": "数字求和" },
+            "keywords": ["arithmetic", "smoke"],
             "solution": {
                 "protocol": "zip_project",
                 "manifest_file": "agentics.solution.json"
@@ -357,6 +365,7 @@ pub fn manifest_json() -> serde_json::Value {
         "challenge_name": "sample-sum",
         "title": "Sample Sum",
         "summary": { "en": "Add numbers", "zh": "数字求和" },
+        "keywords": ["arithmetic", "smoke"],
         "readme_path": "README.md",
         "bundle_path": "v1",
         "private_assets": [
@@ -377,6 +386,7 @@ pub fn archive_manifest_json() -> serde_json::Value {
         "challenge_name": "sample-sum",
         "title": "Sample Sum",
         "summary": { "en": "Add numbers", "zh": "数字求和" },
+        "keywords": ["arithmetic", "smoke"],
         "readme_path": "README.md",
         "archive": {
             "reason": "Retired for MVP lifecycle testing"

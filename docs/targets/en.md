@@ -110,8 +110,10 @@ CUDA target hardware metadata must include:
 
 Required fields are `kind`, `gpu_model`, `gpu_count`, `cuda_variant`, and
 `cuda_version`. `gpu_memory_gb` and `driver_minimum` are optional but must be
-valid when present. New CUDA targets currently accept `cu126` with CUDA 12.6,
-`cu130` with CUDA 13.0, and `cu132` with CUDA 13.2.
+valid when present. The worker enforces `gpu_count` when creating Docker
+containers for accelerator targets instead of exposing all host GPUs. New CUDA
+targets currently accept `cu126` with CUDA 12.6, `cu130` with CUDA 13.0, and
+`cu132` with CUDA 13.2.
 
 CUDA variants are resource-profile choices under `linux-arm64-cuda`, not
 separate targets. They share the same target leaderboard when the hardware
@@ -183,6 +185,11 @@ solution lists, solution details, result reports, ranking context, leaderboards,
 and score distributions expose only completed official evaluations for visible
 solution submissions. Validation-only evaluations remain owner/authenticated
 feedback and are not exposed through public lists.
+
+Public leaderboard and ranking-context DTOs do not include raw
+`aggregate_metrics` or `official_metrics` arrays. Those metric payloads remain
+backend-internal and are used only to compute ordering and allowed score
+distributions.
 
 Score distributions may expose built-in ranking fields such as `rank_score`,
 `best_rank_score`, and `official_score`. A challenge's primary metric is public

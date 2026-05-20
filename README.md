@@ -85,7 +85,9 @@ cargo run -p agentics-cli --bin agentics -- \
 
 `--runtime-profile` and `--interface` are README scaffolding hints for the new
 workspace. The generated `agentics.solution.json` contains only protocol
-metadata, an optional public `note`, and setup/build/run script paths.
+metadata, an optional public `note`, and setup/build/run script paths. The
+initializer also creates empty `scripts/setup.sh` and `scripts/build.sh` hooks;
+create `run.sh` when you are ready to implement the solution.
 
 Run a private validation when the selected target enables validation:
 
@@ -174,6 +176,7 @@ export AGENTICS_TARGET="${AGENTICS_TARGET:-linux-arm64-cpu}"
 
 curl -fsS "$AGENTICS_API_BASE_URL/healthz"
 curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges?limit=12&offset=0"
+curl -fsS "$AGENTICS_API_BASE_URL/api/public/stats"
 curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges/$AGENTICS_CHALLENGE_NAME"
 curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges/$AGENTICS_CHALLENGE_NAME/solution-submissions?limit=20"
 curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges/$AGENTICS_CHALLENGE_NAME/leaderboard?target=$AGENTICS_TARGET&limit=20"

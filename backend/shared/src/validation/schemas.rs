@@ -7,7 +7,7 @@ use serde_json::{Map, Value};
 
 use crate::models::auth::{
     AdminLoginRequest, AdminSessionResponse, CreatorMeResponse, CreatorSessionResponse,
-    GithubOauthCallbackQuery, GithubOauthLoginRequest, GithubOauthLoginResponse,
+    GithubOauthCallbackRequest, GithubOauthLoginRequest, GithubOauthLoginResponse,
 };
 use crate::models::challenge::{
     AdminChallengeListResponse, ChallengeAdminResponse, ChallengeDetailResponse,
@@ -16,7 +16,8 @@ use crate::models::challenge::{
 use crate::models::challenge_creation::{
     AdminChallengePrivateAssetListResponse, ChallengeDraftCleanupResponse,
     ChallengeDraftListResponse, ChallengeDraftResponse, ChallengePrivateAssetResponse,
-    CreateChallengeDraftRequest, UploadChallengePrivateAssetRequest,
+    CreateChallengeDraftRequest, CreatorChallengeDraftResponse, ReviewChallengeDraftRequest,
+    UploadChallengePrivateAssetRequest, ValidateChallengeDraftRequest,
 };
 use crate::models::request::{
     AdminCapacityResponse, AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse,
@@ -25,7 +26,7 @@ use crate::models::request::{
     CreatorChallengeParticipantsResponse, CreatorChallengeStatsResponse, DisableAgentResponse,
     EvaluationJobResponse, HideSolutionSubmissionResponse, LeaderboardResponse,
     PioneerCodeDetailResponse, PioneerCodeListResponse, PublicSolutionSubmissionListResponse,
-    RankingContextResponse, RegisterAgentRequest, RevokePioneerCodeResponse,
+    PublicStatsResponse, RankingContextResponse, RegisterAgentRequest, RevokePioneerCodeResponse,
     ScoreDistributionResponse, SolutionSubmissionArtifactResponse, SolutionSubmissionLogsResponse,
     SolutionSubmissionResponse, SolutionSubmissionResultReportResponse,
 };
@@ -72,14 +73,26 @@ pub fn export_web_schemas() -> Result<BTreeMap<String, Value>, serde_json::Error
         &mut schemas,
         "createChallengeDraftRequestSchema",
     )?;
+    insert_schema::<CreatorChallengeDraftResponse>(
+        &mut schemas,
+        "creatorChallengeDraftResponseSchema",
+    )?;
     insert_schema::<CreateChallengeShortlistRevisionRequest>(
         &mut schemas,
         "createChallengeShortlistRevisionRequestSchema",
     )?;
     insert_schema::<CreatePioneerCodeRequest>(&mut schemas, "createPioneerCodeRequestSchema")?;
+    insert_schema::<ReviewChallengeDraftRequest>(
+        &mut schemas,
+        "reviewChallengeDraftRequestSchema",
+    )?;
     insert_schema::<UploadChallengePrivateAssetRequest>(
         &mut schemas,
         "uploadChallengePrivateAssetRequestSchema",
+    )?;
+    insert_schema::<ValidateChallengeDraftRequest>(
+        &mut schemas,
+        "validateChallengeDraftRequestSchema",
     )?;
     insert_schema::<PublishChallengeResponse>(&mut schemas, "publishChallengeResponseSchema")?;
     insert_schema::<CreatorMeResponse>(&mut schemas, "creatorMeResponseSchema")?;
@@ -94,7 +107,7 @@ pub fn export_web_schemas() -> Result<BTreeMap<String, Value>, serde_json::Error
     )?;
     insert_schema::<DisableAgentResponse>(&mut schemas, "disableAgentResponseSchema")?;
     insert_schema::<EvaluationJobResponse>(&mut schemas, "evaluationJobResponseSchema")?;
-    insert_schema::<GithubOauthCallbackQuery>(&mut schemas, "githubOauthCallbackQuerySchema")?;
+    insert_schema::<GithubOauthCallbackRequest>(&mut schemas, "githubOauthCallbackRequestSchema")?;
     insert_schema::<GithubOauthLoginRequest>(&mut schemas, "githubOauthLoginRequestSchema")?;
     insert_schema::<GithubOauthLoginResponse>(&mut schemas, "githubOauthLoginResponseSchema")?;
     insert_schema::<HideSolutionSubmissionResponse>(
@@ -108,6 +121,7 @@ pub fn export_web_schemas() -> Result<BTreeMap<String, Value>, serde_json::Error
         &mut schemas,
         "publicSolutionSubmissionListResponseSchema",
     )?;
+    insert_schema::<PublicStatsResponse>(&mut schemas, "publicStatsResponseSchema")?;
     insert_schema::<RankingContextResponse>(&mut schemas, "rankingContextResponseSchema")?;
     insert_schema::<RegisterAgentRequest>(&mut schemas, "registerAgentRequestSchema")?;
     insert_schema::<RevokePioneerCodeResponse>(&mut schemas, "revokePioneerCodeResponseSchema")?;

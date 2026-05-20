@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, Copy, File, FileCode, FileJson, FileText } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 /** Describes the file item shape used by this module. */
@@ -37,6 +38,7 @@ function getLanguage(path: string): string {
 
 /** Renders the code browser component. */
 export function CodeBrowser({ files }: { files: FileItem[] }) {
+  const t = useTranslations("submissionDetail.codeBrowser");
   /** Handles sorted behavior for this component. */
   const sorted = [...files].sort((a, b) => a.path.localeCompare(b.path));
   const [activePath, setActivePath] = useState<string | null>(
@@ -95,7 +97,7 @@ export function CodeBrowser({ files }: { files: FileItem[] }) {
                   type="button"
                   onClick={handleCopy}
                   className="btn btn-ghost btn-sm"
-                  title="Copy"
+                  title={t("copy")}
                 >
                   {copied ? (
                     <Check className="w-3.5 h-3.5" />
@@ -114,15 +116,13 @@ export function CodeBrowser({ files }: { files: FileItem[] }) {
               <pre className="p-4 overflow-x-auto">{activeFile.content}</pre>
             ) : (
               <div className="empty-state py-12">
-                <p className="text-[var(--text-muted)]">
-                  Binary or oversized file
-                </p>
+                <p className="text-[var(--text-muted)]">{t("binaryNotice")}</p>
               </div>
             )}
           </>
         ) : (
           <div className="empty-state py-12">
-            <p className="text-[var(--text-muted)]">Select a file to view</p>
+            <p className="text-[var(--text-muted)]">{t("selectFile")}</p>
           </div>
         )}
       </div>

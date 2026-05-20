@@ -1,12 +1,12 @@
 //! Score-distribution builders for public challenge metric views.
 
+use shared::db::LeaderboardMetricEntry;
 use shared::error::{AppError, Result};
 use shared::models::challenge::{ChallengeBundleSpec, MetricVisibility};
 use shared::models::evaluation::MetricValue;
 use shared::models::names::{ChallengeName, MetricName, TargetName};
 use shared::models::request::{
-    LeaderboardEntryDto, ScoreDistributionBucketDto, ScoreDistributionQuantileDto,
-    ScoreDistributionResponse,
+    ScoreDistributionBucketDto, ScoreDistributionQuantileDto, ScoreDistributionResponse,
 };
 
 /// Build a distribution response from the visible best leaderboard entries in scope.
@@ -15,7 +15,7 @@ pub(super) fn build_score_distribution_response(
     target: TargetName,
     metric_name: MetricName,
     spec: &ChallengeBundleSpec,
-    entries: Vec<LeaderboardEntryDto>,
+    entries: Vec<LeaderboardMetricEntry>,
 ) -> Result<ScoreDistributionResponse> {
     ensure_metric_is_publicly_distributable(&metric_name, spec)?;
     let mut values = entries
@@ -61,7 +61,7 @@ pub(super) fn build_score_distribution_response(
 
 /// Select the metric value that participates in one distribution.
 fn metric_value_from_leaderboard_entry(
-    entry: &LeaderboardEntryDto,
+    entry: &LeaderboardMetricEntry,
     metric_name: &MetricName,
     spec: &ChallengeBundleSpec,
 ) -> Option<f64> {
@@ -220,6 +220,7 @@ fn histogram_bucket_index(value: f64, min: f64, width: f64, bucket_count: usize)
 
 #[cfg(test)]
 mod tests {
+    use shared::db::LeaderboardMetricEntry;
     use shared::error::AppError;
     use shared::models::challenge::{
         ChallengeBundleSpec, ChallengeEligibilitySpec, ChallengeEligibilityType,
@@ -230,14 +231,12 @@ mod tests {
         ResourceProfileSpec, ScorerSpec, SolutionSpec, TargetAccelerator,
     };
     use shared::models::evaluation::{MetricValue, ScoreVisibility};
-    use shared::models::ids::{AgentId, SolutionSubmissionId};
     use shared::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
     use shared::models::localization::LocalizedText;
     use shared::models::names::{
         ChallengeKeyword, ChallengeName, MetricName, ResourceProfileName, TargetName,
     };
     use shared::models::paths::BundleRelativePath;
-    use shared::models::request::LeaderboardEntryDto;
     use shared::zip_project::ZipProjectNetworkAccess;
 
     use super::build_score_distribution_response;
@@ -362,21 +361,15 @@ mod tests {
     }
 
     /// Build one leaderboard entry with distinct raw and normalized scores.
-    fn entry(raw_latency: f64, normalized_rank_score: f64) -> LeaderboardEntryDto {
-        LeaderboardEntryDto {
-            target: target_name("linux-arm64-cpu"),
-            agent_id: AgentId::generate(),
-            agent_display_name: "agent".to_string(),
-            best_solution_submission_id: SolutionSubmissionId::generate(),
+    fn entry(raw_latency: f64, normalized_rank_score: f64) -> LeaderboardMetricEntry {
+        LeaderboardMetricEntry {
             best_rank_score: normalized_rank_score,
-            rank_score: normalized_rank_score,
             aggregate_metrics: vec![MetricValue {
                 metric_name: metric_name("latency_ms"),
                 value: raw_latency,
             }],
             official_metrics: Vec::new(),
             official_score: Some(raw_latency),
-            updated_at: "2026-01-01T00:00:00Z".to_string(),
         }
     }
 

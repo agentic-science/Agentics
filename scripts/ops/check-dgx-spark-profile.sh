@@ -5,9 +5,11 @@ MODE="${AGENTICS_HOST_PROBE_MODE:-off}"
 STATE_ROOT="${AGENTICS_DGX_STATE_ROOT:-/srv/agentics}"
 DOCKER_DATA_ROOT="${AGENTICS_DGX_DOCKER_DATA_ROOT:-${STATE_ROOT}/docker-data-root}"
 PHASE_MOUNT_ROOT="${AGENTICS_DGX_PHASE_MOUNT_ROOT:-${STATE_ROOT}/phase-mounts}"
+RUNNER_RUNTIME_ROOT="${AGENTICS_RUNNER_RUNTIME_ROOT:-${STATE_ROOT}/runtime}"
 RUNNER_STORAGE_MODE="${AGENTICS_RUNNER_WRITABLE_STORAGE_MODE:-unbounded}"
 RUNNER_PHASE_MOUNT_ROOT="${AGENTICS_RUNNER_PHASE_MOUNT_ROOT:-${PHASE_MOUNT_ROOT}}"
 RUNNER_SLOT_CLASSES_MB="${AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB:-64,256,1024,4096}"
+RUNNER_DOCKER_LAYER_QUOTA="${AGENTICS_RUNNER_DOCKER_LAYER_QUOTA:-false}"
 PHASE_SLOT_INODES_PER_MB="${AGENTICS_DGX_PHASE_SLOT_INODES_PER_MB:-256}"
 PHASE_SLOTS_PER_CLASS="${AGENTICS_DGX_PHASE_SLOTS_PER_CLASS:-4}"
 DOCKER_HOST_URI="${AGENTICS_DOCKER_HOST:-unix:///run/agentics/docker.sock}"
@@ -66,6 +68,18 @@ check_xfs_prjquota_mount() {
   esac
 }
 
+check_runner_runtime_root() {
+  case "$RUNNER_RUNTIME_ROOT" in
+    /*) ;;
+    *) record_failure "AGENTICS_RUNNER_RUNTIME_ROOT must be an absolute Docker-visible host path: ${RUNNER_RUNTIME_ROOT}" ;;
+  esac
+  if [ ! -d "$RUNNER_RUNTIME_ROOT" ]; then
+    record_failure "runner runtime root is missing: ${RUNNER_RUNTIME_ROOT}"
+  elif [ ! -w "$RUNNER_RUNTIME_ROOT" ]; then
+    record_failure "runner runtime root is not writable by the worker user: ${RUNNER_RUNTIME_ROOT}"
+  fi
+}
+
 runner_slot_classes() {
   printf '%s\n' "$RUNNER_SLOT_CLASSES_MB" | tr ',' ' '
 }
@@ -84,6 +98,9 @@ check_runner_quota_slots() {
   if [ "$RUNNER_STORAGE_MODE" != "xfs-project-quota-slots" ]; then
     record_failure "AGENTICS_RUNNER_WRITABLE_STORAGE_MODE should be xfs-project-quota-slots for DGX hosted workers"
     return
+  fi
+  if [ "$RUNNER_DOCKER_LAYER_QUOTA" != "true" ]; then
+    record_failure "AGENTICS_RUNNER_DOCKER_LAYER_QUOTA must be true for DGX hosted workers"
   fi
   if [ "$RUNNER_PHASE_MOUNT_ROOT" != "$PHASE_MOUNT_ROOT" ]; then
     record_failure "AGENTICS_RUNNER_PHASE_MOUNT_ROOT should match AGENTICS_DGX_PHASE_MOUNT_ROOT"
@@ -197,6 +214,7 @@ if [ "$DOCKER_HOST_URI" != "unix:///run/agentics/docker.sock" ]; then
 fi
 
 check_xfs_prjquota_mount "$DOCKER_DATA_ROOT" "Agentics Docker data root"
+check_runner_runtime_root
 for phase in $PHASES; do
   check_xfs_prjquota_mount "${PHASE_MOUNT_ROOT}/${phase}" "phase mount ${phase}"
 done
@@ -222,6 +240,24 @@ fi
 
 if [ "$RUN_MUTATING_PROBES" = "1" ]; then
   if [ "$docker_available" = "1" ]; then
+    log "running runner runtime bind-mount canary probe"
+    runtime_probe_dir="${RUNNER_RUNTIME_ROOT}/agentics-dgx-runtime-probe.$$"
+    runtime_probe_error="$(mktemp)"
+    runtime_probe_output="$(mktemp)"
+    if ! mkdir -p "$runtime_probe_dir" 2>"$runtime_probe_error"; then
+      record_failure "cannot create runtime probe directory ${runtime_probe_dir}: $(tr '\n' ' ' <"$runtime_probe_error")"
+    elif ! printf 'agentics-runtime\n' >"${runtime_probe_dir}/canary.txt" 2>"$runtime_probe_error"; then
+      record_failure "cannot write runtime probe file ${runtime_probe_dir}/canary.txt: $(tr '\n' ' ' <"$runtime_probe_error")"
+    elif ! docker_cmd run --rm --pull="$PULL_POLICY" --network none -v "${runtime_probe_dir}:/probe:ro" "$PROBE_IMAGE" cat /probe/canary.txt >"$runtime_probe_output" 2>"$runtime_probe_error"; then
+      record_failure "Agentics Docker daemon cannot read worker-created runtime root files: $(tr '\n' ' ' <"$runtime_probe_error")"
+    elif [ "$(cat "$runtime_probe_output")" != "agentics-runtime" ]; then
+      record_failure "Agentics Docker daemon read unexpected runtime canary content from ${runtime_probe_dir}"
+    else
+      log "runner runtime root is visible to the Agentics Docker daemon"
+    fi
+    rm -rf "$runtime_probe_dir"
+    rm -f "$runtime_probe_error" "$runtime_probe_output"
+
     log "running Docker writable-layer quota probe"
     if docker_cmd run --rm --pull="$PULL_POLICY" --storage-opt size=16m --network none "$PROBE_IMAGE" sh -c 'dd if=/dev/zero of=/agentics-quota-probe bs=1M count=64' >/tmp/agentics-dgx-quota-probe.$$ 2>&1; then
       record_failure "Docker writable-layer quota probe unexpectedly succeeded"

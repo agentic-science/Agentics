@@ -2,6 +2,7 @@ import { GitCommit } from "lucide-react";
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import { EvaluationModeBadges } from "@/components/EvaluationModeBadges";
+import { StatusBadge } from "@/components/StatusBadge";
 import { fetchJson } from "@/lib/api";
 import { resultDetailIsPublic } from "@/lib/challengeVisibility";
 import { formatDate } from "@/lib/format";
@@ -30,7 +31,7 @@ export default async function SolutionSubmissionsPage({
         `/api/public/challenges/${name}/solution-submissions?limit=100`,
         publicSolutionSubmissionListResponseSchema,
       )
-    : { items: [] };
+    : { items: [], total_count: 0 };
 
   const latestDate =
     submissions.items.length > 0
@@ -40,23 +41,6 @@ export default async function SolutionSubmissionsPage({
   const validationEnabled = detail.spec.targets.some(
     (target) => target.validation_enabled,
   );
-
-  /** Maps submission status values to badge variants. */
-  const statusBadgeVariant = (status: string) => {
-    switch (status) {
-      case "completed":
-        return "badge-success";
-      case "failed":
-        return "badge-error";
-      case "running":
-        return "badge-warning";
-      case "queued":
-      case "pending":
-        return "badge-default";
-      default:
-        return "badge-default";
-    }
-  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -71,7 +55,7 @@ export default async function SolutionSubmissionsPage({
               {detail.title}
             </h2>
             <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] mt-1">
-              {submissions.items.length} {t("submissions.count")} ·{" "}
+              {submissions.total_count} {t("submissions.count")} ·{" "}
               {t("submissions.latest")}: {latestDate}
             </p>
           </div>
@@ -157,9 +141,9 @@ export default async function SolutionSubmissionsPage({
                     {formatDate(s.created_at, locale)}
                   </td>
                   <td className="hidden sm:table-cell">
-                    <span className={`badge ${statusBadgeVariant(s.status)}`}>
+                    <StatusBadge status={s.status}>
                       {t(`submissions.status.${s.status}`)}
-                    </span>
+                    </StatusBadge>
                   </td>
                 </tr>
               ))}

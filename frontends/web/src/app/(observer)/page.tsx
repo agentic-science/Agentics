@@ -5,9 +5,8 @@ import { ChallengeCatalogCard } from "@/components/ChallengeCatalogCard";
 import { fetchJson } from "@/lib/api";
 import {
   type ChallengeListResponse,
-  challengeDetailResponseSchema,
   challengeListResponseSchema,
-  publicSolutionSubmissionListResponseSchema,
+  publicStatsResponseSchema,
 } from "@/lib/schemas";
 
 const HOME_CHALLENGE_PREVIEW_LIMIT = 12;
@@ -21,43 +20,24 @@ type HomeStats = {
 async function loadHomeStats(
   challenges: ChallengeListResponse,
 ): Promise<HomeStats> {
-  const agentIds = new Set<string>();
-  let submissions = 0;
-
-  await Promise.all(
-    challenges.items.map(async (challenge) => {
-      try {
-        const detail = await fetchJson(
-          `/api/public/challenges/${challenge.name}`,
-          challengeDetailResponseSchema,
-        );
-
-        await Promise.all(
-          detail.spec.targets.map(async (target) => {
-            try {
-              const submissionList = await fetchJson(
-                `/api/public/challenges/${challenge.name}/solution-submissions?target=${encodeURIComponent(target.name)}&limit=100`,
-                publicSolutionSubmissionListResponseSchema,
-              );
-              submissions += submissionList.total_count;
-              for (const submission of submissionList.items) {
-                agentIds.add(submission.agent_id);
-              }
-            } catch {
-              // Stats should never block the public challenge catalog.
-            }
-          }),
-        );
-      } catch {
-        // Stats should never block the public challenge catalog.
-      }
-    }),
-  );
+  try {
+    const stats = await fetchJson(
+      "/api/public/stats",
+      publicStatsResponseSchema,
+    );
+    return {
+      challenges: stats.challenge_count,
+      agents: stats.agent_count,
+      submissions: stats.solution_submission_count,
+    };
+  } catch {
+    // Stats should never block the public challenge catalog.
+  }
 
   return {
     challenges: challenges.total_count,
-    agents: agentIds.size,
-    submissions,
+    agents: 0,
+    submissions: 0,
   };
 }
 

@@ -1,4 +1,7 @@
-use super::{RunnerAttempt, container_name, effective_phase_limits, prepare_limits, scorer_limits};
+use super::{
+    RunnerAttempt, container_name, effective_phase_limits, prepare_limits,
+    read_limited_result_json, scorer_limits,
+};
 use crate::models::challenge::{ChallengePrepareSpec, ResourceProfileSpec};
 use crate::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
 use crate::models::names::ResourceProfileName;
@@ -71,6 +74,28 @@ fn retry_attempts_have_distinct_container_names() {
     );
     assert!(container_name(&first, "run").contains("attempt-1"));
     assert!(container_name(&second, "run").contains("attempt-2"));
+}
+
+/// Verifies scorer result reading rejects symlinks instead of following them.
+#[cfg(unix)]
+#[tokio::test]
+async fn result_json_symlink_is_rejected() {
+    let temp = std::env::temp_dir().join(format!(
+        "agentics-result-json-symlink-{}",
+        uuid::Uuid::new_v4()
+    ));
+    std::fs::create_dir_all(&temp).expect("tempdir should be created");
+    let target = temp.join("target.json");
+    let link = temp.join("result.json");
+    std::fs::write(&target, "{}").expect("target should be writable");
+    std::os::unix::fs::symlink(&target, &link).expect("symlink should be created");
+
+    let error = read_limited_result_json(&link, 1024)
+        .await
+        .expect_err("symlink result.json must be rejected");
+
+    assert!(error.to_string().contains("not a regular file"));
+    drop(std::fs::remove_dir_all(temp));
 }
 
 /// Build a resource profile for runner limit tests.

@@ -15,6 +15,7 @@ use std::str::FromStr;
 use async_trait::async_trait;
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use tokio::io::AsyncWriteExt;
 
 use crate::error::AppError;
 
@@ -187,12 +188,36 @@ impl Storage for LocalStorage {
     async fn put(&self, key: &StorageKey, content: &[u8]) -> Result<StorageKey> {
         let (full, key_path) = self.resolve(key);
         self.reject_symlink_prefixes(&key_path)?;
-        if let Some(parent) = full.parent() {
-            tokio::fs::create_dir_all(parent).await?;
-        }
+        let parent = full
+            .parent()
+            .ok_or_else(|| AppError::Internal("storage key has no parent".to_string()))?;
+        tokio::fs::create_dir_all(parent).await?;
         self.reject_symlink_prefixes(&key_path)?;
         self.reject_symlink_object(&full)?;
-        tokio::fs::write(&full, content).await?;
+        let temporary_full = parent.join(format!(".agentics-write-{}", uuid::Uuid::new_v4()));
+        let write_result = async {
+            let mut temporary = tokio::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&temporary_full)
+                .await?;
+            temporary.write_all(content).await?;
+            temporary.flush().await?;
+            drop(temporary);
+            self.reject_symlink_prefixes(&key_path)?;
+            self.reject_symlink_object(&full)?;
+            tokio::fs::rename(&temporary_full, &full).await?;
+            Ok::<(), AppError>(())
+        }
+        .await;
+        if let Err(error) = write_result {
+            if let Err(cleanup_error) = tokio::fs::remove_file(&temporary_full).await
+                && cleanup_error.kind() != std::io::ErrorKind::NotFound
+            {
+                return Err(cleanup_error.into());
+            }
+            return Err(error);
+        }
         Ok(key.clone())
     }
 
@@ -366,6 +391,27 @@ mod tests {
         let storage = LocalStorage::new(&root);
 
         let result = storage.put(&storage_key("link/escape.txt"), b"bad").await;
+
+        assert!(matches!(result, Err(AppError::BadRequest(_))));
+        assert!(!outside.join("escape.txt").exists());
+        drop(std::fs::remove_dir_all(root));
+        drop(std::fs::remove_dir_all(outside));
+    }
+
+    #[cfg(unix)]
+    /// Verifies that local storage rejects symlink objects.
+    #[tokio::test]
+    async fn local_storage_rejects_symlink_objects() {
+        let root = temp_storage_root("symlink-object-root");
+        let outside = temp_storage_root("symlink-object-outside");
+        std::fs::create_dir_all(root.join("objects")).expect("objects dir should be created");
+        std::os::unix::fs::symlink(outside.join("escape.txt"), root.join("objects/object.txt"))
+            .expect("failed to create symlink");
+        let storage = LocalStorage::new(&root);
+
+        let result = storage
+            .put(&storage_key("objects/object.txt"), b"bad")
+            .await;
 
         assert!(matches!(result, Err(AppError::BadRequest(_))));
         assert!(!outside.join("escape.txt").exists());

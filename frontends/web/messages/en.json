@@ -130,6 +130,8 @@
     "updatedAt": "Updated",
     "submission": "Submission",
     "empty": "No official ranking results yet",
+    "selectTarget": "Select an explicit target.",
+    "notPublic": "Leaderboard is not public.",
     "direction": {
       "maximize": "maximize",
       "minimize": "minimize"

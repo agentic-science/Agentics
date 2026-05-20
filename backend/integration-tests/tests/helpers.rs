@@ -137,6 +137,7 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
         host_probe_mode: shared::config::HostProbeMode::Off,
         require_digest_pinned_images: false,
         runner_writable_storage_mode: "unbounded".to_string(),
+        runner_runtime_root: None,
         runner_phase_mount_root: None,
         runner_writable_slot_classes_mb: "64,256,1024,4096".to_string(),
         runner_docker_layer_quota: false,

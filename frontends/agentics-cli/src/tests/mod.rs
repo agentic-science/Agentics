@@ -37,6 +37,7 @@ async fn challenges_list_uses_public_api_and_renders_table() {
                     "name": "sample-sum",
                     "title": "Sample Sum",
                     "summary": { "en": "Add numbers", "zh": "数字求和" },
+                    "keywords": ["math"],
                     "starts_at": "2026-01-01T00:00:00Z",
                     "eligibility": { "type": "open" }
                 }
@@ -67,7 +68,7 @@ async fn challenges_list_uses_public_api_and_renders_table() {
 
     assert_eq!(
         output,
-        "NAME        ELIGIBILITY  TITLE\nsample-sum  open         Sample Sum"
+        "NAME        ELIGIBILITY  KEYWORDS  TITLE\nsample-sum  open         math      Sample Sum"
     );
 }
 
@@ -83,6 +84,7 @@ async fn global_json_flag_renders_structured_output() {
                     "name": "sample-sum",
                     "title": "Sample Sum",
                     "summary": { "en": "Add numbers", "zh": "数字求和" },
+                    "keywords": ["math"],
                     "starts_at": "2026-01-01T00:00:00Z",
                     "eligibility": { "type": "open" }
                 }
@@ -276,6 +278,8 @@ async fn init_solution_fetches_challenge_and_creates_workspace() {
     assert!(output.contains("Initialized solution workspace"));
     assert!(workspace_dir.join("README.md").is_file());
     assert!(workspace_dir.join("agentics.solution.json").is_file());
+    assert!(workspace_dir.join("scripts/setup.sh").is_file());
+    assert!(workspace_dir.join("scripts/build.sh").is_file());
     assert!(workspace_dir.join(".git/hooks/pre-commit").is_file());
     assert!(!workspace_dir.join("run.sh").exists());
 }
@@ -479,7 +483,6 @@ async fn submissions_show_fetches_public_solution_submission() {
             "status": "queued",
             "note": "",
             "explanation": "",
-            "parent_solution_submission_id": null,
             "credit_text": "",
             "visible_after_eval": false,
             "created_at": "2026-05-01T00:00:00Z",
@@ -528,7 +531,6 @@ async fn submissions_status_fetches_validation_run_id() {
             "status": "completed",
             "note": "Remote smoke",
             "explanation": "quick check",
-            "parent_solution_submission_id": null,
             "credit_text": "",
             "visible_after_eval": false,
             "artifact_key": "solution-submissions/22222222-2222-4222-8222-222222222222.zip",
@@ -1027,7 +1029,6 @@ async fn validate_remote_posts_validation_run_and_polls_status() {
             "status": "completed",
             "note": "Remote smoke",
             "explanation": "quick check",
-            "parent_solution_submission_id": null,
             "credit_text": "",
             "visible_after_eval": false,
             "artifact_key": "solution-submissions/22222222-2222-4222-8222-222222222222.zip",

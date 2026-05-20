@@ -1,11 +1,14 @@
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use super::rows::{draft_status_from_row, row_to_private_asset_response};
-use super::{clear_stale_active_validation_tx, lock_quota_scope};
+use super::{
+    CreateChallengeDraftAuditEventInput, clear_stale_active_validation_tx,
+    create_challenge_draft_audit_event_tx, lock_quota_scope,
+};
 use crate::db::ids::agent_id_from_row;
 use crate::error::{AppError, Result};
 use crate::models::challenge_creation::{ChallengeDraftStatus, ChallengePrivateAssetResponse};
-use crate::models::ids::ChallengePrivateAssetId;
+use crate::models::ids::{AgentId, ChallengeDraftAuditEventId, ChallengePrivateAssetId};
 use crate::storage::StorageKey;
 
 use super::CreateChallengePrivateAssetInput;
@@ -104,6 +107,47 @@ pub async fn activate_challenge_private_asset(
     asset_row_id: &ChallengePrivateAssetId,
 ) -> Result<ChallengePrivateAssetResponse> {
     let mut tx = pool.begin().await?;
+    let response = activate_challenge_private_asset_tx(&mut tx, asset_row_id).await?;
+    tx.commit().await?;
+    Ok(response)
+}
+
+/// Mark a pending private asset active and audit the activation atomically.
+pub async fn activate_challenge_private_asset_with_audit(
+    pool: &PgPool,
+    asset_row_id: &ChallengePrivateAssetId,
+    audit_event_id: ChallengeDraftAuditEventId,
+    actor_agent_id: &AgentId,
+) -> Result<ChallengePrivateAssetResponse> {
+    let mut tx = pool.begin().await?;
+    let response = activate_challenge_private_asset_tx(&mut tx, asset_row_id).await?;
+    create_challenge_draft_audit_event_tx(
+        &mut tx,
+        &CreateChallengeDraftAuditEventInput {
+            event_id: audit_event_id,
+            draft_id: response.draft_id.clone(),
+            actor_agent_id: Some(actor_agent_id.clone()),
+            actor_admin_username: None,
+            action: "private_asset_uploaded".to_string(),
+            message: "private benchmark asset uploaded".to_string(),
+            metadata: serde_json::json!({
+                "asset_name": &response.asset_name,
+                "kind": response.kind,
+                "size_bytes": response.size_bytes,
+                "sha256": &response.sha256
+            }),
+        },
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(response)
+}
+
+/// Mark a pending private asset active inside an existing transaction.
+async fn activate_challenge_private_asset_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    asset_row_id: &ChallengePrivateAssetId,
+) -> Result<ChallengePrivateAssetResponse> {
     let row = sqlx::query(
         r#"
         UPDATE challenge_private_assets
@@ -115,10 +159,10 @@ pub async fn activate_challenge_private_asset(
         WHERE id = $1::uuid
           AND status = 'pending'
         RETURNING *
-        "#,
+    "#,
     )
     .bind(asset_row_id.as_str())
-    .fetch_optional(&mut *tx)
+    .fetch_optional(&mut **tx)
     .await?;
     let Some(row) = row else {
         return Err(AppError::Conflict);
@@ -130,14 +174,12 @@ pub async fn activate_challenge_private_asset(
         FROM challenge_private_assets a
         WHERE a.id = $1::uuid
           AND d.id = a.draft_id
-        "#,
+    "#,
     )
     .bind(asset_row_id.as_str())
-    .execute(&mut *tx)
+    .execute(&mut **tx)
     .await?;
-    let response = row_to_private_asset_response(row)?;
-    tx.commit().await?;
-    Ok(response)
+    row_to_private_asset_response(row)
 }
 
 /// Mark a pending private asset failed after storage write or promote failed.

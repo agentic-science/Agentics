@@ -9,15 +9,32 @@ import {
   Trash2,
   XCircle,
 } from "lucide-react";
-import { type ReactNode, useState } from "react";
-import { AdminApiError, adminFetchJson } from "@/lib/adminApi";
+import { Fragment, type ReactNode, useState } from "react";
+import type { ZodType } from "zod";
+import {
+  ConsoleSectionTitle as SectionTitle,
+  ConsoleTextInput as TextInput,
+} from "@/components/ConsolePrimitives";
+import {
+  AdminApiError,
+  adminFetchJson,
+  listAdminChallengeDraftPrivateAssets,
+} from "@/lib/adminApi";
 import { formatDate } from "@/lib/format";
 import {
+  type AdminChallengePrivateAssetListResponse,
   type ChallengeDraftListItem,
   challengeDraftCleanupResponseSchema,
   challengeDraftResponseSchema,
+  type ReviewChallengeDraftRequest,
+  reviewChallengeDraftRequestSchema,
+  type ValidateChallengeDraftRequest,
+  validateChallengeDraftRequestSchema,
 } from "@/lib/schemas";
 import { StatusBadge } from "./StatusBadge";
+
+type AdminChallengePrivateAssetResponse =
+  AdminChallengePrivateAssetListResponse["items"][number];
 
 /** Describes the refresh options shape used by this module. */
 type RefreshOptions = { quiet?: boolean };
@@ -48,12 +65,45 @@ export function ChallengeDraftReviewPanel({
   );
   const [reviewMessage, setReviewMessage] = useState("");
   const [busyDraftId, setBusyDraftId] = useState<string | null>(null);
+  const [expandedDraftId, setExpandedDraftId] = useState<string | null>(null);
+  const [assetRowsByDraftId, setAssetRowsByDraftId] = useState<
+    Record<string, AdminChallengePrivateAssetListResponse>
+  >({});
+  const [loadingAssetsDraftId, setLoadingAssetsDraftId] = useState<
+    string | null
+  >(null);
+
+  /** Loads private asset lifecycle rows for one draft on demand. */
+  const toggleAssetRows = async (draftId: string) => {
+    if (expandedDraftId === draftId) {
+      setExpandedDraftId(null);
+      return;
+    }
+    setExpandedDraftId(draftId);
+    if (assetRowsByDraftId[draftId] || !csrfToken) {
+      return;
+    }
+
+    setLoadingAssetsDraftId(draftId);
+    try {
+      const rows = await listAdminChallengeDraftPrivateAssets(
+        draftId,
+        csrfToken,
+      );
+      setAssetRowsByDraftId((current) => ({ ...current, [draftId]: rows }));
+    } catch (e) {
+      onError(adminErrorMessage(e));
+    } finally {
+      setLoadingAssetsDraftId(null);
+    }
+  };
 
   /** Runs draft action and refreshes affected data. */
   const runDraftAction = async (
-    draftId: string,
+    draft: ChallengeDraftListItem,
     action: "validate" | "approve" | "publish" | "reject" | "abandon",
   ) => {
+    const draftId = draft.id;
     if (!csrfToken) {
       onError("Sign in before reviewing challenge drafts.");
       return;
@@ -71,10 +121,24 @@ export function ChallengeDraftReviewPanel({
 
     setBusyDraftId(draftId);
     try {
-      const body =
+      const body: ReviewChallengeDraftRequest | ValidateChallengeDraftRequest =
         action === "validate" || action === "publish"
-          ? { repository_path: repositoryPath.trim() }
-          : { message: draftReviewMessage(action, reviewMessage) };
+          ? parseAdminDraftMutationRequest(
+              validateChallengeDraftRequestSchema,
+              { repository_path: repositoryPath.trim() },
+              "Invalid repository path.",
+            )
+          : parseAdminDraftMutationRequest(
+              reviewChallengeDraftRequestSchema,
+              {
+                message: draftReviewMessage(action, reviewMessage),
+                expected_validation_bundle_sha256:
+                  action === "approve"
+                    ? draft.validation_bundle_sha256
+                    : undefined,
+              },
+              "Invalid review message.",
+            );
       const response = await adminFetchJson(
         `/admin/challenge-drafts/${encodeURIComponent(draftId)}/${action}`,
         challengeDraftResponseSchema,
@@ -188,101 +252,139 @@ export function ChallengeDraftReviewPanel({
             <tbody>
               {drafts.map((draft) => {
                 const busy = busyDraftId === draft.id;
+                const assetRows = assetRowsByDraftId[draft.id];
+                const assetWarning = draftAssetWarning(draft, assetRows);
                 return (
-                  <tr key={draft.id}>
-                    <td>
-                      <div className="font-medium">{draft.manifest.title}</div>
-                      <div className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
-                        {draft.challenge_name} · {draft.request}
-                      </div>
-                      <a
-                        href={draft.pr_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-[var(--text-caption)] text-[var(--accent-secondary-text)] hover:underline"
-                      >
-                        PR #{draft.pr_number}
-                      </a>
-                    </td>
-                    <td>
-                      <StatusBadge status={draft.status} />
-                    </td>
-                    <td>
-                      <div className="font-mono">
-                        {draft.creator_github_login}
-                      </div>
-                      <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
-                        {draft.creator_github_user_id}
-                      </div>
-                    </td>
-                    <td className="font-mono text-[var(--text-caption)]">
-                      <Digest label="manifest" value={draft.manifest_sha256} />
-                      <Digest
-                        label="validated"
-                        value={draft.validation_bundle_sha256}
-                      />
-                      <Digest
-                        label="approved"
-                        value={draft.approved_bundle_sha256}
-                      />
-                    </td>
-                    <td>
-                      <div className="font-mono">
-                        {draft.private_assets.length} uploaded
-                      </div>
-                      <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
-                        {draft.manifest.private_assets.length} declared
-                      </div>
-                    </td>
-                    <td className="text-[var(--text-muted)]">
-                      {formatDate(draft.updated_at, locale)}
-                    </td>
-                    <td>
-                      <div className="flex flex-wrap gap-2">
-                        <ActionButton
-                          label="Validate"
-                          icon={<RefreshCw className="w-3 h-3" />}
-                          disabled={busy || !csrfToken}
-                          onClick={() =>
-                            void runDraftAction(draft.id, "validate")
-                          }
+                  <Fragment key={draft.id}>
+                    <tr>
+                      <td>
+                        <div className="font-medium">
+                          {draft.manifest.title}
+                        </div>
+                        <div className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
+                          {draft.challenge_name} · {draft.request}
+                        </div>
+                        <a
+                          href={draft.pr_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[var(--text-caption)] text-[var(--accent-secondary-text)] hover:underline"
+                        >
+                          PR #{draft.pr_number}
+                        </a>
+                      </td>
+                      <td>
+                        <StatusBadge status={draft.status} />
+                      </td>
+                      <td>
+                        <div className="font-mono">
+                          {draft.creator_github_login}
+                        </div>
+                        <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
+                          {draft.creator_github_user_id}
+                        </div>
+                      </td>
+                      <td className="font-mono text-[var(--text-caption)]">
+                        <Digest
+                          label="manifest"
+                          value={draft.manifest_sha256}
                         />
-                        <ActionButton
-                          label="Approve"
-                          icon={<CheckCircle2 className="w-3 h-3" />}
-                          disabled={busy || !csrfToken}
-                          onClick={() =>
-                            void runDraftAction(draft.id, "approve")
-                          }
+                        <Digest
+                          label="validated"
+                          value={draft.validation_bundle_sha256}
                         />
-                        <ActionButton
-                          label="Publish"
-                          icon={<Send className="w-3 h-3" />}
-                          disabled={busy || !csrfToken}
-                          onClick={() =>
-                            void runDraftAction(draft.id, "publish")
-                          }
+                        <Digest
+                          label="approved"
+                          value={draft.approved_bundle_sha256}
                         />
-                        <ActionButton
-                          label="Reject"
-                          icon={<XCircle className="w-3 h-3" />}
-                          disabled={busy || !csrfToken}
-                          onClick={() =>
-                            void runDraftAction(draft.id, "reject")
-                          }
-                          danger
-                        />
-                        <ActionButton
-                          label="Abandon"
-                          icon={<RotateCcw className="w-3 h-3" />}
-                          disabled={busy || !csrfToken}
-                          onClick={() =>
-                            void runDraftAction(draft.id, "abandon")
-                          }
-                        />
-                      </div>
-                    </td>
-                  </tr>
+                      </td>
+                      <td>
+                        <div className="font-mono">
+                          {draft.private_assets.length} active
+                        </div>
+                        <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
+                          {draft.manifest.private_assets.length} declared
+                        </div>
+                        {assetWarning ? (
+                          <div className="mt-1 text-[var(--text-caption)] text-[var(--status-warning)]">
+                            {assetWarning}
+                          </div>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="mt-2 text-[var(--text-caption)] text-[var(--accent-secondary-text)] hover:underline"
+                          onClick={() => void toggleAssetRows(draft.id)}
+                          disabled={!csrfToken}
+                        >
+                          {expandedDraftId === draft.id
+                            ? "Hide lifecycle"
+                            : "Inspect lifecycle"}
+                        </button>
+                      </td>
+                      <td className="text-[var(--text-muted)]">
+                        {formatDate(draft.updated_at, locale)}
+                      </td>
+                      <td>
+                        <div className="flex flex-wrap gap-2">
+                          <ActionButton
+                            label="Validate"
+                            icon={<RefreshCw className="w-3 h-3" />}
+                            disabled={busy || !csrfToken || !!assetWarning}
+                            onClick={() =>
+                              void runDraftAction(draft, "validate")
+                            }
+                          />
+                          <ActionButton
+                            label="Approve"
+                            icon={<CheckCircle2 className="w-3 h-3" />}
+                            disabled={
+                              busy ||
+                              !csrfToken ||
+                              !!assetWarning ||
+                              !draft.validation_bundle_sha256
+                            }
+                            onClick={() =>
+                              void runDraftAction(draft, "approve")
+                            }
+                          />
+                          <ActionButton
+                            label="Publish"
+                            icon={<Send className="w-3 h-3" />}
+                            disabled={busy || !csrfToken || !!assetWarning}
+                            onClick={() =>
+                              void runDraftAction(draft, "publish")
+                            }
+                          />
+                          <ActionButton
+                            label="Reject"
+                            icon={<XCircle className="w-3 h-3" />}
+                            disabled={busy || !csrfToken}
+                            onClick={() => void runDraftAction(draft, "reject")}
+                            danger
+                          />
+                          <ActionButton
+                            label="Abandon"
+                            icon={<RotateCcw className="w-3 h-3" />}
+                            disabled={busy || !csrfToken}
+                            onClick={() =>
+                              void runDraftAction(draft, "abandon")
+                            }
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                    {expandedDraftId === draft.id ? (
+                      <tr>
+                        <td colSpan={7}>
+                          <PrivateAssetLifecycleTable
+                            assets={assetRows?.items ?? []}
+                            loading={loadingAssetsDraftId === draft.id}
+                            locale={locale}
+                          />
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -291,6 +393,22 @@ export function ChallengeDraftReviewPanel({
       </div>
     </section>
   );
+}
+
+/** Parses generated request schemas before sending admin draft mutations. */
+function parseAdminDraftMutationRequest<T>(
+  schema: ZodType<T>,
+  value: unknown,
+  fallbackMessage: string,
+): T {
+  const parsed = schema.safeParse(value);
+  if (!parsed.success) {
+    throw new AdminApiError(
+      400,
+      parsed.error.issues[0]?.message ?? fallbackMessage,
+    );
+  }
+  return parsed.data;
 }
 
 /** Returns an explicit review message that matches the selected action. */
@@ -333,37 +451,113 @@ function confirmDraftAction(
   }
 }
 
-/** Renders the section title component. */
-function SectionTitle({ icon, title }: { icon: ReactNode; title: string }) {
-  return (
-    <h2 className="flex items-center gap-2 text-[var(--text-h3)] font-semibold">
-      <span className="text-[var(--accent-secondary-text)]">{icon}</span>
-      {title}
-    </h2>
+/** Returns a blocking private-asset lifecycle warning for review actions. */
+function draftAssetWarning(
+  draft: ChallengeDraftListItem,
+  lifecycleRows: AdminChallengePrivateAssetListResponse | undefined,
+): string | null {
+  const activeNames = new Set(
+    draft.private_assets.map((asset) => asset.asset_name),
   );
+  const requiredManifestNames = draft.manifest.private_assets
+    .filter((asset) => asset.required)
+    .map((asset) => asset.asset_name);
+  const missing = requiredManifestNames.filter(
+    (name) => !activeNames.has(name),
+  );
+  if (missing.length > 0) {
+    return `Missing required asset: ${missing.join(", ")}`;
+  }
+
+  const nonActiveRequired = lifecycleRows?.items
+    .filter((asset) => asset.required && asset.status !== "active")
+    .map((asset) => `${asset.asset_name} (${asset.status})`);
+  if (nonActiveRequired && nonActiveRequired.length > 0) {
+    return `Required asset not active: ${nonActiveRequired.join(", ")}`;
+  }
+
+  return null;
 }
 
-/** Renders the text input component. */
-function TextInput({
-  label,
-  value,
-  onChange,
+/** Renders the admin-only private asset lifecycle table. */
+function PrivateAssetLifecycleTable({
+  assets,
+  loading,
+  locale,
 }: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
+  assets: AdminChallengePrivateAssetResponse[];
+  loading: boolean;
+  locale: string;
 }) {
+  if (loading) {
+    return (
+      <div className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] p-4 text-[var(--text-muted)]">
+        Loading private asset lifecycle rows...
+      </div>
+    );
+  }
+  if (assets.length === 0) {
+    return (
+      <div className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] p-4 text-[var(--text-muted)]">
+        No private asset lifecycle rows.
+      </div>
+    );
+  }
+
   return (
-    <label className="flex flex-col gap-1">
-      <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
-        {label}
-      </span>
-      <input
-        className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 text-[var(--text-body-sm)] outline-none focus:border-[var(--accent-primary-500)]"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </label>
+    <div className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] p-3 overflow-x-auto">
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>Asset</th>
+            <th>Status</th>
+            <th>Required</th>
+            <th>Size</th>
+            <th>Digest</th>
+            <th>Storage</th>
+            <th>Updated</th>
+            <th>Failure</th>
+          </tr>
+        </thead>
+        <tbody>
+          {assets.map((asset) => (
+            <tr key={asset.id}>
+              <td>
+                <div className="font-mono">{asset.asset_name}</div>
+                <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
+                  {asset.kind}
+                </div>
+              </td>
+              <td>
+                <StatusBadge status={asset.status} />
+              </td>
+              <td>{asset.required ? "yes" : "no"}</td>
+              <td className="font-mono">{asset.size_bytes}</td>
+              <td className="font-mono text-[var(--text-caption)]">
+                {asset.sha256.slice(0, 12)}
+              </td>
+              <td className="font-mono text-[var(--text-caption)]">
+                <div>{asset.storage_key}</div>
+                {asset.temporary_storage_key ? (
+                  <div className="text-[var(--text-muted)]">
+                    temp {asset.temporary_storage_key}
+                  </div>
+                ) : null}
+              </td>
+              <td className="text-[var(--text-caption)] text-[var(--text-muted)]">
+                {formatDate(
+                  asset.activated_at ?? asset.failed_at ?? asset.created_at,
+                  locale,
+                )}
+              </td>
+              <td className="text-[var(--text-caption)] text-[var(--status-error)]">
+                {asset.failure_message ?? "—"}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

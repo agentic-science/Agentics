@@ -43,8 +43,8 @@ use shared::models::request::{
     CreatePioneerCodeRequest, CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse,
     DisableAgentResponse, EvaluationJobResponse, HideSolutionSubmissionResponse,
     LeaderboardResponse, PioneerCodeDetailResponse, PioneerCodeListResponse,
-    PublicSolutionSubmissionListResponse, RankedLeaderboardEntryDto, RankingContextResponse,
-    RegisterAgentRequest, RegisterAgentResponse, RevokePioneerCodeResponse,
+    PublicSolutionSubmissionListResponse, PublicStatsResponse, RankedLeaderboardEntryDto,
+    RankingContextResponse, RegisterAgentRequest, RegisterAgentResponse, RevokePioneerCodeResponse,
     ScoreDistributionResponse, SolutionSubmissionArtifactResponse, SolutionSubmissionLogsResponse,
     SolutionSubmissionResponse, SolutionSubmissionResultReportResponse,
 };
@@ -197,6 +197,17 @@ pub async fn list_challenges(
         limit: challenges.limit,
         offset: challenges.offset,
         has_more: challenges.has_more,
+    }))
+}
+
+/// Fetch aggregate public observer counters.
+pub async fn get_public_stats(State(state): State<AppState>) -> Result<Json<PublicStatsResponse>> {
+    let (challenge_count, agent_count, solution_submission_count) =
+        db::public_observer_stats(&state.db).await?;
+    Ok(Json(PublicStatsResponse {
+        challenge_count,
+        agent_count,
+        solution_submission_count,
     }))
 }
 

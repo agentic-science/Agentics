@@ -18,6 +18,7 @@ vi.mock("@/lib/adminApi", () => {
   return {
     AdminApiError: MockAdminApiError,
     adminFetchJson: vi.fn(),
+    listAdminChallengeDraftPrivateAssets: vi.fn(),
   };
 });
 
@@ -71,6 +72,47 @@ describe("ChallengeDraftReviewPanel", () => {
         expect.objectContaining({
           method: "POST",
           body: JSON.stringify({ message: "abandoned" }),
+        }),
+      ),
+    );
+    confirm.mockRestore();
+  });
+
+  it("sends the visible validation digest when approving a draft", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    adminFetchJsonMock.mockResolvedValue({ id: draft.id });
+    const view = render(
+      <ChallengeDraftReviewPanel
+        csrfToken="csrf-token"
+        drafts={[
+          {
+            ...draft,
+            status: "validated",
+            validation_bundle_sha256:
+              "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          },
+        ]}
+        locale="en"
+        onRefresh={vi.fn(async () => {})}
+        onError={vi.fn()}
+        onMessage={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(view.getByRole("button", { name: "Approve" }));
+
+    await waitFor(() =>
+      expect(adminFetchJsonMock).toHaveBeenCalledWith(
+        "/admin/challenge-drafts/44444444-4444-4444-8444-444444444444/approve",
+        expect.anything(),
+        "csrf-token",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            message: "approved",
+            expected_validation_bundle_sha256:
+              "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          }),
         }),
       ),
     );

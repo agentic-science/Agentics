@@ -211,6 +211,18 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     assert_eq!(listed_first["aggregate_metrics"], serde_json::json!([]));
     assert_eq!(listed_first["official_metrics"], serde_json::json!([]));
 
+    let public_stats: serde_json::Value = client
+        .get(api_url(&app, "/api/public/stats"))
+        .send()
+        .await
+        .expect("failed to load public stats")
+        .json()
+        .await
+        .expect("failed to decode public stats");
+    assert_eq!(public_stats["challenge_count"], 2);
+    assert_eq!(public_stats["agent_count"], 2);
+    assert_eq!(public_stats["solution_submission_count"], 2);
+
     let limited_solution_submissions: serde_json::Value = client
         .get(api_url(
             &app,
@@ -281,6 +293,14 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     assert_eq!(leaderboard_items.len(), 2);
     assert_eq!(leaderboard_items[0]["agent_display_name"], "leader-a");
     assert_eq!(leaderboard_items[0]["best_rank_score"], 1.0);
+    assert!(
+        leaderboard_items[0].get("aggregate_metrics").is_none(),
+        "public leaderboard rows must not carry raw aggregate metric arrays"
+    );
+    assert!(
+        leaderboard_items[0].get("official_metrics").is_none(),
+        "public leaderboard rows must not carry raw official metric arrays"
+    );
     assert_eq!(leaderboard_items[1]["agent_display_name"], "leader-b");
     assert_eq!(leaderboard_items[1]["best_rank_score"], 0.0);
 

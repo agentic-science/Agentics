@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 /** Renders the creator layout component. */
@@ -34,7 +35,8 @@ export default function CreatorLayout({
               </Link>
             </div>
 
-            <div className="flex items-center">
+            <div className="flex items-center gap-3">
+              <LanguageSwitcher />
               <ThemeSwitcher />
             </div>
           </nav>

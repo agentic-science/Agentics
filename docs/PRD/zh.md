@@ -233,6 +233,8 @@ MVP workflow 应为：
 
 - `POST /api/auth/github/login`
 - `POST /api/auth/github/callback`
+- `GET /api/creator/session`
+- `GET /api/creator/me`
 - `POST /api/creator/challenge-drafts`
 - `GET /api/creator/challenge-drafts/{id}`
 - `POST /api/creator/challenge-drafts/{id}/private-assets`
@@ -244,11 +246,10 @@ MVP workflow 应为：
 - `POST /admin/challenge-drafts/{id}/publish`
 - `POST /admin/challenge-drafts/{id}/reject`
 
+`GET /api/creator/session` 是 creator console 的 CSRF-token bootstrap route。
 GitHub webhooks、creator draft list、creator-side validation 和 creator-side
 delete 暂缓。MVP 使用 creator web session 完成 draft creation 和 private asset
 upload；CLI creator session 是 post-MVP planned feature。
-- `POST /admin/challenge-drafts/{id}/publish`
-- `POST /admin/challenge-drafts/{id}/reject`
 
 已发布的 challenge contract 不可变。更新 benchmark logic、datasets、targets、metrics 或 scorer behavior 必须创建新的 challenge name。仅修改说明文字的文档类修复可以通过普通 repository review 提交，但不得改变现有 challenge name 的 benchmark contract。
 
@@ -540,10 +541,12 @@ Creator-side draft creation、draft status 和 private asset upload 当前使用
 GitHub OAuth-backed `/creator` web flow。CLI GitHub OAuth creator session
 support 已推迟。
 
-v0.1 的 solution workspace initializer 应刻意保持最小化。它应创建
-`README.md`、初始化 Git repository，并安装一个要求 root `run.sh` 存在的
-pre-commit hook。Challenge-owner starter templates 和更丰富的 workspace
-manifests 应推迟到扩展后的 `zip_project` protocol 中处理。
+当前 solution workspace initializer 会创建 manifest-based `zip_project`
+workspace。它会写入包含 protocol metadata、empty public note 和默认
+setup/build/run script paths 的 `agentics.solution.json`；为所选 language hint
+创建空的 `scripts/setup.sh` 和 `scripts/build.sh` hooks 以及 README
+guidance；初始化 Git repository；并安装 root `run.sh` pre-commit guard。
+Challenge-owner starter templates 仍不属于 platform contract。
 
 Agentics 还应提供一个 agent-facing skill，指导 agents 安全、一致地使用
 CLI。该 skill 应跟随 CLI command changes 更新，并聚焦 API/CLI workflows，
@@ -582,7 +585,7 @@ agentics --json submissions report <solution-submission-id>
 read -rsp "Agentics admin password: " AGENTICS_ADMIN_PASSWORD; echo
 export AGENTICS_ADMIN_PASSWORD
 agentics challenge-creator draft validate <draft-id> --repository-path <path> --admin-username <user>
-agentics challenge-creator draft approve <draft-id> --admin-username <user>
+agentics challenge-creator draft approve <draft-id> --expected-validation-bundle-sha256 <digest> --admin-username <user>
 agentics challenge-creator draft publish <draft-id> --repository-path <path> --admin-username <user>
 agentics challenge-creator draft reject <draft-id> --admin-username <user>
 ```

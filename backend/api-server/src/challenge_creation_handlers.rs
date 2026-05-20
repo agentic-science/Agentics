@@ -16,7 +16,8 @@ use shared::models::challenge_creation::{
     ChallengeCreationRequestKind, ChallengeDraftCleanupResponse, ChallengeDraftListResponse,
     ChallengeDraftResponse, ChallengeDraftStatus, ChallengeDraftValidationStatus,
     ChallengePrivateAssetKind, ChallengePrivateAssetResponse, CreateChallengeDraftRequest,
-    ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest, ValidateChallengeDraftRequest,
+    CreatorChallengeDraftResponse, ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest,
+    ValidateChallengeDraftRequest,
 };
 use shared::models::hashes::{GitCommitSha, Sha256Digest};
 use shared::models::ids::{
@@ -43,7 +44,7 @@ pub async fn create_challenge_draft(
     State(state): State<AppState>,
     creator: CreatorAuth,
     ValidatedJson(body): ValidatedJson<CreateChallengeDraftRequest>,
-) -> Result<(StatusCode, Json<ChallengeDraftResponse>)> {
+) -> Result<(StatusCode, Json<CreatorChallengeDraftResponse>)> {
     challenge_creation::validate_challenge_creation_manifest(&body.manifest)?;
     validate_challenge_draft_path(&body.challenge_path, &body.manifest.challenge_name)?;
     GithubPullRequestRef::try_new(
@@ -59,10 +60,14 @@ pub async fn create_challenge_draft(
         )));
     }
     let manifest_sha256 = challenge_creation::normalized_manifest_sha256(&body.manifest)?;
+    let draft_id = ChallengeDraftId::generate();
+    let repo_url = body.repo_url.clone();
+    let pr_number = body.pr_number.clone();
+    let commit_sha = body.commit_sha;
     let draft = db::create_challenge_draft(
         &state.db,
         &db::CreateChallengeDraftInput {
-            draft_id: ChallengeDraftId::generate(),
+            draft_id: draft_id.clone(),
             creator_agent_id: creator.agent_id.clone(),
             max_active_drafts: i64::from(state.config.max_active_challenge_drafts_per_agent),
             creator_github_user_id: creator.github_user_id,
@@ -75,29 +80,24 @@ pub async fn create_challenge_draft(
             manifest_sha256,
             manifest: body.manifest,
         },
-    )
-    .await
-    .map_err(map_unique_conflict)?;
-
-    db::create_challenge_draft_audit_event(
-        &state.db,
         &db::CreateChallengeDraftAuditEventInput {
             event_id: ChallengeDraftAuditEventId::generate(),
-            draft_id: draft.id.clone(),
+            draft_id,
             actor_agent_id: Some(creator.agent_id.clone()),
             actor_admin_username: None,
             action: "draft_created".to_string(),
             message: "challenge draft created from GitHub PR".to_string(),
             metadata: serde_json::json!({
-                "repo_url": &draft.repo_url,
-                "pr_number": draft.pr_number,
-                "commit_sha": &draft.commit_sha
+                "repo_url": repo_url,
+                "pr_number": pr_number,
+                "commit_sha": commit_sha
             }),
         },
     )
-    .await?;
+    .await
+    .map_err(map_unique_conflict)?;
 
-    Ok((StatusCode::CREATED, Json(draft)))
+    Ok((StatusCode::CREATED, Json(draft.into())))
 }
 
 /// Fetch a challenge draft owned by the authenticated agent.
@@ -105,14 +105,14 @@ pub async fn get_challenge_draft(
     State(state): State<AppState>,
     creator: CreatorAuth,
     ChallengeDraftIdPath(draft_id): ChallengeDraftIdPath,
-) -> Result<Json<ChallengeDraftResponse>> {
+) -> Result<Json<CreatorChallengeDraftResponse>> {
     let draft = db::get_challenge_draft(&state.db, draft_id.as_str())
         .await?
         .ok_or(AppError::NotFound)?;
     if draft.creator_agent_id != creator.agent_id {
         return Err(AppError::NotFound);
     }
-    Ok(Json(draft))
+    Ok(Json(draft.into()))
 }
 
 /// Upload a private benchmark asset for a draft owned by the authenticated agent.
@@ -233,32 +233,20 @@ pub async fn upload_challenge_private_asset(
         cleanup_storage_key(&state, &temporary_storage_key).await;
         return Err(error);
     }
-    let asset = match db::activate_challenge_private_asset(&state.db, &asset_row_id).await {
+    let asset = match db::activate_challenge_private_asset_with_audit(
+        &state.db,
+        &asset_row_id,
+        ChallengeDraftAuditEventId::generate(),
+        &creator.agent_id,
+    )
+    .await
+    {
         Ok(asset) => asset,
         Err(error) => {
             cleanup_storage_key(&state, &storage_key).await;
             return Err(error);
         }
     };
-
-    db::create_challenge_draft_audit_event(
-        &state.db,
-        &db::CreateChallengeDraftAuditEventInput {
-            event_id: ChallengeDraftAuditEventId::generate(),
-            draft_id: draft.id.clone(),
-            actor_agent_id: Some(creator.agent_id.clone()),
-            actor_admin_username: None,
-            action: "private_asset_uploaded".to_string(),
-            message: "private benchmark asset uploaded".to_string(),
-            metadata: serde_json::json!({
-                "asset_name": &asset.asset_name,
-                "kind": asset.kind,
-                "size_bytes": asset.size_bytes,
-                "sha256": &asset.sha256
-            }),
-        },
-    )
-    .await?;
 
     Ok((StatusCode::CREATED, Json(asset)))
 }
@@ -394,6 +382,18 @@ pub async fn validate_challenge_draft(
     match validation {
         Ok((_, bundle_sha256)) => {
             let message = "challenge draft validation passed".to_string();
+            let audit_event = db::CreateChallengeDraftAuditEventInput {
+                event_id: ChallengeDraftAuditEventId::generate(),
+                draft_id: draft.id.clone(),
+                actor_agent_id: None,
+                actor_admin_username: Some(admin.username.clone()),
+                action: "draft_validated".to_string(),
+                message: message.clone(),
+                metadata: serde_json::json!({
+                    "repository_path": repository_path.to_string(),
+                    "bundle_sha256": &bundle_sha256
+                }),
+            };
             db::finish_challenge_draft_validation(
                 &state.db,
                 &db::FinishChallengeDraftValidationInput {
@@ -403,22 +403,7 @@ pub async fn validate_challenge_draft(
                     message: message.clone(),
                     bundle_sha256: Some(bundle_sha256),
                 },
-            )
-            .await?;
-            db::create_challenge_draft_audit_event(
-                &state.db,
-                &db::CreateChallengeDraftAuditEventInput {
-                    event_id: ChallengeDraftAuditEventId::generate(),
-                    draft_id: draft.id.clone(),
-                    actor_agent_id: None,
-                    actor_admin_username: Some(admin.username.clone()),
-                    action: "draft_validated".to_string(),
-                    message: message.clone(),
-                    metadata: serde_json::json!({
-                        "repository_path": repository_path.to_string(),
-                        "bundle_sha256": &bundle_sha256
-                    }),
-                },
+                &audit_event,
             )
             .await?;
             let draft = db::get_challenge_draft(&state.db, draft.id.as_str())
@@ -428,6 +413,15 @@ pub async fn validate_challenge_draft(
         }
         Err(error) => {
             let message = error.to_string();
+            let audit_event = db::CreateChallengeDraftAuditEventInput {
+                event_id: ChallengeDraftAuditEventId::generate(),
+                draft_id: draft.id.clone(),
+                actor_agent_id: None,
+                actor_admin_username: Some(admin.username.clone()),
+                action: "draft_validation_failed".to_string(),
+                message: message.clone(),
+                metadata: serde_json::json!({ "repository_path": repository_path.to_string() }),
+            };
             db::finish_challenge_draft_validation(
                 &state.db,
                 &db::FinishChallengeDraftValidationInput {
@@ -437,19 +431,7 @@ pub async fn validate_challenge_draft(
                     message: message.clone(),
                     bundle_sha256: None,
                 },
-            )
-            .await?;
-            db::create_challenge_draft_audit_event(
-                &state.db,
-                &db::CreateChallengeDraftAuditEventInput {
-                    event_id: ChallengeDraftAuditEventId::generate(),
-                    draft_id: draft.id.clone(),
-                    actor_agent_id: None,
-                    actor_admin_username: Some(admin.username.clone()),
-                    action: "draft_validation_failed".to_string(),
-                    message,
-                    metadata: serde_json::json!({ "repository_path": repository_path.to_string() }),
-                },
+                &audit_event,
             )
             .await?;
             Err(error)
@@ -465,23 +447,20 @@ pub async fn abandon_challenge_draft(
     ChallengeDraftIdPath(draft_id): ChallengeDraftIdPath,
     ValidatedJson(body): ValidatedJson<ReviewChallengeDraftRequest>,
 ) -> Result<Json<ChallengeDraftResponse>> {
-    db::abandon_challenge_draft(
+    let audit_event = db::CreateChallengeDraftAuditEventInput {
+        event_id: ChallengeDraftAuditEventId::generate(),
+        draft_id: draft_id.clone(),
+        actor_agent_id: None,
+        actor_admin_username: Some(admin.username),
+        action: "draft_abandoned".to_string(),
+        message: body.message.trim().to_string(),
+        metadata: serde_json::json!({}),
+    };
+    db::abandon_challenge_draft_with_audit(
         &state.db,
-        draft_id.as_str(),
+        &draft_id,
         non_empty_message(&body.message),
-    )
-    .await?;
-    db::create_challenge_draft_audit_event(
-        &state.db,
-        &db::CreateChallengeDraftAuditEventInput {
-            event_id: ChallengeDraftAuditEventId::generate(),
-            draft_id: draft_id.clone(),
-            actor_agent_id: None,
-            actor_admin_username: Some(admin.username),
-            action: "draft_abandoned".to_string(),
-            message: body.message.trim().to_string(),
-            metadata: serde_json::json!({}),
-        },
+        &audit_event,
     )
     .await?;
 
@@ -532,34 +511,25 @@ pub async fn approve_challenge_draft(
     ChallengeDraftIdPath(draft_id): ChallengeDraftIdPath,
     ValidatedJson(body): ValidatedJson<ReviewChallengeDraftRequest>,
 ) -> Result<Json<ChallengeDraftResponse>> {
-    let draft = db::get_challenge_draft(&state.db, draft_id.as_str())
-        .await?
-        .ok_or(AppError::NotFound)?;
-    if draft.status != ChallengeDraftStatus::Validated {
-        return Err(AppError::Conflict);
-    }
-    db::approve_validated_challenge_draft(
+    let expected_validation_bundle_sha256 = body
+        .expected_validation_bundle_sha256
+        .as_ref()
+        .ok_or_else(|| {
+            AppError::BadRequest(
+                "expected_validation_bundle_sha256 is required when approving a draft".to_string(),
+            )
+        })?;
+    db::approve_validated_challenge_draft_with_audit(
         &state.db,
-        draft.id.as_str(),
+        &draft_id,
+        expected_validation_bundle_sha256,
         non_empty_message(&body.message),
-    )
-    .await?;
-    let approved_bundle_sha256 = draft.validation_bundle_sha256;
-    db::create_challenge_draft_audit_event(
-        &state.db,
-        &db::CreateChallengeDraftAuditEventInput {
-            event_id: ChallengeDraftAuditEventId::generate(),
-            draft_id: draft.id.clone(),
-            actor_agent_id: None,
-            actor_admin_username: Some(admin.username),
-            action: "draft_approved".to_string(),
-            message: body.message.trim().to_string(),
-            metadata: serde_json::json!({ "approved_bundle_sha256": approved_bundle_sha256 }),
-        },
+        admin.username,
+        ChallengeDraftAuditEventId::generate(),
     )
     .await?;
     Ok(Json(
-        db::get_challenge_draft(&state.db, draft.id.as_str())
+        db::get_challenge_draft(&state.db, draft_id.as_str())
             .await?
             .ok_or(AppError::NotFound)?,
     ))
@@ -578,24 +548,21 @@ pub async fn reject_challenge_draft(
     if draft.status == ChallengeDraftStatus::Published {
         return Err(AppError::Conflict);
     }
-    db::update_challenge_draft_status(
+    let audit_event = db::CreateChallengeDraftAuditEventInput {
+        event_id: ChallengeDraftAuditEventId::generate(),
+        draft_id: draft.id.clone(),
+        actor_agent_id: None,
+        actor_admin_username: Some(admin.username),
+        action: "draft_rejected".to_string(),
+        message: body.message.trim().to_string(),
+        metadata: serde_json::json!({}),
+    };
+    db::update_challenge_draft_status_with_audit(
         &state.db,
-        draft.id.as_str(),
+        &draft.id,
         ChallengeDraftStatus::Rejected,
         non_empty_message(&body.message),
-    )
-    .await?;
-    db::create_challenge_draft_audit_event(
-        &state.db,
-        &db::CreateChallengeDraftAuditEventInput {
-            event_id: ChallengeDraftAuditEventId::generate(),
-            draft_id: draft.id.clone(),
-            actor_agent_id: None,
-            actor_admin_username: Some(admin.username),
-            action: "draft_rejected".to_string(),
-            message: body.message.trim().to_string(),
-            metadata: serde_json::json!({}),
-        },
+        &audit_event,
     )
     .await?;
     Ok(Json(

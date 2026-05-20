@@ -10,6 +10,7 @@ use helpers::{
 };
 
 const QUOTA_TEST_STORAGE_MODE_ENV: &str = "AGENTICS_TEST_RUNNER_WRITABLE_STORAGE_MODE";
+const QUOTA_TEST_RUNTIME_ROOT_ENV: &str = "AGENTICS_TEST_RUNNER_RUNTIME_ROOT";
 const QUOTA_TEST_PHASE_MOUNT_ROOT_ENV: &str = "AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT";
 const QUOTA_TEST_SLOT_CLASSES_ENV: &str = "AGENTICS_TEST_RUNNER_WRITABLE_SLOT_CLASSES_MB";
 const QUOTA_TEST_SETUP_SCRIPT: &str = "scripts/ops/prepare-dgx-spark-test-storage.sh";
@@ -34,6 +35,8 @@ fn quota_sensitive_runner_config(
     let mut config = test_config(storage_root, challenges_root);
     config.runner_writable_storage_mode =
         std::env::var(QUOTA_TEST_STORAGE_MODE_ENV).expect("validated quota storage mode");
+    config.runner_runtime_root =
+        Some(std::env::var(QUOTA_TEST_RUNTIME_ROOT_ENV).expect("validated quota runtime root"));
     config.runner_phase_mount_root =
         Some(std::env::var(QUOTA_TEST_PHASE_MOUNT_ROOT_ENV).expect("validated quota mount root"));
     config.runner_writable_slot_classes_mb =
@@ -46,11 +49,13 @@ fn quota_sensitive_runner_config(
 /// Validate Linux-only quota-sensitive test environment variables.
 fn validate_quota_sensitive_runner_env() -> std::result::Result<(), String> {
     let storage_mode = std::env::var(QUOTA_TEST_STORAGE_MODE_ENV).ok();
+    let runtime_root = std::env::var(QUOTA_TEST_RUNTIME_ROOT_ENV).ok();
     let phase_mount_root = std::env::var(QUOTA_TEST_PHASE_MOUNT_ROOT_ENV).ok();
     let slot_classes = std::env::var(QUOTA_TEST_SLOT_CLASSES_ENV).ok();
 
     let missing: Vec<&str> = [
         (storage_mode.is_none(), QUOTA_TEST_STORAGE_MODE_ENV),
+        (runtime_root.is_none(), QUOTA_TEST_RUNTIME_ROOT_ENV),
         (phase_mount_root.is_none(), QUOTA_TEST_PHASE_MOUNT_ROOT_ENV),
         (slot_classes.is_none(), QUOTA_TEST_SLOT_CLASSES_ENV),
     ]
@@ -68,6 +73,19 @@ fn validate_quota_sensitive_runner_env() -> std::result::Result<(), String> {
     if storage_mode != "xfs-project-quota-slots" {
         return Err(quota_test_setup_error(format!(
             "{QUOTA_TEST_STORAGE_MODE_ENV} must be xfs-project-quota-slots, got `{storage_mode}`"
+        )));
+    }
+
+    let runtime_root = runtime_root.expect("checked above");
+    let root = Path::new(&runtime_root);
+    if !root.is_absolute() {
+        return Err(quota_test_setup_error(format!(
+            "{QUOTA_TEST_RUNTIME_ROOT_ENV} must be an absolute path, got `{runtime_root}`"
+        )));
+    }
+    if !root.is_dir() {
+        return Err(quota_test_setup_error(format!(
+            "{QUOTA_TEST_RUNTIME_ROOT_ENV} must point to a prepared test runtime root, got `{runtime_root}`"
         )));
     }
 
@@ -139,7 +157,7 @@ fn parse_quota_test_slot_classes(raw: &str) -> std::result::Result<Vec<u64>, Str
 /// Build the actionable Linux quota-test setup failure.
 fn quota_test_setup_error(reason: String) -> String {
     format!(
-        "Linux quota-sensitive runner tests require a prepared bounded test quota root: {reason}. Run `{QUOTA_TEST_SETUP_SCRIPT}` and export {QUOTA_TEST_STORAGE_MODE_ENV}=xfs-project-quota-slots, {QUOTA_TEST_PHASE_MOUNT_ROOT_ENV}=/srv/agentics-test/phase-mounts, and {QUOTA_TEST_SLOT_CLASSES_ENV}=64,256,1024,4096 before running these tests on Linux."
+        "Linux quota-sensitive runner tests require a prepared bounded test quota root: {reason}. Run `{QUOTA_TEST_SETUP_SCRIPT}` and export {QUOTA_TEST_STORAGE_MODE_ENV}=xfs-project-quota-slots, {QUOTA_TEST_RUNTIME_ROOT_ENV}=/srv/agentics-test/runtime, {QUOTA_TEST_PHASE_MOUNT_ROOT_ENV}=/srv/agentics-test/phase-mounts, and {QUOTA_TEST_SLOT_CLASSES_ENV}=64,256,1024,4096 before running these tests on Linux."
     )
 }
 

@@ -211,7 +211,11 @@ pub async fn list_leaderboard_entries(
     target: &TargetName,
     limit: i64,
 ) -> Result<Vec<LeaderboardEntryDto>> {
-    list_leaderboard_entries_inner(pool, challenge_name, target, limit, true).await
+    Ok(list_leaderboard_rows(pool, challenge_name, target, limit)
+        .await?
+        .into_iter()
+        .map(LeaderboardRow::into_public_dto)
+        .collect())
 }
 
 /// List leaderboard entries with metric payloads for internal aggregate calculations.
@@ -220,8 +224,21 @@ pub async fn list_leaderboard_entries_with_metric_payloads(
     challenge_name: &ChallengeName,
     target: &TargetName,
     limit: i64,
-) -> Result<Vec<LeaderboardEntryDto>> {
-    list_leaderboard_entries_inner(pool, challenge_name, target, limit, false).await
+) -> Result<Vec<LeaderboardMetricEntry>> {
+    Ok(list_leaderboard_rows(pool, challenge_name, target, limit)
+        .await?
+        .into_iter()
+        .map(LeaderboardRow::into_metric_entry)
+        .collect())
+}
+
+/// Internal leaderboard row that keeps metric payloads out of public DTOs.
+#[derive(Debug, Clone)]
+pub struct LeaderboardMetricEntry {
+    pub best_rank_score: f64,
+    pub aggregate_metrics: Vec<MetricValue>,
+    pub official_metrics: Vec<MetricValue>,
+    pub official_score: Option<f64>,
 }
 
 /// Candidate row used when repairing one agent's leaderboard entry after hiding a submission.
@@ -237,14 +254,52 @@ struct LeaderboardReplacementCandidate {
     official_metrics_json: Value,
 }
 
-/// Query, order, and optionally redact the visible leaderboard rows for one target.
-async fn list_leaderboard_entries_inner(
+/// Database row for one visible leaderboard entry before public projection.
+struct LeaderboardRow {
+    target: TargetName,
+    agent_id: crate::models::ids::AgentId,
+    agent_display_name: String,
+    best_solution_submission_id: SolutionSubmissionId,
+    best_rank_score: f64,
+    aggregate_metrics: Vec<MetricValue>,
+    official_metrics: Vec<MetricValue>,
+    official_score: Option<f64>,
+    updated_at: DateTime<Utc>,
+}
+
+impl LeaderboardRow {
+    /// Project this row into the public leaderboard DTO.
+    fn into_public_dto(self) -> LeaderboardEntryDto {
+        LeaderboardEntryDto {
+            target: self.target,
+            agent_id: self.agent_id,
+            agent_display_name: self.agent_display_name,
+            best_solution_submission_id: self.best_solution_submission_id,
+            best_rank_score: self.best_rank_score,
+            rank_score: self.best_rank_score,
+            official_score: self.official_score,
+            updated_at: self.updated_at.to_rfc3339(),
+        }
+    }
+
+    /// Project this row into the backend-only metric payload shape.
+    fn into_metric_entry(self) -> LeaderboardMetricEntry {
+        LeaderboardMetricEntry {
+            best_rank_score: self.best_rank_score,
+            aggregate_metrics: self.aggregate_metrics,
+            official_metrics: self.official_metrics,
+            official_score: self.official_score,
+        }
+    }
+}
+
+/// Query and order the visible leaderboard rows for one target.
+async fn list_leaderboard_rows(
     pool: &PgPool,
     challenge_name: &ChallengeName,
     target: &TargetName,
     limit: i64,
-    redact_metric_payloads: bool,
-) -> Result<Vec<LeaderboardEntryDto>> {
+) -> Result<Vec<LeaderboardRow>> {
     let requested_limit = limit.max(1);
     let challenge = get_public_challenge(pool, challenge_name)
         .await?
@@ -301,7 +356,7 @@ async fn list_leaderboard_entries_inner(
 
     let rows = query.build().fetch_all(pool).await?;
 
-    let mut entries = rows
+    let entries = rows
         .into_iter()
         .map(|r| {
             let aggregate_metrics = decode_optional_json(
@@ -316,7 +371,7 @@ async fn list_leaderboard_entries_inner(
             .unwrap_or_default();
             let best_rank_score: f64 = r.try_get("best_rank_score")?;
 
-            Ok(LeaderboardEntryDto {
+            Ok(LeaderboardRow {
                 target: target_from_row(&r, "target")?,
                 agent_id: agent_id_from_row(&r, "agent_id")?,
                 agent_display_name: r.try_get("agent_display_name")?,
@@ -325,21 +380,13 @@ async fn list_leaderboard_entries_inner(
                     "best_solution_submission_id",
                 )?,
                 best_rank_score,
-                rank_score: best_rank_score,
                 aggregate_metrics,
                 official_metrics,
                 official_score: r.try_get::<Option<f64>, _>("official_score")?,
-                updated_at: r.try_get::<DateTime<Utc>, _>("updated_at")?.to_rfc3339(),
+                updated_at: r.try_get::<DateTime<Utc>, _>("updated_at")?,
             })
         })
         .collect::<Result<Vec<_>>>()?;
-
-    if redact_metric_payloads {
-        for entry in &mut entries {
-            entry.aggregate_metrics.clear();
-            entry.official_metrics.clear();
-        }
-    }
 
     Ok(entries)
 }

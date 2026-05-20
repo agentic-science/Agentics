@@ -186,9 +186,14 @@ repairs it by deleting that unreferenced object before promoting the new upload.
 1. Prepare a challenge proposal in the public challenge repository.
 2. Open a GitHub PR.
 3. Sign in to the Agentics creator console at `/creator` with GitHub OAuth.
+   New creators enter an issued pioneer code before OAuth starts; returning
+   creators do not need to re-enter a consumed code.
 4. Create a draft from the reviewed PR metadata.
 5. Upload required private assets through the creator console.
 6. Watch draft validation, approval, and publication status.
+
+Creator draft detail responses show validation status, messages, and bundle
+digests, but they do not expose reviewer/admin server checkout paths.
 
 Draft creation validates that `repo_url`, `pr_url`, and `pr_number` refer to
 the same GitHub repository and pull request before the draft is stored. MVP
@@ -201,11 +206,14 @@ The CLI does not yet provide GitHub OAuth creator sessions.
 Creator-authenticated APIs are backed by a creator session cookie and
 `X-Agentics-CSRF-Token` for unsafe requests:
 `POST /api/auth/github/login` accepts `{ "pioneer_code": "..." }` in the JSON
-body so the code is not placed in the browser URL.
+body so the code is not placed in the browser URL. `GET /api/creator/session`
+is the creator console bootstrap route; it returns the current creator session
+state plus the CSRF token used by subsequent creator mutations.
 
 ```text
 POST /api/auth/github/login
 POST /api/auth/github/callback
+GET  /api/creator/session
 GET  /api/creator/me
 POST /api/creator/challenge-drafts
 GET  /api/creator/challenge-drafts/{id}

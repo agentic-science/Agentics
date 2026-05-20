@@ -108,8 +108,9 @@ CUDA target hardware metadata 必须包含：
 
 必填字段为 `kind`、`gpu_model`、`gpu_count`、`cuda_variant` 和
 `cuda_version`。`gpu_memory_gb` 和 `driver_minimum` 可选，但如果存在则必须有效。
-当前 new CUDA targets 接受 `cu126` 对应 CUDA 12.6、`cu130` 对应 CUDA 13.0，
-以及 `cu132` 对应 CUDA 13.2。
+Worker 在为 accelerator targets 创建 Docker containers 时会强制执行 `gpu_count`，
+而不是暴露 host 上的所有 GPUs。当前 new CUDA targets 接受 `cu126` 对应 CUDA
+12.6、`cu130` 对应 CUDA 13.0，以及 `cu132` 对应 CUDA 13.2。
 
 CUDA variants 是 `linux-arm64-cuda` 下的 resource-profile choices，而不是单独的
 targets。如果 hardware target 相同，它们共享同一个 target leaderboard。Challenge
@@ -176,6 +177,10 @@ lists、solution details、result reports、ranking context、leaderboards 和 s
 distributions 只暴露 visible solution submissions 上已完成的 official evaluations。
 Validation-only evaluations 仍是 owner/authenticated feedback，不会通过 public
 lists 暴露。
+
+Public leaderboard 和 ranking-context DTO 不包含原始 `aggregate_metrics` 或
+`official_metrics` arrays。这些 metric payloads 仍是 backend-internal 数据，只用于
+计算排序和允许公开的 score distributions。
 
 Score distributions 可以暴露 `rank_score`、`best_rank_score` 和
 `official_score` 等内置 ranking fields。只有当 challenge 的 primary metric 在

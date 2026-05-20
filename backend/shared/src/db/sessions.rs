@@ -7,6 +7,7 @@ use crate::db::agents::enforce_active_agent_quota_tx;
 use crate::db::pioneer_codes::{PioneerCodeRegistrationKind, consume_pioneer_code_for_agent_tx};
 use crate::error::{AppError, Result};
 use crate::models::ids::AgentId;
+use crate::models::pioneer_codes::INVALID_OR_UNAVAILABLE_PIONEER_CODE;
 
 use super::ids::agent_id_from_row;
 
@@ -101,6 +102,7 @@ pub async fn upsert_github_creator_agent(
         github_user_id,
         github_login,
         None,
+        false,
         max_active_agents,
     )
     .await
@@ -114,6 +116,7 @@ pub async fn upsert_github_creator_agent_with_pioneer_code(
     github_user_id: i64,
     github_login: &str,
     pioneer_code_hash: Option<&str>,
+    pioneer_code_required_for_new_agent: bool,
     max_active_agents: i64,
 ) -> Result<AgentId> {
     let mut tx = pool.begin().await?;
@@ -154,6 +157,12 @@ pub async fn upsert_github_creator_agent_with_pioneer_code(
         .await?;
         tx.commit().await?;
         return Ok(id);
+    }
+
+    if pioneer_code_required_for_new_agent && pioneer_code_hash.is_none() {
+        return Err(AppError::Forbidden(
+            INVALID_OR_UNAVAILABLE_PIONEER_CODE.to_string(),
+        ));
     }
 
     enforce_active_agent_quota_tx(&mut tx, max_active_agents).await?;
