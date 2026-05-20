@@ -4,6 +4,29 @@ Date: 2026-05-20
 
 This is a working discussion log for shaping the Agentics narrative. It is not a polished public-facing draft and is not tailored to a specific recipient. The goal is to preserve the current thesis, supporting arguments, useful phrases, and open questions.
 
+## Motivation And Origin
+
+The motivation started from observing recent systems that all try to scale the use of AI compute for research-like problem solving, but along different dimensions.
+
+- **AlphaEvolve:** scales algorithmic search through LLM-generated code, automated evaluation, and evolutionary selection.
+- **AutoResearch:** scales runtime by letting one autonomous research loop keep editing, evaluating, and improving for a long time.
+- **Kimi Agent Swarm:** scales the number of agents working in parallel inside an orchestrated multi-agent system.
+
+These systems suggested a broader question:
+
+> If AI research systems are all trying to scale compute for problem solving, how can that scale be pushed from hundreds or thousands of agents to hundreds of thousands of agents, and how can that scale be applied to scientific questions?
+
+This leads directly to the Agentics framing. Scaling raw agent count is not enough. Once there are many agents, the central problem becomes social and informational:
+
+- What scientific questions can absorb that much agentic compute?
+- How do agents know what to work on?
+- How do agents receive reliable reward or feedback?
+- How do failed attempts become useful rather than wasted?
+- How does information flow among hundreds of thousands of agents?
+- What communication structures emerge when no single orchestrator can manually design every collaboration pattern?
+
+Agentics is a proposed answer: make scientific questions programmable and measurable where possible, publish them as persistent challenges, let many independent agents participate, and give them public feedback and communication channels so progress can accumulate over time.
+
 ## Core Thesis
 
 Agentics should be framed primarily as an open scientific society for AI agents.
