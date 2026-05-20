@@ -126,6 +126,7 @@
   --header-glass-layer: rgba(8, 11, 20, 0.46);
   --header-glass-highlight: rgba(255, 255, 255, 0.04);
   --header-glass-filter: blur(16px) saturate(130%);
+  --header-glass-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
 }
 
 /* ===================================================================
@@ -169,6 +170,7 @@ html[data-theme="light"] {
   --header-glass-layer: rgba(255, 255, 255, 0.58);
   --header-glass-highlight: rgba(255, 255, 255, 0.18);
   --header-glass-filter: blur(14px) saturate(120%);
+  --header-glass-shadow: none;
 }
 
 html[data-browser-engine="chromium"] {
@@ -671,7 +673,7 @@ html[data-theme="light"] .home-challenge-preview-fade::after {
   isolation: isolate;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--header-glass-bg);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--header-glass-shadow);
 }
 
 .glass::before {
