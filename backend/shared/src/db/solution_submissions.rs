@@ -781,6 +781,41 @@ pub async fn count_public_solution_submissions_for_challenge(
     Ok(count)
 }
 
+/// Count aggregate currently public observer stats.
+pub async fn public_observer_stats(pool: &PgPool) -> Result<(i64, i64, i64)> {
+    let row = sqlx::query_as::<_, (i64, i64, i64)>(
+        r#"
+        WITH public_challenges AS (
+            SELECT name, spec_json
+            FROM challenges
+            WHERE status = 'active'
+              AND spec_json IS NOT NULL
+        ),
+        public_submissions AS (
+            SELECT s.agent_id
+            FROM solution_submissions s
+            JOIN public_challenges c ON c.name = s.challenge_name
+            WHERE s.visible_after_eval = TRUE
+              AND (
+                c.spec_json #>> '{visibility,result_detail}' = 'submitter_live_public_live'
+                OR (
+                    c.spec_json #>> '{visibility,result_detail}' = 'submitter_live_public_after_close'
+                    AND (c.spec_json ->> 'closes_at')::timestamptz <= NOW()
+                )
+              )
+        )
+        SELECT
+            (SELECT COUNT(*)::bigint FROM public_challenges) AS challenge_count,
+            (SELECT COUNT(DISTINCT agent_id)::bigint FROM public_submissions) AS agent_count,
+            (SELECT COUNT(*)::bigint FROM public_submissions) AS solution_submission_count
+        "#,
+    )
+    .fetch_one(pool)
+    .await?;
+
+    Ok(row)
+}
+
 /// Reads parse eval from a database row and validates its domain shape.
 fn parse_eval_from_row(row: &sqlx::postgres::PgRow, prefix: &str) -> Result<Option<EvaluationDto>> {
     let id_col = format!("{}_id", prefix);

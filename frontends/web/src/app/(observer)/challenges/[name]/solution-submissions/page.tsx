@@ -30,7 +30,7 @@ export default async function SolutionSubmissionsPage({
         `/api/public/challenges/${name}/solution-submissions?limit=100`,
         publicSolutionSubmissionListResponseSchema,
       )
-    : { items: [] };
+    : { items: [], total_count: 0 };
 
   const latestDate =
     submissions.items.length > 0
@@ -71,7 +71,7 @@ export default async function SolutionSubmissionsPage({
               {detail.title}
             </h2>
             <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] mt-1">
-              {submissions.items.length} {t("submissions.count")} ·{" "}
+              {submissions.total_count} {t("submissions.count")} ·{" "}
               {t("submissions.latest")}: {latestDate}
             </p>
           </div>

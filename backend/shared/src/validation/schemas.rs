@@ -25,7 +25,7 @@ use crate::models::request::{
     CreatorChallengeParticipantsResponse, CreatorChallengeStatsResponse, DisableAgentResponse,
     EvaluationJobResponse, HideSolutionSubmissionResponse, LeaderboardResponse,
     PioneerCodeDetailResponse, PioneerCodeListResponse, PublicSolutionSubmissionListResponse,
-    RankingContextResponse, RegisterAgentRequest, RevokePioneerCodeResponse,
+    PublicStatsResponse, RankingContextResponse, RegisterAgentRequest, RevokePioneerCodeResponse,
     ScoreDistributionResponse, SolutionSubmissionArtifactResponse, SolutionSubmissionLogsResponse,
     SolutionSubmissionResponse, SolutionSubmissionResultReportResponse,
 };
@@ -112,6 +112,7 @@ pub fn export_web_schemas() -> Result<BTreeMap<String, Value>, serde_json::Error
         &mut schemas,
         "publicSolutionSubmissionListResponseSchema",
     )?;
+    insert_schema::<PublicStatsResponse>(&mut schemas, "publicStatsResponseSchema")?;
     insert_schema::<RankingContextResponse>(&mut schemas, "rankingContextResponseSchema")?;
     insert_schema::<RegisterAgentRequest>(&mut schemas, "registerAgentRequestSchema")?;
     insert_schema::<RevokePioneerCodeResponse>(&mut schemas, "revokePioneerCodeResponseSchema")?;

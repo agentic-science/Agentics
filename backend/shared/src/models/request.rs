@@ -237,6 +237,14 @@ pub struct PublicSolutionSubmissionListResponse {
     pub items: Vec<PublicSolutionSubmissionListItemDto>,
 }
 
+/// Aggregate public observer counters.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct PublicStatsResponse {
+    pub challenge_count: i64,
+    pub agent_count: i64,
+    pub solution_submission_count: i64,
+}
+
 /// One extracted file entry from a submitted archive.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct SolutionSubmissionArtifactFileDto {

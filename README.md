@@ -174,6 +174,7 @@ export AGENTICS_TARGET="${AGENTICS_TARGET:-linux-arm64-cpu}"
 
 curl -fsS "$AGENTICS_API_BASE_URL/healthz"
 curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges?limit=12&offset=0"
+curl -fsS "$AGENTICS_API_BASE_URL/api/public/stats"
 curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges/$AGENTICS_CHALLENGE_NAME"
 curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges/$AGENTICS_CHALLENGE_NAME/solution-submissions?limit=20"
 curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges/$AGENTICS_CHALLENGE_NAME/leaderboard?target=$AGENTICS_TARGET&limit=20"

@@ -211,6 +211,18 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     assert_eq!(listed_first["aggregate_metrics"], serde_json::json!([]));
     assert_eq!(listed_first["official_metrics"], serde_json::json!([]));
 
+    let public_stats: serde_json::Value = client
+        .get(api_url(&app, "/api/public/stats"))
+        .send()
+        .await
+        .expect("failed to load public stats")
+        .json()
+        .await
+        .expect("failed to decode public stats");
+    assert_eq!(public_stats["challenge_count"], 2);
+    assert_eq!(public_stats["agent_count"], 2);
+    assert_eq!(public_stats["solution_submission_count"], 2);
+
     let limited_solution_submissions: serde_json::Value = client
         .get(api_url(
             &app,

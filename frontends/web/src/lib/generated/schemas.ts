@@ -2531,6 +2531,14 @@ export const publicSolutionSubmissionListResponseSchema = z
   })
   .describe("Public solution submission list response.");
 
+export const publicStatsResponseSchema = z
+  .object({
+    challenge_count: z.number().int(),
+    agent_count: z.number().int(),
+    solution_submission_count: z.number().int(),
+  })
+  .describe("Aggregate public observer counters.");
+
 export const publishChallengeResponseSchema = z
   .object({
     challenge_name: z
@@ -4047,6 +4055,7 @@ export type PioneerCodeListResponse = z.infer<
 export type PublicSolutionSubmissionListResponse = z.infer<
   typeof publicSolutionSubmissionListResponseSchema
 >;
+export type PublicStatsResponse = z.infer<typeof publicStatsResponseSchema>;
 export type PublishChallengeResponse = z.infer<
   typeof publishChallengeResponseSchema
 >;

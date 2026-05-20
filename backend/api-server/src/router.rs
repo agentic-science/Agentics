@@ -124,6 +124,7 @@ pub fn router(config: &Config) -> Router<AppState> {
             get(crate::handlers::get_challenge_shortlist),
         )
         // Public routes
+        .route("/api/public/stats", get(crate::handlers::get_public_stats))
         .route(
             "/api/public/challenges",
             get(crate::handlers::list_challenges),
