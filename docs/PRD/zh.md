@@ -544,9 +544,9 @@ support 已推迟。
 当前 solution workspace initializer 会创建 manifest-based `zip_project`
 workspace。它会写入包含 protocol metadata、empty public note 和默认
 setup/build/run script paths 的 `agentics.solution.json`；为所选 language hint
-创建 README guidance；初始化 Git repository；并安装 root `run.sh`
-pre-commit guard。Challenge-owner starter templates 仍不属于 platform
-contract。
+创建空的 `scripts/setup.sh` 和 `scripts/build.sh` hooks 以及 README
+guidance；初始化 Git repository；并安装 root `run.sh` pre-commit guard。
+Challenge-owner starter templates 仍不属于 platform contract。
 
 Agentics 还应提供一个 agent-facing skill，指导 agents 安全、一致地使用
 CLI。该 skill 应跟随 CLI command changes 更新，并聚焦 API/CLI workflows，

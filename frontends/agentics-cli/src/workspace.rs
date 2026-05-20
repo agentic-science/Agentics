@@ -28,6 +28,10 @@ if [ ! -f agentics.solution.json ]; then
 fi
 "#;
 
+const DEFAULT_SETUP_SCRIPT_PATH: &str = "scripts/setup.sh";
+const DEFAULT_BUILD_SCRIPT_PATH: &str = "scripts/build.sh";
+const DEFAULT_RUN_SCRIPT_PATH: &str = "run.sh";
+
 #[derive(Debug, Clone, Serialize)]
 /// Carries init solution summary data across this module boundary.
 pub(crate) struct InitSolutionSummary {
@@ -113,7 +117,16 @@ fn write_workspace_files(
             ZIP_PROJECT_MANIFEST_FILE,
             workspace_dir.display()
         )
-    })
+    })?;
+    let scripts_dir = workspace_dir.join("scripts");
+    fs::create_dir(&scripts_dir)
+        .with_context(|| format!("failed to create {}", scripts_dir.display()))?;
+    for script in [DEFAULT_SETUP_SCRIPT_PATH, DEFAULT_BUILD_SCRIPT_PATH] {
+        let script_path = workspace_dir.join(script);
+        fs::write(&script_path, "")
+            .with_context(|| format!("failed to write {}", script_path.display()))?;
+    }
+    Ok(())
 }
 
 /// Renders readme for user-facing output.
@@ -123,7 +136,7 @@ fn render_readme(
     interface: SolutionInterface,
 ) -> String {
     format!(
-        "# {}\n\nChallenge: `{}`\nStarts at: `{}`\nCloses at: `{}`\nEligibility: `{}`\nRuntime profile: `{}`\nInterface: `{}`\nTargets:\n{}\n\n{}\n\n## Workspace Contract\n\nThis workspace intentionally starts with only `README.md`, `{}`, and a Git repository.\n\nCreate a `run.sh` file at the repository root before committing. The generated pre-commit hook checks that `run.sh` and `{}` exist. Keep `run.sh` aligned with the generated manifest before packaging or submitting.\n",
+        "# {}\n\nChallenge: `{}`\nStarts at: `{}`\nCloses at: `{}`\nEligibility: `{}`\nRuntime profile: `{}`\nInterface: `{}`\nTargets:\n{}\n\n{}\n\n## Workspace Contract\n\nThis workspace starts with `README.md`, `{}`, empty `scripts/setup.sh` and `scripts/build.sh` hooks, and a Git repository.\n\nCreate a `run.sh` file at the repository root before committing. The generated pre-commit hook checks that `run.sh` and `{}` exist. Keep setup, build, and run script paths aligned with the generated manifest before packaging or submitting.\n",
         challenge.title.trim(),
         challenge.name,
         challenge.spec.starts_at.as_str(),
@@ -167,9 +180,9 @@ fn render_manifest() -> Result<String> {
         protocol_version: ZIP_PROJECT_PROTOCOL_VERSION,
         note: String::new(),
         commands: ZipProjectCommands {
-            setup: None,
-            build: None,
-            run: ScriptPath::try_new("run.sh")?,
+            setup: Some(ScriptPath::try_new(DEFAULT_SETUP_SCRIPT_PATH)?),
+            build: Some(ScriptPath::try_new(DEFAULT_BUILD_SCRIPT_PATH)?),
+            run: ScriptPath::try_new(DEFAULT_RUN_SCRIPT_PATH)?,
         },
     };
 
@@ -335,6 +348,16 @@ mod tests {
         assert!(hook.contains("run.sh must exist"));
         assert!(hook.contains("agentics.solution.json must exist"));
         assert!(workspace_dir.join("agentics.solution.json").is_file());
+        assert_eq!(
+            fs::read_to_string(workspace_dir.join("scripts/setup.sh"))
+                .expect("setup script should be readable"),
+            ""
+        );
+        assert_eq!(
+            fs::read_to_string(workspace_dir.join("scripts/build.sh"))
+                .expect("build script should be readable"),
+            ""
+        );
         assert!(!workspace_dir.join("run.sh").exists());
         assert_eq!(
             fs::read_dir(&workspace_dir)
@@ -343,7 +366,7 @@ mod tests {
                 .map(|entry| entry.file_name())
                 .collect::<Vec<_>>()
                 .len(),
-            3
+            4
         );
     }
 
@@ -385,9 +408,27 @@ mod tests {
             ZipProjectManifest::parse_json(&manifest_raw).expect("manifest should parse");
 
         assert_eq!(manifest.note, "");
+        assert_eq!(
+            manifest
+                .commands
+                .setup
+                .as_ref()
+                .expect("setup hook should be declared")
+                .as_str(),
+            "scripts/setup.sh"
+        );
+        assert_eq!(
+            manifest
+                .commands
+                .build
+                .as_ref()
+                .expect("build hook should be declared")
+                .as_str(),
+            "scripts/build.sh"
+        );
         assert_eq!(manifest.commands.run.as_str(), "run.sh");
-        assert!(manifest.commands.setup.is_none());
-        assert!(manifest.commands.build.is_none());
+        assert!(workspace_dir.join("scripts/setup.sh").is_file());
+        assert!(workspace_dir.join("scripts/build.sh").is_file());
     }
 
     /// Verifies that default workspace dir uses challenge name.

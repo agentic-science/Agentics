@@ -341,7 +341,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 
 - **M0.2-CLI-1: Generate manifest-based solution workspaces**
   - Commit target: `cli: generate zip_project manifests`
-  - Scope: Extend `init-solution` to create manifest-based workspaces with protocol metadata, empty public note, and a default run script path. Runtime/profile and interface choices remain README scaffolding hints only.
+  - Scope: Extend `init-solution` to create manifest-based workspaces with protocol metadata, empty public note, default setup/build/run script paths, and empty setup/build hooks. Runtime/profile and interface choices remain README scaffolding hints only.
   - Test spec: Add golden tests for generated workspaces in at least Python and one non-Python README-hint profile.
 
 - **M0.2-CLI-2: Run local validation with benchmark images**
@@ -416,7 +416,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 | `M0.2-WORKER-4: Add GPU validation and official scheduling hooks` | Planned | Single-DGX CUDA execution uses target accelerator metadata; heterogeneous worker capability flags and GPU-specific scheduling remain planned. |
 | `M0.2-BE-1: Expose resource profiles` | Implemented | Public challenge detail responses expose strict target and resource profile metadata and reject invalid stored specs. |
 | `M0.2-BE-2: Add capacity and quota controls` | Implemented | Enforces validation and official quotas before artifact upload, exposes `/admin/capacity`, and documents admin official-run overrides. Heterogeneous GPU quota remains in the future GPU lane. |
-| `M0.2-CLI-1: Generate manifest-based solution workspaces` | Implemented | `init-solution` now generates smaller manifests with an empty public note and records `python-cpu`, `rust-cpu`, `node-cpu`, and `generic-cpu` as README hints only. |
+| `M0.2-CLI-1: Generate manifest-based solution workspaces` | Implemented | `init-solution` now generates manifests with an empty public note, default setup/build/run script paths, empty setup/build hooks, and `python-cpu`, `rust-cpu`, `node-cpu`, and `generic-cpu` as README hints only. |
 | `M0.2-CLI-2: Run local validation with benchmark images` | Implemented | `validate <challenge-name> --bundle-dir <path> --target <target>` runs local validation through the shared Docker runner path, stores local logs in the CLI cache by default, supports `--all-targets`, and preflights target-disabled validation before packaging. |
 | `M0.2-CLI-3: Select targets` | Implemented | `submit` and `validate --remote` support `--target` and `--all-targets`; CLI preflight rejects unsupported targets and target-disabled validation before packaging. |
 | `M0.2-CLI-4: Request GPU validation` | Planned | Dedicated GPU quota UX remains planned; the current CLI can select a CUDA target through `--target`. |

@@ -550,9 +550,10 @@ creator sessions is deferred.
 The current solution workspace initializer creates a manifest-based
 `zip_project` workspace. It writes `agentics.solution.json` with protocol
 metadata, an empty public note, and default setup/build/run script paths;
-creates README guidance for the selected language hint; initializes a Git
-repository; and installs the root `run.sh` pre-commit guard. Challenge-owner
-starter templates remain outside the platform contract.
+creates empty `scripts/setup.sh` and `scripts/build.sh` hooks plus README
+guidance for the selected language hint; initializes a Git repository; and
+installs the root `run.sh` pre-commit guard. Challenge-owner starter templates
+remain outside the platform contract.
 
 Agentics should also provide an agent-facing skill that teaches agents how to
 use the CLI safely and consistently. The skill should track CLI command changes

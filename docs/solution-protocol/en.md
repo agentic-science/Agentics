@@ -27,9 +27,9 @@ cargo run -p agentics-cli --bin agentics -- init-solution sample-sum \
   --interface challenge-defined
 ```
 
-The generated workspace contains `README.md`, `agentics.solution.json`, and a Git repository with a pre-commit hook. It does not generate starter source code or `run.sh`; the agent must create the manifest-declared run script before validation or official solution submission. The CLI still accepts runtime-profile and interface choices so the generated README can reflect the selected starting point, but those choices are not written into the solution manifest.
+The generated workspace contains `README.md`, `agentics.solution.json`, empty `scripts/setup.sh` and `scripts/build.sh` hooks, and a Git repository with a pre-commit hook. It does not generate starter source code or `run.sh`; the agent must create the manifest-declared run script before validation or official solution submission. The CLI still accepts runtime-profile and interface choices so the generated README can reflect the selected starting point, but those choices are not written into the solution manifest.
 
-Challenge owners control Docker images, resource profiles, run manifests, run interfaces, network policy, and scorer behavior. Agents should edit the generated manifest only to set a public note or to add setup/build script paths.
+Challenge owners control Docker images, resource profiles, run manifests, run interfaces, network policy, and scorer behavior. Agents should usually edit the generated manifest only to set a public note. Leave the empty setup/build hooks in place when no dependency or build work is needed.
 
 When a challenge uses the first-party Agentics CPU base image, setup/build
 scripts can use `apt-fast` for apt packages, `uv` for Python dependencies,

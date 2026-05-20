@@ -85,7 +85,9 @@ cargo run -p agentics-cli --bin agentics -- \
 
 `--runtime-profile` and `--interface` are README scaffolding hints for the new
 workspace. The generated `agentics.solution.json` contains only protocol
-metadata, an optional public `note`, and setup/build/run script paths.
+metadata, an optional public `note`, and setup/build/run script paths. The
+initializer also creates empty `scripts/setup.sh` and `scripts/build.sh` hooks;
+create `run.sh` when you are ready to implement the solution.
 
 Run a private validation when the selected target enables validation:
 

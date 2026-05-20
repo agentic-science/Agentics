@@ -341,7 +341,7 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 
 - **M0.2-CLI-1：生成 manifest-based solution workspaces**
   - Commit target：`cli: generate zip_project manifests`
-  - Scope：扩展 `init-solution`，创建包含 protocol metadata、empty public note 和 default run script path 的 manifest-based workspaces。Runtime/profile 和 interface choices 只保留为 README scaffolding hints。
+  - Scope：扩展 `init-solution`，创建包含 protocol metadata、empty public note、default setup/build/run script paths 和空 setup/build hooks 的 manifest-based workspaces。Runtime/profile 和 interface choices 只保留为 README scaffolding hints。
   - Test spec：至少为 Python 和一个非 Python README-hint profile 的 generated workspaces 添加 golden tests。
 
 - **M0.2-CLI-2：使用 benchmark images 运行 local validation**
@@ -416,7 +416,7 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 | `M0.2-WORKER-4：添加 GPU validation 和 official scheduling hooks` | 计划中 | Single-DGX CUDA execution 使用 target accelerator metadata；heterogeneous worker capability flags 和 GPU-specific scheduling 仍是计划中。 |
 | `M0.2-BE-1：暴露 resource profiles` | 已实现 | Public challenge detail responses 暴露 strict target 和 resource profile metadata，并拒绝 invalid stored specs。 |
 | `M0.2-BE-2：添加 capacity 和 quota controls` | 已实现 | 在 artifact upload 前执行 validation 和 official quotas，暴露 `/admin/capacity`，并记录 admin official-run overrides。Heterogeneous GPU quota 保留在未来 GPU lane 中。 |
-| `M0.2-CLI-1：生成 manifest-based solution workspaces` | 已实现 | `init-solution` 现在生成带 empty public note 的更小 manifests，并只把 `python-cpu`、`rust-cpu`、`node-cpu` 和 `generic-cpu` 作为 README hints 记录。 |
+| `M0.2-CLI-1：生成 manifest-based solution workspaces` | 已实现 | `init-solution` 现在生成带 empty public note、default setup/build/run script paths、空 setup/build hooks 的 manifests，并只把 `python-cpu`、`rust-cpu`、`node-cpu` 和 `generic-cpu` 作为 README hints 记录。 |
 | `M0.2-CLI-2：使用 benchmark images 运行 local validation` | 已实现 | `validate <challenge-name> --bundle-dir <path> --target <target>` 会通过 shared Docker runner path 运行 local validation，默认将 local logs 存入 CLI cache，支持 `--all-targets`，并在 packaging 前 preflight target-disabled validation。 |
 | `M0.2-CLI-3：选择 targets` | 已实现 | `submit` 和 `validate --remote` 支持 `--target` 和 `--all-targets`；CLI preflight 会在 packaging 前拒绝 unsupported targets 和 target-disabled validation。 |
 | `M0.2-CLI-4：请求 GPU validation` | 计划中 | Dedicated GPU quota UX 仍是计划中；当前 CLI 可通过 `--target` 选择 CUDA target。 |

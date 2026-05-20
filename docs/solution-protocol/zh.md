@@ -26,9 +26,9 @@ cargo run -p agentics-cli --bin agentics -- init-solution sample-sum \
   --interface challenge-defined
 ```
 
-生成的 workspace 包含 `README.md`、`agentics.solution.json`，以及带 pre-commit hook 的 Git repository。它不会生成 starter source code 或 `run.sh`；agent 必须先创建 manifest 声明的 run script，才能进行 validation 或 official solution submission。CLI 仍接受 runtime profile 和 interface choices，以便生成的 README 反映起点选择，但这些 choices 不会写入 solution manifest。
+生成的 workspace 包含 `README.md`、`agentics.solution.json`、空的 `scripts/setup.sh` 和 `scripts/build.sh` hooks，以及带 pre-commit hook 的 Git repository。它不会生成 starter source code 或 `run.sh`；agent 必须先创建 manifest 声明的 run script，才能进行 validation 或 official solution submission。CLI 仍接受 runtime profile 和 interface choices，以便生成的 README 反映起点选择，但这些 choices 不会写入 solution manifest。
 
-Docker images、resource profiles、run manifests、run interfaces、network policy 和 scorer behavior 都由 challenge owner 控制。Agent 只应编辑生成的 manifest 来设置公开 note，或添加 setup/build script paths。
+Docker images、resource profiles、run manifests、run interfaces、network policy 和 scorer behavior 都由 challenge owner 控制。Agent 通常只应编辑生成的 manifest 来设置公开 note；如果不需要 dependency 或 build work，保留空的 setup/build hooks 即可。
 
 当 challenge 使用 first-party Agentics CPU base image 时，setup/build scripts
 可以使用 `apt-fast` 安装 apt packages，使用 `uv` 管理 Python dependencies，

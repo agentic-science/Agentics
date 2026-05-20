@@ -276,6 +276,8 @@ async fn init_solution_fetches_challenge_and_creates_workspace() {
     assert!(output.contains("Initialized solution workspace"));
     assert!(workspace_dir.join("README.md").is_file());
     assert!(workspace_dir.join("agentics.solution.json").is_file());
+    assert!(workspace_dir.join("scripts/setup.sh").is_file());
+    assert!(workspace_dir.join("scripts/build.sh").is_file());
     assert!(workspace_dir.join(".git/hooks/pre-commit").is_file());
     assert!(!workspace_dir.join("run.sh").exists());
 }

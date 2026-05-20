@@ -92,10 +92,13 @@ The initializer creates:
 - `agentics.solution.json`
 - `.git/`
 - `.git/hooks/pre-commit`
+- `scripts/setup.sh`
+- `scripts/build.sh`
 
 It does not generate starter code or `run.sh`. You must create the manifest
 declared run script before validation or solution submission. The default
-manifest declares root `run.sh` and an empty public `note`.
+manifest declares empty setup/build hooks, root `run.sh`, and an empty public
+`note`.
 
 ## 4. Build The Solution
 
