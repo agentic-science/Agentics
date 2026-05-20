@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use shared::models::github::GithubPullRequestNumber;
-use shared::models::hashes::GitCommitSha;
+use shared::models::hashes::{GitCommitSha, Sha256Digest};
 use shared::models::ids::{ChallengeDraftId, SolutionSubmissionId};
 use shared::models::names::{AssetName, ChallengeName, MetricName, TargetName};
 
@@ -251,6 +251,8 @@ pub(crate) enum ChallengeDraftCommand {
     /// Admin approval after validation passes.
     Approve {
         draft_id: ChallengeDraftId,
+        #[arg(long)]
+        expected_validation_bundle_sha256: Sha256Digest,
         #[arg(long, default_value = "")]
         message: String,
         #[command(flatten)]

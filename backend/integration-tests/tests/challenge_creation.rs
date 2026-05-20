@@ -16,7 +16,9 @@ use serde_json::json;
 use shared::error::AppError;
 use shared::models::challenge_creation::ChallengeDraftValidationStatus;
 use shared::models::hashes::Sha256Digest;
-use shared::models::ids::{ChallengeDraftId, ChallengeDraftValidationRecordId};
+use shared::models::ids::{
+    ChallengeDraftAuditEventId, ChallengeDraftId, ChallengeDraftValidationRecordId,
+};
 
 use reqwest::StatusCode;
 
@@ -220,7 +222,10 @@ async fn draft_validation_claim_blocks_overlap_and_approval(pool: sqlx::PgPool) 
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
-        .json(&json!({ "message": "too early" }))
+        .json(&json!({
+            "message": "too early",
+            "expected_validation_bundle_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }))
         .send()
         .await
         .expect("approve while validation is running");
@@ -258,10 +263,19 @@ async fn draft_validation_claim_blocks_overlap_and_approval(pool: sqlx::PgPool) 
         &pool,
         &shared::db::FinishChallengeDraftValidationInput {
             validation_record_id: first_validation_id,
-            draft_id,
+            draft_id: draft_id.clone(),
             status: ChallengeDraftValidationStatus::Passed,
             message: "passed".to_string(),
             bundle_sha256: Some(validation_digest),
+        },
+        &shared::db::CreateChallengeDraftAuditEventInput {
+            event_id: ChallengeDraftAuditEventId::generate(),
+            draft_id,
+            actor_agent_id: None,
+            actor_admin_username: Some("admin".to_string()),
+            action: "draft_validated".to_string(),
+            message: "passed".to_string(),
+            metadata: json!({}),
         },
     )
     .await
@@ -412,7 +426,10 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
-        .json(&json!({ "message": "looks good" }))
+        .json(&json!({
+            "message": "looks good",
+            "expected_validation_bundle_sha256": validated["validation_bundle_sha256"]
+        }))
         .send()
         .await
         .expect("approve request")
@@ -603,7 +620,7 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
     .error_for_status()
     .expect("private asset should upload");
 
-    client
+    let validated: serde_json::Value = client
         .post(api_url(
             &app,
             &format!("/admin/challenge-drafts/{draft_id}/validate"),
@@ -615,7 +632,10 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
         .await
         .expect("validate request")
         .error_for_status()
-        .expect("draft should validate");
+        .expect("draft should validate")
+        .json()
+        .await
+        .expect("validated draft json");
     client
         .post(api_url(
             &app,
@@ -623,7 +643,10 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
-        .json(&json!({ "message": "approved" }))
+        .json(&json!({
+            "message": "approved",
+            "expected_validation_bundle_sha256": validated["validation_bundle_sha256"]
+        }))
         .send()
         .await
         .expect("approve request")
@@ -698,7 +721,7 @@ async fn concurrent_publish_requests_leave_one_published_bundle(pool: sqlx::PgPo
     .expect("private asset request")
     .error_for_status()
     .expect("private asset should upload");
-    client
+    let validated: serde_json::Value = client
         .post(api_url(
             &app,
             &format!("/admin/challenge-drafts/{draft_id}/validate"),
@@ -710,7 +733,10 @@ async fn concurrent_publish_requests_leave_one_published_bundle(pool: sqlx::PgPo
         .await
         .expect("validate request")
         .error_for_status()
-        .expect("draft should validate");
+        .expect("draft should validate")
+        .json()
+        .await
+        .expect("validated draft json");
     client
         .post(api_url(
             &app,
@@ -718,7 +744,10 @@ async fn concurrent_publish_requests_leave_one_published_bundle(pool: sqlx::PgPo
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
-        .json(&json!({ "message": "approved" }))
+        .json(&json!({
+            "message": "approved",
+            "expected_validation_bundle_sha256": validated["validation_bundle_sha256"]
+        }))
         .send()
         .await
         .expect("approve request")
@@ -821,7 +850,7 @@ async fn failed_publish_removes_claim_scoped_runtime_bundle(pool: sqlx::PgPool) 
     .expect("private asset request")
     .error_for_status()
     .expect("private asset should upload");
-    client
+    let validated: serde_json::Value = client
         .post(api_url(
             &app,
             &format!("/admin/challenge-drafts/{draft_id}/validate"),
@@ -833,7 +862,10 @@ async fn failed_publish_removes_claim_scoped_runtime_bundle(pool: sqlx::PgPool) 
         .await
         .expect("validate request")
         .error_for_status()
-        .expect("draft should validate");
+        .expect("draft should validate")
+        .json()
+        .await
+        .expect("validated draft json");
     client
         .post(api_url(
             &app,
@@ -841,7 +873,10 @@ async fn failed_publish_removes_claim_scoped_runtime_bundle(pool: sqlx::PgPool) 
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
-        .json(&json!({ "message": "approved" }))
+        .json(&json!({
+            "message": "approved",
+            "expected_validation_bundle_sha256": validated["validation_bundle_sha256"]
+        }))
         .send()
         .await
         .expect("approve request")
@@ -1266,7 +1301,7 @@ async fn archive_draft_requires_challenge_owner(pool: sqlx::PgPool) {
     )
     .await;
     let archive_draft_id = archive_draft["id"].as_str().expect("archive draft id");
-    client
+    let archive_validated: serde_json::Value = client
         .post(api_url(
             &app,
             &format!("/admin/challenge-drafts/{archive_draft_id}/validate"),
@@ -1278,7 +1313,10 @@ async fn archive_draft_requires_challenge_owner(pool: sqlx::PgPool) {
         .await
         .expect("validate archive request")
         .error_for_status()
-        .expect("archive draft should validate");
+        .expect("archive draft should validate")
+        .json()
+        .await
+        .expect("validated archive draft json");
     client
         .post(api_url(
             &app,
@@ -1286,7 +1324,10 @@ async fn archive_draft_requires_challenge_owner(pool: sqlx::PgPool) {
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
-        .json(&json!({ "message": "approved" }))
+        .json(&json!({
+            "message": "approved",
+            "expected_validation_bundle_sha256": archive_validated["validation_bundle_sha256"]
+        }))
         .send()
         .await
         .expect("approve archive request")

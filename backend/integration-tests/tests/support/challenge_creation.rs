@@ -61,7 +61,8 @@ pub async fn create_validate_approve_publish_draft(
         .expect("private asset should upload");
     }
 
-    flow.client
+    let validated: serde_json::Value = flow
+        .client
         .post(api_url(
             flow.app,
             &format!("/admin/challenge-drafts/{draft_id}/validate"),
@@ -73,7 +74,10 @@ pub async fn create_validate_approve_publish_draft(
         .await
         .expect("validate request")
         .error_for_status()
-        .expect("draft should validate");
+        .expect("draft should validate")
+        .json()
+        .await
+        .expect("validated draft json");
     flow.client
         .post(api_url(
             flow.app,
@@ -81,7 +85,10 @@ pub async fn create_validate_approve_publish_draft(
         ))
         .header("Authorization", flow.admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
-        .json(&json!({ "message": "approved" }))
+        .json(&json!({
+            "message": "approved",
+            "expected_validation_bundle_sha256": validated["validation_bundle_sha256"]
+        }))
         .send()
         .await
         .expect("approve request")

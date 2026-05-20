@@ -37,6 +37,7 @@ async fn challenges_list_uses_public_api_and_renders_table() {
                     "name": "sample-sum",
                     "title": "Sample Sum",
                     "summary": { "en": "Add numbers", "zh": "数字求和" },
+                    "keywords": ["math"],
                     "starts_at": "2026-01-01T00:00:00Z",
                     "eligibility": { "type": "open" }
                 }
@@ -67,7 +68,7 @@ async fn challenges_list_uses_public_api_and_renders_table() {
 
     assert_eq!(
         output,
-        "NAME        ELIGIBILITY  TITLE\nsample-sum  open         Sample Sum"
+        "NAME        ELIGIBILITY  KEYWORDS  TITLE\nsample-sum  open         math      Sample Sum"
     );
 }
 
@@ -83,6 +84,7 @@ async fn global_json_flag_renders_structured_output() {
                     "name": "sample-sum",
                     "title": "Sample Sum",
                     "summary": { "en": "Add numbers", "zh": "数字求和" },
+                    "keywords": ["math"],
                     "starts_at": "2026-01-01T00:00:00Z",
                     "eligibility": { "type": "open" }
                 }

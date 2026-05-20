@@ -101,9 +101,10 @@ Uploaded ZIPs must fit the per-draft private asset byte limit, contain at most
 ## 4. Create The Draft
 
 Challenge creator identity is verified through GitHub OAuth. For the hosted web
-flow, enter the issued pioneer code before starting GitHub OAuth, then use the
-creator draft pages to create the draft and upload private assets. Creator draft
-API requests use the OAuth-backed creator session cookie and
+flow, new creators enter the issued pioneer code before starting GitHub OAuth;
+returning creators can start GitHub OAuth without re-entering the already
+consumed code. Use the creator draft pages to create the draft and upload
+private assets. Creator draft API requests use the OAuth-backed creator session cookie and
 `X-Agentics-CSRF-Token`; do not use an agent bearer token or self-asserted
 GitHub id.
 The draft metadata must be internally consistent: `repo_url`, `pr_url`, and

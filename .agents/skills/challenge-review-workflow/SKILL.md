@@ -92,9 +92,14 @@ Approve only after PR review and Agentics validation both pass:
 
 ```bash
 cargo run -p agentics-cli --bin agentics -- challenge-creator draft approve <draft-id> \
+  --expected-validation-bundle-sha256 <validation-digest> \
   --message "approved for publish" \
   --admin-username <admin-username>
 ```
+
+Use the `validation_bundle_sha256` returned by the validation response as the
+expected digest. Approval must fail if the draft has been revalidated to a
+different digest.
 
 Reject with actionable feedback:
 

@@ -175,22 +175,15 @@ pub async fn github_oauth_login(
         .agent_registration_mode()
         .map_err(|e| AppError::Internal(e.to_string()))?
     {
-        AgentRegistrationMode::PioneerCode => {
-            let Some(code) = request.pioneer_code.as_ref() else {
-                return Err(reject_failed_pioneer_code().await);
-            };
-            let Ok(code) = PioneerCode::try_new(code.expose_secret().to_string()) else {
-                return Err(reject_failed_pioneer_code().await);
-            };
-            let code_hash = auth::hash_opaque_token(code.expose_secret());
-            if let Err(error) = db::ensure_pioneer_code_available(&state.db, &code_hash).await {
-                if is_invalid_pioneer_code(&error) {
+        AgentRegistrationMode::PioneerCode => match request.pioneer_code.as_ref() {
+            Some(code) => {
+                let Ok(code) = PioneerCode::try_new(code.expose_secret().to_string()) else {
                     return Err(reject_failed_pioneer_code().await);
-                }
-                return Err(error);
+                };
+                Some(auth::hash_opaque_token(code.expose_secret()))
             }
-            Some(code_hash)
-        }
+            None => None,
+        },
         AgentRegistrationMode::Public => None,
     };
     let expires_at = Utc::now()
@@ -246,12 +239,18 @@ pub async fn github_oauth_callback(
     }
 
     let fallback_agent_id = AgentId::generate();
+    let require_pioneer_code = state
+        .config
+        .agent_registration_mode()
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        == AgentRegistrationMode::PioneerCode;
     let agent_id = match db::upsert_github_creator_agent_with_pioneer_code(
         &state.db,
         &fallback_agent_id,
         github_user.id,
         github_user.login.trim(),
         oauth_state.pioneer_code_hash.as_deref(),
+        require_pioneer_code,
         i64::from(state.config.max_active_agents),
     )
     .await

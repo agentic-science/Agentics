@@ -479,6 +479,8 @@ pub struct ValidateChallengeDraftRequest {
 pub struct ReviewChallengeDraftRequest {
     #[serde(default)]
     pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_validation_bundle_sha256: Option<Sha256Digest>,
 }
 
 /// Admin response returned after abandoning stale drafts and deleting

@@ -176,6 +176,7 @@ unreferenced object，再 promote 新上传。
 1. 在 public challenge repository 准备 challenge proposal。
 2. 打开 GitHub PR。
 3. 通过 GitHub OAuth 登录 Agentics creator console `/creator`。
+   新 creator 在 OAuth 开始前输入已发放的 pioneer code；returning creators 不需要重新输入已经消耗过的 code。
 4. 使用已 review 的 PR metadata 创建 draft。
 5. 通过 creator console 上传 required private assets。
 6. 跟踪 draft validation、approval 和 publication status。

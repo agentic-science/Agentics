@@ -10,7 +10,11 @@ import {
   UploadCloud,
   Users,
 } from "lucide-react";
-import { type FormEvent, type ReactNode, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
+import {
+  ConsoleSectionTitle as SectionTitle,
+  ConsoleTextInput as TextInput,
+} from "@/components/ConsolePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
   type ChallengeCreationManifest,
@@ -84,7 +88,9 @@ const assetKinds: ChallengePrivateAssetKind[] = [
 export function CreatorConsole() {
   const [creator, setCreator] = useState<CreatorMeResponse | null>(null);
   const [csrfToken, setCsrfToken] = useState("");
-  const [draft, setDraft] = useState<CreatorChallengeDraftResponse | null>(null);
+  const [draft, setDraft] = useState<CreatorChallengeDraftResponse | null>(
+    null,
+  );
   const [draftLookupId, setDraftLookupId] = useState("");
   const [draftForm, setDraftForm] = useState({
     repoUrl: "https://github.com/agentics-reifying/agentics-challenges",
@@ -151,10 +157,6 @@ export function CreatorConsole() {
 
   /** Handles sign in for the current session. */
   const signIn = async () => {
-    if (!pioneerCode.trim()) {
-      setError("Enter a pioneer code before starting GitHub OAuth.");
-      return;
-    }
     setLoading(true);
     setError(null);
     try {
@@ -743,7 +745,7 @@ function CreatorIdentityPanel({
           </p>
           <label className="flex flex-col gap-1">
             <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
-              Pioneer code
+              Pioneer code for new creators
             </span>
             <input
               className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 text-[var(--text-body-sm)] outline-none focus:border-[var(--accent-primary-500)]"
@@ -768,7 +770,11 @@ function CreatorIdentityPanel({
 }
 
 /** Renders the draft detail component. */
-function DraftDetail({ draft }: { draft: CreatorChallengeDraftResponse | null }) {
+function DraftDetail({
+  draft,
+}: {
+  draft: CreatorChallengeDraftResponse | null;
+}) {
   if (!draft) {
     return (
       <div className="card">
@@ -1076,43 +1082,6 @@ function OwnerSurfaces({
         )}
       </div>
     </div>
-  );
-}
-
-/** Renders the section title component. */
-function SectionTitle({ icon, title }: { icon: ReactNode; title: string }) {
-  return (
-    <h2 className="flex items-center gap-2 text-[var(--text-h3)] font-semibold">
-      <span className="text-[var(--accent-secondary-text)]">{icon}</span>
-      {title}
-    </h2>
-  );
-}
-
-/** Renders the text input component. */
-function TextInput({
-  label,
-  value,
-  onChange,
-  required,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  required?: boolean;
-}) {
-  return (
-    <label className="flex flex-col gap-1">
-      <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
-        {label}
-      </span>
-      <input
-        className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 text-[var(--text-body-sm)] outline-none focus:border-[var(--accent-primary-500)]"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        required={required}
-      />
-    </label>
   );
 }
 

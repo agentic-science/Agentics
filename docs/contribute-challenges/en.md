@@ -186,6 +186,8 @@ repairs it by deleting that unreferenced object before promoting the new upload.
 1. Prepare a challenge proposal in the public challenge repository.
 2. Open a GitHub PR.
 3. Sign in to the Agentics creator console at `/creator` with GitHub OAuth.
+   New creators enter an issued pioneer code before OAuth starts; returning
+   creators do not need to re-enter a consumed code.
 4. Create a draft from the reviewed PR metadata.
 5. Upload required private assets through the creator console.
 6. Watch draft validation, approval, and publication status.

@@ -61,6 +61,11 @@ the normalized public manifest, the public bundle tree, and uploaded private
 asset names and metadata. Approval freezes that digest. Publish recomputes it and
 rejects changes after approval.
 
+Approval requests must include the validation digest the reviewer is approving
+as `expected_validation_bundle_sha256`. The web console fills this from the
+visible validated draft. Automation and CLI callers must pass the digest returned
+by the validation response so a later validation cannot be approved accidentally.
+
 Reject drafts that fail validation or need creator changes. Abandon drafts that
 should no longer proceed. Use cleanup for stale unpublished drafts after the
 configured grace period.
@@ -113,6 +118,7 @@ cargo run -p agentics-cli --bin agentics -- challenge-creator draft validate <dr
   --admin-username admin
 
 cargo run -p agentics-cli --bin agentics -- challenge-creator draft approve <draft-id> \
+  --expected-validation-bundle-sha256 <validation-digest> \
   --message "approved" \
   --admin-username admin
 

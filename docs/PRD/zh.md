@@ -585,7 +585,7 @@ agentics --json submissions report <solution-submission-id>
 read -rsp "Agentics admin password: " AGENTICS_ADMIN_PASSWORD; echo
 export AGENTICS_ADMIN_PASSWORD
 agentics challenge-creator draft validate <draft-id> --repository-path <path> --admin-username <user>
-agentics challenge-creator draft approve <draft-id> --admin-username <user>
+agentics challenge-creator draft approve <draft-id> --expected-validation-bundle-sha256 <digest> --admin-username <user>
 agentics challenge-creator draft publish <draft-id> --repository-path <path> --admin-username <user>
 agentics challenge-creator draft reject <draft-id> --admin-username <user>
 ```

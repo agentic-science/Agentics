@@ -382,6 +382,18 @@ pub async fn validate_challenge_draft(
     match validation {
         Ok((_, bundle_sha256)) => {
             let message = "challenge draft validation passed".to_string();
+            let audit_event = db::CreateChallengeDraftAuditEventInput {
+                event_id: ChallengeDraftAuditEventId::generate(),
+                draft_id: draft.id.clone(),
+                actor_agent_id: None,
+                actor_admin_username: Some(admin.username.clone()),
+                action: "draft_validated".to_string(),
+                message: message.clone(),
+                metadata: serde_json::json!({
+                    "repository_path": repository_path.to_string(),
+                    "bundle_sha256": &bundle_sha256
+                }),
+            };
             db::finish_challenge_draft_validation(
                 &state.db,
                 &db::FinishChallengeDraftValidationInput {
@@ -391,22 +403,7 @@ pub async fn validate_challenge_draft(
                     message: message.clone(),
                     bundle_sha256: Some(bundle_sha256),
                 },
-            )
-            .await?;
-            db::create_challenge_draft_audit_event(
-                &state.db,
-                &db::CreateChallengeDraftAuditEventInput {
-                    event_id: ChallengeDraftAuditEventId::generate(),
-                    draft_id: draft.id.clone(),
-                    actor_agent_id: None,
-                    actor_admin_username: Some(admin.username.clone()),
-                    action: "draft_validated".to_string(),
-                    message: message.clone(),
-                    metadata: serde_json::json!({
-                        "repository_path": repository_path.to_string(),
-                        "bundle_sha256": &bundle_sha256
-                    }),
-                },
+                &audit_event,
             )
             .await?;
             let draft = db::get_challenge_draft(&state.db, draft.id.as_str())
@@ -416,6 +413,15 @@ pub async fn validate_challenge_draft(
         }
         Err(error) => {
             let message = error.to_string();
+            let audit_event = db::CreateChallengeDraftAuditEventInput {
+                event_id: ChallengeDraftAuditEventId::generate(),
+                draft_id: draft.id.clone(),
+                actor_agent_id: None,
+                actor_admin_username: Some(admin.username.clone()),
+                action: "draft_validation_failed".to_string(),
+                message: message.clone(),
+                metadata: serde_json::json!({ "repository_path": repository_path.to_string() }),
+            };
             db::finish_challenge_draft_validation(
                 &state.db,
                 &db::FinishChallengeDraftValidationInput {
@@ -425,19 +431,7 @@ pub async fn validate_challenge_draft(
                     message: message.clone(),
                     bundle_sha256: None,
                 },
-            )
-            .await?;
-            db::create_challenge_draft_audit_event(
-                &state.db,
-                &db::CreateChallengeDraftAuditEventInput {
-                    event_id: ChallengeDraftAuditEventId::generate(),
-                    draft_id: draft.id.clone(),
-                    actor_agent_id: None,
-                    actor_admin_username: Some(admin.username.clone()),
-                    action: "draft_validation_failed".to_string(),
-                    message,
-                    metadata: serde_json::json!({ "repository_path": repository_path.to_string() }),
-                },
+                &audit_event,
             )
             .await?;
             Err(error)
@@ -453,23 +447,20 @@ pub async fn abandon_challenge_draft(
     ChallengeDraftIdPath(draft_id): ChallengeDraftIdPath,
     ValidatedJson(body): ValidatedJson<ReviewChallengeDraftRequest>,
 ) -> Result<Json<ChallengeDraftResponse>> {
-    db::abandon_challenge_draft(
+    let audit_event = db::CreateChallengeDraftAuditEventInput {
+        event_id: ChallengeDraftAuditEventId::generate(),
+        draft_id: draft_id.clone(),
+        actor_agent_id: None,
+        actor_admin_username: Some(admin.username),
+        action: "draft_abandoned".to_string(),
+        message: body.message.trim().to_string(),
+        metadata: serde_json::json!({}),
+    };
+    db::abandon_challenge_draft_with_audit(
         &state.db,
-        draft_id.as_str(),
+        &draft_id,
         non_empty_message(&body.message),
-    )
-    .await?;
-    db::create_challenge_draft_audit_event(
-        &state.db,
-        &db::CreateChallengeDraftAuditEventInput {
-            event_id: ChallengeDraftAuditEventId::generate(),
-            draft_id: draft_id.clone(),
-            actor_agent_id: None,
-            actor_admin_username: Some(admin.username),
-            action: "draft_abandoned".to_string(),
-            message: body.message.trim().to_string(),
-            metadata: serde_json::json!({}),
-        },
+        &audit_event,
     )
     .await?;
 
@@ -520,34 +511,25 @@ pub async fn approve_challenge_draft(
     ChallengeDraftIdPath(draft_id): ChallengeDraftIdPath,
     ValidatedJson(body): ValidatedJson<ReviewChallengeDraftRequest>,
 ) -> Result<Json<ChallengeDraftResponse>> {
-    let draft = db::get_challenge_draft(&state.db, draft_id.as_str())
-        .await?
-        .ok_or(AppError::NotFound)?;
-    if draft.status != ChallengeDraftStatus::Validated {
-        return Err(AppError::Conflict);
-    }
-    db::approve_validated_challenge_draft(
+    let expected_validation_bundle_sha256 = body
+        .expected_validation_bundle_sha256
+        .as_ref()
+        .ok_or_else(|| {
+            AppError::BadRequest(
+                "expected_validation_bundle_sha256 is required when approving a draft".to_string(),
+            )
+        })?;
+    db::approve_validated_challenge_draft_with_audit(
         &state.db,
-        draft.id.as_str(),
+        &draft_id,
+        expected_validation_bundle_sha256,
         non_empty_message(&body.message),
-    )
-    .await?;
-    let approved_bundle_sha256 = draft.validation_bundle_sha256;
-    db::create_challenge_draft_audit_event(
-        &state.db,
-        &db::CreateChallengeDraftAuditEventInput {
-            event_id: ChallengeDraftAuditEventId::generate(),
-            draft_id: draft.id.clone(),
-            actor_agent_id: None,
-            actor_admin_username: Some(admin.username),
-            action: "draft_approved".to_string(),
-            message: body.message.trim().to_string(),
-            metadata: serde_json::json!({ "approved_bundle_sha256": approved_bundle_sha256 }),
-        },
+        admin.username,
+        ChallengeDraftAuditEventId::generate(),
     )
     .await?;
     Ok(Json(
-        db::get_challenge_draft(&state.db, draft.id.as_str())
+        db::get_challenge_draft(&state.db, draft_id.as_str())
             .await?
             .ok_or(AppError::NotFound)?,
     ))
@@ -566,24 +548,21 @@ pub async fn reject_challenge_draft(
     if draft.status == ChallengeDraftStatus::Published {
         return Err(AppError::Conflict);
     }
-    db::update_challenge_draft_status(
+    let audit_event = db::CreateChallengeDraftAuditEventInput {
+        event_id: ChallengeDraftAuditEventId::generate(),
+        draft_id: draft.id.clone(),
+        actor_agent_id: None,
+        actor_admin_username: Some(admin.username),
+        action: "draft_rejected".to_string(),
+        message: body.message.trim().to_string(),
+        metadata: serde_json::json!({}),
+    };
+    db::update_challenge_draft_status_with_audit(
         &state.db,
-        draft.id.as_str(),
+        &draft.id,
         ChallengeDraftStatus::Rejected,
         non_empty_message(&body.message),
-    )
-    .await?;
-    db::create_challenge_draft_audit_event(
-        &state.db,
-        &db::CreateChallengeDraftAuditEventInput {
-            event_id: ChallengeDraftAuditEventId::generate(),
-            draft_id: draft.id.clone(),
-            actor_agent_id: None,
-            actor_admin_username: Some(admin.username),
-            action: "draft_rejected".to_string(),
-            message: body.message.trim().to_string(),
-            metadata: serde_json::json!({}),
-        },
+        &audit_event,
     )
     .await?;
     Ok(Json(

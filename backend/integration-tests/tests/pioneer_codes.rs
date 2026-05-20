@@ -261,6 +261,7 @@ async fn creator_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
         42,
         "creator-login",
         Some(&code_hash),
+        true,
         1_000,
     )
     .await
@@ -274,11 +275,42 @@ async fn creator_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
         42,
         "creator-login-renamed",
         Some("not-a-valid-code-hash"),
+        true,
         1_000,
     )
     .await
     .expect("repeat oauth login should not consume another code");
     assert_eq!(repeated, first_agent_id);
+
+    let repeated_without_code = shared::db::upsert_github_creator_agent_with_pioneer_code(
+        &pool,
+        &shared::models::ids::AgentId::generate(),
+        42,
+        "creator-login-returned",
+        None,
+        true,
+        1_000,
+    )
+    .await
+    .expect("existing oauth creator should not need another pioneer code");
+    assert_eq!(repeated_without_code, first_agent_id);
+
+    let missing_code = shared::db::upsert_github_creator_agent_with_pioneer_code(
+        &pool,
+        &shared::models::ids::AgentId::generate(),
+        43,
+        "new-creator-without-code",
+        None,
+        true,
+        1_000,
+    )
+    .await
+    .expect_err("new creator must still provide a pioneer code");
+    assert!(
+        missing_code
+            .to_string()
+            .contains(shared::models::pioneer_codes::INVALID_OR_UNAVAILABLE_PIONEER_CODE)
+    );
 
     let (detail, uses) = shared::db::get_pioneer_code_detail(&pool, &code_id)
         .await
@@ -296,6 +328,7 @@ async fn creator_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
         42,
         "creator-login",
         Some(&code_hash),
+        true,
         1_000,
     )
     .await

@@ -11,6 +11,7 @@ use shared::models::challenge_creation::{
     ChallengePrivateAssetKind, ReviewChallengeDraftRequest, ValidateChallengeDraftRequest,
 };
 use shared::models::evaluation::{EvaluationJobPayload, ScoringMode, SolutionSubmissionStatus};
+use shared::models::hashes::Sha256Digest;
 use shared::models::ids::{ChallengeDraftId, SolutionSubmissionId};
 use shared::models::names::{ChallengeName, MetricName, TargetName};
 use shared::models::pioneer_codes::{PioneerCode, PioneerCodeInput};
@@ -141,16 +142,20 @@ pub(crate) async fn challenge_draft(
         }
         ChallengeDraftCommand::Approve {
             draft_id,
+            expected_validation_bundle_sha256,
             message,
             admin,
         } => {
             review_draft(
                 &client,
                 output_format,
-                admin,
-                draft_id,
-                message,
-                DraftReviewAction::Approve,
+                DraftReviewRequest {
+                    admin,
+                    draft_id,
+                    message,
+                    expected_validation_bundle_sha256: Some(expected_validation_bundle_sha256),
+                    action: DraftReviewAction::Approve,
+                },
                 settings,
             )
             .await
@@ -163,10 +168,13 @@ pub(crate) async fn challenge_draft(
             review_draft(
                 &client,
                 output_format,
-                admin,
-                draft_id,
-                message,
-                DraftReviewAction::Reject,
+                DraftReviewRequest {
+                    admin,
+                    draft_id,
+                    message,
+                    expected_validation_bundle_sha256: None,
+                    action: DraftReviewAction::Reject,
+                },
                 settings,
             )
             .await
@@ -197,10 +205,13 @@ pub(crate) async fn challenge_draft(
             review_draft(
                 &client,
                 output_format,
-                admin,
-                draft_id,
-                message,
-                DraftReviewAction::Abandon,
+                DraftReviewRequest {
+                    admin,
+                    draft_id,
+                    message,
+                    expected_validation_bundle_sha256: None,
+                    action: DraftReviewAction::Abandon,
+                },
                 settings,
             )
             .await
@@ -408,25 +419,34 @@ enum DraftReviewAction {
     Abandon,
 }
 
+/// Carries draft review inputs through the command handler.
+struct DraftReviewRequest {
+    admin: AdminAuthArgs,
+    draft_id: ChallengeDraftId,
+    message: String,
+    expected_validation_bundle_sha256: Option<Sha256Digest>,
+    action: DraftReviewAction,
+}
+
 /// Handles review draft for this module.
 async fn review_draft(
     client: &ApiClient,
     output_format: cli::OutputFormat,
-    admin: AdminAuthArgs,
-    draft_id: ChallengeDraftId,
-    message: String,
-    action: DraftReviewAction,
+    review: DraftReviewRequest,
     settings: &ResolvedSettings,
 ) -> Result<String> {
-    let request = ReviewChallengeDraftRequest { message };
-    let admin_password = resolve_admin_password(&admin, settings)?;
-    let response = match action {
+    let request = ReviewChallengeDraftRequest {
+        message: review.message,
+        expected_validation_bundle_sha256: review.expected_validation_bundle_sha256,
+    };
+    let admin_password = resolve_admin_password(&review.admin, settings)?;
+    let response = match review.action {
         DraftReviewAction::Approve => {
             client
                 .approve_challenge_draft_admin(
-                    &draft_id,
+                    &review.draft_id,
                     &request,
-                    &admin.admin_username,
+                    &review.admin.admin_username,
                     &admin_password,
                 )
                 .await?
@@ -434,9 +454,9 @@ async fn review_draft(
         DraftReviewAction::Reject => {
             client
                 .reject_challenge_draft_admin(
-                    &draft_id,
+                    &review.draft_id,
                     &request,
-                    &admin.admin_username,
+                    &review.admin.admin_username,
                     &admin_password,
                 )
                 .await?
@@ -444,9 +464,9 @@ async fn review_draft(
         DraftReviewAction::Abandon => {
             client
                 .abandon_challenge_draft_admin(
-                    &draft_id,
+                    &review.draft_id,
                     &request,
-                    &admin.admin_username,
+                    &review.admin.admin_username,
                     &admin_password,
                 )
                 .await?

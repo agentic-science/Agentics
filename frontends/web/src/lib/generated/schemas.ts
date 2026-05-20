@@ -2350,28 +2350,6 @@ export const leaderboardResponseSchema = z
             ),
           best_rank_score: z.number(),
           rank_score: z.number(),
-          aggregate_metrics: z.array(
-            z
-              .object({
-                metric_name: z
-                  .string()
-                  .regex(/^[A-Za-z0-9_.-]+$/)
-                  .min(1),
-                value: z.number(),
-              })
-              .describe("Numeric value for one declared metric."),
-          ),
-          official_metrics: z.array(
-            z
-              .object({
-                metric_name: z
-                  .string()
-                  .regex(/^[A-Za-z0-9_.-]+$/)
-                  .min(1),
-                value: z.number(),
-              })
-              .describe("Numeric value for one declared metric."),
-          ),
           official_score: z.number().optional(),
           updated_at: z.string(),
         })
@@ -2592,28 +2570,6 @@ export const rankingContextResponseSchema = z
           ),
         best_rank_score: z.number(),
         rank_score: z.number(),
-        aggregate_metrics: z.array(
-          z
-            .object({
-              metric_name: z
-                .string()
-                .regex(/^[A-Za-z0-9_.-]+$/)
-                .min(1),
-              value: z.number(),
-            })
-            .describe("Numeric value for one declared metric."),
-        ),
-        official_metrics: z.array(
-          z
-            .object({
-              metric_name: z
-                .string()
-                .regex(/^[A-Za-z0-9_.-]+$/)
-                .min(1),
-              value: z.number(),
-            })
-            .describe("Numeric value for one declared metric."),
-        ),
         official_score: z.number().optional(),
         updated_at: z.string(),
       })
@@ -2644,28 +2600,6 @@ export const rankingContextResponseSchema = z
                 ),
               best_rank_score: z.number(),
               rank_score: z.number(),
-              aggregate_metrics: z.array(
-                z
-                  .object({
-                    metric_name: z
-                      .string()
-                      .regex(/^[A-Za-z0-9_.-]+$/)
-                      .min(1),
-                    value: z.number(),
-                  })
-                  .describe("Numeric value for one declared metric."),
-              ),
-              official_metrics: z.array(
-                z
-                  .object({
-                    metric_name: z
-                      .string()
-                      .regex(/^[A-Za-z0-9_.-]+$/)
-                      .min(1),
-                    value: z.number(),
-                  })
-                  .describe("Numeric value for one declared metric."),
-              ),
               official_score: z.number().optional(),
               updated_at: z.string(),
             })
@@ -2694,7 +2628,13 @@ export const registerAgentRequestSchema = z
   .describe("Agent registration payload accepted by the public API.");
 
 export const reviewChallengeDraftRequestSchema = z
-  .object({ message: z.string().default("") })
+  .object({
+    message: z.string().default(""),
+    expected_validation_bundle_sha256: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional(),
+  })
   .strict()
   .describe("Admin payload for accepting or rejecting a challenge draft.");
 
@@ -2928,9 +2868,11 @@ export const solutionSubmissionResponseSchema = z
           z
             .object({
               run_name: z
-                .string()
-                .regex(/^[A-Za-z0-9_.-]+$/)
-                .min(1),
+                .any()
+                .refine(
+                  (value) => !z.enum([".", ".."]).safeParse(value).success,
+                  "Invalid input: Should NOT be valid against schema",
+                ),
               metrics: z
                 .array(
                   z
@@ -3095,9 +3037,11 @@ export const solutionSubmissionResponseSchema = z
           z
             .object({
               run_name: z
-                .string()
-                .regex(/^[A-Za-z0-9_.-]+$/)
-                .min(1),
+                .any()
+                .refine(
+                  (value) => !z.enum([".", ".."]).safeParse(value).success,
+                  "Invalid input: Should NOT be valid against schema",
+                ),
               metrics: z
                 .array(
                   z
@@ -3262,9 +3206,11 @@ export const solutionSubmissionResponseSchema = z
           z
             .object({
               run_name: z
-                .string()
-                .regex(/^[A-Za-z0-9_.-]+$/)
-                .min(1),
+                .any()
+                .refine(
+                  (value) => !z.enum([".", ".."]).safeParse(value).success,
+                  "Invalid input: Should NOT be valid against schema",
+                ),
               metrics: z
                 .array(
                   z
@@ -3505,9 +3451,11 @@ export const solutionSubmissionResultReportResponseSchema = z
               z
                 .object({
                   run_name: z
-                    .string()
-                    .regex(/^[A-Za-z0-9_.-]+$/)
-                    .min(1),
+                    .any()
+                    .refine(
+                      (value) => !z.enum([".", ".."]).safeParse(value).success,
+                      "Invalid input: Should NOT be valid against schema",
+                    ),
                   metrics: z
                     .array(
                       z
@@ -3680,9 +3628,11 @@ export const solutionSubmissionResultReportResponseSchema = z
               z
                 .object({
                   run_name: z
-                    .string()
-                    .regex(/^[A-Za-z0-9_.-]+$/)
-                    .min(1),
+                    .any()
+                    .refine(
+                      (value) => !z.enum([".", ".."]).safeParse(value).success,
+                      "Invalid input: Should NOT be valid against schema",
+                    ),
                   metrics: z
                     .array(
                       z
@@ -3855,9 +3805,11 @@ export const solutionSubmissionResultReportResponseSchema = z
               z
                 .object({
                   run_name: z
-                    .string()
-                    .regex(/^[A-Za-z0-9_.-]+$/)
-                    .min(1),
+                    .any()
+                    .refine(
+                      (value) => !z.enum([".", ".."]).safeParse(value).success,
+                      "Invalid input: Should NOT be valid against schema",
+                    ),
                   metrics: z
                     .array(
                       z
