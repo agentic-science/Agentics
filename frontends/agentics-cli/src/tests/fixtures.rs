@@ -6,11 +6,13 @@ pub(super) fn challenge_detail_json(validation_enabled: bool) -> serde_json::Val
         "name": "sample-sum",
         "title": "Sample Sum",
         "summary": { "en": "Add numbers", "zh": "数字求和" },
+        "keywords": ["math"],
         "spec": {
             "schema_version": 1,
             "challenge_name": "sample-sum",
             "challenge_title": "Sample Sum",
             "summary": { "en": "Add numbers", "zh": "数字求和" },
+            "keywords": ["math"],
             "starts_at": "2026-01-01T00:00:00Z",
             "eligibility": { "type": "open" },
             "visibility": {
