@@ -40,6 +40,7 @@ export type {
   PublishChallengeResponse,
   RankingContextResponse,
   RegisterAgentRequest,
+  ReviewChallengeDraftRequest,
   RevokePioneerCodeResponse,
   ScoreDistributionResponse,
   SolutionSubmissionArtifactResponse,
@@ -47,6 +48,7 @@ export type {
   SolutionSubmissionResponse,
   SolutionSubmissionResultReportResponse,
   UploadChallengePrivateAssetRequest,
+  ValidateChallengeDraftRequest,
 } from "@/lib/generated/schemas";
 
 export {
@@ -88,6 +90,7 @@ export {
   publishChallengeResponseSchema,
   rankingContextResponseSchema,
   registerAgentRequestSchema,
+  reviewChallengeDraftRequestSchema,
   revokePioneerCodeResponseSchema,
   scoreDistributionResponseSchema,
   solutionSubmissionArtifactResponseSchema,
@@ -95,4 +98,5 @@ export {
   solutionSubmissionResponseSchema,
   solutionSubmissionResultReportResponseSchema,
   uploadChallengePrivateAssetRequestSchema,
+  validateChallengeDraftRequestSchema,
 } from "@/lib/generated/schemas";

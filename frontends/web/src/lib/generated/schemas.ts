@@ -2693,6 +2693,11 @@ export const registerAgentRequestSchema = z
   .strict()
   .describe("Agent registration payload accepted by the public API.");
 
+export const reviewChallengeDraftRequestSchema = z
+  .object({ message: z.string().default("") })
+  .strict()
+  .describe("Admin payload for accepting or rejecting a challenge draft.");
+
 export const revokePioneerCodeResponseSchema = z
   .object({
     id: z
@@ -3969,6 +3974,13 @@ export const uploadChallengePrivateAssetRequestSchema = z
     "Payload for uploading a private benchmark asset to Agentics storage.",
   );
 
+export const validateChallengeDraftRequestSchema = z
+  .object({ repository_path: z.string() })
+  .strict()
+  .describe(
+    "Admin payload for validating a draft against a checked-out repository path.",
+  );
+
 export type AdminCapacityResponse = z.infer<typeof adminCapacityResponseSchema>;
 export type AdminChallengeListResponse = z.infer<
   typeof adminChallengeListResponseSchema
@@ -4063,6 +4075,9 @@ export type RankingContextResponse = z.infer<
   typeof rankingContextResponseSchema
 >;
 export type RegisterAgentRequest = z.infer<typeof registerAgentRequestSchema>;
+export type ReviewChallengeDraftRequest = z.infer<
+  typeof reviewChallengeDraftRequestSchema
+>;
 export type RevokePioneerCodeResponse = z.infer<
   typeof revokePioneerCodeResponseSchema
 >;
@@ -4083,6 +4098,9 @@ export type SolutionSubmissionResultReportResponse = z.infer<
 >;
 export type UploadChallengePrivateAssetRequest = z.infer<
   typeof uploadChallengePrivateAssetRequestSchema
+>;
+export type ValidateChallengeDraftRequest = z.infer<
+  typeof validateChallengeDraftRequestSchema
 >;
 export type AdminChallengeListItem =
   AdminChallengeListResponse["items"][number];

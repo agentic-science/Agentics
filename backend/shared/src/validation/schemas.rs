@@ -16,7 +16,8 @@ use crate::models::challenge::{
 use crate::models::challenge_creation::{
     AdminChallengePrivateAssetListResponse, ChallengeDraftCleanupResponse,
     ChallengeDraftListResponse, ChallengeDraftResponse, ChallengePrivateAssetResponse,
-    CreateChallengeDraftRequest, CreatorChallengeDraftResponse, UploadChallengePrivateAssetRequest,
+    CreateChallengeDraftRequest, CreatorChallengeDraftResponse, ReviewChallengeDraftRequest,
+    UploadChallengePrivateAssetRequest, ValidateChallengeDraftRequest,
 };
 use crate::models::request::{
     AdminCapacityResponse, AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse,
@@ -81,9 +82,17 @@ pub fn export_web_schemas() -> Result<BTreeMap<String, Value>, serde_json::Error
         "createChallengeShortlistRevisionRequestSchema",
     )?;
     insert_schema::<CreatePioneerCodeRequest>(&mut schemas, "createPioneerCodeRequestSchema")?;
+    insert_schema::<ReviewChallengeDraftRequest>(
+        &mut schemas,
+        "reviewChallengeDraftRequestSchema",
+    )?;
     insert_schema::<UploadChallengePrivateAssetRequest>(
         &mut schemas,
         "uploadChallengePrivateAssetRequestSchema",
+    )?;
+    insert_schema::<ValidateChallengeDraftRequest>(
+        &mut schemas,
+        "validateChallengeDraftRequestSchema",
     )?;
     insert_schema::<PublishChallengeResponse>(&mut schemas, "publishChallengeResponseSchema")?;
     insert_schema::<CreatorMeResponse>(&mut schemas, "creatorMeResponseSchema")?;

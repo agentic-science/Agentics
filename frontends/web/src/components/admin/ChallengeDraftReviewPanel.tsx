@@ -10,12 +10,17 @@ import {
   XCircle,
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
+import type { ZodType } from "zod";
 import { AdminApiError, adminFetchJson } from "@/lib/adminApi";
 import { formatDate } from "@/lib/format";
 import {
   type ChallengeDraftListItem,
+  type ReviewChallengeDraftRequest,
+  type ValidateChallengeDraftRequest,
   challengeDraftCleanupResponseSchema,
   challengeDraftResponseSchema,
+  reviewChallengeDraftRequestSchema,
+  validateChallengeDraftRequestSchema,
 } from "@/lib/schemas";
 import { StatusBadge } from "./StatusBadge";
 
@@ -71,10 +76,18 @@ export function ChallengeDraftReviewPanel({
 
     setBusyDraftId(draftId);
     try {
-      const body =
+      const body: ReviewChallengeDraftRequest | ValidateChallengeDraftRequest =
         action === "validate" || action === "publish"
-          ? { repository_path: repositoryPath.trim() }
-          : { message: draftReviewMessage(action, reviewMessage) };
+          ? parseAdminDraftMutationRequest(
+              validateChallengeDraftRequestSchema,
+              { repository_path: repositoryPath.trim() },
+              "Invalid repository path.",
+            )
+          : parseAdminDraftMutationRequest(
+              reviewChallengeDraftRequestSchema,
+              { message: draftReviewMessage(action, reviewMessage) },
+              "Invalid review message.",
+            );
       const response = await adminFetchJson(
         `/admin/challenge-drafts/${encodeURIComponent(draftId)}/${action}`,
         challengeDraftResponseSchema,
@@ -291,6 +304,22 @@ export function ChallengeDraftReviewPanel({
       </div>
     </section>
   );
+}
+
+/** Parses generated request schemas before sending admin draft mutations. */
+function parseAdminDraftMutationRequest<T>(
+  schema: ZodType<T>,
+  value: unknown,
+  fallbackMessage: string,
+): T {
+  const parsed = schema.safeParse(value);
+  if (!parsed.success) {
+    throw new AdminApiError(
+      400,
+      parsed.error.issues[0]?.message ?? fallbackMessage,
+    );
+  }
+  return parsed.data;
 }
 
 /** Returns an explicit review message that matches the selected action. */
