@@ -5,6 +5,21 @@ notes are split by review date and reviewed commit head under `reviews/`.
 
 ## Review Logs
 
+- [2026-05-20, `669533b`](reviews/2026-05-20-669533b.md)
+  - Scope: backend API, database state machines, worker and Docker runner, DGX
+    hosted profile, CLI, web frontend, schemas, tests, documentation alignment,
+    and frontend component reuse.
+  - Current notable open items: run-name path safety, DGX Docker layer-quota
+    admission for loopback hosted profiles, returning creator OAuth after
+    one-use pioneer-code consumption, draft approval and audit atomicity, local
+    storage symlink-safe writes, scorer result symlink handling in unbounded
+    mode, bounded-slot recovery and capacity handling, admin private-asset
+    lifecycle visibility, public leaderboard DTO separation, admin/creator i18n
+    drift, schema-test quality, low-value config default tests, and milestone
+    text drift.
+  - Accepted MVP scope decisions in this pass: client-asserted GitHub PR
+    ownership, pioneer-code re-exposure, and placeholder creator/owner CLI
+    commands.
 - [2026-05-20, `4a47753`](reviews/2026-05-20-4a47753.md)
   - Scope: backend API, database state machines, worker and Docker runner, DGX
     hosted profile, CLI, web frontend, schemas, tests, documentation alignment,
