@@ -229,7 +229,7 @@ impl AssetName {
 pub struct RunName(String);
 
 impl RunName {
-    /// Borrow the canonical scorer run name string.
+    /// Borrow the canonical evaluator run name string.
     pub fn as_str(&self) -> &str {
         self.as_ref()
     }
@@ -326,7 +326,7 @@ impl MetricName {
         self.as_ref()
     }
 
-    /// Built-in compatibility metric used by legacy scorers.
+    /// Built-in compatibility metric used by legacy evaluators.
     #[allow(
         clippy::panic,
         reason = "the built-in `score` metric name is a hard-coded valid literal"

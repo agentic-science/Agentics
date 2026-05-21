@@ -31,7 +31,7 @@ pub async fn read_challenge_creation_manifest(root: &Path) -> Result<ChallengeCr
 ///
 /// The directory is the challenge-level root inside a public repository, for
 /// example `challenges/sample-sum/`. Private benchmark datasets, private
-/// scorer packages, seeds, and reference outputs must be uploaded through
+/// evaluator packages, seeds, and reference outputs must be uploaded through
 /// Agentics storage instead of being committed here.
 pub async fn validate_challenge_creation_repository(
     root: &Path,
@@ -285,7 +285,7 @@ async fn validate_public_bundle(
     }
 
     if spec.targets.iter().any(|target| target.validation_enabled)
-        && let Some(validation_runs) = spec.execution.validation_runs.as_ref()
+        && let Some(validation_runs) = spec.execution.validation_runs()
     {
         assert_public_file_exists(
             bundle_dir.join(validation_runs.as_path()),
@@ -684,10 +684,6 @@ mod tests {
                     "protocol": "zip_project",
                     "manifest_file": "agentics.solution.json"
                 },
-                "scorer": {
-                    "command": ["python", "scorer/run.py"],
-                    "result_file": "result.json"
-                },
                 "targets": [
                     {
                         "name": "linux-arm64-cpu",
@@ -700,7 +696,7 @@ mod tests {
                                 "source": "local",
                                 "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"
                             },
-                            "scorer_image": {
+                            "evaluator_image": {
                                 "source": "local",
                                 "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"
                             },
@@ -711,7 +707,7 @@ mod tests {
                             "setup_network_access": "enabled",
                             "build_network_access": "disabled",
                             "run_network_access": "disabled",
-                            "scorer_network_access": "disabled"
+                            "evaluator_network_access": "disabled"
                         }
                     }
                 ],
@@ -724,6 +720,11 @@ mod tests {
                 },
                 "solution_publication": "public",
                 "execution": {
+                    "mode": "separated_evaluator",
+                    "evaluator": {
+                        "command": ["python", "evaluator/run.py"],
+                        "result_file": "result.json"
+                    },
                     "validation_runs": "public/runs.json",
                     "official_runs": "private-benchmark/runs.json"
                 },

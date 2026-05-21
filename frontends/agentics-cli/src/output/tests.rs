@@ -2,8 +2,9 @@ use shared::models::challenge::{
     ChallengeBundleSpec, ChallengeDetailResponse, ChallengeEligibilitySpec,
     ChallengeEligibilityType, ChallengeExecutionSpec, ChallengeListItemDto, ChallengeListResponse,
     ChallengeResultDetailVisibility, ChallengeSolutionPublicationPolicy, ChallengeTargetSpec,
-    ChallengeVisibility, ChallengeVisibilitySpec, DatasetsSpec, DockerPlatform, MetricSchemaSpec,
-    PrivateBenchmarkPolicy, ResourceProfileSpec, ScorerSpec, SolutionSpec, TargetAccelerator,
+    ChallengeVisibility, ChallengeVisibilitySpec, DatasetsSpec, DockerPlatform, EvaluatorSpec,
+    MetricSchemaSpec, PrivateBenchmarkPolicy, ResourceProfileSpec, SeparatedEvaluatorExecutionSpec,
+    SolutionSpec, TargetAccelerator,
 };
 use shared::models::evaluation::ScoreVisibility;
 use shared::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
@@ -100,10 +101,6 @@ fn challenge_detail() -> ChallengeDetailResponse {
                 protocol: "zip_project".to_string(),
                 manifest_file: bundle_path("agentics.solution.json"),
             },
-            scorer: ScorerSpec {
-                command: vec!["python".to_string(), "scorer/run.py".to_string()],
-                result_file: bundle_path("result.json"),
-            },
             targets: vec![ChallengeTargetSpec {
                 name: target_name("linux-arm64-cpu"),
                 docker_platform: DockerPlatform::LinuxArm64,
@@ -113,7 +110,7 @@ fn challenge_detail() -> ChallengeDetailResponse {
                     name: resource_profile_name("python-cpu-small"),
                     resource_description: None,
                     solution_image: local_image("agentics-linux-arm64-cpu:ubuntu26.04-local"),
-                    scorer_image: local_image("agentics-linux-arm64-cpu:ubuntu26.04-local"),
+                    evaluator_image: local_image("agentics-linux-arm64-cpu:ubuntu26.04-local"),
                     timeout_sec: 30,
                     memory_limit_mb: 512,
                     cpu_limit_millis: 1000,
@@ -121,16 +118,22 @@ fn challenge_detail() -> ChallengeDetailResponse {
                     setup_network_access: ZipProjectNetworkAccess::Enabled,
                     build_network_access: ZipProjectNetworkAccess::Disabled,
                     run_network_access: ZipProjectNetworkAccess::Disabled,
-                    scorer_network_access: ZipProjectNetworkAccess::Disabled,
+                    evaluator_network_access: ZipProjectNetworkAccess::Disabled,
                     hardware_metadata: None,
                 },
             }],
-            execution: ChallengeExecutionSpec {
-                validation_runs: Some(bundle_path("public/runs.json")),
-                validation_prepare: None,
-                official_runs: Some(bundle_path("private-benchmark/runs.json")),
-                official_prepare: None,
-            },
+            execution: ChallengeExecutionSpec::SeparatedEvaluator(
+                SeparatedEvaluatorExecutionSpec {
+                    evaluator: EvaluatorSpec {
+                        command: vec!["python".to_string(), "evaluator/run.py".to_string()],
+                        result_file: bundle_path("result.json"),
+                    },
+                    validation_runs: Some(bundle_path("public/runs.json")),
+                    validation_prepare: None,
+                    official_runs: Some(bundle_path("private-benchmark/runs.json")),
+                    official_prepare: None,
+                },
+            ),
             datasets: DatasetsSpec {
                 public_dir: bundle_path("data/public"),
                 private_benchmark_dir: None,

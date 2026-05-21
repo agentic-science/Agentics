@@ -55,7 +55,7 @@ enum SupportedAcceleratorImage<'a> {
     Accelerator { cuda_variant: &'a str },
 }
 
-/// Validate both solution and scorer image references for a target.
+/// Validate both solution and evaluator image references for a target.
 fn validate_supported_target_images(
     target: &ChallengeTargetSpec,
     image_kind: SupportedAcceleratorImage<'_>,
@@ -67,8 +67,8 @@ fn validate_supported_target_images(
         &image_kind,
     )?;
     validate_supported_image_reference(
-        &target.resource_profile.scorer_image,
-        &format!("{field}.resource_profile.scorer_image"),
+        &target.resource_profile.evaluator_image,
+        &format!("{field}.resource_profile.evaluator_image"),
         &image_kind,
     )
 }

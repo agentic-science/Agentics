@@ -284,7 +284,7 @@ impl JsonSchema for OciRegistryImageReference {
     }
 }
 
-/// Image source declared for a challenge solution or scorer container.
+/// Image source declared for a challenge solution or evaluator container.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "source", rename_all = "snake_case")]
 pub enum ChallengeImageReference {

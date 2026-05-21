@@ -2,9 +2,9 @@
 //!
 //! v0.2 uses one build solution container for setup/build, fresh no-egress run
 //! solution containers that mount the build workspace read-only for benchmark
-//! invocations, and a separate scorer container. Run containers receive only the
-//! current invocation's input files, while scorer-only reference data stays in
-//! the scorer container.
+//! invocations, and a separate evaluator container. Run containers receive only the
+//! current invocation's input files, while evaluator-only reference data stays in
+//! the evaluator container.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -17,7 +17,7 @@ use crate::models::challenge::{
     ChallengeBundleSpec, ChallengePrepareSpec, ChallengeRunManifest, DockerPlatform,
     MetricSchemaSpec, ResourceProfileSpec, TargetAccelerator,
 };
-use crate::models::evaluation::{EvaluationJobPayload, ScorerRunResult, ScoringMode};
+use crate::models::evaluation::{EvaluationJobPayload, EvaluatorRunResult, ScoringMode};
 use crate::models::paths::BundleRelativePath;
 use crate::storage::{Storage, StorageKey};
 use crate::zip_project::{
@@ -43,14 +43,14 @@ use docker::{ContainerOutcome, ContainerRequest, bind_mount, pre_pull_image, run
 use errors::{ensure_container_succeeded, ensure_prepare_succeeded};
 use filesystem::{
     OutputTreeLimits, cleanup_paths, copy_dir_all, ensure_disk_limit, ensure_prepare_disk_limit,
-    extract_zip_safe, validate_scorer_visible_output_tree,
+    extract_zip_safe, validate_evaluator_visible_output_tree,
 };
 use logs::{
     EVALUATION_LOG_BYTES_PER_RUN, EvaluationLogs, append_named_logs, append_phase_logs,
     append_run_logs, include_log_excerpts, phase_name, visible_log_content,
 };
 use run_io::{
-    copy_scorer_visible_run_tree, ensure_declared_outputs_exist, make_container_readable_tree,
+    copy_evaluator_visible_run_tree, ensure_declared_outputs_exist, make_container_readable_tree,
     make_container_writable_tree, materialize_run_io, run_alias, run_interface, write_run_metadata,
 };
 use storage::{RunnerStorage, WritableMountLease, WritablePhase};
@@ -61,11 +61,11 @@ const RUNNER_SCOPE_LABEL: &str = "agentics.runner_scope";
 const RUNNER_SCOPE_HOSTED_WORKER: &str = "hosted-worker";
 const RUNNER_SCOPE_LOCAL_VALIDATION: &str = "local-validation";
 
-/// Validated scorer result plus the persisted runner log location.
+/// Validated evaluator result plus the persisted runner log location.
 #[derive(Debug, Clone)]
 pub struct ExecutionResult {
-    /// Parsed and normalized `result.json` emitted by the scorer.
-    pub result: ScorerRunResult,
+    /// Parsed and normalized `result.json` emitted by the evaluator.
+    pub result: EvaluatorRunResult,
     /// Storage-relative path to stdout and stderr captured from runner containers.
     pub log_key: StorageKey,
 }
@@ -169,7 +169,7 @@ impl RetainedRunnerTree {
     }
 }
 
-/// Keeps one scorer-visible run tree alive until the scorer finishes.
+/// Keeps one evaluator-visible run tree alive until the evaluator finishes.
 struct RetainedRunTree {
     run_name: String,
     tree: RetainedRunnerTree,
@@ -202,8 +202,8 @@ struct SetupBuildRequest<'a> {
     build_root: &'a Path,
 }
 
-/// Carries scorer request data across this module boundary.
-struct ScorerRequest<'a> {
+/// Carries evaluator request data across this module boundary.
+struct EvaluatorRequest<'a> {
     eval_type: ScoringMode,
     spec: &'a ChallengeBundleSpec,
     profile: &'a ResourceProfileSpec,
@@ -214,7 +214,7 @@ struct ScorerRequest<'a> {
     prepared_root: Option<&'a Path>,
     runs_root: &'a Path,
     retained_run_trees: &'a [RetainedRunTree],
-    scorer_output_root: &'a Path,
+    evaluator_output_root: &'a Path,
 }
 
 /// Carries resolved run plan data across this module boundary.
@@ -313,7 +313,7 @@ impl std::fmt::Debug for EvaluationJobExecution<'_> {
     }
 }
 
-/// Execute one evaluation job in Docker and return the validated scorer result.
+/// Execute one evaluation job in Docker and return the validated evaluator result.
 pub async fn execute_evaluation_job(
     request: EvaluationJobExecution<'_>,
 ) -> Result<ExecutionResult> {
@@ -340,7 +340,7 @@ pub async fn execute_evaluation_job(
     let run_work_root = working_root.join("solution-run-work");
     let runs_root = working_root.join("solution-runs");
     let prepared_root = working_root.join("prepared");
-    let scorer_output_root = working_root.join("scorer-output");
+    let evaluator_output_root = working_root.join("evaluator-output");
     let challenge_bundle_root = working_root.join("challenge-bundle");
     let log_key = evaluation_runner_log_key(job_id, attempt_count)?;
 
@@ -350,7 +350,7 @@ pub async fn execute_evaluation_job(
     tokio::fs::create_dir_all(&build_root).await?;
     tokio::fs::create_dir_all(&run_work_root).await?;
     tokio::fs::create_dir_all(&runs_root).await?;
-    tokio::fs::create_dir_all(&scorer_output_root).await?;
+    tokio::fs::create_dir_all(&evaluator_output_root).await?;
 
     copy_dir_all(payload.bundle_path.as_path(), &challenge_bundle_root).await?;
     make_container_readable_tree(&challenge_bundle_root).await?;
@@ -359,7 +359,7 @@ pub async fn execute_evaluation_job(
     if config.requires_digest_pinned_images() {
         crate::challenge_bundle::validate_digest_pinned_images(&spec)?;
     }
-    let result_path = scorer_output_root.join(spec.scorer.result_file.as_path());
+    let result_path = evaluator_output_root.join(spec.execution.evaluator().result_file.as_path());
     let limits = EvaluationLimitConfig {
         max_runs: config.runner_max_runs,
         max_result_json_bytes: config.runner_max_result_json_bytes,
@@ -400,7 +400,7 @@ pub async fn execute_evaluation_job(
         .await?;
         pre_pull_image(
             docker,
-            profile.scorer_image.docker_reference(),
+            profile.evaluator_image.docker_reference(),
             target.docker_platform,
         )
         .await?;
@@ -460,9 +460,9 @@ pub async fn execute_evaluation_job(
         )
         .await?;
 
-        run_scorer(
+        run_evaluator(
             runner_context,
-            ScorerRequest {
+            EvaluatorRequest {
                 eval_type,
                 spec: &spec,
                 profile,
@@ -476,7 +476,7 @@ pub async fn execute_evaluation_job(
                     .map(RetainedRunnerTree::path),
                 runs_root: &runs_root,
                 retained_run_trees: &retained_run_trees,
-                scorer_output_root: &scorer_output_root,
+                evaluator_output_root: &evaluator_output_root,
             },
             &mut logs,
         )
@@ -484,9 +484,9 @@ pub async fn execute_evaluation_job(
 
         let result_raw =
             read_limited_result_json(&result_path, limits.max_result_json_bytes).await?;
-        let mut result: ScorerRunResult = serde_json::from_str(&result_raw)
+        let mut result: EvaluatorRunResult = serde_json::from_str(&result_raw)
             .map_err(|e| AppError::Runner(format!("invalid result.json: {e}")))?;
-        validate_scorer_result(&mut result, eval_type, &spec.metric_schema, limits)?;
+        validate_evaluator_result(&mut result, eval_type, &spec.metric_schema, limits)?;
 
         Ok(ExecutionResult {
             result,
@@ -708,8 +708,8 @@ async fn run_solution_invocations(
     for (run_index, run) in request.run_manifest.runs.iter().enumerate() {
         let run_alias = run_alias(run_index)?;
         let solution_io_root = request.run_work_root.join(run_alias.as_str());
-        let scorer_run_root = request.runs_root.join(run.run_name.as_str());
-        cleanup_paths([solution_io_root.clone(), scorer_run_root.clone()]).await?;
+        let evaluator_run_root = request.runs_root.join(run.run_name.as_str());
+        cleanup_paths([solution_io_root.clone(), evaluator_run_root.clone()]).await?;
         let limits = effective_phase_limits(request.profile, &run_phase);
         let io_mount = runner
             .storage
@@ -793,26 +793,26 @@ async fn run_solution_invocations(
         ensure_disk_limit(&io_root, limits.disk_limit_mb, ZipProjectPhaseName::Run).await?;
         ensure_declared_outputs_exist(run, run_alias.as_str(), &output_dir).await?;
         if runner.storage.uses_bounded_slots() {
-            validate_scorer_visible_output_tree(
+            validate_evaluator_visible_output_tree(
                 &io_root,
                 run_alias.as_str(),
                 request.output_limits,
             )?;
             make_container_readable_tree(&io_root).await?;
-            tokio::fs::create_dir_all(&scorer_run_root).await?;
+            tokio::fs::create_dir_all(&evaluator_run_root).await?;
             retained_run_trees.push(RetainedRunTree {
                 run_name: run.run_name.as_str().to_string(),
                 tree: RetainedRunnerTree::leased(io_mount),
             });
         } else {
-            copy_scorer_visible_run_tree(
+            copy_evaluator_visible_run_tree(
                 &io_root,
-                &scorer_run_root,
+                &evaluator_run_root,
                 run_alias.as_str(),
                 request.output_limits,
             )
             .await?;
-            make_container_readable_tree(&scorer_run_root).await?;
+            make_container_readable_tree(&evaluator_run_root).await?;
             cleanup_paths([solution_io_root]).await?;
         }
     }
@@ -820,36 +820,36 @@ async fn run_solution_invocations(
     Ok(retained_run_trees)
 }
 
-/// Handles run scorer for this module.
-async fn run_scorer(
+/// Handles run evaluator for this module.
+async fn run_evaluator(
     runner: RunnerContext<'_>,
-    request: ScorerRequest<'_>,
+    request: EvaluatorRequest<'_>,
     logs: &mut EvaluationLogs,
 ) -> Result<()> {
     make_container_readable_tree(request.bundle_dir).await?;
     make_container_readable_tree(request.runs_root).await?;
-    let limits = scorer_limits(request.profile);
+    let limits = evaluator_limits(request.profile);
     let output_mount = runner
         .storage
         .writable_mount(
             runner.docker,
-            request.scorer_output_root,
-            WritablePhase::ScorerScore,
+            request.evaluator_output_root,
+            WritablePhase::EvaluatorScore,
             limits.disk_limit_mb,
         )
         .await?;
     make_container_writable_tree(output_mount.path()).await?;
 
-    let mut cmd = request.spec.scorer.command.clone();
+    let mut cmd = request.spec.execution.evaluator().command.clone();
     cmd.extend([
         "--challenge-dir".to_string(),
         "/challenge".to_string(),
         "--solution-runs-dir".to_string(),
         "/solution-runs".to_string(),
         "--output-path".to_string(),
-        format!("/output/{}", request.spec.scorer.result_file),
+        format!("/output/{}", request.spec.execution.evaluator().result_file),
         "--mode".to_string(),
-        request.eval_type.scorer_mode_arg().to_string(),
+        request.eval_type.evaluator_mode_arg().to_string(),
         "--runs-file".to_string(),
         request.run_manifest_container_path.to_string(),
     ]);
@@ -872,10 +872,14 @@ async fn run_scorer(
     let outcome = run_container(
         runner.docker,
         ContainerRequest {
-            name: container_name(runner.attempt, "scorer"),
-            image: request.profile.scorer_image.docker_reference().to_string(),
+            name: container_name(runner.attempt, "evaluator"),
+            image: request
+                .profile
+                .evaluator_image
+                .docker_reference()
+                .to_string(),
             cmd,
-            env: vec!["AGENTICS_PHASE=scorer".to_string()],
+            env: vec!["AGENTICS_PHASE=evaluator".to_string()],
             mounts,
             working_dir: "/challenge".to_string(),
             docker_platform: request.docker_platform,
@@ -883,29 +887,29 @@ async fn run_scorer(
             accelerator_count: effective_accelerator_count(request.profile, request.accelerator)?,
             limits: limits.clone(),
             docker_layer_quota_mb: runner.storage.docker_layer_quota_mb(&limits),
-            labels: runner.container_labels("scorer", Some(&output_mount)),
+            labels: runner.container_labels("evaluator", Some(&output_mount)),
         },
     )
     .await?;
     append_named_logs(
         logs,
-        "scorer",
+        "evaluator",
         visible_log_content(request.eval_type, &outcome.logs),
     );
     if outcome.timed_out || outcome.exit_code != 0 {
         return Err(AppError::Runner(format!(
-            "scorer container failed: exit_code={}, timed_out={}",
+            "evaluator container failed: exit_code={}, timed_out={}",
             outcome.exit_code, outcome.timed_out
         )));
     }
-    replace_dir_all_if_separate(output_mount.path(), request.scorer_output_root).await?;
+    replace_dir_all_if_separate(output_mount.path(), request.evaluator_output_root).await?;
 
     Ok(())
 }
 
-/// Validates scorer result invariants for this contract.
-fn validate_scorer_result(
-    result: &mut ScorerRunResult,
+/// Validates evaluator result invariants for this contract.
+fn validate_evaluator_result(
+    result: &mut EvaluatorRunResult,
     eval_type: ScoringMode,
     metric_schema: &MetricSchemaSpec,
     limits: EvaluationLimitConfig,
@@ -949,7 +953,7 @@ fn configure_run_count_limits(
     Ok(())
 }
 
-/// Read scorer result JSON only after proving its raw byte size is bounded.
+/// Read evaluator result JSON only after proving its raw byte size is bounded.
 async fn read_limited_result_json(path: &Path, max_bytes: u64) -> Result<String> {
     let metadata = tokio::fs::symlink_metadata(path)
         .await
@@ -1046,7 +1050,7 @@ async fn run_prepare_phase(
         .writable_mount(
             request.runner.docker,
             request.prepared_root,
-            WritablePhase::ScorerPrepare,
+            WritablePhase::EvaluatorPrepare,
             limits.disk_limit_mb,
         )
         .await?;
@@ -1058,7 +1062,7 @@ async fn run_prepare_phase(
         "--prepared-dir".to_string(),
         "/prepared".to_string(),
         "--mode".to_string(),
-        request.eval_type.scorer_mode_arg().to_string(),
+        request.eval_type.evaluator_mode_arg().to_string(),
         "--target".to_string(),
         request.target.to_string(),
         "--runs-file".to_string(),
@@ -1070,13 +1074,17 @@ async fn run_prepare_phase(
         ContainerRequest {
             name: container_name(
                 request.runner.attempt,
-                &format!("prepare-{}", request.eval_type.scorer_mode_arg()),
+                &format!("prepare-{}", request.eval_type.evaluator_mode_arg()),
             ),
-            image: request.profile.scorer_image.docker_reference().to_string(),
+            image: request
+                .profile
+                .evaluator_image
+                .docker_reference()
+                .to_string(),
             cmd,
             env: vec![
                 "AGENTICS_PHASE=prepare".to_string(),
-                format!("AGENTICS_MODE={}", request.eval_type.scorer_mode_arg()),
+                format!("AGENTICS_MODE={}", request.eval_type.evaluator_mode_arg()),
             ],
             mounts: vec![
                 bind_mount(request.bundle_dir, "/challenge", true),
@@ -1096,7 +1104,7 @@ async fn run_prepare_phase(
     .await?;
     append_named_logs(
         logs,
-        &format!("prepare-{}", request.eval_type.scorer_mode_arg()),
+        &format!("prepare-{}", request.eval_type.evaluator_mode_arg()),
         visible_log_content(request.eval_type, &outcome.logs),
     );
     ensure_prepare_succeeded(&outcome, include_log_excerpts(request.eval_type))?;
@@ -1113,9 +1121,9 @@ fn run_manifest_source(
 ) -> Result<RunManifestSource<'_>> {
     match eval_type {
         ScoringMode::Validation => {
-            if let Some(path) = spec.execution.validation_runs.as_ref() {
+            if let Some(path) = spec.execution.validation_runs() {
                 Ok(RunManifestSource::Static(path))
-            } else if let Some(prepare) = spec.execution.validation_prepare.as_ref() {
+            } else if let Some(prepare) = spec.execution.validation_prepare() {
                 Ok(RunManifestSource::Prepared(prepare))
             } else {
                 Err(AppError::Runner(
@@ -1124,9 +1132,9 @@ fn run_manifest_source(
             }
         }
         ScoringMode::Official => {
-            if let Some(path) = spec.execution.official_runs.as_ref() {
+            if let Some(path) = spec.execution.official_runs() {
                 Ok(RunManifestSource::Static(path))
-            } else if let Some(prepare) = spec.execution.official_prepare.as_ref() {
+            } else if let Some(prepare) = spec.execution.official_prepare() {
                 Ok(RunManifestSource::Prepared(prepare))
             } else {
                 Err(AppError::Runner(
@@ -1186,14 +1194,14 @@ fn effective_phase_limits(
     }
 }
 
-/// Handles scorer limits for this module.
-fn scorer_limits(profile: &ResourceProfileSpec) -> ZipProjectPhaseLimits {
+/// Handles evaluator limits for this module.
+fn evaluator_limits(profile: &ResourceProfileSpec) -> ZipProjectPhaseLimits {
     ZipProjectPhaseLimits {
         timeout_sec: profile.timeout_sec,
         memory_limit_mb: profile.memory_limit_mb,
         cpu_limit_millis: profile.cpu_limit_millis,
         disk_limit_mb: profile.disk_limit_mb,
-        network_access: profile.scorer_network_access,
+        network_access: profile.evaluator_network_access,
     }
 }
 

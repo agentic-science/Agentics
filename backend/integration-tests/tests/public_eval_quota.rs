@@ -411,7 +411,7 @@ fn is_quota_exhaustion(error: &std::io::Error) -> bool {
         || error.to_string().contains("Disk quota exceeded")
 }
 
-/// Verifies setup/build dependency trees are not capped by scorer-visible output limits.
+/// Verifies setup/build dependency trees are not capped by evaluator-visible output limits.
 #[sqlx::test(migrations = "../migrations")]
 async fn setup_build_file_count_is_not_limited_by_output_cap(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");

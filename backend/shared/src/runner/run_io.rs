@@ -4,14 +4,14 @@ use serde::Serialize;
 use tokio::io::AsyncWriteExt;
 
 use super::errors::phase_error;
-use super::filesystem::{OutputTreeLimits, validate_scorer_visible_output_tree};
+use super::filesystem::{OutputTreeLimits, validate_evaluator_visible_output_tree};
 use super::{ContainerOutcome, ScoringMode};
 use crate::error::{AppError, Result};
 use crate::models::challenge::{ChallengeRunInputFile, ChallengeRunInterface, ChallengeRunSpec};
 use crate::models::names::RunName;
 use crate::zip_project::{ZipProjectPhaseFailureReason, ZipProjectPhaseName};
 
-/// Per-run metadata written by the worker for challenge-owned scorers.
+/// Per-run metadata written by the worker for challenge-owned evaluators.
 #[derive(Debug, Clone, Serialize)]
 struct SolutionRunMetadata {
     run_name: String,
@@ -85,8 +85,11 @@ pub(super) async fn make_container_readable_tree(root: &Path) -> Result<()> {
             } else {
                 0o444
             };
-            permissions.set_mode(current_mode | readable_bits);
-            std::fs::set_permissions(&path, permissions)?;
+            let new_mode = current_mode | readable_bits;
+            if new_mode != current_mode {
+                permissions.set_mode(new_mode);
+                std::fs::set_permissions(&path, permissions)?;
+            }
 
             if metadata.is_dir() {
                 for entry in std::fs::read_dir(&path)? {
@@ -122,8 +125,8 @@ pub(super) fn run_alias(index: usize) -> Result<RunName> {
         .map_err(|e| AppError::Internal(format!("generated invalid run alias: {e}")))
 }
 
-/// Copy a solution run tree into the scorer-visible area while rejecting symlinks and devices.
-pub(super) async fn copy_scorer_visible_run_tree(
+/// Copy a solution run tree into the evaluator-visible area while rejecting symlinks and devices.
+pub(super) async fn copy_evaluator_visible_run_tree(
     source: &Path,
     destination: &Path,
     visible_run_name: &str,
@@ -133,20 +136,20 @@ pub(super) async fn copy_scorer_visible_run_tree(
     let destination = destination.to_path_buf();
     let visible_run_name = visible_run_name.to_string();
     tokio::task::spawn_blocking(move || {
-        copy_scorer_visible_run_tree_blocking(&source, &destination, &visible_run_name, limits)
+        copy_evaluator_visible_run_tree_blocking(&source, &destination, &visible_run_name, limits)
     })
     .await
-    .map_err(|e| AppError::Internal(format!("scorer output copy task failed: {e}")))?
+    .map_err(|e| AppError::Internal(format!("evaluator output copy task failed: {e}")))?
 }
 
-/// Blocking implementation for scorer-visible run tree sanitization and copy.
-fn copy_scorer_visible_run_tree_blocking(
+/// Blocking implementation for evaluator-visible run tree sanitization and copy.
+fn copy_evaluator_visible_run_tree_blocking(
     source: &Path,
     destination: &Path,
     visible_run_name: &str,
     limits: OutputTreeLimits,
 ) -> Result<()> {
-    validate_scorer_visible_output_tree(source, visible_run_name, limits)?;
+    validate_evaluator_visible_output_tree(source, visible_run_name, limits)?;
 
     let mut pending = vec![(source.to_path_buf(), destination.to_path_buf())];
     while let Some((current_source, current_destination)) = pending.pop() {
@@ -346,7 +349,7 @@ mod tests {
 
     use uuid::Uuid;
 
-    use super::{copy_scorer_visible_run_tree, write_run_metadata};
+    use super::{copy_evaluator_visible_run_tree, write_run_metadata};
     use crate::models::challenge::{ChallengeRunInterface, ChallengeRunSpec};
     use crate::models::names::RunName;
     use crate::runner::ContainerOutcome;
@@ -399,10 +402,10 @@ mod tests {
         fs::remove_dir_all(root).expect("test root should clean up");
     }
 
-    /// Verifies that scorer-facing copies reject undeclared symlinks anywhere in the run tree.
+    /// Verifies that evaluator-facing copies reject undeclared symlinks anywhere in the run tree.
     #[cfg(unix)]
     #[tokio::test]
-    async fn scorer_visible_run_tree_rejects_extra_symlink() {
+    async fn evaluator_visible_run_tree_rejects_extra_symlink() {
         let root =
             std::env::temp_dir().join(format!("agentics-run-tree-symlink-test-{}", Uuid::new_v4()));
         let source = root.join("source");
@@ -411,10 +414,14 @@ mod tests {
         std::os::unix::fs::symlink("/challenge/private", source.join("output/extra"))
             .expect("extra symlink should be created");
 
-        let error =
-            copy_scorer_visible_run_tree(&source, &destination, "run-0001", test_output_limits())
-                .await
-                .expect_err("scorer-facing copy should reject symlinks");
+        let error = copy_evaluator_visible_run_tree(
+            &source,
+            &destination,
+            "run-0001",
+            test_output_limits(),
+        )
+        .await
+        .expect_err("evaluator-facing copy should reject symlinks");
         assert!(
             error.to_string().contains("produced a symlink"),
             "unexpected error: {error}"
@@ -424,9 +431,9 @@ mod tests {
         fs::remove_dir_all(root).expect("test root should clean up");
     }
 
-    /// Verifies output tree limits are checked before scorer-facing copy starts.
+    /// Verifies output tree limits are checked before evaluator-facing copy starts.
     #[tokio::test]
-    async fn scorer_visible_run_tree_limit_rejects_before_copying() {
+    async fn evaluator_visible_run_tree_limit_rejects_before_copying() {
         let root =
             std::env::temp_dir().join(format!("agentics-run-tree-limit-test-{}", Uuid::new_v4()));
         let source = root.join("source");
@@ -435,7 +442,7 @@ mod tests {
         fs::write(source.join("stdout.txt"), b"ok").expect("stdout should be created");
         fs::write(source.join("output/result.txt"), b"ok").expect("output should be created");
 
-        let error = copy_scorer_visible_run_tree(
+        let error = copy_evaluator_visible_run_tree(
             &source,
             &destination,
             "run-0001",
@@ -446,7 +453,7 @@ mod tests {
             },
         )
         .await
-        .expect_err("scorer-facing copy should reject excessive files");
+        .expect_err("evaluator-facing copy should reject excessive files");
 
         assert!(
             error.to_string().contains("output file limit"),

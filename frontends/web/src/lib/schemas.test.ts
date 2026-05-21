@@ -24,7 +24,7 @@ function targetFixture(validationEnabled: boolean) {
         source: "local",
         reference: "agentics-linux-arm64-cpu:ubuntu26.04-local",
       },
-      scorer_image: {
+      evaluator_image: {
         source: "local",
         reference: "agentics-linux-arm64-cpu:ubuntu26.04-local",
       },
@@ -35,7 +35,7 @@ function targetFixture(validationEnabled: boolean) {
       setup_network_access: "enabled",
       build_network_access: "disabled",
       run_network_access: "disabled",
-      scorer_network_access: "disabled",
+      evaluator_network_access: "disabled",
     },
   };
 }
@@ -84,12 +84,13 @@ describe("frontend API schemas", () => {
             protocol: "zip_project",
             manifest_file: "agentics.solution.json",
           },
-          scorer: {
-            command: ["python", "scorer/run.py"],
-            result_file: "result.json",
-          },
           targets: [targetFixture(true)],
           execution: {
+            mode: "separated_evaluator",
+            evaluator: {
+              command: ["python", "evaluator/run.py"],
+              result_file: "result.json",
+            },
             validation_runs: "public/runs.json",
           },
           datasets: {
@@ -163,7 +164,7 @@ describe("frontend API schemas", () => {
     ).not.toThrow();
   });
 
-  it("accepts empty public result messages emitted by relaxed scorer JSON", () => {
+  it("accepts empty public result messages emitted by relaxed evaluator JSON", () => {
     expect(() =>
       solutionSubmissionResponseSchema.parse({
         id: "11111111-1111-4111-8111-111111111111",

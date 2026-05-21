@@ -5,7 +5,7 @@ use serde::Serialize;
 use serde_json::{Map, Value, json};
 use shared::models::challenge::{ChallengeDetailResponse, ChallengeListResponse, MetricDirection};
 use shared::models::challenge_creation::{ChallengeDraftCleanupResponse, ChallengeDraftResponse};
-use shared::models::evaluation::{EvaluationDto, ScorerRunResult};
+use shared::models::evaluation::{EvaluationDto, EvaluatorRunResult};
 use shared::models::names::{ChallengeName, MetricName, TargetName};
 use shared::models::request::{
     CreateSolutionSubmissionResponse, LeaderboardResponse, PublicSolutionSubmissionListResponse,
@@ -33,7 +33,7 @@ pub(crate) struct LocalValidationPackageReport {
 pub(crate) struct LocalValidationTargetReport {
     pub target: TargetName,
     pub log_path: PathBuf,
-    pub result: ScorerRunResult,
+    pub result: EvaluatorRunResult,
 }
 
 #[derive(Debug, Clone, Serialize)]

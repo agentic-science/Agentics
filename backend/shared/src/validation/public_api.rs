@@ -95,8 +95,8 @@ mod tests {
     use crate::models::challenge::{
         ChallengeBundleSpec, ChallengeEligibilitySpec, ChallengeEligibilityType,
         ChallengeExecutionSpec, ChallengeSolutionPublicationPolicy, ChallengeVisibility,
-        ChallengeVisibilitySpec, DatasetsSpec, PrivateBenchmarkPolicy, PublicChallengeBundleSpec,
-        ScorerSpec, SolutionSpec,
+        ChallengeVisibilitySpec, DatasetsSpec, EvaluatorSpec, PrivateBenchmarkPolicy,
+        PublicChallengeBundleSpec, SeparatedEvaluatorExecutionSpec, SolutionSpec,
     };
     use crate::models::evaluation::ScoreVisibility;
     use crate::models::localization::LocalizedText;
@@ -126,7 +126,6 @@ mod tests {
                 "summary": {"en": "Sum numbers", "zh": "Sum numbers zh"},
                 "keywords": ["arithmetic"],
                 "solution": {"protocol": ZIP_PROJECT_PROTOCOL, "manifest_file": "agentics.solution.json"},
-                "scorer": {"command": ["python", "score.py"], "result_file": "result.json"},
                 "targets": [{
                     "name": "linux-arm64-cpu",
                     "docker_platform": "linux/arm64",
@@ -135,7 +134,7 @@ mod tests {
                     "resource_profile": {
                         "name": "agentics-small",
                         "solution_image": {"source": "local", "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"},
-                        "scorer_image": {"source": "local", "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"},
+                        "evaluator_image": {"source": "local", "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"},
                         "timeout_sec": 30,
                         "memory_limit_mb": 512,
                         "cpu_limit_millis": 1000,
@@ -143,7 +142,7 @@ mod tests {
                         "setup_network_access": "disabled",
                         "build_network_access": "disabled",
                         "run_network_access": "disabled",
-                        "scorer_network_access": "disabled"
+                        "evaluator_network_access": "disabled"
                     }
                 }],
                 "starts_at": "2026-01-01T00:00:00Z",
@@ -154,7 +153,10 @@ mod tests {
                     "result_detail": "submitter_live_public_live"
                 },
                 "solution_publication": "private",
-                "execution": {},
+                "execution": {
+                    "mode": "separated_evaluator",
+                    "evaluator": {"command": ["python", "evaluator/run.py"], "result_file": "result.json"}
+                },
                 "datasets": {
                     "public_dir": "public",
                     "public_policy": "full",
@@ -181,10 +183,6 @@ mod tests {
                 manifest_file: BundleRelativePath::try_new("agentics.solution.json")
                     .expect("path"),
             },
-            scorer: ScorerSpec {
-                command: vec!["python".to_string(), "score.py".to_string()],
-                result_file: BundleRelativePath::try_new("result.json").expect("path"),
-            },
             targets: public.targets,
             starts_at: "2026-01-01T00:00:00Z".to_string(),
             closes_at: None,
@@ -200,12 +198,16 @@ mod tests {
                     crate::models::challenge::ChallengeResultDetailVisibility::SubmitterLivePublicLive,
             },
             solution_publication: ChallengeSolutionPublicationPolicy::Private,
-            execution: ChallengeExecutionSpec {
+            execution: ChallengeExecutionSpec::SeparatedEvaluator(SeparatedEvaluatorExecutionSpec {
+                evaluator: EvaluatorSpec {
+                    command: vec!["python".to_string(), "evaluator/run.py".to_string()],
+                    result_file: BundleRelativePath::try_new("result.json").expect("path"),
+                },
                 validation_runs: None,
                 validation_prepare: None,
                 official_runs: None,
                 official_prepare: None,
-            },
+            }),
             datasets: DatasetsSpec {
                 public_dir: BundleRelativePath::try_new("public").expect("path"),
                 private_benchmark_dir: None,

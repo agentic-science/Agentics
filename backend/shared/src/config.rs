@@ -412,17 +412,17 @@ fn default_runner_writable_slot_classes_mb() -> String {
     DEFAULT_RUNNER_WRITABLE_SLOT_CLASSES_MB.to_string()
 }
 
-/// Default maximum regular files accepted in one scorer-visible run tree.
+/// Default maximum regular files accepted in one evaluator-visible run tree.
 fn default_runner_max_output_files() -> u64 {
     DEFAULT_RUNNER_MAX_OUTPUT_FILES
 }
 
-/// Default maximum directories accepted in one scorer-visible run tree.
+/// Default maximum directories accepted in one evaluator-visible run tree.
 fn default_runner_max_output_dirs() -> u64 {
     DEFAULT_RUNNER_MAX_OUTPUT_DIRS
 }
 
-/// Default maximum path depth accepted in one scorer-visible run tree.
+/// Default maximum path depth accepted in one evaluator-visible run tree.
 fn default_runner_max_output_depth() -> u64 {
     DEFAULT_RUNNER_MAX_OUTPUT_DEPTH
 }
@@ -432,17 +432,17 @@ fn default_runner_max_runs() -> u64 {
     DEFAULT_RUNNER_MAX_RUNS
 }
 
-/// Default maximum raw scorer result JSON bytes accepted before parsing.
+/// Default maximum raw evaluator result JSON bytes accepted before parsing.
 fn default_runner_max_result_json_bytes() -> u64 {
     DEFAULT_RUNNER_MAX_RESULT_JSON_BYTES
 }
 
-/// Default maximum public case result entries accepted in scorer output.
+/// Default maximum public case result entries accepted in evaluator output.
 fn default_runner_max_public_results() -> u64 {
     DEFAULT_RUNNER_MAX_PUBLIC_RESULTS
 }
 
-/// Default maximum embedded scorer log bytes accepted in scorer output.
+/// Default maximum embedded evaluator log bytes accepted in evaluator output.
 fn default_runner_max_result_log_bytes() -> u64 {
     DEFAULT_RUNNER_MAX_RESULT_LOG_BYTES
 }

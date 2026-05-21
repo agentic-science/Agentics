@@ -5,10 +5,10 @@ use super::challenge::{
     ChallengeBundleSpec, ChallengeDetailResponse, ChallengeEligibilitySpec,
     ChallengeEligibilityType, ChallengeExecutionSpec, ChallengePrepareSpec,
     ChallengeResultDetailVisibility, ChallengeSolutionPublicationPolicy, ChallengeTargetSpec,
-    ChallengeVisibility, ChallengeVisibilitySpec, DatasetsSpec, DockerPlatform,
+    ChallengeVisibility, ChallengeVisibilitySpec, DatasetsSpec, DockerPlatform, EvaluatorSpec,
     HardwareProfileSpec, MetricDefinitionSpec, MetricDirection, MetricSchemaSpec, MetricVisibility,
-    PrivateBenchmarkPolicy, RankingSpec, ResourceProfileSpec, ScorerSpec, SolutionSpec,
-    TargetAccelerator,
+    PrivateBenchmarkPolicy, RankingSpec, ResourceProfileSpec, SeparatedEvaluatorExecutionSpec,
+    SolutionSpec, TargetAccelerator,
 };
 use super::evaluation::{
     EvaluationDto, EvaluationStatus, MetricValue, RunMetricResult, ScoreVisibility, ScoringMode,
@@ -55,6 +55,14 @@ fn challenge_detail_public_projection_omits_private_benchmark_locators() {
     assert!(!text.contains("official_runs"));
     assert!(!text.contains("official_prepare"));
     assert!(!text.contains("private-benchmark"));
+    assert_eq!(
+        value["spec"]["execution"]["mode"],
+        serde_json::json!("separated_evaluator")
+    );
+    assert_eq!(
+        value["spec"]["execution"]["evaluator"]["command"],
+        serde_json::json!(["python", "evaluator/run.py"])
+    );
     assert_eq!(
         value["spec"]["datasets"]["private_benchmark_enabled"],
         serde_json::json!(true)
@@ -165,10 +173,6 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
                 protocol: "zip_project".to_string(),
                 manifest_file: bundle_path("agentics.solution.json"),
             },
-            scorer: ScorerSpec {
-                command: vec!["python".to_string(), "scorer/run.py".to_string()],
-                result_file: bundle_path("result.json"),
-            },
             targets: vec![ChallengeTargetSpec {
                 name: target_name("linux-arm64-cpu"),
                 docker_platform: DockerPlatform::LinuxArm64,
@@ -183,7 +187,7 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
                         "ghcr.io/agentics-reifying/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0@{}",
                         image_digest("1")
                     )),
-                    scorer_image: registry_image(&format!(
+                    evaluator_image: registry_image(&format!(
                         "ghcr.io/agentics-reifying/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0@{}",
                         image_digest("2")
                     )),
@@ -194,7 +198,7 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
                     setup_network_access: ZipProjectNetworkAccess::Enabled,
                     build_network_access: ZipProjectNetworkAccess::Enabled,
                     run_network_access: ZipProjectNetworkAccess::Disabled,
-                    scorer_network_access: ZipProjectNetworkAccess::Disabled,
+                    evaluator_network_access: ZipProjectNetworkAccess::Disabled,
                     hardware_metadata: Some(HardwareProfileSpec {
                         kind: "cpu".to_string(),
                         gpu_model: None,
@@ -206,19 +210,25 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
                     }),
                 },
             }],
-            execution: ChallengeExecutionSpec {
-                validation_runs: Some(bundle_path("public/runs.json")),
-                validation_prepare: None,
-                official_runs: None,
-                official_prepare: Some(ChallengePrepareSpec {
-                    command: vec!["python".to_string(), "scorer/prepare.py".to_string()],
-                    result_runs_file: bundle_path("generated/runs.json"),
-                    network_access: ZipProjectNetworkAccess::Enabled,
-                    reproducibility_notes: Some(
-                        "Generated from a fixed benchmark seed.".to_string(),
-                    ),
-                }),
-            },
+            execution: ChallengeExecutionSpec::SeparatedEvaluator(
+                SeparatedEvaluatorExecutionSpec {
+                    evaluator: EvaluatorSpec {
+                        command: vec!["python".to_string(), "evaluator/run.py".to_string()],
+                        result_file: bundle_path("result.json"),
+                    },
+                    validation_runs: Some(bundle_path("public/runs.json")),
+                    validation_prepare: None,
+                    official_runs: None,
+                    official_prepare: Some(ChallengePrepareSpec {
+                        command: vec!["python".to_string(), "evaluator/prepare.py".to_string()],
+                        result_runs_file: bundle_path("generated/runs.json"),
+                        network_access: ZipProjectNetworkAccess::Enabled,
+                        reproducibility_notes: Some(
+                            "Generated from a fixed benchmark seed.".to_string(),
+                        ),
+                    }),
+                },
+            ),
             datasets: DatasetsSpec {
                 public_dir: bundle_path("public"),
                 private_benchmark_dir: Some(bundle_path("private-benchmark")),

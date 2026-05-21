@@ -94,7 +94,7 @@
       "protocol": "Protocol",
       "resourceProfile": "Resource Profile",
       "manifest": "Manifest",
-      "scorer": "Scorer",
+      "evaluator": "Evaluator",
       "resultFile": "Result File",
       "publicPolicy": "Public Policy",
       "privatePolicy": "Private Benchmark Policy",

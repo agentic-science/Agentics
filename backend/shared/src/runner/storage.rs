@@ -25,8 +25,8 @@ pub(super) enum WritablePhase {
     SolutionSetup,
     SolutionBuild,
     SolutionRun,
-    ScorerPrepare,
-    ScorerScore,
+    EvaluatorPrepare,
+    EvaluatorScore,
 }
 
 #[derive(Debug)]
@@ -159,8 +159,8 @@ impl WritablePhase {
             Self::SolutionSetup => "solution-setup",
             Self::SolutionBuild => "solution-build",
             Self::SolutionRun => "solution-run",
-            Self::ScorerPrepare => "scorer-prepare",
-            Self::ScorerScore => "scorer-score",
+            Self::EvaluatorPrepare => "evaluator-prepare",
+            Self::EvaluatorScore => "evaluator-score",
         }
     }
 }

@@ -88,7 +88,7 @@ pub struct ChallengePrivateAssetRequirement {
 #[serde(rename_all = "snake_case")]
 pub enum ChallengePrivateAssetKind {
     PrivateBenchmarkData,
-    PrivateScorerPackage,
+    PrivateEvaluatorPackage,
     PrivateSeeds,
     PrivateReferenceOutputs,
 }
@@ -98,7 +98,7 @@ impl ChallengePrivateAssetKind {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::PrivateBenchmarkData => "private_benchmark_data",
-            Self::PrivateScorerPackage => "private_scorer_package",
+            Self::PrivateEvaluatorPackage => "private_evaluator_package",
             Self::PrivateSeeds => "private_seeds",
             Self::PrivateReferenceOutputs => "private_reference_outputs",
         }
@@ -108,7 +108,7 @@ impl ChallengePrivateAssetKind {
     pub fn from_storage_value(value: &str) -> Option<Self> {
         match value {
             "private_benchmark_data" => Some(Self::PrivateBenchmarkData),
-            "private_scorer_package" => Some(Self::PrivateScorerPackage),
+            "private_evaluator_package" => Some(Self::PrivateEvaluatorPackage),
             "private_seeds" => Some(Self::PrivateSeeds),
             "private_reference_outputs" => Some(Self::PrivateReferenceOutputs),
             _ => None,

@@ -234,7 +234,10 @@ pub fn write_public_challenge(repo: &Path) -> String {
         })
         .to_string(),
     );
-    write_file(&challenge_root.join("v1/scorer/run.py"), SAMPLE_SUM_SCORER);
+    write_file(
+        &challenge_root.join("v1/evaluator/run.py"),
+        SAMPLE_SUM_EVALUATOR,
+    );
     write_file(
         &challenge_root.join("v1/spec.json"),
         &json!({
@@ -246,10 +249,6 @@ pub fn write_public_challenge(repo: &Path) -> String {
             "solution": {
                 "protocol": "zip_project",
                 "manifest_file": "agentics.solution.json"
-            },
-            "scorer": {
-                "command": ["python", "scorer/run.py"],
-                "result_file": "result.json"
             },
             "targets": [
                 {
@@ -263,7 +262,7 @@ pub fn write_public_challenge(repo: &Path) -> String {
                             "source": "local",
                             "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"
                         },
-                        "scorer_image": {
+                        "evaluator_image": {
                             "source": "local",
                             "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"
                         },
@@ -274,7 +273,7 @@ pub fn write_public_challenge(repo: &Path) -> String {
                         "setup_network_access": "enabled",
                         "build_network_access": "disabled",
                         "run_network_access": "disabled",
-                        "scorer_network_access": "disabled"
+                        "evaluator_network_access": "disabled"
                     }
                 }
             ],
@@ -287,6 +286,11 @@ pub fn write_public_challenge(repo: &Path) -> String {
             },
             "solution_publication": "public",
             "execution": {
+                "mode": "separated_evaluator",
+                "evaluator": {
+                    "command": ["python", "evaluator/run.py"],
+                    "result_file": "result.json"
+                },
                 "validation_runs": "public/runs.json",
                 "official_runs": "private-benchmark/runs.json"
             },
@@ -427,7 +431,7 @@ pub fn private_benchmark_asset_zip_base64() -> String {
     ])
 }
 
-const SAMPLE_SUM_SCORER: &str = r#"from __future__ import annotations
+const SAMPLE_SUM_EVALUATOR: &str = r#"from __future__ import annotations
 
 import argparse
 import json
