@@ -126,24 +126,17 @@ no-overwrite semantics 创建文件，因此 duplicate 或冲突的 archive entr
 
 ## Resource-Profile-Owned Limits
 
-Manifest 不声明 time、memory、CPU、disk、network 或 log limits。所选 challenge target 通过 `ResourceProfileSpec` 拥有 solution/evaluator images 和硬性 resource envelope：
+Manifest 不声明 time、memory、CPU、disk、network 或 log limits。所选 challenge target 通过 `ResourceProfileSpec` 拥有 solution/evaluator images 和硬性 resource envelope。
 
-- `timeout_sec`
-- `memory_limit_mb`
-- `cpu_limit_millis`
-- `disk_limit_mb`
-- `setup_network_access`
-- `build_network_access`
-- `run_network_access`
-- `evaluator_network_access`
+每个 profile 都必须显式声明五个 stages：`solution.setup`、`solution.build`、`solution.run`、`evaluator.setup` 和 `evaluator.run`。每个 stage 都包含 `timeout_sec`、`memory_limit_mb`、`cpu_limit_millis`、`disk_limit_mb` 和 `network_access`。Participant setup/build/run containers 使用对应的 `solution.*` stage。Challenge-owned prepare containers 使用 `evaluator.setup`。Separated evaluator scoring containers 和 piped-stdio interactors 使用 `evaluator.run`。
 
-Challenge-owned prepare specs 会单独选择 prepare `network_access`。Container log capture 使用 platform-owned runner cap，而不是 submitter-controlled manifest data。
+Container log capture 使用 platform-owned runner cap，而不是 submitter-controlled manifest data。
 
 Worker 还会对 evaluator-visible output tree 应用 platform-owned limits。默认每个 run
 tree 最多包含 `8192` 个 regular files、`1024` 个 directories（包含 root），以及
 `32` 层深度。这些 limits 用来保护 evaluator 和 artifact handling，不由 participant
 控制。它们不会限制 setup/build dependency trees；dependency-heavy challenges 应使用
-更大的 `disk_limit_mb` profiles，让 hosted worker 选择更大的 quota slots。
+更大的 stage `disk_limit_mb` profiles，让 hosted worker 选择更大的 quota slots。
 
 Challenge-owned run manifests 最多声明 `12` 个 runs。Runner logs 按每个实际 run
 1 MiB 的上限持久化，因此单次 evaluation 默认最大为 12 MiB。Evaluator `result.json`
@@ -252,18 +245,18 @@ Prepare specs 的形状如下：
 {
   "command": ["python", "evaluator/prepare.py"],
   "result_runs_file": "generated/runs.json",
-  "network_access": "enabled",
   "reproducibility_notes": "Generated from private seeds."
 }
 ```
 
 对于 `piped_stdio`，prepare specs 使用 `result_session_file` 而不是
 `result_runs_file`，prepare command 会收到
-`--session-file /prepared/<result_session_file>`。`network_access` 和
-`reproducibility_notes` 是 challenge-owned policy 和 metadata。MVP runner 不缓存
-prepare outputs，也不强制一种统一 reproducibility strategy。Challenge owners 需要对
-deterministic 或 reliable generation 负责，并在 bundle、private assets 或 prepare
-scripts 中自行 pin 他们关心的 external data sources。
+`--session-file /prepared/<result_session_file>`。Prepare network policy 来自
+`resource_profile.evaluator.setup`。`reproducibility_notes` 仍然是 challenge-owned
+metadata。MVP runner 不缓存 prepare outputs，也不强制一种统一 reproducibility
+strategy。Challenge owners 需要对 deterministic 或 reliable generation 负责，并在
+bundle、private assets 或 prepare scripts 中自行 pin 他们关心的 external data
+sources。
 
 每次 invocation 结束后，worker 会把只包含 regular files 的 sanitized run tree 复制到 `/solution-runs/{run_name}`，并为 evaluator 写入 `/solution-runs/{run_name}/agentics-run.json`。该 metadata 包含 `run_name`、`interface`、`exit_code`、`timed_out`、`wall_time_ms`、`stdout_path`、`stderr_path` 和 `output_dir`。这让 challenge-owned evaluator 可以把 correctness checks 与 worker-measured per-run timing 和任意 aggregate metrics 结合起来，同时阻止 submitted solutions 通过 symlink 或 special files 影响 evaluator container。
 
@@ -280,8 +273,8 @@ Worker 使用隔离的 solution 和 evaluator environments：
 
 - Build solution container 运行 `setup` 和 `build`。
 - Fresh run solution container 执行每一次 `run` invocation，并以 read-only 方式挂载 built workspace。默认 fixture resource profile 会禁止 run containers 访问 external internet。
-- 可选 prepare container 会在 solution invocations 之前用 evaluator image 运行 challenge-owned setup，并把生成的 inputs 写入 `/prepared`。
-- Evaluator container 运行可信的 challenge-owner evaluator code，并使用 challenge-owner-controlled internet access。
+- 可选 prepare container 会在 solution invocations 之前用 evaluator image 运行 challenge-owned setup，使用 `evaluator.setup` stage policy，并把生成的 inputs 写入 `/prepared`。
+- Evaluator container 运行可信的 challenge-owner evaluator code，并使用 `evaluator.run` stage policy。
 - 在 `piped_stdio` 中，interactor 就是可信 evaluator process。它会收到
   `/challenge`、`/session`、可选 `/prepared` 和可写 `/output`。Participant run
   container 只会收到 read-only `/workspace` 和 writable `/io`。

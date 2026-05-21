@@ -59,14 +59,15 @@ Challenge specs must declare one or more targets:
           "source": "local",
           "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"
         },
-        "timeout_sec": 30,
-        "memory_limit_mb": 512,
-        "cpu_limit_millis": 1000,
-        "disk_limit_mb": 1024,
-        "setup_network_access": "enabled",
-        "build_network_access": "disabled",
-        "run_network_access": "disabled",
-        "evaluator_network_access": "disabled"
+        "solution": {
+          "setup": { "timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 1024, "network_access": "enabled" },
+          "build": { "timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 1024, "network_access": "disabled" },
+          "run": { "timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 1024, "network_access": "disabled" }
+        },
+        "evaluator": {
+          "setup": { "timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 1024, "network_access": "enabled" },
+          "run": { "timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 1024, "network_access": "disabled" }
+        }
       }
     }
   ]
@@ -85,7 +86,9 @@ Rules:
   `gpu`, and CUDA hardware metadata in `resource_profile.hardware_metadata`.
 - AMD64 Linux targets are reserved for post-MVP deployment support.
 - `validation_enabled` is target-specific. Validation can be enabled for one target and disabled for another.
-- `resource_profile` contains the Docker images, hard resource limits, network policy, optional resource description, and optional hardware metadata for that target. The solution and evaluator images must use supported first-party Agentics image repositories and target-compatible tags. Hosted deployments must set `AGENTICS_HOST_PROBE_MODE=require` and `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`; hosted startup rejects profiles that require hosted probes but disable image digest pinning, and hosted challenge specs must use registry references with immutable `@sha256:<digest>` suffixes.
+- `resource_profile` contains the Docker images, optional resource description, optional hardware metadata, and stage-owned hard limits for that target. It must declare `solution.setup`, `solution.build`, `solution.run`, `evaluator.setup`, and `evaluator.run`; each stage owns `timeout_sec`, `memory_limit_mb`, `cpu_limit_millis`, `disk_limit_mb`, and `network_access`.
+- Solution setup/build/run containers use the matching `resource_profile.solution.*` stage. Separated evaluator scoring and piped-stdio interactors use `resource_profile.evaluator.run`. Validation and official prepare containers use `resource_profile.evaluator.setup`; prepare specs no longer declare their own `network_access`.
+- The solution and evaluator images must use supported first-party Agentics image repositories and target-compatible tags. Hosted deployments must set `AGENTICS_HOST_PROBE_MODE=require` and `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`; hosted startup rejects profiles that require hosted probes but disable image digest pinning, and hosted challenge specs must use registry references with immutable `@sha256:<digest>` suffixes.
 - CPU targets must use the first-party Agentics CPU base image. Its participant-facing setup guidance is to use `apt-fast` for apt packages, `uv` for Python dependencies, `fnm` for Node version changes, Bun for JavaScript/TypeScript package management, and rustup for Rust toolchain components.
 - If any target has `validation_enabled: true`, `separated_evaluator` bundles must declare `execution.validation_runs` or `execution.validation_prepare`, while `piped_stdio` bundles must declare `execution.validation_session` or `execution.validation_prepare`.
 - If private benchmark scoring is enabled, `separated_evaluator` bundles must declare `execution.official_runs` or `execution.official_prepare`, while `piped_stdio` bundles must declare `execution.official_session` or `execution.official_prepare`.

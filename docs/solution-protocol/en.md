@@ -129,25 +129,18 @@ file.
 
 ## Resource-Profile-Owned Limits
 
-The manifest does not declare time, memory, CPU, disk, network, or log limits. The selected challenge target owns the solution and evaluator images plus the hard resource envelope through `ResourceProfileSpec`:
+The manifest does not declare time, memory, CPU, disk, network, or log limits. The selected challenge target owns the solution and evaluator images plus the hard resource envelope through `ResourceProfileSpec`.
 
-- `timeout_sec`
-- `memory_limit_mb`
-- `cpu_limit_millis`
-- `disk_limit_mb`
-- `setup_network_access`
-- `build_network_access`
-- `run_network_access`
-- `evaluator_network_access`
+Every profile must declare five explicit stages: `solution.setup`, `solution.build`, `solution.run`, `evaluator.setup`, and `evaluator.run`. Each stage contains `timeout_sec`, `memory_limit_mb`, `cpu_limit_millis`, `disk_limit_mb`, and `network_access`. Participant setup/build/run containers use the matching `solution.*` stage. Challenge-owned prepare containers use `evaluator.setup`. Separated evaluator scoring containers and piped-stdio interactors use `evaluator.run`.
 
-Challenge-owned prepare specs separately choose their prepare `network_access`. Container log capture is bounded by a platform-owned runner cap rather than by submitter-controlled manifest data.
+Container log capture is bounded by a platform-owned runner cap rather than by submitter-controlled manifest data.
 
 The worker also applies platform-owned evaluator-visible output tree limits. By
 default, one run tree may contain at most `8192` regular files, `1024`
 directories including the root, and depth `32`. These limits protect evaluator and
 artifact handling and are not participant-controlled. They do not cap
 setup/build dependency trees; dependency-heavy challenges should use larger
-`disk_limit_mb` profiles so the hosted worker selects larger quota slots.
+stage `disk_limit_mb` profiles so the hosted worker selects larger quota slots.
 
 Challenge-owned run manifests may declare at most `12` runs. Runner logs are
 persisted with a cap of one MiB per concrete run, so the default maximum for one
@@ -275,19 +268,18 @@ Prepare specs have this shape:
 {
   "command": ["python", "evaluator/prepare.py"],
   "result_runs_file": "generated/runs.json",
-  "network_access": "enabled",
   "reproducibility_notes": "Generated from private seeds."
 }
 ```
 
 For `piped_stdio`, prepare specs use `result_session_file` instead of
 `result_runs_file`, and the prepare command receives
-`--session-file /prepared/<result_session_file>`. `network_access` and
-`reproducibility_notes` are challenge-owned policy and metadata. The MVP runner
-does not cache prepare outputs and does not enforce one reproducibility strategy.
-Challenge owners are responsible for deterministic or reliable generation and
-for pinning any external data sources inside their bundle, private assets, or
-prepare scripts.
+`--session-file /prepared/<result_session_file>`. Prepare network policy comes
+from `resource_profile.evaluator.setup`. `reproducibility_notes` remains
+challenge-owned metadata. The MVP runner does not cache prepare outputs and does
+not enforce one reproducibility strategy. Challenge owners are responsible for
+deterministic or reliable generation and for pinning any external data sources
+inside their bundle, private assets, or prepare scripts.
 
 After each invocation, the worker copies a sanitized regular-file-only run tree to `/solution-runs/{run_name}` and writes `/solution-runs/{run_name}/agentics-run.json` for the evaluator. The metadata includes `run_name`, `interface`, `exit_code`, `timed_out`, `wall_time_ms`, `stdout_path`, `stderr_path`, and `output_dir`. This lets challenge-owned evaluators combine correctness checks with worker-measured per-run timing and arbitrary aggregate metrics while preventing submitted solutions from passing symlinks or special files into the evaluator container.
 
@@ -304,8 +296,8 @@ The worker uses separate solution and evaluator environments:
 
 - A build solution container runs `setup` and `build`.
 - A fresh run solution container runs each `run` invocation with the built workspace mounted read-only. The default fixture resource profile disables external internet for run containers.
-- An optional prepare container runs challenge-owned setup in the evaluator image before solution invocations and writes generated inputs under `/prepared`.
-- An evaluator container runs trusted challenge-owner evaluator code and has challenge-owner-controlled internet access.
+- An optional prepare container runs challenge-owned setup in the evaluator image before solution invocations, uses the `evaluator.setup` stage policy, and writes generated inputs under `/prepared`.
+- An evaluator container runs trusted challenge-owner evaluator code and uses the `evaluator.run` stage policy.
 - In `piped_stdio`, the interactor is the trusted evaluator process. It receives
   `/challenge`, `/session`, optional `/prepared`, and writable `/output`. The
   participant run container receives only read-only `/workspace` and writable

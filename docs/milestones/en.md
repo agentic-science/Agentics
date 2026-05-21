@@ -276,7 +276,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 
 - **M0.2-PROTO-4: Add evaluator-owned prepare phase**
   - Commit target: `worker: add challenge prepare phase`
-  - Scope: Let challenge bundles declare `validation_prepare` or `official_prepare` commands that run in the evaluator image before solution invocations, write generated inputs and a generated run manifest under `/prepared`, and keep private prepared data out of the public challenge repository. Record prepare network policy and reproducibility metadata without enforcing a universal data reproducibility scheme.
+  - Scope: Let challenge bundles declare `validation_prepare` or `official_prepare` commands that run in the evaluator image before solution invocations, write generated inputs and a generated run manifest under `/prepared`, and keep private prepared data out of the public challenge repository. Prepare network policy comes from `resource_profile.evaluator.setup`; prepare specs record reproducibility metadata without enforcing a universal data reproducibility scheme.
   - Test spec: Add bundle parser tests for static versus prepared run modes, runner integration tests for prepare-generated `source_path` inputs, evaluator access to `/prepared`, official publish with private seed assets, and successful solution scoring through a prepared run manifest.
 
 - **M0.2-PROTO-5: Add piped stdio execution mode**

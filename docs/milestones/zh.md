@@ -276,7 +276,7 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 
 - **M0.2-PROTO-4：添加 evaluator-owned prepare phase**
   - Commit target：`worker: add challenge prepare phase`
-  - Scope：允许 challenge bundles 声明 `validation_prepare` 或 `official_prepare` commands，在 solution invocations 之前用 evaluator image 运行，把生成的 inputs 和生成的 run manifest 写入 `/prepared`，并让 private prepared data 不进入 public challenge repository。记录 prepare network policy 和 reproducibility metadata，但不强制统一 data reproducibility scheme。
+  - Scope：允许 challenge bundles 声明 `validation_prepare` 或 `official_prepare` commands，在 solution invocations 之前用 evaluator image 运行，把生成的 inputs 和生成的 run manifest 写入 `/prepared`，并让 private prepared data 不进入 public challenge repository。Prepare network policy 来自 `resource_profile.evaluator.setup`；prepare specs 记录 reproducibility metadata，但不强制统一 data reproducibility scheme。
   - Test spec：添加 bundle parser tests 覆盖 static runs 与 prepared run modes，添加 runner integration tests 覆盖 prepare-generated `source_path` inputs、evaluator 访问 `/prepared`、使用 private seed assets 发布 official challenge，以及通过 prepared run manifest 成功评分 solution。
 
 - **M0.2-PROTO-5：添加 piped stdio execution mode**

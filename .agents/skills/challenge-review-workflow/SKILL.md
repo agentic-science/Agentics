@@ -75,7 +75,7 @@ admin private asset lifecycle endpoint when you need to inspect pending or
 failed private asset rows that are intentionally omitted from normal draft
 responses.
 
-For source-backed run inputs, confirm every public validation `input_files[].source_path` exists in the public bundle and every static official source path exists in the uploaded private overlay. For `validation_prepare` or `official_prepare`, confirm the prepare command, result run manifest path, network policy, and reproducibility notes are explicit. Evaluator-only reference outputs should stay out of solution inputs unless the challenge intentionally exposes public validation references.
+For source-backed run inputs, confirm every public validation `input_files[].source_path` exists in the public bundle and every static official source path exists in the uploaded private overlay. For `validation_prepare` or `official_prepare`, confirm the prepare command, result run manifest path, `resource_profile.evaluator.setup.network_access`, and reproducibility notes are explicit. Evaluator-only reference outputs should stay out of solution inputs unless the challenge intentionally exposes public validation references.
 
 ## 3. Validate The Draft
 
