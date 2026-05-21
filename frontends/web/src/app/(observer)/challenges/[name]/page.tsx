@@ -87,6 +87,12 @@ export default async function ChallengePage({
       : execution.mode === "coexecuted_benchmark"
         ? t("challenge.config.benchmark")
         : t("challenge.config.evaluator");
+  const executionModeLabel =
+    execution.mode === "piped_stdio"
+      ? t("challenge.config.executionModes.pipedStdio")
+      : execution.mode === "coexecuted_benchmark"
+        ? t("challenge.config.executionModes.coexecutedBenchmark")
+        : t("challenge.config.executionModes.separatedEvaluator");
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6">
@@ -121,7 +127,7 @@ export default async function ChallengePage({
                 {t("challenge.config.executionMode")}
               </span>
               <span className="block text-[var(--text-body-sm)] font-mono text-[var(--text-primary)] [overflow-wrap:anywhere]">
-                {execution.mode}
+                {executionModeLabel}
               </span>
             </div>
             <div className="min-w-0">
@@ -149,6 +155,11 @@ export default async function ChallengePage({
               </span>
             </div>
           </div>
+          {execution.mode === "coexecuted_benchmark" && (
+            <p className="text-[var(--text-body-sm)] text-[var(--status-warning)] leading-relaxed">
+              {t("challenge.config.coexecutedWarning")}
+            </p>
+          )}
         </div>
 
         {/* Metrics */}

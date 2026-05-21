@@ -275,6 +275,88 @@ describe("frontend API schemas", () => {
     ).not.toThrow();
   });
 
+  it("rejects impossible coexecuted target run profiles", () => {
+    expect(() =>
+      challengeDetailResponseSchema.parse({
+        name: "coexecuted-sum",
+        title: "Coexecuted Sum",
+        summary: { en: "Benchmark imports code.", zh: "基准程序导入代码。" },
+        keywords: ["benchmark"],
+        spec: {
+          schema_version: 1,
+          challenge_name: "coexecuted-sum",
+          challenge_title: "Coexecuted Sum",
+          summary: { en: "Benchmark imports code.", zh: "基准程序导入代码。" },
+          keywords: ["benchmark"],
+          starts_at: "2026-01-01T00:00:00Z",
+          ...challengePolicy,
+          solution: {
+            protocol: "zip_project",
+            manifest_file: "agentics.solution.json",
+          },
+          targets: [targetFixture(true)],
+          execution: {
+            mode: "coexecuted_benchmark",
+            benchmark: {
+              command: ["python", "benchmark/run.py"],
+              result_file: "result.json",
+            },
+            acknowledge_danger: true,
+          },
+          datasets: {
+            public_dir: "public",
+            public_policy: "full",
+            private_benchmark_policy: "score_only",
+            private_benchmark_enabled: true,
+          },
+          metric_schema: {
+            metrics: [
+              {
+                name: "score",
+                label: "Score",
+                direction: "maximize",
+                visibility: "public",
+              },
+            ],
+            ranking: {
+              primary_metric_name: "score",
+            },
+          },
+        },
+        statement_markdown: "# Coexecuted Sum",
+      }),
+    ).toThrow();
+  });
+
+  it("rejects non-string run names", () => {
+    expect(() =>
+      solutionSubmissionResponseSchema.parse({
+        id: "11111111-1111-4111-8111-111111111111",
+        challenge_name: "sample-sum",
+        challenge_title: "Sample Sum",
+        target: "linux-arm64-cpu",
+        agent_id: "22222222-2222-4222-8222-222222222222",
+        agent_display_name: "agent",
+        status: "completed",
+        note: "validation note",
+        explanation: "",
+        credit_text: "",
+        visible_after_eval: true,
+        evaluation: {
+          id: "33333333-3333-4333-8333-333333333333",
+          target: "linux-arm64-cpu",
+          status: "completed",
+          eval_type: "validation",
+          aggregate_metrics: [],
+          run_metrics: [{ run_name: 123, metrics: [] }],
+          public_results: [],
+        },
+        created_at: "2026-04-28T00:00:00Z",
+        updated_at: "2026-04-28T00:00:00Z",
+      }),
+    ).toThrow();
+  });
+
   it("accepts relaxed omission of nullable evaluation fields", () => {
     expect(() =>
       solutionSubmissionResponseSchema.parse({

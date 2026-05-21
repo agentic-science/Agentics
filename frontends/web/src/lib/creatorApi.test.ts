@@ -3,8 +3,11 @@ import { ensureDomEnvironment } from "../test/dom";
 import {
   completeGithubLogin,
   consumeExpectedGithubOauthState,
+  createChallengeDraft,
+  createChallengeShortlistRevision,
   startGithubLogin,
   storeExpectedGithubOauthState,
+  uploadPrivateAsset,
 } from "./creatorApi";
 
 const originalFetch = globalThis.fetch;
@@ -94,5 +97,19 @@ describe("creatorApi", () => {
     storeExpectedGithubOauthState("oauth-state");
     expect(consumeExpectedGithubOauthState("oauth-state")).toBe(true);
     expect(consumeExpectedGithubOauthState("oauth-state")).toBe(false);
+  });
+
+  it("validates creator mutation request bodies before fetch", async () => {
+    const fetchMock = vi.fn();
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(createChallengeDraft({} as never, "csrf")).rejects.toThrow();
+    await expect(
+      uploadPrivateAsset("draft-id", {} as never, "csrf"),
+    ).rejects.toThrow();
+    await expect(
+      createChallengeShortlistRevision("sample-sum", {} as never, "csrf"),
+    ).rejects.toThrow();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

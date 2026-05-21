@@ -2,10 +2,10 @@ use shared::models::challenge::{
     ChallengeBundleSpec, ChallengeDetailResponse, ChallengeEligibilitySpec,
     ChallengeEligibilityType, ChallengeExecutionSpec, ChallengeListItemDto, ChallengeListResponse,
     ChallengeResultDetailVisibility, ChallengeSolutionPublicationPolicy, ChallengeTargetSpec,
-    ChallengeVisibility, ChallengeVisibilitySpec, DatasetsSpec, DockerPlatform, EvaluatorSpec,
-    EvaluatorStageProfiles, MetricSchemaSpec, PrivateBenchmarkPolicy, ResourceProfileSpec,
-    SeparatedEvaluatorExecutionSpec, SolutionSpec, SolutionStageProfiles, StageResourceProfile,
-    TargetAccelerator,
+    ChallengeVisibility, ChallengeVisibilitySpec, CoexecutedBenchmarkExecutionSpec, DatasetsSpec,
+    DockerPlatform, EvaluatorSpec, EvaluatorStageProfiles, MetricSchemaSpec,
+    PrivateBenchmarkPolicy, ResourceProfileSpec, SeparatedEvaluatorExecutionSpec, SolutionSpec,
+    SolutionStageProfiles, StageResourceProfile, TargetAccelerator,
 };
 use shared::models::evaluation::ScoreVisibility;
 use shared::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
@@ -72,6 +72,50 @@ fn renders_challenge_detail_table() {
     assert!(output.contains("evaluator: command=python evaluator/run.py, result_file=result.json"));
     assert!(output.contains("ranking_metric: score"));
     assert!(output.ends_with("# Statement\n\nReturn the sum."));
+}
+
+/// Verifies that renders co-executed challenge detail table with the trust boundary.
+#[test]
+fn renders_coexecuted_challenge_detail_table() {
+    let mut detail = challenge_detail();
+    detail.spec.execution =
+        ChallengeExecutionSpec::CoexecutedBenchmark(CoexecutedBenchmarkExecutionSpec {
+            benchmark: EvaluatorSpec {
+                command: vec!["python".to_string(), "benchmark/run.py".to_string()],
+                result_file: bundle_path("result.json"),
+            },
+            acknowledge_danger: true,
+            validation_prepare: None,
+            official_prepare: None,
+        })
+        .into();
+    detail.spec.targets[0].resource_profile.solution.run = None;
+
+    let output =
+        render_challenge_detail(&detail, OutputFormat::Table).expect("render should succeed");
+
+    assert!(output.contains("execution_mode: coexecuted_benchmark"));
+    assert!(output.contains("benchmark: command=python benchmark/run.py, result_file=result.json"));
+    assert!(output.contains("trust_boundary: benchmark harness and participant workspace"));
+}
+
+/// Verifies that impossible co-executed DTOs fail before rendering.
+#[test]
+fn rejects_impossible_coexecuted_challenge_detail_table() {
+    let mut detail = challenge_detail();
+    detail.spec.execution =
+        ChallengeExecutionSpec::CoexecutedBenchmark(CoexecutedBenchmarkExecutionSpec {
+            benchmark: EvaluatorSpec {
+                command: vec!["python".to_string(), "benchmark/run.py".to_string()],
+                result_file: bundle_path("result.json"),
+            },
+            acknowledge_danger: true,
+            validation_prepare: None,
+            official_prepare: None,
+        })
+        .into();
+
+    assert!(render_challenge_detail(&detail, OutputFormat::Table).is_err());
 }
 
 /// Handles challenge detail for this module.

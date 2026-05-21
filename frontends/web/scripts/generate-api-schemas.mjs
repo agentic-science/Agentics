@@ -22,7 +22,7 @@ output += `import { z } from "zod";\n\n`;
 
 for (const [schemaName, schema] of Object.entries(schemas)) {
   const resolvedSchema = stripJsonSchemaMetadata(
-    resolveLocalRefs(schema, schema),
+    preserveStringConstraintsWithNot(resolveLocalRefs(schema, schema)),
   );
   output += `${jsonSchemaToZod(resolvedSchema, {
     name: schemaName,
@@ -106,6 +106,29 @@ function stripJsonSchemaMetadata(node) {
     cleaned[key] = stripJsonSchemaMetadata(value);
   }
   return cleaned;
+}
+
+function preserveStringConstraintsWithNot(node) {
+  if (Array.isArray(node)) {
+    return node.map(preserveStringConstraintsWithNot);
+  }
+  if (!node || typeof node !== "object") {
+    return node;
+  }
+
+  const rewritten = {};
+  for (const [key, value] of Object.entries(node)) {
+    rewritten[key] = preserveStringConstraintsWithNot(value);
+  }
+
+  if (rewritten.type === "string" && rewritten.not !== undefined) {
+    const { not, ...baseStringSchema } = rewritten;
+    return {
+      allOf: [baseStringSchema, { not }],
+    };
+  }
+
+  return rewritten;
 }
 
 function replaceRegexConstructors(source) {

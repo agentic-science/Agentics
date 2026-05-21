@@ -213,6 +213,7 @@ pub(crate) fn render_challenge_detail(
     response: &ChallengeDetailResponse,
     format: OutputFormat,
 ) -> Result<String> {
+    validate_challenge_detail_topology(response)?;
     match format {
         OutputFormat::Json => pretty_json(response),
         OutputFormat::Table => {
@@ -227,8 +228,9 @@ pub(crate) fn render_challenge_detail(
                 PublicChallengeExecutionSpec::PipedStdio(_) => "interactor",
                 PublicChallengeExecutionSpec::CoexecutedBenchmark(_) => "benchmark",
             };
+            let trust_boundary_note = coexecuted_trust_boundary_note(execution);
             Ok(format!(
-                "{} ({})\nsummary: {}\nkeywords: {}\nstarts_at: {}\ncloses_at: {}\neligibility: {}\nleaderboard_visibility: {}\nscore_distribution_visibility: {}\nresult_detail_visibility: {}\nsolution_publication: {}\nsolution_protocol: {} ({})\nexecution_mode: {}\n{}: command={}, result_file={}\ntargets:\n{}\ndatasets: public={}, private_benchmark={}\nranking_metric: {}\n\n{}",
+                "{} ({})\nsummary: {}\nkeywords: {}\nstarts_at: {}\ncloses_at: {}\neligibility: {}\nleaderboard_visibility: {}\nscore_distribution_visibility: {}\nresult_detail_visibility: {}\nsolution_publication: {}\nsolution_protocol: {} ({})\nexecution_mode: {}\n{}: command={}, result_file={}{}targets:\n{}\ndatasets: public={}, private_benchmark={}\nranking_metric: {}\n\n{}",
                 response.title,
                 response.name,
                 response.summary.en,
@@ -246,6 +248,7 @@ pub(crate) fn render_challenge_detail(
                 trusted_executor_label,
                 execution.evaluator().command.join(" "),
                 execution.evaluator().result_file,
+                trust_boundary_note,
                 format_targets(&response.spec.targets),
                 response.spec.datasets.public_dir,
                 private_benchmark,
@@ -253,6 +256,40 @@ pub(crate) fn render_challenge_detail(
                 response.statement_markdown.trim()
             ))
         }
+    }
+}
+
+/// Validate mode-specific public challenge DTO invariants before rendering.
+fn validate_challenge_detail_topology(response: &ChallengeDetailResponse) -> Result<()> {
+    let coexecuted = matches!(
+        response.spec.execution,
+        PublicChallengeExecutionSpec::CoexecutedBenchmark(_)
+    );
+    for target in &response.spec.targets {
+        let has_solution_run = target.resource_profile.solution.run.is_some();
+        if coexecuted && has_solution_run {
+            anyhow::bail!(
+                "invalid challenge DTO: solution.run is forbidden for coexecuted_benchmark execution"
+            );
+        }
+        if !coexecuted && !has_solution_run {
+            anyhow::bail!(
+                "invalid challenge DTO: solution.run is required for {} execution",
+                execution_mode_label(&response.spec.execution)
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Render co-executed benchmark trust-boundary metadata for CLI users.
+fn coexecuted_trust_boundary_note(execution: &PublicChallengeExecutionSpec) -> &'static str {
+    match execution {
+        PublicChallengeExecutionSpec::CoexecutedBenchmark(_) => {
+            "\ntrust_boundary: benchmark harness and participant workspace share the evaluator container; official private data shares that boundary\n"
+        }
+        PublicChallengeExecutionSpec::SeparatedEvaluator(_)
+        | PublicChallengeExecutionSpec::PipedStdio(_) => "\n",
     }
 }
 

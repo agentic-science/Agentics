@@ -158,13 +158,14 @@ export async function createChallengeDraft(
   request: CreateChallengeDraftRequest,
   csrfToken: string,
 ): Promise<CreatorChallengeDraftResponse> {
+  const body = createChallengeDraftRequestSchema.parse(request);
   return creatorFetchJson(
     "/api/creator/challenge-drafts",
     creatorChallengeDraftResponseSchema,
     csrfToken,
     {
       method: "POST",
-      body: JSON.stringify(request),
+      body: JSON.stringify(body),
     },
   );
 }
@@ -185,13 +186,14 @@ export async function uploadPrivateAsset(
   request: UploadChallengePrivateAssetRequest,
   csrfToken: string,
 ): Promise<ChallengePrivateAssetResponse> {
+  const body = uploadChallengePrivateAssetRequestSchema.parse(request);
   return creatorFetchJson(
     `/api/creator/challenge-drafts/${encodeURIComponent(draftId)}/private-assets`,
     challengePrivateAssetResponseSchema,
     csrfToken,
     {
       method: "POST",
-      body: JSON.stringify(request),
+      body: JSON.stringify(body),
     },
   );
 }
@@ -234,13 +236,14 @@ export async function createChallengeShortlistRevision(
   request: CreateChallengeShortlistRevisionRequest,
   csrfToken: string,
 ): Promise<ChallengeShortlistRevisionResponse> {
+  const body = createChallengeShortlistRevisionRequestSchema.parse(request);
   return creatorFetchJson(
     `/api/creator/challenges/${encodeURIComponent(challengeName)}/shortlist-revisions`,
     challengeShortlistRevisionResponseSchema,
     csrfToken,
     {
       method: "POST",
-      body: JSON.stringify(request),
+      body: JSON.stringify(body),
     },
   );
 }

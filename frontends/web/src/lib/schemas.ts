@@ -1,3 +1,5 @@
+import { challengeDetailResponseSchema as generatedChallengeDetailResponseSchema } from "@/lib/generated/schemas";
+
 export type {
   AdminCapacityResponse,
   AdminChallengeListItem,
@@ -31,7 +33,6 @@ export type {
   GithubOauthCallbackRequest,
   GithubOauthLoginRequest,
   GithubOauthLoginResponse,
-  HideSolutionSubmissionResponse,
   LeaderboardResponse,
   PioneerCodeDetailResponse,
   PioneerCodeListResponse,
@@ -60,7 +61,6 @@ export {
   adminSessionResponseSchema,
   adminSolutionSubmissionListResponseSchema,
   challengeAdminResponseSchema,
-  challengeDetailResponseSchema,
   challengeDraftCleanupResponseSchema,
   challengeDraftListResponseSchema,
   challengeDraftResponseSchema,
@@ -81,7 +81,6 @@ export {
   githubOauthCallbackRequestSchema,
   githubOauthLoginRequestSchema,
   githubOauthLoginResponseSchema,
-  hideSolutionSubmissionResponseSchema,
   leaderboardResponseSchema,
   pioneerCodeDetailResponseSchema,
   pioneerCodeListResponseSchema,
@@ -100,3 +99,40 @@ export {
   uploadChallengePrivateAssetRequestSchema,
   validateChallengeDraftRequestSchema,
 } from "@/lib/generated/schemas";
+
+export const challengeDetailResponseSchema =
+  generatedChallengeDetailResponseSchema.superRefine((response, ctx) => {
+    const mode = response.spec.execution.mode;
+    response.spec.targets.forEach((target, index) => {
+      const hasSolutionRun = target.resource_profile.solution.run !== undefined;
+      if (mode === "coexecuted_benchmark" && hasSolutionRun) {
+        ctx.addIssue({
+          code: "custom",
+          path: [
+            "spec",
+            "targets",
+            index,
+            "resource_profile",
+            "solution",
+            "run",
+          ],
+          message:
+            "solution.run is forbidden for coexecuted_benchmark execution",
+        });
+      }
+      if (mode !== "coexecuted_benchmark" && !hasSolutionRun) {
+        ctx.addIssue({
+          code: "custom",
+          path: [
+            "spec",
+            "targets",
+            index,
+            "resource_profile",
+            "solution",
+            "run",
+          ],
+          message: `solution.run is required for ${mode} execution`,
+        });
+      }
+    });
+  });

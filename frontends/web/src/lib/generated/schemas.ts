@@ -2596,18 +2596,6 @@ export const githubOauthLoginResponseSchema = z
   })
   .describe("URL returned to a browser or CLI so it can start GitHub OAuth.");
 
-export const hideSolutionSubmissionResponseSchema = z
-  .object({
-    id: z
-      .string()
-      .uuid()
-      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
-    hidden: z.boolean(),
-  })
-  .describe(
-    "Admin response returned after toggling solution submission visibility.",
-  );
-
 export const leaderboardResponseSchema = z
   .object({
     challenge_name: z
@@ -3182,12 +3170,18 @@ export const solutionSubmissionResponseSchema = z
         run_metrics: z.array(
           z
             .object({
-              run_name: z
-                .any()
-                .refine(
-                  (value) => !z.enum([".", ".."]).safeParse(value).success,
-                  "Invalid input: Should NOT be valid against schema",
-                ),
+              run_name: z.intersection(
+                z
+                  .string()
+                  .regex(/^[A-Za-z0-9_.-]+$/)
+                  .min(1),
+                z
+                  .any()
+                  .refine(
+                    (value) => !z.enum([".", ".."]).safeParse(value).success,
+                    "Invalid input: Should NOT be valid against schema",
+                  ),
+              ),
               metrics: z
                 .array(
                   z
@@ -3350,12 +3344,18 @@ export const solutionSubmissionResponseSchema = z
         run_metrics: z.array(
           z
             .object({
-              run_name: z
-                .any()
-                .refine(
-                  (value) => !z.enum([".", ".."]).safeParse(value).success,
-                  "Invalid input: Should NOT be valid against schema",
-                ),
+              run_name: z.intersection(
+                z
+                  .string()
+                  .regex(/^[A-Za-z0-9_.-]+$/)
+                  .min(1),
+                z
+                  .any()
+                  .refine(
+                    (value) => !z.enum([".", ".."]).safeParse(value).success,
+                    "Invalid input: Should NOT be valid against schema",
+                  ),
+              ),
               metrics: z
                 .array(
                   z
@@ -3518,12 +3518,18 @@ export const solutionSubmissionResponseSchema = z
         run_metrics: z.array(
           z
             .object({
-              run_name: z
-                .any()
-                .refine(
-                  (value) => !z.enum([".", ".."]).safeParse(value).success,
-                  "Invalid input: Should NOT be valid against schema",
-                ),
+              run_name: z.intersection(
+                z
+                  .string()
+                  .regex(/^[A-Za-z0-9_.-]+$/)
+                  .min(1),
+                z
+                  .any()
+                  .refine(
+                    (value) => !z.enum([".", ".."]).safeParse(value).success,
+                    "Invalid input: Should NOT be valid against schema",
+                  ),
+              ),
               metrics: z
                 .array(
                   z
@@ -3772,12 +3778,19 @@ export const solutionSubmissionResultReportResponseSchema = z
             run_metrics: z.array(
               z
                 .object({
-                  run_name: z
-                    .any()
-                    .refine(
-                      (value) => !z.enum([".", ".."]).safeParse(value).success,
-                      "Invalid input: Should NOT be valid against schema",
-                    ),
+                  run_name: z.intersection(
+                    z
+                      .string()
+                      .regex(/^[A-Za-z0-9_.-]+$/)
+                      .min(1),
+                    z
+                      .any()
+                      .refine(
+                        (value) =>
+                          !z.enum([".", ".."]).safeParse(value).success,
+                        "Invalid input: Should NOT be valid against schema",
+                      ),
+                  ),
                   metrics: z
                     .array(
                       z
@@ -3944,12 +3957,19 @@ export const solutionSubmissionResultReportResponseSchema = z
             run_metrics: z.array(
               z
                 .object({
-                  run_name: z
-                    .any()
-                    .refine(
-                      (value) => !z.enum([".", ".."]).safeParse(value).success,
-                      "Invalid input: Should NOT be valid against schema",
-                    ),
+                  run_name: z.intersection(
+                    z
+                      .string()
+                      .regex(/^[A-Za-z0-9_.-]+$/)
+                      .min(1),
+                    z
+                      .any()
+                      .refine(
+                        (value) =>
+                          !z.enum([".", ".."]).safeParse(value).success,
+                        "Invalid input: Should NOT be valid against schema",
+                      ),
+                  ),
                   metrics: z
                     .array(
                       z
@@ -4116,12 +4136,19 @@ export const solutionSubmissionResultReportResponseSchema = z
             run_metrics: z.array(
               z
                 .object({
-                  run_name: z
-                    .any()
-                    .refine(
-                      (value) => !z.enum([".", ".."]).safeParse(value).success,
-                      "Invalid input: Should NOT be valid against schema",
-                    ),
+                  run_name: z.intersection(
+                    z
+                      .string()
+                      .regex(/^[A-Za-z0-9_.-]+$/)
+                      .min(1),
+                    z
+                      .any()
+                      .refine(
+                        (value) =>
+                          !z.enum([".", ".."]).safeParse(value).success,
+                        "Invalid input: Should NOT be valid against schema",
+                      ),
+                  ),
                   metrics: z
                     .array(
                       z
@@ -4313,9 +4340,6 @@ export type GithubOauthLoginRequest = z.infer<
 >;
 export type GithubOauthLoginResponse = z.infer<
   typeof githubOauthLoginResponseSchema
->;
-export type HideSolutionSubmissionResponse = z.infer<
-  typeof hideSolutionSubmissionResponseSchema
 >;
 export type LeaderboardResponse = z.infer<typeof leaderboardResponseSchema>;
 export type PioneerCodeDetailResponse = z.infer<
