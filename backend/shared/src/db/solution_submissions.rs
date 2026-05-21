@@ -15,7 +15,8 @@ use crate::models::request::PublicSolutionSubmissionListItemDto;
 use crate::storage::StorageKey;
 
 use super::evaluation_policy::{
-    ensure_challenge_supports_eval_type_tx, lock_active_challenge_for_admission_tx,
+    ensure_challenge_supports_eval_type_tx, ensure_validation_uses_public_bundle,
+    lock_active_challenge_for_admission_tx,
 };
 use super::ids::{
     agent_id_from_row, challenge_name_from_row, optional_solution_submission_id_from_row,
@@ -93,6 +94,12 @@ pub async fn create_solution_submission_with_job(
         &input.agent_id,
     )
     .await?;
+    ensure_validation_uses_public_bundle(
+        input.eval_type,
+        &spec,
+        &challenge.bundle_path,
+        &challenge.public_bundle_path,
+    )?;
     enforce_quota_admission(&mut tx, input).await?;
     ensure_parent_solution_submission_matches_scope_tx(
         &mut tx,

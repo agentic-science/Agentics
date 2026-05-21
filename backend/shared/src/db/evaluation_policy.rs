@@ -7,6 +7,7 @@ use crate::models::challenge::{ChallengeBundleSpec, ChallengeEligibilityType};
 use crate::models::evaluation::ScoringMode;
 use crate::models::ids::AgentId;
 use crate::models::names::{ChallengeName, TargetName};
+use crate::models::paths::ManagedBundlePath;
 
 use super::challenges::{
     ChallengeRecord, agent_is_shortlisted, challenge_has_shortlist, get_published_challenge,
@@ -49,6 +50,12 @@ pub async fn ensure_published_challenge_supports_eval_type(
         agent_id,
     )
     .await?;
+    ensure_validation_uses_public_bundle(
+        eval_type,
+        &spec,
+        &challenge.bundle_path,
+        &challenge.public_bundle_path,
+    )?;
     Ok(PublishedChallengeAdmission {
         challenge_name: challenge.challenge_name,
         validation_submission_limit: spec.validation_submission_limit,
@@ -137,6 +144,26 @@ pub(super) async fn ensure_challenge_supports_eval_type_tx(
     ensure_challenge_accepts_submissions(spec)?;
     ensure_challenge_eligibility_tx(tx, challenge_name, spec, agent_id).await?;
     ensure_target_supports_eval_type(spec, target, eval_type)
+}
+
+/// Reject validation when the stored public bundle aliases private benchmark data.
+pub(super) fn ensure_validation_uses_public_bundle(
+    eval_type: ScoringMode,
+    spec: &ChallengeBundleSpec,
+    bundle_path: &ManagedBundlePath,
+    public_bundle_path: &ManagedBundlePath,
+) -> Result<()> {
+    if eval_type == ScoringMode::Validation
+        && spec.datasets.private_benchmark_enabled
+        && bundle_path == public_bundle_path
+    {
+        return Err(AppError::BadRequest(
+            "validation is unavailable because this private-benchmark challenge does not have a distinct public bundle path"
+                .to_string(),
+        ));
+    }
+
+    Ok(())
 }
 
 /// Ensures challenge accepts submissions before continuing.

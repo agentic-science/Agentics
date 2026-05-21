@@ -880,6 +880,92 @@ async fn worker_completes_coexecuted_benchmark_submission(pool: sqlx::PgPool) {
     );
 }
 
+/// Verifies that validation refuses private-benchmark challenges without a distinct public bundle.
+#[sqlx::test(migrations = "../migrations")]
+async fn validation_rejects_private_benchmark_bundle_alias(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let challenges = tempfile::tempdir().expect("failed to create challenge tempdir");
+    let bundles = tempfile::tempdir().expect("failed to create bundle tempdir");
+    let (_public_bundle, private_bundle) = create_coexecuted_benchmark_bundles(bundles.path());
+    let config = test_config(storage.path(), challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    sqlx::query(
+        r#"
+        INSERT INTO challenges (
+            name, title, summary, bundle_path, public_bundle_path, statement_path, spec_json, starts_at, status
+        )
+        VALUES (
+            'coexecuted-sum',
+            'Coexecuted Sum',
+            '{"en":"Import participant code in a trusted benchmark harness.","zh":"在可信基准程序中导入参赛代码。"}'::jsonb,
+            $1,
+            $1,
+            $2,
+            $3,
+            '2026-01-01T00:00:00Z'::timestamptz,
+            'active'
+        )
+        "#,
+    )
+    .bind(private_bundle.to_string_lossy().to_string())
+    .bind(private_bundle.join("statement.md").to_string_lossy().to_string())
+    .bind(
+        serde_json::from_str::<serde_json::Value>(
+            &std::fs::read_to_string(private_bundle.join("spec.json"))
+                .expect("failed to read coexecuted spec"),
+        )
+        .expect("failed to parse coexecuted spec"),
+    )
+    .execute(&pool)
+    .await
+    .expect("failed to insert aliased coexecuted challenge");
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "display_name": "coexecuted-alias-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+
+    let validation_response = client
+        .post(api_url(&app, "/api/agent/validation-runs"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
+        .json(&serde_json::json!({
+            "challenge_name": "coexecuted-sum",
+            "target": "linux-arm64-cpu",
+            "artifact_base64": coexecuted_sum_solution_zip_base64(),
+            "explanation": "should fail before private bundle validation"
+        }))
+        .send()
+        .await
+        .expect("failed to submit validation request");
+
+    assert_eq!(validation_response.status(), 400);
+    let body: serde_json::Value = validation_response
+        .json()
+        .await
+        .expect("failed to decode validation error");
+    let message = body["message"]
+        .as_str()
+        .or_else(|| body["error"]["message"].as_str())
+        .unwrap_or_else(|| panic!("missing error message: {body:#}"));
+    assert!(
+        message.contains("distinct public bundle path"),
+        "unexpected validation error: {body:#}"
+    );
+    let submitted_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM solution_submissions")
+        .fetch_one(&pool)
+        .await
+        .expect("failed to count submissions");
+    assert_eq!(submitted_count.0, 0);
+}
+
 /// Verifies that piped-stdio transcript limits fail the run before result persistence.
 #[sqlx::test(migrations = "../migrations")]
 async fn worker_rejects_piped_stdio_interaction_limit(pool: sqlx::PgPool) {

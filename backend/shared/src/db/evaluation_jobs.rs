@@ -8,7 +8,9 @@ use crate::models::ids::{EvaluationJobId, SolutionSubmissionId};
 use crate::models::names::{ChallengeName, TargetName};
 use crate::models::paths::ManagedBundlePath;
 
-use super::evaluation_policy::ensure_challenge_supports_eval_type_tx;
+use super::evaluation_policy::{
+    ensure_challenge_supports_eval_type_tx, ensure_validation_uses_public_bundle,
+};
 use super::ids::{
     agent_id_from_row, challenge_name_from_row, evaluation_job_id_from_row,
     solution_submission_id_from_row, target_from_row,
@@ -285,12 +287,20 @@ pub async fn queue_evaluation_job(
         &agent_id_from_row(&row, "agent_id")?,
     )
     .await?;
+    let bundle_path = managed_bundle_path_from_row(&row, "bundle_path")?;
+    let public_bundle_path = managed_bundle_path_from_row(&row, "public_bundle_path")?;
+    ensure_validation_uses_public_bundle(
+        input.eval_type,
+        &spec,
+        &bundle_path,
+        &public_bundle_path,
+    )?;
     ensure_no_active_job_for_submission_tx(&mut tx, &input.solution_submission_id).await?;
 
     let payload = serde_json::to_value(EvaluationJobPayload {
         artifact_key: storage_key_from_row(&row, "artifact_key")?,
-        bundle_path: managed_bundle_path_from_row(&row, "bundle_path")?,
-        public_bundle_path: managed_bundle_path_from_row(&row, "public_bundle_path")?,
+        bundle_path,
+        public_bundle_path,
         challenge_name: challenge_name.clone(),
         target: target.clone(),
     })
