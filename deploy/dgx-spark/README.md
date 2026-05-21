@@ -57,6 +57,8 @@ gating remains the authoritative access control.
 | Runner result/log caps | 12 runs, 4 MiB `result.json`, 1 MiB persisted logs per run |
 | Runner security profile | `AGENTICS_RUNNER_SECURITY_PROFILE=production` |
 | Probe mode | `AGENTICS_HOST_PROBE_MODE=require` |
+| Worker accelerator capability | `AGENTICS_WORKER_ACCELERATORS=gpu` |
+| GPU probe image | Digest-pinned `cu130` Agentics CUDA image |
 
 MVP deployment supports `linux-arm64-cpu` and `linux-arm64-cuda` targets on the
 DGX Spark host. AMD64 Linux targets remain post-MVP until matching deployment
@@ -107,7 +109,8 @@ capacity exists.
    ```
 
 6. Run the hosted CLI onboarding smoke path and record DGX-3 evidence in
-   `docs/dgx-spark/en.md`.
+   `docs/dgx-spark/en.md`. For CUDA readiness, also run the image GPU smokes
+   and the ignored `cuda_smoke` integration test documented there.
 
 Stop or uninstall the profile with:
 

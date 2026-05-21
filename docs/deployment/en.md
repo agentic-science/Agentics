@@ -136,6 +136,8 @@ evaluation jobs:
   `score` phases.
 - Configure the worker with
   `AGENTICS_RUNNER_SECURITY_PROFILE=production`,
+  `AGENTICS_WORKER_ACCELERATORS=gpu`,
+  `AGENTICS_WORKER_GPU_PROBE_IMAGE`,
   `AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots`,
   `AGENTICS_RUNNER_RUNTIME_ROOT`, `AGENTICS_RUNNER_PHASE_MOUNT_ROOT`,
   `AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB`, and
@@ -182,7 +184,7 @@ Then perform a CLI smoke path using the root `README.md` submitter flow or
 ## DGX Spark Hosted Profile
 
 The DGX Spark hosted deployment is verified separately because it adds ARM64,
-NVIDIA container runtime, GPU device access, Linux systemd startup, and DGX OS
+Docker GPU device access, Linux systemd startup, and DGX OS
 lifecycle assumptions. See the DGX Spark milestones in `docs/milestones/en.md`.
 
 The first host inventory is summarized in `docs/dgx-spark/en.md`. The
@@ -192,7 +194,7 @@ repeatable check is:
 agentics-check-dgx-spark-host
 ```
 
-This check is Linux-gated and reports Docker/NVIDIA runtime blockers without
+This check is Linux-gated and reports Docker/NVIDIA GPU blockers without
 mutating host state. The current inventory confirms OS, GPU, NVIDIA toolkit,
 storage, XFS tooling, loopback tooling, default Docker GPU smoke behavior, and
 the Agentics-owned Docker daemon profile.

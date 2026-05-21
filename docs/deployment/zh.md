@@ -130,6 +130,8 @@ Hosted MVP 在接受 public evaluation jobs 前使用 Linux-only storage profile
   solution 的 `setup`、`build` 和 `run` phases，也覆盖 evaluator 的 `prepare`
   和 `score` phases。
 - 使用 `AGENTICS_RUNNER_SECURITY_PROFILE=production`、
+  `AGENTICS_WORKER_ACCELERATORS=gpu`、
+  `AGENTICS_WORKER_GPU_PROBE_IMAGE`、
   `AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots`、
   `AGENTICS_RUNNER_RUNTIME_ROOT`、`AGENTICS_RUNNER_PHASE_MOUNT_ROOT`、
   `AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB` 和
@@ -174,8 +176,8 @@ agentics-check-local-mvp
 
 ## DGX Spark Hosted Profile
 
-DGX Spark hosted deployment 单独验证，因为它加入了 ARM64、NVIDIA container
-runtime、GPU device access、Linux systemd startup 和 DGX OS lifecycle
+DGX Spark hosted deployment 单独验证，因为它加入了 ARM64、Docker GPU device
+access、Linux systemd startup 和 DGX OS lifecycle
 assumptions。见 `docs/milestones/zh.md` 中的 DGX Spark 里程碑。
 
 第一轮 host inventory 已汇总在 `docs/dgx-spark/zh.md`。
@@ -185,7 +187,7 @@ assumptions。见 `docs/milestones/zh.md` 中的 DGX Spark 里程碑。
 agentics-check-dgx-spark-host
 ```
 
-该检查带 Linux gate，会报告 Docker/NVIDIA runtime blockers，且不会修改 host
+该检查带 Linux gate，会报告 Docker/NVIDIA GPU blockers，且不会修改 host
 state。当前 inventory 已确认 OS、GPU、NVIDIA toolkit、storage、XFS tooling、
 loopback tooling、default Docker GPU smoke 行为，以及 Agentics-owned Docker
 daemon profile。

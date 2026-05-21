@@ -104,7 +104,10 @@ routes.
 
 The DGX hosted profile uses an Agentics-owned Docker daemon with Docker
 writable-layer quotas and root-prepared XFS project-quota slots for runner
-writable bind mounts.
+writable bind mounts. DGX workers set `AGENTICS_WORKER_ACCELERATORS=gpu` and a
+digest-pinned `AGENTICS_WORKER_GPU_PROBE_IMAGE`; startup fails closed if Docker
+GPU device requests cannot see a GPU, and CPU-only workers cannot claim GPU
+jobs.
 
 ## Logs And Backups
 

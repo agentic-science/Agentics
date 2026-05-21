@@ -38,7 +38,7 @@ curl -fsS -u "$AGENTICS_ADMIN_USERNAME:$AGENTICS_ADMIN_PASSWORD" \
   "$AGENTICS_API_BASE_URL/admin/service-heartbeats"
 ```
 
-Worker heartbeat 是判断 worker loop 是否存活的主要信号。每个 worker process 都使用 UUID-backed instance id，并可选带上 host label 方便阅读，因此 heartbeat 和 job claim 不会在重启或跨机器时混淆。Idle worker 应刷新 `status: "idle"` heartbeat。Running worker 应显示 claimed job id 和 solution submission id。
+Worker heartbeat 是判断 worker loop 是否存活的主要信号。每个 worker process 都使用 UUID-backed instance id，并可选带上 host label 方便阅读，因此 heartbeat 和 job claim 不会在重启或跨机器时混淆。Idle worker 应刷新 `status: "idle"` heartbeat。Running worker 应显示 claimed job id 和 solution submission id。Heartbeat payload 也会包含已配置 accelerator capability list，例如 CPU-only worker 的 `["none"]`，或 DGX GPU worker 的 `["none", "gpu"]`。
 
 ## Public Demo Quota Policy
 
@@ -109,6 +109,14 @@ evaluator-visible output caps 是 `AGENTICS_RUNNER_MAX_OUTPUT_FILES=8192`、
 attached stream shutdown grace 是
 `AGENTICS_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS=2`。持久化 runner logs 会按实际
 run count 乘以 1 MiB 限制，因此默认最大值是 12 MiB。
+
+Worker scheduling 对 GPU jobs 采用 fail-closed 策略。默认
+`AGENTICS_WORKER_ACCELERATORS=none` 只会领取无 accelerator jobs。在 DGX workers
+上设置 `AGENTICS_WORKER_ACCELERATORS=gpu` 后，worker 可以同时领取 CPU 和 GPU
+jobs。GPU mode 要求设置 `AGENTICS_WORKER_GPU_PROBE_IMAGE`；如果 host 不是
+Linux、Docker 不可达、Docker GPU device requests 不工作，或无法看到至少一个 GPU，
+startup 会失败。DGX probe baseline 应使用 digest-pinned `cu130` Agentics CUDA
+image。
 
 MVP runner containers 仍使用 image default user 和 writable root filesystem，
 这样 setup/build/run scripts 可以使用普通 package managers 和 toolchains。这是

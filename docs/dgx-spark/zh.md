@@ -30,7 +30,7 @@ MVP hosted deployment targets：
 | NVIDIA driver | `580.142` |
 | Driver-reported CUDA | `13.0` |
 | NVIDIA container toolkit | `nvidia-container-toolkit 1.19.0-1`，`libnvidia-container1 1.19.0-1` |
-| Agentics Docker daemon | `unix:///run/agentics/docker.sock`，`overlay2` on XFS，data root `/srv/agentics/docker-data-root`，可见 named `nvidia` runtime |
+| Agentics Docker daemon | `unix:///run/agentics/docker.sock`，`overlay2` on XFS，data root `/srv/agentics/docker-data-root`，Docker GPU device requests 已启用 |
 | Runner quota slots | 每个 runner phase 都有 64 MiB、256 MiB、1 GiB 和 4 GiB XFS project-quota slots，每个 class 四个 slots，每 MiB 256 个 inodes |
 
 在 DGX host 上运行可重复的 Linux-gated inventory check：
@@ -120,6 +120,8 @@ AGENTICS_WEB_BASE_URL=https://<public-hostname>
 AGENTICS_CORS_ALLOWED_ORIGINS=https://<public-hostname>
 AGENTICS_WEB_SESSION_COOKIE_SECURE=true
 AGENTICS_DOCKER_HOST=unix:///run/agentics/docker.sock
+AGENTICS_WORKER_ACCELERATORS=gpu
+AGENTICS_WORKER_GPU_PROBE_IMAGE=ghcr.io/agentic-science/agentics-linux-arm64-cuda:cu130-ubuntu24.04-v0.2.5@sha256:8e3da4a65e297e3b1e9800da001fa2bbac9ed48453a6972117a0c3ad1d1eef13
 AGENTICS_RUNNER_SECURITY_PROFILE=production
 AGENTICS_HOST_PROBE_MODE=require
 AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true
@@ -208,6 +210,9 @@ probe binary 无法运行，或 bounded runner storage 与 Docker writable-layer
 worker 会 fail closed。
 Packaged worker 默认使用 `bin/agentics-check-dgx-spark-profile`；只有当 deployment
 刻意把 probe binary 安装到其他位置时，才设置 `AGENTICS_HOST_PROBE_COMMAND`。
+当 `AGENTICS_WORKER_ACCELERATORS=gpu` 时，startup 还会要求
+`AGENTICS_WORKER_GPU_PROBE_IMAGE` 能通过 Docker GPU device requests 看到至少一个
+GPU，否则 worker 会 fail closed。
 
 普通 `uninstall` 会删除 services 和 quota storage，但保留 config、release files
 和 durable state。`uninstall --purge-data` 还会删除 `/etc/agentics`、
@@ -240,6 +245,31 @@ sudo -u agentics env \
   AGENTICS_DGX_DOCKER_PULL_POLICY=never \
   agentics-check-dgx-spark-profile
 ```
+
+使用 Docker GPU device requests 运行 CUDA image GPU smokes：
+
+```bash
+for image in \
+  ghcr.io/agentic-science/agentics-linux-arm64-cuda:cu126-ubuntu24.04-v0.2.5@sha256:d2913c5e027e95b67ab4dea49fafd0e8b12a741ec11f125b6d3807c2ac662295 \
+  ghcr.io/agentic-science/agentics-linux-arm64-cuda:cu130-ubuntu24.04-v0.2.5@sha256:8e3da4a65e297e3b1e9800da001fa2bbac9ed48453a6972117a0c3ad1d1eef13 \
+  ghcr.io/agentic-science/agentics-linux-arm64-cuda:cu132-ubuntu24.04-v0.2.5@sha256:ce63970cfc2024d729d786c63d9c8e95e4b352a03e507358ff4a82987ccfd50e
+do
+  docker run --rm --gpus 1 --platform linux/arm64 \
+    -e AGENTICS_GPU_SMOKE_REQUIRE_DEVICE=1 \
+    "$image" /opt/agentics/smoke.sh
+done
+```
+
+在 DGX 上使用本地 integration database 运行端到端 worker CUDA smoke：
+
+```bash
+DATABASE_URL=postgres://agentics:agentics@127.0.0.1:5432/agentics_test \
+  cargo test -p integration-tests --test cuda_smoke -- --ignored --nocapture
+```
+
+这个 ignored test 会发布一个临时 CUDA challenge，并使用不同的 public/private
+bundle paths；随后 queue validation 和 official GPU jobs，以
+`AGENTICS_WORKER_ACCELERATORS=gpu` 运行 worker，并验证 public leaderboard。
 
 在 DGX host 上由开发者运行 integration tests 时，应准备一个由测试用户拥有的独立
 quota root，不复用 production runner slots：
@@ -279,6 +309,7 @@ agentics-check-local-mvp
 
 2026-05-13，`MapleSpark` 上 strict DGX-2 profile verification 和 DGX-3 hosted
 application smoke 已通过。
+2026-05-22，`MapleSpark` 上 CUDA image publication 和 DGX GPU worker smoke 已通过。
 
 Smoke 覆盖：
 
@@ -289,6 +320,14 @@ Smoke 覆盖：
 - no-egress runner enforcement；
 - storage-quota escape failure；
 - capacity 和 worker heartbeat inspection。
+
+CUDA smoke 覆盖：
+
+- 已发布的 `v0.2.5` `cu126`、`cu130` 和 `cu132` GHCR image digests；
+- 每个 CUDA image 的 toolchain smoke；
+- 使用 Docker `--gpus 1` 的每个 CUDA image GPU runtime smoke；
+- ignored `cuda_smoke` integration test，覆盖 `linux-arm64-cuda` 上的 validation、
+  official evaluation、result persistence 和 leaderboard update。
 
 Storage escape run 按预期失败，worker error 为
 `phase exceeded disk limit: 100663583 > 67108864 bytes`。该失败被限制在 job disk

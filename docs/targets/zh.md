@@ -14,7 +14,7 @@ Hosted MVP 支持的 target specs 使用：
 
 `linux/amd64` targets 保留给 post-MVP deployment expansion。Target contract
 会记录可扩展的 accelerator 字段，CUDA targets 在 Linux hosts 上
-使用 Docker NVIDIA runtime 和 GPU device requests。
+使用 Docker GPU device requests。
 
 Agentics base-image source directories 按 target 命名：
 
@@ -34,7 +34,8 @@ variant 开头，例如 `cu130-*`。
 CUDA base images 不内置 PyTorch。CUDA variants 跟随 latest stable PyTorch
 支持的 CUDA versions，同时受 NVIDIA `linux/arm64` image availability 和 DGX
 smoke validation 约束。Published hosted challenge specs 必须使用 digest-pinned
-solution 和 evaluator images。
+solution 和 evaluator images。已发布的 `v0.2.5` CUDA image digests 记录在
+`docker/images/linux-arm64-cuda/README.md`。
 
 ## Schema
 
@@ -162,6 +163,15 @@ Workers 从 evaluation job payload 中读取所选 target。该 target 控制：
 - GPU targets 的 accelerator policy 和 CUDA hardware metadata。
 
 Private benchmark data 仍然只挂载到 evaluator environment。
+
+Worker job claiming 会按 accelerator capability 过滤。默认
+`AGENTICS_WORKER_ACCELERATORS=none` 只领取所选 target 不需要 accelerator 的
+jobs。`AGENTICS_WORKER_ACCELERATORS=gpu` 可以领取无 accelerator jobs 和 `gpu`
+jobs。启用 GPU mode 时，必须设置 `AGENTICS_WORKER_GPU_PROBE_IMAGE`，并应在 DGX
+Spark 上使用 digest-pinned `cu130` baseline。启动时如果 host 不是 Linux、Docker
+不可达、Docker GPU device requests 不工作，或看不到至少一个 GPU，worker 会 fail
+closed。Worker heartbeat 会包含已配置 accelerator capability list，供 admin
+inspection 使用。
 
 ## Leaderboards
 

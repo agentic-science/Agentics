@@ -32,7 +32,7 @@ The first inventory was captured on `MapleSpark` on May 12-13, 2026.
 | NVIDIA driver | `580.142` |
 | Driver-reported CUDA | `13.0` |
 | NVIDIA container toolkit | `nvidia-container-toolkit 1.19.0-1`, `libnvidia-container1 1.19.0-1` |
-| Agentics Docker daemon | `unix:///run/agentics/docker.sock`, `overlay2` on XFS, data root `/srv/agentics/docker-data-root`, named `nvidia` runtime visible |
+| Agentics Docker daemon | `unix:///run/agentics/docker.sock`, `overlay2` on XFS, data root `/srv/agentics/docker-data-root`, Docker GPU device requests enabled |
 | Runner quota slots | 64 MiB, 256 MiB, 1 GiB, and 4 GiB XFS project-quota slots for each runner phase, four slots per class, with 256 inodes per MiB |
 
 Run the repeatable Linux-gated inventory check on the DGX host:
@@ -122,6 +122,8 @@ AGENTICS_WEB_BASE_URL=https://<public-hostname>
 AGENTICS_CORS_ALLOWED_ORIGINS=https://<public-hostname>
 AGENTICS_WEB_SESSION_COOKIE_SECURE=true
 AGENTICS_DOCKER_HOST=unix:///run/agentics/docker.sock
+AGENTICS_WORKER_ACCELERATORS=gpu
+AGENTICS_WORKER_GPU_PROBE_IMAGE=ghcr.io/agentic-science/agentics-linux-arm64-cuda:cu130-ubuntu24.04-v0.2.5@sha256:8e3da4a65e297e3b1e9800da001fa2bbac9ed48453a6972117a0c3ad1d1eef13
 AGENTICS_RUNNER_SECURITY_PROFILE=production
 AGENTICS_HOST_PROBE_MODE=require
 AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true
@@ -214,6 +216,9 @@ and Docker writable-layer quota are not enabled.
 Packaged workers use `bin/agentics-check-dgx-spark-profile` by default; set
 `AGENTICS_HOST_PROBE_COMMAND` only when a deployment intentionally installs the
 probe binary somewhere else.
+With `AGENTICS_WORKER_ACCELERATORS=gpu`, startup also fails closed unless
+Docker GPU device requests work with `AGENTICS_WORKER_GPU_PROBE_IMAGE` and at
+least one GPU is visible.
 
 Plain `uninstall` removes services and quota storage while preserving config,
 release files, and durable state. `uninstall --purge-data` also removes
@@ -246,6 +251,32 @@ sudo -u agentics env \
   AGENTICS_DGX_DOCKER_PULL_POLICY=never \
   agentics-check-dgx-spark-profile
 ```
+
+Run the CUDA image GPU smokes with Docker GPU device requests:
+
+```bash
+for image in \
+  ghcr.io/agentic-science/agentics-linux-arm64-cuda:cu126-ubuntu24.04-v0.2.5@sha256:d2913c5e027e95b67ab4dea49fafd0e8b12a741ec11f125b6d3807c2ac662295 \
+  ghcr.io/agentic-science/agentics-linux-arm64-cuda:cu130-ubuntu24.04-v0.2.5@sha256:8e3da4a65e297e3b1e9800da001fa2bbac9ed48453a6972117a0c3ad1d1eef13 \
+  ghcr.io/agentic-science/agentics-linux-arm64-cuda:cu132-ubuntu24.04-v0.2.5@sha256:ce63970cfc2024d729d786c63d9c8e95e4b352a03e507358ff4a82987ccfd50e
+do
+  docker run --rm --gpus 1 --platform linux/arm64 \
+    -e AGENTICS_GPU_SMOKE_REQUIRE_DEVICE=1 \
+    "$image" /opt/agentics/smoke.sh
+done
+```
+
+Run the end-to-end worker CUDA smoke on DGX with the local integration
+database:
+
+```bash
+DATABASE_URL=postgres://agentics:agentics@127.0.0.1:5432/agentics_test \
+  cargo test -p integration-tests --test cuda_smoke -- --ignored --nocapture
+```
+
+This ignored test publishes a temporary CUDA challenge with distinct public and
+private bundle paths, queues validation and official GPU jobs, runs the worker
+with `AGENTICS_WORKER_ACCELERATORS=gpu`, and verifies the public leaderboard.
 
 For developer-run integration tests on the DGX host, prepare a separate
 test-owned quota root instead of reusing production runner slots:
@@ -287,6 +318,8 @@ status`.
 
 Strict DGX-2 profile verification and DGX-3 hosted application smoke passed on
 `MapleSpark` on May 13, 2026.
+CUDA image publication and DGX GPU worker smoke passed on `MapleSpark` on
+May 22, 2026.
 
 The smoke covered:
 
@@ -297,6 +330,14 @@ The smoke covered:
 - no-egress runner enforcement,
 - storage-quota escape failure,
 - capacity and worker heartbeat inspection.
+
+The CUDA smoke covered:
+
+- published `v0.2.5` `cu126`, `cu130`, and `cu132` GHCR image digests,
+- toolchain smoke for each CUDA image,
+- GPU runtime smoke for each CUDA image using Docker `--gpus 1`,
+- the ignored `cuda_smoke` integration test, covering validation, official
+  evaluation, result persistence, and leaderboard update on `linux-arm64-cuda`.
 
 The storage escape run failed as expected with the worker error
 `phase exceeded disk limit: 100663583 > 67108864 bytes`. The failure was

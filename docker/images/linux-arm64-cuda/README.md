@@ -3,8 +3,8 @@
 This directory defines first-party Agentics CUDA devel base images for the
 `linux-arm64-cuda` target. These images are intended for solution and evaluator
 containers on DGX Spark-class hosted deployments. They are intentionally not
-published from this checkout yet. Publish only from a stable network, smoke on
-the supported DGX host, and pin challenge specs to immutable digests.
+published automatically from this checkout. Publish only from a stable network,
+smoke on the supported DGX host, and pin challenge specs to immutable digests.
 
 ## Image Contract
 
@@ -29,6 +29,24 @@ utilities, network tools, build tools, `apt-fast` with `aria2`, `uv`, `fnm`,
 Node, Bun, rustup with the stable Rust toolchain, CUDA compiler/runtime headers,
 `jq`, `file`, `less`, `nano`, `vim-tiny`, `time`, and `tini`.
 
+## Published v0.2.5 Images
+
+The `v0.2.5` CUDA image release is public on GHCR:
+
+| Variant | Published reference | Agentics image digest | DGX smoke |
+| --- | --- | --- | --- |
+| `cu126` | `ghcr.io/agentic-science/agentics-linux-arm64-cuda:cu126-ubuntu24.04-v0.2.5` | `sha256:d2913c5e027e95b67ab4dea49fafd0e8b12a741ec11f125b6d3807c2ac662295` | Passed on NVIDIA GB10 |
+| `cu130` | `ghcr.io/agentic-science/agentics-linux-arm64-cuda:cu130-ubuntu24.04-v0.2.5` | `sha256:8e3da4a65e297e3b1e9800da001fa2bbac9ed48453a6972117a0c3ad1d1eef13` | Passed on NVIDIA GB10 |
+| `cu132` | `ghcr.io/agentic-science/agentics-linux-arm64-cuda:cu132-ubuntu24.04-v0.2.5` | `sha256:ce63970cfc2024d729d786c63d9c8e95e4b352a03e507358ff4a82987ccfd50e` | Passed on NVIDIA GB10 |
+
+Use digest-pinned references in hosted challenge specs, for example:
+
+```text
+ghcr.io/agentic-science/agentics-linux-arm64-cuda:cu130-ubuntu24.04-v0.2.5@sha256:8e3da4a65e297e3b1e9800da001fa2bbac9ed48453a6972117a0c3ad1d1eef13
+```
+
+`cu130` is the DGX Spark operational baseline for worker startup GPU probes.
+
 ## Current CUDA Variants
 
 The current variant table is kept in `variants.toml`.
@@ -40,8 +58,8 @@ The current variant table is kept in `variants.toml`.
 | `cu132` | `nvidia/cuda:13.2.0-devel-ubuntu24.04` | `sha256:f9492f2eea77fbc3d0c14fa8738f35946b42da72917bf5959d284ca39b4f209a` | Active |
 
 The table records NVIDIA manifest-list digests inspected with `docker buildx
-imagetools inspect`. Official Agentics image releases should also record the
-resulting Agentics image digest after build and smoke.
+imagetools inspect`. The published-image table above records the resulting
+Agentics image digests after build and DGX smoke.
 
 CUDA variants do not create separate leaderboard scopes. They are resource
 profile and image choices under the `linux-arm64-cuda` target. Challenge owners
@@ -104,19 +122,20 @@ NVIDIA base image from `variants.toml`:
 ```bash
 docker buildx build \
   --platform linux/arm64 \
-  --build-arg AGENTICS_IMAGE_VERSION=0.1.0 \
+  --build-arg AGENTICS_IMAGE_VERSION=0.2.5 \
   --build-arg CUDA_BASE_IMAGE=nvidia/cuda:13.0.1-devel-ubuntu24.04@sha256:7d2f6a8c2071d911524f95061a0db363e24d27aa51ec831fcccf9e76eb72bc92 \
   --build-arg CUDA_VARIANT=cu130 \
   --build-arg CUDA_VERSION=13.0 \
   --build-arg UBUNTU_VERSION=24.04 \
-  --build-arg NODE_VERSION=<concrete-node-version> \
-  --build-arg BUN_VERSION=<concrete-bun-version> \
-  -t ghcr.io/agentic-science/agentics-linux-arm64-cuda:cu130-ubuntu24.04-v0.1.0 \
+  --build-arg NODE_VERSION=24.15.0 \
+  --build-arg BUN_VERSION=1.3.14 \
+  -t ghcr.io/agentic-science/agentics-linux-arm64-cuda:cu130-ubuntu24.04-v0.2.5 \
   docker/images/linux-arm64-cuda
 ```
 
-Record the built image digest, `/opt/agentics/image-info.json`, and DGX smoke
-output in release notes. Challenge specs must use the supported
+Push release builds with `--push`, record the built image digest,
+`/opt/agentics/image-info.json`, and DGX smoke output in release notes.
+Challenge specs must use the supported
 `agentics-linux-arm64-cuda` image repository with a tag that starts with the
 declared CUDA variant, such as `cu130-*`. Local development may use
 `source: "local"` for first-party local tags. Hosted challenge specs must use

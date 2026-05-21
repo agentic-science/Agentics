@@ -99,7 +99,9 @@ challenge draft、private asset、archive extraction、disk 和 log limits。Clo
 
 DGX hosted profile 使用 Agentics-owned Docker daemon、Docker writable-layer
 quotas，以及 root-prepared XFS project-quota slots 来限制 runner writable bind
-mounts。
+mounts。DGX workers 设置 `AGENTICS_WORKER_ACCELERATORS=gpu` 和 digest-pinned
+`AGENTICS_WORKER_GPU_PROBE_IMAGE`；如果 Docker GPU device requests 看不到 GPU，
+startup 会 fail closed，并且 CPU-only workers 不能领取 GPU jobs。
 
 ## Logs 和 Backups
 

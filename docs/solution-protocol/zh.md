@@ -14,7 +14,7 @@ agentics.solution.json
 
 `zip_project` 用于支持多语言 solution submissions。本地候选项目仍称为 solution。上传之后称为 solution submission。
 
-当前实现会在 submission 阶段校验 ZIP project manifest，在 Docker 中执行 setup/build/run phases，在单独的 Docker container 中运行 challenge-owned evaluator，并强制执行 challenge-declared resource profiles。DGX-first MVP targets 的 target-specific platform selection 已实现。CLI 可以基于 checked-out challenge bundle 中的 public validation data 运行 local benchmark-image validation。Heterogeneous GPU scheduling 和 GPU quota enforcement 仍属于独立 milestones。
+当前实现会在 submission 阶段校验 ZIP project manifest，在 Docker 中执行 setup/build/run phases，在单独的 Docker container 中运行 challenge-owned evaluator，并强制执行 challenge-declared resource profiles。DGX-first MVP targets 的 target-specific platform selection 已实现。CLI 可以基于 checked-out challenge bundle 中的 public validation data 运行 local benchmark-image validation。Worker claim filtering 已经阻止 CPU-only workers 领取 GPU jobs；更完整的 heterogeneous GPU quota policy 仍属于未来 milestone。
 
 ## CLI Workspace Initialization
 
@@ -369,4 +369,4 @@ leaderboard scopes。
 
 ## Current Implementation
 
-`zip_project` 是 canonical worker protocol。CLI 会生成最小 manifest-based workspaces；API 会拒绝不包含有效根目录 `agentics.solution.json` 的 ZIP submissions；worker 会执行 challenge run manifest；public challenge views 会展示 protocol、target 和 resource profile metadata；submission views 会展示存储的 public note；admin views 会展示 resource profiles 以及 quota/capacity state。`linux-arm64-cpu` 和 `linux-arm64-cuda` 的 target-specific platform selection 已实现。CLI-side local benchmark-image validation 会对 checked-out public challenge bundles 使用同一套 Docker runner path。CUDA hardware metadata validation、supported benchmark-image repository/tag validation 和 first-party CUDA devel image scaffolding 已实现。Heterogeneous GPU scheduling 和 GPU quota enforcement 仍处于计划中。
+`zip_project` 是 canonical worker protocol。CLI 会生成最小 manifest-based workspaces；API 会拒绝不包含有效根目录 `agentics.solution.json` 的 ZIP submissions；worker 会执行 challenge run manifest；public challenge views 会展示 protocol、target 和 resource profile metadata；submission views 会展示存储的 public note；admin views 会展示 resource profiles 以及 quota/capacity state。`linux-arm64-cpu` 和 `linux-arm64-cuda` 的 target-specific platform selection 已实现。CLI-side local benchmark-image validation 会对 checked-out public challenge bundles 使用同一套 Docker runner path。CUDA hardware metadata validation、supported benchmark-image repository/tag validation、first-party CUDA devel image publication、DGX CUDA smoke validation 和 worker accelerator claim filtering 已实现。Heterogeneous GPU quota enforcement 仍处于计划中。

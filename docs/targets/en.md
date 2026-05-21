@@ -14,7 +14,7 @@ For the hosted MVP, supported target specs use:
 
 `linux/amd64` targets are reserved for post-MVP deployment expansion. The
 target contract records an extensible accelerator field, and CUDA targets use
-Docker's NVIDIA runtime and GPU device requests on Linux hosts.
+Docker GPU device requests on Linux hosts.
 
 Agentics base-image source directories are target named:
 
@@ -36,6 +36,8 @@ The CUDA base images intentionally do not include PyTorch. CUDA variants follow
 CUDA versions supported by the latest stable PyTorch release, subject to NVIDIA
 `linux/arm64` image availability and DGX smoke validation. Published hosted
 challenge specs must use digest-pinned solution and evaluator images.
+The published `v0.2.5` CUDA image digests are listed in
+`docker/images/linux-arm64-cuda/README.md`.
 
 ## Schema
 
@@ -166,6 +168,16 @@ Workers read the selected target from the evaluation job payload. The target con
 - Accelerator policy and CUDA hardware metadata for GPU targets.
 
 Private benchmark data remains mounted only in the evaluator environment.
+
+Worker job claiming is accelerator-aware. `AGENTICS_WORKER_ACCELERATORS=none`
+is the default and claims only jobs whose selected target has no accelerator.
+`AGENTICS_WORKER_ACCELERATORS=gpu` claims both no-accelerator and `gpu` jobs.
+When GPU mode is enabled, `AGENTICS_WORKER_GPU_PROBE_IMAGE` must be set to a
+published CUDA image, preferably the digest-pinned `cu130` baseline on DGX
+Spark. Startup fails closed unless the host is Linux, Docker is reachable,
+Docker GPU device requests work, and at least one GPU is visible. Worker
+heartbeats include the configured accelerator capability list for admin
+inspection.
 
 ## Leaderboards
 

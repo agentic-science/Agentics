@@ -15,7 +15,7 @@ agentics.solution.json
 
 `zip_project` is intended to support multi-language solution submissions. A local candidate is still called a solution. Once uploaded, it becomes a solution submission.
 
-The current implementation validates ZIP project manifests at submission time, executes setup/build/run phases in Docker, runs challenge-owned evaluators in a separate Docker container, and enforces challenge-declared resource profiles. Target-specific platform selection is implemented for the DGX-first MVP targets. The CLI can run local benchmark-image validation against public validation data from a checked-out challenge bundle. Heterogeneous GPU scheduling and GPU quota enforcement remain separate milestones.
+The current implementation validates ZIP project manifests at submission time, executes setup/build/run phases in Docker, runs challenge-owned evaluators in a separate Docker container, and enforces challenge-declared resource profiles. Target-specific platform selection is implemented for the DGX-first MVP targets. The CLI can run local benchmark-image validation against public validation data from a checked-out challenge bundle. Worker claim filtering now prevents CPU-only workers from claiming GPU jobs; broader heterogeneous GPU quota policy remains a future milestone.
 
 ## CLI Workspace Initialization
 
@@ -412,6 +412,6 @@ expose resource profiles plus quota/capacity state. Target-specific platform
 selection is implemented for `linux-arm64-cpu` and `linux-arm64-cuda`. CLI-side
 local benchmark-image validation uses the same Docker runner path against
 checked-out public challenge bundles. CUDA hardware metadata validation,
-supported benchmark-image repository/tag validation, and first-party CUDA devel
-image scaffolding are implemented. Heterogeneous GPU scheduling and GPU quota
-enforcement remain planned.
+supported benchmark-image repository/tag validation, first-party CUDA devel image
+publication, DGX CUDA smoke validation, and worker accelerator claim filtering
+are implemented. Heterogeneous GPU quota enforcement remains planned.

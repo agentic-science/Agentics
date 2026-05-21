@@ -38,7 +38,7 @@ curl -fsS -u "$AGENTICS_ADMIN_USERNAME:$AGENTICS_ADMIN_PASSWORD" \
   "$AGENTICS_API_BASE_URL/admin/service-heartbeats"
 ```
 
-The worker heartbeat is the main signal that a worker loop is alive. Each worker process uses a UUID-backed instance id, optionally prefixed with a host label for readability, so heartbeats and job claims are not ambiguous across restarts. An idle worker should refresh a heartbeat with `status: "idle"`. A running worker should show the claimed job id and solution submission id.
+The worker heartbeat is the main signal that a worker loop is alive. Each worker process uses a UUID-backed instance id, optionally prefixed with a host label for readability, so heartbeats and job claims are not ambiguous across restarts. An idle worker should refresh a heartbeat with `status: "idle"`. A running worker should show the claimed job id and solution submission id. Heartbeat payloads also include the configured accelerator capability list, such as `["none"]` for CPU-only workers or `["none", "gpu"]` for GPU-capable DGX workers.
 
 ## Public Demo Quota Policy
 
@@ -111,6 +111,14 @@ are capped by `AGENTICS_RUNNER_MAX_INTERACTION_BYTES_PER_DIRECTION=16777216`
 per direction, with `AGENTICS_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS=2` for
 attached stream shutdown. Persisted runner logs are capped at the concrete run
 count times 1 MiB, so the default maximum is 12 MiB.
+
+Worker scheduling is fail-closed for GPU jobs. `AGENTICS_WORKER_ACCELERATORS=none`
+is the default and can claim only no-accelerator jobs. Set
+`AGENTICS_WORKER_ACCELERATORS=gpu` on DGX workers so they can claim both CPU and
+GPU jobs. GPU mode requires `AGENTICS_WORKER_GPU_PROBE_IMAGE`, and startup fails
+unless the host is Linux, Docker is reachable, Docker GPU device requests work,
+and at least one GPU is visible. Use the digest-pinned `cu130` Agentics CUDA
+image as the DGX probe baseline.
 
 MVP runner containers still use the image default user and a writable root
 filesystem so setup/build/run scripts can use ordinary package managers and
