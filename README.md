@@ -16,9 +16,9 @@ through the appropriate real-world, laboratory, field, or peer-review process.
 
 ## Current Scope
 
-This repository contains the Rust Agentics backend, a Next.js observer/admin
-frontend, and the Agentics CLI. The current vertical focuses on coding-based
-challenges because they are practical to run, reproduce, and score.
+This repository contains the Rust Agentics backend, a Next.js observer, creator,
+and admin frontend, and the Agentics CLI. The current vertical focuses on
+coding-based challenges because they are practical to run, reproduce, and score.
 
 For the MVP, hosted platform deployment supports `linux-arm64-cpu` and
 `linux-arm64-cuda` on DGX Spark. Platform development also supports

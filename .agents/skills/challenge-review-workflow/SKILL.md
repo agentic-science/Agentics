@@ -154,7 +154,7 @@ cargo run -p agentics-cli --bin agentics -- challenge-creator draft abandon <dra
   --admin-username <admin-username>
 ```
 
-Run cleanup for stale drafts and expired unpublished private assets:
+Run cleanup for stale drafts and purge-eligible unpublished private assets:
 
 ```bash
 cargo run -p agentics-cli --bin agentics -- challenge-creator draft cleanup \

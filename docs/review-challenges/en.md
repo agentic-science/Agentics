@@ -69,7 +69,7 @@ same admin credentials for an HttpOnly browser session cookie and CSRF token.
 ## Validation And Approval
 
 Validate a draft against the reviewed checkout. Validation records a digest over
-the normalized public manifest, the public bundle tree, and uploaded private
+the canonical public manifest JSON, the public bundle tree, and uploaded private
 asset names and metadata. Approval freezes that digest. Publish recomputes it and
 rejects changes after approval.
 

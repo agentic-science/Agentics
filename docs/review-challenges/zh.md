@@ -61,8 +61,8 @@ credentials 换取 HttpOnly browser session cookie 和 CSRF token。
 
 ## Validation 和 Approval
 
-针对已 review 的 checkout 验证 draft。Validation 会基于 normalized public
-manifest、public bundle tree 和 uploaded private asset names 与 metadata 记录 digest。
+针对已 review 的 checkout 验证 draft。Validation 会基于 canonical public manifest
+JSON、public bundle tree 和 uploaded private asset names 与 metadata 记录 digest。
 Approval 会冻结该 digest。Publish 会重新计算 digest，并拒绝 approval 之后发生的
 变化。
 
