@@ -64,9 +64,10 @@ fn renders_challenge_detail_table() {
     assert!(output.contains("solution_publication: public"));
     assert!(
         output.contains(
-                "  - linux-arm64-cpu: linux/arm64 none, image=agentics-linux-arm64-cpu:ubuntu26.04-local, timeout=30 sec, memory=512 MB, validation=disabled"
+                "  - linux-arm64-cpu: linux/arm64 none, profile=python-cpu-small, solution_image=agentics-linux-arm64-cpu:ubuntu26.04-local, evaluator_image=agentics-linux-arm64-cpu:ubuntu26.04-evaluator-local, timeout=30 sec, memory=512 MB, validation=disabled"
             )
         );
+    assert!(output.contains("evaluator: command=python evaluator/run.py, result_file=result.json"));
     assert!(output.contains("ranking_metric: score"));
     assert!(output.ends_with("# Statement\n\nReturn the sum."));
 }
@@ -110,7 +111,9 @@ fn challenge_detail() -> ChallengeDetailResponse {
                     name: resource_profile_name("python-cpu-small"),
                     resource_description: None,
                     solution_image: local_image("agentics-linux-arm64-cpu:ubuntu26.04-local"),
-                    evaluator_image: local_image("agentics-linux-arm64-cpu:ubuntu26.04-local"),
+                    evaluator_image: local_image(
+                        "agentics-linux-arm64-cpu:ubuntu26.04-evaluator-local",
+                    ),
                     timeout_sec: 30,
                     memory_limit_mb: 512,
                     cpu_limit_millis: 1000,

@@ -220,7 +220,7 @@ pub(crate) fn render_challenge_detail(
                 "disabled"
             };
             Ok(format!(
-                "{} ({})\nsummary: {}\nkeywords: {}\nstarts_at: {}\ncloses_at: {}\neligibility: {}\nleaderboard_visibility: {}\nscore_distribution_visibility: {}\nresult_detail_visibility: {}\nsolution_publication: {}\nsolution_protocol: {} ({})\ntargets:\n{}\ndatasets: public={}, private_benchmark={}\nranking_metric: {}\n\n{}",
+                "{} ({})\nsummary: {}\nkeywords: {}\nstarts_at: {}\ncloses_at: {}\neligibility: {}\nleaderboard_visibility: {}\nscore_distribution_visibility: {}\nresult_detail_visibility: {}\nsolution_publication: {}\nsolution_protocol: {} ({})\nevaluator: command={}, result_file={}\ntargets:\n{}\ndatasets: public={}, private_benchmark={}\nranking_metric: {}\n\n{}",
                 response.title,
                 response.name,
                 response.summary.en,
@@ -234,6 +234,8 @@ pub(crate) fn render_challenge_detail(
                 status_label(&response.spec.solution_publication),
                 response.spec.solution.protocol,
                 response.spec.solution.manifest_file,
+                response.spec.execution.evaluator().command.join(" "),
+                response.spec.execution.evaluator().result_file,
                 format_targets(&response.spec.targets),
                 response.spec.datasets.public_dir,
                 private_benchmark,
@@ -986,11 +988,13 @@ fn format_targets(targets: &[shared::models::challenge::ChallengeTargetSpec]) ->
         .iter()
         .map(|target| {
             format!(
-                "  - {}: {} {}, image={}, timeout={} sec, memory={} MB, validation={}",
+                "  - {}: {} {}, profile={}, solution_image={}, evaluator_image={}, timeout={} sec, memory={} MB, validation={}",
                 target.name,
                 target.docker_platform.as_str(),
                 target.accelerator.as_str(),
+                target.resource_profile.name,
                 target.resource_profile.solution_image,
+                target.resource_profile.evaluator_image,
                 target.resource_profile.timeout_sec,
                 target.resource_profile.memory_limit_mb,
                 if target.validation_enabled {

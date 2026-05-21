@@ -516,6 +516,20 @@ pub enum PublicChallengeExecutionSpec {
     SeparatedEvaluator(PublicSeparatedEvaluatorExecutionSpec),
 }
 
+impl PublicChallengeExecutionSpec {
+    /// Borrow the public separated-evaluator execution contract.
+    pub fn separated_evaluator(&self) -> &PublicSeparatedEvaluatorExecutionSpec {
+        match self {
+            Self::SeparatedEvaluator(spec) => spec,
+        }
+    }
+
+    /// Borrow the evaluator command contract for the public execution topology.
+    pub fn evaluator(&self) -> &EvaluatorSpec {
+        &self.separated_evaluator().evaluator
+    }
+}
+
 impl From<ChallengeExecutionSpec> for PublicChallengeExecutionSpec {
     fn from(execution: ChallengeExecutionSpec) -> Self {
         match execution {

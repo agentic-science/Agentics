@@ -1,4 +1,4 @@
-import { Clock, Code2, MemoryStick, Package } from "lucide-react";
+import { Code2, Cpu, Package, Target } from "lucide-react";
 import { getLocale, getTranslations } from "next-intl/server";
 import { ChallengeNav } from "@/components/ChallengeNav";
 import { EvaluationModeBadges } from "@/components/EvaluationModeBadges";
@@ -40,10 +40,18 @@ export default async function ChallengeLayout({
       </div>
     );
   }
-  const primaryTarget = challenge.spec.targets[0];
   const validationEnabled = challenge.spec.targets.some(
     (target) => target.validation_enabled,
   );
+  const defaultTarget = challenge.spec.targets[0].name;
+  const targetNames = challenge.spec.targets
+    .map((target) => target.name)
+    .join(", ");
+  const resourceProfileNames = Array.from(
+    new Set(
+      challenge.spec.targets.map((target) => target.resource_profile.name),
+    ),
+  ).join(", ");
 
   return (
     <div className="flex flex-col gap-6">
@@ -81,23 +89,21 @@ export default async function ChallengeLayout({
           {/* Resource Chips */}
           <div className="grid grid-cols-2 gap-3 lg:w-auto lg:min-w-[240px]">
             <div className="card flex flex-col gap-1 py-3 px-4">
-              <Clock className="w-4 h-4 text-[var(--accent-primary-text)]" />
+              <Target className="w-4 h-4 text-[var(--accent-primary-text)]" />
               <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
-                {t("challenge.limits.timeLimit")}
+                {t("challenge.config.targets")}
               </span>
               <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
-                {primaryTarget.resource_profile.timeout_sec}
-                {t("challenge.limits.seconds")}
+                {challenge.spec.targets.length}
               </span>
             </div>
             <div className="card flex flex-col gap-1 py-3 px-4">
-              <MemoryStick className="w-4 h-4 text-[var(--accent-secondary-text)]" />
+              <Cpu className="w-4 h-4 text-[var(--accent-secondary-text)]" />
               <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
-                {t("challenge.limits.memoryLimit")}
+                {t("challenge.config.targetNames")}
               </span>
-              <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
-                {primaryTarget.resource_profile.memory_limit_mb}{" "}
-                {t("challenge.limits.mb")}
+              <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)] [overflow-wrap:anywhere]">
+                {targetNames}
               </span>
             </div>
             <div className="card flex flex-col gap-1 py-3 px-4">
@@ -112,10 +118,10 @@ export default async function ChallengeLayout({
             <div className="card flex flex-col gap-1 py-3 px-4">
               <Package className="w-4 h-4 text-[var(--accent-primary-text)]" />
               <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
-                {t("challenge.config.resourceProfile")}
+                {t("challenge.config.resourceProfiles")}
               </span>
-              <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
-                {primaryTarget.name}
+              <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)] [overflow-wrap:anywhere]">
+                {resourceProfileNames}
               </span>
             </div>
           </div>
@@ -123,7 +129,7 @@ export default async function ChallengeLayout({
       </div>
 
       {/* Tabs */}
-      <ChallengeNav challengeName={name} defaultTarget={primaryTarget.name} />
+      <ChallengeNav challengeName={name} defaultTarget={defaultTarget} />
 
       {/* Page Content */}
       {children}
