@@ -87,8 +87,8 @@ Rules:
 - `validation_enabled` is target-specific. Validation can be enabled for one target and disabled for another.
 - `resource_profile` contains the Docker images, hard resource limits, network policy, optional resource description, and optional hardware metadata for that target. The solution and evaluator images must use supported first-party Agentics image repositories and target-compatible tags. Hosted deployments must set `AGENTICS_HOST_PROBE_MODE=require` and `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`; hosted startup rejects profiles that require hosted probes but disable image digest pinning, and hosted challenge specs must use registry references with immutable `@sha256:<digest>` suffixes.
 - CPU targets must use the first-party Agentics CPU base image. Its participant-facing setup guidance is to use `apt-fast` for apt packages, `uv` for Python dependencies, `fnm` for Node version changes, Bun for JavaScript/TypeScript package management, and rustup for Rust toolchain components.
-- If any target has `validation_enabled: true`, the bundle must declare `execution.validation_runs` or `execution.validation_prepare`.
-- If private benchmark scoring is enabled, the bundle must declare `execution.official_runs` or `execution.official_prepare`.
+- If any target has `validation_enabled: true`, `separated_evaluator` bundles must declare `execution.validation_runs` or `execution.validation_prepare`, while `piped_stdio` bundles must declare `execution.validation_session` or `execution.validation_prepare`.
+- If private benchmark scoring is enabled, `separated_evaluator` bundles must declare `execution.official_runs` or `execution.official_prepare`, while `piped_stdio` bundles must declare `execution.official_session` or `execution.official_prepare`.
 
 CUDA target hardware metadata must include:
 

@@ -152,6 +152,12 @@ entries，embedded `logs` 最多包含 256 KiB UTF-8 text。Participants 和 cha
 evaluators 如果需要更大的 diagnostics，应使用 stdout/stderr，而不是把大日志塞进
 `result.json`。
 
+对于 `piped_stdio`，worker 还会用
+`AGENTICS_RUNNER_MAX_INTERACTION_BYTES_PER_DIRECTION=16777216` 限制
+interactor/participant stdio protocol 每个方向的字节数，并用
+`AGENTICS_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS=2` 控制 attached stream cleanup。
+这些是 operator-owned runner controls，不是 challenge 或 submission settings。
+
 Evaluator `result.json` 使用 declared metrics 作为 scoring contract。Completed
 official results 必须在 `aggregate_metrics` 中包含 challenge 声明的 primary metric；
 如果 challenge 只返回 pass/fail feedback，validation results 可以省略该指标。
@@ -199,25 +205,46 @@ Solution manifest 也不声明 dependency policy。Solutions 可以在 ZIP archi
 
 - `solution.protocol: "zip_project"`。
 - `solution.manifest_file: "agentics.solution.json"`。
-- `execution.mode: "separated_evaluator"`。
-- `execution.evaluator.command`，即在 evaluator container 中执行的 argv array。
-- `execution.evaluator.result_file`，即写入 `/output` 下的 result JSON path。
+- `execution.mode`，当前可以是 `"separated_evaluator"` 或 `"piped_stdio"`。
 - 必填的 challenge-level `starts_at`。
 - `targets`，每个 target 包含 target、Docker platform、required nullable accelerator、validation availability，以及包括 solution image、evaluator image、CPU、memory、disk、timeout、network policy 和可选 `hardware_metadata` 的 resource profile。
-- 启用 validation 时声明 `execution.validation_runs` 或 `execution.validation_prepare`。
-- 启用 private benchmark scoring 时声明 `execution.official_runs` 或 `execution.official_prepare`。
 
-当前唯一实现的 execution topology 是 `separated_evaluator`：setup/build 属于提交的
-solution，每个 run invocation 在 fresh solution container 中执行，可信的
-challenge-owned evaluator 随后在单独 container 中运行。`piped_stdio` 和
-`coexecuted_benchmark` 是预留的未来 topology 名称，当前 bundle validation 会拒绝它们。
+对于 `separated_evaluator`，bundle 声明 `execution.evaluator.command` 和
+`execution.evaluator.result_file`。启用 validation 时必须声明
+`execution.validation_runs` 或 `execution.validation_prepare`；启用 private benchmark
+scoring 时必须声明 `execution.official_runs` 或 `execution.official_prepare`。
+setup/build 属于提交的 solution，每个 run invocation 在 fresh solution container 中
+执行，可信的 challenge-owned evaluator 随后在单独 container 中运行。
+
+对于 `piped_stdio`，bundle 声明 `execution.interactor.command` 和
+`execution.interactor.result_file`。启用 validation 时必须声明
+`execution.validation_session` 或 `execution.validation_prepare`；启用 private benchmark
+scoring 时必须声明 `execution.official_session` 或 `execution.official_prepare`。可信的
+challenge-owned interactor 会与恰好一个 participant run container 并发运行。Worker 将
+interactor stdout 转发到 participant stdin，并将 participant stdout 转发到 interactor
+stdin。Interactor 仍然在 `/output` 下写入同一套 evaluator `result.json` contract。
+`coexecuted_benchmark` 仍是预留名称，bundle validation 会拒绝它。
 
 Target schema、target-specific validation behavior、CLI/API target selection 和
 target-specific leaderboard semantics 见 [Targets](../targets/zh.md)。
 
 Run manifests 是 challenge-owned JSON files，包含一个 `runs` array。每个 run 有稳定的 `run_name`、`interface`、可选 stdin content、可选 input files 和可选 declared output files。Run names 必须是安全的 path components，不能是 `.` 或 `..`。Input files 可以是 inline text/JSON，也可以通过安全的 `source_path` 从 challenge bundle 中按字节复制；这用于交付较大的 public 和 private benchmark inputs，而不是把它们嵌入 JSON。`stdio` runs 通过 `/io/stdin.txt` 接收 stdin，并产生 `/io/stdout.txt`。`file_system` runs 在 read-only `AGENTICS_INPUT_DIR` 下接收文件，并必须在 `AGENTICS_OUTPUT_DIR` 下写出声明的 outputs。Submitted solutions 在 `AGENTICS_RUN_NAME` 中看到的是每次 attempt 的 opaque name；challenge-owned evaluators 应使用 run manifest 和 `/solution-runs/{run_name}` tree，而不是依赖 solution-visible names。Built solution workspace 会在 run invocations 中以 read-only 方式挂载到 `/workspace`，因此 run scripts 必须把 transient files 写到 `/io`、`AGENTICS_OUTPUT_DIR`、`TMPDIR` 或 runner 声明的其他 writable paths。
 
-当某个 mode 声明 `validation_prepare` 或 `official_prepare` 时，worker 会在 solution invocations 之前用 evaluator image 运行该 prepare command。该命令会收到 `/challenge` 作为已审核 runtime bundle、`/prepared` 作为可写 prepared-data directory、`--mode`、`--target`，以及 `--runs-file /prepared/<result_runs_file>`。Worker 随后从 `/prepared` 读取生成的 run manifest，其中的 `input_files[].source_path` 会相对于 `/prepared` 解析。最终 evaluator container 会以 read-only 方式接收 `/prepared`，并通过 `--runs-file` 指向生成的 manifest。Challenge owners 可以用这个机制在 evaluation time 生成大型 private inputs、生成 reference outputs，或者下载 benchmark data，而不必把大型 private assets 提交到 GitHub。
+`piped_stdio` session manifests 是 challenge-owned JSON files，包含 `session_name`、可选
+`input_files` 和可选 object `metadata`。`input_files` 使用与 run manifests 相同的安全
+`path`、`source_path`、`content` 和 `content_json` 规则，并会被 materialize 到只有
+interactor 可见的 `/session/input`。Static session locators 会在 `/challenge` 下解析；
+prepare-generated session locators 会在 `/prepared` 下解析。Participant run containers
+永远不会收到 `/challenge`、`/prepared`、`/session`、private files 或 session source
+files。
+
+当 `separated_evaluator` 声明 `validation_prepare` 或 `official_prepare` 时，worker 会在
+solution invocations 之前用 evaluator image 运行该 prepare command。该命令会收到
+`/challenge` 作为已审核 runtime bundle、`/prepared` 作为可写 prepared-data directory、
+`--mode`、`--target`，以及 `--runs-file /prepared/<result_runs_file>`。Worker 随后从
+`/prepared` 读取生成的 run manifest，其中的 `input_files[].source_path` 会相对于
+`/prepared` 解析。最终 evaluator container 会以 read-only 方式接收 `/prepared`，并通过
+`--runs-file` 指向生成的 manifest。
 
 Prepare specs 的形状如下：
 
@@ -230,7 +257,13 @@ Prepare specs 的形状如下：
 }
 ```
 
-`network_access` 和 `reproducibility_notes` 是 challenge-owned policy 和 metadata。MVP runner 不缓存 prepare outputs，也不强制一种统一 reproducibility strategy。Challenge owners 需要对 deterministic 或 reliable generation 负责，并在 bundle、private assets 或 prepare scripts 中自行 pin 他们关心的 external data sources。
+对于 `piped_stdio`，prepare specs 使用 `result_session_file` 而不是
+`result_runs_file`，prepare command 会收到
+`--session-file /prepared/<result_session_file>`。`network_access` 和
+`reproducibility_notes` 是 challenge-owned policy 和 metadata。MVP runner 不缓存
+prepare outputs，也不强制一种统一 reproducibility strategy。Challenge owners 需要对
+deterministic 或 reliable generation 负责，并在 bundle、private assets 或 prepare
+scripts 中自行 pin 他们关心的 external data sources。
 
 每次 invocation 结束后，worker 会把只包含 regular files 的 sanitized run tree 复制到 `/solution-runs/{run_name}`，并为 evaluator 写入 `/solution-runs/{run_name}/agentics-run.json`。该 metadata 包含 `run_name`、`interface`、`exit_code`、`timed_out`、`wall_time_ms`、`stdout_path`、`stderr_path` 和 `output_dir`。这让 challenge-owned evaluator 可以把 correctness checks 与 worker-measured per-run timing 和任意 aggregate metrics 结合起来，同时阻止 submitted solutions 通过 symlink 或 special files 影响 evaluator container。
 
@@ -249,6 +282,9 @@ Worker 使用隔离的 solution 和 evaluator environments：
 - Fresh run solution container 执行每一次 `run` invocation，并以 read-only 方式挂载 built workspace。默认 fixture resource profile 会禁止 run containers 访问 external internet。
 - 可选 prepare container 会在 solution invocations 之前用 evaluator image 运行 challenge-owned setup，并把生成的 inputs 写入 `/prepared`。
 - Evaluator container 运行可信的 challenge-owner evaluator code，并使用 challenge-owner-controlled internet access。
+- 在 `piped_stdio` 中，interactor 就是可信 evaluator process。它会收到
+  `/challenge`、`/session`、可选 `/prepared` 和可写 `/output`。Participant run
+  container 只会收到 read-only `/workspace` 和 writable `/io`。
 - Private benchmark reference outputs、evaluator-only files 和 official scoring logic 只会挂载到 evaluator container。
 - Solution run container 只接收当前 CLI/stdin 或 file-mode invocation 所需的具体 input。Source-backed inputs 以 read-only 方式挂载，writable `/io` tree 仅用于 stdin/stdout/stderr capture、declared outputs、home 和 temporary files。
 - Hosted deployments 应用 bounded loopback filesystem image 支撑这些 phases

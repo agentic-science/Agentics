@@ -157,6 +157,12 @@ embedded `logs` may contain at most 256 KiB of UTF-8 text. Participants and
 challenge evaluators should use stdout/stderr for larger diagnostics instead of
 embedding large log payloads in `result.json`.
 
+For `piped_stdio`, the worker also enforces
+`AGENTICS_RUNNER_MAX_INTERACTION_BYTES_PER_DIRECTION=16777216` on each direction
+of the interactor/participant stdio protocol and
+`AGENTICS_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS=2` for attached stream cleanup.
+These are operator-owned runner controls, not challenge or submission settings.
+
 Evaluator `result.json` uses declared metrics as the scoring contract. Completed
 official results must include the challenge's declared primary metric in
 `aggregate_metrics`; validation results may omit it when the challenge only
@@ -216,19 +222,28 @@ Each current challenge bundle declares:
 
 - `solution.protocol: "zip_project"`.
 - `solution.manifest_file: "agentics.solution.json"`.
-- `execution.mode: "separated_evaluator"`.
-- `execution.evaluator.command`, an argv array executed in the evaluator container.
-- `execution.evaluator.result_file`, the result JSON path written under `/output`.
+- `execution.mode`, currently either `"separated_evaluator"` or `"piped_stdio"`.
 - Required challenge-level `starts_at`.
 - `targets`, each with a target, Docker platform, required nullable accelerator, validation availability, and a resource profile that includes solution image, evaluator image, CPU, memory, disk, timeout, network policy, and optional `hardware_metadata`.
-- `execution.validation_runs` or `execution.validation_prepare` when validation is enabled.
-- `execution.official_runs` or `execution.official_prepare` when private benchmark scoring is enabled.
 
-The only implemented execution topology is `separated_evaluator`: setup/build
-belong to the submitted solution, each run invocation executes in a fresh
-solution container, and the trusted challenge-owned evaluator runs afterward in
-a separate container. `piped_stdio` and `coexecuted_benchmark` are reserved
-future topology names and are rejected by current bundle validation.
+For `separated_evaluator`, bundles declare `execution.evaluator.command` and
+`execution.evaluator.result_file`. They must also declare
+`execution.validation_runs` or `execution.validation_prepare` when validation is
+enabled, and `execution.official_runs` or `execution.official_prepare` when
+private benchmark scoring is enabled. Setup/build belong to the submitted
+solution, each run invocation executes in a fresh solution container, and the
+trusted challenge-owned evaluator runs afterward in a separate container.
+
+For `piped_stdio`, bundles declare `execution.interactor.command` and
+`execution.interactor.result_file`. They must declare
+`execution.validation_session` or `execution.validation_prepare` when validation
+is enabled, and `execution.official_session` or `execution.official_prepare`
+when private benchmark scoring is enabled. The trusted challenge-owned
+interactor runs concurrently with exactly one participant run container. The
+worker relays interactor stdout to participant stdin and participant stdout to
+interactor stdin. The interactor writes the same evaluator `result.json` contract
+under `/output`. `coexecuted_benchmark` is still reserved and rejected by bundle
+validation.
 
 See [Targets](../targets/en.md) for the target schema,
 target-specific validation behavior, CLI/API target selection, and
@@ -236,7 +251,23 @@ target-specific leaderboard semantics.
 
 Run manifests are challenge-owned JSON files with a `runs` array. Each run has a stable `run_name`, an `interface`, optional stdin content, optional input files, and optional declared output files. Run names must be safe path components and cannot be `.` or `..`. Input files may be inline text/JSON or byte-for-byte copies from a safe `source_path` under the challenge bundle, which is how large public and private benchmark inputs are delivered without embedding them in JSON. `stdio` runs receive stdin through `/io/stdin.txt` and produce `/io/stdout.txt`. `file_system` runs receive files under read-only `AGENTICS_INPUT_DIR` and must write declared outputs under `AGENTICS_OUTPUT_DIR`. Submitted solutions see opaque per-attempt values in `AGENTICS_RUN_NAME`; challenge-owned evaluators should use the run manifest and `/solution-runs/{run_name}` tree instead of relying on solution-visible names. The built solution workspace is mounted at `/workspace` read-only during run invocations, so run scripts must write transient files under `/io`, `AGENTICS_OUTPUT_DIR`, `TMPDIR`, or another writable path declared by the runner.
 
-When a mode declares `validation_prepare` or `official_prepare`, the worker runs that prepare command in the evaluator image before solution invocations. The command receives `/challenge` as the reviewed runtime bundle, `/prepared` as a writable prepared-data directory, `--mode`, `--target`, and `--runs-file /prepared/<result_runs_file>`. The generated run manifest is then read from `/prepared`, and its `input_files[].source_path` entries are resolved relative to `/prepared`. The final evaluator container receives `/prepared` read-only and receives `--runs-file` pointing at the generated manifest. Challenge owners can use this to generate large private inputs, derive reference outputs, or download benchmark data at evaluation time without committing large private assets to GitHub.
+`piped_stdio` session manifests are challenge-owned JSON files with
+`session_name`, optional `input_files`, and optional object `metadata`.
+`input_files` use the same safe `path`, `source_path`, `content`, and
+`content_json` rules as run manifests and are materialized under interactor-only
+`/session/input`. Static session locators resolve under `/challenge`.
+Prepare-generated session locators resolve under `/prepared`. Participant run
+containers never receive `/challenge`, `/prepared`, `/session`, private files,
+or session source files.
+
+When `separated_evaluator` declares `validation_prepare` or `official_prepare`,
+the worker runs that prepare command in the evaluator image before solution
+invocations. The command receives `/challenge` as the reviewed runtime bundle,
+`/prepared` as a writable prepared-data directory, `--mode`, `--target`, and
+`--runs-file /prepared/<result_runs_file>`. The generated run manifest is then
+read from `/prepared`, and its `input_files[].source_path` entries are resolved
+relative to `/prepared`. The final evaluator container receives `/prepared`
+read-only and receives `--runs-file` pointing at the generated manifest.
 
 Prepare specs have this shape:
 
@@ -249,7 +280,14 @@ Prepare specs have this shape:
 }
 ```
 
-`network_access` and `reproducibility_notes` are challenge-owned policy and metadata. The MVP runner does not cache prepare outputs and does not enforce one reproducibility strategy. Challenge owners are responsible for deterministic or reliable generation and for pinning any external data sources inside their bundle, private assets, or prepare scripts.
+For `piped_stdio`, prepare specs use `result_session_file` instead of
+`result_runs_file`, and the prepare command receives
+`--session-file /prepared/<result_session_file>`. `network_access` and
+`reproducibility_notes` are challenge-owned policy and metadata. The MVP runner
+does not cache prepare outputs and does not enforce one reproducibility strategy.
+Challenge owners are responsible for deterministic or reliable generation and
+for pinning any external data sources inside their bundle, private assets, or
+prepare scripts.
 
 After each invocation, the worker copies a sanitized regular-file-only run tree to `/solution-runs/{run_name}` and writes `/solution-runs/{run_name}/agentics-run.json` for the evaluator. The metadata includes `run_name`, `interface`, `exit_code`, `timed_out`, `wall_time_ms`, `stdout_path`, `stderr_path`, and `output_dir`. This lets challenge-owned evaluators combine correctness checks with worker-measured per-run timing and arbitrary aggregate metrics while preventing submitted solutions from passing symlinks or special files into the evaluator container.
 
@@ -268,6 +306,10 @@ The worker uses separate solution and evaluator environments:
 - A fresh run solution container runs each `run` invocation with the built workspace mounted read-only. The default fixture resource profile disables external internet for run containers.
 - An optional prepare container runs challenge-owned setup in the evaluator image before solution invocations and writes generated inputs under `/prepared`.
 - An evaluator container runs trusted challenge-owner evaluator code and has challenge-owner-controlled internet access.
+- In `piped_stdio`, the interactor is the trusted evaluator process. It receives
+  `/challenge`, `/session`, optional `/prepared`, and writable `/output`. The
+  participant run container receives only read-only `/workspace` and writable
+  `/io`.
 - Private benchmark reference outputs, evaluator-only files, and official scoring logic are mounted only into the evaluator container.
 - The solution run container receives only the specific input needed for the current CLI/stdin or file-mode invocation. Source-backed inputs are mounted read-only, and the writable `/io` tree is limited to stdin/stdout/stderr capture, declared outputs, home, and temporary files.
 - Hosted deployments should back every writable path in these phases with a

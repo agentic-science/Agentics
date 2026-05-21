@@ -132,6 +132,8 @@ AGENTICS_RUNNER_MAX_RUNS=12
 AGENTICS_RUNNER_MAX_RESULT_JSON_BYTES=4194304
 AGENTICS_RUNNER_MAX_PUBLIC_RESULTS=1024
 AGENTICS_RUNNER_MAX_RESULT_LOG_BYTES=262144
+AGENTICS_RUNNER_MAX_INTERACTION_BYTES_PER_DIRECTION=16777216
+AGENTICS_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS=2
 ```
 
 公开 hosted profile 前必须使用非默认 `AGENTICS_ADMIN_PASSWORD`。开放 creator
@@ -171,7 +173,7 @@ directories 和 32 层 depth；setup/build dependency installs 由 XFS byte 和 
 quota 约束。每次 evaluation 最多运行 12 个 solution invocations。持久化 runner
 logs 按实际 run count 每个 1 MiB 限制，`result.json` 在解析前限制为 4 MiB，
 public evaluator feedback 限制为 1024 个 entries，embedded evaluator result logs 限制为
-256 KiB。
+256 KiB。`piped_stdio` interaction traffic 每个方向限制为 16 MiB。
 
 ## Service Startup
 

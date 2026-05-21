@@ -249,10 +249,14 @@ validation and official solution submissions.
 - Public validation data is safe to expose.
 - Private official data and reference outputs stay outside GitHub.
 - Every enabled target uses a deployment-supported target.
-- Validation is enabled only when the challenge declares `validation_runs` or
-  `validation_prepare`.
-- Official scoring is enabled only when the challenge declares `official_runs`
-  or `official_prepare`.
+- Validation is enabled only when the selected execution mode declares its
+  validation source: `validation_runs` or `validation_prepare` for
+  `separated_evaluator`, and `validation_session` or `validation_prepare` for
+  `piped_stdio`.
+- Official scoring is enabled only when the selected execution mode declares
+  its official source: `official_runs` or `official_prepare` for
+  `separated_evaluator`, and `official_session` or `official_prepare` for
+  `piped_stdio`.
 - Images use explicit `local` or `registry` sources, supported first-party
   Agentics repositories, and target-compatible tags. Hosted deployments must
   reject local images and require digest-pinned registry images.

@@ -100,8 +100,11 @@ evaluator-visible output caps 是 `AGENTICS_RUNNER_MAX_OUTPUT_FILES=8192`、
 `AGENTICS_RUNNER_MAX_OUTPUT_DEPTH=32`。Result 和 log payload caps 是
 `AGENTICS_RUNNER_MAX_RUNS=12`、`AGENTICS_RUNNER_MAX_RESULT_JSON_BYTES=4194304`、
 `AGENTICS_RUNNER_MAX_PUBLIC_RESULTS=1024` 和
-`AGENTICS_RUNNER_MAX_RESULT_LOG_BYTES=262144`。持久化 runner logs 会按实际 run
-count 乘以 1 MiB 限制，因此默认最大值是 12 MiB。
+`AGENTICS_RUNNER_MAX_RESULT_LOG_BYTES=262144`。`piped_stdio` interaction bytes
+由 `AGENTICS_RUNNER_MAX_INTERACTION_BYTES_PER_DIRECTION=16777216` 限制每个方向，
+attached stream shutdown grace 是
+`AGENTICS_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS=2`。持久化 runner logs 会按实际
+run count 乘以 1 MiB 限制，因此默认最大值是 12 MiB。
 
 MVP runner containers 仍使用 image default user 和 writable root filesystem，
 这样 setup/build/run scripts 可以使用普通 package managers 和 toolchains。这是

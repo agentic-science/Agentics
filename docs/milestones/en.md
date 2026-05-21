@@ -279,6 +279,11 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
   - Scope: Let challenge bundles declare `validation_prepare` or `official_prepare` commands that run in the evaluator image before solution invocations, write generated inputs and a generated run manifest under `/prepared`, and keep private prepared data out of the public challenge repository. Record prepare network policy and reproducibility metadata without enforcing a universal data reproducibility scheme.
   - Test spec: Add bundle parser tests for static versus prepared run modes, runner integration tests for prepare-generated `source_path` inputs, evaluator access to `/prepared`, official publish with private seed assets, and successful solution scoring through a prepared run manifest.
 
+- **M0.2-PROTO-5: Add piped stdio execution mode**
+  - Commit target: `worker: add piped stdio execution mode`
+  - Scope: Add `execution.mode: "piped_stdio"` for one interactive session where a trusted challenge-owned interactor/evaluator communicates with one participant run container through bounded stdin/stdout pipes and writes the existing evaluator result JSON.
+  - Test spec: Add bundle parser tests for session manifests and mode-specific locators, runner integration tests for happy-path interaction and byte-limit failure, and client/schema tests for displaying the execution mode and interactor metadata.
+
 ### Targets
 
 - **M0.2-TARGET-1: Define target schema**
@@ -406,6 +411,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 | `M0.2-PROTO-2: Add setup/build/run phase model` | Implemented | Resolves setup/build/run phases from script paths while deriving execution limits from challenge-owned resource profiles and platform-owned log capture settings. |
 | `M0.2-PROTO-3: Add dependency policy validation` | Deferred | Discarded as a standalone milestone; dependency reproducibility belongs to challenge owners and submitting agents and is not a participant-controlled manifest policy. |
 | `M0.2-PROTO-4: Add evaluator-owned prepare phase` | Implemented | Challenge bundles can generate validation or official run manifests and source-backed inputs in an evaluator-owned `/prepared` workspace before solution invocations. |
+| `M0.2-PROTO-5: Add piped stdio execution mode` | Implemented | Challenge bundles can run one trusted interactor/evaluator concurrently with one participant run container through bounded stdin/stdout pipes, using session manifests and the same result JSON contract. |
 | `M0.2-TARGET-1: Define target schema` | Implemented | Challenge bundles now declare `targets` with canonical ARM64 CPU/CUDA targets, Docker platform, required nullable accelerator, validation flag, and target-owned resource profile. CUDA targets require `hardware_metadata` with hardware model, GPU count, CUDA variant, and matching CUDA version metadata. AMD64 Linux targets are rejected until post-MVP deployment capacity exists. |
 | `M0.2-TARGET-2: Add target-specific evaluation and leaderboards` | Implemented | Solution submissions, jobs, evaluations, quotas, workers, API DTOs, and leaderboard rows now carry `target`; HTTP submissions validate targets before artifact decode. |
 | `M0.2-IMAGE-1: Define first-party CPU base image` | Implemented | Adds source-defined Ubuntu 26.04 CPU base image files, smoke checks, local build docs, participant guidance, and validation requiring supported CPU image repositories and `ubuntu26.04-*` tags. Publishing and digest rollout are intentionally deferred. |

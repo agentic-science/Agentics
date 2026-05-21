@@ -234,10 +234,12 @@ direct public records 可读，并拒绝新的 validation 和 official solution 
 - Public validation data 可以安全公开。
 - Private official data 和 reference outputs 保持在 GitHub 之外。
 - 每个启用的 target 都使用 deployment-supported target。
-- 只有当 challenge 声明 `validation_runs` 或 `validation_prepare` 时才启用
-  validation。
-- 只有当 challenge 声明 `official_runs` 或 `official_prepare` 时才启用 official
-  scoring。
+- 只有当所选 execution mode 声明对应 validation source 时才启用 validation：
+  `separated_evaluator` 使用 `validation_runs` 或 `validation_prepare`，
+  `piped_stdio` 使用 `validation_session` 或 `validation_prepare`。
+- 只有当所选 execution mode 声明对应 official source 时才启用 official scoring：
+  `separated_evaluator` 使用 `official_runs` 或 `official_prepare`，`piped_stdio`
+  使用 `official_session` 或 `official_prepare`。
 - Images 使用显式 `local` 或 `registry` source、受支持的 first-party Agentics
   repositories 和与 target 匹配的 tags。Hosted deployments 必须拒绝 local
   images，并要求 digest-pinned registry images。

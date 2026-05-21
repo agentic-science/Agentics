@@ -134,6 +134,8 @@ AGENTICS_RUNNER_MAX_RUNS=12
 AGENTICS_RUNNER_MAX_RESULT_JSON_BYTES=4194304
 AGENTICS_RUNNER_MAX_PUBLIC_RESULTS=1024
 AGENTICS_RUNNER_MAX_RESULT_LOG_BYTES=262144
+AGENTICS_RUNNER_MAX_INTERACTION_BYTES_PER_DIRECTION=16777216
+AGENTICS_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS=2
 ```
 
 Use a non-default `AGENTICS_ADMIN_PASSWORD` before exposing the hosted profile.
@@ -174,7 +176,8 @@ dependency installs are governed by the XFS byte and inode quota instead. Each
 evaluation may run at most 12 solution invocations. Persisted runner logs are
 capped at one MiB per concrete run, `result.json` is capped at 4 MiB before
 parsing, public evaluator feedback is capped at 1024 entries, and embedded evaluator
-result logs are capped at 256 KiB.
+result logs are capped at 256 KiB. `piped_stdio` interaction traffic is capped
+at 16 MiB in each direction.
 
 ## Service Startup
 

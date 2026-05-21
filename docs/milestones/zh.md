@@ -279,6 +279,11 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
   - Scope：允许 challenge bundles 声明 `validation_prepare` 或 `official_prepare` commands，在 solution invocations 之前用 evaluator image 运行，把生成的 inputs 和生成的 run manifest 写入 `/prepared`，并让 private prepared data 不进入 public challenge repository。记录 prepare network policy 和 reproducibility metadata，但不强制统一 data reproducibility scheme。
   - Test spec：添加 bundle parser tests 覆盖 static runs 与 prepared run modes，添加 runner integration tests 覆盖 prepare-generated `source_path` inputs、evaluator 访问 `/prepared`、使用 private seed assets 发布 official challenge，以及通过 prepared run manifest 成功评分 solution。
 
+- **M0.2-PROTO-5：添加 piped stdio execution mode**
+  - Commit target：`worker: add piped stdio execution mode`
+  - Scope：添加 `execution.mode: "piped_stdio"`，用于一个 interactive session，让 challenge-owned trusted interactor/evaluator 通过有界 stdin/stdout pipes 与一个 participant run container 通信，并写出既有 evaluator result JSON。
+  - Test spec：添加 bundle parser tests 覆盖 session manifests 和 mode-specific locators，添加 runner integration tests 覆盖成功交互和 byte-limit failure，并补充 client/schema tests 显示 execution mode 与 interactor metadata。
+
 ### Targets
 
 - **M0.2-TARGET-1：定义 target schema**
@@ -406,6 +411,7 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 | `M0.2-PROTO-2：添加 setup/build/run phase model` | 已实现 | 从 script paths 解析 setup/build/run phases，并从 challenge-owned resource profiles 与 platform-owned log capture settings 派生 execution limits。 |
 | `M0.2-PROTO-3：添加 dependency policy validation` | 已推迟 | 作为 standalone milestone 废弃；dependency reproducibility 属于 challenge owners 和 submitting agents 的责任，不再是 participant-controlled manifest policy。 |
 | `M0.2-PROTO-4：添加 evaluator-owned prepare phase` | 已实现 | Challenge bundles 可以在 solution invocations 之前，在 evaluator-owned `/prepared` workspace 中生成 validation 或 official run manifests 和 source-backed inputs。 |
+| `M0.2-PROTO-5：添加 piped stdio execution mode` | 已实现 | Challenge bundles 可以让一个 trusted interactor/evaluator 通过有界 stdin/stdout pipes 与一个 participant run container 并发运行，并使用 session manifests 与相同的 result JSON contract。 |
 | `M0.2-TARGET-1：定义 target schema` | 已实现 | Challenge bundles 现在声明带有 canonical ARM64 CPU/CUDA targets、Docker platform、required nullable accelerator、validation flag 和 target-owned resource profile 的 `targets`。CUDA targets 必须在 `hardware_metadata` 中声明 hardware model、GPU count、CUDA variant 和匹配的 CUDA version metadata。AMD64 Linux targets 在 post-MVP deployment capacity 存在前会被拒绝。 |
 | `M0.2-TARGET-2：添加 target-specific evaluations 和 leaderboards` | 已实现 | Solution submissions、jobs、evaluations、quotas、workers、API DTOs 和 leaderboard rows 现在都携带 `target`；HTTP submissions 会在 artifact decode 前校验 target。 |
 | `M0.2-IMAGE-1：定义 first-party CPU base image` | 已实现 | 添加 source-defined Ubuntu 26.04 CPU base image files、smoke checks、local build docs、participant guidance，以及要求 supported CPU image repositories 和 `ubuntu26.04-*` tags 的 validation。发布和 digest rollout 已有意推迟。 |

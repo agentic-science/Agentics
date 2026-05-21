@@ -46,10 +46,13 @@ visibility, and solution publication policy. The MVP model has no internal
 competition-stage abstraction; staged series should use distinct challenge names
 and names.
 
-Every bundle must also declare the current execution topology explicitly:
+Every bundle must also declare the execution topology explicitly. Use
 `execution.mode: "separated_evaluator"`, `execution.evaluator.command`, and
-`execution.evaluator.result_file`. The evaluator is trusted challenge-owned code
-that runs after solution invocations in a separate evaluator image.
+`execution.evaluator.result_file` for ordinary multi-run checker-style
+benchmarks. Use `execution.mode: "piped_stdio"`, `execution.interactor.command`,
+and `execution.interactor.result_file` for one interactive session where the
+trusted challenge-owned interactor is also the evaluator and writes
+`result.json`.
 
 Use required `keywords` in both `agentics.challenge.json` and the bundle
 `spec.json` so the public catalog can support keyword filtering. Keep the two
@@ -62,13 +65,13 @@ the challenge is published, use the creator console to upload delta-only JSON
 with `agent_ids_to_add`. Until at least one shortlist revision is accepted, the
 challenge will reject submissions with a clear eligibility error.
 
-If the bundle declares `datasets.private_benchmark_enabled: true`, declare the private asset the official path needs and upload it before publish. Static `execution.official_runs` usually needs `private_benchmark_data`. Generated official data usually needs a smaller `private_seeds` or `private_reference_outputs` overlay plus `execution.official_prepare`.
+If the bundle declares `datasets.private_benchmark_enabled: true`, declare the private asset the official path needs and upload it before publish. Static `execution.official_runs` or `execution.official_session` usually needs `private_benchmark_data`. Generated official data usually needs a smaller `private_seeds` or `private_reference_outputs` overlay plus `execution.official_prepare`.
 Use `private_assets[].required_paths` for any private overlay path that must
 exist in the final runtime bundle, for example `private-benchmark/runs.json` for
 static official data or `private-benchmark/config.json` for prepare-generated
 seed/config overlays.
 
-Run manifests may use `input_files[].source_path` for large public or private input files. Public validation source paths must resolve inside the public bundle. Static official source paths usually resolve inside the uploaded private benchmark overlay. Prepare-generated official source paths resolve inside `/prepared`, relative to the generated run manifest's prepared workspace. Keep expected outputs and reference data evaluator-owned; do not expose them to solution inputs unless the challenge intentionally makes them public.
+Run manifests and `piped_stdio` session manifests may use `input_files[].source_path` for large public or private input files. Public validation source paths must resolve inside the public bundle. Static official source paths usually resolve inside the uploaded private benchmark overlay. Prepare-generated official source paths resolve inside `/prepared`, relative to the generated run or session manifest's prepared workspace. Keep expected outputs and reference data evaluator-owned; do not expose them to solution inputs unless the challenge intentionally makes them public.
 
 Challenge bundles must use supported first-party Agentics images with explicit
 image sources. Local development may use `source: "local"` with
