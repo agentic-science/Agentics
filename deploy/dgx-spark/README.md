@@ -122,8 +122,8 @@ just dgx-profile uninstall --purge-data
 
 Plain `uninstall` removes services and quota storage while preserving config,
 release files, and durable state. `uninstall --purge-data` also removes
-`/etc/agentics`, `/opt/agentics`, `/srv/agentics`, `/srv/agentics-test`, and the
-`agentics` service identity.
+`/etc/agentics`, `/opt/agentics/current`, `/srv/agentics`,
+`/srv/agentics-test`, and the `agentics` service identity.
 
 Developer-run quota-sensitive integration tests should use a separate test
 quota root rather than the hosted worker slots:

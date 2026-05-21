@@ -46,8 +46,8 @@ use zip::CompressionMethod;
 use zip::write::SimpleFileOptions;
 
 use crate::support::{
-    ReportLine, SupportError, env_non_empty, print_reports, require_safe_destructive_path,
-    run_with_ctrl_c,
+    DEFAULT_OUTPUT_LIMIT_BYTES, ReportLine, SupportError, env_non_empty, print_reports,
+    require_safe_destructive_path, run_command, run_with_ctrl_c,
 };
 
 const PREFIX: &str = "agentics-demo";
@@ -64,7 +64,7 @@ const ENV_DEMO_DATABASE_URL: &str = "AGENTICS_DEMO_DATABASE_URL";
 const ENV_DEMO_CORS_ALLOWED_ORIGINS: &str = "AGENTICS_DEMO_CORS_ALLOWED_ORIGINS";
 const ENV_DEMO_WEB_ALLOWED_DEV_ORIGINS: &str = "AGENTICS_DEMO_WEB_ALLOWED_DEV_ORIGINS";
 const ENV_DEMO_PUBLIC_HOST: &str = "AGENTICS_DEMO_PUBLIC_HOST";
-const ENV_POSTGRES_PORT: &str = "AGENTICS_POSTGRES_PORT";
+const ENV_DEMO_DATABASE_URL_CONFIRM: &str = "AGENTICS_DEMO_DATABASE_URL_CONFIRM";
 const ENV_STORAGE_ROOT: &str = "AGENTICS_STORAGE_ROOT";
 const ENV_CHALLENGES_ROOT: &str = "AGENTICS_CHALLENGES_ROOT";
 const ENV_API_HOST: &str = "AGENTICS_API_HOST";
@@ -80,7 +80,10 @@ const DEFAULT_DEMO_WEB_PORT: u16 = 13_001;
 const DEFAULT_DEMO_DATABASE_NAME: &str = "agentics_demo";
 const POSTGRES_IMAGE: &str = "postgres:16-alpine";
 const POSTGRES_CONTAINER: &str = "agentics-local-demo-platform-db";
-const POSTGRES_VOLUME: &str = "agentics_platform_db_data";
+const POSTGRES_VOLUME: &str = "agentics_local_demo_postgres_data";
+const DEMO_DOCKER_LABEL_KEY: &str = "ai.agentics.local-demo";
+const DEMO_DOCKER_LABEL_VALUE: &str = "true";
+const NON_LOOPBACK_DATABASE_CONFIRMATION: &str = "non-loopback-demo-db";
 const PROCESS_TIMEOUT: Duration = Duration::from_secs(180);
 
 /// CLI for local demo orchestration.
@@ -153,7 +156,7 @@ async fn up(config: &LocalDemoConfig) -> Result<Vec<ReportLine>, LocalDemoError>
     tokio::fs::create_dir_all(&config.runtime_root).await?;
     tokio::fs::create_dir_all(&config.pid_dir).await?;
     tokio::fs::create_dir_all(&config.log_dir).await?;
-    ensure_admin_password(config).await?;
+    ensure_admin_password(config)?;
 
     let mut reports = Vec::new();
     reports.extend(install_dependencies(config).await?);
@@ -275,6 +278,7 @@ pub struct LocalDemoConfig {
     database_name: DemoDatabaseName,
     database_url: SecretString,
     admin_password: SecretString,
+    admin_password_source: AdminPasswordSource,
     api_base_url: Url,
     web_base_url: Url,
     cors_allowed_origins: String,
@@ -331,20 +335,15 @@ impl LocalDemoConfig {
             &env_value(ENV_DEMO_DATABASE_NAME, &file_env)
                 .unwrap_or_else(|| DEFAULT_DEMO_DATABASE_NAME.to_string()),
         )?;
-        let postgres_port = parse_port(
-            ENV_POSTGRES_PORT,
-            env_value(ENV_POSTGRES_PORT, &file_env).as_deref(),
-            5432,
+        let database_url_raw = resolve_demo_database_url(
+            env_non_empty(ENV_DEMO_DATABASE_URL),
+            file_env_non_empty(ENV_DEMO_DATABASE_URL, &file_env),
         )?;
-        let database_url_raw = env_non_empty(ENV_DEMO_DATABASE_URL)
-            .or_else(|| file_env_non_empty(ENV_DEMO_DATABASE_URL, &file_env))
-            .or_else(|| env_non_empty(ENV_DATABASE_URL))
-            .unwrap_or_else(|| {
-                format!(
-                    "postgres://agentics:agentics@127.0.0.1:{postgres_port}/{}",
-                    database_name.as_str()
-                )
-            });
+        let database_url = validate_demo_database_url(
+            &database_url_raw,
+            &database_name,
+            env_value(ENV_DEMO_DATABASE_URL_CONFIRM, &file_env).as_deref(),
+        )?;
         let api_base_url = parse_url(
             ENV_AGENTICS_API_BASE_URL,
             &env_non_empty(ENV_DEMO_API_BASE_URL)
@@ -359,7 +358,8 @@ impl LocalDemoConfig {
                 .or_else(|| file_env_non_empty(ENV_DEMO_WEB_BASE_URL, &file_env))
                 .unwrap_or_else(|| default_local_web_base_url("127.0.0.1", web_port)),
         )?;
-        let public_host = env_value(ENV_DEMO_PUBLIC_HOST, &file_env);
+        let public_host = env_value(ENV_DEMO_PUBLIC_HOST, &file_env)
+            .or_else(|| lan.then(detect_lan_host).flatten());
         let cors_allowed_origins = env_value(ENV_DEMO_CORS_ALLOWED_ORIGINS, &file_env)
             .or_else(|| env_value(ENV_CORS_ALLOWED_ORIGINS, &file_env))
             .unwrap_or_else(|| {
@@ -376,10 +376,7 @@ impl LocalDemoConfig {
         } else {
             repo_root.join(storage_root)
         };
-        let admin_password = env_non_empty(ENV_AGENTICS_ADMIN_PASSWORD)
-            .filter(|value| !matches!(value.as_str(), "agentics-admin" | "change-me"))
-            .map(SecretString::from)
-            .unwrap_or_else(|| SecretString::from(generate_demo_admin_password()));
+        let (admin_password, admin_password_source) = resolve_admin_password(&admin_password_file)?;
         Ok(Self {
             repo_root,
             runtime_root,
@@ -392,8 +389,9 @@ impl LocalDemoConfig {
             web_host: web_host.clone(),
             web_port,
             database_name,
-            database_url: SecretString::from(database_url_raw),
+            database_url: SecretString::from(database_url.to_string()),
             admin_password,
+            admin_password_source,
             api_base_url,
             web_base_url,
             cors_allowed_origins,
@@ -492,6 +490,13 @@ impl DemoDatabaseName {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AdminPasswordSource {
+    ExistingFile,
+    Environment,
+    Generated,
+}
+
 async fn install_dependencies(config: &LocalDemoConfig) -> Result<Vec<ReportLine>, LocalDemoError> {
     require_tool("docker")?;
     require_tool("cargo")?;
@@ -509,12 +514,7 @@ async fn start_postgres(
 ) -> Result<ReportLine, LocalDemoError> {
     let docker = Docker::connect_with_defaults()?;
     ensure_image(&docker, POSTGRES_IMAGE).await?;
-    let _ignored = docker
-        .create_volume(VolumeCreateRequest {
-            name: Some(POSTGRES_VOLUME.to_string()),
-            ..Default::default()
-        })
-        .await;
+    ensure_demo_volume(&docker).await?;
     if purge_existing {
         let _ignored = docker
             .remove_container(
@@ -523,11 +523,10 @@ async fn start_postgres(
             )
             .await;
     }
-    if docker
-        .inspect_container(POSTGRES_CONTAINER, None)
-        .await
-        .is_err()
-    {
+    let inspect = docker.inspect_container(POSTGRES_CONTAINER, None).await;
+    if let Ok(container) = &inspect {
+        require_demo_container(container)?;
+    } else {
         let mut port_bindings = HashMap::new();
         port_bindings.insert(
             "5432/tcp".to_string(),
@@ -554,6 +553,7 @@ async fn start_postgres(
                 }]),
                 ..Default::default()
             }),
+            labels: Some(demo_docker_labels()),
             ..Default::default()
         };
         let opts = CreateContainerOptionsBuilder::default()
@@ -561,31 +561,114 @@ async fn start_postgres(
             .build();
         docker.create_container(Some(opts), body).await?;
     }
-    let _ignored = docker
+    if let Err(error) = docker
         .start_container(POSTGRES_CONTAINER, None::<StartContainerOptions>)
-        .await;
+        .await
+    {
+        let inspect = docker.inspect_container(POSTGRES_CONTAINER, None).await?;
+        let running = inspect
+            .state
+            .as_ref()
+            .and_then(|state| state.running)
+            .unwrap_or(false);
+        if !running {
+            return Err(LocalDemoError::Docker(error));
+        }
+    }
     Ok(ReportLine::pass("Postgres", POSTGRES_CONTAINER))
 }
 
 async fn stop_postgres(purge_data: bool) -> Result<ReportLine, LocalDemoError> {
     let docker = Docker::connect_with_defaults()?;
-    let _ignored = docker
-        .remove_container(
-            POSTGRES_CONTAINER,
-            Some(RemoveContainerOptionsBuilder::default().force(true).build()),
-        )
-        .await;
+    if let Ok(container) = docker.inspect_container(POSTGRES_CONTAINER, None).await {
+        require_demo_container(&container)?;
+        docker
+            .remove_container(
+                POSTGRES_CONTAINER,
+                Some(RemoveContainerOptionsBuilder::default().force(true).build()),
+            )
+            .await?;
+    }
     if purge_data {
-        let _ignored = docker
+        require_demo_volume_owned(&docker).await?;
+        docker
             .remove_volume(
                 POSTGRES_VOLUME,
                 Some(RemoveVolumeOptionsBuilder::default().force(true).build()),
             )
-            .await;
+            .await?;
         Ok(ReportLine::pass("Postgres", "removed container and volume"))
     } else {
         Ok(ReportLine::pass("Postgres", "removed container"))
     }
+}
+
+async fn ensure_demo_volume(docker: &Docker) -> Result<(), LocalDemoError> {
+    match docker.inspect_volume(POSTGRES_VOLUME).await {
+        Ok(volume) => {
+            if has_demo_label(&volume.labels) {
+                Ok(())
+            } else {
+                Err(LocalDemoError::InvalidConfig(format!(
+                    "refusing to use Docker volume {POSTGRES_VOLUME} without {DEMO_DOCKER_LABEL_KEY}={DEMO_DOCKER_LABEL_VALUE}"
+                )))
+            }
+        }
+        Err(_) => {
+            docker
+                .create_volume(VolumeCreateRequest {
+                    name: Some(POSTGRES_VOLUME.to_string()),
+                    labels: Some(demo_docker_labels()),
+                    ..Default::default()
+                })
+                .await?;
+            Ok(())
+        }
+    }
+}
+
+fn require_demo_volume_record(
+    docker_volume: &bollard::models::Volume,
+) -> Result<(), LocalDemoError> {
+    if has_demo_label(&docker_volume.labels) {
+        Ok(())
+    } else {
+        Err(LocalDemoError::InvalidConfig(format!(
+            "refusing to remove Docker volume {POSTGRES_VOLUME} without {DEMO_DOCKER_LABEL_KEY}={DEMO_DOCKER_LABEL_VALUE}"
+        )))
+    }
+}
+
+async fn require_demo_volume_owned(docker: &Docker) -> Result<(), LocalDemoError> {
+    let volume = docker.inspect_volume(POSTGRES_VOLUME).await?;
+    require_demo_volume_record(&volume)
+}
+
+fn require_demo_container(
+    container: &bollard::models::ContainerInspectResponse,
+) -> Result<(), LocalDemoError> {
+    let labels = container
+        .config
+        .as_ref()
+        .and_then(|config| config.labels.as_ref());
+    if labels.is_some_and(has_demo_label) {
+        Ok(())
+    } else {
+        Err(LocalDemoError::InvalidConfig(format!(
+            "refusing to use Docker container {POSTGRES_CONTAINER} without {DEMO_DOCKER_LABEL_KEY}={DEMO_DOCKER_LABEL_VALUE}"
+        )))
+    }
+}
+
+fn demo_docker_labels() -> HashMap<String, String> {
+    HashMap::from([(
+        DEMO_DOCKER_LABEL_KEY.to_string(),
+        DEMO_DOCKER_LABEL_VALUE.to_string(),
+    )])
+}
+
+fn has_demo_label(labels: &HashMap<String, String>) -> bool {
+    labels.get(DEMO_DOCKER_LABEL_KEY).map(String::as_str) == Some(DEMO_DOCKER_LABEL_VALUE)
 }
 
 async fn ensure_image(docker: &Docker, image: &str) -> Result<(), LocalDemoError> {
@@ -673,7 +756,7 @@ async fn seed_database(config: &LocalDemoConfig) -> Result<Vec<ReportLine>, Loca
         .max_connections(3)
         .connect(config.database_url.expose_secret())
         .await?;
-    sqlx::query(DEMO_SEED_SQL).execute(&pool).await?;
+    sqlx::raw_sql(DEMO_SEED_SQL).execute(&pool).await?;
     Ok(vec![
         ReportLine::pass("demo artifacts", "wrote sample solution ZIPs"),
         ReportLine::pass(
@@ -767,6 +850,8 @@ async fn start_named_process(
         .stdin(Stdio::null())
         .stdout(Stdio::from(log))
         .stderr(Stdio::from(log_err));
+    #[cfg(unix)]
+    command.process_group(0);
     let child = command.spawn()?;
     let pid = child
         .id()
@@ -791,7 +876,8 @@ async fn stop_named_process(
         let _ignored = tokio::fs::remove_file(&pid_path).await;
         return Ok(ReportLine::skip(process.as_str(), "stale pid removed"));
     }
-    terminate_pid(pid).await?;
+    terminate_process_group(pid).await?;
+    wait_for_process_port_closed(config, process).await?;
     let _ignored = tokio::fs::remove_file(&pid_path).await;
     Ok(ReportLine::pass(
         process.as_str(),
@@ -832,15 +918,22 @@ async fn purge_demo_files(config: &LocalDemoConfig) -> Result<(), LocalDemoError
     Ok(())
 }
 
-async fn ensure_admin_password(config: &LocalDemoConfig) -> Result<(), LocalDemoError> {
-    if config.admin_password_file.exists() {
-        return Ok(());
+fn ensure_admin_password(config: &LocalDemoConfig) -> Result<(), LocalDemoError> {
+    match config.admin_password_source {
+        AdminPasswordSource::ExistingFile => {
+            secure_admin_password_file(&config.admin_password_file)?
+        }
+        AdminPasswordSource::Environment => {}
+        AdminPasswordSource::Generated => {
+            if let Some(parent) = config.admin_password_file.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            create_secret_file(
+                &config.admin_password_file,
+                config.admin_password.expose_secret(),
+            )?;
+        }
     }
-    tokio::fs::write(
-        &config.admin_password_file,
-        config.admin_password.expose_secret(),
-    )
-    .await?;
     Ok(())
 }
 
@@ -865,6 +958,13 @@ impl DemoProcess {
     fn log_path(self, config: &LocalDemoConfig) -> PathBuf {
         config.log_dir.join(format!("{}.log", self.as_str()))
     }
+
+    fn port(self, config: &LocalDemoConfig) -> u16 {
+        match self {
+            Self::Api => config.api_port,
+            Self::Web => config.web_port,
+        }
+    }
 }
 
 fn read_pid(path: &Path) -> Result<u32, LocalDemoError> {
@@ -886,13 +986,20 @@ fn pid_is_running(pid: u32) -> bool {
     }
 }
 
-async fn terminate_pid(pid: u32) -> Result<(), LocalDemoError> {
+async fn terminate_process_group(pid: u32) -> Result<(), LocalDemoError> {
     #[cfg(unix)]
     {
         use nix::sys::signal::{Signal, kill};
         use nix::unistd::Pid;
 
-        let process = Pid::from_raw(pid.cast_signed());
+        let process_id = i32::try_from(pid)
+            .map_err(|_| LocalDemoError::Process(format!("pid {pid} is too large to signal")))?;
+        let group_id = process_id.checked_neg().ok_or_else(|| {
+            LocalDemoError::Process(format!("pid {pid} cannot form a process group id"))
+        })?;
+        let group = Pid::from_raw(group_id);
+        let process = Pid::from_raw(process_id);
+        let _ignored = kill(group, Signal::SIGTERM);
         let _ignored = kill(process, Signal::SIGTERM);
         for _ in 0..20 {
             if !pid_is_running(pid) {
@@ -900,6 +1007,7 @@ async fn terminate_pid(pid: u32) -> Result<(), LocalDemoError> {
             }
             tokio::time::sleep(Duration::from_millis(200)).await;
         }
+        let _ignored = kill(group, Signal::SIGKILL);
         let _ignored = kill(process, Signal::SIGKILL);
         Ok(())
     }
@@ -912,6 +1020,28 @@ async fn terminate_pid(pid: u32) -> Result<(), LocalDemoError> {
     }
 }
 
+async fn wait_for_process_port_closed(
+    config: &LocalDemoConfig,
+    process: DemoProcess,
+) -> Result<(), LocalDemoError> {
+    let port = process.port(config);
+    for _ in 0..25 {
+        let result = tokio::time::timeout(
+            Duration::from_millis(200),
+            tokio::net::TcpStream::connect(("127.0.0.1", port)),
+        )
+        .await;
+        if !matches!(result, Ok(Ok(_))) {
+            return Ok(());
+        }
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+    Err(LocalDemoError::Process(format!(
+        "{} port {port} is still accepting connections after stop",
+        process.as_str()
+    )))
+}
+
 async fn checked_process_in<const N: usize>(
     program: &str,
     args: [&str; N],
@@ -919,23 +1049,23 @@ async fn checked_process_in<const N: usize>(
     env: HashMap<String, String>,
 ) -> Result<(), LocalDemoError> {
     let output = tokio::time::timeout(PROCESS_TIMEOUT, async {
-        Command::new(program)
+        let mut command = Command::new(program);
+        command
             .args(args)
             .envs(env)
             .current_dir(cwd)
-            .stdin(Stdio::null())
-            .output()
-            .await
+            .stdin(Stdio::null());
+        run_command(command, program, None, DEFAULT_OUTPUT_LIMIT_BYTES).await
     })
     .await
     .map_err(|_| LocalDemoError::Timeout(program.to_string()))??;
-    if output.status.success() {
+    if output.success() {
         Ok(())
     } else {
         Err(LocalDemoError::Process(format!(
-            "{program} failed: {}{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
+            "{program} failed with {:?}: {}",
+            output.status,
+            output.combined()
         )))
     }
 }
@@ -997,6 +1127,118 @@ fn parse_port(name: &str, value: Option<&str>, default: u16) -> Result<u16, Loca
 fn parse_url(name: &str, value: &str) -> Result<Url, LocalDemoError> {
     Url::parse(value)
         .map_err(|error| LocalDemoError::InvalidConfig(format!("invalid {name}: {error}")))
+}
+
+fn resolve_demo_database_url(
+    process_value: Option<String>,
+    file_value: Option<String>,
+) -> Result<String, LocalDemoError> {
+    process_value.or(file_value).ok_or_else(|| {
+        LocalDemoError::InvalidConfig(format!(
+            "{ENV_DEMO_DATABASE_URL} must be set; local demo refuses to use {ENV_DATABASE_URL} or generate an implicit database URL"
+        ))
+    })
+}
+
+fn validate_demo_database_url(
+    raw: &str,
+    database_name: &DemoDatabaseName,
+    confirmation: Option<&str>,
+) -> Result<Url, LocalDemoError> {
+    let url = parse_url(ENV_DEMO_DATABASE_URL, raw)?;
+    if !matches!(url.scheme(), "postgres" | "postgresql") {
+        return Err(LocalDemoError::InvalidConfig(format!(
+            "{ENV_DEMO_DATABASE_URL} must use postgres or postgresql scheme"
+        )));
+    }
+    let host = url.host_str().ok_or_else(|| {
+        LocalDemoError::InvalidConfig(format!("{ENV_DEMO_DATABASE_URL} must include a host"))
+    })?;
+    if !host_is_loopback(host) && confirmation != Some(NON_LOOPBACK_DATABASE_CONFIRMATION) {
+        return Err(LocalDemoError::InvalidConfig(format!(
+            "refusing non-loopback {ENV_DEMO_DATABASE_URL} host {host:?} without {ENV_DEMO_DATABASE_URL_CONFIRM}={NON_LOOPBACK_DATABASE_CONFIRMATION}"
+        )));
+    }
+    let path_database = url.path().trim_start_matches('/');
+    if path_database != database_name.as_str() {
+        return Err(LocalDemoError::InvalidConfig(format!(
+            "{ENV_DEMO_DATABASE_URL} database path must be /{}; got {:?}",
+            database_name.as_str(),
+            url.path()
+        )));
+    }
+    Ok(url)
+}
+
+fn resolve_admin_password(
+    path: &Path,
+) -> Result<(SecretString, AdminPasswordSource), LocalDemoError> {
+    if path.exists() {
+        reject_symlink(path, "admin password file")?;
+        let value = std::fs::read_to_string(path)?.trim().to_string();
+        if value.is_empty() {
+            return Err(LocalDemoError::InvalidConfig(format!(
+                "{} is empty",
+                path.display()
+            )));
+        }
+        return Ok((SecretString::from(value), AdminPasswordSource::ExistingFile));
+    }
+    if let Some(value) = env_non_empty(ENV_AGENTICS_ADMIN_PASSWORD)
+        .filter(|value| !matches!(value.as_str(), "agentics-admin" | "change-me"))
+    {
+        return Ok((SecretString::from(value), AdminPasswordSource::Environment));
+    }
+    Ok((
+        SecretString::from(generate_demo_admin_password()),
+        AdminPasswordSource::Generated,
+    ))
+}
+
+fn create_secret_file(path: &Path, secret: &str) -> Result<(), LocalDemoError> {
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(path)?;
+    file.write_all(secret.as_bytes())?;
+    secure_admin_password_file(path)?;
+    Ok(())
+}
+
+fn secure_admin_password_file(path: &Path) -> Result<(), LocalDemoError> {
+    reject_symlink(path, "admin password file")?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let permissions = std::fs::Permissions::from_mode(0o600);
+        std::fs::set_permissions(path, permissions)?;
+    }
+    Ok(())
+}
+
+fn reject_symlink(path: &Path, label: &str) -> Result<(), LocalDemoError> {
+    if std::fs::symlink_metadata(path)
+        .map(|metadata| metadata.file_type().is_symlink())
+        .unwrap_or(false)
+    {
+        return Err(LocalDemoError::InvalidConfig(format!(
+            "refusing symlink {label} {}",
+            path.display()
+        )));
+    }
+    Ok(())
+}
+
+fn detect_lan_host() -> Option<String> {
+    let socket = std::net::UdpSocket::bind(("0.0.0.0", 0)).ok()?;
+    socket.connect(("8.8.8.8", 80)).ok()?;
+    let addr = socket.local_addr().ok()?;
+    let host = addr.ip().to_string();
+    (!host_is_loopback(&host)).then_some(host)
 }
 
 fn demo_cors_allowed_origins(web_port: u16, public_host: Option<&str>, web_host: &str) -> String {
@@ -1086,7 +1328,11 @@ pub enum LocalDemoError {
 
 #[cfg(test)]
 mod tests {
-    use super::{DemoDatabaseName, demo_allowed_dev_origins, demo_cors_allowed_origins};
+    use super::{
+        DemoDatabaseName, ENV_DEMO_DATABASE_URL, NON_LOOPBACK_DATABASE_CONFIRMATION,
+        demo_allowed_dev_origins, demo_cors_allowed_origins, resolve_demo_database_url,
+        validate_demo_database_url,
+    };
 
     /// Verifies database names are constrained before SQL identifier use.
     #[test]
@@ -1106,6 +1352,51 @@ mod tests {
         assert_eq!(
             demo_allowed_dev_origins(Some("127.0.0.1"), "0.0.0.0"),
             "127.0.0.1,localhost"
+        );
+    }
+
+    /// Verifies local demo refuses implicit or generic platform database URLs.
+    #[test]
+    fn demo_database_url_must_be_explicit() {
+        let error = resolve_demo_database_url(None, None).expect_err("missing URL should fail");
+        assert!(error.to_string().contains(ENV_DEMO_DATABASE_URL));
+    }
+
+    /// Verifies demo database URLs must target the demo database on loopback by default.
+    #[test]
+    fn demo_database_url_is_validated() {
+        let name = DemoDatabaseName::parse("agentics_demo").unwrap();
+        assert!(
+            validate_demo_database_url(
+                "postgres://agentics:agentics@127.0.0.1:5432/agentics_demo",
+                &name,
+                None,
+            )
+            .is_ok()
+        );
+        assert!(
+            validate_demo_database_url(
+                "postgres://agentics:agentics@127.0.0.1:5432/agentics",
+                &name,
+                None,
+            )
+            .is_err()
+        );
+        assert!(
+            validate_demo_database_url(
+                "postgres://agentics:agentics@db.internal:5432/agentics_demo",
+                &name,
+                None,
+            )
+            .is_err()
+        );
+        assert!(
+            validate_demo_database_url(
+                "postgres://agentics:agentics@db.internal:5432/agentics_demo",
+                &name,
+                Some(NON_LOOPBACK_DATABASE_CONFIRMATION),
+            )
+            .is_ok()
         );
     }
 }

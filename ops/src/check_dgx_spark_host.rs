@@ -18,7 +18,7 @@ use std::time::Duration;
 
 use bollard::Docker;
 use bollard::container::LogOutput;
-use bollard::models::{ContainerCreateBody, DeviceRequest, HostConfig};
+use bollard::models::{ContainerCreateBody, DeviceRequest, HostConfig, HostConfigLogConfig};
 use bollard::query_parameters::{
     CreateContainerOptionsBuilder, LogsOptionsBuilder, RemoveContainerOptionsBuilder,
     StartContainerOptions, WaitContainerOptionsBuilder,
@@ -29,12 +29,12 @@ use shared::zip_project::DockerNetworkMode;
 use uuid::Uuid;
 
 use crate::dgx::{
-    DEFAULT_CUDA_IMAGE, DockerPullPolicy, ENV_DGX_CUDA_IMAGE, ENV_DGX_DOCKER_CLI,
-    ENV_DGX_DOCKER_PULL_POLICY, ENV_DGX_RUN_DOCKER_SMOKE,
+    DEFAULT_CUDA_IMAGE, DockerPullPolicy, ENV_DGX_CUDA_IMAGE, ENV_DGX_DOCKER_PULL_POLICY,
+    ENV_DGX_RUN_DOCKER_SMOKE,
 };
 use crate::support::{
-    DEFAULT_OUTPUT_LIMIT_BYTES, ReportLine, SupportError, env_non_empty, parse_bool_env,
-    print_reports, run_process, run_with_ctrl_c,
+    DEFAULT_OUTPUT_LIMIT_BYTES, ReportLine, SupportError, append_bounded_bytes, env_non_empty,
+    parse_bool_env, print_reports, run_process, run_with_ctrl_c,
 };
 
 const PREFIX: &str = "agentics-dgx-host";
@@ -206,17 +206,7 @@ async fn xfs_tool_reports(_timeout: Duration) -> Vec<ReportLine> {
 }
 
 async fn docker_reports(timeout: Duration) -> Vec<ReportLine> {
-    if let Some(raw) = env_non_empty(ENV_DGX_DOCKER_CLI) {
-        let command = match DirectCommand::parse(&raw) {
-            Ok(command) => command,
-            Err(message) => return vec![ReportLine::fail(ENV_DGX_DOCKER_CLI, message)],
-        };
-        return vec![
-            process_direct_command("docker version", &command, ["version"], timeout).await,
-            process_direct_command("docker context", &command, ["context", "ls"], timeout).await,
-        ];
-    }
-
+    let _timeout = timeout;
     match Docker::connect_with_defaults() {
         Ok(docker) => match docker.info().await {
             Ok(info) => {
@@ -301,6 +291,7 @@ async fn run_docker_smoke(
         host_config: Some(HostConfig {
             network_mode: Some(DockerNetworkMode::None.as_str().to_string()),
             auto_remove: Some(false),
+            log_config: Some(smoke_log_config()),
             device_requests: Some(vec![DeviceRequest {
                 driver: Some("nvidia".to_string()),
                 count: Some(-1),
@@ -313,41 +304,50 @@ async fn run_docker_smoke(
     };
     let opts = CreateContainerOptionsBuilder::default().name(&name).build();
     let response = docker.create_container(Some(opts), body).await?;
-    docker
-        .start_container(&response.id, None::<StartContainerOptions>)
-        .await?;
-    let mut wait = docker.wait_container(
-        &response.id,
-        Some(
-            WaitContainerOptionsBuilder::default()
-                .condition("not-running")
-                .build(),
-        ),
-    );
-    let status = tokio::time::timeout(Duration::from_secs(DOCKER_SMOKE_TIMEOUT_SECS), async {
-        let mut code = 1;
-        while let Some(item) = wait.next().await {
-            code = item?.status_code;
-        }
-        Ok::<i64, bollard::errors::Error>(code)
-    })
-    .await
-    .map_err(|_| HostCheckError::Timeout(DOCKER_SMOKE_TIMEOUT_SECS))??;
+    let container_id = response.id;
+    let result = async {
+        docker
+            .start_container(&container_id, None::<StartContainerOptions>)
+            .await?;
+        let mut wait = docker.wait_container(
+            &container_id,
+            Some(
+                WaitContainerOptionsBuilder::default()
+                    .condition("not-running")
+                    .build(),
+            ),
+        );
+        let status = tokio::time::timeout(Duration::from_secs(DOCKER_SMOKE_TIMEOUT_SECS), async {
+            let mut code = 1;
+            while let Some(item) = wait.next().await {
+                code = item?.status_code;
+            }
+            Ok::<i64, bollard::errors::Error>(code)
+        })
+        .await
+        .map_err(|_| HostCheckError::Timeout(DOCKER_SMOKE_TIMEOUT_SECS))??;
 
-    let logs = collect_container_logs(&docker, &response.id).await?;
-    let _ignored = docker
+        let logs = collect_container_logs(&docker, &container_id).await?;
+        Ok::<(i64, String), HostCheckError>((status, logs))
+    }
+    .await;
+    let cleanup = docker
         .remove_container(
-            &response.id,
+            &container_id,
             Some(RemoveContainerOptionsBuilder::default().force(true).build()),
         )
         .await;
-    if status == 0 {
-        Ok(logs)
-    } else {
-        Err(HostCheckError::DockerSmoke(format!(
+    match (result, cleanup) {
+        (Ok((0, logs)), Ok(())) => Ok(logs),
+        (Ok((status, logs)), Ok(())) => Err(HostCheckError::DockerSmoke(format!(
             "container exited with {status}: {}",
             logs.trim()
-        )))
+        ))),
+        (Err(error), Ok(())) => Err(error),
+        (Ok(_), Err(error)) => Err(HostCheckError::Docker(error)),
+        (Err(error), Err(cleanup_error)) => Err(HostCheckError::DockerSmoke(format!(
+            "{error}; additionally failed to remove Docker smoke container: {cleanup_error}"
+        ))),
     }
 }
 
@@ -362,15 +362,38 @@ async fn collect_container_logs(
         .build();
     let mut stream = docker.logs(id, Some(opts));
     let mut bytes = Vec::new();
+    let mut truncated = false;
     while let Some(item) = stream.next().await {
         match item? {
             LogOutput::StdOut { message }
             | LogOutput::StdErr { message }
-            | LogOutput::Console { message } => bytes.extend_from_slice(&message),
+            | LogOutput::Console { message } => append_bounded_bytes(
+                &mut bytes,
+                &message,
+                DEFAULT_OUTPUT_LIMIT_BYTES,
+                &mut truncated,
+            ),
             _ => {}
         }
     }
-    Ok(String::from_utf8_lossy(&bytes).into_owned())
+    let mut text = String::from_utf8_lossy(&bytes).into_owned();
+    if truncated {
+        text.push_str("\n[agentics] Docker smoke logs truncated\n");
+    }
+    Ok(text)
+}
+
+fn smoke_log_config() -> HostConfigLogConfig {
+    let mut config = std::collections::HashMap::new();
+    config.insert(
+        "max-size".to_string(),
+        format!("{}b", DEFAULT_OUTPUT_LIMIT_BYTES),
+    );
+    config.insert("max-file".to_string(), "1".to_string());
+    HostConfigLogConfig {
+        typ: Some("json-file".to_string()),
+        config: Some(config),
+    }
 }
 
 async fn process_line<const N: usize>(
@@ -383,54 +406,6 @@ async fn process_line<const N: usize>(
         label,
         run_process(program, args, Some(timeout), DEFAULT_OUTPUT_LIMIT_BYTES).await,
     )
-}
-
-async fn process_direct_command<const N: usize>(
-    label: &str,
-    command: &DirectCommand,
-    extra_args: [&str; N],
-    timeout: Duration,
-) -> ReportLine {
-    let args = command
-        .args
-        .iter()
-        .cloned()
-        .chain(extra_args.into_iter().map(String::from))
-        .collect::<Vec<_>>();
-    command_report(
-        label,
-        run_process(
-            &command.program,
-            args,
-            Some(timeout),
-            DEFAULT_OUTPUT_LIMIT_BYTES,
-        )
-        .await,
-    )
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct DirectCommand {
-    program: String,
-    args: Vec<String>,
-}
-
-impl DirectCommand {
-    fn parse(value: &str) -> Result<Self, String> {
-        let mut parts = value.split_whitespace();
-        let Some(program) = parts.next() else {
-            return Err("command must not be empty".to_string());
-        };
-        if value.contains('"') || value.contains('\'') {
-            return Err(
-                "quoted shell fragments are not supported; configure a direct command".to_string(),
-            );
-        }
-        Ok(Self {
-            program: program.to_string(),
-            args: parts.map(ToOwned::to_owned).collect(),
-        })
-    }
 }
 
 fn command_report(
@@ -485,20 +460,11 @@ enum HostCheckError {
 
 #[cfg(test)]
 mod tests {
-    use super::{DirectCommand, first_lines};
+    use super::first_lines;
 
     /// Verifies inventory output summary is bounded by line count.
     #[test]
     fn first_lines_limits_output() {
         assert_eq!(first_lines("a\nb\nc", 2), "a | b");
-    }
-
-    /// Verifies Docker CLI override is parsed as a direct command, not shell.
-    #[test]
-    fn parses_direct_command() {
-        let command = DirectCommand::parse("sudo -n docker").unwrap();
-        assert_eq!(command.program, "sudo");
-        assert_eq!(command.args, vec!["-n", "docker"]);
-        assert!(DirectCommand::parse("sudo 'docker version'").is_err());
     }
 }

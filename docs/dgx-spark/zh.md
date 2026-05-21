@@ -43,12 +43,14 @@ agentics-check-dgx-spark-host
 account：
 
 ```bash
-AGENTICS_DGX_DOCKER_CLI='sudo -n docker' \
 AGENTICS_DGX_RUN_DOCKER_SMOKE=1 \
 AGENTICS_DGX_DOCKER_PULL_POLICY=never \
 AGENTICS_DGX_CUDA_IMAGE=nvidia/cuda:13.0.1-base-ubuntu24.04 \
 agentics-check-dgx-spark-host
 ```
+
+Rust checker 直接使用 Docker API。请通过目标 daemon socket 配置 Docker 访问，
+例如设置 `DOCKER_HOST`，不要使用 Docker CLI wrapper。
 
 不要在 operator 的 default Docker daemon 上运行 public Agentics jobs。
 Agentics-owned Docker daemon 和 root-prepared quota slots 是 public jobs 的
@@ -216,7 +218,7 @@ GPU，否则 worker 会 fail closed。
 
 普通 `uninstall` 会删除 services 和 quota storage，但保留 config、release files
 和 durable state。`uninstall --purge-data` 还会删除 `/etc/agentics`、
-`/opt/agentics`、`/srv/agentics`、`/srv/agentics-test` 和 `agentics` service
+`/opt/agentics/current`、`/srv/agentics`、`/srv/agentics-test` 和 `agentics` service
 identity。
 
 ## Verification

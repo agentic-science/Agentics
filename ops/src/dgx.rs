@@ -19,6 +19,7 @@ pub const ENV_DGX_SERVICE_USER: &str = "AGENTICS_DGX_SERVICE_USER";
 pub const ENV_DGX_SERVICE_GROUP: &str = "AGENTICS_DGX_SERVICE_GROUP";
 pub const ENV_DGX_CONFIG_ROOT: &str = "AGENTICS_DGX_CONFIG_ROOT";
 pub const ENV_DGX_RELEASE_ROOT: &str = "AGENTICS_DGX_RELEASE_ROOT";
+pub const ENV_DGX_SOURCE_ROOT: &str = "AGENTICS_DGX_SOURCE_ROOT";
 pub const ENV_DGX_STATE_ROOT: &str = "AGENTICS_DGX_STATE_ROOT";
 pub const ENV_DGX_TEST_STATE_ROOT: &str = "AGENTICS_DGX_TEST_STATE_ROOT";
 pub const ENV_DGX_SYSTEMD_ROOT: &str = "AGENTICS_DGX_SYSTEMD_ROOT";
@@ -53,7 +54,6 @@ pub const ENV_DGX_PROBE_SLOT_CLASS_MB: &str = "AGENTICS_DGX_PROBE_SLOT_CLASS_MB"
 pub const ENV_DGX_RUN_MUTATING_PROBES: &str = "AGENTICS_DGX_RUN_MUTATING_PROBES";
 pub const ENV_DGX_RUN_DOCKER_SMOKE: &str = "AGENTICS_DGX_RUN_DOCKER_SMOKE";
 pub const ENV_DGX_CUDA_IMAGE: &str = "AGENTICS_DGX_CUDA_IMAGE";
-pub const ENV_DGX_DOCKER_CLI: &str = "AGENTICS_DGX_DOCKER_CLI";
 pub const ENV_DOCKER_HOST: &str = "AGENTICS_DOCKER_HOST";
 pub const ENV_RUNNER_RUNTIME_ROOT: &str = "AGENTICS_RUNNER_RUNTIME_ROOT";
 pub const ENV_RUNNER_PHASE_MOUNT_ROOT: &str = "AGENTICS_RUNNER_PHASE_MOUNT_ROOT";
@@ -66,7 +66,7 @@ pub const ENV_HOST_PROBE_MODE: &str = "AGENTICS_HOST_PROBE_MODE";
 pub const DEFAULT_SERVICE_USER: &str = "agentics";
 pub const DEFAULT_SERVICE_GROUP: &str = "agentics";
 pub const DEFAULT_CONFIG_ROOT: &str = "/etc/agentics";
-pub const DEFAULT_RELEASE_ROOT: &str = "/opt/agentics";
+pub const DEFAULT_RELEASE_ROOT: &str = "/opt/agentics/current";
 pub const DEFAULT_STATE_ROOT: &str = "/srv/agentics";
 pub const DEFAULT_TEST_STATE_ROOT: &str = "/srv/agentics-test";
 pub const DEFAULT_SYSTEMD_ROOT: &str = "/etc/systemd/system";
@@ -370,6 +370,7 @@ pub struct DgxProfileConfig {
     pub service_group: String,
     pub config_root: PathBuf,
     pub release_root: PathBuf,
+    pub source_root: PathBuf,
     pub state_root: PathBuf,
     pub test_state_root: PathBuf,
     pub systemd_root: PathBuf,
@@ -379,13 +380,24 @@ pub struct DgxProfileConfig {
 impl DgxProfileConfig {
     /// Resolve profile management config from environment.
     pub fn from_env() -> Self {
+        let release_root = env_path(ENV_DGX_RELEASE_ROOT, DEFAULT_RELEASE_ROOT);
+        let cargo_repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| release_root.clone());
+        let default_source_root = if cargo_repo_root.join("deploy/dgx-spark").is_dir() {
+            cargo_repo_root
+        } else {
+            release_root.clone()
+        };
         Self {
             service_user: support::env_non_empty(ENV_DGX_SERVICE_USER)
                 .unwrap_or_else(|| DEFAULT_SERVICE_USER.to_string()),
             service_group: support::env_non_empty(ENV_DGX_SERVICE_GROUP)
                 .unwrap_or_else(|| DEFAULT_SERVICE_GROUP.to_string()),
             config_root: env_path(ENV_DGX_CONFIG_ROOT, DEFAULT_CONFIG_ROOT),
-            release_root: env_path(ENV_DGX_RELEASE_ROOT, DEFAULT_RELEASE_ROOT),
+            release_root,
+            source_root: env_path_or_default(ENV_DGX_SOURCE_ROOT, default_source_root),
             state_root: env_path(ENV_DGX_STATE_ROOT, DEFAULT_STATE_ROOT),
             test_state_root: env_path(ENV_DGX_TEST_STATE_ROOT, DEFAULT_TEST_STATE_ROOT),
             systemd_root: env_path(ENV_DGX_SYSTEMD_ROOT, DEFAULT_SYSTEMD_ROOT),

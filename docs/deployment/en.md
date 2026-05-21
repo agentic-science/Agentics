@@ -84,7 +84,8 @@ Leave `NEXT_PUBLIC_AGENTICS_API_BASE_URL` unset when the web process proxies adm
 3. Build release binaries when rehearsing a hosted-style run:
 
    ```bash
-   cargo build --release -p api-server -p worker -p agentics-cli
+   cargo build --release -p api-server -p worker -p agentics-cli -p agentics-ops
+   test -x target/release/agentics-check-dgx-spark-profile
    cd frontends/web
    bun install
    AGENTICS_API_BASE_URL="$AGENTICS_API_BASE_URL" bun run build

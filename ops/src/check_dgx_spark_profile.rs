@@ -18,7 +18,7 @@ use std::time::Duration;
 
 use bollard::Docker;
 use bollard::container::LogOutput;
-use bollard::models::{ContainerCreateBody, HostConfig, Mount, MountType};
+use bollard::models::{ContainerCreateBody, HostConfig, HostConfigLogConfig, Mount, MountType};
 use bollard::query_parameters::{
     CreateContainerOptionsBuilder, LogsOptionsBuilder, RemoveContainerOptionsBuilder,
     StartContainerOptions, WaitContainerOptionsBuilder,
@@ -34,7 +34,8 @@ use crate::dgx::{
     ENV_DGX_RUN_MUTATING_PROBES, SlotMetadata, phase_slot_path,
 };
 use crate::support::{
-    DEFAULT_OUTPUT_LIMIT_BYTES, ReportLine, SupportError, run_process, run_with_ctrl_c,
+    DEFAULT_OUTPUT_LIMIT_BYTES, ReportLine, SupportError, append_bounded_bytes, run_process,
+    run_with_ctrl_c,
 };
 
 const PREFIX: &str = "agentics-dgx-check";
@@ -182,6 +183,9 @@ fn expected_docker_host(config: &DgxProfileCheckConfig) -> ReportLine {
 }
 
 fn check_xfs_mount(path: &Path, label: &str) -> ReportLine {
+    if !path.try_exists().unwrap_or(false) || !path.is_dir() {
+        return ReportLine::fail(label, format!("{} is missing", path.display()));
+    }
     match find_mount(path) {
         Some(mount) if mount.fstype == "xfs" && mount.has_project_quota() => ReportLine::pass(
             label,
@@ -391,8 +395,10 @@ async fn check_mutating_probe_policy(config: &DgxProfileCheckConfig) -> Vec<Repo
     vec![
         runtime_visibility_probe(config).await,
         docker_layer_quota_probe(config).await,
-        slot_quota_probe(config).await,
     ]
+    .into_iter()
+    .chain(slot_quota_probes(config).await)
+    .collect()
 }
 
 async fn runtime_visibility_probe(config: &DgxProfileCheckConfig) -> ReportLine {
@@ -454,10 +460,21 @@ async fn docker_layer_quota_probe(config: &DgxProfileCheckConfig) -> ReportLine 
     }
 }
 
-async fn slot_quota_probe(config: &DgxProfileCheckConfig) -> ReportLine {
-    let Some(phase) = config.phases.first().copied() else {
-        return ReportLine::fail("bounded slot quota probe", "no phases configured");
-    };
+async fn slot_quota_probes(config: &DgxProfileCheckConfig) -> Vec<ReportLine> {
+    if config.phases.is_empty() {
+        return vec![ReportLine::fail(
+            "bounded slot quota probe",
+            "no phases configured",
+        )];
+    }
+    let mut reports = Vec::new();
+    for phase in &config.phases {
+        reports.push(slot_quota_probe(config, *phase).await);
+    }
+    reports
+}
+
+async fn slot_quota_probe(config: &DgxProfileCheckConfig, phase: DgxPhase) -> ReportLine {
     let slot = phase_slot_path(
         &config.runner_phase_mount_root,
         phase,
@@ -490,7 +507,7 @@ async fn slot_quota_probe(config: &DgxProfileCheckConfig) -> ReportLine {
         {
             ReportLine::pass(
                 "bounded slot quota probe",
-                "failed with expected quota exhaustion",
+                format!("{phase} failed with expected quota exhaustion"),
             )
         }
         Err(error) => ReportLine::fail("bounded slot quota probe", error.to_string()),
@@ -522,6 +539,7 @@ async fn run_busybox(
         network_mode: Some(DockerNetworkMode::None.as_str().to_string()),
         mounts: Some(mounts),
         auto_remove: Some(false),
+        log_config: Some(probe_log_config()),
         ..Default::default()
     };
     if let Some(limit_mb) = storage_limit_mb {
@@ -538,40 +556,49 @@ async fn run_busybox(
     };
     let opts = CreateContainerOptionsBuilder::default().name(&name).build();
     let response = docker.create_container(Some(opts), body).await?;
-    docker
-        .start_container(&response.id, None::<StartContainerOptions>)
-        .await?;
-    let mut wait = docker.wait_container(
-        &response.id,
-        Some(
-            WaitContainerOptionsBuilder::default()
-                .condition("not-running")
-                .build(),
-        ),
-    );
-    let status = tokio::time::timeout(Duration::from_secs(DOCKER_PROBE_TIMEOUT_SECS), async {
-        let mut code = 1;
-        while let Some(item) = wait.next().await {
-            code = item?.status_code;
-        }
-        Ok::<i64, bollard::errors::Error>(code)
-    })
-    .await
-    .map_err(|_| ProfileCheckError::Probe("Docker probe timed out".to_string()))??;
-    let logs = collect_container_logs(&docker, &response.id).await?;
-    let _ignored = docker
+    let container_id = response.id;
+    let result = async {
+        docker
+            .start_container(&container_id, None::<StartContainerOptions>)
+            .await?;
+        let mut wait = docker.wait_container(
+            &container_id,
+            Some(
+                WaitContainerOptionsBuilder::default()
+                    .condition("not-running")
+                    .build(),
+            ),
+        );
+        let status = tokio::time::timeout(Duration::from_secs(DOCKER_PROBE_TIMEOUT_SECS), async {
+            let mut code = 1;
+            while let Some(item) = wait.next().await {
+                code = item?.status_code;
+            }
+            Ok::<i64, bollard::errors::Error>(code)
+        })
+        .await
+        .map_err(|_| ProfileCheckError::Probe("Docker probe timed out".to_string()))??;
+        let logs = collect_container_logs(&docker, &container_id).await?;
+        Ok::<(i64, String), ProfileCheckError>((status, logs))
+    }
+    .await;
+    let cleanup = docker
         .remove_container(
-            &response.id,
+            &container_id,
             Some(RemoveContainerOptionsBuilder::default().force(true).build()),
         )
         .await;
-    if status == 0 {
-        Ok(logs)
-    } else {
-        Err(ProfileCheckError::Probe(format!(
+    match (result, cleanup) {
+        (Ok((0, logs)), Ok(())) => Ok(logs),
+        (Ok((status, logs)), Ok(())) => Err(ProfileCheckError::Probe(format!(
             "container exited with {status}: {}",
             logs.trim()
-        )))
+        ))),
+        (Err(error), Ok(())) => Err(error),
+        (Ok(_), Err(error)) => Err(ProfileCheckError::Docker(error)),
+        (Err(error), Err(cleanup_error)) => Err(ProfileCheckError::Probe(format!(
+            "{error}; additionally failed to remove Docker probe container: {cleanup_error}"
+        ))),
     }
 }
 
@@ -586,15 +613,38 @@ async fn collect_container_logs(
         .build();
     let mut logs = docker.logs(id, Some(opts));
     let mut bytes = Vec::new();
+    let mut truncated = false;
     while let Some(item) = logs.next().await {
         match item? {
             LogOutput::StdOut { message }
             | LogOutput::StdErr { message }
-            | LogOutput::Console { message } => bytes.extend_from_slice(&message),
+            | LogOutput::Console { message } => append_bounded_bytes(
+                &mut bytes,
+                &message,
+                DEFAULT_OUTPUT_LIMIT_BYTES,
+                &mut truncated,
+            ),
             _ => {}
         }
     }
-    Ok(String::from_utf8_lossy(&bytes).into_owned())
+    let mut text = String::from_utf8_lossy(&bytes).into_owned();
+    if truncated {
+        text.push_str("\n[agentics] Docker probe logs truncated\n");
+    }
+    Ok(text)
+}
+
+fn probe_log_config() -> HostConfigLogConfig {
+    let mut config = std::collections::HashMap::new();
+    config.insert(
+        "max-size".to_string(),
+        format!("{}b", DEFAULT_OUTPUT_LIMIT_BYTES),
+    );
+    config.insert("max-file".to_string(), "1".to_string());
+    HostConfigLogConfig {
+        typ: Some("json-file".to_string()),
+        config: Some(config),
+    }
 }
 
 fn bind_mount(source: &Path, target: &str, read_only: bool) -> Mount {

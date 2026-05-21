@@ -81,7 +81,8 @@ export NEXT_PUBLIC_AGENTICS_API_BASE_URL=''
 3. 如果要演练 hosted-style 运行，构建 release binaries：
 
    ```bash
-   cargo build --release -p api-server -p worker -p agentics-cli
+   cargo build --release -p api-server -p worker -p agentics-cli -p agentics-ops
+   test -x target/release/agentics-check-dgx-spark-profile
    cd frontends/web
    bun install
    AGENTICS_API_BASE_URL="$AGENTICS_API_BASE_URL" bun run build

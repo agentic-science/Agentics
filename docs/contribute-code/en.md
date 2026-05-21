@@ -118,7 +118,8 @@ generated demo logs, seeded artifact ZIPs, and the local Postgres volume.
 ## Build Binaries
 
 ```bash
-cargo build --release -p api-server -p worker -p agentics-cli
+cargo build --release -p api-server -p worker -p agentics-cli -p agentics-ops
+test -x target/release/agentics-check-dgx-spark-profile
 ```
 
 Build the web frontend:

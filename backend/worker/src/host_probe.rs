@@ -1,6 +1,6 @@
 //! Hosted runner profile probe enforcement.
 
-use std::process::ExitStatus;
+use std::process::{ExitStatus, Stdio};
 use std::time::Duration;
 
 use bollard::Docker;
@@ -16,6 +16,7 @@ use shared::config::{
     WorkerAccelerators,
 };
 use shared::zip_project::DockerNetworkMode;
+use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::Command;
 use tokio::time::timeout;
 use tracing::{info, warn};
@@ -23,6 +24,7 @@ use uuid::Uuid;
 
 const MAX_PROBE_OUTPUT_BYTES: usize = 8192;
 const GPU_PROBE_TIMEOUT_SECS: u64 = 30;
+const HOST_PROBE_TIMEOUT_SECS: u64 = 60;
 
 /// Run the configured hosted profile probe before the worker accepts jobs.
 pub(crate) async fn enforce_host_probe(config: &Config) -> anyhow::Result<()> {
@@ -32,18 +34,31 @@ pub(crate) async fn enforce_host_probe(config: &Config) -> anyhow::Result<()> {
             let mode = config.host_probe_mode;
             let command = std::env::var(ENV_AGENTICS_HOST_PROBE_COMMAND)
                 .unwrap_or_else(|_| DEFAULT_HOST_PROBE_COMMAND.to_string());
-            let output = Command::new(&command)
-                .env("AGENTICS_HOST_PROBE_MODE", mode.as_str())
-                .output()
-                .await;
+            let output = run_host_probe_command(&command, mode).await;
             match output {
-                Ok(output) if output.status.success() => {
+                Ok(output)
+                    if output.status.success() && !output_contains_failure(&output.stdout) =>
+                {
                     info!("host profile probe passed");
                     Ok(())
                 }
+                Ok(output) if output.status.success() => handle_probe_failure(
+                    mode,
+                    format_probe_failure(
+                        Some(output.status),
+                        &output.stdout,
+                        &output.stderr,
+                        output.truncated,
+                    ),
+                ),
                 Ok(output) => handle_probe_failure(
                     mode,
-                    format_probe_failure(Some(output.status), &output.stdout, &output.stderr),
+                    format_probe_failure(
+                        Some(output.status),
+                        &output.stdout,
+                        &output.stderr,
+                        output.truncated,
+                    ),
                 ),
                 Err(error) => handle_probe_failure(
                     mode,
@@ -52,6 +67,91 @@ pub(crate) async fn enforce_host_probe(config: &Config) -> anyhow::Result<()> {
             }
         }
     }
+}
+
+#[derive(Debug)]
+struct HostProbeCommandOutput {
+    status: ExitStatus,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+    truncated: bool,
+}
+
+async fn run_host_probe_command(
+    command: &str,
+    mode: HostProbeMode,
+) -> anyhow::Result<HostProbeCommandOutput> {
+    let mut child = Command::new(command)
+        .env("AGENTICS_HOST_PROBE_MODE", mode.as_str())
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|error| {
+            anyhow::anyhow!("failed to run host profile probe `{command}`: {error}")
+        })?;
+
+    let mut stdout = child.stdout.take();
+    let mut stderr = child.stderr.take();
+    let stdout_task = tokio::spawn(async move { read_bounded_output(&mut stdout).await });
+    let stderr_task = tokio::spawn(async move { read_bounded_output(&mut stderr).await });
+    let status = match timeout(Duration::from_secs(HOST_PROBE_TIMEOUT_SECS), child.wait()).await {
+        Ok(result) => result.map_err(|error| {
+            anyhow::anyhow!("failed to wait for host profile probe `{command}`: {error}")
+        })?,
+        Err(_) => {
+            let _ignored = child.kill().await;
+            let _ignored = child.wait().await;
+            anyhow::bail!(
+                "host profile probe `{command}` timed out after {HOST_PROBE_TIMEOUT_SECS}s"
+            );
+        }
+    };
+    let (stdout, stdout_truncated) = stdout_task
+        .await
+        .map_err(|error| anyhow::anyhow!("failed to join host probe stdout task: {error}"))?
+        .map_err(|error| anyhow::anyhow!("failed to read host probe stdout: {error}"))?;
+    let (stderr, stderr_truncated) = stderr_task
+        .await
+        .map_err(|error| anyhow::anyhow!("failed to join host probe stderr task: {error}"))?
+        .map_err(|error| anyhow::anyhow!("failed to read host probe stderr: {error}"))?;
+
+    Ok(HostProbeCommandOutput {
+        status,
+        stdout,
+        stderr,
+        truncated: stdout_truncated || stderr_truncated,
+    })
+}
+
+async fn read_bounded_output<R>(stream: &mut Option<R>) -> Result<(Vec<u8>, bool), std::io::Error>
+where
+    R: AsyncRead + Unpin,
+{
+    let mut output = Vec::new();
+    let mut truncated = false;
+    let Some(stream) = stream.as_mut() else {
+        return Ok((output, truncated));
+    };
+    let mut chunk = [0u8; 8192];
+    loop {
+        let read = stream.read(&mut chunk).await?;
+        if read == 0 {
+            break;
+        }
+        let slice = chunk
+            .get(..read)
+            .ok_or_else(|| std::io::Error::other("read exceeded buffer size"))?;
+        append_bounded_bytes(&mut output, slice, &mut truncated);
+    }
+    Ok((output, truncated))
+}
+
+fn output_contains_failure(stdout: &[u8]) -> bool {
+    String::from_utf8_lossy(stdout)
+        .lines()
+        .any(|line| line.contains("] FAIL "))
 }
 
 /// Run a Docker-backed GPU probe before GPU-capable workers accept jobs.
@@ -273,13 +373,25 @@ fn handle_probe_failure(mode: HostProbeMode, message: String) -> anyhow::Result<
 }
 
 /// Format bounded probe output for worker logs and startup errors.
-fn format_probe_failure(status: Option<ExitStatus>, stdout: &[u8], stderr: &[u8]) -> String {
+fn format_probe_failure(
+    status: Option<ExitStatus>,
+    stdout: &[u8],
+    stderr: &[u8],
+    truncated: bool,
+) -> String {
     let status = status
         .map(|status| status.to_string())
         .unwrap_or_else(|| "unknown status".to_string());
     let stdout = bounded_utf8(stdout);
     let stderr = bounded_utf8(stderr);
-    format!("host profile probe failed with {status}\nstdout:\n{stdout}\nstderr:\n{stderr}")
+    let truncation = if truncated {
+        "\n[agentics] host profile probe output truncated"
+    } else {
+        ""
+    };
+    format!(
+        "host profile probe failed with {status}\nstdout:\n{stdout}\nstderr:\n{stderr}{truncation}"
+    )
 }
 
 /// Convert command output to bounded UTF-8 text.
@@ -300,7 +412,9 @@ fn bounded_utf8(bytes: &[u8]) -> String {
 mod tests {
     use shared::config::HostProbeMode;
 
-    use super::{append_bounded_bytes, bounded_utf8, handle_probe_failure};
+    use super::{
+        append_bounded_bytes, bounded_utf8, handle_probe_failure, output_contains_failure,
+    };
 
     /// Verifies require mode fails closed when the hosted probe fails.
     #[test]
@@ -340,5 +454,16 @@ mod tests {
 
         assert_eq!(output.len(), super::MAX_PROBE_OUTPUT_BYTES);
         assert!(truncated);
+    }
+
+    /// Verifies warn-mode checker output that exits zero still surfaces failures.
+    #[test]
+    fn host_probe_output_failure_lines_are_detected() {
+        assert!(output_contains_failure(
+            b"[agentics-dgx-check] FAIL mutating probes - missing\n"
+        ));
+        assert!(!output_contains_failure(
+            b"[agentics-dgx-check] PASS runner profile modes - ok\n"
+        ));
     }
 }

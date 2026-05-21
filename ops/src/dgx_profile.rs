@@ -22,12 +22,14 @@ use clap::{Parser, Subcommand};
 use nix::unistd::Uid;
 
 use crate::dgx::{
-    DgxProfileConfig, ENV_DGX_PROFILE_CONFIRM, PROFILE_PURGE_CONFIRMATION, STORAGE_CONFIRMATION,
+    DEFAULT_CONFIG_ROOT, DEFAULT_DOCKER_HOST_URI, DEFAULT_RELEASE_ROOT, DEFAULT_STATE_ROOT,
+    DEFAULT_TEST_STATE_ROOT, DgxProfileConfig, ENV_DGX_PERSIST_FSTAB, ENV_DGX_PROFILE_CONFIRM,
+    PROFILE_PURGE_CONFIRMATION, STORAGE_CONFIRMATION,
 };
-use crate::dgx_storage::{StorageError, prepare_storage};
+use crate::dgx_storage::{StorageError, prepare_storage_config};
 use crate::support::{
     DEFAULT_OUTPUT_LIMIT_BYTES, ReportLine, SupportError, env_non_empty, print_reports,
-    require_safe_destructive_path, run_process, run_with_ctrl_c,
+    require_safe_destructive_path, run_process,
 };
 
 const PREFIX: &str = "agentics-dgx-profile";
@@ -88,16 +90,17 @@ pub enum ProfileCommand {
 /// Run this command from process args and env.
 pub async fn run_from_process() -> ExitCode {
     let cli = Cli::parse();
-    run_with_ctrl_c(PREFIX, async move {
-        match run(cli).await {
-            Ok(reports) => print_reports(PREFIX, &reports),
-            Err(error) => {
-                eprintln!("[{PREFIX}] ERROR: {error}");
-                ExitCode::from(2)
-            }
+    match run(cli).await {
+        Ok(reports) => print_reports(PREFIX, &reports),
+        Err(ProfileError::Interrupted) => {
+            eprintln!("[{PREFIX}] interrupted by Ctrl-C");
+            ExitCode::from(crate::support::INTERRUPTED_EXIT)
         }
-    })
-    .await
+        Err(error) => {
+            eprintln!("[{PREFIX}] ERROR: {error}");
+            ExitCode::from(2)
+        }
+    }
 }
 
 async fn run(cli: Cli) -> Result<Vec<ReportLine>, ProfileError> {
@@ -134,7 +137,17 @@ async fn install_profile(
     let mut rollback = InstallRollback::default();
     let mut reports = Vec::new();
     for action in &plan.actions {
-        match apply_install_action(config, action, &mut rollback).await {
+        let result = tokio::select! {
+            result = apply_install_action(config, action, &mut rollback) => result,
+            signal = tokio::signal::ctrl_c() => {
+                if signal.is_ok() {
+                    rollback.rollback().await;
+                    return Err(ProfileError::Interrupted);
+                }
+                Err(ProfileError::Interrupted)
+            }
+        };
+        match result {
             Ok(message) => reports.push(ReportLine::pass(action.label(), message)),
             Err(error) => {
                 rollback.rollback().await;
@@ -182,7 +195,7 @@ async fn uninstall_profile(
 ) -> Result<Vec<ReportLine>, ProfileError> {
     require_linux_and_root(dry_run)?;
     require_purge_confirmation(purge_data, dry_run)?;
-    validate_uninstall_roots(config)?;
+    validate_uninstall_roots(config, purge_data)?;
     let plan = UninstallPlan::from_config(config, purge_data);
     if dry_run {
         return Ok(plan
@@ -194,7 +207,16 @@ async fn uninstall_profile(
 
     let mut reports = Vec::new();
     for action in plan.actions {
-        match apply_uninstall_action(config, &action).await {
+        let result = tokio::select! {
+            result = apply_uninstall_action(config, &action) => result,
+            signal = tokio::signal::ctrl_c() => {
+                if signal.is_ok() {
+                    return Err(ProfileError::Interrupted);
+                }
+                Err(ProfileError::Interrupted)
+            }
+        };
+        match result {
             Ok(message) => reports.push(ReportLine::pass(action.label(), message)),
             Err(error) => reports.push(ReportLine::fail(action.label(), error.to_string())),
         }
@@ -230,13 +252,44 @@ fn require_purge_confirmation(purge_data: bool, dry_run: bool) -> Result<(), Pro
     }
 }
 
-fn validate_uninstall_roots(config: &DgxProfileConfig) -> Result<(), ProfileError> {
-    let allowed = [config.state_root.clone(), config.test_state_root.clone()];
-    for (label, path) in [
-        ("state root", &config.state_root),
-        ("test state root", &config.test_state_root),
+fn validate_uninstall_roots(
+    config: &DgxProfileConfig,
+    purge_data: bool,
+) -> Result<(), ProfileError> {
+    if config.state_root == config.test_state_root {
+        return Err(ProfileError::Unsafe(
+            "refusing uninstall because state root and test state root are identical".to_string(),
+        ));
+    }
+    for (label, path, allowed) in [
+        (
+            "state root",
+            &config.state_root,
+            vec![PathBuf::from(DEFAULT_STATE_ROOT)],
+        ),
+        (
+            "test state root",
+            &config.test_state_root,
+            vec![PathBuf::from(DEFAULT_TEST_STATE_ROOT)],
+        ),
     ] {
         require_safe_destructive_path(path, label, &allowed)?;
+    }
+    if purge_data {
+        for (label, path, allowed) in [
+            (
+                "config root",
+                &config.config_root,
+                vec![PathBuf::from(DEFAULT_CONFIG_ROOT)],
+            ),
+            (
+                "release root",
+                &config.release_root,
+                vec![PathBuf::from(DEFAULT_RELEASE_ROOT)],
+            ),
+        ] {
+            require_safe_destructive_path(path, label, &allowed)?;
+        }
     }
     Ok(())
 }
@@ -253,27 +306,39 @@ impl InstallPlan {
             InstallAction::EnsureDir {
                 path: config.config_root.clone(),
                 mode: "0750",
+                service_group_owned: true,
             },
             InstallAction::EnsureDir {
                 path: config.systemd_root.clone(),
                 mode: "0755",
+                service_group_owned: false,
             },
             InstallAction::CopyFile {
-                source: PathBuf::from("deploy/dgx-spark/dockerd-agentics.json"),
+                source: config
+                    .source_root
+                    .join("deploy/dgx-spark/dockerd-agentics.json"),
                 destination: config.config_root.join("dockerd-agentics.json"),
                 overwrite: true,
+                mode: "0644",
+                service_group_readable: false,
             },
             InstallAction::CopyFile {
-                source: PathBuf::from("deploy/dgx-spark/agentics.env.example"),
+                source: config
+                    .source_root
+                    .join("deploy/dgx-spark/agentics.env.example"),
                 destination: config.config_root.join("agentics.env"),
                 overwrite: false,
+                mode: "0640",
+                service_group_readable: true,
             },
         ];
         for service in SERVICES {
             actions.push(InstallAction::CopyFile {
-                source: PathBuf::from("deploy/dgx-spark").join(service),
+                source: config.source_root.join("deploy/dgx-spark").join(service),
                 destination: config.systemd_root.join(service),
                 overwrite: true,
+                mode: "0644",
+                service_group_readable: false,
             });
         }
         if !skip_storage {
@@ -290,11 +355,14 @@ enum InstallAction {
     EnsureDir {
         path: PathBuf,
         mode: &'static str,
+        service_group_owned: bool,
     },
     CopyFile {
         source: PathBuf,
         destination: PathBuf,
         overwrite: bool,
+        mode: &'static str,
+        service_group_readable: bool,
     },
     PrepareStorage,
     SystemdDaemonReload,
@@ -314,15 +382,17 @@ impl InstallAction {
     fn describe(&self) -> String {
         match self {
             Self::EnsureIdentity => "ensure service user and group exist".to_string(),
-            Self::EnsureDir { path, mode } => {
+            Self::EnsureDir { path, mode, .. } => {
                 format!("ensure directory {} mode {mode}", path.display())
             }
             Self::CopyFile {
                 source,
                 destination,
                 overwrite,
+                mode,
+                ..
             } => format!(
-                "copy {} to {}{}",
+                "copy {} to {} mode {mode}{}",
                 source.display(),
                 destination.display(),
                 if *overwrite { "" } else { " if absent" }
@@ -380,7 +450,11 @@ async fn apply_install_action(
                 config.service_user, config.service_group
             ))
         }
-        InstallAction::EnsureDir { path, mode } => {
+        InstallAction::EnsureDir {
+            path,
+            mode,
+            service_group_owned,
+        } => {
             if !path.exists() {
                 tokio::fs::create_dir_all(path).await?;
                 rollback.created_paths.push(path.clone());
@@ -390,14 +464,27 @@ async fn apply_install_action(
                 vec![mode.to_string(), path.to_string_lossy().to_string()],
             )
             .await?;
+            if *service_group_owned {
+                checked_process(
+                    "chown",
+                    vec![
+                        format!("root:{}", config.service_group),
+                        path.to_string_lossy().to_string(),
+                    ],
+                )
+                .await?;
+            }
             Ok(format!("ensured {}", path.display()))
         }
         InstallAction::CopyFile {
             source,
             destination,
             overwrite,
+            mode,
+            service_group_readable,
         } => {
             if destination.exists() && !overwrite {
+                apply_file_permissions(config, destination, mode, *service_group_readable).await?;
                 return Ok(format!("{} already exists", destination.display()));
             }
             if let Some(parent) = destination.parent() {
@@ -409,12 +496,18 @@ async fn apply_install_action(
                 rollback.created_paths.push(destination.clone());
             }
             tokio::fs::copy(source, destination).await?;
+            apply_file_permissions(config, destination, mode, *service_group_readable).await?;
             Ok(format!("installed {}", destination.display()))
         }
         InstallAction::PrepareStorage => {
-            let reports = prepare_storage(false, Some(STORAGE_CONFIRMATION.to_string()), false)
-                .await
-                .map_err(ProfileError::Storage)?;
+            let mut storage_config = crate::dgx::DgxStorageConfig::from_env()?;
+            if crate::support::env_non_empty(ENV_DGX_PERSIST_FSTAB).is_none() {
+                storage_config.persist_fstab = true;
+            }
+            let reports =
+                prepare_storage_config(storage_config, false, Some(STORAGE_CONFIRMATION), false)
+                    .await
+                    .map_err(ProfileError::Storage)?;
             let failures = reports.iter().filter(|line| line.is_failure()).count();
             if failures == 0 {
                 Ok("prepared storage".to_string())
@@ -429,6 +522,25 @@ async fn apply_install_action(
             Ok("reloaded systemd units".to_string())
         }
     }
+}
+
+async fn apply_file_permissions(
+    config: &DgxProfileConfig,
+    path: &Path,
+    mode: &str,
+    service_group_readable: bool,
+) -> Result<(), ProfileError> {
+    checked_process(
+        "chmod",
+        vec![mode.to_string(), path.to_string_lossy().to_string()],
+    )
+    .await?;
+    let owner = if service_group_readable {
+        format!("root:{}", config.service_group)
+    } else {
+        "root:root".to_string()
+    };
+    checked_process("chown", vec![owner, path.to_string_lossy().to_string()]).await
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -536,7 +648,7 @@ async fn apply_uninstall_action(
         }
         UninstallAction::RemoveDockerContainers => remove_agentics_docker_containers(config).await,
         UninstallAction::RemoveFstabEntries => {
-            remove_lines_matching_paths(
+            remove_fstab_entries(
                 Path::new("/etc/fstab"),
                 &[&config.state_root, &config.test_state_root],
             )
@@ -633,13 +745,23 @@ async fn run_service_actions(
     }
     let mut reports = Vec::new();
     for action in actions {
-        let result = match action {
-            ServiceAction::DaemonReload => systemctl_if_available(["daemon-reload"]).await,
-            ServiceAction::EnableNow(service) => {
-                systemctl_if_available(["enable", "--now", service]).await
+        let result = tokio::select! {
+            result = async {
+                match action {
+                    ServiceAction::DaemonReload => systemctl_if_available(["daemon-reload"]).await,
+                    ServiceAction::EnableNow(service) => {
+                        systemctl_if_available(["enable", "--now", service]).await
+                    }
+                    ServiceAction::Start(service) => systemctl_if_available(["start", service]).await,
+                    ServiceAction::Stop(service) => systemctl_if_available(["stop", service]).await,
+                }
+            } => result,
+            signal = tokio::signal::ctrl_c() => {
+                if signal.is_ok() {
+                    return Err(ProfileError::Interrupted);
+                }
+                Err(ProfileError::Interrupted)
             }
-            ServiceAction::Start(service) => systemctl_if_available(["start", service]).await,
-            ServiceAction::Stop(service) => systemctl_if_available(["stop", service]).await,
         };
         match result {
             Ok(()) => reports.push(ReportLine::pass("systemd", action.describe())),
@@ -659,6 +781,12 @@ async fn systemctl_if_available<const N: usize>(args: [&str; N]) -> Result<(), P
 async fn remove_agentics_docker_containers(
     config: &DgxProfileConfig,
 ) -> Result<String, ProfileError> {
+    if config.docker_host_uri != DEFAULT_DOCKER_HOST_URI {
+        return Err(ProfileError::Unsafe(format!(
+            "refusing Docker cleanup on non-Agentics Docker host {}; expected {DEFAULT_DOCKER_HOST_URI}",
+            config.docker_host_uri
+        )));
+    }
     let docker = match Docker::connect_with_host(&config.docker_host_uri) {
         Ok(docker) => docker,
         Err(error) => return Ok(format!("skipped Docker cleanup: {error}")),
@@ -666,7 +794,16 @@ async fn remove_agentics_docker_containers(
     let options = ListContainersOptionsBuilder::default().all(true).build();
     let containers = docker.list_containers(Some(options)).await?;
     let mut removed = 0usize;
+    let mut skipped = 0usize;
     for container in containers {
+        if !container
+            .labels
+            .as_ref()
+            .is_some_and(has_agentics_container_label)
+        {
+            skipped = skipped.saturating_add(1);
+            continue;
+        }
         let Some(id) = container.id else {
             continue;
         };
@@ -678,7 +815,35 @@ async fn remove_agentics_docker_containers(
             .await?;
         removed = removed.saturating_add(1);
     }
-    Ok(format!("removed {removed} Agentics Docker container(s)"))
+    Ok(format!(
+        "removed {removed} Agentics Docker container(s); skipped {skipped} unlabelled/non-Agentics container(s)"
+    ))
+}
+
+async fn remove_fstab_entries(path: &Path, roots: &[&PathBuf]) -> Result<String, ProfileError> {
+    if !path.exists() {
+        return Ok(format!("{} absent", path.display()));
+    }
+    let current = tokio::fs::read_to_string(path).await?;
+    let kept = current
+        .lines()
+        .filter(|line| !is_agentics_fstab_entry(line, roots))
+        .collect::<Vec<_>>();
+    if kept.len() == current.lines().count() {
+        return Ok(format!("no Agentics entries in {}", path.display()));
+    }
+    let backup = backup_path(path);
+    tokio::fs::copy(path, &backup).await?;
+    let mut next = kept.join("\n");
+    if !next.is_empty() {
+        next.push('\n');
+    }
+    tokio::fs::write(path, next).await?;
+    Ok(format!(
+        "updated {}; backup {}",
+        path.display(),
+        backup.display()
+    ))
 }
 
 async fn remove_lines_matching_paths(
@@ -713,6 +878,49 @@ async fn remove_lines_matching_paths(
         path.display(),
         backup.display()
     ))
+}
+
+fn has_agentics_container_label(labels: &std::collections::HashMap<String, String>) -> bool {
+    labels
+        .keys()
+        .any(|key| key.starts_with("agentics.") || key.starts_with("ai.agentics."))
+}
+
+fn is_agentics_fstab_entry(line: &str, roots: &[&PathBuf]) -> bool {
+    let trimmed = line.trim();
+    if trimmed.is_empty() || trimmed.starts_with('#') {
+        return false;
+    }
+    let fields = trimmed.split_whitespace().collect::<Vec<_>>();
+    let Some(source) = fields.first().map(PathBuf::from) else {
+        return false;
+    };
+    let Some(target) = fields.get(1).map(PathBuf::from) else {
+        return false;
+    };
+    let Some(fstype) = fields.get(2) else {
+        return false;
+    };
+    let Some(options) = fields.get(3) else {
+        return false;
+    };
+    if *fstype != "xfs" {
+        return false;
+    }
+    let has_loop = options.split(',').any(|option| option == "loop");
+    let has_project_quota = options
+        .split(',')
+        .any(|option| matches!(option, "prjquota" | "pquota"));
+    if !has_loop || !has_project_quota {
+        return false;
+    }
+    roots.iter().any(|root| {
+        let loop_image_root = root.join("loop-images");
+        let docker_data_root = root.join("docker-data-root");
+        let phase_mount_root = root.join("phase-mounts");
+        source.starts_with(&loop_image_root)
+            && (target == docker_data_root || target.starts_with(&phase_mount_root))
+    })
 }
 
 async fn unmount_tree(root: &Path) -> Result<String, ProfileError> {
@@ -861,13 +1069,15 @@ pub enum ProfileError {
     Io(#[from] std::io::Error),
     #[error("unsafe operation: {0}")]
     Unsafe(String),
+    #[error("interrupted by Ctrl-C")]
+    Interrupted,
     #[error("{0}")]
     Command(String),
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{InstallPlan, ProfileCommand, UninstallPlan};
+    use super::{InstallPlan, UninstallPlan, is_agentics_fstab_entry, validate_uninstall_roots};
     use crate::dgx::DgxProfileConfig;
 
     fn config() -> DgxProfileConfig {
@@ -875,7 +1085,8 @@ mod tests {
             service_user: "agentics".to_string(),
             service_group: "agentics".to_string(),
             config_root: "/etc/agentics".into(),
-            release_root: "/opt/agentics".into(),
+            release_root: "/opt/agentics/current".into(),
+            source_root: "/opt/agentics/current".into(),
             state_root: "/srv/agentics".into(),
             test_state_root: "/srv/agentics-test".into(),
             systemd_root: "/etc/systemd/system".into(),
@@ -906,13 +1117,35 @@ mod tests {
         );
     }
 
-    /// Keeps the clap subcommand enum reachable in tests.
+    /// Verifies purge refuses broad release/config overrides before deletion.
     #[test]
-    fn subcommands_are_distinct() {
-        let commands = [
-            std::mem::discriminant(&ProfileCommand::Start { dry_run: true }),
-            std::mem::discriminant(&ProfileCommand::Stop { dry_run: true }),
-        ];
-        assert_ne!(commands[0], commands[1]);
+    fn purge_root_validation_rejects_broad_overrides() {
+        let mut release_config = config();
+        release_config.release_root = "/opt".into();
+        assert!(validate_uninstall_roots(&release_config, true).is_err());
+
+        let mut state_config = config();
+        state_config.state_root = "/srv".into();
+        assert!(validate_uninstall_roots(&state_config, false).is_err());
+    }
+
+    /// Verifies fstab cleanup targets only storage-prepared loop quota mounts.
+    #[test]
+    fn fstab_cleanup_matches_only_loop_quota_entries() {
+        let root = std::path::PathBuf::from("/srv/agentics");
+        let roots = [&root];
+
+        assert!(is_agentics_fstab_entry(
+            "/srv/agentics/loop-images/phase-solution-run.xfs /srv/agentics/phase-mounts/solution-run xfs loop,prjquota,nofail 0 0",
+            &roots,
+        ));
+        assert!(!is_agentics_fstab_entry(
+            "/dev/nvme0n1 /srv/agentics xfs defaults 0 0",
+            &roots,
+        ));
+        assert!(!is_agentics_fstab_entry(
+            "/srv/agentics/loop-images/unrelated.xfs /mnt/unrelated xfs loop,prjquota 0 0",
+            &roots,
+        ));
     }
 }

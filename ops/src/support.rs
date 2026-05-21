@@ -12,7 +12,7 @@ use std::process::{ExitCode, Stdio};
 use std::time::Duration;
 
 use thiserror::Error;
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::Command;
 
 /// Default byte cap for command output captured into diagnostics.
@@ -93,6 +93,32 @@ where
         });
     }
     Ok(parsed)
+}
+
+/// Parse an optional positive integer environment variable.
+pub fn parse_optional_positive_env<T>(name: &str) -> Result<Option<T>, SupportError>
+where
+    T: std::str::FromStr + PartialOrd + From<u8> + Copy,
+    T::Err: std::fmt::Display,
+{
+    let Some(value) = env_non_empty(name) else {
+        return Ok(None);
+    };
+    let parsed = value
+        .parse::<T>()
+        .map_err(|error| SupportError::InvalidEnv {
+            name: name.to_string(),
+            value: value.clone(),
+            message: error.to_string(),
+        })?;
+    if parsed <= T::from(0) {
+        return Err(SupportError::InvalidEnv {
+            name: name.to_string(),
+            value,
+            message: "must be greater than zero".to_string(),
+        });
+    }
+    Ok(Some(parsed))
 }
 
 /// A displayable operational check result.
@@ -228,9 +254,20 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
-    let mut child = Command::new(program)
-        .args(args)
-        .stdin(Stdio::null())
+    let mut command = Command::new(program);
+    command.args(args).stdin(Stdio::null());
+    run_command(command, program, timeout, limit_bytes).await
+}
+
+/// Run one configured process with bounded output and optional timeout.
+pub async fn run_command(
+    mut command: Command,
+    program: &str,
+    timeout: Option<Duration>,
+    limit_bytes: usize,
+) -> Result<CommandOutput, SupportError> {
+    let mut child = command
+        .kill_on_drop(true)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -241,20 +278,8 @@ where
 
     let mut stdout = child.stdout.take();
     let mut stderr = child.stderr.take();
-    let stdout_task = tokio::spawn(async move {
-        let mut bytes = Vec::new();
-        if let Some(stream) = stdout.as_mut() {
-            stream.read_to_end(&mut bytes).await?;
-        }
-        Ok::<Vec<u8>, std::io::Error>(bytes)
-    });
-    let stderr_task = tokio::spawn(async move {
-        let mut bytes = Vec::new();
-        if let Some(stream) = stderr.as_mut() {
-            stream.read_to_end(&mut bytes).await?;
-        }
-        Ok::<Vec<u8>, std::io::Error>(bytes)
-    });
+    let stdout_task = tokio::spawn(async move { read_bounded(&mut stdout, limit_bytes).await });
+    let stderr_task = tokio::spawn(async move { read_bounded(&mut stderr, limit_bytes).await });
 
     let status = match timeout {
         Some(duration) => {
@@ -267,6 +292,7 @@ where
                 }
                 _ = tokio::time::sleep(duration) => {
                     let _ignored = child.kill().await;
+                    let _ignored = child.wait().await;
                     return Err(SupportError::ProcessTimeout {
                         program: program.to_string(),
                         seconds: duration.as_secs(),
@@ -283,14 +309,14 @@ where
             })?,
     };
 
-    let stdout = stdout_task
+    let (stdout, stdout_truncated) = stdout_task
         .await
         .map_err(|error| SupportError::Join(error.to_string()))?
         .map_err(|error| SupportError::ProcessWait {
             program: program.to_string(),
             message: error.to_string(),
         })?;
-    let stderr = stderr_task
+    let (stderr, stderr_truncated) = stderr_task
         .await
         .map_err(|error| SupportError::Join(error.to_string()))?
         .map_err(|error| SupportError::ProcessWait {
@@ -300,10 +326,56 @@ where
 
     Ok(CommandOutput {
         status: status.code(),
-        stdout: bounded_utf8(&stdout, limit_bytes).0,
-        stderr: bounded_utf8(&stderr, limit_bytes).0,
-        truncated: stdout.len() > limit_bytes || stderr.len() > limit_bytes,
+        stdout: String::from_utf8_lossy(&stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&stderr).into_owned(),
+        truncated: stdout_truncated || stderr_truncated,
     })
+}
+
+async fn read_bounded<R>(
+    stream: &mut Option<R>,
+    limit_bytes: usize,
+) -> Result<(Vec<u8>, bool), std::io::Error>
+where
+    R: AsyncRead + Unpin,
+{
+    let mut bytes = Vec::new();
+    let mut truncated = false;
+    let Some(stream) = stream.as_mut() else {
+        return Ok((bytes, truncated));
+    };
+    let mut chunk = [0u8; 8192];
+    loop {
+        let read = stream.read(&mut chunk).await?;
+        if read == 0 {
+            break;
+        }
+        let slice = chunk
+            .get(..read)
+            .ok_or_else(|| std::io::Error::other("read exceeded buffer size"))?;
+        append_bounded_bytes(&mut bytes, slice, limit_bytes, &mut truncated);
+    }
+    Ok((bytes, truncated))
+}
+
+/// Append bytes to a diagnostic buffer without growing past a hard cap.
+pub fn append_bounded_bytes(
+    output: &mut Vec<u8>,
+    chunk: &[u8],
+    limit_bytes: usize,
+    truncated: &mut bool,
+) {
+    if output.len() >= limit_bytes {
+        *truncated = *truncated || !chunk.is_empty();
+        return;
+    }
+    let remaining = limit_bytes.saturating_sub(output.len());
+    if chunk.len() > remaining {
+        output.extend(chunk.iter().take(remaining).copied());
+        *truncated = true;
+    } else {
+        output.extend_from_slice(chunk);
+    }
 }
 
 /// Convert bytes to UTF-8 while enforcing a display limit.
@@ -336,6 +408,7 @@ pub fn require_safe_destructive_path(
     allowed_roots: &[PathBuf],
 ) -> Result<(), SupportError> {
     require_absolute_path(path, label)?;
+    reject_parent_components(path, label)?;
     if path == Path::new("/") {
         return Err(SupportError::UnsafePath {
             label: label.to_string(),
@@ -343,10 +416,21 @@ pub fn require_safe_destructive_path(
             message: "refusing to operate on filesystem root".to_string(),
         });
     }
-    if !allowed_roots
-        .iter()
-        .any(|root| path == root || path.starts_with(root))
-    {
+    let normalized_path = normalize_existing_path(path, label)?;
+    let mut matched_root = false;
+    for root in allowed_roots {
+        require_absolute_path(root, "allowed root")?;
+        reject_parent_components(root, "allowed root")?;
+        if root == Path::new("/") {
+            continue;
+        }
+        let normalized_root = normalize_existing_path(root, "allowed root")?;
+        if normalized_path == normalized_root || normalized_path.starts_with(&normalized_root) {
+            matched_root = true;
+            break;
+        }
+    }
+    if !matched_root {
         return Err(SupportError::UnsafePath {
             label: label.to_string(),
             path: path.to_path_buf(),
@@ -354,6 +438,42 @@ pub fn require_safe_destructive_path(
         });
     }
     Ok(())
+}
+
+fn reject_parent_components(path: &Path, label: &str) -> Result<(), SupportError> {
+    if path
+        .components()
+        .any(|component| matches!(component, std::path::Component::ParentDir))
+    {
+        return Err(SupportError::UnsafePath {
+            label: label.to_string(),
+            path: path.to_path_buf(),
+            message: "path must not contain parent-directory traversal".to_string(),
+        });
+    }
+    Ok(())
+}
+
+fn normalize_existing_path(path: &Path, label: &str) -> Result<PathBuf, SupportError> {
+    if std::fs::symlink_metadata(path)
+        .map(|metadata| metadata.file_type().is_symlink())
+        .unwrap_or(false)
+    {
+        return Err(SupportError::UnsafePath {
+            label: label.to_string(),
+            path: path.to_path_buf(),
+            message: "refusing to operate on a symlink path".to_string(),
+        });
+    }
+    match std::fs::canonicalize(path) {
+        Ok(canonical) => Ok(canonical),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(path.to_path_buf()),
+        Err(error) => Err(SupportError::UnsafePath {
+            label: label.to_string(),
+            path: path.to_path_buf(),
+            message: format!("failed to canonicalize existing path: {error}"),
+        }),
+    }
 }
 
 /// Errors from shared ops support helpers.
@@ -383,7 +503,7 @@ pub enum SupportError {
 
 #[cfg(test)]
 mod tests {
-    use super::{bounded_utf8, parse_boolish, require_safe_destructive_path};
+    use super::{append_bounded_bytes, bounded_utf8, parse_boolish, require_safe_destructive_path};
     use std::path::{Path, PathBuf};
 
     /// Verifies byte bounding reports truncation.
@@ -411,5 +531,19 @@ mod tests {
         );
         assert!(require_safe_destructive_path(Path::new("/etc"), "x", &roots).is_err());
         assert!(require_safe_destructive_path(Path::new("/"), "x", &roots).is_err());
+        assert!(
+            require_safe_destructive_path(Path::new("/srv/agentics/../docs"), "x", &roots).is_err()
+        );
+    }
+
+    /// Verifies diagnostic buffers never grow past their hard cap.
+    #[test]
+    fn appends_bounded_bytes_without_overallocation() {
+        let mut output = Vec::new();
+        let mut truncated = false;
+        append_bounded_bytes(&mut output, b"abcdef", 3, &mut truncated);
+        append_bounded_bytes(&mut output, b"ghij", 3, &mut truncated);
+        assert_eq!(output, b"abc");
+        assert!(truncated);
     }
 }

@@ -38,7 +38,7 @@ fake(name, title, summary_en, summary_zh, keywords, ordinal) AS (
     ('demo-ui-kappa', 'Microscopy Segment', 'Segment cell boundaries from noisy microscopy tiles with hidden labels.', '在隐藏标签下从噪声显微图块中分割细胞边界。', jsonb_build_array('microscopy', 'segmentation', 'biology'), 10)
 )
 INSERT INTO challenges (
-  name, title, summary, bundle_path, statement_path, spec_json,
+  name, title, summary, bundle_path, public_bundle_path, statement_path, spec_json,
   starts_at, closes_at, eligibility_policy_json, validation_submission_limit,
   official_submission_limit, leaderboard_visibility, score_distribution_visibility,
   result_detail_visibility, solution_publication_policy, status, created_at, updated_at
@@ -48,6 +48,7 @@ SELECT
   fake.title,
   jsonb_build_object('en', fake.summary_en, 'zh', fake.summary_zh),
   source.bundle_path,
+  source.public_bundle_path,
   source.statement_path,
   jsonb_set(
     jsonb_set(

@@ -29,7 +29,7 @@ use crate::dgx::{
 };
 use crate::support::{
     DEFAULT_OUTPUT_LIMIT_BYTES, ReportLine, SupportError, env_non_empty, parse_boolish,
-    print_reports, require_safe_destructive_path, run_process, run_with_ctrl_c,
+    print_reports, require_safe_destructive_path, run_process,
 };
 
 const PREFIX: &str = "agentics-dgx-storage";
@@ -62,31 +62,33 @@ pub struct PrepareTestStorageCli {
 /// Entrypoint for production storage binary.
 pub async fn run_prepare_from_process() -> ExitCode {
     let cli = PrepareStorageCli::parse();
-    run_with_ctrl_c(PREFIX, async {
-        match prepare_storage(false, env_non_empty(ENV_DGX_CONFIRM), cli.dry_run).await {
-            Ok(reports) => print_reports(PREFIX, &reports),
-            Err(error) => {
-                eprintln!("[{PREFIX}] ERROR: {error}");
-                ExitCode::from(2)
-            }
+    match prepare_storage(false, env_non_empty(ENV_DGX_CONFIRM), cli.dry_run).await {
+        Ok(reports) => print_reports(PREFIX, &reports),
+        Err(StorageError::Interrupted) => {
+            eprintln!("[{PREFIX}] interrupted by Ctrl-C");
+            ExitCode::from(crate::support::INTERRUPTED_EXIT)
         }
-    })
-    .await
+        Err(error) => {
+            eprintln!("[{PREFIX}] ERROR: {error}");
+            ExitCode::from(2)
+        }
+    }
 }
 
 /// Entrypoint for test storage binary.
 pub async fn run_prepare_test_from_process() -> ExitCode {
     let cli = PrepareTestStorageCli::parse();
-    run_with_ctrl_c(PREFIX, async move {
-        match prepare_storage(true, env_non_empty(ENV_DGX_TEST_CONFIRM), cli.dry_run).await {
-            Ok(reports) => print_reports(PREFIX, &reports),
-            Err(error) => {
-                eprintln!("[{PREFIX}] ERROR: {error}");
-                ExitCode::from(2)
-            }
+    match prepare_storage(true, env_non_empty(ENV_DGX_TEST_CONFIRM), cli.dry_run).await {
+        Ok(reports) => print_reports(PREFIX, &reports),
+        Err(StorageError::Interrupted) => {
+            eprintln!("[{PREFIX}] interrupted by Ctrl-C");
+            ExitCode::from(crate::support::INTERRUPTED_EXIT)
         }
-    })
-    .await
+        Err(error) => {
+            eprintln!("[{PREFIX}] ERROR: {error}");
+            ExitCode::from(2)
+        }
+    }
 }
 
 /// Prepare storage, optionally using test-root defaults.
@@ -95,13 +97,23 @@ pub async fn prepare_storage(
     confirmation: Option<String>,
     dry_run: bool,
 ) -> Result<Vec<ReportLine>, StorageError> {
-    require_linux_and_root(dry_run)?;
-    require_confirmation(test_mode, confirmation.as_deref(), dry_run)?;
     let config = if test_mode {
         test_storage_config()?
     } else {
         DgxStorageConfig::from_env()?
     };
+    prepare_storage_config(config, test_mode, confirmation.as_deref(), dry_run).await
+}
+
+/// Prepare storage from an already resolved config.
+pub async fn prepare_storage_config(
+    config: DgxStorageConfig,
+    test_mode: bool,
+    confirmation: Option<&str>,
+    dry_run: bool,
+) -> Result<Vec<ReportLine>, StorageError> {
+    require_linux_and_root(dry_run)?;
+    require_confirmation(test_mode, confirmation, dry_run)?;
     validate_destructive_roots(&config, test_mode)?;
     let plan = StoragePlan::from_config(&config);
     if dry_run {
@@ -115,7 +127,17 @@ pub async fn prepare_storage(
     let mut rollback = RollbackLog::default();
     let mut reports = Vec::new();
     for action in plan.actions {
-        match apply_action(&config, &action, &mut rollback).await {
+        let result = tokio::select! {
+            result = apply_action(&config, &action, &mut rollback) => result,
+            signal = tokio::signal::ctrl_c() => {
+                if signal.is_ok() {
+                    rollback.rollback().await;
+                    return Err(StorageError::Interrupted);
+                }
+                Err(StorageError::Interrupted)
+            }
+        };
+        match result {
             Ok(message) => reports.push(ReportLine::pass(action.label(), message)),
             Err(error) => {
                 rollback.rollback().await;
@@ -162,18 +184,12 @@ fn test_storage_config() -> Result<DgxStorageConfig, StorageError> {
         config.slot_classes_mb =
             dgx::parse_slot_classes(ENV_DGX_TEST_PHASE_SLOT_CLASSES_MB, &value)?;
     }
-    config.slots_per_class = env_non_empty(ENV_DGX_TEST_PHASE_SLOTS_PER_CLASS)
-        .as_deref()
-        .map(|value| value.parse::<u64>())
-        .transpose()
-        .map_err(|error| StorageError::Unsafe(error.to_string()))?
-        .unwrap_or(config.slots_per_class);
-    config.slot_inodes_per_mb = env_non_empty(ENV_DGX_TEST_PHASE_SLOT_INODES_PER_MB)
-        .as_deref()
-        .map(|value| value.parse::<u64>())
-        .transpose()
-        .map_err(|error| StorageError::Unsafe(error.to_string()))?
-        .unwrap_or(config.slot_inodes_per_mb);
+    config.slots_per_class =
+        crate::support::parse_optional_positive_env(ENV_DGX_TEST_PHASE_SLOTS_PER_CLASS)?
+            .unwrap_or(config.slots_per_class);
+    config.slot_inodes_per_mb =
+        crate::support::parse_optional_positive_env(ENV_DGX_TEST_PHASE_SLOT_INODES_PER_MB)?
+            .unwrap_or(config.slot_inodes_per_mb);
     config.persist_fstab = env_non_empty(ENV_DGX_TEST_PERSIST_FSTAB)
         .as_deref()
         .map(|value| parse_boolish(ENV_DGX_TEST_PERSIST_FSTAB, value))
@@ -444,16 +460,17 @@ async fn apply_action(
                 mount.display()
             );
             let fstab = Path::new("/etc/fstab");
-            let current = tokio::fs::read_to_string(fstab).await.unwrap_or_default();
-            let mount_text = mount.to_string_lossy().to_string();
-            if current
-                .lines()
-                .any(|existing| existing.split_whitespace().nth(1) == Some(mount_text.as_str()))
-            {
+            let current = read_optional_file_bytes(fstab).await?;
+            if fstab_has_mount_entry(current.as_deref().unwrap_or_default(), mount) {
                 return Ok(format!("fstab entry exists for {}", mount.display()));
             }
             rollback.backup_file(fstab).await?;
-            tokio::fs::write(fstab, format!("{current}{line}")).await?;
+            let mut next = current.unwrap_or_default();
+            if !next.is_empty() && !next.ends_with(b"\n") {
+                next.push(b'\n');
+            }
+            next.extend_from_slice(line.as_bytes());
+            tokio::fs::write(fstab, next).await?;
             Ok(format!("added fstab entry for {}", mount.display()))
         }
         StorageAction::EnsureSlot {
@@ -575,7 +592,7 @@ async fn mount_is_active(mount: &Path) -> Result<bool, StorageError> {
 struct RollbackLog {
     created_paths: Vec<PathBuf>,
     mounted_paths: Vec<PathBuf>,
-    file_backups: Vec<(PathBuf, String)>,
+    file_backups: Vec<(PathBuf, Option<Vec<u8>>)>,
 }
 
 impl RollbackLog {
@@ -587,7 +604,7 @@ impl RollbackLog {
         {
             return Ok(());
         }
-        let content = tokio::fs::read_to_string(path).await.unwrap_or_default();
+        let content = read_optional_file_bytes(path).await?;
         self.file_backups.push((path.to_path_buf(), content));
         Ok(())
     }
@@ -603,7 +620,10 @@ impl RollbackLog {
             .await;
         }
         for (path, content) in self.file_backups {
-            let _ignored = tokio::fs::write(path, content).await;
+            let _ignored = match content {
+                Some(bytes) => tokio::fs::write(path, bytes).await,
+                None => tokio::fs::remove_file(path).await,
+            };
         }
         for path in self.created_paths.iter().rev() {
             let _ignored = if path.is_dir() {
@@ -613,6 +633,24 @@ impl RollbackLog {
             };
         }
     }
+}
+
+async fn read_optional_file_bytes(path: &Path) -> Result<Option<Vec<u8>>, std::io::Error> {
+    match tokio::fs::read(path).await {
+        Ok(bytes) => Ok(Some(bytes)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+fn fstab_has_mount_entry(bytes: &[u8], mount: &Path) -> bool {
+    let mount_text = mount.to_string_lossy();
+    bytes.split(|byte| *byte == b'\n').any(|line| {
+        line.split(|byte| byte.is_ascii_whitespace())
+            .filter(|field| !field.is_empty())
+            .nth(1)
+            == Some(mount_text.as_bytes())
+    })
 }
 
 /// Storage preparation error.
@@ -628,45 +666,30 @@ pub enum StorageError {
     Json(#[from] serde_json::Error),
     #[error("unsafe operation: {0}")]
     Unsafe(String),
+    #[error("interrupted by Ctrl-C")]
+    Interrupted,
     #[error("{0}")]
     Command(String),
 }
 
 #[cfg(test)]
 mod tests {
-    use super::StoragePlan;
-    use crate::dgx;
+    use super::fstab_has_mount_entry;
+    use std::path::Path;
 
-    /// Verifies storage planning covers images, mounts, and slots.
+    /// Verifies fstab detection uses the mount field, not broad substrings.
     #[test]
-    fn storage_plan_contains_slot_actions() {
-        let config = dgx::DgxStorageConfig {
-            state_root: "/srv/agentics".into(),
-            loop_image_root: "/srv/agentics/loop-images".into(),
-            docker_data_root: "/srv/agentics/docker-data-root".into(),
-            docker_loop_image: "/srv/agentics/loop-images/docker-data-root.xfs".into(),
-            phase_mount_root: "/srv/agentics/phase-mounts".into(),
-            docker_loop_size: "1G".to_string(),
-            phase_loop_size: "1G".to_string(),
-            service_user: "agentics".to_string(),
-            service_group: "agentics".to_string(),
-            phases: vec![dgx::DgxPhase::SolutionRun],
-            slot_classes_mb: vec![64],
-            slots_per_class: 2,
-            project_id_base: 100_000,
-            slot_inodes_per_mb: 256,
-            persist_fstab: true,
-        };
-        let plan = StoragePlan::from_config(&config);
-        assert!(
-            plan.actions
-                .iter()
-                .any(|action| action.describe().contains("slot-001"))
-        );
-        assert!(
-            plan.actions
-                .iter()
-                .any(|action| action.describe().contains("fstab"))
-        );
+    fn fstab_entry_detection_checks_mount_field() {
+        let bytes = b"/srv/agentics/loop-images/docker.xfs /srv/agentics/docker-data-root xfs loop,prjquota,nofail 0 0\n\
+            /srv/agentics/docker-data-root /mnt/other xfs loop,prjquota 0 0\n";
+
+        assert!(fstab_has_mount_entry(
+            bytes,
+            Path::new("/srv/agentics/docker-data-root")
+        ));
+        assert!(!fstab_has_mount_entry(
+            bytes,
+            Path::new("/srv/agentics/loop-images/docker.xfs")
+        ));
     }
 }

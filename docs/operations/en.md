@@ -161,8 +161,9 @@ agentics-check-dgx-spark-host
 ```
 
 Set `AGENTICS_DGX_RUN_DOCKER_SMOKE=1` only from an operator account that can
-access the intended Docker daemon. If Docker access is sudo-gated, set
-`AGENTICS_DGX_DOCKER_CLI='sudo -n docker'`.
+access the intended Docker daemon. The Rust checker uses Docker API access
+directly, so configure the target daemon through the Docker socket environment
+such as `DOCKER_HOST` rather than a Docker CLI wrapper.
 
 For the DGX deployment profile, run:
 

@@ -116,7 +116,8 @@ logs、seeded artifact ZIPs 和 local Postgres volume。
 ## 构建二进制
 
 ```bash
-cargo build --release -p api-server -p worker -p agentics-cli
+cargo build --release -p api-server -p worker -p agentics-cli -p agentics-ops
+test -x target/release/agentics-check-dgx-spark-profile
 ```
 
 构建 web frontend：

@@ -45,12 +45,15 @@ To include the NVIDIA Docker smoke check, use an operator account that can
 access the intended Docker daemon:
 
 ```bash
-AGENTICS_DGX_DOCKER_CLI='sudo -n docker' \
 AGENTICS_DGX_RUN_DOCKER_SMOKE=1 \
 AGENTICS_DGX_DOCKER_PULL_POLICY=never \
 AGENTICS_DGX_CUDA_IMAGE=nvidia/cuda:13.0.1-base-ubuntu24.04 \
 agentics-check-dgx-spark-host
 ```
+
+The Rust checker uses the Docker API directly. Configure Docker access through
+the intended daemon socket, for example by setting `DOCKER_HOST`, rather than a
+Docker CLI wrapper.
 
 Do not run public Agentics jobs on the operator's default Docker daemon. The
 Agentics-owned Docker daemon and root-prepared quota slots are the hosted
@@ -222,8 +225,8 @@ least one GPU is visible.
 
 Plain `uninstall` removes services and quota storage while preserving config,
 release files, and durable state. `uninstall --purge-data` also removes
-`/etc/agentics`, `/opt/agentics`, `/srv/agentics`, `/srv/agentics-test`, and the
-`agentics` service identity.
+`/etc/agentics`, `/opt/agentics/current`, `/srv/agentics`,
+`/srv/agentics-test`, and the `agentics` service identity.
 
 ## Verification
 

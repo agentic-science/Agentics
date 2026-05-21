@@ -158,8 +158,9 @@ agentics-check-dgx-spark-host
 ```
 
 仅在 operator account 能访问目标 Docker daemon 时，才设置
-`AGENTICS_DGX_RUN_DOCKER_SMOKE=1`。如果 Docker access 需要 sudo，设置
-`AGENTICS_DGX_DOCKER_CLI='sudo -n docker'`。
+`AGENTICS_DGX_RUN_DOCKER_SMOKE=1`。Rust checker 直接使用 Docker API access，
+因此请通过 `DOCKER_HOST` 这类 Docker socket environment 指向目标 daemon，
+不要使用 Docker CLI wrapper。
 
 DGX deployment profile 使用以下检查：
 
