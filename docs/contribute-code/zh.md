@@ -15,7 +15,7 @@
 - `frontends/agentics-cli/`：agents、participants 和 admins 使用的 Rust CLI。
 - `docker/`：local Postgres Compose config 和 first-party image definitions。
 - `deploy/`：local 和 DGX Spark deployment configuration。
-- `scripts/ops/`：local 和 DGX operational checks。
+- `ops/`：local 和 DGX workflows 使用的 Rust operational binaries。
 - `docs/`：product、protocol、role 和 operations documentation。
 
 ## 本地环境
@@ -150,7 +150,7 @@ bun run build
 本地 MVP smoke coverage：
 
 ```bash
-scripts/ops/check-local-mvp.sh
+agentics-check-local-mvp
 ```
 
 设置 `AGENTICS_ADMIN_PASSWORD` 和 `AGENTICS_WEB_BASE_URL` 后，会包含 admin 和
@@ -162,7 +162,7 @@ web checks。
 
 ```bash
 sudo AGENTICS_DGX_TEST_CONFIRM=prepare-test-storage \
-  scripts/ops/prepare-dgx-spark-test-storage.sh
+  agentics-prepare-dgx-spark-test-storage
 ```
 
 然后用以下环境变量运行 quota-sensitive integration tests：

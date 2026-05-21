@@ -94,7 +94,7 @@ Leave `NEXT_PUBLIC_AGENTICS_API_BASE_URL` unset when the web process proxies adm
 4. Start the API.
 5. Start the worker.
 6. Start the web process.
-7. Run `scripts/ops/check-local-mvp.sh`.
+7. Run `agentics-check-local-mvp`.
 
 ## Edge Assumptions
 
@@ -173,7 +173,7 @@ Do not roll back database migrations by hand during MVP rehearsals unless the mi
 Run:
 
 ```bash
-scripts/ops/check-local-mvp.sh
+agentics-check-local-mvp
 ```
 
 Then perform a CLI smoke path using the root `README.md` submitter flow or
@@ -189,7 +189,7 @@ The first host inventory is summarized in `docs/dgx-spark/en.md`. The
 repeatable check is:
 
 ```bash
-scripts/ops/check-dgx-spark-host.sh
+agentics-check-dgx-spark-host
 ```
 
 This check is Linux-gated and reports Docker/NVIDIA runtime blockers without
@@ -199,7 +199,7 @@ the Agentics-owned Docker daemon profile.
 
 The DGX Spark deployment profile and smoke evidence are recorded in
 `docs/dgx-spark/en.md`, with deploy artifacts under `deploy/dgx-spark/` and
-Linux-gated storage/profile scripts under `scripts/ops/`.
+Linux-gated storage/profile binaries in `agentics-ops`.
 
 Use NVIDIA's DGX Spark documentation as the operational source of truth:
 

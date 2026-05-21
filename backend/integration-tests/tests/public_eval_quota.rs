@@ -14,7 +14,7 @@ const QUOTA_TEST_STORAGE_MODE_ENV: &str = "AGENTICS_TEST_RUNNER_WRITABLE_STORAGE
 const QUOTA_TEST_RUNTIME_ROOT_ENV: &str = "AGENTICS_TEST_RUNNER_RUNTIME_ROOT";
 const QUOTA_TEST_PHASE_MOUNT_ROOT_ENV: &str = "AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT";
 const QUOTA_TEST_SLOT_CLASSES_ENV: &str = "AGENTICS_TEST_RUNNER_WRITABLE_SLOT_CLASSES_MB";
-const QUOTA_TEST_SETUP_SCRIPT: &str = "scripts/ops/prepare-dgx-spark-test-storage.sh";
+const QUOTA_TEST_SETUP_COMMAND: &str = "agentics-prepare-dgx-spark-test-storage";
 const QUOTA_TEST_REQUIRED_SLOT_CLASS_MB: u64 = 64;
 
 /// Returns true when the local environment can run Linux quota-sensitive tests.
@@ -161,7 +161,7 @@ fn parse_quota_test_slot_classes(raw: &str) -> std::result::Result<Vec<u64>, Str
 /// Build the actionable Linux quota-test setup failure.
 fn quota_test_setup_error(reason: String) -> String {
     format!(
-        "Linux quota-sensitive runner tests require a prepared bounded test quota root: {reason}. Run `{QUOTA_TEST_SETUP_SCRIPT}` and export {QUOTA_TEST_STORAGE_MODE_ENV}=xfs-project-quota-slots, {QUOTA_TEST_RUNTIME_ROOT_ENV}=/srv/agentics-test/runtime, {QUOTA_TEST_PHASE_MOUNT_ROOT_ENV}=/srv/agentics-test/phase-mounts, and {QUOTA_TEST_SLOT_CLASSES_ENV}=64,256,1024,4096 before running these tests on Linux."
+        "Linux quota-sensitive runner tests require a prepared bounded test quota root: {reason}. Run `{QUOTA_TEST_SETUP_COMMAND}` and export {QUOTA_TEST_STORAGE_MODE_ENV}=xfs-project-quota-slots, {QUOTA_TEST_RUNTIME_ROOT_ENV}=/srv/agentics-test/runtime, {QUOTA_TEST_PHASE_MOUNT_ROOT_ENV}=/srv/agentics-test/phase-mounts, and {QUOTA_TEST_SLOT_CLASSES_ENV}=64,256,1024,4096 before running these tests on Linux."
     )
 }
 
@@ -399,7 +399,7 @@ fn test_quota_root_enforces_inode_limit_when_configured() {
 
     let Some((index, error)) = quota_hit else {
         panic!(
-            "expected the prepared {QUOTA_TEST_REQUIRED_SLOT_CLASS_MB} MiB test quota slot to exhaust before 17000 files; verify {QUOTA_TEST_SETUP_SCRIPT} prepared inode quotas"
+            "expected the prepared {QUOTA_TEST_REQUIRED_SLOT_CLASS_MB} MiB test quota slot to exhaust before 17000 files; verify {QUOTA_TEST_SETUP_COMMAND} prepared inode quotas"
         );
     };
     assert!(

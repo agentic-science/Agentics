@@ -9,6 +9,11 @@ DGX hosted profile. macOS rehearsal uses the foreground `cargo` and `bun`
 commands documented in `docs/deployment/en.md`; do not reuse the DGX systemd
 units as macOS startup definitions.
 
+Operational commands referenced below are Rust binaries from the `agentics-ops`
+package. Packaged deployments place them under `/opt/agentics/current/bin`; from
+a source checkout, use `just dgx-profile ...` or
+`cargo run -p agentics-ops --bin <binary> -- ...`.
+
 ## Files
 
 - `agentics.env.example`: environment template for API, worker, web, and CLI
@@ -98,7 +103,7 @@ capacity exists.
      AGENTICS_DGX_PHASE_SLOT_INODES_PER_MB=256 \
      AGENTICS_DGX_RUN_MUTATING_PROBES=1 \
      AGENTICS_DGX_DOCKER_PULL_POLICY=never \
-     scripts/ops/check-dgx-spark-profile.sh
+     agentics-check-dgx-spark-profile
    ```
 
 6. Run the hosted CLI onboarding smoke path and record DGX-3 evidence in
@@ -122,7 +127,7 @@ quota root rather than the hosted worker slots:
 
 ```bash
 sudo AGENTICS_DGX_TEST_CONFIRM=prepare-test-storage \
-  scripts/ops/prepare-dgx-spark-test-storage.sh
+  agentics-prepare-dgx-spark-test-storage
 export AGENTICS_TEST_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots
 export AGENTICS_TEST_RUNNER_RUNTIME_ROOT=/srv/agentics-test/runtime
 export AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics-test/phase-mounts

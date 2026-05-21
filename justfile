@@ -18,11 +18,12 @@ infra-down:
 
 # Manage the Linux-only DGX Spark systemd deployment profile
 dgx-profile *args:
-    sudo scripts/ops/manage-dgx-spark-profile.sh {{args}}
+    cargo build -p agentics-ops --bin agentics-manage-dgx-spark-profile
+    sudo -E target/debug/agentics-manage-dgx-spark-profile {{args}}
 
 # Start a local demo stack with seeded fake frontend results
 local-demo *args:
-    scripts/dev/local-demo.sh {{args}}
+    cargo run -p agentics-ops --bin agentics-local-demo -- {{args}}
 
 # Run database migrations
 migrate:

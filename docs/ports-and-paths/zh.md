@@ -52,7 +52,7 @@ slots，并使用 Docker `storage_opt.size` 约束 container-layer writes。Slot
 `8192` 个 files、`1024` 个 directories 和 `32` 层 depth。
 
 `/srv/agentics-test` 用于开发者运行 quota-sensitive integration tests。它必须用
-`scripts/ops/prepare-dgx-spark-test-storage.sh` 单独准备，且 hosted workers 不应使用。
+`agentics-prepare-dgx-spark-test-storage` 单独准备，且 hosted workers 不应使用。
 
 Systemd units 仅适用于 Linux，并使用上述 release symlink paths。macOS
 development 使用前台 `cargo` 和 `bun` commands。

@@ -9,14 +9,20 @@ workspace = true
 [dependencies]
 bollard = { workspace = true }
 clap = { version = "4", features = ["derive"] }
+dotenvy = "0.15"
+futures = { workspace = true }
+nix = { version = "0.30", features = ["fs", "process", "signal", "user"] }
 reqwest = { workspace = true }
 secrecy = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 shared = { workspace = true }
+sqlx = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 url = { workspace = true }
+uuid = { workspace = true }
+zip = { workspace = true }
 
 [dev-dependencies]
-serde_json = { workspace = true }
 wiremock = "0.6"

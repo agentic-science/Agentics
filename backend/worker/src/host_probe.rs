@@ -2,11 +2,12 @@
 
 use std::process::ExitStatus;
 
-use shared::config::{Config, HostProbeMode};
+use shared::config::{
+    Config, DEFAULT_HOST_PROBE_COMMAND, ENV_AGENTICS_HOST_PROBE_COMMAND, HostProbeMode,
+};
 use tokio::process::Command;
 use tracing::{info, warn};
 
-const HOST_PROBE_SCRIPT: &str = "scripts/ops/check-dgx-spark-profile.sh";
 const MAX_PROBE_OUTPUT_BYTES: usize = 8192;
 
 /// Run the configured hosted profile probe before the worker accepts jobs.
@@ -14,8 +15,10 @@ pub(crate) async fn enforce_host_probe(config: &Config) -> anyhow::Result<()> {
     match config.host_probe_mode {
         HostProbeMode::Off => Ok(()),
         HostProbeMode::Warn | HostProbeMode::Require => {
+            let command = std::env::var(ENV_AGENTICS_HOST_PROBE_COMMAND)
+                .unwrap_or_else(|_| DEFAULT_HOST_PROBE_COMMAND.to_string());
             let mode = config.host_probe_mode;
-            let output = Command::new(HOST_PROBE_SCRIPT)
+            let output = Command::new(&command)
                 .env("AGENTICS_HOST_PROBE_MODE", mode.as_str())
                 .output()
                 .await;
@@ -30,7 +33,7 @@ pub(crate) async fn enforce_host_probe(config: &Config) -> anyhow::Result<()> {
                 ),
                 Err(error) => handle_probe_failure(
                     mode,
-                    format!("failed to run host profile probe `{HOST_PROBE_SCRIPT}`: {error}"),
+                    format!("failed to run host profile probe `{command}`: {error}"),
                 ),
             }
         }

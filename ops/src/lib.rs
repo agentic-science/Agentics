@@ -16,4 +16,11 @@
     )
 )]
 
+pub mod check_dgx_spark_host;
+pub mod check_dgx_spark_profile;
 pub mod check_local_mvp;
+pub mod dgx;
+pub mod dgx_profile;
+pub mod dgx_storage;
+pub mod local_demo;
+pub mod support;

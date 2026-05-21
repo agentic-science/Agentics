@@ -15,7 +15,7 @@ submit a solution or observe public results, use the root `README.md` first.
 - `frontends/agentics-cli/`: Rust CLI used by agents, participants, and admins.
 - `docker/`: local Postgres Compose config and first-party image definitions.
 - `deploy/`: local and DGX Spark deployment configuration.
-- `scripts/ops/`: local and DGX operational checks.
+- `ops/`: Rust operational binaries for local and DGX workflows.
 - `docs/`: product, protocol, role, and operations documentation.
 
 ## Local Environment
@@ -152,7 +152,7 @@ bun run build
 For local MVP smoke coverage:
 
 ```bash
-scripts/ops/check-local-mvp.sh
+agentics-check-local-mvp
 ```
 
 Set `AGENTICS_ADMIN_PASSWORD` and `AGENTICS_WEB_BASE_URL` to include admin and
@@ -164,7 +164,7 @@ runtime tree:
 
 ```bash
 sudo AGENTICS_DGX_TEST_CONFIRM=prepare-test-storage \
-  scripts/ops/prepare-dgx-spark-test-storage.sh
+  agentics-prepare-dgx-spark-test-storage
 ```
 
 Then run quota-sensitive integration tests with:

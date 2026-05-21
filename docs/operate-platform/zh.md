@@ -42,7 +42,7 @@ Local foreground operation：
 4. 启动 `api-server`。
 5. 启动 `worker`。
 6. 启动 Next.js web frontend。
-7. 运行 `scripts/ops/check-local-mvp.sh`。
+7. 运行 `agentics-check-local-mvp`。
 
 DGX Spark 使用 [DGX Spark operations](../dgx-spark/zh.md)。`deploy/dgx-spark/`
 下的 systemd units 仅适用于 Linux，并使用 release symlink `/opt/agentics/current`。
@@ -66,16 +66,16 @@ curl -fsS -u "$AGENTICS_ADMIN_USERNAME:$AGENTICS_ADMIN_PASSWORD" \
 Local MVP check：
 
 ```bash
-AGENTICS_ADMIN_PASSWORD='<admin-password>' scripts/ops/check-local-mvp.sh
+AGENTICS_ADMIN_PASSWORD='<admin-password>' agentics-check-local-mvp
 ```
 
 DGX host 和 profile checks：
 
 ```bash
-scripts/ops/check-dgx-spark-host.sh
+agentics-check-dgx-spark-host
 AGENTICS_RUNNER_SECURITY_PROFILE=production \
   AGENTICS_HOST_PROBE_MODE=warn \
-  scripts/ops/check-dgx-spark-profile.sh
+  agentics-check-dgx-spark-profile
 ```
 
 只有在 Agentics-owned Docker daemon 和 runner quota slots 已配置后，才同时使用

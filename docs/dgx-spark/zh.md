@@ -36,7 +36,7 @@ MVP hosted deployment targets：
 在 DGX host 上运行可重复的 Linux-gated inventory check：
 
 ```bash
-scripts/ops/check-dgx-spark-host.sh
+agentics-check-dgx-spark-host
 ```
 
 若要包含 NVIDIA Docker smoke check，使用能够访问目标 Docker daemon 的 operator
@@ -47,7 +47,7 @@ AGENTICS_DGX_DOCKER_CLI='sudo -n docker' \
 AGENTICS_DGX_RUN_DOCKER_SMOKE=1 \
 AGENTICS_DGX_DOCKER_PULL_POLICY=never \
 AGENTICS_DGX_CUDA_IMAGE=nvidia/cuda:13.0.1-base-ubuntu24.04 \
-scripts/ops/check-dgx-spark-host.sh
+agentics-check-dgx-spark-host
 ```
 
 不要在 operator 的 default Docker daemon 上运行 public Agentics jobs。
@@ -67,14 +67,16 @@ Deployment artifacts 位于 `deploy/dgx-spark/`：
 | `agentics-worker.service` | Worker systemd unit；worker 会强制执行配置的 host probe mode |
 | `agentics-web.service` | Web frontend systemd unit |
 
-Linux-gated operational scripts：
+Linux-gated operational binaries 位于 `agentics-ops` package。Packaged
+deployment 会将它们安装到 `/opt/agentics/current/bin`；从 source checkout
+运行时，使用 `cargo run -p agentics-ops --bin <binary> -- ...`。
 
-| Script | Purpose |
+| Binary | Purpose |
 | --- | --- |
-| `scripts/ops/manage-dgx-spark-profile.sh` | 安装、启动、停止和卸载 DGX systemd profile |
-| `scripts/ops/prepare-dgx-spark-storage.sh` | 创建 loopback XFS images、使用 project quotas 挂载，并准备 runner quota slots |
-| `scripts/ops/prepare-dgx-spark-test-storage.sh` | 创建单独的 `/srv/agentics-test` quota root，并归属给调用测试的用户 |
-| `scripts/ops/check-dgx-spark-profile.sh` | 检查 runtime profile、Docker runtime-root visibility、Docker quota behavior、phase mounts 和 quota-slot probes |
+| `agentics-manage-dgx-spark-profile` | 安装、启动、停止和卸载 DGX systemd profile |
+| `agentics-prepare-dgx-spark-storage` | 创建 loopback XFS images、使用 project quotas 挂载，并准备 runner quota slots |
+| `agentics-prepare-dgx-spark-test-storage` | 创建单独的 `/srv/agentics-test` quota root，并归属给调用测试的用户 |
+| `agentics-check-dgx-spark-profile` | 检查 runtime profile、Docker runtime-root visibility、Docker quota behavior、phase mounts 和 quota-slot probes |
 
 ## Persistent Layout
 
@@ -150,10 +152,10 @@ AGENTICS_DGX_PERSIST_FSTAB=1 \
 AGENTICS_DGX_PHASE_SLOT_CLASSES_MB='64 256 1024 4096' \
 AGENTICS_DGX_PHASE_SLOTS_PER_CLASS=4 \
 AGENTICS_DGX_PHASE_SLOT_INODES_PER_MB=256 \
-scripts/ops/prepare-dgx-spark-storage.sh
+agentics-prepare-dgx-spark-storage
 ```
 
-该脚本在未设置 `AGENTICS_DGX_CONFIRM=prepare-storage` 时会拒绝运行。它创建
+storage preparer 在未设置 `AGENTICS_DGX_CONFIRM=prepare-storage` 时会拒绝运行。它创建
 persistent directory layout，格式化缺失的 loopback XFS images，使用 `prjquota`
 挂载，并在每个 phase mount 下准备 quota slots。设置
 `AGENTICS_DGX_PERSIST_FSTAB=1` 后，它会追加 idempotent `/etc/fstab` entries。
@@ -199,11 +201,13 @@ just dgx-profile uninstall --purge-data
 ```
 
 当 `AGENTICS_HOST_PROBE_MODE=warn` 或 `require` 时，worker process 会在 startup
-期间运行 `scripts/ops/check-dgx-spark-profile.sh`。当
+期间运行 `agentics-check-dgx-spark-profile`。当
 `AGENTICS_RUNNER_SECURITY_PROFILE=production` 和
 `AGENTICS_HOST_PROBE_MODE=require` 同时设置时，如果 Linux host profile 未被证明、
-probe script 无法运行，或 bounded runner storage 与 Docker writable-layer quota 未启用，
+probe binary 无法运行，或 bounded runner storage 与 Docker writable-layer quota 未启用，
 worker 会 fail closed。
+Packaged worker 默认使用 `bin/agentics-check-dgx-spark-profile`；只有当 deployment
+刻意把 probe binary 安装到其他位置时，才设置 `AGENTICS_HOST_PROBE_COMMAND`。
 
 普通 `uninstall` 会删除 services 和 quota storage，但保留 config、release files
 和 durable state。`uninstall --purge-data` 还会删除 `/etc/agentics`、
@@ -217,7 +221,7 @@ identity。
 ```bash
 AGENTICS_HOST_PROBE_MODE=warn \
 AGENTICS_RUNNER_SECURITY_PROFILE=production \
-scripts/ops/check-dgx-spark-profile.sh
+agentics-check-dgx-spark-profile
 ```
 
 Agentics-owned Docker daemon 和 phase mounts 配置完成后，运行包含 mutating probes
@@ -234,7 +238,7 @@ sudo -u agentics env \
   AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096 \
   AGENTICS_DGX_RUN_MUTATING_PROBES=1 \
   AGENTICS_DGX_DOCKER_PULL_POLICY=never \
-  scripts/ops/check-dgx-spark-profile.sh
+  agentics-check-dgx-spark-profile
 ```
 
 在 DGX host 上由开发者运行 integration tests 时，应准备一个由测试用户拥有的独立
@@ -242,7 +246,7 @@ quota root，不复用 production runner slots：
 
 ```bash
 sudo AGENTICS_DGX_TEST_CONFIRM=prepare-test-storage \
-  scripts/ops/prepare-dgx-spark-test-storage.sh
+  agentics-prepare-dgx-spark-test-storage
 ```
 
 运行 quota-sensitive integration tests 时设置：
@@ -265,7 +269,7 @@ worker slot ownership。
 ```bash
 AGENTICS_ADMIN_PASSWORD='<admin-password>' \
 AGENTICS_WEB_BASE_URL='https://<public-hostname>' \
-scripts/ops/check-local-mvp.sh
+agentics-check-local-mvp
 ```
 
 最后针对 hosted endpoint 运行根目录 `README.md` 中的 CLI submitter flow，并用

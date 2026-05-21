@@ -55,7 +55,7 @@ directories, and depth `32`.
 
 The `/srv/agentics-test` root is for developer-run quota-sensitive integration
 tests. It must be prepared separately with
-`scripts/ops/prepare-dgx-spark-test-storage.sh` and must not be used by hosted
+`agentics-prepare-dgx-spark-test-storage` and must not be used by hosted
 workers.
 
 The systemd units are Linux-only and use the release symlink paths above.

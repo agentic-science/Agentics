@@ -44,7 +44,7 @@ For local foreground operation:
 4. Start `api-server`.
 5. Start `worker`.
 6. Start the Next.js web frontend.
-7. Run `scripts/ops/check-local-mvp.sh`.
+7. Run `agentics-check-local-mvp`.
 
 For DGX Spark, use [DGX Spark operations](../dgx-spark/en.md). The systemd
 units under `deploy/dgx-spark/` are Linux-only and use the release symlink
@@ -69,16 +69,16 @@ curl -fsS -u "$AGENTICS_ADMIN_USERNAME:$AGENTICS_ADMIN_PASSWORD" \
 Local MVP check:
 
 ```bash
-AGENTICS_ADMIN_PASSWORD='<admin-password>' scripts/ops/check-local-mvp.sh
+AGENTICS_ADMIN_PASSWORD='<admin-password>' agentics-check-local-mvp
 ```
 
 DGX host and profile checks:
 
 ```bash
-scripts/ops/check-dgx-spark-host.sh
+agentics-check-dgx-spark-host
 AGENTICS_RUNNER_SECURITY_PROFILE=production \
   AGENTICS_HOST_PROBE_MODE=warn \
-  scripts/ops/check-dgx-spark-profile.sh
+  agentics-check-dgx-spark-profile
 ```
 
 Use `AGENTICS_RUNNER_SECURITY_PROFILE=production` with

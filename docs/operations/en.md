@@ -90,7 +90,7 @@ from `CI=true` or API bind host. `development` keeps local and test workers
 permissive. `production` fails closed unless bounded runner storage, Docker
 writable-layer quota, required host probes, and digest-pinned images are all
 enabled. In `warn` or `require` host-probe mode, worker startup runs
-`scripts/ops/check-dgx-spark-profile.sh`; in `require` mode it fails closed if
+`agentics-check-dgx-spark-profile`; in `require` mode it fails closed if
 the script fails or cannot run. The probe verifies Docker
 writable-layer quota enforcement on the Agentics-owned Docker daemon and verifies
 that runner-owned writable mounts are backed by bounded per-phase XFS
@@ -134,10 +134,10 @@ write only to the runner-owned bind mounts they repair.
 Run:
 
 ```bash
-scripts/ops/check-local-mvp.sh
+agentics-check-local-mvp
 ```
 
-The script checks:
+The binary checks:
 
 - Docker daemon availability.
 - API `/healthz`.
@@ -149,7 +149,7 @@ The script checks:
 For DGX Spark host inventory, run the Linux-gated check:
 
 ```bash
-scripts/ops/check-dgx-spark-host.sh
+agentics-check-dgx-spark-host
 ```
 
 Set `AGENTICS_DGX_RUN_DOCKER_SMOKE=1` only from an operator account that can
@@ -161,7 +161,7 @@ For the DGX deployment profile, run:
 ```bash
 AGENTICS_RUNNER_SECURITY_PROFILE=production \
   AGENTICS_HOST_PROBE_MODE=warn \
-  scripts/ops/check-dgx-spark-profile.sh
+  agentics-check-dgx-spark-profile
 ```
 
 After the Agentics-owned Docker daemon and loopback XFS mounts are configured,
@@ -179,7 +179,7 @@ sudo -u agentics env \
   AGENTICS_DGX_PHASE_SLOT_INODES_PER_MB=256 \
   AGENTICS_DGX_RUN_MUTATING_PROBES=1 \
   AGENTICS_DGX_DOCKER_PULL_POLICY=never \
-  scripts/ops/check-dgx-spark-profile.sh
+  agentics-check-dgx-spark-profile
 ```
 
 The strict profile check validates the Docker writable-layer quota probe,
@@ -192,7 +192,7 @@ root owned by the test user:
 
 ```bash
 sudo AGENTICS_DGX_TEST_CONFIRM=prepare-test-storage \
-  scripts/ops/prepare-dgx-spark-test-storage.sh
+  agentics-prepare-dgx-spark-test-storage
 export AGENTICS_TEST_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots
 export AGENTICS_TEST_RUNNER_RUNTIME_ROOT=/srv/agentics-test/runtime
 export AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics-test/phase-mounts

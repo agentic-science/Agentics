@@ -21,6 +21,8 @@ pub const ENV_AGENTICS_WEB_BASE_URL: &str = "AGENTICS_WEB_BASE_URL";
 pub const ENV_AGENTICS_ADMIN_USERNAME: &str = "AGENTICS_ADMIN_USERNAME";
 /// Environment variable that configures the administrator password.
 pub const ENV_AGENTICS_ADMIN_PASSWORD: &str = "AGENTICS_ADMIN_PASSWORD";
+/// Environment variable that overrides the hosted runner profile probe command.
+pub const ENV_AGENTICS_HOST_PROBE_COMMAND: &str = "AGENTICS_HOST_PROBE_COMMAND";
 
 const CONFIG_ENV_PREFIX: &str = "AGENTICS_";
 /// Default API listen host for local development.
@@ -33,6 +35,8 @@ pub const DEFAULT_WEB_PORT: u16 = 3001;
 pub const DEFAULT_ADMIN_USERNAME: &str = "admin";
 /// Insecure default administrator password for local-only development.
 pub const INSECURE_DEFAULT_ADMIN_PASSWORD: &str = "agentics-admin";
+/// Default hosted runner profile probe command in packaged deployments.
+pub const DEFAULT_HOST_PROBE_COMMAND: &str = "bin/agentics-check-dgx-spark-profile";
 const DEFAULT_POSTGRES_PORT: u16 = 5432;
 const DEFAULT_AGENT_REGISTRATION_MODE: AgentRegistrationMode = AgentRegistrationMode::PioneerCode;
 const DEFAULT_WORKER_ACCELERATORS: WorkerAccelerators = WorkerAccelerators::None;

@@ -38,7 +38,7 @@ The first inventory was captured on `MapleSpark` on May 12-13, 2026.
 Run the repeatable Linux-gated inventory check on the DGX host:
 
 ```bash
-scripts/ops/check-dgx-spark-host.sh
+agentics-check-dgx-spark-host
 ```
 
 To include the NVIDIA Docker smoke check, use an operator account that can
@@ -49,7 +49,7 @@ AGENTICS_DGX_DOCKER_CLI='sudo -n docker' \
 AGENTICS_DGX_RUN_DOCKER_SMOKE=1 \
 AGENTICS_DGX_DOCKER_PULL_POLICY=never \
 AGENTICS_DGX_CUDA_IMAGE=nvidia/cuda:13.0.1-base-ubuntu24.04 \
-scripts/ops/check-dgx-spark-host.sh
+agentics-check-dgx-spark-host
 ```
 
 Do not run public Agentics jobs on the operator's default Docker daemon. The
@@ -69,14 +69,16 @@ Deployment artifacts live in `deploy/dgx-spark/`:
 | `agentics-worker.service` | Worker systemd unit; the worker enforces the configured host probe mode |
 | `agentics-web.service` | Web frontend systemd unit |
 
-Linux-gated operational scripts:
+Linux-gated operational binaries live in the `agentics-ops` package. Packaged
+deployments install them under `/opt/agentics/current/bin`; from a source
+checkout, use `cargo run -p agentics-ops --bin <binary> -- ...`.
 
-| Script | Purpose |
+| Binary | Purpose |
 | --- | --- |
-| `scripts/ops/manage-dgx-spark-profile.sh` | Installs, starts, stops, and uninstalls the DGX systemd profile |
-| `scripts/ops/prepare-dgx-spark-storage.sh` | Creates loopback XFS images, mounts them with project quotas, and prepares runner quota slots |
-| `scripts/ops/prepare-dgx-spark-test-storage.sh` | Creates a separate `/srv/agentics-test` quota root owned by the invoking test user |
-| `scripts/ops/check-dgx-spark-profile.sh` | Checks runtime profile, Docker runtime-root visibility, Docker quota behavior, phase mounts, and quota-slot probes |
+| `agentics-manage-dgx-spark-profile` | Installs, starts, stops, and uninstalls the DGX systemd profile |
+| `agentics-prepare-dgx-spark-storage` | Creates loopback XFS images, mounts them with project quotas, and prepares runner quota slots |
+| `agentics-prepare-dgx-spark-test-storage` | Creates a separate `/srv/agentics-test` quota root owned by the invoking test user |
+| `agentics-check-dgx-spark-profile` | Checks runtime profile, Docker runtime-root visibility, Docker quota behavior, phase mounts, and quota-slot probes |
 
 ## Persistent Layout
 
@@ -152,10 +154,11 @@ AGENTICS_DGX_PERSIST_FSTAB=1 \
 AGENTICS_DGX_PHASE_SLOT_CLASSES_MB='64 256 1024 4096' \
 AGENTICS_DGX_PHASE_SLOTS_PER_CLASS=4 \
 AGENTICS_DGX_PHASE_SLOT_INODES_PER_MB=256 \
-scripts/ops/prepare-dgx-spark-storage.sh
+agentics-prepare-dgx-spark-storage
 ```
 
-The script refuses to run unless `AGENTICS_DGX_CONFIRM=prepare-storage` is set.
+The storage preparer refuses to run unless
+`AGENTICS_DGX_CONFIRM=prepare-storage` is set.
 It creates the persistent directory layout, formats missing loopback XFS images,
 mounts them with `prjquota`, and prepares quota slots under each phase mount.
 Set `AGENTICS_DGX_PERSIST_FSTAB=1` to append idempotent `/etc/fstab` entries.
@@ -202,12 +205,15 @@ just dgx-profile uninstall
 just dgx-profile uninstall --purge-data
 ```
 
-The worker process runs `scripts/ops/check-dgx-spark-profile.sh` during startup
+The worker process runs `agentics-check-dgx-spark-profile` during startup
 when `AGENTICS_HOST_PROBE_MODE=warn` or `require`. With
 `AGENTICS_RUNNER_SECURITY_PROFILE=production` and
 `AGENTICS_HOST_PROBE_MODE=require`, the worker fails closed if the Linux host
-profile is not proven, the probe script cannot run, or bounded runner storage
+profile is not proven, the probe binary cannot run, or bounded runner storage
 and Docker writable-layer quota are not enabled.
+Packaged workers use `bin/agentics-check-dgx-spark-profile` by default; set
+`AGENTICS_HOST_PROBE_COMMAND` only when a deployment intentionally installs the
+probe binary somewhere else.
 
 Plain `uninstall` removes services and quota storage while preserving config,
 release files, and durable state. `uninstall --purge-data` also removes
@@ -221,7 +227,7 @@ Run the non-mutating profile check first:
 ```bash
 AGENTICS_HOST_PROBE_MODE=warn \
 AGENTICS_RUNNER_SECURITY_PROFILE=production \
-scripts/ops/check-dgx-spark-profile.sh
+agentics-check-dgx-spark-profile
 ```
 
 After the Agentics-owned Docker daemon and phase mounts are configured, run the
@@ -238,7 +244,7 @@ sudo -u agentics env \
   AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096 \
   AGENTICS_DGX_RUN_MUTATING_PROBES=1 \
   AGENTICS_DGX_DOCKER_PULL_POLICY=never \
-  scripts/ops/check-dgx-spark-profile.sh
+  agentics-check-dgx-spark-profile
 ```
 
 For developer-run integration tests on the DGX host, prepare a separate
@@ -246,7 +252,7 @@ test-owned quota root instead of reusing production runner slots:
 
 ```bash
 sudo AGENTICS_DGX_TEST_CONFIRM=prepare-test-storage \
-  scripts/ops/prepare-dgx-spark-test-storage.sh
+  agentics-prepare-dgx-spark-test-storage
 ```
 
 Run quota-sensitive integration tests with:
@@ -270,7 +276,7 @@ Then run:
 ```bash
 AGENTICS_ADMIN_PASSWORD='<admin-password>' \
 AGENTICS_WEB_BASE_URL='https://<public-hostname>' \
-scripts/ops/check-local-mvp.sh
+agentics-check-local-mvp
 ```
 
 Finally, run the CLI submitter flow from the root `README.md` against the hosted
