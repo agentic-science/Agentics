@@ -919,50 +919,141 @@ export const challengeDetailResponseSchema = z
             "Policy controlling when solution artifacts may become public.",
           ),
         execution: z
-          .object({
-            evaluator: z
-              .object({
-                command: z.array(z.string()),
-                result_file: z
-                  .string()
-                  .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
-              })
-              .strict()
-              .describe(
-                "Evaluator entrypoint and output-file contract for a bundle.",
-              ),
-            validation_runs: z
-              .string()
-              .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
-              .optional(),
-            validation_prepare: z
-              .object({
-                command: z.array(z.string()),
-                result_runs_file: z
-                  .string()
-                  .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
-                  .describe(
-                    "Relative path, under the prepared workspace, to the generated run manifest.",
-                  ),
-                network_access: z
-                  .enum(["disabled", "loopback", "enabled"])
-                  .describe("Network access policy requested for a phase."),
-                reproducibility_notes: z
-                  .string()
-                  .describe(
-                    "Challenge-owner notes about seeds, versions, or external data provenance.",
-                  )
-                  .optional(),
-              })
-              .strict()
-              .describe(
-                "Optional evaluator-image command that prepares generated benchmark inputs.",
-              )
-              .optional(),
-            mode: z.literal("separated_evaluator"),
+          .any()
+          .superRefine((x, ctx) => {
+            const schemas = [
+              z
+                .object({
+                  evaluator: z
+                    .object({
+                      command: z.array(z.string()),
+                      result_file: z
+                        .string()
+                        .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+                    })
+                    .strict()
+                    .describe(
+                      "Evaluator entrypoint and output-file contract for a bundle.",
+                    ),
+                  validation_runs: z
+                    .string()
+                    .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+                    .optional(),
+                  validation_prepare: z
+                    .object({
+                      command: z.array(z.string()),
+                      result_runs_file: z
+                        .string()
+                        .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+                        .describe(
+                          "Relative path, under the prepared workspace, to the generated run manifest.",
+                        ),
+                      network_access: z
+                        .enum(["disabled", "loopback", "enabled"])
+                        .describe(
+                          "Network access policy requested for a phase.",
+                        ),
+                      reproducibility_notes: z
+                        .string()
+                        .describe(
+                          "Challenge-owner notes about seeds, versions, or external data provenance.",
+                        )
+                        .optional(),
+                    })
+                    .strict()
+                    .describe(
+                      "Optional evaluator-image command that prepares generated benchmark inputs.",
+                    )
+                    .optional(),
+                  mode: z.literal("separated_evaluator"),
+                })
+                .strict()
+                .describe("Public separated-evaluator topology metadata."),
+              z
+                .object({
+                  interactor: z
+                    .object({
+                      command: z.array(z.string()),
+                      result_file: z
+                        .string()
+                        .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+                    })
+                    .strict()
+                    .describe(
+                      "Evaluator entrypoint and output-file contract for a bundle.",
+                    ),
+                  validation_session: z
+                    .string()
+                    .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+                    .optional(),
+                  validation_prepare: z
+                    .object({
+                      command: z.array(z.string()),
+                      result_session_file: z
+                        .string()
+                        .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+                        .describe(
+                          "Relative path, under the prepared workspace, to the generated session manifest.",
+                        ),
+                      network_access: z
+                        .enum(["disabled", "loopback", "enabled"])
+                        .describe(
+                          "Network access policy requested for a phase.",
+                        ),
+                      reproducibility_notes: z
+                        .string()
+                        .describe(
+                          "Challenge-owner notes about seeds, versions, or external data provenance.",
+                        )
+                        .optional(),
+                    })
+                    .strict()
+                    .describe(
+                      "Optional interactor-image command that prepares one generated interactive session.",
+                    )
+                    .optional(),
+                  mode: z.literal("piped_stdio"),
+                })
+                .strict()
+                .describe("Public piped-stdio topology metadata."),
+            ];
+            const { errors, failed } = schemas.reduce<{
+              errors: z.core.$ZodIssue[];
+              failed: number;
+            }>(
+              ({ errors, failed }, schema) =>
+                ((result) =>
+                  result.error
+                    ? {
+                        errors: [...errors, ...result.error.issues],
+                        failed: failed + 1,
+                      }
+                    : { errors, failed })(schema.safeParse(x)),
+              { errors: [], failed: 0 },
+            );
+            const passed = schemas.length - failed;
+            if (passed !== 1) {
+              ctx.addIssue(
+                errors.length
+                  ? {
+                      path: [],
+                      code: "invalid_union",
+                      errors: [errors],
+                      message:
+                        "Invalid input: Should pass single schema. Passed " +
+                        passed,
+                    }
+                  : {
+                      path: [],
+                      code: "custom",
+                      errors: [errors],
+                      message:
+                        "Invalid input: Should pass single schema. Passed " +
+                        passed,
+                    },
+              );
+            }
           })
-          .strict()
-          .describe("Public separated-evaluator topology metadata.")
           .describe(
             "Public execution metadata that excludes official private benchmark locators.",
           ),

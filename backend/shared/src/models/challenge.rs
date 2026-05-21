@@ -437,6 +437,7 @@ pub struct HardwareProfileSpec {
 #[serde(rename_all = "snake_case")]
 pub enum ChallengeExecutionMode {
     SeparatedEvaluator,
+    PipedStdio,
 }
 
 /// Challenge-owned execution topology and run manifest locations for `zip_project`.
@@ -444,6 +445,7 @@ pub enum ChallengeExecutionMode {
 #[serde(tag = "mode", rename_all = "snake_case")]
 pub enum ChallengeExecutionSpec {
     SeparatedEvaluator(SeparatedEvaluatorExecutionSpec),
+    PipedStdio(PipedStdioExecutionSpec),
 }
 
 impl ChallengeExecutionSpec {
@@ -451,46 +453,56 @@ impl ChallengeExecutionSpec {
     pub fn mode(&self) -> ChallengeExecutionMode {
         match self {
             Self::SeparatedEvaluator(_) => ChallengeExecutionMode::SeparatedEvaluator,
+            Self::PipedStdio(_) => ChallengeExecutionMode::PipedStdio,
         }
     }
 
-    /// Borrow the current separated-evaluator execution contract.
-    pub fn separated_evaluator(&self) -> &SeparatedEvaluatorExecutionSpec {
+    /// Borrow the current piped-stdio execution contract.
+    pub fn piped_stdio(&self) -> Option<&PipedStdioExecutionSpec> {
         match self {
-            Self::SeparatedEvaluator(spec) => spec,
-        }
-    }
-
-    /// Mutably borrow the current separated-evaluator execution contract.
-    pub fn separated_evaluator_mut(&mut self) -> &mut SeparatedEvaluatorExecutionSpec {
-        match self {
-            Self::SeparatedEvaluator(spec) => spec,
+            Self::SeparatedEvaluator(_) => None,
+            Self::PipedStdio(spec) => Some(spec),
         }
     }
 
     /// Borrow the evaluator command contract for the current topology.
     pub fn evaluator(&self) -> &EvaluatorSpec {
-        &self.separated_evaluator().evaluator
+        match self {
+            Self::SeparatedEvaluator(spec) => &spec.evaluator,
+            Self::PipedStdio(spec) => &spec.interactor,
+        }
     }
 
     /// Borrow public validation run locator if declared.
     pub fn validation_runs(&self) -> Option<&BundleRelativePath> {
-        self.separated_evaluator().validation_runs.as_ref()
+        match self {
+            Self::SeparatedEvaluator(spec) => spec.validation_runs.as_ref(),
+            Self::PipedStdio(_) => None,
+        }
     }
 
     /// Borrow public validation prepare contract if declared.
     pub fn validation_prepare(&self) -> Option<&ChallengePrepareSpec> {
-        self.separated_evaluator().validation_prepare.as_ref()
+        match self {
+            Self::SeparatedEvaluator(spec) => spec.validation_prepare.as_ref(),
+            Self::PipedStdio(_) => None,
+        }
     }
 
     /// Borrow official benchmark run locator if declared.
     pub fn official_runs(&self) -> Option<&BundleRelativePath> {
-        self.separated_evaluator().official_runs.as_ref()
+        match self {
+            Self::SeparatedEvaluator(spec) => spec.official_runs.as_ref(),
+            Self::PipedStdio(_) => None,
+        }
     }
 
     /// Borrow official benchmark prepare contract if declared.
     pub fn official_prepare(&self) -> Option<&ChallengePrepareSpec> {
-        self.separated_evaluator().official_prepare.as_ref()
+        match self {
+            Self::SeparatedEvaluator(spec) => spec.official_prepare.as_ref(),
+            Self::PipedStdio(_) => None,
+        }
     }
 }
 
@@ -509,24 +521,36 @@ pub struct SeparatedEvaluatorExecutionSpec {
     pub official_prepare: Option<ChallengePrepareSpec>,
 }
 
+/// Interactive topology where a trusted interactor exchanges stdio with one solution run.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PipedStdioExecutionSpec {
+    pub interactor: EvaluatorSpec,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub validation_session: Option<BundleRelativePath>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub validation_prepare: Option<PipedStdioPrepareSpec>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub official_session: Option<BundleRelativePath>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub official_prepare: Option<PipedStdioPrepareSpec>,
+}
+
 /// Public execution metadata that excludes official private benchmark locators.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "mode", rename_all = "snake_case")]
 pub enum PublicChallengeExecutionSpec {
     SeparatedEvaluator(PublicSeparatedEvaluatorExecutionSpec),
+    PipedStdio(PublicPipedStdioExecutionSpec),
 }
 
 impl PublicChallengeExecutionSpec {
-    /// Borrow the public separated-evaluator execution contract.
-    pub fn separated_evaluator(&self) -> &PublicSeparatedEvaluatorExecutionSpec {
-        match self {
-            Self::SeparatedEvaluator(spec) => spec,
-        }
-    }
-
     /// Borrow the evaluator command contract for the public execution topology.
     pub fn evaluator(&self) -> &EvaluatorSpec {
-        &self.separated_evaluator().evaluator
+        match self {
+            Self::SeparatedEvaluator(spec) => &spec.evaluator,
+            Self::PipedStdio(spec) => &spec.interactor,
+        }
     }
 }
 
@@ -537,6 +561,13 @@ impl From<ChallengeExecutionSpec> for PublicChallengeExecutionSpec {
                 Self::SeparatedEvaluator(PublicSeparatedEvaluatorExecutionSpec {
                     evaluator: spec.evaluator,
                     validation_runs: spec.validation_runs,
+                    validation_prepare: spec.validation_prepare,
+                })
+            }
+            ChallengeExecutionSpec::PipedStdio(spec) => {
+                Self::PipedStdio(PublicPipedStdioExecutionSpec {
+                    interactor: spec.interactor,
+                    validation_session: spec.validation_session,
                     validation_prepare: spec.validation_prepare,
                 })
             }
@@ -555,6 +586,17 @@ pub struct PublicSeparatedEvaluatorExecutionSpec {
     pub validation_prepare: Option<ChallengePrepareSpec>,
 }
 
+/// Public piped-stdio topology metadata.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PublicPipedStdioExecutionSpec {
+    pub interactor: EvaluatorSpec,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub validation_session: Option<BundleRelativePath>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub validation_prepare: Option<PipedStdioPrepareSpec>,
+}
+
 /// Optional evaluator-image command that prepares generated benchmark inputs.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -562,6 +604,19 @@ pub struct ChallengePrepareSpec {
     pub command: Vec<String>,
     /// Relative path, under the prepared workspace, to the generated run manifest.
     pub result_runs_file: BundleRelativePath,
+    pub network_access: ZipProjectNetworkAccess,
+    /// Challenge-owner notes about seeds, versions, or external data provenance.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reproducibility_notes: Option<String>,
+}
+
+/// Optional interactor-image command that prepares one generated interactive session.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PipedStdioPrepareSpec {
+    pub command: Vec<String>,
+    /// Relative path, under the prepared workspace, to the generated session manifest.
+    pub result_session_file: BundleRelativePath,
     pub network_access: ZipProjectNetworkAccess,
     /// Challenge-owner notes about seeds, versions, or external data provenance.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -608,6 +663,17 @@ pub struct ChallengeRunInputFile {
     pub content: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content_json: Option<serde_json::Value>,
+}
+
+/// Challenge-owned single interactive session manifest for `piped_stdio`.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PipedStdioSessionManifest {
+    pub session_name: RunName,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub input_files: Vec<ChallengeRunInputFile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 /// Dataset layout and visibility policy declared by a bundle.

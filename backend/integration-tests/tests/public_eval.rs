@@ -36,6 +36,199 @@ fn create_validation_disabled_challenge(root: &Path) {
     .expect("failed to write copied spec");
 }
 
+/// Creates a minimal piped-stdio challenge after validating caller inputs.
+fn create_piped_stdio_challenge(root: &Path) {
+    let bundle_dir = root.join("interactive-sum/v1");
+    std::fs::create_dir_all(bundle_dir.join("interactor"))
+        .expect("failed to create interactor dir");
+    std::fs::create_dir_all(bundle_dir.join("public")).expect("failed to create public dir");
+    std::fs::create_dir_all(bundle_dir.join("private-benchmark"))
+        .expect("failed to create private benchmark dir");
+    std::fs::write(
+        bundle_dir.join("statement.md"),
+        "# Interactive Sum\n\nAdd two numbers.\n",
+    )
+    .expect("failed to write statement");
+    std::fs::write(
+        bundle_dir.join("public/session.json"),
+        serde_json::json!({
+            "session_name": "public-1",
+            "metadata": { "a": 2, "b": 3 }
+        })
+        .to_string(),
+    )
+    .expect("failed to write validation session");
+    std::fs::write(
+        bundle_dir.join("private-benchmark/session.json"),
+        serde_json::json!({
+            "session_name": "official-1",
+            "metadata": { "a": 11, "b": 31 }
+        })
+        .to_string(),
+    )
+    .expect("failed to write official session");
+    std::fs::write(
+        bundle_dir.join("interactor/run.py"),
+        r#"from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--challenge-dir", required=True)
+parser.add_argument("--session-file", required=True)
+parser.add_argument("--session-input-dir", required=True)
+parser.add_argument("--output-path", required=True)
+parser.add_argument("--mode", required=True)
+parser.add_argument("--target", required=True)
+args = parser.parse_args()
+
+session = json.loads(Path(args.session_file).read_text())
+metadata = session.get("metadata", {})
+a = int(metadata.get("a", 0))
+b = int(metadata.get("b", 0))
+print(f"{a} {b}", flush=True)
+answer = sys.stdin.readline().strip()
+passed = answer == str(a + b)
+score = 1.0 if passed else 0.0
+summary_key = "validation_summary" if args.mode == "validation" else "official_summary"
+payload = {
+    "status": "passed" if passed else "failed",
+    "rank_score": score,
+    "aggregate_metrics": [
+        {"metric_name": "score", "value": score},
+        {"metric_name": "passed_cases", "value": score}
+    ],
+    summary_key: {"score": score, "passed": 1 if passed else 0, "total": 1},
+}
+if args.mode == "validation":
+    payload["public_results"] = [
+        {"case_name": session["session_name"], "status": "passed" if passed else "failed", "score": score, "message": "ok" if passed else "wrong"}
+    ]
+Path(args.output_path).write_text(json.dumps({
+    **payload
+}))
+"#,
+    )
+    .expect("failed to write interactor");
+    std::fs::write(
+        bundle_dir.join("spec.json"),
+        serde_json::json!({
+            "schema_version": 1,
+            "challenge_name": "interactive-sum",
+            "challenge_title": "Interactive Sum",
+            "summary": {
+                "en": "Add numbers through a trusted interactive interactor.",
+                "zh": "通过可信交互器完成加法。"
+            },
+            "keywords": ["interactive"],
+            "solution": {
+                "protocol": "zip_project",
+                "manifest_file": "agentics.solution.json"
+            },
+            "targets": [{
+                "name": "linux-arm64-cpu",
+                "docker_platform": "linux/arm64",
+                "accelerator": null,
+                "validation_enabled": true,
+                "resource_profile": {
+                    "name": "python-cpu-small",
+                    "solution_image": {
+                        "source": "local",
+                        "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"
+                    },
+                    "evaluator_image": {
+                        "source": "local",
+                        "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"
+                    },
+                    "timeout_sec": 30,
+                    "memory_limit_mb": 512,
+                    "cpu_limit_millis": 1000,
+                    "disk_limit_mb": 256,
+                    "setup_network_access": "disabled",
+                    "build_network_access": "disabled",
+                    "run_network_access": "disabled",
+                    "evaluator_network_access": "disabled"
+                }
+            }],
+            "starts_at": "2026-01-01T00:00:00Z",
+            "eligibility": { "type": "open" },
+            "visibility": {
+                "leaderboard": "public_live",
+                "score_distribution": "public_live",
+                "result_detail": "submitter_live_public_live"
+            },
+            "solution_publication": "public",
+            "execution": {
+                "mode": "piped_stdio",
+                "interactor": {
+                    "command": ["python", "interactor/run.py"],
+                    "result_file": "result.json"
+                },
+                "validation_session": "public/session.json",
+                "official_session": "private-benchmark/session.json"
+            },
+            "datasets": {
+                "public_dir": "public",
+                "private_benchmark_dir": "private-benchmark",
+                "public_policy": "full",
+                "private_benchmark_policy": "score_only",
+                "private_benchmark_enabled": true
+            },
+            "metric_schema": {
+                "metrics": [
+                    {
+                        "name": "score",
+                        "label": "Score",
+                        "direction": "maximize",
+                        "visibility": "public"
+                    },
+                    {
+                        "name": "passed_cases",
+                        "label": "Passed Cases",
+                        "direction": "maximize",
+                        "visibility": "public"
+                    }
+                ],
+                "ranking": {
+                    "primary_metric_name": "score",
+                    "tie_breaker_metric_names": ["passed_cases"]
+                }
+            }
+        })
+        .to_string(),
+    )
+    .expect("failed to write spec");
+}
+
+/// Build a base64 ZIP containing an interactive sum solution.
+fn piped_stdio_sum_solution_zip_base64() -> String {
+    zip_project_zip_base64(vec![
+        (
+            "agentics.solution.json",
+            serde_json::json!({
+                "protocol": "zip_project",
+                "protocol_version": 1,
+                "note": "interactive sum solution",
+                "commands": {
+                    "run": "run.sh"
+                }
+            })
+            .to_string(),
+        ),
+        (
+            "run.sh",
+            "#!/usr/bin/env sh\nset -eu\npython main.py\n".to_string(),
+        ),
+        (
+            "main.py",
+            "import sys\nline = sys.stdin.readline().strip()\na, b = map(int, line.split())\nprint(a + b, flush=True)\n".to_string(),
+        ),
+    ])
+}
+
 /// Verifies that worker completes official solution submission.
 #[sqlx::test(migrations = "../migrations")]
 async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
@@ -129,7 +322,10 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
         .json()
         .await
         .expect("failed to decode solution submission response");
-    assert_eq!(solution_submission["status"], "completed");
+    assert_eq!(
+        solution_submission["status"], "completed",
+        "unexpected official submission response: {solution_submission:#}"
+    );
     assert_eq!(solution_submission["note"], "sample-sum smoke solution");
     assert_eq!(solution_submission["visible_after_eval"], true);
     assert_eq!(
@@ -216,6 +412,189 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
                 }
             ])
         )
+    );
+}
+
+/// Verifies that the worker completes a piped-stdio official submission.
+#[sqlx::test(migrations = "../migrations")]
+async fn worker_completes_piped_stdio_solution_submission(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let challenges = tempfile::tempdir().expect("failed to create challenge tempdir");
+    create_piped_stdio_challenge(challenges.path());
+    let config = test_config(storage.path(), challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "display_name": "piped-stdio-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+
+    let validation_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agent/validation-runs"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
+        .json(&serde_json::json!({
+            "challenge_name": "interactive-sum",
+            "target": "linux-arm64-cpu",
+            "artifact_base64": piped_stdio_sum_solution_zip_base64(),
+            "explanation": "piped stdio validation smoke test"
+        }))
+        .send()
+        .await
+        .expect("failed to create validation run")
+        .json()
+        .await
+        .expect("failed to decode create validation response");
+    let validation_id = validation_response["id"]
+        .as_str()
+        .expect("missing validation id");
+    run_worker_once(&pool, &config).await;
+    let validation: serde_json::Value = client
+        .get(api_url(
+            &app,
+            &format!("/api/agent/validation-runs/{validation_id}"),
+        ))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
+        .send()
+        .await
+        .expect("failed to get validation run")
+        .json()
+        .await
+        .expect("failed to decode validation response");
+    assert_eq!(validation["status"], "completed");
+    assert_eq!(validation["evaluation"]["eval_type"], "validation");
+    assert_eq!(validation["evaluation"]["rank_score"], 1.0);
+    assert_eq!(validation["evaluation"]["validation_summary"]["score"], 1.0);
+
+    let create_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agent/solution-submissions"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
+        .json(&serde_json::json!({
+            "challenge_name": "interactive-sum",
+            "target": "linux-arm64-cpu",
+            "artifact_base64": piped_stdio_sum_solution_zip_base64(),
+            "explanation": "piped stdio official smoke test"
+        }))
+        .send()
+        .await
+        .expect("failed to create solution submission")
+        .json()
+        .await
+        .expect("failed to decode create solution submission response");
+    let solution_submission_id = create_response["id"]
+        .as_str()
+        .expect("missing solution submission id");
+
+    run_worker_once(&pool, &config).await;
+
+    let solution_submission: serde_json::Value = client
+        .get(api_url(
+            &app,
+            &format!("/api/agent/solution-submissions/{solution_submission_id}"),
+        ))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
+        .send()
+        .await
+        .expect("failed to get solution submission")
+        .json()
+        .await
+        .expect("failed to decode solution submission response");
+
+    assert_eq!(
+        solution_submission["status"], "completed",
+        "unexpected piped_stdio submission response"
+    );
+    assert_eq!(solution_submission["evaluation"]["eval_type"], "official");
+    assert_eq!(solution_submission["evaluation"]["rank_score"], 1.0);
+    assert_eq!(
+        solution_submission["official_primary_metric"],
+        serde_json::json!({ "metric_name": "score", "value": 1.0 })
+    );
+}
+
+/// Verifies that piped-stdio transcript limits fail the run before result persistence.
+#[sqlx::test(migrations = "../migrations")]
+async fn worker_rejects_piped_stdio_interaction_limit(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let challenges = tempfile::tempdir().expect("failed to create challenge tempdir");
+    create_piped_stdio_challenge(challenges.path());
+    let mut config = test_config(storage.path(), challenges.path());
+    config.runner_max_interaction_bytes_per_direction = 1;
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "display_name": "piped-limit-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+
+    let create_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agent/validation-runs"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
+        .json(&serde_json::json!({
+            "challenge_name": "interactive-sum",
+            "target": "linux-arm64-cpu",
+            "artifact_base64": piped_stdio_sum_solution_zip_base64(),
+            "explanation": "piped stdio limit smoke test"
+        }))
+        .send()
+        .await
+        .expect("failed to create validation run")
+        .json()
+        .await
+        .expect("failed to decode create validation response");
+    let validation_id = create_response["id"]
+        .as_str()
+        .expect("missing validation id");
+
+    run_worker_once(&pool, &config).await;
+
+    let validation: serde_json::Value = client
+        .get(api_url(
+            &app,
+            &format!("/api/agent/validation-runs/{validation_id}"),
+        ))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
+        .send()
+        .await
+        .expect("failed to get validation run")
+        .json()
+        .await
+        .expect("failed to decode validation response");
+    let job_error: (Option<String>,) = sqlx::query_as(
+        "SELECT last_error FROM evaluation_jobs WHERE solution_submission_id = $1::uuid",
+    )
+    .bind(validation_id)
+    .fetch_one(&pool)
+    .await
+    .expect("failed to query validation job error");
+
+    assert_eq!(validation["status"], "failed");
+    assert!(
+        job_error
+            .0
+            .as_deref()
+            .is_some_and(|message| message.contains("interaction output exceeded")),
+        "unexpected piped_stdio interaction-limit job error: {:?}",
+        job_error.0
     );
 }
 

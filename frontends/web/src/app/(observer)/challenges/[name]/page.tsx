@@ -74,6 +74,15 @@ export default async function ChallengePage({
   const primaryDefinition = metricSchema.metrics.find(
     (metric) => metric.name === metricSchema.ranking.primary_metric_name,
   );
+  const execution = detail.spec.execution;
+  const trustedExecutor =
+    execution.mode === "piped_stdio"
+      ? execution.interactor
+      : execution.evaluator;
+  const trustedExecutorLabel =
+    execution.mode === "piped_stdio"
+      ? t("challenge.config.interactor")
+      : t("challenge.config.evaluator");
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6">
@@ -105,10 +114,18 @@ export default async function ChallengePage({
             </div>
             <div className="min-w-0">
               <span className="block text-[var(--text-caption)] text-[var(--text-muted)] uppercase tracking-wide">
-                {t("challenge.config.evaluator")}
+                {t("challenge.config.executionMode")}
               </span>
               <span className="block text-[var(--text-body-sm)] font-mono text-[var(--text-primary)] [overflow-wrap:anywhere]">
-                {detail.spec.execution.evaluator.command.join(" ")}
+                {execution.mode}
+              </span>
+            </div>
+            <div className="min-w-0">
+              <span className="block text-[var(--text-caption)] text-[var(--text-muted)] uppercase tracking-wide">
+                {trustedExecutorLabel}
+              </span>
+              <span className="block text-[var(--text-body-sm)] font-mono text-[var(--text-primary)] [overflow-wrap:anywhere]">
+                {trustedExecutor.command.join(" ")}
               </span>
             </div>
             <div className="min-w-0">

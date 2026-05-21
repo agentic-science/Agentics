@@ -124,6 +124,57 @@ describe("frontend API schemas", () => {
         statement_markdown: "# Sample Sum",
       }),
     ).not.toThrow();
+
+    expect(() =>
+      challengeDetailResponseSchema.parse({
+        name: "interactive-sum",
+        title: "Interactive Sum",
+        summary: { en: "Add numbers interactively.", zh: "交互式数字求和。" },
+        keywords: ["interactive"],
+        spec: {
+          schema_version: 1,
+          challenge_name: "interactive-sum",
+          challenge_title: "Interactive Sum",
+          summary: { en: "Add numbers interactively.", zh: "交互式数字求和。" },
+          keywords: ["interactive"],
+          starts_at: "2026-01-01T00:00:00Z",
+          ...challengePolicy,
+          solution: {
+            protocol: "zip_project",
+            manifest_file: "agentics.solution.json",
+          },
+          targets: [targetFixture(true)],
+          execution: {
+            mode: "piped_stdio",
+            interactor: {
+              command: ["python", "interactor/run.py"],
+              result_file: "result.json",
+            },
+            validation_session: "public/session.json",
+          },
+          datasets: {
+            public_dir: "public",
+            public_policy: "full",
+            private_benchmark_policy: "score_only",
+            private_benchmark_enabled: true,
+          },
+          metric_schema: {
+            metrics: [
+              {
+                name: "score",
+                label: "Score",
+                direction: "maximize",
+                visibility: "public",
+              },
+            ],
+            ranking: {
+              primary_metric_name: "score",
+            },
+          },
+        },
+        statement_markdown: "# Interactive Sum",
+      }),
+    ).not.toThrow();
   });
 
   it("accepts relaxed omission of nullable evaluation fields", () => {

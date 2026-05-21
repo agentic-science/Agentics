@@ -202,15 +202,26 @@ pub(super) async fn materialize_run_io(
         _ => String::new(),
     };
     tokio::fs::write(io_root.join("stdin.txt"), stdin).await?;
-    for input in &run.input_files {
-        write_run_input_file(
-            input_source_root,
-            input_dir,
-            input,
-            visible_run_name,
-            eval_type,
-        )
-        .await?;
+    materialize_input_files(
+        &run.input_files,
+        visible_run_name,
+        eval_type,
+        input_source_root,
+        input_dir,
+    )
+    .await
+}
+
+/// Materialize declared challenge-owned input files into a container input directory.
+pub(super) async fn materialize_input_files(
+    input_files: &[ChallengeRunInputFile],
+    visible_name: &str,
+    eval_type: ScoringMode,
+    input_source_root: &Path,
+    input_dir: &Path,
+) -> Result<()> {
+    for input in input_files {
+        write_run_input_file(input_source_root, input_dir, input, visible_name, eval_type).await?;
     }
     Ok(())
 }

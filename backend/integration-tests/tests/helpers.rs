@@ -148,6 +148,8 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
         runner_max_result_json_bytes: 4 * 1024 * 1024,
         runner_max_public_results: 1024,
         runner_max_result_log_bytes: 256 * 1024,
+        runner_max_interaction_bytes_per_direction: 16 * 1024 * 1024,
+        runner_interaction_shutdown_grace_secs: 2,
         log_level: "error".to_string(),
     }
 }

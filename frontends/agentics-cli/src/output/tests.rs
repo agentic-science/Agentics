@@ -66,7 +66,8 @@ fn renders_challenge_detail_table() {
         output.contains(
                 "  - linux-arm64-cpu: linux/arm64 none, profile=python-cpu-small, solution_image=agentics-linux-arm64-cpu:ubuntu26.04-local, evaluator_image=agentics-linux-arm64-cpu:ubuntu26.04-evaluator-local, timeout=30 sec, memory=512 MB, validation=disabled"
             )
-        );
+    );
+    assert!(output.contains("execution_mode: separated_evaluator"));
     assert!(output.contains("evaluator: command=python evaluator/run.py, result_file=result.json"));
     assert!(output.contains("ranking_metric: score"));
     assert!(output.ends_with("# Statement\n\nReturn the sum."));

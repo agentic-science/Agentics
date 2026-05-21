@@ -5,8 +5,9 @@ use crate::models::challenge::{
     ChallengeExecutionSpec, ChallengePrepareSpec, ChallengeResultDetailVisibility,
     ChallengeSolutionPublicationPolicy, ChallengeTargetSpec, ChallengeVisibility,
     ChallengeVisibilitySpec, DatasetsSpec, DockerPlatform, EvaluatorSpec, HardwareProfileSpec,
-    MetricDirection, MetricSchemaSpec, MetricVisibility, PrivateBenchmarkPolicy,
-    ResourceProfileSpec, SeparatedEvaluatorExecutionSpec, SolutionSpec, TargetAccelerator,
+    MetricDirection, MetricSchemaSpec, MetricVisibility, PipedStdioExecutionSpec,
+    PipedStdioPrepareSpec, PrivateBenchmarkPolicy, ResourceProfileSpec,
+    SeparatedEvaluatorExecutionSpec, SolutionSpec, TargetAccelerator,
 };
 use crate::models::evaluation::ScoreVisibility;
 use crate::models::hashes::OciSha256Digest;
@@ -103,6 +104,30 @@ fn base_spec() -> ChallengeBundleSpec {
         },
         metric_schema: MetricSchemaSpec::default(),
     }
+}
+
+/// Handles base piped-stdio spec for this module.
+fn base_piped_stdio_spec() -> ChallengeBundleSpec {
+    let mut spec = base_spec();
+    spec.execution = ChallengeExecutionSpec::PipedStdio(PipedStdioExecutionSpec {
+        interactor: EvaluatorSpec {
+            command: vec!["python".to_string(), "interactor/run.py".to_string()],
+            result_file: bundle_path("result.json"),
+        },
+        validation_session: Some(bundle_path("public/session.json")),
+        validation_prepare: None,
+        official_session: Some(bundle_path("private-benchmark/session.json")),
+        official_prepare: None,
+    });
+    spec
+}
+
+/// Borrow separated-evaluator execution in tests that start from `base_spec`.
+fn separated_evaluator_mut(spec: &mut ChallengeBundleSpec) -> &mut SeparatedEvaluatorExecutionSpec {
+    let ChallengeExecutionSpec::SeparatedEvaluator(execution) = &mut spec.execution else {
+        panic!("base spec should use separated_evaluator execution");
+    };
+    execution
 }
 
 /// Handles challenge name for this module.
@@ -265,15 +290,13 @@ fn execution_mode_is_required() {
 /// Verifies that future execution modes are reserved until they are implemented.
 #[test]
 fn unimplemented_execution_modes_are_rejected() {
-    for mode in ["piped_stdio", "coexecuted_benchmark"] {
-        let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
-        spec_json["execution"]["mode"] = serde_json::json!(mode);
+    let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
+    spec_json["execution"]["mode"] = serde_json::json!("coexecuted_benchmark");
 
-        let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
-            .expect_err("unimplemented execution mode should fail");
+    let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+        .expect_err("unimplemented execution mode should fail");
 
-        assert!(error.to_string().contains(mode));
-    }
+    assert!(error.to_string().contains("coexecuted_benchmark"));
 }
 
 /// Verifies that targets are required.
@@ -649,7 +672,7 @@ fn enabled_private_benchmark_requires_directory() {
 #[test]
 fn validation_run_manifest_required_only_when_target_enables_validation() {
     let mut spec = base_spec();
-    spec.execution.separated_evaluator_mut().validation_runs = None;
+    separated_evaluator_mut(&mut spec).validation_runs = None;
     spec.targets[0].validation_enabled = false;
 
     assert!(validate_challenge_bundle_spec(&spec).is_ok());
@@ -664,7 +687,7 @@ fn validation_run_manifest_required_only_when_target_enables_validation() {
 #[test]
 fn validation_prepare_satisfies_validation_enabled_target() {
     let mut spec = base_spec();
-    let execution = spec.execution.separated_evaluator_mut();
+    let execution = separated_evaluator_mut(&mut spec);
     execution.validation_runs = None;
     execution.validation_prepare = Some(prepare_spec());
 
@@ -675,7 +698,7 @@ fn validation_prepare_satisfies_validation_enabled_target() {
 #[test]
 fn official_prepare_satisfies_private_benchmark_execution() {
     let mut spec = base_spec();
-    let execution = spec.execution.separated_evaluator_mut();
+    let execution = separated_evaluator_mut(&mut spec);
     execution.official_runs = None;
     execution.official_prepare = Some(prepare_spec());
 
@@ -686,7 +709,7 @@ fn official_prepare_satisfies_private_benchmark_execution() {
 #[test]
 fn official_prepare_may_omit_private_benchmark_directory() {
     let mut spec = base_spec();
-    let execution = spec.execution.separated_evaluator_mut();
+    let execution = separated_evaluator_mut(&mut spec);
     execution.official_runs = None;
     execution.official_prepare = Some(prepare_spec());
     spec.datasets.private_benchmark_dir = None;
@@ -694,11 +717,70 @@ fn official_prepare_may_omit_private_benchmark_directory() {
     assert!(validate_challenge_bundle_spec(&spec).is_ok());
 }
 
+/// Verifies that piped-stdio execution accepts static sessions and public projection hides official data.
+#[test]
+fn piped_stdio_static_sessions_are_valid_and_projected_publicly() {
+    let spec = base_piped_stdio_spec();
+
+    validate_challenge_bundle_spec(&spec).expect("piped stdio spec should validate");
+    let public = crate::models::challenge::PublicChallengeBundleSpec::from(spec);
+    let execution_json =
+        serde_json::to_value(public.execution).expect("public execution serializes");
+
+    assert_eq!(execution_json["mode"], serde_json::json!("piped_stdio"));
+    assert_eq!(
+        execution_json["validation_session"],
+        serde_json::json!("public/session.json")
+    );
+    assert!(execution_json.get("official_session").is_none());
+    assert!(execution_json.get("official_prepare").is_none());
+}
+
+/// Verifies that separated-evaluator-only run manifest fields are rejected for piped-stdio.
+#[test]
+fn piped_stdio_rejects_run_manifest_fields() {
+    let mut spec_json = serde_json::to_value(base_piped_stdio_spec()).expect("spec serializes");
+    spec_json["execution"]["validation_runs"] = serde_json::json!("public/runs.json");
+
+    let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+        .expect_err("piped stdio should reject run manifest fields");
+
+    assert!(error.to_string().contains("validation_runs"));
+}
+
+/// Verifies that static and prepared piped-stdio sessions are mutually exclusive.
+#[test]
+fn piped_stdio_static_and_prepare_sessions_are_mutually_exclusive() {
+    let mut spec = base_piped_stdio_spec();
+    if let ChallengeExecutionSpec::PipedStdio(execution) = &mut spec.execution {
+        execution.validation_prepare = Some(piped_prepare_spec());
+    }
+
+    let error = validate_challenge_bundle_spec(&spec)
+        .expect_err("validation session and prepare should conflict");
+
+    assert!(error.to_string().contains("validation_session"));
+}
+
+/// Verifies that piped-stdio validation requires a session source when validation is enabled.
+#[test]
+fn piped_stdio_validation_requires_session_source() {
+    let mut spec = base_piped_stdio_spec();
+    if let ChallengeExecutionSpec::PipedStdio(execution) = &mut spec.execution {
+        execution.validation_session = None;
+    }
+
+    let error =
+        validate_challenge_bundle_spec(&spec).expect_err("validation should require a session");
+
+    assert!(error.to_string().contains("validation_session"));
+}
+
 /// Verifies that prepare and static runs are mutually exclusive per mode.
 #[test]
 fn prepare_and_static_runs_are_mutually_exclusive_per_mode() {
     let mut spec = base_spec();
-    spec.execution.separated_evaluator_mut().official_prepare = Some(prepare_spec());
+    separated_evaluator_mut(&mut spec).official_prepare = Some(prepare_spec());
 
     let error = validate_challenge_bundle_spec(&spec)
         .expect_err("official prepare and official runs should conflict");
@@ -767,11 +849,50 @@ fn create_bundle(root: &Path, spec: &ChallengeBundleSpec) {
         .expect("failed to write evaluator");
 }
 
+/// Creates a piped-stdio bundle after validating caller inputs.
+fn create_piped_stdio_bundle(root: &Path, spec: &ChallengeBundleSpec) {
+    std::fs::create_dir_all(root.join("interactor")).expect("failed to create interactor dir");
+    std::fs::create_dir_all(root.join("public")).expect("failed to create public dir");
+    std::fs::create_dir_all(root.join("private-benchmark"))
+        .expect("failed to create private benchmark dir");
+    std::fs::write(
+        root.join("public/session.json"),
+        r#"{"session_name":"public-1","input_files":[{"path":"prompt.txt","source_path":"public/prompt.txt"}],"metadata":{"kind":"sample"}}"#,
+    )
+    .expect("failed to write public session");
+    std::fs::write(root.join("public/prompt.txt"), "payload\n")
+        .expect("failed to write session input");
+    std::fs::write(
+        root.join("private-benchmark/session.json"),
+        r#"{"session_name":"official-1"}"#,
+    )
+    .expect("failed to write official session");
+    std::fs::write(
+        root.join("spec.json"),
+        serde_json::to_string(spec).expect("failed to serialize spec"),
+    )
+    .expect("failed to write spec");
+    std::fs::write(root.join("statement.md"), "# Sample\n\nBody\n")
+        .expect("failed to write statement");
+    std::fs::write(root.join("interactor/run.py"), "print('ok')\n")
+        .expect("failed to write interactor");
+}
+
 /// Handles prepare spec for this module.
 fn prepare_spec() -> ChallengePrepareSpec {
     ChallengePrepareSpec {
         command: vec!["python".to_string(), "evaluator/prepare.py".to_string()],
         result_runs_file: bundle_path("generated/runs.json"),
+        network_access: ZipProjectNetworkAccess::Disabled,
+        reproducibility_notes: Some("Generated from deterministic private seeds.".to_string()),
+    }
+}
+
+/// Handles piped prepare spec for this module.
+fn piped_prepare_spec() -> PipedStdioPrepareSpec {
+    PipedStdioPrepareSpec {
+        command: vec!["python".to_string(), "interactor/prepare.py".to_string()],
+        result_session_file: bundle_path("generated/session.json"),
         network_access: ZipProjectNetworkAccess::Disabled,
         reproducibility_notes: Some("Generated from deterministic private seeds.".to_string()),
     }
@@ -819,6 +940,86 @@ async fn source_backed_run_inputs_must_exist_under_bundle_root() {
 
     assert!(missing_result.is_err());
     assert!(present_result.is_ok());
+}
+
+/// Verifies source-backed session inputs are validated under the selected source root.
+#[tokio::test]
+async fn source_backed_session_inputs_must_exist_under_bundle_root() {
+    let root = std::env::temp_dir().join(format!(
+        "agentics-bundle-source-session-input-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let mut spec = base_piped_stdio_spec();
+    spec.datasets.private_benchmark_enabled = false;
+    spec.datasets.private_benchmark_dir = Some(bundle_path("private-benchmark"));
+    if let ChallengeExecutionSpec::PipedStdio(execution) = &mut spec.execution {
+        execution.official_session = None;
+    }
+    create_piped_stdio_bundle(&root, &spec);
+    std::fs::remove_file(root.join("public/prompt.txt")).expect("failed to remove source input");
+
+    let missing_result = validate_challenge_bundle(&root).await;
+    std::fs::write(root.join("public/prompt.txt"), "payload\n")
+        .expect("failed to restore source input");
+    let present_result = validate_challenge_bundle(&root).await;
+    drop(std::fs::remove_dir_all(root));
+
+    assert!(missing_result.is_err());
+    assert!(present_result.is_ok());
+}
+
+/// Verifies session manifests reject duplicate materialized input paths.
+#[tokio::test]
+async fn session_manifest_rejects_duplicate_input_paths() {
+    let root = std::env::temp_dir().join(format!(
+        "agentics-bundle-duplicate-session-input-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let mut spec = base_piped_stdio_spec();
+    spec.datasets.private_benchmark_enabled = false;
+    spec.datasets.private_benchmark_dir = Some(bundle_path("private-benchmark"));
+    if let ChallengeExecutionSpec::PipedStdio(execution) = &mut spec.execution {
+        execution.official_session = None;
+    }
+    create_piped_stdio_bundle(&root, &spec);
+    std::fs::write(
+        root.join("public/session.json"),
+        r#"{"session_name":"public-1","input_files":[{"path":"prompt.txt","content":"a"},{"path":"prompt.txt","content":"b"}]}"#,
+    )
+    .expect("failed to write duplicate session inputs");
+
+    let result = validate_challenge_bundle(&root).await;
+    drop(std::fs::remove_dir_all(root));
+
+    let error = result.expect_err("duplicate session input paths should fail");
+    assert!(error.to_string().contains("duplicate path"));
+}
+
+/// Verifies session metadata must be an object when present.
+#[tokio::test]
+async fn session_manifest_rejects_non_object_metadata() {
+    let root = std::env::temp_dir().join(format!(
+        "agentics-bundle-session-metadata-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let mut spec = base_piped_stdio_spec();
+    spec.datasets.private_benchmark_enabled = false;
+    spec.datasets.private_benchmark_dir = Some(bundle_path("private-benchmark"));
+    if let ChallengeExecutionSpec::PipedStdio(execution) = &mut spec.execution {
+        execution.official_session = None;
+    }
+    create_piped_stdio_bundle(&root, &spec);
+    std::fs::write(
+        root.join("public/session.json"),
+        r#"{"session_name":"public-1","metadata":["not","object"]}"#,
+    )
+    .expect("failed to write invalid session metadata");
+
+    let result = validate_challenge_bundle(&root).await;
+    drop(std::fs::remove_dir_all(root));
+
+    let error = result.expect_err("non-object metadata should fail");
+    assert!(error.to_string().contains("invalid session manifest"));
 }
 
 /// Verifies that run manifests cannot declare more than the platform run cap.

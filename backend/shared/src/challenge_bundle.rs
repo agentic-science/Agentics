@@ -13,7 +13,8 @@ use crate::error::{AppError, Result};
 use crate::models::challenge::{
     ChallengeBundleSpec, ChallengeExecutionMode, ChallengePrepareSpec, ChallengeRunInputFile,
     ChallengeRunManifest, ChallengeRunSpec, ChallengeSolutionPublicationPolicy,
-    MAX_CHALLENGE_KEYWORDS, MIN_CHALLENGE_KEYWORDS, PrivateBenchmarkPolicy,
+    MAX_CHALLENGE_KEYWORDS, MIN_CHALLENGE_KEYWORDS, PipedStdioPrepareSpec,
+    PipedStdioSessionManifest, PrivateBenchmarkPolicy,
 };
 use crate::models::paths::BundleRelativePath;
 use crate::validation::{targets, text};
@@ -61,6 +62,30 @@ pub async fn read_challenge_run_manifest_file(
     Ok(manifest)
 }
 
+/// Read and validate one challenge-owned interactive session manifest.
+pub async fn read_piped_stdio_session_manifest(
+    bundle_dir: &Path,
+    manifest_path: &BundleRelativePath,
+) -> Result<PipedStdioSessionManifest> {
+    read_piped_stdio_session_manifest_file(
+        &bundle_dir.join(manifest_path.as_path()),
+        &format!("session manifest {manifest_path}"),
+    )
+    .await
+}
+
+/// Read and validate a challenge-owned interactive session manifest from a resolved path.
+pub async fn read_piped_stdio_session_manifest_file(
+    manifest_file: &Path,
+    label: &str,
+) -> Result<PipedStdioSessionManifest> {
+    let raw = tokio::fs::read_to_string(manifest_file).await?;
+    let manifest: PipedStdioSessionManifest = serde_json::from_str(&raw)
+        .map_err(|e| AppError::Validation(format!("invalid {label}: {e}")))?;
+    validate_piped_stdio_session_manifest(&manifest)?;
+    Ok(manifest)
+}
+
 /// Validate that a challenge bundle has the required files and declared data directories.
 pub async fn validate_challenge_bundle(bundle_dir: &Path) -> Result<()> {
     let spec = read_challenge_bundle_spec(bundle_dir).await?;
@@ -70,59 +95,146 @@ pub async fn validate_challenge_bundle(bundle_dir: &Path) -> Result<()> {
 
     assert_path_type(&spec_path, "file", "spec.json").await?;
     assert_path_type(&statement_path, "file", "statement.md").await?;
-    if let Some(script_path) = declared_evaluator_script(&spec.execution.evaluator().command) {
-        assert_path_type(&bundle_dir.join(script_path), "file", "evaluator script").await?;
-    }
-    for (label, prepare) in [
-        (
-            "validation prepare script",
-            spec.execution.validation_prepare(),
-        ),
-        ("official prepare script", spec.execution.official_prepare()),
-    ] {
-        if let Some(prepare) = prepare
-            && let Some(script_path) = declared_evaluator_script(&prepare.command)
-        {
-            assert_path_type(&bundle_dir.join(script_path), "file", label).await?;
-        }
-    }
+    assert_declared_execution_scripts(bundle_dir, &spec).await?;
     assert_path_type(&public_dir, "directory", "public data dir").await?;
 
-    if spec.targets.iter().any(|target| target.validation_enabled)
-        && let Some(validation_runs) = spec.execution.validation_runs()
+    validate_declared_execution_inputs(bundle_dir, &spec).await?;
+
+    if spec.datasets.private_benchmark_enabled
+        && let Some(ref private_benchmark_dir) = spec.datasets.private_benchmark_dir
     {
         assert_path_type(
-            &bundle_dir.join(validation_runs.as_path()),
-            "file",
-            "validation run manifest",
+            &bundle_dir.join(private_benchmark_dir.as_path()),
+            "directory",
+            "private benchmark data dir",
         )
         .await?;
-        let manifest = read_challenge_run_manifest(bundle_dir, validation_runs).await?;
-        validate_challenge_run_manifest_sources(bundle_dir, &manifest).await?;
     }
 
-    if spec.datasets.private_benchmark_enabled {
-        if let Some(ref private_benchmark_dir) = spec.datasets.private_benchmark_dir {
-            assert_path_type(
-                &bundle_dir.join(private_benchmark_dir.as_path()),
-                "directory",
-                "private benchmark data dir",
-            )
-            .await?;
+    Ok(())
+}
+
+/// Validate declared execution scripts for the selected topology.
+async fn assert_declared_execution_scripts(
+    bundle_dir: &Path,
+    spec: &ChallengeBundleSpec,
+) -> Result<()> {
+    if let Some(script_path) = declared_evaluator_script(&spec.execution.evaluator().command) {
+        let label = match spec.execution.mode() {
+            ChallengeExecutionMode::SeparatedEvaluator => "evaluator script",
+            ChallengeExecutionMode::PipedStdio => "interactor script",
+        };
+        assert_path_type(&bundle_dir.join(script_path), "file", label).await?;
+    }
+
+    match &spec.execution {
+        crate::models::challenge::ChallengeExecutionSpec::SeparatedEvaluator(execution) => {
+            for (label, prepare) in [
+                (
+                    "validation prepare script",
+                    execution.validation_prepare.as_ref(),
+                ),
+                (
+                    "official prepare script",
+                    execution.official_prepare.as_ref(),
+                ),
+            ] {
+                if let Some(prepare) = prepare
+                    && let Some(script_path) = declared_evaluator_script(&prepare.command)
+                {
+                    assert_path_type(&bundle_dir.join(script_path), "file", label).await?;
+                }
+            }
         }
-        if let Some(official_runs) = spec.execution.official_runs() {
-            assert_path_type(
-                &bundle_dir.join(official_runs.as_path()),
-                "file",
-                "official run manifest",
-            )
-            .await?;
-            let manifest = read_challenge_run_manifest(bundle_dir, official_runs).await?;
-            validate_challenge_run_manifest_sources(bundle_dir, &manifest).await?;
+        crate::models::challenge::ChallengeExecutionSpec::PipedStdio(execution) => {
+            for (label, prepare) in [
+                (
+                    "validation prepare script",
+                    execution.validation_prepare.as_ref(),
+                ),
+                (
+                    "official prepare script",
+                    execution.official_prepare.as_ref(),
+                ),
+            ] {
+                if let Some(prepare) = prepare
+                    && let Some(script_path) = declared_evaluator_script(&prepare.command)
+                {
+                    assert_path_type(&bundle_dir.join(script_path), "file", label).await?;
+                }
+            }
         }
     }
 
     Ok(())
+}
+
+/// Validate static run/session locators declared by the execution topology.
+async fn validate_declared_execution_inputs(
+    bundle_dir: &Path,
+    spec: &ChallengeBundleSpec,
+) -> Result<()> {
+    match &spec.execution {
+        crate::models::challenge::ChallengeExecutionSpec::SeparatedEvaluator(execution) => {
+            if spec.targets.iter().any(|target| target.validation_enabled)
+                && let Some(validation_runs) = &execution.validation_runs
+            {
+                validate_static_run_manifest(bundle_dir, validation_runs, "validation").await?;
+            }
+            if spec.datasets.private_benchmark_enabled
+                && let Some(official_runs) = &execution.official_runs
+            {
+                validate_static_run_manifest(bundle_dir, official_runs, "official").await?;
+            }
+        }
+        crate::models::challenge::ChallengeExecutionSpec::PipedStdio(execution) => {
+            if spec.targets.iter().any(|target| target.validation_enabled)
+                && let Some(validation_session) = &execution.validation_session
+            {
+                validate_static_session_manifest(bundle_dir, validation_session, "validation")
+                    .await?;
+            }
+            if spec.datasets.private_benchmark_enabled
+                && let Some(official_session) = &execution.official_session
+            {
+                validate_static_session_manifest(bundle_dir, official_session, "official").await?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate one static run manifest and its source-backed inputs.
+async fn validate_static_run_manifest(
+    bundle_dir: &Path,
+    manifest_path: &BundleRelativePath,
+    label: &str,
+) -> Result<()> {
+    assert_path_type(
+        &bundle_dir.join(manifest_path.as_path()),
+        "file",
+        &format!("{label} run manifest"),
+    )
+    .await?;
+    let manifest = read_challenge_run_manifest(bundle_dir, manifest_path).await?;
+    validate_challenge_run_manifest_sources(bundle_dir, &manifest).await
+}
+
+/// Validate one static interactive session manifest and its source-backed inputs.
+async fn validate_static_session_manifest(
+    bundle_dir: &Path,
+    manifest_path: &BundleRelativePath,
+    label: &str,
+) -> Result<()> {
+    assert_path_type(
+        &bundle_dir.join(manifest_path.as_path()),
+        "file",
+        &format!("{label} session manifest"),
+    )
+    .await?;
+    let manifest = read_piped_stdio_session_manifest(bundle_dir, manifest_path).await?;
+    validate_piped_stdio_session_manifest_sources(bundle_dir, &manifest).await
 }
 
 /// Handles assert path type for this module.
@@ -177,7 +289,20 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
             "solution.manifest_file must be {ZIP_PROJECT_MANIFEST_FILE}"
         )));
     }
-    validate_evaluator_command(&spec.execution.evaluator().command)?;
+    match &spec.execution {
+        crate::models::challenge::ChallengeExecutionSpec::SeparatedEvaluator(execution) => {
+            validate_evaluator_command(
+                &execution.evaluator.command,
+                "execution.evaluator.command",
+            )?;
+        }
+        crate::models::challenge::ChallengeExecutionSpec::PipedStdio(execution) => {
+            validate_evaluator_command(
+                &execution.interactor.command,
+                "execution.interactor.command",
+            )?;
+        }
+    }
     validate_targets(spec)?;
     validate_challenge_policy(spec)?;
     validate_execution(spec)?;
@@ -194,12 +319,12 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
     match (
         spec.datasets.private_benchmark_enabled,
         spec.datasets.private_benchmark_dir.as_ref(),
-        spec.execution.official_runs().is_some(),
+        execution_uses_static_official_locator(&spec.execution),
     ) {
         (true, Some(_), _) => {}
         (true, None, true) => {
             return Err(AppError::Validation(
-                "datasets.private_benchmark_dir is required when private_benchmark_enabled uses static official_runs"
+                "datasets.private_benchmark_dir is required when private_benchmark_enabled uses a static official run or session manifest"
                     .to_string(),
             ));
         }
@@ -250,17 +375,15 @@ pub fn validate_digest_pinned_images(spec: &ChallengeBundleSpec) -> Result<()> {
 }
 
 /// Validates evaluator command invariants for this contract.
-fn validate_evaluator_command(command: &[String]) -> Result<()> {
+fn validate_evaluator_command(command: &[String], field: &str) -> Result<()> {
     if command.is_empty() {
-        return Err(AppError::Validation(
-            "execution.evaluator.command must not be empty".to_string(),
-        ));
+        return Err(AppError::Validation(format!("{field} must not be empty")));
     }
     for (index, part) in command.iter().enumerate() {
-        require_non_empty(part, &format!("execution.evaluator.command[{index}]"))?;
+        require_non_empty(part, &format!("{field}[{index}]"))?;
         if part.contains('\0') {
             return Err(AppError::Validation(format!(
-                "execution.evaluator.command[{index}] must not contain NUL bytes"
+                "{field}[{index}] must not contain NUL bytes"
             )));
         }
     }
@@ -374,28 +497,42 @@ fn validate_optional_positive_limit(value: Option<i64>, field: &str) -> Result<(
 
 /// Validates execution invariants for this contract.
 fn validate_execution(spec: &ChallengeBundleSpec) -> Result<()> {
-    match spec.execution.mode() {
-        ChallengeExecutionMode::SeparatedEvaluator => {}
+    match &spec.execution {
+        crate::models::challenge::ChallengeExecutionSpec::SeparatedEvaluator(execution) => {
+            validate_separated_evaluator_execution(spec, execution)?;
+        }
+        crate::models::challenge::ChallengeExecutionSpec::PipedStdio(execution) => {
+            validate_piped_stdio_execution(spec, execution)?;
+        }
     }
-    if let Some(prepare) = spec.execution.validation_prepare() {
+
+    Ok(())
+}
+
+/// Validate separated-evaluator topology fields.
+fn validate_separated_evaluator_execution(
+    spec: &ChallengeBundleSpec,
+    execution: &crate::models::challenge::SeparatedEvaluatorExecutionSpec,
+) -> Result<()> {
+    if let Some(prepare) = &execution.validation_prepare {
         validate_prepare_spec(prepare, "execution.validation_prepare")?;
     }
-    if let Some(prepare) = spec.execution.official_prepare() {
+    if let Some(prepare) = &execution.official_prepare {
         validate_prepare_spec(prepare, "execution.official_prepare")?;
     }
-    if spec.execution.validation_runs().is_some() && spec.execution.validation_prepare().is_some() {
+    if execution.validation_runs.is_some() && execution.validation_prepare.is_some() {
         return Err(AppError::Validation(
             "execution must not declare both validation_runs and validation_prepare".to_string(),
         ));
     }
-    if spec.execution.official_runs().is_some() && spec.execution.official_prepare().is_some() {
+    if execution.official_runs.is_some() && execution.official_prepare.is_some() {
         return Err(AppError::Validation(
             "execution must not declare both official_runs and official_prepare".to_string(),
         ));
     }
     if spec.targets.iter().any(|target| target.validation_enabled)
-        && spec.execution.validation_runs().is_none()
-        && spec.execution.validation_prepare().is_none()
+        && execution.validation_runs.is_none()
+        && execution.validation_prepare.is_none()
     {
         return Err(AppError::Validation(
             "execution.validation_runs or execution.validation_prepare is required when any target has validation_enabled true"
@@ -403,20 +540,71 @@ fn validate_execution(spec: &ChallengeBundleSpec) -> Result<()> {
         ));
     }
     if spec.datasets.private_benchmark_enabled
-        && spec.execution.official_runs().is_none()
-        && spec.execution.official_prepare().is_none()
+        && execution.official_runs.is_none()
+        && execution.official_prepare.is_none()
     {
         return Err(AppError::Validation(
             "execution.official_runs or execution.official_prepare is required when private_benchmark_enabled is true"
                 .to_string(),
         ));
     }
+    Ok(())
+}
 
+/// Validate piped-stdio topology fields.
+fn validate_piped_stdio_execution(
+    spec: &ChallengeBundleSpec,
+    execution: &crate::models::challenge::PipedStdioExecutionSpec,
+) -> Result<()> {
+    if let Some(prepare) = &execution.validation_prepare {
+        validate_piped_stdio_prepare_spec(prepare, "execution.validation_prepare")?;
+    }
+    if let Some(prepare) = &execution.official_prepare {
+        validate_piped_stdio_prepare_spec(prepare, "execution.official_prepare")?;
+    }
+    if execution.validation_session.is_some() && execution.validation_prepare.is_some() {
+        return Err(AppError::Validation(
+            "execution must not declare both validation_session and validation_prepare".to_string(),
+        ));
+    }
+    if execution.official_session.is_some() && execution.official_prepare.is_some() {
+        return Err(AppError::Validation(
+            "execution must not declare both official_session and official_prepare".to_string(),
+        ));
+    }
+    if spec.targets.iter().any(|target| target.validation_enabled)
+        && execution.validation_session.is_none()
+        && execution.validation_prepare.is_none()
+    {
+        return Err(AppError::Validation(
+            "execution.validation_session or execution.validation_prepare is required when any target has validation_enabled true"
+                .to_string(),
+        ));
+    }
+    if spec.datasets.private_benchmark_enabled
+        && execution.official_session.is_none()
+        && execution.official_prepare.is_none()
+    {
+        return Err(AppError::Validation(
+            "execution.official_session or execution.official_prepare is required when private_benchmark_enabled is true"
+                .to_string(),
+        ));
+    }
     Ok(())
 }
 
 /// Validates prepare spec invariants for this contract.
 fn validate_prepare_spec(prepare: &ChallengePrepareSpec, field: &str) -> Result<()> {
+    validate_prepare_command(&prepare.command, &format!("{field}.command"))?;
+    if let Some(notes) = &prepare.reproducibility_notes {
+        require_non_empty(notes, &format!("{field}.reproducibility_notes"))?;
+    }
+
+    Ok(())
+}
+
+/// Validates piped-stdio prepare spec invariants for this contract.
+fn validate_piped_stdio_prepare_spec(prepare: &PipedStdioPrepareSpec, field: &str) -> Result<()> {
     validate_prepare_command(&prepare.command, &format!("{field}.command"))?;
     if let Some(notes) = &prepare.reproducibility_notes {
         require_non_empty(notes, &format!("{field}.reproducibility_notes"))?;
@@ -470,6 +658,22 @@ fn validate_challenge_run(run: &ChallengeRunSpec) -> Result<()> {
         if !output_paths.insert(path.as_str()) {
             return Err(AppError::Validation(format!(
                 "runs[].output_files contains duplicate path `{path}`"
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+/// Validates interactive session manifest invariants.
+fn validate_piped_stdio_session_manifest(manifest: &PipedStdioSessionManifest) -> Result<()> {
+    let mut input_paths = HashSet::with_capacity(manifest.input_files.len());
+    for input in &manifest.input_files {
+        validate_run_input_file(input)?;
+        if !input_paths.insert(input.path.as_str()) {
+            return Err(AppError::Validation(format!(
+                "session.input_files contains duplicate path `{}`",
+                input.path
             )));
         }
     }
@@ -534,6 +738,52 @@ pub async fn validate_challenge_run_manifest_sources(
     }
 
     Ok(())
+}
+
+/// Validate source-backed session inputs under one source root.
+pub async fn validate_piped_stdio_session_manifest_sources(
+    bundle_dir: &Path,
+    manifest: &PipedStdioSessionManifest,
+) -> Result<()> {
+    for input in &manifest.input_files {
+        if let Some(source_path) = &input.source_path {
+            let full_path = bundle_dir.join(source_path.as_path());
+            let meta = tokio::fs::symlink_metadata(&full_path).await.map_err(|_| {
+                AppError::Validation(format!(
+                    "session.input_files[].source_path does not exist: {}",
+                    full_path.display()
+                ))
+            })?;
+            if meta.file_type().is_symlink() {
+                return Err(AppError::Validation(format!(
+                    "session.input_files[].source_path must not be a symlink: {}",
+                    full_path.display()
+                )));
+            }
+            if !meta.is_file() {
+                return Err(AppError::Validation(format!(
+                    "session.input_files[].source_path is not a file: {}",
+                    full_path.display()
+                )));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Return whether the execution topology has a static private official locator.
+fn execution_uses_static_official_locator(
+    execution: &crate::models::challenge::ChallengeExecutionSpec,
+) -> bool {
+    match execution {
+        crate::models::challenge::ChallengeExecutionSpec::SeparatedEvaluator(execution) => {
+            execution.official_runs.is_some()
+        }
+        crate::models::challenge::ChallengeExecutionSpec::PipedStdio(execution) => {
+            execution.official_session.is_some()
+        }
+    }
 }
 
 /// Validates metric schema invariants for this contract.

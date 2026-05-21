@@ -14,8 +14,9 @@ use bollard::Docker;
 use crate::config::Config;
 use crate::error::{AppError, Result};
 use crate::models::challenge::{
-    ChallengeBundleSpec, ChallengePrepareSpec, ChallengeRunManifest, DockerPlatform,
-    MetricSchemaSpec, ResourceProfileSpec, TargetAccelerator,
+    ChallengeBundleSpec, ChallengeExecutionSpec, ChallengePrepareSpec, ChallengeRunManifest,
+    DockerPlatform, MetricSchemaSpec, PipedStdioPrepareSpec, PipedStdioSessionManifest,
+    ResourceProfileSpec, TargetAccelerator,
 };
 use crate::models::evaluation::{EvaluationJobPayload, EvaluatorRunResult, ScoringMode};
 use crate::models::paths::BundleRelativePath;
@@ -39,7 +40,10 @@ pub use docker::{
     remove_stale_local_validation_containers, remove_stopped_runner_containers,
 };
 
-use docker::{ContainerOutcome, ContainerRequest, bind_mount, pre_pull_image, run_container};
+use docker::{
+    ContainerOutcome, ContainerRequest, bind_mount, pre_pull_image, run_container,
+    run_interactive_stdio_session,
+};
 use errors::{ensure_container_succeeded, ensure_prepare_succeeded};
 use filesystem::{
     OutputTreeLimits, cleanup_paths, copy_dir_all, ensure_disk_limit, ensure_prepare_disk_limit,
@@ -51,7 +55,8 @@ use logs::{
 };
 use run_io::{
     copy_evaluator_visible_run_tree, ensure_declared_outputs_exist, make_container_readable_tree,
-    make_container_writable_tree, materialize_run_io, run_alias, run_interface, write_run_metadata,
+    make_container_writable_tree, materialize_input_files, materialize_run_io, run_alias,
+    run_interface, write_run_metadata,
 };
 use storage::{RunnerStorage, WritableMountLease, WritablePhase};
 
@@ -217,6 +222,25 @@ struct EvaluatorRequest<'a> {
     evaluator_output_root: &'a Path,
 }
 
+/// Carries piped-stdio session request data across this module boundary.
+struct PipedStdioRequest<'a> {
+    eval_type: ScoringMode,
+    spec: &'a ChallengeBundleSpec,
+    profile: &'a ResourceProfileSpec,
+    docker_platform: DockerPlatform,
+    accelerator: TargetAccelerator,
+    target: &'a str,
+    manifest: &'a ZipProjectManifest,
+    bundle_dir: &'a Path,
+    prepared_root: &'a Path,
+    session_root: &'a Path,
+    build_root: &'a RetainedRunnerTree,
+    run_work_root: &'a Path,
+    evaluator_output_root: &'a Path,
+    max_interaction_bytes_per_direction: u64,
+    interaction_shutdown_grace_secs: u64,
+}
+
 /// Carries resolved run plan data across this module boundary.
 struct ResolvedRunPlan {
     manifest: ChallengeRunManifest,
@@ -225,8 +249,28 @@ struct ResolvedRunPlan {
     prepared_root: Option<RetainedRunnerTree>,
 }
 
+/// Carries resolved interactive session data across this module boundary.
+struct ResolvedSessionPlan {
+    manifest: PipedStdioSessionManifest,
+    input_source_root: PathBuf,
+    prepared_root: Option<RetainedRunnerTree>,
+}
+
 /// Carries run plan request data across this module boundary.
 struct RunPlanRequest<'a> {
+    runner: RunnerContext<'a>,
+    spec: &'a ChallengeBundleSpec,
+    profile: &'a ResourceProfileSpec,
+    docker_platform: DockerPlatform,
+    accelerator: TargetAccelerator,
+    target: &'a str,
+    eval_type: ScoringMode,
+    bundle_dir: &'a Path,
+    prepared_root: &'a Path,
+}
+
+/// Carries interactive session plan request data across this module boundary.
+struct SessionPlanRequest<'a> {
     runner: RunnerContext<'a>,
     spec: &'a ChallengeBundleSpec,
     profile: &'a ResourceProfileSpec,
@@ -256,6 +300,19 @@ struct PrepareRequest<'a> {
     target: &'a str,
     eval_type: ScoringMode,
     prepare: &'a ChallengePrepareSpec,
+    bundle_dir: &'a Path,
+    prepared_root: &'a Path,
+}
+
+/// Carries piped-stdio prepare request data across this module boundary.
+struct PipedStdioPrepareRequest<'a> {
+    runner: RunnerContext<'a>,
+    profile: &'a ResourceProfileSpec,
+    docker_platform: DockerPlatform,
+    accelerator: TargetAccelerator,
+    target: &'a str,
+    eval_type: ScoringMode,
+    prepare: &'a PipedStdioPrepareSpec,
     bundle_dir: &'a Path,
     prepared_root: &'a Path,
 }
@@ -340,6 +397,7 @@ pub async fn execute_evaluation_job(
     let run_work_root = working_root.join("solution-run-work");
     let runs_root = working_root.join("solution-runs");
     let prepared_root = working_root.join("prepared");
+    let session_root = working_root.join("session");
     let evaluator_output_root = working_root.join("evaluator-output");
     let challenge_bundle_root = working_root.join("challenge-bundle");
     let log_key = evaluation_runner_log_key(job_id, attempt_count)?;
@@ -350,6 +408,7 @@ pub async fn execute_evaluation_job(
     tokio::fs::create_dir_all(&build_root).await?;
     tokio::fs::create_dir_all(&run_work_root).await?;
     tokio::fs::create_dir_all(&runs_root).await?;
+    tokio::fs::create_dir_all(&session_root).await?;
     tokio::fs::create_dir_all(&evaluator_output_root).await?;
 
     copy_dir_all(payload.bundle_path.as_path(), &challenge_bundle_root).await?;
@@ -425,62 +484,93 @@ pub async fn execute_evaluation_job(
         )
         .await?;
 
-        let run_plan = resolve_run_plan(
-            RunPlanRequest {
-                runner: runner_context,
-                spec: &spec,
-                profile,
-                docker_platform: target.docker_platform,
-                accelerator: target.accelerator,
-                target: target.name.as_str(),
-                eval_type,
-                bundle_dir,
-                prepared_root: &prepared_root,
-            },
-            &mut logs,
-        )
-        .await?;
-        configure_run_count_limits(&run_plan.manifest, limits, &mut logs)?;
-        let retained_run_trees = run_solution_invocations(
-            runner_context,
-            SolutionRunRequest {
-                eval_type,
-                profile,
-                docker_platform: target.docker_platform,
-                accelerator: target.accelerator,
-                manifest: &manifest,
-                run_manifest: &run_plan.manifest,
-                input_source_root: &run_plan.input_source_root,
-                build_root: &build_workspace,
-                run_work_root: &run_work_root,
-                runs_root: &runs_root,
-                output_limits,
-            },
-            &mut logs,
-        )
-        .await?;
+        match &spec.execution {
+            ChallengeExecutionSpec::SeparatedEvaluator(_) => {
+                let run_plan = resolve_run_plan(
+                    RunPlanRequest {
+                        runner: runner_context,
+                        spec: &spec,
+                        profile,
+                        docker_platform: target.docker_platform,
+                        accelerator: target.accelerator,
+                        target: target.name.as_str(),
+                        eval_type,
+                        bundle_dir,
+                        prepared_root: &prepared_root,
+                    },
+                    &mut logs,
+                )
+                .await?;
+                configure_run_count_limits(&run_plan.manifest, limits, &mut logs)?;
+                let retained_run_trees = run_solution_invocations(
+                    runner_context,
+                    SolutionRunRequest {
+                        eval_type,
+                        profile,
+                        docker_platform: target.docker_platform,
+                        accelerator: target.accelerator,
+                        manifest: &manifest,
+                        run_manifest: &run_plan.manifest,
+                        input_source_root: &run_plan.input_source_root,
+                        build_root: &build_workspace,
+                        run_work_root: &run_work_root,
+                        runs_root: &runs_root,
+                        output_limits,
+                    },
+                    &mut logs,
+                )
+                .await?;
 
-        run_evaluator(
-            runner_context,
-            EvaluatorRequest {
-                eval_type,
-                spec: &spec,
-                profile,
-                docker_platform: target.docker_platform,
-                accelerator: target.accelerator,
-                run_manifest_container_path: &run_plan.run_manifest_container_path,
-                bundle_dir,
-                prepared_root: run_plan
-                    .prepared_root
-                    .as_ref()
-                    .map(RetainedRunnerTree::path),
-                runs_root: &runs_root,
-                retained_run_trees: &retained_run_trees,
-                evaluator_output_root: &evaluator_output_root,
-            },
-            &mut logs,
-        )
-        .await?;
+                run_evaluator(
+                    runner_context,
+                    EvaluatorRequest {
+                        eval_type,
+                        spec: &spec,
+                        profile,
+                        docker_platform: target.docker_platform,
+                        accelerator: target.accelerator,
+                        run_manifest_container_path: &run_plan.run_manifest_container_path,
+                        bundle_dir,
+                        prepared_root: run_plan
+                            .prepared_root
+                            .as_ref()
+                            .map(RetainedRunnerTree::path),
+                        runs_root: &runs_root,
+                        retained_run_trees: &retained_run_trees,
+                        evaluator_output_root: &evaluator_output_root,
+                    },
+                    &mut logs,
+                )
+                .await?;
+            }
+            ChallengeExecutionSpec::PipedStdio(_) => {
+                logs.set_limit(EVALUATION_LOG_BYTES_PER_RUN);
+                run_piped_stdio_session(
+                    runner_context,
+                    PipedStdioRequest {
+                        eval_type,
+                        spec: &spec,
+                        profile,
+                        docker_platform: target.docker_platform,
+                        accelerator: target.accelerator,
+                        target: target.name.as_str(),
+                        manifest: &manifest,
+                        bundle_dir,
+                        prepared_root: &prepared_root,
+                        session_root: &session_root,
+                        build_root: &build_workspace,
+                        run_work_root: &run_work_root,
+                        evaluator_output_root: &evaluator_output_root,
+                        max_interaction_bytes_per_direction: config
+                            .runner_max_interaction_bytes_per_direction,
+                        interaction_shutdown_grace_secs: config
+                            .runner_interaction_shutdown_grace_secs,
+                    },
+                    &mut logs,
+                )
+                .await?;
+            }
+        }
 
         let result_raw =
             read_limited_result_json(&result_path, limits.max_result_json_bytes).await?;
@@ -907,6 +997,206 @@ async fn run_evaluator(
     Ok(())
 }
 
+/// Run the current single-session piped-stdio topology.
+async fn run_piped_stdio_session(
+    runner: RunnerContext<'_>,
+    request: PipedStdioRequest<'_>,
+    logs: &mut EvaluationLogs,
+) -> Result<()> {
+    let run_phase = request
+        .manifest
+        .phase_execution_plan()
+        .into_iter()
+        .find(|phase| phase.name == ZipProjectPhaseName::Run)
+        .ok_or_else(|| AppError::Runner("zip_project manifest has no run phase".to_string()))?;
+    let session_plan = resolve_piped_stdio_session_plan(
+        SessionPlanRequest {
+            runner,
+            spec: request.spec,
+            profile: request.profile,
+            docker_platform: request.docker_platform,
+            accelerator: request.accelerator,
+            target: request.target,
+            eval_type: request.eval_type,
+            bundle_dir: request.bundle_dir,
+            prepared_root: request.prepared_root,
+        },
+        logs,
+    )
+    .await?;
+
+    cleanup_paths([request.session_root.to_path_buf()]).await?;
+    let session_input_dir = request.session_root.join("input");
+    tokio::fs::create_dir_all(&session_input_dir).await?;
+    tokio::fs::write(
+        request.session_root.join("session.json"),
+        serde_json::to_vec_pretty(&session_plan.manifest)
+            .map_err(|e| AppError::Internal(format!("serialize session manifest failed: {e}")))?,
+    )
+    .await?;
+    materialize_input_files(
+        &session_plan.manifest.input_files,
+        session_plan.manifest.session_name.as_str(),
+        request.eval_type,
+        &session_plan.input_source_root,
+        &session_input_dir,
+    )
+    .await?;
+    make_container_readable_tree(request.session_root).await?;
+    make_container_readable_tree(request.bundle_dir).await?;
+
+    let run_limits = effective_phase_limits(request.profile, &run_phase);
+    cleanup_paths([request.run_work_root.to_path_buf()]).await?;
+    let io_mount = runner
+        .storage
+        .writable_mount(
+            runner.docker,
+            request.run_work_root,
+            WritablePhase::SolutionRun,
+            run_limits.disk_limit_mb,
+        )
+        .await?;
+    let io_root = io_mount.path().to_path_buf();
+    tokio::fs::create_dir_all(io_root.join("output")).await?;
+    tokio::fs::create_dir_all(io_root.join("tmp")).await?;
+    make_container_writable_tree(&io_root).await?;
+
+    let evaluator_limits = evaluator_limits(request.profile);
+    let output_mount = runner
+        .storage
+        .writable_mount(
+            runner.docker,
+            request.evaluator_output_root,
+            WritablePhase::EvaluatorScore,
+            evaluator_limits.disk_limit_mb,
+        )
+        .await?;
+    make_container_writable_tree(output_mount.path()).await?;
+
+    let mut interactor_cmd = request.spec.execution.evaluator().command.clone();
+    interactor_cmd.extend([
+        "--challenge-dir".to_string(),
+        "/challenge".to_string(),
+        "--session-file".to_string(),
+        "/session/session.json".to_string(),
+        "--session-input-dir".to_string(),
+        "/session/input".to_string(),
+        "--output-path".to_string(),
+        format!("/output/{}", request.spec.execution.evaluator().result_file),
+        "--mode".to_string(),
+        request.eval_type.evaluator_mode_arg().to_string(),
+        "--target".to_string(),
+        request.target.to_string(),
+    ]);
+
+    let mut interactor_mounts = vec![
+        bind_mount(request.bundle_dir, "/challenge", true),
+        bind_mount(request.session_root, "/session", true),
+        bind_mount(output_mount.path(), "/output", false),
+    ];
+    if let Some(prepared_root) = session_plan
+        .prepared_root
+        .as_ref()
+        .map(RetainedRunnerTree::path)
+    {
+        interactor_mounts.push(bind_mount(prepared_root, "/prepared", true));
+    }
+
+    let outcome = run_interactive_stdio_session(
+        runner.docker,
+        ContainerRequest {
+            name: container_name(runner.attempt, "piped-participant"),
+            image: request
+                .profile
+                .solution_image
+                .docker_reference()
+                .to_string(),
+            cmd: vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "mkdir -p /io/output /io/tmp; exec sh \"$1\"".to_string(),
+                "agentics-piped-run".to_string(),
+                format!("/workspace/{}", run_phase.command),
+            ],
+            env: vec![
+                "AGENTICS_PHASE=run".to_string(),
+                format!(
+                    "AGENTICS_SESSION_NAME={}",
+                    session_plan.manifest.session_name
+                ),
+                "AGENTICS_INTERFACE=piped_stdio".to_string(),
+                "AGENTICS_OUTPUT_DIR=/io/output".to_string(),
+                "HOME=/io".to_string(),
+                "TMPDIR=/io/tmp".to_string(),
+                "PYTHONDONTWRITEBYTECODE=1".to_string(),
+            ],
+            mounts: vec![
+                bind_mount(request.build_root.path(), "/workspace", true),
+                bind_mount(&io_root, "/io", false),
+            ],
+            working_dir: "/workspace".to_string(),
+            docker_platform: request.docker_platform,
+            accelerator: request.accelerator,
+            accelerator_count: effective_accelerator_count(request.profile, request.accelerator)?,
+            limits: run_limits.clone(),
+            docker_layer_quota_mb: runner.storage.docker_layer_quota_mb(&run_limits),
+            labels: runner.container_labels("run", Some(&io_mount)),
+        },
+        ContainerRequest {
+            name: container_name(runner.attempt, "interactor"),
+            image: request
+                .profile
+                .evaluator_image
+                .docker_reference()
+                .to_string(),
+            cmd: interactor_cmd,
+            env: vec![
+                "AGENTICS_PHASE=interactor".to_string(),
+                format!("AGENTICS_MODE={}", request.eval_type.evaluator_mode_arg()),
+            ],
+            mounts: interactor_mounts,
+            working_dir: "/challenge".to_string(),
+            docker_platform: request.docker_platform,
+            accelerator: request.accelerator,
+            accelerator_count: effective_accelerator_count(request.profile, request.accelerator)?,
+            limits: evaluator_limits.clone(),
+            docker_layer_quota_mb: runner.storage.docker_layer_quota_mb(&evaluator_limits),
+            labels: runner.container_labels("interactor", Some(&output_mount)),
+        },
+        request.max_interaction_bytes_per_direction,
+        request.interaction_shutdown_grace_secs,
+    )
+    .await?;
+
+    append_named_logs(
+        logs,
+        "participant",
+        visible_log_content(request.eval_type, &outcome.participant.logs),
+    );
+    append_named_logs(
+        logs,
+        "interactor",
+        visible_log_content(request.eval_type, &outcome.interactor.logs),
+    );
+    if outcome.participant.timed_out || outcome.participant.exit_code != 0 {
+        return Err(AppError::Runner(format!(
+            "participant container failed: exit_code={}, timed_out={}",
+            outcome.participant.exit_code, outcome.participant.timed_out
+        )));
+    }
+    if outcome.interactor.timed_out || outcome.interactor.exit_code != 0 {
+        return Err(AppError::Runner(format!(
+            "interactor container failed: exit_code={}, timed_out={}",
+            outcome.interactor.exit_code, outcome.interactor.timed_out
+        )));
+    }
+    ensure_disk_limit(&io_root, run_limits.disk_limit_mb, ZipProjectPhaseName::Run).await?;
+    ensure_prepare_disk_limit(output_mount.path(), evaluator_limits.disk_limit_mb).await?;
+    replace_dir_all_if_separate(output_mount.path(), request.evaluator_output_root).await?;
+
+    Ok(())
+}
+
 /// Validates evaluator result invariants for this contract.
 fn validate_evaluator_result(
     result: &mut EvaluatorRunResult,
@@ -980,6 +1270,12 @@ enum RunManifestSource<'a> {
     Prepared(&'a ChallengePrepareSpec),
 }
 
+/// Enumerates interactive session source variants supported by this module.
+enum PipedStdioSessionSource<'a> {
+    Static(&'a BundleRelativePath),
+    Prepared(&'a PipedStdioPrepareSpec),
+}
+
 /// Handles resolve run plan for this module.
 async fn resolve_run_plan(
     request: RunPlanRequest<'_>,
@@ -1032,6 +1328,62 @@ async fn resolve_run_plan(
                 manifest,
                 input_source_root: retained_prepared_root.path().to_path_buf(),
                 run_manifest_container_path: format!("/prepared/{}", prepare.result_runs_file),
+                prepared_root: Some(retained_prepared_root),
+            })
+        }
+    }
+}
+
+/// Resolve the single interactive session manifest for a piped-stdio evaluation.
+async fn resolve_piped_stdio_session_plan(
+    request: SessionPlanRequest<'_>,
+    logs: &mut EvaluationLogs,
+) -> Result<ResolvedSessionPlan> {
+    match piped_stdio_session_source(request.spec, request.eval_type)? {
+        PipedStdioSessionSource::Static(manifest_path) => {
+            let manifest = crate::challenge_bundle::read_piped_stdio_session_manifest(
+                request.bundle_dir,
+                manifest_path,
+            )
+            .await?;
+            Ok(ResolvedSessionPlan {
+                manifest,
+                input_source_root: request.bundle_dir.to_path_buf(),
+                prepared_root: None,
+            })
+        }
+        PipedStdioSessionSource::Prepared(prepare) => {
+            let retained_prepared_root = run_piped_stdio_prepare_phase(
+                PipedStdioPrepareRequest {
+                    runner: request.runner,
+                    profile: request.profile,
+                    docker_platform: request.docker_platform,
+                    accelerator: request.accelerator,
+                    target: request.target,
+                    eval_type: request.eval_type,
+                    prepare,
+                    bundle_dir: request.bundle_dir,
+                    prepared_root: request.prepared_root,
+                },
+                logs,
+            )
+            .await?;
+            let manifest_path = retained_prepared_root
+                .path()
+                .join(prepare.result_session_file.as_path());
+            let manifest = crate::challenge_bundle::read_piped_stdio_session_manifest_file(
+                &manifest_path,
+                &format!("prepared session manifest {}", manifest_path.display()),
+            )
+            .await?;
+            crate::challenge_bundle::validate_piped_stdio_session_manifest_sources(
+                retained_prepared_root.path(),
+                &manifest,
+            )
+            .await?;
+            Ok(ResolvedSessionPlan {
+                manifest,
+                input_source_root: retained_prepared_root.path().to_path_buf(),
                 prepared_root: Some(retained_prepared_root),
             })
         }
@@ -1114,6 +1466,82 @@ async fn run_prepare_phase(
     Ok(RetainedRunnerTree::leased(prepared_mount))
 }
 
+/// Run a trusted prepare command that emits one interactive session manifest.
+async fn run_piped_stdio_prepare_phase(
+    request: PipedStdioPrepareRequest<'_>,
+    logs: &mut EvaluationLogs,
+) -> Result<RetainedRunnerTree> {
+    let limits = piped_stdio_prepare_limits(request.profile, request.prepare);
+    let prepared_mount = request
+        .runner
+        .storage
+        .writable_mount(
+            request.runner.docker,
+            request.prepared_root,
+            WritablePhase::EvaluatorPrepare,
+            limits.disk_limit_mb,
+        )
+        .await?;
+    make_container_writable_tree(prepared_mount.path()).await?;
+    let mut cmd = request.prepare.command.clone();
+    cmd.extend([
+        "--challenge-dir".to_string(),
+        "/challenge".to_string(),
+        "--prepared-dir".to_string(),
+        "/prepared".to_string(),
+        "--mode".to_string(),
+        request.eval_type.evaluator_mode_arg().to_string(),
+        "--target".to_string(),
+        request.target.to_string(),
+        "--session-file".to_string(),
+        format!("/prepared/{}", request.prepare.result_session_file),
+    ]);
+
+    let outcome = run_container(
+        request.runner.docker,
+        ContainerRequest {
+            name: container_name(
+                request.runner.attempt,
+                &format!("prepare-{}", request.eval_type.evaluator_mode_arg()),
+            ),
+            image: request
+                .profile
+                .evaluator_image
+                .docker_reference()
+                .to_string(),
+            cmd,
+            env: vec![
+                "AGENTICS_PHASE=prepare".to_string(),
+                format!("AGENTICS_MODE={}", request.eval_type.evaluator_mode_arg()),
+            ],
+            mounts: vec![
+                bind_mount(request.bundle_dir, "/challenge", true),
+                bind_mount(prepared_mount.path(), "/prepared", false),
+            ],
+            working_dir: "/challenge".to_string(),
+            docker_platform: request.docker_platform,
+            accelerator: request.accelerator,
+            accelerator_count: effective_accelerator_count(request.profile, request.accelerator)?,
+            limits: limits.clone(),
+            docker_layer_quota_mb: request.runner.storage.docker_layer_quota_mb(&limits),
+            labels: request
+                .runner
+                .container_labels("prepare", Some(&prepared_mount)),
+        },
+    )
+    .await?;
+    append_named_logs(
+        logs,
+        &format!("prepare-{}", request.eval_type.evaluator_mode_arg()),
+        visible_log_content(request.eval_type, &outcome.logs),
+    );
+    ensure_prepare_succeeded(&outcome, include_log_excerpts(request.eval_type))?;
+    ensure_prepare_disk_limit(prepared_mount.path(), limits.disk_limit_mb).await?;
+    make_container_readable_tree(prepared_mount.path()).await?;
+
+    Ok(RetainedRunnerTree::leased(prepared_mount))
+}
+
 /// Handles run manifest source for this module.
 fn run_manifest_source(
     spec: &ChallengeBundleSpec,
@@ -1139,6 +1567,42 @@ fn run_manifest_source(
             } else {
                 Err(AppError::Runner(
                     "challenge does not declare official runs or official prepare".to_string(),
+                ))
+            }
+        }
+    }
+}
+
+/// Resolve session manifest source for the current piped-stdio mode.
+fn piped_stdio_session_source(
+    spec: &ChallengeBundleSpec,
+    eval_type: ScoringMode,
+) -> Result<PipedStdioSessionSource<'_>> {
+    let execution = spec
+        .execution
+        .piped_stdio()
+        .ok_or_else(|| AppError::Runner("challenge execution is not piped_stdio".to_string()))?;
+    match eval_type {
+        ScoringMode::Validation => {
+            if let Some(path) = &execution.validation_session {
+                Ok(PipedStdioSessionSource::Static(path))
+            } else if let Some(prepare) = &execution.validation_prepare {
+                Ok(PipedStdioSessionSource::Prepared(prepare))
+            } else {
+                Err(AppError::Runner(
+                    "challenge does not declare validation session or validation prepare"
+                        .to_string(),
+                ))
+            }
+        }
+        ScoringMode::Official => {
+            if let Some(path) = &execution.official_session {
+                Ok(PipedStdioSessionSource::Static(path))
+            } else if let Some(prepare) = &execution.official_prepare {
+                Ok(PipedStdioSessionSource::Prepared(prepare))
+            } else {
+                Err(AppError::Runner(
+                    "challenge does not declare official session or official prepare".to_string(),
                 ))
             }
         }
@@ -1209,6 +1673,20 @@ fn evaluator_limits(profile: &ResourceProfileSpec) -> ZipProjectPhaseLimits {
 fn prepare_limits(
     profile: &ResourceProfileSpec,
     prepare: &ChallengePrepareSpec,
+) -> ZipProjectPhaseLimits {
+    ZipProjectPhaseLimits {
+        timeout_sec: profile.timeout_sec,
+        memory_limit_mb: profile.memory_limit_mb,
+        cpu_limit_millis: profile.cpu_limit_millis,
+        disk_limit_mb: profile.disk_limit_mb,
+        network_access: prepare.network_access,
+    }
+}
+
+/// Handles piped-stdio prepare limits for this module.
+fn piped_stdio_prepare_limits(
+    profile: &ResourceProfileSpec,
+    prepare: &PipedStdioPrepareSpec,
 ) -> ZipProjectPhaseLimits {
     ZipProjectPhaseLimits {
         timeout_sec: profile.timeout_sec,

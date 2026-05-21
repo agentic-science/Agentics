@@ -26,6 +26,8 @@ const DEFAULT_RUNNER_MAX_RUNS: u64 = crate::challenge_bundle::MAX_CHALLENGE_RUNS
 const DEFAULT_RUNNER_MAX_RESULT_JSON_BYTES: u64 = 4 * 1024 * 1024;
 const DEFAULT_RUNNER_MAX_PUBLIC_RESULTS: u64 = 1024;
 const DEFAULT_RUNNER_MAX_RESULT_LOG_BYTES: u64 = 256 * 1024;
+const DEFAULT_RUNNER_MAX_INTERACTION_BYTES_PER_DIRECTION: u64 = 16 * 1024 * 1024;
+const DEFAULT_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS: u64 = 2;
 
 /// Application configuration loaded from `AGENTICS_*` environment variables.
 #[derive(Debug, Clone, Deserialize)]
@@ -129,6 +131,10 @@ pub struct Config {
     pub runner_max_public_results: u64,
     #[serde(default = "default_runner_max_result_log_bytes")]
     pub runner_max_result_log_bytes: u64,
+    #[serde(default = "default_runner_max_interaction_bytes_per_direction")]
+    pub runner_max_interaction_bytes_per_direction: u64,
+    #[serde(default = "default_runner_interaction_shutdown_grace_secs")]
+    pub runner_interaction_shutdown_grace_secs: u64,
     #[serde(default = "default_log_level")]
     pub log_level: String,
 }
@@ -447,6 +453,16 @@ fn default_runner_max_result_log_bytes() -> u64 {
     DEFAULT_RUNNER_MAX_RESULT_LOG_BYTES
 }
 
+/// Default maximum bytes relayed in each direction during a piped-stdio interaction.
+fn default_runner_max_interaction_bytes_per_direction() -> u64 {
+    DEFAULT_RUNNER_MAX_INTERACTION_BYTES_PER_DIRECTION
+}
+
+/// Default grace period for attached stdio pumps after interactive containers exit.
+fn default_runner_interaction_shutdown_grace_secs() -> u64 {
+    DEFAULT_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS
+}
+
 /// Default hosted profile probe mode for local development.
 fn default_host_probe_mode() -> HostProbeMode {
     HostProbeMode::Off
@@ -696,6 +712,16 @@ impl Config {
         }
         if self.runner_max_result_log_bytes == 0 {
             anyhow::bail!("AGENTICS_RUNNER_MAX_RESULT_LOG_BYTES must be greater than zero");
+        }
+        if self.runner_max_interaction_bytes_per_direction == 0 {
+            anyhow::bail!(
+                "AGENTICS_RUNNER_MAX_INTERACTION_BYTES_PER_DIRECTION must be greater than zero"
+            );
+        }
+        if self.runner_interaction_shutdown_grace_secs == 0 {
+            anyhow::bail!(
+                "AGENTICS_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS must be greater than zero"
+            );
         }
         Ok(())
     }
@@ -1008,6 +1034,20 @@ mod tests {
                 },
                 "AGENTICS_RUNNER_MAX_RESULT_LOG_BYTES",
             ),
+            (
+                Config {
+                    runner_max_interaction_bytes_per_direction: 0,
+                    ..test_config()
+                },
+                "AGENTICS_RUNNER_MAX_INTERACTION_BYTES_PER_DIRECTION",
+            ),
+            (
+                Config {
+                    runner_interaction_shutdown_grace_secs: 0,
+                    ..test_config()
+                },
+                "AGENTICS_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS",
+            ),
         ] {
             config.api_host = "127.0.0.1".to_string();
             let error = config
@@ -1185,6 +1225,10 @@ mod tests {
             runner_max_result_json_bytes: super::default_runner_max_result_json_bytes(),
             runner_max_public_results: super::default_runner_max_public_results(),
             runner_max_result_log_bytes: super::default_runner_max_result_log_bytes(),
+            runner_max_interaction_bytes_per_direction:
+                super::default_runner_max_interaction_bytes_per_direction(),
+            runner_interaction_shutdown_grace_secs:
+                super::default_runner_interaction_shutdown_grace_secs(),
             log_level: "info".to_string(),
         }
     }

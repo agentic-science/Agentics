@@ -5,7 +5,9 @@ use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 
-use crate::challenge_bundle::{read_challenge_bundle_spec, read_challenge_run_manifest};
+use crate::challenge_bundle::{
+    read_challenge_bundle_spec, read_challenge_run_manifest, read_piped_stdio_session_manifest,
+};
 use crate::error::{AppError, Result};
 use crate::models::challenge::{MAX_CHALLENGE_KEYWORDS, MIN_CHALLENGE_KEYWORDS};
 use crate::models::challenge_creation::{
@@ -318,17 +320,41 @@ async fn validate_public_bundle(
         )));
     }
 
-    if spec.targets.iter().any(|target| target.validation_enabled)
-        && let Some(validation_runs) = spec.execution.validation_runs()
-    {
-        assert_public_file_exists(
-            bundle_dir.join(validation_runs.as_path()),
-            "execution.validation_runs",
-        )
-        .await?;
-        let manifest = read_challenge_run_manifest(&bundle_dir, validation_runs).await?;
-        crate::challenge_bundle::validate_challenge_run_manifest_sources(&bundle_dir, &manifest)
-            .await?;
+    if spec.targets.iter().any(|target| target.validation_enabled) {
+        match &spec.execution {
+            crate::models::challenge::ChallengeExecutionSpec::SeparatedEvaluator(execution) => {
+                if let Some(validation_runs) = &execution.validation_runs {
+                    assert_public_file_exists(
+                        bundle_dir.join(validation_runs.as_path()),
+                        "execution.validation_runs",
+                    )
+                    .await?;
+                    let manifest =
+                        read_challenge_run_manifest(&bundle_dir, validation_runs).await?;
+                    crate::challenge_bundle::validate_challenge_run_manifest_sources(
+                        &bundle_dir,
+                        &manifest,
+                    )
+                    .await?;
+                }
+            }
+            crate::models::challenge::ChallengeExecutionSpec::PipedStdio(execution) => {
+                if let Some(validation_session) = &execution.validation_session {
+                    assert_public_file_exists(
+                        bundle_dir.join(validation_session.as_path()),
+                        "execution.validation_session",
+                    )
+                    .await?;
+                    let manifest =
+                        read_piped_stdio_session_manifest(&bundle_dir, validation_session).await?;
+                    crate::challenge_bundle::validate_piped_stdio_session_manifest_sources(
+                        &bundle_dir,
+                        &manifest,
+                    )
+                    .await?;
+                }
+            }
+        }
     }
 
     Ok(())
@@ -737,6 +763,51 @@ mod tests {
             .expect_err("declared private benchmark directory should fail");
 
         assert!(error.to_string().contains("private asset uploads"));
+        cleanup(&repo);
+    }
+
+    /// Verifies that public bundle validation checks piped-stdio validation session inputs.
+    #[tokio::test]
+    async fn rejects_missing_piped_stdio_validation_session_source() {
+        let repo = temp_repo("piped-session-source");
+        write_valid_public_challenge(&repo);
+        let spec_path = repo.join("v1/spec.json");
+        let mut spec: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&spec_path).expect("spec should read"))
+                .expect("spec should parse");
+        spec["execution"] = json!({
+            "mode": "piped_stdio",
+            "interactor": {
+                "command": ["python", "evaluator/run.py"],
+                "result_file": "result.json"
+            },
+            "validation_session": "public/session.json",
+            "official_session": "private-benchmark/session.json"
+        });
+        write_file(&spec_path, &spec.to_string());
+        write_file(
+            &repo.join("v1/public/session.json"),
+            &json!({
+                "session_name": "case-1",
+                "input_files": [
+                    {
+                        "path": "prompt.txt",
+                        "source_path": "public/missing-prompt.txt"
+                    }
+                ]
+            })
+            .to_string(),
+        );
+
+        let error = validate_challenge_creation_repository(&repo)
+            .await
+            .expect_err("missing piped session source should fail");
+
+        assert!(
+            error
+                .to_string()
+                .contains("session.input_files[].source_path does not exist")
+        );
         cleanup(&repo);
     }
 

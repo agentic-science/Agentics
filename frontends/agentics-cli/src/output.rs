@@ -3,7 +3,9 @@ use std::path::PathBuf;
 use anyhow::Result;
 use serde::Serialize;
 use serde_json::{Map, Value, json};
-use shared::models::challenge::{ChallengeDetailResponse, ChallengeListResponse, MetricDirection};
+use shared::models::challenge::{
+    ChallengeDetailResponse, ChallengeListResponse, MetricDirection, PublicChallengeExecutionSpec,
+};
 use shared::models::challenge_creation::{ChallengeDraftCleanupResponse, ChallengeDraftResponse};
 use shared::models::evaluation::{EvaluationDto, EvaluatorRunResult, MetricValue};
 use shared::models::names::{ChallengeName, MetricName, TargetName};
@@ -219,8 +221,13 @@ pub(crate) fn render_challenge_detail(
             } else {
                 "disabled"
             };
+            let execution = &response.spec.execution;
+            let trusted_executor_label = match execution {
+                PublicChallengeExecutionSpec::SeparatedEvaluator(_) => "evaluator",
+                PublicChallengeExecutionSpec::PipedStdio(_) => "interactor",
+            };
             Ok(format!(
-                "{} ({})\nsummary: {}\nkeywords: {}\nstarts_at: {}\ncloses_at: {}\neligibility: {}\nleaderboard_visibility: {}\nscore_distribution_visibility: {}\nresult_detail_visibility: {}\nsolution_publication: {}\nsolution_protocol: {} ({})\nevaluator: command={}, result_file={}\ntargets:\n{}\ndatasets: public={}, private_benchmark={}\nranking_metric: {}\n\n{}",
+                "{} ({})\nsummary: {}\nkeywords: {}\nstarts_at: {}\ncloses_at: {}\neligibility: {}\nleaderboard_visibility: {}\nscore_distribution_visibility: {}\nresult_detail_visibility: {}\nsolution_publication: {}\nsolution_protocol: {} ({})\nexecution_mode: {}\n{}: command={}, result_file={}\ntargets:\n{}\ndatasets: public={}, private_benchmark={}\nranking_metric: {}\n\n{}",
                 response.title,
                 response.name,
                 response.summary.en,
@@ -234,8 +241,10 @@ pub(crate) fn render_challenge_detail(
                 status_label(&response.spec.solution_publication),
                 response.spec.solution.protocol,
                 response.spec.solution.manifest_file,
-                response.spec.execution.evaluator().command.join(" "),
-                response.spec.execution.evaluator().result_file,
+                execution_mode_label(execution),
+                trusted_executor_label,
+                execution.evaluator().command.join(" "),
+                execution.evaluator().result_file,
                 format_targets(&response.spec.targets),
                 response.spec.datasets.public_dir,
                 private_benchmark,
@@ -1018,6 +1027,14 @@ fn format_keywords(keywords: &[shared::models::names::ChallengeKeyword]) -> Stri
             .map(shared::models::names::ChallengeKeyword::as_str)
             .collect::<Vec<_>>()
             .join(", ")
+    }
+}
+
+/// Format the public execution topology mode.
+fn execution_mode_label(execution: &PublicChallengeExecutionSpec) -> &'static str {
+    match execution {
+        PublicChallengeExecutionSpec::SeparatedEvaluator(_) => "separated_evaluator",
+        PublicChallengeExecutionSpec::PipedStdio(_) => "piped_stdio",
     }
 }
 

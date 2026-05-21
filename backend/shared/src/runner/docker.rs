@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::pin::Pin;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use bollard::Docker;
@@ -8,12 +9,14 @@ use bollard::models::{
     Mount, MountType, ResourcesUlimits,
 };
 use bollard::query_parameters::{
-    CreateContainerOptionsBuilder, KillContainerOptionsBuilder, ListContainersOptionsBuilder,
-    LogsOptionsBuilder, RemoveContainerOptionsBuilder, StartContainerOptions,
-    WaitContainerOptionsBuilder,
+    AttachContainerOptionsBuilder, CreateContainerOptionsBuilder, KillContainerOptionsBuilder,
+    ListContainersOptionsBuilder, LogsOptionsBuilder, RemoveContainerOptionsBuilder,
+    StartContainerOptions, WaitContainerOptionsBuilder,
 };
-use futures::StreamExt;
+use futures::{Stream, StreamExt};
 use sqlx::PgPool;
+use tokio::io::{AsyncWrite, AsyncWriteExt};
+use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
 use crate::config::Config;
@@ -53,6 +56,13 @@ pub(super) struct ContainerOutcome {
     pub(super) wall_time_ms: u64,
 }
 
+#[derive(Debug)]
+/// Carries two-container interactive session outcome data.
+pub(super) struct InteractiveSessionOutcome {
+    pub(super) participant: ContainerOutcome,
+    pub(super) interactor: ContainerOutcome,
+}
+
 /// Summary of Agentics runner container reconciliation work.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct RunnerContainerCleanupSummary {
@@ -76,69 +86,11 @@ pub(super) async fn run_container(
     let permission_fix_platform = request.docker_platform;
     let permission_fix_mounts = writable_bind_mounts(&request.mounts);
     let permission_fix_labels = request.labels.clone();
-    let memory_bytes = request
-        .limits
-        .memory_limit_mb
-        .checked_mul(1024 * 1024)
-        .ok_or_else(|| AppError::Runner("memory limit overflow".to_string()))?;
-    let memory = i64::try_from(memory_bytes)
-        .map_err(|_| AppError::Runner("memory limit exceeds Docker API range".to_string()))?;
-    let nano_cpus = i64::from(request.limits.cpu_limit_millis)
-        .checked_mul(1_000_000)
-        .ok_or_else(|| AppError::Runner("CPU limit overflow".to_string()))?;
+    let timeout_sec = request.limits.timeout_sec;
     let log_cap_bytes = PLATFORM_CONTAINER_LOG_LIMIT_BYTES;
-    let mut host_config = hardened_container_host_config(
-        request
-            .limits
-            .network_access
-            .docker_network_mode()
-            .to_string(),
-        request.mounts,
-        log_cap_bytes,
-        false,
-    );
-    host_config.memory = Some(memory);
-    host_config.memory_swap = Some(memory);
-    host_config.nano_cpus = Some(nano_cpus);
-    host_config.storage_opt = docker_storage_opt(request.docker_layer_quota_mb);
-    host_config.runtime = accelerator_runtime(request.accelerator);
-    host_config.device_requests =
-        accelerator_device_requests(request.accelerator, request.accelerator_count)?;
-    let container_config = ContainerCreateBody {
-        image: Some(request.image),
-        entrypoint: Some(Vec::<String>::new()),
-        cmd: Some(request.cmd),
-        env: Some(request.env),
-        working_dir: Some(request.working_dir),
-        host_config: Some(host_config),
-        labels: Some({
-            let mut labels = request.labels;
-            labels.insert(
-                super::RUNNER_KIND_LABEL.to_string(),
-                super::RUNNER_KIND_ZIP_PROJECT.to_string(),
-            );
-            labels
-        }),
-        ..Default::default()
-    };
+    let container_id = create_container(docker, request, false).await?;
 
-    let create_opts = CreateContainerOptionsBuilder::default()
-        .name(&request.name)
-        .platform(request.docker_platform.as_str())
-        .build();
-    let create_resp = docker
-        .create_container(Some(create_opts), container_config)
-        .await
-        .map_err(|e| AppError::Docker(format!("create container failed: {e}")))?;
-    let container_id = create_resp.id;
-
-    let run_result = run_created_container(
-        docker,
-        &container_id,
-        request.limits.timeout_sec,
-        log_cap_bytes,
-    )
-    .await;
+    let run_result = run_created_container(docker, &container_id, timeout_sec, log_cap_bytes).await;
     let permission_result = repair_bind_mount_permissions(
         docker,
         permission_fix_image,
@@ -165,6 +117,88 @@ pub(super) async fn run_container(
         (Err(run_err), Err(permission_err), Err(cleanup_err)) => Err(AppError::Docker(format!(
             "{run_err}; additionally failed to repair bind mount permissions: {permission_err}; additionally failed to remove runner container: {cleanup_err}"
         ))),
+    }
+}
+
+/// Run one participant container and one trusted interactor container with crossed stdio.
+pub(super) async fn run_interactive_stdio_session(
+    docker: &Docker,
+    participant: ContainerRequest,
+    interactor: ContainerRequest,
+    max_interaction_bytes_per_direction: u64,
+    shutdown_grace_secs: u64,
+) -> Result<InteractiveSessionOutcome> {
+    let participant_fix = PermissionRepairRequest::from_container_request(&participant);
+    let interactor_fix = PermissionRepairRequest::from_container_request(&interactor);
+    let timeout_sec = participant
+        .limits
+        .timeout_sec
+        .max(interactor.limits.timeout_sec);
+    let participant_id = create_container(docker, participant, true).await?;
+    let interactor_id = match create_container(docker, interactor, true).await {
+        Ok(container_id) => container_id,
+        Err(create_error) => {
+            return match remove_container(docker, &participant_id).await {
+                Ok(()) => Err(create_error),
+                Err(cleanup_error) => Err(AppError::Docker(format!(
+                    "{create_error}; additionally failed to remove participant container: {cleanup_error}"
+                ))),
+            };
+        }
+    };
+
+    let run_result = run_attached_interactive_pair(
+        docker,
+        &participant_id,
+        &interactor_id,
+        timeout_sec,
+        max_interaction_bytes_per_direction,
+        shutdown_grace_secs,
+    )
+    .await;
+    let participant_permission = participant_fix.repair(docker).await;
+    let interactor_permission = interactor_fix.repair(docker).await;
+    let participant_remove = remove_container(docker, &participant_id).await;
+    let interactor_remove = remove_container(docker, &interactor_id).await;
+
+    combine_interactive_cleanup_results(
+        run_result,
+        participant_permission,
+        interactor_permission,
+        participant_remove,
+        interactor_remove,
+    )
+}
+
+/// Information needed to repair writable bind mount permissions after a container exits.
+struct PermissionRepairRequest {
+    image: String,
+    docker_platform: DockerPlatform,
+    mounts: Vec<Mount>,
+    labels: HashMap<String, String>,
+}
+
+impl PermissionRepairRequest {
+    /// Capture permission-repair inputs before the container request is consumed.
+    fn from_container_request(request: &ContainerRequest) -> Self {
+        Self {
+            image: request.image.clone(),
+            docker_platform: request.docker_platform,
+            mounts: writable_bind_mounts(&request.mounts),
+            labels: request.labels.clone(),
+        }
+    }
+
+    /// Run the permission-repair helper for this request.
+    async fn repair(self, docker: &Docker) -> Result<()> {
+        repair_bind_mount_permissions(
+            docker,
+            self.image,
+            self.docker_platform,
+            self.mounts,
+            self.labels,
+        )
+        .await
     }
 }
 
@@ -636,6 +670,75 @@ pub(super) fn bind_mount(path: &std::path::Path, target: &str, read_only: bool) 
     }
 }
 
+/// Create a runner container using the standard hardening and resource limits.
+async fn create_container(
+    docker: &Docker,
+    request: ContainerRequest,
+    attach_stdio: bool,
+) -> Result<String> {
+    let memory_bytes = request
+        .limits
+        .memory_limit_mb
+        .checked_mul(1024 * 1024)
+        .ok_or_else(|| AppError::Runner("memory limit overflow".to_string()))?;
+    let memory = i64::try_from(memory_bytes)
+        .map_err(|_| AppError::Runner("memory limit exceeds Docker API range".to_string()))?;
+    let nano_cpus = i64::from(request.limits.cpu_limit_millis)
+        .checked_mul(1_000_000)
+        .ok_or_else(|| AppError::Runner("CPU limit overflow".to_string()))?;
+    let mut host_config = hardened_container_host_config(
+        request
+            .limits
+            .network_access
+            .docker_network_mode()
+            .to_string(),
+        request.mounts,
+        PLATFORM_CONTAINER_LOG_LIMIT_BYTES,
+        false,
+    );
+    host_config.memory = Some(memory);
+    host_config.memory_swap = Some(memory);
+    host_config.nano_cpus = Some(nano_cpus);
+    host_config.storage_opt = docker_storage_opt(request.docker_layer_quota_mb);
+    host_config.runtime = accelerator_runtime(request.accelerator);
+    host_config.device_requests =
+        accelerator_device_requests(request.accelerator, request.accelerator_count)?;
+
+    let container_config = ContainerCreateBody {
+        image: Some(request.image),
+        entrypoint: Some(Vec::<String>::new()),
+        cmd: Some(request.cmd),
+        env: Some(request.env),
+        working_dir: Some(request.working_dir),
+        host_config: Some(host_config),
+        labels: Some({
+            let mut labels = request.labels;
+            labels.insert(
+                super::RUNNER_KIND_LABEL.to_string(),
+                super::RUNNER_KIND_ZIP_PROJECT.to_string(),
+            );
+            labels
+        }),
+        attach_stdin: attach_stdio.then_some(true),
+        attach_stdout: attach_stdio.then_some(true),
+        attach_stderr: attach_stdio.then_some(true),
+        open_stdin: attach_stdio.then_some(true),
+        stdin_once: attach_stdio.then_some(false),
+        tty: Some(false),
+        ..Default::default()
+    };
+
+    let create_opts = CreateContainerOptionsBuilder::default()
+        .name(&request.name)
+        .platform(request.docker_platform.as_str())
+        .build();
+    let create_resp = docker
+        .create_container(Some(create_opts), container_config)
+        .await
+        .map_err(|e| AppError::Docker(format!("create container failed: {e}")))?;
+    Ok(create_resp.id)
+}
+
 /// Handles run created container for this module.
 async fn run_created_container(
     docker: &Docker,
@@ -692,6 +795,238 @@ async fn run_created_container(
     })
 }
 
+/// Run two already-created containers with attached and crossed stdio streams.
+async fn run_attached_interactive_pair(
+    docker: &Docker,
+    participant_id: &str,
+    interactor_id: &str,
+    timeout_sec: u64,
+    max_interaction_bytes_per_direction: u64,
+    shutdown_grace_secs: u64,
+) -> Result<InteractiveSessionOutcome> {
+    let participant_attach = attach_container_stdio(docker, participant_id).await?;
+    let interactor_attach = attach_container_stdio(docker, interactor_id).await?;
+
+    docker
+        .start_container(participant_id, None::<StartContainerOptions>)
+        .await
+        .map_err(|e| AppError::Docker(format!("start participant container failed: {e}")))?;
+    docker
+        .start_container(interactor_id, None::<StartContainerOptions>)
+        .await
+        .map_err(|e| AppError::Docker(format!("start interactor container failed: {e}")))?;
+
+    let started = Instant::now();
+    let participant_output = participant_attach.output;
+    let participant_input = participant_attach.input;
+    let interactor_output = interactor_attach.output;
+    let interactor_input = interactor_attach.input;
+    let kill_switch = InteractiveKillSwitch {
+        docker: docker.clone(),
+        participant_id: participant_id.to_string(),
+        interactor_id: interactor_id.to_string(),
+    };
+
+    let participant_pump = tokio::spawn(pump_attached_output(
+        "participant",
+        participant_output,
+        interactor_input,
+        max_interaction_bytes_per_direction,
+        PLATFORM_CONTAINER_LOG_LIMIT_BYTES,
+        kill_switch.clone(),
+    ));
+    let interactor_pump = tokio::spawn(pump_attached_output(
+        "interactor",
+        interactor_output,
+        participant_input,
+        max_interaction_bytes_per_direction,
+        PLATFORM_CONTAINER_LOG_LIMIT_BYTES,
+        kill_switch,
+    ));
+
+    let wait_result = timeout(Duration::from_secs(timeout_sec), async {
+        let (participant, interactor) = tokio::join!(
+            wait_container_exit(docker, participant_id),
+            wait_container_exit(docker, interactor_id)
+        );
+        Ok::<_, AppError>((participant?, interactor?))
+    })
+    .await;
+
+    let mut wait_error = None;
+    let (participant_exit, interactor_exit, timed_out) = match wait_result {
+        Ok(result) => match result {
+            Ok((participant_exit, interactor_exit)) => (participant_exit, interactor_exit, false),
+            Err(error) => {
+                wait_error = Some(error);
+                (1, 1, false)
+            }
+        },
+        Err(_) => {
+            kill_container_if_running(docker, participant_id).await?;
+            kill_container_if_running(docker, interactor_id).await?;
+            (124, 124, true)
+        }
+    };
+
+    let pump_timeout = Duration::from_secs(shutdown_grace_secs);
+    let participant_pump =
+        finish_attached_pump("participant", participant_pump, pump_timeout).await;
+    let interactor_pump = finish_attached_pump("interactor", interactor_pump, pump_timeout).await;
+    let participant_pump = match participant_pump {
+        Ok(outcome) => outcome,
+        Err(error) => return Err(error),
+    };
+    let interactor_pump = match interactor_pump {
+        Ok(outcome) => outcome,
+        Err(error) => return Err(error),
+    };
+    if let Some(error) = wait_error {
+        return Err(error);
+    }
+
+    let wall_time_ms = duration_millis(started.elapsed());
+    Ok(InteractiveSessionOutcome {
+        participant: ContainerOutcome {
+            exit_code: participant_exit,
+            logs: participant_pump.logs,
+            timed_out,
+            wall_time_ms,
+        },
+        interactor: ContainerOutcome {
+            exit_code: interactor_exit,
+            logs: interactor_pump.logs,
+            timed_out,
+            wall_time_ms,
+        },
+    })
+}
+
+/// Finish one attached stdio pump and convert task failures into Docker errors.
+async fn finish_attached_pump(
+    label: &'static str,
+    pump: JoinHandle<Result<AttachedPumpOutcome>>,
+    pump_timeout: Duration,
+) -> Result<AttachedPumpOutcome> {
+    timeout(pump_timeout, pump)
+        .await
+        .map_err(|_| AppError::Docker(format!("{label} stdio pump did not stop")))?
+        .map_err(|e| AppError::Docker(format!("{label} stdio pump task failed: {e}")))?
+}
+
+/// Attach to stdin/stdout/stderr for one interactive container.
+async fn attach_container_stdio(
+    docker: &Docker,
+    container_id: &str,
+) -> Result<bollard::container::AttachContainerResults> {
+    let options = AttachContainerOptionsBuilder::default()
+        .stream(true)
+        .stdin(true)
+        .stdout(true)
+        .stderr(true)
+        .build();
+    docker
+        .attach_container(container_id, Some(options))
+        .await
+        .map_err(|e| AppError::Docker(format!("attach container failed: {e}")))
+}
+
+/// Outcome from pumping one attached output stream into the opposite stdin.
+struct AttachedPumpOutcome {
+    logs: String,
+}
+
+/// Allows a stdio pump to stop both containers immediately on protocol-limit failure.
+#[derive(Clone)]
+struct InteractiveKillSwitch {
+    docker: Docker,
+    participant_id: String,
+    interactor_id: String,
+}
+
+impl InteractiveKillSwitch {
+    /// Best-effort kill both sides of an interactive session.
+    async fn kill_both(&self) {
+        drop(kill_container_if_running(&self.docker, &self.participant_id).await);
+        drop(kill_container_if_running(&self.docker, &self.interactor_id).await);
+    }
+}
+
+/// Pump stdout to the peer stdin while capturing only stderr into bounded logs.
+async fn pump_attached_output(
+    label: &'static str,
+    mut output: Pin<
+        Box<dyn Stream<Item = std::result::Result<LogOutput, bollard::errors::Error>> + Send>,
+    >,
+    mut peer_input: Pin<Box<dyn AsyncWrite + Send>>,
+    max_interaction_bytes: u64,
+    log_cap_bytes: u64,
+    kill_switch: InteractiveKillSwitch,
+) -> Result<AttachedPumpOutcome> {
+    let mut relayed = 0u64;
+    let mut logs = Vec::new();
+    let mut logs_truncated = false;
+    let log_limit = usize::try_from(log_cap_bytes).unwrap_or(usize::MAX);
+
+    while let Some(chunk) = output.next().await {
+        match chunk {
+            Ok(LogOutput::StdOut { message }) | Ok(LogOutput::Console { message }) => {
+                let chunk_len = u64::try_from(message.len()).unwrap_or(u64::MAX);
+                relayed = relayed.checked_add(chunk_len).ok_or_else(|| {
+                    AppError::Docker(format!("{label} interaction byte count overflowed"))
+                })?;
+                if relayed > max_interaction_bytes {
+                    drop(peer_input.shutdown().await);
+                    kill_switch.kill_both().await;
+                    return Err(AppError::Docker(format!(
+                        "{label} interaction output exceeded {max_interaction_bytes} bytes"
+                    )));
+                }
+                peer_input.write_all(&message).await.map_err(|e| {
+                    AppError::Docker(format!("write {label} interaction bytes failed: {e}"))
+                })?;
+            }
+            Ok(LogOutput::StdErr { message }) => {
+                append_bounded_log_bytes(&mut logs, &message, log_limit, &mut logs_truncated);
+            }
+            Ok(LogOutput::StdIn { .. }) => {}
+            Err(error) => {
+                drop(peer_input.shutdown().await);
+                return Err(AppError::Docker(format!(
+                    "read {label} attached output failed: {error}"
+                )));
+            }
+        }
+    }
+
+    peer_input
+        .shutdown()
+        .await
+        .map_err(|e| AppError::Docker(format!("shutdown {label} peer stdin failed: {e}")))?;
+    let mut logs = String::from_utf8_lossy(&logs).into_owned();
+    if logs_truncated {
+        logs.push_str(&format!(
+            "\n[agentics] {label} stderr truncated at {log_cap_bytes} bytes\n"
+        ));
+    }
+    Ok(AttachedPumpOutcome { logs })
+}
+
+/// Wait until one started container exits and return its exit code.
+async fn wait_container_exit(docker: &Docker, container_id: &str) -> Result<i64> {
+    let wait_opts = WaitContainerOptionsBuilder::default()
+        .condition("not-running")
+        .build();
+    let mut results = docker.wait_container(container_id, Some(wait_opts));
+    let mut exit_code = 1;
+    while let Some(result) = results.next().await {
+        let status =
+            result.map_err(|error| AppError::Docker(format!("wait container failed: {error}")))?;
+        exit_code = status.status_code;
+    }
+    Ok(exit_code)
+}
+
 /// Handles duration millis for this module.
 fn duration_millis(duration: Duration) -> u64 {
     let millis = duration.as_millis();
@@ -722,6 +1057,53 @@ async fn kill_and_remove_container(docker: &Docker, container_id: &str) -> Resul
         }
     }
     remove_container(docker, container_id).await
+}
+
+/// Kill a started container, ignoring the benign case where it has already exited.
+async fn kill_container_if_running(docker: &Docker, container_id: &str) -> Result<()> {
+    let kill_opts = KillContainerOptionsBuilder::default()
+        .signal("SIGKILL")
+        .build();
+    if let Err(error) = docker.kill_container(container_id, Some(kill_opts)).await {
+        let message = error.to_string();
+        if !message.contains("is not running") && !message.contains("No such container") {
+            return Err(AppError::Docker(format!(
+                "kill interactive runner container failed: {error}"
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Preserve the primary interactive run error while surfacing cleanup failures.
+fn combine_interactive_cleanup_results(
+    run_result: Result<InteractiveSessionOutcome>,
+    participant_permission: Result<()>,
+    interactor_permission: Result<()>,
+    participant_remove: Result<()>,
+    interactor_remove: Result<()>,
+) -> Result<InteractiveSessionOutcome> {
+    let mut cleanup_errors = Vec::new();
+    for result in [
+        participant_permission,
+        interactor_permission,
+        participant_remove,
+        interactor_remove,
+    ] {
+        if let Err(error) = result {
+            cleanup_errors.push(error.to_string());
+        }
+    }
+
+    match (run_result, cleanup_errors.is_empty()) {
+        (Ok(outcome), true) => Ok(outcome),
+        (Ok(_), false) => Err(AppError::Docker(cleanup_errors.join("; additionally "))),
+        (Err(error), true) => Err(error),
+        (Err(error), false) => Err(AppError::Docker(format!(
+            "{error}; additionally {}",
+            cleanup_errors.join("; additionally ")
+        ))),
+    }
 }
 
 /// Handles docker log config for this module.
