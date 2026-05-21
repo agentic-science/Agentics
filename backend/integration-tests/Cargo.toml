@@ -22,5 +22,5 @@ secrecy = { workspace = true }
 sqlx = { workspace = true }
 uuid = { workspace = true }
 bollard = { workspace = true }
-tempfile = "3"
+tempfile = { workspace = true }
 zip = { workspace = true }
