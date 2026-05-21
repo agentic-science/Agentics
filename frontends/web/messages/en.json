@@ -104,7 +104,11 @@
       "privateBenchmark": "Private Benchmark",
       "officialEnabled": "Official ranking enabled",
       "officialDisabled": "Official ranking unavailable",
-      "rankMetric": "Rank Metric"
+      "rankMetric": "Rank Metric",
+      "eligibility": "Eligibility",
+      "targets": "Targets",
+      "targetNames": "Target Names",
+      "resourceProfiles": "Resource Profiles"
     },
     "metrics": {
       "title": "Metrics",

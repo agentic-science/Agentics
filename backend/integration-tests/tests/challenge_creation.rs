@@ -1144,11 +1144,11 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
         INSERT INTO leaderboard_entries (
             challenge_name, target, agent_id, best_solution_submission_id,
             best_rank_score, public_results_json, aggregate_metrics_json,
-            official_score, official_metrics_json
+            official_metrics_json
         )
         VALUES (
             'sample-sum', 'linux-arm64-cpu', $1, $2,
-            0.95, '[]'::jsonb, $3, 0.95, $3
+            0.95, '[]'::jsonb, $3, $3
         )
         "#,
     )
@@ -1441,12 +1441,36 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
     let public_repo = tempfile::tempdir().expect("public repo tempdir");
-    let commit_sha = write_public_challenge(public_repo.path());
+    write_public_challenge(public_repo.path());
+    let mut manifest = manifest_json();
+    manifest["private_assets"]
+        .as_array_mut()
+        .expect("private assets array")
+        .push(json!({
+            "asset_name": "extra-cases",
+            "kind": "private_reference_outputs",
+            "required": false
+        }));
+    write_file(
+        &public_repo
+            .path()
+            .join("challenges/sample-sum/agentics.challenge.json"),
+        &manifest.to_string(),
+    );
+    let commit_sha = commit_all(public_repo.path(), "add optional asset");
+    let valid_asset_base64 = private_benchmark_asset_zip_base64();
+    let valid_asset_len = u64::try_from(
+        STANDARD
+            .decode(&valid_asset_base64)
+            .expect("valid asset base64")
+            .len(),
+    )
+    .expect("asset length fits u64");
 
     let mut config = test_config(storage.path(), seeded_challenges.path());
     config.max_active_challenge_drafts_per_agent = 1;
     config.challenge_draft_validations_per_day = 1;
-    config.challenge_private_asset_bytes_per_draft = 1;
+    config.challenge_private_asset_bytes_per_draft = valid_asset_len;
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
@@ -1456,7 +1480,7 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
     );
 
     let draft: serde_json::Value =
-        create_draft_with_commit(&client, &app, &creator, 41, manifest_json(), &commit_sha).await;
+        create_draft_with_commit(&client, &app, &creator, 41, manifest.clone(), &commit_sha).await;
     let draft_id = draft["id"].as_str().expect("draft id");
 
     let quota_response = creator_auth(
@@ -1470,7 +1494,7 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
         "commit_sha": "0123456789abcde420123456789abcde42012345",
         "challenge_path": "challenges/sample-sum",
         "pr_author_github_user_id": 1001,
-        "manifest": manifest_json()
+        "manifest": manifest
     }))
     .send()
     .await
@@ -1480,7 +1504,7 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
         reqwest::StatusCode::TOO_MANY_REQUESTS
     );
 
-    let asset_response = creator_auth(
+    creator_auth(
         client.post(api_url(
             &app,
             &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
@@ -1491,12 +1515,34 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
         "asset_name": "official-cases",
         "kind": "private_benchmark_data",
         "required": false,
-        "asset_base64": STANDARD.encode(b"[]")
+        "asset_base64": valid_asset_base64
+    }))
+    .send()
+    .await
+    .expect("required asset request")
+    .error_for_status()
+    .expect("required asset should upload");
+
+    let asset_response = creator_auth(
+        client.post(api_url(
+            &app,
+            &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+        )),
+        &creator,
+    )
+    .json(&json!({
+        "asset_name": "extra-cases",
+        "kind": "private_reference_outputs",
+        "required": false,
+        "asset_base64": private_benchmark_asset_zip_base64()
     }))
     .send()
     .await
     .expect("asset quota request");
-    assert_eq!(asset_response.status(), reqwest::StatusCode::BAD_REQUEST);
+    assert_eq!(
+        asset_response.status(),
+        reqwest::StatusCode::TOO_MANY_REQUESTS
+    );
 
     client
         .post(api_url(

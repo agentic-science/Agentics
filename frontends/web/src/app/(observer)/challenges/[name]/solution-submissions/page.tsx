@@ -6,7 +6,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { fetchJson } from "@/lib/api";
 import { resultDetailIsPublic } from "@/lib/challengeVisibility";
 import { formatDate } from "@/lib/format";
-import { formatDeclaredMetric, primaryMetricFromScore } from "@/lib/metrics";
+import { formatDeclaredMetric } from "@/lib/metrics";
 import {
   challengeDetailResponseSchema,
   publicSolutionSubmissionListResponseSchema,
@@ -15,23 +15,33 @@ import {
 /** Renders the solution submissions page component. */
 export default async function SolutionSubmissionsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ name: string }>;
+  searchParams: Promise<{ target?: string }>;
 }) {
   const { name } = await params;
+  const { target: requestedTarget } = await searchParams;
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
 
   const detail = await fetchJson(
     `/api/public/challenges/${name}`,
     challengeDetailResponseSchema,
   );
+  const defaultTarget = detail.spec.targets[0]?.name;
+  const selectedTarget =
+    requestedTarget &&
+    detail.spec.targets.some((target) => target.name === requestedTarget)
+      ? requestedTarget
+      : defaultTarget;
   const submissionsArePublic = resultDetailIsPublic(detail.spec);
-  const submissions = submissionsArePublic
-    ? await fetchJson(
-        `/api/public/challenges/${name}/solution-submissions?limit=100`,
-        publicSolutionSubmissionListResponseSchema,
-      )
-    : { items: [], total_count: 0 };
+  const submissions =
+    submissionsArePublic && selectedTarget
+      ? await fetchJson(
+          `/api/public/challenges/${name}/solution-submissions?target=${encodeURIComponent(selectedTarget)}&limit=100`,
+          publicSolutionSubmissionListResponseSchema,
+        )
+      : { items: [], total_count: 0 };
 
   const latestDate =
     submissions.items.length > 0
@@ -68,6 +78,23 @@ export default async function SolutionSubmissionsPage({
             disabledLabel={t("common.disabled")}
           />
         </div>
+        {detail.spec.targets.length > 1 ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {detail.spec.targets.map((target) => (
+              <Link
+                key={target.name}
+                href={`/challenges/${name}/solution-submissions?target=${encodeURIComponent(target.name)}`}
+                className={`text-[var(--text-body-sm)] rounded-md border px-3 py-1 transition-colors ${
+                  target.name === selectedTarget
+                    ? "border-[var(--accent-primary-text)] text-[var(--accent-primary-text)]"
+                    : "border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                }`}
+              >
+                {target.name}
+              </Link>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {/* Table */}
@@ -122,14 +149,17 @@ export default async function SolutionSubmissionsPage({
                   <td className="font-mono text-[var(--accent-primary-text)]">
                     {formatDeclaredMetric(
                       metricSchema,
-                      primaryMetricFromScore(metricSchema, s.official_score),
+                      s.official_primary_metric,
                     )}
                   </td>
                   <td className="font-mono">
                     {s.rank_score?.toFixed(4) ?? t("common.na")}
                   </td>
                   <td className="hidden md:table-cell font-mono">
-                    {s.official_score?.toFixed(4) ?? t("common.na")}
+                    {formatDeclaredMetric(
+                      metricSchema,
+                      s.official_primary_metric,
+                    )}
                   </td>
                   <td className="hidden lg:table-cell font-mono text-[var(--text-muted)] text-[var(--text-caption)]">
                     {s.parent_solution_submission_id ?? t("common.none")}

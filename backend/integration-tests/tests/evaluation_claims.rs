@@ -478,9 +478,9 @@ async fn losing_official_submission_does_not_overwrite_leaderboard_best_metadata
     let losing_submission_id = create_official_submission(&client, &app, token, "loser").await;
     finish_next_job_with_score(&pool, &losing_submission_id, "worker-loser", 0.25).await;
 
-    let row: (String, f64, Option<f64>, serde_json::Value) = sqlx::query_as(
+    let row: (String, f64, serde_json::Value) = sqlx::query_as(
         r#"
-        SELECT best_solution_submission_id::text AS best_solution_submission_id, best_rank_score, official_score, official_metrics_json
+        SELECT best_solution_submission_id::text AS best_solution_submission_id, best_rank_score, official_metrics_json
         FROM leaderboard_entries
         WHERE challenge_name = 'sample-sum'
           AND target = 'linux-arm64-cpu'
@@ -498,9 +498,8 @@ async fn losing_official_submission_does_not_overwrite_leaderboard_best_metadata
 
     assert_eq!(row.0, winning_submission_id.as_str());
     assert_eq!(row.1, 1.0);
-    assert_eq!(row.2, Some(1.0));
     assert_eq!(
-        row.3,
+        row.2,
         serde_json::json!([{ "metric_name": "score", "value": 1.0 }])
     );
 }
@@ -806,7 +805,6 @@ fn persisted_result(
         target: job.target.clone(),
         eval_type: ScoringMode::Official,
         status,
-        primary_score: score,
         rank_score: score,
         aggregate_metrics: score
             .map(|value| {

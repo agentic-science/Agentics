@@ -377,7 +377,7 @@ pub async fn validate_challenge_draft(
         state.config.challenge_draft_validation_timeout_minutes,
     )
     .await?;
-    let validation = validate_draft_repository(&draft, &repository_path).await;
+    let validation = validate_draft_repository(&state, &draft, &repository_path).await;
 
     match validation {
         Ok((_, bundle_sha256)) => {
@@ -627,7 +627,8 @@ async fn publish_claimed_challenge_draft(
     publish_claim_id: &ChallengeDraftPublishClaimId,
     repository_path: &RepositoryCheckoutPath,
 ) -> Result<()> {
-    let (manifest, bundle_sha256) = validate_draft_repository(draft, repository_path).await?;
+    let (manifest, bundle_sha256) =
+        validate_draft_repository(state, draft, repository_path).await?;
     let approved_bundle_sha256 = draft
         .approved_bundle_sha256
         .as_ref()
@@ -773,6 +774,7 @@ fn validate_challenge_draft_path(
 
 /// Validates the checked-out proposal against the manifest hash recorded at draft creation.
 async fn validate_draft_repository(
+    state: &AppState,
     draft: &ChallengeDraftResponse,
     repository_path: &RepositoryCheckoutPath,
 ) -> Result<(ChallengeCreationManifest, Sha256Digest)> {
@@ -795,13 +797,44 @@ async fn validate_draft_repository(
             draft.challenge_name, manifest.challenge_name
         )));
     }
-    let bundle_sha256 = challenge_creation::draft_review_bundle_sha256(
-        &proposal_root,
-        &manifest,
-        &draft.private_assets,
-    )
-    .await?;
+    let bundle_sha256 = match manifest.request {
+        ChallengeCreationRequestKind::ArchiveChallenge => {
+            challenge_creation::draft_review_bundle_sha256(
+                &proposal_root,
+                &manifest,
+                &draft.private_assets,
+            )
+            .await?
+        }
+        ChallengeCreationRequestKind::NewChallenge => {
+            validate_and_hash_runtime_bundle(state, draft, &proposal_root, &manifest).await?
+        }
+    };
     Ok((manifest, bundle_sha256))
+}
+
+/// Assemble private overlays, validate the runtime bundle, and return its review digest.
+async fn validate_and_hash_runtime_bundle(
+    state: &AppState,
+    draft: &ChallengeDraftResponse,
+    proposal_root: &Path,
+    manifest: &ChallengeCreationManifest,
+) -> Result<Sha256Digest> {
+    let validation_claim_id = ChallengeDraftPublishClaimId::generate();
+    let runtime_bundle_path = temporary_runtime_bundle_path(state, draft, &validation_claim_id);
+    let validation = async {
+        assemble_runtime_bundle(state, draft, proposal_root, manifest, &runtime_bundle_path)
+            .await?;
+        challenge_bundle::validate_challenge_bundle(&runtime_bundle_path).await?;
+        let spec = challenge_bundle::read_challenge_bundle_spec(&runtime_bundle_path).await?;
+        if state.config.requires_digest_pinned_images() {
+            challenge_bundle::validate_digest_pinned_images(&spec)?;
+        }
+        challenge_creation::draft_review_runtime_bundle_sha256(&runtime_bundle_path, manifest).await
+    }
+    .await;
+    cleanup_runtime_bundle(&runtime_bundle_path).await;
+    validation
 }
 
 /// Ensures validation and publication use the exact reviewed Git commit and a clean tree.
@@ -883,6 +916,7 @@ async fn assemble_runtime_bundle(
         )
         .await?;
     }
+    validate_private_asset_required_paths(draft, manifest, runtime_bundle_path).await?;
 
     Ok(())
 }
@@ -978,6 +1012,37 @@ fn validate_private_assets_for_publish(
             "static official_runs challenges must upload a private_benchmark_data asset"
                 .to_string(),
         ));
+    }
+
+    Ok(())
+}
+
+/// Confirms uploaded private overlays produced every manifest-declared runtime path.
+async fn validate_private_asset_required_paths(
+    draft: &ChallengeDraftResponse,
+    manifest: &ChallengeCreationManifest,
+    runtime_bundle_path: &Path,
+) -> Result<()> {
+    let uploaded: HashSet<&str> = draft
+        .private_assets
+        .iter()
+        .map(|asset| asset.asset_name.as_str())
+        .collect();
+
+    for requirement in &manifest.private_assets {
+        if !uploaded.contains(requirement.asset_name.as_str()) {
+            continue;
+        }
+        for required_path in &requirement.required_paths {
+            let path = runtime_bundle_path.join(required_path.as_path());
+            if tokio::fs::try_exists(&path).await? {
+                continue;
+            }
+            return Err(AppError::BadRequest(format!(
+                "private asset `{}` did not provide required runtime path `{required_path}`",
+                requirement.asset_name
+            )));
+        }
     }
 
     Ok(())

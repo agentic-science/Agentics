@@ -19,6 +19,9 @@ Reviewer checklist:
 - Required public `keywords` match between `agentics.challenge.json` and
   `spec.json`, contain one to six entries, and each keyword fits within 30
   UTF-8 bytes.
+- `execution.mode` is `separated_evaluator`, and `execution.evaluator.command`
+  plus `execution.evaluator.result_file` identify the trusted evaluator entry
+  point and result JSON.
 - The metric schema has one primary ranking metric and clear metric descriptions.
 - Targets are realistic for the hosted worker budget.
 - Challenge-level `starts_at` is present, `starts_at` and optional `closes_at`
@@ -56,6 +59,8 @@ Confirm:
 - Repo URL, PR number, PR URL, commit SHA, and challenge path match the reviewed PR.
 - Required private assets have been uploaded.
 - Private asset kinds match the manifest.
+- Any `private_assets[].required_paths` are produced by the uploaded active
+  overlays after the runtime bundle is assembled.
 
 Private assets are ZIP overlays. They should add private paths such as `private-benchmark/runs.json` for static official runs or `private-benchmark/config.json` for prepare-generated official runs, and must not overwrite public files.
 

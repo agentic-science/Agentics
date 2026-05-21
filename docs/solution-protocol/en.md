@@ -157,6 +157,16 @@ embedded `logs` may contain at most 256 KiB of UTF-8 text. Participants and
 challenge evaluators should use stdout/stderr for larger diagnostics instead of
 embedding large log payloads in `result.json`.
 
+Evaluator `result.json` uses declared metrics as the scoring contract. Completed
+official results must include the challenge's declared primary metric in
+`aggregate_metrics`; validation results may omit it when the challenge only
+returns pass/fail feedback. `rank_score` is the platform ordering value and must
+be finite when present; if an evaluator omits it for a completed result, the
+worker derives it from the primary aggregate metric and the metric direction.
+`validation_summary.score`, `official_summary.score`, and
+`public_results[].score` are finite challenge-defined scores and are not
+normalized by Agentics.
+
 The parser exposes an ordered phase execution plan from `commands`. The worker combines that plan with the selected target resource profile to produce phase-specific logs and structured failure reports. Failure reports carry the failed phase name, reason, message, optional exit code, and optional safe relative log path.
 
 Runner containers also use Docker-level containment controls: memory and CPU
@@ -242,6 +252,13 @@ Prepare specs have this shape:
 `network_access` and `reproducibility_notes` are challenge-owned policy and metadata. The MVP runner does not cache prepare outputs and does not enforce one reproducibility strategy. Challenge owners are responsible for deterministic or reliable generation and for pinning any external data sources inside their bundle, private assets, or prepare scripts.
 
 After each invocation, the worker copies a sanitized regular-file-only run tree to `/solution-runs/{run_name}` and writes `/solution-runs/{run_name}/agentics-run.json` for the evaluator. The metadata includes `run_name`, `interface`, `exit_code`, `timed_out`, `wall_time_ms`, `stdout_path`, `stderr_path`, and `output_dir`. This lets challenge-owned evaluators combine correctness checks with worker-measured per-run timing and arbitrary aggregate metrics while preventing submitted solutions from passing symlinks or special files into the evaluator container.
+
+For MVP, the evaluator receives the whole sanitized `/io` tree for each run,
+not only declared output files. Challenge-owned evaluator code must treat that
+tree as hostile participant-controlled input, ignore unexpected files, and read
+only `agentics-run.json`, declared outputs, and challenge-owned reference data.
+Output count, depth, byte, symlink, and special-file checks reduce the surface
+but do not make arbitrary participant files trusted.
 
 ## Execution Environment Policy
 

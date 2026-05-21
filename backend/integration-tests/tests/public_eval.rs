@@ -132,9 +132,12 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
     assert_eq!(solution_submission["status"], "completed");
     assert_eq!(solution_submission["note"], "sample-sum smoke solution");
     assert_eq!(solution_submission["visible_after_eval"], true);
+    assert_eq!(
+        solution_submission["official_primary_metric"],
+        serde_json::json!({ "metric_name": "score", "value": 1.0 })
+    );
     assert_eq!(solution_submission["evaluation"]["status"], "completed");
     assert_eq!(solution_submission["evaluation"]["eval_type"], "official");
-    assert_eq!(solution_submission["evaluation"]["primary_score"], 1.0);
     assert_eq!(solution_submission["evaluation"]["rank_score"], 1.0);
     assert_eq!(
         solution_submission["evaluation"]["aggregate_metrics"],
@@ -180,8 +183,8 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
     .fetch_one(&pool)
     .await
     .expect("failed to query evaluation job");
-    let evaluation_status: (String, String, f64, f64, serde_json::Value, serde_json::Value) = sqlx::query_as(
-        "SELECT status, eval_type, primary_score, rank_score, aggregate_metrics_json, run_metrics_json FROM evaluations WHERE solution_submission_id = $1::uuid",
+    let evaluation_status: (String, String, f64, serde_json::Value, serde_json::Value) = sqlx::query_as(
+        "SELECT status, eval_type, rank_score, aggregate_metrics_json, run_metrics_json FROM evaluations WHERE solution_submission_id = $1::uuid",
     )
     .bind(solution_submission_id)
     .fetch_one(&pool)
@@ -197,7 +200,6 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
         (
             "completed".to_string(),
             "official".to_string(),
-            1.0,
             1.0,
             serde_json::json!([
                 { "metric_name": "score", "value": 1.0 },

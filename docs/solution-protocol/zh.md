@@ -149,8 +149,16 @@ Challenge-owned run manifests 最多声明 `12` 个 runs。Runner logs 按每个
 1 MiB 的上限持久化，因此单次 evaluation 默认最大为 12 MiB。Evaluator `result.json`
 在解析前限制为 4 MiB。在 `result.json` 内，`public_results` 最多包含 `1024` 个
 entries，embedded `logs` 最多包含 256 KiB UTF-8 text。Participants 和 challenge
-challenge evaluators 如果需要更大的 diagnostics，应使用 stdout/stderr，而不是把大日志塞进
+evaluators 如果需要更大的 diagnostics，应使用 stdout/stderr，而不是把大日志塞进
 `result.json`。
+
+Evaluator `result.json` 使用 declared metrics 作为 scoring contract。Completed
+official results 必须在 `aggregate_metrics` 中包含 challenge 声明的 primary metric；
+如果 challenge 只返回 pass/fail feedback，validation results 可以省略该指标。
+`rank_score` 是平台排序值，出现时必须是有限数字；如果 evaluator 对 completed result
+省略它，worker 会根据 primary aggregate metric 和 metric direction 推导。
+`validation_summary.score`、`official_summary.score` 和 `public_results[].score`
+都是 challenge-defined finite scores，Agentics 不会把它们规范化到固定范围。
 
 Parser 会从 `commands` 暴露 ordered phase execution plan。Worker 会把该 plan 与所选 target resource profile 组合，产生 phase-specific logs 和结构化 failure reports。Failure report 包含 failed phase name、reason、message、可选 exit code，以及可选 safe relative log path。
 
@@ -225,6 +233,13 @@ Prepare specs 的形状如下：
 `network_access` 和 `reproducibility_notes` 是 challenge-owned policy 和 metadata。MVP runner 不缓存 prepare outputs，也不强制一种统一 reproducibility strategy。Challenge owners 需要对 deterministic 或 reliable generation 负责，并在 bundle、private assets 或 prepare scripts 中自行 pin 他们关心的 external data sources。
 
 每次 invocation 结束后，worker 会把只包含 regular files 的 sanitized run tree 复制到 `/solution-runs/{run_name}`，并为 evaluator 写入 `/solution-runs/{run_name}/agentics-run.json`。该 metadata 包含 `run_name`、`interface`、`exit_code`、`timed_out`、`wall_time_ms`、`stdout_path`、`stderr_path` 和 `output_dir`。这让 challenge-owned evaluator 可以把 correctness checks 与 worker-measured per-run timing 和任意 aggregate metrics 结合起来，同时阻止 submitted solutions 通过 symlink 或 special files 影响 evaluator container。
+
+MVP 中 evaluator 会收到每个 run 的完整 sanitized `/io` tree，而不只是 declared
+output files。Challenge-owned evaluator code 必须把该 tree 视为
+participant-controlled hostile input，忽略 unexpected files，并且只读取
+`agentics-run.json`、declared outputs 和 challenge-owned reference data。Output
+数量、深度、字节数、symlink 和 special-file checks 会降低风险面，但不会让任意
+participant files 变成可信输入。
 
 ## Execution Environment Policy
 

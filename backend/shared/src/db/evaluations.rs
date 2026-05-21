@@ -10,7 +10,7 @@ use crate::models::names::TargetName;
 use crate::storage::StorageKey;
 
 use super::leaderboard::{
-    update_official_score_for_solution_submission_tx,
+    update_official_metrics_for_solution_submission_tx,
     upsert_leaderboard_entry_for_solution_submission_tx,
 };
 
@@ -71,7 +71,6 @@ pub struct PersistedEvaluationResult {
     pub target: TargetName,
     pub eval_type: ScoringMode,
     pub status: EvaluationStatus,
-    pub primary_score: Option<f64>,
     pub rank_score: Option<f64>,
     pub aggregate_metrics: Vec<MetricValue>,
     pub run_metrics: Vec<RunMetricResult>,
@@ -131,17 +130,16 @@ pub async fn mark_evaluation_finished(
     let evaluation_update = sqlx::query(
         r#"
         UPDATE evaluations
-        SET status = $2, primary_score = $3, rank_score = $4,
-            aggregate_metrics_json = $5, run_metrics_json = $6,
-            public_results_json = $7, validation_summary_json = $8,
-            official_summary_json = $9, log_key = $10, finished_at = NOW()
+        SET status = $2, rank_score = $3,
+            aggregate_metrics_json = $4, run_metrics_json = $5,
+            public_results_json = $6, validation_summary_json = $7,
+            official_summary_json = $8, log_key = $9, finished_at = NOW()
         WHERE job_id = $1::uuid
           AND status = 'running'
         "#,
     )
     .bind(result.job_id.as_str())
     .bind(status_str)
-    .bind(result.primary_score)
     .bind(result.rank_score)
     .bind(&aggregate_metrics_json)
     .bind(&run_metrics_json)
@@ -208,11 +206,10 @@ pub async fn mark_evaluation_finished(
                 )
                 .await?;
                 if became_best {
-                    update_official_score_for_solution_submission_tx(
+                    update_official_metrics_for_solution_submission_tx(
                         &mut tx,
                         &result.solution_submission_id,
                         &result.target,
-                        result.primary_score,
                         &result.aggregate_metrics,
                     )
                     .await?;

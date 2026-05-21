@@ -162,11 +162,13 @@ fn format_targets(challenge: &ChallengeDetailResponse) -> String {
         .iter()
         .map(|target| {
             format!(
-                "- `{}`: {} {}, image `{}`",
+                "- `{}`: {} {}, profile `{}`, solution image `{}`, evaluator image `{}`",
                 target.name,
                 target.docker_platform.as_str(),
                 target.accelerator.as_str(),
-                target.resource_profile.solution_image
+                target.resource_profile.name,
+                target.resource_profile.solution_image,
+                target.resource_profile.evaluator_image
             )
         })
         .collect::<Vec<_>>()

@@ -516,6 +516,20 @@ pub enum PublicChallengeExecutionSpec {
     SeparatedEvaluator(PublicSeparatedEvaluatorExecutionSpec),
 }
 
+impl PublicChallengeExecutionSpec {
+    /// Borrow the public separated-evaluator execution contract.
+    pub fn separated_evaluator(&self) -> &PublicSeparatedEvaluatorExecutionSpec {
+        match self {
+            Self::SeparatedEvaluator(spec) => spec,
+        }
+    }
+
+    /// Borrow the evaluator command contract for the public execution topology.
+    pub fn evaluator(&self) -> &EvaluatorSpec {
+        &self.separated_evaluator().evaluator
+    }
+}
+
 impl From<ChallengeExecutionSpec> for PublicChallengeExecutionSpec {
     fn from(execution: ChallengeExecutionSpec) -> Self {
         match execution {
@@ -703,7 +717,7 @@ impl Default for MetricSchemaSpec {
                 unit: None,
                 direction: MetricDirection::Maximize,
                 visibility: MetricVisibility::Public,
-                metric_description: Some("Normalized compatibility score in [0, 1].".to_string()),
+                metric_description: Some("Challenge-defined compatibility score.".to_string()),
             }],
             ranking: RankingSpec {
                 primary_metric_name: MetricName::score(),

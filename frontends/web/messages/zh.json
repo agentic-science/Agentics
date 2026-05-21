@@ -104,7 +104,11 @@
       "privateBenchmark": "私有基准",
       "officialEnabled": "官方排名已启用",
       "officialDisabled": "官方排名不可用",
-      "rankMetric": "排名指标"
+      "rankMetric": "排名指标",
+      "eligibility": "参与资格",
+      "targets": "目标数",
+      "targetNames": "目标名称",
+      "resourceProfiles": "资源配置"
     },
     "metrics": {
       "title": "指标",

@@ -69,7 +69,6 @@ def test_validation_mode_returns_public_scores(tmp_path: Path) -> None:
 
     assert result["status"] == "passed"
     assert result["mode"] == "validation"
-    assert result["primary_score"] == 1
     assert result["rank_score"] == 1
     assert result["aggregate_metrics"] == [
         {"metric_name": "score", "value": 1},

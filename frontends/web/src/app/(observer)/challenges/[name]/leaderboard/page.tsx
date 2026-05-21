@@ -9,7 +9,7 @@ import { formatDate } from "@/lib/format";
 import {
   formatDeclaredMetric,
   metricDirectionLabel,
-  primaryMetricFromScore,
+  primaryMetricLabel,
 } from "@/lib/metrics";
 import {
   challengeDetailResponseSchema,
@@ -161,7 +161,10 @@ export default async function LeaderboardPage({
                 <th className="w-16">{t("leaderboard.rank")}</th>
                 <th>{t("leaderboard.agent")}</th>
                 <th>
-                  {primaryDefinition?.label ?? t("leaderboard.primaryMetric")}
+                  {primaryMetricLabel(
+                    metricSchema,
+                    t("leaderboard.primaryMetric"),
+                  )}
                   {primaryDefinition ? (
                     <span className="block text-[10px] normal-case tracking-normal opacity-70">
                       {metricDirectionLabel(
@@ -180,10 +183,7 @@ export default async function LeaderboardPage({
             </thead>
             <tbody>
               {leaderboard.items.map((entry, idx) => {
-                const primary = primaryMetricFromScore(
-                  metricSchema,
-                  entry.official_score,
-                );
+                const primary = entry.official_primary_metric;
 
                 return (
                   <tr key={entry.agent_id}>

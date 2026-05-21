@@ -77,7 +77,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
 
     run_worker_once(&pool, &config).await;
     assert_runner_persisted_only_intended_artifacts(storage.path(), &first_job_id);
-    set_official_primary_score_for_submission(&pool, pending_id, 42.0, 1.0, 1).await;
+    set_official_primary_metric_for_submission(&pool, pending_id, 42.0, 1.0, 1).await;
 
     let second_response: serde_json::Value = client
         .post(api_url(&app, "/api/agent/solution-submissions"))
@@ -163,8 +163,9 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         1.0
     );
     assert_eq!(
-        public_result_report["solution_submission"]["evaluation"]["primary_score"], 42.0,
-        "official_score surfaces should preserve raw official primary score separately from rank_score"
+        public_result_report["solution_submission"]["official_primary_metric"],
+        serde_json::json!({ "metric_name": "score", "value": 42.0 }),
+        "official primary metric should preserve the primary metric value separately from rank_score"
     );
     assert_eq!(
         public_result_report["solution_submission"]["note"],
@@ -205,11 +206,14 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         listed_first.get("validation_score").is_none(),
         "public lists must not expose validation scores"
     );
-    assert_eq!(listed_first["official_score"], 42.0);
+    assert_eq!(
+        listed_first["official_primary_metric"],
+        serde_json::json!({ "metric_name": "score", "value": 42.0 })
+    );
     assert_eq!(listed_first["note"], "sample-sum smoke solution");
     assert_eq!(listed_first["rank_score"], 1.0);
-    assert_eq!(listed_first["aggregate_metrics"], serde_json::json!([]));
-    assert_eq!(listed_first["official_metrics"], serde_json::json!([]));
+    assert!(listed_first.get("aggregate_metrics").is_none());
+    assert!(listed_first.get("official_metrics").is_none());
 
     let public_stats: serde_json::Value = client
         .get(api_url(&app, "/api/public/stats"))
@@ -223,10 +227,20 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     assert_eq!(public_stats["agent_count"], 2);
     assert_eq!(public_stats["solution_submission_count"], 2);
 
-    let limited_solution_submissions: serde_json::Value = client
+    let missing_target_response = client
         .get(api_url(
             &app,
             "/api/public/challenges/sample-sum/solution-submissions?limit=1",
+        ))
+        .send()
+        .await
+        .expect("failed to list public solution submissions without target");
+    assert_eq!(missing_target_response.status(), 400);
+
+    let limited_solution_submissions: serde_json::Value = client
+        .get(api_url(
+            &app,
+            "/api/public/challenges/sample-sum/solution-submissions?target=linux-arm64-cpu&limit=1",
         ))
         .send()
         .await
@@ -246,7 +260,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     let oversized_list_response = client
         .get(api_url(
             &app,
-            "/api/public/challenges/sample-sum/solution-submissions?limit=101",
+            "/api/public/challenges/sample-sum/solution-submissions?target=linux-arm64-cpu&limit=101",
         ))
         .send()
         .await
@@ -304,7 +318,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     assert_eq!(leaderboard_items[1]["agent_display_name"], "leader-b");
     assert_eq!(leaderboard_items[1]["best_rank_score"], 0.0);
 
-    set_official_primary_score_for_submission(&pool, second_id, 7.0, 1.0, 3).await;
+    set_official_primary_metric_for_submission(&pool, second_id, 7.0, 1.0, 3).await;
     let tie_break_leaderboard: serde_json::Value = client
         .get(api_url(
             &app,
@@ -417,21 +431,20 @@ fn runner_temp_workspace_exists(job_id: &str) -> bool {
     })
 }
 
-/// Adjusts official score fields so public surfaces must distinguish raw and rank scores.
-async fn set_official_primary_score_for_submission(
+/// Adjusts official metric fields so public surfaces must distinguish primary metric and rank score.
+async fn set_official_primary_metric_for_submission(
     pool: &sqlx::PgPool,
     solution_submission_id: &str,
-    primary_score: f64,
+    primary_metric_value: f64,
     rank_score: f64,
     passed_cases: i64,
 ) {
     sqlx::query(
         r#"
         UPDATE evaluations
-        SET primary_score = $2,
-            rank_score = $3,
+        SET rank_score = $2,
             aggregate_metrics_json = jsonb_build_array(
-                jsonb_build_object('metric_name', 'score', 'value', $2),
+                jsonb_build_object('metric_name', 'score', 'value', $3),
                 jsonb_build_object('metric_name', 'passed_cases', 'value', $4),
                 jsonb_build_object('metric_name', 'private_metric', 'value', 999)
             )
@@ -440,8 +453,8 @@ async fn set_official_primary_score_for_submission(
         "#,
     )
     .bind(solution_submission_id)
-    .bind(primary_score)
     .bind(rank_score)
+    .bind(primary_metric_value)
     .bind(passed_cases)
     .execute(pool)
     .await
@@ -450,13 +463,13 @@ async fn set_official_primary_score_for_submission(
         r#"
         UPDATE leaderboard_entries
         SET best_rank_score = $2,
-            official_score = $3,
             aggregate_metrics_json = jsonb_build_array(
                 jsonb_build_object('metric_name', 'score', 'value', $3),
                 jsonb_build_object('metric_name', 'passed_cases', 'value', $4),
                 jsonb_build_object('metric_name', 'private_metric', 'value', 999)
             ),
             official_metrics_json = jsonb_build_array(
+                jsonb_build_object('metric_name', 'score', 'value', $3),
                 jsonb_build_object('metric_name', 'private_metric', 'value', 999)
             )
         WHERE best_solution_submission_id = $1::uuid
@@ -464,7 +477,7 @@ async fn set_official_primary_score_for_submission(
     )
     .bind(solution_submission_id)
     .bind(rank_score)
-    .bind(primary_score)
+    .bind(primary_metric_value)
     .bind(passed_cases)
     .execute(pool)
     .await
@@ -642,7 +655,6 @@ async fn insert_running_official_evaluation_for_submission(
             target,
             eval_type,
             status,
-            primary_score,
             rank_score,
             aggregate_metrics_json,
             official_summary_json,
@@ -655,7 +667,6 @@ async fn insert_running_official_evaluation_for_submission(
             'linux-arm64-cpu',
             'official',
             'running',
-            $4,
             $4,
             '[{"metric_name":"score","value":999.0}]'::jsonb,
             '{"score":999.0,"passed":999,"total":999}'::jsonb,
@@ -718,7 +729,6 @@ async fn insert_validation_evaluation_for_submission(
             target,
             eval_type,
             status,
-            primary_score,
             rank_score,
             aggregate_metrics_json,
             validation_summary_json,
@@ -731,7 +741,6 @@ async fn insert_validation_evaluation_for_submission(
             'linux-arm64-cpu',
             'validation',
             'completed',
-            $4,
             $4,
             '[{"metric_name":"score","value":0.25}]'::jsonb,
             '{"score":0.25,"passed":1,"total":4}'::jsonb,

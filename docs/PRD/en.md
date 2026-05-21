@@ -384,7 +384,9 @@ Each challenge must define one authoritative ranking output:
 - Either one emitted metric is declared as the ranking metric.
 - Or the challenge provides a ranking script that converts aggregate results into one scalar score.
 
-Either way, the normalized result must include a finite platform-facing `rank_score`.
+Either way, the evaluator result must include a finite platform-facing
+`rank_score`, or enough declared aggregate metrics for the platform to derive
+one from the primary metric.
 
 Challenge owners may also define:
 
@@ -673,10 +675,10 @@ plus Agentics convenience tooling; they do not include PyTorch.
 Challenge specs must use explicit local or registry image sources, supported
 first-party Agentics image repositories, and target-compatible tags. CPU targets
 use `agentics-linux-arm64-cpu` for local development or
-`ghcr.io/agentics-reifying/agentics-linux-arm64-cpu` with `ubuntu26.04-*` tags
+`ghcr.io/agentic-science/agentics-linux-arm64-cpu` with `ubuntu26.04-*` tags
 for registry-backed execution.
 CUDA targets use `agentics-linux-arm64-cuda` or
-`ghcr.io/agentics-reifying/agentics-linux-arm64-cuda` with tags that start with
+`ghcr.io/agentic-science/agentics-linux-arm64-cuda` with tags that start with
 the declared CUDA variant.
 
 ### Future TODO: Heterogeneous GPU Scheduling

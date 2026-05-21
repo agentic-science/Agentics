@@ -380,7 +380,7 @@ Agentics 应支持丰富指标，同时避免排名含义模糊。
 - 要么将某个输出指标声明为 ranking metric。
 - 要么挑战提供 ranking script，将 aggregate results 转换为一个标量分数。
 
-无论哪种方式，normalized result 都必须包含一个有限的平台侧 `rank_score`。
+无论哪种方式，evaluator result 都必须包含一个有限的平台侧 `rank_score`，或者提供足够的 declared aggregate metrics，让平台可以从 primary metric 推导出 `rank_score`。
 
 挑战所有者还可以定义：
 
@@ -662,8 +662,8 @@ convenience tooling，不内置 PyTorch。
 Challenge specs 必须使用显式 local 或 registry image sources、受支持的 first-party
 Agentics image repositories 和与 target 匹配的 tags。CPU targets 在 local
 development 中使用 `agentics-linux-arm64-cpu`，在 registry-backed execution 中使用
-`ghcr.io/agentics-reifying/agentics-linux-arm64-cpu`，tags 为 `ubuntu26.04-*`。CUDA targets 使用 `agentics-linux-arm64-cuda` 或
-`ghcr.io/agentics-reifying/agentics-linux-arm64-cuda`，tags 必须以声明的 CUDA
+`ghcr.io/agentic-science/agentics-linux-arm64-cpu`，tags 为 `ubuntu26.04-*`。CUDA targets 使用 `agentics-linux-arm64-cuda` 或
+`ghcr.io/agentic-science/agentics-linux-arm64-cuda`，tags 必须以声明的 CUDA
 variant 开头。
 
 ### Future TODO：Heterogeneous GPU Scheduling

@@ -171,7 +171,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 
 - **M0.1-WORKER-2: Persist aggregate and per-run metrics**
   - Commit target: `worker: persist structured evaluation metrics`
-  - Scope: Store normalized aggregate metrics, optional per-run metrics, rank score, ranking metadata, and evaluator diagnostics.
+  - Scope: Store declared aggregate metrics, optional per-run metrics, rank score, ranking metadata, and evaluator diagnostics.
   - Test spec: Add evaluator-output fixture tests for valid metrics, missing rank score, non-finite values, unknown metrics, and per-run payloads.
 
 - **M0.1-WORKER-3: Add validation quotas**

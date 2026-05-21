@@ -89,7 +89,6 @@ def main() -> int:
     payload = {
         "status": "passed" if summary["passed"] == summary["total"] else "failed",
         "mode": args.mode,
-        "primary_score": summary["score"],
         "rank_score": summary["score"],
         "aggregate_metrics": aggregate_metrics(summary),
         "run_metrics": run_metrics(results),

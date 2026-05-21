@@ -376,7 +376,8 @@ pub fn manifest_json() -> serde_json::Value {
             {
                 "asset_name": "official-cases",
                 "kind": "private_benchmark_data",
-                "required": true
+                "required": true,
+                "required_paths": ["private-benchmark/runs.json"]
             }
         ]
     })
@@ -462,7 +463,6 @@ def main() -> int:
     payload = {
         "status": "passed" if passed_count == total else "failed",
         "mode": args.mode,
-        "primary_score": score,
         "rank_score": score,
         "aggregate_metrics": [{"metric_name": "score", "value": score}],
         "run_metrics": [{"run_name": result["case_name"], "metrics": [{"metric_name": "score", "value": result["score"]}]} for result in results],

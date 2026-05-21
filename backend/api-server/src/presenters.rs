@@ -166,6 +166,20 @@ pub fn present_solution_submission(
     } else {
         None
     };
+    let official_primary_metric =
+        solution_submission
+            .official_evaluation
+            .as_ref()
+            .and_then(|evaluation| {
+                shared::models::evaluation::MetricValue::find_by_name(
+                    &evaluation.aggregate_metrics,
+                    &solution_submission
+                        .challenge_spec
+                        .metric_schema
+                        .ranking
+                        .primary_metric_name,
+                )
+            });
     let official_evaluation =
         present_evaluation(solution_submission.official_evaluation.as_ref(), audience);
     let evaluation_job = if audience.includes_evaluation_job() {
@@ -201,6 +215,7 @@ pub fn present_solution_submission(
         explanation: solution_submission.explanation.clone(),
         parent_solution_submission_id: solution_submission.parent_solution_submission_id.clone(),
         credit_text: solution_submission.credit_text.clone(),
+        official_primary_metric,
         visible_after_eval: solution_submission.visible_after_eval,
         artifact_key: if audience.includes_artifact_key() {
             Some(solution_submission.artifact_key.clone())
@@ -254,7 +269,6 @@ fn redact_private_benchmark_details(evaluation: &EvaluationDto) -> EvaluationDto
         target: evaluation.target.clone(),
         status: evaluation.status,
         eval_type: evaluation.eval_type,
-        primary_score: evaluation.primary_score,
         rank_score: evaluation.rank_score,
         aggregate_metrics: Vec::new(),
         run_metrics: Vec::new(),

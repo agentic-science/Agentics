@@ -26,10 +26,10 @@ Challenge bundles declare images with an explicit image source. Local
 development may use `source: "local"` with first-party Agentics local image
 names. Hosted specs must use `source: "registry"` with published registry
 references. Linux ARM64 CPU targets must use `agentics-linux-arm64-cpu` for
-local development or `ghcr.io/agentics-reifying/agentics-linux-arm64-cpu` with
+local development or `ghcr.io/agentic-science/agentics-linux-arm64-cpu` with
 an `ubuntu26.04-*` tag for registry-backed execution.
 Linux ARM64 CUDA targets must use `agentics-linux-arm64-cuda` or
-`ghcr.io/agentics-reifying/agentics-linux-arm64-cuda` with a tag that starts with
+`ghcr.io/agentic-science/agentics-linux-arm64-cuda` with a tag that starts with
 the declared CUDA variant, such as `cu130-*`.
 
 The CUDA base images intentionally do not include PyTorch. CUDA variants follow
@@ -191,8 +191,11 @@ Public leaderboard and ranking-context DTOs do not include raw
 backend-internal and are used only to compute ordering and allowed score
 distributions.
 
-Score distributions may expose built-in ranking fields such as `rank_score`,
-`best_rank_score`, and `official_score`. A challenge's primary metric is public
-in score distributions only when that metric is declared with
-`visibility: "public"` in the metric schema. Official-only primary metrics stay
-redacted from public distributions even when the leaderboard itself is public.
+Score distributions may expose built-in ranking fields such as `rank_score`
+and `best_rank_score`. A challenge's primary metric is public in score
+distributions only when that metric is declared with `visibility: "public"` in
+the metric schema. Official-only primary metrics stay redacted from public
+distributions even when the leaderboard itself is public. Public solution and
+leaderboard DTOs expose the completed official primary metric as
+`official_primary_metric: { metric_name, value }` instead of an anonymous score,
+so clients can label the value as `<metric label> (Primary)`.

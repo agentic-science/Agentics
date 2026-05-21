@@ -138,7 +138,8 @@ Package behavior to remember:
 ## 5. Validate Privately
 
 Use local validation for fast public-data checks when you have a checked-out
-challenge bundle and the benchmark image is available locally or pullable:
+challenge bundle and both the solution image and evaluator image are available
+locally or pullable:
 
 ```bash
 cargo run -p agentics-cli --bin agentics -- validate sample-sum \
