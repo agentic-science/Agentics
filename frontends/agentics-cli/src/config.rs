@@ -8,8 +8,10 @@ use anyhow::{Context, Result, anyhow, bail};
 use reqwest::Url;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
-
-const DEFAULT_API_PORT: u16 = 3100;
+use shared::config::{
+    DEFAULT_API_HOST, DEFAULT_API_PORT, ENV_AGENTICS_ADMIN_PASSWORD, ENV_AGENTICS_API_BASE_URL,
+    ENV_AGENTICS_API_PORT, default_local_api_base_url,
+};
 
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 /// Carries cli config data across this module boundary.
@@ -43,10 +45,10 @@ impl Environment {
     /// Handles from process for this module.
     pub(crate) fn from_process() -> Self {
         Self {
-            api_base_url: read_non_empty_env("AGENTICS_API_BASE_URL"),
+            api_base_url: read_non_empty_env(ENV_AGENTICS_API_BASE_URL),
             token: read_non_empty_env("AGENTICS_TOKEN").map(SecretString::from),
             pioneer_code: read_non_empty_env("AGENTICS_PIONEER_CODE").map(SecretString::from),
-            admin_password: read_non_empty_env("AGENTICS_ADMIN_PASSWORD").map(SecretString::from),
+            admin_password: read_non_empty_env(ENV_AGENTICS_ADMIN_PASSWORD).map(SecretString::from),
         }
     }
 }
@@ -172,11 +174,11 @@ impl fmt::Display for ApiBaseUrl {
 
 /// Handles default api base url for this module.
 fn default_api_base_url() -> String {
-    let api_port = std::env::var("AGENTICS_API_PORT")
+    let api_port = std::env::var(ENV_AGENTICS_API_PORT)
         .ok()
         .and_then(|value| value.parse::<u16>().ok())
         .unwrap_or(DEFAULT_API_PORT);
-    format!("http://127.0.0.1:{api_port}")
+    default_local_api_base_url(DEFAULT_API_HOST, api_port)
 }
 
 #[derive(Debug, Clone)]

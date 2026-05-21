@@ -6,17 +6,36 @@ use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
+use crate::models::challenge::TargetAccelerator;
 use crate::models::urls::{
     GithubApiUserUrl, GithubOauthAuthorizeUrl, GithubOauthRedirectUrl, GithubOauthTokenUrl,
 };
 
+/// Environment variable that configures the API listen port.
+pub const ENV_AGENTICS_API_PORT: &str = "AGENTICS_API_PORT";
+/// Environment variable that configures the API base URL for clients and tools.
+pub const ENV_AGENTICS_API_BASE_URL: &str = "AGENTICS_API_BASE_URL";
+/// Environment variable that configures the web frontend base URL for checks.
+pub const ENV_AGENTICS_WEB_BASE_URL: &str = "AGENTICS_WEB_BASE_URL";
+/// Environment variable that configures the administrator username.
+pub const ENV_AGENTICS_ADMIN_USERNAME: &str = "AGENTICS_ADMIN_USERNAME";
+/// Environment variable that configures the administrator password.
+pub const ENV_AGENTICS_ADMIN_PASSWORD: &str = "AGENTICS_ADMIN_PASSWORD";
+
 const CONFIG_ENV_PREFIX: &str = "AGENTICS_";
-const DEFAULT_ADMIN_USERNAME: &str = "admin";
-const DEFAULT_ADMIN_PASSWORD: &str = "agentics-admin";
+/// Default API listen host for local development.
+pub const DEFAULT_API_HOST: &str = "127.0.0.1";
+/// Default API listen port for local development.
+pub const DEFAULT_API_PORT: u16 = 3100;
+/// Default web listen port for local development.
+pub const DEFAULT_WEB_PORT: u16 = 3001;
+/// Default administrator username for local development.
+pub const DEFAULT_ADMIN_USERNAME: &str = "admin";
+/// Insecure default administrator password for local-only development.
+pub const INSECURE_DEFAULT_ADMIN_PASSWORD: &str = "agentics-admin";
 const DEFAULT_POSTGRES_PORT: u16 = 5432;
-const DEFAULT_API_PORT: u16 = 3100;
-const DEFAULT_WEB_PORT: u16 = 3001;
 const DEFAULT_AGENT_REGISTRATION_MODE: &str = "pioneer_code";
+const DEFAULT_WORKER_ACCELERATORS: WorkerAccelerators = WorkerAccelerators::None;
 const DEFAULT_RUNNER_SECURITY_PROFILE: RunnerSecurityProfile = RunnerSecurityProfile::Development;
 const DEFAULT_RUNNER_WRITABLE_STORAGE_MODE: &str = "unbounded";
 const DEFAULT_RUNNER_WRITABLE_SLOT_CLASSES_MB: &str = "64,256,1024,4096";
@@ -55,6 +74,10 @@ pub struct Config {
     pub worker_poll_interval_ms: u64,
     #[serde(default = "default_worker_stale_job_minutes")]
     pub worker_stale_job_minutes: i32,
+    #[serde(default = "default_worker_accelerators")]
+    pub worker_accelerators: WorkerAccelerators,
+    #[serde(default)]
+    pub worker_gpu_probe_image: Option<String>,
     #[serde(default = "default_validation_runs_per_agent_challenge_day")]
     pub validation_runs_per_agent_challenge_day: u32,
     #[serde(default = "default_official_runs_per_agent_challenge_day")]
@@ -182,6 +205,16 @@ pub enum RunnerSecurityProfile {
     Production,
 }
 
+/// Worker accelerator capability advertised to the scheduler.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkerAccelerators {
+    /// Worker accepts only jobs that require no accelerator.
+    None,
+    /// Worker accepts no-accelerator jobs and GPU jobs.
+    Gpu,
+}
+
 impl HostProbeMode {
     /// Stable environment string for this policy.
     pub fn as_str(self) -> &'static str {
@@ -199,6 +232,32 @@ impl RunnerSecurityProfile {
         match self {
             Self::Development => "development",
             Self::Production => "production",
+        }
+    }
+}
+
+impl WorkerAccelerators {
+    /// Stable environment string for this capability set.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Gpu => "gpu",
+        }
+    }
+
+    /// Return whether this worker can claim a job requiring the given accelerator.
+    pub fn supports(self, accelerator: TargetAccelerator) -> bool {
+        match (self, accelerator) {
+            (_, TargetAccelerator::None) | (Self::Gpu, TargetAccelerator::Gpu) => true,
+            (Self::None, TargetAccelerator::Gpu) => false,
+        }
+    }
+
+    /// Return heartbeat-friendly accelerator capability labels.
+    pub fn heartbeat_values(self) -> Vec<String> {
+        match self {
+            Self::None => vec!["none".to_string()],
+            Self::Gpu => vec!["none".to_string(), "gpu".to_string()],
         }
     }
 }
@@ -264,7 +323,7 @@ fn validate_cors_origin(origin: &str) -> anyhow::Result<()> {
 
 /// Handles default api host for this module.
 fn default_api_host() -> String {
-    "127.0.0.1".to_string()
+    DEFAULT_API_HOST.to_string()
 }
 
 /// Handles default api port for this module.
@@ -289,7 +348,7 @@ fn default_admin_username() -> String {
 
 /// Handles default admin password for this module.
 fn default_admin_password() -> SecretString {
-    SecretString::from(DEFAULT_ADMIN_PASSWORD)
+    SecretString::from(INSECURE_DEFAULT_ADMIN_PASSWORD)
 }
 
 /// Handles default cors allowed origins for this module.
@@ -314,6 +373,11 @@ fn default_worker_poll_interval_ms() -> u64 {
 /// Handles default worker stale job minutes for this module.
 fn default_worker_stale_job_minutes() -> i32 {
     1
+}
+
+/// Default worker accelerator capability.
+fn default_worker_accelerators() -> WorkerAccelerators {
+    DEFAULT_WORKER_ACCELERATORS
 }
 
 /// Handles default validation runs per agent challenge day for this module.
@@ -624,6 +688,7 @@ impl Config {
     /// Validate worker-only storage settings before claiming evaluation jobs.
     pub fn validate_runner_storage(&self) -> anyhow::Result<()> {
         self.validate_runner_output_limits()?;
+        self.validate_worker_accelerator_config()?;
         self.validate_hosted_image_policy()?;
 
         match self.runner_writable_storage_mode()? {
@@ -702,6 +767,41 @@ impl Config {
         }
 
         Ok(())
+    }
+
+    /// Validate worker accelerator capability knobs before accepting jobs.
+    fn validate_worker_accelerator_config(&self) -> anyhow::Result<()> {
+        match self.worker_accelerators {
+            WorkerAccelerators::None => {
+                if let Some(image) = self.worker_gpu_probe_image.as_deref()
+                    && image.trim().is_empty()
+                {
+                    anyhow::bail!("AGENTICS_WORKER_GPU_PROBE_IMAGE must not be empty");
+                }
+            }
+            WorkerAccelerators::Gpu => {
+                if !cfg!(target_os = "linux") {
+                    anyhow::bail!("AGENTICS_WORKER_ACCELERATORS=gpu is Linux-only");
+                }
+                self.worker_gpu_probe_image()?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Return the validated GPU probe image for GPU-capable workers.
+    pub fn worker_gpu_probe_image(&self) -> anyhow::Result<&str> {
+        let image = self
+            .worker_gpu_probe_image
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "AGENTICS_WORKER_GPU_PROBE_IMAGE must be set when AGENTICS_WORKER_ACCELERATORS=gpu"
+                )
+            })?;
+        Ok(image)
     }
 
     /// Return whether this configuration must enforce immutable hosted images.
@@ -849,7 +949,7 @@ impl Config {
     /// Handles uses default admin credentials for this module.
     fn uses_default_admin_credentials(&self) -> bool {
         self.admin_username == DEFAULT_ADMIN_USERNAME
-            && self.admin_password.expose_secret() == DEFAULT_ADMIN_PASSWORD
+            && self.admin_password.expose_secret() == INSECURE_DEFAULT_ADMIN_PASSWORD
     }
 
     /// Compare a candidate admin password against the configured secret.
@@ -900,6 +1000,16 @@ fn validate_required_trimmed(value: Option<&str>, field: &str) -> anyhow::Result
     Ok(())
 }
 
+/// Build the local API base URL from explicit host and port defaults.
+pub fn default_local_api_base_url(api_host: &str, api_port: u16) -> String {
+    format!("http://{api_host}:{api_port}")
+}
+
+/// Build the local web base URL from explicit host and port defaults.
+pub fn default_local_web_base_url(web_host: &str, web_port: u16) -> String {
+    format!("http://{web_host}:{web_port}")
+}
+
 /// Validates cookie name invariants for this contract.
 fn validate_cookie_name(value: &str, field: &str) -> anyhow::Result<()> {
     let value = value.trim();
@@ -940,6 +1050,19 @@ mod tests {
         assert!(!debug.contains("secret-admin-password"));
         assert!(!debug.contains("secret-oauth-client"));
         assert!(debug.contains("[REDACTED"));
+    }
+
+    /// Verifies local base URL helpers use explicit hosts and ports.
+    #[test]
+    fn local_base_url_helpers_use_explicit_inputs() {
+        assert_eq!(
+            super::default_local_api_base_url(super::DEFAULT_API_HOST, super::DEFAULT_API_PORT),
+            "http://127.0.0.1:3100"
+        );
+        assert_eq!(
+            super::default_local_web_base_url(super::DEFAULT_API_HOST, super::DEFAULT_WEB_PORT),
+            "http://127.0.0.1:3001"
+        );
     }
 
     /// Verifies that default admin credentials are rejected on wildcard bind.
@@ -1225,6 +1348,50 @@ mod tests {
         );
     }
 
+    /// Verifies worker accelerator config is fail-closed for GPU workers.
+    #[test]
+    fn gpu_worker_requires_probe_image_and_linux_host() {
+        let mut config = Config {
+            worker_accelerators: super::WorkerAccelerators::Gpu,
+            ..test_config()
+        };
+
+        let error = config
+            .validate_runner_storage()
+            .expect_err("GPU workers need an explicit probe image");
+        if cfg!(target_os = "linux") {
+            assert!(
+                error
+                    .to_string()
+                    .contains("AGENTICS_WORKER_GPU_PROBE_IMAGE")
+            );
+        } else {
+            assert!(error.to_string().contains("Linux-only"));
+        }
+
+        config.worker_gpu_probe_image = Some(
+            "ghcr.io/agentic-science/agentics-linux-arm64-cuda:cu130-ubuntu24.04-v0.2.5@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+        );
+        assert_eq!(
+            config.validate_runner_storage().is_ok(),
+            cfg!(target_os = "linux")
+        );
+    }
+
+    /// Verifies worker accelerator capability matching stays explicit.
+    #[test]
+    fn worker_accelerator_capabilities_are_explicit() {
+        assert!(super::WorkerAccelerators::None.supports(super::TargetAccelerator::None));
+        assert!(!super::WorkerAccelerators::None.supports(super::TargetAccelerator::Gpu));
+        assert!(super::WorkerAccelerators::Gpu.supports(super::TargetAccelerator::None));
+        assert!(super::WorkerAccelerators::Gpu.supports(super::TargetAccelerator::Gpu));
+        assert_eq!(
+            super::WorkerAccelerators::Gpu.heartbeat_values(),
+            vec!["none".to_string(), "gpu".to_string()]
+        );
+    }
+
     /// Handles test config for this module.
     fn test_config() -> Config {
         Config {
@@ -1239,6 +1406,8 @@ mod tests {
             cors_allowed_origins: super::default_cors_allowed_origins(),
             worker_poll_interval_ms: 3000,
             worker_stale_job_minutes: 1,
+            worker_accelerators: super::default_worker_accelerators(),
+            worker_gpu_probe_image: None,
             validation_runs_per_agent_challenge_day: 20,
             official_runs_per_agent_challenge_day: 5,
             max_active_official_jobs: 20,

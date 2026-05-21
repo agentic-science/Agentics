@@ -31,6 +31,8 @@ truth.
   checks, logs, common failures, and backups.
 - [Ports, paths, and target policy](ports-and-paths/en.md): centralized runtime
   ports, filesystem paths, and MVP target support.
+- [Scripting policy](scripting-policy/en.md): Rust-first policy for
+  platform-owned operational automation.
 - [API JSON contract](api-json-contract/en.md): response DTO JSON policy and
   frontend schema-generation workflow.
 - [Visual identity system](visual-identity-system/en.md): UI contribution
@@ -63,6 +65,7 @@ Most current documents have Chinese versions next to the English version:
 - [DGX Spark operations](dgx-spark/zh.md)
 - [Operations runbook](operations/zh.md)
 - [Ports、paths 和 target policy](ports-and-paths/zh.md)
+- [脚本策略](scripting-policy/zh.md)
 - [API JSON contract](api-json-contract/zh.md)
 - [Visual identity system](visual-identity-system/zh.md)
 - [PRD](PRD/zh.md)
