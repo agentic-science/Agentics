@@ -166,7 +166,8 @@ fn accelerator_json_name(accelerator: TargetAccelerator) -> &'static str {
 #[cfg(test)]
 mod tests {
     use crate::models::challenge::{
-        ChallengeTargetSpec, DockerPlatform, ResourceProfileSpec, TargetAccelerator,
+        ChallengeTargetSpec, DockerPlatform, EvaluatorStageProfiles, ResourceProfileSpec,
+        SolutionStageProfiles, StageResourceProfile, TargetAccelerator,
     };
     use crate::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
     use crate::models::names::{ChallengeName, ResourceProfileName, TargetName};
@@ -207,16 +208,32 @@ mod tests {
                 resource_description: None,
                 solution_image: image.clone(),
                 evaluator_image: image,
-                timeout_sec: 30,
-                memory_limit_mb: 512,
-                cpu_limit_millis: 1000,
-                disk_limit_mb: 1024,
-                setup_network_access: ZipProjectNetworkAccess::Disabled,
-                build_network_access: ZipProjectNetworkAccess::Disabled,
-                run_network_access: ZipProjectNetworkAccess::Disabled,
-                evaluator_network_access: ZipProjectNetworkAccess::Disabled,
+                solution: SolutionStageProfiles {
+                    setup: stage_profile(30, 512, 1000, 1024),
+                    build: stage_profile(30, 512, 1000, 1024),
+                    run: stage_profile(30, 512, 1000, 1024),
+                },
+                evaluator: EvaluatorStageProfiles {
+                    setup: stage_profile(30, 512, 1000, 1024),
+                    run: stage_profile(30, 512, 1000, 1024),
+                },
                 hardware_metadata: None,
             },
+        }
+    }
+
+    fn stage_profile(
+        timeout_sec: u64,
+        memory_limit_mb: u64,
+        cpu_limit_millis: u32,
+        disk_limit_mb: u64,
+    ) -> StageResourceProfile {
+        StageResourceProfile {
+            timeout_sec,
+            memory_limit_mb,
+            cpu_limit_millis,
+            disk_limit_mb,
+            network_access: ZipProjectNetworkAccess::Disabled,
         }
     }
 

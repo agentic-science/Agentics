@@ -222,9 +222,11 @@ mod tests {
         ChallengeBundleSpec, ChallengeEligibilitySpec, ChallengeEligibilityType,
         ChallengeExecutionSpec, ChallengeResultDetailVisibility,
         ChallengeSolutionPublicationPolicy, ChallengeTargetSpec, ChallengeVisibility,
-        ChallengeVisibilitySpec, DatasetsSpec, DockerPlatform, EvaluatorSpec, MetricDefinitionSpec,
-        MetricDirection, MetricSchemaSpec, MetricVisibility, PrivateBenchmarkPolicy, RankingSpec,
-        ResourceProfileSpec, SeparatedEvaluatorExecutionSpec, SolutionSpec, TargetAccelerator,
+        ChallengeVisibilitySpec, DatasetsSpec, DockerPlatform, EvaluatorSpec,
+        EvaluatorStageProfiles, MetricDefinitionSpec, MetricDirection, MetricSchemaSpec,
+        MetricVisibility, PrivateBenchmarkPolicy, RankingSpec, ResourceProfileSpec,
+        SeparatedEvaluatorExecutionSpec, SolutionSpec, SolutionStageProfiles, StageResourceProfile,
+        TargetAccelerator,
     };
     use shared::models::evaluation::{MetricValue, ScoreVisibility};
     use shared::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
@@ -276,6 +278,23 @@ mod tests {
         }
     }
 
+    /// Build one stage resource profile for focused score-distribution tests.
+    fn stage_profile(
+        timeout_sec: u64,
+        memory_limit_mb: u64,
+        cpu_limit_millis: u32,
+        disk_limit_mb: u64,
+        network_access: ZipProjectNetworkAccess,
+    ) -> StageResourceProfile {
+        StageResourceProfile {
+            timeout_sec,
+            memory_limit_mb,
+            cpu_limit_millis,
+            disk_limit_mb,
+            network_access,
+        }
+    }
+
     /// Build a minimal challenge contract whose primary metric is minimized.
     fn minimized_metric_spec() -> ChallengeBundleSpec {
         ChallengeBundleSpec {
@@ -298,14 +317,27 @@ mod tests {
                     resource_description: None,
                     solution_image: local_image("agentics-linux-arm64-cpu:ubuntu26.04-local"),
                     evaluator_image: local_image("agentics-linux-arm64-cpu:ubuntu26.04-local"),
-                    timeout_sec: 30,
-                    memory_limit_mb: 512,
-                    cpu_limit_millis: 1000,
-                    disk_limit_mb: 1024,
-                    setup_network_access: ZipProjectNetworkAccess::Enabled,
-                    build_network_access: ZipProjectNetworkAccess::Disabled,
-                    run_network_access: ZipProjectNetworkAccess::Disabled,
-                    evaluator_network_access: ZipProjectNetworkAccess::Disabled,
+                    solution: SolutionStageProfiles {
+                        setup: stage_profile(30, 512, 1000, 1024, ZipProjectNetworkAccess::Enabled),
+                        build: stage_profile(
+                            30,
+                            512,
+                            1000,
+                            1024,
+                            ZipProjectNetworkAccess::Disabled,
+                        ),
+                        run: stage_profile(30, 512, 1000, 1024, ZipProjectNetworkAccess::Disabled),
+                    },
+                    evaluator: EvaluatorStageProfiles {
+                        setup: stage_profile(
+                            30,
+                            512,
+                            1000,
+                            1024,
+                            ZipProjectNetworkAccess::Disabled,
+                        ),
+                        run: stage_profile(30, 512, 1000, 1024, ZipProjectNetworkAccess::Disabled),
+                    },
                     hardware_metadata: None,
                 },
             }],

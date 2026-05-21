@@ -3,8 +3,9 @@ use shared::models::challenge::{
     ChallengeEligibilityType, ChallengeExecutionSpec, ChallengeListItemDto, ChallengeListResponse,
     ChallengeResultDetailVisibility, ChallengeSolutionPublicationPolicy, ChallengeTargetSpec,
     ChallengeVisibility, ChallengeVisibilitySpec, DatasetsSpec, DockerPlatform, EvaluatorSpec,
-    MetricSchemaSpec, PrivateBenchmarkPolicy, ResourceProfileSpec, SeparatedEvaluatorExecutionSpec,
-    SolutionSpec, TargetAccelerator,
+    EvaluatorStageProfiles, MetricSchemaSpec, PrivateBenchmarkPolicy, ResourceProfileSpec,
+    SeparatedEvaluatorExecutionSpec, SolutionSpec, SolutionStageProfiles, StageResourceProfile,
+    TargetAccelerator,
 };
 use shared::models::evaluation::ScoreVisibility;
 use shared::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
@@ -64,7 +65,7 @@ fn renders_challenge_detail_table() {
     assert!(output.contains("solution_publication: public"));
     assert!(
         output.contains(
-                "  - linux-arm64-cpu: linux/arm64 none, profile=python-cpu-small, solution_image=agentics-linux-arm64-cpu:ubuntu26.04-local, evaluator_image=agentics-linux-arm64-cpu:ubuntu26.04-evaluator-local, timeout=30 sec, memory=512 MB, validation=disabled"
+                "  - linux-arm64-cpu: linux/arm64 none, profile=python-cpu-small, solution_image=agentics-linux-arm64-cpu:ubuntu26.04-local, evaluator_image=agentics-linux-arm64-cpu:ubuntu26.04-evaluator-local, solution_run=30 sec/512 MB, evaluator_run=30 sec/512 MB, validation=disabled"
             )
     );
     assert!(output.contains("execution_mode: separated_evaluator"));
@@ -115,14 +116,33 @@ fn challenge_detail() -> ChallengeDetailResponse {
                     evaluator_image: local_image(
                         "agentics-linux-arm64-cpu:ubuntu26.04-evaluator-local",
                     ),
-                    timeout_sec: 30,
-                    memory_limit_mb: 512,
-                    cpu_limit_millis: 1000,
-                    disk_limit_mb: 1024,
-                    setup_network_access: ZipProjectNetworkAccess::Enabled,
-                    build_network_access: ZipProjectNetworkAccess::Disabled,
-                    run_network_access: ZipProjectNetworkAccess::Disabled,
-                    evaluator_network_access: ZipProjectNetworkAccess::Disabled,
+                    solution: SolutionStageProfiles {
+                        setup: stage_profile(
+                            60,
+                            1024,
+                            1000,
+                            1024,
+                            ZipProjectNetworkAccess::Enabled,
+                        ),
+                        build: stage_profile(
+                            60,
+                            1024,
+                            1000,
+                            1024,
+                            ZipProjectNetworkAccess::Disabled,
+                        ),
+                        run: stage_profile(30, 512, 1000, 1024, ZipProjectNetworkAccess::Disabled),
+                    },
+                    evaluator: EvaluatorStageProfiles {
+                        setup: stage_profile(
+                            60,
+                            1024,
+                            1000,
+                            1024,
+                            ZipProjectNetworkAccess::Enabled,
+                        ),
+                        run: stage_profile(30, 512, 1000, 1024, ZipProjectNetworkAccess::Disabled),
+                    },
                     hardware_metadata: None,
                 },
             }],
@@ -175,6 +195,22 @@ fn challenge_keyword(value: &str) -> ChallengeKeyword {
 /// Handles resource profile name for this module.
 fn resource_profile_name(value: &str) -> ResourceProfileName {
     ResourceProfileName::try_new(value.to_string()).expect("test resource profile name is valid")
+}
+
+fn stage_profile(
+    timeout_sec: u64,
+    memory_limit_mb: u64,
+    cpu_limit_millis: u32,
+    disk_limit_mb: u64,
+    network_access: ZipProjectNetworkAccess,
+) -> StageResourceProfile {
+    StageResourceProfile {
+        timeout_sec,
+        memory_limit_mb,
+        cpu_limit_millis,
+        disk_limit_mb,
+        network_access,
+    }
 }
 
 /// Handles bundle path for this module.

@@ -4,10 +4,11 @@ use crate::models::challenge::{
     ChallengeBundleSpec, ChallengeEligibilitySpec, ChallengeEligibilityType,
     ChallengeExecutionSpec, ChallengePrepareSpec, ChallengeResultDetailVisibility,
     ChallengeSolutionPublicationPolicy, ChallengeTargetSpec, ChallengeVisibility,
-    ChallengeVisibilitySpec, DatasetsSpec, DockerPlatform, EvaluatorSpec, HardwareProfileSpec,
-    MetricDirection, MetricSchemaSpec, MetricVisibility, PipedStdioExecutionSpec,
-    PipedStdioPrepareSpec, PrivateBenchmarkPolicy, ResourceProfileSpec,
-    SeparatedEvaluatorExecutionSpec, SolutionSpec, TargetAccelerator,
+    ChallengeVisibilitySpec, DatasetsSpec, DockerPlatform, EvaluatorSpec, EvaluatorStageProfiles,
+    HardwareProfileSpec, MetricDirection, MetricSchemaSpec, MetricVisibility,
+    PipedStdioExecutionSpec, PipedStdioPrepareSpec, PrivateBenchmarkPolicy, ResourceProfileSpec,
+    SeparatedEvaluatorExecutionSpec, SolutionSpec, SolutionStageProfiles, StageResourceProfile,
+    TargetAccelerator,
 };
 use crate::models::evaluation::ScoreVisibility;
 use crate::models::hashes::OciSha256Digest;
@@ -61,14 +62,15 @@ fn base_spec() -> ChallengeBundleSpec {
                 resource_description: None,
                 solution_image: local_image("agentics-linux-arm64-cpu:ubuntu26.04-local"),
                 evaluator_image: local_image("agentics-linux-arm64-cpu:ubuntu26.04-local"),
-                timeout_sec: 30,
-                memory_limit_mb: 512,
-                cpu_limit_millis: 1000,
-                disk_limit_mb: 1024,
-                setup_network_access: ZipProjectNetworkAccess::Enabled,
-                build_network_access: ZipProjectNetworkAccess::Disabled,
-                run_network_access: ZipProjectNetworkAccess::Disabled,
-                evaluator_network_access: ZipProjectNetworkAccess::Disabled,
+                solution: SolutionStageProfiles {
+                    setup: stage_profile(30, 512, 1000, 1024, ZipProjectNetworkAccess::Enabled),
+                    build: stage_profile(30, 512, 1000, 1024, ZipProjectNetworkAccess::Disabled),
+                    run: stage_profile(30, 512, 1000, 1024, ZipProjectNetworkAccess::Disabled),
+                },
+                evaluator: EvaluatorStageProfiles {
+                    setup: stage_profile(30, 512, 1000, 1024, ZipProjectNetworkAccess::Disabled),
+                    run: stage_profile(30, 512, 1000, 1024, ZipProjectNetworkAccess::Disabled),
+                },
                 hardware_metadata: None,
             },
         }],
@@ -120,6 +122,23 @@ fn base_piped_stdio_spec() -> ChallengeBundleSpec {
         official_prepare: None,
     });
     spec
+}
+
+/// Build a stage resource profile for tests.
+fn stage_profile(
+    timeout_sec: u64,
+    memory_limit_mb: u64,
+    cpu_limit_millis: u32,
+    disk_limit_mb: u64,
+    network_access: ZipProjectNetworkAccess,
+) -> StageResourceProfile {
+    StageResourceProfile {
+        timeout_sec,
+        memory_limit_mb,
+        cpu_limit_millis,
+        disk_limit_mb,
+        network_access,
+    }
 }
 
 /// Borrow separated-evaluator execution in tests that start from `base_spec`.
@@ -369,6 +388,66 @@ fn legacy_scorer_resource_profile_fields_are_rejected() {
     }
 }
 
+/// Verifies old flat resource profile limits and network fields are rejected.
+#[test]
+fn legacy_flat_resource_profile_fields_are_rejected() {
+    for field in [
+        "timeout_sec",
+        "memory_limit_mb",
+        "cpu_limit_millis",
+        "disk_limit_mb",
+        "setup_network_access",
+        "build_network_access",
+        "run_network_access",
+        "evaluator_network_access",
+    ] {
+        let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
+        spec_json["targets"][0]["resource_profile"][field] = match field {
+            "setup_network_access"
+            | "build_network_access"
+            | "run_network_access"
+            | "evaluator_network_access" => serde_json::json!("disabled"),
+            _ => serde_json::json!(30),
+        };
+
+        let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+            .expect_err("legacy flat resource profile field should fail");
+
+        assert!(error.to_string().contains(field));
+    }
+}
+
+/// Verifies all required stage profiles must be declared explicitly.
+#[test]
+fn missing_stage_profile_is_rejected() {
+    let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
+    spec_json["targets"][0]["resource_profile"]["solution"]
+        .as_object_mut()
+        .expect("solution profile should be an object")
+        .remove("build");
+
+    let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+        .expect_err("missing stage profile should fail");
+
+    assert!(error.to_string().contains("build"));
+}
+
+/// Verifies stage resource limits must be positive.
+#[test]
+fn zero_stage_resource_limit_is_rejected() {
+    let mut spec = base_spec();
+    spec.targets[0].resource_profile.solution.run.disk_limit_mb = 0;
+
+    let error =
+        validate_challenge_bundle_spec(&spec).expect_err("zero stage resource limit should fail");
+
+    assert!(
+        error
+            .to_string()
+            .contains("targets[0].resource_profile.solution.run.disk_limit_mb")
+    );
+}
+
 /// Verifies that starts_at is now an explicit required challenge-level policy.
 #[test]
 fn starts_at_is_required() {
@@ -443,8 +522,7 @@ fn removed_prepare_metadata_fields_are_rejected() {
         let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
         spec_json["execution"]["official_prepare"] = serde_json::json!({
             "command": ["python", "evaluator/prepare.py"],
-            "result_runs_file": "generated/runs.json",
-            "network_access": "enabled"
+            "result_runs_file": "generated/runs.json"
         });
         spec_json["execution"]["official_prepare"][field] = if field == "external_data" {
             serde_json::json!([])
@@ -457,6 +535,22 @@ fn removed_prepare_metadata_fields_are_rejected() {
 
         assert!(error.to_string().contains(field));
     }
+}
+
+/// Verifies removed prepare network fields are rejected.
+#[test]
+fn removed_prepare_network_access_field_is_rejected() {
+    let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
+    spec_json["execution"]["official_prepare"] = serde_json::json!({
+        "command": ["python", "evaluator/prepare.py"],
+        "result_runs_file": "generated/runs.json",
+        "network_access": "enabled"
+    });
+
+    let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+        .expect_err("prepare network access should be stage-owned");
+
+    assert!(error.to_string().contains("network_access"));
 }
 
 /// Verifies that hosted challenge target names must use the MVP allowlist.
@@ -883,7 +977,6 @@ fn prepare_spec() -> ChallengePrepareSpec {
     ChallengePrepareSpec {
         command: vec!["python".to_string(), "evaluator/prepare.py".to_string()],
         result_runs_file: bundle_path("generated/runs.json"),
-        network_access: ZipProjectNetworkAccess::Disabled,
         reproducibility_notes: Some("Generated from deterministic private seeds.".to_string()),
     }
 }
@@ -893,7 +986,6 @@ fn piped_prepare_spec() -> PipedStdioPrepareSpec {
     PipedStdioPrepareSpec {
         command: vec!["python".to_string(), "interactor/prepare.py".to_string()],
         result_session_file: bundle_path("generated/session.json"),
-        network_access: ZipProjectNetworkAccess::Disabled,
         reproducibility_notes: Some("Generated from deterministic private seeds.".to_string()),
     }
 }

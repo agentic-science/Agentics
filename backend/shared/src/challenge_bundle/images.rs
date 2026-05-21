@@ -2,7 +2,8 @@
 
 use crate::error::{AppError, Result};
 use crate::models::challenge::{
-    ChallengeTargetSpec, HardwareProfileSpec, ResourceProfileSpec, TargetAccelerator,
+    ChallengeTargetSpec, HardwareProfileSpec, ResourceProfileSpec, StageResourceProfile,
+    TargetAccelerator,
 };
 use crate::models::images::ChallengeImageReference;
 
@@ -131,13 +132,14 @@ fn require_supported_image_repository(
 
 /// Validate image, timeout, memory, CPU, disk, and hardware fields for a target.
 fn validate_resource_profile(profile: &ResourceProfileSpec, field: &str) -> Result<()> {
-    validate_positive_u64(profile.timeout_sec, &format!("{field}.timeout_sec"))?;
-    validate_positive_u64(profile.memory_limit_mb, &format!("{field}.memory_limit_mb"))?;
-    validate_positive_u32(
-        profile.cpu_limit_millis,
-        &format!("{field}.cpu_limit_millis"),
+    validate_stage_resource_profile(&profile.solution.setup, &format!("{field}.solution.setup"))?;
+    validate_stage_resource_profile(&profile.solution.build, &format!("{field}.solution.build"))?;
+    validate_stage_resource_profile(&profile.solution.run, &format!("{field}.solution.run"))?;
+    validate_stage_resource_profile(
+        &profile.evaluator.setup,
+        &format!("{field}.evaluator.setup"),
     )?;
-    validate_positive_u64(profile.disk_limit_mb, &format!("{field}.disk_limit_mb"))?;
+    validate_stage_resource_profile(&profile.evaluator.run, &format!("{field}.evaluator.run"))?;
     if let Some(resource_description) = &profile.resource_description {
         require_non_empty(
             resource_description,
@@ -147,6 +149,16 @@ fn validate_resource_profile(profile: &ResourceProfileSpec, field: &str) -> Resu
     if let Some(hardware) = &profile.hardware_metadata {
         validate_hardware_profile(hardware, &format!("{field}.hardware_metadata"))?;
     }
+
+    Ok(())
+}
+
+/// Validate limits for one execution stage.
+fn validate_stage_resource_profile(stage: &StageResourceProfile, field: &str) -> Result<()> {
+    validate_positive_u64(stage.timeout_sec, &format!("{field}.timeout_sec"))?;
+    validate_positive_u64(stage.memory_limit_mb, &format!("{field}.memory_limit_mb"))?;
+    validate_positive_u32(stage.cpu_limit_millis, &format!("{field}.cpu_limit_millis"))?;
+    validate_positive_u64(stage.disk_limit_mb, &format!("{field}.disk_limit_mb"))?;
 
     Ok(())
 }

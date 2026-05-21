@@ -6,9 +6,10 @@ use super::challenge::{
     ChallengeEligibilityType, ChallengeExecutionSpec, ChallengePrepareSpec,
     ChallengeResultDetailVisibility, ChallengeSolutionPublicationPolicy, ChallengeTargetSpec,
     ChallengeVisibility, ChallengeVisibilitySpec, DatasetsSpec, DockerPlatform, EvaluatorSpec,
-    HardwareProfileSpec, MetricDefinitionSpec, MetricDirection, MetricSchemaSpec, MetricVisibility,
-    PrivateBenchmarkPolicy, RankingSpec, ResourceProfileSpec, SeparatedEvaluatorExecutionSpec,
-    SolutionSpec, TargetAccelerator,
+    EvaluatorStageProfiles, HardwareProfileSpec, MetricDefinitionSpec, MetricDirection,
+    MetricSchemaSpec, MetricVisibility, PrivateBenchmarkPolicy, RankingSpec, ResourceProfileSpec,
+    SeparatedEvaluatorExecutionSpec, SolutionSpec, SolutionStageProfiles, StageResourceProfile,
+    TargetAccelerator,
 };
 use super::evaluation::{
     EvaluationDto, EvaluationStatus, MetricValue, RunMetricResult, ScoreVisibility, ScoringMode,
@@ -191,14 +192,33 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
                         "ghcr.io/agentic-science/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0@{}",
                         image_digest("2")
                     )),
-                    timeout_sec: 60,
-                    memory_limit_mb: 2048,
-                    cpu_limit_millis: 2000,
-                    disk_limit_mb: 4096,
-                    setup_network_access: ZipProjectNetworkAccess::Enabled,
-                    build_network_access: ZipProjectNetworkAccess::Enabled,
-                    run_network_access: ZipProjectNetworkAccess::Disabled,
-                    evaluator_network_access: ZipProjectNetworkAccess::Disabled,
+                    solution: SolutionStageProfiles {
+                        setup: stage_profile(
+                            60,
+                            2048,
+                            2000,
+                            4096,
+                            ZipProjectNetworkAccess::Enabled,
+                        ),
+                        build: stage_profile(
+                            60,
+                            2048,
+                            2000,
+                            4096,
+                            ZipProjectNetworkAccess::Enabled,
+                        ),
+                        run: stage_profile(60, 2048, 2000, 4096, ZipProjectNetworkAccess::Disabled),
+                    },
+                    evaluator: EvaluatorStageProfiles {
+                        setup: stage_profile(
+                            60,
+                            2048,
+                            2000,
+                            4096,
+                            ZipProjectNetworkAccess::Enabled,
+                        ),
+                        run: stage_profile(60, 2048, 2000, 4096, ZipProjectNetworkAccess::Disabled),
+                    },
                     hardware_metadata: Some(HardwareProfileSpec {
                         kind: "cpu".to_string(),
                         gpu_model: None,
@@ -222,7 +242,6 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
                     official_prepare: Some(ChallengePrepareSpec {
                         command: vec!["python".to_string(), "evaluator/prepare.py".to_string()],
                         result_runs_file: bundle_path("generated/runs.json"),
-                        network_access: ZipProjectNetworkAccess::Enabled,
                         reproducibility_notes: Some(
                             "Generated from a fixed benchmark seed.".to_string(),
                         ),
@@ -293,6 +312,23 @@ fn metric_name(value: &str) -> MetricName {
 /// Handles resource profile name for this module.
 fn resource_profile_name(value: &str) -> ResourceProfileName {
     ResourceProfileName::try_new(value.to_string()).expect("test resource profile name is valid")
+}
+
+/// Handles stage profile for this module.
+fn stage_profile(
+    timeout_sec: u64,
+    memory_limit_mb: u64,
+    cpu_limit_millis: u32,
+    disk_limit_mb: u64,
+    network_access: ZipProjectNetworkAccess,
+) -> StageResourceProfile {
+    StageResourceProfile {
+        timeout_sec,
+        memory_limit_mb,
+        cpu_limit_millis,
+        disk_limit_mb,
+        network_access,
+    }
 }
 
 /// Handles bundle path for this module.

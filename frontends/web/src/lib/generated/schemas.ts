@@ -252,29 +252,99 @@ export const adminChallengeListResponseSchema = z
                         .describe(
                           "Image source declared for a challenge solution or evaluator container.",
                         ),
-                      timeout_sec: z.number().int().gte(0),
-                      memory_limit_mb: z.number().int().gte(0),
-                      cpu_limit_millis: z.number().int().gte(0),
-                      disk_limit_mb: z.number().int().gte(0),
-                      setup_network_access: z
-                        .enum(["disabled", "loopback", "enabled"])
+                      solution: z
+                        .object({
+                          setup: z
+                            .object({
+                              timeout_sec: z.number().int().gte(0),
+                              memory_limit_mb: z.number().int().gte(0),
+                              cpu_limit_millis: z.number().int().gte(0),
+                              disk_limit_mb: z.number().int().gte(0),
+                              network_access: z
+                                .enum(["disabled", "loopback", "enabled"])
+                                .describe(
+                                  "Network access policy requested for a phase.",
+                                ),
+                            })
+                            .strict()
+                            .describe(
+                              "Resource envelope for one Docker-executed stage.",
+                            ),
+                          build: z
+                            .object({
+                              timeout_sec: z.number().int().gte(0),
+                              memory_limit_mb: z.number().int().gte(0),
+                              cpu_limit_millis: z.number().int().gte(0),
+                              disk_limit_mb: z.number().int().gte(0),
+                              network_access: z
+                                .enum(["disabled", "loopback", "enabled"])
+                                .describe(
+                                  "Network access policy requested for a phase.",
+                                ),
+                            })
+                            .strict()
+                            .describe(
+                              "Resource envelope for one Docker-executed stage.",
+                            ),
+                          run: z
+                            .object({
+                              timeout_sec: z.number().int().gte(0),
+                              memory_limit_mb: z.number().int().gte(0),
+                              cpu_limit_millis: z.number().int().gte(0),
+                              disk_limit_mb: z.number().int().gte(0),
+                              network_access: z
+                                .enum(["disabled", "loopback", "enabled"])
+                                .describe(
+                                  "Network access policy requested for a phase.",
+                                ),
+                            })
+                            .strict()
+                            .describe(
+                              "Resource envelope for one Docker-executed stage.",
+                            ),
+                        })
+                        .strict()
                         .describe(
-                          "Network access policy requested for a phase.",
+                          "Resource limits for participant-owned solution stages.",
                         ),
-                      build_network_access: z
-                        .enum(["disabled", "loopback", "enabled"])
+                      evaluator: z
+                        .object({
+                          setup: z
+                            .object({
+                              timeout_sec: z.number().int().gte(0),
+                              memory_limit_mb: z.number().int().gte(0),
+                              cpu_limit_millis: z.number().int().gte(0),
+                              disk_limit_mb: z.number().int().gte(0),
+                              network_access: z
+                                .enum(["disabled", "loopback", "enabled"])
+                                .describe(
+                                  "Network access policy requested for a phase.",
+                                ),
+                            })
+                            .strict()
+                            .describe(
+                              "Resource envelope for one Docker-executed stage.",
+                            ),
+                          run: z
+                            .object({
+                              timeout_sec: z.number().int().gte(0),
+                              memory_limit_mb: z.number().int().gte(0),
+                              cpu_limit_millis: z.number().int().gte(0),
+                              disk_limit_mb: z.number().int().gte(0),
+                              network_access: z
+                                .enum(["disabled", "loopback", "enabled"])
+                                .describe(
+                                  "Network access policy requested for a phase.",
+                                ),
+                            })
+                            .strict()
+                            .describe(
+                              "Resource envelope for one Docker-executed stage.",
+                            ),
+                        })
+                        .strict()
                         .describe(
-                          "Network access policy requested for a phase.",
-                        ),
-                      run_network_access: z
-                        .enum(["disabled", "loopback", "enabled"])
-                        .describe(
-                          "Network access policy requested for a phase.",
-                        ),
-                      evaluator_network_access: z
-                        .enum(["disabled", "loopback", "enabled"])
-                        .describe(
-                          "Network access policy requested for a phase.",
+                          "Resource limits for trusted challenge-owned evaluator stages.",
                         ),
                       hardware_metadata: z
                         .object({
@@ -842,22 +912,100 @@ export const challengeDetailResponseSchema = z
                     .describe(
                       "Image source declared for a challenge solution or evaluator container.",
                     ),
-                  timeout_sec: z.number().int().gte(0),
-                  memory_limit_mb: z.number().int().gte(0),
-                  cpu_limit_millis: z.number().int().gte(0),
-                  disk_limit_mb: z.number().int().gte(0),
-                  setup_network_access: z
-                    .enum(["disabled", "loopback", "enabled"])
-                    .describe("Network access policy requested for a phase."),
-                  build_network_access: z
-                    .enum(["disabled", "loopback", "enabled"])
-                    .describe("Network access policy requested for a phase."),
-                  run_network_access: z
-                    .enum(["disabled", "loopback", "enabled"])
-                    .describe("Network access policy requested for a phase."),
-                  evaluator_network_access: z
-                    .enum(["disabled", "loopback", "enabled"])
-                    .describe("Network access policy requested for a phase."),
+                  solution: z
+                    .object({
+                      setup: z
+                        .object({
+                          timeout_sec: z.number().int().gte(0),
+                          memory_limit_mb: z.number().int().gte(0),
+                          cpu_limit_millis: z.number().int().gte(0),
+                          disk_limit_mb: z.number().int().gte(0),
+                          network_access: z
+                            .enum(["disabled", "loopback", "enabled"])
+                            .describe(
+                              "Network access policy requested for a phase.",
+                            ),
+                        })
+                        .strict()
+                        .describe(
+                          "Resource envelope for one Docker-executed stage.",
+                        ),
+                      build: z
+                        .object({
+                          timeout_sec: z.number().int().gte(0),
+                          memory_limit_mb: z.number().int().gte(0),
+                          cpu_limit_millis: z.number().int().gte(0),
+                          disk_limit_mb: z.number().int().gte(0),
+                          network_access: z
+                            .enum(["disabled", "loopback", "enabled"])
+                            .describe(
+                              "Network access policy requested for a phase.",
+                            ),
+                        })
+                        .strict()
+                        .describe(
+                          "Resource envelope for one Docker-executed stage.",
+                        ),
+                      run: z
+                        .object({
+                          timeout_sec: z.number().int().gte(0),
+                          memory_limit_mb: z.number().int().gte(0),
+                          cpu_limit_millis: z.number().int().gte(0),
+                          disk_limit_mb: z.number().int().gte(0),
+                          network_access: z
+                            .enum(["disabled", "loopback", "enabled"])
+                            .describe(
+                              "Network access policy requested for a phase.",
+                            ),
+                        })
+                        .strict()
+                        .describe(
+                          "Resource envelope for one Docker-executed stage.",
+                        ),
+                    })
+                    .strict()
+                    .describe(
+                      "Resource limits for participant-owned solution stages.",
+                    ),
+                  evaluator: z
+                    .object({
+                      setup: z
+                        .object({
+                          timeout_sec: z.number().int().gte(0),
+                          memory_limit_mb: z.number().int().gte(0),
+                          cpu_limit_millis: z.number().int().gte(0),
+                          disk_limit_mb: z.number().int().gte(0),
+                          network_access: z
+                            .enum(["disabled", "loopback", "enabled"])
+                            .describe(
+                              "Network access policy requested for a phase.",
+                            ),
+                        })
+                        .strict()
+                        .describe(
+                          "Resource envelope for one Docker-executed stage.",
+                        ),
+                      run: z
+                        .object({
+                          timeout_sec: z.number().int().gte(0),
+                          memory_limit_mb: z.number().int().gte(0),
+                          cpu_limit_millis: z.number().int().gte(0),
+                          disk_limit_mb: z.number().int().gte(0),
+                          network_access: z
+                            .enum(["disabled", "loopback", "enabled"])
+                            .describe(
+                              "Network access policy requested for a phase.",
+                            ),
+                        })
+                        .strict()
+                        .describe(
+                          "Resource envelope for one Docker-executed stage.",
+                        ),
+                    })
+                    .strict()
+                    .describe(
+                      "Resource limits for trusted challenge-owned evaluator stages.",
+                    ),
                   hardware_metadata: z
                     .object({
                       kind: z.string(),
@@ -948,11 +1096,6 @@ export const challengeDetailResponseSchema = z
                         .describe(
                           "Relative path, under the prepared workspace, to the generated run manifest.",
                         ),
-                      network_access: z
-                        .enum(["disabled", "loopback", "enabled"])
-                        .describe(
-                          "Network access policy requested for a phase.",
-                        ),
                       reproducibility_notes: z
                         .string()
                         .describe(
@@ -994,11 +1137,6 @@ export const challengeDetailResponseSchema = z
                         .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
                         .describe(
                           "Relative path, under the prepared workspace, to the generated session manifest.",
-                        ),
-                      network_access: z
-                        .enum(["disabled", "loopback", "enabled"])
-                        .describe(
-                          "Network access policy requested for a phase.",
                         ),
                       reproducibility_notes: z
                         .string()

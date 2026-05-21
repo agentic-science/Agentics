@@ -641,18 +641,23 @@ function TargetSummary({ challenge }: { challenge: AdminChallengeListItem }) {
 
   return (
     <div className="flex flex-col gap-1">
-      {targets.map((target) => (
-        <div key={target.name}>
-          <div className="font-mono text-[var(--text-caption)]">
-            {target.name}
+      {targets.map((target) => {
+        const solutionRun = target.resource_profile.solution.run;
+        const evaluatorRun = target.resource_profile.evaluator.run;
+        return (
+          <div key={target.name}>
+            <div className="font-mono text-[var(--text-caption)]">
+              {target.name}
+            </div>
+            <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
+              {target.docker_platform} · solution run{" "}
+              {solutionRun.cpu_limit_millis}m/{solutionRun.memory_limit_mb} MiB
+              · evaluator run {evaluatorRun.cpu_limit_millis}m/
+              {evaluatorRun.memory_limit_mb} MiB
+            </div>
           </div>
-          <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
-            {target.docker_platform} ·{" "}
-            {target.resource_profile.cpu_limit_millis}m ·{" "}
-            {target.resource_profile.memory_limit_mb} MiB
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

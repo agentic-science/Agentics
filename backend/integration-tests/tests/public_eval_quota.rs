@@ -175,7 +175,7 @@ async fn worker_enforces_run_writable_disk_limit(pool: sqlx::PgPool) {
     sqlx::query(
         r#"
         UPDATE challenges
-        SET spec_json = jsonb_set(spec_json, '{targets,0,resource_profile,disk_limit_mb}', '64'::jsonb)
+        SET spec_json = jsonb_set(spec_json, '{targets,0,resource_profile,solution,run,disk_limit_mb}', '64'::jsonb)
         WHERE name = 'sample-sum'
         "#,
     )

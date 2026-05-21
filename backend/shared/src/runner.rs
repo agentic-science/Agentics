@@ -16,7 +16,7 @@ use crate::error::{AppError, Result};
 use crate::models::challenge::{
     ChallengeBundleSpec, ChallengeExecutionSpec, ChallengePrepareSpec, ChallengeRunManifest,
     DockerPlatform, MetricSchemaSpec, PipedStdioPrepareSpec, PipedStdioSessionManifest,
-    ResourceProfileSpec, TargetAccelerator,
+    ResourceProfileSpec, StageResourceProfile, TargetAccelerator,
 };
 use crate::models::evaluation::{EvaluationJobPayload, EvaluatorRunResult, ScoringMode};
 use crate::models::paths::BundleRelativePath;
@@ -1395,7 +1395,7 @@ async fn run_prepare_phase(
     request: PrepareRequest<'_>,
     logs: &mut EvaluationLogs,
 ) -> Result<RetainedRunnerTree> {
-    let limits = prepare_limits(request.profile, request.prepare);
+    let limits = prepare_limits(request.profile);
     let prepared_mount = request
         .runner
         .storage
@@ -1471,7 +1471,7 @@ async fn run_piped_stdio_prepare_phase(
     request: PipedStdioPrepareRequest<'_>,
     logs: &mut EvaluationLogs,
 ) -> Result<RetainedRunnerTree> {
-    let limits = piped_stdio_prepare_limits(request.profile, request.prepare);
+    let limits = prepare_limits(request.profile);
     let prepared_mount = request
         .runner
         .storage
@@ -1644,56 +1644,32 @@ fn effective_phase_limits(
     profile: &ResourceProfileSpec,
     phase: &ZipProjectResolvedPhase,
 ) -> ZipProjectPhaseLimits {
-    let network_access = match phase.name {
-        ZipProjectPhaseName::Setup => profile.setup_network_access,
-        ZipProjectPhaseName::Build => profile.build_network_access,
-        ZipProjectPhaseName::Run => profile.run_network_access,
+    let stage = match phase.name {
+        ZipProjectPhaseName::Setup => &profile.solution.setup,
+        ZipProjectPhaseName::Build => &profile.solution.build,
+        ZipProjectPhaseName::Run => &profile.solution.run,
     };
-    ZipProjectPhaseLimits {
-        timeout_sec: profile.timeout_sec,
-        memory_limit_mb: profile.memory_limit_mb,
-        cpu_limit_millis: profile.cpu_limit_millis,
-        disk_limit_mb: profile.disk_limit_mb,
-        network_access,
-    }
+    stage_limits(stage)
 }
 
 /// Handles evaluator limits for this module.
 fn evaluator_limits(profile: &ResourceProfileSpec) -> ZipProjectPhaseLimits {
-    ZipProjectPhaseLimits {
-        timeout_sec: profile.timeout_sec,
-        memory_limit_mb: profile.memory_limit_mb,
-        cpu_limit_millis: profile.cpu_limit_millis,
-        disk_limit_mb: profile.disk_limit_mb,
-        network_access: profile.evaluator_network_access,
-    }
+    stage_limits(&profile.evaluator.run)
 }
 
 /// Handles prepare limits for this module.
-fn prepare_limits(
-    profile: &ResourceProfileSpec,
-    prepare: &ChallengePrepareSpec,
-) -> ZipProjectPhaseLimits {
-    ZipProjectPhaseLimits {
-        timeout_sec: profile.timeout_sec,
-        memory_limit_mb: profile.memory_limit_mb,
-        cpu_limit_millis: profile.cpu_limit_millis,
-        disk_limit_mb: profile.disk_limit_mb,
-        network_access: prepare.network_access,
-    }
+fn prepare_limits(profile: &ResourceProfileSpec) -> ZipProjectPhaseLimits {
+    stage_limits(&profile.evaluator.setup)
 }
 
-/// Handles piped-stdio prepare limits for this module.
-fn piped_stdio_prepare_limits(
-    profile: &ResourceProfileSpec,
-    prepare: &PipedStdioPrepareSpec,
-) -> ZipProjectPhaseLimits {
+/// Convert a stage resource profile into runner phase limits.
+fn stage_limits(stage: &StageResourceProfile) -> ZipProjectPhaseLimits {
     ZipProjectPhaseLimits {
-        timeout_sec: profile.timeout_sec,
-        memory_limit_mb: profile.memory_limit_mb,
-        cpu_limit_millis: profile.cpu_limit_millis,
-        disk_limit_mb: profile.disk_limit_mb,
-        network_access: prepare.network_access,
+        timeout_sec: stage.timeout_sec,
+        memory_limit_mb: stage.memory_limit_mb,
+        cpu_limit_millis: stage.cpu_limit_millis,
+        disk_limit_mb: stage.disk_limit_mb,
+        network_access: stage.network_access,
     }
 }
 

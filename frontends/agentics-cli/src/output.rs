@@ -996,16 +996,20 @@ fn format_targets(targets: &[shared::models::challenge::ChallengeTargetSpec]) ->
     targets
         .iter()
         .map(|target| {
+            let solution_run = &target.resource_profile.solution.run;
+            let evaluator_run = &target.resource_profile.evaluator.run;
             format!(
-                "  - {}: {} {}, profile={}, solution_image={}, evaluator_image={}, timeout={} sec, memory={} MB, validation={}",
+                "  - {}: {} {}, profile={}, solution_image={}, evaluator_image={}, solution_run={} sec/{} MB, evaluator_run={} sec/{} MB, validation={}",
                 target.name,
                 target.docker_platform.as_str(),
                 target.accelerator.as_str(),
                 target.resource_profile.name,
                 target.resource_profile.solution_image,
                 target.resource_profile.evaluator_image,
-                target.resource_profile.timeout_sec,
-                target.resource_profile.memory_limit_mb,
+                solution_run.timeout_sec,
+                solution_run.memory_limit_mb,
+                evaluator_run.timeout_sec,
+                evaluator_run.memory_limit_mb,
                 if target.validation_enabled {
                     "enabled"
                 } else {

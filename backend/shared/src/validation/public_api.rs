@@ -135,14 +135,15 @@ mod tests {
                         "name": "agentics-small",
                         "solution_image": {"source": "local", "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"},
                         "evaluator_image": {"source": "local", "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"},
-                        "timeout_sec": 30,
-                        "memory_limit_mb": 512,
-                        "cpu_limit_millis": 1000,
-                        "disk_limit_mb": 1024,
-                        "setup_network_access": "disabled",
-                        "build_network_access": "disabled",
-                        "run_network_access": "disabled",
-                        "evaluator_network_access": "disabled"
+                        "solution": {
+                            "setup": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 1024, "network_access": "disabled"},
+                            "build": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 1024, "network_access": "disabled"},
+                            "run": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 1024, "network_access": "disabled"}
+                        },
+                        "evaluator": {
+                            "setup": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 1024, "network_access": "disabled"},
+                            "run": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 1024, "network_access": "disabled"}
+                        }
                     }
                 }],
                 "starts_at": "2026-01-01T00:00:00Z",

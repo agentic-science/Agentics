@@ -2,10 +2,12 @@ use super::{
     RunnerAttempt, container_name, effective_phase_limits, evaluator_limits, prepare_limits,
     read_limited_result_json,
 };
-use crate::models::challenge::{ChallengePrepareSpec, ResourceProfileSpec};
+use crate::models::challenge::{
+    EvaluatorStageProfiles, ResourceProfileSpec, SolutionStageProfiles, StageResourceProfile,
+};
 use crate::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
 use crate::models::names::ResourceProfileName;
-use crate::models::paths::{BundleRelativePath, ScriptPath};
+use crate::models::paths::ScriptPath;
 use crate::zip_project::{ZipProjectNetworkAccess, ZipProjectPhaseName, ZipProjectResolvedPhase};
 
 /// Verifies that network policy clamps to resource profile.
@@ -25,37 +27,31 @@ fn network_policy_clamps_to_resource_profile() {
 #[test]
 fn solution_phase_limits_come_from_resource_profile() {
     let profile = resource_profile();
-    let phase = ZipProjectResolvedPhase {
-        name: ZipProjectPhaseName::Run,
-        command: ScriptPath::try_new("run.sh").expect("script path"),
-    };
 
-    let limits = effective_phase_limits(&profile, &phase);
+    let setup = effective_phase_limits(&profile, &resolved_phase(ZipProjectPhaseName::Setup));
+    let build = effective_phase_limits(&profile, &resolved_phase(ZipProjectPhaseName::Build));
+    let run = effective_phase_limits(&profile, &resolved_phase(ZipProjectPhaseName::Run));
 
-    assert_eq!(limits.timeout_sec, 42);
-    assert_eq!(limits.memory_limit_mb, 2048);
-    assert_eq!(limits.cpu_limit_millis, 2500);
-    assert_eq!(limits.disk_limit_mb, 4096);
-    assert_eq!(limits.network_access, ZipProjectNetworkAccess::Loopback);
+    assert_eq!(setup.timeout_sec, 11);
+    assert_eq!(setup.network_access, ZipProjectNetworkAccess::Enabled);
+    assert_eq!(build.memory_limit_mb, 222);
+    assert_eq!(build.network_access, ZipProjectNetworkAccess::Disabled);
+    assert_eq!(run.cpu_limit_millis, 3333);
+    assert_eq!(run.disk_limit_mb, 4444);
+    assert_eq!(run.network_access, ZipProjectNetworkAccess::Loopback);
 }
 
 /// Verifies evaluator and prepare phases use challenge-owned network policy.
 #[test]
 fn evaluator_and_prepare_limits_use_challenge_owned_policy() {
     let profile = resource_profile();
-    let prepare = ChallengePrepareSpec {
-        command: vec!["python".to_string(), "prepare.py".to_string()],
-        result_runs_file: BundleRelativePath::try_new("prepared/runs.json").expect("runs path"),
-        network_access: ZipProjectNetworkAccess::Enabled,
-        reproducibility_notes: None,
-    };
 
     let evaluator = evaluator_limits(&profile);
-    let prepare_limits = prepare_limits(&profile, &prepare);
+    let prepare_limits = prepare_limits(&profile);
 
-    assert_eq!(evaluator.timeout_sec, profile.timeout_sec);
+    assert_eq!(evaluator.timeout_sec, 55);
     assert_eq!(evaluator.network_access, ZipProjectNetworkAccess::Disabled);
-    assert_eq!(prepare_limits.timeout_sec, profile.timeout_sec);
+    assert_eq!(prepare_limits.timeout_sec, 44);
     assert_eq!(
         prepare_limits.network_access,
         ZipProjectNetworkAccess::Enabled
@@ -111,14 +107,40 @@ fn resource_profile() -> ResourceProfileSpec {
         resource_description: None,
         solution_image: image.clone(),
         evaluator_image: image,
-        timeout_sec: 42,
-        memory_limit_mb: 2048,
-        cpu_limit_millis: 2500,
-        disk_limit_mb: 4096,
-        setup_network_access: ZipProjectNetworkAccess::Enabled,
-        build_network_access: ZipProjectNetworkAccess::Disabled,
-        run_network_access: ZipProjectNetworkAccess::Loopback,
-        evaluator_network_access: ZipProjectNetworkAccess::Disabled,
+        solution: SolutionStageProfiles {
+            setup: stage_profile(11, 111, 1111, 1111, ZipProjectNetworkAccess::Enabled),
+            build: stage_profile(22, 222, 2222, 2222, ZipProjectNetworkAccess::Disabled),
+            run: stage_profile(33, 333, 3333, 4444, ZipProjectNetworkAccess::Loopback),
+        },
+        evaluator: EvaluatorStageProfiles {
+            setup: stage_profile(44, 444, 4444, 4444, ZipProjectNetworkAccess::Enabled),
+            run: stage_profile(55, 555, 5555, 5555, ZipProjectNetworkAccess::Disabled),
+        },
         hardware_metadata: None,
+    }
+}
+
+/// Build one test stage resource profile.
+fn stage_profile(
+    timeout_sec: u64,
+    memory_limit_mb: u64,
+    cpu_limit_millis: u32,
+    disk_limit_mb: u64,
+    network_access: ZipProjectNetworkAccess,
+) -> StageResourceProfile {
+    StageResourceProfile {
+        timeout_sec,
+        memory_limit_mb,
+        cpu_limit_millis,
+        disk_limit_mb,
+        network_access,
+    }
+}
+
+/// Build one resolved phase for limit selection tests.
+fn resolved_phase(name: ZipProjectPhaseName) -> ZipProjectResolvedPhase {
+    ZipProjectResolvedPhase {
+        name,
+        command: ScriptPath::try_new("run.sh").expect("script path"),
     }
 }

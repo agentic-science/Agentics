@@ -402,16 +402,38 @@ pub struct ResourceProfileSpec {
     pub resource_description: Option<String>,
     pub solution_image: ChallengeImageReference,
     pub evaluator_image: ChallengeImageReference,
+    pub solution: SolutionStageProfiles,
+    pub evaluator: EvaluatorStageProfiles,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hardware_metadata: Option<HardwareProfileSpec>,
+}
+
+/// Resource limits for participant-owned solution stages.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SolutionStageProfiles {
+    pub setup: StageResourceProfile,
+    pub build: StageResourceProfile,
+    pub run: StageResourceProfile,
+}
+
+/// Resource limits for trusted challenge-owned evaluator stages.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct EvaluatorStageProfiles {
+    pub setup: StageResourceProfile,
+    pub run: StageResourceProfile,
+}
+
+/// Resource envelope for one Docker-executed stage.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct StageResourceProfile {
     pub timeout_sec: u64,
     pub memory_limit_mb: u64,
     pub cpu_limit_millis: u32,
     pub disk_limit_mb: u64,
-    pub setup_network_access: ZipProjectNetworkAccess,
-    pub build_network_access: ZipProjectNetworkAccess,
-    pub run_network_access: ZipProjectNetworkAccess,
-    pub evaluator_network_access: ZipProjectNetworkAccess,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub hardware_metadata: Option<HardwareProfileSpec>,
+    pub network_access: ZipProjectNetworkAccess,
 }
 
 /// Optional hardware metadata advertised with a resource profile.
@@ -604,7 +626,6 @@ pub struct ChallengePrepareSpec {
     pub command: Vec<String>,
     /// Relative path, under the prepared workspace, to the generated run manifest.
     pub result_runs_file: BundleRelativePath,
-    pub network_access: ZipProjectNetworkAccess,
     /// Challenge-owner notes about seeds, versions, or external data provenance.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reproducibility_notes: Option<String>,
@@ -617,7 +638,6 @@ pub struct PipedStdioPrepareSpec {
     pub command: Vec<String>,
     /// Relative path, under the prepared workspace, to the generated session manifest.
     pub result_session_file: BundleRelativePath,
-    pub network_access: ZipProjectNetworkAccess,
     /// Challenge-owner notes about seeds, versions, or external data provenance.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reproducibility_notes: Option<String>,
