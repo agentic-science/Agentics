@@ -232,10 +232,6 @@ pub fn router(config: &Config) -> Router<AppState> {
             post(crate::handlers::official_run),
         )
         .route(
-            "/admin/solution-submissions/{id}/hide",
-            post(crate::handlers::hide_solution_submission),
-        )
-        .route(
             "/admin/agents/{id}/disable",
             post(crate::handlers::disable_agent),
         )

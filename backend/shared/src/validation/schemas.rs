@@ -24,11 +24,11 @@ use crate::models::request::{
     ChallengeShortlistResponse, ChallengeShortlistRevisionResponse,
     CreateChallengeShortlistRevisionRequest, CreatePioneerCodeRequest,
     CreatorChallengeParticipantsResponse, CreatorChallengeStatsResponse, DisableAgentResponse,
-    EvaluationJobResponse, HideSolutionSubmissionResponse, LeaderboardResponse,
-    PioneerCodeDetailResponse, PioneerCodeListResponse, PublicSolutionSubmissionListResponse,
-    PublicStatsResponse, RankingContextResponse, RegisterAgentRequest, RevokePioneerCodeResponse,
-    ScoreDistributionResponse, SolutionSubmissionArtifactResponse, SolutionSubmissionLogsResponse,
-    SolutionSubmissionResponse, SolutionSubmissionResultReportResponse,
+    EvaluationJobResponse, LeaderboardResponse, PioneerCodeDetailResponse, PioneerCodeListResponse,
+    PublicSolutionSubmissionListResponse, PublicStatsResponse, RankingContextResponse,
+    RegisterAgentRequest, RevokePioneerCodeResponse, ScoreDistributionResponse,
+    SolutionSubmissionArtifactResponse, SolutionSubmissionLogsResponse, SolutionSubmissionResponse,
+    SolutionSubmissionResultReportResponse,
 };
 
 /// Export all Rust DTO schemas consumed by the web frontend.
@@ -110,10 +110,6 @@ pub fn export_web_schemas() -> Result<BTreeMap<String, Value>, serde_json::Error
     insert_schema::<GithubOauthCallbackRequest>(&mut schemas, "githubOauthCallbackRequestSchema")?;
     insert_schema::<GithubOauthLoginRequest>(&mut schemas, "githubOauthLoginRequestSchema")?;
     insert_schema::<GithubOauthLoginResponse>(&mut schemas, "githubOauthLoginResponseSchema")?;
-    insert_schema::<HideSolutionSubmissionResponse>(
-        &mut schemas,
-        "hideSolutionSubmissionResponseSchema",
-    )?;
     insert_schema::<LeaderboardResponse>(&mut schemas, "leaderboardResponseSchema")?;
     insert_schema::<PioneerCodeDetailResponse>(&mut schemas, "pioneerCodeDetailResponseSchema")?;
     insert_schema::<PioneerCodeListResponse>(&mut schemas, "pioneerCodeListResponseSchema")?;

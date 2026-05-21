@@ -4,7 +4,6 @@ import {
   Activity,
   Ban,
   Boxes,
-  EyeOff,
   FlaskConical,
   Gauge,
   GitPullRequest,
@@ -50,7 +49,6 @@ import {
   challengeDraftListResponseSchema,
   disableAgentResponseSchema,
   evaluationJobResponseSchema,
-  hideSolutionSubmissionResponseSchema,
   type PioneerCodeListResponse,
   pioneerCodeListResponseSchema,
 } from "@/lib/schemas";
@@ -848,12 +846,12 @@ function SubmissionActions({
   onMessage: (message: string | null) => void;
 }) {
   const [pendingAction, setPendingAction] = useState<
-    "rejudge" | "official-run" | "hide" | "disable-agent" | null
+    "rejudge" | "official-run" | "disable-agent" | null
   >(null);
 
   /** Runs action and refreshes affected data. */
   const runAction = async (
-    action: "rejudge" | "official-run" | "hide" | "disable-agent",
+    action: "rejudge" | "official-run" | "disable-agent",
   ) => {
     if (!csrfToken || pendingAction) return;
     try {
@@ -868,16 +866,6 @@ function SubmissionActions({
           { method: "POST" },
         );
         onMessage(`Disabled agent ${submission.agent_display_name}.`);
-      } else if (action === "hide") {
-        if (!window.confirm(`Hide submission ${submission.id.slice(0, 8)}?`))
-          return;
-        await adminFetchJson(
-          `/admin/solution-submissions/${encodeURIComponent(submission.id)}/hide`,
-          hideSolutionSubmissionResponseSchema,
-          csrfToken,
-          { method: "POST" },
-        );
-        onMessage(`Hidden submission ${submission.id.slice(0, 8)}.`);
       } else {
         const actionLabel =
           action === "official-run" ? "queue an official run for" : "rejudge";
@@ -923,15 +911,6 @@ function SubmissionActions({
       >
         <Play className="w-3 h-3" />
         Official
-      </button>
-      <button
-        type="button"
-        className="btn btn-ghost btn-sm"
-        onClick={() => runAction("hide")}
-        disabled={!csrfToken || pendingAction !== null}
-      >
-        <EyeOff className="w-3 h-3" />
-        Hide
       </button>
       <button
         type="button"

@@ -15,30 +15,6 @@ use super::challenges::get_public_challenge;
 use super::ids::{agent_id_from_row, solution_submission_id_from_row, target_from_row};
 use super::json::decode_optional_json;
 
-/// Hide a solution submission and repair or remove the affected leaderboard entry.
-pub async fn hide_solution_submission(
-    pool: &PgPool,
-    solution_submission_id: &SolutionSubmissionId,
-) -> Result<()> {
-    let mut tx = pool.begin().await?;
-
-    let row: Option<(String,)> = sqlx::query_as(
-        "UPDATE solution_submissions SET visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1::uuid RETURNING id::text"
-    )
-    .bind(solution_submission_id.as_str())
-    .fetch_optional(&mut *tx)
-    .await?;
-
-    if row.is_none() {
-        return Err(AppError::NotFound);
-    };
-
-    repair_leaderboard_entry_for_solution_submission_tx(&mut tx, solution_submission_id).await?;
-
-    tx.commit().await?;
-    Ok(())
-}
-
 /// Repair or remove the leaderboard row touched by one submission visibility change.
 pub(super) async fn repair_leaderboard_entry_for_solution_submission_tx<'a>(
     tx: &mut Transaction<'a, Postgres>,
@@ -235,7 +211,7 @@ pub struct LeaderboardMetricEntry {
     pub official_metrics: Vec<MetricValue>,
 }
 
-/// Candidate row used when repairing one agent's leaderboard entry after hiding a submission.
+/// Candidate row used when repairing one agent's leaderboard entry after visibility changes.
 #[derive(Debug)]
 struct LeaderboardReplacementCandidate {
     id: String,

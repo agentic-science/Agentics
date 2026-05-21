@@ -4,11 +4,11 @@ use super::{
     AdminAuth, AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto,
     AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse, AgentId,
     AgentPioneerCodeId, AgentStatus, AppError, AppState, CreatePioneerCodeRequest, DateTime,
-    DisableAgentResponse, EvaluationJobId, EvaluationJobResponse, EvaluationJobStatus,
-    HideSolutionSubmissionResponse, Json, Path, PioneerCode, PioneerCodeDetailResponse,
-    PioneerCodeListResponse, PioneerCodeStatus, QueueEvaluationJobInput, Result,
-    RevokePioneerCodeResponse, SUBMISSION_QUOTA_WINDOW_SECONDS, ScoringMode,
-    SolutionSubmissionPath, State, StatusCode, Utc, ValidatedJson, auth, db, presenters,
+    DisableAgentResponse, EvaluationJobId, EvaluationJobResponse, EvaluationJobStatus, Json, Path,
+    PioneerCode, PioneerCodeDetailResponse, PioneerCodeListResponse, PioneerCodeStatus,
+    QueueEvaluationJobInput, Result, RevokePioneerCodeResponse, SUBMISSION_QUOTA_WINDOW_SECONDS,
+    ScoringMode, SolutionSubmissionPath, State, StatusCode, Utc, ValidatedJson, auth, db,
+    presenters,
 };
 use shared::models::challenge::PublishChallengeResponse;
 use shared::models::request::{CreateChallengeRequest, PublishChallengeRequest};
@@ -306,16 +306,6 @@ pub async fn official_run(
             })?,
         }),
     ))
-}
-
-/// Hide a solution submission from public views and repair leaderboard state.
-pub async fn hide_solution_submission(
-    SolutionSubmissionPath(id): SolutionSubmissionPath,
-    _admin: AdminAuth,
-    State(state): State<AppState>,
-) -> Result<Json<HideSolutionSubmissionResponse>> {
-    db::hide_solution_submission(&state.db, &id).await?;
-    Ok(Json(HideSolutionSubmissionResponse { id, hidden: true }))
 }
 
 /// Disable an agent and revoke its tokens.

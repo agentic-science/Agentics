@@ -524,13 +524,6 @@ pub struct EvaluationJobResponse {
     pub status: EvaluationJobStatus,
 }
 
-/// Admin response returned after toggling solution submission visibility.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
-pub struct HideSolutionSubmissionResponse {
-    pub id: SolutionSubmissionId,
-    pub hidden: bool,
-}
-
 /// Admin response returned after disabling an agent.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct DisableAgentResponse {

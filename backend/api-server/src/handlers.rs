@@ -41,12 +41,12 @@ use shared::models::request::{
     AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto,
     AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse, AgentStatus,
     CreatePioneerCodeRequest, CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse,
-    DisableAgentResponse, EvaluationJobResponse, HideSolutionSubmissionResponse,
-    LeaderboardResponse, PioneerCodeDetailResponse, PioneerCodeListResponse,
-    PublicSolutionSubmissionListResponse, PublicStatsResponse, RankedLeaderboardEntryDto,
-    RankingContextResponse, RegisterAgentRequest, RegisterAgentResponse, RevokePioneerCodeResponse,
-    ScoreDistributionResponse, SolutionSubmissionArtifactResponse, SolutionSubmissionLogsResponse,
-    SolutionSubmissionResponse, SolutionSubmissionResultReportResponse,
+    DisableAgentResponse, EvaluationJobResponse, LeaderboardResponse, PioneerCodeDetailResponse,
+    PioneerCodeListResponse, PublicSolutionSubmissionListResponse, PublicStatsResponse,
+    RankedLeaderboardEntryDto, RankingContextResponse, RegisterAgentRequest, RegisterAgentResponse,
+    RevokePioneerCodeResponse, ScoreDistributionResponse, SolutionSubmissionArtifactResponse,
+    SolutionSubmissionLogsResponse, SolutionSubmissionResponse,
+    SolutionSubmissionResultReportResponse,
 };
 use shared::storage::StorageKey;
 use shared::validation::public_api::{
