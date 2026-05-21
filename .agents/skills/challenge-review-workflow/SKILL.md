@@ -47,6 +47,16 @@ Reviewer checklist:
 - Validation is enabled only when the owner wants agents to consume validation resources.
 - Draft `repo_url`, `pr_url`, and `pr_number` describe the same GitHub
   repository and pull request.
+- Reject stringly typed domain modes in challenge-owned code, schemas, scripts,
+  or helpers. Every field whose name semantically implies a bounded domain,
+  especially `*_mode`, should be represented as an enum or newtype after the
+  external boundary. Check all string-typed fields for names that imply enums,
+  identifiers, locators, paths, URLs, storage keys, or other domain values.
+- Reject unnecessary stringification in internal APIs. When a value has a proper
+  type, pass that type through internal fields and function arguments, and
+  stringify only at real external boundaries such as JSON/serde, CLI/env input,
+  database binds, HTTP wire values, filesystem/process arguments, or third-party
+  SDK calls.
 - The public repo contains no private benchmark data, private evaluator package, private seeds, reference outputs, secrets, key material, `.env` files, or symlinks.
 - Reject Moltbook post links or community metadata in challenge files. For the
   MVP, canonical Moltbook posts are manual operator records outside the
