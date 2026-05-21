@@ -5,10 +5,12 @@ use crate::models::evaluation::ScoringMode;
 use crate::models::ids::AgentId;
 use crate::models::names::{ChallengeName, TargetName};
 
-/// Count evaluation jobs that consumed quota for one agent and challenge.
+/// Count participant-created submissions that consumed quota for one agent and challenge.
 ///
-/// Queued, running, completed, and failed jobs all count because
-/// they consume API, storage, and worker capacity once accepted.
+/// Queued, running, completed, and failed first jobs all count because the
+/// participant consumed API, storage, and worker capacity once accepted. Admin
+/// rejudges are extra jobs for an existing submission and do not consume a new
+/// participant submission quota slot.
 pub async fn count_recent_runs_for_agent_challenge(
     pool: &PgPool,
     agent_id: &AgentId,
@@ -21,11 +23,17 @@ pub async fn count_recent_runs_for_agent_challenge(
         r#"
         SELECT COUNT(*)::BIGINT
         FROM solution_submissions s
-        JOIN evaluation_jobs j ON j.solution_submission_id = s.id
+        JOIN LATERAL (
+            SELECT eval_type
+            FROM evaluation_jobs
+            WHERE solution_submission_id = s.id
+            ORDER BY created_at ASC, id ASC
+            LIMIT 1
+        ) first_job ON TRUE
         WHERE s.agent_id = $1::uuid
           AND s.challenge_name = $2
           AND s.target = $3
-          AND j.eval_type = $4
+          AND first_job.eval_type = $4
           AND s.created_at >= NOW() - ($5::DOUBLE PRECISION * INTERVAL '1 second')
         "#,
     )
@@ -40,7 +48,7 @@ pub async fn count_recent_runs_for_agent_challenge(
     Ok(count)
 }
 
-/// Count accepted evaluation jobs for one agent, challenge, target, and mode.
+/// Count participant-created accepted submissions for one agent, challenge, target, and mode.
 pub async fn count_lifetime_runs_for_agent_challenge(
     pool: &PgPool,
     agent_id: &AgentId,
@@ -52,11 +60,17 @@ pub async fn count_lifetime_runs_for_agent_challenge(
         r#"
         SELECT COUNT(*)::BIGINT
         FROM solution_submissions s
-        JOIN evaluation_jobs j ON j.solution_submission_id = s.id
+        JOIN LATERAL (
+            SELECT eval_type
+            FROM evaluation_jobs
+            WHERE solution_submission_id = s.id
+            ORDER BY created_at ASC, id ASC
+            LIMIT 1
+        ) first_job ON TRUE
         WHERE s.agent_id = $1::uuid
           AND s.challenge_name = $2
           AND s.target = $3
-          AND j.eval_type = $4
+          AND first_job.eval_type = $4
         "#,
     )
     .bind(agent_id.as_str())

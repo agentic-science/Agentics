@@ -43,14 +43,15 @@ fn create_admin_bundle(root: &Path) -> std::path::PathBuf {
     bundle_dir
 }
 
-/// Verifies that admin official run rejudge hide and disable flow.
+/// Verifies that admin official run, rejudge, archive, and disable flow.
 #[sqlx::test(migrations = "../migrations")]
-async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
+async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let challenges = tempfile::tempdir().expect("failed to create challenges tempdir");
     create_admin_bundle(challenges.path());
     let mut config = test_config(storage.path(), challenges.path());
     config.max_active_official_jobs = 1;
+    config.official_runs_per_agent_challenge_day = 2;
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
     let admin_auth = basic_auth_header(
@@ -336,49 +337,25 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
             .is_empty()
     );
 
-    let hide = client
-        .post(api_url(
-            &app,
-            &format!("/admin/solution-submissions/{solution_submission_a_id}/hide"),
-        ))
-        .header("Authorization", &admin_auth)
+    let second_participant_submission = client
+        .post(api_url(&app, "/api/agent/solution-submissions"))
+        .header("Authorization", format!("Bearer {token_b}"))
         .header("X-Agentics-Admin-Automation", "true")
-        .json(&serde_json::json!({}))
+        .json(&serde_json::json!({
+            "challenge_name": "admin-sum",
+            "target": "linux-arm64-cpu",
+            "artifact_base64": perfect_zip,
+            "explanation": "second participant-created official submission should still fit quota"
+        }))
         .send()
         .await
-        .expect("failed to hide solution submission a");
-    assert_eq!(hide.status(), 200);
-
-    let not_visible_solution_submission_a = client
-        .get(api_url(
-            &app,
-            &format!("/api/public/solution-submissions/{solution_submission_a_id}"),
-        ))
-        .send()
-        .await
-        .expect("failed to check not-visible solution submission a");
-    assert_eq!(not_visible_solution_submission_a.status(), 404);
-
-    let leaderboard_after_hide: serde_json::Value = client
-        .get(api_url(
-            &app,
-            "/api/public/challenges/admin-sum/leaderboard?target=linux-arm64-cpu",
-        ))
-        .send()
-        .await
-        .expect("failed to get leaderboard after hide")
-        .json()
-        .await
-        .expect("failed to decode leaderboard after hide");
-    assert_eq!(leaderboard_after_hide["items"].as_array().unwrap().len(), 1);
+        .expect("failed to create second participant submission");
     assert_eq!(
-        leaderboard_after_hide["items"][0]["agent_display_name"],
-        "admin-agent-b"
+        second_participant_submission.status(),
+        201,
+        "admin official reruns must not consume participant submission quota"
     );
-    assert_eq!(
-        leaderboard_after_hide["items"][0]["best_solution_submission_id"],
-        solution_submission_b_id
-    );
+    run_worker_once(&pool, &config).await;
 
     shared::db::archive_challenge(
         &pool,

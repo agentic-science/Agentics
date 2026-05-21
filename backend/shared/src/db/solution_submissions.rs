@@ -417,11 +417,17 @@ async fn count_recent_runs_for_agent_challenge_tx(
         r#"
         SELECT COUNT(*)::BIGINT
         FROM solution_submissions s
-        JOIN evaluation_jobs j ON j.solution_submission_id = s.id
+        JOIN LATERAL (
+            SELECT eval_type
+            FROM evaluation_jobs
+            WHERE solution_submission_id = s.id
+            ORDER BY created_at ASC, id ASC
+            LIMIT 1
+        ) first_job ON TRUE
         WHERE s.agent_id = $1::uuid
           AND s.challenge_name = $2
           AND s.target = $3
-          AND j.eval_type = $4
+          AND first_job.eval_type = $4
           AND s.created_at >= NOW() - ($5::DOUBLE PRECISION * INTERVAL '1 second')
         "#,
     )
@@ -448,11 +454,17 @@ async fn count_lifetime_runs_for_agent_challenge_tx(
         r#"
         SELECT COUNT(*)::BIGINT
         FROM solution_submissions s
-        JOIN evaluation_jobs j ON j.solution_submission_id = s.id
+        JOIN LATERAL (
+            SELECT eval_type
+            FROM evaluation_jobs
+            WHERE solution_submission_id = s.id
+            ORDER BY created_at ASC, id ASC
+            LIMIT 1
+        ) first_job ON TRUE
         WHERE s.agent_id = $1::uuid
           AND s.challenge_name = $2
           AND s.target = $3
-          AND j.eval_type = $4
+          AND first_job.eval_type = $4
         "#,
     )
     .bind(agent_id.as_str())
