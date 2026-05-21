@@ -6,6 +6,7 @@ import {
   deriveCommunicationTimeline,
   validateCommunicationGraph,
 } from "./communicationGraph";
+import { deriveCommunicationTimelineFrameState } from "./communicationGraphExport";
 
 function graphWith(
   overrides: Partial<CommunicationGraph> = {},
@@ -154,5 +155,105 @@ describe("deriveCommunicationTimeline", () => {
     expect(model.links[0].kind).toBe("fade");
     expect(model.links[0].startAt).toBe(graph.animation.t);
     expect(model.links[0].duration).toBeCloseTo(graph.animation.t / 6);
+  });
+});
+
+describe("deriveCommunicationTimelineFrameState", () => {
+  it("grows horizontal and oblique links by their derived timestamp", () => {
+    const graph = graphWith({
+      links: [
+        [
+          [0, 1],
+          [0, 2],
+        ],
+      ],
+    });
+    const model = deriveCommunicationTimeline(graph);
+
+    const midway = deriveCommunicationTimelineFrameState(
+      model,
+      graph.animation.t / 2,
+    );
+    const arrived = deriveCommunicationTimelineFrameState(
+      model,
+      graph.animation.t,
+    );
+
+    expect(midway.links[0].pathProgress).toBeGreaterThan(0);
+    expect(midway.links[0].pathProgress).toBeLessThan(1);
+    expect(midway.links[0].opacity).toBeGreaterThan(0);
+    expect(arrived.links[0].pathProgress).toBe(1);
+  });
+
+  it("fades same-timestep vertical links as complete segments", () => {
+    const graph = graphWith({
+      links: [
+        [
+          [0, 2],
+          [1, 2],
+        ],
+      ],
+    });
+    const model = deriveCommunicationTimeline(graph);
+    const link = model.links[0];
+
+    const before = deriveCommunicationTimelineFrameState(
+      model,
+      link.startAt - 0.01,
+    );
+    const during = deriveCommunicationTimelineFrameState(
+      model,
+      link.startAt + link.duration / 2,
+    );
+
+    expect(before.links[0].opacity).toBe(0);
+    expect(during.links[0].pathProgress).toBe(1);
+    expect(during.links[0].opacity).toBeGreaterThan(0);
+  });
+
+  it("keeps discovery nodes muted before activation and amber after activation", () => {
+    const graph = graphWith({
+      links: [
+        [
+          [0, 1],
+          [1, 2],
+        ],
+      ],
+      discoveries: [[1, 2]],
+    });
+    const model = deriveCommunicationTimeline(graph);
+    const targetNode = (timeSeconds: number) =>
+      deriveCommunicationTimelineFrameState(model, timeSeconds).nodes.find(
+        (node) => node.node.index[0] === 1 && node.node.index[1] === 2,
+      );
+
+    expect(targetNode(graph.animation.t / 2)?.state).toBe("muted");
+
+    const active = targetNode(graph.animation.t + graph.animation.t / 6);
+
+    expect(active?.state).toBe("discovery");
+    expect(active?.nodeOpacity).toBe(1);
+    expect(active?.haloOpacity).toBeGreaterThan(0);
+  });
+
+  it("fades active links and nodes together after the derived fade-out point", () => {
+    const graph = graphWith({
+      links: [
+        [
+          [0, 1],
+          [0, 2],
+        ],
+      ],
+    });
+    const model = deriveCommunicationTimeline(graph);
+
+    const finalFrame = deriveCommunicationTimelineFrameState(model, model.loop);
+
+    expect(finalFrame.links[0].opacity).toBe(0);
+    expect(
+      finalFrame.nodes
+        .filter((node) => node.node.activeAt !== undefined)
+        .every((node) => node.nodeOpacity === 0),
+    ).toBe(true);
   });
 });

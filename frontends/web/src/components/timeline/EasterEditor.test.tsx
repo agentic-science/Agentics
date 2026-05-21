@@ -27,6 +27,22 @@ vi.mock("framer-motion", () => ({
   useReducedMotion: () => true,
 }));
 
+const mediaExportMocks = vi.hoisted(() => ({
+  gif: vi.fn(() => Promise.resolve()),
+  webm: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock("./communicationGraphExport", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("./communicationGraphExport")>();
+
+  return {
+    ...actual,
+    exportCommunicationGraphGif: mediaExportMocks.gif,
+    exportCommunicationGraphWebm: mediaExportMocks.webm,
+  };
+});
+
 ensureDomEnvironment();
 const { cleanup, fireEvent, render, waitFor } = await import(
   "@testing-library/react"
@@ -41,6 +57,7 @@ let anchorClickSpy: ReturnType<typeof vi.spyOn>;
 
 async function exportCurrentGraph(view: RenderResult) {
   fireEvent.click(view.getByRole("button", { name: "Export" }));
+  fireEvent.click(view.getByRole("menuitem", { name: "JSON" }));
   await waitFor(() => expect(createObjectUrlMock).toHaveBeenCalled());
   const exportedBlob =
     createObjectUrlMock.mock.calls[
@@ -70,6 +87,10 @@ describe("EasterEditor", () => {
   beforeEach(() => {
     createObjectUrlMock.mockClear();
     revokeObjectUrlMock.mockClear();
+    mediaExportMocks.gif.mockReset();
+    mediaExportMocks.webm.mockReset();
+    mediaExportMocks.gif.mockResolvedValue(undefined);
+    mediaExportMocks.webm.mockResolvedValue(undefined);
     anchorClickSpy = vi
       .spyOn(window.HTMLAnchorElement.prototype, "click")
       .mockImplementation(() => undefined);
@@ -132,6 +153,16 @@ describe("EasterEditor", () => {
     expect(view.queryByText("Reset sample")).toBeNull();
     expect(view.queryByRole("button", { name: "Edit" })).toBeNull();
     expect(view.queryByRole("button", { name: "Present" })).toBeNull();
+  });
+
+  it("opens the export menu with JSON, WebM, and GIF actions", () => {
+    const view = render(<EasterEditor />);
+
+    fireEvent.click(view.getByRole("button", { name: "Export" }));
+
+    expect(view.getByRole("menuitem", { name: "JSON" })).toBeTruthy();
+    expect(view.getByRole("menuitem", { name: "WebM" })).toBeTruthy();
+    expect(view.getByRole("menuitem", { name: "GIF" })).toBeTruthy();
   });
 
   it("shows friendly field names and updated animation defaults", () => {
@@ -238,6 +269,56 @@ describe("EasterEditor", () => {
     expect(anchorClickSpy).toHaveBeenCalled();
     expect(revokeObjectUrlMock).toHaveBeenCalledWith(
       "blob:agentics-communication-graph",
+    );
+  });
+
+  it("exports WebM and GIF through the media helpers", async () => {
+    const view = render(<EasterEditor />);
+
+    fireEvent.click(view.getByRole("button", { name: "Export" }));
+    fireEvent.click(view.getByRole("menuitem", { name: "WebM" }));
+
+    await waitFor(() => expect(mediaExportMocks.webm).toHaveBeenCalledTimes(1));
+    expect(mediaExportMocks.webm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentCount: 3,
+        timeSteps: 5,
+      }),
+    );
+
+    fireEvent.click(view.getByRole("button", { name: "Export" }));
+    fireEvent.click(view.getByRole("menuitem", { name: "GIF" }));
+
+    await waitFor(() => expect(mediaExportMocks.gif).toHaveBeenCalledTimes(1));
+    expect(mediaExportMocks.gif).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentCount: 3,
+        timeSteps: 5,
+      }),
+    );
+  });
+
+  it("disables export actions while a media export is running", async () => {
+    let resolveWebm: (() => void) | undefined;
+    mediaExportMocks.webm.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveWebm = resolve;
+      }),
+    );
+    const view = render(<EasterEditor />);
+
+    fireEvent.click(view.getByRole("button", { name: "Export" }));
+    fireEvent.click(view.getByRole("menuitem", { name: "WebM" }));
+
+    const exportButton = view.getByRole("button", { name: "Exporting..." });
+    expect(exportButton).toHaveProperty("disabled", true);
+
+    resolveWebm?.();
+    await waitFor(() =>
+      expect(view.getByRole("button", { name: "Export" })).toHaveProperty(
+        "disabled",
+        false,
+      ),
     );
   });
 });

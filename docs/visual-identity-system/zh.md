@@ -211,6 +211,17 @@ creator consoles 是 MVP 阶段的 operational tools，MVP 中保持 English-onl
 - **尊重减少动效偏好** —— 将动画包裹在 `@media (prefers-reduced-motion: no-preference)` 中
 - **交错揭示** —— 列表按顺序动画，项目之间延迟 50ms
 
+### 通信时间线编辑器
+
+隐藏的 `/easter-editor` 路由是用于创作 communication timeline graphs 的内部工具。它保持图模型
+minimal：agent 数量、time steps、links、discovery dots，以及 animation constants。可视化编辑器
+支持直接连接 dots，通过右键或双击标记 discovery，导入 JSON，并导出 JSON、WebM 和 GIF。
+
+媒体导出由图模型生成确定性的 canvas frames，而不是录制实时 SVG 动画。因此导出的 WebM 和 GIF
+会遵循与 philosophy animations 相同的 derived causal timing：同一 time step 的 vertical links
+作为完整线段淡入，跨 time step 的 links 沿路径绘制，discovery dots 只在到达时发光，并且所有
+active elements 在一个 loop 结束时一起淡出。
+
 ---
 
 ## 组件 primitive 指南
