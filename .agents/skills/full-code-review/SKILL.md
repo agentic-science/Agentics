@@ -26,6 +26,21 @@ Findings must be evidence-backed:
 
 ## General Review Lanes
 
+Before the manual review lanes, run the repository large-file scanner from the
+workspace root:
+
+```bash
+cargo run -p agentics-ops --bin agentics-scan-large-files -- --threshold 1200 --watch-threshold 900
+```
+
+Treat every `FAIL` line as a P2 maintainability finding that requires a
+refactor before substantial new behavior is added to that file. Include the
+scanner output or a concise summary in the review log. The command exits
+nonzero when oversized files are found; that is a review signal, not a reason to
+skip the finding. Treat `WARN` lines as a watch list and call them out when the
+reviewed change adds more code to those files. If the scanner cannot run, record
+that as residual risk and run an equivalent native line-count pass.
+
 Cover these project-agnostic lanes when the user asks for a complete review:
 
 1. Backend Rust code quality

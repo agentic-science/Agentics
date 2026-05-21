@@ -22,5 +22,6 @@ pub mod check_local_mvp;
 pub mod dgx;
 pub mod dgx_profile;
 pub mod dgx_storage;
+pub mod large_files;
 pub mod local_demo;
 pub mod support;

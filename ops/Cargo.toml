@@ -11,6 +11,7 @@ bollard = { workspace = true }
 clap = { version = "4", features = ["derive"] }
 dotenvy = "0.15"
 futures = { workspace = true }
+ignore = { workspace = true }
 nix = { version = "0.30", features = ["fs", "process", "signal", "user"] }
 reqwest = { workspace = true }
 secrecy = { workspace = true }
@@ -25,4 +26,5 @@ uuid = { workspace = true }
 zip = { workspace = true }
 
 [dev-dependencies]
+tempfile = { workspace = true }
 wiremock = "0.6"
