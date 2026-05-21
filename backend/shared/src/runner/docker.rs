@@ -106,6 +106,7 @@ pub(super) async fn run_container(
         accelerator_device_requests(request.accelerator, request.accelerator_count)?;
     let container_config = ContainerCreateBody {
         image: Some(request.image),
+        entrypoint: Some(Vec::<String>::new()),
         cmd: Some(request.cmd),
         env: Some(request.env),
         working_dir: Some(request.working_dir),
@@ -213,6 +214,7 @@ async fn repair_bind_mount_permissions(
     let host_config = permission_repair_host_config(mounts);
     let container_config = ContainerCreateBody {
         image: Some(image),
+        entrypoint: Some(Vec::<String>::new()),
         cmd: Some(cmd),
         working_dir: Some("/".to_string()),
         host_config: Some(host_config),
@@ -263,7 +265,8 @@ pub async fn reconcile_runner_containers(
     pool: &PgPool,
     stale_minutes: i32,
 ) -> Result<RunnerContainerCleanupSummary> {
-    let containers = list_agentics_runner_containers(docker).await?;
+    let containers =
+        list_agentics_runner_containers(docker, super::RUNNER_SCOPE_HOSTED_WORKER).await?;
     let now_secs = current_unix_timestamp_secs();
     let mut summary = RunnerContainerCleanupSummary::default();
     for container in containers {
@@ -309,13 +312,45 @@ pub async fn reconcile_runner_containers(
 
 /// Remove old stopped Agentics runner containers left by earlier worker attempts.
 pub async fn remove_stopped_runner_containers(docker: &Docker) -> Result<u64> {
-    let containers = list_agentics_runner_containers(docker).await?;
+    let containers =
+        list_agentics_runner_containers(docker, super::RUNNER_SCOPE_HOSTED_WORKER).await?;
     remove_stopped_runner_containers_from_list(docker, containers).await
 }
 
-/// List every Docker container carrying the Agentics runner label.
+/// Remove stale local-validation containers left by interrupted CLI runs.
+pub async fn remove_stale_local_validation_containers(
+    docker: &Docker,
+) -> Result<RunnerContainerCleanupSummary> {
+    let containers =
+        list_agentics_runner_containers(docker, super::RUNNER_SCOPE_LOCAL_VALIDATION).await?;
+    let now_secs = current_unix_timestamp_secs();
+    let mut summary = RunnerContainerCleanupSummary::default();
+    for container in containers {
+        if !is_stale_runner_container(container.created, now_secs) {
+            continue;
+        }
+        let Some(container_id) = container.id else {
+            continue;
+        };
+        if matches!(container.state, Some(ContainerSummaryStateEnum::RUNNING)) {
+            kill_and_remove_container(docker, &container_id).await?;
+            summary.removed_running = summary.removed_running.checked_add(1).ok_or_else(|| {
+                AppError::Internal("removed local validation container count overflow".to_string())
+            })?;
+        } else {
+            remove_container(docker, &container_id).await?;
+            summary.removed_stopped = summary.removed_stopped.checked_add(1).ok_or_else(|| {
+                AppError::Internal("removed local validation container count overflow".to_string())
+            })?;
+        }
+    }
+    Ok(summary)
+}
+
+/// List every Docker container carrying the Agentics runner label for one scope.
 async fn list_agentics_runner_containers(
     docker: &Docker,
+    scope: &str,
 ) -> Result<Vec<bollard::models::ContainerSummary>> {
     let mut filters = HashMap::new();
     filters.insert(
@@ -326,11 +361,7 @@ async fn list_agentics_runner_containers(
                 super::RUNNER_KIND_LABEL,
                 super::RUNNER_KIND_ZIP_PROJECT
             ),
-            format!(
-                "{}={}",
-                super::RUNNER_SCOPE_LABEL,
-                super::RUNNER_SCOPE_HOSTED_WORKER
-            ),
+            format!("{}={}", super::RUNNER_SCOPE_LABEL, scope),
         ],
     );
     let options = ListContainersOptionsBuilder::default()
@@ -343,17 +374,17 @@ async fn list_agentics_runner_containers(
         .map_err(|e| AppError::Docker(format!("list runner containers failed: {e}")))?;
     Ok(containers
         .into_iter()
-        .filter(container_has_hosted_runner_scope)
+        .filter(|container| container_has_runner_scope(container, scope))
         .collect())
 }
 
-/// Return true only for containers owned by hosted worker reconciliation.
-fn container_has_hosted_runner_scope(container: &bollard::models::ContainerSummary) -> bool {
+/// Return true only for containers owned by the requested runner scope.
+fn container_has_runner_scope(container: &bollard::models::ContainerSummary, scope: &str) -> bool {
     container
         .labels
         .as_ref()
         .and_then(|labels| labels.get(super::RUNNER_SCOPE_LABEL))
-        .is_some_and(|scope| scope == super::RUNNER_SCOPE_HOSTED_WORKER)
+        .is_some_and(|value| value == scope)
 }
 
 /// Remove stale stopped containers from a pre-fetched Docker container list.
@@ -1010,6 +1041,27 @@ mod tests {
             crate::runner::RUNNER_SCOPE_LOCAL_VALIDATION.to_string(),
         );
         assert!(RunnerContainerLabels::parse(&labels).is_none());
+    }
+
+    /// Verifies scope filtering separates hosted workers from local validation.
+    #[test]
+    fn runner_container_scope_filter_matches_requested_scope() {
+        let container = bollard::models::ContainerSummary {
+            labels: Some(HashMap::from([(
+                crate::runner::RUNNER_SCOPE_LABEL.to_string(),
+                crate::runner::RUNNER_SCOPE_LOCAL_VALIDATION.to_string(),
+            )])),
+            ..Default::default()
+        };
+
+        assert!(container_has_runner_scope(
+            &container,
+            crate::runner::RUNNER_SCOPE_LOCAL_VALIDATION,
+        ));
+        assert!(!container_has_runner_scope(
+            &container,
+            crate::runner::RUNNER_SCOPE_HOSTED_WORKER,
+        ));
     }
 
     /// Build valid runner labels for classification tests.

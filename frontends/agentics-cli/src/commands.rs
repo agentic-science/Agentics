@@ -689,6 +689,7 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
     config.validate_runner_storage()?;
 
     let docker = shared::runner::connect_docker(&config)?;
+    shared::runner::remove_stale_local_validation_containers(&docker).await?;
     let storage = LocalStorage::new(&storage_root);
     let package_report = output::LocalValidationPackageReport {
         workspace_dir: package.workspace_dir.clone(),

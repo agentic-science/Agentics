@@ -234,6 +234,13 @@ Prepare specs 的形状如下：
 
 每次 invocation 结束后，worker 会把只包含 regular files 的 sanitized run tree 复制到 `/solution-runs/{run_name}`，并为 evaluator 写入 `/solution-runs/{run_name}/agentics-run.json`。该 metadata 包含 `run_name`、`interface`、`exit_code`、`timed_out`、`wall_time_ms`、`stdout_path`、`stderr_path` 和 `output_dir`。这让 challenge-owned evaluator 可以把 correctness checks 与 worker-measured per-run timing 和任意 aggregate metrics 结合起来，同时阻止 submitted solutions 通过 symlink 或 special files 影响 evaluator container。
 
+MVP 中 evaluator 会收到每个 run 的完整 sanitized `/io` tree，而不只是 declared
+output files。Challenge-owned evaluator code 必须把该 tree 视为
+participant-controlled hostile input，忽略 unexpected files，并且只读取
+`agentics-run.json`、declared outputs 和 challenge-owned reference data。Output
+数量、深度、字节数、symlink 和 special-file checks 会降低风险面，但不会让任意
+participant files 变成可信输入。
+
 ## Execution Environment Policy
 
 Worker 使用隔离的 solution 和 evaluator environments：

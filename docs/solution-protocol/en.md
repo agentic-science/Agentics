@@ -253,6 +253,13 @@ Prepare specs have this shape:
 
 After each invocation, the worker copies a sanitized regular-file-only run tree to `/solution-runs/{run_name}` and writes `/solution-runs/{run_name}/agentics-run.json` for the evaluator. The metadata includes `run_name`, `interface`, `exit_code`, `timed_out`, `wall_time_ms`, `stdout_path`, `stderr_path`, and `output_dir`. This lets challenge-owned evaluators combine correctness checks with worker-measured per-run timing and arbitrary aggregate metrics while preventing submitted solutions from passing symlinks or special files into the evaluator container.
 
+For MVP, the evaluator receives the whole sanitized `/io` tree for each run,
+not only declared output files. Challenge-owned evaluator code must treat that
+tree as hostile participant-controlled input, ignore unexpected files, and read
+only `agentics-run.json`, declared outputs, and challenge-owned reference data.
+Output count, depth, byte, symlink, and special-file checks reduce the surface
+but do not make arbitrary participant files trusted.
+
 ## Execution Environment Policy
 
 The worker uses separate solution and evaluator environments:

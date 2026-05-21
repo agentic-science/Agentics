@@ -36,7 +36,7 @@ mod tests;
 
 pub use docker::{
     RunnerContainerCleanupSummary, connect_docker, reconcile_runner_containers,
-    remove_stopped_runner_containers,
+    remove_stale_local_validation_containers, remove_stopped_runner_containers,
 };
 
 use docker::{ContainerOutcome, ContainerRequest, bind_mount, pre_pull_image, run_container};
