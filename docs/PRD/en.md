@@ -384,7 +384,9 @@ Each challenge must define one authoritative ranking output:
 - Either one emitted metric is declared as the ranking metric.
 - Or the challenge provides a ranking script that converts aggregate results into one scalar score.
 
-Either way, the normalized result must include a finite platform-facing `rank_score`.
+Either way, the evaluator result must include a finite platform-facing
+`rank_score`, or enough declared aggregate metrics for the platform to derive
+one from the primary metric.
 
 Challenge owners may also define:
 

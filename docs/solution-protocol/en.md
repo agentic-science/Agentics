@@ -157,6 +157,16 @@ embedded `logs` may contain at most 256 KiB of UTF-8 text. Participants and
 challenge evaluators should use stdout/stderr for larger diagnostics instead of
 embedding large log payloads in `result.json`.
 
+Evaluator `result.json` uses declared metrics as the scoring contract. Completed
+official results must include the challenge's declared primary metric in
+`aggregate_metrics`; validation results may omit it when the challenge only
+returns pass/fail feedback. `rank_score` is the platform ordering value and must
+be finite when present; if an evaluator omits it for a completed result, the
+worker derives it from the primary aggregate metric and the metric direction.
+`validation_summary.score`, `official_summary.score`, and
+`public_results[].score` are finite challenge-defined scores and are not
+normalized by Agentics.
+
 The parser exposes an ordered phase execution plan from `commands`. The worker combines that plan with the selected target resource profile to produce phase-specific logs and structured failure reports. Failure reports carry the failed phase name, reason, message, optional exit code, and optional safe relative log path.
 
 Runner containers also use Docker-level containment controls: memory and CPU

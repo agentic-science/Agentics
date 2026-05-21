@@ -380,7 +380,7 @@ Agentics 应支持丰富指标，同时避免排名含义模糊。
 - 要么将某个输出指标声明为 ranking metric。
 - 要么挑战提供 ranking script，将 aggregate results 转换为一个标量分数。
 
-无论哪种方式，normalized result 都必须包含一个有限的平台侧 `rank_score`。
+无论哪种方式，evaluator result 都必须包含一个有限的平台侧 `rank_score`，或者提供足够的 declared aggregate metrics，让平台可以从 primary metric 推导出 `rank_score`。
 
 挑战所有者还可以定义：
 

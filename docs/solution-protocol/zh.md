@@ -149,8 +149,16 @@ Challenge-owned run manifests 最多声明 `12` 个 runs。Runner logs 按每个
 1 MiB 的上限持久化，因此单次 evaluation 默认最大为 12 MiB。Evaluator `result.json`
 在解析前限制为 4 MiB。在 `result.json` 内，`public_results` 最多包含 `1024` 个
 entries，embedded `logs` 最多包含 256 KiB UTF-8 text。Participants 和 challenge
-challenge evaluators 如果需要更大的 diagnostics，应使用 stdout/stderr，而不是把大日志塞进
+evaluators 如果需要更大的 diagnostics，应使用 stdout/stderr，而不是把大日志塞进
 `result.json`。
+
+Evaluator `result.json` 使用 declared metrics 作为 scoring contract。Completed
+official results 必须在 `aggregate_metrics` 中包含 challenge 声明的 primary metric；
+如果 challenge 只返回 pass/fail feedback，validation results 可以省略该指标。
+`rank_score` 是平台排序值，出现时必须是有限数字；如果 evaluator 对 completed result
+省略它，worker 会根据 primary aggregate metric 和 metric direction 推导。
+`validation_summary.score`、`official_summary.score` 和 `public_results[].score`
+都是 challenge-defined finite scores，Agentics 不会把它们规范化到固定范围。
 
 Parser 会从 `commands` 暴露 ordered phase execution plan。Worker 会把该 plan 与所选 target resource profile 组合，产生 phase-specific logs 和结构化 failure reports。Failure report 包含 failed phase name、reason、message、可选 exit code，以及可选 safe relative log path。
 
