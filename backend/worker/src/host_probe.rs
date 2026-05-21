@@ -1,23 +1,37 @@
 //! Hosted runner profile probe enforcement.
 
 use std::process::ExitStatus;
+use std::time::Duration;
 
+use bollard::Docker;
+use bollard::container::LogOutput;
+use bollard::models::{ContainerCreateBody, DeviceRequest, HostConfig, HostConfigLogConfig};
+use bollard::query_parameters::{
+    CreateContainerOptionsBuilder, CreateImageOptionsBuilder, LogsOptionsBuilder,
+    RemoveContainerOptionsBuilder, StartContainerOptions, WaitContainerOptionsBuilder,
+};
+use futures::StreamExt;
 use shared::config::{
     Config, DEFAULT_HOST_PROBE_COMMAND, ENV_AGENTICS_HOST_PROBE_COMMAND, HostProbeMode,
+    WorkerAccelerators,
 };
+use shared::zip_project::DockerNetworkMode;
 use tokio::process::Command;
+use tokio::time::timeout;
 use tracing::{info, warn};
+use uuid::Uuid;
 
 const MAX_PROBE_OUTPUT_BYTES: usize = 8192;
+const GPU_PROBE_TIMEOUT_SECS: u64 = 30;
 
 /// Run the configured hosted profile probe before the worker accepts jobs.
 pub(crate) async fn enforce_host_probe(config: &Config) -> anyhow::Result<()> {
     match config.host_probe_mode {
         HostProbeMode::Off => Ok(()),
         HostProbeMode::Warn | HostProbeMode::Require => {
+            let mode = config.host_probe_mode;
             let command = std::env::var(ENV_AGENTICS_HOST_PROBE_COMMAND)
                 .unwrap_or_else(|_| DEFAULT_HOST_PROBE_COMMAND.to_string());
-            let mode = config.host_probe_mode;
             let output = Command::new(&command)
                 .env("AGENTICS_HOST_PROBE_MODE", mode.as_str())
                 .output()
@@ -37,6 +51,212 @@ pub(crate) async fn enforce_host_probe(config: &Config) -> anyhow::Result<()> {
                 ),
             }
         }
+    }
+}
+
+/// Run a Docker-backed GPU probe before GPU-capable workers accept jobs.
+pub(crate) async fn enforce_worker_gpu_probe(
+    config: &Config,
+    docker: &Docker,
+) -> anyhow::Result<()> {
+    if config.worker_accelerators != WorkerAccelerators::Gpu {
+        return Ok(());
+    }
+    if !cfg!(target_os = "linux") {
+        anyhow::bail!("AGENTICS_WORKER_ACCELERATORS=gpu is Linux-only");
+    }
+
+    let image = config.worker_gpu_probe_image()?;
+    pull_probe_image(docker, image).await?;
+    let container_id = create_gpu_probe_container(docker, image).await?;
+    let probe_result = run_gpu_probe_container(docker, &container_id).await;
+    let cleanup_result = remove_probe_container(docker, &container_id).await;
+
+    match (probe_result, cleanup_result) {
+        (Ok(logs), Ok(())) => {
+            info!(probe_output = %logs.trim(), "worker GPU probe passed");
+            Ok(())
+        }
+        (Ok(_), Err(cleanup_error)) => Err(cleanup_error),
+        (Err(probe_error), Ok(())) => Err(probe_error),
+        (Err(probe_error), Err(cleanup_error)) => {
+            anyhow::bail!(
+                "{probe_error}; additionally failed to remove GPU probe container: {cleanup_error}"
+            )
+        }
+    }
+}
+
+/// Pull the configured GPU probe image when it is not already present locally.
+async fn pull_probe_image(docker: &Docker, image: &str) -> anyhow::Result<()> {
+    if docker.inspect_image(image).await.is_ok() {
+        return Ok(());
+    }
+
+    let opts = CreateImageOptionsBuilder::default()
+        .from_image(image)
+        .platform("linux/arm64")
+        .build();
+    let mut stream = docker.create_image(Some(opts), None, None);
+    while let Some(item) = stream.next().await {
+        item.map_err(|error| anyhow::anyhow!("failed to pull GPU probe image `{image}`: {error}"))?;
+    }
+    Ok(())
+}
+
+/// Create a minimal GPU device-request probe container.
+async fn create_gpu_probe_container(docker: &Docker, image: &str) -> anyhow::Result<String> {
+    let name = format!("agentics-gpu-probe-{}", Uuid::new_v4());
+    let host_config = HostConfig {
+        network_mode: Some(DockerNetworkMode::None.as_str().to_string()),
+        auto_remove: Some(false),
+        device_requests: Some(vec![DeviceRequest {
+            driver: Some("nvidia".to_string()),
+            count: Some(1),
+            capabilities: Some(vec![vec!["gpu".to_string()]]),
+            ..Default::default()
+        }]),
+        readonly_rootfs: Some(true),
+        cap_drop: Some(vec!["ALL".to_string()]),
+        security_opt: Some(vec!["no-new-privileges:true".to_string()]),
+        privileged: Some(false),
+        publish_all_ports: Some(false),
+        init: Some(true),
+        oom_kill_disable: Some(false),
+        log_config: Some(probe_log_config()),
+        ..Default::default()
+    };
+    let body = ContainerCreateBody {
+        image: Some(image.to_string()),
+        entrypoint: Some(Vec::<String>::new()),
+        cmd: Some(vec![
+            "sh".to_string(),
+            "-lc".to_string(),
+            "nvidia-smi -L && nvidia-smi >/dev/null".to_string(),
+        ]),
+        host_config: Some(host_config),
+        labels: Some(std::collections::HashMap::from([(
+            "ai.agentics.worker.gpu_probe".to_string(),
+            "true".to_string(),
+        )])),
+        ..Default::default()
+    };
+    let opts = CreateContainerOptionsBuilder::default()
+        .name(&name)
+        .platform("linux/arm64")
+        .build();
+    let response = docker
+        .create_container(Some(opts), body)
+        .await
+        .map_err(|error| anyhow::anyhow!("failed to create GPU probe container: {error}"))?;
+    Ok(response.id)
+}
+
+/// Start the GPU probe container, wait for completion, and return bounded logs.
+async fn run_gpu_probe_container(docker: &Docker, container_id: &str) -> anyhow::Result<String> {
+    docker
+        .start_container(container_id, None::<StartContainerOptions>)
+        .await
+        .map_err(|error| anyhow::anyhow!("failed to start GPU probe container: {error}"))?;
+
+    let exit_code = match timeout(
+        Duration::from_secs(GPU_PROBE_TIMEOUT_SECS),
+        wait_probe_container(docker, container_id),
+    )
+    .await
+    {
+        Ok(result) => result?,
+        Err(_) => {
+            anyhow::bail!("GPU probe container timed out after {GPU_PROBE_TIMEOUT_SECS}s");
+        }
+    };
+    let logs = collect_probe_logs(docker, container_id).await?;
+    if exit_code != 0 {
+        anyhow::bail!("GPU probe container exited with {exit_code}\n{logs}");
+    }
+    Ok(logs)
+}
+
+/// Wait for the probe container to stop.
+async fn wait_probe_container(docker: &Docker, container_id: &str) -> anyhow::Result<i64> {
+    let opts = WaitContainerOptionsBuilder::default()
+        .condition("not-running")
+        .build();
+    let mut stream = docker.wait_container(container_id, Some(opts));
+    let mut exit_code = 1;
+    while let Some(result) = stream.next().await {
+        let status = result
+            .map_err(|error| anyhow::anyhow!("failed to wait for GPU probe container: {error}"))?;
+        exit_code = status.status_code;
+    }
+    Ok(exit_code)
+}
+
+/// Collect bounded stdout and stderr from the probe container.
+async fn collect_probe_logs(docker: &Docker, container_id: &str) -> anyhow::Result<String> {
+    let opts = LogsOptionsBuilder::default()
+        .stdout(true)
+        .stderr(true)
+        .tail("all")
+        .build();
+    let mut logs = docker.logs(container_id, Some(opts));
+    let mut output = Vec::new();
+    let mut truncated = false;
+
+    while let Some(chunk) = logs.next().await {
+        match chunk {
+            Ok(LogOutput::StdOut { message })
+            | Ok(LogOutput::StdErr { message })
+            | Ok(LogOutput::Console { message }) => {
+                append_bounded_bytes(&mut output, &message, &mut truncated);
+            }
+            Ok(_) => {}
+            Err(error) => anyhow::bail!("failed to collect GPU probe logs: {error}"),
+        }
+    }
+
+    let mut text = String::from_utf8_lossy(&output).into_owned();
+    if truncated {
+        text.push_str("\n[agentics] GPU probe logs truncated\n");
+    }
+    Ok(text)
+}
+
+/// Remove the probe container, forcing cleanup after timeouts or failures.
+async fn remove_probe_container(docker: &Docker, container_id: &str) -> anyhow::Result<()> {
+    let opts = RemoveContainerOptionsBuilder::default().force(true).build();
+    docker
+        .remove_container(container_id, Some(opts))
+        .await
+        .map_err(|error| anyhow::anyhow!("failed to remove GPU probe container: {error}"))
+}
+
+/// Bound probe logs before they reach startup errors or service logs.
+fn append_bounded_bytes(output: &mut Vec<u8>, chunk: &[u8], truncated: &mut bool) {
+    if output.len() >= MAX_PROBE_OUTPUT_BYTES {
+        *truncated = !chunk.is_empty();
+        return;
+    }
+    let remaining = MAX_PROBE_OUTPUT_BYTES.saturating_sub(output.len());
+    if chunk.len() > remaining {
+        output.extend(chunk.iter().take(remaining).copied());
+        *truncated = true;
+    } else {
+        output.extend_from_slice(chunk);
+    }
+}
+
+/// Docker log cap for GPU probe containers.
+fn probe_log_config() -> HostConfigLogConfig {
+    let mut config = std::collections::HashMap::new();
+    config.insert(
+        "max-size".to_string(),
+        format!("{}b", MAX_PROBE_OUTPUT_BYTES),
+    );
+    config.insert("max-file".to_string(), "1".to_string());
+    HostConfigLogConfig {
+        typ: Some("json-file".to_string()),
+        config: Some(config),
     }
 }
 
@@ -80,7 +300,7 @@ fn bounded_utf8(bytes: &[u8]) -> String {
 mod tests {
     use shared::config::HostProbeMode;
 
-    use super::{bounded_utf8, handle_probe_failure};
+    use super::{append_bounded_bytes, bounded_utf8, handle_probe_failure};
 
     /// Verifies require mode fails closed when the hosted probe fails.
     #[test]
@@ -104,5 +324,21 @@ mod tests {
 
         assert!(text.len() < 9000);
         assert!(text.contains("truncated"));
+    }
+
+    /// Verifies GPU probe log collection is bounded by bytes.
+    #[test]
+    fn gpu_probe_log_append_truncates_by_byte_limit() {
+        let mut output = Vec::new();
+        let mut truncated = false;
+
+        append_bounded_bytes(
+            &mut output,
+            &vec![b'x'; super::MAX_PROBE_OUTPUT_BYTES + 1],
+            &mut truncated,
+        );
+
+        assert_eq!(output.len(), super::MAX_PROBE_OUTPUT_BYTES);
+        assert!(truncated);
     }
 }

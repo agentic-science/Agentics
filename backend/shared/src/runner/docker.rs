@@ -696,7 +696,6 @@ async fn create_container(
     host_config.memory_swap = Some(memory);
     host_config.nano_cpus = Some(nano_cpus);
     host_config.storage_opt = docker_storage_opt(request.docker_layer_quota_mb);
-    host_config.runtime = accelerator_runtime(request.accelerator);
     host_config.device_requests =
         accelerator_device_requests(request.accelerator, request.accelerator_count)?;
 
@@ -1121,14 +1120,6 @@ fn docker_storage_opt(limit_mb: Option<u64>) -> Option<HashMap<String, String>> 
         storage_opt.insert("size".to_string(), format!("{limit_mb}m"));
         storage_opt
     })
-}
-
-/// Handles accelerator runtime for this module.
-fn accelerator_runtime(accelerator: TargetAccelerator) -> Option<String> {
-    match accelerator {
-        TargetAccelerator::None => None,
-        TargetAccelerator::Gpu => Some("nvidia".to_string()),
-    }
 }
 
 /// Handles accelerator device requests for this module.

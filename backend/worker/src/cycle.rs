@@ -30,7 +30,7 @@ use shared::runner::{
 };
 use shared::storage::LocalStorage;
 
-use crate::host_probe::enforce_host_probe;
+use crate::host_probe::{enforce_host_probe, enforce_worker_gpu_probe};
 
 /// Long-lived evaluation worker with shared database, Docker, and storage handles.
 #[derive(Debug)]
@@ -49,6 +49,7 @@ impl Worker {
         enforce_host_probe(&config).await?;
         let db = create_pool(&config, 2).await?;
         let docker = connect_docker(&config)?;
+        enforce_worker_gpu_probe(&config, &docker).await?;
         let cleanup =
             reconcile_runner_containers(&docker, &db, config.worker_stale_job_minutes.max(1))
                 .await?;
@@ -171,7 +172,7 @@ pub async fn run_worker_cycle(
         );
     }
 
-    let job = claim_next_evaluation_job(db, worker_id).await?;
+    let job = claim_next_evaluation_job(db, worker_id, config.worker_accelerators).await?;
 
     let Some(job) = job else {
         // Heartbeats are the admin-facing signal that an otherwise idle worker
@@ -181,6 +182,7 @@ pub async fn run_worker_cycle(
             worker_id,
             &HeartbeatPayload {
                 status: "idle".to_string(),
+                accelerators: config.worker_accelerators.heartbeat_values(),
                 job_id: None,
                 solution_submission_id: None,
                 last_completed_job_id: None,
@@ -196,6 +198,7 @@ pub async fn run_worker_cycle(
         worker_id,
         &HeartbeatPayload {
             status: "running".to_string(),
+            accelerators: config.worker_accelerators.heartbeat_values(),
             job_id: Some(job.id.clone()),
             solution_submission_id: Some(job.solution_submission_id.clone()),
             last_completed_job_id: None,
@@ -293,6 +296,7 @@ pub async fn run_worker_cycle(
                     worker_id,
                     &HeartbeatPayload {
                         status: "idle".to_string(),
+                        accelerators: config.worker_accelerators.heartbeat_values(),
                         job_id: None,
                         solution_submission_id: None,
                         last_completed_job_id: None,
@@ -308,6 +312,7 @@ pub async fn run_worker_cycle(
                 worker_id,
                 &HeartbeatPayload {
                     status: "idle".to_string(),
+                    accelerators: config.worker_accelerators.heartbeat_values(),
                     job_id: None,
                     solution_submission_id: None,
                     last_completed_job_id: Some(job_id.clone()),
@@ -353,6 +358,7 @@ pub async fn run_worker_cycle(
                 worker_id,
                 &HeartbeatPayload {
                     status: "idle".to_string(),
+                    accelerators: config.worker_accelerators.heartbeat_values(),
                     job_id: None,
                     solution_submission_id: None,
                     last_completed_job_id: None,
@@ -398,6 +404,7 @@ pub async fn run_worker_cycle(
                     worker_id,
                     &HeartbeatPayload {
                         status: "idle".to_string(),
+                        accelerators: config.worker_accelerators.heartbeat_values(),
                         job_id: None,
                         solution_submission_id: None,
                         last_completed_job_id: None,
@@ -413,6 +420,7 @@ pub async fn run_worker_cycle(
                 worker_id,
                 &HeartbeatPayload {
                     status: "idle".to_string(),
+                    accelerators: config.worker_accelerators.heartbeat_values(),
                     job_id: None,
                     solution_submission_id: None,
                     last_completed_job_id: None,

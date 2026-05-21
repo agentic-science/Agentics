@@ -22,6 +22,7 @@ async fn admin_read_models_power_operator_console(pool: sqlx::PgPool) {
         "test-worker",
         &shared::db::HeartbeatPayload {
             status: "idle".to_string(),
+            accelerators: vec!["none".to_string()],
             job_id: None,
             solution_submission_id: None,
             last_completed_job_id: None,

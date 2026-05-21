@@ -1,8 +1,9 @@
 use serde_json::Value;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
+use crate::config::WorkerAccelerators;
 use crate::error::{AppError, Result};
-use crate::models::challenge::ChallengeBundleSpec;
+use crate::models::challenge::{ChallengeBundleSpec, TargetAccelerator};
 use crate::models::evaluation::{EvaluationJobPayload, ScoringMode};
 use crate::models::ids::{EvaluationJobId, SolutionSubmissionId};
 use crate::models::names::{ChallengeName, TargetName};
@@ -24,6 +25,7 @@ pub struct EvaluationJobRecord {
     pub solution_submission_id: SolutionSubmissionId,
     pub challenge_name: ChallengeName,
     pub target: TargetName,
+    pub required_accelerator: TargetAccelerator,
     pub eval_type: ScoringMode,
     pub status: String,
     pub attempt_count: i32,
@@ -37,6 +39,7 @@ pub struct EvaluationJobRecord {
 pub async fn claim_next_evaluation_job(
     pool: &PgPool,
     worker_id: &str,
+    worker_accelerators: WorkerAccelerators,
 ) -> Result<Option<EvaluationJobRecord>> {
     let mut tx = pool.begin().await?;
 
@@ -48,6 +51,7 @@ pub async fn claim_next_evaluation_job(
             WHERE status = 'queued'
               AND scheduled_at <= NOW()
               AND attempt_count < max_attempts
+              AND (required_accelerator = 'none' OR ($2 AND required_accelerator = 'gpu'))
             ORDER BY priority DESC, scheduled_at ASC
             FOR UPDATE SKIP LOCKED
             LIMIT 1
@@ -56,10 +60,11 @@ pub async fn claim_next_evaluation_job(
         SET status = 'running', claimed_at = NOW(), worker_id = $1, attempt_count = j.attempt_count + 1
         FROM next_job
         WHERE j.id = next_job.id
-        RETURNING j.id, j.solution_submission_id, j.challenge_name, j.target, j.eval_type, j.status, j.attempt_count, j.payload_json
+        RETURNING j.id, j.solution_submission_id, j.challenge_name, j.target, j.required_accelerator, j.eval_type, j.status, j.attempt_count, j.payload_json
         "#
     )
     .bind(worker_id)
+    .bind(worker_accelerators.supports(TargetAccelerator::Gpu))
     .fetch_optional(&mut *tx)
     .await?;
 
@@ -96,6 +101,7 @@ pub async fn claim_next_evaluation_job(
         solution_submission_id,
         challenge_name: challenge_name_from_row(&r, "challenge_name")?,
         target: target_from_row(&r, "target")?,
+        required_accelerator: required_accelerator_from_row(&r, "required_accelerator")?,
         eval_type,
         status: r.try_get("status")?,
         attempt_count: r.try_get("attempt_count")?,
@@ -307,6 +313,7 @@ pub async fn queue_evaluation_job(
     .map_err(|e| AppError::Internal(e.to_string()))?;
 
     let eval_type_str = input.eval_type.as_str();
+    let required_accelerator = required_accelerator_for_target(&spec, &target)?;
     let priority = if input.eval_type == ScoringMode::Official {
         if let Some(max_active) = input.max_active_official_jobs {
             lock_quota_scope(&mut tx, "global:official-active").await?;
@@ -324,14 +331,15 @@ pub async fn queue_evaluation_job(
 
     sqlx::query(
         r#"
-        INSERT INTO evaluation_jobs (id, solution_submission_id, challenge_name, target, eval_type, status, priority, payload_json)
-        VALUES ($1::uuid, $2::uuid, $3, $4, $5, 'queued', $6, $7)
+        INSERT INTO evaluation_jobs (id, solution_submission_id, challenge_name, target, required_accelerator, eval_type, status, priority, payload_json)
+        VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, 'queued', $7, $8)
         "#
     )
     .bind(input.job_id.as_str())
     .bind(input.solution_submission_id.as_str())
     .bind(challenge_name.as_str())
     .bind(target.as_str())
+    .bind(required_accelerator.as_str())
     .bind(eval_type_str)
     .bind(priority)
     .bind(&payload)
@@ -362,6 +370,7 @@ pub async fn queue_evaluation_job(
         solution_submission_id: solution_submission_id_from_row(&row, "id")?,
         challenge_name,
         target,
+        required_accelerator,
         eval_type: input.eval_type,
         status: "queued".to_string(),
         attempt_count: 0,
@@ -377,6 +386,33 @@ fn storage_key_from_row(
     let value: String = row.try_get(column)?;
     crate::storage::StorageKey::try_new(&value)
         .map_err(|e| AppError::Internal(format!("stored invalid storage key in `{column}`: {e}")))
+}
+
+/// Reads required worker accelerator from a database row.
+fn required_accelerator_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<TargetAccelerator> {
+    let value: String = row.try_get(column)?;
+    TargetAccelerator::from_storage_value(&value).ok_or_else(|| {
+        AppError::Internal(format!(
+            "stored invalid required accelerator `{value}` in `{column}`"
+        ))
+    })
+}
+
+/// Return the accelerator requirement declared by the selected challenge target.
+fn required_accelerator_for_target(
+    spec: &ChallengeBundleSpec,
+    target: &TargetName,
+) -> Result<TargetAccelerator> {
+    let target_spec = spec.target(target).ok_or_else(|| {
+        AppError::Internal(format!(
+            "challenge `{}` does not declare target `{target}` after admission validation",
+            spec.challenge_name
+        ))
+    })?;
+    Ok(target_spec.accelerator)
 }
 
 /// Reads managed bundle path from a database row and validates its domain shape.

@@ -100,6 +100,8 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
         cors_allowed_origins: "http://127.0.0.1:3001,http://localhost:3001".to_string(),
         worker_poll_interval_ms: 3000,
         worker_stale_job_minutes: 1,
+        worker_accelerators: shared::config::WorkerAccelerators::None,
+        worker_gpu_probe_image: None,
         validation_runs_per_agent_challenge_day: 20,
         official_runs_per_agent_challenge_day: 5,
         max_active_official_jobs: 20,

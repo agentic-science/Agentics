@@ -19,6 +19,7 @@ use crate::models::request::AdminServiceHeartbeatDto;
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct HeartbeatPayload {
     pub status: String,
+    pub accelerators: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub job_id: Option<EvaluationJobId>,
     #[serde(skip_serializing_if = "Option::is_none")]

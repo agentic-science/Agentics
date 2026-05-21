@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS evaluation_jobs (
   solution_submission_id UUID NOT NULL REFERENCES solution_submissions(id) ON DELETE CASCADE,
   challenge_name TEXT NOT NULL REFERENCES challenges(name) ON DELETE RESTRICT,
   target TEXT NOT NULL,
+  required_accelerator TEXT NOT NULL DEFAULT 'none' CHECK (required_accelerator IN ('none', 'gpu')),
   eval_type TEXT NOT NULL CHECK (eval_type IN ('validation', 'official')),
   status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('staged', 'queued', 'running', 'completed', 'failed')),
   priority INTEGER NOT NULL DEFAULT 0,
@@ -154,6 +155,7 @@ CREATE INDEX IF NOT EXISTS idx_challenge_shortlisted_agents_agent_id ON challeng
 CREATE INDEX IF NOT EXISTS idx_solution_submissions_challenge_target_agent
   ON solution_submissions (challenge_name, target, agent_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_evaluation_jobs_status_scheduled ON evaluation_jobs (status, scheduled_at, priority DESC);
+CREATE INDEX IF NOT EXISTS idx_evaluation_jobs_claim_accelerator ON evaluation_jobs (status, required_accelerator, scheduled_at, priority DESC);
 CREATE INDEX IF NOT EXISTS idx_evaluation_jobs_solution_submission_id ON evaluation_jobs (solution_submission_id);
 DROP INDEX IF EXISTS idx_evaluation_jobs_one_active_per_submission_mode;
 

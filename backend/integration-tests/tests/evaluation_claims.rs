@@ -6,7 +6,9 @@ use helpers::{
     api_url, examples_challenges_root, sample_sum_solution, solution_zip_base64,
     spawn_app_with_config, test_config,
 };
+use shared::config::WorkerAccelerators;
 use shared::db::{MarkEvaluationStartedInput, PersistedEvaluationResult};
+use shared::models::challenge::TargetAccelerator;
 use shared::models::evaluation::{EvaluationStatus, MetricValue, ScoreSummary, ScoringMode};
 use shared::models::ids::{EvaluationId, EvaluationJobId, SolutionSubmissionId};
 use shared::models::names::MetricName;
@@ -258,6 +260,136 @@ async fn evaluation_rows_cannot_cross_submission_targets(pool: sqlx::PgPool) {
     );
 }
 
+/// Verifies worker accelerator capability is enforced atomically while claiming jobs.
+#[sqlx::test(migrations = "../migrations")]
+async fn worker_accelerator_capability_filters_job_claims(pool: sqlx::PgPool) {
+    let agent_id = uuid::Uuid::new_v4().to_string();
+    let cpu_submission_id = uuid::Uuid::new_v4().to_string();
+    let gpu_submission_id = uuid::Uuid::new_v4().to_string();
+    let cpu_job_id = uuid::Uuid::new_v4().to_string();
+    let gpu_job_id = uuid::Uuid::new_v4().to_string();
+    let bundle_root = tempfile::tempdir().expect("failed to create bundle tempdir");
+    let private_bundle = bundle_root.path().join("private-bundle");
+    let public_bundle = bundle_root.path().join("public-bundle");
+    std::fs::create_dir_all(&private_bundle).expect("failed to create private bundle dir");
+    std::fs::create_dir_all(&public_bundle).expect("failed to create public bundle dir");
+
+    sqlx::query(
+        r#"
+        INSERT INTO agents (id, display_name)
+        VALUES ($1::uuid, 'accelerator-claim-agent')
+        "#,
+    )
+    .bind(&agent_id)
+    .execute(&pool)
+    .await
+    .expect("agent should insert");
+
+    sqlx::query(
+        r#"
+        INSERT INTO challenges (name, title, spec_json)
+        VALUES ('accelerator-claim', 'Accelerator Claim', '{}'::jsonb)
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect("challenge should insert");
+
+    for (submission_id, target) in [
+        (&cpu_submission_id, "linux-arm64-cpu"),
+        (&gpu_submission_id, "linux-arm64-cuda"),
+    ] {
+        sqlx::query(
+            r#"
+            INSERT INTO solution_submissions (
+                id, challenge_name, target, agent_id, artifact_key, status
+            )
+            VALUES (
+                $1::uuid, 'accelerator-claim', $2, $3::uuid, $4, 'queued'
+            )
+            "#,
+        )
+        .bind(submission_id)
+        .bind(target)
+        .bind(&agent_id)
+        .bind(format!("artifacts/{submission_id}.zip"))
+        .execute(&pool)
+        .await
+        .expect("submission should insert");
+    }
+
+    for (job_id, submission_id, target, required_accelerator, priority) in [
+        (
+            &gpu_job_id,
+            &gpu_submission_id,
+            "linux-arm64-cuda",
+            "gpu",
+            10,
+        ),
+        (
+            &cpu_job_id,
+            &cpu_submission_id,
+            "linux-arm64-cpu",
+            "none",
+            0,
+        ),
+    ] {
+        let payload = serde_json::json!({
+            "artifact_key": format!("artifacts/{submission_id}.zip"),
+            "bundle_path": private_bundle.display().to_string(),
+            "public_bundle_path": public_bundle.display().to_string(),
+            "challenge_name": "accelerator-claim",
+            "target": target,
+        });
+        sqlx::query(
+            r#"
+            INSERT INTO evaluation_jobs (
+                id, solution_submission_id, challenge_name, target,
+                required_accelerator, eval_type, status, priority, payload_json
+            )
+            VALUES (
+                $1::uuid, $2::uuid, 'accelerator-claim', $3,
+                $4, 'validation', 'queued', $5, $6
+            )
+            "#,
+        )
+        .bind(job_id)
+        .bind(submission_id)
+        .bind(target)
+        .bind(required_accelerator)
+        .bind(priority)
+        .bind(&payload)
+        .execute(&pool)
+        .await
+        .expect("job should insert");
+    }
+
+    let cpu_claim =
+        shared::db::claim_next_evaluation_job(&pool, "cpu-only-worker", WorkerAccelerators::None)
+            .await
+            .expect("CPU worker claim query should succeed")
+            .expect("CPU worker should claim the CPU job");
+    assert_eq!(cpu_claim.id.as_str(), cpu_job_id);
+    assert_eq!(cpu_claim.required_accelerator, TargetAccelerator::None);
+
+    let skipped_gpu_claim =
+        shared::db::claim_next_evaluation_job(&pool, "cpu-only-worker-2", WorkerAccelerators::None)
+            .await
+            .expect("CPU worker claim query should succeed");
+    assert!(
+        skipped_gpu_claim.is_none(),
+        "CPU-only workers must skip queued GPU jobs"
+    );
+
+    let gpu_claim =
+        shared::db::claim_next_evaluation_job(&pool, "gpu-worker", WorkerAccelerators::Gpu)
+            .await
+            .expect("GPU worker claim query should succeed")
+            .expect("GPU worker should claim the GPU job");
+    assert_eq!(gpu_claim.id.as_str(), gpu_job_id);
+    assert_eq!(gpu_claim.required_accelerator, TargetAccelerator::Gpu);
+}
+
 /// Verifies that stale worker completion cannot overwrite current claim.
 #[sqlx::test(migrations = "../migrations")]
 async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPool) {
@@ -299,10 +431,11 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
     let solution_submission_id = SolutionSubmissionId::try_new(solution_submission_id)
         .expect("API returned valid solution submission id");
 
-    let first_claim = shared::db::claim_next_evaluation_job(&pool, "worker-a")
-        .await
-        .expect("failed to claim first job")
-        .expect("missing first job");
+    let first_claim =
+        shared::db::claim_next_evaluation_job(&pool, "worker-a", WorkerAccelerators::None)
+            .await
+            .expect("failed to claim first job")
+            .expect("missing first job");
     assert_eq!(first_claim.solution_submission_id, solution_submission_id);
     assert_eq!(first_claim.attempt_count, 1);
     assert!(
@@ -359,10 +492,11 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
         "requeue should clear stale running evaluations before a new worker starts"
     );
 
-    let second_claim = shared::db::claim_next_evaluation_job(&pool, "worker-b")
-        .await
-        .expect("failed to claim second job")
-        .expect("missing second job");
+    let second_claim =
+        shared::db::claim_next_evaluation_job(&pool, "worker-b", WorkerAccelerators::None)
+            .await
+            .expect("failed to claim second job")
+            .expect("missing second job");
     assert_eq!(second_claim.id, first_claim.id);
     assert_eq!(second_claim.attempt_count, 2);
     assert!(
@@ -682,7 +816,7 @@ async fn start_official_rejudge(
     )
     .await
     .expect("official rejudge should queue");
-    let claim = shared::db::claim_next_evaluation_job(pool, worker_id)
+    let claim = shared::db::claim_next_evaluation_job(pool, worker_id, WorkerAccelerators::None)
         .await
         .expect("failed to claim rejudge")
         .expect("missing rejudge");
@@ -765,7 +899,7 @@ async fn claim_and_start_job(
     solution_submission_id: &SolutionSubmissionId,
     worker_id: &str,
 ) -> shared::db::EvaluationJobRecord {
-    let claim = shared::db::claim_next_evaluation_job(pool, worker_id)
+    let claim = shared::db::claim_next_evaluation_job(pool, worker_id, WorkerAccelerators::None)
         .await
         .expect("failed to claim job")
         .expect("missing queued job");

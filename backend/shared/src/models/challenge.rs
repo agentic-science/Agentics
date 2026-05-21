@@ -289,6 +289,15 @@ impl TargetAccelerator {
             Self::Gpu => "gpu",
         }
     }
+
+    /// Parse a stable database string for required worker accelerator scheduling.
+    pub fn from_storage_value(value: &str) -> Option<Self> {
+        match value {
+            "none" => Some(Self::None),
+            "gpu" => Some(Self::Gpu),
+            _ => None,
+        }
+    }
 }
 
 impl Serialize for TargetAccelerator {

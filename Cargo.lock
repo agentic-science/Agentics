@@ -4685,6 +4685,7 @@ version = "0.2.5"
 dependencies = [
  "anyhow",
  "bollard",
+ "futures",
  "shared",
  "sqlx",
  "tokio",

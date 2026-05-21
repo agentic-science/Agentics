@@ -3,7 +3,7 @@ use serde_json::Value;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use crate::error::{AppError, Result};
-use crate::models::challenge::ChallengeBundleSpec;
+use crate::models::challenge::{ChallengeBundleSpec, TargetAccelerator};
 use crate::models::evaluation::{
     EvaluationDto, EvaluationJobPayload, EvaluationJobStatus, EvaluationStatus, MetricValue,
     PublicCaseResult, RunMetricResult, ScoringMode, SolutionSubmissionStatus,
@@ -154,14 +154,15 @@ pub async fn create_solution_submission_with_job(
     } else {
         0
     };
+    let required_accelerator = required_accelerator_for_target(&spec, &input.target)?;
 
     sqlx::query(
         r#"
         INSERT INTO evaluation_jobs (
-            id, solution_submission_id, challenge_name, target, eval_type, status, priority, payload_json, scheduled_at
+            id, solution_submission_id, challenge_name, target, required_accelerator, eval_type, status, priority, payload_json, scheduled_at
         )
         VALUES (
-            $1::uuid, $2::uuid, $3, $4, $5, 'staged', $6, $7,
+            $1::uuid, $2::uuid, $3, $4, $5, $6, 'staged', $7, $8,
             NOW()
         )
         "#,
@@ -170,6 +171,7 @@ pub async fn create_solution_submission_with_job(
     .bind(input.solution_submission_id.as_str())
     .bind(challenge.challenge_name.as_str())
     .bind(input.target.as_str())
+    .bind(required_accelerator.as_str())
     .bind(input.eval_type.as_str())
     .bind(priority)
     .bind(&payload)
@@ -225,6 +227,20 @@ pub async fn ensure_parent_solution_submission_matches_scope(
     .await?;
     tx.commit().await?;
     Ok(())
+}
+
+/// Return the accelerator requirement declared by the selected challenge target.
+fn required_accelerator_for_target(
+    spec: &ChallengeBundleSpec,
+    target: &TargetName,
+) -> Result<TargetAccelerator> {
+    let target_spec = spec.target(target).ok_or_else(|| {
+        AppError::Internal(format!(
+            "challenge `{}` does not declare target `{target}` after admission validation",
+            spec.challenge_name
+        ))
+    })?;
+    Ok(target_spec.accelerator)
 }
 
 /// Enforce parent-submission lineage invariants inside a submission transaction.
