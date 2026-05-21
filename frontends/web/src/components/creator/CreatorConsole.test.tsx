@@ -13,17 +13,18 @@ import {
   storeExpectedGithubOauthState,
   uploadPrivateAsset,
 } from "@/lib/creatorApi";
-import {
-  type CreatorChallengeDraftResponse,
-  createChallengeDraftRequestSchema,
-  createChallengeShortlistRevisionRequestSchema,
-  uploadChallengePrivateAssetRequestSchema,
-} from "@/lib/schemas";
+import type { CreatorChallengeDraftResponse } from "@/lib/schemas";
 import { ensureDomEnvironment } from "../../test/dom";
 
 import { CreatorConsole } from "./CreatorConsole";
 
-vi.mock("@/lib/creatorApi", () => {
+vi.mock("@/lib/creatorApi", async () => {
+  const {
+    createChallengeDraftRequestSchema,
+    createChallengeShortlistRevisionRequestSchema,
+    uploadChallengePrivateAssetRequestSchema,
+  } = await import("@/lib/schemas");
+
   class MockCreatorApiError extends Error {
     readonly status: number;
 

@@ -62,7 +62,11 @@ html[data-theme="light"] .page {
   inset: 0;
   pointer-events: none;
   content: "";
-  background: linear-gradient(180deg, transparent 0%, rgba(2, 6, 23, 0.12) 100%);
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(2, 6, 23, 0.12) 100%
+  );
 }
 
 html[data-theme="light"] .heroVisual::after {
@@ -183,7 +187,8 @@ html[data-theme="light"] .heroVisual::after {
       circle at 20% 82%,
       rgba(45, 212, 191, 0.08),
       transparent 34%
-    ), var(--surface-secondary);
+    ),
+    var(--surface-secondary);
 }
 
 .visualFrame svg {

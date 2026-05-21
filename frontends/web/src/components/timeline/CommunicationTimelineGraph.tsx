@@ -68,22 +68,25 @@ export function CommunicationTimelineGraph({
           <AnimatedLink key={link.id} link={link} model={model} />
         ))}
       </g>
-      {rowLabels?.map((row, index) => (
-        <g key={`${row.label}-${index}`}>
-          <text
-            className={`${styles.agentLabel} ${styles.agentLabelStrong}`}
-            x="52"
-            y={model.ys[index] + 4}
-          >
-            {row.label}
-          </text>
-          {row.detail ? (
-            <text className={styles.agentLabel} x="72" y={model.ys[index] + 4}>
-              {row.detail}
+      {rowLabels?.map((row, index) => {
+        const y = model.ys[index];
+        return (
+          <g key={`${row.label}-${row.detail ?? "label"}-${y}`}>
+            <text
+              className={`${styles.agentLabel} ${styles.agentLabelStrong}`}
+              x="52"
+              y={y + 4}
+            >
+              {row.label}
             </text>
-          ) : null}
-        </g>
-      ))}
+            {row.detail ? (
+              <text className={styles.agentLabel} x="72" y={y + 4}>
+                {row.detail}
+              </text>
+            ) : null}
+          </g>
+        );
+      })}
       {showTimeLabels
         ? model.xs.map((x, index) => (
             <text

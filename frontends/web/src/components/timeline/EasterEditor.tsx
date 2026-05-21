@@ -606,8 +606,8 @@ function EditorErrorDialog({
         </div>
         <p className={styles.dialogDescription}>{description}</p>
         <ul id="editor-error-details" className={styles.dialogList}>
-          {errors.map((error, index) => (
-            <li key={`${index}-${error}`}>{error}</li>
+          {errors.map((error) => (
+            <li key={error}>{error}</li>
           ))}
         </ul>
         <button

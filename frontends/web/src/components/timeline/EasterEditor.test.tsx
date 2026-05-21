@@ -27,12 +27,12 @@ vi.mock("framer-motion", () => ({
   useReducedMotion: () => true,
 }));
 
-const mediaExportMocks = vi.hoisted(() => ({
+const mediaExportMocks = {
   gif: vi.fn(() => Promise.resolve()),
   webm: vi.fn(() => Promise.resolve()),
-}));
+};
 
-vi.mock("./communicationGraphExport", async (importOriginal) => {
+vi.doMock("./communicationGraphExport", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("./communicationGraphExport")>();
 

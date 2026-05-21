@@ -171,7 +171,8 @@
       circle at 18% 84%,
       rgba(45, 212, 191, 0.08),
       transparent 34%
-    ), var(--surface-secondary);
+    ),
+    var(--surface-secondary);
 }
 
 .previewGraph {
