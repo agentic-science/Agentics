@@ -279,7 +279,7 @@ du -sh "$AGENTICS_STORAGE_ROOT"/eval-artifacts 2>/dev/null || true
 du -sh "$AGENTICS_STORAGE_ROOT"/solution-artifacts 2>/dev/null || true
 ```
 
-使用 challenge draft cleanup 清理 stale unpublished private assets。Published runtime bundles 和 completed solution artifacts 是持久 MVP records。
+使用 challenge draft cleanup 清理 stale unpublished private assets。Published private runtime bundles、published public-only bundles 和 completed solution artifacts 是持久 MVP records。
 
 ### Public Abuse Spike
 

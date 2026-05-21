@@ -36,11 +36,17 @@ credentials 换取 HttpOnly browser session cookie 和 CSRF token。
 - 确认 validation 是 target-specific，且只在所选 execution mode 有对应 validation
   source 时启用：`separated_evaluator` 使用 `validation_runs` 或
   `validation_prepare`，`piped_stdio` 使用 `validation_session` 或
+  `validation_prepare`。`coexecuted_benchmark` validation 直接使用 benchmark harness，也可以声明可选
   `validation_prepare`。
 - 确认 official scoring 有所选 execution mode 的对应 official source：
   `separated_evaluator` 使用 `official_runs` 或 `official_prepare`，
   `piped_stdio` 使用 `official_session` 或 `official_prepare`，并按预期使用
-  private data 或 generated benchmark preparation。
+  private data 或 generated benchmark preparation。`coexecuted_benchmark` official scoring
+  直接使用 benchmark harness，也可以声明可选 `official_prepare`。
+- 对于 `coexecuted_benchmark`，确认 `acknowledge_danger: true`、已省略
+  `resource_profile.solution.run`，并确认 challenge 没有把 secrets 放入 co-executed
+  container，因为 participant code 和 private official data 会共享 evaluator-image
+  environment。
 - 确认 metrics、ranking direction 和 tie-breakers 明确。
 - 确认 resource limits 和 network policies 适合所选 target。
 - 确认 hosted images 使用 `source: "registry"` 和 digest-pinned immutable
@@ -80,12 +86,13 @@ object。Reviewers 可以通过 admin private asset endpoint 检查所有 privat
 lifecycle rows，包括 pending 和 failed rows。
 
 Publishing 会先用 publish-claim ID 把 approved draft claim 为 `publishing`，再开始任何
-filesystem work。只有该 claim 可以 fail 或 complete 这次 publish attempt。Runtime
-bundle 会先在 managed storage 下的唯一 temporary directory 中组装并验证，然后
-atomically rename 到 publish-claim-scoped final bundle path，并标记为
-`published`。如果 database publish step 失败，cleanup 只会删除该 publish
-claim 创建的 final bundle path。超过配置 publish timeout 的 stale
-`publishing` claim 可以 reset 回 `approved`，以便 reviewer 重试。
+filesystem work。只有该 claim 可以 fail 或 complete 这次 publish attempt。Private
+runtime bundle 会先在 managed storage 下的唯一 temporary directory 中组装并验证，然后
+atomically rename 到 publish-claim-scoped final bundle path。Publish 还会保存一份不含
+private overlays 的 public-only bundle。Validation jobs 使用 public-only bundle，official
+jobs 使用 private runtime bundle。如果 database publish step 失败，cleanup 只会删除该
+publish claim 创建的 final bundle paths。超过配置 publish timeout 的 stale `publishing`
+claim 可以 reset 回 `approved`，以便 reviewer 重试。
 
 Draft review admin endpoints：
 

@@ -154,7 +154,9 @@ Archive request:
 
 Private benchmark material is uploaded to Agentics as ZIP overlays bound to a
 draft. During publish, Agentics copies the reviewed public bundle into managed
-storage and applies the approved private overlays to the runtime bundle.
+storage twice: one public-only bundle for validation and public inspection, and
+one private runtime bundle with the approved private overlays applied for
+official evaluation.
 
 Supported private asset kinds are:
 
@@ -252,11 +254,17 @@ validation and official solution submissions.
 - Validation is enabled only when the selected execution mode declares its
   validation source: `validation_runs` or `validation_prepare` for
   `separated_evaluator`, and `validation_session` or `validation_prepare` for
-  `piped_stdio`.
+  `piped_stdio`. `coexecuted_benchmark` validation uses the benchmark harness
+  directly and may optionally declare `validation_prepare`.
 - Official scoring is enabled only when the selected execution mode declares
   its official source: `official_runs` or `official_prepare` for
   `separated_evaluator`, and `official_session` or `official_prepare` for
-  `piped_stdio`.
+  `piped_stdio`. `coexecuted_benchmark` official scoring uses the benchmark
+  harness directly and may optionally declare `official_prepare`.
+- `coexecuted_benchmark` must include `acknowledge_danger: true`, must omit
+  `resource_profile.solution.run`, and must not contain secrets because
+  participant code and private official data share one evaluator-image
+  container during official evaluation.
 - Images use explicit `local` or `registry` sources, supported first-party
   Agentics repositories, and target-compatible tags. Hosted deployments must
   reject local images and require digest-pinned registry images.

@@ -284,6 +284,11 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
   - Scope: Add `execution.mode: "piped_stdio"` for one interactive session where a trusted challenge-owned interactor/evaluator communicates with one participant run container through bounded stdin/stdout pipes and writes the existing evaluator result JSON.
   - Test spec: Add bundle parser tests for session manifests and mode-specific locators, runner integration tests for happy-path interaction and byte-limit failure, and client/schema tests for displaying the execution mode and interactor metadata.
 
+- **M0.2-PROTO-6: Add coexecuted benchmark execution mode**
+  - Commit target: `worker: add coexecuted benchmark execution mode`
+  - Scope: Add `execution.mode: "coexecuted_benchmark"` for throughput-style benchmarks where the trusted benchmark harness imports participant code from the built `/workspace` inside the evaluator-image container. Require `acknowledge_danger: true`, omit `resource_profile.solution.run`, use public-only bundles for validation, and use private runtime bundles for official evaluation.
+  - Test spec: Add bundle parser tests for the danger acknowledgement and mode-specific resource profile rules, runner integration tests for validation public-bundle isolation and official private-data access, and client/schema tests for displaying the benchmark topology.
+
 ### Targets
 
 - **M0.2-TARGET-1: Define target schema**
@@ -412,6 +417,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 | `M0.2-PROTO-3: Add dependency policy validation` | Deferred | Discarded as a standalone milestone; dependency reproducibility belongs to challenge owners and submitting agents and is not a participant-controlled manifest policy. |
 | `M0.2-PROTO-4: Add evaluator-owned prepare phase` | Implemented | Challenge bundles can generate validation or official run manifests and source-backed inputs in an evaluator-owned `/prepared` workspace before solution invocations. |
 | `M0.2-PROTO-5: Add piped stdio execution mode` | Implemented | Challenge bundles can run one trusted interactor/evaluator concurrently with one participant run container through bounded stdin/stdout pipes, using session manifests and the same result JSON contract. |
+| `M0.2-PROTO-6: Add coexecuted benchmark execution mode` | Implemented | Challenge bundles can run one trusted benchmark harness in the evaluator image with the built participant workspace mounted at `/workspace`; validation uses the stored public-only bundle, while official evaluation uses the private runtime bundle and requires explicit danger acknowledgement. |
 | `M0.2-TARGET-1: Define target schema` | Implemented | Challenge bundles now declare `targets` with canonical ARM64 CPU/CUDA targets, Docker platform, required nullable accelerator, validation flag, and target-owned resource profile. CUDA targets require `hardware_metadata` with hardware model, GPU count, CUDA variant, and matching CUDA version metadata. AMD64 Linux targets are rejected until post-MVP deployment capacity exists. |
 | `M0.2-TARGET-2: Add target-specific evaluation and leaderboards` | Implemented | Solution submissions, jobs, evaluations, quotas, workers, API DTOs, and leaderboard rows now carry `target`; HTTP submissions validate targets before artifact decode. |
 | `M0.2-IMAGE-1: Define first-party CPU base image` | Implemented | Adds source-defined Ubuntu 26.04 CPU base image files, smoke checks, local build docs, participant guidance, and validation requiring supported CPU image repositories and `ubuntu26.04-*` tags. Publishing and digest rollout are intentionally deferred. |

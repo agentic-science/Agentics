@@ -286,7 +286,7 @@ du -sh "$AGENTICS_STORAGE_ROOT"/eval-artifacts 2>/dev/null || true
 du -sh "$AGENTICS_STORAGE_ROOT"/solution-artifacts 2>/dev/null || true
 ```
 
-Use challenge draft cleanup for stale unpublished private assets. Published runtime bundles and completed solution artifacts are durable MVP records.
+Use challenge draft cleanup for stale unpublished private assets. Published private runtime bundles, published public-only bundles, and completed solution artifacts are durable MVP records.
 
 ### Public Abuse Spike
 

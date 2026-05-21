@@ -52,7 +52,13 @@ Every bundle must also declare the execution topology explicitly. Use
 benchmarks. Use `execution.mode: "piped_stdio"`, `execution.interactor.command`,
 and `execution.interactor.result_file` for one interactive session where the
 trusted challenge-owned interactor is also the evaluator and writes
-`result.json`.
+`result.json`. Use `execution.mode: "coexecuted_benchmark"`,
+`execution.benchmark.command`, `execution.benchmark.result_file`, and
+`acknowledge_danger: true` only for throughput-style benchmarks where the
+trusted harness must import participant code from `/workspace` inside the
+evaluator-image container. Co-executed profiles must omit
+`resource_profile.solution.run`, and challenge authors must not place secrets in
+the co-executed environment.
 
 Use required `keywords` in both `agentics.challenge.json` and the bundle
 `spec.json` so the public catalog can support keyword filtering. Keep the two

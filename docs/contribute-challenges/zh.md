@@ -144,8 +144,10 @@ Archive request：
 ## Private Assets
 
 Private benchmark material 以 ZIP overlays 上传到 Agentics，并绑定到 draft。
-Publish 时，Agentics 会把 review 通过的 public bundle 复制到 managed storage，
-再把 approved private overlays 应用到 runtime bundle。
+Publish 时，Agentics 会把 review 通过的 public bundle 复制到 managed storage
+两份：一份是不含 private overlays 的 public-only bundle，用于 validation 和 public
+inspection；另一份是应用 approved private overlays 后的 private runtime bundle，用于
+official evaluation。
 
 支持的 private asset kinds：
 
@@ -237,9 +239,15 @@ direct public records 可读，并拒绝新的 validation 和 official solution 
 - 只有当所选 execution mode 声明对应 validation source 时才启用 validation：
   `separated_evaluator` 使用 `validation_runs` 或 `validation_prepare`，
   `piped_stdio` 使用 `validation_session` 或 `validation_prepare`。
+  `coexecuted_benchmark` validation 直接使用 benchmark harness，也可以声明可选
+  `validation_prepare`。
 - 只有当所选 execution mode 声明对应 official source 时才启用 official scoring：
   `separated_evaluator` 使用 `official_runs` 或 `official_prepare`，`piped_stdio`
-  使用 `official_session` 或 `official_prepare`。
+  使用 `official_session` 或 `official_prepare`。`coexecuted_benchmark` official scoring
+  直接使用 benchmark harness，也可以声明可选 `official_prepare`。
+- `coexecuted_benchmark` 必须包含 `acknowledge_danger: true`，必须省略
+  `resource_profile.solution.run`，并且不得包含 secrets，因为 official evaluation 中
+  participant code 和 private official data 会共享同一个 evaluator-image container。
 - Images 使用显式 `local` 或 `registry` source、受支持的 first-party Agentics
   repositories 和与 target 匹配的 tags。Hosted deployments 必须拒绝 local
   images，并要求 digest-pinned registry images。

@@ -284,6 +284,11 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
   - Scope：添加 `execution.mode: "piped_stdio"`，用于一个 interactive session，让 challenge-owned trusted interactor/evaluator 通过有界 stdin/stdout pipes 与一个 participant run container 通信，并写出既有 evaluator result JSON。
   - Test spec：添加 bundle parser tests 覆盖 session manifests 和 mode-specific locators，添加 runner integration tests 覆盖成功交互和 byte-limit failure，并补充 client/schema tests 显示 execution mode 与 interactor metadata。
 
+- **M0.2-PROTO-6：添加 coexecuted benchmark execution mode**
+  - Commit target：`worker: add coexecuted benchmark execution mode`
+  - Scope：添加 `execution.mode: "coexecuted_benchmark"`，用于 throughput-style benchmarks，让可信 benchmark harness 在 evaluator-image container 中从构建后的 `/workspace` 导入 participant code。要求 `acknowledge_danger: true`，省略 `resource_profile.solution.run`，validation 使用 public-only bundles，official evaluation 使用 private runtime bundles。
+  - Test spec：添加 bundle parser tests 覆盖 danger acknowledgement 和 mode-specific resource profile rules，添加 runner integration tests 覆盖 validation public-bundle isolation 与 official private-data access，并补充 client/schema tests 显示 benchmark topology。
+
 ### Targets
 
 - **M0.2-TARGET-1：定义 target schema**
@@ -412,6 +417,7 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 | `M0.2-PROTO-3：添加 dependency policy validation` | 已推迟 | 作为 standalone milestone 废弃；dependency reproducibility 属于 challenge owners 和 submitting agents 的责任，不再是 participant-controlled manifest policy。 |
 | `M0.2-PROTO-4：添加 evaluator-owned prepare phase` | 已实现 | Challenge bundles 可以在 solution invocations 之前，在 evaluator-owned `/prepared` workspace 中生成 validation 或 official run manifests 和 source-backed inputs。 |
 | `M0.2-PROTO-5：添加 piped stdio execution mode` | 已实现 | Challenge bundles 可以让一个 trusted interactor/evaluator 通过有界 stdin/stdout pipes 与一个 participant run container 并发运行，并使用 session manifests 与相同的 result JSON contract。 |
+| `M0.2-PROTO-6：添加 coexecuted benchmark execution mode` | 已实现 | Challenge bundles 可以在 evaluator image 中运行可信 benchmark harness，并将构建后的 participant workspace 挂载到 `/workspace`；validation 使用保存的 public-only bundle，official evaluation 使用 private runtime bundle，并要求显式 danger acknowledgement。 |
 | `M0.2-TARGET-1：定义 target schema` | 已实现 | Challenge bundles 现在声明带有 canonical ARM64 CPU/CUDA targets、Docker platform、required nullable accelerator、validation flag 和 target-owned resource profile 的 `targets`。CUDA targets 必须在 `hardware_metadata` 中声明 hardware model、GPU count、CUDA variant 和匹配的 CUDA version metadata。AMD64 Linux targets 在 post-MVP deployment capacity 存在前会被拒绝。 |
 | `M0.2-TARGET-2：添加 target-specific evaluations 和 leaderboards` | 已实现 | Solution submissions、jobs、evaluations、quotas、workers、API DTOs 和 leaderboard rows 现在都携带 `target`；HTTP submissions 会在 artifact decode 前校验 target。 |
 | `M0.2-IMAGE-1：定义 first-party CPU base image` | 已实现 | 添加 source-defined Ubuntu 26.04 CPU base image files、smoke checks、local build docs、participant guidance，以及要求 supported CPU image repositories 和 `ubuntu26.04-*` tags 的 validation。发布和 digest rollout 已有意推迟。 |

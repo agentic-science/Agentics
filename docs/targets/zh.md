@@ -84,12 +84,12 @@ Challenge specs 必须声明一个或多个 targets：
   `gpu`，并在 `resource_profile.hardware_metadata` 中声明 CUDA hardware metadata。
 - AMD64 Linux targets 保留给 post-MVP deployment support。
 - `validation_enabled` 是 target-specific 的。一个 target 可以启用 validation，另一个 target 可以关闭 validation。
-- `resource_profile` 包含该 target 的 Docker images、可选 resource description、可选 hardware metadata，以及按 stage 拥有的硬性 limits。它必须声明 `solution.setup`、`solution.build`、`solution.run`、`evaluator.setup` 和 `evaluator.run`；每个 stage 都拥有 `timeout_sec`、`memory_limit_mb`、`cpu_limit_millis`、`disk_limit_mb` 和 `network_access`。
-- Solution setup/build/run containers 使用对应的 `resource_profile.solution.*` stage。Separated evaluator scoring 和 piped-stdio interactors 使用 `resource_profile.evaluator.run`。Validation 和 official prepare containers 使用 `resource_profile.evaluator.setup`；prepare specs 不再声明自己的 `network_access`。
+- `resource_profile` 包含该 target 的 Docker images、可选 resource description、可选 hardware metadata，以及按 stage 拥有的硬性 limits。`separated_evaluator` 和 `piped_stdio` targets 必须声明 `solution.setup`、`solution.build`、`solution.run`、`evaluator.setup` 和 `evaluator.run`；`coexecuted_benchmark` targets 必须声明 `solution.setup`、`solution.build`、`evaluator.setup` 和 `evaluator.run`，并且必须省略 `solution.run`。
+- 当对应 container 存在时，solution setup/build/run containers 使用对应的 `resource_profile.solution.*` stage。Separated evaluator scoring、piped-stdio interactors 和 co-executed benchmark harnesses 使用 `resource_profile.evaluator.run`。Validation 和 official prepare containers 使用 `resource_profile.evaluator.setup`；prepare specs 不再声明自己的 `network_access`。
 - Solution 和 evaluator images 必须使用受支持的 first-party Agentics image repositories 和与 target 匹配的 tags。Hosted deployments 必须设置 `AGENTICS_HOST_PROBE_MODE=require` 和 `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`；hosted startup 会拒绝要求 hosted probes 但禁用 image digest pinning 的 profiles，并且 hosted challenge specs 必须使用包含 immutable `@sha256:<digest>` suffix 的 registry references。
 - CPU targets 必须使用 first-party Agentics CPU base image。面向 participants 的 setup guidance 是：使用 `apt-fast` 安装 apt packages，使用 `uv` 管理 Python dependencies，使用 `fnm` 切换 Node version，使用 Bun 管理 JavaScript/TypeScript packages，并使用 rustup 安装 Rust toolchain components。
-- 如果任一 target 有 `validation_enabled: true`，`separated_evaluator` bundle 必须声明 `execution.validation_runs` 或 `execution.validation_prepare`，`piped_stdio` bundle 必须声明 `execution.validation_session` 或 `execution.validation_prepare`。
-- 如果启用 private benchmark scoring，`separated_evaluator` bundle 必须声明 `execution.official_runs` 或 `execution.official_prepare`，`piped_stdio` bundle 必须声明 `execution.official_session` 或 `execution.official_prepare`。
+- 如果任一 target 有 `validation_enabled: true`，`separated_evaluator` bundle 必须声明 `execution.validation_runs` 或 `execution.validation_prepare`，`piped_stdio` bundle 必须声明 `execution.validation_session` 或 `execution.validation_prepare`。`coexecuted_benchmark` validation runs 直接使用 benchmark harness，也可以声明可选 `execution.validation_prepare`。
+- 如果启用 private benchmark scoring，`separated_evaluator` bundle 必须声明 `execution.official_runs` 或 `execution.official_prepare`，`piped_stdio` bundle 必须声明 `execution.official_session` 或 `execution.official_prepare`。`coexecuted_benchmark` official runs 直接使用 benchmark harness，也可以声明可选 `execution.official_prepare`。
 
 CUDA target hardware metadata 必须包含：
 

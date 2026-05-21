@@ -39,11 +39,19 @@ same admin credentials for an HttpOnly browser session cookie and CSRF token.
 - Confirm validation is target-specific and only enabled when the selected
   execution mode has its validation source: `validation_runs` or
   `validation_prepare` for `separated_evaluator`, and `validation_session` or
-  `validation_prepare` for `piped_stdio`.
+  `validation_prepare` for `piped_stdio`. `coexecuted_benchmark` validation
+  uses the benchmark harness directly and may optionally declare
+  `validation_prepare`.
 - Confirm official scoring has the selected execution mode's official source:
   `official_runs` or `official_prepare` for `separated_evaluator`, and
   `official_session` or `official_prepare` for `piped_stdio`, with private data
-  or generated benchmark preparation as intended.
+  or generated benchmark preparation as intended. `coexecuted_benchmark`
+  official scoring uses the benchmark harness directly and may optionally
+  declare `official_prepare`.
+- For `coexecuted_benchmark`, confirm `acknowledge_danger: true`,
+  `resource_profile.solution.run` is omitted, and the challenge does not put
+  secrets in the co-executed container because participant code and private
+  official data share the evaluator-image environment.
 - Confirm metrics, ranking direction, and tie-breakers are unambiguous.
 - Confirm resource limits and network policies are appropriate for the selected
   target.
@@ -87,12 +95,14 @@ pending and failed rows, through the admin private asset endpoint.
 
 Publishing claims an approved draft by moving it to `publishing` with a
 publish-claim ID before any filesystem work starts. Only that claim can fail or
-complete the publish attempt. The runtime bundle is assembled in a unique
-temporary directory under managed storage, validated there, then atomically
-renamed into a publish-claim-scoped final bundle path and marked `published`.
-If the database publish step fails, cleanup removes only the final bundle path
-created by that publish claim. A stale `publishing` claim can be reset to
-`approved` after the configured publish timeout so reviewers can retry.
+complete the publish attempt. The private runtime bundle is assembled in a
+unique temporary directory under managed storage, validated there, then
+atomically renamed into a publish-claim-scoped final bundle path. Publish also
+stores a public-only bundle without private overlays. Validation jobs use the
+public-only bundle, while official jobs use the private runtime bundle. If the
+database publish step fails, cleanup removes only the final bundle paths created
+by that publish claim. A stale `publishing` claim can be reset to `approved`
+after the configured publish timeout so reviewers can retry.
 
 Admin endpoints for draft review are:
 

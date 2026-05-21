@@ -19,12 +19,18 @@ Reviewer checklist:
 - Required public `keywords` match between `agentics.challenge.json` and
   `spec.json`, contain one to six entries, and each keyword fits within 30
   UTF-8 bytes.
-- `execution.mode` is `separated_evaluator` or `piped_stdio`. For
+- `execution.mode` is `separated_evaluator`, `piped_stdio`, or
+  `coexecuted_benchmark`. For
   `separated_evaluator`, `execution.evaluator.command` plus
   `execution.evaluator.result_file` identify the trusted evaluator entry point
   and result JSON. For `piped_stdio`, `execution.interactor.command` plus
   `execution.interactor.result_file` identify the trusted interactor/evaluator
-  entry point and result JSON.
+  entry point and result JSON. For `coexecuted_benchmark`,
+  `execution.benchmark.command`, `execution.benchmark.result_file`, and
+  `acknowledge_danger: true` identify a weaker-trust benchmark harness that
+  imports participant code from `/workspace` inside the evaluator-image
+  container. Confirm `resource_profile.solution.run` is omitted and no secrets
+  are placed in co-executed official data.
 - The metric schema has one primary ranking metric and clear metric descriptions.
 - Targets are realistic for the hosted worker budget.
 - Challenge-level `starts_at` is present, `starts_at` and optional `closes_at`

@@ -131,7 +131,7 @@ file.
 
 The manifest does not declare time, memory, CPU, disk, network, or log limits. The selected challenge target owns the solution and evaluator images plus the hard resource envelope through `ResourceProfileSpec`.
 
-Every profile must declare five explicit stages: `solution.setup`, `solution.build`, `solution.run`, `evaluator.setup`, and `evaluator.run`. Each stage contains `timeout_sec`, `memory_limit_mb`, `cpu_limit_millis`, `disk_limit_mb`, and `network_access`. Participant setup/build/run containers use the matching `solution.*` stage. Challenge-owned prepare containers use `evaluator.setup`. Separated evaluator scoring containers and piped-stdio interactors use `evaluator.run`.
+For `separated_evaluator` and `piped_stdio`, every profile must declare five explicit stages: `solution.setup`, `solution.build`, `solution.run`, `evaluator.setup`, and `evaluator.run`. For `coexecuted_benchmark`, profiles must declare `solution.setup`, `solution.build`, `evaluator.setup`, and `evaluator.run`, and must omit `solution.run` because the platform does not launch a separate participant run container. Each stage contains `timeout_sec`, `memory_limit_mb`, `cpu_limit_millis`, `disk_limit_mb`, and `network_access`. Participant setup/build/run containers use the matching `solution.*` stage when that container exists. Challenge-owned prepare containers use `evaluator.setup`. Separated evaluator scoring containers, piped-stdio interactors, and co-executed benchmark harnesses use `evaluator.run`.
 
 Container log capture is bounded by a platform-owned runner cap rather than by submitter-controlled manifest data.
 
@@ -215,7 +215,7 @@ Each current challenge bundle declares:
 
 - `solution.protocol: "zip_project"`.
 - `solution.manifest_file: "agentics.solution.json"`.
-- `execution.mode`, currently either `"separated_evaluator"` or `"piped_stdio"`.
+- `execution.mode`, currently `"separated_evaluator"`, `"piped_stdio"`, or `"coexecuted_benchmark"`.
 - Required challenge-level `starts_at`.
 - `targets`, each with a target, Docker platform, required nullable accelerator, validation availability, and a resource profile that includes solution image, evaluator image, CPU, memory, disk, timeout, network policy, and optional `hardware_metadata`.
 
@@ -235,8 +235,27 @@ when private benchmark scoring is enabled. The trusted challenge-owned
 interactor runs concurrently with exactly one participant run container. The
 worker relays interactor stdout to participant stdin and participant stdout to
 interactor stdin. The interactor writes the same evaluator `result.json` contract
-under `/output`. `coexecuted_benchmark` is still reserved and rejected by bundle
-validation.
+under `/output`.
+
+For `coexecuted_benchmark`, bundles declare `execution.benchmark.command`,
+`execution.benchmark.result_file`, and `execution.acknowledge_danger: true`.
+They may declare `execution.validation_prepare` and `execution.official_prepare`;
+these prepare specs contain only a command and optional reproducibility notes.
+They must not declare run or session locators such as `validation_runs`,
+`official_runs`, `validation_session`, or `official_session`. The worker still
+runs solution setup/build in the solution image, then skips participant run
+invocations and runs the trusted benchmark harness once in the evaluator image.
+The benchmark receives `/workspace`, `/challenge`, optional `/prepared`, and
+writable `/output`; it owns how participant code is imported or invoked from
+`/workspace` and writes the normal evaluator `result.json`.
+
+`coexecuted_benchmark` has a weaker trust boundary than the other modes: the
+trusted benchmark harness, participant-built workspace, and private official
+benchmark files share one evaluator-image container for official evaluation.
+Challenge owners must not place secrets in co-executed environments, and
+reviewers must require the explicit `acknowledge_danger: true` field before
+approval. Validation jobs use the stored public-only bundle, while official jobs
+use the private runtime bundle with uploaded private overlays.
 
 See [Targets](../targets/en.md) for the target schema,
 target-specific validation behavior, CLI/API target selection, and
@@ -255,7 +274,8 @@ or session source files.
 
 When `separated_evaluator` declares `validation_prepare` or `official_prepare`,
 the worker runs that prepare command in the evaluator image before solution
-invocations. The command receives `/challenge` as the reviewed runtime bundle,
+invocations. The command receives `/challenge` as the reviewed bundle for that
+evaluation mode, public-only for validation and private runtime for official,
 `/prepared` as a writable prepared-data directory, `--mode`, `--target`, and
 `--runs-file /prepared/<result_runs_file>`. The generated run manifest is then
 read from `/prepared`, and its `input_files[].source_path` entries are resolved
@@ -281,7 +301,12 @@ not enforce one reproducibility strategy. Challenge owners are responsible for
 deterministic or reliable generation and for pinning any external data sources
 inside their bundle, private assets, or prepare scripts.
 
-After each invocation, the worker copies a sanitized regular-file-only run tree to `/solution-runs/{run_name}` and writes `/solution-runs/{run_name}/agentics-run.json` for the evaluator. The metadata includes `run_name`, `interface`, `exit_code`, `timed_out`, `wall_time_ms`, `stdout_path`, `stderr_path`, and `output_dir`. This lets challenge-owned evaluators combine correctness checks with worker-measured per-run timing and arbitrary aggregate metrics while preventing submitted solutions from passing symlinks or special files into the evaluator container.
+For `coexecuted_benchmark`, prepare specs contain only `command` and optional
+`reproducibility_notes`. The prepare command receives `--challenge-dir`,
+`--prepared-dir`, `--mode`, and `--target`; it does not emit a run or session
+manifest path because the benchmark harness owns participant invocation.
+
+After each separated-evaluator invocation, the worker copies a sanitized regular-file-only run tree to `/solution-runs/{run_name}` and writes `/solution-runs/{run_name}/agentics-run.json` for the evaluator. The metadata includes `run_name`, `interface`, `exit_code`, `timed_out`, `wall_time_ms`, `stdout_path`, `stderr_path`, and `output_dir`. This lets challenge-owned evaluators combine correctness checks with worker-measured per-run timing and arbitrary aggregate metrics while preventing submitted solutions from passing symlinks or special files into the evaluator container.
 
 For MVP, the evaluator receives the whole sanitized `/io` tree for each run,
 not only declared output files. Challenge-owned evaluator code must treat that

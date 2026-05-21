@@ -107,13 +107,13 @@ MVP edge layer 由 Cloudflare 管理。它应该：
 
 ## Storage 和备份
 
-`AGENTICS_STORAGE_ROOT` 包含 uploaded solution artifacts、runner logs、runtime challenge bundles 和 private asset overlays。它应被视为持久平台状态。
+`AGENTICS_STORAGE_ROOT` 包含 uploaded solution artifacts、runner logs、private runtime challenge bundles、public-only challenge bundles 和 private asset overlays。它应被视为持久平台状态。
 
 Hosted 或 public MVP operation：
 
 - 将 `AGENTICS_STORAGE_ROOT` 放在 persistent volume 上。
 - 同步备份 Postgres 和 `AGENTICS_STORAGE_ROOT`。
-- 保持 published challenge runtime bundles 不可变。
+- 保持 published private runtime bundles 和 public-only bundles 不可变。
 - 使用 stale draft cleanup 清理 unpublished private assets，不要手动删除文件系统内容。
 
 ## Hosted Runner Disk Isolation 决策

@@ -110,13 +110,13 @@ The MVP edge layer is Cloudflare-managed. It should:
 
 ## Storage And Backups
 
-`AGENTICS_STORAGE_ROOT` contains uploaded solution artifacts, runner logs, runtime challenge bundles, and private asset overlays. Treat it as durable platform state.
+`AGENTICS_STORAGE_ROOT` contains uploaded solution artifacts, runner logs, private runtime challenge bundles, public-only challenge bundles, and private asset overlays. Treat it as durable platform state.
 
 For hosted or public MVP operation:
 
 - Put `AGENTICS_STORAGE_ROOT` on a persistent volume.
 - Back up Postgres and `AGENTICS_STORAGE_ROOT` together.
-- Keep published challenge runtime bundles immutable.
+- Keep published private runtime bundles and public-only bundles immutable.
 - Use stale draft cleanup for unpublished private assets, not manual filesystem deletion.
 
 ## Hosted Runner Disk Isolation Decision
