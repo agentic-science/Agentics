@@ -210,7 +210,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 
 - **M0.1-ADMIN-3: Solution Submission and worker operations view**
   - Commit target: `admin: add solution submission operations console`
-  - Scope: Provide admin UI for queued/running/completed jobs, worker heartbeats, rejudge, official-run triggering, hide solution submission, and disable agent actions.
+  - Scope: Provide admin UI for queued/running/completed jobs, worker heartbeats, rejudge, official-run triggering, and disable agent actions.
   - Test spec: Add UI tests for action confirmation states and API integration tests for each state-changing action.
 
 ### Challenge Authoring and Documentation
@@ -299,7 +299,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 - **M0.2-TARGET-2: Add target-specific evaluation and leaderboards**
   - Commit target: `api: add target evaluations`
   - Scope: Persist the selected target on validation runs, official evaluations, solution submissions, and leaderboard rows. The worker should use the selected target's Docker platform and resource profile. Official submissions should be able to target one supported target or all supported targets. Each target should produce independent official results and leaderboard entries.
-  - Test spec: Add integration tests proving unsupported targets are rejected before artifact upload, target-specific validation disablement is enforced, Docker receives the selected platform and accelerator policy, multiple supported targets produce separate official results, leaderboard rows are scoped by target, and hidden or rejudged submissions repair only the affected target leaderboard.
+  - Test spec: Add integration tests proving unsupported targets are rejected before artifact upload, target-specific validation disablement is enforced, Docker receives the selected platform and accelerator policy, multiple supported targets produce separate official results, leaderboard rows are scoped by target, and rejudged submissions repair only the affected target leaderboard.
 
 ### Base Images
 
@@ -534,7 +534,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 
 - **M0.2.5-DGX-2: Add DGX Spark deployment profile**
   - Commit target: `deploy: add dgx spark mvp profile`
-  - Scope: Define DGX-specific environment values, persistent storage layout, reverse proxy and TLS assumptions, Docker runtime settings, service supervision, backup locations, and release artifact paths. Include an Agentics-owned Docker daemon backed by a loopback XFS data-root image with project quotas, `AGENTICS_HOST_PROBE_MODE=require`, Docker writable-layer quota probes, and root-prepared XFS project-quota slots under per-phase loopback filesystem images for all solution setup/build/run writable mounts and evaluator prepare/score writable mounts. Keep GPU solution execution disabled until the GPU milestone lane is implemented.
+  - Scope: Define DGX-specific environment values, persistent storage layout, reverse proxy and TLS assumptions, Docker runtime settings, service supervision, backup locations, and release artifact paths. Include an Agentics-owned Docker daemon backed by a loopback XFS data-root image with project quotas, `AGENTICS_RUNNER_SECURITY_PROFILE=production`, `AGENTICS_HOST_PROBE_MODE=require`, Docker writable-layer quota probes, and root-prepared XFS project-quota slots under per-phase loopback filesystem images for all solution setup/build/run writable mounts and evaluator prepare/score writable mounts. Keep GPU solution execution disabled until the GPU milestone lane is implemented.
   - Test spec: Dry-run migrations, API startup, worker startup, web startup, health checks, Docker writable-layer quota probe, per-phase loop-image writable-mount probe, and per-phase quota-slot exhaustion probe on DGX Spark with persistent storage and non-default admin credentials.
 
 - **M0.2.5-DGX-3: Run DGX Spark end-to-end smoke and benchmark calibration**
@@ -654,8 +654,8 @@ v0.3 adds a repository-based solution submission path for public, auditable chal
   - Scope: Display PR URL, commit SHA, validation status, official-run handoff status, and trusted artifact metadata on solution submission pages.
   - Test spec: Add rendering tests for direct ZIP solution submissions and GitHub PR solution submissions.
 
-- **M0.3-ADMIN-1: Add PR moderation and official-run controls**
-  - Commit target: `admin: add github pr moderation controls`
+- **M0.3-ADMIN-1: Add PR review and official-run controls**
+  - Commit target: `admin: add github pr review controls`
   - Scope: Add admin tools for approving official-run handoff, blocking abusive PR-linked solution submissions, and inspecting trusted ingestion metadata.
   - Test spec: Add UI action tests and backend authorization tests.
 
@@ -684,7 +684,7 @@ v0.3 adds a repository-based solution submission path for public, auditable chal
 | `M0.3-WORKER-1: Add repository artifact fetch support` | Planned | Required for official runs from repository artifacts. |
 | `M0.3-CI-1: Add validation workflow templates` | Planned | Provides validation-only templates. |
 | `M0.3-WEB-1: Show GitHub-linked solution-submissions` | Planned | Depends on PR metadata ingestion. |
-| `M0.3-ADMIN-1: Add PR moderation and official-run controls` | Planned | Admin control for PR workflow. |
+| `M0.3-ADMIN-1: Add PR review and official-run controls` | Planned | Admin control for PR workflow. |
 | `M0.3-CLI-1: Add GitHub workflow helper commands` | Planned | Helper layer, not required for CI ingestion. |
 | `M0.3-DOC-1: Document GitHub solution submission security model` | Planned | Should ship before public GitHub workflow. |
 

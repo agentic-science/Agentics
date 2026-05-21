@@ -81,7 +81,7 @@ admin private asset lifecycle endpoint when you need to inspect pending or
 failed private asset rows that are intentionally omitted from normal draft
 responses.
 
-For source-backed run inputs, confirm every public validation `input_files[].source_path` exists in the public bundle and every static official source path exists in the uploaded private overlay. For `validation_prepare` or `official_prepare`, confirm the prepare command, result run manifest path, `resource_profile.evaluator.setup.network_access`, and reproducibility notes are explicit. Evaluator-only reference outputs should stay out of solution inputs unless the challenge intentionally exposes public validation references.
+For source-backed run inputs, confirm every public validation `input_files[].source_path` exists in the public bundle and every static official source path exists in the uploaded private overlay. For separated-evaluator prepare, confirm the prepare command, `result_runs_file`, `resource_profile.evaluator.setup.network_access`, and reproducibility notes. For piped-stdio prepare, confirm the prepare command, `result_session_file`, evaluator setup network policy, and reproducibility notes. For co-executed prepare, confirm there is no result locator, and review the benchmark command plus weaker trust boundary carefully. Evaluator-only reference outputs should stay out of solution inputs unless the challenge intentionally exposes public validation references.
 
 ## 3. Validate The Draft
 
@@ -113,7 +113,9 @@ cargo run -p agentics-cli --bin agentics -- challenge-creator draft approve <dra
 
 Use the `validation_bundle_sha256` returned by the validation response as the
 expected digest. Approval must fail if the draft has been revalidated to a
-different digest.
+different digest. Publish stores both the private runtime bundle and a separate
+public-only bundle; validation jobs use only the public-only bundle, while
+official jobs use the private runtime bundle with approved private overlays.
 
 Reject with actionable feedback:
 
