@@ -1,4 +1,4 @@
-/** Format normalized scores for compact leaderboard and solution submission tables. */
+/** Format score-like numeric values for compact leaderboard and submission tables. */
 export function formatScore(value: number | null | undefined): string {
   if (value == null) return "n/a";
   if (Number.isInteger(value)) return String(value);

@@ -5,7 +5,7 @@ use serde::Serialize;
 use serde_json::{Map, Value, json};
 use shared::models::challenge::{ChallengeDetailResponse, ChallengeListResponse, MetricDirection};
 use shared::models::challenge_creation::{ChallengeDraftCleanupResponse, ChallengeDraftResponse};
-use shared::models::evaluation::{EvaluationDto, EvaluatorRunResult};
+use shared::models::evaluation::{EvaluationDto, EvaluatorRunResult, MetricValue};
 use shared::models::names::{ChallengeName, MetricName, TargetName};
 use shared::models::request::{
     CreateSolutionSubmissionResponse, LeaderboardResponse, PublicSolutionSubmissionListResponse,
@@ -33,6 +33,7 @@ pub(crate) struct LocalValidationPackageReport {
 pub(crate) struct LocalValidationTargetReport {
     pub target: TargetName,
     pub log_path: PathBuf,
+    pub primary_metric: Option<MetricValue>,
     pub result: EvaluatorRunResult,
 }
 
@@ -375,15 +376,11 @@ pub(crate) fn render_solution_submission_status(
                 .and_then(|eval| eval.rank_score)
                 .map(format_score)
                 .unwrap_or_else(|| "none".to_string());
-            let validation_primary_score = response
-                .validation_evaluation
-                .as_ref()
-                .and_then(|eval| eval.primary_score)
-                .map(format_score)
-                .unwrap_or_else(|| "none".to_string());
+            let official_primary_metric =
+                format_optional_metric(response.official_primary_metric.as_ref());
 
             Ok(format!(
-                "solution submission: {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\nvalidation_evaluation: {}\nofficial_evaluation: {}\nvalidation_primary_score: {}\nrank_score: {}\nvisible_after_eval: {}",
+                "solution submission: {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\nvalidation_evaluation: {}\nofficial_evaluation: {}\nofficial_primary_metric: {}\nrank_score: {}\nvisible_after_eval: {}",
                 response.id,
                 response.challenge_name,
                 response.target,
@@ -391,7 +388,7 @@ pub(crate) fn render_solution_submission_status(
                 evaluation_job,
                 validation_eval,
                 official_eval,
-                validation_primary_score,
+                official_primary_metric,
                 rank_score,
                 response.visible_after_eval
             ))
@@ -430,24 +427,22 @@ pub(crate) fn render_validation_run_status(
             let validation_status = validation_eval
                 .map(|eval| status_label(&eval.status))
                 .unwrap_or_else(|| "none".to_string());
-            let primary_score = validation_eval
-                .and_then(|eval| eval.primary_score)
-                .map(format_score)
-                .unwrap_or_else(|| "none".to_string());
+            let primary_metric =
+                format_optional_metric(validation_eval.and_then(first_aggregate_metric));
             let rank_score = validation_eval
                 .and_then(|eval| eval.rank_score)
                 .map(format_score)
                 .unwrap_or_else(|| "none".to_string());
 
             Ok(format!(
-                "validation_run: {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\nvalidation: {}\nprimary_score: {}\nrank_score: {}\nvisible_after_eval: {}",
+                "validation_run: {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\nvalidation: {}\nprimary_metric: {}\nrank_score: {}\nvisible_after_eval: {}",
                 response.id,
                 response.challenge_name,
                 response.target,
                 response.status,
                 evaluation_job,
                 validation_status,
-                primary_score,
+                primary_metric,
                 rank_score,
                 response.visible_after_eval
             ))
@@ -512,11 +507,11 @@ pub(crate) fn render_local_validation_report(
         OutputFormat::Json => pretty_json(report),
         OutputFormat::Table => match report.targets.as_slice() {
             [target] => Ok(format!(
-                "Local validation completed\nchallenge: {}\ntarget: {}\nstatus: {}\nprimary_score: {}\nrank_score: {}\nlog: {}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}\nbundle: {}\nstorage: {}",
+                "Local validation completed\nchallenge: {}\ntarget: {}\nstatus: {}\nprimary_metric: {}\nrank_score: {}\nlog: {}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}\nbundle: {}\nstorage: {}",
                 report.challenge_name,
                 target.target,
                 status_label(&target.result.status),
-                format_score(target.result.primary_score),
+                format_optional_metric(target.primary_metric.as_ref()),
                 target
                     .result
                     .rank_score
@@ -538,7 +533,7 @@ pub(crate) fn render_local_validation_report(
                         vec![
                             target.target.to_string(),
                             status_label(&target.result.status),
-                            format_score(target.result.primary_score),
+                            format_optional_metric(target.primary_metric.as_ref()),
                             target
                                 .result
                                 .rank_score
@@ -551,7 +546,10 @@ pub(crate) fn render_local_validation_report(
                 Ok(format!(
                     "Local validation completed\nchallenge: {}\n{}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}\nbundle: {}\nstorage: {}",
                     report.challenge_name,
-                    render_table(&["TARGET", "STATUS", "PRIMARY", "RANK", "LOG"], &rows),
+                    render_table(
+                        &["TARGET", "STATUS", "PRIMARY_METRIC", "RANK", "LOG"],
+                        &rows
+                    ),
                     report.package.file_count,
                     report.package.uncompressed_bytes,
                     report.package.zip_bytes,
@@ -653,9 +651,7 @@ pub(crate) fn render_public_solution_submission_list(
                         item.rank_score
                             .map(format_score)
                             .unwrap_or_else(|| "none".to_string()),
-                        item.official_score
-                            .map(format_score)
-                            .unwrap_or_else(|| "none".to_string()),
+                        format_optional_metric(item.official_primary_metric.as_ref()),
                         item.created_at.clone(),
                     ]
                 })
@@ -670,7 +666,7 @@ pub(crate) fn render_public_solution_submission_list(
                         "TARGET",
                         "STATUS",
                         "RANK_SCORE",
-                        "OFFICIAL_SCORE",
+                        "OFFICIAL_PRIMARY_METRIC",
                         "CREATED",
                     ],
                     &rows,
@@ -695,18 +691,14 @@ pub(crate) fn render_solution_submission_report(
         })),
         OutputFormat::Table => {
             let submission = &response.solution_submission;
-            let validation_score = submission
-                .validation_evaluation
-                .as_ref()
-                .and_then(|evaluation| evaluation.primary_score)
-                .map(format_score)
-                .unwrap_or_else(|| "none".to_string());
-            let official_score = submission
-                .official_evaluation
-                .as_ref()
-                .and_then(|evaluation| evaluation.primary_score)
-                .map(format_score)
-                .unwrap_or_else(|| "none".to_string());
+            let validation_primary_metric = format_optional_metric(
+                submission
+                    .validation_evaluation
+                    .as_ref()
+                    .and_then(first_aggregate_metric),
+            );
+            let official_primary_metric =
+                format_optional_metric(submission.official_primary_metric.as_ref());
             let rank_score = select_submission_display_evaluation(submission)
                 .and_then(|evaluation| evaluation.rank_score)
                 .map(format_score)
@@ -743,7 +735,7 @@ pub(crate) fn render_solution_submission_report(
             };
 
             Ok(format!(
-                "solution_submission: {}\nchallenge: {}\ntarget: {}\nagent: {}\nstatus: {}\ncreated_at: {}\nupdated_at: {}\nvalidation_primary_score: {}\nofficial_score: {}\nrank_score: {}\nrank: {}\ntotal_ranked: {}\npercentile: {}\nis_agent_best: {}\nmetrics:\n{}\nlogs: {}",
+                "solution_submission: {}\nchallenge: {}\ntarget: {}\nagent: {}\nstatus: {}\ncreated_at: {}\nupdated_at: {}\nvalidation_primary_metric: {}\nofficial_primary_metric: {}\nrank_score: {}\nrank: {}\ntotal_ranked: {}\npercentile: {}\nis_agent_best: {}\nmetrics:\n{}\nlogs: {}",
                 submission.id,
                 submission.challenge_name,
                 submission.target,
@@ -754,8 +746,8 @@ pub(crate) fn render_solution_submission_report(
                 submission.status,
                 submission.created_at,
                 submission.updated_at,
-                validation_score,
-                official_score,
+                validation_primary_metric,
+                official_primary_metric,
                 rank_score,
                 rank,
                 total_ranked,
@@ -1045,6 +1037,23 @@ fn format_score(score: f64) -> String {
     } else {
         format!("{score:.4}")
     }
+}
+
+/// Format a named metric value for compact CLI output.
+fn format_metric(metric: &MetricValue) -> String {
+    format!("{}={}", metric.metric_name, format_score(metric.value))
+}
+
+/// Format an optional named metric value.
+fn format_optional_metric(metric: Option<&MetricValue>) -> String {
+    metric
+        .map(format_metric)
+        .unwrap_or_else(|| "none".to_string())
+}
+
+/// Select the first aggregate metric for validation-only displays without a challenge spec.
+fn first_aggregate_metric(evaluation: &EvaluationDto) -> Option<&MetricValue> {
+    evaluation.aggregate_metrics.first()
 }
 
 /// Looks up an exact quantile value when the API returned it.

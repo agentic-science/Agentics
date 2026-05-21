@@ -21,7 +21,7 @@ import {
   metricDirectionLabel,
   metricLabel,
   primaryMetric,
-  primaryMetricFromScore,
+  primaryMetricLabel,
 } from "@/lib/metrics";
 import {
   challengeDetailResponseSchema,
@@ -99,13 +99,8 @@ export default async function SolutionSubmissionPage({
 
   const evalDto = selectSubmissionDisplayEvaluation(submission);
   const metricSchema = detail.spec.metric_schema;
-  const primary =
-    primaryMetric(metricSchema, evalDto?.aggregate_metrics ?? []) ??
-    primaryMetricFromScore(metricSchema, evalDto?.primary_score);
-  const officialPrimary = primaryMetricFromScore(
-    metricSchema,
-    submission.official_evaluation?.primary_score,
-  );
+  const primary = primaryMetric(metricSchema, evalDto?.aggregate_metrics ?? []);
+  const officialPrimary = submission.official_primary_metric;
 
   return (
     <div className="flex flex-col gap-6">
@@ -160,9 +155,9 @@ export default async function SolutionSubmissionPage({
             <div className="card flex flex-col gap-1 py-3 px-4">
               <Award className="w-4 h-4 text-[var(--accent-primary-text)]" />
               <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
-                {metricLabel(
+                {primaryMetricLabel(
                   metricSchema,
-                  metricSchema.ranking.primary_metric_name,
+                  t("leaderboard.primaryMetric"),
                 )}
               </span>
               <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">

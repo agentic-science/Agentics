@@ -6,7 +6,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { fetchJson } from "@/lib/api";
 import { resultDetailIsPublic } from "@/lib/challengeVisibility";
 import { formatDate } from "@/lib/format";
-import { formatDeclaredMetric, primaryMetricFromScore } from "@/lib/metrics";
+import { formatDeclaredMetric } from "@/lib/metrics";
 import {
   challengeDetailResponseSchema,
   publicSolutionSubmissionListResponseSchema,
@@ -122,14 +122,17 @@ export default async function SolutionSubmissionsPage({
                   <td className="font-mono text-[var(--accent-primary-text)]">
                     {formatDeclaredMetric(
                       metricSchema,
-                      primaryMetricFromScore(metricSchema, s.official_score),
+                      s.official_primary_metric,
                     )}
                   </td>
                   <td className="font-mono">
                     {s.rank_score?.toFixed(4) ?? t("common.na")}
                   </td>
                   <td className="hidden md:table-cell font-mono">
-                    {s.official_score?.toFixed(4) ?? t("common.na")}
+                    {formatDeclaredMetric(
+                      metricSchema,
+                      s.official_primary_metric,
+                    )}
                   </td>
                   <td className="hidden lg:table-cell font-mono text-[var(--text-muted)] text-[var(--text-caption)]">
                     {s.parent_solution_submission_id ?? t("common.none")}

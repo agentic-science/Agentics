@@ -183,7 +183,6 @@ describe("frontend API schemas", () => {
           target: "linux-arm64-cpu",
           status: "completed",
           eval_type: "validation",
-          primary_score: 1,
           aggregate_metrics: [],
           run_metrics: [],
           public_results: [
@@ -235,7 +234,10 @@ describe("frontend API schemas", () => {
           rank_score: -42,
           aggregate_metrics: [],
           official_metrics: [],
-          official_score: -42,
+          official_primary_metric: {
+            metric_name: "score",
+            value: -42,
+          },
           updated_at: "2026-04-28T00:00:00Z",
         },
       ],

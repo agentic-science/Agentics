@@ -1097,7 +1097,7 @@ export const challengeDetailResponseSchema = z
                 label: "Score",
                 direction: "maximize",
                 visibility: "public",
-                metric_description: "Normalized compatibility score in [0, 1].",
+                metric_description: "Challenge-defined compatibility score.",
               },
             ],
             ranking: {
@@ -2355,7 +2355,16 @@ export const leaderboardResponseSchema = z
             ),
           best_rank_score: z.number(),
           rank_score: z.number(),
-          official_score: z.number().optional(),
+          official_primary_metric: z
+            .object({
+              metric_name: z
+                .string()
+                .regex(/^[A-Za-z0-9_.-]+$/)
+                .min(1),
+              value: z.number(),
+            })
+            .describe("Numeric value for one declared metric.")
+            .optional(),
           updated_at: z.string(),
         })
         .describe(
@@ -2482,30 +2491,17 @@ export const publicSolutionSubmissionListResponseSchema = z
             )
             .optional(),
           credit_text: z.string(),
-          official_score: z.number().optional(),
           rank_score: z.number().optional(),
-          aggregate_metrics: z.array(
-            z
-              .object({
-                metric_name: z
-                  .string()
-                  .regex(/^[A-Za-z0-9_.-]+$/)
-                  .min(1),
-                value: z.number(),
-              })
-              .describe("Numeric value for one declared metric."),
-          ),
-          official_metrics: z.array(
-            z
-              .object({
-                metric_name: z
-                  .string()
-                  .regex(/^[A-Za-z0-9_.-]+$/)
-                  .min(1),
-                value: z.number(),
-              })
-              .describe("Numeric value for one declared metric."),
-          ),
+          official_primary_metric: z
+            .object({
+              metric_name: z
+                .string()
+                .regex(/^[A-Za-z0-9_.-]+$/)
+                .min(1),
+              value: z.number(),
+            })
+            .describe("Numeric value for one declared metric.")
+            .optional(),
           created_at: z.string(),
           updated_at: z.string(),
         })
@@ -2575,7 +2571,16 @@ export const rankingContextResponseSchema = z
           ),
         best_rank_score: z.number(),
         rank_score: z.number(),
-        official_score: z.number().optional(),
+        official_primary_metric: z
+          .object({
+            metric_name: z
+              .string()
+              .regex(/^[A-Za-z0-9_.-]+$/)
+              .min(1),
+            value: z.number(),
+          })
+          .describe("Numeric value for one declared metric.")
+          .optional(),
         updated_at: z.string(),
       })
       .describe("One leaderboard row for an agent's best solution submission.")
@@ -2605,7 +2610,16 @@ export const rankingContextResponseSchema = z
                 ),
               best_rank_score: z.number(),
               rank_score: z.number(),
-              official_score: z.number().optional(),
+              official_primary_metric: z
+                .object({
+                  metric_name: z
+                    .string()
+                    .regex(/^[A-Za-z0-9_.-]+$/)
+                    .min(1),
+                  value: z.number(),
+                })
+                .describe("Numeric value for one declared metric.")
+                .optional(),
               updated_at: z.string(),
             })
             .describe(
@@ -2763,6 +2777,16 @@ export const solutionSubmissionResponseSchema = z
       .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
       .optional(),
     credit_text: z.string(),
+    official_primary_metric: z
+      .object({
+        metric_name: z
+          .string()
+          .regex(/^[A-Za-z0-9_.-]+$/)
+          .min(1),
+        value: z.number(),
+      })
+      .describe("Numeric value for one declared metric.")
+      .optional(),
     visible_after_eval: z.boolean(),
     artifact_key: z
       .string()
@@ -2856,7 +2880,6 @@ export const solutionSubmissionResponseSchema = z
             }
           })
           .describe("Evaluation surface requested for a solution submission."),
-        primary_score: z.number().optional(),
         rank_score: z.number().optional(),
         aggregate_metrics: z.array(
           z
@@ -2916,7 +2939,7 @@ export const solutionSubmissionResponseSchema = z
           .object({
             score: z
               .number()
-              .describe("Normalized score in the inclusive range `[0, 1]`."),
+              .describe("Challenge-defined finite score summary."),
             passed: z
               .number()
               .int()
@@ -2934,7 +2957,7 @@ export const solutionSubmissionResponseSchema = z
           .object({
             score: z
               .number()
-              .describe("Normalized score in the inclusive range `[0, 1]`."),
+              .describe("Challenge-defined finite score summary."),
             passed: z
               .number()
               .int()
@@ -3025,7 +3048,6 @@ export const solutionSubmissionResponseSchema = z
             }
           })
           .describe("Evaluation surface requested for a solution submission."),
-        primary_score: z.number().optional(),
         rank_score: z.number().optional(),
         aggregate_metrics: z.array(
           z
@@ -3085,7 +3107,7 @@ export const solutionSubmissionResponseSchema = z
           .object({
             score: z
               .number()
-              .describe("Normalized score in the inclusive range `[0, 1]`."),
+              .describe("Challenge-defined finite score summary."),
             passed: z
               .number()
               .int()
@@ -3103,7 +3125,7 @@ export const solutionSubmissionResponseSchema = z
           .object({
             score: z
               .number()
-              .describe("Normalized score in the inclusive range `[0, 1]`."),
+              .describe("Challenge-defined finite score summary."),
             passed: z
               .number()
               .int()
@@ -3194,7 +3216,6 @@ export const solutionSubmissionResponseSchema = z
             }
           })
           .describe("Evaluation surface requested for a solution submission."),
-        primary_score: z.number().optional(),
         rank_score: z.number().optional(),
         aggregate_metrics: z.array(
           z
@@ -3254,7 +3275,7 @@ export const solutionSubmissionResponseSchema = z
           .object({
             score: z
               .number()
-              .describe("Normalized score in the inclusive range `[0, 1]`."),
+              .describe("Challenge-defined finite score summary."),
             passed: z
               .number()
               .int()
@@ -3272,7 +3293,7 @@ export const solutionSubmissionResponseSchema = z
           .object({
             score: z
               .number()
-              .describe("Normalized score in the inclusive range `[0, 1]`."),
+              .describe("Challenge-defined finite score summary."),
             passed: z
               .number()
               .int()
@@ -3342,6 +3363,16 @@ export const solutionSubmissionResultReportResponseSchema = z
           )
           .optional(),
         credit_text: z.string(),
+        official_primary_metric: z
+          .object({
+            metric_name: z
+              .string()
+              .regex(/^[A-Za-z0-9_.-]+$/)
+              .min(1),
+            value: z.number(),
+          })
+          .describe("Numeric value for one declared metric.")
+          .optional(),
         visible_after_eval: z.boolean(),
         artifact_key: z
           .string()
@@ -3439,7 +3470,6 @@ export const solutionSubmissionResultReportResponseSchema = z
               .describe(
                 "Evaluation surface requested for a solution submission.",
               ),
-            primary_score: z.number().optional(),
             rank_score: z.number().optional(),
             aggregate_metrics: z.array(
               z
@@ -3499,9 +3529,7 @@ export const solutionSubmissionResultReportResponseSchema = z
               .object({
                 score: z
                   .number()
-                  .describe(
-                    "Normalized score in the inclusive range `[0, 1]`.",
-                  ),
+                  .describe("Challenge-defined finite score summary."),
                 passed: z
                   .number()
                   .int()
@@ -3519,9 +3547,7 @@ export const solutionSubmissionResultReportResponseSchema = z
               .object({
                 score: z
                   .number()
-                  .describe(
-                    "Normalized score in the inclusive range `[0, 1]`.",
-                  ),
+                  .describe("Challenge-defined finite score summary."),
                 passed: z
                   .number()
                   .int()
@@ -3616,7 +3642,6 @@ export const solutionSubmissionResultReportResponseSchema = z
               .describe(
                 "Evaluation surface requested for a solution submission.",
               ),
-            primary_score: z.number().optional(),
             rank_score: z.number().optional(),
             aggregate_metrics: z.array(
               z
@@ -3676,9 +3701,7 @@ export const solutionSubmissionResultReportResponseSchema = z
               .object({
                 score: z
                   .number()
-                  .describe(
-                    "Normalized score in the inclusive range `[0, 1]`.",
-                  ),
+                  .describe("Challenge-defined finite score summary."),
                 passed: z
                   .number()
                   .int()
@@ -3696,9 +3719,7 @@ export const solutionSubmissionResultReportResponseSchema = z
               .object({
                 score: z
                   .number()
-                  .describe(
-                    "Normalized score in the inclusive range `[0, 1]`.",
-                  ),
+                  .describe("Challenge-defined finite score summary."),
                 passed: z
                   .number()
                   .int()
@@ -3793,7 +3814,6 @@ export const solutionSubmissionResultReportResponseSchema = z
               .describe(
                 "Evaluation surface requested for a solution submission.",
               ),
-            primary_score: z.number().optional(),
             rank_score: z.number().optional(),
             aggregate_metrics: z.array(
               z
@@ -3853,9 +3873,7 @@ export const solutionSubmissionResultReportResponseSchema = z
               .object({
                 score: z
                   .number()
-                  .describe(
-                    "Normalized score in the inclusive range `[0, 1]`.",
-                  ),
+                  .describe("Challenge-defined finite score summary."),
                 passed: z
                   .number()
                   .int()
@@ -3873,9 +3891,7 @@ export const solutionSubmissionResultReportResponseSchema = z
               .object({
                 score: z
                   .number()
-                  .describe(
-                    "Normalized score in the inclusive range `[0, 1]`.",
-                  ),
+                  .describe("Challenge-defined finite score summary."),
                 passed: z
                   .number()
                   .int()

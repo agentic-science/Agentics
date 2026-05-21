@@ -721,11 +721,18 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
         })
         .await
         {
-            Ok(execution) => target_reports.push(output::LocalValidationTargetReport {
-                target,
-                log_path,
-                result: execution.result,
-            }),
+            Ok(execution) => {
+                let primary_metric = shared::models::evaluation::MetricValue::find_by_name(
+                    &execution.result.aggregate_metrics,
+                    &spec.metric_schema.ranking.primary_metric_name,
+                );
+                target_reports.push(output::LocalValidationTargetReport {
+                    target,
+                    log_path,
+                    primary_metric,
+                    result: execution.result,
+                })
+            }
             Err(error) => {
                 return Err(local_validation_error(
                     LocalValidationErrorContext {

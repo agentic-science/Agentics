@@ -10,11 +10,7 @@ import {
   resultDetailIsPublic,
 } from "@/lib/challengeVisibility";
 import { formatDate } from "@/lib/format";
-import {
-  formatDeclaredMetric,
-  metricDirectionLabel,
-  primaryMetricFromScore,
-} from "@/lib/metrics";
+import { formatDeclaredMetric, metricDirectionLabel } from "@/lib/metrics";
 import {
   challengeDetailResponseSchema,
   leaderboardResponseSchema,
@@ -216,7 +212,7 @@ export default async function ChallengePage({
                   <span className="text-[var(--text-body-sm)] font-mono text-[var(--accent-primary-text)]">
                     {formatDeclaredMetric(
                       metricSchema,
-                      primaryMetricFromScore(metricSchema, s.official_score),
+                      s.official_primary_metric,
                     )}
                   </span>
                 </Link>
@@ -259,10 +255,7 @@ export default async function ChallengePage({
                   <span className="text-[var(--text-body-sm)] font-mono text-[var(--accent-primary-text)]">
                     {formatDeclaredMetric(
                       metricSchema,
-                      primaryMetricFromScore(
-                        metricSchema,
-                        entry.official_score,
-                      ),
+                      entry.official_primary_metric,
                     )}
                   </span>
                 </div>

@@ -108,12 +108,8 @@ pub(super) fn public_submission_list_json() -> serde_json::Value {
                 "note": "public note",
                 "explanation": "fast solution",
                 "credit_text": "",
-                "official_score": 1.8,
                 "rank_score": 1.8,
-                "aggregate_metrics": [
-                    { "metric_name": "score", "value": 1.8 }
-                ],
-                "official_metrics": [],
+                "official_primary_metric": { "metric_name": "score", "value": 1.8 },
                 "created_at": "2026-05-01T00:00:00Z",
                 "updated_at": "2026-05-01T00:00:01Z"
             }
@@ -134,11 +130,7 @@ pub(super) fn leaderboard_json() -> serde_json::Value {
                 "best_solution_submission_id": "11111111-1111-4111-8111-111111111111",
                 "best_rank_score": 1.8,
                 "rank_score": 1.8,
-                "aggregate_metrics": [
-                    { "metric_name": "score", "value": 1.8 }
-                ],
-                "official_metrics": [],
-                "official_score": 1.8,
+                "official_primary_metric": { "metric_name": "score", "value": 1.8 },
                 "updated_at": "2026-05-01T00:00:01Z"
             }
         ]
@@ -184,7 +176,6 @@ pub(super) fn solution_submission_json() -> serde_json::Value {
             "target": "linux-arm64-cpu",
             "status": "completed",
             "eval_type": "official",
-            "primary_score": 1.8,
             "rank_score": 1.8,
             "aggregate_metrics": [
                 { "metric_name": "score", "value": 1.8 }
@@ -192,6 +183,7 @@ pub(super) fn solution_submission_json() -> serde_json::Value {
             "run_metrics": [],
             "public_results": []
         },
+        "official_primary_metric": { "metric_name": "score", "value": 1.8 },
         "created_at": "2026-05-01T00:00:00Z",
         "updated_at": "2026-05-01T00:00:01Z"
     })
@@ -204,6 +196,7 @@ pub(super) fn validation_only_solution_submission_json() -> serde_json::Value {
         .as_object_mut()
         .expect("solution submission fixture should be an object");
     object.remove("official_evaluation");
+    object.remove("official_primary_metric");
     object.insert("visible_after_eval".to_string(), json!(false));
     object.insert(
         "validation_evaluation".to_string(),
@@ -212,7 +205,6 @@ pub(super) fn validation_only_solution_submission_json() -> serde_json::Value {
             "target": "linux-arm64-cpu",
             "status": "completed",
             "eval_type": "validation",
-            "primary_score": 0.75,
             "rank_score": 0.75,
             "aggregate_metrics": [
                 { "metric_name": "score", "value": 0.75 }

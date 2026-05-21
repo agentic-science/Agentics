@@ -544,7 +544,6 @@ async fn submissions_status_fetches_validation_run_id() {
                 "target": "linux-arm64-cpu",
                 "status": "completed",
                 "eval_type": "validation",
-                "primary_score": 1.0,
                 "rank_score": 1.0,
                 "aggregate_metrics": [],
                 "run_metrics": [],
@@ -555,7 +554,6 @@ async fn submissions_status_fetches_validation_run_id() {
                 "target": "linux-arm64-cpu",
                 "status": "completed",
                 "eval_type": "validation",
-                "primary_score": 1.0,
                 "rank_score": 1.0,
                 "aggregate_metrics": [],
                 "run_metrics": [],
@@ -728,8 +726,8 @@ async fn submissions_report_uses_validation_rank_score_without_official_eval() {
         .await
         .expect("submissions report should use validation evaluation");
 
-    assert!(output.contains("validation_primary_score: 0.75"));
-    assert!(output.contains("official_score: none"));
+    assert!(output.contains("validation_primary_metric: score=0.75"));
+    assert!(output.contains("official_primary_metric: none"));
     assert!(output.contains("rank_score: 0.75"));
 }
 
@@ -1042,7 +1040,6 @@ async fn validate_remote_posts_validation_run_and_polls_status() {
                 "target": "linux-arm64-cpu",
                 "status": "completed",
                 "eval_type": "validation",
-                "primary_score": 1.0,
                 "rank_score": 1.0,
                 "aggregate_metrics": [
                     { "metric_name": "score", "value": 1.0 },
@@ -1113,7 +1110,7 @@ async fn validate_remote_posts_validation_run_and_polls_status() {
 
     assert!(output.contains("validation_run: 22222222-2222-4222-8222-222222222222"));
     assert!(output.contains("validation: completed"));
-    assert!(output.contains("primary_score: 1"));
+    assert!(output.contains("primary_metric: score=1"));
     assert!(output.contains("rank_score: 1"));
     assert!(output.contains("visible_after_eval: false"));
     assert_eq!(body["challenge_name"], "sample-sum");
