@@ -30,6 +30,9 @@ specific task says otherwise.
   fit the task.
 - Reuse existing workspace code, configuration types, DTOs, validation helpers,
   and domain newtypes before adding new local abstractions.
+- Do not duplicate default values, environment variable names, ports, paths, or
+  other constants. Promote shared defaults to an appropriate common module and
+  import them instead.
 - Treat external process execution as a typed boundary. Do not use `sh -c` for
   ordinary command execution.
 - Keep command documentation close to the implementation and update matching

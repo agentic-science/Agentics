@@ -25,6 +25,8 @@ Challenge payload scripts、sample solution scripts 和 image-local smoke script
   `serde_json`、`sqlx`、`bollard`、`tempfile`，以及标准 filesystem/process APIs。
 - 新增本地 abstraction 之前，先复用 workspace 中已有的 code、configuration
   types、DTOs、validation helpers 和 domain newtypes。
+- 不要重复定义 default values、environment variable names、ports、paths 或其他
+  constants。应将 shared defaults 提升到合适的 common module，然后 import 使用。
 - 将 external process execution 视为 typed boundary。普通 command execution 不使用
   `sh -c`。
 - Command documentation 应靠近 implementation；行为变化时同步更新对应的 operator
