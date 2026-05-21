@@ -25,6 +25,7 @@ use crate::storage::StorageKey;
 
 use super::challenges::{PublishChallengeInput, add_challenge_owner_tx, publish_challenge_tx};
 mod assets;
+mod audit;
 mod rows;
 
 pub use assets::{
@@ -32,6 +33,8 @@ pub use assets::{
     fail_challenge_private_asset, private_asset_storage_key_has_active_reference,
     reserve_challenge_private_asset,
 };
+use audit::create_challenge_draft_audit_event_tx;
+pub use audit::{CreateChallengeDraftAuditEventInput, create_challenge_draft_audit_event};
 pub use rows::list_challenge_private_asset_states;
 use rows::{
     list_private_assets_for_draft, list_validation_records_for_draft,
@@ -71,18 +74,6 @@ pub struct CreateChallengePrivateAssetInput {
     pub storage_key: StorageKey,
     pub temporary_storage_key: StorageKey,
     pub uploader_agent_id: AgentId,
-}
-
-/// Input for appending a draft audit event.
-#[derive(Debug, Clone)]
-pub struct CreateChallengeDraftAuditEventInput {
-    pub event_id: ChallengeDraftAuditEventId,
-    pub draft_id: ChallengeDraftId,
-    pub actor_agent_id: Option<AgentId>,
-    pub actor_admin_username: Option<String>,
-    pub action: String,
-    pub message: String,
-    pub metadata: Value,
 }
 
 /// Input for atomically publishing one approved new-challenge draft.
@@ -1184,42 +1175,5 @@ async fn archive_challenge_tx(
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
-    Ok(())
-}
-
-/// Append a draft audit event.
-pub async fn create_challenge_draft_audit_event(
-    pool: &PgPool,
-    input: &CreateChallengeDraftAuditEventInput,
-) -> Result<()> {
-    let mut tx = pool.begin().await?;
-    create_challenge_draft_audit_event_tx(&mut tx, input).await?;
-    tx.commit().await?;
-    Ok(())
-}
-
-/// Creates challenge draft audit event tx after validating caller inputs.
-pub(super) async fn create_challenge_draft_audit_event_tx(
-    tx: &mut Transaction<'_, Postgres>,
-    input: &CreateChallengeDraftAuditEventInput,
-) -> Result<()> {
-    sqlx::query(
-        r#"
-        INSERT INTO challenge_draft_audit_events (
-            id, draft_id, actor_agent_id, actor_admin_username, action, message, metadata_json
-        )
-        VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7)
-        "#,
-    )
-    .bind(input.event_id.as_str())
-    .bind(input.draft_id.as_str())
-    .bind(input.actor_agent_id.as_ref().map(AgentId::as_str))
-    .bind(&input.actor_admin_username)
-    .bind(&input.action)
-    .bind(&input.message)
-    .bind(&input.metadata)
-    .execute(&mut **tx)
-    .await?;
-
     Ok(())
 }
