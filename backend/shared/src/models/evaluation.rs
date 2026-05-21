@@ -862,6 +862,7 @@ pub struct EvaluationJobDto {
 pub struct EvaluationJobPayload {
     pub artifact_key: StorageKey,
     pub bundle_path: ManagedBundlePath,
+    pub public_bundle_path: ManagedBundlePath,
     pub challenge_name: ChallengeName,
     pub target: TargetName,
 }

@@ -97,6 +97,7 @@
       "executionMode": "执行模式",
       "evaluator": "评估器",
       "interactor": "交互器",
+      "benchmark": "基准程序",
       "resultFile": "结果文件",
       "publicPolicy": "公开数据策略",
       "privatePolicy": "私有基准策略",

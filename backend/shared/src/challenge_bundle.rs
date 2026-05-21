@@ -13,8 +13,8 @@ use crate::error::{AppError, Result};
 use crate::models::challenge::{
     ChallengeBundleSpec, ChallengeExecutionMode, ChallengePrepareSpec, ChallengeRunInputFile,
     ChallengeRunManifest, ChallengeRunSpec, ChallengeSolutionPublicationPolicy,
-    MAX_CHALLENGE_KEYWORDS, MIN_CHALLENGE_KEYWORDS, PipedStdioPrepareSpec,
-    PipedStdioSessionManifest, PrivateBenchmarkPolicy,
+    CoexecutedBenchmarkPrepareSpec, MAX_CHALLENGE_KEYWORDS, MIN_CHALLENGE_KEYWORDS,
+    PipedStdioPrepareSpec, PipedStdioSessionManifest, PrivateBenchmarkPolicy,
 };
 use crate::models::paths::BundleRelativePath;
 use crate::validation::{targets, text};
@@ -123,6 +123,7 @@ async fn assert_declared_execution_scripts(
         let label = match spec.execution.mode() {
             ChallengeExecutionMode::SeparatedEvaluator => "evaluator script",
             ChallengeExecutionMode::PipedStdio => "interactor script",
+            ChallengeExecutionMode::CoexecutedBenchmark => "benchmark script",
         };
         assert_path_type(&bundle_dir.join(script_path), "file", label).await?;
     }
@@ -147,6 +148,24 @@ async fn assert_declared_execution_scripts(
             }
         }
         crate::models::challenge::ChallengeExecutionSpec::PipedStdio(execution) => {
+            for (label, prepare) in [
+                (
+                    "validation prepare script",
+                    execution.validation_prepare.as_ref(),
+                ),
+                (
+                    "official prepare script",
+                    execution.official_prepare.as_ref(),
+                ),
+            ] {
+                if let Some(prepare) = prepare
+                    && let Some(script_path) = declared_evaluator_script(&prepare.command)
+                {
+                    assert_path_type(&bundle_dir.join(script_path), "file", label).await?;
+                }
+            }
+        }
+        crate::models::challenge::ChallengeExecutionSpec::CoexecutedBenchmark(execution) => {
             for (label, prepare) in [
                 (
                     "validation prepare script",
@@ -200,6 +219,7 @@ async fn validate_declared_execution_inputs(
                 validate_static_session_manifest(bundle_dir, official_session, "official").await?;
             }
         }
+        crate::models::challenge::ChallengeExecutionSpec::CoexecutedBenchmark(_) => {}
     }
 
     Ok(())
@@ -300,6 +320,12 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
             validate_evaluator_command(
                 &execution.interactor.command,
                 "execution.interactor.command",
+            )?;
+        }
+        crate::models::challenge::ChallengeExecutionSpec::CoexecutedBenchmark(execution) => {
+            validate_evaluator_command(
+                &execution.benchmark.command,
+                "execution.benchmark.command",
             )?;
         }
     }
@@ -504,9 +530,47 @@ fn validate_execution(spec: &ChallengeBundleSpec) -> Result<()> {
         crate::models::challenge::ChallengeExecutionSpec::PipedStdio(execution) => {
             validate_piped_stdio_execution(spec, execution)?;
         }
+        crate::models::challenge::ChallengeExecutionSpec::CoexecutedBenchmark(execution) => {
+            validate_coexecuted_benchmark_execution(spec, execution)?;
+        }
     }
+    validate_solution_run_stage_policy(spec)?;
 
     Ok(())
+}
+
+/// Validate the mode-specific presence of participant run-stage limits.
+fn validate_solution_run_stage_policy(spec: &ChallengeBundleSpec) -> Result<()> {
+    for (index, target) in spec.targets.iter().enumerate() {
+        let field = format!("targets[{index}].resource_profile.solution.run");
+        match spec.execution.mode() {
+            ChallengeExecutionMode::SeparatedEvaluator | ChallengeExecutionMode::PipedStdio => {
+                if target.resource_profile.solution.run.is_none() {
+                    return Err(AppError::Validation(format!(
+                        "{field} is required for {} execution",
+                        execution_mode_name(spec.execution.mode())
+                    )));
+                }
+            }
+            ChallengeExecutionMode::CoexecutedBenchmark => {
+                if target.resource_profile.solution.run.is_some() {
+                    return Err(AppError::Validation(format!(
+                        "{field} is forbidden for coexecuted_benchmark execution"
+                    )));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Stable wire name for one execution mode.
+fn execution_mode_name(mode: ChallengeExecutionMode) -> &'static str {
+    match mode {
+        ChallengeExecutionMode::SeparatedEvaluator => "separated_evaluator",
+        ChallengeExecutionMode::PipedStdio => "piped_stdio",
+        ChallengeExecutionMode::CoexecutedBenchmark => "coexecuted_benchmark",
+    }
 }
 
 /// Validate separated-evaluator topology fields.
@@ -593,6 +657,25 @@ fn validate_piped_stdio_execution(
     Ok(())
 }
 
+/// Validate co-executed benchmark topology fields.
+fn validate_coexecuted_benchmark_execution(
+    _spec: &ChallengeBundleSpec,
+    execution: &crate::models::challenge::CoexecutedBenchmarkExecutionSpec,
+) -> Result<()> {
+    if !execution.acknowledge_danger {
+        return Err(AppError::Validation(
+            "execution.acknowledge_danger must be true for coexecuted_benchmark".to_string(),
+        ));
+    }
+    if let Some(prepare) = &execution.validation_prepare {
+        validate_coexecuted_benchmark_prepare_spec(prepare, "execution.validation_prepare")?;
+    }
+    if let Some(prepare) = &execution.official_prepare {
+        validate_coexecuted_benchmark_prepare_spec(prepare, "execution.official_prepare")?;
+    }
+    Ok(())
+}
+
 /// Validates prepare spec invariants for this contract.
 fn validate_prepare_spec(prepare: &ChallengePrepareSpec, field: &str) -> Result<()> {
     validate_prepare_command(&prepare.command, &format!("{field}.command"))?;
@@ -605,6 +688,19 @@ fn validate_prepare_spec(prepare: &ChallengePrepareSpec, field: &str) -> Result<
 
 /// Validates piped-stdio prepare spec invariants for this contract.
 fn validate_piped_stdio_prepare_spec(prepare: &PipedStdioPrepareSpec, field: &str) -> Result<()> {
+    validate_prepare_command(&prepare.command, &format!("{field}.command"))?;
+    if let Some(notes) = &prepare.reproducibility_notes {
+        require_non_empty(notes, &format!("{field}.reproducibility_notes"))?;
+    }
+
+    Ok(())
+}
+
+/// Validates co-executed benchmark prepare spec invariants for this contract.
+fn validate_coexecuted_benchmark_prepare_spec(
+    prepare: &CoexecutedBenchmarkPrepareSpec,
+    field: &str,
+) -> Result<()> {
     validate_prepare_command(&prepare.command, &format!("{field}.command"))?;
     if let Some(notes) = &prepare.reproducibility_notes {
         require_non_empty(notes, &format!("{field}.reproducibility_notes"))?;
@@ -783,6 +879,7 @@ fn execution_uses_static_official_locator(
         crate::models::challenge::ChallengeExecutionSpec::PipedStdio(execution) => {
             execution.official_session.is_some()
         }
+        crate::models::challenge::ChallengeExecutionSpec::CoexecutedBenchmark(_) => false,
     }
 }
 

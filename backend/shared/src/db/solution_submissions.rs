@@ -136,6 +136,7 @@ pub async fn create_solution_submission_with_job(
     let payload = serde_json::to_value(EvaluationJobPayload {
         artifact_key: input.artifact_key.clone(),
         bundle_path: challenge.bundle_path.clone(),
+        public_bundle_path: challenge.public_bundle_path.clone(),
         challenge_name: challenge.challenge_name.clone(),
         target: input.target.clone(),
     })

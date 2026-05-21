@@ -28,9 +28,12 @@ fn network_policy_clamps_to_resource_profile() {
 fn solution_phase_limits_come_from_resource_profile() {
     let profile = resource_profile();
 
-    let setup = effective_phase_limits(&profile, &resolved_phase(ZipProjectPhaseName::Setup));
-    let build = effective_phase_limits(&profile, &resolved_phase(ZipProjectPhaseName::Build));
-    let run = effective_phase_limits(&profile, &resolved_phase(ZipProjectPhaseName::Run));
+    let setup = effective_phase_limits(&profile, &resolved_phase(ZipProjectPhaseName::Setup))
+        .expect("setup limits should resolve");
+    let build = effective_phase_limits(&profile, &resolved_phase(ZipProjectPhaseName::Build))
+        .expect("build limits should resolve");
+    let run = effective_phase_limits(&profile, &resolved_phase(ZipProjectPhaseName::Run))
+        .expect("run limits should resolve");
 
     assert_eq!(setup.timeout_sec, 11);
     assert_eq!(setup.network_access, ZipProjectNetworkAccess::Enabled);
@@ -110,7 +113,13 @@ fn resource_profile() -> ResourceProfileSpec {
         solution: SolutionStageProfiles {
             setup: stage_profile(11, 111, 1111, 1111, ZipProjectNetworkAccess::Enabled),
             build: stage_profile(22, 222, 2222, 2222, ZipProjectNetworkAccess::Disabled),
-            run: stage_profile(33, 333, 3333, 4444, ZipProjectNetworkAccess::Loopback),
+            run: Some(stage_profile(
+                33,
+                333,
+                3333,
+                4444,
+                ZipProjectNetworkAccess::Loopback,
+            )),
         },
         evaluator: EvaluatorStageProfiles {
             setup: stage_profile(44, 444, 4444, 4444, ZipProjectNetworkAccess::Enabled),

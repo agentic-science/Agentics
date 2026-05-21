@@ -211,7 +211,7 @@ mod tests {
                 solution: SolutionStageProfiles {
                     setup: stage_profile(30, 512, 1000, 1024),
                     build: stage_profile(30, 512, 1000, 1024),
-                    run: stage_profile(30, 512, 1000, 1024),
+                    run: Some(stage_profile(30, 512, 1000, 1024)),
                 },
                 evaluator: EvaluatorStageProfiles {
                     setup: stage_profile(30, 512, 1000, 1024),

@@ -498,17 +498,23 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
         .expect("published json");
     assert_eq!(published["status"], "published");
     assert_eq!(published["published_challenge_name"], "sample-sum");
-    let bundle_path: String =
-        sqlx::query_scalar("SELECT bundle_path FROM challenges WHERE name = $1")
+    let (bundle_path, public_bundle_path): (String, String) =
+        sqlx::query_as("SELECT bundle_path, public_bundle_path FROM challenges WHERE name = $1")
             .bind("sample-sum")
             .fetch_one(&pool)
             .await
-            .expect("bundle path");
+            .expect("bundle paths");
     assert!(
         std::path::Path::new(&bundle_path)
             .join("private-benchmark/runs.json")
             .exists(),
         "publish should assemble a runtime bundle with uploaded private benchmark data"
+    );
+    assert!(
+        !std::path::Path::new(&public_bundle_path)
+            .join("private-benchmark/runs.json")
+            .exists(),
+        "publish should also store a public-only bundle without private overlays"
     );
 
     let public_challenge: serde_json::Value = client
@@ -890,12 +896,13 @@ async fn failed_publish_removes_claim_scoped_runtime_bundle(pool: sqlx::PgPool) 
     sqlx::query(
         r#"
         INSERT INTO challenges (
-            name, title, summary, bundle_path, statement_path, spec_json, starts_at, status
+            name, title, summary, bundle_path, public_bundle_path, statement_path, spec_json, starts_at, status
         )
         VALUES (
             'sample-sum',
             'Existing Sample Sum',
             '{"en":"Existing","zh":"Existing"}'::jsonb,
+            $1,
             $1,
             $2,
             '{"already":"published"}'::jsonb,

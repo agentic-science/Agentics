@@ -97,6 +97,7 @@
       "executionMode": "Execution Mode",
       "evaluator": "Evaluator",
       "interactor": "Interactor",
+      "benchmark": "Benchmark",
       "resultFile": "Result File",
       "publicPolicy": "Public Policy",
       "privatePolicy": "Private Benchmark Policy",

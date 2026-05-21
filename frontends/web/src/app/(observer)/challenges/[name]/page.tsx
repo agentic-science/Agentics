@@ -78,11 +78,15 @@ export default async function ChallengePage({
   const trustedExecutor =
     execution.mode === "piped_stdio"
       ? execution.interactor
-      : execution.evaluator;
+      : execution.mode === "coexecuted_benchmark"
+        ? execution.benchmark
+        : execution.evaluator;
   const trustedExecutorLabel =
     execution.mode === "piped_stdio"
       ? t("challenge.config.interactor")
-      : t("challenge.config.evaluator");
+      : execution.mode === "coexecuted_benchmark"
+        ? t("challenge.config.benchmark")
+        : t("challenge.config.evaluator");
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6">

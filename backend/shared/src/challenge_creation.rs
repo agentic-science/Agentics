@@ -354,6 +354,7 @@ async fn validate_public_bundle(
                     .await?;
                 }
             }
+            crate::models::challenge::ChallengeExecutionSpec::CoexecutedBenchmark(_) => {}
         }
     }
 

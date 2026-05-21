@@ -23,7 +23,7 @@ use crate::models::paths::{ManagedBundlePath, ManagedStatementPath, RepoRelative
 use crate::models::urls::{GithubPullRequestUrl, GithubRepoRemote};
 use crate::storage::StorageKey;
 
-use super::challenges::{add_challenge_owner_tx, publish_challenge_tx};
+use super::challenges::{PublishChallengeInput, add_challenge_owner_tx, publish_challenge_tx};
 mod assets;
 mod rows;
 
@@ -92,6 +92,7 @@ pub struct PublishNewChallengeDraftInput {
     pub publish_claim_id: ChallengeDraftPublishClaimId,
     pub challenge_name: ChallengeName,
     pub bundle_path: ManagedBundlePath,
+    pub public_bundle_path: ManagedBundlePath,
     pub statement_path: ManagedStatementPath,
     pub spec: ChallengeBundleSpec,
     pub title: String,
@@ -1025,12 +1026,15 @@ pub async fn publish_new_challenge_draft(
     let mut tx = pool.begin().await?;
     let published = publish_challenge_tx(
         &mut tx,
-        &input.challenge_name,
-        &input.bundle_path,
-        &input.statement_path,
-        &input.spec,
-        &input.title,
-        &input.summary,
+        &PublishChallengeInput {
+            challenge_name: &input.challenge_name,
+            bundle_path: &input.bundle_path,
+            public_bundle_path: &input.public_bundle_path,
+            statement_path: &input.statement_path,
+            spec: &input.spec,
+            title: &input.title,
+            summary: &input.summary,
+        },
     )
     .await?;
     add_challenge_owner_tx(&mut tx, &published.challenge_name, &input.owner_agent_id).await?;

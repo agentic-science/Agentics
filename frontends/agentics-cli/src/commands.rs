@@ -705,6 +705,9 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
         let payload = EvaluationJobPayload {
             artifact_key: stored_artifact_key,
             bundle_path: shared::models::paths::ManagedBundlePath::from_existing_dir(&bundle_dir)?,
+            public_bundle_path: shared::models::paths::ManagedBundlePath::from_existing_dir(
+                &bundle_dir,
+            )?,
             challenge_name: spec.challenge_name.clone(),
             target: target.clone(),
         };

@@ -644,15 +644,17 @@ function TargetSummary({ challenge }: { challenge: AdminChallengeListItem }) {
       {targets.map((target) => {
         const solutionRun = target.resource_profile.solution.run;
         const evaluatorRun = target.resource_profile.evaluator.run;
+        const solutionRunSummary = solutionRun
+          ? `${solutionRun.cpu_limit_millis}m/${solutionRun.memory_limit_mb} MiB`
+          : "not used";
         return (
           <div key={target.name}>
             <div className="font-mono text-[var(--text-caption)]">
               {target.name}
             </div>
             <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
-              {target.docker_platform} · solution run{" "}
-              {solutionRun.cpu_limit_millis}m/{solutionRun.memory_limit_mb} MiB
-              · evaluator run {evaluatorRun.cpu_limit_millis}m/
+              {target.docker_platform} · solution run {solutionRunSummary}·
+              evaluator run {evaluatorRun.cpu_limit_millis}m/
               {evaluatorRun.memory_limit_mb} MiB
             </div>
           </div>

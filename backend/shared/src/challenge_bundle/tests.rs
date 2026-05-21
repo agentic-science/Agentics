@@ -4,9 +4,10 @@ use crate::models::challenge::{
     ChallengeBundleSpec, ChallengeEligibilitySpec, ChallengeEligibilityType,
     ChallengeExecutionSpec, ChallengePrepareSpec, ChallengeResultDetailVisibility,
     ChallengeSolutionPublicationPolicy, ChallengeTargetSpec, ChallengeVisibility,
-    ChallengeVisibilitySpec, DatasetsSpec, DockerPlatform, EvaluatorSpec, EvaluatorStageProfiles,
-    HardwareProfileSpec, MetricDirection, MetricSchemaSpec, MetricVisibility,
-    PipedStdioExecutionSpec, PipedStdioPrepareSpec, PrivateBenchmarkPolicy, ResourceProfileSpec,
+    ChallengeVisibilitySpec, CoexecutedBenchmarkExecutionSpec, CoexecutedBenchmarkPrepareSpec,
+    DatasetsSpec, DockerPlatform, EvaluatorSpec, EvaluatorStageProfiles, HardwareProfileSpec,
+    MetricDirection, MetricSchemaSpec, MetricVisibility, PipedStdioExecutionSpec,
+    PipedStdioPrepareSpec, PrivateBenchmarkPolicy, ResourceProfileSpec,
     SeparatedEvaluatorExecutionSpec, SolutionSpec, SolutionStageProfiles, StageResourceProfile,
     TargetAccelerator,
 };
@@ -65,7 +66,13 @@ fn base_spec() -> ChallengeBundleSpec {
                 solution: SolutionStageProfiles {
                     setup: stage_profile(30, 512, 1000, 1024, ZipProjectNetworkAccess::Enabled),
                     build: stage_profile(30, 512, 1000, 1024, ZipProjectNetworkAccess::Disabled),
-                    run: stage_profile(30, 512, 1000, 1024, ZipProjectNetworkAccess::Disabled),
+                    run: Some(stage_profile(
+                        30,
+                        512,
+                        1000,
+                        1024,
+                        ZipProjectNetworkAccess::Disabled,
+                    )),
                 },
                 evaluator: EvaluatorStageProfiles {
                     setup: stage_profile(30, 512, 1000, 1024, ZipProjectNetworkAccess::Disabled),
@@ -124,6 +131,25 @@ fn base_piped_stdio_spec() -> ChallengeBundleSpec {
     spec
 }
 
+/// Build a valid co-executed benchmark spec for tests.
+fn base_coexecuted_benchmark_spec() -> ChallengeBundleSpec {
+    let mut spec = base_spec();
+    spec.execution =
+        ChallengeExecutionSpec::CoexecutedBenchmark(CoexecutedBenchmarkExecutionSpec {
+            benchmark: EvaluatorSpec {
+                command: vec!["python".to_string(), "benchmark/run.py".to_string()],
+                result_file: bundle_path("result.json"),
+            },
+            acknowledge_danger: true,
+            validation_prepare: Some(coexecuted_prepare_spec()),
+            official_prepare: Some(coexecuted_prepare_spec()),
+        });
+    for target in &mut spec.targets {
+        target.resource_profile.solution.run = None;
+    }
+    spec
+}
+
 /// Build a stage resource profile for tests.
 fn stage_profile(
     timeout_sec: u64,
@@ -145,6 +171,16 @@ fn stage_profile(
 fn separated_evaluator_mut(spec: &mut ChallengeBundleSpec) -> &mut SeparatedEvaluatorExecutionSpec {
     let ChallengeExecutionSpec::SeparatedEvaluator(execution) = &mut spec.execution else {
         panic!("base spec should use separated_evaluator execution");
+    };
+    execution
+}
+
+/// Borrow co-executed benchmark execution in tests that start from `base_coexecuted_benchmark_spec`.
+fn coexecuted_benchmark_mut(
+    spec: &mut ChallengeBundleSpec,
+) -> &mut CoexecutedBenchmarkExecutionSpec {
+    let ChallengeExecutionSpec::CoexecutedBenchmark(execution) = &mut spec.execution else {
+        panic!("spec should use coexecuted_benchmark execution");
     };
     execution
 }
@@ -306,16 +342,16 @@ fn execution_mode_is_required() {
     assert!(error.to_string().contains("mode"));
 }
 
-/// Verifies that future execution modes are reserved until they are implemented.
+/// Verifies that unknown execution modes are rejected.
 #[test]
-fn unimplemented_execution_modes_are_rejected() {
+fn unknown_execution_modes_are_rejected() {
     let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
-    spec_json["execution"]["mode"] = serde_json::json!("coexecuted_benchmark");
+    spec_json["execution"]["mode"] = serde_json::json!("firecracker_benchmark");
 
     let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
-        .expect_err("unimplemented execution mode should fail");
+        .expect_err("unknown execution mode should fail");
 
-    assert!(error.to_string().contains("coexecuted_benchmark"));
+    assert!(error.to_string().contains("firecracker_benchmark"));
 }
 
 /// Verifies that targets are required.
@@ -436,7 +472,13 @@ fn missing_stage_profile_is_rejected() {
 #[test]
 fn zero_stage_resource_limit_is_rejected() {
     let mut spec = base_spec();
-    spec.targets[0].resource_profile.solution.run.disk_limit_mb = 0;
+    spec.targets[0]
+        .resource_profile
+        .solution
+        .run
+        .as_mut()
+        .expect("base spec declares solution run")
+        .disk_limit_mb = 0;
 
     let error =
         validate_challenge_bundle_spec(&spec).expect_err("zero stage resource limit should fail");
@@ -870,6 +912,104 @@ fn piped_stdio_validation_requires_session_source() {
     assert!(error.to_string().contains("validation_session"));
 }
 
+/// Verifies that co-executed benchmarks validate and hide official prepare metadata publicly.
+#[test]
+fn coexecuted_benchmark_is_valid_and_projected_publicly() {
+    let spec = base_coexecuted_benchmark_spec();
+
+    validate_challenge_bundle_spec(&spec).expect("co-executed benchmark spec should validate");
+    let public = crate::models::challenge::PublicChallengeBundleSpec::from(spec);
+    let execution_json =
+        serde_json::to_value(public.execution).expect("public execution serializes");
+
+    assert_eq!(
+        execution_json["mode"],
+        serde_json::json!("coexecuted_benchmark")
+    );
+    assert_eq!(
+        execution_json["acknowledge_danger"],
+        serde_json::json!(true)
+    );
+    assert!(execution_json.get("benchmark").is_some());
+    assert!(execution_json.get("validation_prepare").is_some());
+    assert!(execution_json.get("official_prepare").is_none());
+}
+
+/// Verifies that co-executed benchmarks require explicit danger acknowledgement.
+#[test]
+fn coexecuted_benchmark_requires_danger_acknowledgement() {
+    let mut spec = base_coexecuted_benchmark_spec();
+    coexecuted_benchmark_mut(&mut spec).acknowledge_danger = false;
+
+    let error = validate_challenge_bundle_spec(&spec).expect_err("missing danger ack should fail");
+
+    assert!(error.to_string().contains("acknowledge_danger"));
+}
+
+/// Verifies that co-executed benchmarks reject solution run-stage limits.
+#[test]
+fn coexecuted_benchmark_rejects_solution_run_profile() {
+    let mut spec = base_coexecuted_benchmark_spec();
+    spec.targets[0].resource_profile.solution.run = Some(stage_profile(
+        30,
+        512,
+        1000,
+        1024,
+        ZipProjectNetworkAccess::Disabled,
+    ));
+
+    let error = validate_challenge_bundle_spec(&spec)
+        .expect_err("co-executed benchmark should reject solution run profile");
+
+    assert!(error.to_string().contains("solution.run"));
+    assert!(error.to_string().contains("forbidden"));
+}
+
+/// Verifies that separated and piped modes require solution run-stage limits.
+#[test]
+fn solution_run_profile_is_required_for_modes_with_solution_run_container() {
+    let mut separated = base_spec();
+    separated.targets[0].resource_profile.solution.run = None;
+    let separated_error = validate_challenge_bundle_spec(&separated)
+        .expect_err("separated evaluator should require solution run profile");
+    assert!(separated_error.to_string().contains("solution.run"));
+
+    let mut piped = base_piped_stdio_spec();
+    piped.targets[0].resource_profile.solution.run = None;
+    let piped_error = validate_challenge_bundle_spec(&piped)
+        .expect_err("piped stdio should require solution run profile");
+    assert!(piped_error.to_string().contains("solution.run"));
+}
+
+/// Verifies that co-executed benchmarks reject static run and session locators.
+#[test]
+fn coexecuted_benchmark_rejects_run_and_session_locators() {
+    let mut spec_json =
+        serde_json::to_value(base_coexecuted_benchmark_spec()).expect("spec serializes");
+    spec_json["execution"]["validation_runs"] = serde_json::json!("public/runs.json");
+    spec_json["execution"]["validation_session"] = serde_json::json!("public/session.json");
+
+    let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+        .expect_err("co-executed benchmark should reject foreign locator fields");
+
+    let message = error.to_string();
+    assert!(message.contains("validation_runs") || message.contains("validation_session"));
+}
+
+/// Verifies that co-executed prepare does not accept generated result-file locators.
+#[test]
+fn coexecuted_benchmark_prepare_rejects_result_file_locators() {
+    let mut spec_json =
+        serde_json::to_value(base_coexecuted_benchmark_spec()).expect("spec serializes");
+    spec_json["execution"]["validation_prepare"]["result_runs_file"] =
+        serde_json::json!("generated/runs.json");
+
+    let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+        .expect_err("co-executed prepare should reject result-file locators");
+
+    assert!(error.to_string().contains("result_runs_file"));
+}
+
 /// Verifies that prepare and static runs are mutually exclusive per mode.
 #[test]
 fn prepare_and_static_runs_are_mutually_exclusive_per_mode() {
@@ -986,6 +1126,14 @@ fn piped_prepare_spec() -> PipedStdioPrepareSpec {
     PipedStdioPrepareSpec {
         command: vec!["python".to_string(), "interactor/prepare.py".to_string()],
         result_session_file: bundle_path("generated/session.json"),
+        reproducibility_notes: Some("Generated from deterministic private seeds.".to_string()),
+    }
+}
+
+/// Handles co-executed benchmark prepare spec for this module.
+fn coexecuted_prepare_spec() -> CoexecutedBenchmarkPrepareSpec {
+    CoexecutedBenchmarkPrepareSpec {
+        command: vec!["python".to_string(), "benchmark/prepare.py".to_string()],
         reproducibility_notes: Some("Generated from deterministic private seeds.".to_string()),
     }
 }

@@ -204,6 +204,200 @@ Path(args.output_path).write_text(json.dumps({
     .expect("failed to write spec");
 }
 
+/// Creates public/private bundle paths for a minimal co-executed benchmark challenge.
+fn create_coexecuted_benchmark_bundles(root: &Path) -> (std::path::PathBuf, std::path::PathBuf) {
+    let public_bundle = root.join("coexecuted-public/v1");
+    let private_bundle = root.join("coexecuted-private/v1");
+    for bundle in [&public_bundle, &private_bundle] {
+        std::fs::create_dir_all(bundle.join("benchmark")).expect("failed to create benchmark dir");
+        std::fs::create_dir_all(bundle.join("public")).expect("failed to create public dir");
+        std::fs::write(
+            bundle.join("statement.md"),
+            "# Coexecuted Sum\n\nImport participant code from the built workspace.\n",
+        )
+        .expect("failed to write statement");
+        std::fs::write(bundle.join("public/case.json"), r#"{"a":2,"b":3}"#)
+            .expect("failed to write public case");
+        std::fs::write(
+            bundle.join("benchmark/run.py"),
+            r#"from __future__ import annotations
+
+import argparse
+import importlib.util
+import json
+from pathlib import Path
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--challenge-dir", required=True)
+parser.add_argument("--workspace-dir", required=True)
+parser.add_argument("--output-path", required=True)
+parser.add_argument("--mode", required=True)
+parser.add_argument("--target", required=True)
+args = parser.parse_args()
+
+challenge_dir = Path(args.challenge_dir)
+private_marker = challenge_dir / "private-benchmark" / "secret.json"
+if args.mode == "validation":
+    if private_marker.exists():
+        raise SystemExit("validation benchmark unexpectedly received private data")
+    case = json.loads((challenge_dir / "public" / "case.json").read_text())
+else:
+    case = json.loads(private_marker.read_text())
+
+module_path = Path(args.workspace_dir) / "solution.py"
+spec = importlib.util.spec_from_file_location("agentics_solution", module_path)
+module = importlib.util.module_from_spec(spec)
+assert spec and spec.loader
+spec.loader.exec_module(module)
+answer = int(module.solve(case["a"], case["b"]))
+passed = answer == int(case["a"]) + int(case["b"])
+score = 1.0 if passed else 0.0
+summary_key = "validation_summary" if args.mode == "validation" else "official_summary"
+payload = {
+    "status": "passed" if passed else "failed",
+    "rank_score": score,
+    "aggregate_metrics": [
+        {"metric_name": "score", "value": score},
+        {"metric_name": "passed_cases", "value": score},
+    ],
+    summary_key: {"score": score, "passed": 1 if passed else 0, "total": 1},
+}
+if args.mode == "validation":
+    payload["public_results"] = [
+        {"case_name": "public-1", "status": "passed" if passed else "failed", "score": score}
+    ]
+Path(args.output_path).write_text(json.dumps(payload))
+"#,
+        )
+        .expect("failed to write benchmark");
+    }
+    std::fs::create_dir_all(private_bundle.join("private-benchmark"))
+        .expect("failed to create private benchmark dir");
+    std::fs::write(
+        private_bundle.join("private-benchmark/secret.json"),
+        r#"{"a":11,"b":31}"#,
+    )
+    .expect("failed to write private case");
+
+    let spec = serde_json::json!({
+        "schema_version": 1,
+        "challenge_name": "coexecuted-sum",
+        "challenge_title": "Coexecuted Sum",
+        "summary": {
+            "en": "Import participant code in a trusted benchmark harness.",
+            "zh": "在可信基准程序中导入参赛代码。"
+        },
+        "keywords": ["benchmark"],
+        "solution": {
+            "protocol": "zip_project",
+            "manifest_file": "agentics.solution.json"
+        },
+        "targets": [{
+            "name": "linux-arm64-cpu",
+            "docker_platform": "linux/arm64",
+            "accelerator": null,
+            "validation_enabled": true,
+            "resource_profile": {
+                "name": "python-cpu-small",
+                "solution_image": {
+                    "source": "local",
+                    "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"
+                },
+                "evaluator_image": {
+                    "source": "local",
+                    "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"
+                },
+                "solution": {
+                    "setup": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 256, "network_access": "disabled"},
+                    "build": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 256, "network_access": "disabled"}
+                },
+                "evaluator": {
+                    "setup": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 256, "network_access": "disabled"},
+                    "run": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 256, "network_access": "disabled"}
+                }
+            }
+        }],
+        "starts_at": "2026-01-01T00:00:00Z",
+        "eligibility": { "type": "open" },
+        "visibility": {
+            "leaderboard": "public_live",
+            "score_distribution": "public_live",
+            "result_detail": "submitter_live_public_live"
+        },
+        "solution_publication": "public",
+        "execution": {
+            "mode": "coexecuted_benchmark",
+            "benchmark": {
+                "command": ["python", "benchmark/run.py"],
+                "result_file": "result.json"
+            },
+            "acknowledge_danger": true
+        },
+        "datasets": {
+            "public_dir": "public",
+            "private_benchmark_dir": "private-benchmark",
+            "public_policy": "full",
+            "private_benchmark_policy": "score_only",
+            "private_benchmark_enabled": true
+        },
+        "metric_schema": {
+            "metrics": [
+                {
+                    "name": "score",
+                    "label": "Score",
+                    "direction": "maximize",
+                    "visibility": "public"
+                },
+                {
+                    "name": "passed_cases",
+                    "label": "Passed Cases",
+                    "direction": "maximize",
+                    "visibility": "public"
+                }
+            ],
+            "ranking": {
+                "primary_metric_name": "score",
+                "tie_breaker_metric_names": ["passed_cases"]
+            }
+        }
+    });
+    for bundle in [&public_bundle, &private_bundle] {
+        std::fs::write(
+            bundle.join("spec.json"),
+            serde_json::to_string_pretty(&spec).expect("failed to serialize spec"),
+        )
+        .expect("failed to write spec");
+    }
+
+    (public_bundle, private_bundle)
+}
+
+/// Build a base64 ZIP containing a co-executed sum solution.
+fn coexecuted_sum_solution_zip_base64() -> String {
+    zip_project_zip_base64(vec![
+        (
+            "agentics.solution.json",
+            serde_json::json!({
+                "protocol": "zip_project",
+                "protocol_version": 1,
+                "note": "coexecuted sum solution",
+                "commands": {
+                    "run": "unused-run.sh"
+                }
+            })
+            .to_string(),
+        ),
+        (
+            "unused-run.sh",
+            "#!/usr/bin/env sh\nset -eu\npython solution.py\n".to_string(),
+        ),
+        (
+            "solution.py",
+            "def solve(a, b):\n    return a + b\n".to_string(),
+        ),
+    ])
+}
+
 /// Build a base64 ZIP containing an interactive sum solution.
 fn piped_stdio_sum_solution_zip_base64() -> String {
     zip_project_zip_base64(vec![
@@ -470,7 +664,21 @@ async fn worker_completes_piped_stdio_solution_submission(pool: sqlx::PgPool) {
         .json()
         .await
         .expect("failed to decode validation response");
-    assert_eq!(validation["status"], "completed");
+    let validation_job_error: (Option<String>,) = sqlx::query_as(
+        "SELECT last_error FROM evaluation_jobs WHERE solution_submission_id = $1::uuid",
+    )
+    .bind(validation_id)
+    .fetch_one(&pool)
+    .await
+    .expect("failed to query piped-stdio validation job error");
+    let validation_runner_log = validation["evaluation"]["log_key"]
+        .as_str()
+        .and_then(|log_key| std::fs::read_to_string(storage.path().join(log_key)).ok());
+    assert_eq!(
+        validation["status"], "completed",
+        "unexpected piped-stdio validation response: {validation:#}; job_error={:?}; runner_log={:?}",
+        validation_job_error.0, validation_runner_log
+    );
     assert_eq!(validation["evaluation"]["eval_type"], "validation");
     assert_eq!(validation["evaluation"]["rank_score"], 1.0);
     assert_eq!(validation["evaluation"]["validation_summary"]["score"], 1.0);
@@ -515,6 +723,155 @@ async fn worker_completes_piped_stdio_solution_submission(pool: sqlx::PgPool) {
         solution_submission["status"], "completed",
         "unexpected piped_stdio submission response"
     );
+    assert_eq!(solution_submission["evaluation"]["eval_type"], "official");
+    assert_eq!(solution_submission["evaluation"]["rank_score"], 1.0);
+    assert_eq!(
+        solution_submission["official_primary_metric"],
+        serde_json::json!({ "metric_name": "score", "value": 1.0 })
+    );
+}
+
+/// Verifies that the worker completes a co-executed benchmark without exposing private data to validation.
+#[sqlx::test(migrations = "../migrations")]
+async fn worker_completes_coexecuted_benchmark_submission(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let challenges = tempfile::tempdir().expect("failed to create challenge tempdir");
+    let bundles = tempfile::tempdir().expect("failed to create bundle tempdir");
+    let (public_bundle, private_bundle) = create_coexecuted_benchmark_bundles(bundles.path());
+    let config = test_config(storage.path(), challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    sqlx::query(
+        r#"
+        INSERT INTO challenges (
+            name, title, summary, bundle_path, public_bundle_path, statement_path, spec_json, starts_at, status
+        )
+        VALUES (
+            'coexecuted-sum',
+            'Coexecuted Sum',
+            '{"en":"Import participant code in a trusted benchmark harness.","zh":"在可信基准程序中导入参赛代码。"}'::jsonb,
+            $1,
+            $2,
+            $3,
+            $4,
+            '2026-01-01T00:00:00Z'::timestamptz,
+            'active'
+        )
+        "#,
+    )
+    .bind(private_bundle.to_string_lossy().to_string())
+    .bind(public_bundle.to_string_lossy().to_string())
+    .bind(private_bundle.join("statement.md").to_string_lossy().to_string())
+    .bind(
+        serde_json::from_str::<serde_json::Value>(
+            &std::fs::read_to_string(private_bundle.join("spec.json"))
+                .expect("failed to read coexecuted spec"),
+        )
+        .expect("failed to parse coexecuted spec"),
+    )
+    .execute(&pool)
+    .await
+    .expect("failed to insert coexecuted challenge");
+    let client = reqwest::Client::new();
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "display_name": "coexecuted-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+
+    let validation_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agent/validation-runs"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
+        .json(&serde_json::json!({
+            "challenge_name": "coexecuted-sum",
+            "target": "linux-arm64-cpu",
+            "artifact_base64": coexecuted_sum_solution_zip_base64(),
+            "explanation": "coexecuted validation smoke test"
+        }))
+        .send()
+        .await
+        .expect("failed to create validation run")
+        .json()
+        .await
+        .expect("failed to decode create validation response");
+    let validation_id = validation_response["id"]
+        .as_str()
+        .expect("missing validation id");
+    run_worker_once(&pool, &config).await;
+
+    let validation: serde_json::Value = client
+        .get(api_url(
+            &app,
+            &format!("/api/agent/validation-runs/{validation_id}"),
+        ))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
+        .send()
+        .await
+        .expect("failed to get validation run")
+        .json()
+        .await
+        .expect("failed to decode validation response");
+    let validation_job_error: (Option<String>,) = sqlx::query_as(
+        "SELECT last_error FROM evaluation_jobs WHERE solution_submission_id = $1::uuid",
+    )
+    .bind(validation_id)
+    .fetch_one(&pool)
+    .await
+    .expect("failed to query coexecuted validation job error");
+    let validation_runner_log = validation["evaluation"]["log_key"]
+        .as_str()
+        .and_then(|log_key| std::fs::read_to_string(storage.path().join(log_key)).ok());
+    assert_eq!(
+        validation["status"], "completed",
+        "unexpected coexecuted validation response: {validation:#}; job_error={:?}; runner_log={:?}",
+        validation_job_error.0, validation_runner_log
+    );
+    assert_eq!(validation["evaluation"]["eval_type"], "validation");
+    assert_eq!(validation["evaluation"]["rank_score"], 1.0);
+
+    let create_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agent/solution-submissions"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
+        .json(&serde_json::json!({
+            "challenge_name": "coexecuted-sum",
+            "target": "linux-arm64-cpu",
+            "artifact_base64": coexecuted_sum_solution_zip_base64(),
+            "explanation": "coexecuted official smoke test"
+        }))
+        .send()
+        .await
+        .expect("failed to create solution submission")
+        .json()
+        .await
+        .expect("failed to decode create solution submission response");
+    let solution_submission_id = create_response["id"]
+        .as_str()
+        .expect("missing solution submission id");
+    run_worker_once(&pool, &config).await;
+
+    let solution_submission: serde_json::Value = client
+        .get(api_url(
+            &app,
+            &format!("/api/agent/solution-submissions/{solution_submission_id}"),
+        ))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
+        .send()
+        .await
+        .expect("failed to get solution submission")
+        .json()
+        .await
+        .expect("failed to decode solution submission response");
+
+    assert_eq!(solution_submission["status"], "completed");
     assert_eq!(solution_submission["evaluation"]["eval_type"], "official");
     assert_eq!(solution_submission["evaluation"]["rank_score"], 1.0);
     assert_eq!(

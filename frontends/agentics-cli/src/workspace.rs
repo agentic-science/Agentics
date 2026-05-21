@@ -499,13 +499,13 @@ mod tests {
                                 1024,
                                 ZipProjectNetworkAccess::Disabled,
                             ),
-                            run: stage_profile(
+                            run: Some(stage_profile(
                                 30,
                                 512,
                                 1000,
                                 1024,
                                 ZipProjectNetworkAccess::Disabled,
-                            ),
+                            )),
                         },
                         evaluator: EvaluatorStageProfiles {
                             setup: stage_profile(

@@ -225,6 +225,7 @@ pub(crate) fn render_challenge_detail(
             let trusted_executor_label = match execution {
                 PublicChallengeExecutionSpec::SeparatedEvaluator(_) => "evaluator",
                 PublicChallengeExecutionSpec::PipedStdio(_) => "interactor",
+                PublicChallengeExecutionSpec::CoexecutedBenchmark(_) => "benchmark",
             };
             Ok(format!(
                 "{} ({})\nsummary: {}\nkeywords: {}\nstarts_at: {}\ncloses_at: {}\neligibility: {}\nleaderboard_visibility: {}\nscore_distribution_visibility: {}\nresult_detail_visibility: {}\nsolution_publication: {}\nsolution_protocol: {} ({})\nexecution_mode: {}\n{}: command={}, result_file={}\ntargets:\n{}\ndatasets: public={}, private_benchmark={}\nranking_metric: {}\n\n{}",
@@ -998,16 +999,19 @@ fn format_targets(targets: &[shared::models::challenge::ChallengeTargetSpec]) ->
         .map(|target| {
             let solution_run = &target.resource_profile.solution.run;
             let evaluator_run = &target.resource_profile.evaluator.run;
+            let solution_run_summary = solution_run
+                .as_ref()
+                .map(|limits| format!("{} sec/{} MB", limits.timeout_sec, limits.memory_limit_mb))
+                .unwrap_or_else(|| "not used".to_string());
             format!(
-                "  - {}: {} {}, profile={}, solution_image={}, evaluator_image={}, solution_run={} sec/{} MB, evaluator_run={} sec/{} MB, validation={}",
+                "  - {}: {} {}, profile={}, solution_image={}, evaluator_image={}, solution_run={}, evaluator_run={} sec/{} MB, validation={}",
                 target.name,
                 target.docker_platform.as_str(),
                 target.accelerator.as_str(),
                 target.resource_profile.name,
                 target.resource_profile.solution_image,
                 target.resource_profile.evaluator_image,
-                solution_run.timeout_sec,
-                solution_run.memory_limit_mb,
+                solution_run_summary,
                 evaluator_run.timeout_sec,
                 evaluator_run.memory_limit_mb,
                 if target.validation_enabled {
@@ -1039,6 +1043,7 @@ fn execution_mode_label(execution: &PublicChallengeExecutionSpec) -> &'static st
     match execution {
         PublicChallengeExecutionSpec::SeparatedEvaluator(_) => "separated_evaluator",
         PublicChallengeExecutionSpec::PipedStdio(_) => "piped_stdio",
+        PublicChallengeExecutionSpec::CoexecutedBenchmark(_) => "coexecuted_benchmark",
     }
 }
 

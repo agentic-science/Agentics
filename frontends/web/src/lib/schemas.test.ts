@@ -71,6 +71,19 @@ function targetFixture(validationEnabled: boolean) {
   };
 }
 
+/** Builds the co-executed target fixture without a participant run stage. */
+function coexecutedTargetFixture() {
+  const target = targetFixture(true);
+  const { setup, build } = target.resource_profile.solution;
+  return {
+    ...target,
+    resource_profile: {
+      ...target.resource_profile,
+      solution: { setup, build },
+    },
+  };
+}
+
 const challengePolicy = {
   eligibility: { type: "open" },
   visibility: {
@@ -204,6 +217,60 @@ describe("frontend API schemas", () => {
           },
         },
         statement_markdown: "# Interactive Sum",
+      }),
+    ).not.toThrow();
+
+    expect(() =>
+      challengeDetailResponseSchema.parse({
+        name: "coexecuted-sum",
+        title: "Coexecuted Sum",
+        summary: { en: "Benchmark imports code.", zh: "基准程序导入代码。" },
+        keywords: ["benchmark"],
+        spec: {
+          schema_version: 1,
+          challenge_name: "coexecuted-sum",
+          challenge_title: "Coexecuted Sum",
+          summary: { en: "Benchmark imports code.", zh: "基准程序导入代码。" },
+          keywords: ["benchmark"],
+          starts_at: "2026-01-01T00:00:00Z",
+          ...challengePolicy,
+          solution: {
+            protocol: "zip_project",
+            manifest_file: "agentics.solution.json",
+          },
+          targets: [coexecutedTargetFixture()],
+          execution: {
+            mode: "coexecuted_benchmark",
+            benchmark: {
+              command: ["python", "benchmark/run.py"],
+              result_file: "result.json",
+            },
+            acknowledge_danger: true,
+            validation_prepare: {
+              command: ["python", "benchmark/prepare.py"],
+            },
+          },
+          datasets: {
+            public_dir: "public",
+            public_policy: "full",
+            private_benchmark_policy: "score_only",
+            private_benchmark_enabled: true,
+          },
+          metric_schema: {
+            metrics: [
+              {
+                name: "score",
+                label: "Score",
+                direction: "maximize",
+                visibility: "public",
+              },
+            ],
+            ranking: {
+              primary_metric_name: "score",
+            },
+          },
+        },
+        statement_markdown: "# Coexecuted Sum",
       }),
     ).not.toThrow();
   });

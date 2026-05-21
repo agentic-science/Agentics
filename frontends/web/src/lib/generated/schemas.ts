@@ -301,7 +301,8 @@ export const adminChallengeListResponseSchema = z
                             .strict()
                             .describe(
                               "Resource envelope for one Docker-executed stage.",
-                            ),
+                            )
+                            .optional(),
                         })
                         .strict()
                         .describe(
@@ -961,7 +962,8 @@ export const challengeDetailResponseSchema = z
                         .strict()
                         .describe(
                           "Resource envelope for one Docker-executed stage.",
-                        ),
+                        )
+                        .optional(),
                     })
                     .strict()
                     .describe(
@@ -1154,6 +1156,39 @@ export const challengeDetailResponseSchema = z
                 })
                 .strict()
                 .describe("Public piped-stdio topology metadata."),
+              z
+                .object({
+                  benchmark: z
+                    .object({
+                      command: z.array(z.string()),
+                      result_file: z
+                        .string()
+                        .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+                    })
+                    .strict()
+                    .describe(
+                      "Evaluator entrypoint and output-file contract for a bundle.",
+                    ),
+                  acknowledge_danger: z.boolean(),
+                  validation_prepare: z
+                    .object({
+                      command: z.array(z.string()),
+                      reproducibility_notes: z
+                        .string()
+                        .describe(
+                          "Challenge-owner notes about seeds, versions, or external data provenance.",
+                        )
+                        .optional(),
+                    })
+                    .strict()
+                    .describe(
+                      "Optional benchmark-image command that prepares files for a co-executed benchmark.",
+                    )
+                    .optional(),
+                  mode: z.literal("coexecuted_benchmark"),
+                })
+                .strict()
+                .describe("Public co-executed benchmark topology metadata."),
             ];
             const { errors, failed } = schemas.reduce<{
               errors: z.core.$ZodIssue[];
@@ -2778,6 +2813,7 @@ export const publishChallengeResponseSchema = z
       .max(63),
     title: z.string(),
     bundle_path: z.string(),
+    public_bundle_path: z.string(),
     statement_path: z.string(),
   })
   .describe("Admin response returned after publishing a challenge bundle.");

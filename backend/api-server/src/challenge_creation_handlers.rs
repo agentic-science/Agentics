@@ -663,6 +663,10 @@ async fn publish_claimed_challenge_draft(
             let final_bundle_path = runtime_bundle_path(state, draft, &manifest, publish_claim_id);
             let temporary_bundle_path =
                 temporary_runtime_bundle_path(state, draft, publish_claim_id);
+            let final_public_bundle_path =
+                public_runtime_bundle_path(state, draft, &manifest, publish_claim_id);
+            let temporary_public_bundle_path =
+                temporary_public_runtime_bundle_path(state, draft, publish_claim_id);
 
             let publish_new_result = prepare_and_publish_new_challenge_draft(
                 state,
@@ -676,12 +680,16 @@ async fn publish_claimed_challenge_draft(
                     bundle_sha256,
                     temporary_bundle_path: &temporary_bundle_path,
                     final_bundle_path: &final_bundle_path,
+                    temporary_public_bundle_path: &temporary_public_bundle_path,
+                    final_public_bundle_path: &final_public_bundle_path,
                 },
             )
             .await;
             if let Err(error) = publish_new_result {
                 cleanup_runtime_bundle(&temporary_bundle_path).await;
                 cleanup_runtime_bundle(&final_bundle_path).await;
+                cleanup_runtime_bundle(&temporary_public_bundle_path).await;
+                cleanup_runtime_bundle(&final_public_bundle_path).await;
                 return Err(error);
             }
         }
@@ -700,6 +708,8 @@ struct PublishNewChallengeDraftContext<'a> {
     bundle_sha256: Sha256Digest,
     temporary_bundle_path: &'a Path,
     final_bundle_path: &'a Path,
+    temporary_public_bundle_path: &'a Path,
+    final_public_bundle_path: &'a Path,
 }
 
 /// Assemble, validate, promote, and commit a new challenge publish attempt.
@@ -715,16 +725,29 @@ async fn prepare_and_publish_new_challenge_draft(
         ctx.temporary_bundle_path,
     )
     .await?;
+    assemble_public_bundle(
+        ctx.proposal_root,
+        ctx.manifest,
+        ctx.temporary_public_bundle_path,
+    )
+    .await?;
     challenge_bundle::validate_challenge_bundle(ctx.temporary_bundle_path).await?;
     let spec = challenge_bundle::read_challenge_bundle_spec(ctx.temporary_bundle_path).await?;
     if state.config.requires_digest_pinned_images() {
         challenge_bundle::validate_digest_pinned_images(&spec)?;
     }
     promote_runtime_bundle(ctx.temporary_bundle_path, ctx.final_bundle_path).await?;
+    promote_runtime_bundle(
+        ctx.temporary_public_bundle_path,
+        ctx.final_public_bundle_path,
+    )
+    .await?;
 
     let statement_path = ctx.final_bundle_path.join("statement.md");
     let managed_bundle_path =
         shared::models::paths::ManagedBundlePath::from_existing_dir(ctx.final_bundle_path)?;
+    let managed_public_bundle_path =
+        shared::models::paths::ManagedBundlePath::from_existing_dir(ctx.final_public_bundle_path)?;
     let managed_statement_path =
         shared::models::paths::ManagedStatementPath::from_existing_file(&statement_path)?;
     db::publish_new_challenge_draft(
@@ -734,6 +757,7 @@ async fn prepare_and_publish_new_challenge_draft(
             publish_claim_id: ctx.publish_claim_id.clone(),
             challenge_name: ctx.manifest.challenge_name.clone(),
             bundle_path: managed_bundle_path,
+            public_bundle_path: managed_public_bundle_path,
             statement_path: managed_statement_path,
             spec,
             title: ctx.manifest.title.clone(),
@@ -921,6 +945,24 @@ async fn assemble_runtime_bundle(
     Ok(())
 }
 
+/// Builds the managed public-only bundle from the reviewed public challenge checkout.
+async fn assemble_public_bundle(
+    proposal_root: &Path,
+    manifest: &ChallengeCreationManifest,
+    public_runtime_bundle_path: &Path,
+) -> Result<()> {
+    let bundle_path = manifest.bundle_path.as_ref().ok_or_else(|| {
+        AppError::BadRequest("bundle_path is required for publishable drafts".to_string())
+    })?;
+    let public_bundle_path = proposal_root.join(bundle_path.as_path());
+    challenge_bundle::copy_challenge_bundle_dir(
+        &public_bundle_path,
+        public_runtime_bundle_path,
+        true,
+    )
+    .await
+}
+
 /// Final managed runtime-bundle path for a published draft.
 fn runtime_bundle_path(
     state: &AppState,
@@ -935,6 +977,20 @@ fn runtime_bundle_path(
         .join(publish_claim_id.as_str())
 }
 
+/// Final managed public-only bundle path for a published draft.
+fn public_runtime_bundle_path(
+    state: &AppState,
+    draft: &ChallengeDraftResponse,
+    manifest: &ChallengeCreationManifest,
+    publish_claim_id: &ChallengeDraftPublishClaimId,
+) -> PathBuf {
+    Path::new(&state.config.storage_root)
+        .join("challenge-public-bundles")
+        .join(manifest.challenge_name.as_str())
+        .join(draft.id.as_str())
+        .join(publish_claim_id.as_str())
+}
+
 /// Attempt-scoped temporary runtime-bundle path under the same storage root.
 fn temporary_runtime_bundle_path(
     state: &AppState,
@@ -944,6 +1000,23 @@ fn temporary_runtime_bundle_path(
     Path::new(&state.config.storage_root)
         .join("_tmp")
         .join("challenge-bundles")
+        .join(format!(
+            "{}-{}-{}",
+            draft.id,
+            publish_claim_id,
+            Uuid::new_v4()
+        ))
+}
+
+/// Attempt-scoped temporary public-only bundle path under the same storage root.
+fn temporary_public_runtime_bundle_path(
+    state: &AppState,
+    draft: &ChallengeDraftResponse,
+    publish_claim_id: &ChallengeDraftPublishClaimId,
+) -> PathBuf {
+    Path::new(&state.config.storage_root)
+        .join("_tmp")
+        .join("challenge-public-bundles")
         .join(format!(
             "{}-{}-{}",
             draft.id,
@@ -1008,6 +1081,7 @@ fn validate_private_assets_for_publish(
             shared::models::challenge::ChallengeExecutionSpec::PipedStdio(execution) => {
                 execution.official_session.is_some() && execution.official_prepare.is_none()
             }
+            shared::models::challenge::ChallengeExecutionSpec::CoexecutedBenchmark(_) => false,
         };
     let private_benchmark_uploaded = draft
         .private_assets

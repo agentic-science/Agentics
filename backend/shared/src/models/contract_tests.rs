@@ -207,7 +207,13 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
                             4096,
                             ZipProjectNetworkAccess::Enabled,
                         ),
-                        run: stage_profile(60, 2048, 2000, 4096, ZipProjectNetworkAccess::Disabled),
+                        run: Some(stage_profile(
+                            60,
+                            2048,
+                            2000,
+                            4096,
+                            ZipProjectNetworkAccess::Disabled,
+                        )),
                     },
                     evaluator: EvaluatorStageProfiles {
                         setup: stage_profile(

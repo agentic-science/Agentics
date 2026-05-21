@@ -254,7 +254,7 @@ pub async fn queue_evaluation_job(
     let row = sqlx::query(
         r#"
         SELECT s.id, s.challenge_name, s.target, s.agent_id::text AS agent_id, s.artifact_key, s.visible_after_eval,
-               p.bundle_path, p.spec_json
+               p.bundle_path, p.public_bundle_path, p.spec_json
         FROM solution_submissions s
         JOIN challenges p ON p.name = s.challenge_name
         WHERE s.id = $1::uuid
@@ -290,6 +290,7 @@ pub async fn queue_evaluation_job(
     let payload = serde_json::to_value(EvaluationJobPayload {
         artifact_key: storage_key_from_row(&row, "artifact_key")?,
         bundle_path: managed_bundle_path_from_row(&row, "bundle_path")?,
+        public_bundle_path: managed_bundle_path_from_row(&row, "public_bundle_path")?,
         challenge_name: challenge_name.clone(),
         target: target.clone(),
     })

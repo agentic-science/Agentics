@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS challenges (
   title TEXT NOT NULL,
   summary JSONB NOT NULL DEFAULT '{"en":"","zh":""}'::jsonb,
   bundle_path TEXT,
+  public_bundle_path TEXT,
   statement_path TEXT,
   spec_json JSONB,
   starts_at TIMESTAMPTZ,

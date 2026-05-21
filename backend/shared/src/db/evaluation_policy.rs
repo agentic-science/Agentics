@@ -101,7 +101,7 @@ pub(super) async fn lock_active_challenge_for_admission_tx(
 ) -> Result<ChallengeRecord> {
     let row = sqlx::query(
         r#"
-        SELECT name AS challenge_name, title, summary, bundle_path, statement_path, spec_json
+        SELECT name AS challenge_name, title, summary, bundle_path, public_bundle_path, statement_path, spec_json
         FROM challenges
         WHERE name = $1
           AND status = 'active'
@@ -119,6 +119,7 @@ pub(super) async fn lock_active_challenge_for_admission_tx(
         title: row.try_get("title")?,
         summary: localized_text_from_row(&row, "summary")?,
         bundle_path: managed_bundle_path_from_row(&row, "bundle_path")?,
+        public_bundle_path: managed_bundle_path_from_row(&row, "public_bundle_path")?,
         statement_path: managed_statement_path_from_row(&row, "statement_path")?,
         spec_json: row.try_get("spec_json")?,
     })

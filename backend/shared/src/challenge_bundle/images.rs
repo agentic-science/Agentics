@@ -134,7 +134,9 @@ fn require_supported_image_repository(
 fn validate_resource_profile(profile: &ResourceProfileSpec, field: &str) -> Result<()> {
     validate_stage_resource_profile(&profile.solution.setup, &format!("{field}.solution.setup"))?;
     validate_stage_resource_profile(&profile.solution.build, &format!("{field}.solution.build"))?;
-    validate_stage_resource_profile(&profile.solution.run, &format!("{field}.solution.run"))?;
+    if let Some(run) = &profile.solution.run {
+        validate_stage_resource_profile(run, &format!("{field}.solution.run"))?;
+    }
     validate_stage_resource_profile(
         &profile.evaluator.setup,
         &format!("{field}.evaluator.setup"),

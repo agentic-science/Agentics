@@ -6,6 +6,7 @@ use sqlx::{PgPool, Row};
 
 use super::ids::{solution_submission_id_from_row, uuid_string_from_row};
 use super::leaderboard::repair_leaderboard_entry_for_solution_submission_tx;
+use crate::db::challenges::PublishChallengeInput;
 use crate::error::{AppError, Result};
 use crate::models::evaluation::ScoringMode;
 use crate::models::ids::{EvaluationJobId, SolutionSubmissionId};
@@ -125,12 +126,15 @@ pub async fn ensure_challenges_seeded_from_root(
 
             if crate::db::publish_challenge(
                 pool,
-                challenge_name,
-                &managed_bundle_path,
-                &managed_statement_path,
-                &spec,
-                &spec.challenge_title,
-                &spec.summary,
+                &PublishChallengeInput {
+                    challenge_name,
+                    bundle_path: &managed_bundle_path,
+                    public_bundle_path: &managed_bundle_path,
+                    statement_path: &managed_statement_path,
+                    spec: &spec,
+                    title: &spec.challenge_title,
+                    summary: &spec.summary,
+                },
             )
             .await
             .is_err()
@@ -141,8 +145,9 @@ pub async fn ensure_challenges_seeded_from_root(
                     SET title = $2,
                         summary = $3,
                         bundle_path = $4,
-                        statement_path = $5,
-                        spec_json = $6,
+                        public_bundle_path = $5,
+                        statement_path = $6,
+                        spec_json = $7,
                         status = 'active',
                         updated_at = NOW()
                     WHERE name = $1
@@ -154,6 +159,7 @@ pub async fn ensure_challenges_seeded_from_root(
                     serde_json::to_value(&spec.summary)
                         .map_err(|e| AppError::Internal(e.to_string()))?,
                 )
+                .bind(managed_bundle_path.as_str()?)
                 .bind(managed_bundle_path.as_str()?)
                 .bind(managed_statement_path.as_str()?)
                 .bind(serde_json::to_value(&spec).map_err(|e| AppError::Internal(e.to_string()))?)

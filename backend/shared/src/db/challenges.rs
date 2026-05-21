@@ -50,8 +50,21 @@ pub struct ChallengeRecord {
     pub title: String,
     pub summary: LocalizedText,
     pub bundle_path: ManagedBundlePath,
+    pub public_bundle_path: ManagedBundlePath,
     pub statement_path: ManagedStatementPath,
     pub spec_json: Value,
+}
+
+/// Challenge publish inputs.
+#[derive(Debug)]
+pub struct PublishChallengeInput<'a> {
+    pub challenge_name: &'a ChallengeName,
+    pub bundle_path: &'a ManagedBundlePath,
+    pub public_bundle_path: &'a ManagedBundlePath,
+    pub statement_path: &'a ManagedStatementPath,
+    pub spec: &'a ChallengeBundleSpec,
+    pub title: &'a str,
+    pub summary: &'a LocalizedText,
 }
 
 /// Create or update an unpublished challenge shell.
@@ -142,24 +155,10 @@ pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeLi
 /// Publish a validated bundle as the benchmark contract for a challenge name.
 pub async fn publish_challenge(
     pool: &PgPool,
-    challenge_name: &ChallengeName,
-    bundle_path: &ManagedBundlePath,
-    statement_path: &ManagedStatementPath,
-    spec: &ChallengeBundleSpec,
-    title: &str,
-    summary: &LocalizedText,
+    input: &PublishChallengeInput<'_>,
 ) -> Result<PublishChallengeResponse> {
     let mut tx = pool.begin().await?;
-    let response = publish_challenge_tx(
-        &mut tx,
-        challenge_name,
-        bundle_path,
-        statement_path,
-        spec,
-        title,
-        summary,
-    )
-    .await?;
+    let response = publish_challenge_tx(&mut tx, input).await?;
     tx.commit().await?;
     Ok(response)
 }
@@ -167,29 +166,26 @@ pub async fn publish_challenge(
 /// Handles publish challenge tx for this module.
 pub async fn publish_challenge_tx(
     tx: &mut Transaction<'_, Postgres>,
-    challenge_name: &ChallengeName,
-    bundle_path: &ManagedBundlePath,
-    statement_path: &ManagedStatementPath,
-    spec: &ChallengeBundleSpec,
-    title: &str,
-    summary: &LocalizedText,
+    input: &PublishChallengeInput<'_>,
 ) -> Result<PublishChallengeResponse> {
-    let spec_json = serde_json::to_value(spec).map_err(|e| AppError::Internal(e.to_string()))?;
-    let summary_json = localized_text_to_json(summary)?;
+    let spec_json =
+        serde_json::to_value(input.spec).map_err(|e| AppError::Internal(e.to_string()))?;
+    let summary_json = localized_text_to_json(input.summary)?;
 
     let row = sqlx::query(
         r#"
         INSERT INTO challenges (
-            name, title, summary, bundle_path, statement_path, spec_json,
+            name, title, summary, bundle_path, public_bundle_path, statement_path, spec_json,
             starts_at, closes_at, eligibility_policy_json, validation_submission_limit,
             official_submission_limit, leaderboard_visibility, score_distribution_visibility,
             result_detail_visibility, solution_publication_policy, status
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'active')
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'active')
         ON CONFLICT (name) DO UPDATE
         SET title = EXCLUDED.title,
             summary = EXCLUDED.summary,
             bundle_path = EXCLUDED.bundle_path,
+            public_bundle_path = EXCLUDED.public_bundle_path,
             statement_path = EXCLUDED.statement_path,
             spec_json = EXCLUDED.spec_json,
             starts_at = EXCLUDED.starts_at,
@@ -204,24 +200,28 @@ pub async fn publish_challenge_tx(
             status = 'active',
             updated_at = NOW()
         WHERE challenges.spec_json IS NULL
-        RETURNING name AS challenge_name, title, bundle_path, statement_path
+        RETURNING name AS challenge_name, title, bundle_path, public_bundle_path, statement_path
         "#,
     )
-    .bind(challenge_name.as_str())
-    .bind(title)
+    .bind(input.challenge_name.as_str())
+    .bind(input.title)
     .bind(&summary_json)
-    .bind(bundle_path.as_str()?)
-    .bind(statement_path.as_str()?)
+    .bind(input.bundle_path.as_str()?)
+    .bind(input.public_bundle_path.as_str()?)
+    .bind(input.statement_path.as_str()?)
     .bind(&spec_json)
-    .bind(parse_required_time(&spec.starts_at)?)
-    .bind(parse_optional_time(spec.closes_at.as_deref())?)
-    .bind(serde_json::to_value(&spec.eligibility).map_err(|e| AppError::Internal(e.to_string()))?)
-    .bind(spec.validation_submission_limit)
-    .bind(spec.official_submission_limit)
-    .bind(to_json_string(spec.visibility.leaderboard)?)
-    .bind(to_json_string(spec.visibility.score_distribution)?)
-    .bind(to_json_string(spec.visibility.result_detail)?)
-    .bind(to_json_string(spec.solution_publication)?)
+    .bind(parse_required_time(&input.spec.starts_at)?)
+    .bind(parse_optional_time(input.spec.closes_at.as_deref())?)
+    .bind(
+        serde_json::to_value(&input.spec.eligibility)
+            .map_err(|e| AppError::Internal(e.to_string()))?,
+    )
+    .bind(input.spec.validation_submission_limit)
+    .bind(input.spec.official_submission_limit)
+    .bind(to_json_string(input.spec.visibility.leaderboard)?)
+    .bind(to_json_string(input.spec.visibility.score_distribution)?)
+    .bind(to_json_string(input.spec.visibility.result_detail)?)
+    .bind(to_json_string(input.spec.solution_publication)?)
     .fetch_one(&mut **tx)
     .await
     .map_err(|error| match error {
@@ -234,6 +234,7 @@ pub async fn publish_challenge_tx(
         challenge_name: challenge_name_from_row(&row, "challenge_name")?,
         title: row.try_get("title")?,
         bundle_path: managed_bundle_path_from_row(&row, "bundle_path")?,
+        public_bundle_path: managed_bundle_path_from_row(&row, "public_bundle_path")?,
         statement_path: managed_statement_path_from_row(&row, "statement_path")?,
     })
 }
@@ -842,7 +843,7 @@ pub async fn get_published_challenge(
 ) -> Result<Option<ChallengeRecord>> {
     let row = sqlx::query(
         r#"
-        SELECT name AS challenge_name, title, summary, bundle_path, statement_path, spec_json
+        SELECT name AS challenge_name, title, summary, bundle_path, public_bundle_path, statement_path, spec_json
         FROM challenges
         WHERE status = 'active'
           AND spec_json IS NOT NULL
@@ -865,7 +866,7 @@ pub async fn get_public_challenge(
 ) -> Result<Option<ChallengeRecord>> {
     let row = sqlx::query(
         r#"
-        SELECT name AS challenge_name, title, summary, bundle_path, statement_path, spec_json
+        SELECT name AS challenge_name, title, summary, bundle_path, public_bundle_path, statement_path, spec_json
         FROM challenges
         WHERE status IN ('active', 'archived')
           AND spec_json IS NOT NULL
@@ -887,6 +888,7 @@ fn row_to_challenge_record(r: sqlx::postgres::PgRow) -> Result<ChallengeRecord> 
         title: r.try_get("title")?,
         summary: localized_text_from_row(&r, "summary")?,
         bundle_path: managed_bundle_path_from_row(&r, "bundle_path")?,
+        public_bundle_path: managed_bundle_path_from_row(&r, "public_bundle_path")?,
         statement_path: managed_statement_path_from_row(&r, "statement_path")?,
         spec_json: r.try_get("spec_json")?,
     })
