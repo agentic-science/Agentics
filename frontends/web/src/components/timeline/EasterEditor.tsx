@@ -1,6 +1,14 @@
 "use client";
 
-import { Download, Play, Square, Trash2, Upload, X } from "lucide-react";
+import {
+  ChevronDown,
+  Download,
+  Play,
+  Square,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
 import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { CommunicationTimelineGraph } from "./CommunicationTimelineGraph";
 import {
@@ -8,13 +16,18 @@ import {
   cloneCommunicationGraph,
   defaultCommunicationGraph,
   deriveCommunicationTimeline,
-  formatCommunicationGraphJson,
   type IndexedPoint,
   validateCommunicationGraph,
 } from "./communicationGraph";
+import {
+  exportCommunicationGraphGif,
+  exportCommunicationGraphJson,
+  exportCommunicationGraphWebm,
+} from "./communicationGraphExport";
 import styles from "./EasterEditor.module.css";
 
 type EditorMode = "edit" | "presentation";
+type MediaExportKind = "gif" | "webm";
 
 const initialGraph = cloneCommunicationGraph(defaultCommunicationGraph);
 
@@ -26,6 +39,11 @@ export function EasterEditor() {
   );
   const [graph, setGraph] = useState<CommunicationGraph>(initialGraph);
   const [importErrors, setImportErrors] = useState<string[]>([]);
+  const [exportErrors, setExportErrors] = useState<string[]>([]);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [exportingMedia, setExportingMedia] = useState<MediaExportKind | null>(
+    null,
+  );
   const [editorMode, setEditorMode] = useState<EditorMode>("edit");
   const [selectedLinkStart, setSelectedLinkStart] =
     useState<IndexedPoint | null>(null);
@@ -98,16 +116,29 @@ export function EasterEditor() {
   };
 
   /** Exports the current valid graph JSON. */
-  const handleExport = () => {
-    const blob = new Blob([formatCommunicationGraphJson(graph)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "agentics-communication-graph.json";
-    link.click();
-    URL.revokeObjectURL(url);
+  const handleJsonExport = () => {
+    exportCommunicationGraphJson(graph);
+    setExportMenuOpen(false);
+  };
+
+  /** Exports the current graph animation as deterministic canvas media. */
+  const handleMediaExport = async (kind: MediaExportKind) => {
+    setExportMenuOpen(false);
+    setExportErrors([]);
+    setExportingMedia(kind);
+    try {
+      if (kind === "webm") {
+        await exportCommunicationGraphWebm(graph);
+      } else {
+        await exportCommunicationGraphGif(graph);
+      }
+    } catch (error) {
+      setExportErrors([
+        error instanceof Error ? error.message : "The animation export failed.",
+      ]);
+    } finally {
+      setExportingMedia(null);
+    }
   };
 
   /** Updates the current graph with validation. */
@@ -194,6 +225,7 @@ export function EasterEditor() {
   };
 
   const isPlaying = editorMode === "presentation";
+  const isExporting = exportingMedia !== null;
 
   return (
     <div className={styles.page}>
@@ -213,7 +245,10 @@ export function EasterEditor() {
           <button
             className={styles.button}
             type="button"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => {
+              setExportMenuOpen(false);
+              fileInputRef.current?.click();
+            }}
           >
             <Upload size={16} />
             Import
@@ -225,26 +260,71 @@ export function EasterEditor() {
             accept="application/json,.json"
             onChange={handleImport}
           />
+          <div className={styles.exportMenuWrap}>
+            <button
+              className={`${styles.button} ${styles.buttonPrimary}`}
+              type="button"
+              aria-expanded={exportMenuOpen}
+              aria-haspopup="menu"
+              disabled={isExporting}
+              onClick={() => setExportMenuOpen((open) => !open)}
+            >
+              <Download size={16} />
+              {isExporting ? "Exporting..." : "Export"}
+              {isExporting ? null : <ChevronDown size={14} />}
+            </button>
+            {exportMenuOpen ? (
+              <div className={styles.exportMenu} role="menu">
+                <button
+                  className={styles.exportMenuItem}
+                  type="button"
+                  role="menuitem"
+                  disabled={isExporting}
+                  onClick={handleJsonExport}
+                >
+                  JSON
+                </button>
+                <button
+                  className={styles.exportMenuItem}
+                  type="button"
+                  role="menuitem"
+                  disabled={isExporting}
+                  onClick={() => void handleMediaExport("webm")}
+                >
+                  WebM
+                </button>
+                <button
+                  className={styles.exportMenuItem}
+                  type="button"
+                  role="menuitem"
+                  disabled={isExporting}
+                  onClick={() => void handleMediaExport("gif")}
+                >
+                  GIF
+                </button>
+              </div>
+            ) : null}
+          </div>
           <button
-            className={`${styles.button} ${styles.buttonPrimary}`}
+            className={styles.button}
             type="button"
-            onClick={handleExport}
+            onClick={() => {
+              setExportMenuOpen(false);
+              clearGraph();
+            }}
           >
-            <Download size={16} />
-            Export
-          </button>
-          <button className={styles.button} type="button" onClick={clearGraph}>
             <Trash2 size={16} />
             Clear
           </button>
           <button
             className={`${styles.button} ${isPlaying ? styles.playButtonActive : ""}`}
             type="button"
-            onClick={() =>
+            onClick={() => {
+              setExportMenuOpen(false);
               setEditorMode((mode) =>
                 mode === "edit" ? "presentation" : "edit",
-              )
-            }
+              );
+            }}
             title={isPlaying ? "Stop presentation" : "Play presentation"}
           >
             {isPlaying ? <Square size={16} /> : <Play size={16} />}
@@ -320,9 +400,19 @@ export function EasterEditor() {
         </div>
       </section>
       {importErrors.length > 0 ? (
-        <ImportErrorDialog
+        <EditorErrorDialog
           errors={importErrors}
+          title="Import failed"
+          description="The current graph was not replaced. Fix these issues and import the JSON again."
           onClose={() => setImportErrors([])}
+        />
+      ) : null}
+      {exportErrors.length > 0 ? (
+        <EditorErrorDialog
+          errors={exportErrors}
+          title="Export failed"
+          description="The current graph is unchanged. Try another export format or adjust the graph."
+          onClose={() => setExportErrors([])}
         />
       ) : null}
     </div>
@@ -482,39 +572,40 @@ function CommunicationGraphVisualEditor({
   );
 }
 
-function ImportErrorDialog({
+function EditorErrorDialog({
+  description,
   errors,
   onClose,
+  title,
 }: {
+  description: string;
   errors: string[];
   onClose: () => void;
+  title: string;
 }) {
   return (
     <div className={styles.dialogBackdrop}>
       <div
         className={styles.dialog}
         role="alertdialog"
-        aria-labelledby="import-error-title"
-        aria-describedby="import-error-details"
+        aria-labelledby="editor-error-title"
+        aria-describedby="editor-error-details"
       >
         <div className={styles.dialogHeader}>
-          <h2 id="import-error-title" className={styles.dialogTitle}>
-            Import failed
+          <h2 id="editor-error-title" className={styles.dialogTitle}>
+            {title}
           </h2>
           <button
             className={styles.dialogCloseButton}
             type="button"
             onClick={onClose}
-            aria-label="Close import errors"
+            aria-label={`Close ${title.toLowerCase()} details`}
           >
             <X size={16} />
           </button>
         </div>
-        <p className={styles.dialogDescription}>
-          The current graph was not replaced. Fix these issues and import the
-          JSON again.
-        </p>
-        <ul id="import-error-details" className={styles.dialogList}>
+        <p className={styles.dialogDescription}>{description}</p>
+        <ul id="editor-error-details" className={styles.dialogList}>
           {errors.map((error, index) => (
             <li key={`${index}-${error}`}>{error}</li>
           ))}

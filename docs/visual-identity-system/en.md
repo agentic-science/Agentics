@@ -212,6 +212,21 @@ Base unit: `4px`
 - **Respect reduced motion** — wrap animations in `@media (prefers-reduced-motion: no-preference)`
 - **Staggered reveals** — lists animate in sequence with 50ms delay between items
 
+### Communication Timeline Editor
+
+The hidden `/easter-editor` route is the internal tool for authoring
+communication timeline graphs. It keeps the graph model minimal: agent count,
+time steps, links, discovery dots, and animation constants. The visual editor
+supports direct dot linking, right-click or double-click discovery marking,
+JSON import, and export to JSON, WebM, and GIF.
+
+Media export is generated from the graph model with deterministic canvas frames,
+not by screen-recording the live SVG animation. Exported WebM and GIF files
+therefore follow the same derived causal timing as the philosophy animations:
+same-time vertical links fade as complete segments, cross-time links draw along
+their paths, discovery dots glow only when reached, and all active elements fade
+out together at the end of one loop.
+
 ---
 
 ## Component Primitives Guidelines
