@@ -77,12 +77,31 @@ pub enum ZipProjectNetworkAccess {
     Enabled,
 }
 
+/// Docker network mode selected by the runner after policy resolution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DockerNetworkMode {
+    /// Disable container networking with Docker's `none` network mode.
+    None,
+    /// Use Docker's default bridge network.
+    Bridge,
+}
+
+impl DockerNetworkMode {
+    /// Stable Docker API string for this network mode.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Bridge => "bridge",
+        }
+    }
+}
+
 impl ZipProjectNetworkAccess {
     /// Docker network mode used by the v0.2 runner.
-    pub fn docker_network_mode(self) -> &'static str {
+    pub fn docker_network_mode(self) -> DockerNetworkMode {
         match self {
-            Self::Disabled | Self::Loopback => "none",
-            Self::Enabled => "bridge",
+            Self::Disabled | Self::Loopback => DockerNetworkMode::None,
+            Self::Enabled => DockerNetworkMode::Bridge,
         }
     }
 

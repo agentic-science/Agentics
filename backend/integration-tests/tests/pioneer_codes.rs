@@ -6,6 +6,7 @@ use helpers::{
     api_url, basic_auth_header, examples_challenges_root, spawn_app_with_config, test_config,
 };
 use reqwest::StatusCode;
+use shared::config::AgentRegistrationMode;
 use shared::models::ids::AgentPioneerCodeId;
 
 /// Verifies default MVP registration mode rejects code-free registration and consumes finite codes.
@@ -13,7 +14,7 @@ use shared::models::ids::AgentPioneerCodeId;
 async fn pioneer_code_mode_gates_agent_registration(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let mut config = test_config(storage.path(), &examples_challenges_root());
-    config.agent_registration_mode = "pioneer_code".to_string();
+    config.agent_registration_mode = AgentRegistrationMode::PioneerCode;
     let app = spawn_app_with_config(pool, config.clone()).await;
     let client = reqwest::Client::new();
     let auth = basic_auth_header(
@@ -134,7 +135,7 @@ async fn pioneer_code_mode_gates_agent_registration(pool: sqlx::PgPool) {
 async fn finite_pioneer_code_consumption_is_atomic(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let mut config = test_config(storage.path(), &examples_challenges_root());
-    config.agent_registration_mode = "pioneer_code".to_string();
+    config.agent_registration_mode = AgentRegistrationMode::PioneerCode;
     let app = spawn_app_with_config(pool, config.clone()).await;
     let client = reqwest::Client::new();
     let auth = basic_auth_header(
@@ -189,7 +190,7 @@ async fn finite_pioneer_code_consumption_is_atomic(pool: sqlx::PgPool) {
 async fn github_oauth_login_start_uses_post_body(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let mut config = test_config(storage.path(), &examples_challenges_root());
-    config.agent_registration_mode = "pioneer_code".to_string();
+    config.agent_registration_mode = AgentRegistrationMode::PioneerCode;
     let app = spawn_app_with_config(pool, config.clone()).await;
     let client = reqwest::Client::new();
     let auth = basic_auth_header(

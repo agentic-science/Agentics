@@ -8,7 +8,9 @@ use crate::models::challenge::{
 use crate::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
 use crate::models::names::ResourceProfileName;
 use crate::models::paths::ScriptPath;
-use crate::zip_project::{ZipProjectNetworkAccess, ZipProjectPhaseName, ZipProjectResolvedPhase};
+use crate::zip_project::{
+    DockerNetworkMode, ZipProjectNetworkAccess, ZipProjectPhaseName, ZipProjectResolvedPhase,
+};
 
 /// Verifies that network policy clamps to resource profile.
 #[test]
@@ -19,7 +21,7 @@ fn network_policy_clamps_to_resource_profile() {
     );
     assert_eq!(
         ZipProjectNetworkAccess::Loopback.docker_network_mode(),
-        "none"
+        DockerNetworkMode::None
     );
 }
 

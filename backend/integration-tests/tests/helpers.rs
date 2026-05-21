@@ -10,7 +10,7 @@ use api_server::router;
 use api_server::state::AppState;
 use chrono::{Duration, Utc};
 use secrecy::SecretString;
-use shared::config::Config;
+use shared::config::{AgentRegistrationMode, Config, RunnerWritableStorageMode};
 use shared::runner::connect_docker;
 use shared::storage::{LocalStorage, Storage};
 use sqlx::PgPool;
@@ -31,7 +31,7 @@ pub struct TestCreatorSession {
 /// Spawn the API server with environment-derived config.
 pub async fn spawn_app(pool: PgPool) -> TestApp {
     let mut config = Config::from_env().expect("failed to load config");
-    config.agent_registration_mode = "public".to_string();
+    config.agent_registration_mode = AgentRegistrationMode::Public;
     spawn_app_with_config(pool, config).await
 }
 
@@ -132,12 +132,12 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
         web_csrf_cookie_name: "agentics_csrf".to_string(),
         web_session_ttl_hours: 24,
         web_session_cookie_secure: false,
-        agent_registration_mode: "public".to_string(),
+        agent_registration_mode: AgentRegistrationMode::Public,
         docker_host: std::env::var("AGENTICS_TEST_DOCKER_HOST").ok(),
         host_probe_mode: shared::config::HostProbeMode::Off,
         runner_security_profile: shared::config::RunnerSecurityProfile::Development,
         require_digest_pinned_images: false,
-        runner_writable_storage_mode: "unbounded".to_string(),
+        runner_writable_storage_mode: RunnerWritableStorageMode::Unbounded,
         runner_runtime_root: None,
         runner_phase_mount_root: None,
         runner_writable_slot_classes_mb: "64,256,1024,4096".to_string(),

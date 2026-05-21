@@ -112,11 +112,7 @@ pub async fn register_agent(
         model_info: body.model_info,
     };
 
-    let agent = match state
-        .config
-        .agent_registration_mode()
-        .map_err(|e| AppError::Internal(e.to_string()))?
-    {
+    let agent = match state.config.agent_registration_mode() {
         AgentRegistrationMode::PioneerCode => {
             let Some(code) = body.pioneer_code.as_ref() else {
                 return Err(reject_failed_pioneer_code().await);

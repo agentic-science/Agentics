@@ -8,6 +8,7 @@ use helpers::{
     api_url, examples_challenges_root, run_worker_once, sample_sum_solution,
     solution_zip_base64_with_scripts, spawn_app_with_config, test_config, zip_project_zip_base64,
 };
+use shared::config::RunnerWritableStorageMode;
 
 const QUOTA_TEST_STORAGE_MODE_ENV: &str = "AGENTICS_TEST_RUNNER_WRITABLE_STORAGE_MODE";
 const QUOTA_TEST_RUNTIME_ROOT_ENV: &str = "AGENTICS_TEST_RUNNER_RUNTIME_ROOT";
@@ -33,8 +34,10 @@ fn quota_sensitive_runner_config(
 ) -> shared::config::Config {
     validate_quota_sensitive_runner_env().expect("quota env should be validated before use");
     let mut config = test_config(storage_root, challenges_root);
-    config.runner_writable_storage_mode =
-        std::env::var(QUOTA_TEST_STORAGE_MODE_ENV).expect("validated quota storage mode");
+    config.runner_writable_storage_mode = std::env::var(QUOTA_TEST_STORAGE_MODE_ENV)
+        .expect("validated quota storage mode")
+        .parse()
+        .expect("validated quota storage mode");
     config.runner_runtime_root =
         Some(std::env::var(QUOTA_TEST_RUNTIME_ROOT_ENV).expect("validated quota runtime root"));
     config.runner_phase_mount_root =
@@ -70,9 +73,10 @@ fn validate_quota_sensitive_runner_env() -> std::result::Result<(), String> {
     }
 
     let storage_mode = storage_mode.expect("checked above");
-    if storage_mode != "xfs-project-quota-slots" {
+    if storage_mode != RunnerWritableStorageMode::XfsProjectQuotaSlots.as_str() {
         return Err(quota_test_setup_error(format!(
-            "{QUOTA_TEST_STORAGE_MODE_ENV} must be xfs-project-quota-slots, got `{storage_mode}`"
+            "{QUOTA_TEST_STORAGE_MODE_ENV} must be {}, got `{storage_mode}`",
+            RunnerWritableStorageMode::XfsProjectQuotaSlots.as_str()
         )));
     }
 

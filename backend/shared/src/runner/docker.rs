@@ -23,7 +23,7 @@ use crate::config::Config;
 use crate::error::{AppError, Result};
 use crate::models::challenge::{DockerPlatform, TargetAccelerator};
 use crate::models::ids::EvaluationJobId;
-use crate::zip_project::ZipProjectPhaseLimits;
+use crate::zip_project::{DockerNetworkMode, ZipProjectPhaseLimits};
 
 const STALE_RUNNER_CONTAINER_MIN_AGE_SECS: i64 = 600;
 const PERMISSION_FIX_TIMEOUT_SECS: u64 = 30;
@@ -580,13 +580,13 @@ pub fn connect_docker(config: &Config) -> Result<Docker> {
 
 /// Build the Docker hardening baseline shared by runner and helper containers.
 fn hardened_container_host_config(
-    network_mode: String,
+    network_mode: DockerNetworkMode,
     mounts: Vec<Mount>,
     log_cap_bytes: u64,
     readonly_rootfs: bool,
 ) -> HostConfig {
     HostConfig {
-        network_mode: Some(network_mode),
+        network_mode: Some(network_mode.as_str().to_string()),
         mounts: Some(mounts),
         auto_remove: Some(false),
         pids_limit: Some(256),
@@ -606,7 +606,7 @@ fn hardened_container_host_config(
 /// Build permission-repair host config with only writable bind mounts exposed.
 fn permission_repair_host_config(mounts: Vec<Mount>) -> HostConfig {
     let mut config = hardened_container_host_config(
-        "none".to_string(),
+        DockerNetworkMode::None,
         mounts,
         PERMISSION_FIX_LOG_LIMIT_BYTES,
         true,
@@ -687,11 +687,7 @@ async fn create_container(
         .checked_mul(1_000_000)
         .ok_or_else(|| AppError::Runner("CPU limit overflow".to_string()))?;
     let mut host_config = hardened_container_host_config(
-        request
-            .limits
-            .network_access
-            .docker_network_mode()
-            .to_string(),
+        request.limits.network_access.docker_network_mode(),
         request.mounts,
         PLATFORM_CONTAINER_LOG_LIMIT_BYTES,
         false,

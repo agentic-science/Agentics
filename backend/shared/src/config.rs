@@ -2,7 +2,7 @@
 
 use figment::{Figment, providers::Env};
 use secrecy::{ExposeSecret, SecretString};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -34,10 +34,11 @@ pub const DEFAULT_ADMIN_USERNAME: &str = "admin";
 /// Insecure default administrator password for local-only development.
 pub const INSECURE_DEFAULT_ADMIN_PASSWORD: &str = "agentics-admin";
 const DEFAULT_POSTGRES_PORT: u16 = 5432;
-const DEFAULT_AGENT_REGISTRATION_MODE: &str = "pioneer_code";
+const DEFAULT_AGENT_REGISTRATION_MODE: AgentRegistrationMode = AgentRegistrationMode::PioneerCode;
 const DEFAULT_WORKER_ACCELERATORS: WorkerAccelerators = WorkerAccelerators::None;
 const DEFAULT_RUNNER_SECURITY_PROFILE: RunnerSecurityProfile = RunnerSecurityProfile::Development;
-const DEFAULT_RUNNER_WRITABLE_STORAGE_MODE: &str = "unbounded";
+const DEFAULT_RUNNER_WRITABLE_STORAGE_MODE: RunnerWritableStorageMode =
+    RunnerWritableStorageMode::Unbounded;
 const DEFAULT_RUNNER_WRITABLE_SLOT_CLASSES_MB: &str = "64,256,1024,4096";
 const DEFAULT_RUNNER_MAX_OUTPUT_FILES: u64 = 8192;
 const DEFAULT_RUNNER_MAX_OUTPUT_DIRS: u64 = 1024;
@@ -123,7 +124,7 @@ pub struct Config {
     #[serde(default)]
     pub web_session_cookie_secure: bool,
     #[serde(default = "default_agent_registration_mode")]
-    pub agent_registration_mode: String,
+    pub agent_registration_mode: AgentRegistrationMode,
     /// Optional Docker host URI used by CI or remote Docker setups.
     #[serde(default)]
     pub docker_host: Option<String>,
@@ -134,7 +135,7 @@ pub struct Config {
     #[serde(default)]
     pub require_digest_pinned_images: bool,
     #[serde(default = "default_runner_writable_storage_mode")]
-    pub runner_writable_storage_mode: String,
+    pub runner_writable_storage_mode: RunnerWritableStorageMode,
     #[serde(default)]
     pub runner_runtime_root: Option<String>,
     #[serde(default)]
@@ -262,6 +263,16 @@ impl WorkerAccelerators {
     }
 }
 
+impl AgentRegistrationMode {
+    /// Stable environment string for this registration policy.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::PioneerCode => "pioneer_code",
+            Self::Public => "public",
+        }
+    }
+}
+
 impl FromStr for AgentRegistrationMode {
     type Err = anyhow::Error;
 
@@ -273,6 +284,27 @@ impl FromStr for AgentRegistrationMode {
             other => anyhow::bail!(
                 "AGENTICS_AGENT_REGISTRATION_MODE must be `pioneer_code` or `public`, got `{other}`"
             ),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for AgentRegistrationMode {
+    /// Deserialize one agent-registration mode through the canonical parser.
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::from_str(&value).map_err(serde::de::Error::custom)
+    }
+}
+
+impl RunnerWritableStorageMode {
+    /// Stable environment string for this runner writable-storage strategy.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Unbounded => "unbounded",
+            Self::XfsProjectQuotaSlots => "xfs-project-quota-slots",
         }
     }
 }
@@ -289,6 +321,17 @@ impl FromStr for RunnerWritableStorageMode {
                 "AGENTICS_RUNNER_WRITABLE_STORAGE_MODE must be `unbounded` or `xfs-project-quota-slots`, got `{other}`"
             ),
         }
+    }
+}
+
+impl<'de> Deserialize<'de> for RunnerWritableStorageMode {
+    /// Deserialize one runner writable-storage mode through the canonical parser.
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::from_str(&value).map_err(serde::de::Error::custom)
     }
 }
 
@@ -486,8 +529,8 @@ fn default_web_session_ttl_hours() -> i64 {
 }
 
 /// Default MVP registration mode that requires pioneer codes.
-fn default_agent_registration_mode() -> String {
-    DEFAULT_AGENT_REGISTRATION_MODE.to_string()
+fn default_agent_registration_mode() -> AgentRegistrationMode {
+    DEFAULT_AGENT_REGISTRATION_MODE
 }
 
 /// Handles default log level for this module.
@@ -496,8 +539,8 @@ fn default_log_level() -> String {
 }
 
 /// Handles default runner writable storage mode for this module.
-fn default_runner_writable_storage_mode() -> String {
-    DEFAULT_RUNNER_WRITABLE_STORAGE_MODE.to_string()
+fn default_runner_writable_storage_mode() -> RunnerWritableStorageMode {
+    DEFAULT_RUNNER_WRITABLE_STORAGE_MODE
 }
 
 /// Default runner security profile for local development.
@@ -583,7 +626,7 @@ impl Config {
         }
 
         if !is_loopback_host(&self.api_host)
-            && self.agent_registration_mode()? == AgentRegistrationMode::Public
+            && self.agent_registration_mode == AgentRegistrationMode::Public
         {
             anyhow::bail!(
                 "refusing to bind API to `{}` with AGENTICS_AGENT_REGISTRATION_MODE=public; public registration is local-development only",
@@ -691,7 +734,7 @@ impl Config {
         self.validate_worker_accelerator_config()?;
         self.validate_hosted_image_policy()?;
 
-        match self.runner_writable_storage_mode()? {
+        match self.runner_writable_storage_mode {
             RunnerWritableStorageMode::Unbounded => {
                 if self.runner_security_profile == RunnerSecurityProfile::Production {
                     anyhow::bail!(
@@ -864,8 +907,8 @@ impl Config {
     }
 
     /// Handles runner writable storage mode for this module.
-    pub fn runner_writable_storage_mode(&self) -> anyhow::Result<RunnerWritableStorageMode> {
-        self.runner_writable_storage_mode.parse()
+    pub fn runner_writable_storage_mode(&self) -> RunnerWritableStorageMode {
+        self.runner_writable_storage_mode
     }
 
     /// Return the host-visible root for transient runner artifacts.
@@ -901,8 +944,8 @@ impl Config {
     }
 
     /// Return the configured agent-registration mode.
-    pub fn agent_registration_mode(&self) -> anyhow::Result<AgentRegistrationMode> {
-        self.agent_registration_mode.parse()
+    pub fn agent_registration_mode(&self) -> AgentRegistrationMode {
+        self.agent_registration_mode
     }
 
     /// Return whether local-only testing knobs such as unlimited pioneer codes may be used.
@@ -1065,6 +1108,35 @@ mod tests {
         );
     }
 
+    /// Verifies mode config values deserialize through typed boundary parsers.
+    #[test]
+    fn mode_config_values_deserialize_through_typed_parsers() {
+        assert_eq!(
+            serde_json::from_value::<super::AgentRegistrationMode>(serde_json::json!(
+                "pioneer_code"
+            ))
+            .unwrap(),
+            super::AgentRegistrationMode::PioneerCode
+        );
+        assert_eq!(
+            serde_json::from_value::<super::RunnerWritableStorageMode>(serde_json::json!(
+                "xfs-project-quota-slots"
+            ))
+            .unwrap(),
+            super::RunnerWritableStorageMode::XfsProjectQuotaSlots
+        );
+        assert_eq!(
+            super::RunnerWritableStorageMode::XfsProjectQuotaSlots.as_str(),
+            "xfs-project-quota-slots"
+        );
+        assert!(
+            serde_json::from_value::<super::RunnerWritableStorageMode>(serde_json::json!(
+                "xfs_project_quota_slots"
+            ))
+            .is_err()
+        );
+    }
+
     /// Verifies that default admin credentials are rejected on wildcard bind.
     #[test]
     fn default_admin_credentials_are_rejected_on_wildcard_bind() {
@@ -1076,11 +1148,11 @@ mod tests {
         config.admin_password = SecretString::from("changed");
         assert!(config.validate_api_security().is_err());
 
-        config.agent_registration_mode = "pioneer_code".to_string();
+        config.agent_registration_mode = super::AgentRegistrationMode::PioneerCode;
         config.web_session_cookie_secure = true;
         assert!(config.validate_api_security().is_ok());
 
-        config.agent_registration_mode = "public".to_string();
+        config.agent_registration_mode = super::AgentRegistrationMode::Public;
         assert!(config.validate_api_security().is_err());
     }
 
@@ -1091,7 +1163,7 @@ mod tests {
         config.api_host = "0.0.0.0".to_string();
         config.admin_password = SecretString::from("changed");
         config.web_session_cookie_secure = true;
-        config.agent_registration_mode = "public".to_string();
+        config.agent_registration_mode = super::AgentRegistrationMode::Public;
 
         let error = config
             .validate_api_security()
@@ -1239,7 +1311,8 @@ mod tests {
             "Docker layer quota does not bound phase bind mounts"
         );
 
-        config.runner_writable_storage_mode = "xfs-project-quota-slots".to_string();
+        config.runner_writable_storage_mode =
+            super::RunnerWritableStorageMode::XfsProjectQuotaSlots;
         config.runner_docker_layer_quota = false;
         config.api_host = "127.0.0.1".to_string();
         config.runner_runtime_root = Some("/agentics-runtime".to_string());
@@ -1274,7 +1347,7 @@ mod tests {
     #[test]
     fn quota_backed_runner_requires_runtime_root() {
         let config = Config {
-            runner_writable_storage_mode: "xfs-project-quota-slots".to_string(),
+            runner_writable_storage_mode: super::RunnerWritableStorageMode::XfsProjectQuotaSlots,
             runner_docker_layer_quota: true,
             runner_phase_mount_root: Some("/agentics-runner-slots".to_string()),
             ..test_config()
@@ -1289,7 +1362,7 @@ mod tests {
         }
 
         let config = Config {
-            runner_writable_storage_mode: "xfs-project-quota-slots".to_string(),
+            runner_writable_storage_mode: super::RunnerWritableStorageMode::XfsProjectQuotaSlots,
             runner_docker_layer_quota: true,
             runner_runtime_root: Some("relative-runtime".to_string()),
             runner_phase_mount_root: Some("/agentics-runner-slots".to_string()),
@@ -1339,7 +1412,7 @@ mod tests {
         );
 
         let local_quota_config = Config {
-            runner_writable_storage_mode: "xfs-project-quota-slots".to_string(),
+            runner_writable_storage_mode: super::RunnerWritableStorageMode::XfsProjectQuotaSlots,
             ..test_config()
         };
         assert!(

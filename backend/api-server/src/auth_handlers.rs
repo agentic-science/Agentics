@@ -170,11 +170,7 @@ pub async fn github_oauth_login(
     )?;
     let state_token = auth::create_oauth_state();
     let state_hash = auth::hash_opaque_token(&state_token);
-    let pioneer_code_hash = match state
-        .config
-        .agent_registration_mode()
-        .map_err(|e| AppError::Internal(e.to_string()))?
-    {
+    let pioneer_code_hash = match state.config.agent_registration_mode() {
         AgentRegistrationMode::PioneerCode => match request.pioneer_code.as_ref() {
             Some(code) => {
                 let Ok(code) = PioneerCode::try_new(code.expose_secret().to_string()) else {
@@ -239,11 +235,8 @@ pub async fn github_oauth_callback(
     }
 
     let fallback_agent_id = AgentId::generate();
-    let require_pioneer_code = state
-        .config
-        .agent_registration_mode()
-        .map_err(|e| AppError::Internal(e.to_string()))?
-        == AgentRegistrationMode::PioneerCode;
+    let require_pioneer_code =
+        state.config.agent_registration_mode() == AgentRegistrationMode::PioneerCode;
     let agent_id = match db::upsert_github_creator_agent_with_pioneer_code(
         &state.db,
         &fallback_agent_id,
