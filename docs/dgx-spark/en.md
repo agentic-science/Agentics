@@ -120,6 +120,7 @@ AGENTICS_WEB_BASE_URL=https://<public-hostname>
 AGENTICS_CORS_ALLOWED_ORIGINS=https://<public-hostname>
 AGENTICS_WEB_SESSION_COOKIE_SECURE=true
 AGENTICS_DOCKER_HOST=unix:///run/agentics/docker.sock
+AGENTICS_RUNNER_SECURITY_PROFILE=production
 AGENTICS_HOST_PROBE_MODE=require
 AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true
 AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots
@@ -203,8 +204,10 @@ just dgx-profile uninstall --purge-data
 
 The worker process runs `scripts/ops/check-dgx-spark-profile.sh` during startup
 when `AGENTICS_HOST_PROBE_MODE=warn` or `require`. With
+`AGENTICS_RUNNER_SECURITY_PROFILE=production` and
 `AGENTICS_HOST_PROBE_MODE=require`, the worker fails closed if the Linux host
-profile is not proven or the probe script cannot run.
+profile is not proven, the probe script cannot run, or bounded runner storage
+and Docker writable-layer quota are not enabled.
 
 Plain `uninstall` removes services and quota storage while preserving config,
 release files, and durable state. `uninstall --purge-data` also removes
@@ -217,6 +220,7 @@ Run the non-mutating profile check first:
 
 ```bash
 AGENTICS_HOST_PROBE_MODE=warn \
+AGENTICS_RUNNER_SECURITY_PROFILE=production \
 scripts/ops/check-dgx-spark-profile.sh
 ```
 
@@ -227,6 +231,7 @@ strict check with mutating probes:
 docker --host unix:///run/agentics/docker.sock pull busybox:1.36
 sudo -u agentics env \
   AGENTICS_HOST_PROBE_MODE=require \
+  AGENTICS_RUNNER_SECURITY_PROFILE=production \
   AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots \
   AGENTICS_RUNNER_RUNTIME_ROOT=/srv/agentics/runtime \
   AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts \

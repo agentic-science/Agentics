@@ -21,7 +21,8 @@ units as macOS startup definitions.
   and loopback XFS data root.
 - `agentics-api.service`: API server service.
 - `agentics-worker.service`: worker service using the Agentics-owned Docker
-  daemon. The worker binary enforces `AGENTICS_HOST_PROBE_MODE` during startup.
+  daemon. The worker binary enforces `AGENTICS_RUNNER_SECURITY_PROFILE` and
+  `AGENTICS_HOST_PROBE_MODE` during startup.
 - `agentics-web.service`: Next.js web service.
 
 The MVP edge layer is Cloudflare-managed. These files intentionally do not ship
@@ -49,6 +50,7 @@ gating remains the authoritative access control.
 | Runner writable storage mode | `xfs-project-quota-slots` |
 | Runner quota slot classes | `64,256,1024,4096` MiB |
 | Runner result/log caps | 12 runs, 4 MiB `result.json`, 1 MiB persisted logs per run |
+| Runner security profile | `AGENTICS_RUNNER_SECURITY_PROFILE=production` |
 | Probe mode | `AGENTICS_HOST_PROBE_MODE=require` |
 
 MVP deployment supports `linux-arm64-cpu` and `linux-arm64-cuda` targets on the
@@ -85,10 +87,11 @@ capacity exists.
 5. Run the profile check:
 
    ```bash
-   docker --host unix:///run/agentics/docker.sock pull busybox:1.36
-   sudo -u agentics env \
-     AGENTICS_HOST_PROBE_MODE=require \
-     AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots \
+  docker --host unix:///run/agentics/docker.sock pull busybox:1.36
+  sudo -u agentics env \
+    AGENTICS_HOST_PROBE_MODE=require \
+    AGENTICS_RUNNER_SECURITY_PROFILE=production \
+    AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots \
      AGENTICS_RUNNER_RUNTIME_ROOT=/srv/agentics/runtime \
      AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts \
      AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096 \

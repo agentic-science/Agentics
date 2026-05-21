@@ -129,12 +129,14 @@ Hosted MVP 在接受 public evaluation jobs 前使用 Linux-only storage profile
   phase mount 下使用 root-prepared XFS project-quota slots。该策略覆盖
   solution 的 `setup`、`build` 和 `run` phases，也覆盖 evaluator 的 `prepare`
   和 `score` phases。
-- 使用 `AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots`、
+- 使用 `AGENTICS_RUNNER_SECURITY_PROFILE=production`、
+  `AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots`、
   `AGENTICS_RUNNER_RUNTIME_ROOT`、`AGENTICS_RUNNER_PHASE_MOUNT_ROOT`、
   `AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB` 和
   `AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true` 配置 worker。
 - 用 `AGENTICS_HOST_PROBE_MODE=off|warn|require` 控制 strict probes，不要使用
-  generic `CI` variable。
+  generic `CI` variable。Production runner security 还要求
+  `AGENTICS_HOST_PROBE_MODE=require` 和 digest-pinned images。
 - Mac-local development 保持宽松；strict storage probe 属于 hosted Linux
   staging 和 DGX-hosted workers。
 

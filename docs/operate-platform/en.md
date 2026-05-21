@@ -76,11 +76,14 @@ DGX host and profile checks:
 
 ```bash
 scripts/ops/check-dgx-spark-host.sh
-AGENTICS_HOST_PROBE_MODE=warn scripts/ops/check-dgx-spark-profile.sh
+AGENTICS_RUNNER_SECURITY_PROFILE=production \
+  AGENTICS_HOST_PROBE_MODE=warn \
+  scripts/ops/check-dgx-spark-profile.sh
 ```
 
-Use `AGENTICS_HOST_PROBE_MODE=require` only after the Agentics-owned Docker
-daemon and runner quota slots are configured.
+Use `AGENTICS_RUNNER_SECURITY_PROFILE=production` with
+`AGENTICS_HOST_PROBE_MODE=require` only after the Agentics-owned Docker daemon
+and runner quota slots are configured.
 
 ## Admin Access
 

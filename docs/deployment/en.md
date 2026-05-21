@@ -135,12 +135,14 @@ evaluation jobs:
   solution `setup`, `build`, and `run` phases, and to evaluator `prepare` and
   `score` phases.
 - Configure the worker with
+  `AGENTICS_RUNNER_SECURITY_PROFILE=production`,
   `AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots`,
   `AGENTICS_RUNNER_RUNTIME_ROOT`, `AGENTICS_RUNNER_PHASE_MOUNT_ROOT`,
   `AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB`, and
   `AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true`.
 - Gate strict probes with `AGENTICS_HOST_PROBE_MODE=off|warn|require`, not the
-  generic `CI` variable.
+  generic `CI` variable. Production runner security also requires
+  `AGENTICS_HOST_PROBE_MODE=require` and digest-pinned images.
 - Keep Mac-local development permissive. The strict storage probe belongs to
   hosted Linux staging and DGX-hosted workers.
 

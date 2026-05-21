@@ -118,6 +118,7 @@ AGENTICS_WEB_BASE_URL=https://<public-hostname>
 AGENTICS_CORS_ALLOWED_ORIGINS=https://<public-hostname>
 AGENTICS_WEB_SESSION_COOKIE_SECURE=true
 AGENTICS_DOCKER_HOST=unix:///run/agentics/docker.sock
+AGENTICS_RUNNER_SECURITY_PROFILE=production
 AGENTICS_HOST_PROBE_MODE=require
 AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true
 AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots
@@ -199,8 +200,10 @@ just dgx-profile uninstall --purge-data
 
 当 `AGENTICS_HOST_PROBE_MODE=warn` 或 `require` 时，worker process 会在 startup
 期间运行 `scripts/ops/check-dgx-spark-profile.sh`。当
-`AGENTICS_HOST_PROBE_MODE=require` 时，如果 Linux host profile 未被证明或 probe
-script 无法运行，worker 会 fail closed。
+`AGENTICS_RUNNER_SECURITY_PROFILE=production` 和
+`AGENTICS_HOST_PROBE_MODE=require` 同时设置时，如果 Linux host profile 未被证明、
+probe script 无法运行，或 bounded runner storage 与 Docker writable-layer quota 未启用，
+worker 会 fail closed。
 
 普通 `uninstall` 会删除 services 和 quota storage，但保留 config、release files
 和 durable state。`uninstall --purge-data` 还会删除 `/etc/agentics`、
@@ -213,6 +216,7 @@ identity。
 
 ```bash
 AGENTICS_HOST_PROBE_MODE=warn \
+AGENTICS_RUNNER_SECURITY_PROFILE=production \
 scripts/ops/check-dgx-spark-profile.sh
 ```
 
@@ -223,6 +227,7 @@ Agentics-owned Docker daemon 和 phase mounts 配置完成后，运行包含 mut
 docker --host unix:///run/agentics/docker.sock pull busybox:1.36
 sudo -u agentics env \
   AGENTICS_HOST_PROBE_MODE=require \
+  AGENTICS_RUNNER_SECURITY_PROFILE=production \
   AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots \
   AGENTICS_RUNNER_RUNTIME_ROOT=/srv/agentics/runtime \
   AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts \

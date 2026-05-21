@@ -83,13 +83,17 @@ DGX Spark 数值应在 benchmark calibration 后重新评估。
 Hosted DGX profile 会在 public workers 接受 jobs 前添加 strict storage probes。
 这是 DGX-hosted hardening，并与 Mac-local runbook 分离。
 
-使用明确的 Agentics flag `AGENTICS_HOST_PROBE_MODE=off|warn|require`，
-不要从 `CI=true` 推断 strictness，因为 CI 可能运行在无法证明 Docker/XFS quota
-behavior 的 hosts 上。在 `warn` 或 `require` mode 下，worker startup 会运行
-`scripts/ops/check-dgx-spark-profile.sh`；在 `require` mode 下，如果 script 失败或
-无法运行，worker 会 fail closed。该 probe 会验证 Agentics-owned Docker daemon 上的
+使用明确的 Agentics flags `AGENTICS_RUNNER_SECURITY_PROFILE=development|production`
+和 `AGENTICS_HOST_PROBE_MODE=off|warn|require`，不要从 `CI=true` 或 API bind host
+推断 strictness。`development` 让 local 和 test workers 保持宽松；`production`
+会 fail closed，除非 bounded runner storage、Docker writable-layer quota、required
+host probes 和 digest-pinned images 全部启用。在 `warn` 或 `require` mode 下，
+worker startup 会运行 `scripts/ops/check-dgx-spark-profile.sh`；在 `require` mode
+下，如果 script 失败或无法运行，worker 会 fail closed。该 probe 会验证
+Agentics-owned Docker daemon 上的
 Docker writable-layer quota enforcement，并验证 runner-owned writable mounts 由有界的
 per-phase XFS project-quota slots 支撑。DGX profile 应设置
+`AGENTICS_RUNNER_SECURITY_PROFILE=production`、
 `AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots`、
 `AGENTICS_RUNNER_RUNTIME_ROOT=/srv/agentics/runtime`、
 `AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts`、
@@ -152,7 +156,9 @@ scripts/ops/check-dgx-spark-host.sh
 DGX deployment profile 使用以下检查：
 
 ```bash
-AGENTICS_HOST_PROBE_MODE=warn scripts/ops/check-dgx-spark-profile.sh
+AGENTICS_RUNNER_SECURITY_PROFILE=production \
+  AGENTICS_HOST_PROBE_MODE=warn \
+  scripts/ops/check-dgx-spark-profile.sh
 ```
 
 配置好 Agentics-owned Docker daemon 和 loopback XFS mounts 后，先 preload probe
@@ -162,6 +168,7 @@ image，然后以 service user 运行 strict check：
 docker --host unix:///run/agentics/docker.sock pull busybox:1.36
 sudo -u agentics env \
   AGENTICS_HOST_PROBE_MODE=require \
+  AGENTICS_RUNNER_SECURITY_PROFILE=production \
   AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots \
   AGENTICS_RUNNER_RUNTIME_ROOT=/srv/agentics/runtime \
   AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts \

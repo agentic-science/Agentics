@@ -17,6 +17,7 @@ const DEFAULT_POSTGRES_PORT: u16 = 5432;
 const DEFAULT_API_PORT: u16 = 3100;
 const DEFAULT_WEB_PORT: u16 = 3001;
 const DEFAULT_AGENT_REGISTRATION_MODE: &str = "pioneer_code";
+const DEFAULT_RUNNER_SECURITY_PROFILE: RunnerSecurityProfile = RunnerSecurityProfile::Development;
 const DEFAULT_RUNNER_WRITABLE_STORAGE_MODE: &str = "unbounded";
 const DEFAULT_RUNNER_WRITABLE_SLOT_CLASSES_MB: &str = "64,256,1024,4096";
 const DEFAULT_RUNNER_MAX_OUTPUT_FILES: u64 = 8192;
@@ -105,6 +106,8 @@ pub struct Config {
     pub docker_host: Option<String>,
     #[serde(default = "default_host_probe_mode")]
     pub host_probe_mode: HostProbeMode,
+    #[serde(default = "default_runner_security_profile")]
+    pub runner_security_profile: RunnerSecurityProfile,
     #[serde(default)]
     pub require_digest_pinned_images: bool,
     #[serde(default = "default_runner_writable_storage_mode")]
@@ -169,6 +172,16 @@ pub enum HostProbeMode {
     Require,
 }
 
+/// Worker runner safety profile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RunnerSecurityProfile {
+    /// Local development and test profile. Host isolation checks are opt-in.
+    Development,
+    /// Production profile. Runner storage, Docker layers, and host probes fail closed.
+    Production,
+}
+
 impl HostProbeMode {
     /// Stable environment string for this policy.
     pub fn as_str(self) -> &'static str {
@@ -176,6 +189,16 @@ impl HostProbeMode {
             Self::Off => "off",
             Self::Warn => "warn",
             Self::Require => "require",
+        }
+    }
+}
+
+impl RunnerSecurityProfile {
+    /// Stable environment string for this policy.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Development => "development",
+            Self::Production => "production",
         }
     }
 }
@@ -413,6 +436,11 @@ fn default_runner_writable_storage_mode() -> String {
     DEFAULT_RUNNER_WRITABLE_STORAGE_MODE.to_string()
 }
 
+/// Default runner security profile for local development.
+fn default_runner_security_profile() -> RunnerSecurityProfile {
+    DEFAULT_RUNNER_SECURITY_PROFILE
+}
+
 /// Handles default runner writable slot classes mb for this module.
 fn default_runner_writable_slot_classes_mb() -> String {
     DEFAULT_RUNNER_WRITABLE_SLOT_CLASSES_MB.to_string()
@@ -600,9 +628,9 @@ impl Config {
 
         match self.runner_writable_storage_mode()? {
             RunnerWritableStorageMode::Unbounded => {
-                if !is_loopback_host(&self.api_host) {
+                if self.runner_security_profile == RunnerSecurityProfile::Production {
                     anyhow::bail!(
-                        "unbounded runner writable storage is allowed only for loopback development; set AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots for hosted workers"
+                        "AGENTICS_RUNNER_SECURITY_PROFILE=production requires AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots"
                     );
                 }
             }
@@ -642,6 +670,13 @@ impl Config {
         if self.runner_docker_layer_quota && !cfg!(target_os = "linux") {
             anyhow::bail!("AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true is Linux-only");
         }
+        if self.runner_security_profile == RunnerSecurityProfile::Production
+            && self.host_probe_mode != HostProbeMode::Require
+        {
+            anyhow::bail!(
+                "AGENTICS_RUNNER_SECURITY_PROFILE=production requires AGENTICS_HOST_PROBE_MODE=require"
+            );
+        }
         if self.host_probe_mode == HostProbeMode::Require && !self.runner_docker_layer_quota {
             anyhow::bail!(
                 "AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true is required when AGENTICS_HOST_PROBE_MODE=require"
@@ -671,14 +706,16 @@ impl Config {
 
     /// Return whether this configuration must enforce immutable hosted images.
     pub fn requires_digest_pinned_images(&self) -> bool {
-        self.require_digest_pinned_images || self.host_probe_mode == HostProbeMode::Require
+        self.require_digest_pinned_images
+            || self.host_probe_mode == HostProbeMode::Require
+            || self.runner_security_profile == RunnerSecurityProfile::Production
     }
 
     /// Reject hosted profiles that try to opt out of immutable image references.
     fn validate_hosted_image_policy(&self) -> anyhow::Result<()> {
         if self.requires_digest_pinned_images() && !self.require_digest_pinned_images {
             anyhow::bail!(
-                "AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES must be true for hosted profiles using AGENTICS_HOST_PROBE_MODE=require"
+                "AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES must be true for profiles using AGENTICS_HOST_PROBE_MODE=require or AGENTICS_RUNNER_SECURITY_PROFILE=production"
             );
         }
         Ok(())
@@ -1059,18 +1096,18 @@ mod tests {
 
     /// Verifies that hosted workers must bound bind mounts and writable rootfs.
     #[test]
-    fn hosted_runner_requires_bounded_mounts_and_layer_quota() {
+    fn production_runner_requires_bounded_mounts_layers_and_host_probes() {
         let mut config = test_config();
-        config.api_host = "0.0.0.0".to_string();
+        config.runner_security_profile = super::RunnerSecurityProfile::Production;
         config.require_digest_pinned_images = true;
 
         let error = config
             .validate_runner_storage()
-            .expect_err("hosted workers require a writable storage boundary");
+            .expect_err("production workers require a writable storage boundary");
         assert!(
             error
                 .to_string()
-                .contains("unbounded runner writable storage")
+                .contains("AGENTICS_RUNNER_SECURITY_PROFILE=production")
         );
 
         config.runner_docker_layer_quota = true;
@@ -1090,21 +1127,23 @@ mod tests {
         assert!(error.to_string().contains("xfs-project-quota-slots"));
 
         config.runner_docker_layer_quota = true;
+        let error = config
+            .validate_runner_storage()
+            .expect_err("production workers require host probes");
+        if cfg!(target_os = "linux") {
+            assert!(
+                error
+                    .to_string()
+                    .contains("AGENTICS_RUNNER_SECURITY_PROFILE=production")
+            );
+        } else {
+            assert!(error.to_string().contains("Linux-only"));
+        }
+
+        config.host_probe_mode = super::HostProbeMode::Require;
         assert_eq!(
             config.validate_runner_storage().is_ok(),
             cfg!(target_os = "linux")
-        );
-
-        config.runner_writable_storage_mode = "unbounded".to_string();
-        config.runner_docker_layer_quota = false;
-        config.host_probe_mode = super::HostProbeMode::Require;
-        let error = config
-            .validate_runner_storage()
-            .expect_err("required host probes also need Docker layer quota");
-        assert!(
-            error
-                .to_string()
-                .contains("AGENTICS_HOST_PROBE_MODE=require")
         );
     }
 
@@ -1145,7 +1184,7 @@ mod tests {
 
     /// Verifies hosted profiles cannot disable digest-pinned image enforcement.
     #[test]
-    fn hosted_profiles_require_digest_pinned_images() {
+    fn production_and_required_probe_profiles_require_digest_pinned_images() {
         let mut probe_config = Config {
             host_probe_mode: super::HostProbeMode::Require,
             ..test_config()
@@ -1162,6 +1201,19 @@ mod tests {
 
         probe_config.require_digest_pinned_images = true;
         assert!(probe_config.validate_api_security().is_ok());
+
+        let production_config = Config {
+            runner_security_profile: super::RunnerSecurityProfile::Production,
+            ..test_config()
+        };
+        let error = production_config
+            .validate_api_security()
+            .expect_err("production profile implies immutable images");
+        assert!(
+            error
+                .to_string()
+                .contains("AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES")
+        );
 
         let local_quota_config = Config {
             runner_writable_storage_mode: "xfs-project-quota-slots".to_string(),
@@ -1212,6 +1264,7 @@ mod tests {
             agent_registration_mode: super::default_agent_registration_mode(),
             docker_host: None,
             host_probe_mode: super::default_host_probe_mode(),
+            runner_security_profile: super::default_runner_security_profile(),
             require_digest_pinned_images: false,
             runner_writable_storage_mode: super::default_runner_writable_storage_mode(),
             runner_runtime_root: None,

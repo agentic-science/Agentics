@@ -73,11 +73,13 @@ DGX host 和 profile checks：
 
 ```bash
 scripts/ops/check-dgx-spark-host.sh
-AGENTICS_HOST_PROBE_MODE=warn scripts/ops/check-dgx-spark-profile.sh
+AGENTICS_RUNNER_SECURITY_PROFILE=production \
+  AGENTICS_HOST_PROBE_MODE=warn \
+  scripts/ops/check-dgx-spark-profile.sh
 ```
 
-只有在 Agentics-owned Docker daemon 和 runner quota slots 已配置后，才使用
-`AGENTICS_HOST_PROBE_MODE=require`。
+只有在 Agentics-owned Docker daemon 和 runner quota slots 已配置后，才同时使用
+`AGENTICS_RUNNER_SECURITY_PROFILE=production` 和 `AGENTICS_HOST_PROBE_MODE=require`。
 
 ## Admin Access
 

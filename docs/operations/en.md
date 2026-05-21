@@ -84,14 +84,18 @@ The hosted DGX profile adds strict storage probes before public workers accept
 jobs. This is DGX-hosted hardening and remains separate from the Mac-local
 runbook.
 
-Use the explicit Agentics flag `AGENTICS_HOST_PROBE_MODE=off|warn|require`
-instead of deriving strictness from `CI=true`, because CI may run on hosts that
-cannot prove Docker/XFS quota behavior. In `warn` or `require` mode, worker
-startup runs `scripts/ops/check-dgx-spark-profile.sh`; in `require` mode it fails
-closed if the script fails or cannot run. The probe verifies Docker
+Use the explicit Agentics flags `AGENTICS_RUNNER_SECURITY_PROFILE=development|production`
+and `AGENTICS_HOST_PROBE_MODE=off|warn|require` instead of deriving strictness
+from `CI=true` or API bind host. `development` keeps local and test workers
+permissive. `production` fails closed unless bounded runner storage, Docker
+writable-layer quota, required host probes, and digest-pinned images are all
+enabled. In `warn` or `require` host-probe mode, worker startup runs
+`scripts/ops/check-dgx-spark-profile.sh`; in `require` mode it fails closed if
+the script fails or cannot run. The probe verifies Docker
 writable-layer quota enforcement on the Agentics-owned Docker daemon and verifies
 that runner-owned writable mounts are backed by bounded per-phase XFS
 project-quota slots. The DGX profile should set
+`AGENTICS_RUNNER_SECURITY_PROFILE=production`,
 `AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots`,
 `AGENTICS_RUNNER_RUNTIME_ROOT=/srv/agentics/runtime`,
 `AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts`,
@@ -155,7 +159,9 @@ access the intended Docker daemon. If Docker access is sudo-gated, set
 For the DGX deployment profile, run:
 
 ```bash
-AGENTICS_HOST_PROBE_MODE=warn scripts/ops/check-dgx-spark-profile.sh
+AGENTICS_RUNNER_SECURITY_PROFILE=production \
+  AGENTICS_HOST_PROBE_MODE=warn \
+  scripts/ops/check-dgx-spark-profile.sh
 ```
 
 After the Agentics-owned Docker daemon and loopback XFS mounts are configured,
@@ -165,6 +171,7 @@ preload the probe image, then run the strict check as the service user:
 docker --host unix:///run/agentics/docker.sock pull busybox:1.36
 sudo -u agentics env \
   AGENTICS_HOST_PROBE_MODE=require \
+  AGENTICS_RUNNER_SECURITY_PROFILE=production \
   AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots \
   AGENTICS_RUNNER_RUNTIME_ROOT=/srv/agentics/runtime \
   AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts \
