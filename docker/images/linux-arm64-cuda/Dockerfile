@@ -12,7 +12,7 @@ ARG NODE_VERSION=24
 ARG BUN_VERSION=latest
 
 LABEL org.opencontainers.image.title="Agentics Linux ARM64 CUDA Base" \
-      org.opencontainers.image.description="First-party Agentics CUDA devel base image for linux-arm64-cuda solution and scorer containers" \
+      org.opencontainers.image.description="First-party Agentics CUDA devel base image for linux-arm64-cuda solution and evaluator containers" \
       ai.agentics.image.version="${AGENTICS_IMAGE_VERSION}" \
       ai.agentics.target.name="linux-arm64-cuda" \
       ai.agentics.cuda.variant="${CUDA_VARIANT}" \

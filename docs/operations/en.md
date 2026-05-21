@@ -97,7 +97,7 @@ project-quota slots. The DGX profile should set
 `AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts`,
 `AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096`, and
 `AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true`. The default platform-owned
-scorer-visible output caps are `AGENTICS_RUNNER_MAX_OUTPUT_FILES=8192`,
+evaluator-visible output caps are `AGENTICS_RUNNER_MAX_OUTPUT_FILES=8192`,
 `AGENTICS_RUNNER_MAX_OUTPUT_DIRS=1024`, and
 `AGENTICS_RUNNER_MAX_OUTPUT_DEPTH=32`. Result and log payload caps are
 `AGENTICS_RUNNER_MAX_RUNS=12`, `AGENTICS_RUNNER_MAX_RESULT_JSON_BYTES=4194304`,
@@ -113,8 +113,8 @@ root keeps transient Docker bind sources in a daemon-visible host path, and XFS
 project-quota slots bound runner-owned bind mounts such as workspaces, `/io`,
 `/prepared`, `/output`, home, and temporary directories. DGX slots also set an
 inode hard limit, defaulting to `256` inodes per MiB, so dependency installs are
-bounded without applying the scorer-visible output file cap to setup/build
-workspaces. Retained build, prepare, and scorer-visible run trees stay backed by
+bounded without applying the evaluator-visible output file cap to setup/build
+workspaces. Retained build, prepare, and evaluator-visible run trees stay backed by
 their leased runner slots until dependent phases finish. Future hardening can add
 non-root run phases or read-only root filesystems without weakening the current
 disk-boundary requirement.
@@ -197,7 +197,7 @@ those slots belong to the hosted worker service user.
 
 ## Logs
 
-Current logging is process stdout/stderr. For hosted rehearsal, run each service under a supervisor that captures logs, for example `systemd`, `tmux` with file logging, or a container runtime. Worker evaluation logs are written under `AGENTICS_STORAGE_ROOT/eval-artifacts/<job-id>/runner.log`. Runner scratch trees for source extraction, build workspaces, prepared data, solution run I/O, and scorer output are temporary per-job workspaces and should not persist in durable storage.
+Current logging is process stdout/stderr. For hosted rehearsal, run each service under a supervisor that captures logs, for example `systemd`, `tmux` with file logging, or a container runtime. Worker evaluation logs are written under `AGENTICS_STORAGE_ROOT/eval-artifacts/<job-id>/runner.log`. Runner scratch trees for source extraction, build workspaces, prepared data, solution run I/O, and evaluator output are temporary per-job workspaces and should not persist in durable storage.
 
 Minimum log retention for MVP rehearsal:
 

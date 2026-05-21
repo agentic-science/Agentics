@@ -132,7 +132,7 @@ evaluation jobs:
 - Use Docker writable-layer quotas for writes that land in the container layer.
 - Use separate per-phase loopback filesystem images for writable mounts, with
   root-prepared XFS project-quota slots under each phase mount. This applies to
-  solution `setup`, `build`, and `run` phases, and to scorer `prepare` and
+  solution `setup`, `build`, and `run` phases, and to evaluator `prepare` and
   `score` phases.
 - Configure the worker with
   `AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots`,

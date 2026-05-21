@@ -34,7 +34,7 @@ variant 开头，例如 `cu130-*`。
 CUDA base images 不内置 PyTorch。CUDA variants 跟随 latest stable PyTorch
 支持的 CUDA versions，同时受 NVIDIA `linux/arm64` image availability 和 DGX
 smoke validation 约束。Published hosted challenge specs 必须使用 digest-pinned
-solution 和 scorer images。
+solution 和 evaluator images。
 
 ## Schema
 
@@ -54,7 +54,7 @@ Challenge specs 必须声明一个或多个 targets：
           "source": "local",
           "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"
         },
-        "scorer_image": {
+        "evaluator_image": {
           "source": "local",
           "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"
         },
@@ -65,7 +65,7 @@ Challenge specs 必须声明一个或多个 targets：
         "setup_network_access": "enabled",
         "build_network_access": "disabled",
         "run_network_access": "disabled",
-        "scorer_network_access": "disabled"
+        "evaluator_network_access": "disabled"
       }
     }
   ]
@@ -83,10 +83,10 @@ Challenge specs 必须声明一个或多个 targets：
   `gpu`，并在 `resource_profile.hardware_metadata` 中声明 CUDA hardware metadata。
 - AMD64 Linux targets 保留给 post-MVP deployment support。
 - `validation_enabled` 是 target-specific 的。一个 target 可以启用 validation，另一个 target 可以关闭 validation。
-- `resource_profile` 包含该 target 的 Docker images、硬性 resource limits、network policy、可选 resource description 和可选 hardware metadata。Solution 和 scorer images 必须使用受支持的 first-party Agentics image repositories 和与 target 匹配的 tags。Hosted deployments 必须设置 `AGENTICS_HOST_PROBE_MODE=require` 和 `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`；hosted startup 会拒绝要求 hosted probes 但禁用 image digest pinning 的 profiles，并且 hosted challenge specs 必须使用包含 immutable `@sha256:<digest>` suffix 的 registry references。
+- `resource_profile` 包含该 target 的 Docker images、硬性 resource limits、network policy、可选 resource description 和可选 hardware metadata。Solution 和 evaluator images 必须使用受支持的 first-party Agentics image repositories 和与 target 匹配的 tags。Hosted deployments 必须设置 `AGENTICS_HOST_PROBE_MODE=require` 和 `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`；hosted startup 会拒绝要求 hosted probes 但禁用 image digest pinning 的 profiles，并且 hosted challenge specs 必须使用包含 immutable `@sha256:<digest>` suffix 的 registry references。
 - CPU targets 必须使用 first-party Agentics CPU base image。面向 participants 的 setup guidance 是：使用 `apt-fast` 安装 apt packages，使用 `uv` 管理 Python dependencies，使用 `fnm` 切换 Node version，使用 Bun 管理 JavaScript/TypeScript packages，并使用 rustup 安装 Rust toolchain components。
-- 如果任一 target 有 `validation_enabled: true`，bundle 必须声明 `execution.validation_runs`。
-- 如果启用 private benchmark scoring，bundle 必须声明 `execution.official_runs`。
+- 如果任一 target 有 `validation_enabled: true`，bundle 必须声明 `execution.validation_runs` 或 `execution.validation_prepare`。
+- 如果启用 private benchmark scoring，bundle 必须声明 `execution.official_runs` 或 `execution.official_prepare`。
 
 CUDA target hardware metadata 必须包含：
 
@@ -153,12 +153,12 @@ Remote CLI preflight 会先获取 challenge metadata，再打包 workspace。Loc
 Workers 从 evaluation job payload 中读取所选 target。该 target 控制：
 
 - Pull images 时使用的 Docker platform。
-- 创建 setup、build、run 和 scorer containers 时使用的 Docker platform。
-- Solution 和 scorer images。
+- 创建 setup、build、run 和 evaluator containers 时使用的 Docker platform。
+- Solution 和 evaluator images。
 - Timeout、memory、CPU、disk 和 network policy。Log limits 是 platform-owned safety policy。
 - GPU targets 的 accelerator policy 和 CUDA hardware metadata。
 
-Private benchmark data 仍然只挂载到 scorer environment。
+Private benchmark data 仍然只挂载到 evaluator environment。
 
 ## Leaderboards
 

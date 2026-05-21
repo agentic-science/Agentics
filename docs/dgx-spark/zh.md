@@ -99,8 +99,8 @@ Phase mount root 为以下每类 writable runner class 准备一个 loopback XFS
 - `solution-setup`
 - `solution-build`
 - `solution-run`
-- `scorer-prepare`
-- `scorer-score`
+- `evaluator-prepare`
+- `evaluator-score`
 
 ## Required Environment
 
@@ -158,7 +158,7 @@ persistent directory layout，格式化缺失的 loopback XFS images，使用 `p
 在 `MapleSpark` 上，DGX-2 run 已挂载：
 
 - `/srv/agentics/docker-data-root`，200 GiB loopback XFS with `prjquota`。
-- 五个 phase mounts，每个 20 GiB，覆盖 solution setup/build/run 和 scorer
+- 五个 phase mounts，每个 20 GiB，覆盖 solution setup/build/run 和 evaluator
   prepare/score。
 - 每个 class 和 phase 四个 quota slots，覆盖 64 MiB、256 MiB、1024 MiB 和
   4096 MiB limits。默认每 MiB `256` 个 inodes，因此这些 slots 的 inode hard
@@ -166,11 +166,11 @@ persistent directory layout，格式化缺失的 loopback XFS images，使用 `p
 
 Worker 会选择不小于 effective phase `disk_limit_mb` 的最小 configured slot
 class。如果需要 exact hard phase limit，应让 challenge resource profiles 与 slot
-classes 对齐。单独的 scorer-visible run tree cap 默认为 8192 个 files、1024 个
+classes 对齐。单独的 evaluator-visible run tree cap 默认为 8192 个 files、1024 个
 directories 和 32 层 depth；setup/build dependency installs 由 XFS byte 和 inode
 quota 约束。每次 evaluation 最多运行 12 个 solution invocations。持久化 runner
 logs 按实际 run count 每个 1 MiB 限制，`result.json` 在解析前限制为 4 MiB，
-public scorer feedback 限制为 1024 个 entries，embedded scorer result logs 限制为
+public evaluator feedback 限制为 1024 个 entries，embedded evaluator result logs 限制为
 256 KiB。
 
 ## Service Startup

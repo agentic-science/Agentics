@@ -1,7 +1,7 @@
 # Agentics Linux ARM64 CPU Base Image
 
 This directory defines the first-party Agentics CPU base image for solution and
-scorer containers. It is intentionally not published from this checkout yet.
+evaluator containers. It is intentionally not published from this checkout yet.
 Publish only from a stable network and pin challenge specs to immutable digests.
 
 ## Image Contract
@@ -9,7 +9,7 @@ Publish only from a stable network and pin challenge specs to immutable digests.
 - Base: Ubuntu 26.04.
 - Target: `linux-arm64-cpu`.
 - MVP platform: `linux/arm64`.
-- Intended use: CPU solution setup, build, run, scorer prepare, and scorer score
+- Intended use: CPU solution setup, build, run, evaluator prepare, and evaluator score
   phases.
 - User model: root for setup, build, and run in the MVP.
 - Docker labels: Agentics image version and Ubuntu version.
@@ -73,7 +73,7 @@ docker buildx build \
 Challenge specs may use `source: "local"` for the local tag above during
 development. Hosted challenge specs must use `source: "registry"` with the
 published `ghcr.io/agentics-reifying/agentics-linux-arm64-cpu` repository, an
-`ubuntu26.04-*` tag, and digest-pinned `solution_image` and `scorer_image`
+`ubuntu26.04-*` tag, and digest-pinned `solution_image` and `evaluator_image`
 references after the image is published.
 
 Do not publish `linux-amd64-cpu` variants until the platform has AMD64 Linux

@@ -51,7 +51,7 @@ v0.0 is the already implemented baseline. Its historical version snapshot has be
 - **M0.0-DOC-3: Add challenge bundle authoring reference**
   - Status: Implemented.
   - Commit target: `docs: add challenge bundle authoring guide`
-  - Scope: Document bundle directory layout, `spec.json`, public data, private benchmark data, scorer contracts, result JSON, Docker image assumptions, validation rules, and common failure modes.
+  - Scope: Document bundle directory layout, `spec.json`, public data, private benchmark data, evaluator contracts, result JSON, Docker image assumptions, validation rules, and common failure modes.
   - Artifact: Historical version snapshot retired; current challenge guidance starts at `docs/contribute-challenges/en.md`.
   - Test spec: Validate every documented field against the Rust bundle parser and the seeded example bundles.
 
@@ -74,7 +74,7 @@ v0.0 is the already implemented baseline. Its historical version snapshot has be
 - **M0.0-WORKER-1: Capture runner behavior**
   - Status: Implemented.
   - Commit target: `docs: capture v0.0 runner behavior`
-  - Scope: Document Docker execution, scorer image default, artifact mounting, timeout and resource limits, logs, job claiming, heartbeat behavior, and stale-job handling.
+  - Scope: Document Docker execution, evaluator image default, artifact mounting, timeout and resource limits, logs, job claiming, heartbeat behavior, and stale-job handling.
   - Artifact: Historical version snapshot retired; current operations guidance starts at `docs/operations/en.md`.
   - Test spec: Run a successful sample solution submission and one intentionally failing sample solution submission, then compare observed logs and persisted status with the document.
 
@@ -171,8 +171,8 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 
 - **M0.1-WORKER-2: Persist aggregate and per-run metrics**
   - Commit target: `worker: persist structured evaluation metrics`
-  - Scope: Store normalized aggregate metrics, optional per-run metrics, rank score, ranking metadata, and scorer diagnostics.
-  - Test spec: Add scorer-output fixture tests for valid metrics, missing rank score, non-finite values, unknown metrics, and per-run payloads.
+  - Scope: Store normalized aggregate metrics, optional per-run metrics, rank score, ranking metadata, and evaluator diagnostics.
+  - Test spec: Add evaluator-output fixture tests for valid metrics, missing rank score, non-finite values, unknown metrics, and per-run payloads.
 
 - **M0.1-WORKER-3: Add validation quotas**
   - Commit target: `worker: add validation quota enforcement`
@@ -274,10 +274,10 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
   - Scope: Model setup, build, and run phases from manifest-declared scripts while deriving timeout, memory, CPU, disk, and network policy from challenge-owned resource profiles. Container log capture is platform-owned runner configuration, not solution manifest data.
   - Test spec: Add unit tests for script-to-phase resolution, profile-owned limit selection, platform log caps, and phase-specific failure reporting.
 
-- **M0.2-PROTO-4: Add scorer-owned prepare phase**
+- **M0.2-PROTO-4: Add evaluator-owned prepare phase**
   - Commit target: `worker: add challenge prepare phase`
-  - Scope: Let challenge bundles declare `validation_prepare` or `official_prepare` commands that run in the scorer image before solution invocations, write generated inputs and a generated run manifest under `/prepared`, and keep private prepared data out of the public challenge repository. Record prepare network policy and reproducibility metadata without enforcing a universal data reproducibility scheme.
-  - Test spec: Add bundle parser tests for static versus prepared run modes, runner integration tests for prepare-generated `source_path` inputs, scorer access to `/prepared`, official publish with private seed assets, and successful solution scoring through a prepared run manifest.
+  - Scope: Let challenge bundles declare `validation_prepare` or `official_prepare` commands that run in the evaluator image before solution invocations, write generated inputs and a generated run manifest under `/prepared`, and keep private prepared data out of the public challenge repository. Record prepare network policy and reproducibility metadata without enforcing a universal data reproducibility scheme.
+  - Test spec: Add bundle parser tests for static versus prepared run modes, runner integration tests for prepare-generated `source_path` inputs, evaluator access to `/prepared`, official publish with private seed assets, and successful solution scoring through a prepared run manifest.
 
 ### Targets
 
@@ -295,7 +295,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 
 - **M0.2-IMAGE-1: Define first-party CPU base image**
   - Commit target: `docker: add agentics cpu base image`
-  - Scope: Add a source-defined Agentics CPU base image for solution and scorer containers. For MVP, publish and smoke `linux/arm64`; reserve `linux/amd64` publication for post-MVP capacity. Use Ubuntu 26.04, run setup/build/run as root for MVP simplicity, install shell/core utilities, network tools, build tools, `apt-fast` with `aria2`, `uv`, `fnm`, Node, Bun, rustup, `jq`, `file`, editor/debugging basics, `time`, and `tini`. Add image metadata, a smoke script, local build instructions, participant guidance, and validation requiring CPU targets to use supported `agentics-linux-arm64-cpu` repositories with `ubuntu26.04-*` tags.
+  - Scope: Add a source-defined Agentics CPU base image for solution and evaluator containers. For MVP, publish and smoke `linux/arm64`; reserve `linux/amd64` publication for post-MVP capacity. Use Ubuntu 26.04, run setup/build/run as root for MVP simplicity, install shell/core utilities, network tools, build tools, `apt-fast` with `aria2`, `uv`, `fnm`, Node, Bun, rustup, `jq`, `file`, editor/debugging basics, `time`, and `tini`. Add image metadata, a smoke script, local build instructions, participant guidance, and validation requiring CPU targets to use supported `agentics-linux-arm64-cpu` repositories with `ubuntu26.04-*` tags.
   - Test spec: Run shell syntax checks for image scripts and, when network is stable, build `linux/arm64` with Docker Buildx and run `/opt/agentics/smoke.sh` on that supported MVP platform. Add bundle-validation tests for supported and unsupported CPU image repositories and tags.
 
 - **M0.2-IMAGE-2: Define first-party CUDA devel base images**
@@ -307,7 +307,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 
 - **M0.2-WORKER-1: Execute multi-phase solution submissions**
   - Commit target: `worker: execute zip_project setup build run phases`
-  - Scope: Update runner orchestration to execute setup and build in a build solution container, then execute run in a fresh no-egress solution container. Keep scorer execution in a separate scorer container with challenge-owned internet policy. Support CLI/stdin and file interfaces, isolated logs, phase-specific status, and private benchmark data mounted only into the scorer environment.
+  - Scope: Update runner orchestration to execute setup and build in a build solution container, then execute run in a fresh no-egress solution container. Keep evaluator execution in a separate evaluator container with challenge-owned internet policy. Support CLI/stdin and file interfaces, isolated logs, phase-specific status, and private benchmark data mounted only into the evaluator environment.
   - Test spec: Add integration tests for successful multi-phase execution, each phase failing independently, no private benchmark data mounted into solution containers, setup/build egress behavior, run-phase no-egress behavior, a defensive run-stage internet probe that must fail, CLI/stdin mode, and file mode.
 
 - **M0.2-WORKER-2: Add resource profile enforcement**
@@ -380,12 +380,12 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 
 - **M0.2-EXAMPLE-1: Add `zip_project` protocol fixture challenges and submissions**
   - Commit target: `examples: add zip_project protocol fixtures`
-  - Scope: Add small executable fixture challenges and matching solution submissions for CLI/stdin scoring, file-mode scoring, and scorer-controlled multi-run evaluation. Fixtures should exercise setup/build/run phases, build artifact handoff into the fresh run container, valid solutions, intentional phase failures, and private benchmark data visible only to the scorer.
+  - Scope: Add small executable fixture challenges and matching solution submissions for CLI/stdin scoring, file-mode scoring, and evaluator-controlled multi-run evaluation. Fixtures should exercise setup/build/run phases, build artifact handoff into the fresh run container, valid solutions, intentional phase failures, and private benchmark data visible only to the evaluator.
   - Test spec: Add parser and runner integration tests for each fixture. Assert CLI/stdin outputs are scored, file outputs are scored, multi-run evaluation can use multiple datasets with different output formats or metric groups, phase failures are reported at the right phase, private benchmark data is not mounted into solution containers, and the run-stage internet probe cannot reach external network resources.
 
 - **M0.2-DOC-1: Document multi-language challenge authoring**
   - Commit target: `docs: document multi-language zip_project authoring`
-  - Scope: Add manifest examples, generated CLI workspace hints, reference image guidance, setup/build/run contract, two-container solution execution model, scorer/solution data boundaries, internet policy, dependency guidance, multi-run evaluation examples, language examples, and quota/admin capacity notes. Local benchmark-image validation remains a separate CLI milestone.
+  - Scope: Add manifest examples, generated CLI workspace hints, reference image guidance, setup/build/run contract, two-container solution execution model, evaluator/solution data boundaries, internet policy, dependency guidance, multi-run evaluation examples, language examples, and quota/admin capacity notes. Local benchmark-image validation remains a separate CLI milestone.
   - Test spec: Validate documented sample ZIPs against parser fixtures and at least one local runner smoke test.
 
 - **M0.2-DOC-2: Document GPU benchmark expectations**
@@ -405,12 +405,12 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 | `M0.2-PROTO-1: Define zip_project manifest schema` | Implemented | Adds strict shared Rust parsing and bilingual docs for a smaller `agentics.solution.json` containing protocol metadata, a public note, and setup/build/run script paths. |
 | `M0.2-PROTO-2: Add setup/build/run phase model` | Implemented | Resolves setup/build/run phases from script paths while deriving execution limits from challenge-owned resource profiles and platform-owned log capture settings. |
 | `M0.2-PROTO-3: Add dependency policy validation` | Deferred | Discarded as a standalone milestone; dependency reproducibility belongs to challenge owners and submitting agents and is not a participant-controlled manifest policy. |
-| `M0.2-PROTO-4: Add scorer-owned prepare phase` | Implemented | Challenge bundles can generate validation or official run manifests and source-backed inputs in a scorer-owned `/prepared` workspace before solution invocations. |
+| `M0.2-PROTO-4: Add evaluator-owned prepare phase` | Implemented | Challenge bundles can generate validation or official run manifests and source-backed inputs in an evaluator-owned `/prepared` workspace before solution invocations. |
 | `M0.2-TARGET-1: Define target schema` | Implemented | Challenge bundles now declare `targets` with canonical ARM64 CPU/CUDA targets, Docker platform, required nullable accelerator, validation flag, and target-owned resource profile. CUDA targets require `hardware_metadata` with hardware model, GPU count, CUDA variant, and matching CUDA version metadata. AMD64 Linux targets are rejected until post-MVP deployment capacity exists. |
 | `M0.2-TARGET-2: Add target-specific evaluation and leaderboards` | Implemented | Solution submissions, jobs, evaluations, quotas, workers, API DTOs, and leaderboard rows now carry `target`; HTTP submissions validate targets before artifact decode. |
 | `M0.2-IMAGE-1: Define first-party CPU base image` | Implemented | Adds source-defined Ubuntu 26.04 CPU base image files, smoke checks, local build docs, participant guidance, and validation requiring supported CPU image repositories and `ubuntu26.04-*` tags. Publishing and digest rollout are intentionally deferred. |
 | `M0.2-IMAGE-2: Define first-party CUDA devel base images` | Implemented | Adds target-named `linux-arm64-cuda` image sources, active CUDA 12.6/13.0/13.2 variant policy, NVIDIA manifest digests, metadata labels, smoke checks, DGX publication guidance, and validation requiring CUDA image tags to match the declared variant. Publishing and DGX runtime smoke remain deferred. |
-| `M0.2-WORKER-1: Execute multi-phase solution-submissions` | Implemented | Runs setup/build in a build solution container, runs each invocation in a fresh solution container, supports source-backed run inputs, records per-invocation metadata, and isolates scoring in a separate scorer container. |
+| `M0.2-WORKER-1: Execute multi-phase solution-submissions` | Implemented | Runs setup/build in a build solution container, runs each invocation in a fresh solution container, supports source-backed run inputs, records per-invocation metadata, and isolates scoring in a separate evaluator container. |
 | `M0.2-WORKER-2: Add resource profile enforcement` | Implemented | Enforces challenge-declared Docker images, timeout, memory, CPU, disk, image digest validation, and network policy. |
 | `M0.2-WORKER-3: Add GPU profile recording` | Implemented | Targets record accelerator and CUDA hardware metadata, including CUDA variant and version, for the DGX MVP. |
 | `M0.2-WORKER-4: Add GPU validation and official scheduling hooks` | Planned | Single-DGX CUDA execution uses target accelerator metadata; heterogeneous worker capability flags and GPU-specific scheduling remain planned. |
@@ -420,10 +420,10 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 | `M0.2-CLI-2: Run local validation with benchmark images` | Implemented | `validate <challenge-name> --bundle-dir <path> --target <target>` runs local validation through the shared Docker runner path, stores local logs in the CLI cache by default, supports `--all-targets`, and preflights target-disabled validation before packaging. |
 | `M0.2-CLI-3: Select targets` | Implemented | `submit` and `validate --remote` support `--target` and `--all-targets`; CLI preflight rejects unsupported targets and target-disabled validation before packaging. |
 | `M0.2-CLI-4: Request GPU validation` | Planned | Dedicated GPU quota UX remains planned; the current CLI can select a CUDA target through `--target`. |
-| `M0.2-WEB-1: Show protocol and resource metadata` | Implemented | Observer challenge pages and frontend schemas display submission notes, scorer command, targets, and resource profile metadata. |
+| `M0.2-WEB-1: Show protocol and resource metadata` | Implemented | Observer challenge pages and frontend schemas display submission notes, evaluator command, targets, and resource profile metadata. |
 | `M0.2-WEB-2: Show target-specific leaderboards` | Implemented | Observer leaderboard fetches and displays the selected target, with target tabs for multi-target challenges. |
 | `M0.2-ADMIN-1: Manage resource profiles and quotas` | Implemented | Admin challenge rows show current targets and mode flags; the capacity tab shows configured quotas and active usage. Heterogeneous GPU configuration remains in the future GPU lane. |
-| `M0.2-EXAMPLE-1: Add zip_project protocol fixture challenges and submissions` | Implemented | Adds sample-sum stdio, grid-routing file-mode, and matrix-multiplication multi-invocation fixtures, manifest-based solutions, scorer tests, and worker integration coverage for timing metadata, private source-backed inputs, and run-stage no-egress behavior. |
+| `M0.2-EXAMPLE-1: Add zip_project protocol fixture challenges and submissions` | Implemented | Adds sample-sum stdio, grid-routing file-mode, and matrix-multiplication multi-invocation fixtures, manifest-based solutions, evaluator tests, and worker integration coverage for timing metadata, private source-backed inputs, and run-stage no-egress behavior. |
 | `M0.2-DOC-1: Document multi-language challenge authoring` | Implemented | Documents the canonical protocol, generated CLI hints, run manifests, resource profiles, execution isolation, dependency guidance, quota controls, admin capacity views, and local benchmark-image validation. |
 | `M0.2-DOC-2: Document GPU benchmark expectations` | Implemented | MVP CUDA target policy documents required hardware metadata, active CUDA variants, shared leaderboard behavior under `linux-arm64-cuda`, and challenge-owner comparability responsibility. Heterogeneous GPU scheduling docs remain future work. |
 | `M0.2-DOC-3: Document target authoring` | Implemented | Adds bilingual v0.2 target docs covering targets, Docker platforms, validation flags, target-aware APIs, CLI behavior, worker behavior, and leaderboards. |
@@ -468,7 +468,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 
 - **M0.2.5-CREATE-3: Add private benchmark asset upload and binding**
   - Commit target: `api: add private benchmark asset binding`
-  - Scope: Add private asset upload for private benchmark datasets, private scorer packages, private seeds, and reference outputs. Store asset metadata, digest, size, creator, storage URI, and draft binding in Agentics-controlled storage.
+  - Scope: Add private asset upload for private benchmark datasets, private evaluator packages, private seeds, and reference outputs. Store asset metadata, digest, size, creator, storage URI, and draft binding in Agentics-controlled storage.
   - Test spec: Add upload tests for size limits, digest recording, missing draft rejection, unauthorized creator rejection, duplicate asset handling, and storage cleanup on failed uploads.
 
 - **M0.2.5-CREATE-4: Add challenge draft validation and review lifecycle**
@@ -495,8 +495,8 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 
 - **M0.2.5-DEMO-2: Package official demo challenges**
   - Commit target: `examples: package mvp demo challenges`
-  - Scope: Package the matrix multiplication demo with statements, public data, private seed/config overlay, scorer prepare behavior, scorer behavior, metric schema, validation toggle, resource profile, targets, and challenge repository CI.
-  - Test spec: Run parser tests, challenge repository CI validation, scorer tests, public validation smoke tests, and official evaluation smoke tests for the demo challenge.
+  - Scope: Package the matrix multiplication demo with statements, public data, private seed/config overlay, evaluator prepare behavior, evaluator behavior, metric schema, validation toggle, resource profile, targets, and challenge repository CI.
+  - Test spec: Run parser tests, challenge repository CI validation, evaluator tests, public validation smoke tests, and official evaluation smoke tests for the demo challenge.
 
 ### Deployment and Operations
 
@@ -522,7 +522,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 
 - **M0.2.5-DGX-2: Add DGX Spark deployment profile**
   - Commit target: `deploy: add dgx spark mvp profile`
-  - Scope: Define DGX-specific environment values, persistent storage layout, reverse proxy and TLS assumptions, Docker runtime settings, service supervision, backup locations, and release artifact paths. Include an Agentics-owned Docker daemon backed by a loopback XFS data-root image with project quotas, `AGENTICS_HOST_PROBE_MODE=require`, Docker writable-layer quota probes, and root-prepared XFS project-quota slots under per-phase loopback filesystem images for all solution setup/build/run writable mounts and scorer prepare/score writable mounts. Keep GPU solution execution disabled until the GPU milestone lane is implemented.
+  - Scope: Define DGX-specific environment values, persistent storage layout, reverse proxy and TLS assumptions, Docker runtime settings, service supervision, backup locations, and release artifact paths. Include an Agentics-owned Docker daemon backed by a loopback XFS data-root image with project quotas, `AGENTICS_HOST_PROBE_MODE=require`, Docker writable-layer quota probes, and root-prepared XFS project-quota slots under per-phase loopback filesystem images for all solution setup/build/run writable mounts and evaluator prepare/score writable mounts. Keep GPU solution execution disabled until the GPU milestone lane is implemented.
   - Test spec: Dry-run migrations, API startup, worker startup, web startup, health checks, Docker writable-layer quota probe, per-phase loop-image writable-mount probe, and per-phase quota-slot exhaustion probe on DGX Spark with persistent storage and non-default admin credentials.
 
 - **M0.2.5-DGX-3: Run DGX Spark end-to-end smoke and benchmark calibration**

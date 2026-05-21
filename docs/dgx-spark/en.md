@@ -101,8 +101,8 @@ The phase mount root has one loopback XFS mount for each writable runner class:
 - `solution-setup`
 - `solution-build`
 - `solution-run`
-- `scorer-prepare`
-- `scorer-score`
+- `evaluator-prepare`
+- `evaluator-score`
 
 ## Required Environment
 
@@ -160,7 +160,7 @@ Set `AGENTICS_DGX_PERSIST_FSTAB=1` to append idempotent `/etc/fstab` entries.
 On `MapleSpark`, the DGX-2 run mounted:
 
 - `/srv/agentics/docker-data-root`, 200 GiB loopback XFS with `prjquota`.
-- Five phase mounts, 20 GiB each, for solution setup/build/run and scorer
+- Five phase mounts, 20 GiB each, for solution setup/build/run and evaluator
   prepare/score.
 - Four quota slots per class and phase for 64 MiB, 256 MiB, 1024 MiB, and
   4096 MiB limits. With the default `256` inodes per MiB, those slots have
@@ -168,12 +168,12 @@ On `MapleSpark`, the DGX-2 run mounted:
 
 The worker chooses the smallest configured slot class that is at least the
 effective phase `disk_limit_mb`. Align challenge resource profiles to slot
-classes when an exact hard phase limit is required. The separate scorer-visible
+classes when an exact hard phase limit is required. The separate evaluator-visible
 run tree cap defaults to 8192 files, 1024 directories, and depth 32; setup/build
 dependency installs are governed by the XFS byte and inode quota instead. Each
 evaluation may run at most 12 solution invocations. Persisted runner logs are
 capped at one MiB per concrete run, `result.json` is capped at 4 MiB before
-parsing, public scorer feedback is capped at 1024 entries, and embedded scorer
+parsing, public evaluator feedback is capped at 1024 entries, and embedded evaluator
 result logs are capped at 256 KiB.
 
 ## Service Startup

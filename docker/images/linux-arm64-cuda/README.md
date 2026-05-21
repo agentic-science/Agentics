@@ -1,7 +1,7 @@
 # Agentics Linux ARM64 CUDA Base Image
 
 This directory defines first-party Agentics CUDA devel base images for the
-`linux-arm64-cuda` target. These images are intended for solution and scorer
+`linux-arm64-cuda` target. These images are intended for solution and evaluator
 containers on DGX Spark-class hosted deployments. They are intentionally not
 published from this checkout yet. Publish only from a stable network, smoke on
 the supported DGX host, and pin challenge specs to immutable digests.
@@ -16,7 +16,7 @@ the supported DGX host, and pin challenge specs to immutable digests.
   availability and DGX smoke validation.
 - PyTorch policy: PyTorch is not included. Challenge owners and participants
   install their chosen PyTorch build or another CUDA framework in setup/build.
-- Intended use: CUDA solution setup, build, run, scorer prepare, and scorer
+- Intended use: CUDA solution setup, build, run, evaluator prepare, and evaluator
   score phases.
 - User model: root for setup, build, and run in the MVP.
 - Docker labels: Agentics image version, target, CUDA variant, CUDA version,
@@ -120,5 +120,5 @@ output in release notes. Challenge specs must use the supported
 `agentics-linux-arm64-cuda` image repository with a tag that starts with the
 declared CUDA variant, such as `cu130-*`. Local development may use
 `source: "local"` for first-party local tags. Hosted challenge specs must use
-`source: "registry"` and digest-pinned `solution_image` and `scorer_image`
+`source: "registry"` and digest-pinned `solution_image` and `evaluator_image`
 references after the image is published.

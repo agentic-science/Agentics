@@ -57,7 +57,7 @@ Rules:
 - `public/` contains public validation assets and public run manifests.
 
 Do not commit private benchmark data, private seeds, reference outputs, private
-scorer packages, secrets, `.env` files, private keys, or symlinks.
+evaluator packages, secrets, `.env` files, private keys, or symlinks.
 
 ## Lifecycle Manifest
 
@@ -155,7 +155,7 @@ storage and applies the approved private overlays to the runtime bundle.
 Supported private asset kinds are:
 
 - `private_benchmark_data`
-- `private_scorer_package`
+- `private_evaluator_package`
 - `private_seeds`
 - `private_reference_outputs`
 
