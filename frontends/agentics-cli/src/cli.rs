@@ -303,8 +303,8 @@ pub(crate) struct AdminAuthArgs {
 pub(crate) enum ChallengePrivateAssetKindArg {
     #[value(name = "private_benchmark_data")]
     BenchmarkData,
-    #[value(name = "private_scorer_package")]
-    ScorerPackage,
+    #[value(name = "private_evaluator_package")]
+    EvaluatorPackage,
     #[value(name = "private_seeds")]
     Seeds,
     #[value(name = "private_reference_outputs")]

@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS challenge_private_assets (
   id UUID PRIMARY KEY,
   draft_id UUID NOT NULL REFERENCES challenge_drafts(id) ON DELETE CASCADE,
   asset_name TEXT NOT NULL,
-  kind TEXT NOT NULL CHECK (kind IN ('private_benchmark_data', 'private_scorer_package', 'private_seeds', 'private_reference_outputs')),
+  kind TEXT NOT NULL CHECK (kind IN ('private_benchmark_data', 'private_evaluator_package', 'private_seeds', 'private_reference_outputs')),
   required BOOLEAN NOT NULL DEFAULT FALSE,
   size_bytes BIGINT NOT NULL CHECK (size_bytes >= 0),
   sha256 TEXT NOT NULL,

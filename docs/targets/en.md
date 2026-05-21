@@ -35,7 +35,7 @@ the declared CUDA variant, such as `cu130-*`.
 The CUDA base images intentionally do not include PyTorch. CUDA variants follow
 CUDA versions supported by the latest stable PyTorch release, subject to NVIDIA
 `linux/arm64` image availability and DGX smoke validation. Published hosted
-challenge specs must use digest-pinned solution and scorer images.
+challenge specs must use digest-pinned solution and evaluator images.
 
 ## Schema
 
@@ -55,7 +55,7 @@ Challenge specs must declare one or more targets:
           "source": "local",
           "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"
         },
-        "scorer_image": {
+        "evaluator_image": {
           "source": "local",
           "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"
         },
@@ -66,7 +66,7 @@ Challenge specs must declare one or more targets:
         "setup_network_access": "enabled",
         "build_network_access": "disabled",
         "run_network_access": "disabled",
-        "scorer_network_access": "disabled"
+        "evaluator_network_access": "disabled"
       }
     }
   ]
@@ -85,10 +85,10 @@ Rules:
   `gpu`, and CUDA hardware metadata in `resource_profile.hardware_metadata`.
 - AMD64 Linux targets are reserved for post-MVP deployment support.
 - `validation_enabled` is target-specific. Validation can be enabled for one target and disabled for another.
-- `resource_profile` contains the Docker images, hard resource limits, network policy, optional resource description, and optional hardware metadata for that target. The solution and scorer images must use supported first-party Agentics image repositories and target-compatible tags. Hosted deployments must set `AGENTICS_HOST_PROBE_MODE=require` and `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`; hosted startup rejects profiles that require hosted probes but disable image digest pinning, and hosted challenge specs must use registry references with immutable `@sha256:<digest>` suffixes.
+- `resource_profile` contains the Docker images, hard resource limits, network policy, optional resource description, and optional hardware metadata for that target. The solution and evaluator images must use supported first-party Agentics image repositories and target-compatible tags. Hosted deployments must set `AGENTICS_HOST_PROBE_MODE=require` and `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`; hosted startup rejects profiles that require hosted probes but disable image digest pinning, and hosted challenge specs must use registry references with immutable `@sha256:<digest>` suffixes.
 - CPU targets must use the first-party Agentics CPU base image. Its participant-facing setup guidance is to use `apt-fast` for apt packages, `uv` for Python dependencies, `fnm` for Node version changes, Bun for JavaScript/TypeScript package management, and rustup for Rust toolchain components.
-- If any target has `validation_enabled: true`, the bundle must declare `execution.validation_runs`.
-- If private benchmark scoring is enabled, the bundle must declare `execution.official_runs`.
+- If any target has `validation_enabled: true`, the bundle must declare `execution.validation_runs` or `execution.validation_prepare`.
+- If private benchmark scoring is enabled, the bundle must declare `execution.official_runs` or `execution.official_prepare`.
 
 CUDA target hardware metadata must include:
 
@@ -157,12 +157,12 @@ For `--all-targets`, the remote CLI creates one solution submission or validatio
 Workers read the selected target from the evaluation job payload. The target controls:
 
 - Docker platform used when pulling images.
-- Docker platform used when creating setup, build, run, and scorer containers.
-- Solution and scorer images.
+- Docker platform used when creating setup, build, run, and evaluator containers.
+- Solution and evaluator images.
 - Timeout, memory, CPU, disk, and network policy. Log limits are platform-owned safety policy.
 - Accelerator policy and CUDA hardware metadata for GPU targets.
 
-Private benchmark data remains mounted only in the scorer environment.
+Private benchmark data remains mounted only in the evaluator environment.
 
 ## Leaderboards
 

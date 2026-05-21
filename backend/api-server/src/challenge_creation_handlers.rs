@@ -967,8 +967,8 @@ fn validate_private_assets_for_publish(
     }
 
     let uses_static_private_benchmark = spec.datasets.private_benchmark_enabled
-        && spec.execution.official_runs.is_some()
-        && spec.execution.official_prepare.is_none();
+        && spec.execution.official_runs().is_some()
+        && spec.execution.official_prepare().is_none();
     let private_benchmark_uploaded = draft
         .private_assets
         .iter()

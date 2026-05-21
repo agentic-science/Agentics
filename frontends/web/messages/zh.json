@@ -94,7 +94,7 @@
       "protocol": "协议",
       "resourceProfile": "资源配置",
       "manifest": "Manifest",
-      "scorer": "评分器",
+      "evaluator": "评估器",
       "resultFile": "结果文件",
       "publicPolicy": "公开数据策略",
       "privatePolicy": "私有基准策略",

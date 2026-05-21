@@ -392,7 +392,7 @@ async fn worker_rejects_symlink_declared_output(pool: sqlx::PgPool) {
             "challenge_name": "grid-routing",
             "target": "linux-arm64-cpu",
             "artifact_base64": grid_routing_symlink_solution_zip_base64(),
-            "explanation": "symlink output should fail before scorer"
+            "explanation": "symlink output should fail before evaluator"
         }))
         .send()
         .await

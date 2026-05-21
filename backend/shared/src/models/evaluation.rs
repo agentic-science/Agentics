@@ -38,8 +38,8 @@ impl ScoringMode {
         }
     }
 
-    /// Argument passed to the scorer protocol.
-    pub fn scorer_mode_arg(self) -> &'static str {
+    /// Argument passed to the evaluator protocol.
+    pub fn evaluator_mode_arg(self) -> &'static str {
         match self {
             Self::Validation => "validation",
             Self::Official => "official",
@@ -62,19 +62,19 @@ pub enum ScoreVisibility {
     ScoreOnly,
 }
 
-/// Per-case scorer outcome for public validation tests.
+/// Per-case evaluator outcome for public validation tests.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum ScorerCaseStatus {
+pub enum EvaluatorCaseStatus {
     Passed,
     Failed,
     Error,
 }
 
-/// Overall scorer outcome emitted by `result.json`.
+/// Overall evaluator outcome emitted by `result.json`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum ScorerRunStatus {
+pub enum EvaluatorRunStatus {
     Passed,
     Failed,
     Error,
@@ -221,7 +221,7 @@ pub struct ScoreSummary {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct PublicCaseResult {
     pub case_name: String,
-    pub status: ScorerCaseStatus,
+    pub status: EvaluatorCaseStatus,
     pub score: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
@@ -234,7 +234,7 @@ pub struct MetricValue {
     pub value: f64,
 }
 
-/// Metric values for one scorer-defined run, case, seed, shard, or scenario.
+/// Metric values for one evaluator-defined run, case, seed, shard, or scenario.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct RunMetricResult {
     pub run_name: RunName,
@@ -269,14 +269,14 @@ pub struct EvaluationDto {
     pub finished_at: Option<String>,
 }
 
-/// Raw scorer output read from a runner container's `result.json`.
+/// Raw evaluator output read from a runner container's `result.json`.
 ///
 /// Optional fields match the relaxed JSON contract used by the rewrite:
 /// absent nullable fields are accepted, but numeric scores and mode-specific
 /// summaries are validated before the result is persisted.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
-pub struct ScorerRunResult {
-    pub status: ScorerRunStatus,
+pub struct EvaluatorRunResult {
+    pub status: EvaluatorRunStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mode: Option<ScoringMode>,
     pub primary_score: f64,
@@ -349,7 +349,7 @@ impl RunMetricResult {
     }
 }
 
-impl ScorerRunResult {
+impl EvaluatorRunResult {
     /// Validate platform-owned size limits before result persistence.
     pub fn validate_size_limits(
         &self,
@@ -381,9 +381,9 @@ impl ScorerRunResult {
         Ok(())
     }
 
-    /// Validate scorer output against the evaluation mode that was actually run.
+    /// Validate evaluator output against the evaluation mode that was actually run.
     ///
-    /// If the scorer included a `mode`, it must match `mode`; older scorer
+    /// If the evaluator included a `mode`, it must match `mode`; older evaluator
     /// outputs may omit it and will be normalized by the runner after this
     /// validation succeeds.
     pub fn validate_for_mode(&self, mode: ScoringMode) -> Result<(), String> {
@@ -437,9 +437,9 @@ impl ScorerRunResult {
         Ok(())
     }
 
-    /// Fill legacy scorer output into the structured metric fields.
+    /// Fill legacy evaluator output into the structured metric fields.
     ///
-    /// Older scorers only emit `primary_score`; that value becomes the default
+    /// Older evaluators only emit `primary_score`; that value becomes the default
     /// `score` aggregate metric and rank score so clients can rely on one
     /// metric shape for both old and new bundles.
     pub fn normalize_metrics(
@@ -609,8 +609,8 @@ mod tests {
     use crate::models::names::{MetricName, RunName};
 
     use super::{
-        MetricValue, RunMetricResult, ScoreSummary, ScorerCaseStatus, ScorerRunResult,
-        ScorerRunStatus, ScoringMode,
+        EvaluatorCaseStatus, EvaluatorRunResult, EvaluatorRunStatus, MetricValue, RunMetricResult,
+        ScoreSummary, ScoringMode,
     };
 
     /// Handles metric name for this module.
@@ -624,9 +624,9 @@ mod tests {
     }
 
     /// Handles valid validation result for this module.
-    fn valid_validation_result() -> ScorerRunResult {
-        ScorerRunResult {
-            status: ScorerRunStatus::Passed,
+    fn valid_validation_result() -> EvaluatorRunResult {
+        EvaluatorRunResult {
+            status: EvaluatorRunStatus::Passed,
             mode: Some(ScoringMode::Validation),
             primary_score: 1.0,
             rank_score: None,
@@ -643,9 +643,9 @@ mod tests {
         }
     }
 
-    /// Verifies that scorer mode mismatch is rejected.
+    /// Verifies that evaluator mode mismatch is rejected.
     #[test]
-    fn scorer_mode_mismatch_is_rejected() {
+    fn evaluator_mode_mismatch_is_rejected() {
         let mut result = valid_validation_result();
         result.mode = Some(ScoringMode::Official);
         result.official_summary = Some(ScoreSummary {
@@ -657,9 +657,9 @@ mod tests {
         assert!(result.validate_for_mode(ScoringMode::Validation).is_err());
     }
 
-    /// Verifies that scorer mode can be absent.
+    /// Verifies that evaluator mode can be absent.
     #[test]
-    fn scorer_mode_can_be_absent() {
+    fn evaluator_mode_can_be_absent() {
         let mut result = valid_validation_result();
         result.mode = None;
 
@@ -793,18 +793,18 @@ mod tests {
 
     /// Verifies platform size limits reject result payload expansion.
     #[test]
-    fn scorer_result_size_limits_are_enforced() {
+    fn evaluator_result_size_limits_are_enforced() {
         let mut result = valid_validation_result();
         result.public_results = vec![
             super::PublicCaseResult {
                 case_name: "case-1".to_string(),
-                status: ScorerCaseStatus::Passed,
+                status: EvaluatorCaseStatus::Passed,
                 score: 1.0,
                 message: None,
             },
             super::PublicCaseResult {
                 case_name: "case-2".to_string(),
-                status: ScorerCaseStatus::Passed,
+                status: EvaluatorCaseStatus::Passed,
                 score: 1.0,
                 message: None,
             },

@@ -9,7 +9,7 @@ ARG NODE_VERSION=24
 ARG BUN_VERSION=latest
 
 LABEL org.opencontainers.image.title="Agentics CPU Base" \
-      org.opencontainers.image.description="First-party Agentics CPU base image for solution and scorer containers" \
+      org.opencontainers.image.description="First-party Agentics CPU base image for solution and evaluator containers" \
       ai.agentics.image.version="${AGENTICS_IMAGE_VERSION}" \
       ai.agentics.target.name="linux-arm64-cpu" \
       ai.agentics.ubuntu.version="${UBUNTU_VERSION}"

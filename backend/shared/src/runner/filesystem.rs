@@ -8,7 +8,7 @@ use crate::zip_project::{
 
 use super::errors::phase_error;
 
-/// Platform-owned limits for the scorer-visible run tree.
+/// Platform-owned limits for the evaluator-visible run tree.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct OutputTreeLimits {
     pub(super) max_files: u64,
@@ -103,8 +103,8 @@ fn directory_size(path: &Path) -> Result<u64> {
     inspect_tree(path, None, None).map(|usage| usage.bytes)
 }
 
-/// Validate scorer-visible output tree bounds before copying it to the scorer.
-pub(super) fn validate_scorer_visible_output_tree(
+/// Validate evaluator-visible output tree bounds before copying it to the evaluator.
+pub(super) fn validate_evaluator_visible_output_tree(
     path: &Path,
     visible_run_name: &str,
     limits: OutputTreeLimits,
@@ -217,7 +217,7 @@ fn inspect_tree(
     Ok(usage)
 }
 
-/// Build a resource-limit error for scorer-visible run tree bounds.
+/// Build a resource-limit error for evaluator-visible run tree bounds.
 fn output_limit_error(
     visible_run_name: &str,
     limit_name: &str,
@@ -515,7 +515,7 @@ mod tests {
         std::fs::write(root.join("one.txt"), b"1").expect("failed to write first file");
         std::fs::write(root.join("two.txt"), b"2").expect("failed to write second file");
 
-        let error = validate_scorer_visible_output_tree(
+        let error = validate_evaluator_visible_output_tree(
             &root,
             "run-0001",
             OutputTreeLimits {
@@ -537,7 +537,7 @@ mod tests {
         std::fs::create_dir_all(root.join("a")).expect("failed to create first dir");
         std::fs::create_dir_all(root.join("b")).expect("failed to create second dir");
 
-        let error = validate_scorer_visible_output_tree(
+        let error = validate_evaluator_visible_output_tree(
             &root,
             "run-0001",
             OutputTreeLimits {
@@ -558,7 +558,7 @@ mod tests {
         let root = temp_path("too-deep-output");
         std::fs::create_dir_all(root.join("a/b")).expect("failed to create deep dir");
 
-        let error = validate_scorer_visible_output_tree(
+        let error = validate_evaluator_visible_output_tree(
             &root,
             "run-0001",
             OutputTreeLimits {
@@ -583,7 +583,7 @@ mod tests {
         std::fs::write(&outside, b"outside").expect("failed to write outside file");
         std::os::unix::fs::symlink(&outside, root.join("link")).expect("failed to create symlink");
 
-        let error = validate_scorer_visible_output_tree(
+        let error = validate_evaluator_visible_output_tree(
             &root,
             "run-0001",
             OutputTreeLimits {
@@ -609,7 +609,7 @@ mod tests {
         let _listener =
             std::os::unix::net::UnixListener::bind(&socket_path).expect("failed to bind socket");
 
-        let error = validate_scorer_visible_output_tree(
+        let error = validate_evaluator_visible_output_tree(
             &root,
             "run-0001",
             OutputTreeLimits {

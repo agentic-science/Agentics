@@ -390,7 +390,7 @@ fn assert_runner_persisted_only_intended_artifacts(storage_root: &Path, job_id: 
         "build-workspace",
         "prepared",
         "solution-runs",
-        "scorer-output",
+        "evaluator-output",
     ] {
         assert!(
             !durable_job_dir.join(private_scratch).exists(),

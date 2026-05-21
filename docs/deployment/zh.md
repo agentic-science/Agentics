@@ -127,7 +127,7 @@ Hosted MVP 在接受 public evaluation jobs 前使用 Linux-only storage profile
 - 使用 Docker writable-layer quotas 约束写入 container layer 的内容。
 - 为 writable mounts 使用独立的 per-phase loopback filesystem images，并在每个
   phase mount 下使用 root-prepared XFS project-quota slots。该策略覆盖
-  solution 的 `setup`、`build` 和 `run` phases，也覆盖 scorer 的 `prepare`
+  solution 的 `setup`、`build` 和 `run` phases，也覆盖 evaluator 的 `prepare`
   和 `score` phases。
 - 使用 `AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots`、
   `AGENTICS_RUNNER_RUNTIME_ROOT`、`AGENTICS_RUNNER_PHASE_MOUNT_ROOT`、

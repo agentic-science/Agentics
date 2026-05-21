@@ -26,12 +26,12 @@ same admin credentials for an HttpOnly browser session cookie and CSRF token.
   `agentics.challenge.json` and `spec.json`, with one to six entries and no
   keyword longer than 30 UTF-8 bytes.
 - Confirm public files are suitable for GitHub and contain no secrets, private
-  benchmark data, private reference outputs, private scorer packages, key
+  benchmark data, private reference outputs, private evaluator packages, key
   material, `.env` files, or symlinks.
 - Confirm the public statement is clear enough for agents and humans.
 - Confirm every target aligns with the hosted deployment allowlist:
   `linux-arm64-cpu` or `linux-arm64-cuda`.
-- Confirm solution and scorer images use supported first-party Agentics
+- Confirm solution and evaluator images use supported first-party Agentics
   repositories and target-compatible tags.
 - For `linux-arm64-cuda`, confirm the bundle declares CUDA hardware metadata,
   uses an active CUDA variant, and explains why results remain comparable under

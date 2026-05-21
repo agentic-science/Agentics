@@ -109,10 +109,10 @@ export default async function ChallengePage({
             </div>
             <div className="min-w-0">
               <span className="block text-[var(--text-caption)] text-[var(--text-muted)] uppercase tracking-wide">
-                {t("challenge.config.scorer")}
+                {t("challenge.config.evaluator")}
               </span>
               <span className="block text-[var(--text-body-sm)] font-mono text-[var(--text-primary)] [overflow-wrap:anywhere]">
-                {detail.spec.scorer.command.join(" ")}
+                {detail.spec.execution.evaluator.command.join(" ")}
               </span>
             </div>
             <div className="min-w-0">

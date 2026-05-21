@@ -104,7 +104,7 @@ Cover these project-agnostic lanes when the user asks for a complete review:
 Always inspect these platform-specific risks:
 
 - Private benchmark data must not leak through public DTOs, logs, run names,
-  per-case metrics, scorer messages, artifacts, or frontend render paths.
+  per-case metrics, evaluator messages, artifacts, or frontend render paths.
 - Public projection and redaction should be centralized. Review public
   submission lists, public submission details, result reports, ranking context,
   leaderboards, score distributions, frontend rendering, and CLI rendering as
@@ -288,7 +288,7 @@ confirm they share the same private-benchmark policy:
 - agentics-cli render path
 
 Report any surface that reads private aggregate metrics, run metrics, logs,
-case-level messages, artifacts, or scorer output without passing through the
+case-level messages, artifacts, or evaluator output without passing through the
 public projection/redaction boundary.
 
 ## Severity Guidance

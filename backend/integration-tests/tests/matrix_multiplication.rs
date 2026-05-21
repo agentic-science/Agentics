@@ -96,7 +96,7 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
     .error_for_status()
     .expect("private asset upload should succeed");
 
-    client
+    let validated: serde_json::Value = client
         .post(api_url(
             &app,
             &format!("/admin/challenge-drafts/{draft_id}/validate"),
@@ -108,7 +108,10 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
         .await
         .expect("failed to validate draft")
         .error_for_status()
-        .expect("draft validation should pass");
+        .expect("draft validation should pass")
+        .json()
+        .await
+        .expect("failed to decode validation response");
 
     client
         .post(api_url(
@@ -117,7 +120,10 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
-        .json(&serde_json::json!({ "message": "approved for matrix e2e" }))
+        .json(&serde_json::json!({
+            "message": "approved for matrix e2e",
+            "expected_validation_bundle_sha256": validated["validation_bundle_sha256"]
+        }))
         .send()
         .await
         .expect("failed to approve draft")
@@ -189,11 +195,17 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
         .await
         .expect("failed to decode completed submission");
 
+    let runner_log = if completed["status"] == "completed" {
+        String::new()
+    } else {
+        latest_runner_log(&pool, storage.path(), submission_id).await
+    };
     assert_eq!(
         completed["status"],
         "completed",
-        "submission response: {}",
-        serde_json::to_string_pretty(&completed).expect("submission response should serialize")
+        "submission response: {}\nrunner log:\n{}",
+        serde_json::to_string_pretty(&completed).expect("submission response should serialize"),
+        runner_log
     );
     assert_eq!(completed["evaluation"]["eval_type"], "official");
     assert_eq!(
@@ -322,4 +334,24 @@ fn generate_smoke_private_asset(challenge_root: &Path) -> PathBuf {
         .expect("failed to run matrix asset generator");
     assert!(status.success(), "matrix asset generator failed");
     output_zip
+}
+
+/// Read latest runner log for a failed matrix evaluation.
+async fn latest_runner_log(
+    pool: &sqlx::PgPool,
+    storage_root: &Path,
+    submission_id: &str,
+) -> String {
+    let log_key: Option<String> = sqlx::query_scalar(
+        "SELECT log_key FROM evaluations WHERE solution_submission_id = $1::uuid ORDER BY finished_at DESC NULLS LAST LIMIT 1",
+    )
+    .bind(submission_id)
+    .fetch_optional(pool)
+    .await
+    .expect("failed to fetch matrix evaluation log key");
+    let Some(log_key) = log_key else {
+        return "<missing log key>".to_string();
+    };
+    std::fs::read_to_string(storage_root.join(log_key))
+        .unwrap_or_else(|error| format!("<failed to read runner log: {error}>"))
 }

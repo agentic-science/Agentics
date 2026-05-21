@@ -28,7 +28,7 @@ challenges/<challenge-name>/
       runs.json
 ```
 
-Keep the public repository public-safe. Do not commit private benchmark data, private scorer packages, private seeds, reference outputs, secrets, `.env` files, key material, or symlinks.
+Keep the public repository public-safe. Do not commit private benchmark data, private evaluator packages, private seeds, reference outputs, secrets, `.env` files, key material, or symlinks.
 
 ## 2. Write The Manifest
 
@@ -59,7 +59,7 @@ challenge will reject submissions with a clear eligibility error.
 
 If the bundle declares `datasets.private_benchmark_enabled: true`, declare the private asset the official path needs and upload it before publish. Static `execution.official_runs` usually needs `private_benchmark_data`. Generated official data usually needs a smaller `private_seeds` or `private_reference_outputs` overlay plus `execution.official_prepare`.
 
-Run manifests may use `input_files[].source_path` for large public or private input files. Public validation source paths must resolve inside the public bundle. Static official source paths usually resolve inside the uploaded private benchmark overlay. Prepare-generated official source paths resolve inside `/prepared`, relative to the generated run manifest's prepared workspace. Keep expected outputs and reference data scorer-owned; do not expose them to solution inputs unless the challenge intentionally makes them public.
+Run manifests may use `input_files[].source_path` for large public or private input files. Public validation source paths must resolve inside the public bundle. Static official source paths usually resolve inside the uploaded private benchmark overlay. Prepare-generated official source paths resolve inside `/prepared`, relative to the generated run manifest's prepared workspace. Keep expected outputs and reference data evaluator-owned; do not expose them to solution inputs unless the challenge intentionally makes them public.
 
 Challenge bundles must use supported first-party Agentics images with explicit
 image sources. Local development may use `source: "local"` with

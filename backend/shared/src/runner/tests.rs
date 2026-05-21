@@ -1,6 +1,6 @@
 use super::{
-    RunnerAttempt, container_name, effective_phase_limits, prepare_limits,
-    read_limited_result_json, scorer_limits,
+    RunnerAttempt, container_name, effective_phase_limits, evaluator_limits, prepare_limits,
+    read_limited_result_json,
 };
 use crate::models::challenge::{ChallengePrepareSpec, ResourceProfileSpec};
 use crate::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
@@ -39,9 +39,9 @@ fn solution_phase_limits_come_from_resource_profile() {
     assert_eq!(limits.network_access, ZipProjectNetworkAccess::Loopback);
 }
 
-/// Verifies scorer and prepare phases use challenge-owned network policy.
+/// Verifies evaluator and prepare phases use challenge-owned network policy.
 #[test]
-fn scorer_and_prepare_limits_use_challenge_owned_policy() {
+fn evaluator_and_prepare_limits_use_challenge_owned_policy() {
     let profile = resource_profile();
     let prepare = ChallengePrepareSpec {
         command: vec!["python".to_string(), "prepare.py".to_string()],
@@ -50,11 +50,11 @@ fn scorer_and_prepare_limits_use_challenge_owned_policy() {
         reproducibility_notes: None,
     };
 
-    let scorer = scorer_limits(&profile);
+    let evaluator = evaluator_limits(&profile);
     let prepare_limits = prepare_limits(&profile, &prepare);
 
-    assert_eq!(scorer.timeout_sec, profile.timeout_sec);
-    assert_eq!(scorer.network_access, ZipProjectNetworkAccess::Disabled);
+    assert_eq!(evaluator.timeout_sec, profile.timeout_sec);
+    assert_eq!(evaluator.network_access, ZipProjectNetworkAccess::Disabled);
     assert_eq!(prepare_limits.timeout_sec, profile.timeout_sec);
     assert_eq!(
         prepare_limits.network_access,
@@ -76,7 +76,7 @@ fn retry_attempts_have_distinct_container_names() {
     assert!(container_name(&second, "run").contains("attempt-2"));
 }
 
-/// Verifies scorer result reading rejects symlinks instead of following them.
+/// Verifies evaluator result reading rejects symlinks instead of following them.
 #[cfg(unix)]
 #[tokio::test]
 async fn result_json_symlink_is_rejected() {
@@ -110,7 +110,7 @@ fn resource_profile() -> ResourceProfileSpec {
         name: ResourceProfileName::try_new("python-cpu").expect("profile name"),
         resource_description: None,
         solution_image: image.clone(),
-        scorer_image: image,
+        evaluator_image: image,
         timeout_sec: 42,
         memory_limit_mb: 2048,
         cpu_limit_millis: 2500,
@@ -118,7 +118,7 @@ fn resource_profile() -> ResourceProfileSpec {
         setup_network_access: ZipProjectNetworkAccess::Enabled,
         build_network_access: ZipProjectNetworkAccess::Disabled,
         run_network_access: ZipProjectNetworkAccess::Loopback,
-        scorer_network_access: ZipProjectNetworkAccess::Disabled,
+        evaluator_network_access: ZipProjectNetworkAccess::Disabled,
         hardware_metadata: None,
     }
 }

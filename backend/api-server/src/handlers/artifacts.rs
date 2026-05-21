@@ -37,7 +37,7 @@ pub(super) async fn read_solution_submission_artifact_summary(
 
 /// Read a submitter-visible validation log response, truncating the payload for transport.
 ///
-/// Official logs can contain scorer output from private benchmark execution, so
+/// Official logs can contain evaluator output from private benchmark execution, so
 /// they are intentionally not part of the participant-facing log surface.
 pub(super) async fn read_solution_submission_logs(
     state: &AppState,

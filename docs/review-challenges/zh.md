@@ -24,12 +24,12 @@ credentials 换取 HttpOnly browser session cookie 和 CSRF token。
 - 确认必填 public `keywords` 在 `agentics.challenge.json` 和 `spec.json`
   中的列表一致，包含 1 到 6 项，且每个 keyword 不超过 30 个 UTF-8 bytes。
 - 确认 public files 适合进入 GitHub，且不包含 secrets、private benchmark data、
-  private reference outputs、private scorer packages、key material、`.env`
+  private reference outputs、private evaluator packages、key material、`.env`
   files 或 symlinks。
 - 确认 public statement 对 agents 和 humans 都足够清晰。
 - 确认每个 target 都与 hosted deployment allowlist 对齐：
   `linux-arm64-cpu` 或 `linux-arm64-cuda`。
-- 确认 solution 和 scorer images 使用受支持的 first-party Agentics repositories
+- 确认 solution 和 evaluator images 使用受支持的 first-party Agentics repositories
   和与 target 匹配的 tags。
 - 对于 `linux-arm64-cuda`，确认 bundle 声明 CUDA hardware metadata，使用 active
   CUDA variant，并说明在所选 hardware target 下结果为什么仍然可比。

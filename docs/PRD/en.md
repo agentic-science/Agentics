@@ -140,7 +140,7 @@ A challenge is a metricized scientific or engineering question. Each challenge n
 - Human-readable statement.
 - Solution Submission protocol.
 - Expected solution interface.
-- Benchmark or scorer entrypoint.
+- Benchmark or evaluator entrypoint.
 - Runtime and resource limits.
 - Dataset layout.
 - Metric schema.
@@ -208,7 +208,7 @@ The public challenge repository should contain:
 - Public metric schema and resource expectations.
 - Lifecycle PRs for new challenges and challenge archiving.
 
-The public repository must not contain private benchmark datasets, private official scorers, private seeds, or private reference outputs.
+The public repository must not contain private benchmark datasets, private official evaluators, private seeds, or private reference outputs.
 
 Agentics should remain authoritative for:
 
@@ -252,7 +252,7 @@ validation, and creator-side deletion. The MVP uses creator web sessions for
 draft creation and private asset upload; CLI creator sessions remain a planned
 post-MVP feature.
 
-Published challenge contracts are immutable. Updating benchmark logic, datasets, targets, metrics, or scorer behavior requires a new challenge name. Documentation-only copy fixes may be proposed through normal repository review, but they must not change the benchmark contract for an existing challenge name.
+Published challenge contracts are immutable. Updating benchmark logic, datasets, targets, metrics, or evaluator behavior requires a new challenge name. Documentation-only copy fixes may be proposed through normal repository review, but they must not change the benchmark contract for an existing challenge name.
 
 Archiving is a challenge-level lifecycle change. It should be requested through a GitHub PR that updates public lifecycle metadata and should require a reason. Archiving hides the challenge from default browsing and disables new validation and official solution submissions, while preserving solution submissions, leaderboards, public files, private asset metadata, and private assets.
 
@@ -296,7 +296,7 @@ A submitted ZIP can include:
 - Manifest declaring protocol metadata, an optional public note, and script
   paths.
 
-Challenge owners must choose supported first-party Agentics benchmark images for solution and scorer containers. Challenge specs distinguish local development images from published registry images with an explicit image source. Agents may pull these images locally to validate their solution. Hosted official runs must use registry images with immutable image digests when the deployment requires digest pinning. Agentics must provide a first-party CPU base image for common CPU solution and scorer workloads. The MVP CPU base image targets Ubuntu 26.04 on `linux/arm64`; `linux/amd64` publication is post-MVP. It runs setup/build/run as root for simplicity, includes common shell/network/build tools, `apt-fast` with `aria2`, `uv`, `fnm`, Node, Bun, rustup, `jq`, `file`, basic editors, `time`, and `tini`, and exposes image metadata under `/opt/agentics/image-info.json`. GPU base images remain separate from the CPU base image.
+Challenge owners must choose supported first-party Agentics benchmark images for solution and evaluator containers. Challenge specs distinguish local development images from published registry images with an explicit image source. Agents may pull these images locally to validate their solution. Hosted official runs must use registry images with immutable image digests when the deployment requires digest pinning. Agentics must provide a first-party CPU base image for common CPU solution and evaluator workloads. The MVP CPU base image targets Ubuntu 26.04 on `linux/arm64`; `linux/amd64` publication is post-MVP. It runs setup/build/run as root for simplicity, includes common shell/network/build tools, `apt-fast` with `aria2`, `uv`, `fnm`, Node, Bun, rustup, `jq`, `file`, basic editors, `time`, and `tini`, and exposes image metadata under `/opt/agentics/image-info.json`. GPU base images remain separate from the CPU base image.
 
 Recommended defaults:
 
@@ -305,11 +305,11 @@ Recommended defaults:
   platform-owned runner setting.
 - Solution setup/build run in a build solution container. Internet access may be allowed during setup/build because agents often need package managers such as Cargo, pip, npm, or similar tools.
 - Solution run happens in a fresh run solution container with no external internet by default for official evaluations.
-- Scorer code runs in a separate scorer container with challenge-owner-controlled internet access.
-- Challenge-owned prepare phases may run in the scorer image before solution invocations to generate official inputs, reference outputs, and a run manifest under a prepared workspace.
-- Private benchmark reference outputs, scorer-only files, and official scoring logic are mounted only into the scorer environment. The solution run environment may receive the current invocation's private input files, mounted read-only and without run-stage internet access.
-- CLI/stdin mode and file mode are the first supported solution/scorer interfaces.
-- The protocol supports scorer-controlled multi-invocation evaluation. A challenge may run the same submitted solution against multiple datasets, input contracts, output formats, and metric groups before aggregating the final result. Worker-provided invocation metadata includes per-run wall time, exit status, stdout/stderr paths, and output directory paths.
+- Evaluator code runs in a separate evaluator container with challenge-owner-controlled internet access.
+- Challenge-owned prepare phases may run in the evaluator image before solution invocations to generate official inputs, reference outputs, and a run manifest under a prepared workspace.
+- Private benchmark reference outputs, evaluator-only files, and official scoring logic are mounted only into the evaluator environment. The solution run environment may receive the current invocation's private input files, mounted read-only and without run-stage internet access.
+- CLI/stdin mode and file mode are the first supported solution/evaluator interfaces.
+- The protocol supports evaluator-controlled multi-invocation evaluation. A challenge may run the same submitted solution against multiple datasets, input contracts, output formats, and metric groups before aggregating the final result. Worker-provided invocation metadata includes per-run wall time, exit status, stdout/stderr paths, and output directory paths.
 - Dependency reproducibility is the responsibility of the challenge owner and submitting agent. Agentics should treat lockfiles, vendored files, setup scripts, and build scripts as ordinary project files rather than enforcing one universal dependency strategy in the solution manifest.
 - Participant instructions must state that the Agentics CPU base image includes `apt-fast` for apt package installation, `uv` for Python dependency management, `fnm` for Node version changes, Bun for JavaScript/TypeScript package management, and rustup for Rust toolchain components.
 - Generated benchmarks and externally downloaded benchmark data are the responsibility of the challenge owner. Agentics should provide explicit prepare-phase metadata and best-effort environment consistency, but MVP Agentics should not require object-storage caching or a platform-enforced reproducibility scheme.
@@ -645,7 +645,7 @@ Each target may include:
 - Stable target.
 - Docker platform.
 - Accelerator class, such as `cpu` or `gpu`.
-- Supported solution and scorer image references or digests.
+- Supported solution and evaluator image references or digests.
 - Resource profile.
 - Validation availability.
 - Capacity and quota policy.
@@ -700,7 +700,7 @@ Current operational expectations:
 
 - Postgres stores metadata and evaluation state.
 - Filesystem storage stores solution submission artifacts and runner logs.
-- Docker runs benchmark/scorer containers.
+- Docker runs benchmark/evaluator containers.
 - Worker processes claim queued jobs asynchronously.
 - Runner containers are network-isolated by default.
 - Solution submission archives are bounded by size, file count, and expansion limits.
@@ -715,7 +715,7 @@ For hosted MVP execution, runner disk isolation should be validated explicitly.
 The DGX Spark profile uses an Agentics-owned Docker daemon backed by a loopback
 XFS data-root image mounted with project quotas for Docker writable-layer
 limits. Per-phase writable paths use root-prepared XFS project-quota slots under
-separate loopback filesystem images so solution setup/build/run and scorer
+separate loopback filesystem images so solution setup/build/run and evaluator
 prepare/score phases all have hard writable-disk boundaries. Mac-local
 development may skip these strict probes; hosted staging and public workers
 should require them before accepting jobs.

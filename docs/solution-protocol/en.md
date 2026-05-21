@@ -15,7 +15,7 @@ agentics.solution.json
 
 `zip_project` is intended to support multi-language solution submissions. A local candidate is still called a solution. Once uploaded, it becomes a solution submission.
 
-The current implementation validates ZIP project manifests at submission time, executes setup/build/run phases in Docker, runs challenge-owned scorers in a separate Docker container, and enforces challenge-declared resource profiles. Target-specific platform selection is implemented for the DGX-first MVP targets. The CLI can run local benchmark-image validation against public validation data from a checked-out challenge bundle. Heterogeneous GPU scheduling and GPU quota enforcement remain separate milestones.
+The current implementation validates ZIP project manifests at submission time, executes setup/build/run phases in Docker, runs challenge-owned evaluators in a separate Docker container, and enforces challenge-declared resource profiles. Target-specific platform selection is implemented for the DGX-first MVP targets. The CLI can run local benchmark-image validation against public validation data from a checked-out challenge bundle. Heterogeneous GPU scheduling and GPU quota enforcement remain separate milestones.
 
 ## CLI Workspace Initialization
 
@@ -29,7 +29,7 @@ cargo run -p agentics-cli --bin agentics -- init-solution sample-sum \
 
 The generated workspace contains `README.md`, `agentics.solution.json`, empty `scripts/setup.sh` and `scripts/build.sh` hooks, and a Git repository with a pre-commit hook. It does not generate starter source code or `run.sh`; the agent must create the manifest-declared run script before validation or official solution submission. The CLI still accepts runtime-profile and interface choices so the generated README can reflect the selected starting point, but those choices are not written into the solution manifest.
 
-Challenge owners control Docker images, resource profiles, run manifests, run interfaces, network policy, and scorer behavior. Agents should usually edit the generated manifest only to set a public note. Leave the empty setup/build hooks in place when no dependency or build work is needed.
+Challenge owners control Docker images, resource profiles, run manifests, run interfaces, network policy, and evaluator behavior. Agents should usually edit the generated manifest only to set a public note. Leave the empty setup/build hooks in place when no dependency or build work is needed.
 
 When a challenge uses the first-party Agentics CPU base image, setup/build
 scripts can use `apt-fast` for apt packages, `uv` for Python dependencies,
@@ -129,7 +129,7 @@ file.
 
 ## Resource-Profile-Owned Limits
 
-The manifest does not declare time, memory, CPU, disk, network, or log limits. The selected challenge target owns the solution and scorer images plus the hard resource envelope through `ResourceProfileSpec`:
+The manifest does not declare time, memory, CPU, disk, network, or log limits. The selected challenge target owns the solution and evaluator images plus the hard resource envelope through `ResourceProfileSpec`:
 
 - `timeout_sec`
 - `memory_limit_mb`
@@ -138,23 +138,23 @@ The manifest does not declare time, memory, CPU, disk, network, or log limits. T
 - `setup_network_access`
 - `build_network_access`
 - `run_network_access`
-- `scorer_network_access`
+- `evaluator_network_access`
 
 Challenge-owned prepare specs separately choose their prepare `network_access`. Container log capture is bounded by a platform-owned runner cap rather than by submitter-controlled manifest data.
 
-The worker also applies platform-owned scorer-visible output tree limits. By
+The worker also applies platform-owned evaluator-visible output tree limits. By
 default, one run tree may contain at most `8192` regular files, `1024`
-directories including the root, and depth `32`. These limits protect scorer and
+directories including the root, and depth `32`. These limits protect evaluator and
 artifact handling and are not participant-controlled. They do not cap
 setup/build dependency trees; dependency-heavy challenges should use larger
 `disk_limit_mb` profiles so the hosted worker selects larger quota slots.
 
 Challenge-owned run manifests may declare at most `12` runs. Runner logs are
 persisted with a cap of one MiB per concrete run, so the default maximum for one
-evaluation is 12 MiB. Scorer `result.json` is capped at 4 MiB before parsing.
+evaluation is 12 MiB. Evaluator `result.json` is capped at 4 MiB before parsing.
 Within `result.json`, `public_results` may contain at most `1024` entries and
 embedded `logs` may contain at most 256 KiB of UTF-8 text. Participants and
-challenge scorers should use stdout/stderr for larger diagnostics instead of
+challenge evaluators should use stdout/stderr for larger diagnostics instead of
 embedding large log payloads in `result.json`.
 
 The parser exposes an ordered phase execution plan from `commands`. The worker combines that plan with the selected target resource profile to produce phase-specific logs and structured failure reports. Failure reports carry the failed phase name, reason, message, optional exit code, and optional safe relative log path.
@@ -175,8 +175,8 @@ writable-layer quotas from an Agentics-owned Docker daemon whose data root lives
 on a loopback XFS image mounted with project quotas, and root-prepared XFS
 project-quota slots under separate per-phase loopback filesystem images for
 writable mounts such as setup/build workspace scratch, run `/io`, prepare
-`/prepared`, scorer `/output`, home, and temporary paths. This covers all three
-solution phases and both scorer phases. The DGX slots enforce both byte quotas
+`/prepared`, evaluator `/output`, home, and temporary paths. This covers all three
+solution phases and both evaluator phases. The DGX slots enforce both byte quotas
 and inode quotas; the default inode policy is `256` inodes per MiB, so the
 default `64`, `256`, `1024`, and `4096` MiB slots allow `16384`, `65536`,
 `262144`, and `1048576` inodes respectively. The worker chooses the smallest
@@ -186,8 +186,8 @@ exact hard phase limit. Strict deployment probes are controlled by
 `AGENTICS_HOST_PROBE_MODE=off|warn|require`; Mac-local development can skip
 them, while hosted workers should require them before accepting jobs.
 
-Before scorer and run containers receive read-only bind mounts, the worker
-stages challenge bundles and scorer-visible run outputs into per-attempt
+Before evaluator and run containers receive read-only bind mounts, the worker
+stages challenge bundles and evaluator-visible run outputs into per-attempt
 temporary trees and ensures those temporary copies are container-readable. The
 source challenge checkout and durable uploaded assets are not modified for this
 permission repair. Writable bind mounts are repaired by a short post-run
@@ -206,26 +206,33 @@ Each current challenge bundle declares:
 
 - `solution.protocol: "zip_project"`.
 - `solution.manifest_file: "agentics.solution.json"`.
-- `scorer.command`, an argv array executed in the scorer container.
-- `scorer.result_file`, the result JSON path written under `/output`.
+- `execution.mode: "separated_evaluator"`.
+- `execution.evaluator.command`, an argv array executed in the evaluator container.
+- `execution.evaluator.result_file`, the result JSON path written under `/output`.
 - Required challenge-level `starts_at`.
-- `targets`, each with a target, Docker platform, required nullable accelerator, validation availability, and a resource profile that includes solution image, scorer image, CPU, memory, disk, timeout, network policy, and optional `hardware_metadata`.
+- `targets`, each with a target, Docker platform, required nullable accelerator, validation availability, and a resource profile that includes solution image, evaluator image, CPU, memory, disk, timeout, network policy, and optional `hardware_metadata`.
 - `execution.validation_runs` or `execution.validation_prepare` when validation is enabled.
 - `execution.official_runs` or `execution.official_prepare` when private benchmark scoring is enabled.
+
+The only implemented execution topology is `separated_evaluator`: setup/build
+belong to the submitted solution, each run invocation executes in a fresh
+solution container, and the trusted challenge-owned evaluator runs afterward in
+a separate container. `piped_stdio` and `coexecuted_benchmark` are reserved
+future topology names and are rejected by current bundle validation.
 
 See [Targets](../targets/en.md) for the target schema,
 target-specific validation behavior, CLI/API target selection, and
 target-specific leaderboard semantics.
 
-Run manifests are challenge-owned JSON files with a `runs` array. Each run has a stable `run_name`, an `interface`, optional stdin content, optional input files, and optional declared output files. Run names must be safe path components and cannot be `.` or `..`. Input files may be inline text/JSON or byte-for-byte copies from a safe `source_path` under the challenge bundle, which is how large public and private benchmark inputs are delivered without embedding them in JSON. `stdio` runs receive stdin through `/io/stdin.txt` and produce `/io/stdout.txt`. `file_system` runs receive files under read-only `AGENTICS_INPUT_DIR` and must write declared outputs under `AGENTICS_OUTPUT_DIR`. Submitted solutions see opaque per-attempt values in `AGENTICS_RUN_NAME`; challenge-owned scorers should use the run manifest and `/solution-runs/{run_name}` tree instead of relying on solution-visible names. The built solution workspace is mounted at `/workspace` read-only during run invocations, so run scripts must write transient files under `/io`, `AGENTICS_OUTPUT_DIR`, `TMPDIR`, or another writable path declared by the runner.
+Run manifests are challenge-owned JSON files with a `runs` array. Each run has a stable `run_name`, an `interface`, optional stdin content, optional input files, and optional declared output files. Run names must be safe path components and cannot be `.` or `..`. Input files may be inline text/JSON or byte-for-byte copies from a safe `source_path` under the challenge bundle, which is how large public and private benchmark inputs are delivered without embedding them in JSON. `stdio` runs receive stdin through `/io/stdin.txt` and produce `/io/stdout.txt`. `file_system` runs receive files under read-only `AGENTICS_INPUT_DIR` and must write declared outputs under `AGENTICS_OUTPUT_DIR`. Submitted solutions see opaque per-attempt values in `AGENTICS_RUN_NAME`; challenge-owned evaluators should use the run manifest and `/solution-runs/{run_name}` tree instead of relying on solution-visible names. The built solution workspace is mounted at `/workspace` read-only during run invocations, so run scripts must write transient files under `/io`, `AGENTICS_OUTPUT_DIR`, `TMPDIR`, or another writable path declared by the runner.
 
-When a mode declares `validation_prepare` or `official_prepare`, the worker runs that prepare command in the scorer image before solution invocations. The command receives `/challenge` as the reviewed runtime bundle, `/prepared` as a writable prepared-data directory, `--mode`, `--target`, and `--runs-file /prepared/<result_runs_file>`. The generated run manifest is then read from `/prepared`, and its `input_files[].source_path` entries are resolved relative to `/prepared`. The final scorer container receives `/prepared` read-only and receives `--runs-file` pointing at the generated manifest. Challenge owners can use this to generate large private inputs, derive reference outputs, or download benchmark data at evaluation time without committing large private assets to GitHub.
+When a mode declares `validation_prepare` or `official_prepare`, the worker runs that prepare command in the evaluator image before solution invocations. The command receives `/challenge` as the reviewed runtime bundle, `/prepared` as a writable prepared-data directory, `--mode`, `--target`, and `--runs-file /prepared/<result_runs_file>`. The generated run manifest is then read from `/prepared`, and its `input_files[].source_path` entries are resolved relative to `/prepared`. The final evaluator container receives `/prepared` read-only and receives `--runs-file` pointing at the generated manifest. Challenge owners can use this to generate large private inputs, derive reference outputs, or download benchmark data at evaluation time without committing large private assets to GitHub.
 
 Prepare specs have this shape:
 
 ```json
 {
-  "command": ["python", "scorer/prepare.py"],
+  "command": ["python", "evaluator/prepare.py"],
   "result_runs_file": "generated/runs.json",
   "network_access": "enabled",
   "reproducibility_notes": "Generated from private seeds."
@@ -234,17 +241,17 @@ Prepare specs have this shape:
 
 `network_access` and `reproducibility_notes` are challenge-owned policy and metadata. The MVP runner does not cache prepare outputs and does not enforce one reproducibility strategy. Challenge owners are responsible for deterministic or reliable generation and for pinning any external data sources inside their bundle, private assets, or prepare scripts.
 
-After each invocation, the worker copies a sanitized regular-file-only run tree to `/solution-runs/{run_name}` and writes `/solution-runs/{run_name}/agentics-run.json` for the scorer. The metadata includes `run_name`, `interface`, `exit_code`, `timed_out`, `wall_time_ms`, `stdout_path`, `stderr_path`, and `output_dir`. This lets challenge-owned scorers combine correctness checks with worker-measured per-run timing and arbitrary aggregate metrics while preventing submitted solutions from passing symlinks or special files into the scorer container.
+After each invocation, the worker copies a sanitized regular-file-only run tree to `/solution-runs/{run_name}` and writes `/solution-runs/{run_name}/agentics-run.json` for the evaluator. The metadata includes `run_name`, `interface`, `exit_code`, `timed_out`, `wall_time_ms`, `stdout_path`, `stderr_path`, and `output_dir`. This lets challenge-owned evaluators combine correctness checks with worker-measured per-run timing and arbitrary aggregate metrics while preventing submitted solutions from passing symlinks or special files into the evaluator container.
 
 ## Execution Environment Policy
 
-The worker uses separate solution and scorer environments:
+The worker uses separate solution and evaluator environments:
 
 - A build solution container runs `setup` and `build`.
 - A fresh run solution container runs each `run` invocation with the built workspace mounted read-only. The default fixture resource profile disables external internet for run containers.
-- An optional prepare container runs challenge-owned setup in the scorer image before solution invocations and writes generated inputs under `/prepared`.
-- A scorer container runs trusted challenge-owner scorer code and has challenge-owner-controlled internet access.
-- Private benchmark reference outputs, scorer-only files, and official scoring logic are mounted only into the scorer container.
+- An optional prepare container runs challenge-owned setup in the evaluator image before solution invocations and writes generated inputs under `/prepared`.
+- An evaluator container runs trusted challenge-owner evaluator code and has challenge-owner-controlled internet access.
+- Private benchmark reference outputs, evaluator-only files, and official scoring logic are mounted only into the evaluator container.
 - The solution run container receives only the specific input needed for the current CLI/stdin or file-mode invocation. Source-backed inputs are mounted read-only, and the writable `/io` tree is limited to stdin/stdout/stderr capture, declared outputs, home, and temporary files.
 - Hosted deployments should back every writable path in these phases with a
   bounded loopback filesystem image rather than an unbounded host bind mount.
@@ -296,7 +303,7 @@ Each target owns:
 
 - Stable target.
 - Docker platform.
-- Supported solution and scorer image references or immutable digests.
+- Supported solution and evaluator image references or immutable digests.
 - Resource profile and network policy.
 - Validation availability.
 - Quota and capacity scope.

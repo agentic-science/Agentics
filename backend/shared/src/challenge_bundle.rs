@@ -11,9 +11,9 @@ use chrono::{DateTime, Utc};
 
 use crate::error::{AppError, Result};
 use crate::models::challenge::{
-    ChallengeBundleSpec, ChallengePrepareSpec, ChallengeRunInputFile, ChallengeRunManifest,
-    ChallengeRunSpec, ChallengeSolutionPublicationPolicy, MAX_CHALLENGE_KEYWORDS,
-    MIN_CHALLENGE_KEYWORDS, PrivateBenchmarkPolicy,
+    ChallengeBundleSpec, ChallengeExecutionMode, ChallengePrepareSpec, ChallengeRunInputFile,
+    ChallengeRunManifest, ChallengeRunSpec, ChallengeSolutionPublicationPolicy,
+    MAX_CHALLENGE_KEYWORDS, MIN_CHALLENGE_KEYWORDS, PrivateBenchmarkPolicy,
 };
 use crate::models::paths::BundleRelativePath;
 use crate::validation::{targets, text};
@@ -70,21 +70,18 @@ pub async fn validate_challenge_bundle(bundle_dir: &Path) -> Result<()> {
 
     assert_path_type(&spec_path, "file", "spec.json").await?;
     assert_path_type(&statement_path, "file", "statement.md").await?;
-    if let Some(script_path) = declared_scorer_script(&spec.scorer.command) {
-        assert_path_type(&bundle_dir.join(script_path), "file", "scorer script").await?;
+    if let Some(script_path) = declared_evaluator_script(&spec.execution.evaluator().command) {
+        assert_path_type(&bundle_dir.join(script_path), "file", "evaluator script").await?;
     }
     for (label, prepare) in [
         (
             "validation prepare script",
-            spec.execution.validation_prepare.as_ref(),
+            spec.execution.validation_prepare(),
         ),
-        (
-            "official prepare script",
-            spec.execution.official_prepare.as_ref(),
-        ),
+        ("official prepare script", spec.execution.official_prepare()),
     ] {
         if let Some(prepare) = prepare
-            && let Some(script_path) = declared_scorer_script(&prepare.command)
+            && let Some(script_path) = declared_evaluator_script(&prepare.command)
         {
             assert_path_type(&bundle_dir.join(script_path), "file", label).await?;
         }
@@ -92,7 +89,7 @@ pub async fn validate_challenge_bundle(bundle_dir: &Path) -> Result<()> {
     assert_path_type(&public_dir, "directory", "public data dir").await?;
 
     if spec.targets.iter().any(|target| target.validation_enabled)
-        && let Some(validation_runs) = spec.execution.validation_runs.as_ref()
+        && let Some(validation_runs) = spec.execution.validation_runs()
     {
         assert_path_type(
             &bundle_dir.join(validation_runs.as_path()),
@@ -113,7 +110,7 @@ pub async fn validate_challenge_bundle(bundle_dir: &Path) -> Result<()> {
             )
             .await?;
         }
-        if let Some(official_runs) = spec.execution.official_runs.as_ref() {
+        if let Some(official_runs) = spec.execution.official_runs() {
             assert_path_type(
                 &bundle_dir.join(official_runs.as_path()),
                 "file",
@@ -180,7 +177,7 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
             "solution.manifest_file must be {ZIP_PROJECT_MANIFEST_FILE}"
         )));
     }
-    validate_scorer_command(&spec.scorer.command)?;
+    validate_evaluator_command(&spec.execution.evaluator().command)?;
     validate_targets(spec)?;
     validate_challenge_policy(spec)?;
     validate_execution(spec)?;
@@ -197,7 +194,7 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
     match (
         spec.datasets.private_benchmark_enabled,
         spec.datasets.private_benchmark_dir.as_ref(),
-        spec.execution.official_runs.is_some(),
+        spec.execution.official_runs().is_some(),
     ) {
         (true, Some(_), _) => {}
         (true, None, true) => {
@@ -244,26 +241,26 @@ pub fn validate_digest_pinned_images(spec: &ChallengeBundleSpec) -> Result<()> {
             &format!("{field}.solution_image"),
         )?;
         images::require_image_digest_reference(
-            &target.resource_profile.scorer_image,
-            &format!("{field}.scorer_image"),
+            &target.resource_profile.evaluator_image,
+            &format!("{field}.evaluator_image"),
         )?;
     }
 
     Ok(())
 }
 
-/// Validates scorer command invariants for this contract.
-fn validate_scorer_command(command: &[String]) -> Result<()> {
+/// Validates evaluator command invariants for this contract.
+fn validate_evaluator_command(command: &[String]) -> Result<()> {
     if command.is_empty() {
         return Err(AppError::Validation(
-            "scorer.command must not be empty".to_string(),
+            "execution.evaluator.command must not be empty".to_string(),
         ));
     }
     for (index, part) in command.iter().enumerate() {
-        require_non_empty(part, &format!("scorer.command[{index}]"))?;
+        require_non_empty(part, &format!("execution.evaluator.command[{index}]"))?;
         if part.contains('\0') {
             return Err(AppError::Validation(format!(
-                "scorer.command[{index}] must not contain NUL bytes"
+                "execution.evaluator.command[{index}] must not contain NUL bytes"
             )));
         }
     }
@@ -288,8 +285,8 @@ fn validate_prepare_command(command: &[String], field: &str) -> Result<()> {
     Ok(())
 }
 
-/// Handles declared scorer script for this module.
-fn declared_scorer_script(command: &[String]) -> Option<&str> {
+/// Handles declared evaluator script for this module.
+fn declared_evaluator_script(command: &[String]) -> Option<&str> {
     command
         .iter()
         .find(|part| is_safe_relative_path(part) && part.ends_with(".py"))
@@ -377,25 +374,28 @@ fn validate_optional_positive_limit(value: Option<i64>, field: &str) -> Result<(
 
 /// Validates execution invariants for this contract.
 fn validate_execution(spec: &ChallengeBundleSpec) -> Result<()> {
-    if let Some(prepare) = &spec.execution.validation_prepare {
+    match spec.execution.mode() {
+        ChallengeExecutionMode::SeparatedEvaluator => {}
+    }
+    if let Some(prepare) = spec.execution.validation_prepare() {
         validate_prepare_spec(prepare, "execution.validation_prepare")?;
     }
-    if let Some(prepare) = &spec.execution.official_prepare {
+    if let Some(prepare) = spec.execution.official_prepare() {
         validate_prepare_spec(prepare, "execution.official_prepare")?;
     }
-    if spec.execution.validation_runs.is_some() && spec.execution.validation_prepare.is_some() {
+    if spec.execution.validation_runs().is_some() && spec.execution.validation_prepare().is_some() {
         return Err(AppError::Validation(
             "execution must not declare both validation_runs and validation_prepare".to_string(),
         ));
     }
-    if spec.execution.official_runs.is_some() && spec.execution.official_prepare.is_some() {
+    if spec.execution.official_runs().is_some() && spec.execution.official_prepare().is_some() {
         return Err(AppError::Validation(
             "execution must not declare both official_runs and official_prepare".to_string(),
         ));
     }
     if spec.targets.iter().any(|target| target.validation_enabled)
-        && spec.execution.validation_runs.is_none()
-        && spec.execution.validation_prepare.is_none()
+        && spec.execution.validation_runs().is_none()
+        && spec.execution.validation_prepare().is_none()
     {
         return Err(AppError::Validation(
             "execution.validation_runs or execution.validation_prepare is required when any target has validation_enabled true"
@@ -403,8 +403,8 @@ fn validate_execution(spec: &ChallengeBundleSpec) -> Result<()> {
         ));
     }
     if spec.datasets.private_benchmark_enabled
-        && spec.execution.official_runs.is_none()
-        && spec.execution.official_prepare.is_none()
+        && spec.execution.official_runs().is_none()
+        && spec.execution.official_prepare().is_none()
     {
         return Err(AppError::Validation(
             "execution.official_runs or execution.official_prepare is required when private_benchmark_enabled is true"

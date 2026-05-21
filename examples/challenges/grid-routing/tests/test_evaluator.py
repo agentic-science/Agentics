@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
 CHALLENGE_DIR = ROOT / "examples" / "challenges" / "grid-routing" / "v1"
-SCORER_PATH = CHALLENGE_DIR / "scorer" / "run.py"
+EVALUATOR_PATH = CHALLENGE_DIR / "evaluator" / "run.py"
 
 
 def runs_file_for_mode(mode: str) -> Path:
@@ -17,7 +17,7 @@ def runs_file_for_mode(mode: str) -> Path:
     )
 
 
-def run_scorer(tmp_path: Path, *, mode: str, paths_by_instance: dict[str, str]) -> dict:
+def run_evaluator(tmp_path: Path, *, mode: str, paths_by_instance: dict[str, str]) -> dict:
     runs_file = runs_file_for_mode(mode)
     solution_runs_dir = tmp_path / "solution-runs"
     runs = json.loads(runs_file.read_text(encoding="utf-8"))["runs"]
@@ -37,7 +37,7 @@ def run_scorer(tmp_path: Path, *, mode: str, paths_by_instance: dict[str, str]) 
     subprocess.run(
         [
             sys.executable,
-            str(SCORER_PATH),
+            str(EVALUATOR_PATH),
             "--challenge-dir",
             str(CHALLENGE_DIR),
             "--solution-runs-dir",
@@ -57,7 +57,7 @@ def run_scorer(tmp_path: Path, *, mode: str, paths_by_instance: dict[str, str]) 
 
 
 def test_validation_mode_returns_public_scores(tmp_path: Path) -> None:
-    result = run_scorer(
+    result = run_evaluator(
         tmp_path,
         mode="validation",
         paths_by_instance={
@@ -88,7 +88,7 @@ def test_validation_mode_returns_public_scores(tmp_path: Path) -> None:
 
 
 def test_validation_mode_rewards_valid_but_indirect_route(tmp_path: Path) -> None:
-    result = run_scorer(
+    result = run_evaluator(
         tmp_path,
         mode="validation",
         paths_by_instance={
@@ -107,7 +107,7 @@ def test_validation_mode_rewards_valid_but_indirect_route(tmp_path: Path) -> Non
 
 
 def test_failed_path_is_reported(tmp_path: Path) -> None:
-    result = run_scorer(
+    result = run_evaluator(
         tmp_path,
         mode="validation",
         paths_by_instance={
@@ -125,7 +125,7 @@ def test_failed_path_is_reported(tmp_path: Path) -> None:
 
 
 def test_official_mode_uses_private_benchmark_cases(tmp_path: Path) -> None:
-    result = run_scorer(
+    result = run_evaluator(
         tmp_path,
         mode="official",
         paths_by_instance={

@@ -480,7 +480,7 @@ impl From<ChallengePrivateAssetKindArg> for ChallengePrivateAssetKind {
     fn from(value: ChallengePrivateAssetKindArg) -> Self {
         match value {
             ChallengePrivateAssetKindArg::BenchmarkData => Self::PrivateBenchmarkData,
-            ChallengePrivateAssetKindArg::ScorerPackage => Self::PrivateScorerPackage,
+            ChallengePrivateAssetKindArg::EvaluatorPackage => Self::PrivateEvaluatorPackage,
             ChallengePrivateAssetKindArg::Seeds => Self::PrivateSeeds,
             ChallengePrivateAssetKindArg::ReferenceOutputs => Self::PrivateReferenceOutputs,
         }

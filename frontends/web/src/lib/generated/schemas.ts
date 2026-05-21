@@ -186,9 +186,9 @@ export const adminChallengeListResponseSchema = z
                           }
                         })
                         .describe(
-                          "Image source declared for a challenge solution or scorer container.",
+                          "Image source declared for a challenge solution or evaluator container.",
                         ),
-                      scorer_image: z
+                      evaluator_image: z
                         .any()
                         .superRefine((x, ctx) => {
                           const schemas = [
@@ -250,7 +250,7 @@ export const adminChallengeListResponseSchema = z
                           }
                         })
                         .describe(
-                          "Image source declared for a challenge solution or scorer container.",
+                          "Image source declared for a challenge solution or evaluator container.",
                         ),
                       timeout_sec: z.number().int().gte(0),
                       memory_limit_mb: z.number().int().gte(0),
@@ -271,7 +271,7 @@ export const adminChallengeListResponseSchema = z
                         .describe(
                           "Network access policy requested for a phase.",
                         ),
-                      scorer_network_access: z
+                      evaluator_network_access: z
                         .enum(["disabled", "loopback", "enabled"])
                         .describe(
                           "Network access policy requested for a phase.",
@@ -371,7 +371,7 @@ export const adminChallengePrivateAssetListResponseSchema = z
           kind: z
             .enum([
               "private_benchmark_data",
-              "private_scorer_package",
+              "private_evaluator_package",
               "private_seeds",
               "private_reference_outputs",
             ])
@@ -658,14 +658,6 @@ export const challengeDetailResponseSchema = z
               .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
           })
           .describe("Local solution format constraints declared by a bundle."),
-        scorer: z
-          .object({
-            command: z.array(z.string()),
-            result_file: z
-              .string()
-              .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
-          })
-          .describe("Scorer entrypoint and output-file contract for a bundle."),
         targets: z.array(
           z
             .object({
@@ -787,9 +779,9 @@ export const challengeDetailResponseSchema = z
                       }
                     })
                     .describe(
-                      "Image source declared for a challenge solution or scorer container.",
+                      "Image source declared for a challenge solution or evaluator container.",
                     ),
-                  scorer_image: z
+                  evaluator_image: z
                     .any()
                     .superRefine((x, ctx) => {
                       const schemas = [
@@ -848,7 +840,7 @@ export const challengeDetailResponseSchema = z
                       }
                     })
                     .describe(
-                      "Image source declared for a challenge solution or scorer container.",
+                      "Image source declared for a challenge solution or evaluator container.",
                     ),
                   timeout_sec: z.number().int().gte(0),
                   memory_limit_mb: z.number().int().gte(0),
@@ -863,7 +855,7 @@ export const challengeDetailResponseSchema = z
                   run_network_access: z
                     .enum(["disabled", "loopback", "enabled"])
                     .describe("Network access policy requested for a phase."),
-                  scorer_network_access: z
+                  evaluator_network_access: z
                     .enum(["disabled", "loopback", "enabled"])
                     .describe("Network access policy requested for a phase."),
                   hardware_metadata: z
@@ -928,6 +920,17 @@ export const challengeDetailResponseSchema = z
           ),
         execution: z
           .object({
+            evaluator: z
+              .object({
+                command: z.array(z.string()),
+                result_file: z
+                  .string()
+                  .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+              })
+              .strict()
+              .describe(
+                "Evaluator entrypoint and output-file contract for a bundle.",
+              ),
             validation_runs: z
               .string()
               .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
@@ -953,11 +956,13 @@ export const challengeDetailResponseSchema = z
               })
               .strict()
               .describe(
-                "Optional scorer-image command that prepares generated benchmark inputs.",
+                "Optional evaluator-image command that prepares generated benchmark inputs.",
               )
               .optional(),
+            mode: z.literal("separated_evaluator"),
           })
           .strict()
+          .describe("Public separated-evaluator topology metadata.")
           .describe(
             "Public execution metadata that excludes official private benchmark locators.",
           ),
@@ -1057,12 +1062,12 @@ export const challengeDetailResponseSchema = z
                       }
                     })
                     .describe(
-                      "Visibility level for a metric emitted by the scorer.",
+                      "Visibility level for a metric emitted by the evaluator.",
                     ),
                   metric_description: z.string().optional(),
                 })
                 .describe(
-                  "One metric that a scorer may emit in aggregate or per-run result payloads.",
+                  "One metric that an evaluator may emit in aggregate or per-run result payloads.",
                 ),
             ),
             ranking: z
@@ -1083,7 +1088,7 @@ export const challengeDetailResponseSchema = z
               .describe("Ranking configuration for a challenge."),
           })
           .describe(
-            "Metric definitions and ranking metadata used to interpret scorer output.",
+            "Metric definitions and ranking metadata used to interpret evaluator output.",
           )
           .default({
             metrics: [
@@ -1230,7 +1235,7 @@ export const challengeDraftListResponseSchema = z
                       kind: z
                         .enum([
                           "private_benchmark_data",
-                          "private_scorer_package",
+                          "private_evaluator_package",
                           "private_seeds",
                           "private_reference_outputs",
                         ])
@@ -1301,7 +1306,7 @@ export const challengeDraftListResponseSchema = z
                   kind: z
                     .enum([
                       "private_benchmark_data",
-                      "private_scorer_package",
+                      "private_evaluator_package",
                       "private_seeds",
                       "private_reference_outputs",
                     ])
@@ -1467,7 +1472,7 @@ export const challengeDraftResponseSchema = z
                 kind: z
                   .enum([
                     "private_benchmark_data",
-                    "private_scorer_package",
+                    "private_evaluator_package",
                     "private_seeds",
                     "private_reference_outputs",
                   ])
@@ -1536,7 +1541,7 @@ export const challengeDraftResponseSchema = z
             kind: z
               .enum([
                 "private_benchmark_data",
-                "private_scorer_package",
+                "private_evaluator_package",
                 "private_seeds",
                 "private_reference_outputs",
               ])
@@ -1664,7 +1669,7 @@ export const challengePrivateAssetResponseSchema = z
     kind: z
       .enum([
         "private_benchmark_data",
-        "private_scorer_package",
+        "private_evaluator_package",
         "private_seeds",
         "private_reference_outputs",
       ])
@@ -1804,7 +1809,7 @@ export const createChallengeDraftRequestSchema = z
                 kind: z
                   .enum([
                     "private_benchmark_data",
-                    "private_scorer_package",
+                    "private_evaluator_package",
                     "private_seeds",
                     "private_reference_outputs",
                   ])
@@ -1967,7 +1972,7 @@ export const creatorChallengeDraftResponseSchema = z
                 kind: z
                   .enum([
                     "private_benchmark_data",
-                    "private_scorer_package",
+                    "private_evaluator_package",
                     "private_seeds",
                     "private_reference_outputs",
                   ])
@@ -2035,7 +2040,7 @@ export const creatorChallengeDraftResponseSchema = z
             kind: z
               .enum([
                 "private_benchmark_data",
-                "private_scorer_package",
+                "private_evaluator_package",
                 "private_seeds",
                 "private_reference_outputs",
               ])
@@ -2888,7 +2893,7 @@ export const solutionSubmissionResponseSchema = z
                 .default([]),
             })
             .describe(
-              "Metric values for one scorer-defined run, case, seed, shard, or scenario.",
+              "Metric values for one evaluator-defined run, case, seed, shard, or scenario.",
             ),
         ),
         public_results: z.array(
@@ -2898,7 +2903,7 @@ export const solutionSubmissionResponseSchema = z
               status: z
                 .enum(["passed", "failed", "error"])
                 .describe(
-                  "Per-case scorer outcome for public validation tests.",
+                  "Per-case evaluator outcome for public validation tests.",
                 ),
               score: z.number(),
               message: z.string().optional(),
@@ -3057,7 +3062,7 @@ export const solutionSubmissionResponseSchema = z
                 .default([]),
             })
             .describe(
-              "Metric values for one scorer-defined run, case, seed, shard, or scenario.",
+              "Metric values for one evaluator-defined run, case, seed, shard, or scenario.",
             ),
         ),
         public_results: z.array(
@@ -3067,7 +3072,7 @@ export const solutionSubmissionResponseSchema = z
               status: z
                 .enum(["passed", "failed", "error"])
                 .describe(
-                  "Per-case scorer outcome for public validation tests.",
+                  "Per-case evaluator outcome for public validation tests.",
                 ),
               score: z.number(),
               message: z.string().optional(),
@@ -3226,7 +3231,7 @@ export const solutionSubmissionResponseSchema = z
                 .default([]),
             })
             .describe(
-              "Metric values for one scorer-defined run, case, seed, shard, or scenario.",
+              "Metric values for one evaluator-defined run, case, seed, shard, or scenario.",
             ),
         ),
         public_results: z.array(
@@ -3236,7 +3241,7 @@ export const solutionSubmissionResponseSchema = z
               status: z
                 .enum(["passed", "failed", "error"])
                 .describe(
-                  "Per-case scorer outcome for public validation tests.",
+                  "Per-case evaluator outcome for public validation tests.",
                 ),
               score: z.number(),
               message: z.string().optional(),
@@ -3471,7 +3476,7 @@ export const solutionSubmissionResultReportResponseSchema = z
                     .default([]),
                 })
                 .describe(
-                  "Metric values for one scorer-defined run, case, seed, shard, or scenario.",
+                  "Metric values for one evaluator-defined run, case, seed, shard, or scenario.",
                 ),
             ),
             public_results: z.array(
@@ -3481,7 +3486,7 @@ export const solutionSubmissionResultReportResponseSchema = z
                   status: z
                     .enum(["passed", "failed", "error"])
                     .describe(
-                      "Per-case scorer outcome for public validation tests.",
+                      "Per-case evaluator outcome for public validation tests.",
                     ),
                   score: z.number(),
                   message: z.string().optional(),
@@ -3648,7 +3653,7 @@ export const solutionSubmissionResultReportResponseSchema = z
                     .default([]),
                 })
                 .describe(
-                  "Metric values for one scorer-defined run, case, seed, shard, or scenario.",
+                  "Metric values for one evaluator-defined run, case, seed, shard, or scenario.",
                 ),
             ),
             public_results: z.array(
@@ -3658,7 +3663,7 @@ export const solutionSubmissionResultReportResponseSchema = z
                   status: z
                     .enum(["passed", "failed", "error"])
                     .describe(
-                      "Per-case scorer outcome for public validation tests.",
+                      "Per-case evaluator outcome for public validation tests.",
                     ),
                   score: z.number(),
                   message: z.string().optional(),
@@ -3825,7 +3830,7 @@ export const solutionSubmissionResultReportResponseSchema = z
                     .default([]),
                 })
                 .describe(
-                  "Metric values for one scorer-defined run, case, seed, shard, or scenario.",
+                  "Metric values for one evaluator-defined run, case, seed, shard, or scenario.",
                 ),
             ),
             public_results: z.array(
@@ -3835,7 +3840,7 @@ export const solutionSubmissionResultReportResponseSchema = z
                   status: z
                     .enum(["passed", "failed", "error"])
                     .describe(
-                      "Per-case scorer outcome for public validation tests.",
+                      "Per-case evaluator outcome for public validation tests.",
                     ),
                   score: z.number(),
                   message: z.string().optional(),
@@ -3913,7 +3918,7 @@ export const uploadChallengePrivateAssetRequestSchema = z
     kind: z
       .enum([
         "private_benchmark_data",
-        "private_scorer_package",
+        "private_evaluator_package",
         "private_seeds",
         "private_reference_outputs",
       ])

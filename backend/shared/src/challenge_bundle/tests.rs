@@ -4,9 +4,9 @@ use crate::models::challenge::{
     ChallengeBundleSpec, ChallengeEligibilitySpec, ChallengeEligibilityType,
     ChallengeExecutionSpec, ChallengePrepareSpec, ChallengeResultDetailVisibility,
     ChallengeSolutionPublicationPolicy, ChallengeTargetSpec, ChallengeVisibility,
-    ChallengeVisibilitySpec, DatasetsSpec, DockerPlatform, HardwareProfileSpec, MetricDirection,
-    MetricSchemaSpec, MetricVisibility, PrivateBenchmarkPolicy, ResourceProfileSpec, ScorerSpec,
-    SolutionSpec, TargetAccelerator,
+    ChallengeVisibilitySpec, DatasetsSpec, DockerPlatform, EvaluatorSpec, HardwareProfileSpec,
+    MetricDirection, MetricSchemaSpec, MetricVisibility, PrivateBenchmarkPolicy,
+    ResourceProfileSpec, SeparatedEvaluatorExecutionSpec, SolutionSpec, TargetAccelerator,
 };
 use crate::models::evaluation::ScoreVisibility;
 use crate::models::hashes::OciSha256Digest;
@@ -50,10 +50,6 @@ fn base_spec() -> ChallengeBundleSpec {
             protocol: "zip_project".to_string(),
             manifest_file: bundle_path("agentics.solution.json"),
         },
-        scorer: ScorerSpec {
-            command: vec!["python".to_string(), "scorer/run.py".to_string()],
-            result_file: bundle_path("result.json"),
-        },
         targets: vec![ChallengeTargetSpec {
             name: target_name("linux-arm64-cpu"),
             docker_platform: DockerPlatform::LinuxArm64,
@@ -63,7 +59,7 @@ fn base_spec() -> ChallengeBundleSpec {
                 name: resource_profile_name("agentics-cpu-small"),
                 resource_description: None,
                 solution_image: local_image("agentics-linux-arm64-cpu:ubuntu26.04-local"),
-                scorer_image: local_image("agentics-linux-arm64-cpu:ubuntu26.04-local"),
+                evaluator_image: local_image("agentics-linux-arm64-cpu:ubuntu26.04-local"),
                 timeout_sec: 30,
                 memory_limit_mb: 512,
                 cpu_limit_millis: 1000,
@@ -71,7 +67,7 @@ fn base_spec() -> ChallengeBundleSpec {
                 setup_network_access: ZipProjectNetworkAccess::Enabled,
                 build_network_access: ZipProjectNetworkAccess::Disabled,
                 run_network_access: ZipProjectNetworkAccess::Disabled,
-                scorer_network_access: ZipProjectNetworkAccess::Disabled,
+                evaluator_network_access: ZipProjectNetworkAccess::Disabled,
                 hardware_metadata: None,
             },
         }],
@@ -88,12 +84,16 @@ fn base_spec() -> ChallengeBundleSpec {
             result_detail: ChallengeResultDetailVisibility::SubmitterLivePublicAfterClose,
         },
         solution_publication: ChallengeSolutionPublicationPolicy::Public,
-        execution: ChallengeExecutionSpec {
+        execution: ChallengeExecutionSpec::SeparatedEvaluator(SeparatedEvaluatorExecutionSpec {
+            evaluator: EvaluatorSpec {
+                command: vec!["python".to_string(), "evaluator/run.py".to_string()],
+                result_file: bundle_path("result.json"),
+            },
             validation_runs: Some(bundle_path("public/runs.json")),
             validation_prepare: None,
             official_runs: Some(bundle_path("private-benchmark/runs.json")),
             official_prepare: None,
-        },
+        }),
         datasets: DatasetsSpec {
             public_dir: bundle_path("public"),
             private_benchmark_dir: Some(bundle_path("private-benchmark")),
@@ -157,7 +157,7 @@ fn pin_images(spec: &mut ChallengeBundleSpec) {
             "ghcr.io/agentics-reifying/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0@{digest}"
         );
         target.resource_profile.solution_image = registry_image(&image);
-        target.resource_profile.scorer_image = registry_image(&image);
+        target.resource_profile.evaluator_image = registry_image(&image);
     }
 }
 
@@ -168,7 +168,7 @@ fn use_cuda_target(target: &mut ChallengeTargetSpec, cuda_variant: &str) {
     target.resource_profile.hardware_metadata = Some(cuda_hardware());
     let image = format!("agentics-linux-arm64-cuda:{cuda_variant}-ubuntu24.04-local");
     target.resource_profile.solution_image = local_image(&image);
-    target.resource_profile.scorer_image = local_image(&image);
+    target.resource_profile.evaluator_image = local_image(&image);
 }
 
 /// Handles cuda hardware for this module.
@@ -221,6 +221,62 @@ fn legacy_community_field_is_rejected() {
     assert!(error.to_string().contains("community"));
 }
 
+/// Verifies that legacy top-level scorer contracts are rejected.
+#[test]
+fn legacy_top_level_scorer_field_is_rejected() {
+    let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
+    spec_json["scorer"] = serde_json::json!({
+        "command": ["python", "scorer/run.py"],
+        "result_file": "result.json"
+    });
+
+    let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+        .expect_err("legacy scorer field should be unknown");
+
+    assert!(error.to_string().contains("scorer"));
+}
+
+/// Verifies that evaluator contracts do not silently ignore unknown fields.
+#[test]
+fn evaluator_unknown_fields_are_rejected() {
+    let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
+    spec_json["execution"]["evaluator"]["extra"] = serde_json::json!("ignored");
+
+    let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+        .expect_err("unknown evaluator field should fail");
+
+    assert!(error.to_string().contains("extra"));
+}
+
+/// Verifies that execution mode is required by the topology tag.
+#[test]
+fn execution_mode_is_required() {
+    let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
+    spec_json["execution"]
+        .as_object_mut()
+        .expect("execution should be an object")
+        .remove("mode");
+
+    let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+        .expect_err("missing execution mode should fail");
+
+    assert!(error.to_string().contains("mode"));
+}
+
+/// Verifies that future execution modes are reserved until they are implemented.
+#[test]
+fn unimplemented_execution_modes_are_rejected() {
+    for mode in ["piped_stdio", "coexecuted_benchmark"] {
+        let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
+        spec_json["execution"]["mode"] = serde_json::json!(mode);
+
+        let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+            .expect_err("unimplemented execution mode should fail");
+
+        assert!(error.to_string().contains(mode));
+    }
+}
+
 /// Verifies that targets are required.
 #[test]
 fn targets_are_required() {
@@ -268,6 +324,27 @@ fn legacy_image_digest_field_is_rejected() {
         .expect_err("legacy digest field should fail");
 
     assert!(error.to_string().contains("solution_image_digest"));
+}
+
+/// Verifies old resource profile scorer field names are rejected.
+#[test]
+fn legacy_scorer_resource_profile_fields_are_rejected() {
+    for field in ["scorer_image", "scorer_network_access"] {
+        let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
+        spec_json["targets"][0]["resource_profile"][field] = if field == "scorer_image" {
+            serde_json::json!({
+                "source": "local",
+                "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"
+            })
+        } else {
+            serde_json::json!("disabled")
+        };
+
+        let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+            .expect_err("legacy scorer resource field should fail");
+
+        assert!(error.to_string().contains(field));
+    }
 }
 
 /// Verifies that starts_at is now an explicit required challenge-level policy.
@@ -343,7 +420,7 @@ fn removed_prepare_metadata_fields_are_rejected() {
     for field in ["external_data", "cache_key_hint"] {
         let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
         spec_json["execution"]["official_prepare"] = serde_json::json!({
-            "command": ["python", "scorer/prepare.py"],
+            "command": ["python", "evaluator/prepare.py"],
             "result_runs_file": "generated/runs.json",
             "network_access": "enabled"
         });
@@ -413,7 +490,7 @@ fn cuda_target_requires_cuda_hardware_metadata() {
     spec.targets[0].resource_profile.hardware_metadata = Some(cuda_hardware());
     let image = "agentics-linux-arm64-cuda:cu130-ubuntu24.04-local";
     spec.targets[0].resource_profile.solution_image = local_image(image);
-    spec.targets[0].resource_profile.scorer_image = local_image(image);
+    spec.targets[0].resource_profile.evaluator_image = local_image(image);
     validate_challenge_bundle_spec(&spec).expect("cuda target should validate");
 }
 
@@ -440,7 +517,7 @@ fn cpu_target_rejects_unsupported_image_tag() {
     let mut spec = base_spec();
     let image = "agentics-linux-arm64-cpu:bookworm";
     spec.targets[0].resource_profile.solution_image = local_image(image);
-    spec.targets[0].resource_profile.scorer_image = local_image(image);
+    spec.targets[0].resource_profile.evaluator_image = local_image(image);
 
     let error =
         validate_challenge_bundle_spec(&spec).expect_err("unsupported image tag should fail");
@@ -573,7 +650,7 @@ fn enabled_private_benchmark_requires_directory() {
 #[test]
 fn validation_run_manifest_required_only_when_target_enables_validation() {
     let mut spec = base_spec();
-    spec.execution.validation_runs = None;
+    spec.execution.separated_evaluator_mut().validation_runs = None;
     spec.targets[0].validation_enabled = false;
 
     assert!(validate_challenge_bundle_spec(&spec).is_ok());
@@ -588,8 +665,9 @@ fn validation_run_manifest_required_only_when_target_enables_validation() {
 #[test]
 fn validation_prepare_satisfies_validation_enabled_target() {
     let mut spec = base_spec();
-    spec.execution.validation_runs = None;
-    spec.execution.validation_prepare = Some(prepare_spec());
+    let execution = spec.execution.separated_evaluator_mut();
+    execution.validation_runs = None;
+    execution.validation_prepare = Some(prepare_spec());
 
     assert!(validate_challenge_bundle_spec(&spec).is_ok());
 }
@@ -598,8 +676,9 @@ fn validation_prepare_satisfies_validation_enabled_target() {
 #[test]
 fn official_prepare_satisfies_private_benchmark_execution() {
     let mut spec = base_spec();
-    spec.execution.official_runs = None;
-    spec.execution.official_prepare = Some(prepare_spec());
+    let execution = spec.execution.separated_evaluator_mut();
+    execution.official_runs = None;
+    execution.official_prepare = Some(prepare_spec());
 
     assert!(validate_challenge_bundle_spec(&spec).is_ok());
 }
@@ -608,8 +687,9 @@ fn official_prepare_satisfies_private_benchmark_execution() {
 #[test]
 fn official_prepare_may_omit_private_benchmark_directory() {
     let mut spec = base_spec();
-    spec.execution.official_runs = None;
-    spec.execution.official_prepare = Some(prepare_spec());
+    let execution = spec.execution.separated_evaluator_mut();
+    execution.official_runs = None;
+    execution.official_prepare = Some(prepare_spec());
     spec.datasets.private_benchmark_dir = None;
 
     assert!(validate_challenge_bundle_spec(&spec).is_ok());
@@ -619,7 +699,7 @@ fn official_prepare_may_omit_private_benchmark_directory() {
 #[test]
 fn prepare_and_static_runs_are_mutually_exclusive_per_mode() {
     let mut spec = base_spec();
-    spec.execution.official_prepare = Some(prepare_spec());
+    spec.execution.separated_evaluator_mut().official_prepare = Some(prepare_spec());
 
     let error = validate_challenge_bundle_spec(&spec)
         .expect_err("official prepare and official runs should conflict");
@@ -670,7 +750,7 @@ fn metric_schema_accepts_tie_breaker_metadata() {
 
 /// Creates bundle after validating caller inputs.
 fn create_bundle(root: &Path, spec: &ChallengeBundleSpec) {
-    std::fs::create_dir_all(root.join("scorer")).expect("failed to create scorer dir");
+    std::fs::create_dir_all(root.join("evaluator")).expect("failed to create evaluator dir");
     std::fs::create_dir_all(root.join("public")).expect("failed to create public dir");
     std::fs::write(
         root.join("public/runs.json"),
@@ -684,13 +764,14 @@ fn create_bundle(root: &Path, spec: &ChallengeBundleSpec) {
     .expect("failed to write spec");
     std::fs::write(root.join("statement.md"), "# Sample\n\nBody\n")
         .expect("failed to write statement");
-    std::fs::write(root.join("scorer/run.py"), "print('ok')\n").expect("failed to write scorer");
+    std::fs::write(root.join("evaluator/run.py"), "print('ok')\n")
+        .expect("failed to write evaluator");
 }
 
 /// Handles prepare spec for this module.
 fn prepare_spec() -> ChallengePrepareSpec {
     ChallengePrepareSpec {
-        command: vec!["python".to_string(), "scorer/prepare.py".to_string()],
+        command: vec!["python".to_string(), "evaluator/prepare.py".to_string()],
         result_runs_file: bundle_path("generated/runs.json"),
         network_access: ZipProjectNetworkAccess::Disabled,
         reproducibility_notes: Some("Generated from deterministic private seeds.".to_string()),
@@ -773,7 +854,7 @@ async fn run_manifest_rejects_too_many_runs() {
     assert!(error.to_string().contains("at most 12 runs"));
 }
 
-/// Verifies that run names cannot escape scorer-visible filesystem paths.
+/// Verifies that run names cannot escape evaluator-visible filesystem paths.
 #[tokio::test]
 async fn run_manifest_rejects_parent_directory_run_name() {
     let root = std::env::temp_dir().join(format!(

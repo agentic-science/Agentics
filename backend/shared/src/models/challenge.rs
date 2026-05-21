@@ -73,7 +73,6 @@ pub struct ChallengeBundleSpec {
     #[schemars(length(min = 1, max = 6))]
     pub keywords: Vec<ChallengeKeyword>,
     pub solution: SolutionSpec,
-    pub scorer: ScorerSpec,
     pub targets: Vec<ChallengeTargetSpec>,
     pub starts_at: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -87,7 +86,7 @@ pub struct ChallengeBundleSpec {
     pub solution_publication: ChallengeSolutionPublicationPolicy,
     pub execution: ChallengeExecutionSpec,
     pub datasets: DatasetsSpec,
-    /// Metric definitions and ranking metadata used to interpret scorer output.
+    /// Metric definitions and ranking metadata used to interpret evaluator output.
     #[serde(default)]
     #[schemars(required)]
     pub metric_schema: MetricSchemaSpec,
@@ -123,7 +122,6 @@ pub struct PublicChallengeBundleSpec {
     #[schemars(length(min = 1, max = 6))]
     pub keywords: Vec<ChallengeKeyword>,
     pub solution: SolutionSpec,
-    pub scorer: ScorerSpec,
     pub targets: Vec<ChallengeTargetSpec>,
     pub starts_at: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -137,7 +135,7 @@ pub struct PublicChallengeBundleSpec {
     pub solution_publication: ChallengeSolutionPublicationPolicy,
     pub execution: PublicChallengeExecutionSpec,
     pub datasets: PublicDatasetsSpec,
-    /// Metric definitions and ranking metadata used to interpret scorer output.
+    /// Metric definitions and ranking metadata used to interpret evaluator output.
     #[serde(default)]
     #[schemars(required)]
     pub metric_schema: MetricSchemaSpec,
@@ -170,7 +168,6 @@ impl From<ChallengeBundleSpec> for PublicChallengeBundleSpec {
             summary: spec.summary,
             keywords: spec.keywords,
             solution: spec.solution,
-            scorer: spec.scorer,
             targets: spec.targets,
             starts_at: spec.starts_at,
             closes_at: spec.closes_at,
@@ -179,10 +176,7 @@ impl From<ChallengeBundleSpec> for PublicChallengeBundleSpec {
             official_submission_limit: spec.official_submission_limit,
             visibility: spec.visibility,
             solution_publication: spec.solution_publication,
-            execution: PublicChallengeExecutionSpec {
-                validation_runs: spec.execution.validation_runs,
-                validation_prepare: spec.execution.validation_prepare,
-            },
+            execution: spec.execution.into(),
             datasets: PublicDatasetsSpec {
                 public_dir: spec.datasets.public_dir,
                 public_policy: spec.datasets.public_policy,
@@ -253,9 +247,10 @@ pub struct SolutionSpec {
     pub manifest_file: BundleRelativePath,
 }
 
-/// Scorer entrypoint and output-file contract for a bundle.
+/// Evaluator entrypoint and output-file contract for a bundle.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
-pub struct ScorerSpec {
+#[serde(deny_unknown_fields)]
+pub struct EvaluatorSpec {
     pub command: Vec<String>,
     pub result_file: BundleRelativePath,
 }
@@ -406,7 +401,7 @@ pub struct ResourceProfileSpec {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resource_description: Option<String>,
     pub solution_image: ChallengeImageReference,
-    pub scorer_image: ChallengeImageReference,
+    pub evaluator_image: ChallengeImageReference,
     pub timeout_sec: u64,
     pub memory_limit_mb: u64,
     pub cpu_limit_millis: u32,
@@ -414,7 +409,7 @@ pub struct ResourceProfileSpec {
     pub setup_network_access: ZipProjectNetworkAccess,
     pub build_network_access: ZipProjectNetworkAccess,
     pub run_network_access: ZipProjectNetworkAccess,
-    pub scorer_network_access: ZipProjectNetworkAccess,
+    pub evaluator_network_access: ZipProjectNetworkAccess,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hardware_metadata: Option<HardwareProfileSpec>,
 }
@@ -437,10 +432,73 @@ pub struct HardwareProfileSpec {
     pub driver_minimum: Option<String>,
 }
 
-/// Challenge-owned run manifest locations for standardized `zip_project` execution.
+/// Supported challenge execution topology.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ChallengeExecutionMode {
+    SeparatedEvaluator,
+}
+
+/// Challenge-owned execution topology and run manifest locations for `zip_project`.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(tag = "mode", rename_all = "snake_case")]
+pub enum ChallengeExecutionSpec {
+    SeparatedEvaluator(SeparatedEvaluatorExecutionSpec),
+}
+
+impl ChallengeExecutionSpec {
+    /// Return the current execution topology mode.
+    pub fn mode(&self) -> ChallengeExecutionMode {
+        match self {
+            Self::SeparatedEvaluator(_) => ChallengeExecutionMode::SeparatedEvaluator,
+        }
+    }
+
+    /// Borrow the current separated-evaluator execution contract.
+    pub fn separated_evaluator(&self) -> &SeparatedEvaluatorExecutionSpec {
+        match self {
+            Self::SeparatedEvaluator(spec) => spec,
+        }
+    }
+
+    /// Mutably borrow the current separated-evaluator execution contract.
+    pub fn separated_evaluator_mut(&mut self) -> &mut SeparatedEvaluatorExecutionSpec {
+        match self {
+            Self::SeparatedEvaluator(spec) => spec,
+        }
+    }
+
+    /// Borrow the evaluator command contract for the current topology.
+    pub fn evaluator(&self) -> &EvaluatorSpec {
+        &self.separated_evaluator().evaluator
+    }
+
+    /// Borrow public validation run locator if declared.
+    pub fn validation_runs(&self) -> Option<&BundleRelativePath> {
+        self.separated_evaluator().validation_runs.as_ref()
+    }
+
+    /// Borrow public validation prepare contract if declared.
+    pub fn validation_prepare(&self) -> Option<&ChallengePrepareSpec> {
+        self.separated_evaluator().validation_prepare.as_ref()
+    }
+
+    /// Borrow official benchmark run locator if declared.
+    pub fn official_runs(&self) -> Option<&BundleRelativePath> {
+        self.separated_evaluator().official_runs.as_ref()
+    }
+
+    /// Borrow official benchmark prepare contract if declared.
+    pub fn official_prepare(&self) -> Option<&ChallengePrepareSpec> {
+        self.separated_evaluator().official_prepare.as_ref()
+    }
+}
+
+/// Current separated-container evaluator topology.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct ChallengeExecutionSpec {
+pub struct SeparatedEvaluatorExecutionSpec {
+    pub evaluator: EvaluatorSpec,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub validation_runs: Option<BundleRelativePath>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -453,15 +511,37 @@ pub struct ChallengeExecutionSpec {
 
 /// Public execution metadata that excludes official private benchmark locators.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(tag = "mode", rename_all = "snake_case")]
+pub enum PublicChallengeExecutionSpec {
+    SeparatedEvaluator(PublicSeparatedEvaluatorExecutionSpec),
+}
+
+impl From<ChallengeExecutionSpec> for PublicChallengeExecutionSpec {
+    fn from(execution: ChallengeExecutionSpec) -> Self {
+        match execution {
+            ChallengeExecutionSpec::SeparatedEvaluator(spec) => {
+                Self::SeparatedEvaluator(PublicSeparatedEvaluatorExecutionSpec {
+                    evaluator: spec.evaluator,
+                    validation_runs: spec.validation_runs,
+                    validation_prepare: spec.validation_prepare,
+                })
+            }
+        }
+    }
+}
+
+/// Public separated-evaluator topology metadata.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct PublicChallengeExecutionSpec {
+pub struct PublicSeparatedEvaluatorExecutionSpec {
+    pub evaluator: EvaluatorSpec,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub validation_runs: Option<BundleRelativePath>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub validation_prepare: Option<ChallengePrepareSpec>,
 }
 
-/// Optional scorer-image command that prepares generated benchmark inputs.
+/// Optional evaluator-image command that prepares generated benchmark inputs.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ChallengePrepareSpec {
@@ -474,14 +554,14 @@ pub struct ChallengePrepareSpec {
     pub reproducibility_notes: Option<String>,
 }
 
-/// Challenge-owned list of scorer-controlled solution invocations.
+/// Challenge-owned list of evaluator-controlled solution invocations.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeRunManifest {
     #[serde(default)]
     pub runs: Vec<ChallengeRunSpec>,
 }
 
-/// One solution invocation prepared by the worker and later scored by the scorer.
+/// One solution invocation prepared by the worker and later evaluated by the evaluator.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeRunSpec {
     pub run_name: RunName,
@@ -560,7 +640,7 @@ pub enum MetricDirection {
     Minimize,
 }
 
-/// Visibility level for a metric emitted by the scorer.
+/// Visibility level for a metric emitted by the evaluator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum MetricVisibility {
@@ -570,7 +650,7 @@ pub enum MetricVisibility {
     Official,
 }
 
-/// One metric that a scorer may emit in aggregate or per-run result payloads.
+/// One metric that an evaluator may emit in aggregate or per-run result payloads.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct MetricDefinitionSpec {
     pub name: MetricName,

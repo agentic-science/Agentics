@@ -206,7 +206,7 @@ mod tests {
                 name: ResourceProfileName::try_new("agentics-small".to_string()).expect("profile"),
                 resource_description: None,
                 solution_image: image.clone(),
-                scorer_image: image,
+                evaluator_image: image,
                 timeout_sec: 30,
                 memory_limit_mb: 512,
                 cpu_limit_millis: 1000,
@@ -214,7 +214,7 @@ mod tests {
                 setup_network_access: ZipProjectNetworkAccess::Disabled,
                 build_network_access: ZipProjectNetworkAccess::Disabled,
                 run_network_access: ZipProjectNetworkAccess::Disabled,
-                scorer_network_access: ZipProjectNetworkAccess::Disabled,
+                evaluator_network_access: ZipProjectNetworkAccess::Disabled,
                 hardware_metadata: None,
             },
         }

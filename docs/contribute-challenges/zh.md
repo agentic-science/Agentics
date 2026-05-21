@@ -54,7 +54,7 @@ challenges/<challenge-name>/
 - `public/` 包含 public validation assets 和 public run manifests。
 
 不要提交 private benchmark data、private seeds、reference outputs、private
-scorer packages、secrets、`.env` files、private keys 或 symlinks。
+evaluator packages、secrets、`.env` files、private keys 或 symlinks。
 
 ## Lifecycle Manifest
 
@@ -146,7 +146,7 @@ Publish 时，Agentics 会把 review 通过的 public bundle 复制到 managed s
 支持的 private asset kinds：
 
 - `private_benchmark_data`
-- `private_scorer_package`
+- `private_evaluator_package`
 - `private_seeds`
 - `private_reference_outputs`
 

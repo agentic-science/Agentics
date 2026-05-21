@@ -79,7 +79,7 @@ const defaultManifest = JSON.stringify(
 
 const assetKinds: ChallengePrivateAssetKind[] = [
   "private_benchmark_data",
-  "private_scorer_package",
+  "private_evaluator_package",
   "private_seeds",
   "private_reference_outputs",
 ];
