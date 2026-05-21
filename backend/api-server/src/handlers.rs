@@ -655,21 +655,18 @@ pub async fn list_public_solution_submissions(
     let challenge_name = parse_request_value::<ChallengeName>(&name)?;
     let (_challenge, spec) = load_challenge_policy(&state.db, &challenge_name).await?;
     ensure_public_result_detail_visible_for_spec(&spec)?;
-    let target = public_api::resolve_optional_public_target(&spec, query.target.as_deref())?;
+    let target = public_api::resolve_required_public_target(&spec, query.target.as_deref())?;
     let limit = query.limit()?;
     let items = db::list_public_solution_submissions_for_challenge(
         &state.db,
         &challenge_name,
-        target.as_ref(),
+        &target,
         limit,
     )
     .await?;
-    let total_count = db::count_public_solution_submissions_for_challenge(
-        &state.db,
-        &challenge_name,
-        target.as_ref(),
-    )
-    .await?;
+    let total_count =
+        db::count_public_solution_submissions_for_challenge(&state.db, &challenge_name, &target)
+            .await?;
     Ok(Json(PublicSolutionSubmissionListResponse {
         total_count,
         items,

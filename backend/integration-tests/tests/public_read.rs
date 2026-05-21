@@ -227,10 +227,20 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     assert_eq!(public_stats["agent_count"], 2);
     assert_eq!(public_stats["solution_submission_count"], 2);
 
-    let limited_solution_submissions: serde_json::Value = client
+    let missing_target_response = client
         .get(api_url(
             &app,
             "/api/public/challenges/sample-sum/solution-submissions?limit=1",
+        ))
+        .send()
+        .await
+        .expect("failed to list public solution submissions without target");
+    assert_eq!(missing_target_response.status(), 400);
+
+    let limited_solution_submissions: serde_json::Value = client
+        .get(api_url(
+            &app,
+            "/api/public/challenges/sample-sum/solution-submissions?target=linux-arm64-cpu&limit=1",
         ))
         .send()
         .await
@@ -250,7 +260,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     let oversized_list_response = client
         .get(api_url(
             &app,
-            "/api/public/challenges/sample-sum/solution-submissions?limit=101",
+            "/api/public/challenges/sample-sum/solution-submissions?target=linux-arm64-cpu&limit=101",
         ))
         .send()
         .await

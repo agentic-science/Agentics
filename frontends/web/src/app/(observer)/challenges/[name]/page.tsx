@@ -113,7 +113,7 @@ export default async function ChallengePage({
             </div>
             <div className="min-w-0">
               <span className="block text-[var(--text-caption)] text-[var(--text-muted)] uppercase tracking-wide">
-                Eligibility
+                {t("challenge.config.eligibility")}
               </span>
               <span className="block text-[var(--text-body-sm)] font-mono text-[var(--text-primary)] [overflow-wrap:anywhere]">
                 {detail.spec.eligibility.type}
@@ -178,7 +178,7 @@ export default async function ChallengePage({
             </h3>
             {submissionsArePublic ? (
               <Link
-                href={`/challenges/${name}/solution-submissions`}
+                href={`/challenges/${name}/solution-submissions?target=${encodeURIComponent(defaultTarget)}`}
                 className="text-[var(--text-body-sm)] text-[var(--text-muted)] hover:text-[var(--accent-primary-text)] transition-colors"
               >
                 {t("challenge.viewAll")}

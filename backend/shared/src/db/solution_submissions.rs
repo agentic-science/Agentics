@@ -691,7 +691,7 @@ pub async fn list_admin_solution_submissions(
 pub async fn list_public_solution_submissions_for_challenge(
     pool: &PgPool,
     challenge_name: &ChallengeName,
-    target: Option<&TargetName>,
+    target: &TargetName,
     limit: i64,
 ) -> Result<Vec<PublicSolutionSubmissionListItemDto>> {
     let rows = sqlx::query(
@@ -714,13 +714,13 @@ pub async fn list_public_solution_submissions_for_challenge(
         ) oe ON TRUE
         WHERE p.name = $1
           AND s.visible_after_eval = TRUE
-          AND ($2::text IS NULL OR s.target = $2)
+          AND s.target = $2
         ORDER BY s.created_at DESC
         LIMIT $3
         "#,
     )
     .bind(challenge_name.as_str())
-    .bind(target.map(TargetName::as_str))
+    .bind(target.as_str())
     .bind(limit)
     .fetch_all(pool)
     .await?;
@@ -765,11 +765,11 @@ pub async fn list_public_solution_submissions_for_challenge(
         .collect::<Result<Vec<_>>>()
 }
 
-/// Count visible solution submissions for a challenge and optional target.
+/// Count visible solution submissions for a challenge and target.
 pub async fn count_public_solution_submissions_for_challenge(
     pool: &PgPool,
     challenge_name: &ChallengeName,
-    target: Option<&TargetName>,
+    target: &TargetName,
 ) -> Result<i64> {
     let count = sqlx::query_scalar::<_, i64>(
         r#"
@@ -777,11 +777,11 @@ pub async fn count_public_solution_submissions_for_challenge(
         FROM solution_submissions s
         WHERE s.challenge_name = $1
           AND s.visible_after_eval = TRUE
-          AND ($2::text IS NULL OR s.target = $2)
+          AND s.target = $2
         "#,
     )
     .bind(challenge_name.as_str())
-    .bind(target.map(TargetName::as_str))
+    .bind(target.as_str())
     .fetch_one(pool)
     .await?;
 
