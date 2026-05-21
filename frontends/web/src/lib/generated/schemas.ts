@@ -1243,6 +1243,13 @@ export const challengeDraftListResponseSchema = z
                           "Supported private asset classes for challenge creation.",
                         ),
                       required: z.boolean(),
+                      required_paths: z
+                        .array(
+                          z
+                            .string()
+                            .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+                        )
+                        .optional(),
                       asset_note: z.string().optional(),
                     })
                     .strict()
@@ -1480,6 +1487,11 @@ export const challengeDraftResponseSchema = z
                     "Supported private asset classes for challenge creation.",
                   ),
                 required: z.boolean(),
+                required_paths: z
+                  .array(
+                    z.string().regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+                  )
+                  .optional(),
                 asset_note: z.string().optional(),
               })
               .strict()
@@ -1817,6 +1829,11 @@ export const createChallengeDraftRequestSchema = z
                     "Supported private asset classes for challenge creation.",
                   ),
                 required: z.boolean(),
+                required_paths: z
+                  .array(
+                    z.string().regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+                  )
+                  .optional(),
                 asset_note: z.string().optional(),
               })
               .strict()
@@ -1980,6 +1997,11 @@ export const creatorChallengeDraftResponseSchema = z
                     "Supported private asset classes for challenge creation.",
                   ),
                 required: z.boolean(),
+                required_paths: z
+                  .array(
+                    z.string().regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+                  )
+                  .optional(),
                 asset_note: z.string().optional(),
               })
               .strict()

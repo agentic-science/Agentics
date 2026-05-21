@@ -376,7 +376,8 @@ pub fn manifest_json() -> serde_json::Value {
             {
                 "asset_name": "official-cases",
                 "kind": "private_benchmark_data",
-                "required": true
+                "required": true,
+                "required_paths": ["private-benchmark/runs.json"]
             }
         ]
     })

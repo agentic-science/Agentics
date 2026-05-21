@@ -20,9 +20,9 @@ Challenge bundles must use supported first-party Agentics images. Local
 development may use `source: "local"` with `agentics-linux-arm64-cpu`; hosted
 challenge specs must use `source: "registry"` with published registry
 references. CPU registry targets must use
-`ghcr.io/agentics-reifying/agentics-linux-arm64-cpu` with an `ubuntu26.04-*` tag.
+`ghcr.io/agentic-science/agentics-linux-arm64-cpu` with an `ubuntu26.04-*` tag.
 CUDA targets must use `agentics-linux-arm64-cuda` or
-`ghcr.io/agentics-reifying/agentics-linux-arm64-cuda` with a tag that starts with
+`ghcr.io/agentic-science/agentics-linux-arm64-cuda` with a tag that starts with
 the declared CUDA variant, such as `cu130-*`.
 
 For `linux-arm64-cuda`, challenge bundles must declare CUDA hardware metadata:
@@ -82,15 +82,19 @@ New challenge:
     {
       "asset_name": "official-cases",
       "kind": "private_benchmark_data",
-      "required": true
+      "required": true,
+      "required_paths": ["private-benchmark/runs.json"]
     }
   ]
 }
 ```
 
 Every `private_assets[]` entry must explicitly set `required` to `true` or
-`false`. `new_version` is not accepted in the MVP model. Material
-benchmark-contract changes require a new `challenge_name`.
+`false`. Use `required_paths` when the overlay must produce specific runtime
+bundle paths, such as `private-benchmark/runs.json` for static official cases or
+`private-benchmark/config.json` for prepare-generated official data.
+`new_version` is not accepted in the MVP model. Material benchmark-contract
+changes require a new `challenge_name`.
 
 `keywords` is required public catalog metadata. A challenge must declare one to
 six keywords, each keyword may contain spaces, and each keyword must fit within
@@ -163,6 +167,9 @@ Overlay entries must use safe relative paths, must not be symlinks, and must not
 overwrite public bundle files. A static private benchmark overlay commonly
 contains `private-benchmark/runs.json` plus any files referenced by
 `input_files[].source_path` in official run manifests.
+If the manifest declares `private_assets[].required_paths`, draft validation and
+publish both assemble the runtime bundle and reject the draft unless each listed
+path exists after the private overlays are applied.
 
 Private asset ZIPs use the shared archive validator. They must stay within the
 configured per-draft private asset byte limit, contain at most 1024 entries, use

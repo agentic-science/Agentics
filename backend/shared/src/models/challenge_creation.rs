@@ -9,7 +9,7 @@ use super::ids::{
 };
 use super::localization::LocalizedText;
 use super::names::{AssetName, ChallengeKeyword, ChallengeName};
-use super::paths::RepoRelativePath;
+use super::paths::{BundleRelativePath, RepoRelativePath};
 use super::urls::{GithubPullRequestUrl, GithubRepoRemote};
 use crate::storage::StorageKey;
 
@@ -79,6 +79,8 @@ pub struct ChallengePrivateAssetRequirement {
     pub asset_name: AssetName,
     pub kind: ChallengePrivateAssetKind,
     pub required: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub required_paths: Vec<BundleRelativePath>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub asset_note: Option<String>,
 }

@@ -107,6 +107,24 @@ pub async fn draft_review_bundle_sha256(
     .map_err(|e| AppError::Internal(format!("draft digest task failed: {e}")))?
 }
 
+/// Return a deterministic digest for an assembled runtime bundle reviewed by an admin.
+///
+/// The digest covers the normalized public manifest and the fully assembled
+/// runtime bundle after private overlays have been applied. This is the digest
+/// approval and publish compare for publishable new challenges.
+pub async fn draft_review_runtime_bundle_sha256(
+    runtime_bundle_root: &Path,
+    manifest: &ChallengeCreationManifest,
+) -> Result<Sha256Digest> {
+    let runtime_bundle_root = runtime_bundle_root.to_path_buf();
+    let manifest = manifest.clone();
+    tokio::task::spawn_blocking(move || {
+        draft_review_runtime_bundle_sha256_blocking(&runtime_bundle_root, &manifest)
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("runtime bundle digest task failed: {e}")))?
+}
+
 /// Return the SHA-256 digest of arbitrary bytes.
 pub fn sha256_digest(bytes: &[u8]) -> Sha256Digest {
     let mut hasher = Sha256::new();
@@ -145,6 +163,22 @@ fn draft_review_bundle_sha256_blocking(
             asset.sha256.to_string().as_bytes(),
         );
     }
+
+    Ok(Sha256Digest::from_bytes(hasher.finalize().into()))
+}
+
+/// Handles draft review runtime bundle sha256 blocking for this module.
+fn draft_review_runtime_bundle_sha256_blocking(
+    runtime_bundle_root: &Path,
+    manifest: &ChallengeCreationManifest,
+) -> Result<Sha256Digest> {
+    let mut hasher = Sha256::new();
+    hash_field(&mut hasher, "format", b"agentics-draft-runtime-review-v1");
+
+    let manifest_bytes =
+        serde_json::to_vec(manifest).map_err(|e| AppError::Internal(e.to_string()))?;
+    hash_field(&mut hasher, "manifest", &manifest_bytes);
+    hash_public_tree(&mut hasher, runtime_bundle_root)?;
 
     Ok(Sha256Digest::from_bytes(hasher.finalize().into()))
 }
@@ -361,6 +395,15 @@ fn validate_private_asset_requirements(
         }
         if let Some(note) = &asset.asset_note {
             require_non_empty(note, "private_assets[].asset_note")?;
+        }
+        let mut required_paths = HashSet::with_capacity(asset.required_paths.len());
+        for path in &asset.required_paths {
+            if !required_paths.insert(path.as_str()) {
+                return Err(AppError::Validation(format!(
+                    "private_assets `{}` contains duplicate required_paths entry `{path}`",
+                    asset.asset_name
+                )));
+            }
         }
     }
     Ok(())
@@ -602,6 +645,63 @@ mod tests {
         assert!(error.to_string().contains("required"));
     }
 
+    /// Verifies that required private asset paths are safe and unique.
+    #[test]
+    fn private_asset_required_paths_are_safe_and_unique() {
+        let manifest = ChallengeCreationManifest {
+            schema_version: 1,
+            request: ChallengeCreationRequestKind::NewChallenge,
+            challenge_name: "sample-sum".parse().expect("valid challenge name"),
+            title: "Sample Sum".to_string(),
+            summary: localized_summary(),
+            keywords: vec!["arithmetic".parse().expect("valid keyword")],
+            readme_path: "README.md".parse().expect("valid readme path"),
+            bundle_path: Some("v1".parse().expect("valid bundle path")),
+            archive: None,
+            private_assets: vec![ChallengePrivateAssetRequirement {
+                asset_name: "official-cases".parse().expect("valid asset name"),
+                kind: crate::models::challenge_creation::ChallengePrivateAssetKind::PrivateBenchmarkData,
+                required: true,
+                required_paths: vec![
+                    "private-benchmark/runs.json"
+                        .parse()
+                        .expect("valid bundle path"),
+                    "private-benchmark/runs.json"
+                        .parse()
+                        .expect("valid bundle path"),
+                ],
+                asset_note: None,
+            }],
+            ci: Default::default(),
+        };
+
+        let error = validate_challenge_creation_manifest(&manifest)
+            .expect_err("duplicate required paths should fail");
+        assert!(error.to_string().contains("duplicate required_paths"));
+
+        let manifest = json!({
+            "schema_version": 1,
+            "request": "new_challenge",
+            "challenge_name": "sample-sum",
+            "title": "Sample Sum",
+            "summary": { "en": "Add numbers", "zh": "数字求和" },
+            "readme_path": "README.md",
+            "bundle_path": "v1",
+            "private_assets": [
+                {
+                    "asset_name": "official-cases",
+                    "kind": "private_benchmark_data",
+                    "required": true,
+                    "required_paths": ["../private-benchmark/runs.json"]
+                }
+            ]
+        });
+
+        let error = serde_json::from_value::<ChallengeCreationManifest>(manifest)
+            .expect_err("unsafe required path should fail");
+        assert!(error.to_string().contains("safe relative paths"));
+    }
+
     /// Verifies that rejects private material in public repo.
     #[tokio::test]
     async fn rejects_private_material_in_public_repo() {
@@ -765,7 +865,8 @@ mod tests {
                 {
                     "asset_name": "official-cases",
                     "kind": "private_benchmark_data",
-                    "required": true
+                    "required": true,
+                    "required_paths": ["private-benchmark/runs.json"]
                 }
             ]
         });

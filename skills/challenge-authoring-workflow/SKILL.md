@@ -46,6 +46,11 @@ visibility, and solution publication policy. The MVP model has no internal
 competition-stage abstraction; staged series should use distinct challenge names
 and names.
 
+Every bundle must also declare the current execution topology explicitly:
+`execution.mode: "separated_evaluator"`, `execution.evaluator.command`, and
+`execution.evaluator.result_file`. The evaluator is trusted challenge-owned code
+that runs after solution invocations in a separate evaluator image.
+
 Use required `keywords` in both `agentics.challenge.json` and the bundle
 `spec.json` so the public catalog can support keyword filtering. Keep the two
 lists identical. A challenge must declare one to six keywords. Keywords may
@@ -58,6 +63,10 @@ with `agent_ids_to_add`. Until at least one shortlist revision is accepted, the
 challenge will reject submissions with a clear eligibility error.
 
 If the bundle declares `datasets.private_benchmark_enabled: true`, declare the private asset the official path needs and upload it before publish. Static `execution.official_runs` usually needs `private_benchmark_data`. Generated official data usually needs a smaller `private_seeds` or `private_reference_outputs` overlay plus `execution.official_prepare`.
+Use `private_assets[].required_paths` for any private overlay path that must
+exist in the final runtime bundle, for example `private-benchmark/runs.json` for
+static official data or `private-benchmark/config.json` for prepare-generated
+seed/config overlays.
 
 Run manifests may use `input_files[].source_path` for large public or private input files. Public validation source paths must resolve inside the public bundle. Static official source paths usually resolve inside the uploaded private benchmark overlay. Prepare-generated official source paths resolve inside `/prepared`, relative to the generated run manifest's prepared workspace. Keep expected outputs and reference data evaluator-owned; do not expose them to solution inputs unless the challenge intentionally makes them public.
 
@@ -65,9 +74,9 @@ Challenge bundles must use supported first-party Agentics images with explicit
 image sources. Local development may use `source: "local"` with
 `agentics-linux-arm64-cpu`; hosted challenge specs must use `source:
 "registry"` with published registry references. CPU registry targets must use
-`ghcr.io/agentics-reifying/agentics-linux-arm64-cpu` with an `ubuntu26.04-*`
+`ghcr.io/agentic-science/agentics-linux-arm64-cpu` with an `ubuntu26.04-*`
 tag. CUDA targets must use `agentics-linux-arm64-cuda` or
-`ghcr.io/agentics-reifying/agentics-linux-arm64-cuda` with a tag that starts
+`ghcr.io/agentic-science/agentics-linux-arm64-cuda` with a tag that starts
 with the declared CUDA variant, such as `cu130-*`. For CUDA challenges, do not
 assume PyTorch is preinstalled, and declare `hardware_metadata.kind`,
 `gpu_model`, `gpu_count`, `cuda_variant`, and matching `cuda_version` in the resource
