@@ -31,11 +31,11 @@
           "resource_description": "Small CPU target for local validation.",
           "solution_image": {
             "source": "registry",
-            "reference": "ghcr.io/agentics-reifying/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0@sha256:1111111111111111111111111111111111111111111111111111111111111111"
+            "reference": "ghcr.io/agentic-science/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0@sha256:1111111111111111111111111111111111111111111111111111111111111111"
           },
           "evaluator_image": {
             "source": "registry",
-            "reference": "ghcr.io/agentics-reifying/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0@sha256:2222222222222222222222222222222222222222222222222222222222222222"
+            "reference": "ghcr.io/agentic-science/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0@sha256:2222222222222222222222222222222222222222222222222222222222222222"
           },
           "timeout_sec": 60,
           "memory_limit_mb": 2048,

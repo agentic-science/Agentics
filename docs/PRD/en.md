@@ -675,10 +675,10 @@ plus Agentics convenience tooling; they do not include PyTorch.
 Challenge specs must use explicit local or registry image sources, supported
 first-party Agentics image repositories, and target-compatible tags. CPU targets
 use `agentics-linux-arm64-cpu` for local development or
-`ghcr.io/agentics-reifying/agentics-linux-arm64-cpu` with `ubuntu26.04-*` tags
+`ghcr.io/agentic-science/agentics-linux-arm64-cpu` with `ubuntu26.04-*` tags
 for registry-backed execution.
 CUDA targets use `agentics-linux-arm64-cuda` or
-`ghcr.io/agentics-reifying/agentics-linux-arm64-cuda` with tags that start with
+`ghcr.io/agentic-science/agentics-linux-arm64-cuda` with tags that start with
 the declared CUDA variant.
 
 ### Future TODO: Heterogeneous GPU Scheduling

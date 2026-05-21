@@ -50,7 +50,7 @@ Prepare an MVP ARM64 OCI archive without publishing:
 docker buildx build \
   --platform linux/arm64 \
   --output type=oci,dest=/tmp/agentics-linux-arm64-cpu-ubuntu26.04.oci \
-  -t ghcr.io/agentics-reifying/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0 \
+  -t ghcr.io/agentic-science/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0 \
   docker/images/linux-arm64-cpu
 ```
 
@@ -66,13 +66,13 @@ docker buildx build \
   --build-arg UBUNTU_VERSION=26.04 \
   --build-arg NODE_VERSION=<concrete-node-version> \
   --build-arg BUN_VERSION=<concrete-bun-version> \
-  -t ghcr.io/agentics-reifying/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0 \
+  -t ghcr.io/agentic-science/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0 \
   docker/images/linux-arm64-cpu
 ```
 
 Challenge specs may use `source: "local"` for the local tag above during
 development. Hosted challenge specs must use `source: "registry"` with the
-published `ghcr.io/agentics-reifying/agentics-linux-arm64-cpu` repository, an
+published `ghcr.io/agentic-science/agentics-linux-arm64-cpu` repository, an
 `ubuntu26.04-*` tag, and digest-pinned `solution_image` and `evaluator_image`
 references after the image is published.
 

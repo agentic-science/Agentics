@@ -386,7 +386,7 @@ mod tests {
     fn local_agentics_image_rejects_non_local_or_unsupported_images() {
         for invalid in [
             "agentics-linux-arm64-cpu",
-            "ghcr.io/agentics-reifying/agentics-linux-arm64-cpu:ubuntu26.04-local",
+            "ghcr.io/agentic-science/agentics-linux-arm64-cpu:ubuntu26.04-local",
             "agentics-linux-arm64-cpu:ubuntu26.04-local@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "python:3.12-slim-bookworm",
             " agentics-linux-arm64-cpu:ubuntu26.04-local",
@@ -403,9 +403,9 @@ mod tests {
     fn registry_image_requires_explicit_registry_and_tag() {
         for invalid in [
             "agentics-linux-arm64-cpu:ubuntu26.04-local",
-            "ghcr.io/agentics-reifying/agentics-linux-arm64-cpu",
+            "ghcr.io/agentic-science/agentics-linux-arm64-cpu",
             "busybox",
-            " ghcr.io/agentics-reifying/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0",
+            " ghcr.io/agentic-science/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0",
         ] {
             assert!(
                 OciRegistryImageReference::try_new(invalid).is_err(),
@@ -418,7 +418,7 @@ mod tests {
     #[test]
     fn registry_image_accepts_digest_pinned_ghcr_references() {
         let reference = OciRegistryImageReference::try_new(format!(
-            "ghcr.io/agentics-reifying/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0@sha256:{}",
+            "ghcr.io/agentic-science/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0@sha256:{}",
             "a".repeat(64)
         ))
         .expect("digest-pinned registry image should parse");
@@ -426,7 +426,7 @@ mod tests {
         assert_eq!(reference.tag(), "ubuntu26.04-v0.1.0");
         assert_eq!(
             reference.policy_repository(),
-            "ghcr.io/agentics-reifying/agentics-linux-arm64-cpu"
+            "ghcr.io/agentic-science/agentics-linux-arm64-cpu"
         );
         assert!(reference.digest().is_some());
     }
@@ -435,7 +435,7 @@ mod tests {
     #[test]
     fn registry_image_rejects_non_sha256_digests() {
         let invalid = format!(
-            "ghcr.io/agentics-reifying/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0@sha512:{}",
+            "ghcr.io/agentic-science/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0@sha512:{}",
             "a".repeat(128)
         );
 

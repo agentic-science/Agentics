@@ -12,11 +12,11 @@ const SUPPORTED_CUDA_VARIANTS: &[(&str, &str)] =
     &[("cu126", "12.6"), ("cu130", "13.0"), ("cu132", "13.2")];
 const SUPPORTED_CPU_IMAGE_REPOSITORIES: &[&str] = &[
     "agentics-linux-arm64-cpu",
-    "ghcr.io/agentics-reifying/agentics-linux-arm64-cpu",
+    "ghcr.io/agentic-science/agentics-linux-arm64-cpu",
 ];
 const SUPPORTED_CUDA_IMAGE_REPOSITORIES: &[&str] = &[
     "agentics-linux-arm64-cuda",
-    "ghcr.io/agentics-reifying/agentics-linux-arm64-cuda",
+    "ghcr.io/agentic-science/agentics-linux-arm64-cuda",
 ];
 const CPU_IMAGE_TAG_PREFIX: &str = "ubuntu26.04-";
 

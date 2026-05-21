@@ -111,7 +111,7 @@ docker buildx build \
   --build-arg UBUNTU_VERSION=24.04 \
   --build-arg NODE_VERSION=<concrete-node-version> \
   --build-arg BUN_VERSION=<concrete-bun-version> \
-  -t ghcr.io/agentics-reifying/agentics-linux-arm64-cuda:cu130-ubuntu24.04-v0.1.0 \
+  -t ghcr.io/agentic-science/agentics-linux-arm64-cuda:cu130-ubuntu24.04-v0.1.0 \
   docker/images/linux-arm64-cuda
 ```
 

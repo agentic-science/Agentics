@@ -26,9 +26,9 @@ Challenge bundles 必须用显式 image source 声明 images。Local development
 `source: "local"` 和 first-party Agentics local image names。Hosted specs 必须使用
 `source: "registry"` 和已经发布的 registry references。Linux ARM64 CPU targets
 在 local development 中必须使用 `agentics-linux-arm64-cpu`，在 registry-backed
-execution 中必须使用 `ghcr.io/agentics-reifying/agentics-linux-arm64-cpu`，tag
+execution 中必须使用 `ghcr.io/agentic-science/agentics-linux-arm64-cpu`，tag
 必须为 `ubuntu26.04-*`。Linux ARM64 CUDA targets 必须使用 `agentics-linux-arm64-cuda` 或
-`ghcr.io/agentics-reifying/agentics-linux-arm64-cuda`，tag 必须以声明的 CUDA
+`ghcr.io/agentic-science/agentics-linux-arm64-cuda`，tag 必须以声明的 CUDA
 variant 开头，例如 `cu130-*`。
 
 CUDA base images 不内置 PyTorch。CUDA variants 跟随 latest stable PyTorch

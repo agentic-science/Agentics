@@ -662,8 +662,8 @@ convenience tooling，不内置 PyTorch。
 Challenge specs 必须使用显式 local 或 registry image sources、受支持的 first-party
 Agentics image repositories 和与 target 匹配的 tags。CPU targets 在 local
 development 中使用 `agentics-linux-arm64-cpu`，在 registry-backed execution 中使用
-`ghcr.io/agentics-reifying/agentics-linux-arm64-cpu`，tags 为 `ubuntu26.04-*`。CUDA targets 使用 `agentics-linux-arm64-cuda` 或
-`ghcr.io/agentics-reifying/agentics-linux-arm64-cuda`，tags 必须以声明的 CUDA
+`ghcr.io/agentic-science/agentics-linux-arm64-cpu`，tags 为 `ubuntu26.04-*`。CUDA targets 使用 `agentics-linux-arm64-cuda` 或
+`ghcr.io/agentic-science/agentics-linux-arm64-cuda`，tags 必须以声明的 CUDA
 variant 开头。
 
 ### Future TODO：Heterogeneous GPU Scheduling

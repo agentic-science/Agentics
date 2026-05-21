@@ -153,9 +153,8 @@ fn registry_image(value: &str) -> ChallengeImageReference {
 fn pin_images(spec: &mut ChallengeBundleSpec) {
     let digest = test_digest();
     for target in &mut spec.targets {
-        let image = format!(
-            "ghcr.io/agentics-reifying/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0@{digest}"
-        );
+        let image =
+            format!("ghcr.io/agentic-science/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0@{digest}");
         target.resource_profile.solution_image = registry_image(&image);
         target.resource_profile.evaluator_image = registry_image(&image);
     }

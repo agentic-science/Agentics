@@ -184,11 +184,11 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
                         "Small CPU target for local validation.".to_string(),
                     ),
                     solution_image: registry_image(&format!(
-                        "ghcr.io/agentics-reifying/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0@{}",
+                        "ghcr.io/agentic-science/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0@{}",
                         image_digest("1")
                     )),
                     evaluator_image: registry_image(&format!(
-                        "ghcr.io/agentics-reifying/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0@{}",
+                        "ghcr.io/agentic-science/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0@{}",
                         image_digest("2")
                     )),
                     timeout_sec: 60,
