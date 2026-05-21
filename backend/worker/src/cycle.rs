@@ -258,7 +258,6 @@ pub async fn run_worker_cycle(
         Ok(result) => {
             let job_id = job.id.clone();
             let solution_submission_id = job.solution_submission_id.clone();
-            let primary_score = result.result.primary_score;
             let rank_score = result.result.rank_score;
 
             let persisted = mark_evaluation_finished(
@@ -271,7 +270,6 @@ pub async fn run_worker_cycle(
                     target: job.target.clone(),
                     eval_type: job.eval_type,
                     status: EvaluationStatus::Completed,
-                    primary_score: Some(primary_score),
                     rank_score,
                     aggregate_metrics: result.result.aggregate_metrics,
                     run_metrics: result.result.run_metrics,
@@ -321,7 +319,7 @@ pub async fn run_worker_cycle(
             info!(
                 job_id = %job_id,
                 solution_submission_id = %solution_submission_id,
-                primary_score = %primary_score,
+                rank_score = ?rank_score,
                 "evaluation completed"
             );
         }
@@ -376,7 +374,6 @@ pub async fn run_worker_cycle(
                     target: job.target.clone(),
                     eval_type: job.eval_type,
                     status: EvaluationStatus::Failed,
-                    primary_score: None,
                     rank_score: None,
                     aggregate_metrics: vec![],
                     run_metrics: vec![],

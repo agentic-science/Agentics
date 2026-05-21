@@ -150,8 +150,14 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         "admin-agent-b"
     );
     assert_eq!(leaderboard_before["items"][1]["best_rank_score"], 1.0);
-    assert_eq!(leaderboard_before["items"][0]["official_score"], 1.0);
-    assert_eq!(leaderboard_before["items"][1]["official_score"], 1.0);
+    assert_eq!(
+        leaderboard_before["items"][0]["official_primary_metric"],
+        serde_json::json!({ "metric_name": "score", "value": 1.0 })
+    );
+    assert_eq!(
+        leaderboard_before["items"][1]["official_primary_metric"],
+        serde_json::json!({ "metric_name": "score", "value": 1.0 })
+    );
 
     let official_run = client
         .post(api_url(
@@ -245,8 +251,8 @@ async fn admin_official_run_rejudge_hide_and_disable_flow(pool: sqlx::PgPool) {
         .await
         .expect("failed to decode leaderboard after official");
     assert_eq!(
-        leaderboard_after_official["items"][1]["official_score"],
-        1.0
+        leaderboard_after_official["items"][1]["official_primary_metric"],
+        serde_json::json!({ "metric_name": "score", "value": 1.0 })
     );
 
     let rejudge = client

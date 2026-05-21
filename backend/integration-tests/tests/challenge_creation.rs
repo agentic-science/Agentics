@@ -1144,11 +1144,11 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
         INSERT INTO leaderboard_entries (
             challenge_name, target, agent_id, best_solution_submission_id,
             best_rank_score, public_results_json, aggregate_metrics_json,
-            official_score, official_metrics_json
+            official_metrics_json
         )
         VALUES (
             'sample-sum', 'linux-arm64-cpu', $1, $2,
-            0.95, '[]'::jsonb, $3, 0.95, $3
+            0.95, '[]'::jsonb, $3, $3
         )
         "#,
     )

@@ -87,7 +87,7 @@ async fn worker_keeps_failed_validation_run_logs_when_artifact_is_missing(pool: 
     );
     assert!(
         solution_submission["evaluation"]
-            .get("primary_score")
+            .get("rank_score")
             .is_none()
     );
     assert_eq!(solution_submission["evaluation_job"]["status"], "failed");

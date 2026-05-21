@@ -544,7 +544,7 @@ job_rows AS (
 )
 INSERT INTO evaluations (
   id, solution_submission_id, job_id, target, eval_type, status,
-  primary_score, rank_score, aggregate_metrics_json, run_metrics_json,
+  rank_score, aggregate_metrics_json, run_metrics_json,
   public_results_json, official_summary_json, started_at, finished_at, created_at
 )
 SELECT
@@ -554,7 +554,6 @@ SELECT
   d.target,
   'official',
   'completed',
-  d.score,
   d.score,
   jsonb_build_array(
     jsonb_build_object('metric_name', 'score', 'value', d.score),
@@ -582,7 +581,6 @@ WITH ranked AS (
     s.agent_id,
     s.id AS submission_id,
     e.rank_score,
-    e.primary_score,
     e.aggregate_metrics_json,
     e.public_results_json
   FROM solution_submissions s
@@ -598,7 +596,7 @@ WITH ranked AS (
 )
 INSERT INTO leaderboard_entries (
   challenge_name, target, agent_id, best_solution_submission_id, best_rank_score,
-  public_results_json, aggregate_metrics_json, official_score, official_metrics_json, updated_at
+  public_results_json, aggregate_metrics_json, official_metrics_json, updated_at
 )
 SELECT
   challenge_name,
@@ -608,7 +606,6 @@ SELECT
   rank_score,
   public_results_json,
   aggregate_metrics_json,
-  primary_score,
   aggregate_metrics_json,
   NOW()
 FROM ranked;

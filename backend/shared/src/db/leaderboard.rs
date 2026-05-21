@@ -94,7 +94,6 @@ pub(super) async fn repair_leaderboard_entry_for_solution_submission_tx<'a>(
                 ) AS ranking_score,
                 COALESCE(oe.public_results_json, ve.public_results_json, '[]'::jsonb) AS public_results,
                 COALESCE(oe.aggregate_metrics_json, ve.aggregate_metrics_json, '[]'::jsonb) AS aggregate_metrics,
-                oe.primary_score AS official_score,
                 COALESCE(oe.aggregate_metrics_json, '[]'::jsonb) AS official_metrics
             FROM solution_submissions s
             LEFT JOIN LATERAL (
@@ -104,7 +103,7 @@ pub(super) async fn repair_leaderboard_entry_for_solution_submission_tx<'a>(
                 ORDER BY created_at DESC LIMIT 1
             ) ve ON TRUE
             LEFT JOIN LATERAL (
-                SELECT primary_score, rank_score, aggregate_metrics_json, official_summary_json, public_results_json
+                SELECT rank_score, aggregate_metrics_json, official_summary_json, public_results_json
                 FROM evaluations
                 WHERE solution_submission_id = s.id AND eval_type = 'official' AND status = 'completed' AND target = s.target
                 ORDER BY created_at DESC LIMIT 1
@@ -142,7 +141,6 @@ pub(super) async fn repair_leaderboard_entry_for_solution_submission_tx<'a>(
                     public_results_json: row.try_get("public_results")?,
                     aggregate_metrics,
                     aggregate_metrics_json: row.try_get("aggregate_metrics")?,
-                    official_score: row.try_get("official_score")?,
                     official_metrics_json: row.try_get("official_metrics")?,
                 })
             })
@@ -164,16 +162,14 @@ pub(super) async fn repair_leaderboard_entry_for_solution_submission_tx<'a>(
                 r#"
                 INSERT INTO leaderboard_entries (
                     challenge_name, target, agent_id, best_solution_submission_id, best_rank_score,
-                    public_results_json, aggregate_metrics_json, official_score,
-                    official_metrics_json, updated_at
+                    public_results_json, aggregate_metrics_json, official_metrics_json, updated_at
                 )
-                VALUES ($1, $2, $3::uuid, $4::uuid, $5, $6, $7, $8, $9, NOW())
+                VALUES ($1, $2, $3::uuid, $4::uuid, $5, $6, $7, $8, NOW())
                 ON CONFLICT (challenge_name, target, agent_id) DO UPDATE
                 SET best_solution_submission_id = EXCLUDED.best_solution_submission_id,
                     best_rank_score = EXCLUDED.best_rank_score,
                     public_results_json = EXCLUDED.public_results_json,
                     aggregate_metrics_json = EXCLUDED.aggregate_metrics_json,
-                    official_score = EXCLUDED.official_score,
                     official_metrics_json = EXCLUDED.official_metrics_json,
                     updated_at = NOW()
                 "#,
@@ -185,7 +181,6 @@ pub(super) async fn repair_leaderboard_entry_for_solution_submission_tx<'a>(
             .bind(best.rank_score)
             .bind(&best.public_results_json)
             .bind(&best.aggregate_metrics_json)
-            .bind(best.official_score)
             .bind(&best.official_metrics_json)
             .execute(&mut **tx)
             .await?;
@@ -211,10 +206,10 @@ pub async fn list_leaderboard_entries(
     target: &TargetName,
     limit: i64,
 ) -> Result<Vec<LeaderboardEntryDto>> {
-    Ok(list_leaderboard_rows(pool, challenge_name, target, limit)
-        .await?
+    let (spec, rows) = list_leaderboard_rows(pool, challenge_name, target, limit).await?;
+    Ok(rows
         .into_iter()
-        .map(LeaderboardRow::into_public_dto)
+        .map(|row| row.into_public_dto(&spec))
         .collect())
 }
 
@@ -225,8 +220,8 @@ pub async fn list_leaderboard_entries_with_metric_payloads(
     target: &TargetName,
     limit: i64,
 ) -> Result<Vec<LeaderboardMetricEntry>> {
-    Ok(list_leaderboard_rows(pool, challenge_name, target, limit)
-        .await?
+    let (_spec, rows) = list_leaderboard_rows(pool, challenge_name, target, limit).await?;
+    Ok(rows
         .into_iter()
         .map(LeaderboardRow::into_metric_entry)
         .collect())
@@ -238,7 +233,6 @@ pub struct LeaderboardMetricEntry {
     pub best_rank_score: f64,
     pub aggregate_metrics: Vec<MetricValue>,
     pub official_metrics: Vec<MetricValue>,
-    pub official_score: Option<f64>,
 }
 
 /// Candidate row used when repairing one agent's leaderboard entry after hiding a submission.
@@ -250,7 +244,6 @@ struct LeaderboardReplacementCandidate {
     public_results_json: Value,
     aggregate_metrics: Vec<MetricValue>,
     aggregate_metrics_json: Value,
-    official_score: Option<f64>,
     official_metrics_json: Value,
 }
 
@@ -263,13 +256,16 @@ struct LeaderboardRow {
     best_rank_score: f64,
     aggregate_metrics: Vec<MetricValue>,
     official_metrics: Vec<MetricValue>,
-    official_score: Option<f64>,
     updated_at: DateTime<Utc>,
 }
 
 impl LeaderboardRow {
     /// Project this row into the public leaderboard DTO.
-    fn into_public_dto(self) -> LeaderboardEntryDto {
+    fn into_public_dto(self, spec: &ChallengeBundleSpec) -> LeaderboardEntryDto {
+        let official_primary_metric = MetricValue::find_by_name(
+            &self.official_metrics,
+            &spec.metric_schema.ranking.primary_metric_name,
+        );
         LeaderboardEntryDto {
             target: self.target,
             agent_id: self.agent_id,
@@ -277,7 +273,7 @@ impl LeaderboardRow {
             best_solution_submission_id: self.best_solution_submission_id,
             best_rank_score: self.best_rank_score,
             rank_score: self.best_rank_score,
-            official_score: self.official_score,
+            official_primary_metric,
             updated_at: self.updated_at.to_rfc3339(),
         }
     }
@@ -288,7 +284,6 @@ impl LeaderboardRow {
             best_rank_score: self.best_rank_score,
             aggregate_metrics: self.aggregate_metrics,
             official_metrics: self.official_metrics,
-            official_score: self.official_score,
         }
     }
 }
@@ -299,7 +294,7 @@ async fn list_leaderboard_rows(
     challenge_name: &ChallengeName,
     target: &TargetName,
     limit: i64,
-) -> Result<Vec<LeaderboardRow>> {
+) -> Result<(ChallengeBundleSpec, Vec<LeaderboardRow>)> {
     let requested_limit = limit.max(1);
     let challenge = get_public_challenge(pool, challenge_name)
         .await?
@@ -310,8 +305,8 @@ async fn list_leaderboard_rows(
         r#"
         SELECT
             le.target, le.agent_id, a.display_name AS agent_display_name, le.best_solution_submission_id,
-            le.best_rank_score, le.aggregate_metrics_json, le.official_score,
-            le.official_metrics_json, le.updated_at
+            le.best_rank_score, le.aggregate_metrics_json, le.official_metrics_json,
+            le.updated_at
         FROM leaderboard_entries le
         JOIN solution_submissions s ON s.id = le.best_solution_submission_id
         JOIN agents a ON a.id = le.agent_id
@@ -382,13 +377,12 @@ async fn list_leaderboard_rows(
                 best_rank_score,
                 aggregate_metrics,
                 official_metrics,
-                official_score: r.try_get::<Option<f64>, _>("official_score")?,
                 updated_at: r.try_get::<DateTime<Utc>, _>("updated_at")?,
             })
         })
         .collect::<Result<Vec<_>>>()?;
 
-    Ok(entries)
+    Ok((spec, entries))
 }
 
 /// Handles upsert leaderboard entry for solution submission tx for this module.
@@ -473,12 +467,11 @@ pub(super) async fn upsert_leaderboard_entry_for_solution_submission_tx<'a>(
     Ok(true)
 }
 
-/// Handles update official score for solution submission tx for this module.
-pub(super) async fn update_official_score_for_solution_submission_tx<'a>(
+/// Update official aggregate metrics for a leaderboard entry after it becomes best.
+pub(super) async fn update_official_metrics_for_solution_submission_tx<'a>(
     tx: &mut Transaction<'a, Postgres>,
     solution_submission_id: &SolutionSubmissionId,
     target: &TargetName,
-    official_score: Option<f64>,
     official_metrics: &[MetricValue],
 ) -> Result<()> {
     let row: Option<(String, String)> = sqlx::query_as(
@@ -496,12 +489,11 @@ pub(super) async fn update_official_score_for_solution_submission_tx<'a>(
         serde_json::to_value(official_metrics).map_err(|e| AppError::Internal(e.to_string()))?;
 
     sqlx::query(
-        "UPDATE leaderboard_entries SET official_score = $4, official_metrics_json = $5, updated_at = NOW() WHERE challenge_name = $1 AND target = $2 AND agent_id = $3::uuid"
+        "UPDATE leaderboard_entries SET official_metrics_json = $4, updated_at = NOW() WHERE challenge_name = $1 AND target = $2 AND agent_id = $3::uuid"
     )
     .bind(&challenge_name)
     .bind(target.as_str())
     .bind(&agent_id)
-    .bind(official_score)
     .bind(&official_metrics_json)
     .execute(&mut **tx)
     .await?;

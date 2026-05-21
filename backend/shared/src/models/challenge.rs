@@ -703,7 +703,7 @@ impl Default for MetricSchemaSpec {
                 unit: None,
                 direction: MetricDirection::Maximize,
                 visibility: MetricVisibility::Public,
-                metric_description: Some("Normalized compatibility score in [0, 1].".to_string()),
+                metric_description: Some("Challenge-defined compatibility score.".to_string()),
             }],
             ranking: RankingSpec {
                 primary_metric_name: MetricName::score(),

@@ -58,6 +58,7 @@ pub struct SolutionSubmissionRecord {
     pub agent_id: AgentId,
     pub agent_display_name: Option<String>,
     pub challenge_title: Option<String>,
+    pub challenge_spec: ChallengeBundleSpec,
     pub artifact_key: StorageKey,
     pub note: String,
     pub status: String,
@@ -176,6 +177,7 @@ pub async fn create_solution_submission_with_job(
         agent_id: agent_id_from_row(&row, "agent_id")?,
         agent_display_name: None,
         challenge_title: None,
+        challenge_spec: spec,
         artifact_key: storage_key_from_row(&row, "artifact_key")?,
         note: row.try_get("note")?,
         status: row.try_get("status")?,
@@ -507,7 +509,8 @@ async fn get_solution_submission_by_id_inner(
         r#"
         SELECT
             s.id, s.challenge_name, s.target, s.agent_id,
-            p.title AS challenge_title, a.display_name AS agent_display_name,
+            p.title AS challenge_title, p.spec_json AS challenge_spec_json,
+            a.display_name AS agent_display_name,
             s.artifact_key, s.note, s.status, s.explanation,
             s.parent_solution_submission_id, s.credit_text, s.visible_after_eval,
             s.created_at, s.updated_at,
@@ -516,7 +519,6 @@ async fn get_solution_submission_by_id_inner(
             pe.target AS validation_eval_target,
             pe.status AS validation_eval_status,
             pe.eval_type AS validation_eval_eval_type,
-            pe.primary_score AS validation_eval_primary_score,
             pe.rank_score AS validation_eval_rank_score,
             pe.aggregate_metrics_json AS validation_eval_aggregate_metrics,
             pe.run_metrics_json AS validation_eval_run_metrics,
@@ -530,7 +532,6 @@ async fn get_solution_submission_by_id_inner(
             oe.target AS official_eval_target,
             oe.status AS official_eval_status,
             oe.eval_type AS official_eval_eval_type,
-            oe.primary_score AS official_eval_primary_score,
             oe.rank_score AS official_eval_rank_score,
             oe.aggregate_metrics_json AS official_eval_aggregate_metrics,
             oe.run_metrics_json AS official_eval_run_metrics,
@@ -547,11 +548,11 @@ async fn get_solution_submission_by_id_inner(
             SELECT id, status FROM evaluation_jobs WHERE solution_submission_id = s.id ORDER BY created_at DESC LIMIT 1
         ) j ON TRUE
         LEFT JOIN LATERAL (
-            SELECT id, target, status, eval_type, primary_score, rank_score, aggregate_metrics_json, run_metrics_json, public_results_json, validation_summary_json, official_summary_json, log_key, started_at, finished_at
+            SELECT id, target, status, eval_type, rank_score, aggregate_metrics_json, run_metrics_json, public_results_json, validation_summary_json, official_summary_json, log_key, started_at, finished_at
             FROM evaluations WHERE solution_submission_id = s.id AND eval_type = 'validation' AND target = s.target ORDER BY created_at DESC LIMIT 1
         ) pe ON TRUE
         LEFT JOIN LATERAL (
-            SELECT id, target, status, eval_type, primary_score, rank_score, aggregate_metrics_json, run_metrics_json, public_results_json, validation_summary_json, official_summary_json, log_key, started_at, finished_at
+            SELECT id, target, status, eval_type, rank_score, aggregate_metrics_json, run_metrics_json, public_results_json, validation_summary_json, official_summary_json, log_key, started_at, finished_at
             FROM evaluations WHERE solution_submission_id = s.id AND eval_type = 'official' AND target = s.target {official_status_filter} ORDER BY created_at DESC LIMIT 1
         ) oe ON TRUE
         WHERE s.id = $1::uuid
@@ -569,6 +570,9 @@ async fn get_solution_submission_by_id_inner(
 
     let validation_eval = parse_eval_from_row(&r, "validation_eval")?;
     let official_eval = parse_eval_from_row(&r, "official_eval")?;
+    let challenge_spec_json: Value = r.try_get("challenge_spec_json")?;
+    let challenge_spec = serde_json::from_value::<ChallengeBundleSpec>(challenge_spec_json)
+        .map_err(|e| AppError::Internal(format!("stored challenge spec is invalid: {e}")))?;
 
     Ok(Some(SolutionSubmissionRecord {
         id: solution_submission_id_from_row(&r, "id")?,
@@ -577,6 +581,7 @@ async fn get_solution_submission_by_id_inner(
         agent_id: agent_id_from_row(&r, "agent_id")?,
         agent_display_name: r.try_get::<Option<String>, _>("agent_display_name")?,
         challenge_title: r.try_get::<Option<String>, _>("challenge_title")?,
+        challenge_spec,
         artifact_key: storage_key_from_row(&r, "artifact_key")?,
         note: r.try_get("note")?,
         status: r.try_get("status")?,
@@ -693,17 +698,16 @@ pub async fn list_public_solution_submissions_for_challenge(
         r#"
         SELECT
             s.id, s.challenge_name, s.target, p.title AS challenge_title,
+            p.spec_json AS challenge_spec_json,
             s.agent_id, a.display_name AS agent_display_name, s.status, s.note, s.explanation,
             s.parent_solution_submission_id, s.credit_text, s.created_at, s.updated_at,
-            oe.primary_score AS official_score,
             oe.rank_score AS rank_score,
-            '[]'::jsonb AS aggregate_metrics,
-            '[]'::jsonb AS official_metrics
+            COALESCE(oe.aggregate_metrics_json, '[]'::jsonb) AS official_metrics
         FROM solution_submissions s
         JOIN agents a ON a.id = s.agent_id
         JOIN challenges p ON p.name = s.challenge_name
         LEFT JOIN LATERAL (
-            SELECT primary_score, rank_score, aggregate_metrics_json, official_summary_json
+            SELECT rank_score, aggregate_metrics_json, official_summary_json
             FROM evaluations
             WHERE solution_submission_id = s.id AND eval_type = 'official' AND status = 'completed' AND target = s.target
             ORDER BY created_at DESC LIMIT 1
@@ -723,11 +727,20 @@ pub async fn list_public_solution_submissions_for_challenge(
 
     rows.into_iter()
         .map(|r| {
-            let aggregate_metrics = decode_optional_json(
-                r.try_get::<Option<Value>, _>("aggregate_metrics")?,
-                "solution submission aggregate metrics",
+            let challenge_spec_json: Value = r.try_get("challenge_spec_json")?;
+            let challenge_spec = serde_json::from_value::<ChallengeBundleSpec>(challenge_spec_json)
+                .map_err(|e| {
+                    AppError::Internal(format!("stored challenge spec is invalid: {e}"))
+                })?;
+            let official_metrics: Vec<MetricValue> = decode_optional_json(
+                r.try_get::<Option<Value>, _>("official_metrics")?,
+                "solution submission official metrics",
             )?
             .unwrap_or_default();
+            let official_primary_metric = MetricValue::find_by_name(
+                &official_metrics,
+                &challenge_spec.metric_schema.ranking.primary_metric_name,
+            );
             Ok(PublicSolutionSubmissionListItemDto {
                 id: solution_submission_id_from_row(&r, "id")?,
                 challenge_name: challenge_name_from_row(&r, "challenge_name")?,
@@ -745,14 +758,8 @@ pub async fn list_public_solution_submissions_for_challenge(
                 credit_text: r.try_get("credit_text")?,
                 created_at: r.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
                 updated_at: r.try_get::<DateTime<Utc>, _>("updated_at")?.to_rfc3339(),
-                official_score: r.try_get::<Option<f64>, _>("official_score")?,
                 rank_score: r.try_get::<Option<f64>, _>("rank_score")?,
-                aggregate_metrics,
-                official_metrics: decode_optional_json(
-                    r.try_get::<Option<Value>, _>("official_metrics")?,
-                    "solution submission official metrics",
-                )?
-                .unwrap_or_default(),
+                official_primary_metric,
             })
         })
         .collect::<Result<Vec<_>>>()
@@ -828,7 +835,6 @@ fn parse_eval_from_row(row: &sqlx::postgres::PgRow, prefix: &str) -> Result<Opti
     let target_col = format!("{}_target", prefix);
     let target = target_from_row(row, target_col.as_str())?;
     let eval_type_str: String = row.try_get(format!("{}_eval_type", prefix).as_str())?;
-    let primary_score: Option<f64> = row.try_get(format!("{}_primary_score", prefix).as_str())?;
     let rank_score: Option<f64> = row.try_get(format!("{}_rank_score", prefix).as_str())?;
     let aggregate_json: Option<Value> =
         row.try_get(format!("{}_aggregate_metrics", prefix).as_str())?;
@@ -873,7 +879,6 @@ fn parse_eval_from_row(row: &sqlx::postgres::PgRow, prefix: &str) -> Result<Opti
         target,
         status,
         eval_type,
-        primary_score,
         rank_score,
         aggregate_metrics,
         run_metrics,

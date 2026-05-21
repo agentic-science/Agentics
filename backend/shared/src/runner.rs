@@ -64,7 +64,7 @@ const RUNNER_SCOPE_LOCAL_VALIDATION: &str = "local-validation";
 /// Validated evaluator result plus the persisted runner log location.
 #[derive(Debug, Clone)]
 pub struct ExecutionResult {
-    /// Parsed and normalized `result.json` emitted by the evaluator.
+    /// Parsed and completed `result.json` emitted by the evaluator.
     pub result: EvaluatorRunResult,
     /// Storage-relative path to stdout and stderr captured from runner containers.
     pub log_key: StorageKey,
@@ -921,7 +921,7 @@ fn validate_evaluator_result(
         .validate_for_mode(eval_type)
         .map_err(|e| AppError::Runner(format!("invalid result.json: {e}")))?;
     result
-        .normalize_metrics(metric_schema, eval_type)
+        .complete_metric_result(metric_schema, eval_type)
         .map_err(|e| AppError::Runner(format!("invalid result.json: {e}")))?;
     result.mode = Some(eval_type);
     Ok(())

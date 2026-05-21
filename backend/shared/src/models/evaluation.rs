@@ -209,7 +209,7 @@ impl fmt::Display for SolutionSubmissionStatus {
 /// Aggregate score summary for validation or official datasets.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ScoreSummary {
-    /// Normalized score in the inclusive range `[0, 1]`.
+    /// Challenge-defined finite score summary.
     pub score: f64,
     /// Number of passed cases in the aggregate.
     pub passed: i64,
@@ -251,8 +251,6 @@ pub struct EvaluationDto {
     pub status: EvaluationStatus,
     pub eval_type: ScoringMode,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub primary_score: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub rank_score: Option<f64>,
     pub aggregate_metrics: Vec<MetricValue>,
     pub run_metrics: Vec<RunMetricResult>,
@@ -279,7 +277,6 @@ pub struct EvaluatorRunResult {
     pub status: EvaluatorRunStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mode: Option<ScoringMode>,
-    pub primary_score: f64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rank_score: Option<f64>,
     #[serde(default)]
@@ -297,9 +294,9 @@ pub struct EvaluatorRunResult {
 }
 
 impl ScoreSummary {
-    /// Validate score bounds and aggregate case counts for a named summary field.
+    /// Validate finite score and aggregate case counts for a named summary field.
     pub fn validate(&self, label: &str) -> Result<(), String> {
-        validate_score(self.score, &format!("{label}.score"))?;
+        validate_finite_number(self.score, &format!("{label}.score"))?;
         if self.passed < 0 {
             return Err(format!("{label}.passed must be >= 0"));
         }
@@ -315,12 +312,12 @@ impl ScoreSummary {
 }
 
 impl PublicCaseResult {
-    /// Validate the public case name and normalized score.
+    /// Validate the public case name and finite challenge-defined score.
     pub fn validate(&self) -> Result<(), String> {
         if self.case_name.trim().is_empty() {
             return Err("public_results.case_name must not be empty".to_string());
         }
-        validate_score(self.score, "public_results.score")
+        validate_finite_number(self.score, "public_results.score")
     }
 }
 
@@ -328,6 +325,14 @@ impl MetricValue {
     /// Validate metric name shape and finite numeric value.
     pub fn validate(&self, field: &str) -> Result<(), String> {
         validate_finite_number(self.value, &format!("{field}.value"))
+    }
+
+    /// Find a metric value by name in an evaluator metric payload.
+    pub fn find_by_name(metrics: &[Self], metric_name: &MetricName) -> Option<Self> {
+        metrics
+            .iter()
+            .find(|metric| &metric.metric_name == metric_name)
+            .cloned()
     }
 }
 
@@ -383,9 +388,7 @@ impl EvaluatorRunResult {
 
     /// Validate evaluator output against the evaluation mode that was actually run.
     ///
-    /// If the evaluator included a `mode`, it must match `mode`; older evaluator
-    /// outputs may omit it and will be normalized by the runner after this
-    /// validation succeeds.
+    /// If the evaluator included a `mode`, it must match `mode`.
     pub fn validate_for_mode(&self, mode: ScoringMode) -> Result<(), String> {
         if let Some(result_mode) = self.mode
             && result_mode != mode
@@ -393,7 +396,6 @@ impl EvaluatorRunResult {
             return Err("result mode does not match evaluation job type".to_string());
         }
 
-        validate_score(self.primary_score, "primary_score")?;
         if let Some(rank_score) = self.rank_score {
             validate_finite_number(rank_score, "rank_score")?;
         }
@@ -437,33 +439,13 @@ impl EvaluatorRunResult {
         Ok(())
     }
 
-    /// Fill legacy evaluator output into the structured metric fields.
-    ///
-    /// Older evaluators only emit `primary_score`; that value becomes the default
-    /// `score` aggregate metric and rank score so clients can rely on one
-    /// metric shape for both old and new bundles.
-    pub fn normalize_metrics(
+    /// Complete metric-derived evaluator fields after schema validation.
+    pub fn complete_metric_result(
         &mut self,
         schema: &MetricSchemaSpec,
         mode: ScoringMode,
     ) -> Result<(), String> {
         self.validate_for_metric_schema(schema, mode)?;
-
-        if self.aggregate_metrics.is_empty() {
-            if schema.ranking.primary_metric_name.as_str() != "score" {
-                if mode == ScoringMode::Validation {
-                    return Ok(());
-                }
-                return Err(format!(
-                    "aggregate_metrics is required when primary metric is `{}`",
-                    schema.ranking.primary_metric_name
-                ));
-            }
-            self.aggregate_metrics.push(MetricValue {
-                metric_name: schema.ranking.primary_metric_name.clone(),
-                value: self.primary_score,
-            });
-        }
 
         if self.rank_score.is_none() {
             let primary_metric = schema
@@ -484,6 +466,10 @@ impl EvaluatorRunResult {
                 MetricDirection::Maximize => primary_value,
                 MetricDirection::Minimize => -primary_value,
             });
+        }
+
+        if mode == ScoringMode::Official && self.rank_score.is_none() {
+            return Err("rank_score is required for official evaluation results".to_string());
         }
 
         Ok(())
@@ -527,7 +513,6 @@ impl EvaluatorRunResult {
         }
 
         if mode == ScoringMode::Official
-            && !self.aggregate_metrics.is_empty()
             && !self
                 .aggregate_metrics
                 .iter()
@@ -549,16 +534,6 @@ impl EvaluatorRunResult {
             .find(|metric| &metric.metric_name == metric_name)
             .map(|metric| metric.value)
     }
-}
-
-/// Validates score invariants for this contract.
-fn validate_score(value: f64, field: &str) -> Result<(), String> {
-    validate_finite_number(value, field)?;
-    if !(0.0..=1.0).contains(&value) {
-        return Err(format!("{field} must be a finite number in [0, 1]"));
-    }
-
-    Ok(())
 }
 
 /// Validates finite number invariants for this contract.
@@ -628,7 +603,6 @@ mod tests {
         EvaluatorRunResult {
             status: EvaluatorRunStatus::Passed,
             mode: Some(ScoringMode::Validation),
-            primary_score: 1.0,
             rank_score: None,
             aggregate_metrics: vec![],
             run_metrics: vec![],
@@ -666,18 +640,16 @@ mod tests {
         assert!(result.validate_for_mode(ScoringMode::Validation).is_ok());
     }
 
-    /// Verifies that minimal metric output normalizes to primary score.
+    /// Verifies that evaluator output can rely on declared aggregate metrics.
     #[test]
-    fn minimal_metric_output_normalizes_to_primary_score() {
+    fn evaluator_output_with_declared_metrics_is_valid() {
         let mut result = valid_validation_result();
         result
-            .normalize_metrics(&MetricSchemaSpec::default(), ScoringMode::Validation)
+            .complete_metric_result(&MetricSchemaSpec::default(), ScoringMode::Validation)
             .unwrap();
 
-        assert_eq!(result.rank_score, Some(1.0));
-        assert_eq!(result.aggregate_metrics.len(), 1);
-        assert_eq!(result.aggregate_metrics[0].metric_name.as_str(), "score");
-        assert_eq!(result.aggregate_metrics[0].value, 1.0);
+        assert_eq!(result.rank_score, None);
+        assert!(result.aggregate_metrics.is_empty());
     }
 
     /// Verifies that missing rank score derives from minimized primary metric.
@@ -704,7 +676,7 @@ mod tests {
         }];
 
         result
-            .normalize_metrics(&schema, ScoringMode::Validation)
+            .complete_metric_result(&schema, ScoringMode::Validation)
             .unwrap();
 
         assert_eq!(result.rank_score, Some(-42.0));
@@ -721,7 +693,7 @@ mod tests {
 
         assert!(
             result
-                .normalize_metrics(&MetricSchemaSpec::default(), ScoringMode::Validation)
+                .complete_metric_result(&MetricSchemaSpec::default(), ScoringMode::Validation)
                 .is_err()
         );
     }
@@ -756,7 +728,7 @@ mod tests {
 
         assert!(
             result
-                .normalize_metrics(&MetricSchemaSpec::default(), ScoringMode::Validation)
+                .complete_metric_result(&MetricSchemaSpec::default(), ScoringMode::Validation)
                 .is_ok()
         );
     }
@@ -786,9 +758,61 @@ mod tests {
 
         assert!(
             result
-                .normalize_metrics(&schema, ScoringMode::Validation)
+                .complete_metric_result(&schema, ScoringMode::Validation)
                 .is_err()
         );
+    }
+
+    /// Verifies completed official output must include the declared primary metric.
+    #[test]
+    fn official_result_requires_primary_metric() {
+        let mut result = valid_validation_result();
+        result.mode = Some(ScoringMode::Official);
+        result.validation_summary = None;
+        result.official_summary = Some(ScoreSummary {
+            score: 3.25,
+            passed: 1,
+            total: 1,
+        });
+
+        let error = result
+            .complete_metric_result(&MetricSchemaSpec::default(), ScoringMode::Official)
+            .expect_err("official result should require primary aggregate metric");
+        assert!(error.contains("aggregate_metrics missing primary metric"));
+    }
+
+    /// Verifies summary and public case scores accept arbitrary finite values.
+    #[test]
+    fn summary_and_public_case_scores_accept_arbitrary_finite_values() {
+        let summary = ScoreSummary {
+            score: 42.0,
+            passed: 1,
+            total: 1,
+        };
+        assert!(summary.validate("validation_summary").is_ok());
+
+        let public_case = super::PublicCaseResult {
+            case_name: "case-1".to_string(),
+            status: EvaluatorCaseStatus::Passed,
+            score: -7.5,
+            message: None,
+        };
+        assert!(public_case.validate().is_ok());
+
+        let invalid_summary = ScoreSummary {
+            score: f64::INFINITY,
+            passed: 1,
+            total: 1,
+        };
+        assert!(invalid_summary.validate("validation_summary").is_err());
+
+        let invalid_public_case = super::PublicCaseResult {
+            case_name: "case-2".to_string(),
+            status: EvaluatorCaseStatus::Passed,
+            score: f64::NAN,
+            message: None,
+        };
+        assert!(invalid_public_case.validate().is_err());
     }
 
     /// Verifies platform size limits reject result payload expansion.

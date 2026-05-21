@@ -67,7 +67,6 @@ fn metric_value_from_leaderboard_entry(
 ) -> Option<f64> {
     match metric_name.as_str() {
         "rank_score" | "best_rank_score" => Some(entry.best_rank_score),
-        "official_score" => entry.official_score,
         _ if metric_name == &spec.metric_schema.ranking.primary_metric_name => {
             metric_value_by_name(&entry.official_metrics, metric_name)
                 .or_else(|| metric_value_by_name(&entry.aggregate_metrics, metric_name))
@@ -89,10 +88,7 @@ fn ensure_metric_is_publicly_distributable(
     metric_name: &MetricName,
     spec: &ChallengeBundleSpec,
 ) -> Result<()> {
-    if matches!(
-        metric_name.as_str(),
-        "rank_score" | "best_rank_score" | "official_score"
-    ) {
+    if matches!(metric_name.as_str(), "rank_score" | "best_rank_score") {
         return Ok(());
     }
 
@@ -106,7 +102,7 @@ fn ensure_metric_is_publicly_distributable(
     }
 
     Err(AppError::Forbidden(
-        "score distribution is available only for rank_score, official_score, or the primary ranking metric"
+        "score distribution is available only for rank_score, best_rank_score, or the public primary ranking metric"
             .to_string(),
     ))
 }
@@ -362,16 +358,18 @@ mod tests {
         }
     }
 
-    /// Build one leaderboard entry with distinct raw and normalized scores.
-    fn entry(raw_latency: f64, normalized_rank_score: f64) -> LeaderboardMetricEntry {
+    /// Build one leaderboard entry with distinct primary metric and rank scores.
+    fn entry(raw_latency: f64, rank_score: f64) -> LeaderboardMetricEntry {
         LeaderboardMetricEntry {
-            best_rank_score: normalized_rank_score,
+            best_rank_score: rank_score,
             aggregate_metrics: vec![MetricValue {
                 metric_name: metric_name("latency_ms"),
                 value: raw_latency,
             }],
-            official_metrics: Vec::new(),
-            official_score: Some(raw_latency),
+            official_metrics: vec![MetricValue {
+                metric_name: metric_name("latency_ms"),
+                value: raw_latency,
+            }],
         }
     }
 
@@ -393,9 +391,9 @@ mod tests {
         assert_eq!(response.max, Some(50.0));
     }
 
-    /// Verifies rank-score distributions intentionally use normalized comparator values.
+    /// Verifies rank-score distributions intentionally use comparator values.
     #[test]
-    fn rank_score_distribution_uses_normalized_comparator_values() {
+    fn rank_score_distribution_uses_comparator_values() {
         let spec = minimized_metric_spec();
         let response = build_score_distribution_response(
             challenge_name("latency-challenge"),
@@ -427,15 +425,14 @@ mod tests {
         .expect_err("official-only primary metric should be rejected");
         assert!(matches!(error, AppError::Forbidden(_)));
 
-        let response = build_score_distribution_response(
+        let error = build_score_distribution_response(
             challenge_name("latency-challenge"),
             target_name("linux-arm64-cpu"),
             metric_name("official_score"),
             &spec,
             vec![entry(20.0, -20.0)],
         )
-        .expect("official_score built-in remains public");
-        assert_eq!(response.count, 1);
-        assert_eq!(response.min, Some(20.0));
+        .expect_err("official_score built-in is no longer exposed");
+        assert!(matches!(error, AppError::Forbidden(_)));
     }
 }

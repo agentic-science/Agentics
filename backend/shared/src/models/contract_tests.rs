@@ -339,6 +339,10 @@ fn official_solution_submission_response() -> SolutionSubmissionResponse {
         explanation: "Blocked matmul implementation.".to_string(),
         parent_solution_submission_id: None,
         credit_text: String::new(),
+        official_primary_metric: Some(MetricValue {
+            metric_name: metric_name("runtime_ms"),
+            value: 42.5,
+        }),
         visible_after_eval: true,
         artifact_key: Some(storage_key(
             "solution-submissions/11111111-1111-4111-8111-111111111111.zip",
@@ -351,7 +355,6 @@ fn official_solution_submission_response() -> SolutionSubmissionResponse {
             target: target_name("linux-arm64-cpu"),
             status: EvaluationStatus::Completed,
             eval_type: ScoringMode::Official,
-            primary_score: Some(0.91),
             rank_score: Some(-42.5),
             aggregate_metrics: vec![
                 MetricValue {
