@@ -82,17 +82,17 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
                     let response = client.list_challenges().await?;
                     output::render_challenge_list(&response, output_format)
                 }
-                ChallengesCommand::Show { challenge_name } => {
-                    let response = client.get_challenge(&challenge_name).await?;
+                ChallengesCommand::Show { challenge_id } => {
+                    let response = client.get_challenge(&challenge_id).await?;
                     output::render_challenge_detail(&response, output_format)
                 }
                 ChallengesCommand::Stats {
-                    challenge_name,
+                    challenge_id,
                     target,
                     metric,
                 } => {
                     commands::challenge_stats(
-                        challenge_name,
+                        challenge_id,
                         target,
                         metric,
                         output_format,
@@ -107,7 +107,7 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
                 commands::challenge_draft(command, output_format, &settings).await
             }
             ChallengeCreatorCommand::Stats {
-                challenge_name: _,
+                challenge_id: _,
                 target: _,
             } => {
                 anyhow::bail!(
@@ -115,7 +115,7 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
                 )
             }
             ChallengeCreatorCommand::Participants {
-                challenge_name: _,
+                challenge_id: _,
                 target: _,
             } => {
                 anyhow::bail!(
@@ -128,7 +128,7 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
         },
         Commands::InitSolution(args) => {
             let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-            let challenge = client.get_challenge(&args.challenge_name).await?;
+            let challenge = client.get_challenge(&args.challenge_id).await?;
             let summary = workspace::init_solution_workspace(
                 &challenge,
                 args.dir,
@@ -143,12 +143,12 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
             let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
             match args.command {
                 SubmissionsCommand::List {
-                    challenge_name,
+                    challenge_id,
                     target,
                     limit,
                 } => {
                     commands::list_public_solution_submissions(
-                        challenge_name,
+                        challenge_id,
                         target,
                         limit,
                         output_format,
@@ -197,14 +197,14 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
                     if challenge_detail.spec.target(&target).is_none() {
                         anyhow::bail!(
                             "challenge `{}` does not support target `{target}`",
-                            challenge_detail.name
+                            challenge_detail.challenge_name
                         );
                     }
                     let response = if settings.token_configured() {
                         match client
                             .get_solution_submission_ranking_context(
                                 &submission_id,
-                                &challenge_detail.name,
+                                &challenge_detail.challenge_id,
                                 &target,
                             )
                             .await
@@ -217,7 +217,7 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
                                 client
                                     .get_public_solution_submission_ranking_context(
                                         &submission_id,
-                                        &challenge_detail.name,
+                                        &challenge_detail.challenge_id,
                                         &target,
                                     )
                                     .await?
@@ -228,7 +228,7 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
                         client
                             .get_public_solution_submission_ranking_context(
                                 &submission_id,
-                                &challenge_detail.name,
+                                &challenge_detail.challenge_id,
                                 &target,
                             )
                             .await?
@@ -241,10 +241,10 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
             let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
             match args.command {
                 LeaderboardCommand::Show {
-                    challenge_name,
+                    challenge_id,
                     target,
                 } => {
-                    let response = client.get_leaderboard(&challenge_name, &target).await?;
+                    let response = client.get_leaderboard(&challenge_id, &target).await?;
                     output::render_leaderboard(&response, output_format)
                 }
             }
@@ -253,12 +253,12 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
             let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
             match args.command {
                 MetricsCommand::Distribution {
-                    challenge_name,
+                    challenge_id,
                     target,
                     metric,
                 } => {
                     let response = client
-                        .get_score_distribution(&challenge_name, &target, &metric)
+                        .get_score_distribution(&challenge_id, &target, &metric)
                         .await?;
                     output::render_score_distribution(&response, output_format)
                 }

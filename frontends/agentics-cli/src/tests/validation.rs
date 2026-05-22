@@ -4,7 +4,9 @@ use super::*;
 async fn validate_remote_posts_validation_run_and_polls_status() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/api/public/challenges/sample-sum"))
+        .and(path(
+            "/api/public/challenges/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        ))
         .respond_with(ResponseTemplate::new(200).set_body_json(challenge_detail_json(true)))
         .mount(&server)
         .await;
@@ -14,6 +16,7 @@ async fn validate_remote_posts_validation_run_and_polls_status() {
         .respond_with(ResponseTemplate::new(201).set_body_json(json!({
             "id": "22222222-2222-4222-8222-222222222222",
             "status": "queued",
+            "challenge_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
             "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_key": "solution-submissions/22222222-2222-4222-8222-222222222222.zip",
@@ -30,6 +33,7 @@ async fn validate_remote_posts_validation_run_and_polls_status() {
         .and(header("authorization", "Bearer test-token"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "id": "22222222-2222-4222-8222-222222222222",
+            "challenge_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
             "challenge_name": "sample-sum",
             "challenge_title": "Sample Sum",
             "target": "linux-arm64-cpu",
@@ -92,7 +96,8 @@ async fn validate_remote_posts_validation_run_and_polls_status() {
         "test-token",
         "validate",
         "--remote",
-        "sample-sum",
+        "--challenge-id",
+        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         "--target",
         "linux-arm64-cpu",
         "--dir",
@@ -124,7 +129,7 @@ async fn validate_remote_posts_validation_run_and_polls_status() {
     assert!(output.contains("primary_metric: score=1"));
     assert!(output.contains("rank_score: 1"));
     assert!(output.contains("visible_after_eval: false"));
-    assert_eq!(body["challenge_name"], "sample-sum");
+    assert_eq!(body["challenge_id"], "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
     assert_eq!(body["target"], "linux-arm64-cpu");
     assert_eq!(body["explanation"], "quick check");
     assert!(body["artifact_base64"].as_str().expect("artifact").len() > 20);
@@ -135,7 +140,9 @@ async fn validate_remote_posts_validation_run_and_polls_status() {
 async fn validate_remote_rejects_disabled_validation_before_packaging() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/api/public/challenges/sample-sum"))
+        .and(path(
+            "/api/public/challenges/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        ))
         .respond_with(ResponseTemplate::new(200).set_body_json(challenge_detail_json(false)))
         .mount(&server)
         .await;
@@ -155,7 +162,8 @@ async fn validate_remote_rejects_disabled_validation_before_packaging() {
         "test-token",
         "validate",
         "--remote",
-        "sample-sum",
+        "--challenge-id",
+        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         "--target",
         "linux-arm64-cpu",
         "--dir",
@@ -172,7 +180,10 @@ async fn validate_remote_rejects_disabled_validation_before_packaging() {
 
     assert!(error.to_string().contains("validation pass is disabled"));
     assert_eq!(requests.len(), 1);
-    assert_eq!(requests[0].url.path(), "/api/public/challenges/sample-sum");
+    assert_eq!(
+        requests[0].url.path(),
+        "/api/public/challenges/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    );
 }
 
 /// Verifies that validate local requires bundle dir.

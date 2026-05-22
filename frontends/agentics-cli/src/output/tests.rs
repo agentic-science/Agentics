@@ -8,6 +8,7 @@ use shared::models::challenge::{
     SolutionStageProfiles, StageResourceProfile, TargetAccelerator,
 };
 use shared::models::evaluation::ScoreVisibility;
+use shared::models::ids::ChallengeId;
 use shared::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
 use shared::models::localization::LocalizedText;
 use shared::models::names::{ChallengeKeyword, ChallengeName, ResourceProfileName, TargetName};
@@ -29,7 +30,8 @@ fn renders_challenge_list_table() {
     let output = render_challenge_list(
         &ChallengeListResponse {
             items: vec![ChallengeListItemDto {
-                name: challenge_name("sample-sum"),
+                challenge_id: challenge_id(),
+                challenge_name: challenge_name("sample-sum"),
                 title: "Sample Sum".to_string(),
                 summary: localized_summary(),
                 keywords: vec![challenge_keyword("arithmetic")],
@@ -50,7 +52,7 @@ fn renders_challenge_list_table() {
 
     assert_eq!(
         output,
-        "NAME        ELIGIBILITY  KEYWORDS    TITLE\nsample-sum  open         arithmetic  Sample Sum"
+        "ID                                    NAME        ELIGIBILITY  KEYWORDS    TITLE\naaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa  sample-sum  open         arithmetic  Sample Sum"
     );
 }
 
@@ -125,7 +127,8 @@ fn rejects_impossible_coexecuted_challenge_detail_table() {
 /// Handles challenge detail for this module.
 fn challenge_detail() -> ChallengeDetailResponse {
     ChallengeDetailResponse {
-        name: challenge_name("sample-sum"),
+        challenge_id: challenge_id(),
+        challenge_name: challenge_name("sample-sum"),
         title: "Sample Sum".to_string(),
         summary: localized_summary(),
         keywords: vec![challenge_keyword("arithmetic")],
@@ -257,6 +260,12 @@ fn localized_summary() -> LocalizedText {
 /// Handles challenge name for this module.
 fn challenge_name(value: &str) -> ChallengeName {
     ChallengeName::try_new(value.to_string()).expect("test challenge name is valid")
+}
+
+/// Handles challenge id for this module.
+fn challenge_id() -> ChallengeId {
+    ChallengeId::try_new("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+        .expect("test challenge id is valid")
 }
 
 /// Build a valid public challenge keyword for output tests.

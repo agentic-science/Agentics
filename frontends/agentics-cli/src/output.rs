@@ -8,6 +8,7 @@ use shared::models::challenge::{
 };
 use shared::models::challenge_creation::{ChallengeDraftCleanupResponse, ChallengeDraftResponse};
 use shared::models::evaluation::{EvaluationDto, EvaluatorRunResult, MetricValue};
+use shared::models::ids::ChallengeId;
 use shared::models::names::{ChallengeName, MetricName, TargetName};
 use shared::models::request::{
     CreateSolutionSubmissionResponse, LeaderboardResponse, PublicSolutionSubmissionListResponse,
@@ -193,7 +194,8 @@ pub(crate) fn render_challenge_list(
                 .iter()
                 .map(|challenge| {
                     vec![
-                        challenge.name.to_string(),
+                        challenge.challenge_id.to_string(),
+                        challenge.challenge_name.to_string(),
                         status_label(&challenge.eligibility.eligibility_type),
                         format_keywords(&challenge.keywords),
                         challenge.title.clone(),
@@ -201,7 +203,7 @@ pub(crate) fn render_challenge_list(
                 })
                 .collect::<Vec<_>>();
             Ok(render_table(
-                &["NAME", "ELIGIBILITY", "KEYWORDS", "TITLE"],
+                &["ID", "NAME", "ELIGIBILITY", "KEYWORDS", "TITLE"],
                 &rows,
             ))
         }
@@ -238,7 +240,7 @@ pub(crate) fn render_challenge_detail(
             Ok(format!(
                 "{} ({})\nsummary: {}\nkeywords: {}\nstarts_at: {}\ncloses_at: {}\neligibility: {}\nmoltbook_submolt: {} ({})\nmoltbook_discussion: {}\nleaderboard_visibility: {}\nscore_distribution_visibility: {}\nresult_detail_visibility: {}\nsolution_publication: {}\nsolution_protocol: {} ({})\nexecution_mode: {}\n{}: command={}, result_file={}{}targets:\n{}\ndatasets: public={}, private_benchmark={}\nranking_metric: {}\n\n{}",
                 response.title,
-                response.name,
+                response.challenge_name,
                 response.summary.en,
                 format_keywords(&response.keywords),
                 response.spec.starts_at.as_str(),
@@ -310,8 +312,9 @@ pub(crate) fn render_init_solution(
     match format {
         OutputFormat::Json => pretty_json(summary),
         OutputFormat::Table => Ok(format!(
-            "Initialized solution workspace: {}\nchallenge: {} ({})\nruntime_profile: {}\ninterface: {}",
+            "Initialized solution workspace: {}\nchallenge_id: {}\nchallenge: {} ({})\nruntime_profile: {}\ninterface: {}",
             summary.workspace_dir.display(),
+            summary.challenge_id,
             summary.challenge_title,
             summary.challenge_name,
             summary.runtime_profile,
@@ -339,7 +342,7 @@ pub(crate) fn render_create_solution_submission(
         OutputFormat::Table => Ok(format!(
             "Submitted {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}",
             response.id,
-            response.challenge_name,
+            response.challenge_id,
             response.target,
             response.status,
             response.evaluation_job_id,
@@ -690,7 +693,7 @@ pub(crate) fn render_solution_submission_logs(
 /// Renders public solution submission rows for a challenge target.
 pub(crate) fn render_public_solution_submission_list(
     response: &PublicSolutionSubmissionListResponse,
-    challenge_name: &ChallengeName,
+    challenge_id: &ChallengeId,
     target: &TargetName,
     format: OutputFormat,
 ) -> Result<String> {
@@ -715,7 +718,7 @@ pub(crate) fn render_public_solution_submission_list(
                 })
                 .collect::<Vec<_>>();
             Ok(format!(
-                "challenge: {challenge_name}\ntarget: {target}\ntotal_visible: {}\n{}",
+                "challenge_id: {challenge_id}\ntarget: {target}\ntotal_visible: {}\n{}",
                 response.total_count,
                 render_table(
                     &[
@@ -917,7 +920,7 @@ pub(crate) fn render_challenge_stats(
                 .unwrap_or_else(|| "none".to_string());
             Ok(format!(
                 "challenge: {} ({})\ntarget: {}\nstatus: {}\nstarts_at: {}\ncloses_at: {}\neligibility: {}\nranking_metric: {}\nranked_agents: {}\nvisible_submissions: {}\nbest_score: {}\nmean_score: {}\nmedian_score: {}\np90_score: {}\ntop:\n{}",
-                challenge.name,
+                challenge.challenge_name,
                 challenge.title,
                 leaderboard.target,
                 "published",

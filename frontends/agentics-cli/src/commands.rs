@@ -12,7 +12,7 @@ use shared::models::challenge_creation::{
 };
 use shared::models::evaluation::{EvaluationJobPayload, ScoringMode, SolutionSubmissionStatus};
 use shared::models::hashes::Sha256Digest;
-use shared::models::ids::{ChallengeDraftId, SolutionSubmissionId};
+use shared::models::ids::{ChallengeDraftId, ChallengeId, SolutionSubmissionId};
 use shared::models::names::{ChallengeName, MetricName, TargetName};
 use shared::models::pioneer_codes::{PioneerCode, PioneerCodeInput};
 use shared::models::request::{
@@ -239,18 +239,18 @@ pub(crate) fn challenge_shortlist(
 
 /// Builds a challenge statistics view from public challenge result surfaces.
 pub(crate) async fn challenge_stats(
-    challenge_name: ChallengeName,
+    challenge_id: ChallengeId,
     target: TargetName,
     metric: Option<MetricName>,
     output_format: cli::OutputFormat,
     settings: &ResolvedSettings,
 ) -> Result<String> {
     let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-    let challenge = client.get_challenge(&challenge_name).await?;
+    let challenge = client.get_challenge(&challenge_id).await?;
     if challenge.spec.target(&target).is_none() {
         bail!(
             "challenge `{}` does not support target `{target}`",
-            challenge.name
+            challenge.challenge_name
         );
     }
     let metric_name = metric.unwrap_or_else(|| {
@@ -261,12 +261,12 @@ pub(crate) async fn challenge_stats(
             .primary_metric_name
             .clone()
     });
-    let leaderboard = client.get_leaderboard(&challenge_name, &target).await?;
+    let leaderboard = client.get_leaderboard(&challenge_id, &target).await?;
     let distribution = client
-        .get_score_distribution(&challenge_name, &target, &metric_name)
+        .get_score_distribution(&challenge_id, &target, &metric_name)
         .await?;
     let submissions = match client
-        .list_public_solution_submissions(&challenge_name, &target, 20)
+        .list_public_solution_submissions(&challenge_id, &target, 20)
         .await
     {
         Ok(response) => Some(response),
@@ -285,7 +285,7 @@ pub(crate) async fn challenge_stats(
 
 /// Lists visible public solution submissions for one challenge target.
 pub(crate) async fn list_public_solution_submissions(
-    challenge_name: ChallengeName,
+    challenge_id: ChallengeId,
     target: TargetName,
     limit: i64,
     output_format: cli::OutputFormat,
@@ -293,14 +293,9 @@ pub(crate) async fn list_public_solution_submissions(
 ) -> Result<String> {
     let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
     let response = client
-        .list_public_solution_submissions(&challenge_name, &target, limit)
+        .list_public_solution_submissions(&challenge_id, &target, limit)
         .await?;
-    output::render_public_solution_submission_list(
-        &response,
-        &challenge_name,
-        &target,
-        output_format,
-    )
+    output::render_public_solution_submission_list(&response, &challenge_id, &target, output_format)
 }
 
 /// Fetches a detailed result report and ranking context for one solution submission.
@@ -337,7 +332,7 @@ pub(crate) async fn solution_submission_report(
         match client
             .get_solution_submission_ranking_context(
                 &submission_id,
-                &solution_submission.challenge_name,
+                &solution_submission.challenge_id,
                 &solution_submission.target,
             )
             .await
@@ -347,7 +342,7 @@ pub(crate) async fn solution_submission_report(
                 public_ranking_context_or_none(
                     &client,
                     &submission_id,
-                    &solution_submission.challenge_name,
+                    &solution_submission.challenge_id,
                     &solution_submission.target,
                 )
                 .await?
@@ -358,7 +353,7 @@ pub(crate) async fn solution_submission_report(
         public_ranking_context_or_none(
             &client,
             &submission_id,
-            &solution_submission.challenge_name,
+            &solution_submission.challenge_id,
             &solution_submission.target,
         )
         .await?
@@ -380,11 +375,11 @@ fn is_visibility_unavailable(error: &anyhow::Error) -> bool {
 async fn public_ranking_context_or_none(
     client: &ApiClient,
     submission_id: &SolutionSubmissionId,
-    challenge_name: &ChallengeName,
+    challenge_id: &ChallengeId,
     target: &TargetName,
 ) -> Result<Option<RankingContextResponse>> {
     match client
-        .get_public_solution_submission_ranking_context(submission_id, challenge_name, target)
+        .get_public_solution_submission_ranking_context(submission_id, challenge_id, target)
         .await
     {
         Ok(context) => Ok(Some(context)),
@@ -494,7 +489,7 @@ pub(crate) async fn submit(
     settings: &ResolvedSettings,
 ) -> Result<String> {
     let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-    let challenge = client.get_challenge(&args.challenge_name).await?;
+    let challenge = client.get_challenge(&args.challenge_id).await?;
     let targets = select_targets(
         &challenge,
         args.target.as_ref(),
@@ -503,7 +498,7 @@ pub(crate) async fn submit(
     )?;
     validate_parent_submission_scope(
         &client,
-        &challenge.name,
+        &challenge.challenge_id,
         &targets,
         args.all_targets,
         args.parent_solution_submission_id.as_ref(),
@@ -514,7 +509,7 @@ pub(crate) async fn submit(
     let mut responses = Vec::with_capacity(targets.len());
     for target in targets {
         let request = create_solution_submission_request(
-            challenge.name.clone(),
+            challenge.challenge_id.clone(),
             target.clone(),
             &package,
             args.explanation.clone(),
@@ -559,7 +554,11 @@ async fn validate_remote(
     settings: &ResolvedSettings,
 ) -> Result<String> {
     let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-    let challenge = client.get_challenge(&args.challenge_name).await?;
+    let challenge_id = args
+        .challenge_id
+        .clone()
+        .context("--challenge-id is required for remote validation")?;
+    let challenge = client.get_challenge(&challenge_id).await?;
     let targets = select_targets(
         &challenge,
         args.target.as_ref(),
@@ -568,7 +567,7 @@ async fn validate_remote(
     )?;
     validate_parent_submission_scope(
         &client,
-        &challenge.name,
+        &challenge.challenge_id,
         &targets,
         args.all_targets,
         args.parent_solution_submission_id.as_ref(),
@@ -579,7 +578,7 @@ async fn validate_remote(
     let mut responses = Vec::with_capacity(targets.len());
     for target in targets {
         let request = create_solution_submission_request(
-            challenge.name.clone(),
+            challenge.challenge_id.clone(),
             target.clone(),
             &package,
             args.explanation.clone(),
@@ -643,11 +642,15 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
         .context("--bundle-dir is required for local validation")?;
     let bundle_dir = canonical_dir(bundle_dir, "challenge bundle")?;
     let spec = shared::challenge_bundle::read_challenge_bundle_spec(&bundle_dir).await?;
-    if spec.challenge_name != args.challenge_name {
+    let requested_challenge_name = args
+        .challenge_name
+        .as_ref()
+        .context("challenge_name is required for local validation")?;
+    if &spec.challenge_name != requested_challenge_name {
         bail!(
             "local challenge bundle declares challenge `{}`, but command requested `{}`",
             spec.challenge_name,
-            args.challenge_name
+            requested_challenge_name
         );
     }
 
@@ -708,6 +711,7 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
             public_bundle_path: shared::models::paths::ManagedBundlePath::from_existing_dir(
                 &bundle_dir,
             )?,
+            challenge_id: None,
             challenge_name: spec.challenge_name.clone(),
             target: target.clone(),
         };
@@ -877,7 +881,7 @@ fn runner_log_key(job_id: &str) -> PathBuf {
 /// Validates parent submission scope invariants for this contract.
 async fn validate_parent_submission_scope(
     client: &ApiClient,
-    challenge_name: &ChallengeName,
+    challenge_id: &ChallengeId,
     targets: &[TargetName],
     all_targets: bool,
     parent_solution_submission_id: Option<&SolutionSubmissionId>,
@@ -899,9 +903,9 @@ async fn validate_parent_submission_scope(
                 "failed to inspect parent solution submission `{parent_solution_submission_id}`"
             )
         })?;
-    if &parent.challenge_name != challenge_name || parent.target != *target {
+    if &parent.challenge_id != challenge_id || parent.target != *target {
         bail!(
-            "parent solution submission `{parent_solution_submission_id}` must belong to challenge `{challenge_name}` target `{target}`"
+            "parent solution submission `{parent_solution_submission_id}` must belong to challenge_id `{challenge_id}` target `{target}`"
         );
     }
     Ok(())
@@ -963,7 +967,7 @@ fn parse_model_info(raw: &str) -> Result<serde_json::Value> {
 
 /// Creates solution submission request after validating caller inputs.
 fn create_solution_submission_request(
-    challenge_name: ChallengeName,
+    challenge_id: ChallengeId,
     target: TargetName,
     package: &package::SolutionPackage,
     explanation: String,
@@ -971,7 +975,7 @@ fn create_solution_submission_request(
     credit_text: String,
 ) -> CreateSolutionSubmissionRequest {
     CreateSolutionSubmissionRequest {
-        challenge_name,
+        challenge_id,
         target,
         artifact_base64: STANDARD.encode(&package.bytes),
         explanation,
@@ -988,7 +992,7 @@ fn select_targets(
     mode: TargetSelectionMode,
 ) -> Result<Vec<TargetName>> {
     targets::select_targets_from_spec(
-        &challenge.name,
+        &challenge.challenge_name,
         &challenge.spec.targets,
         requested_target,
         all_targets,
