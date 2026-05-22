@@ -23,7 +23,9 @@ use crate::zip_project::{ZIP_PROJECT_MANIFEST_FILE, ZIP_PROJECT_PROTOCOL};
 mod filesystem;
 mod images;
 
-pub use filesystem::{challenge_bundle_tree_sha256, copy_challenge_bundle_dir};
+pub use filesystem::{
+    challenge_bundle_tree_sha256, copy_challenge_bundle_dir, copy_challenge_bundle_dir_excluding,
+};
 
 /// Hard maximum number of solution invocations in one evaluation.
 pub const MAX_CHALLENGE_RUNS_PER_EVALUATION: u64 = 12;

@@ -18,7 +18,7 @@ use crate::storage::StorageKey;
 use super::super::ids::{
     agent_id_from_row, asset_name_from_row, challenge_draft_id_from_row,
     challenge_draft_validation_record_id_from_row, challenge_name_from_row,
-    challenge_private_asset_id_from_row, optional_challenge_name_from_row,
+    challenge_private_asset_id_from_row, optional_challenge_id_from_row,
 };
 
 /// List all private asset lifecycle records for an admin draft review.
@@ -97,6 +97,12 @@ pub(super) fn row_to_draft_response(
     let manifest_json: Value = row.try_get("manifest_json")?;
     let manifest: ChallengeCreationManifest =
         serde_json::from_value(manifest_json).map_err(|e| AppError::Internal(e.to_string()))?;
+    let published_challenge_id = optional_challenge_id_from_row(&row, "published_challenge_id")?;
+    let published_challenge_name = if published_challenge_id.is_some() {
+        Some(challenge_name_from_row(&row, "challenge_name")?)
+    } else {
+        None
+    };
 
     Ok(ChallengeDraftResponse {
         id: challenge_draft_id_from_row(&row, "id")?,
@@ -120,10 +126,8 @@ pub(super) fn row_to_draft_response(
         approved_bundle_sha256: optional_sha256_digest_from_row(&row, "approved_bundle_sha256")?,
         validation_message: row.try_get("validation_message")?,
         validation_repository_path: row.try_get("validation_repository_path")?,
-        published_challenge_name: optional_challenge_name_from_row(
-            &row,
-            "published_challenge_name",
-        )?,
+        published_challenge_id,
+        published_challenge_name,
         private_assets,
         validation_records,
         created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),

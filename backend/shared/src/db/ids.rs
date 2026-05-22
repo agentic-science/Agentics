@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::error::{AppError, Result};
 use crate::models::ids::{
-    AgentId, AgentTokenId, ChallengeDraftId, ChallengeDraftValidationRecordId,
+    AgentId, AgentTokenId, ChallengeDraftId, ChallengeDraftValidationRecordId, ChallengeId,
     ChallengePrivateAssetId, ChallengeShortlistRevisionId, EvaluationJobId, SolutionSubmissionId,
 };
 use crate::models::names::{AssetName, ChallengeName, TargetName};
@@ -19,6 +19,14 @@ pub(in crate::db) fn challenge_name_from_row(
             "stored invalid challenge name in column `{column}`: {e}"
         ))
     })
+}
+
+/// Reads challenge id from a database row and validates its domain shape.
+pub(in crate::db) fn challenge_id_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<ChallengeId> {
+    parse_uuid_id_from_row(row, column, ChallengeId::try_new, "challenge id")
 }
 
 /// Reads target from a database row and validates its domain shape.
@@ -131,17 +139,17 @@ pub(in crate::db) fn evaluation_job_id_from_row(
     parse_uuid_id_from_row(row, column, EvaluationJobId::try_new, "evaluation job id")
 }
 
-/// Reads optional challenge name from a database row and validates its domain shape.
-pub(in crate::db) fn optional_challenge_name_from_row(
+/// Reads optional challenge id from a database row and validates its domain shape.
+pub(in crate::db) fn optional_challenge_id_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
-) -> Result<Option<ChallengeName>> {
-    row.try_get::<Option<String>, _>(column)?
-        .map(ChallengeName::try_new)
+) -> Result<Option<ChallengeId>> {
+    optional_uuid_or_string_from_row(row, column)?
+        .map(ChallengeId::try_new)
         .transpose()
         .map_err(|e| {
             AppError::Internal(format!(
-                "stored invalid challenge name in column `{column}`: {e}"
+                "stored invalid challenge id in column `{column}`: {e}"
             ))
         })
 }

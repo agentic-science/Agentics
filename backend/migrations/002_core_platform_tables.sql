@@ -20,7 +20,8 @@ CREATE TABLE IF NOT EXISTS agent_tokens (
 );
 
 CREATE TABLE IF NOT EXISTS challenges (
-  name TEXT PRIMARY KEY,
+  challenge_id UUID PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
   title TEXT NOT NULL,
   summary JSONB NOT NULL DEFAULT '{"en":"","zh":""}'::jsonb,
   bundle_path TEXT,
@@ -45,16 +46,16 @@ CREATE TABLE IF NOT EXISTS challenges (
 );
 
 CREATE TABLE IF NOT EXISTS challenge_owners (
-  challenge_name TEXT NOT NULL REFERENCES challenges(name) ON DELETE CASCADE,
+  challenge_id UUID NOT NULL REFERENCES challenges(challenge_id) ON DELETE CASCADE,
   agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
   role TEXT NOT NULL DEFAULT 'owner' CHECK (role IN ('owner')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (challenge_name, agent_id)
+  PRIMARY KEY (challenge_id, agent_id)
 );
 
 CREATE TABLE IF NOT EXISTS challenge_shortlist_revisions (
   id UUID PRIMARY KEY,
-  challenge_name TEXT NOT NULL REFERENCES challenges(name) ON DELETE CASCADE,
+  challenge_id UUID NOT NULL REFERENCES challenges(challenge_id) ON DELETE CASCADE,
   uploader_agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
   storage_key TEXT NOT NULL,
   sha256 TEXT NOT NULL,
@@ -64,17 +65,17 @@ CREATE TABLE IF NOT EXISTS challenge_shortlist_revisions (
 );
 
 CREATE TABLE IF NOT EXISTS challenge_shortlisted_agents (
-  challenge_name TEXT NOT NULL REFERENCES challenges(name) ON DELETE CASCADE,
+  challenge_id UUID NOT NULL REFERENCES challenges(challenge_id) ON DELETE CASCADE,
   agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
   added_by_agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
   source_revision_id UUID NOT NULL REFERENCES challenge_shortlist_revisions(id) ON DELETE RESTRICT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (challenge_name, agent_id)
+  PRIMARY KEY (challenge_id, agent_id)
 );
 
 CREATE TABLE IF NOT EXISTS solution_submissions (
   id UUID PRIMARY KEY,
-  challenge_name TEXT NOT NULL REFERENCES challenges(name) ON DELETE RESTRICT,
+  challenge_id UUID NOT NULL REFERENCES challenges(challenge_id) ON DELETE RESTRICT,
   target TEXT NOT NULL,
   agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
   artifact_key TEXT NOT NULL,
@@ -86,13 +87,13 @@ CREATE TABLE IF NOT EXISTS solution_submissions (
   visible_after_eval BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (id, challenge_name, target)
+  UNIQUE (id, challenge_id, target)
 );
 
 CREATE TABLE IF NOT EXISTS evaluation_jobs (
   id UUID PRIMARY KEY,
   solution_submission_id UUID NOT NULL REFERENCES solution_submissions(id) ON DELETE CASCADE,
-  challenge_name TEXT NOT NULL REFERENCES challenges(name) ON DELETE RESTRICT,
+  challenge_id UUID NOT NULL REFERENCES challenges(challenge_id) ON DELETE RESTRICT,
   target TEXT NOT NULL,
   required_accelerator TEXT NOT NULL DEFAULT 'none' CHECK (required_accelerator IN ('none', 'gpu')),
   eval_type TEXT NOT NULL CHECK (eval_type IN ('validation', 'official')),
@@ -108,8 +109,8 @@ CREATE TABLE IF NOT EXISTS evaluation_jobs (
   worker_id TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (id, solution_submission_id, target),
-  FOREIGN KEY (solution_submission_id, challenge_name, target)
-    REFERENCES solution_submissions(id, challenge_name, target) ON DELETE CASCADE
+  FOREIGN KEY (solution_submission_id, challenge_id, target)
+    REFERENCES solution_submissions(id, challenge_id, target) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS evaluations (
@@ -134,7 +135,7 @@ CREATE TABLE IF NOT EXISTS evaluations (
 );
 
 CREATE TABLE IF NOT EXISTS leaderboard_entries (
-  challenge_name TEXT NOT NULL REFERENCES challenges(name) ON DELETE CASCADE,
+  challenge_id UUID NOT NULL REFERENCES challenges(challenge_id) ON DELETE CASCADE,
   target TEXT NOT NULL,
   agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
   best_solution_submission_id UUID NOT NULL REFERENCES solution_submissions(id) ON DELETE CASCADE,
@@ -143,17 +144,17 @@ CREATE TABLE IF NOT EXISTS leaderboard_entries (
   aggregate_metrics_json JSONB NOT NULL DEFAULT '[]'::jsonb,
   official_metrics_json JSONB NOT NULL DEFAULT '[]'::jsonb,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (challenge_name, target, agent_id),
-  FOREIGN KEY (best_solution_submission_id, challenge_name, target)
-    REFERENCES solution_submissions(id, challenge_name, target) ON DELETE CASCADE
+  PRIMARY KEY (challenge_id, target, agent_id),
+  FOREIGN KEY (best_solution_submission_id, challenge_id, target)
+    REFERENCES solution_submissions(id, challenge_id, target) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_agent_tokens_agent_id ON agent_tokens (agent_id);
-CREATE INDEX IF NOT EXISTS idx_challenge_owners_agent_id ON challenge_owners (agent_id, challenge_name);
-CREATE INDEX IF NOT EXISTS idx_challenge_shortlist_revisions_challenge_name ON challenge_shortlist_revisions (challenge_name, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_challenge_shortlisted_agents_agent_id ON challenge_shortlisted_agents (agent_id, challenge_name);
+CREATE INDEX IF NOT EXISTS idx_challenge_owners_agent_id ON challenge_owners (agent_id, challenge_id);
+CREATE INDEX IF NOT EXISTS idx_challenge_shortlist_revisions_challenge_id ON challenge_shortlist_revisions (challenge_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_challenge_shortlisted_agents_agent_id ON challenge_shortlisted_agents (agent_id, challenge_id);
 CREATE INDEX IF NOT EXISTS idx_solution_submissions_challenge_target_agent
-  ON solution_submissions (challenge_name, target, agent_id, created_at DESC);
+  ON solution_submissions (challenge_id, target, agent_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_evaluation_jobs_status_scheduled ON evaluation_jobs (status, scheduled_at, priority DESC);
 CREATE INDEX IF NOT EXISTS idx_evaluation_jobs_claim_accelerator ON evaluation_jobs (status, required_accelerator, scheduled_at, priority DESC);
 CREATE INDEX IF NOT EXISTS idx_evaluation_jobs_solution_submission_id ON evaluation_jobs (solution_submission_id);

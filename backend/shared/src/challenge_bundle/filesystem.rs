@@ -30,6 +30,28 @@ pub async fn copy_challenge_bundle_dir(
     .map_err(|e| AppError::Internal(format!("bundle copy task failed: {e}")))?
 }
 
+/// Copy a challenge bundle directory while excluding one bundle-relative tree.
+pub async fn copy_challenge_bundle_dir_excluding(
+    source: &Path,
+    target: &Path,
+    excluded_relative_tree: &Path,
+    replace_existing: bool,
+) -> Result<()> {
+    let source = source.to_path_buf();
+    let target = target.to_path_buf();
+    let excluded_relative_tree = excluded_relative_tree.to_path_buf();
+    tokio::task::spawn_blocking(move || {
+        copy_challenge_bundle_dir_excluding_blocking(
+            &source,
+            &target,
+            &excluded_relative_tree,
+            replace_existing,
+        )
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("public bundle copy task failed: {e}")))?
+}
+
 /// Compute a bundle-tree digest synchronously for execution on a blocking thread.
 fn challenge_bundle_tree_sha256_blocking(bundle_root: &Path) -> Result<Sha256Digest> {
     let mut hasher = Sha256::new();
@@ -153,4 +175,79 @@ fn copy_challenge_bundle_dir_blocking(
     }
 
     Ok(())
+}
+
+/// Copy a challenge bundle while excluding one relative subtree.
+fn copy_challenge_bundle_dir_excluding_blocking(
+    source: &Path,
+    target: &Path,
+    excluded_relative_tree: &Path,
+    replace_existing: bool,
+) -> Result<()> {
+    if excluded_relative_tree.as_os_str().is_empty() || excluded_relative_tree.is_absolute() {
+        return Err(AppError::Validation(
+            "excluded challenge bundle path must be relative and non-empty".to_string(),
+        ));
+    }
+
+    if target.exists() {
+        if !replace_existing {
+            if target.is_dir() {
+                return Ok(());
+            }
+            return Err(AppError::Validation(format!(
+                "managed public bundle target exists and is not a directory: {}",
+                target.display()
+            )));
+        }
+        std::fs::remove_dir_all(target)?;
+    }
+    std::fs::create_dir_all(target)?;
+
+    let mut stack = vec![source.to_path_buf()];
+    while let Some(current_source) = stack.pop() {
+        let relative_dir = current_source
+            .strip_prefix(source)
+            .map_err(|e| AppError::Internal(format!("failed to copy public bundle: {e}")))?;
+        if is_path_within_tree(relative_dir, excluded_relative_tree) {
+            continue;
+        }
+        let current_target = target.join(relative_dir);
+        std::fs::create_dir_all(&current_target)?;
+
+        for entry in std::fs::read_dir(&current_source)? {
+            let entry = entry?;
+            let source_path = entry.path();
+            let relative_path = source_path
+                .strip_prefix(source)
+                .map_err(|e| AppError::Internal(format!("failed to copy public bundle: {e}")))?;
+            if is_path_within_tree(relative_path, excluded_relative_tree) {
+                continue;
+            }
+
+            let meta = std::fs::symlink_metadata(&source_path)?;
+            if meta.file_type().is_symlink() {
+                return Err(AppError::Validation(format!(
+                    "challenge bundle must not contain symlinks: {}",
+                    source_path.display()
+                )));
+            }
+            if meta.is_dir() {
+                stack.push(source_path);
+            } else if meta.is_file() {
+                let target_path = target.join(relative_path);
+                if let Some(parent) = target_path.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+                std::fs::copy(&source_path, &target_path)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Return whether a relative path is the excluded tree itself or a child of it.
+fn is_path_within_tree(path: &Path, tree: &Path) -> bool {
+    path == tree || path.starts_with(tree)
 }

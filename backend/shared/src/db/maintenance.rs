@@ -1,6 +1,6 @@
 //! Maintenance queries used by server startup and worker liveness.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use sqlx::{PgPool, Row};
 
@@ -87,6 +87,7 @@ pub async fn list_service_heartbeats(pool: &PgPool) -> Result<Vec<AdminServiceHe
 pub async fn ensure_challenges_seeded_from_root(
     pool: &PgPool,
     challenges_root: &str,
+    storage_root: &str,
 ) -> Result<usize> {
     tokio::fs::create_dir_all(challenges_root).await?;
     let mut entries = tokio::fs::read_dir(challenges_root).await?;
@@ -121,16 +122,20 @@ pub async fn ensure_challenges_seeded_from_root(
             let statement_path = bundle_dir.join("statement.md");
             let managed_bundle_path =
                 crate::models::paths::ManagedBundlePath::from_existing_dir(&bundle_dir)?;
+            let public_bundle_path =
+                seeded_public_bundle_path(&bundle_dir, Path::new(storage_root), &spec).await?;
             let managed_statement_path =
                 crate::models::paths::ManagedStatementPath::from_existing_file(&statement_path)?;
             let challenge_name = &spec.challenge_name;
+            let challenge_id = crate::models::ids::ChallengeId::generate();
 
             if crate::db::publish_challenge(
                 pool,
                 &PublishChallengeInput {
+                    challenge_id: &challenge_id,
                     challenge_name,
                     bundle_path: &managed_bundle_path,
-                    public_bundle_path: &managed_bundle_path,
+                    public_bundle_path: &public_bundle_path,
                     statement_path: &managed_statement_path,
                     spec: &spec,
                     title: &spec.challenge_title,
@@ -161,7 +166,7 @@ pub async fn ensure_challenges_seeded_from_root(
                         .map_err(|e| AppError::Internal(e.to_string()))?,
                 )
                 .bind(managed_bundle_path.as_str()?)
-                .bind(managed_bundle_path.as_str()?)
+                .bind(public_bundle_path.as_str()?)
                 .bind(managed_statement_path.as_str()?)
                 .bind(serde_json::to_value(&spec).map_err(|e| AppError::Internal(e.to_string()))?)
                 .execute(pool)
@@ -175,6 +180,36 @@ pub async fn ensure_challenges_seeded_from_root(
     }
 
     Ok(synced)
+}
+
+/// Return the public-only bundle path for a seeded challenge.
+async fn seeded_public_bundle_path(
+    bundle_dir: &Path,
+    storage_root: &Path,
+    spec: &crate::models::challenge::ChallengeBundleSpec,
+) -> Result<crate::models::paths::ManagedBundlePath> {
+    if !spec.datasets.private_benchmark_enabled {
+        return crate::models::paths::ManagedBundlePath::from_existing_dir(bundle_dir);
+    }
+
+    let digest = crate::challenge_bundle::challenge_bundle_tree_sha256(bundle_dir).await?;
+    let target = storage_root
+        .join("seeded-public-bundles")
+        .join(spec.challenge_name.as_str())
+        .join(digest.to_hex());
+    if let Some(private_benchmark_dir) = &spec.datasets.private_benchmark_dir {
+        crate::challenge_bundle::copy_challenge_bundle_dir_excluding(
+            bundle_dir,
+            &target,
+            private_benchmark_dir.as_path(),
+            true,
+        )
+        .await?;
+    } else {
+        crate::challenge_bundle::copy_challenge_bundle_dir(bundle_dir, &target, true).await?;
+    }
+
+    crate::models::paths::ManagedBundlePath::from_existing_dir(&target)
 }
 
 /// Summary of stale job recovery work.

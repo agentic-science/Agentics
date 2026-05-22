@@ -7,8 +7,8 @@ use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction};
 use crate::error::{AppError, Result};
 use crate::models::challenge::{ChallengeBundleSpec, MetricDirection};
 use crate::models::evaluation::{MetricValue, PublicCaseResult};
-use crate::models::ids::SolutionSubmissionId;
-use crate::models::names::{ChallengeName, MetricName, TargetName};
+use crate::models::ids::{ChallengeId, SolutionSubmissionId};
+use crate::models::names::{MetricName, TargetName};
 use crate::models::request::LeaderboardEntryDto;
 
 use super::challenges::get_public_challenge;
@@ -21,22 +21,22 @@ pub(super) async fn repair_leaderboard_entry_for_solution_submission_tx<'a>(
     solution_submission_id: &SolutionSubmissionId,
 ) -> Result<()> {
     let row: Option<(String, String, String)> = sqlx::query_as(
-        "SELECT challenge_name, target, agent_id::text AS agent_id FROM solution_submissions WHERE id = $1::uuid LIMIT 1"
+        "SELECT challenge_id::text AS challenge_id, target, agent_id::text AS agent_id FROM solution_submissions WHERE id = $1::uuid LIMIT 1"
     )
     .bind(solution_submission_id.as_str())
     .fetch_optional(&mut **tx)
     .await?;
 
-    let Some((challenge_name, target, agent_id)) = row else {
+    let Some((challenge_id, target, agent_id)) = row else {
         return Ok(());
     };
 
-    lock_leaderboard_scope(tx, &challenge_name, &target, &agent_id).await?;
+    lock_leaderboard_scope(tx, &challenge_id, &target, &agent_id).await?;
 
     let leaderboard_entry: Option<(String,)> = sqlx::query_as(
-        "SELECT best_solution_submission_id::text AS best_solution_submission_id FROM leaderboard_entries WHERE challenge_name = $1 AND target = $2 AND agent_id = $3::uuid LIMIT 1"
+        "SELECT best_solution_submission_id::text AS best_solution_submission_id FROM leaderboard_entries WHERE challenge_id = $1::uuid AND target = $2 AND agent_id = $3::uuid LIMIT 1"
     )
-    .bind(&challenge_name)
+    .bind(&challenge_id)
     .bind(&target)
     .bind(&agent_id)
     .fetch_optional(&mut **tx)
@@ -46,11 +46,12 @@ pub(super) async fn repair_leaderboard_entry_for_solution_submission_tx<'a>(
         .map(|e| e.0 == solution_submission_id.as_str())
         .unwrap_or(false)
     {
-        let spec_json: Option<(Value,)> =
-            sqlx::query_as("SELECT spec_json FROM challenges WHERE name = $1 LIMIT 1")
-                .bind(&challenge_name)
-                .fetch_optional(&mut **tx)
-                .await?;
+        let spec_json: Option<(Value,)> = sqlx::query_as(
+            "SELECT spec_json FROM challenges WHERE challenge_id = $1::uuid LIMIT 1",
+        )
+        .bind(&challenge_id)
+        .fetch_optional(&mut **tx)
+        .await?;
         let Some((spec_json,)) = spec_json else {
             return Ok(());
         };
@@ -84,7 +85,7 @@ pub(super) async fn repair_leaderboard_entry_for_solution_submission_tx<'a>(
                 WHERE solution_submission_id = s.id AND eval_type = 'official' AND status = 'completed' AND target = s.target
                 ORDER BY created_at DESC LIMIT 1
             ) oe ON TRUE
-            WHERE s.challenge_name = $1 AND s.agent_id = $2::uuid AND s.id <> $3::uuid
+            WHERE s.challenge_id = $1::uuid AND s.agent_id = $2::uuid AND s.id <> $3::uuid
               AND s.target = $4
               AND s.visible_after_eval = TRUE AND s.status = 'completed'
               AND COALESCE(
@@ -95,7 +96,7 @@ pub(super) async fn repair_leaderboard_entry_for_solution_submission_tx<'a>(
                   ) IS NOT NULL
             "#
         )
-        .bind(&challenge_name)
+        .bind(&challenge_id)
         .bind(&agent_id)
         .bind(solution_submission_id.as_str())
         .bind(&target)
@@ -137,11 +138,11 @@ pub(super) async fn repair_leaderboard_entry_for_solution_submission_tx<'a>(
             sqlx::query(
                 r#"
                 INSERT INTO leaderboard_entries (
-                    challenge_name, target, agent_id, best_solution_submission_id, best_rank_score,
+                    challenge_id, target, agent_id, best_solution_submission_id, best_rank_score,
                     public_results_json, aggregate_metrics_json, official_metrics_json, updated_at
                 )
-                VALUES ($1, $2, $3::uuid, $4::uuid, $5, $6, $7, $8, NOW())
-                ON CONFLICT (challenge_name, target, agent_id) DO UPDATE
+                VALUES ($1::uuid, $2, $3::uuid, $4::uuid, $5, $6, $7, $8, NOW())
+                ON CONFLICT (challenge_id, target, agent_id) DO UPDATE
                 SET best_solution_submission_id = EXCLUDED.best_solution_submission_id,
                     best_rank_score = EXCLUDED.best_rank_score,
                     public_results_json = EXCLUDED.public_results_json,
@@ -150,7 +151,7 @@ pub(super) async fn repair_leaderboard_entry_for_solution_submission_tx<'a>(
                     updated_at = NOW()
                 "#,
             )
-            .bind(&challenge_name)
+            .bind(&challenge_id)
             .bind(&target)
             .bind(&agent_id)
             .bind(&best.id)
@@ -162,9 +163,9 @@ pub(super) async fn repair_leaderboard_entry_for_solution_submission_tx<'a>(
             .await?;
         } else {
             sqlx::query(
-                "DELETE FROM leaderboard_entries WHERE challenge_name = $1 AND target = $2 AND agent_id = $3::uuid",
+                "DELETE FROM leaderboard_entries WHERE challenge_id = $1::uuid AND target = $2 AND agent_id = $3::uuid",
             )
-            .bind(&challenge_name)
+            .bind(&challenge_id)
             .bind(&target)
             .bind(&agent_id)
             .execute(&mut **tx)
@@ -175,14 +176,14 @@ pub(super) async fn repair_leaderboard_entry_for_solution_submission_tx<'a>(
     Ok(())
 }
 
-/// List leaderboard entries for a challenge name.
+/// List leaderboard entries for a challenge id.
 pub async fn list_leaderboard_entries(
     pool: &PgPool,
-    challenge_name: &ChallengeName,
+    challenge_id: &ChallengeId,
     target: &TargetName,
     limit: i64,
 ) -> Result<Vec<LeaderboardEntryDto>> {
-    let (spec, rows) = list_leaderboard_rows(pool, challenge_name, target, limit).await?;
+    let (spec, rows) = list_leaderboard_rows(pool, challenge_id, target, limit).await?;
     Ok(rows
         .into_iter()
         .map(|row| row.into_public_dto(&spec))
@@ -192,11 +193,11 @@ pub async fn list_leaderboard_entries(
 /// List leaderboard entries with metric payloads for internal aggregate calculations.
 pub async fn list_leaderboard_entries_with_metric_payloads(
     pool: &PgPool,
-    challenge_name: &ChallengeName,
+    challenge_id: &ChallengeId,
     target: &TargetName,
     limit: i64,
 ) -> Result<Vec<LeaderboardMetricEntry>> {
-    let (_spec, rows) = list_leaderboard_rows(pool, challenge_name, target, limit).await?;
+    let (_spec, rows) = list_leaderboard_rows(pool, challenge_id, target, limit).await?;
     Ok(rows
         .into_iter()
         .map(LeaderboardRow::into_metric_entry)
@@ -267,12 +268,12 @@ impl LeaderboardRow {
 /// Query and order the visible leaderboard rows for one target.
 async fn list_leaderboard_rows(
     pool: &PgPool,
-    challenge_name: &ChallengeName,
+    challenge_id: &ChallengeId,
     target: &TargetName,
     limit: i64,
 ) -> Result<(ChallengeBundleSpec, Vec<LeaderboardRow>)> {
     let requested_limit = limit.max(1);
-    let challenge = get_public_challenge(pool, challenge_name)
+    let challenge = get_public_challenge(pool, challenge_id)
         .await?
         .ok_or(AppError::NotFound)?;
     let spec = serde_json::from_value::<ChallengeBundleSpec>(challenge.spec_json)
@@ -286,12 +287,13 @@ async fn list_leaderboard_rows(
         FROM leaderboard_entries le
         JOIN solution_submissions s ON s.id = le.best_solution_submission_id
         JOIN agents a ON a.id = le.agent_id
-        JOIN challenges p ON p.name = le.challenge_name
-        WHERE p.name =
+        JOIN challenges p ON p.challenge_id = le.challenge_id
+        WHERE p.challenge_id =
         "#,
     );
     query
-        .push_bind(challenge_name.as_str())
+        .push_bind(challenge_id.as_str())
+        .push("::uuid")
         .push(
             r#"
           AND le.target =
@@ -372,9 +374,9 @@ pub(super) async fn upsert_leaderboard_entry_for_solution_submission_tx<'a>(
 ) -> Result<bool> {
     let row: Option<(String, String, Value)> = sqlx::query_as(
         r#"
-        SELECT s.challenge_name, s.agent_id::text AS agent_id, p.spec_json
+        SELECT s.challenge_id::text AS challenge_id, s.agent_id::text AS agent_id, p.spec_json
         FROM solution_submissions s
-        JOIN challenges p ON p.name = s.challenge_name
+        JOIN challenges p ON p.challenge_id = s.challenge_id
         WHERE s.id = $1::uuid
         LIMIT 1
         "#,
@@ -383,18 +385,18 @@ pub(super) async fn upsert_leaderboard_entry_for_solution_submission_tx<'a>(
     .fetch_optional(&mut **tx)
     .await?;
 
-    let Some((challenge_name, agent_id, spec_json)) = row else {
+    let Some((challenge_id, agent_id, spec_json)) = row else {
         return Ok(false);
     };
     let spec = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
         .map_err(|e| AppError::Internal(format!("stored challenge spec is invalid: {e}")))?;
 
-    lock_leaderboard_scope(tx, &challenge_name, target.as_str(), &agent_id).await?;
+    lock_leaderboard_scope(tx, &challenge_id, target.as_str(), &agent_id).await?;
 
     let current: Option<(f64, Value)> = sqlx::query_as(
-        "SELECT best_rank_score, aggregate_metrics_json FROM leaderboard_entries WHERE challenge_name = $1 AND target = $2 AND agent_id = $3::uuid LIMIT 1"
+        "SELECT best_rank_score, aggregate_metrics_json FROM leaderboard_entries WHERE challenge_id = $1::uuid AND target = $2 AND agent_id = $3::uuid LIMIT 1"
     )
-    .bind(&challenge_name)
+    .bind(&challenge_id)
     .bind(target.as_str())
     .bind(&agent_id)
     .fetch_optional(&mut **tx)
@@ -418,11 +420,11 @@ pub(super) async fn upsert_leaderboard_entry_for_solution_submission_tx<'a>(
     sqlx::query(
         r#"
         INSERT INTO leaderboard_entries (
-            challenge_name, target, agent_id, best_solution_submission_id, best_rank_score,
+            challenge_id, target, agent_id, best_solution_submission_id, best_rank_score,
             public_results_json, aggregate_metrics_json, updated_at
         )
-        VALUES ($1, $2, $3::uuid, $4::uuid, $5, $6, $7, NOW())
-        ON CONFLICT (challenge_name, target, agent_id) DO UPDATE
+        VALUES ($1::uuid, $2, $3::uuid, $4::uuid, $5, $6, $7, NOW())
+        ON CONFLICT (challenge_id, target, agent_id) DO UPDATE
         SET best_solution_submission_id = EXCLUDED.best_solution_submission_id,
             best_rank_score = EXCLUDED.best_rank_score,
             public_results_json = EXCLUDED.public_results_json,
@@ -430,7 +432,7 @@ pub(super) async fn upsert_leaderboard_entry_for_solution_submission_tx<'a>(
             updated_at = NOW()
         "#,
     )
-    .bind(&challenge_name)
+    .bind(&challenge_id)
     .bind(target.as_str())
     .bind(&agent_id)
     .bind(solution_submission_id.as_str())
@@ -451,13 +453,13 @@ pub(super) async fn update_official_metrics_for_solution_submission_tx<'a>(
     official_metrics: &[MetricValue],
 ) -> Result<()> {
     let row: Option<(String, String)> = sqlx::query_as(
-        "SELECT challenge_name, agent_id::text AS agent_id FROM solution_submissions WHERE id = $1::uuid LIMIT 1",
+        "SELECT challenge_id::text AS challenge_id, agent_id::text AS agent_id FROM solution_submissions WHERE id = $1::uuid LIMIT 1",
     )
     .bind(solution_submission_id.as_str())
     .fetch_optional(&mut **tx)
     .await?;
 
-    let Some((challenge_name, agent_id)) = row else {
+    let Some((challenge_id, agent_id)) = row else {
         return Ok(());
     };
 
@@ -465,9 +467,9 @@ pub(super) async fn update_official_metrics_for_solution_submission_tx<'a>(
         serde_json::to_value(official_metrics).map_err(|e| AppError::Internal(e.to_string()))?;
 
     sqlx::query(
-        "UPDATE leaderboard_entries SET official_metrics_json = $4, updated_at = NOW() WHERE challenge_name = $1 AND target = $2 AND agent_id = $3::uuid"
+        "UPDATE leaderboard_entries SET official_metrics_json = $4, updated_at = NOW() WHERE challenge_id = $1::uuid AND target = $2 AND agent_id = $3::uuid"
     )
-    .bind(&challenge_name)
+    .bind(&challenge_id)
     .bind(target.as_str())
     .bind(&agent_id)
     .bind(&official_metrics_json)
@@ -480,11 +482,11 @@ pub(super) async fn update_official_metrics_for_solution_submission_tx<'a>(
 /// Serialize leaderboard changes for one challenge, target, and agent.
 async fn lock_leaderboard_scope(
     tx: &mut Transaction<'_, Postgres>,
-    challenge_name: &str,
+    challenge_id: &str,
     target: &str,
     agent_id: &str,
 ) -> Result<()> {
-    let scope = format!("leaderboard:{challenge_name}:{target}:{agent_id}");
+    let scope = format!("leaderboard:{challenge_id}:{target}:{agent_id}");
     sqlx::query(
         r#"
         INSERT INTO quota_admission_locks (scope)

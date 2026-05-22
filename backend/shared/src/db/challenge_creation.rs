@@ -1,6 +1,5 @@
 //! Challenge draft, GitHub identity, private asset, and review lifecycle queries.
 
-use serde_json::Value;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use crate::error::{AppError, Result};
@@ -15,7 +14,7 @@ use crate::models::hashes::GitCommitSha;
 use crate::models::hashes::Sha256Digest;
 use crate::models::ids::{
     AgentId, ChallengeDraftAuditEventId, ChallengeDraftId, ChallengeDraftPublishClaimId,
-    ChallengeDraftValidationRecordId, ChallengePrivateAssetId,
+    ChallengeDraftValidationRecordId, ChallengeId, ChallengePrivateAssetId,
 };
 use crate::models::localization::LocalizedText;
 use crate::models::names::{AssetName, ChallengeName};
@@ -982,13 +981,13 @@ pub async fn mark_challenge_draft_published(
     pool: &PgPool,
     draft_id: &str,
     publish_claim_id: &ChallengeDraftPublishClaimId,
-    published_challenge_name: Option<&ChallengeName>,
+    published_challenge_id: Option<&ChallengeId>,
 ) -> Result<()> {
     let result = sqlx::query(
         r#"
         UPDATE challenge_drafts
         SET status = 'published',
-            published_challenge_name = $2,
+            published_challenge_id = $2::uuid,
             publish_claim_id = NULL,
             updated_at = NOW()
         WHERE id = $1::uuid
@@ -998,7 +997,7 @@ pub async fn mark_challenge_draft_published(
         "#,
     )
     .bind(draft_id)
-    .bind(published_challenge_name.map(ChallengeName::as_str))
+    .bind(published_challenge_id.map(ChallengeId::as_str))
     .bind(publish_claim_id.as_str())
     .execute(pool)
     .await?;
@@ -1015,9 +1014,11 @@ pub async fn publish_new_challenge_draft(
     input: &PublishNewChallengeDraftInput,
 ) -> Result<()> {
     let mut tx = pool.begin().await?;
+    let challenge_id = ChallengeId::generate();
     let published = publish_challenge_tx(
         &mut tx,
         &PublishChallengeInput {
+            challenge_id: &challenge_id,
             challenge_name: &input.challenge_name,
             bundle_path: &input.bundle_path,
             public_bundle_path: &input.public_bundle_path,
@@ -1028,12 +1029,12 @@ pub async fn publish_new_challenge_draft(
         },
     )
     .await?;
-    add_challenge_owner_tx(&mut tx, &published.challenge_name, &input.owner_agent_id).await?;
+    add_challenge_owner_tx(&mut tx, &published.challenge_id, &input.owner_agent_id).await?;
     mark_challenge_draft_published_tx(
         &mut tx,
         input.draft_id.as_str(),
         &input.publish_claim_id,
-        Some(&published.challenge_name),
+        Some(&published.challenge_id),
     )
     .await?;
     create_challenge_draft_audit_event_tx(
@@ -1047,6 +1048,7 @@ pub async fn publish_new_challenge_draft(
             message: "challenge draft published".to_string(),
             metadata: serde_json::json!({
                 "challenge_name": &input.challenge_name,
+                "published_challenge_id": &published.challenge_id,
                 "published_challenge_name": &published.challenge_name,
                 "repository_path": &input.repository_path,
                 "bundle_sha256": input.bundle_sha256
@@ -1064,13 +1066,15 @@ pub async fn publish_archive_challenge_draft(
     input: &PublishArchiveChallengeDraftInput,
 ) -> Result<()> {
     let mut tx = pool.begin().await?;
-    ensure_agent_owns_challenge_tx(&mut tx, &input.challenge_name, &input.owner_agent_id).await?;
-    archive_challenge_tx(&mut tx, &input.challenge_name).await?;
+    let challenge_id =
+        resolve_active_challenge_id_by_name_tx(&mut tx, &input.challenge_name).await?;
+    ensure_agent_owns_challenge_tx(&mut tx, &challenge_id, &input.owner_agent_id).await?;
+    archive_challenge_tx(&mut tx, &challenge_id).await?;
     mark_challenge_draft_published_tx(
         &mut tx,
         input.draft_id.as_str(),
         &input.publish_claim_id,
-        None,
+        Some(&challenge_id),
     )
     .await?;
     create_challenge_draft_audit_event_tx(
@@ -1084,7 +1088,8 @@ pub async fn publish_archive_challenge_draft(
             message: "challenge draft published".to_string(),
             metadata: serde_json::json!({
                 "challenge_name": &input.challenge_name,
-                "published_challenge_name": Value::Null,
+                "published_challenge_id": &challenge_id,
+                "published_challenge_name": &input.challenge_name,
                 "repository_path": &input.repository_path,
                 "bundle_sha256": input.bundle_sha256
             }),
@@ -1095,10 +1100,34 @@ pub async fn publish_archive_challenge_draft(
     Ok(())
 }
 
+/// Resolve an active published challenge id by its unique challenge name.
+async fn resolve_active_challenge_id_by_name_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    challenge_name: &ChallengeName,
+) -> Result<ChallengeId> {
+    let row = sqlx::query(
+        r#"
+        SELECT challenge_id
+        FROM challenges
+        WHERE name = $1
+          AND status = 'active'
+          AND spec_json IS NOT NULL
+        LIMIT 1
+        FOR UPDATE
+        "#,
+    )
+    .bind(challenge_name.as_str())
+    .fetch_optional(&mut **tx)
+    .await?;
+
+    let row = row.ok_or(AppError::NotFound)?;
+    super::ids::challenge_id_from_row(&row, "challenge_id")
+}
+
 /// Require that an archive draft creator currently owns the target challenge.
 async fn ensure_agent_owns_challenge_tx(
     tx: &mut Transaction<'_, Postgres>,
-    challenge_name: &ChallengeName,
+    challenge_id: &ChallengeId,
     agent_id: &AgentId,
 ) -> Result<()> {
     let owns_challenge = sqlx::query_scalar::<_, bool>(
@@ -1106,11 +1135,11 @@ async fn ensure_agent_owns_challenge_tx(
         SELECT EXISTS (
             SELECT 1
             FROM challenge_owners
-            WHERE challenge_name = $1 AND agent_id = $2::uuid
+            WHERE challenge_id = $1::uuid AND agent_id = $2::uuid
         )
         "#,
     )
-    .bind(challenge_name.as_str())
+    .bind(challenge_id.as_str())
     .bind(agent_id.as_str())
     .fetch_one(&mut **tx)
     .await?;
@@ -1128,13 +1157,13 @@ async fn mark_challenge_draft_published_tx(
     tx: &mut Transaction<'_, Postgres>,
     draft_id: &str,
     publish_claim_id: &ChallengeDraftPublishClaimId,
-    published_challenge_name: Option<&ChallengeName>,
+    published_challenge_id: Option<&ChallengeId>,
 ) -> Result<()> {
     let result = sqlx::query(
         r#"
         UPDATE challenge_drafts
         SET status = 'published',
-            published_challenge_name = $2,
+            published_challenge_id = $2::uuid,
             publish_claim_id = NULL,
             updated_at = NOW()
         WHERE id = $1::uuid
@@ -1144,7 +1173,7 @@ async fn mark_challenge_draft_published_tx(
         "#,
     )
     .bind(draft_id)
-    .bind(published_challenge_name.map(ChallengeName::as_str))
+    .bind(published_challenge_id.map(ChallengeId::as_str))
     .bind(publish_claim_id.as_str())
     .execute(&mut **tx)
     .await?;
@@ -1158,17 +1187,17 @@ async fn mark_challenge_draft_published_tx(
 /// Handles archive challenge tx for this module.
 async fn archive_challenge_tx(
     tx: &mut Transaction<'_, Postgres>,
-    challenge_name: &ChallengeName,
+    challenge_id: &ChallengeId,
 ) -> Result<()> {
     let result = sqlx::query(
         r#"
         UPDATE challenges
         SET status = 'archived',
             updated_at = NOW()
-        WHERE name = $1
+        WHERE challenge_id = $1::uuid
         "#,
     )
-    .bind(challenge_name.as_str())
+    .bind(challenge_id.as_str())
     .execute(&mut **tx)
     .await?;
 
