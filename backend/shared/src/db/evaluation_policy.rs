@@ -108,7 +108,7 @@ pub(super) async fn lock_active_challenge_for_admission_tx(
 ) -> Result<ChallengeRecord> {
     let row = sqlx::query(
         r#"
-        SELECT name AS challenge_name, title, summary, bundle_path, public_bundle_path, statement_path, spec_json
+        SELECT name AS challenge_name, title, summary, bundle_path, public_bundle_path, statement_path, spec_json, moltbook_discussion_url
         FROM challenges
         WHERE name = $1
           AND status = 'active'
@@ -129,6 +129,10 @@ pub(super) async fn lock_active_challenge_for_admission_tx(
         public_bundle_path: managed_bundle_path_from_row(&row, "public_bundle_path")?,
         statement_path: managed_statement_path_from_row(&row, "statement_path")?,
         spec_json: row.try_get("spec_json")?,
+        moltbook_discussion_url: optional_moltbook_post_url_from_row(
+            &row,
+            "moltbook_discussion_url",
+        )?,
     })
 }
 
@@ -285,6 +289,18 @@ fn managed_statement_path_from_row(
 ) -> Result<crate::models::paths::ManagedStatementPath> {
     let value: String = row.try_get(column)?;
     crate::models::paths::ManagedStatementPath::from_existing_file(value)
+        .map_err(|e| AppError::Internal(format!("stored invalid {column}: {e}")))
+}
+
+/// Read an optional Moltbook post URL from a locked challenge row.
+fn optional_moltbook_post_url_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<Option<crate::models::urls::MoltbookPostUrl>> {
+    let value: Option<String> = row.try_get(column)?;
+    value
+        .map(crate::models::urls::MoltbookPostUrl::try_new)
+        .transpose()
         .map_err(|e| AppError::Internal(format!("stored invalid {column}: {e}")))
 }
 

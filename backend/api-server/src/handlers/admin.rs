@@ -3,15 +3,18 @@
 use super::{
     AdminAuth, AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto,
     AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse, AgentId,
-    AgentPioneerCodeId, AgentStatus, AppError, AppState, CreatePioneerCodeRequest, DateTime,
-    DisableAgentResponse, EvaluationJobId, EvaluationJobResponse, EvaluationJobStatus, Json, Path,
-    PioneerCode, PioneerCodeDetailResponse, PioneerCodeListResponse, PioneerCodeStatus,
+    AgentPioneerCodeId, AgentStatus, AppError, AppState, ChallengeName, CreatePioneerCodeRequest,
+    DateTime, DisableAgentResponse, EvaluationJobId, EvaluationJobResponse, EvaluationJobStatus,
+    Json, Path, PioneerCode, PioneerCodeDetailResponse, PioneerCodeListResponse, PioneerCodeStatus,
     QueueEvaluationJobInput, Result, RevokePioneerCodeResponse, SUBMISSION_QUOTA_WINDOW_SECONDS,
     ScoringMode, SolutionSubmissionPath, State, StatusCode, Utc, ValidatedJson, auth, db,
-    presenters,
+    parse_request_value, presenters,
 };
-use shared::models::challenge::PublishChallengeResponse;
-use shared::models::request::{CreateChallengeRequest, PublishChallengeRequest};
+use shared::models::challenge::{MoltbookCommunityDto, PublishChallengeResponse};
+use shared::models::request::{
+    ChallengeMoltbookDiscussionResponse, CreateChallengeRequest, PublishChallengeRequest,
+    SetChallengeMoltbookDiscussionRequest,
+};
 
 // ---------------------------------------------------------------------------
 // Admin routes
@@ -189,6 +192,46 @@ pub async fn publish_challenge(
         "direct admin bundle publishing is disabled for MVP; use the GitHub-backed challenge draft review flow"
             .to_string(),
     ))
+}
+
+/// Attach a Moltbook discussion post to a published challenge.
+pub async fn set_challenge_moltbook_discussion(
+    _admin: AdminAuth,
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+    ValidatedJson(body): ValidatedJson<SetChallengeMoltbookDiscussionRequest>,
+) -> Result<Json<ChallengeMoltbookDiscussionResponse>> {
+    let challenge_name = parse_request_value::<ChallengeName>(&name)?;
+    let record =
+        db::set_challenge_moltbook_discussion(&state.db, &challenge_name, &body.discussion_url)
+            .await?;
+    Ok(Json(challenge_moltbook_discussion_response(&state, record)))
+}
+
+/// Clear the Moltbook discussion post from a published challenge.
+pub async fn clear_challenge_moltbook_discussion(
+    _admin: AdminAuth,
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+) -> Result<Json<ChallengeMoltbookDiscussionResponse>> {
+    let challenge_name = parse_request_value::<ChallengeName>(&name)?;
+    let record = db::clear_challenge_moltbook_discussion(&state.db, &challenge_name).await?;
+    Ok(Json(challenge_moltbook_discussion_response(&state, record)))
+}
+
+/// Build the admin response shape for Moltbook discussion updates.
+fn challenge_moltbook_discussion_response(
+    state: &AppState,
+    record: db::ChallengeMoltbookDiscussionRecord,
+) -> ChallengeMoltbookDiscussionResponse {
+    ChallengeMoltbookDiscussionResponse {
+        challenge_name: record.challenge_name,
+        moltbook: MoltbookCommunityDto {
+            submolt_name: state.config.moltbook_submolt_name.clone(),
+            submolt_url: state.config.moltbook_submolt_url.clone(),
+            discussion_url: record.discussion_url,
+        },
+    }
 }
 
 /// List recent solution submissions for admin operations.

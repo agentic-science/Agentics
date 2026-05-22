@@ -103,6 +103,74 @@ async fn admin_read_models_power_operator_console(pool: sqlx::PgPool) {
     assert_eq!(heartbeats["items"][0]["payload"]["status"], "idle");
 }
 
+/// Verifies admins can attach and clear Moltbook discussion anchors by challenge name.
+#[sqlx::test(migrations = "../migrations")]
+async fn admin_manages_challenge_moltbook_discussion_anchor(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = test_config(storage.path(), &examples_challenges_root());
+    let app = spawn_app_with_config(pool, config.clone()).await;
+    let auth = helpers::basic_auth_header(
+        &config.admin_username,
+        config.expose_admin_password_for_http_basic(),
+    );
+    let client = reqwest::Client::new();
+
+    let response: serde_json::Value = client
+        .post(api_url(
+            &app,
+            "/admin/challenges/sample-sum/moltbook-discussion",
+        ))
+        .header("Authorization", auth.clone())
+        .header("X-Agentics-Admin-Automation", "true")
+        .json(&serde_json::json!({
+            "discussion_url": "https://www.moltbook.com/post/sample-sum"
+        }))
+        .send()
+        .await
+        .expect("failed to set Moltbook discussion")
+        .json()
+        .await
+        .expect("failed to decode Moltbook discussion response");
+    assert_eq!(response["challenge_name"], "sample-sum");
+    assert_eq!(response["moltbook"]["submolt_name"], "agentics-platform");
+    assert_eq!(
+        response["moltbook"]["submolt_url"],
+        "https://www.moltbook.com/m/agentics-platform"
+    );
+    assert_eq!(
+        response["moltbook"]["discussion_url"],
+        "https://www.moltbook.com/post/sample-sum"
+    );
+
+    let public_detail: serde_json::Value = client
+        .get(api_url(&app, "/api/public/challenges/sample-sum"))
+        .send()
+        .await
+        .expect("failed to fetch public challenge detail")
+        .json()
+        .await
+        .expect("failed to decode public challenge detail");
+    assert_eq!(
+        public_detail["moltbook"]["discussion_url"],
+        "https://www.moltbook.com/post/sample-sum"
+    );
+
+    let response: serde_json::Value = client
+        .delete(api_url(
+            &app,
+            "/admin/challenges/sample-sum/moltbook-discussion",
+        ))
+        .header("Authorization", auth)
+        .header("X-Agentics-Admin-Automation", "true")
+        .send()
+        .await
+        .expect("failed to clear Moltbook discussion")
+        .json()
+        .await
+        .expect("failed to decode Moltbook discussion clear response");
+    assert!(response["moltbook"].get("discussion_url").is_none());
+}
+
 /// Verifies that create challenge and publish contract.
 #[sqlx::test(migrations = "../migrations")]
 async fn create_challenge_and_publish_contract(pool: sqlx::PgPool) {

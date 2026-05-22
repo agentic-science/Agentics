@@ -92,6 +92,9 @@ pub const RESOURCE_PROFILE_NAME_ERROR_MESSAGE: &str = "resource_profile.name mus
 /// User-facing validation message for challenge keywords.
 pub const CHALLENGE_KEYWORD_ERROR_MESSAGE: &str = "challenge keyword must be non-empty after trimming, at most 30 UTF-8 bytes, and must not contain control characters";
 
+/// User-facing validation message for Moltbook Submolt names.
+pub const MOLTBOOK_SUBMOLT_NAME_ERROR_MESSAGE: &str = "moltbook submolt name must be 2-30 lowercase ASCII letters, digits, or single hyphens, and must start and end with a letter or digit";
+
 /// Validation failure for [`ResourceProfileName`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ResourceProfileNameError;
@@ -117,6 +120,19 @@ impl fmt::Display for ChallengeKeywordError {
 }
 
 impl std::error::Error for ChallengeKeywordError {}
+
+/// Validation failure for [`MoltbookSubmoltName`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MoltbookSubmoltNameError;
+
+impl fmt::Display for MoltbookSubmoltNameError {
+    /// Format the user-facing Moltbook Submolt name validation error.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(MOLTBOOK_SUBMOLT_NAME_ERROR_MESSAGE)
+    }
+}
+
+impl std::error::Error for MoltbookSubmoltNameError {}
 
 #[nutype(
     sanitize(trim, lowercase),
@@ -298,6 +314,39 @@ impl ChallengeKeyword {
 }
 
 #[nutype(
+    sanitize(trim, lowercase),
+    validate(
+        with = validate_moltbook_submolt_name,
+        error = MoltbookSubmoltNameError
+    ),
+    derive(
+        Debug,
+        Clone,
+        PartialEq,
+        Eq,
+        PartialOrd,
+        Ord,
+        Hash,
+        AsRef,
+        Deref,
+        Display,
+        Serialize,
+        Deserialize,
+        FromStr,
+        TryFrom,
+    ),
+)]
+/// Carries the canonical Moltbook Submolt name used by platform metadata.
+pub struct MoltbookSubmoltName(String);
+
+impl MoltbookSubmoltName {
+    /// Borrow the canonical Moltbook Submolt name string.
+    pub fn as_str(&self) -> &str {
+        self.as_ref()
+    }
+}
+
+#[nutype(
     sanitize(trim),
     validate(with = validate_metric_name, error = MetricNameError),
     derive(
@@ -391,6 +440,28 @@ impl_token_json_schema!(TargetName, "TargetName");
 impl_token_json_schema!(MetricName, "MetricName");
 impl_token_json_schema!(AssetName, "AssetName");
 impl_token_json_schema!(ResourceProfileName, "ResourceProfileName");
+
+impl JsonSchema for MoltbookSubmoltName {
+    /// Keep Moltbook Submolt schemas inline at every field use site.
+    fn inline_schema() -> bool {
+        true
+    }
+
+    /// Return the schema name used by generated frontend contracts.
+    fn schema_name() -> Cow<'static, str> {
+        "MoltbookSubmoltName".into()
+    }
+
+    /// Emit the JSON Schema shape for canonical Moltbook Submolt names.
+    fn json_schema(_: &mut SchemaGenerator) -> Schema {
+        json_schema!({
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 30,
+            "pattern": "^[a-z0-9](?:[a-z0-9]|-(?!-)){0,28}[a-z0-9]$"
+        })
+    }
+}
 
 impl JsonSchema for RunName {
     /// Handles inline schema for this module.
@@ -529,11 +600,33 @@ fn validate_challenge_keyword(value: &str) -> Result<(), ChallengeKeywordError> 
     }
 }
 
+/// Validates Moltbook Submolt names used by platform community metadata.
+fn validate_moltbook_submolt_name(value: &str) -> Result<(), MoltbookSubmoltNameError> {
+    let bytes = value.as_bytes();
+    if !(2..=30).contains(&bytes.len()) {
+        return Err(MoltbookSubmoltNameError);
+    }
+    let (Some(first), Some(last)) = (bytes.first(), bytes.last()) else {
+        return Err(MoltbookSubmoltNameError);
+    };
+    if !first.is_ascii_alphanumeric() || !last.is_ascii_alphanumeric() {
+        return Err(MoltbookSubmoltNameError);
+    }
+    if value.contains("--")
+        || !bytes
+            .iter()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || *byte == b'-')
+    {
+        return Err(MoltbookSubmoltNameError);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        AssetName, ChallengeKeyword, ChallengeName, MetricName, ResourceProfileName, RunName,
-        TargetName, is_valid_challenge_name,
+        AssetName, ChallengeKeyword, ChallengeName, MetricName, MoltbookSubmoltName,
+        ResourceProfileName, RunName, TargetName, is_valid_challenge_name,
     };
 
     /// Verifies that validates challenge names.
@@ -618,5 +711,19 @@ mod tests {
         assert!(ChallengeKeyword::try_new("bad\nkeyword".to_string()).is_err());
         assert!(ChallengeKeyword::try_new("abcdefghijklmnopqrstuvwxyz12345".to_string()).is_err());
         assert!(ChallengeKeyword::try_new("多字节多字节多字节多字节".to_string()).is_err());
+    }
+
+    /// Verifies Moltbook Submolt name canonicalization and validation.
+    #[test]
+    fn validates_moltbook_submolt_names() {
+        let name = MoltbookSubmoltName::try_new(" Agentics-Platform ".to_string())
+            .expect("submolt name should canonicalize");
+        assert_eq!(name.as_str(), "agentics-platform");
+        assert!(MoltbookSubmoltName::try_new("ai".to_string()).is_ok());
+        assert!(MoltbookSubmoltName::try_new("a".to_string()).is_err());
+        assert!(MoltbookSubmoltName::try_new("-agentics".to_string()).is_err());
+        assert!(MoltbookSubmoltName::try_new("agentics-".to_string()).is_err());
+        assert!(MoltbookSubmoltName::try_new("agentics--platform".to_string()).is_err());
+        assert!(MoltbookSubmoltName::try_new("agentics_platform".to_string()).is_err());
     }
 }

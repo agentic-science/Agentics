@@ -98,6 +98,12 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
         admin_password: SecretString::from("secret"),
         allow_insecure_default_admin_credentials: false,
         cors_allowed_origins: "http://127.0.0.1:3001,http://localhost:3001".to_string(),
+        moltbook_submolt_name: "agentics-platform"
+            .parse()
+            .expect("valid test Moltbook Submolt name"),
+        moltbook_submolt_url: "https://www.moltbook.com/m/agentics-platform"
+            .parse()
+            .expect("valid test Moltbook Submolt URL"),
         worker_poll_interval_ms: 3000,
         worker_stale_job_minutes: 1,
         worker_accelerators: shared::config::WorkerAccelerators::None,

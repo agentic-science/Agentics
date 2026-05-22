@@ -24,6 +24,7 @@ use crate::models::request::{
     CreatorChallengeParticipantDto, CreatorChallengeParticipantsResponse,
     CreatorChallengeStatsResponse,
 };
+use crate::models::urls::MoltbookPostUrl;
 use crate::storage::StorageKey;
 
 /// Published challenge list plus the unbounded count for pagination previews.
@@ -53,6 +54,14 @@ pub struct ChallengeRecord {
     pub public_bundle_path: ManagedBundlePath,
     pub statement_path: ManagedStatementPath,
     pub spec_json: Value,
+    pub moltbook_discussion_url: Option<MoltbookPostUrl>,
+}
+
+/// Moltbook discussion anchor attached to one published challenge.
+#[derive(Debug, Clone)]
+pub struct ChallengeMoltbookDiscussionRecord {
+    pub challenge_name: ChallengeName,
+    pub discussion_url: Option<MoltbookPostUrl>,
 }
 
 /// Challenge publish inputs.
@@ -112,7 +121,7 @@ pub async fn create_or_update_challenge(
 pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeListItemDto>> {
     let rows = sqlx::query(
         r#"
-        SELECT name, title, summary, status, spec_json, created_at, updated_at
+        SELECT name, title, summary, status, spec_json, moltbook_discussion_url, created_at, updated_at
         FROM challenges
         ORDER BY updated_at DESC, created_at DESC
         "#,
@@ -145,11 +154,61 @@ pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeLi
                 private_benchmark_enabled: spec
                     .as_ref()
                     .map(|spec| spec.datasets.private_benchmark_enabled),
+                moltbook_discussion_url: optional_moltbook_post_url_from_row(
+                    &r,
+                    "moltbook_discussion_url",
+                )?,
                 created_at: r.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
                 updated_at: r.try_get::<DateTime<Utc>, _>("updated_at")?.to_rfc3339(),
             })
         })
         .collect::<Result<Vec<_>>>()
+}
+
+/// Attach a Moltbook discussion post to an active or archived challenge.
+pub async fn set_challenge_moltbook_discussion(
+    pool: &PgPool,
+    challenge_name: &ChallengeName,
+    discussion_url: &MoltbookPostUrl,
+) -> Result<ChallengeMoltbookDiscussionRecord> {
+    update_challenge_moltbook_discussion(pool, challenge_name, Some(discussion_url)).await
+}
+
+/// Clear a Moltbook discussion post from an active or archived challenge.
+pub async fn clear_challenge_moltbook_discussion(
+    pool: &PgPool,
+    challenge_name: &ChallengeName,
+) -> Result<ChallengeMoltbookDiscussionRecord> {
+    update_challenge_moltbook_discussion(pool, challenge_name, None).await
+}
+
+/// Guarded Moltbook discussion update shared by set and clear paths.
+async fn update_challenge_moltbook_discussion(
+    pool: &PgPool,
+    challenge_name: &ChallengeName,
+    discussion_url: Option<&MoltbookPostUrl>,
+) -> Result<ChallengeMoltbookDiscussionRecord> {
+    let row = sqlx::query(
+        r#"
+        UPDATE challenges
+        SET moltbook_discussion_url = $2,
+            updated_at = NOW()
+        WHERE name = $1
+          AND status IN ('active', 'archived')
+          AND spec_json IS NOT NULL
+        RETURNING name AS challenge_name, moltbook_discussion_url
+        "#,
+    )
+    .bind(challenge_name.as_str())
+    .bind(discussion_url.map(MoltbookPostUrl::as_str))
+    .fetch_optional(pool)
+    .await?;
+
+    let row = row.ok_or(AppError::NotFound)?;
+    Ok(ChallengeMoltbookDiscussionRecord {
+        challenge_name: challenge_name_from_row(&row, "challenge_name")?,
+        discussion_url: optional_moltbook_post_url_from_row(&row, "moltbook_discussion_url")?,
+    })
 }
 
 /// Publish a validated bundle as the benchmark contract for a challenge name.
@@ -843,7 +902,7 @@ pub async fn get_published_challenge(
 ) -> Result<Option<ChallengeRecord>> {
     let row = sqlx::query(
         r#"
-        SELECT name AS challenge_name, title, summary, bundle_path, public_bundle_path, statement_path, spec_json
+        SELECT name AS challenge_name, title, summary, bundle_path, public_bundle_path, statement_path, spec_json, moltbook_discussion_url
         FROM challenges
         WHERE status = 'active'
           AND spec_json IS NOT NULL
@@ -866,7 +925,7 @@ pub async fn get_public_challenge(
 ) -> Result<Option<ChallengeRecord>> {
     let row = sqlx::query(
         r#"
-        SELECT name AS challenge_name, title, summary, bundle_path, public_bundle_path, statement_path, spec_json
+        SELECT name AS challenge_name, title, summary, bundle_path, public_bundle_path, statement_path, spec_json, moltbook_discussion_url
         FROM challenges
         WHERE status IN ('active', 'archived')
           AND spec_json IS NOT NULL
@@ -891,6 +950,10 @@ fn row_to_challenge_record(r: sqlx::postgres::PgRow) -> Result<ChallengeRecord> 
         public_bundle_path: managed_bundle_path_from_row(&r, "public_bundle_path")?,
         statement_path: managed_statement_path_from_row(&r, "statement_path")?,
         spec_json: r.try_get("spec_json")?,
+        moltbook_discussion_url: optional_moltbook_post_url_from_row(
+            &r,
+            "moltbook_discussion_url",
+        )?,
     })
 }
 
@@ -926,6 +989,18 @@ fn managed_statement_path_from_row(
 ) -> Result<ManagedStatementPath> {
     let value: String = row.try_get(column)?;
     ManagedStatementPath::from_existing_file(value)
+        .map_err(|e| AppError::Internal(format!("stored invalid {column}: {e}")))
+}
+
+/// Read an optional Moltbook post URL from a database row.
+fn optional_moltbook_post_url_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<Option<MoltbookPostUrl>> {
+    let value: Option<String> = row.try_get(column)?;
+    value
+        .map(MoltbookPostUrl::try_new)
+        .transpose()
         .map_err(|e| AppError::Internal(format!("stored invalid {column}: {e}")))
 }
 

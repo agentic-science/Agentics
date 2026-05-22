@@ -7,8 +7,10 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use crate::models::challenge::TargetAccelerator;
+use crate::models::names::MoltbookSubmoltName;
 use crate::models::urls::{
     GithubApiUserUrl, GithubOauthAuthorizeUrl, GithubOauthRedirectUrl, GithubOauthTokenUrl,
+    MoltbookSubmoltUrl,
 };
 
 /// Environment variable that configures the API listen port.
@@ -23,6 +25,10 @@ pub const ENV_AGENTICS_ADMIN_USERNAME: &str = "AGENTICS_ADMIN_USERNAME";
 pub const ENV_AGENTICS_ADMIN_PASSWORD: &str = "AGENTICS_ADMIN_PASSWORD";
 /// Environment variable that overrides the hosted runner profile probe command.
 pub const ENV_AGENTICS_HOST_PROBE_COMMAND: &str = "AGENTICS_HOST_PROBE_COMMAND";
+/// Environment variable that configures the shared Moltbook Submolt name.
+pub const ENV_AGENTICS_MOLTBOOK_SUBMOLT_NAME: &str = "AGENTICS_MOLTBOOK_SUBMOLT_NAME";
+/// Environment variable that configures the shared Moltbook Submolt URL.
+pub const ENV_AGENTICS_MOLTBOOK_SUBMOLT_URL: &str = "AGENTICS_MOLTBOOK_SUBMOLT_URL";
 
 const CONFIG_ENV_PREFIX: &str = "AGENTICS_";
 /// Default API listen host for local development.
@@ -40,6 +46,8 @@ pub const DEFAULT_HOST_PROBE_COMMAND: &str = "bin/agentics-check-dgx-spark-profi
 const DEFAULT_POSTGRES_PORT: u16 = 5432;
 const DEFAULT_AGENT_REGISTRATION_MODE: AgentRegistrationMode = AgentRegistrationMode::PioneerCode;
 const DEFAULT_WORKER_ACCELERATORS: WorkerAccelerators = WorkerAccelerators::None;
+const DEFAULT_MOLTBOOK_SUBMOLT_NAME: &str = "agentics-platform";
+const DEFAULT_MOLTBOOK_SUBMOLT_URL: &str = "https://www.moltbook.com/m/agentics-platform";
 const DEFAULT_RUNNER_SECURITY_PROFILE: RunnerSecurityProfile = RunnerSecurityProfile::Development;
 const DEFAULT_RUNNER_WRITABLE_STORAGE_MODE: RunnerWritableStorageMode =
     RunnerWritableStorageMode::Unbounded;
@@ -75,6 +83,10 @@ pub struct Config {
     pub allow_insecure_default_admin_credentials: bool,
     #[serde(default = "default_cors_allowed_origins")]
     pub cors_allowed_origins: String,
+    #[serde(default = "default_moltbook_submolt_name")]
+    pub moltbook_submolt_name: MoltbookSubmoltName,
+    #[serde(default = "default_moltbook_submolt_url")]
+    pub moltbook_submolt_url: MoltbookSubmoltUrl,
     #[serde(default = "default_worker_poll_interval_ms")]
     pub worker_poll_interval_ms: u64,
     #[serde(default = "default_worker_stale_job_minutes")]
@@ -427,6 +439,26 @@ fn default_worker_accelerators() -> WorkerAccelerators {
     DEFAULT_WORKER_ACCELERATORS
 }
 
+#[allow(
+    clippy::expect_used,
+    reason = "hard-coded default Moltbook Submolt name must satisfy the domain parser"
+)]
+/// Default shared Moltbook Submolt name.
+fn default_moltbook_submolt_name() -> MoltbookSubmoltName {
+    MoltbookSubmoltName::try_new(DEFAULT_MOLTBOOK_SUBMOLT_NAME.to_string())
+        .expect("default Moltbook Submolt name must be valid")
+}
+
+#[allow(
+    clippy::expect_used,
+    reason = "hard-coded default Moltbook Submolt URL must satisfy the domain parser"
+)]
+/// Default shared Moltbook Submolt URL.
+fn default_moltbook_submolt_url() -> MoltbookSubmoltUrl {
+    MoltbookSubmoltUrl::try_new(DEFAULT_MOLTBOOK_SUBMOLT_URL)
+        .expect("default Moltbook Submolt URL must be valid")
+}
+
 /// Handles default validation runs per agent challenge day for this module.
 fn default_validation_runs_per_agent_challenge_day() -> u32 {
     20
@@ -701,6 +733,7 @@ impl Config {
         for origin in self.cors_allowed_origin_values() {
             validate_cors_origin(&origin)?;
         }
+        self.validate_moltbook_config()?;
         if !is_loopback_host(&self.api_host) && !self.web_session_cookie_secure {
             anyhow::bail!(
                 "AGENTICS_WEB_SESSION_COOKIE_SECURE must be true when the API is reachable from another machine"
@@ -729,6 +762,21 @@ impl Config {
         }
         self.validate_hosted_image_policy()?;
 
+        Ok(())
+    }
+
+    /// Validate Moltbook platform-community configuration.
+    fn validate_moltbook_config(&self) -> anyhow::Result<()> {
+        let url_name = self.moltbook_submolt_url.submolt_name().map_err(|e| {
+            anyhow::anyhow!("{} is invalid: {e}", ENV_AGENTICS_MOLTBOOK_SUBMOLT_URL)
+        })?;
+        if url_name != self.moltbook_submolt_name {
+            anyhow::bail!(
+                "{} must match the Submolt name in {}",
+                ENV_AGENTICS_MOLTBOOK_SUBMOLT_NAME,
+                ENV_AGENTICS_MOLTBOOK_SUBMOLT_URL
+            );
+        }
         Ok(())
     }
 

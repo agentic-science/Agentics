@@ -7,9 +7,9 @@ use super::challenge::{
     ChallengeResultDetailVisibility, ChallengeSolutionPublicationPolicy, ChallengeTargetSpec,
     ChallengeVisibility, ChallengeVisibilitySpec, DatasetsSpec, DockerPlatform, EvaluatorSpec,
     EvaluatorStageProfiles, HardwareProfileSpec, MetricDefinitionSpec, MetricDirection,
-    MetricSchemaSpec, MetricVisibility, PrivateBenchmarkPolicy, RankingSpec, ResourceProfileSpec,
-    SeparatedEvaluatorExecutionSpec, SolutionSpec, SolutionStageProfiles, StageResourceProfile,
-    TargetAccelerator,
+    MetricSchemaSpec, MetricVisibility, MoltbookCommunityDto, PrivateBenchmarkPolicy, RankingSpec,
+    ResourceProfileSpec, SeparatedEvaluatorExecutionSpec, SolutionSpec, SolutionStageProfiles,
+    StageResourceProfile, TargetAccelerator,
 };
 use super::evaluation::{
     EvaluationDto, EvaluationStatus, MetricValue, RunMetricResult, ScoreVisibility, ScoringMode,
@@ -292,6 +292,24 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
         statement_markdown:
             "# Matrix Multiplication\n\nWrite a solution that multiplies f32 matrices quickly."
                 .to_string(),
+        moltbook: moltbook_community(),
+    }
+}
+
+/// Build Moltbook metadata for DTO contract fixtures.
+fn moltbook_community() -> MoltbookCommunityDto {
+    MoltbookCommunityDto {
+        submolt_name: "agentics-platform"
+            .parse()
+            .expect("valid Moltbook Submolt name"),
+        submolt_url: "https://www.moltbook.com/m/agentics-platform"
+            .parse()
+            .expect("valid Moltbook Submolt URL"),
+        discussion_url: Some(
+            "https://www.moltbook.com/post/matrix-multiplication"
+                .parse()
+                .expect("valid Moltbook post URL"),
+        ),
     }
 }
 

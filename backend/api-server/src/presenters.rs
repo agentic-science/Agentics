@@ -4,7 +4,9 @@ use shared::db::{
     AgentRecord, ChallengeRecord, PioneerCodeRecord, PioneerCodeUseRecord, SolutionSubmissionRecord,
 };
 use shared::error::{AppError, Result};
-use shared::models::challenge::{ChallengeBundleSpec, ChallengeDetailResponse};
+use shared::models::challenge::{
+    ChallengeBundleSpec, ChallengeDetailResponse, MoltbookCommunityDto,
+};
 use shared::models::evaluation::{
     EvaluationDto, EvaluationJobStatus, ScoringMode, SolutionSubmissionStatus,
 };
@@ -90,6 +92,7 @@ fn present_pioneer_code_use(use_record: &PioneerCodeUseRecord) -> Result<Pioneer
 pub fn present_challenge_detail(
     challenge: &ChallengeRecord,
     statement: &str,
+    moltbook: MoltbookCommunityDto,
 ) -> Result<ChallengeDetailResponse> {
     let spec: ChallengeBundleSpec = serde_json::from_value(challenge.spec_json.clone())
         .map_err(|e| AppError::Internal(format!("stored challenge spec is invalid: {e}")))?;
@@ -101,6 +104,7 @@ pub fn present_challenge_detail(
         keywords: spec.keywords.clone(),
         spec: spec.into(),
         statement_markdown: statement.to_string(),
+        moltbook,
     })
 }
 

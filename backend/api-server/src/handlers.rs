@@ -28,7 +28,7 @@ use shared::db::{self, QueueEvaluationJobInput};
 use shared::error::{AppError, Result};
 use shared::models::challenge::{
     ChallengeBundleSpec, ChallengeResultDetailVisibility, ChallengeSolutionPublicationPolicy,
-    ChallengeVisibility,
+    ChallengeVisibility, MoltbookCommunityDto,
 };
 use shared::models::evaluation::{EvaluationJobStatus, ScoringMode};
 use shared::models::ids::{
@@ -224,8 +224,13 @@ async fn get_challenge_detail_response(
     let challenge = challenge.ok_or(AppError::NotFound)?;
 
     let statement = tokio::fs::read_to_string(challenge.statement_path.as_path()).await?;
+    let moltbook = MoltbookCommunityDto {
+        submolt_name: state.config.moltbook_submolt_name.clone(),
+        submolt_url: state.config.moltbook_submolt_url.clone(),
+        discussion_url: challenge.moltbook_discussion_url.clone(),
+    };
     Ok(Json(presenters::present_challenge_detail(
-        &challenge, &statement,
+        &challenge, &statement, moltbook,
     )?))
 }
 

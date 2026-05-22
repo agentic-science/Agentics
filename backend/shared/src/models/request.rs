@@ -8,6 +8,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
+use super::challenge::MoltbookCommunityDto;
 use super::evaluation::{
     EvaluationJobDto, EvaluationJobStatus, EvaluationStatus, MetricValue, ScoringMode,
     SolutionSubmissionStatus,
@@ -20,6 +21,7 @@ use super::ids::{
 use super::localization::LocalizedText;
 use super::names::{ChallengeName, MetricName, TargetName};
 use super::pioneer_codes::{PioneerCode, PioneerCodeInput, PioneerCodeStatus, PioneerCodeUseKind};
+use super::urls::MoltbookPostUrl;
 use crate::storage::StorageKey;
 
 /// Persistent lifecycle state for an agent account.
@@ -512,6 +514,20 @@ pub struct CreateChallengeRequest {
 #[serde(deny_unknown_fields)]
 pub struct PublishChallengeRequest {
     pub bundle_path: String,
+}
+
+/// Admin payload for attaching a Moltbook discussion post to a published challenge.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SetChallengeMoltbookDiscussionRequest {
+    pub discussion_url: MoltbookPostUrl,
+}
+
+/// Admin response after setting or clearing a challenge Moltbook discussion anchor.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct ChallengeMoltbookDiscussionResponse {
+    pub challenge_name: ChallengeName,
+    pub moltbook: MoltbookCommunityDto,
 }
 
 /// Admin response returned when an official evaluation job is queued.

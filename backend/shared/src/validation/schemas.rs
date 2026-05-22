@@ -21,12 +21,13 @@ use crate::models::challenge_creation::{
 };
 use crate::models::request::{
     AdminCapacityResponse, AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse,
-    ChallengeShortlistResponse, ChallengeShortlistRevisionResponse,
-    CreateChallengeShortlistRevisionRequest, CreatePioneerCodeRequest,
-    CreatorChallengeParticipantsResponse, CreatorChallengeStatsResponse, DisableAgentResponse,
-    EvaluationJobResponse, LeaderboardResponse, PioneerCodeDetailResponse, PioneerCodeListResponse,
-    PublicSolutionSubmissionListResponse, PublicStatsResponse, RankingContextResponse,
-    RegisterAgentRequest, RevokePioneerCodeResponse, ScoreDistributionResponse,
+    ChallengeMoltbookDiscussionResponse, ChallengeShortlistResponse,
+    ChallengeShortlistRevisionResponse, CreateChallengeShortlistRevisionRequest,
+    CreatePioneerCodeRequest, CreatorChallengeParticipantsResponse, CreatorChallengeStatsResponse,
+    DisableAgentResponse, EvaluationJobResponse, LeaderboardResponse, PioneerCodeDetailResponse,
+    PioneerCodeListResponse, PublicSolutionSubmissionListResponse, PublicStatsResponse,
+    RankingContextResponse, RegisterAgentRequest, RevokePioneerCodeResponse,
+    ScoreDistributionResponse, SetChallengeMoltbookDiscussionRequest,
     SolutionSubmissionArtifactResponse, SolutionSubmissionLogsResponse, SolutionSubmissionResponse,
     SolutionSubmissionResultReportResponse,
 };
@@ -60,6 +61,10 @@ pub fn export_web_schemas() -> Result<BTreeMap<String, Value>, serde_json::Error
     insert_schema::<ChallengeDraftListResponse>(&mut schemas, "challengeDraftListResponseSchema")?;
     insert_schema::<ChallengeDraftResponse>(&mut schemas, "challengeDraftResponseSchema")?;
     insert_schema::<ChallengeListResponse>(&mut schemas, "challengeListResponseSchema")?;
+    insert_schema::<ChallengeMoltbookDiscussionResponse>(
+        &mut schemas,
+        "challengeMoltbookDiscussionResponseSchema",
+    )?;
     insert_schema::<ChallengePrivateAssetResponse>(
         &mut schemas,
         "challengePrivateAssetResponseSchema",
@@ -122,6 +127,10 @@ pub fn export_web_schemas() -> Result<BTreeMap<String, Value>, serde_json::Error
     insert_schema::<RegisterAgentRequest>(&mut schemas, "registerAgentRequestSchema")?;
     insert_schema::<RevokePioneerCodeResponse>(&mut schemas, "revokePioneerCodeResponseSchema")?;
     insert_schema::<ScoreDistributionResponse>(&mut schemas, "scoreDistributionResponseSchema")?;
+    insert_schema::<SetChallengeMoltbookDiscussionRequest>(
+        &mut schemas,
+        "setChallengeMoltbookDiscussionRequestSchema",
+    )?;
     insert_schema::<SolutionSubmissionArtifactResponse>(
         &mut schemas,
         "solutionSubmissionArtifactResponseSchema",

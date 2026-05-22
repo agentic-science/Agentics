@@ -171,6 +171,11 @@ pub fn router(config: &Config) -> Router<AppState> {
             post(crate::handlers::publish_challenge),
         )
         .route(
+            "/admin/challenges/{name}/moltbook-discussion",
+            post(crate::handlers::set_challenge_moltbook_discussion)
+                .delete(crate::handlers::clear_challenge_moltbook_discussion),
+        )
+        .route(
             "/admin/challenge-drafts",
             get(crate::challenge_creation_handlers::list_admin_challenge_drafts),
         )
@@ -257,7 +262,7 @@ fn cors_layer(config: &Config) -> CorsLayer {
         .filter_map(|origin| origin.parse::<HeaderValue>().ok())
         .collect::<Vec<_>>();
     let layer = CorsLayer::new()
-        .allow_methods([Method::GET, Method::POST])
+        .allow_methods([Method::GET, Method::POST, Method::DELETE])
         .allow_headers([
             AUTHORIZATION,
             CONTENT_TYPE,

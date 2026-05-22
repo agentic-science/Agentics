@@ -10,11 +10,13 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use super::images::ChallengeImageReference;
 use super::localization::LocalizedText;
 use super::names::{
-    ChallengeKeyword, ChallengeName, MetricName, ResourceProfileName, RunName, TargetName,
+    ChallengeKeyword, ChallengeName, MetricName, MoltbookSubmoltName, ResourceProfileName, RunName,
+    TargetName,
 };
 use super::paths::{
     BundleRelativePath, ManagedBundlePath, ManagedStatementPath, RunInputPath, RunOutputPath,
 };
+use super::urls::{MoltbookPostUrl, MoltbookSubmoltUrl};
 use crate::zip_project::ZipProjectNetworkAccess;
 
 /// Persistent lifecycle state for a challenge shell or published benchmark.
@@ -901,6 +903,15 @@ pub struct ChallengeListResponse {
     pub has_more: bool,
 }
 
+/// Public Moltbook community metadata exposed on challenge detail surfaces.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct MoltbookCommunityDto {
+    pub submolt_name: MoltbookSubmoltName,
+    pub submolt_url: MoltbookSubmoltUrl,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub discussion_url: Option<MoltbookPostUrl>,
+}
+
 /// Public challenge detail response with spec and Markdown statement.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeDetailResponse {
@@ -911,6 +922,7 @@ pub struct ChallengeDetailResponse {
     pub keywords: Vec<ChallengeKeyword>,
     pub spec: PublicChallengeBundleSpec,
     pub statement_markdown: String,
+    pub moltbook: MoltbookCommunityDto,
 }
 
 /// Admin-facing challenge metadata response.
@@ -949,6 +961,8 @@ pub struct AdminChallengeListItemDto {
     pub solution_publication: Option<ChallengeSolutionPublicationPolicy>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub private_benchmark_enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub moltbook_discussion_url: Option<MoltbookPostUrl>,
     pub created_at: String,
     pub updated_at: String,
 }

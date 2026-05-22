@@ -22,6 +22,7 @@ use shared::models::ids::{AgentId, AgentTokenId, ChallengeDraftId, SolutionSubmi
 use shared::models::request::{
     CreateChallengeRequest, CreateChallengeShortlistRevisionRequest, CreatePioneerCodeRequest,
     CreateSolutionSubmissionRequest, PublishChallengeRequest, RegisterAgentRequest,
+    SetChallengeMoltbookDiscussionRequest,
 };
 use shared::validation::text;
 
@@ -489,5 +490,12 @@ impl ValidateRequest for PublishChallengeRequest {
     /// Ensures direct admin publishing references a bundle path.
     fn validate(&self) -> Result<(), String> {
         require_non_empty(&self.bundle_path, "bundle_path")
+    }
+}
+
+impl ValidateRequest for SetChallengeMoltbookDiscussionRequest {
+    /// URL syntax is validated by the typed request field during deserialization.
+    fn validate(&self) -> Result<(), String> {
+        Ok(())
     }
 }

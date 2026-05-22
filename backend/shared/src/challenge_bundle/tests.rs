@@ -300,6 +300,19 @@ fn legacy_community_field_is_rejected() {
     assert!(error.to_string().contains("community"));
 }
 
+/// Verifies that challenge-authored Moltbook metadata remains platform-owned.
+#[test]
+fn challenge_authored_moltbook_field_is_rejected() {
+    let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
+    spec_json["moltbook"] = serde_json::json!({
+        "discussion_url": "https://www.moltbook.com/post/sample-sum"
+    });
+
+    let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+        .expect_err("Moltbook metadata should be an unknown field");
+    assert!(error.to_string().contains("moltbook"));
+}
+
 /// Verifies that legacy top-level scorer contracts are rejected.
 #[test]
 fn legacy_top_level_scorer_field_is_rejected() {

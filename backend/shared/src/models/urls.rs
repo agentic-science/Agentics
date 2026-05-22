@@ -8,6 +8,8 @@ use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use url::Url;
 
+use super::names::MoltbookSubmoltName;
+
 /// User-facing validation message for GitHub repository remotes.
 pub const GITHUB_REPO_REMOTE_ERROR_MESSAGE: &str = "repo_url must be a GitHub HTTPS repository URL or git@github.com:{owner}/{repo}.git SSH remote";
 
@@ -16,6 +18,14 @@ pub const GITHUB_PULL_REQUEST_URL_ERROR_MESSAGE: &str = "pr_url must be a GitHub
 
 /// User-facing validation message for external data URLs.
 pub const EXTERNAL_DATA_URL_ERROR_MESSAGE: &str = "external data url must be an HTTPS URL";
+
+/// User-facing validation message for the platform Moltbook Submolt URL.
+pub const MOLTBOOK_SUBMOLT_URL_ERROR_MESSAGE: &str =
+    "moltbook submolt url must be https://www.moltbook.com/m/{submolt-name}";
+
+/// User-facing validation message for Moltbook discussion post URLs.
+pub const MOLTBOOK_POST_URL_ERROR_MESSAGE: &str =
+    "moltbook post url must be https://www.moltbook.com/post/{post-id}";
 
 /// Validation message for GitHub OAuth redirect URLs.
 pub const GITHUB_OAUTH_REDIRECT_URL_ERROR_MESSAGE: &str =
@@ -375,6 +385,93 @@ impl FromStr for ExternalDataUrl {
 impl_string_url_serde!(ExternalDataUrl);
 impl_string_url_schema!(ExternalDataUrl, "ExternalDataUrl", r"^https://[^?#]+$");
 
+/// Validated Moltbook Submolt URL for the global Agentics communication channel.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct MoltbookSubmoltUrl(Url);
+
+impl MoltbookSubmoltUrl {
+    /// Parse and validate a Moltbook Submolt URL.
+    pub fn try_new(value: impl AsRef<str>) -> Result<Self, UrlFieldError> {
+        value.as_ref().parse()
+    }
+
+    /// Borrow the canonical string representation.
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+
+    /// Return the Submolt name carried by this URL.
+    pub fn submolt_name(&self) -> Result<MoltbookSubmoltName, UrlFieldError> {
+        moltbook_submolt_name(&self.0)
+    }
+}
+
+impl fmt::Display for MoltbookSubmoltUrl {
+    /// Handles fmt for this module.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for MoltbookSubmoltUrl {
+    type Err = UrlFieldError;
+
+    /// Handles from str for this module.
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let url = parse_url(value.trim(), MOLTBOOK_SUBMOLT_URL_ERROR_MESSAGE)?;
+        validate_moltbook_submolt_url(&url)?;
+        Ok(Self(url))
+    }
+}
+
+impl_string_url_serde!(MoltbookSubmoltUrl);
+impl_string_url_schema!(
+    MoltbookSubmoltUrl,
+    "MoltbookSubmoltUrl",
+    r"^https://www\.moltbook\.com/m/[a-z0-9](?:[a-z0-9]|-(?!-)){0,28}[a-z0-9]$"
+);
+
+/// Validated Moltbook post URL used as an operator-attached challenge discussion anchor.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct MoltbookPostUrl(Url);
+
+impl MoltbookPostUrl {
+    /// Parse and validate a Moltbook post URL.
+    pub fn try_new(value: impl AsRef<str>) -> Result<Self, UrlFieldError> {
+        value.as_ref().parse()
+    }
+
+    /// Borrow the canonical string representation.
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl fmt::Display for MoltbookPostUrl {
+    /// Handles fmt for this module.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for MoltbookPostUrl {
+    type Err = UrlFieldError;
+
+    /// Handles from str for this module.
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let url = parse_url(value.trim(), MOLTBOOK_POST_URL_ERROR_MESSAGE)?;
+        validate_moltbook_post_url(&url)?;
+        Ok(Self(url))
+    }
+}
+
+impl_string_url_serde!(MoltbookPostUrl);
+impl_string_url_schema!(
+    MoltbookPostUrl,
+    "MoltbookPostUrl",
+    r"^https://www\.moltbook\.com/post/[A-Za-z0-9_-]+$"
+);
+
 macro_rules! define_url_wrapper {
     ($type_name:ident, $schema_name:literal, $validator:ident, $message:ident) => {
         #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -592,6 +689,75 @@ fn validate_github_api_user_url(url: &Url) -> Result<(), UrlFieldError> {
     )
 }
 
+/// Validates Moltbook Submolt URL invariants for this contract.
+fn validate_moltbook_submolt_url(url: &Url) -> Result<(), UrlFieldError> {
+    validate_moltbook_base(url, MOLTBOOK_SUBMOLT_URL_ERROR_MESSAGE)?;
+    moltbook_submolt_name(url).map(|_| ())
+}
+
+/// Validates Moltbook post URL invariants for this contract.
+fn validate_moltbook_post_url(url: &Url) -> Result<(), UrlFieldError> {
+    validate_moltbook_base(url, MOLTBOOK_POST_URL_ERROR_MESSAGE)?;
+    let segments = moltbook_path_segments(url, MOLTBOOK_POST_URL_ERROR_MESSAGE)?;
+    let [post, post_id] = segments.as_slice() else {
+        return Err(UrlFieldError::new(MOLTBOOK_POST_URL_ERROR_MESSAGE));
+    };
+    if post != "post" || !has_moltbook_post_id_syntax(post_id) {
+        return Err(UrlFieldError::new(MOLTBOOK_POST_URL_ERROR_MESSAGE));
+    }
+    Ok(())
+}
+
+/// Return the Moltbook Submolt name from a validated Submolt URL.
+fn moltbook_submolt_name(url: &Url) -> Result<MoltbookSubmoltName, UrlFieldError> {
+    let segments = moltbook_path_segments(url, MOLTBOOK_SUBMOLT_URL_ERROR_MESSAGE)?;
+    let [m, name] = segments.as_slice() else {
+        return Err(UrlFieldError::new(MOLTBOOK_SUBMOLT_URL_ERROR_MESSAGE));
+    };
+    if m != "m" {
+        return Err(UrlFieldError::new(MOLTBOOK_SUBMOLT_URL_ERROR_MESSAGE));
+    }
+    let parsed = MoltbookSubmoltName::try_new(name.to_string())
+        .map_err(|_| UrlFieldError::new(MOLTBOOK_SUBMOLT_URL_ERROR_MESSAGE))?;
+    if parsed.as_str() != name {
+        return Err(UrlFieldError::new(MOLTBOOK_SUBMOLT_URL_ERROR_MESSAGE));
+    }
+    Ok(parsed)
+}
+
+/// Validate the host and URL decorations shared by all Moltbook links.
+fn validate_moltbook_base(url: &Url, message: &'static str) -> Result<(), UrlFieldError> {
+    validate_https_url(url, message)?;
+    if url.host_str() != Some("www.moltbook.com")
+        || url.port().is_some()
+        || !url.username().is_empty()
+        || url.password().is_some()
+    {
+        return Err(UrlFieldError::new(message));
+    }
+    Ok(())
+}
+
+/// Return non-empty Moltbook path segments.
+fn moltbook_path_segments(url: &Url, message: &'static str) -> Result<Vec<String>, UrlFieldError> {
+    let Some(segments) = url.path_segments() else {
+        return Err(UrlFieldError::new(message));
+    };
+    let segments: Vec<String> = segments.map(ToString::to_string).collect();
+    if segments.iter().any(|segment| segment.is_empty()) {
+        return Err(UrlFieldError::new(message));
+    }
+    Ok(segments)
+}
+
+/// Validate the opaque post id syntax accepted by Moltbook public post URLs.
+fn has_moltbook_post_id_syntax(value: &str) -> bool {
+    !value.is_empty()
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+}
+
 /// Validates exact https url invariants for this contract.
 fn validate_exact_https_url(
     url: &Url,
@@ -666,7 +832,10 @@ fn reject_whitespace_or_control(value: &str, message: &'static str) -> Result<()
 
 #[cfg(test)]
 mod tests {
-    use super::{ExternalDataUrl, GithubPullRequestUrl, GithubRepoRemote};
+    use super::{
+        ExternalDataUrl, GithubPullRequestUrl, GithubRepoRemote, MoltbookPostUrl,
+        MoltbookSubmoltUrl,
+    };
 
     /// Verifies that parses github repo remotes.
     #[test]
@@ -717,5 +886,40 @@ mod tests {
         assert!(ExternalDataUrl::try_new("https://example.com/data.bin").is_ok());
         assert!(ExternalDataUrl::try_new("http://example.com/data.bin").is_err());
         assert!(ExternalDataUrl::try_new("https://example.com/data.bin#section").is_err());
+    }
+
+    /// Verifies Moltbook URL wrappers accept only the www Moltbook contracts.
+    #[test]
+    fn parses_moltbook_urls() {
+        let submolt = MoltbookSubmoltUrl::try_new("https://www.moltbook.com/m/agentics-platform")
+            .expect("canonical Submolt URL should parse");
+        assert_eq!(
+            submolt
+                .submolt_name()
+                .expect("Submolt name should parse")
+                .as_str(),
+            "agentics-platform"
+        );
+        assert!(MoltbookPostUrl::try_new("https://www.moltbook.com/post/abc-123_X").is_ok());
+
+        for value in [
+            "https://moltbook.com/m/agentics-platform",
+            "https://www.moltbook.com/m/Agentics-Platform",
+            "https://www.moltbook.com/submolts/agentics-platform",
+            "https://www.moltbook.com/m/agentics-platform?x=1",
+            "https://example.com/m/agentics-platform",
+        ] {
+            assert!(MoltbookSubmoltUrl::try_new(value).is_err());
+        }
+
+        for value in [
+            "https://moltbook.com/post/abc-123",
+            "https://www.moltbook.com/posts/abc-123",
+            "https://www.moltbook.com/post/abc-123/comments",
+            "https://www.moltbook.com/post/abc.123",
+            "https://example.com/post/abc-123",
+        ] {
+            assert!(MoltbookPostUrl::try_new(value).is_err());
+        }
     }
 }

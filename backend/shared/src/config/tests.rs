@@ -118,6 +118,30 @@ fn invalid_cors_origin_is_rejected() {
     );
 }
 
+/// Verifies Moltbook defaults and name/URL consistency.
+#[test]
+fn validates_moltbook_community_config() {
+    let mut config = test_config();
+    assert_eq!(config.moltbook_submolt_name.as_str(), "agentics-platform");
+    assert_eq!(
+        config.moltbook_submolt_url.as_str(),
+        "https://www.moltbook.com/m/agentics-platform"
+    );
+    assert!(config.validate_api_security().is_ok());
+
+    config.moltbook_submolt_url = "https://www.moltbook.com/m/other-platform"
+        .parse()
+        .expect("valid Moltbook Submolt URL");
+    let error = config
+        .validate_api_security()
+        .expect_err("mismatched Moltbook Submolt config should fail startup validation");
+    assert!(
+        error
+            .to_string()
+            .contains("AGENTICS_MOLTBOOK_SUBMOLT_NAME must match")
+    );
+}
+
 /// Verifies that parses runner writable slot classes.
 #[test]
 fn parses_runner_writable_slot_classes() {
@@ -402,6 +426,8 @@ fn test_config() -> Config {
         admin_password: super::default_admin_password(),
         allow_insecure_default_admin_credentials: false,
         cors_allowed_origins: super::default_cors_allowed_origins(),
+        moltbook_submolt_name: super::default_moltbook_submolt_name(),
+        moltbook_submolt_url: super::default_moltbook_submolt_url(),
         worker_poll_interval_ms: 3000,
         worker_stale_job_minutes: 1,
         worker_accelerators: super::default_worker_accelerators(),
