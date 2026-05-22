@@ -1036,11 +1036,24 @@ fn duration_millis(duration: Duration) -> u64 {
 /// Handles remove container for this module.
 async fn remove_container(docker: &Docker, container_id: &str) -> Result<()> {
     let remove_opts = RemoveContainerOptionsBuilder::default().force(true).build();
-    docker
+    if let Err(error) = docker
         .remove_container(container_id, Some(remove_opts))
         .await
-        .map_err(|e| AppError::Docker(format!("remove runner container failed: {e}")))?;
+    {
+        let message = error.to_string();
+        if !is_benign_remove_race(&message) {
+            return Err(AppError::Docker(format!(
+                "remove runner container failed: {error}"
+            )));
+        }
+    }
     Ok(())
+}
+
+/// Docker may report an idempotent cleanup race when another cleanup path wins.
+fn is_benign_remove_race(message: &str) -> bool {
+    message.contains("No such container")
+        || (message.contains("removal of container") && message.contains("already in progress"))
 }
 
 /// Force-stop and remove one running runner container.
