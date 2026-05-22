@@ -266,7 +266,7 @@ export default async function ChallengeCatalogPage({
           <div className="home-challenge-grid">
             {challenges.items.map((challenge) => (
               <ChallengeCatalogCard
-                key={challenge.name}
+                key={challenge.challenge_id}
                 challenge={challenge}
                 locale={locale}
                 showKeywords

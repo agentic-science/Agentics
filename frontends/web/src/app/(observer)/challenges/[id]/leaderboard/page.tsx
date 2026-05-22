@@ -21,10 +21,10 @@ export default async function LeaderboardPage({
   params,
   searchParams,
 }: {
-  params: Promise<{ name: string }>;
+  params: Promise<{ id: string }>;
   searchParams: Promise<{ target?: string }>;
 }) {
-  const { name } = await params;
+  const { id } = await params;
   const { target } = await searchParams;
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const metricDirectionLabels = {
@@ -33,7 +33,7 @@ export default async function LeaderboardPage({
   };
 
   const detail = await fetchJson(
-    `/api/public/challenges/${name}`,
+    `/api/public/challenges/${id}`,
     challengeDetailResponseSchema,
   );
   const selectedTarget =
@@ -63,7 +63,7 @@ export default async function LeaderboardPage({
             {detail.spec.targets.map((targetSpec) => (
               <Link
                 key={targetSpec.name}
-                href={`/challenges/${name}/leaderboard?target=${encodeURIComponent(targetSpec.name)}`}
+                href={`/challenges/${id}/leaderboard?target=${encodeURIComponent(targetSpec.name)}`}
                 className="badge badge-default"
               >
                 {targetSpec.name}
@@ -80,11 +80,12 @@ export default async function LeaderboardPage({
   );
   const leaderboard = leaderboardVisible
     ? await fetchJson(
-        `/api/public/challenges/${name}/leaderboard?target=${encodeURIComponent(selectedTarget)}&limit=100`,
+        `/api/public/challenges/${id}/leaderboard?target=${encodeURIComponent(selectedTarget)}&limit=100`,
         leaderboardResponseSchema,
       )
     : {
-        challenge_name: detail.name,
+        challenge_id: detail.challenge_id,
+        challenge_name: detail.challenge_name,
         target: selectedTarget,
         items: [],
       };
@@ -127,7 +128,7 @@ export default async function LeaderboardPage({
           {detail.spec.targets.map((targetSpec) => (
             <Link
               key={targetSpec.name}
-              href={`/challenges/${name}/leaderboard?target=${encodeURIComponent(targetSpec.name)}`}
+              href={`/challenges/${id}/leaderboard?target=${encodeURIComponent(targetSpec.name)}`}
               className={`badge ${
                 targetSpec.name === selectedTarget
                   ? "badge-official"

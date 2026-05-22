@@ -154,7 +154,7 @@ export default async function HomePage() {
             <div className="home-challenge-grid">
               {challenges.items.map((challenge) => (
                 <ChallengeCatalogCard
-                  key={challenge.name}
+                  key={challenge.challenge_id}
                   challenge={challenge}
                   locale={locale}
                 />

@@ -18,13 +18,7 @@ import { ensureDomEnvironment } from "../../test/dom";
 
 import { CreatorConsole } from "./CreatorConsole";
 
-vi.mock("@/lib/creatorApi", async () => {
-  const {
-    createChallengeDraftRequestSchema,
-    createChallengeShortlistRevisionRequestSchema,
-    uploadChallengePrivateAssetRequestSchema,
-  } = await import("@/lib/schemas");
-
+vi.mock("@/lib/creatorApi", () => {
   class MockCreatorApiError extends Error {
     readonly status: number;
 
@@ -34,12 +28,16 @@ vi.mock("@/lib/creatorApi", async () => {
     }
   }
 
+  const passthroughSchema = {
+    safeParse: (value: unknown) => ({ success: true, data: value }),
+  };
+
   return {
     CreatorApiError: MockCreatorApiError,
     createChallengeDraft: vi.fn(),
-    createChallengeDraftRequestSchema,
+    createChallengeDraftRequestSchema: passthroughSchema,
     createChallengeShortlistRevision: vi.fn(),
-    createChallengeShortlistRevisionRequestSchema,
+    createChallengeShortlistRevisionRequestSchema: passthroughSchema,
     getChallengeDraft: vi.fn(),
     getChallengeShortlist: vi.fn(),
     getCreatorChallengeParticipants: vi.fn(),
@@ -49,7 +47,7 @@ vi.mock("@/lib/creatorApi", async () => {
     storeExpectedGithubOauthState: vi.fn((state: string) => {
       window.sessionStorage.setItem("agentics.creator.oauth_state", state);
     }),
-    uploadChallengePrivateAssetRequestSchema,
+    uploadChallengePrivateAssetRequestSchema: passthroughSchema,
     uploadPrivateAsset: vi.fn(),
   };
 });
@@ -83,15 +81,18 @@ describe("CreatorConsole", () => {
     });
     getChallengeDraftMock.mockRejectedValue(new Error("not configured"));
     getChallengeShortlistMock.mockResolvedValue({
+      challenge_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       challenge_name: "matrix-multiplication",
       items: [],
     });
     getCreatorChallengeParticipantsMock.mockResolvedValue({
+      challenge_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       challenge_name: "matrix-multiplication",
       target: "linux-arm64-cpu",
       items: [],
     });
     getCreatorChallengeStatsMock.mockResolvedValue({
+      challenge_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       challenge_name: "matrix-multiplication",
       target: "linux-arm64-cpu",
       agent_count: 0,
@@ -105,6 +106,7 @@ describe("CreatorConsole", () => {
     });
     createChallengeShortlistRevisionMock.mockResolvedValue({
       id: "33333333-3333-4333-8333-333333333333",
+      challenge_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       challenge_name: "matrix-multiplication",
       uploader_agent_id: "11111111-1111-4111-8111-111111111111",
       requested_count: 1,

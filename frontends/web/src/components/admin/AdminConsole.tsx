@@ -495,11 +495,14 @@ function ChallengeAdminPanel({
             </thead>
             <tbody>
               {challenges.map((challenge) => (
-                <tr key={challenge.name}>
+                <tr key={challenge.challenge_id}>
                   <td>
                     <div className="font-medium">{challenge.title}</div>
                     <div className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
-                      {challenge.name}
+                      {challenge.challenge_name}
+                    </div>
+                    <div className="font-mono text-[10px] text-[var(--text-muted)] [overflow-wrap:anywhere]">
+                      {challenge.challenge_id}
                     </div>
                   </td>
                   <td>

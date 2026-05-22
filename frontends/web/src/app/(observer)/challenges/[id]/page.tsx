@@ -21,9 +21,9 @@ import {
 export default async function ChallengePage({
   params,
 }: {
-  params: Promise<{ name: string }>;
+  params: Promise<{ id: string }>;
 }) {
-  const { name } = await params;
+  const { id } = await params;
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const metricDirectionLabels = {
     maximize: t("challenge.metrics.higherIsBetter"),
@@ -31,7 +31,7 @@ export default async function ChallengePage({
   };
 
   const detail = await fetchJson(
-    `/api/public/challenges/${name}`,
+    `/api/public/challenges/${id}`,
     challengeDetailResponseSchema,
   );
   if (detail.spec.targets.length === 0) {
@@ -45,7 +45,7 @@ export default async function ChallengePage({
   const submissionsArePublic = resultDetailIsPublic(detail.spec);
   const submissionsPromise = submissionsArePublic
     ? fetchJson(
-        `/api/public/challenges/${name}/solution-submissions?target=${encodeURIComponent(defaultTarget)}&limit=5`,
+        `/api/public/challenges/${id}/solution-submissions?target=${encodeURIComponent(defaultTarget)}&limit=5`,
         publicSolutionSubmissionListResponseSchema,
       )
     : Promise.resolve({ items: [] });
@@ -54,11 +54,12 @@ export default async function ChallengePage({
     detail.spec,
   )
     ? fetchJson(
-        `/api/public/challenges/${name}/leaderboard?target=${encodeURIComponent(defaultTarget)}&limit=5`,
+        `/api/public/challenges/${id}/leaderboard?target=${encodeURIComponent(defaultTarget)}&limit=5`,
         leaderboardResponseSchema,
       )
     : Promise.resolve({
-        challenge_name: detail.name,
+        challenge_id: detail.challenge_id,
+        challenge_name: detail.challenge_name,
         target: defaultTarget,
         items: [],
       });
@@ -210,7 +211,7 @@ export default async function ChallengePage({
             </h3>
             {submissionsArePublic ? (
               <Link
-                href={`/challenges/${name}/solution-submissions?target=${encodeURIComponent(defaultTarget)}`}
+                href={`/challenges/${id}/solution-submissions?target=${encodeURIComponent(defaultTarget)}`}
                 className="text-[var(--text-body-sm)] text-[var(--text-muted)] hover:text-[var(--accent-primary-text)] transition-colors"
               >
                 {t("challenge.viewAll")}
@@ -261,7 +262,7 @@ export default async function ChallengePage({
               {t("challenge.topLeaderboard")}
             </h3>
             <Link
-              href={`/challenges/${name}/leaderboard?target=${encodeURIComponent(defaultTarget)}`}
+              href={`/challenges/${id}/leaderboard?target=${encodeURIComponent(defaultTarget)}`}
               className="text-[var(--text-body-sm)] text-[var(--text-muted)] hover:text-[var(--accent-primary-text)] transition-colors"
             >
               {t("challenge.viewAll")}

@@ -33,7 +33,13 @@ export const adminChallengeListResponseSchema = z
     items: z.array(
       z
         .object({
-          name: z
+          challenge_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
+          challenge_name: z
             .string()
             .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
             .min(3)
@@ -529,6 +535,12 @@ export const adminSolutionSubmissionListResponseSchema = z
             .regex(
               /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
             ),
+          challenge_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
           challenge_name: z
             .string()
             .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
@@ -641,7 +653,11 @@ export const adminSolutionSubmissionListResponseSchema = z
 
 export const challengeAdminResponseSchema = z
   .object({
-    name: z
+    challenge_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+    challenge_name: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
       .min(3)
@@ -674,7 +690,11 @@ export const challengeAdminResponseSchema = z
 
 export const challengeDetailResponseSchema = z
   .object({
-    name: z
+    challenge_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+    challenge_name: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
       .min(3)
@@ -1575,6 +1595,13 @@ export const challengeDraftListResponseSchema = z
             .optional(),
           validation_message: z.string().optional(),
           validation_repository_path: z.string().optional(),
+          published_challenge_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            )
+            .optional(),
           published_challenge_name: z
             .string()
             .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
@@ -1815,6 +1842,11 @@ export const challengeDraftResponseSchema = z
       .optional(),
     validation_message: z.string().optional(),
     validation_repository_path: z.string().optional(),
+    published_challenge_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
+      .optional(),
     published_challenge_name: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
@@ -1911,7 +1943,13 @@ export const challengeListResponseSchema = z
     items: z.array(
       z
         .object({
-          name: z
+          challenge_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
+          challenge_name: z
             .string()
             .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
             .min(3)
@@ -1957,6 +1995,10 @@ export const challengeListResponseSchema = z
 
 export const challengeMoltbookDiscussionResponseSchema = z
   .object({
+    challenge_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
     challenge_name: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
@@ -2025,6 +2067,10 @@ export const challengePrivateAssetResponseSchema = z
 
 export const challengeShortlistResponseSchema = z
   .object({
+    challenge_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
     challenge_name: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
@@ -2056,6 +2102,10 @@ export const challengeShortlistResponseSchema = z
 export const challengeShortlistRevisionResponseSchema = z
   .object({
     id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+    challenge_id: z
       .string()
       .uuid()
       .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
@@ -2358,6 +2408,11 @@ export const creatorChallengeDraftResponseSchema = z
       .regex(/^[0-9a-f]{64}$/)
       .optional(),
     validation_message: z.string().optional(),
+    published_challenge_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
+      .optional(),
     published_challenge_name: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
@@ -2452,6 +2507,10 @@ export const creatorChallengeDraftResponseSchema = z
 
 export const creatorChallengeParticipantsResponseSchema = z
   .object({
+    challenge_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
     challenge_name: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
@@ -2496,6 +2555,10 @@ export const creatorChallengeParticipantsResponseSchema = z
 
 export const creatorChallengeStatsResponseSchema = z
   .object({
+    challenge_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
     challenge_name: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
@@ -2659,6 +2722,10 @@ export const githubOauthLoginResponseSchema = z
 
 export const leaderboardResponseSchema = z
   .object({
+    challenge_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
     challenge_name: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
@@ -2796,6 +2863,12 @@ export const publicSolutionSubmissionListResponseSchema = z
             .regex(
               /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
             ),
+          challenge_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
           challenge_name: z
             .string()
             .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
@@ -2855,6 +2928,10 @@ export const publicStatsResponseSchema = z
 
 export const publishChallengeResponseSchema = z
   .object({
+    challenge_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
     challenge_name: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
@@ -2869,6 +2946,10 @@ export const publishChallengeResponseSchema = z
 
 export const rankingContextResponseSchema = z
   .object({
+    challenge_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
     challenge_name: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
@@ -3009,6 +3090,10 @@ export const revokePioneerCodeResponseSchema = z
 
 export const scoreDistributionResponseSchema = z
   .object({
+    challenge_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
     challenge_name: z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
@@ -3096,6 +3181,10 @@ export const solutionSubmissionLogsResponseSchema = z
 export const solutionSubmissionResponseSchema = z
   .object({
     id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+    challenge_id: z
       .string()
       .uuid()
       .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
@@ -3694,6 +3783,12 @@ export const solutionSubmissionResultReportResponseSchema = z
     solution_submission: z
       .object({
         id: z
+          .string()
+          .uuid()
+          .regex(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          ),
+        challenge_id: z
           .string()
           .uuid()
           .regex(

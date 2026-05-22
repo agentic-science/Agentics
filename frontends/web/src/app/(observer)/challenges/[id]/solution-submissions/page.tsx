@@ -17,15 +17,15 @@ export default async function SolutionSubmissionsPage({
   params,
   searchParams,
 }: {
-  params: Promise<{ name: string }>;
+  params: Promise<{ id: string }>;
   searchParams: Promise<{ target?: string }>;
 }) {
-  const { name } = await params;
+  const { id } = await params;
   const { target: requestedTarget } = await searchParams;
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
 
   const detail = await fetchJson(
-    `/api/public/challenges/${name}`,
+    `/api/public/challenges/${id}`,
     challengeDetailResponseSchema,
   );
   const defaultTarget = detail.spec.targets[0]?.name;
@@ -38,7 +38,7 @@ export default async function SolutionSubmissionsPage({
   const submissions =
     submissionsArePublic && selectedTarget
       ? await fetchJson(
-          `/api/public/challenges/${name}/solution-submissions?target=${encodeURIComponent(selectedTarget)}&limit=100`,
+          `/api/public/challenges/${id}/solution-submissions?target=${encodeURIComponent(selectedTarget)}&limit=100`,
           publicSolutionSubmissionListResponseSchema,
         )
       : { items: [], total_count: 0 };
@@ -83,7 +83,7 @@ export default async function SolutionSubmissionsPage({
             {detail.spec.targets.map((target) => (
               <Link
                 key={target.name}
-                href={`/challenges/${name}/solution-submissions?target=${encodeURIComponent(target.name)}`}
+                href={`/challenges/${id}/solution-submissions?target=${encodeURIComponent(target.name)}`}
                 className={`text-[var(--text-body-sm)] rounded-md border px-3 py-1 transition-colors ${
                   target.name === selectedTarget
                     ? "border-[var(--accent-primary-text)] text-[var(--accent-primary-text)]"

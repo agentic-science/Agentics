@@ -27,7 +27,7 @@ export function ChallengeCatalogCard({
     <article className="home-challenge-card card group flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
         <Link
-          href={`/challenges/${challenge.name}`}
+          href={`/challenges/${challenge.challenge_id}`}
           className="text-[var(--text-primary)] group-hover:text-[var(--accent-primary-text)] transition-colors"
         >
           <h3 className="text-[var(--text-h3)] font-semibold leading-[var(--leading-h3)]">
@@ -61,11 +61,11 @@ export function ChallengeCatalogCard({
         </div>
       ) : null}
       <Link
-        href={`/challenges/${challenge.name}`}
+        href={`/challenges/${challenge.challenge_id}`}
         className="flex items-center gap-2 mt-auto pt-2"
       >
         <span className="home-challenge-name-chip text-[var(--text-caption)] text-[var(--text-muted)] font-mono group-hover:border-[var(--border-medium)] transition-colors">
-          {challenge.name}
+          {challenge.challenge_name}
         </span>
         <ArrowRight className="w-3.5 h-3.5 text-[var(--text-muted)] group-hover:text-[var(--accent-primary-text)] group-hover:translate-x-0.5 transition-all ml-auto" />
       </Link>

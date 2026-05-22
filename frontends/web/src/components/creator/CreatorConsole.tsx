@@ -114,7 +114,7 @@ export function CreatorConsole() {
     file: null,
   });
   const [ownerForm, setOwnerForm] = useState({
-    challengeName: "matrix-multiplication",
+    challengeId: "",
     target: "linux-arm64-cpu",
     shortlistText: JSON.stringify(
       { agent_ids_to_add: ["11111111-1111-4111-8111-111111111111"] },
@@ -323,26 +323,26 @@ export function CreatorConsole() {
 
   /** Loads owner surfaces for the selected challenge. */
   const loadOwnerSurfaces = async () => {
-    if (!ownerForm.challengeName.trim()) {
-      setError("Enter a published challenge name.");
+    if (!ownerForm.challengeId.trim()) {
+      setError("Enter a published challenge id.");
       return;
     }
 
     setLoading(true);
     setError(null);
     try {
-      const challengeName = ownerForm.challengeName.trim();
+      const challengeId = ownerForm.challengeId.trim();
       const target = ownerForm.target.trim() || undefined;
       const [statsResponse, participantsResponse, shortlistResponse] =
         await Promise.all([
-          getCreatorChallengeStats(challengeName, target),
-          getCreatorChallengeParticipants(challengeName, target),
-          getChallengeShortlist(challengeName),
+          getCreatorChallengeStats(challengeId, target),
+          getCreatorChallengeParticipants(challengeId, target),
+          getChallengeShortlist(challengeId),
         ]);
       setStats(statsResponse);
       setParticipants(participantsResponse);
       setShortlist(shortlistResponse);
-      setMessage(`Loaded owner surfaces for ${challengeName}.`);
+      setMessage(`Loaded owner surfaces for ${challengeId}.`);
     } catch (e) {
       setError(creatorErrorMessage(e));
     } finally {
@@ -357,8 +357,8 @@ export function CreatorConsole() {
       setError("Refresh the creator session before uploading a shortlist.");
       return;
     }
-    if (!ownerForm.challengeName.trim()) {
-      setError("Enter a published challenge name.");
+    if (!ownerForm.challengeId.trim()) {
+      setError("Enter a published challenge id.");
       return;
     }
 
@@ -381,14 +381,14 @@ export function CreatorConsole() {
     setLoading(true);
     setError(null);
     try {
-      const challengeName = ownerForm.challengeName.trim();
+      const challengeId = ownerForm.challengeId.trim();
       const response = await createChallengeShortlistRevision(
-        challengeName,
+        challengeId,
         parsedPayload.data,
         csrfToken,
       );
       setShortlistRevision(response);
-      setShortlist(await getChallengeShortlist(challengeName));
+      setShortlist(await getChallengeShortlist(challengeId));
       setMessage(`Uploaded shortlist revision ${response.id}.`);
     } catch (e) {
       setError(creatorErrorMessage(e));
@@ -619,10 +619,10 @@ export function CreatorConsole() {
               title="Owner statistics"
             />
             <TextInput
-              label="Published challenge name"
-              value={ownerForm.challengeName}
-              onChange={(challengeName) =>
-                setOwnerForm({ ...ownerForm, challengeName })
+              label="Published challenge id"
+              value={ownerForm.challengeId}
+              onChange={(challengeId) =>
+                setOwnerForm({ ...ownerForm, challengeId })
               }
               required
             />
@@ -836,6 +836,10 @@ function DraftDetail({
           <Metadata
             label="Published challenge"
             value={draft.published_challenge_name ?? "—"}
+          />
+          <Metadata
+            label="Published challenge ID"
+            value={draft.published_challenge_id ?? "—"}
           />
         </dl>
       </div>
