@@ -25,7 +25,7 @@ use crate::dgx::{
     ENV_DGX_TEST_PERSIST_FSTAB, ENV_DGX_TEST_PHASE_LOOP_SIZE, ENV_DGX_TEST_PHASE_SLOT_CLASSES_MB,
     ENV_DGX_TEST_PHASE_SLOT_INODES_PER_MB, ENV_DGX_TEST_PHASE_SLOTS_PER_CLASS,
     ENV_DGX_TEST_STATE_ROOT, ENV_DGX_TEST_USER, STORAGE_CONFIRMATION, SlotMetadata,
-    TEST_STORAGE_CONFIRMATION, phase_slot_path, slot_class_dir, slot_name,
+    TEST_STORAGE_CONFIRMATION, phase_slot_path, slot_name,
 };
 use crate::support::{
     DEFAULT_OUTPUT_LIMIT_BYTES, ReportLine, SupportError, env_non_empty, parse_boolish,
@@ -403,75 +403,11 @@ async fn apply_action(
     rollback: &mut RollbackLog,
 ) -> Result<String, StorageError> {
     match action {
-        StorageAction::EnsureDir(path) => {
-            if path.exists() {
-                return Ok(format!("{} exists", path.display()));
-            }
-            tokio::fs::create_dir_all(path).await?;
-            rollback.created_paths.push(path.clone());
-            Ok(format!("created {}", path.display()))
-        }
-        StorageAction::EnsureImage(path, size) => {
-            if path.exists() {
-                return Ok(format!("{} exists", path.display()));
-            }
-            if let Some(parent) = path.parent() {
-                tokio::fs::create_dir_all(parent).await?;
-            }
-            checked_process(
-                "truncate",
-                vec![
-                    "-s".to_string(),
-                    size.clone(),
-                    path.to_string_lossy().to_string(),
-                ],
-            )
-            .await?;
-            rollback.created_paths.push(path.clone());
-            checked_process(
-                "mkfs.xfs",
-                vec!["-f".to_string(), path.to_string_lossy().to_string()],
-            )
-            .await?;
-            Ok(format!("created XFS image {}", path.display()))
-        }
-        StorageAction::EnsureMount { image, mount } => {
-            tokio::fs::create_dir_all(mount).await?;
-            if mount_is_active(mount).await? {
-                return Ok(format!("{} already mounted", mount.display()));
-            }
-            checked_process(
-                "mount",
-                vec![
-                    "-o".to_string(),
-                    "loop,prjquota".to_string(),
-                    image.to_string_lossy().to_string(),
-                    mount.to_string_lossy().to_string(),
-                ],
-            )
-            .await?;
-            rollback.mounted_paths.push(mount.clone());
-            Ok(format!("mounted {}", mount.display()))
-        }
+        StorageAction::EnsureDir(path) => ensure_directory(path, rollback).await,
+        StorageAction::EnsureImage(path, size) => ensure_xfs_image(path, size, rollback).await,
+        StorageAction::EnsureMount { image, mount } => ensure_mount(image, mount, rollback).await,
         StorageAction::EnsureFstab { image, mount } => {
-            let line = format!(
-                "{} {} xfs loop,prjquota,nofail 0 0\n",
-                image.display(),
-                mount.display()
-            );
-            let fstab = Path::new("/etc/fstab");
-            let current = read_optional_file_bytes(fstab).await?;
-            if fstab_has_mount_entry(current.as_deref().unwrap_or_default(), mount) {
-                return Ok(format!("fstab entry exists for {}", mount.display()));
-            }
-            rollback.backup_file(fstab).await?;
-            let mut next = current.unwrap_or_default();
-            if !next.is_empty() && !next.ends_with(b"\n") {
-                next.push(b'\n');
-            }
-            next.extend_from_slice(line.as_bytes());
-            tokio::fs::write(fstab, next).await?;
-            Ok(format!("added fstab entry for {}", mount.display()))
+            ensure_fstab_entry(image, mount, rollback).await
         }
         StorageAction::EnsureSlot {
             phase,
@@ -479,80 +415,216 @@ async fn apply_action(
             slot_index,
             project_id,
         } => {
-            let mount = config.phase_mount_root.join(phase.as_str());
-            let slot_path =
-                phase_slot_path(&config.phase_mount_root, *phase, *class_mb, *slot_index);
-            tokio::fs::create_dir_all(slot_path.parent().unwrap_or(&slot_path)).await?;
-            tokio::fs::create_dir_all(&slot_path).await?;
-            let metadata = SlotMetadata::new(
+            ensure_quota_slot(
+                config,
                 *phase,
                 *class_mb,
                 *slot_index,
                 *project_id,
-                config.slot_inodes_per_mb,
-            );
-            checked_process(
-                "xfs_quota",
-                vec![
-                    "-x".to_string(),
-                    "-c".to_string(),
-                    format!("project -s -p {} {project_id}", slot_path.display()),
-                    mount.to_string_lossy().to_string(),
-                ],
+                rollback,
             )
-            .await?;
-            checked_process(
-                "xfs_quota",
-                vec![
-                    "-x".to_string(),
-                    "-c".to_string(),
-                    format!(
-                        "limit -p bhard={}m ihard={} {project_id}",
-                        class_mb, metadata.inode_hard_limit
-                    ),
-                    mount.to_string_lossy().to_string(),
-                ],
-            )
-            .await?;
-            tokio::fs::write(
-                slot_path.join(".agentics-slot.json"),
-                serde_json::to_string(&metadata)?,
-            )
-            .await?;
-            Ok(format!(
-                "ensured {}",
-                config
-                    .phase_mount_root
-                    .join(phase.as_str())
-                    .join("slots")
-                    .join(slot_class_dir(*class_mb))
-                    .join(slot_name(*slot_index))
-                    .display()
-            ))
+            .await
         }
-        StorageAction::ChownOwnedPaths => {
-            let user_group = format!("{}:{}", config.service_user, config.service_group);
-            for path in [
-                config.state_root.join("storage"),
-                config.state_root.join("challenges"),
-                config.state_root.join("runtime"),
-                config.phase_mount_root.clone(),
-            ] {
-                if path.exists() {
-                    checked_process(
-                        "chown",
-                        vec![
-                            "-R".to_string(),
-                            user_group.clone(),
-                            path.to_string_lossy().to_string(),
-                        ],
-                    )
-                    .await?;
-                }
-            }
-            Ok(format!("applied ownership {user_group}"))
+        StorageAction::ChownOwnedPaths => chown_owned_paths(config).await,
+    }
+}
+
+async fn ensure_directory(path: &Path, rollback: &mut RollbackLog) -> Result<String, StorageError> {
+    if create_dir_all_recorded(path, rollback).await? {
+        Ok(format!("created {}", path.display()))
+    } else {
+        Ok(format!("{} exists", path.display()))
+    }
+}
+
+async fn ensure_xfs_image(
+    path: &Path,
+    size: &str,
+    rollback: &mut RollbackLog,
+) -> Result<String, StorageError> {
+    if path.exists() {
+        return Ok(format!("{} exists", path.display()));
+    }
+    if let Some(parent) = path.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+    checked_process(
+        "truncate",
+        vec![
+            "-s".to_string(),
+            size.to_string(),
+            path.to_string_lossy().to_string(),
+        ],
+    )
+    .await?;
+    rollback.created_paths.push(path.to_path_buf());
+    checked_process(
+        "mkfs.xfs",
+        vec!["-f".to_string(), path.to_string_lossy().to_string()],
+    )
+    .await?;
+    Ok(format!("created XFS image {}", path.display()))
+}
+
+async fn ensure_mount(
+    image: &Path,
+    mount: &Path,
+    rollback: &mut RollbackLog,
+) -> Result<String, StorageError> {
+    create_dir_all_recorded(mount, rollback).await?;
+    if mount_is_active(mount).await? {
+        return Ok(format!("{} already mounted", mount.display()));
+    }
+    checked_process(
+        "mount",
+        vec![
+            "-o".to_string(),
+            "loop,prjquota".to_string(),
+            image.to_string_lossy().to_string(),
+            mount.to_string_lossy().to_string(),
+        ],
+    )
+    .await?;
+    rollback.mounted_paths.push(mount.to_path_buf());
+    Ok(format!("mounted {}", mount.display()))
+}
+
+async fn ensure_fstab_entry(
+    image: &Path,
+    mount: &Path,
+    rollback: &mut RollbackLog,
+) -> Result<String, StorageError> {
+    let line = format!(
+        "{} {} xfs loop,prjquota,nofail 0 0\n",
+        image.display(),
+        mount.display()
+    );
+    let fstab = Path::new("/etc/fstab");
+    let current = read_optional_file_bytes(fstab).await?;
+    if fstab_has_mount_entry(current.as_deref().unwrap_or_default(), mount) {
+        return Ok(format!("fstab entry exists for {}", mount.display()));
+    }
+    rollback.backup_file(fstab).await?;
+    let mut next = current.unwrap_or_default();
+    if !next.is_empty() && !next.ends_with(b"\n") {
+        next.push(b'\n');
+    }
+    next.extend_from_slice(line.as_bytes());
+    tokio::fs::write(fstab, next).await?;
+    Ok(format!("added fstab entry for {}", mount.display()))
+}
+
+async fn ensure_quota_slot(
+    config: &DgxStorageConfig,
+    phase: dgx::DgxPhase,
+    class_mb: u64,
+    slot_index: u64,
+    project_id: u64,
+    rollback: &mut RollbackLog,
+) -> Result<String, StorageError> {
+    let mount = config.phase_mount_root.join(phase.as_str());
+    let slot_path = phase_slot_path(&config.phase_mount_root, phase, class_mb, slot_index);
+    if let Some(parent) = slot_path.parent() {
+        create_dir_all_recorded(parent, rollback).await?;
+    }
+    create_dir_all_recorded(&slot_path, rollback).await?;
+
+    let metadata = SlotMetadata::new(
+        phase,
+        class_mb,
+        slot_index,
+        project_id,
+        config.slot_inodes_per_mb,
+    );
+    assign_xfs_project(&mount, &slot_path, project_id).await?;
+    apply_xfs_project_limits(&mount, class_mb, project_id, metadata.inode_hard_limit).await?;
+    write_slot_metadata(&slot_path, &metadata, rollback).await?;
+    Ok(format!("ensured {}", slot_path.display()))
+}
+
+async fn assign_xfs_project(
+    mount: &Path,
+    slot_path: &Path,
+    project_id: u64,
+) -> Result<(), StorageError> {
+    checked_process(
+        "xfs_quota",
+        vec![
+            "-x".to_string(),
+            "-c".to_string(),
+            format!("project -s -p {} {project_id}", slot_path.display()),
+            mount.to_string_lossy().to_string(),
+        ],
+    )
+    .await
+}
+
+async fn apply_xfs_project_limits(
+    mount: &Path,
+    class_mb: u64,
+    project_id: u64,
+    inode_hard_limit: u64,
+) -> Result<(), StorageError> {
+    checked_process(
+        "xfs_quota",
+        vec![
+            "-x".to_string(),
+            "-c".to_string(),
+            format!("limit -p bhard={class_mb}m ihard={inode_hard_limit} {project_id}"),
+            mount.to_string_lossy().to_string(),
+        ],
+    )
+    .await
+}
+
+async fn write_slot_metadata(
+    slot_path: &Path,
+    metadata: &SlotMetadata,
+    rollback: &mut RollbackLog,
+) -> Result<(), StorageError> {
+    let metadata_path = slot_path.join(".agentics-slot.json");
+    if metadata_path.exists() {
+        rollback.backup_file(&metadata_path).await?;
+    } else {
+        rollback.created_paths.push(metadata_path.clone());
+    }
+    tokio::fs::write(metadata_path, serde_json::to_string(metadata)?).await?;
+    Ok(())
+}
+
+async fn chown_owned_paths(config: &DgxStorageConfig) -> Result<String, StorageError> {
+    let user_group = format!("{}:{}", config.service_user, config.service_group);
+    for path in [
+        config.state_root.join("storage"),
+        config.state_root.join("challenges"),
+        config.state_root.join("runtime"),
+        config.phase_mount_root.clone(),
+    ] {
+        if path.exists() {
+            checked_process(
+                "chown",
+                vec![
+                    "-R".to_string(),
+                    user_group.clone(),
+                    path.to_string_lossy().to_string(),
+                ],
+            )
+            .await?;
         }
     }
+    Ok(format!("applied ownership {user_group}"))
+}
+
+async fn create_dir_all_recorded(
+    path: &Path,
+    rollback: &mut RollbackLog,
+) -> Result<bool, StorageError> {
+    if path.exists() {
+        return Ok(false);
+    }
+    tokio::fs::create_dir_all(path).await?;
+    rollback.created_paths.push(path.to_path_buf());
+    Ok(true)
 }
 
 async fn checked_process(program: &str, args: Vec<String>) -> Result<(), StorageError> {
@@ -674,8 +746,10 @@ pub enum StorageError {
 
 #[cfg(test)]
 mod tests {
-    use super::fstab_has_mount_entry;
     use std::path::Path;
+
+    use super::{RollbackLog, create_dir_all_recorded, fstab_has_mount_entry, write_slot_metadata};
+    use crate::dgx::{DgxPhase, SlotMetadata};
 
     /// Verifies fstab detection uses the mount field, not broad substrings.
     #[test]
@@ -691,5 +765,63 @@ mod tests {
             bytes,
             Path::new("/srv/agentics/loop-images/docker.xfs")
         ));
+    }
+
+    /// Verifies rollback removes directories that this invocation created.
+    #[tokio::test]
+    async fn rollback_removes_recorded_created_directories() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let class_dir = tempdir.path().join("slots").join("64mb");
+        let slot_dir = class_dir.join("slot-001");
+        let mut rollback = RollbackLog::default();
+
+        assert!(
+            create_dir_all_recorded(&class_dir, &mut rollback)
+                .await
+                .expect("create class dir")
+        );
+        assert!(
+            create_dir_all_recorded(&slot_dir, &mut rollback)
+                .await
+                .expect("create slot dir")
+        );
+        rollback.rollback().await;
+
+        assert!(!slot_dir.exists());
+        assert!(!class_dir.exists());
+    }
+
+    /// Verifies metadata overwrites are backed up for current-invocation rollback.
+    #[tokio::test]
+    async fn rollback_restores_overwritten_slot_metadata() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let slot_dir = tempdir.path().join("slot-001");
+        tokio::fs::create_dir_all(&slot_dir)
+            .await
+            .expect("create slot dir");
+        let metadata_path = slot_dir.join(".agentics-slot.json");
+        tokio::fs::write(&metadata_path, br#"{"phase":"solution-run"}"#)
+            .await
+            .expect("write old metadata");
+        let mut rollback = RollbackLog::default();
+        let metadata = SlotMetadata::new(DgxPhase::SolutionRun, 64, 1, 100_001, 256);
+
+        write_slot_metadata(&slot_dir, &metadata, &mut rollback)
+            .await
+            .expect("write metadata");
+        assert_ne!(
+            tokio::fs::read_to_string(&metadata_path)
+                .await
+                .expect("read new metadata"),
+            r#"{"phase":"solution-run"}"#,
+        );
+        rollback.rollback().await;
+
+        assert_eq!(
+            tokio::fs::read_to_string(&metadata_path)
+                .await
+                .expect("read restored metadata"),
+            r#"{"phase":"solution-run"}"#,
+        );
     }
 }
