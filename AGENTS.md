@@ -51,6 +51,53 @@ For your information:
 - Keep track of file sizes. If a file has more then 1200 lines of code, propose a refactor to the user.
 - When fixing lint findings, preserving behavior is mandatory. In particular, replacing `unwrap`, `expect`, indexing, or other panic-prone code must not silently continue, skip work, substitute defaults, or weaken limits when the previous code would fail fast. Prefer eliminating impossible states by construction, for example by building the correctly typed value directly instead of constructing a generic value and then asserting its shape. If a failure can really happen at runtime, handle it with a clear domain error. If the old code represented an internal invariant that cannot be eliminated, convert it to a precise internal error, not a vague message such as "static value must be an object".
 
+### Commit Message Convention
+
+Use a lightweight Conventional Commit style for new commits:
+
+```text
+<type>(<scope>): <imperative summary>
+
+<body explaining why and notable details>
+
+<footer, if needed>
+```
+
+For cross-cutting commits where one scope would be misleading, omit the scope:
+
+```text
+<type>: <imperative summary>
+```
+
+Allowed types:
+
+- `feat`: new behavior or user-facing capability.
+- `fix`: bug, security, lifecycle, or correctness fix.
+- `refactor`: restructuring without intended behavior change.
+- `docs`: documentation, README, or agent skill updates.
+- `test`: test-only changes.
+- `chore`: tooling, dependency, metadata, or generated-only maintenance.
+- `perf`: performance improvement.
+- `style`: formatting-only changes with no behavior change.
+
+Use repo-local, concrete scopes such as `api`, `runner`, `cli`, `web`, `docs`, `ops`, `challenge-spec`, `db`, or `schemas`.
+
+Commit subject rules:
+
+- Use imperative mood, such as `add`, `fix`, `reject`, or `document`.
+- Keep the subject under about 72 characters when practical.
+- Do not end the subject with a period.
+- Mention the user-visible or public contract when that is the important change.
+
+Commit body rules:
+
+- Use a multiline body when the "why" is not obvious, behavior changes, migrations are involved, or tradeoffs matter.
+- Write the body as motivation and important consequences, not a file-by-file changelog.
+- Include verification notes only when useful, especially for non-obvious tests or intentionally skipped checks.
+- Use footers such as `BREAKING CHANGE: ...` or `Refs #123` when they add useful context.
+
+Use a multiline body for any commit that changes public APIs, DB schema, runner security behavior, challenge specs, or operational workflow. Narrow docs/client/test-only commits may stay one-line if the subject is self-explanatory.
+
 ### Agentics-Specific Requirements
 
 - Before the public MVP release, DO NOT consider any internal or external API compatibilities. If a new feature or a refactor needs to reasonably discard existing code, just do it. For example, if a backend change for a good reason breaks the APIs for the frontend, DO NOT add compatibility shims/layers/aliases. Instead, just fix the frontend.
