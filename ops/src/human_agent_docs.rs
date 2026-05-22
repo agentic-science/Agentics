@@ -38,6 +38,7 @@ const EXCLUDED_COMPONENTS: &[&str] = &[
     "build",
     "coverage",
     "dist",
+    "examples",
     "node_modules",
     "target",
 ];
@@ -709,6 +710,10 @@ mod tests {
         write_file(
             &temp.path().join("node_modules/package/README.md"),
             "dependency",
+        );
+        write_file(
+            &temp.path().join("examples/solutions/sample/README.md"),
+            "example",
         );
 
         let report = scan_human_agent_docs(&DocCheckConfig::new(temp.path().to_path_buf()))
