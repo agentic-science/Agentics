@@ -33,132 +33,154 @@ use crate::models::request::{
     SolutionSubmissionResultReportResponse,
 };
 
+struct SchemaExport {
+    name: &'static str,
+    build: fn() -> Result<Value, serde_json::Error>,
+}
+
+macro_rules! web_schema_exports {
+    ($(($ty:ty, $name:literal $(,)?)),+ $(,)?) => {
+        const WEB_SCHEMA_EXPORTS: &[SchemaExport] = &[
+            $(
+                SchemaExport {
+                    name: $name,
+                    build: schema_value::<$ty>,
+                },
+            )+
+        ];
+    };
+}
+
+web_schema_exports! {
+    (AdminCapacityResponse, "adminCapacityResponseSchema"),
+    (AdminChallengeListResponse, "adminChallengeListResponseSchema"),
+    (
+        AdminChallengePrivateAssetListResponse,
+        "adminChallengePrivateAssetListResponseSchema",
+    ),
+    (AdminLoginRequest, "adminLoginRequestSchema"),
+    (
+        AdminServiceHeartbeatListResponse,
+        "adminServiceHeartbeatListResponseSchema",
+    ),
+    (AdminSessionResponse, "adminSessionResponseSchema"),
+    (
+        AdminSolutionSubmissionListResponse,
+        "adminSolutionSubmissionListResponseSchema",
+    ),
+    (ChallengeAdminResponse, "challengeAdminResponseSchema"),
+    (ChallengeDetailResponse, "challengeDetailResponseSchema"),
+    (
+        ChallengeDraftCleanupResponse,
+        "challengeDraftCleanupResponseSchema",
+    ),
+    (ChallengeDraftListResponse, "challengeDraftListResponseSchema"),
+    (ChallengeDraftResponse, "challengeDraftResponseSchema"),
+    (ChallengeListResponse, "challengeListResponseSchema"),
+    (
+        ChallengeMoltbookDiscussionResponse,
+        "challengeMoltbookDiscussionResponseSchema",
+    ),
+    (
+        ChallengePrivateAssetResponse,
+        "challengePrivateAssetResponseSchema",
+    ),
+    (ChallengeShortlistResponse, "challengeShortlistResponseSchema"),
+    (
+        ChallengeShortlistRevisionResponse,
+        "challengeShortlistRevisionResponseSchema",
+    ),
+    (
+        CreateChallengeDraftRequest,
+        "createChallengeDraftRequestSchema",
+    ),
+    (
+        CreatorChallengeDraftResponse,
+        "creatorChallengeDraftResponseSchema",
+    ),
+    (
+        CreateChallengeShortlistRevisionRequest,
+        "createChallengeShortlistRevisionRequestSchema",
+    ),
+    (CreatePioneerCodeRequest, "createPioneerCodeRequestSchema"),
+    (
+        ReviewChallengeDraftRequest,
+        "reviewChallengeDraftRequestSchema",
+    ),
+    (
+        UploadChallengePrivateAssetRequest,
+        "uploadChallengePrivateAssetRequestSchema",
+    ),
+    (
+        ValidateChallengeDraftRequest,
+        "validateChallengeDraftRequestSchema",
+    ),
+    (PublishChallengeResponse, "publishChallengeResponseSchema"),
+    (CreatorMeResponse, "creatorMeResponseSchema"),
+    (CreatorSessionResponse, "creatorSessionResponseSchema"),
+    (
+        CreatorChallengeParticipantsResponse,
+        "creatorChallengeParticipantsResponseSchema",
+    ),
+    (
+        CreatorChallengeStatsResponse,
+        "creatorChallengeStatsResponseSchema",
+    ),
+    (DisableAgentResponse, "disableAgentResponseSchema"),
+    (EvaluationJobResponse, "evaluationJobResponseSchema"),
+    (ErrorResponse, "errorResponseSchema"),
+    (
+        GithubOauthCallbackRequest,
+        "githubOauthCallbackRequestSchema",
+    ),
+    (GithubOauthLoginRequest, "githubOauthLoginRequestSchema"),
+    (GithubOauthLoginResponse, "githubOauthLoginResponseSchema"),
+    (LeaderboardResponse, "leaderboardResponseSchema"),
+    (PioneerCodeDetailResponse, "pioneerCodeDetailResponseSchema"),
+    (PioneerCodeListResponse, "pioneerCodeListResponseSchema"),
+    (
+        PublicSolutionSubmissionListResponse,
+        "publicSolutionSubmissionListResponseSchema",
+    ),
+    (PublicStatsResponse, "publicStatsResponseSchema"),
+    (RankingContextResponse, "rankingContextResponseSchema"),
+    (RegisterAgentRequest, "registerAgentRequestSchema"),
+    (RevokePioneerCodeResponse, "revokePioneerCodeResponseSchema"),
+    (ScoreDistributionResponse, "scoreDistributionResponseSchema"),
+    (
+        SetChallengeMoltbookDiscussionRequest,
+        "setChallengeMoltbookDiscussionRequestSchema",
+    ),
+    (
+        SolutionSubmissionArtifactResponse,
+        "solutionSubmissionArtifactResponseSchema",
+    ),
+    (
+        SolutionSubmissionLogsResponse,
+        "solutionSubmissionLogsResponseSchema",
+    ),
+    (
+        SolutionSubmissionResultReportResponse,
+        "solutionSubmissionResultReportResponseSchema",
+    ),
+    (SolutionSubmissionResponse, "solutionSubmissionResponseSchema"),
+}
+
 /// Export all Rust DTO schemas consumed by the web frontend.
 pub fn export_web_schemas() -> Result<BTreeMap<String, Value>, serde_json::Error> {
     let mut schemas = BTreeMap::new();
-
-    insert_schema::<AdminCapacityResponse>(&mut schemas, "adminCapacityResponseSchema")?;
-    insert_schema::<AdminChallengeListResponse>(&mut schemas, "adminChallengeListResponseSchema")?;
-    insert_schema::<AdminChallengePrivateAssetListResponse>(
-        &mut schemas,
-        "adminChallengePrivateAssetListResponseSchema",
-    )?;
-    insert_schema::<AdminLoginRequest>(&mut schemas, "adminLoginRequestSchema")?;
-    insert_schema::<AdminServiceHeartbeatListResponse>(
-        &mut schemas,
-        "adminServiceHeartbeatListResponseSchema",
-    )?;
-    insert_schema::<AdminSessionResponse>(&mut schemas, "adminSessionResponseSchema")?;
-    insert_schema::<AdminSolutionSubmissionListResponse>(
-        &mut schemas,
-        "adminSolutionSubmissionListResponseSchema",
-    )?;
-    insert_schema::<ChallengeAdminResponse>(&mut schemas, "challengeAdminResponseSchema")?;
-    insert_schema::<ChallengeDetailResponse>(&mut schemas, "challengeDetailResponseSchema")?;
-    insert_schema::<ChallengeDraftCleanupResponse>(
-        &mut schemas,
-        "challengeDraftCleanupResponseSchema",
-    )?;
-    insert_schema::<ChallengeDraftListResponse>(&mut schemas, "challengeDraftListResponseSchema")?;
-    insert_schema::<ChallengeDraftResponse>(&mut schemas, "challengeDraftResponseSchema")?;
-    insert_schema::<ChallengeListResponse>(&mut schemas, "challengeListResponseSchema")?;
-    insert_schema::<ChallengeMoltbookDiscussionResponse>(
-        &mut schemas,
-        "challengeMoltbookDiscussionResponseSchema",
-    )?;
-    insert_schema::<ChallengePrivateAssetResponse>(
-        &mut schemas,
-        "challengePrivateAssetResponseSchema",
-    )?;
-    insert_schema::<ChallengeShortlistResponse>(&mut schemas, "challengeShortlistResponseSchema")?;
-    insert_schema::<ChallengeShortlistRevisionResponse>(
-        &mut schemas,
-        "challengeShortlistRevisionResponseSchema",
-    )?;
-    insert_schema::<CreateChallengeDraftRequest>(
-        &mut schemas,
-        "createChallengeDraftRequestSchema",
-    )?;
-    insert_schema::<CreatorChallengeDraftResponse>(
-        &mut schemas,
-        "creatorChallengeDraftResponseSchema",
-    )?;
-    insert_schema::<CreateChallengeShortlistRevisionRequest>(
-        &mut schemas,
-        "createChallengeShortlistRevisionRequestSchema",
-    )?;
-    insert_schema::<CreatePioneerCodeRequest>(&mut schemas, "createPioneerCodeRequestSchema")?;
-    insert_schema::<ReviewChallengeDraftRequest>(
-        &mut schemas,
-        "reviewChallengeDraftRequestSchema",
-    )?;
-    insert_schema::<UploadChallengePrivateAssetRequest>(
-        &mut schemas,
-        "uploadChallengePrivateAssetRequestSchema",
-    )?;
-    insert_schema::<ValidateChallengeDraftRequest>(
-        &mut schemas,
-        "validateChallengeDraftRequestSchema",
-    )?;
-    insert_schema::<PublishChallengeResponse>(&mut schemas, "publishChallengeResponseSchema")?;
-    insert_schema::<CreatorMeResponse>(&mut schemas, "creatorMeResponseSchema")?;
-    insert_schema::<CreatorSessionResponse>(&mut schemas, "creatorSessionResponseSchema")?;
-    insert_schema::<CreatorChallengeParticipantsResponse>(
-        &mut schemas,
-        "creatorChallengeParticipantsResponseSchema",
-    )?;
-    insert_schema::<CreatorChallengeStatsResponse>(
-        &mut schemas,
-        "creatorChallengeStatsResponseSchema",
-    )?;
-    insert_schema::<DisableAgentResponse>(&mut schemas, "disableAgentResponseSchema")?;
-    insert_schema::<EvaluationJobResponse>(&mut schemas, "evaluationJobResponseSchema")?;
-    insert_schema::<ErrorResponse>(&mut schemas, "errorResponseSchema")?;
-    insert_schema::<GithubOauthCallbackRequest>(&mut schemas, "githubOauthCallbackRequestSchema")?;
-    insert_schema::<GithubOauthLoginRequest>(&mut schemas, "githubOauthLoginRequestSchema")?;
-    insert_schema::<GithubOauthLoginResponse>(&mut schemas, "githubOauthLoginResponseSchema")?;
-    insert_schema::<LeaderboardResponse>(&mut schemas, "leaderboardResponseSchema")?;
-    insert_schema::<PioneerCodeDetailResponse>(&mut schemas, "pioneerCodeDetailResponseSchema")?;
-    insert_schema::<PioneerCodeListResponse>(&mut schemas, "pioneerCodeListResponseSchema")?;
-    insert_schema::<PublicSolutionSubmissionListResponse>(
-        &mut schemas,
-        "publicSolutionSubmissionListResponseSchema",
-    )?;
-    insert_schema::<PublicStatsResponse>(&mut schemas, "publicStatsResponseSchema")?;
-    insert_schema::<RankingContextResponse>(&mut schemas, "rankingContextResponseSchema")?;
-    insert_schema::<RegisterAgentRequest>(&mut schemas, "registerAgentRequestSchema")?;
-    insert_schema::<RevokePioneerCodeResponse>(&mut schemas, "revokePioneerCodeResponseSchema")?;
-    insert_schema::<ScoreDistributionResponse>(&mut schemas, "scoreDistributionResponseSchema")?;
-    insert_schema::<SetChallengeMoltbookDiscussionRequest>(
-        &mut schemas,
-        "setChallengeMoltbookDiscussionRequestSchema",
-    )?;
-    insert_schema::<SolutionSubmissionArtifactResponse>(
-        &mut schemas,
-        "solutionSubmissionArtifactResponseSchema",
-    )?;
-    insert_schema::<SolutionSubmissionLogsResponse>(
-        &mut schemas,
-        "solutionSubmissionLogsResponseSchema",
-    )?;
-    insert_schema::<SolutionSubmissionResultReportResponse>(
-        &mut schemas,
-        "solutionSubmissionResultReportResponseSchema",
-    )?;
-    insert_schema::<SolutionSubmissionResponse>(&mut schemas, "solutionSubmissionResponseSchema")?;
+    for export in WEB_SCHEMA_EXPORTS {
+        schemas.insert(export.name.to_string(), (export.build)()?);
+    }
 
     Ok(schemas)
 }
 
-/// Insert one schema into the web export map.
-fn insert_schema<T: JsonSchema>(
-    schemas: &mut BTreeMap<String, Value>,
-    export_name: &str,
-) -> Result<(), serde_json::Error> {
+/// Build one normalized schema value.
+fn schema_value<T: JsonSchema>() -> Result<Value, serde_json::Error> {
     let mut schema = serde_json::to_value(schema_for!(T))?;
     normalize_response_schema(&mut schema);
-    schemas.insert(export_name.to_string(), schema);
-    Ok(())
+    Ok(schema)
 }
 
 /// Preserve optional-field omission semantics in generated Zod schemas.
@@ -226,6 +248,73 @@ fn remove_nullability(map: &mut Map<String, Value>) {
             for (child_key, child_value) in non_null_map {
                 map.entry(child_key).or_insert(child_value);
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use super::*;
+
+    #[test]
+    fn web_schema_manifest_exports_unique_named_contracts() {
+        let schemas = export_web_schemas().expect("web schemas should export");
+        let manifest_names = WEB_SCHEMA_EXPORTS
+            .iter()
+            .map(|export| export.name)
+            .collect::<BTreeSet<_>>();
+        let schema_names = schemas.keys().map(String::as_str).collect::<BTreeSet<_>>();
+
+        assert_eq!(
+            manifest_names.len(),
+            WEB_SCHEMA_EXPORTS.len(),
+            "schema export manifest must not contain duplicate names",
+        );
+        assert_eq!(
+            schema_names, manifest_names,
+            "generated schemas must match the manifest exactly",
+        );
+        for expected in [
+            "adminCapacityResponseSchema",
+            "challengeDetailResponseSchema",
+            "creatorChallengeDraftResponseSchema",
+            "solutionSubmissionResultReportResponseSchema",
+        ] {
+            assert!(
+                schemas.contains_key(expected),
+                "missing frontend schema contract {expected}",
+            );
+        }
+    }
+
+    #[test]
+    fn web_schema_export_strips_internal_preserve_null_markers() {
+        let schemas = export_web_schemas().expect("web schemas should export");
+
+        for (name, schema) in schemas {
+            assert_no_preserve_null_marker(&name, &schema);
+        }
+    }
+
+    fn assert_no_preserve_null_marker(context: &str, value: &Value) {
+        match value {
+            Value::Array(items) => {
+                for (index, item) in items.iter().enumerate() {
+                    assert_no_preserve_null_marker(&format!("{context}[{index}]"), item);
+                }
+            }
+            Value::Object(map) => {
+                assert!(
+                    !map.contains_key("x-agentics-preserve-null"),
+                    "internal preserve-null marker leaked at {context}",
+                );
+                for (key, child) in map {
+                    assert_no_preserve_null_marker(&format!("{context}.{key}"), child);
+                }
+            }
+            _ => {}
         }
     }
 }
