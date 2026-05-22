@@ -8,12 +8,12 @@
 
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
-use std::process::{ExitCode, Stdio};
+use std::process::{ExitCode, ExitStatus, Stdio};
 use std::time::Duration;
 
 use thiserror::Error;
 use tokio::io::{AsyncRead, AsyncReadExt};
-use tokio::process::Command;
+use tokio::process::{Child, ChildStderr, ChildStdout, Command};
 
 /// Default byte cap for command output captured into diagnostics.
 pub const DEFAULT_OUTPUT_LIMIT_BYTES: usize = 16 * 1024;
@@ -278,51 +278,26 @@ pub async fn run_command(
 
     let mut stdout = child.stdout.take();
     let mut stderr = child.stderr.take();
-    let stdout_task = tokio::spawn(async move { read_bounded(&mut stdout, limit_bytes).await });
-    let stderr_task = tokio::spawn(async move { read_bounded(&mut stderr, limit_bytes).await });
 
-    let status = match timeout {
-        Some(duration) => {
-            tokio::select! {
-                result = child.wait() => {
-                    result.map_err(|error| SupportError::ProcessWait {
-                        program: program.to_string(),
-                        message: error.to_string(),
-                    })?
-                }
-                _ = tokio::time::sleep(duration) => {
-                    let _ignored = child.kill().await;
-                    let _ignored = child.wait().await;
-                    return Err(SupportError::ProcessTimeout {
-                        program: program.to_string(),
-                        seconds: duration.as_secs(),
-                    });
-                }
+    let completion = wait_command_completion(&mut child, &mut stdout, &mut stderr, limit_bytes);
+    let (status, stdout, stdout_truncated, stderr, stderr_truncated) = match timeout {
+        Some(duration) => match tokio::time::timeout(duration, completion).await {
+            Ok(result) => result,
+            Err(_) => {
+                let _ignored = child.kill().await;
+                let _ignored = child.wait().await;
+                return Err(SupportError::ProcessTimeout {
+                    program: program.to_string(),
+                    seconds: duration.as_secs(),
+                });
             }
-        }
-        None => child
-            .wait()
-            .await
-            .map_err(|error| SupportError::ProcessWait {
-                program: program.to_string(),
-                message: error.to_string(),
-            })?,
-    };
-
-    let (stdout, stdout_truncated) = stdout_task
-        .await
-        .map_err(|error| SupportError::Join(error.to_string()))?
-        .map_err(|error| SupportError::ProcessWait {
-            program: program.to_string(),
-            message: error.to_string(),
-        })?;
-    let (stderr, stderr_truncated) = stderr_task
-        .await
-        .map_err(|error| SupportError::Join(error.to_string()))?
-        .map_err(|error| SupportError::ProcessWait {
-            program: program.to_string(),
-            message: error.to_string(),
-        })?;
+        },
+        None => completion.await,
+    }
+    .map_err(|error| SupportError::ProcessWait {
+        program: program.to_string(),
+        message: error.to_string(),
+    })?;
 
     Ok(CommandOutput {
         status: status.code(),
@@ -330,6 +305,24 @@ pub async fn run_command(
         stderr: String::from_utf8_lossy(&stderr).into_owned(),
         truncated: stdout_truncated || stderr_truncated,
     })
+}
+
+async fn wait_command_completion(
+    child: &mut Child,
+    stdout: &mut Option<ChildStdout>,
+    stderr: &mut Option<ChildStderr>,
+    limit_bytes: usize,
+) -> Result<(ExitStatus, Vec<u8>, bool, Vec<u8>, bool), std::io::Error> {
+    let (status, stdout, stderr) = tokio::join!(
+        child.wait(),
+        read_bounded(stdout, limit_bytes),
+        read_bounded(stderr, limit_bytes)
+    );
+    let status = status?;
+    let (stdout, stdout_truncated) = stdout?;
+    let (stderr, stderr_truncated) = stderr?;
+
+    Ok((status, stdout, stdout_truncated, stderr, stderr_truncated))
 }
 
 async fn read_bounded<R>(
@@ -491,8 +484,6 @@ pub enum SupportError {
     ProcessWait { program: String, message: String },
     #[error("{program} timed out after {seconds}s")]
     ProcessTimeout { program: String, seconds: u64 },
-    #[error("task join failure: {0}")]
-    Join(String),
     #[error("unsafe {label} path {path:?}: {message}")]
     UnsafePath {
         label: String,
@@ -503,8 +494,14 @@ pub enum SupportError {
 
 #[cfg(test)]
 mod tests {
-    use super::{append_bounded_bytes, bounded_utf8, parse_boolish, require_safe_destructive_path};
+    use super::{
+        SupportError, append_bounded_bytes, bounded_utf8, parse_boolish,
+        require_safe_destructive_path, run_command,
+    };
     use std::path::{Path, PathBuf};
+    use std::process::Stdio;
+    use std::time::Duration;
+    use tokio::process::Command;
 
     /// Verifies byte bounding reports truncation.
     #[test]
@@ -545,5 +542,21 @@ mod tests {
         append_bounded_bytes(&mut output, b"ghij", 3, &mut truncated);
         assert_eq!(output, b"abc");
         assert!(truncated);
+    }
+
+    /// Verifies timeout kills a slow child and reports the command timeout.
+    #[tokio::test]
+    async fn run_command_times_out_slow_child() {
+        let mut command = Command::new("sh");
+        command.arg("-c").arg("sleep 5").stdin(Stdio::null());
+
+        let error = run_command(command, "sh", Some(Duration::from_millis(50)), 1024)
+            .await
+            .expect_err("slow command should time out");
+
+        assert!(matches!(
+            error,
+            SupportError::ProcessTimeout { program, .. } if program == "sh"
+        ));
     }
 }

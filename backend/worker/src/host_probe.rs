@@ -17,7 +17,7 @@ use shared::config::{
 };
 use shared::zip_project::DockerNetworkMode;
 use tokio::io::{AsyncRead, AsyncReadExt};
-use tokio::process::Command;
+use tokio::process::{Child, ChildStderr, ChildStdout, Command};
 use tokio::time::timeout;
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -94,28 +94,20 @@ async fn run_host_probe_command(
 
     let mut stdout = child.stdout.take();
     let mut stderr = child.stderr.take();
-    let stdout_task = tokio::spawn(async move { read_bounded_output(&mut stdout).await });
-    let stderr_task = tokio::spawn(async move { read_bounded_output(&mut stderr).await });
-    let status = match timeout(Duration::from_secs(HOST_PROBE_TIMEOUT_SECS), child.wait()).await {
-        Ok(result) => result.map_err(|error| {
-            anyhow::anyhow!("failed to wait for host profile probe `{command}`: {error}")
-        })?,
-        Err(_) => {
-            let _ignored = child.kill().await;
-            let _ignored = child.wait().await;
-            anyhow::bail!(
-                "host profile probe `{command}` timed out after {HOST_PROBE_TIMEOUT_SECS}s"
-            );
-        }
-    };
-    let (stdout, stdout_truncated) = stdout_task
-        .await
-        .map_err(|error| anyhow::anyhow!("failed to join host probe stdout task: {error}"))?
-        .map_err(|error| anyhow::anyhow!("failed to read host probe stdout: {error}"))?;
-    let (stderr, stderr_truncated) = stderr_task
-        .await
-        .map_err(|error| anyhow::anyhow!("failed to join host probe stderr task: {error}"))?
-        .map_err(|error| anyhow::anyhow!("failed to read host probe stderr: {error}"))?;
+    let completion = wait_host_probe_completion(&mut child, &mut stdout, &mut stderr);
+    let (status, stdout, stdout_truncated, stderr, stderr_truncated) =
+        match timeout(Duration::from_secs(HOST_PROBE_TIMEOUT_SECS), completion).await {
+            Ok(result) => result.map_err(|error| {
+                anyhow::anyhow!("failed to wait for host profile probe `{command}`: {error}")
+            })?,
+            Err(_) => {
+                let _ignored = child.kill().await;
+                let _ignored = child.wait().await;
+                anyhow::bail!(
+                    "host profile probe `{command}` timed out after {HOST_PROBE_TIMEOUT_SECS}s"
+                );
+            }
+        };
 
     Ok(HostProbeCommandOutput {
         status,
@@ -123,6 +115,22 @@ async fn run_host_probe_command(
         stderr,
         truncated: stdout_truncated || stderr_truncated,
     })
+}
+
+async fn wait_host_probe_completion(
+    child: &mut Child,
+    stdout: &mut Option<ChildStdout>,
+    stderr: &mut Option<ChildStderr>,
+) -> Result<(ExitStatus, Vec<u8>, bool, Vec<u8>, bool), std::io::Error> {
+    let (status, stdout, stderr) = tokio::join!(
+        child.wait(),
+        read_bounded_output(stdout),
+        read_bounded_output(stderr)
+    );
+    let status = status?;
+    let (stdout, stdout_truncated) = stdout?;
+    let (stderr, stderr_truncated) = stderr?;
+    Ok((status, stdout, stdout_truncated, stderr, stderr_truncated))
 }
 
 async fn read_bounded_output<R>(stream: &mut Option<R>) -> Result<(Vec<u8>, bool), std::io::Error>

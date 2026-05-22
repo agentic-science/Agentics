@@ -35,7 +35,6 @@ use shared::models::HealthResponse;
 use shared::models::challenge::ChallengeListResponse;
 use shared::models::request::{AdminCapacityResponse, AdminServiceHeartbeatListResponse};
 use thiserror::Error;
-use tokio::task::JoinHandle;
 use url::Url;
 
 const DEFAULT_TIMEOUT_SECONDS: u64 = 15;
@@ -255,96 +254,83 @@ pub async fn run_checks(config: CheckConfig, docker_probe: DockerProbe) -> Vec<C
         }
     };
 
-    let mut tasks: Vec<(usize, JoinHandle<CheckReport>)> = Vec::new();
-    tasks.push((0, tokio::spawn(check_docker(docker_probe))));
-    tasks.push((
-        1,
-        tokio::spawn(check_api_health(
-            client.clone(),
-            config.api_base_url.clone(),
-        )),
-    ));
-    tasks.push((
-        2,
-        tokio::spawn(check_challenge_catalog(
-            client.clone(),
-            config.api_base_url.clone(),
-        )),
-    ));
+    let docker = check_docker(docker_probe);
+    let api_health = check_api_health(client.clone(), config.api_base_url.clone());
+    let challenge_catalog = check_challenge_catalog(client.clone(), config.api_base_url.clone());
+    let admin_capacity = check_optional_admin_capacity(
+        client.clone(),
+        config.api_base_url.clone(),
+        config.admin_username.clone(),
+        config.admin_password.clone(),
+    );
+    let admin_heartbeats = check_optional_admin_heartbeats(
+        client.clone(),
+        config.api_base_url.clone(),
+        config.admin_username,
+        config.admin_password,
+    );
+    let web = check_optional_web(client, config.web_base_url);
 
-    match config.admin_password.clone() {
+    let (docker, api_health, challenge_catalog, admin_capacity, admin_heartbeats, web) = tokio::join!(
+        docker,
+        api_health,
+        challenge_catalog,
+        admin_capacity,
+        admin_heartbeats,
+        web
+    );
+    vec![
+        docker,
+        api_health,
+        challenge_catalog,
+        admin_capacity,
+        admin_heartbeats,
+        web,
+    ]
+}
+
+async fn check_optional_admin_capacity(
+    client: Client,
+    api_base_url: Url,
+    admin_username: String,
+    admin_password: Option<SecretString>,
+) -> CheckReport {
+    match admin_password {
         Some(password) => {
-            tasks.push((
-                3,
-                tokio::spawn(check_admin_capacity(
-                    client.clone(),
-                    config.api_base_url.clone(),
-                    config.admin_username.clone(),
-                    password.clone(),
-                )),
-            ));
-            tasks.push((
-                4,
-                tokio::spawn(check_admin_heartbeats(
-                    client.clone(),
-                    config.api_base_url.clone(),
-                    config.admin_username.clone(),
-                    password,
-                )),
-            ));
+            check_admin_capacity(client, api_base_url, admin_username, password).await
         }
-        None => {
-            tasks.push((
-                3,
-                tokio::spawn(async {
-                    skipped(
-                        "admin capacity",
-                        "AGENTICS_ADMIN_PASSWORD is unset and --admin-password-stdin was not used",
-                    )
-                }),
-            ));
-            tasks.push((
-                4,
-                tokio::spawn(async {
-                    skipped(
-                        "admin heartbeats",
-                        "AGENTICS_ADMIN_PASSWORD is unset and --admin-password-stdin was not used",
-                    )
-                }),
-            ));
-        }
+        None => skipped(
+            "admin capacity",
+            "AGENTICS_ADMIN_PASSWORD is unset and --admin-password-stdin was not used",
+        ),
     }
+}
 
-    match config.web_base_url.clone() {
-        Some(web_base_url) => {
-            tasks.push((5, tokio::spawn(check_web(client, web_base_url))));
+async fn check_optional_admin_heartbeats(
+    client: Client,
+    api_base_url: Url,
+    admin_username: String,
+    admin_password: Option<SecretString>,
+) -> CheckReport {
+    match admin_password {
+        Some(password) => {
+            check_admin_heartbeats(client, api_base_url, admin_username, password).await
         }
-        None => {
-            tasks.push((
-                5,
-                tokio::spawn(async {
-                    skipped(
-                        "web frontend",
-                        "AGENTICS_WEB_BASE_URL and --web-base-url are unset",
-                    )
-                }),
-            ));
-        }
+        None => skipped(
+            "admin heartbeats",
+            "AGENTICS_ADMIN_PASSWORD is unset and --admin-password-stdin was not used",
+        ),
     }
+}
 
-    let mut reports = Vec::with_capacity(tasks.len());
-    for (order, task) in tasks {
-        let report = match task.await {
-            Ok(report) => report,
-            Err(error) => CheckReport {
-                name: "internal task",
-                status: CheckStatus::Failed(format!("check task {order} failed to join: {error}")),
-            },
-        };
-        reports.push((order, report));
+async fn check_optional_web(client: Client, web_base_url: Option<Url>) -> CheckReport {
+    match web_base_url {
+        Some(web_base_url) => check_web(client, web_base_url).await,
+        None => skipped(
+            "web frontend",
+            "AGENTICS_WEB_BASE_URL and --web-base-url are unset",
+        ),
     }
-    reports.sort_by_key(|(order, _)| *order);
-    reports.into_iter().map(|(_, report)| report).collect()
 }
 
 fn read_stdin_password(enabled: bool) -> Result<Option<SecretString>, CheckError> {
