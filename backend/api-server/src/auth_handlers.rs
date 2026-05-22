@@ -222,44 +222,89 @@ pub async fn github_oauth_callback(
     AppendHeaders<[(HeaderName, String); 2]>,
     Json<CreatorSessionResponse>,
 )> {
-    let state_hash = auth::hash_opaque_token(&request.state);
-    let oauth_state = db::consume_github_oauth_state(&state.db, &state_hash)
-        .await?
-        .ok_or(ServiceError::Unauthorized)?;
-
+    let oauth_state = consume_callback_oauth_state(&state, &request.state).await?;
     let access_token = exchange_github_code(&state, &request.code).await?;
-    let github_user = fetch_github_user(&state, &access_token).await?;
-    if github_user.id <= 0 || github_user.login.trim().is_empty() {
+    let github_user = validate_github_user(fetch_github_user(&state, &access_token).await?)?;
+    let agent_id = upsert_callback_creator_agent(&state, &oauth_state, &github_user).await?;
+    let issued_session = issue_creator_session(&state, agent_id, &github_user).await?;
+
+    Ok((
+        StatusCode::OK,
+        issued_session.headers,
+        Json(issued_session.response),
+    ))
+}
+
+async fn consume_callback_oauth_state(
+    state: &AppState,
+    state_token: &str,
+) -> Result<db::ConsumedGithubOauthState> {
+    let state_hash = auth::hash_opaque_token(state_token);
+    db::consume_github_oauth_state(&state.db, &state_hash)
+        .await?
+        .ok_or_else(|| ServiceError::Unauthorized.into())
+}
+
+#[derive(Debug, Clone)]
+struct VerifiedGithubUser {
+    id: i64,
+    login: String,
+}
+
+fn validate_github_user(user: GithubUserResponse) -> Result<VerifiedGithubUser> {
+    let login = user.login.trim();
+    if user.id <= 0 || login.is_empty() {
         return Err(ServiceError::BadRequest(
             "GitHub OAuth returned an invalid creator identity".to_string(),
         )
         .into());
     }
+    Ok(VerifiedGithubUser {
+        id: user.id,
+        login: login.to_string(),
+    })
+}
 
+async fn upsert_callback_creator_agent(
+    state: &AppState,
+    oauth_state: &db::ConsumedGithubOauthState,
+    github_user: &VerifiedGithubUser,
+) -> Result<AgentId> {
     let fallback_agent_id = AgentId::generate();
     let require_pioneer_code =
         state.config.agent_registration_mode() == AgentRegistrationMode::PioneerCode;
-    let agent_id = match db::upsert_github_creator_agent_with_pioneer_code(
+    match db::upsert_github_creator_agent_with_pioneer_code(
         &state.db,
         &fallback_agent_id,
         github_user.id,
-        github_user.login.trim(),
+        &github_user.login,
         oauth_state.pioneer_code_hash.as_deref(),
         require_pioneer_code,
         i64::from(state.config.max_active_agents),
     )
     .await
     {
-        Ok(agent_id) => agent_id,
+        Ok(agent_id) => Ok(agent_id),
         Err(error) if is_invalid_pioneer_code(&error) => {
-            return Err(reject_failed_pioneer_code().await.into());
+            Err(reject_failed_pioneer_code().await.into())
         }
-        Err(error) => return Err(error.into()),
-    };
+        Err(error) => Err(error.into()),
+    }
+}
 
+struct IssuedCreatorSession {
+    headers: AppendHeaders<[(HeaderName, String); 2]>,
+    response: CreatorSessionResponse,
+}
+
+async fn issue_creator_session(
+    state: &AppState,
+    agent_id: AgentId,
+    github_user: &VerifiedGithubUser,
+) -> Result<IssuedCreatorSession> {
     let session_token = auth::create_web_session_token();
     let csrf_token = auth::create_csrf_token();
-    let ttl_seconds = session_ttl_seconds(&state)?;
+    let ttl_seconds = session_ttl_seconds(state)?;
     let expires_at = session_expires_at(ttl_seconds)?;
     db::create_creator_session(
         &state.db,
@@ -269,30 +314,27 @@ pub async fn github_oauth_callback(
             csrf_token_hash: auth::hash_opaque_token(&csrf_token),
             agent_id: agent_id.as_str().to_string(),
             github_user_id: github_user.id,
-            github_login: github_user.login.trim().to_string(),
+            github_login: github_user.login.clone(),
             expires_at,
         },
     )
     .await?;
 
-    let headers = AppendHeaders(session_cookies(
-        &state,
-        &session_token,
-        &csrf_token,
-        ttl_seconds,
-    ));
-
-    Ok((
-        StatusCode::OK,
-        headers,
-        Json(CreatorSessionResponse {
+    Ok(IssuedCreatorSession {
+        headers: AppendHeaders(session_cookies(
+            state,
+            &session_token,
+            &csrf_token,
+            ttl_seconds,
+        )),
+        response: CreatorSessionResponse {
             agent_id,
             github_user_id: github_user.id,
-            github_login: github_user.login,
+            github_login: github_user.login.clone(),
             csrf_token,
             expires_at: expires_at.to_rfc3339(),
-        }),
-    ))
+        },
+    })
 }
 
 /// Return the current creator identity for a session cookie.
