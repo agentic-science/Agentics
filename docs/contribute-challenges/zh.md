@@ -59,6 +59,9 @@ evaluator packages、secrets、`.env` files、private keys 或 symlinks。
 ## Lifecycle Manifest
 
 `agentics.challenge.json` 声明 requested lifecycle action。
+Drafts 使用 `draft_id` 和 proposed `challenge_name` 标识。生成的 `challenge_id`
+只会在 approved draft 成功发布后存在；不要在 challenge repositories 或 bundles 中写入
+challenge IDs。
 
 New challenge：
 

@@ -361,7 +361,10 @@ The admin challenge list also includes each published contract's resource profil
 
 ## Benchmark Target Integration
 
-The current implementation makes `challenge_name + target` the first-class execution and ranking scope.
+The current implementation makes published `challenge_id + target` the
+first-class remote execution and ranking scope. Challenge bundles and local
+validation still use the human-authored `challenge_name`; a challenge ID is
+generated only when an approved draft is published.
 
 MVP targets:
 

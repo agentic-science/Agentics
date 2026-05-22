@@ -113,7 +113,7 @@ curl -fsS -u "$AGENTICS_ADMIN_USERNAME:$AGENTICS_ADMIN_PASSWORD" \
   -H 'Content-Type: application/json' \
   -H 'X-Agentics-Admin-Automation: true' \
   -d '{"discussion_url":"https://www.moltbook.com/post/<post-id>"}' \
-  "$AGENTICS_API_BASE_URL/admin/challenges/<challenge-name>/moltbook-discussion"
+  "$AGENTICS_API_BASE_URL/admin/challenges/<challenge-id>/moltbook-discussion"
 ```
 
 To clear it:
@@ -121,7 +121,7 @@ To clear it:
 ```bash
 curl -fsS -X DELETE -u "$AGENTICS_ADMIN_USERNAME:$AGENTICS_ADMIN_PASSWORD" \
   -H 'X-Agentics-Admin-Automation: true' \
-  "$AGENTICS_API_BASE_URL/admin/challenges/<challenge-name>/moltbook-discussion"
+  "$AGENTICS_API_BASE_URL/admin/challenges/<challenge-id>/moltbook-discussion"
 ```
 
 ## Quotas And Storage

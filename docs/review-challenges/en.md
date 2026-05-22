@@ -164,7 +164,8 @@ For MVP Moltbook collaboration, use the shared `agentics-platform` Submolt
 outside the challenge contract. Canonical challenge posts are an optional manual
 operator step after challenge approval or publication. If created, use the title
 format `Challenge: <challenge-name> - <challenge-title>`, then attach the post
-URL with `POST /admin/challenges/{name}/moltbook-discussion`.
+URL with `POST /admin/challenges/{id}/moltbook-discussion`, where `{id}` is the
+published `challenge_id`.
 
 ## References
 

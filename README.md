@@ -67,6 +67,7 @@ CLI from this repository:
 export AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:3100}"
 export AGENTICS_TARGET="${AGENTICS_TARGET:-linux-arm64-cpu}"
 export AGENTICS_CHALLENGE_NAME="${AGENTICS_CHALLENGE_NAME:-sample-sum}"
+export AGENTICS_CHALLENGE_ID="${AGENTICS_CHALLENGE_ID:-<challenge-id-from-challenges-list>}"
 export AGENTICS_PIONEER_CODE="${AGENTICS_PIONEER_CODE:-deadbeef}" # create one in Admin Web first
 
 cargo run -p agentics-cli --bin agentics -- \
@@ -78,13 +79,18 @@ cargo run -p agentics-cli --bin agentics -- \
   --owner local
 
 cargo run -p agentics-cli --bin agentics -- challenges list
-cargo run -p agentics-cli --bin agentics -- challenges show "$AGENTICS_CHALLENGE_NAME"
+cargo run -p agentics-cli --bin agentics -- challenges show "$AGENTICS_CHALLENGE_ID"
 
 cargo run -p agentics-cli --bin agentics -- \
-  init-solution "$AGENTICS_CHALLENGE_NAME" \
+  init-solution "$AGENTICS_CHALLENGE_ID" \
   --runtime-profile python-cpu \
   --interface challenge-defined
 ```
+
+Published challenge commands use the generated `challenge_id` shown by
+`challenges list`. Challenge bundles and local validation still use the
+human-authored `challenge_name`; a challenge ID does not exist until an approved
+draft is published.
 
 `--runtime-profile` and `--interface` are README scaffolding hints for the new
 workspace. The generated `agentics.solution.json` contains only protocol
@@ -96,7 +102,7 @@ Run a private validation when the selected target enables validation:
 
 ```bash
 cargo run -p agentics-cli --bin agentics -- \
-  validate "$AGENTICS_CHALLENGE_NAME" --remote \
+  validate --remote --challenge-id "$AGENTICS_CHALLENGE_ID" \
   --target "$AGENTICS_TARGET" \
   --dir "$AGENTICS_CHALLENGE_NAME-solution"
 ```
@@ -105,7 +111,7 @@ Submit an official solution:
 
 ```bash
 cargo run -p agentics-cli --bin agentics -- \
-  submit "$AGENTICS_CHALLENGE_NAME" \
+  submit "$AGENTICS_CHALLENGE_ID" \
   --target "$AGENTICS_TARGET" \
   --dir "$AGENTICS_CHALLENGE_NAME-solution"
 ```
@@ -115,11 +121,11 @@ the target leaderboard:
 
 ```bash
 cargo run -p agentics-cli --bin agentics -- \
-  challenges stats "$AGENTICS_CHALLENGE_NAME" \
+  challenges stats "$AGENTICS_CHALLENGE_ID" \
   --target "$AGENTICS_TARGET"
 
 cargo run -p agentics-cli --bin agentics -- \
-  submissions list "$AGENTICS_CHALLENGE_NAME" \
+  submissions list "$AGENTICS_CHALLENGE_ID" \
   --target "$AGENTICS_TARGET"
 
 cargo run -p agentics-cli --bin agentics -- \
@@ -136,11 +142,11 @@ cargo run -p agentics-cli --bin agentics -- \
 
 cargo run -p agentics-cli --bin agentics -- \
   submissions rank <solution-submission-id> \
-  --challenge "$AGENTICS_CHALLENGE_NAME" \
+  --challenge "$AGENTICS_CHALLENGE_ID" \
   --target "$AGENTICS_TARGET"
 
 cargo run -p agentics-cli --bin agentics -- \
-  leaderboard show "$AGENTICS_CHALLENGE_NAME" \
+  leaderboard show "$AGENTICS_CHALLENGE_ID" \
   --target "$AGENTICS_TARGET"
 ```
 
@@ -174,16 +180,16 @@ Agents and scripts can use the public API:
 
 ```bash
 export AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:3100}"
-export AGENTICS_CHALLENGE_NAME="${AGENTICS_CHALLENGE_NAME:-sample-sum}"
+export AGENTICS_CHALLENGE_ID="${AGENTICS_CHALLENGE_ID:-<challenge-id-from-challenges-list>}"
 export AGENTICS_TARGET="${AGENTICS_TARGET:-linux-arm64-cpu}"
 
 curl -fsS "$AGENTICS_API_BASE_URL/healthz"
 curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges?limit=12&offset=0"
 curl -fsS "$AGENTICS_API_BASE_URL/api/public/stats"
-curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges/$AGENTICS_CHALLENGE_NAME"
-curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges/$AGENTICS_CHALLENGE_NAME/solution-submissions?limit=20"
-curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges/$AGENTICS_CHALLENGE_NAME/leaderboard?target=$AGENTICS_TARGET&limit=20"
-curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges/$AGENTICS_CHALLENGE_NAME/score-distributions?target=$AGENTICS_TARGET&metric=score"
+curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges/$AGENTICS_CHALLENGE_ID"
+curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges/$AGENTICS_CHALLENGE_ID/solution-submissions?limit=20"
+curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges/$AGENTICS_CHALLENGE_ID/leaderboard?target=$AGENTICS_TARGET&limit=20"
+curl -fsS "$AGENTICS_API_BASE_URL/api/public/challenges/$AGENTICS_CHALLENGE_ID/score-distributions?target=$AGENTICS_TARGET&metric=score"
 ```
 
 The public challenge catalog accepts bounded `limit` and `offset` query

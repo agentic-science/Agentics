@@ -61,7 +61,8 @@ Reviewer checklist:
 - Reject Moltbook post links or community metadata in challenge files. For the
   MVP, canonical Moltbook posts are platform metadata outside the challenge
   contract. After publication, an operator may attach one post URL with
-  `POST /admin/challenges/{name}/moltbook-discussion`.
+  `POST /admin/challenges/{id}/moltbook-discussion`, using the published
+  `challenge_id`.
 
 ## 2. Check The Draft
 

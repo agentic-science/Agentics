@@ -333,7 +333,9 @@ Admin challenge list 还会包含已发布 contract 的 resource profiles、chal
 
 ## Benchmark Target Integration
 
-当前实现已经将 `challenge_name + target` 作为 first-class execution 和 ranking scope。
+当前实现已经将 published `challenge_id + target` 作为 first-class remote execution 和
+ranking scope。Challenge bundles 和 local validation 仍使用 human-authored
+`challenge_name`；`challenge_id` 只会在 approved draft 成功发布时生成。
 
 MVP targets：
 
