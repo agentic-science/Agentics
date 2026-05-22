@@ -349,7 +349,7 @@ The API enforces configured quota and capacity limits before accepting uploaded 
 - `AGENTICS_MAX_ACTIVE_OFFICIAL_JOBS` limits queued or running official jobs globally.
 - `AGENTICS_MAX_ACTIVE_AGENTS` limits active registered agents.
 
-Quota failures return structured `too_many_requests` API errors before artifact decoding or storage. Admin official-run actions are operational overrides and can queue an official run even when public submission capacity is saturated.
+Quota failures return the shared API error envelope with `error.code = "too_many_requests"` before artifact decoding or storage. Admin official-run actions are operational overrides and can queue an official run even when public submission capacity is saturated.
 
 The admin API exposes capacity state through:
 

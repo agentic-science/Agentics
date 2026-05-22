@@ -30,7 +30,7 @@ normalization code where optional fields and shape checks are chained.
 if let Some(path) = manifest.commands.setup.as_deref()
     && !is_safe_relative_path(path)
 {
-    return Err(AppError::Validation("invalid setup path".to_owned()));
+    return Err(ServiceError::Validation("invalid setup path".to_owned()));
 }
 ```
 
@@ -378,7 +378,7 @@ formats, instead of accepting any non-zero value implicitly.
 
 ```rust
 let visible = bool::try_from(raw_visible)
-    .map_err(|_| AppError::Validation("visible must be 0 or 1".to_owned()))?;
+    .map_err(|_| ServiceError::Validation("visible must be 0 or 1".to_owned()))?;
 ```
 
 This is useful for strict protocol or database import paths.

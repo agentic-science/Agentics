@@ -22,6 +22,29 @@ Response DTOs should not emit explicit `null` for absent values. This keeps the
 wire format compact, matches the relaxed JSON contract, and reduces ambiguity in
 generated schemas.
 
+## Error Responses
+
+All API handlers and extractors return the same nested error envelope:
+
+```json
+{
+  "error": {
+    "code": "bad_request",
+    "message": "display_name must not be empty",
+    "details": [
+      { "field": "display_name", "message": "must not be empty" }
+    ]
+  }
+}
+```
+
+`error.code` is the stable branching contract and is one of `bad_request`,
+`unauthorized`, `forbidden`, `not_found`, `conflict`, `too_many_requests`,
+`payload_too_large`, or `internal_error`. `error.message` is safe for display
+but not stable for branching. `error.details` is omitted when empty and is used
+only for structured request or field validation. Internal failures always return
+`internal_error` with `internal server error`; sources and context stay in logs.
+
 ## Exceptions
 
 Use explicit `null` only when the API must distinguish a field that is present

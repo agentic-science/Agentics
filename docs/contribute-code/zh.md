@@ -215,7 +215,8 @@ production runner slot ownership。
 
 被 web frontend 消费的 Rust response DTOs 应 derive `schemars::JsonSchema`。
 保持 `docs/api-json-contract/zh.md` 中记录的 API JSON policy：缺失的 optional
-response fields 应省略，而不是序列化成显式 `null`。
+response fields 应省略，而不是序列化成显式 `null`；API errors 应使用嵌套的
+`ErrorResponse { error: { code, message, details? } }` envelope。
 
 修改 frontend 使用的 shared DTOs 后运行：
 

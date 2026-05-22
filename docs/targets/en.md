@@ -141,7 +141,7 @@ Published challenge operations use `challenge_id`. Challenge bundles still
 declare `challenge_name`, but `challenge_id` is generated only when an approved
 draft is published. The API validates challenge status, timing, eligibility,
 and target support before artifact decoding, storage, and queueing. Missing or
-unsupported targets return `400 bad_request`; inactive challenges and
+unsupported targets return `400` with `error.code = "bad_request"`; inactive challenges and
 ineligible agents return authorization errors before upload work begins.
 Validation runs also check the selected target's `validation_enabled` flag
 before artifact decoding.

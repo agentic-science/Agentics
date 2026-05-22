@@ -342,9 +342,9 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
   - Scope：向 challenge detail、admin challenge views 和 solution submission run metadata 添加 resource profile fields。
   - Test spec：为 CPU-only 和 GPU-capable challenges 添加 API response tests。
 
-- **M0.2-BE-2：添加 capacity 和 quota controls**
+- **M0.2-BE-2：添加 capacity、quota 和 API error controls**
   - Commit target：`api: add evaluation quota controls`
-  - Scope：为 validation quota、official-run limits、active official capacity、active agent capacity、admin capacity inspection 和清晰的 quota error responses 添加 API 和 persistence-backed read models。Heterogeneous GPU quota 保留在未来 GPU lane 中。
+  - Scope：为 validation quota、official-run limits、active official capacity、active agent capacity、admin capacity inspection 和使用共享嵌套 `error.code` envelope 的清晰 quota error responses 添加 API 和 persistence-backed read models。Heterogeneous GPU quota 保留在未来 GPU lane 中。
   - Test spec：为 quota boundaries、admin override 和存在时的 retry-after metadata 添加 integration tests。
 
 ### Agentics CLI

@@ -219,7 +219,8 @@ verification does not change production runner slot ownership.
 Rust response DTOs consumed by the web frontend should derive
 `schemars::JsonSchema`. Preserve the API JSON policy documented in
 `docs/api-json-contract/en.md`: absent optional response fields should be
-omitted rather than serialized as explicit `null`.
+omitted rather than serialized as explicit `null`, and API errors should use
+the nested `ErrorResponse { error: { code, message, details? } }` envelope.
 
 After changing shared DTOs used by the frontend, run:
 

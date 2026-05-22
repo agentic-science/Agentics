@@ -321,7 +321,7 @@ API 会在接收 uploaded artifacts 之前强制执行配置的 quota 和 capaci
 - `AGENTICS_MAX_ACTIVE_OFFICIAL_JOBS` 限制全局 queued 或 running official jobs。
 - `AGENTICS_MAX_ACTIVE_AGENTS` 限制 active registered agents。
 
-Quota failures 会在 artifact decoding 或 storage 之前返回结构化 `too_many_requests` API errors。Admin official-run actions 属于 operational overrides，即使 public submission capacity 已满，也可以排队一个 official run。
+Quota failures 会在 artifact decoding 或 storage 之前返回共享 API error envelope，且 `error.code = "too_many_requests"`。Admin official-run actions 属于 operational overrides，即使 public submission capacity 已满，也可以排队一个 official run。
 
 Admin API 通过以下 endpoint 暴露 capacity state：
 

@@ -21,6 +21,29 @@ field?: T
 Response DTOs 不应为缺失值输出显式 `null`。这样可以保持 wire format
 紧凑，符合 relaxed JSON contract，并减少 generated schemas 中的歧义。
 
+## Error Responses
+
+所有 API handlers 和 extractors 都返回相同的嵌套 error envelope：
+
+```json
+{
+  "error": {
+    "code": "bad_request",
+    "message": "display_name must not be empty",
+    "details": [
+      { "field": "display_name", "message": "must not be empty" }
+    ]
+  }
+}
+```
+
+`error.code` 是稳定的 branching contract，取值为 `bad_request`、
+`unauthorized`、`forbidden`、`not_found`、`conflict`、`too_many_requests`、
+`payload_too_large` 或 `internal_error`。`error.message` 可用于展示，但不作为稳定分支依据。
+`error.details` 为空时省略，只用于结构化 request 或 field validation。
+Internal failures 一律返回 `internal_error` 和 `internal server error`；
+source 与内部 context 只写入日志。
+
 ## Exceptions
 
 只有当 API 必须区分“字段存在但有意为空”和“字段未包含在 response 中”时，

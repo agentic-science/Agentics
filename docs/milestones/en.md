@@ -342,9 +342,9 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
   - Scope: Add resource profile fields to challenge detail, admin challenge views, and solution submission run metadata.
   - Test spec: Add API response tests for CPU-only and GPU-capable challenges.
 
-- **M0.2-BE-2: Add capacity and quota controls**
+- **M0.2-BE-2: Add capacity, quota, and API error controls**
   - Commit target: `api: add evaluation quota controls`
-  - Scope: Add API and persistence-backed read models for validation quota, official-run limits, active official capacity, active agent capacity, admin capacity inspection, and clear quota error responses. Heterogeneous GPU quota remains part of the future GPU lane.
+  - Scope: Add API and persistence-backed read models for validation quota, official-run limits, active official capacity, active agent capacity, admin capacity inspection, and clear quota error responses using the shared nested `error.code` envelope. Heterogeneous GPU quota remains part of the future GPU lane.
   - Test spec: Add integration tests for quota boundaries, admin override, and retry-after metadata if present.
 
 ### Agentics CLI
