@@ -258,44 +258,23 @@ async fn check_slot(
         return ReportLine::fail("quota slot", format!("missing {}", slot_path.display()));
     }
     let metadata_path = slot_path.join(".agentics-slot.json");
-    let metadata = match tokio::fs::read_to_string(&metadata_path).await {
-        Ok(text) => match serde_json::from_str::<SlotMetadata>(&text) {
-            Ok(metadata) => metadata,
-            Err(error) => {
-                return ReportLine::fail(
-                    "quota slot metadata",
-                    format!("{} is invalid JSON: {error}", metadata_path.display()),
-                );
-            }
-        },
-        Err(error) => {
-            return ReportLine::fail(
-                "quota slot metadata",
-                format!("cannot read {}: {error}", metadata_path.display()),
-            );
-        }
+    let metadata = match read_slot_metadata(&metadata_path).await {
+        Ok(metadata) => metadata,
+        Err(message) => return ReportLine::fail("quota slot metadata", message),
     };
-    let expected_inode_limit = class_mb.saturating_mul(config.phase_slot_inodes_per_mb);
-    if metadata.phase != phase
-        || metadata.slot_class_mb != class_mb
-        || metadata.slot_index != slot_index
-        || metadata.inodes_per_mb != config.phase_slot_inodes_per_mb
-        || metadata.inode_hard_limit != expected_inode_limit
-    {
-        return ReportLine::fail(
-            "quota slot metadata",
-            format!(
-                "{} does not match expected phase/class/index/limits",
-                metadata_path.display()
-            ),
-        );
-    }
-    let quota = check_project_inode_quota(
-        &config.runner_phase_mount_root.join(phase.as_str()),
-        metadata.project_id,
-        expected_inode_limit,
-    )
-    .await;
+    let expected_inode_limit = match validate_slot_metadata(
+        &metadata_path,
+        &metadata,
+        phase,
+        class_mb,
+        slot_index,
+        config.phase_slot_inodes_per_mb,
+    ) {
+        Ok(expected_inode_limit) => expected_inode_limit,
+        Err(message) => return ReportLine::fail("quota slot metadata", message),
+    };
+    let quota =
+        verify_slot_project_quota(config, phase, metadata.project_id, expected_inode_limit).await;
     match quota {
         Ok(()) if writable_probe(slot_path) => {
             ReportLine::pass("quota slot", format!("{} ready", slot_path.display()))
@@ -306,6 +285,52 @@ async fn check_slot(
         ),
         Err(error) => ReportLine::fail("quota slot", format!("{}: {error}", slot_path.display())),
     }
+}
+
+async fn read_slot_metadata(metadata_path: &Path) -> Result<SlotMetadata, String> {
+    let text = tokio::fs::read_to_string(metadata_path)
+        .await
+        .map_err(|error| format!("cannot read {}: {error}", metadata_path.display()))?;
+    serde_json::from_str(&text)
+        .map_err(|error| format!("{} is invalid JSON: {error}", metadata_path.display()))
+}
+
+fn validate_slot_metadata(
+    metadata_path: &Path,
+    metadata: &SlotMetadata,
+    phase: DgxPhase,
+    class_mb: u64,
+    slot_index: u64,
+    inodes_per_mb: u64,
+) -> Result<u64, String> {
+    let expected_inode_limit = class_mb.saturating_mul(inodes_per_mb);
+    if metadata.phase == phase
+        && metadata.slot_class_mb == class_mb
+        && metadata.slot_index == slot_index
+        && metadata.inodes_per_mb == inodes_per_mb
+        && metadata.inode_hard_limit == expected_inode_limit
+    {
+        Ok(expected_inode_limit)
+    } else {
+        Err(format!(
+            "{} does not match expected phase/class/index/limits",
+            metadata_path.display()
+        ))
+    }
+}
+
+async fn verify_slot_project_quota(
+    config: &DgxProfileCheckConfig,
+    phase: DgxPhase,
+    project_id: u64,
+    expected_inode_limit: u64,
+) -> Result<(), ProfileCheckError> {
+    check_project_inode_quota(
+        &config.runner_phase_mount_root.join(phase.as_str()),
+        project_id,
+        expected_inode_limit,
+    )
+    .await
 }
 
 async fn check_project_inode_quota(
@@ -520,21 +545,51 @@ async fn run_busybox(
     cmd: Vec<String>,
     storage_limit_mb: Option<u64>,
 ) -> Result<String, ProfileCheckError> {
-    let docker = Docker::connect_with_host(&config.docker_host_uri)?;
-    if config.pull_policy == DockerPullPolicy::Always
-        || (config.pull_policy == DockerPullPolicy::Missing
-            && docker.inspect_image(&config.probe_image).await.is_err())
-    {
-        use bollard::query_parameters::CreateImageOptionsBuilder;
-        let opts = CreateImageOptionsBuilder::default()
-            .from_image(&config.probe_image)
-            .build();
-        let mut stream = docker.create_image(Some(opts), None, None);
-        while let Some(item) = stream.next().await {
-            item?;
-        }
-    }
+    let docker = connect_probe_docker(config).await?;
     let name = format!("agentics-dgx-profile-probe-{}", Uuid::new_v4());
+    let body = busybox_container_body(config, mounts, cmd, storage_limit_mb);
+    let opts = CreateContainerOptionsBuilder::default().name(&name).build();
+    let response = docker.create_container(Some(opts), body).await?;
+    let container_id = response.id;
+    let result = wait_for_probe_container(&docker, &container_id).await;
+    let cleanup = remove_probe_container(&docker, &container_id).await;
+    finish_probe_result(result, cleanup)
+}
+
+async fn connect_probe_docker(config: &DgxProfileCheckConfig) -> Result<Docker, ProfileCheckError> {
+    let docker = Docker::connect_with_host(&config.docker_host_uri)?;
+    ensure_probe_image(&docker, &config.probe_image, config.pull_policy).await?;
+    Ok(docker)
+}
+
+async fn ensure_probe_image(
+    docker: &Docker,
+    image: &str,
+    pull_policy: DockerPullPolicy,
+) -> Result<(), ProfileCheckError> {
+    let should_pull = pull_policy == DockerPullPolicy::Always
+        || (pull_policy == DockerPullPolicy::Missing && docker.inspect_image(image).await.is_err());
+    if !should_pull {
+        return Ok(());
+    }
+
+    use bollard::query_parameters::CreateImageOptionsBuilder;
+    let opts = CreateImageOptionsBuilder::default()
+        .from_image(image)
+        .build();
+    let mut stream = docker.create_image(Some(opts), None, None);
+    while let Some(item) = stream.next().await {
+        item?;
+    }
+    Ok(())
+}
+
+fn busybox_container_body(
+    config: &DgxProfileCheckConfig,
+    mounts: Vec<Mount>,
+    cmd: Vec<String>,
+    storage_limit_mb: Option<u64>,
+) -> ContainerCreateBody {
     let mut host_config = HostConfig {
         network_mode: Some(DockerNetworkMode::None.as_str().to_string()),
         mounts: Some(mounts),
@@ -548,46 +603,66 @@ async fn run_busybox(
             format!("{limit_mb}m"),
         )]));
     }
-    let body = ContainerCreateBody {
+    ContainerCreateBody {
         image: Some(config.probe_image.clone()),
         cmd: Some(cmd),
         host_config: Some(host_config),
         ..Default::default()
-    };
-    let opts = CreateContainerOptionsBuilder::default().name(&name).build();
-    let response = docker.create_container(Some(opts), body).await?;
-    let container_id = response.id;
-    let result = async {
-        docker
-            .start_container(&container_id, None::<StartContainerOptions>)
-            .await?;
-        let mut wait = docker.wait_container(
-            &container_id,
-            Some(
-                WaitContainerOptionsBuilder::default()
-                    .condition("not-running")
-                    .build(),
-            ),
-        );
-        let status = tokio::time::timeout(Duration::from_secs(DOCKER_PROBE_TIMEOUT_SECS), async {
-            let mut code = 1;
-            while let Some(item) = wait.next().await {
-                code = item?.status_code;
-            }
-            Ok::<i64, bollard::errors::Error>(code)
-        })
-        .await
-        .map_err(|_| ProfileCheckError::Probe("Docker probe timed out".to_string()))??;
-        let logs = collect_container_logs(&docker, &container_id).await?;
-        Ok::<(i64, String), ProfileCheckError>((status, logs))
     }
-    .await;
-    let cleanup = docker
+}
+
+async fn wait_for_probe_container(
+    docker: &Docker,
+    container_id: &str,
+) -> Result<(i64, String), ProfileCheckError> {
+    docker
+        .start_container(container_id, None::<StartContainerOptions>)
+        .await?;
+    let status = wait_for_container_exit(docker, container_id).await?;
+    let logs = collect_container_logs(docker, container_id).await?;
+    Ok((status, logs))
+}
+
+async fn wait_for_container_exit(
+    docker: &Docker,
+    container_id: &str,
+) -> Result<i64, ProfileCheckError> {
+    let mut wait = docker.wait_container(
+        container_id,
+        Some(
+            WaitContainerOptionsBuilder::default()
+                .condition("not-running")
+                .build(),
+        ),
+    );
+    tokio::time::timeout(Duration::from_secs(DOCKER_PROBE_TIMEOUT_SECS), async {
+        let mut code = 1;
+        while let Some(item) = wait.next().await {
+            code = item?.status_code;
+        }
+        Ok::<i64, bollard::errors::Error>(code)
+    })
+    .await
+    .map_err(|_| ProfileCheckError::Probe("Docker probe timed out".to_string()))?
+    .map_err(ProfileCheckError::Docker)
+}
+
+async fn remove_probe_container(
+    docker: &Docker,
+    container_id: &str,
+) -> Result<(), bollard::errors::Error> {
+    docker
         .remove_container(
-            &container_id,
+            container_id,
             Some(RemoveContainerOptionsBuilder::default().force(true).build()),
         )
-        .await;
+        .await
+}
+
+fn finish_probe_result(
+    result: Result<(i64, String), ProfileCheckError>,
+    cleanup: Result<(), bollard::errors::Error>,
+) -> Result<String, ProfileCheckError> {
     match (result, cleanup) {
         (Ok((0, logs)), Ok(())) => Ok(logs),
         (Ok((status, logs)), Ok(())) => Err(ProfileCheckError::Probe(format!(
@@ -750,7 +825,13 @@ enum ProfileCheckError {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_mountinfo_line, parse_project_inode_hard_limit};
+    use std::path::Path;
+
+    use super::{
+        ProfileCheckError, finish_probe_result, parse_mountinfo_line,
+        parse_project_inode_hard_limit, validate_slot_metadata,
+    };
+    use crate::dgx::{DgxPhase, SlotMetadata};
 
     /// Verifies mountinfo parsing extracts target, fstype, and quota options.
     #[test]
@@ -768,5 +849,48 @@ mod tests {
         let report = "#100001      0      0  16384      0      0";
         assert_eq!(parse_project_inode_hard_limit(report, 100001), Some(16384));
         assert_eq!(parse_project_inode_hard_limit(report, 7), None);
+    }
+
+    /// Verifies slot metadata validation enforces the prepared quota contract.
+    #[test]
+    fn validates_slot_metadata_contract() {
+        let metadata = SlotMetadata::new(DgxPhase::SolutionRun, 64, 1, 100_001, 256);
+
+        assert_eq!(
+            validate_slot_metadata(
+                Path::new(".agentics-slot.json"),
+                &metadata,
+                DgxPhase::SolutionRun,
+                64,
+                1,
+                256,
+            ),
+            Ok(16_384),
+        );
+        assert!(
+            validate_slot_metadata(
+                Path::new(".agentics-slot.json"),
+                &metadata,
+                DgxPhase::SolutionBuild,
+                64,
+                1,
+                256,
+            )
+            .is_err()
+        );
+    }
+
+    /// Verifies probe result classification preserves successful logs and exit failures.
+    #[test]
+    fn classifies_probe_container_result() {
+        assert_eq!(
+            finish_probe_result(Ok((0, "ok".to_string())), Ok(()))
+                .expect("successful probe should return logs"),
+            "ok",
+        );
+        let error = finish_probe_result(Ok((7, "bad".to_string())), Ok(()))
+            .expect_err("nonzero probe exit should fail");
+
+        assert!(matches!(error, ProfileCheckError::Probe(message) if message.contains("7")));
     }
 }

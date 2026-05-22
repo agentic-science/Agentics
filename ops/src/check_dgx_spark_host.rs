@@ -270,22 +270,50 @@ async fn run_docker_smoke(
     image: &str,
     pull_policy: DockerPullPolicy,
 ) -> Result<String, HostCheckError> {
+    let docker = connect_smoke_docker(image, pull_policy).await?;
+    let name = format!("agentics-dgx-host-smoke-{}", Uuid::new_v4());
+    let body = smoke_container_body(image);
+    let opts = CreateContainerOptionsBuilder::default().name(&name).build();
+    let response = docker.create_container(Some(opts), body).await?;
+    let container_id = response.id;
+    let result = wait_for_smoke_container(&docker, &container_id).await;
+    let cleanup = remove_smoke_container(&docker, &container_id).await;
+    finish_smoke_result(result, cleanup)
+}
+
+async fn connect_smoke_docker(
+    image: &str,
+    pull_policy: DockerPullPolicy,
+) -> Result<Docker, HostCheckError> {
     let docker = Docker::connect_with_defaults()?;
-    if pull_policy == DockerPullPolicy::Always
-        || (pull_policy == DockerPullPolicy::Missing && docker.inspect_image(image).await.is_err())
-    {
-        use bollard::query_parameters::CreateImageOptionsBuilder;
-        let opts = CreateImageOptionsBuilder::default()
-            .from_image(image)
-            .build();
-        let mut stream = docker.create_image(Some(opts), None, None);
-        while let Some(item) = stream.next().await {
-            item?;
-        }
+    ensure_smoke_image(&docker, image, pull_policy).await?;
+    Ok(docker)
+}
+
+async fn ensure_smoke_image(
+    docker: &Docker,
+    image: &str,
+    pull_policy: DockerPullPolicy,
+) -> Result<(), HostCheckError> {
+    let should_pull = pull_policy == DockerPullPolicy::Always
+        || (pull_policy == DockerPullPolicy::Missing && docker.inspect_image(image).await.is_err());
+    if !should_pull {
+        return Ok(());
     }
 
-    let name = format!("agentics-dgx-host-smoke-{}", Uuid::new_v4());
-    let body = ContainerCreateBody {
+    use bollard::query_parameters::CreateImageOptionsBuilder;
+    let opts = CreateImageOptionsBuilder::default()
+        .from_image(image)
+        .build();
+    let mut stream = docker.create_image(Some(opts), None, None);
+    while let Some(item) = stream.next().await {
+        item?;
+    }
+    Ok(())
+}
+
+fn smoke_container_body(image: &str) -> ContainerCreateBody {
+    ContainerCreateBody {
         image: Some(image.to_string()),
         cmd: Some(vec!["nvidia-smi".to_string()]),
         host_config: Some(HostConfig {
@@ -301,42 +329,58 @@ async fn run_docker_smoke(
             ..Default::default()
         }),
         ..Default::default()
-    };
-    let opts = CreateContainerOptionsBuilder::default().name(&name).build();
-    let response = docker.create_container(Some(opts), body).await?;
-    let container_id = response.id;
-    let result = async {
-        docker
-            .start_container(&container_id, None::<StartContainerOptions>)
-            .await?;
-        let mut wait = docker.wait_container(
-            &container_id,
-            Some(
-                WaitContainerOptionsBuilder::default()
-                    .condition("not-running")
-                    .build(),
-            ),
-        );
-        let status = tokio::time::timeout(Duration::from_secs(DOCKER_SMOKE_TIMEOUT_SECS), async {
-            let mut code = 1;
-            while let Some(item) = wait.next().await {
-                code = item?.status_code;
-            }
-            Ok::<i64, bollard::errors::Error>(code)
-        })
-        .await
-        .map_err(|_| HostCheckError::Timeout(DOCKER_SMOKE_TIMEOUT_SECS))??;
-
-        let logs = collect_container_logs(&docker, &container_id).await?;
-        Ok::<(i64, String), HostCheckError>((status, logs))
     }
-    .await;
-    let cleanup = docker
+}
+
+async fn wait_for_smoke_container(
+    docker: &Docker,
+    container_id: &str,
+) -> Result<(i64, String), HostCheckError> {
+    docker
+        .start_container(container_id, None::<StartContainerOptions>)
+        .await?;
+    let status = wait_for_smoke_exit(docker, container_id).await?;
+    let logs = collect_container_logs(docker, container_id).await?;
+    Ok((status, logs))
+}
+
+async fn wait_for_smoke_exit(docker: &Docker, container_id: &str) -> Result<i64, HostCheckError> {
+    let mut wait = docker.wait_container(
+        container_id,
+        Some(
+            WaitContainerOptionsBuilder::default()
+                .condition("not-running")
+                .build(),
+        ),
+    );
+    tokio::time::timeout(Duration::from_secs(DOCKER_SMOKE_TIMEOUT_SECS), async {
+        let mut code = 1;
+        while let Some(item) = wait.next().await {
+            code = item?.status_code;
+        }
+        Ok::<i64, bollard::errors::Error>(code)
+    })
+    .await
+    .map_err(|_| HostCheckError::Timeout(DOCKER_SMOKE_TIMEOUT_SECS))?
+    .map_err(HostCheckError::Docker)
+}
+
+async fn remove_smoke_container(
+    docker: &Docker,
+    container_id: &str,
+) -> Result<(), bollard::errors::Error> {
+    docker
         .remove_container(
-            &container_id,
+            container_id,
             Some(RemoveContainerOptionsBuilder::default().force(true).build()),
         )
-        .await;
+        .await
+}
+
+fn finish_smoke_result(
+    result: Result<(i64, String), HostCheckError>,
+    cleanup: Result<(), bollard::errors::Error>,
+) -> Result<String, HostCheckError> {
     match (result, cleanup) {
         (Ok((0, logs)), Ok(())) => Ok(logs),
         (Ok((status, logs)), Ok(())) => Err(HostCheckError::DockerSmoke(format!(
@@ -460,11 +504,25 @@ enum HostCheckError {
 
 #[cfg(test)]
 mod tests {
-    use super::first_lines;
+    use super::{HostCheckError, finish_smoke_result, first_lines};
 
     /// Verifies inventory output summary is bounded by line count.
     #[test]
     fn first_lines_limits_output() {
         assert_eq!(first_lines("a\nb\nc", 2), "a | b");
+    }
+
+    /// Verifies Docker smoke classification preserves logs and nonzero exits.
+    #[test]
+    fn classifies_smoke_container_result() {
+        assert_eq!(
+            finish_smoke_result(Ok((0, "ok".to_string())), Ok(()))
+                .expect("successful smoke should return logs"),
+            "ok",
+        );
+        let error = finish_smoke_result(Ok((9, "bad".to_string())), Ok(()))
+            .expect_err("nonzero smoke exit should fail");
+
+        assert!(matches!(error, HostCheckError::DockerSmoke(message) if message.contains("9")));
     }
 }
