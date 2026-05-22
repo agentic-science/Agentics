@@ -184,10 +184,11 @@ AGENTICS_DATABASE_URL='postgres://agentics:agentics@127.0.0.1:5432/agentics_test
   just rust-risk-integration
 ```
 
-`rust-risk-integration` skips only the two quota-root integration tests that
-require `agentics-prepare-dgx-spark-test-storage`; the rest of the integration
-suite contributes coverage before the CRAP report is produced. Set
-`AGENTICS_CRAP_TOP` to change how many ranked functions are printed.
+`rust-risk-integration` runs the full Rust test set, including `#[ignore]`
+hardware tests, before the CRAP report is produced. It does not skip quota-root
+or DGX CUDA smoke tests, so prepare the quota-sensitive and hardware test
+environment first. Set `AGENTICS_CRAP_TOP` to change how many ranked functions
+are printed.
 
 On Linux DGX development hosts, quota-sensitive runner tests need a test-owned
 XFS quota root. Prepare it separately from the production `/srv/agentics`

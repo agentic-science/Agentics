@@ -64,7 +64,7 @@ rust-risk-unit:
     cargo llvm-cov --workspace --exclude integration-tests --lcov --output-path {{crap_lcov_unit}}
     cargo crap --workspace --lcov {{crap_lcov_unit}} --top "${AGENTICS_CRAP_TOP:-30}"
 
-# Rust coverage + CRAP report including integration tests that do not need prepared DGX quota roots
+# Rust coverage + CRAP report including all integration tests
 rust-risk-integration:
     mkdir -p target/llvm-cov
     @database_url="${DATABASE_URL:-${AGENTICS_DATABASE_URL:-}}"; \
@@ -72,9 +72,7 @@ rust-risk-integration:
         printf 'DATABASE_URL or AGENTICS_DATABASE_URL must be set for integration coverage.\n' >&2; \
         exit 2; \
       fi; \
-      DATABASE_URL="$database_url" cargo llvm-cov --workspace --lcov --output-path {{crap_lcov_integration}} -- \
-        --skip test_quota_root_enforces_inode_limit_when_configured \
-        --skip worker_enforces_run_writable_disk_limit
+      DATABASE_URL="$database_url" cargo llvm-cov --workspace --lcov --output-path {{crap_lcov_integration}} -- --include-ignored
     cargo crap --workspace --lcov {{crap_lcov_integration}} --top "${AGENTICS_CRAP_TOP:-30}"
 
 # Frontend unit tests

@@ -7,7 +7,8 @@ description: Run and interpret Agentics Rust change-risk analysis with cargo llv
 
 Use this skill to produce coverage-informed CRAP reports for the Agentics Rust
 workspace. Prefer the checked-in `just` recipes because they encode the local
-LCOV paths, test exclusions, and `.cargo-crap.toml` filters.
+LCOV paths and `.cargo-crap.toml` filters. Do not skip tests when running the
+integration workflow, including tests marked `#[ignore]`.
 
 ## Quick Workflow
 
@@ -21,7 +22,8 @@ LCOV paths, test exclusions, and `.cargo-crap.toml` filters.
    The LCOV output is `target/llvm-cov/agentics-workspace.lcov`.
 
 3. For the better signal that includes DB-backed integration coverage, ensure a
-   local Postgres test database is available, then run:
+   local Postgres test database is available, then run the full integration
+   workflow, including ignored hardware tests:
 
    ```bash
    just infra-up
@@ -31,7 +33,9 @@ LCOV paths, test exclusions, and `.cargo-crap.toml` filters.
 
    If the user or environment already provides `DATABASE_URL` or
    `AGENTICS_DATABASE_URL`, use that instead of inventing one. The LCOV output
-   is `target/llvm-cov/agentics-workspace-with-integration.lcov`.
+   is `target/llvm-cov/agentics-workspace-with-integration.lcov`. If the test
+   run fails, stop and report the failing tests; do not run `cargo crap` against
+   an older LCOV file.
 
 4. Use `AGENTICS_CRAP_TOP=<n>` to limit or expand the ranked report:
 
@@ -57,18 +61,22 @@ For integration coverage:
 ```bash
 mkdir -p target/llvm-cov
 DATABASE_URL="$DATABASE_URL" cargo llvm-cov --workspace \
-  --lcov --output-path target/llvm-cov/agentics-workspace-with-integration.lcov -- \
-  --skip test_quota_root_enforces_inode_limit_when_configured \
-  --skip worker_enforces_run_writable_disk_limit
+  --lcov --output-path target/llvm-cov/agentics-workspace-with-integration.lcov \
+  -- --include-ignored
 cargo crap --workspace \
   --lcov target/llvm-cov/agentics-workspace-with-integration.lcov \
   --top "${AGENTICS_CRAP_TOP:-30}"
 ```
 
-The two skipped tests require a prepared Linux DGX XFS quota root from
-`agentics-prepare-dgx-spark-test-storage`. Do not silently remove those skips
-unless the required `AGENTICS_TEST_RUNNER_*` environment variables are present
-and the user wants quota-root coverage.
+Quota-sensitive integration tests require a prepared Linux DGX XFS quota root
+from `agentics-prepare-dgx-spark-test-storage` and the matching
+`AGENTICS_TEST_RUNNER_*` environment variables. If that root is unavailable,
+report the failure or ask the user to prepare the test root; do not hide it with
+`--skip`.
+
+Ignored hardware tests, such as DGX CUDA smoke coverage, are part of this
+workflow. If the host lacks the required hardware or published images, report
+that failure directly instead of dropping `--include-ignored`.
 
 ## Interpretation
 

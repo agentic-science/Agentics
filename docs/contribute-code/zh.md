@@ -181,9 +181,9 @@ AGENTICS_DATABASE_URL='postgres://agentics:agentics@127.0.0.1:5432/agentics_test
   just rust-risk-integration
 ```
 
-`rust-risk-integration` 只跳过两个需要
-`agentics-prepare-dgx-spark-test-storage` 的 quota-root integration tests；其余
-integration suite 都会贡献 coverage，然后再生成 CRAP report。设置
+`rust-risk-integration` 会先运行完整 Rust test set，包括 `#[ignore]` hardware
+tests，然后再生成 CRAP report。它不跳过 quota-root 或 DGX CUDA smoke tests，
+因此需要先准备 quota-sensitive 和 hardware test environment。设置
 `AGENTICS_CRAP_TOP` 可以调整输出的 ranked functions 数量。
 
 在 Linux DGX development hosts 上，quota-sensitive runner tests 需要一个由
