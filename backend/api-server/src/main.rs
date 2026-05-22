@@ -43,7 +43,12 @@ async fn main() -> anyhow::Result<()> {
 
     // Seed challenges from challenges_root
     if tokio::fs::metadata(&config.challenges_root).await.is_ok() {
-        shared::db::ensure_challenges_seeded_from_root(&db, &config.challenges_root).await?;
+        shared::db::ensure_challenges_seeded_from_root(
+            &db,
+            &config.challenges_root,
+            &config.storage_root,
+        )
+        .await?;
     }
 
     let state = AppState {

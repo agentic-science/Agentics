@@ -11,8 +11,8 @@ use shared::challenge_creation;
 use shared::db;
 use shared::error::{AppError, Result};
 use shared::models::challenge::ChallengeBundleSpec;
-use shared::models::ids::{AgentId, ChallengeShortlistRevisionId};
-use shared::models::names::{ChallengeName, TargetName};
+use shared::models::ids::{AgentId, ChallengeId, ChallengeShortlistRevisionId};
+use shared::models::names::TargetName;
 use shared::models::request::{
     ChallengeShortlistResponse, ChallengeShortlistRevisionResponse,
     CreateChallengeShortlistRevisionRequest, CreatorChallengeParticipantsResponse,
@@ -35,14 +35,13 @@ pub struct CreatorChallengeQuery {
 pub async fn get_creator_challenge_stats(
     State(state): State<AppState>,
     creator: CreatorAuth,
-    Path(name): Path<String>,
+    Path(id): Path<String>,
     Query(query): Query<CreatorChallengeQuery>,
 ) -> Result<Json<CreatorChallengeStatsResponse>> {
-    let (challenge_name, target) =
-        resolve_creator_challenge_scope(&state.db, &creator, &name, query.target.as_deref())
-            .await?;
+    let (challenge_id, _challenge_name, target) =
+        resolve_creator_challenge_scope(&state.db, &creator, &id, query.target.as_deref()).await?;
     let response =
-        db::get_creator_challenge_stats(&state.db, &challenge_name, target.as_ref()).await?;
+        db::get_creator_challenge_stats(&state.db, &challenge_id, target.as_ref()).await?;
     Ok(Json(response))
 }
 
@@ -50,15 +49,13 @@ pub async fn get_creator_challenge_stats(
 pub async fn list_creator_challenge_participants(
     State(state): State<AppState>,
     creator: CreatorAuth,
-    Path(name): Path<String>,
+    Path(id): Path<String>,
     Query(query): Query<CreatorChallengeQuery>,
 ) -> Result<Json<CreatorChallengeParticipantsResponse>> {
-    let (challenge_name, target) =
-        resolve_creator_challenge_scope(&state.db, &creator, &name, query.target.as_deref())
-            .await?;
+    let (challenge_id, _challenge_name, target) =
+        resolve_creator_challenge_scope(&state.db, &creator, &id, query.target.as_deref()).await?;
     let response =
-        db::list_creator_challenge_participants(&state.db, &challenge_name, target.as_ref())
-            .await?;
+        db::list_creator_challenge_participants(&state.db, &challenge_id, target.as_ref()).await?;
     Ok(Json(response))
 }
 
@@ -66,11 +63,11 @@ pub async fn list_creator_challenge_participants(
 pub async fn create_challenge_shortlist_revision(
     State(state): State<AppState>,
     creator: CreatorAuth,
-    Path(name): Path<String>,
+    Path(id): Path<String>,
     ValidatedJson(body): ValidatedJson<CreateChallengeShortlistRevisionRequest>,
 ) -> Result<(StatusCode, Json<ChallengeShortlistRevisionResponse>)> {
-    let (challenge_name, _) =
-        resolve_creator_challenge_scope(&state.db, &creator, &name, None).await?;
+    let (challenge_id, challenge_name, _) =
+        resolve_creator_challenge_scope(&state.db, &creator, &id, None).await?;
     let requested_count = i64::try_from(body.agent_ids_to_add.len())
         .map_err(|_| AppError::BadRequest("shortlist payload is too large".to_string()))?;
     let raw_json = serde_json::to_vec(&body)
@@ -88,6 +85,7 @@ pub async fn create_challenge_shortlist_revision(
         &state.db,
         &db::CreateChallengeShortlistRevisionInput {
             revision_id,
+            challenge_id,
             challenge_name,
             uploader_agent_id: creator.agent_id,
             storage_key: stored_key.clone(),
@@ -111,11 +109,11 @@ pub async fn create_challenge_shortlist_revision(
 pub async fn get_challenge_shortlist(
     State(state): State<AppState>,
     creator: CreatorAuth,
-    Path(name): Path<String>,
+    Path(id): Path<String>,
 ) -> Result<Json<ChallengeShortlistResponse>> {
-    let (challenge_name, _) =
-        resolve_creator_challenge_scope(&state.db, &creator, &name, None).await?;
-    let response = db::list_challenge_shortlist(&state.db, &challenge_name).await?;
+    let (challenge_id, _challenge_name, _) =
+        resolve_creator_challenge_scope(&state.db, &creator, &id, None).await?;
+    let response = db::list_challenge_shortlist(&state.db, &challenge_id).await?;
     Ok(Json(response))
 }
 
@@ -123,20 +121,24 @@ pub async fn get_challenge_shortlist(
 async fn resolve_creator_challenge_scope(
     pool: &sqlx::PgPool,
     creator: &CreatorAuth,
-    raw_challenge_name: &str,
+    raw_challenge_id: &str,
     requested_target: Option<&str>,
-) -> Result<(ChallengeName, Option<TargetName>)> {
-    let challenge_name = parse_request_value::<ChallengeName>(raw_challenge_name)?;
-    let challenge = db::get_published_challenge(pool, &challenge_name).await?;
+) -> Result<(
+    ChallengeId,
+    shared::models::names::ChallengeName,
+    Option<TargetName>,
+)> {
+    let challenge_id = parse_request_value::<ChallengeId>(raw_challenge_id)?;
+    let challenge = db::get_published_challenge(pool, &challenge_id).await?;
     let challenge = challenge.ok_or(AppError::NotFound)?;
-    if !db::agent_owns_challenge(pool, &challenge.challenge_name, &creator.agent_id).await? {
+    if !db::agent_owns_challenge(pool, &challenge.challenge_id, &creator.agent_id).await? {
         return Err(AppError::Forbidden(
             "agent is not an owner of this challenge".to_string(),
         ));
     }
 
     let target = resolve_target_from_spec(&challenge.spec_json, requested_target)?;
-    Ok((challenge.challenge_name, target))
+    Ok((challenge.challenge_id, challenge.challenge_name, target))
 }
 
 /// Validate an optional target query against a published challenge spec.

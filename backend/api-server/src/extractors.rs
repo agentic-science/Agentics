@@ -20,9 +20,8 @@ use shared::models::challenge_creation::{
 };
 use shared::models::ids::{AgentId, AgentTokenId, ChallengeDraftId, SolutionSubmissionId};
 use shared::models::request::{
-    CreateChallengeRequest, CreateChallengeShortlistRevisionRequest, CreatePioneerCodeRequest,
-    CreateSolutionSubmissionRequest, PublishChallengeRequest, RegisterAgentRequest,
-    SetChallengeMoltbookDiscussionRequest,
+    CreateChallengeShortlistRevisionRequest, CreatePioneerCodeRequest,
+    CreateSolutionSubmissionRequest, RegisterAgentRequest, SetChallengeMoltbookDiscussionRequest,
 };
 use shared::validation::text;
 
@@ -474,22 +473,6 @@ impl ValidateRequest for CreateChallengeShortlistRevisionRequest {
             return Err("agent_ids_to_add must contain at least one agent id".to_string());
         }
         Ok(())
-    }
-}
-
-impl ValidateRequest for CreateChallengeRequest {
-    /// Ensures direct admin challenge creation includes public display text.
-    fn validate(&self) -> Result<(), String> {
-        require_non_empty(&self.title, "title")?;
-        require_non_empty(&self.summary.en, "summary.en")?;
-        require_non_empty(&self.summary.zh, "summary.zh")
-    }
-}
-
-impl ValidateRequest for PublishChallengeRequest {
-    /// Ensures direct admin publishing references a bundle path.
-    fn validate(&self) -> Result<(), String> {
-        require_non_empty(&self.bundle_path, "bundle_path")
     }
 }
 

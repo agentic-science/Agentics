@@ -4,6 +4,7 @@ use shared::db::LeaderboardMetricEntry;
 use shared::error::{AppError, Result};
 use shared::models::challenge::{ChallengeBundleSpec, MetricVisibility};
 use shared::models::evaluation::MetricValue;
+use shared::models::ids::ChallengeId;
 use shared::models::names::{ChallengeName, MetricName, TargetName};
 use shared::models::request::{
     ScoreDistributionBucketDto, ScoreDistributionQuantileDto, ScoreDistributionResponse,
@@ -11,6 +12,7 @@ use shared::models::request::{
 
 /// Build a distribution response from the visible best leaderboard entries in scope.
 pub(super) fn build_score_distribution_response(
+    challenge_id: ChallengeId,
     challenge_name: ChallengeName,
     target: TargetName,
     metric_name: MetricName,
@@ -47,6 +49,7 @@ pub(super) fn build_score_distribution_response(
     };
 
     Ok(ScoreDistributionResponse {
+        challenge_id,
         challenge_name,
         target,
         metric_name,
@@ -229,6 +232,7 @@ mod tests {
         TargetAccelerator,
     };
     use shared::models::evaluation::{MetricValue, ScoreVisibility};
+    use shared::models::ids::ChallengeId;
     use shared::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
     use shared::models::localization::LocalizedText;
     use shared::models::names::{
@@ -242,6 +246,11 @@ mod tests {
     /// Parse a valid challenge name for a focused score-distribution test.
     fn challenge_name(value: &str) -> ChallengeName {
         ChallengeName::try_new(value.to_string()).expect("test challenge name is valid")
+    }
+
+    /// Parse a valid challenge id for a focused score-distribution test.
+    fn challenge_id(value: &str) -> ChallengeId {
+        ChallengeId::try_new(value).expect("test challenge id is valid")
     }
 
     /// Parse a valid challenge keyword for a focused score-distribution test.
@@ -416,6 +425,7 @@ mod tests {
     fn primary_metric_distribution_uses_raw_metric_values_for_minimized_metrics() {
         let spec = minimized_metric_spec();
         let response = build_score_distribution_response(
+            challenge_id("11111111-1111-4111-8111-111111111111"),
             challenge_name("latency-challenge"),
             target_name("linux-arm64-cpu"),
             metric_name("latency_ms"),
@@ -434,6 +444,7 @@ mod tests {
     fn rank_score_distribution_uses_comparator_values() {
         let spec = minimized_metric_spec();
         let response = build_score_distribution_response(
+            challenge_id("11111111-1111-4111-8111-111111111111"),
             challenge_name("latency-challenge"),
             target_name("linux-arm64-cpu"),
             metric_name("rank_score"),
@@ -454,6 +465,7 @@ mod tests {
         spec.metric_schema.metrics[0].visibility = MetricVisibility::Official;
 
         let error = build_score_distribution_response(
+            challenge_id("11111111-1111-4111-8111-111111111111"),
             challenge_name("latency-challenge"),
             target_name("linux-arm64-cpu"),
             metric_name("latency_ms"),
@@ -464,6 +476,7 @@ mod tests {
         assert!(matches!(error, AppError::Forbidden(_)));
 
         let error = build_score_distribution_response(
+            challenge_id("11111111-1111-4111-8111-111111111111"),
             challenge_name("latency-challenge"),
             target_name("linux-arm64-cpu"),
             metric_name("official_score"),

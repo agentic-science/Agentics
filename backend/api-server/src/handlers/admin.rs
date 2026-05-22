@@ -3,17 +3,16 @@
 use super::{
     AdminAuth, AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto,
     AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse, AgentId,
-    AgentPioneerCodeId, AgentStatus, AppError, AppState, ChallengeName, CreatePioneerCodeRequest,
+    AgentPioneerCodeId, AgentStatus, AppError, AppState, ChallengeId, CreatePioneerCodeRequest,
     DateTime, DisableAgentResponse, EvaluationJobId, EvaluationJobResponse, EvaluationJobStatus,
     Json, Path, PioneerCode, PioneerCodeDetailResponse, PioneerCodeListResponse, PioneerCodeStatus,
     QueueEvaluationJobInput, Result, RevokePioneerCodeResponse, SUBMISSION_QUOTA_WINDOW_SECONDS,
     ScoringMode, SolutionSubmissionPath, State, StatusCode, Utc, ValidatedJson, auth, db,
     parse_request_value, presenters,
 };
-use shared::models::challenge::{MoltbookCommunityDto, PublishChallengeResponse};
+use shared::models::challenge::MoltbookCommunityDto;
 use shared::models::request::{
-    ChallengeMoltbookDiscussionResponse, CreateChallengeRequest, PublishChallengeRequest,
-    SetChallengeMoltbookDiscussionRequest,
+    ChallengeMoltbookDiscussionResponse, SetChallengeMoltbookDiscussionRequest,
 };
 
 // ---------------------------------------------------------------------------
@@ -158,52 +157,16 @@ pub async fn list_admin_challenges(
     ))
 }
 
-/// Create or update a challenge shell.
-pub async fn create_challenge(
-    _admin: AdminAuth,
-    State(state): State<AppState>,
-    ValidatedJson(body): ValidatedJson<CreateChallengeRequest>,
-) -> Result<(
-    StatusCode,
-    Json<shared::models::challenge::ChallengeAdminResponse>,
-)> {
-    let challenge =
-        db::create_or_update_challenge(&state.db, &body.name, &body.title, &body.summary)
-            .await
-            .map_err(|e| match e {
-                AppError::Database(sqlx::Error::Database(db_err))
-                    if db_err.is_unique_violation() =>
-                {
-                    AppError::Conflict
-                }
-                _ => e,
-            })?;
-    Ok((StatusCode::CREATED, Json(challenge)))
-}
-
-/// Validate and publish a challenge bundle.
-pub async fn publish_challenge(
-    _admin: AdminAuth,
-    State(_state): State<AppState>,
-    Path(_challenge_name): Path<String>,
-    ValidatedJson(_body): ValidatedJson<PublishChallengeRequest>,
-) -> Result<(StatusCode, Json<PublishChallengeResponse>)> {
-    Err(AppError::Forbidden(
-        "direct admin bundle publishing is disabled for MVP; use the GitHub-backed challenge draft review flow"
-            .to_string(),
-    ))
-}
-
 /// Attach a Moltbook discussion post to a published challenge.
 pub async fn set_challenge_moltbook_discussion(
     _admin: AdminAuth,
     State(state): State<AppState>,
-    Path(name): Path<String>,
+    Path(id): Path<String>,
     ValidatedJson(body): ValidatedJson<SetChallengeMoltbookDiscussionRequest>,
 ) -> Result<Json<ChallengeMoltbookDiscussionResponse>> {
-    let challenge_name = parse_request_value::<ChallengeName>(&name)?;
+    let challenge_id = parse_request_value::<ChallengeId>(&id)?;
     let record =
-        db::set_challenge_moltbook_discussion(&state.db, &challenge_name, &body.discussion_url)
+        db::set_challenge_moltbook_discussion(&state.db, &challenge_id, &body.discussion_url)
             .await?;
     Ok(Json(challenge_moltbook_discussion_response(&state, record)))
 }
@@ -212,10 +175,10 @@ pub async fn set_challenge_moltbook_discussion(
 pub async fn clear_challenge_moltbook_discussion(
     _admin: AdminAuth,
     State(state): State<AppState>,
-    Path(name): Path<String>,
+    Path(id): Path<String>,
 ) -> Result<Json<ChallengeMoltbookDiscussionResponse>> {
-    let challenge_name = parse_request_value::<ChallengeName>(&name)?;
-    let record = db::clear_challenge_moltbook_discussion(&state.db, &challenge_name).await?;
+    let challenge_id = parse_request_value::<ChallengeId>(&id)?;
+    let record = db::clear_challenge_moltbook_discussion(&state.db, &challenge_id).await?;
     Ok(Json(challenge_moltbook_discussion_response(&state, record)))
 }
 
@@ -225,6 +188,7 @@ fn challenge_moltbook_discussion_response(
     record: db::ChallengeMoltbookDiscussionRecord,
 ) -> ChallengeMoltbookDiscussionResponse {
     ChallengeMoltbookDiscussionResponse {
+        challenge_id: record.challenge_id,
         challenge_name: record.challenge_name,
         moltbook: MoltbookCommunityDto {
             submolt_name: state.config.moltbook_submolt_name.clone(),
