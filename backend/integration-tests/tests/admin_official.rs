@@ -5,10 +5,9 @@ mod helpers;
 use std::path::Path;
 
 use helpers::{
-    api_url, basic_auth_header, copy_dir_all, examples_challenges_root, run_worker_once,
-    sample_sum_solution, solution_zip_base64, spawn_app_with_config, test_config,
+    api_url, basic_auth_header, copy_dir_all, examples_challenges_root, published_challenge_id,
+    run_worker_once, sample_sum_solution, solution_zip_base64, spawn_app_with_config, test_config,
 };
-use shared::models::names::ChallengeName;
 
 /// Create an admin-published bundle by adapting the legacy `sample-sum` fixture.
 fn create_admin_bundle(root: &Path) -> std::path::PathBuf {
@@ -54,6 +53,7 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
     config.official_runs_per_agent_challenge_day = 2;
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
+    let admin_sum_id = published_challenge_id(&pool, "admin-sum").await;
     let admin_auth = basic_auth_header(
         &config.admin_username,
         config.expose_admin_password_for_http_basic(),
@@ -91,7 +91,7 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
         .header("Authorization", format!("Bearer {token_a}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_name": "admin-sum",
+            "challenge_id": &admin_sum_id,
             "target": "linux-arm64-cpu",
             "artifact_base64": perfect_zip,
             "explanation": "best rank score"
@@ -113,7 +113,7 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
         .header("Authorization", format!("Bearer {token_b}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_name": "admin-sum",
+            "challenge_id": &admin_sum_id,
             "target": "linux-arm64-cpu",
             "artifact_base64": private_benchmark_only_zip,
             "explanation": "passes private benchmark only"
@@ -133,7 +133,7 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
     let leaderboard_before: serde_json::Value = client
         .get(api_url(
             &app,
-            "/api/public/challenges/admin-sum/leaderboard?target=linux-arm64-cpu",
+            &format!("/api/public/challenges/{admin_sum_id}/leaderboard?target=linux-arm64-cpu"),
         ))
         .send()
         .await
@@ -243,7 +243,7 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
     let leaderboard_after_official: serde_json::Value = client
         .get(api_url(
             &app,
-            "/api/public/challenges/admin-sum/leaderboard?target=linux-arm64-cpu",
+            &format!("/api/public/challenges/{admin_sum_id}/leaderboard?target=linux-arm64-cpu"),
         ))
         .send()
         .await
@@ -290,7 +290,7 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
     let leaderboard_during_rejudge: serde_json::Value = client
         .get(api_url(
             &app,
-            "/api/public/challenges/admin-sum/leaderboard?target=linux-arm64-cpu",
+            &format!("/api/public/challenges/{admin_sum_id}/leaderboard?target=linux-arm64-cpu"),
         ))
         .send()
         .await
@@ -342,7 +342,7 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
         .header("Authorization", format!("Bearer {token_b}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_name": "admin-sum",
+            "challenge_id": &admin_sum_id,
             "target": "linux-arm64-cpu",
             "artifact_base64": perfect_zip,
             "explanation": "second participant-created official submission should still fit quota"
@@ -357,12 +357,11 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
     );
     run_worker_once(&pool, &config).await;
 
-    shared::db::archive_challenge(
-        &pool,
-        &ChallengeName::try_new("admin-sum").expect("test challenge name is valid"),
-    )
-    .await
-    .expect("challenge should archive");
+    let admin_sum_id_typed = shared::models::ids::ChallengeId::try_new(admin_sum_id.clone())
+        .expect("test challenge id is valid");
+    shared::db::archive_challenge(&pool, &admin_sum_id_typed)
+        .await
+        .expect("challenge should archive");
     let archived_rejudge = client
         .post(api_url(
             &app,

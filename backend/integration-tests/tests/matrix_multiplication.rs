@@ -8,8 +8,8 @@ use std::process::Command;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use helpers::{
     TestCreatorSession, api_url, basic_auth_header, challenge_repo_root, copy_dir_all,
-    create_creator_session, matrix_multiplication_solution_zip_base64, run_worker_once,
-    spawn_app_with_config, test_config,
+    create_creator_session, matrix_multiplication_solution_zip_base64, published_challenge_id,
+    run_worker_once, spawn_app_with_config, test_config,
 };
 
 /// Handles creator auth for this module.
@@ -143,6 +143,7 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
         .expect("failed to publish draft")
         .error_for_status()
         .expect("draft publish should pass");
+    let matrix_challenge_id = published_challenge_id(&pool, "matrix-multiplication").await;
 
     let participant_register: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
@@ -162,7 +163,7 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {participant_token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_name": "matrix-multiplication",
+            "challenge_id": matrix_challenge_id,
             "target": target,
             "artifact_base64": matrix_multiplication_solution_zip_base64(),
             "explanation": "C baseline for matrix multiplication"

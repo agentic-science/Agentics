@@ -6,8 +6,8 @@ use std::path::Path;
 
 use helpers::{
     api_url, copy_dir_all, examples_challenges_root, grid_routing_solution_zip_base64,
-    run_worker_once, sample_sum_solution, solution_zip_base64, solution_zip_base64_with_scripts,
-    spawn_app_with_config, test_config, zip_project_zip_base64,
+    published_challenge_id, run_worker_once, sample_sum_solution, solution_zip_base64,
+    solution_zip_base64_with_scripts, spawn_app_with_config, test_config, zip_project_zip_base64,
 };
 
 /// Creates validation disabled challenge after validating caller inputs.

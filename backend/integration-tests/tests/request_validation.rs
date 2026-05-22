@@ -6,8 +6,8 @@ use std::path::Path;
 
 use helpers::{
     TestCreatorSession, api_url, basic_auth_header, copy_dir_all, create_creator_session,
-    examples_challenges_root, run_worker_once, sample_sum_solution, solution_zip_base64, spawn_app,
-    spawn_app_with_config, test_config, zip_project_zip_base64,
+    examples_challenges_root, published_challenge_id, run_worker_once, sample_sum_solution,
+    solution_zip_base64, spawn_app, spawn_app_with_config, test_config, zip_project_zip_base64,
 };
 
 /// Handles creator auth for this module.
@@ -61,22 +61,22 @@ async fn request_validation_returns_contract_error_shape(pool: sqlx::PgPool) {
         .expect("failed to decode unknown-field response");
     assert_eq!(unknown_field_body["error"], "bad_request");
 
-    let invalid_challenge_name = client
+    let invalid_challenge_id = client
         .get(api_url(&app, "/api/public/challenges/bad%20id"))
         .send()
         .await
-        .expect("failed to send invalid challenge name request");
-    assert_eq!(invalid_challenge_name.status(), 400);
-    let invalid_challenge_name_body: serde_json::Value = invalid_challenge_name
+        .expect("failed to send invalid challenge id request");
+    assert_eq!(invalid_challenge_id.status(), 400);
+    let invalid_challenge_id_body: serde_json::Value = invalid_challenge_id
         .json()
         .await
-        .expect("failed to decode invalid challenge name response");
-    assert_eq!(invalid_challenge_name_body["error"], "bad_request");
+        .expect("failed to decode invalid challenge id response");
+    assert_eq!(invalid_challenge_id_body["error"], "bad_request");
     assert!(
-        invalid_challenge_name_body["message"]
+        invalid_challenge_id_body["message"]
             .as_str()
             .expect("message should be a string")
-            .contains("challenge_name")
+            .contains("challenge_id")
     );
 }
 
@@ -138,7 +138,7 @@ async fn zip_submission_routes_accept_declared_large_json_bodies(pool: sqlx::PgP
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_name": "missing-challenge",
+            "challenge_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64
         }))
@@ -171,13 +171,14 @@ async fn solution_submission_rejects_invalid_target_before_artifact_decode(pool:
         .await
         .expect("failed to decode register response");
     let token = register_response["token"].as_str().expect("missing token");
+    let sample_sum_id = published_challenge_id(&pool, "sample-sum").await;
 
     let malformed_response = client
         .post(helpers::api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_name": "sample-sum",
+            "challenge_id": &sample_sum_id,
             "target": "linux arm64",
             "artifact_base64": "not-base64"
         }))
@@ -203,7 +204,7 @@ async fn solution_submission_rejects_invalid_target_before_artifact_decode(pool:
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_name": "sample-sum",
+            "challenge_id": &sample_sum_id,
             "target": "cpu-linux-ppc64le",
             "artifact_base64": "not-base64"
         }))
@@ -247,6 +248,7 @@ async fn solution_submission_rejects_oversized_manifest_note_before_storage(pool
         .await
         .expect("failed to decode register response");
     let token = register_response["token"].as_str().expect("missing token");
+    let sample_sum_id = published_challenge_id(&pool, "sample-sum").await;
     let artifact_base64 = zip_project_zip_base64(vec![
         (
             "agentics.solution.json",
@@ -273,7 +275,7 @@ async fn solution_submission_rejects_oversized_manifest_note_before_storage(pool
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_name": "sample-sum",
+            "challenge_id": &sample_sum_id,
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64
         }))
@@ -295,7 +297,10 @@ async fn solution_submission_rejects_oversized_manifest_note_before_storage(pool
             .await
             .expect("failed to query solution submission count");
     assert_eq!(solution_submission_count, 0);
-    assert_eq!(regular_file_count(storage.path()), 0);
+    assert_eq!(
+        regular_file_count(&storage.path().join("solution-submissions")),
+        0
+    );
 }
 
 /// Verifies that invalid solution submission path ids return bad request.
@@ -343,13 +348,14 @@ async fn solution_submission_rejects_legacy_round_field_before_artifact_decode(p
         .await
         .expect("failed to decode register response");
     let token = register_response["token"].as_str().expect("missing token");
+    let sample_sum_id = published_challenge_id(&pool, "sample-sum").await;
 
     let no_round_field = client
         .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_name": "sample-sum",
+            "challenge_id": &sample_sum_id,
             "target": "linux-arm64-cpu",
             "artifact_base64": "not-base64"
         }))
@@ -363,7 +369,7 @@ async fn solution_submission_rejects_legacy_round_field_before_artifact_decode(p
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_name": "sample-sum",
+            "challenge_id": &sample_sum_id,
             "round_id": "missing-round",
             "target": "linux-arm64-cpu",
             "artifact_base64": "not-base64"
@@ -388,7 +394,7 @@ async fn solution_submission_rejects_legacy_round_field_before_artifact_decode(p
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_name": "sample-sum",
+            "challenge_id": &sample_sum_id,
             "round_id": "Main Round!",
             "target": "linux-arm64-cpu",
             "artifact_base64": "not-base64"
@@ -454,12 +460,13 @@ async fn solution_submission_rejects_unstarted_and_closed_challenges_before_arti
         ("future-challenge", "not started"),
         ("closed-challenge", "closed"),
     ] {
+        let challenge_id = published_challenge_id(&pool, challenge_name).await;
         let response = client
             .post(api_url(&app, "/api/agent/solution-submissions"))
             .header("Authorization", format!("Bearer {token}"))
             .header("X-Agentics-Admin-Automation", "true")
             .json(&serde_json::json!({
-                "challenge_name": challenge_name,
+                "challenge_id": challenge_id,
                 "target": "linux-arm64-cpu",
                 "artifact_base64": "not-base64"
             }))
@@ -497,12 +504,13 @@ async fn private_shortlist_challenge_requires_owner_delta_before_artifact_decode
     let client = reqwest::Client::new();
     let owner = create_creator_session(&pool, 2001, "shortlist-owner").await;
     let non_owner = create_creator_session(&pool, 2002, "not-owner").await;
-    let challenge_name =
-        shared::models::names::ChallengeName::try_new("shortlist-challenge".to_string())
-            .expect("test challenge name is valid");
+    let challenge_id = shared::models::ids::ChallengeId::try_new(
+        published_challenge_id(&pool, "shortlist-challenge").await,
+    )
+    .expect("test challenge id is valid");
     let owner_agent_id =
         shared::models::ids::AgentId::try_new(&owner.agent_id).expect("valid owner agent id");
-    shared::db::add_challenge_owner(&pool, &challenge_name, &owner_agent_id)
+    shared::db::add_challenge_owner(&pool, &challenge_id, &owner_agent_id)
         .await
         .expect("owner should be granted");
 
@@ -513,7 +521,7 @@ async fn private_shortlist_challenge_requires_owner_delta_before_artifact_decode
         &client,
         &app,
         &shortlisted.token,
-        "shortlist-challenge",
+        challenge_id.as_str(),
         "not-base64",
     )
     .await;
@@ -530,7 +538,7 @@ async fn private_shortlist_challenge_requires_owner_delta_before_artifact_decode
     let non_owner_upload = creator_auth(
         client.post(api_url(
             &app,
-            "/api/creator/challenges/shortlist-challenge/shortlist-revisions",
+            &format!("/api/creator/challenges/{challenge_id}/shortlist-revisions"),
         )),
         &non_owner,
     )
@@ -543,7 +551,7 @@ async fn private_shortlist_challenge_requires_owner_delta_before_artifact_decode
     let unknown_agent_upload = creator_auth(
         client.post(api_url(
             &app,
-            "/api/creator/challenges/shortlist-challenge/shortlist-revisions",
+            &format!("/api/creator/challenges/{challenge_id}/shortlist-revisions"),
         )),
         &owner,
     )
@@ -559,7 +567,7 @@ async fn private_shortlist_challenge_requires_owner_delta_before_artifact_decode
     let revision: serde_json::Value = creator_auth(
         client.post(api_url(
             &app,
-            "/api/creator/challenges/shortlist-challenge/shortlist-revisions",
+            &format!("/api/creator/challenges/{challenge_id}/shortlist-revisions"),
         )),
         &owner,
     )
@@ -581,7 +589,7 @@ async fn private_shortlist_challenge_requires_owner_delta_before_artifact_decode
     let duplicate_revision: serde_json::Value = creator_auth(
         client.post(api_url(
             &app,
-            "/api/creator/challenges/shortlist-challenge/shortlist-revisions",
+            &format!("/api/creator/challenges/{challenge_id}/shortlist-revisions"),
         )),
         &owner,
     )
@@ -599,7 +607,7 @@ async fn private_shortlist_challenge_requires_owner_delta_before_artifact_decode
     let shortlist: serde_json::Value = creator_auth(
         client.get(api_url(
             &app,
-            "/api/creator/challenges/shortlist-challenge/shortlist",
+            &format!("/api/creator/challenges/{challenge_id}/shortlist"),
         )),
         &owner,
     )
@@ -618,7 +626,7 @@ async fn private_shortlist_challenge_requires_owner_delta_before_artifact_decode
         &client,
         &app,
         &outsider.token,
-        "shortlist-challenge",
+        challenge_id.as_str(),
         "not-base64",
     )
     .await;
@@ -636,7 +644,7 @@ async fn private_shortlist_challenge_requires_owner_delta_before_artifact_decode
         &client,
         &app,
         &shortlisted.token,
-        "shortlist-challenge",
+        challenge_id.as_str(),
         &solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']")),
     )
     .await;
@@ -654,12 +662,13 @@ async fn challenge_submission_limit_rejects_before_extra_artifact_work(pool: sql
     let client = reqwest::Client::new();
     let agent = register_api_agent(&client, &app, "limited-agent").await;
     let artifact = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
+    let challenge_id = published_challenge_id(&pool, "limited-sum").await;
 
     let accepted = submit_solution_with_target(
         &client,
         &app,
         &agent.token,
-        "limited-sum",
+        &challenge_id,
         "linux-arm64-cpu",
         &artifact,
     )
@@ -670,7 +679,7 @@ async fn challenge_submission_limit_rejects_before_extra_artifact_work(pool: sql
         &client,
         &app,
         &agent.token,
-        "limited-sum",
+        &challenge_id,
         "linux-arm64-cpu",
         &artifact,
     )
@@ -721,17 +730,7 @@ async fn admin_direct_publish_is_disabled(pool: sqlx::PgPool) {
         .await
         .expect("failed to publish private shortlist challenge directly");
 
-    assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
-    let error: serde_json::Value = response
-        .json()
-        .await
-        .expect("failed to decode direct publish error");
-    assert!(
-        error["message"]
-            .as_str()
-            .expect("message")
-            .contains("GitHub-backed challenge draft")
-    );
+    assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
 }
 
 /// Verifies that parent submissions cannot cross agent ownership boundaries.
@@ -744,15 +743,21 @@ async fn parent_solution_submission_must_match_agent_and_scope(pool: sqlx::PgPoo
     let parent_agent = register_api_agent(&client, &app, "parent-agent").await;
     let child_agent = register_api_agent(&client, &app, "child-agent").await;
     let artifact = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
+    let sample_sum_id = published_challenge_id(&pool, "sample-sum").await;
 
-    let parent: serde_json::Value =
-        submit_solution(&client, &app, &parent_agent.token, "sample-sum", &artifact)
-            .await
-            .error_for_status()
-            .expect("parent submission should queue")
-            .json()
-            .await
-            .expect("parent json");
+    let parent: serde_json::Value = submit_solution(
+        &client,
+        &app,
+        &parent_agent.token,
+        &sample_sum_id,
+        &artifact,
+    )
+    .await
+    .error_for_status()
+    .expect("parent submission should queue")
+    .json()
+    .await
+    .expect("parent json");
     run_worker_once(&pool, &config).await;
 
     let response = client
@@ -760,7 +765,7 @@ async fn parent_solution_submission_must_match_agent_and_scope(pool: sqlx::PgPoo
         .header("Authorization", format!("Bearer {}", child_agent.token))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_name": "sample-sum",
+            "challenge_id": &sample_sum_id,
             "target": "linux-arm64-cpu",
             "parent_solution_submission_id": parent["id"],
             "artifact_base64": "not base64"
@@ -775,7 +780,7 @@ async fn parent_solution_submission_must_match_agent_and_scope(pool: sqlx::PgPoo
         error["message"]
             .as_str()
             .expect("message")
-            .contains("same agent, challenge_name, and target"),
+            .contains("same agent, challenge_id, and target"),
         "parent scope validation must run before artifact decoding"
     );
 }
@@ -819,14 +824,14 @@ async fn submit_solution(
     client: &reqwest::Client,
     app: &helpers::TestApp,
     token: &str,
-    challenge_name: &str,
+    challenge_id: &str,
     artifact_base64: &str,
 ) -> reqwest::Response {
     submit_solution_with_target(
         client,
         app,
         token,
-        challenge_name,
+        challenge_id,
         "linux-arm64-cpu",
         artifact_base64,
     )
@@ -838,7 +843,7 @@ async fn submit_solution_with_target(
     client: &reqwest::Client,
     app: &helpers::TestApp,
     token: &str,
-    challenge_name: &str,
+    challenge_id: &str,
     target: &str,
     artifact_base64: &str,
 ) -> reqwest::Response {
@@ -847,7 +852,7 @@ async fn submit_solution_with_target(
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_name": challenge_name,
+            "challenge_id": challenge_id,
             "target": target,
             "artifact_base64": artifact_base64
         }))
@@ -858,6 +863,9 @@ async fn submit_solution_with_target(
 
 /// Count regular files under a test storage root.
 fn regular_file_count(root: &Path) -> usize {
+    if !root.exists() {
+        return 0;
+    }
     let mut count = 0;
     let mut stack = vec![root.to_path_buf()];
     while let Some(path) = stack.pop() {

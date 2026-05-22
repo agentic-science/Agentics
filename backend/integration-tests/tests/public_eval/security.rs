@@ -9,12 +9,14 @@ async fn validation_rejects_private_benchmark_bundle_alias(pool: sqlx::PgPool) {
     let (_public_bundle, private_bundle) = create_coexecuted_benchmark_bundles(bundles.path());
     let config = test_config(storage.path(), challenges.path());
     let app = spawn_app_with_config(pool.clone(), config).await;
+    let coexecuted_challenge_id = shared::models::ids::ChallengeId::generate();
     sqlx::query(
         r#"
         INSERT INTO challenges (
-            name, title, summary, bundle_path, public_bundle_path, statement_path, spec_json, starts_at, status
+            challenge_id, name, title, summary, bundle_path, public_bundle_path, statement_path, spec_json, starts_at, status
         )
         VALUES (
+            $4::uuid,
             'coexecuted-sum',
             'Coexecuted Sum',
             '{"en":"Import participant code in a trusted benchmark harness.","zh":"在可信基准程序中导入参赛代码。"}'::jsonb,
@@ -36,6 +38,7 @@ async fn validation_rejects_private_benchmark_bundle_alias(pool: sqlx::PgPool) {
         )
         .expect("failed to parse coexecuted spec"),
     )
+    .bind(coexecuted_challenge_id.as_str())
     .execute(&pool)
     .await
     .expect("failed to insert aliased coexecuted challenge");
@@ -57,7 +60,7 @@ async fn validation_rejects_private_benchmark_bundle_alias(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_name": "coexecuted-sum",
+            "challenge_id": published_challenge_id(&pool, "coexecuted-sum").await,
             "target": "linux-arm64-cpu",
             "artifact_base64": coexecuted_sum_solution_zip_base64(),
             "explanation": "should fail before private bundle validation"
@@ -113,7 +116,7 @@ async fn worker_rejects_piped_stdio_interaction_limit(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_name": "interactive-sum",
+            "challenge_id": published_challenge_id(&pool, "interactive-sum").await,
             "target": "linux-arm64-cpu",
             "artifact_base64": piped_stdio_sum_solution_zip_base64(),
             "explanation": "piped stdio limit smoke test"
@@ -187,7 +190,7 @@ async fn worker_completes_private_validation_run_without_leaderboard(pool: sqlx:
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_name": "sample-sum",
+            "challenge_id": published_challenge_id(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "validation smoke test"
@@ -269,7 +272,7 @@ async fn worker_completes_file_mode_validation_run(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_name": "grid-routing",
+            "challenge_id": published_challenge_id(&pool, "grid-routing").await,
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "file mode validation smoke test"
@@ -334,7 +337,7 @@ async fn worker_rejects_symlink_declared_output(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_name": "grid-routing",
+            "challenge_id": published_challenge_id(&pool, "grid-routing").await,
             "target": "linux-arm64-cpu",
             "artifact_base64": grid_routing_symlink_solution_zip_base64(),
             "explanation": "symlink output should fail before evaluator"
@@ -407,7 +410,7 @@ async fn worker_reports_build_phase_failure(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_name": "sample-sum",
+            "challenge_id": published_challenge_id(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "build phase failure smoke test"
@@ -498,7 +501,7 @@ python main.py
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_name": "sample-sum",
+            "challenge_id": published_challenge_id(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "run stage internet probe"
@@ -568,7 +571,7 @@ python main.py
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_name": "sample-sum",
+            "challenge_id": published_challenge_id(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "run workspace readonly probe"

@@ -15,6 +15,17 @@ use shared::runner::connect_docker;
 use shared::storage::{LocalStorage, Storage};
 use sqlx::PgPool;
 
+/// Resolve the generated id for a published challenge fixture.
+pub async fn published_challenge_id(pool: &PgPool, challenge_name: &str) -> String {
+    sqlx::query_scalar::<_, String>(
+        "SELECT challenge_id::text FROM challenges WHERE name = $1 LIMIT 1",
+    )
+    .bind(challenge_name)
+    .fetch_one(pool)
+    .await
+    .expect("published challenge id should exist")
+}
+
 /// Running test server bound to an ephemeral local port.
 pub struct TestApp {
     pub addr: SocketAddr,
@@ -41,9 +52,13 @@ pub async fn spawn_app(pool: PgPool) -> TestApp {
 /// directories while exercising the real router and startup seeding path.
 pub async fn spawn_app_with_config(pool: PgPool, config: Config) -> TestApp {
     if std::fs::exists(&config.challenges_root).expect("failed to inspect challenge root") {
-        shared::db::ensure_challenges_seeded_from_root(&pool, &config.challenges_root)
-            .await
-            .expect("failed to seed challenges");
+        shared::db::ensure_challenges_seeded_from_root(
+            &pool,
+            &config.challenges_root,
+            &config.storage_root,
+        )
+        .await
+        .expect("failed to seed challenges");
     }
 
     let storage = Arc::new(LocalStorage::new(&config.storage_root));

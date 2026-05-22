@@ -129,7 +129,7 @@ async fn public_challenge_catalog_supports_pagination(pool: sqlx::PgPool) {
         .await
         .expect("search JSON should decode");
     assert_eq!(searched["total_count"], 1);
-    assert_eq!(searched["items"][0]["name"], "grid-routing");
+    assert_eq!(searched["items"][0]["challenge_name"], "grid-routing");
 
     let keyword_filtered: serde_json::Value = client
         .get(api_url(
@@ -145,7 +145,10 @@ async fn public_challenge_catalog_supports_pagination(pool: sqlx::PgPool) {
         .await
         .expect("keyword JSON should decode");
     assert_eq!(keyword_filtered["total_count"], 1);
-    assert_eq!(keyword_filtered["items"][0]["name"], "grid-routing");
+    assert_eq!(
+        keyword_filtered["items"][0]["challenge_name"],
+        "grid-routing"
+    );
 
     let multi_keyword_filtered: serde_json::Value = client
         .get(api_url(
@@ -161,7 +164,10 @@ async fn public_challenge_catalog_supports_pagination(pool: sqlx::PgPool) {
         .await
         .expect("multiple keyword JSON should decode");
     assert_eq!(multi_keyword_filtered["total_count"], 1);
-    assert_eq!(multi_keyword_filtered["items"][0]["name"], "grid-routing");
+    assert_eq!(
+        multi_keyword_filtered["items"][0]["challenge_name"],
+        "grid-routing"
+    );
 
     let mismatched_keywords: serde_json::Value = client
         .get(api_url(

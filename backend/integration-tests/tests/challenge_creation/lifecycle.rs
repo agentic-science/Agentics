@@ -79,19 +79,25 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
         public_repo: public_repo.path(),
     };
     create_validate_approve_publish_draft(&publish_flow, &commit_sha, 31, manifest_json()).await;
+    let sample_sum_id: String =
+        sqlx::query_scalar("SELECT challenge_id::text FROM challenges WHERE name = 'sample-sum'")
+            .fetch_one(&pool)
+            .await
+            .expect("published sample-sum id");
 
     let archived_submission_id = uuid::Uuid::new_v4();
     sqlx::query(
         r#"
         INSERT INTO solution_submissions (
-            id, challenge_name, target, agent_id, artifact_key, status,
+            id, challenge_id, target, agent_id, artifact_key, status,
             explanation, credit_text, visible_after_eval, note
         )
-        VALUES ($1, 'sample-sum', 'linux-arm64-cpu', $2, $3, 'completed',
+        VALUES ($1, $2::uuid, 'linux-arm64-cpu', $3, $4, 'completed',
                 'archived public surface probe', '', TRUE, '')
         "#,
     )
     .bind(archived_submission_id)
+    .bind(&sample_sum_id)
     .bind(participant_agent_id)
     .bind(format!("solution-submissions/{archived_submission_id}.zip"))
     .execute(&pool)
@@ -100,16 +106,17 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
     sqlx::query(
         r#"
         INSERT INTO leaderboard_entries (
-            challenge_name, target, agent_id, best_solution_submission_id,
+            challenge_id, target, agent_id, best_solution_submission_id,
             best_rank_score, public_results_json, aggregate_metrics_json,
             official_metrics_json
         )
         VALUES (
-            'sample-sum', 'linux-arm64-cpu', $1, $2,
-            0.95, '[]'::jsonb, $3, $3
+            $1::uuid, 'linux-arm64-cpu', $2, $3,
+            0.95, '[]'::jsonb, $4, $4
         )
         "#,
     )
+    .bind(&sample_sum_id)
     .bind(participant_agent_id)
     .bind(archived_submission_id)
     .bind(json!([{ "metric_name": "score", "value": 0.95 }]))
@@ -142,11 +149,20 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
             .as_array()
             .expect("items")
             .iter()
-            .all(|item| item["name"] != "sample-sum")
+            .all(|item| item["challenge_name"] != "sample-sum")
     );
 
+    let sample_sum_id: String =
+        sqlx::query_scalar("SELECT challenge_id::text FROM challenges WHERE name = 'sample-sum'")
+            .fetch_one(&pool)
+            .await
+            .expect("sample-sum challenge id");
+
     client
-        .get(api_url(&app, "/api/public/challenges/sample-sum"))
+        .get(api_url(
+            &app,
+            &format!("/api/public/challenges/{sample_sum_id}"),
+        ))
         .send()
         .await
         .expect("archived detail")
@@ -156,7 +172,7 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
     let leaderboard: serde_json::Value = client
         .get(api_url(
             &app,
-            "/api/public/challenges/sample-sum/leaderboard?target=linux-arm64-cpu",
+            &format!("/api/public/challenges/{sample_sum_id}/leaderboard?target=linux-arm64-cpu"),
         ))
         .send()
         .await
@@ -176,7 +192,7 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
         .get(api_url(
             &app,
             &format!(
-                "/api/public/solution-submissions/{archived_submission_id}/ranking-context?challenge_name=sample-sum&target=linux-arm64-cpu"
+                "/api/public/solution-submissions/{archived_submission_id}/ranking-context?challenge_id={sample_sum_id}&target=linux-arm64-cpu"
             ),
         ))
         .send()
@@ -192,7 +208,7 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
     let distribution: serde_json::Value = client
         .get(api_url(
             &app,
-            "/api/public/challenges/sample-sum/score-distributions?target=linux-arm64-cpu&metric=score",
+            &format!("/api/public/challenges/{sample_sum_id}/score-distributions?target=linux-arm64-cpu&metric=score"),
         ))
         .send()
         .await
@@ -209,7 +225,7 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
         .header("Authorization", participant_bearer)
         .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({
-            "challenge_name": "sample-sum",
+            "challenge_id": sample_sum_id,
             "target": "linux-arm64-cpu",
             "artifact_base64": solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"))
         }))

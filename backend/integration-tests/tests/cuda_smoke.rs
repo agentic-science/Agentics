@@ -6,6 +6,7 @@ use helpers::{
     api_url, run_worker_once, spawn_app_with_config, test_config, zip_project_zip_base64,
 };
 use shared::config::WorkerAccelerators;
+use shared::models::ids::ChallengeId;
 use shared::models::paths::{ManagedBundlePath, ManagedStatementPath};
 
 const CUDA_TARGET: &str = "linux-arm64-cuda";
@@ -28,6 +29,11 @@ async fn dgx_cuda_smoke_completes_official_result_and_leaderboard(pool: sqlx::Pg
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     publish_cuda_smoke_challenge(&pool, &private_bundle, &public_bundle).await;
     let client = reqwest::Client::new();
+    let cuda_challenge_id: String =
+        sqlx::query_scalar("SELECT challenge_id::text FROM challenges WHERE name = 'cuda-smoke'")
+            .fetch_one(&pool)
+            .await
+            .expect("CUDA smoke challenge id should exist");
 
     let registration: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
@@ -47,7 +53,7 @@ async fn dgx_cuda_smoke_completes_official_result_and_leaderboard(pool: sqlx::Pg
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_name": "cuda-smoke",
+            "challenge_id": &cuda_challenge_id,
             "target": CUDA_TARGET,
             "artifact_base64": cuda_solution_zip_base64(),
             "explanation": "DGX CUDA validation smoke"
@@ -93,7 +99,7 @@ async fn dgx_cuda_smoke_completes_official_result_and_leaderboard(pool: sqlx::Pg
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_name": "cuda-smoke",
+            "challenge_id": &cuda_challenge_id,
             "target": CUDA_TARGET,
             "artifact_base64": cuda_solution_zip_base64(),
             "explanation": "DGX CUDA official smoke"
@@ -138,7 +144,9 @@ async fn dgx_cuda_smoke_completes_official_result_and_leaderboard(pool: sqlx::Pg
     let leaderboard: serde_json::Value = client
         .get(api_url(
             &app,
-            "/api/public/challenges/cuda-smoke/leaderboard?target=linux-arm64-cuda",
+            &format!(
+                "/api/public/challenges/{cuda_challenge_id}/leaderboard?target=linux-arm64-cuda"
+            ),
         ))
         .send()
         .await
@@ -177,6 +185,7 @@ async fn publish_cuda_smoke_challenge(
     shared::db::publish_challenge(
         pool,
         &shared::db::PublishChallengeInput {
+            challenge_id: &ChallengeId::generate(),
             challenge_name: &spec.challenge_name,
             bundle_path: &managed_private,
             public_bundle_path: &managed_public,

@@ -2,7 +2,10 @@
 
 mod helpers;
 
-use helpers::{api_url, examples_challenges_root, spawn_app, spawn_app_with_config, test_config};
+use helpers::{
+    api_url, examples_challenges_root, published_challenge_id, spawn_app, spawn_app_with_config,
+    test_config,
+};
 use shared::config::Config;
 
 /// Verifies that admin read models power operator console.
@@ -16,7 +19,6 @@ async fn admin_read_models_power_operator_console(pool: sqlx::PgPool) {
         config.expose_admin_password_for_http_basic(),
     );
     let client = reqwest::Client::new();
-
     shared::db::upsert_service_heartbeat(
         &pool,
         "test-worker",
@@ -48,7 +50,7 @@ async fn admin_read_models_power_operator_console(pool: sqlx::PgPool) {
         .as_array()
         .expect("items")
         .iter()
-        .find(|item| item["name"] == "sample-sum")
+        .find(|item| item["challenge_name"] == "sample-sum")
         .expect("sample-sum should be seeded");
     assert_eq!(sample_sum["targets"][0]["name"], "linux-arm64-cpu");
     assert_eq!(sample_sum["targets"][0]["validation_enabled"], true);
@@ -108,17 +110,18 @@ async fn admin_read_models_power_operator_console(pool: sqlx::PgPool) {
 async fn admin_manages_challenge_moltbook_discussion_anchor(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let config = test_config(storage.path(), &examples_challenges_root());
-    let app = spawn_app_with_config(pool, config.clone()).await;
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let auth = helpers::basic_auth_header(
         &config.admin_username,
         config.expose_admin_password_for_http_basic(),
     );
     let client = reqwest::Client::new();
+    let sample_sum_id = published_challenge_id(&pool, "sample-sum").await;
 
     let response: serde_json::Value = client
         .post(api_url(
             &app,
-            "/admin/challenges/sample-sum/moltbook-discussion",
+            &format!("/admin/challenges/{sample_sum_id}/moltbook-discussion"),
         ))
         .header("Authorization", auth.clone())
         .header("X-Agentics-Admin-Automation", "true")
@@ -143,7 +146,10 @@ async fn admin_manages_challenge_moltbook_discussion_anchor(pool: sqlx::PgPool) 
     );
 
     let public_detail: serde_json::Value = client
-        .get(api_url(&app, "/api/public/challenges/sample-sum"))
+        .get(api_url(
+            &app,
+            &format!("/api/public/challenges/{sample_sum_id}"),
+        ))
         .send()
         .await
         .expect("failed to fetch public challenge detail")
@@ -158,7 +164,7 @@ async fn admin_manages_challenge_moltbook_discussion_anchor(pool: sqlx::PgPool) 
     let response: serde_json::Value = client
         .delete(api_url(
             &app,
-            "/admin/challenges/sample-sum/moltbook-discussion",
+            &format!("/admin/challenges/{sample_sum_id}/moltbook-discussion"),
         ))
         .header("Authorization", auth)
         .header("X-Agentics-Admin-Automation", "true")
@@ -171,13 +177,12 @@ async fn admin_manages_challenge_moltbook_discussion_anchor(pool: sqlx::PgPool) 
     assert!(response["moltbook"].get("discussion_url").is_none());
 }
 
-/// Verifies that create challenge and publish contract.
+/// Verifies that legacy direct challenge creation and publish routes are disabled.
 #[sqlx::test(migrations = "../migrations")]
-async fn create_challenge_and_publish_contract(pool: sqlx::PgPool) {
+async fn direct_challenge_creation_and_publish_routes_are_disabled(pool: sqlx::PgPool) {
     let app = spawn_app(pool).await;
     let config = Config::from_env().expect("failed to load config");
 
-    // Successful admin creation verifies basic-auth extraction and challenge upsert.
     let response = reqwest::Client::new()
         .post(api_url(&app, "/admin/challenges"))
         .header(
@@ -197,13 +202,8 @@ async fn create_challenge_and_publish_contract(pool: sqlx::PgPool) {
         .await
         .expect("failed to execute request");
 
-    assert!(response.status().is_success());
+    assert_eq!(response.status(), reqwest::StatusCode::METHOD_NOT_ALLOWED);
 
-    let body: serde_json::Value = response.json().await.expect("failed to parse response");
-    assert_eq!(body["name"], "test-challenge");
-    assert_eq!(body["title"], "Test Challenge");
-
-    // Legacy direct publishing is disabled for MVP.
     let response = reqwest::Client::new()
         .post(api_url(&app, "/admin/challenges/test-challenge/publish"))
         .header(
@@ -221,14 +221,7 @@ async fn create_challenge_and_publish_contract(pool: sqlx::PgPool) {
         .await
         .expect("failed to execute request");
 
-    assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
-    let body: serde_json::Value = response.json().await.expect("failed to parse error");
-    assert!(
-        body["message"]
-            .as_str()
-            .expect("error message")
-            .contains("GitHub-backed challenge draft")
-    );
+    assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
 }
 
 /// Verifies that admin routes require auth.
@@ -237,11 +230,7 @@ async fn admin_routes_require_auth(pool: sqlx::PgPool) {
     let app = spawn_app(pool).await;
 
     let response = reqwest::Client::new()
-        .post(api_url(&app, "/admin/challenges"))
-        .json(&serde_json::json!({
-            "name": "test-challenge",
-            "title": "Test Challenge"
-        }))
+        .get(api_url(&app, "/admin/challenges"))
         .send()
         .await
         .expect("failed to execute request");
@@ -307,34 +296,26 @@ async fn admin_session_cookie_authenticates_admin_routes(pool: sqlx::PgPool) {
     assert_eq!(list_response.status(), reqwest::StatusCode::OK);
 
     let missing_csrf_response = client
-        .post(api_url(&app, "/admin/challenges"))
+        .post(api_url(&app, "/admin/challenge-drafts/cleanup"))
         .header(reqwest::header::COOKIE, &session_cookie)
-        .json(&serde_json::json!({
-            "name": "session-admin-missing-csrf",
-            "title": "Session Admin Missing CSRF",
-            "summary": { "en": "Session admin challenge", "zh": "会话管理员挑战" }
-        }))
+        .json(&serde_json::json!({}))
         .send()
         .await
-        .expect("failed to create challenge without csrf");
+        .expect("failed to clean up without csrf");
     assert_eq!(
         missing_csrf_response.status(),
         reqwest::StatusCode::FORBIDDEN
     );
 
-    let create_response = client
-        .post(api_url(&app, "/admin/challenges"))
+    let cleanup_response = client
+        .post(api_url(&app, "/admin/challenge-drafts/cleanup"))
         .header(reqwest::header::COOKIE, &session_cookie)
         .header("x-agentics-csrf-token", csrf_token)
-        .json(&serde_json::json!({
-            "name": "session-admin",
-            "title": "Session Admin",
-            "summary": { "en": "Session admin challenge", "zh": "会话管理员挑战" }
-        }))
+        .json(&serde_json::json!({}))
         .send()
         .await
-        .expect("failed to create challenge with session auth");
-    assert_eq!(create_response.status(), reqwest::StatusCode::CREATED);
+        .expect("failed to clean up with session auth");
+    assert_eq!(cleanup_response.status(), reqwest::StatusCode::OK);
 
     let logout_response = client
         .post(api_url(&app, "/api/auth/admin/logout"))
@@ -442,6 +423,7 @@ async fn admin_official_run_rejects_submission_with_active_job(pool: sqlx::PgPoo
         config.expose_admin_password_for_http_basic(),
     );
     let client = reqwest::Client::new();
+    let sample_sum_id = published_challenge_id(&pool, "sample-sum").await;
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
@@ -459,7 +441,7 @@ async fn admin_official_run_rejects_submission_with_active_job(pool: sqlx::PgPoo
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_name": "sample-sum",
+            "challenge_id": &sample_sum_id,
             "target": "linux-arm64-cpu",
             "artifact_base64": helpers::solution_zip_base64(&helpers::sample_sum_solution("payload['a'] + payload['b']")),
             "explanation": "fills official queue"
@@ -474,7 +456,7 @@ async fn admin_official_run_rejects_submission_with_active_job(pool: sqlx::PgPoo
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_name": "sample-sum",
+            "challenge_id": &sample_sum_id,
             "target": "linux-arm64-cpu",
             "artifact_base64": helpers::solution_zip_base64(&helpers::sample_sum_solution("payload['a'] + payload['b']")),
             "explanation": "admin promotes this validation run"
@@ -512,7 +494,7 @@ async fn admin_official_run_rejects_submission_with_active_job(pool: sqlx::PgPoo
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_name": "sample-sum",
+            "challenge_id": &sample_sum_id,
             "target": "linux-arm64-cpu",
             "artifact_base64": "not-base64",
             "explanation": "public official run should still be rejected"
