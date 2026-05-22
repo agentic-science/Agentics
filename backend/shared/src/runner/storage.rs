@@ -7,7 +7,7 @@ use bollard::query_parameters::ListContainersOptionsBuilder;
 use fs2::FileExt;
 
 use crate::config::{Config, RunnerWritableStorageMode};
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::zip_project::ZipProjectPhaseLimits;
 
 #[derive(Debug, Clone)]
@@ -54,7 +54,7 @@ impl RunnerStorage {
             phase_mount_root: config.runner_phase_mount_root.as_ref().map(PathBuf::from),
             slot_classes_mb: config
                 .runner_writable_slot_classes_mb()
-                .map_err(|e| AppError::Runner(e.to_string()))?,
+                .map_err(|e| ServiceError::Runner(e.to_string()))?,
             docker_layer_quota: config.runner_docker_layer_quota,
         })
     }
@@ -84,7 +84,7 @@ impl RunnerStorage {
             }
             RunnerWritableStorageMode::XfsProjectQuotaSlots => {
                 let phase_mount_root = self.phase_mount_root.as_ref().ok_or_else(|| {
-                    AppError::Runner(
+                    ServiceError::Runner(
                         "AGENTICS_RUNNER_PHASE_MOUNT_ROOT must be configured".to_string(),
                     )
                 })?;
@@ -170,7 +170,7 @@ fn choose_slot_class(classes: &[u64], disk_limit_mb: u64) -> Result<u64> {
         .copied()
         .find(|class_mb| *class_mb >= disk_limit_mb)
         .ok_or_else(|| {
-            AppError::Runner(format!(
+            ServiceError::Runner(format!(
                 "no bounded writable slot class can satisfy {disk_limit_mb} MiB; configure AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB and rerun DGX storage preparation"
             ))
         })
@@ -190,7 +190,7 @@ async fn acquire_slot(
     let phase_label = phase.dir_name().to_string();
     let slots = list_slot_dirs(&slot_class_root)?;
     if slots.is_empty() {
-        return Err(AppError::Runner(format!(
+        return Err(ServiceError::Runner(format!(
             "no bounded writable slots found for phase `{phase_label}` class {slot_class_mb} MiB at {}",
             slot_class_root.display()
         )));
@@ -201,7 +201,7 @@ async fn acquire_slot(
         let lock_attempt_slot_path = slot_path.clone();
         let maybe_lock = tokio::task::spawn_blocking(move || lock_slot(&lock_attempt_slot_path))
             .await
-            .map_err(|e| AppError::Internal(format!("bounded slot lock task failed: {e}")))??;
+            .map_err(|e| ServiceError::Internal(format!("bounded slot lock task failed: {e}")))??;
         let Some(lock_file) = maybe_lock else {
             continue;
         };
@@ -217,7 +217,7 @@ async fn acquire_slot(
             tokio::task::spawn_blocking(move || reset_slot_work_path(&cleanup_work_path))
                 .await
                 .map_err(|e| {
-                    AppError::Internal(format!("bounded slot cleanup task failed: {e}"))
+                    ServiceError::Internal(format!("bounded slot cleanup task failed: {e}"))
                 })?;
         if let Err(error) = cleanup_result {
             cleanup_failures = cleanup_failures.saturating_add(1);
@@ -242,12 +242,12 @@ async fn acquire_slot(
     }
 
     if cleanup_failures > 0 {
-        return Err(AppError::RunnerCapacity(format!(
+        return Err(ServiceError::RunnerCapacity(format!(
             "bounded writable slots are unavailable for phase `{phase_label}` class {slot_class_mb} MiB; {cleanup_failures} slot cleanup attempt(s) failed and need operator repair"
         )));
     }
 
-    Err(AppError::RunnerCapacity(format!(
+    Err(ServiceError::RunnerCapacity(format!(
         "all bounded writable slots are busy for phase `{phase_label}` class {slot_class_mb} MiB"
     )))
 }
@@ -264,7 +264,7 @@ fn lock_slot(slot_path: &Path) -> Result<Option<fs::File>> {
     match lock_file.try_lock_exclusive() {
         Ok(()) => Ok(Some(lock_file)),
         Err(error) if error.kind() == ErrorKind::WouldBlock => Ok(None),
-        Err(error) => Err(AppError::Io(error)),
+        Err(error) => Err(ServiceError::Io(error)),
     }
 }
 
@@ -273,7 +273,7 @@ fn reset_slot_work_path(work_path: &Path) -> Result<()> {
     if let Err(error) = fs::remove_dir_all(work_path)
         && error.kind() != ErrorKind::NotFound
     {
-        return Err(AppError::Io(error));
+        return Err(ServiceError::Io(error));
     }
     fs::create_dir_all(work_path)?;
     Ok(())
@@ -295,7 +295,7 @@ async fn slot_has_live_runner_container(docker: &Docker, slot_path: &Path) -> Re
     let containers = docker
         .list_containers(Some(options))
         .await
-        .map_err(|e| AppError::Docker(format!("list runner containers failed: {e}")))?;
+        .map_err(|e| ServiceError::Docker(format!("list runner containers failed: {e}")))?;
     Ok(!containers.is_empty())
 }
 
@@ -308,7 +308,7 @@ fn path_label(path: &Path) -> String {
 fn list_slot_dirs(slot_class_root: &Path) -> Result<Vec<PathBuf>> {
     let mut slots = Vec::new();
     let entries = fs::read_dir(slot_class_root).map_err(|error| {
-        AppError::Runner(format!(
+        ServiceError::Runner(format!(
             "bounded writable slot class directory is missing or unreadable at {}: {error}",
             slot_class_root.display()
         ))
@@ -347,7 +347,7 @@ mod tests {
     fn rejects_limits_without_slot_class() {
         let result = choose_slot_class(&[64, 256], 1024);
         assert!(
-            matches!(result, Err(AppError::Runner(message)) if message.contains("no bounded writable slot class"))
+            matches!(result, Err(ServiceError::Runner(message)) if message.contains("no bounded writable slot class"))
         );
     }
 

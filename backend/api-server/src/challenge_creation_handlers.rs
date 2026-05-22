@@ -10,7 +10,8 @@ use axum::{Json, extract::State, http::StatusCode};
 use tracing::warn;
 use uuid::Uuid;
 
-use shared::error::{AppError, Result};
+use crate::error::ApiResult as Result;
+use shared::error::ServiceError;
 use shared::models::challenge_creation::{
     AdminChallengePrivateAssetListResponse, ChallengeCreationManifest,
     ChallengeCreationRequestKind, ChallengeDraftCleanupResponse, ChallengeDraftListResponse,
@@ -54,10 +55,11 @@ pub async fn create_challenge_draft(
     )?;
 
     if creator.github_user_id != body.pr_author_github_user_id {
-        return Err(AppError::BadRequest(format!(
+        return Err(ServiceError::BadRequest(format!(
             "PR author GitHub user id {} does not match authenticated creator GitHub user id {}",
             body.pr_author_github_user_id, creator.github_user_id
-        )));
+        ))
+        .into());
     }
     let manifest_sha256 = challenge_creation::normalized_manifest_sha256(&body.manifest)?;
     let draft_id = ChallengeDraftId::generate();
@@ -95,7 +97,7 @@ pub async fn create_challenge_draft(
         },
     )
     .await
-    .map_err(map_unique_conflict)?;
+    .map_err(ServiceError::unique_violation_as_conflict)?;
 
     Ok((StatusCode::CREATED, Json(draft.into())))
 }
@@ -108,9 +110,9 @@ pub async fn get_challenge_draft(
 ) -> Result<Json<CreatorChallengeDraftResponse>> {
     let draft = db::get_challenge_draft(&state.db, draft_id.as_str())
         .await?
-        .ok_or(AppError::NotFound)?;
+        .ok_or(ServiceError::NotFound)?;
     if draft.creator_agent_id != creator.agent_id {
-        return Err(AppError::NotFound);
+        return Err(ServiceError::NotFound.into());
     }
     Ok(Json(draft.into()))
 }
@@ -124,9 +126,9 @@ pub async fn upload_challenge_private_asset(
 ) -> Result<(StatusCode, Json<ChallengePrivateAssetResponse>)> {
     let draft = db::get_challenge_draft(&state.db, draft_id.as_str())
         .await?
-        .ok_or(AppError::NotFound)?;
+        .ok_or(ServiceError::NotFound)?;
     if draft.creator_agent_id != creator.agent_id {
-        return Err(AppError::NotFound);
+        return Err(ServiceError::NotFound.into());
     }
     if matches!(
         draft.status,
@@ -136,7 +138,7 @@ pub async fn upload_challenge_private_asset(
             | ChallengeDraftStatus::Published
             | ChallengeDraftStatus::Abandoned
     ) {
-        return Err(AppError::Conflict);
+        return Err(ServiceError::Conflict.into());
     }
 
     let requirement = draft
@@ -145,30 +147,32 @@ pub async fn upload_challenge_private_asset(
         .iter()
         .find(|asset| asset.asset_name == body.asset_name)
         .ok_or_else(|| {
-            AppError::BadRequest(format!(
+            ServiceError::BadRequest(format!(
                 "private asset `{}` is not declared in the challenge manifest",
                 body.asset_name
             ))
         })?;
     if requirement.kind != body.kind {
-        return Err(AppError::BadRequest(format!(
+        return Err(ServiceError::BadRequest(format!(
             "private asset `{}` kind mismatch",
             body.asset_name
-        )));
+        ))
+        .into());
     }
 
-    let asset_bytes = base64_decode(&body.asset_base64).ok_or(AppError::Base64)?;
+    let asset_bytes = base64_decode(&body.asset_base64).ok_or(ServiceError::Base64)?;
     let asset_size_bytes = u64::try_from(asset_bytes.len()).map_err(|_| {
-        AppError::BadRequest("private asset size exceeds supported range".to_string())
+        ServiceError::BadRequest("private asset size exceeds supported range".to_string())
     })?;
     if asset_size_bytes > state.config.challenge_private_asset_bytes_per_draft {
-        return Err(AppError::BadRequest(format!(
+        return Err(ServiceError::BadRequest(format!(
             "private asset must be at most {} bytes",
             state.config.challenge_private_asset_bytes_per_draft
-        )));
+        ))
+        .into());
     }
     let asset_size_bytes_i64 = i64::try_from(asset_size_bytes).map_err(|_| {
-        AppError::BadRequest("private asset size exceeds supported database range".to_string())
+        ServiceError::BadRequest("private asset size exceeds supported database range".to_string())
     })?;
     validate_private_asset_zip_upload(
         &asset_bytes,
@@ -207,14 +211,14 @@ pub async fn upload_challenge_private_asset(
         state.config.challenge_private_asset_pending_timeout_minutes,
     )
     .await
-    .map_err(map_unique_conflict)?;
+    .map_err(ServiceError::unique_violation_as_conflict)?;
 
     let temporary_storage_key = match state.storage.put(&temporary_asset_key, &asset_bytes).await {
         Ok(key) => key,
         Err(error) => {
             fail_challenge_private_asset_record(&state, &asset_row_id, &error.to_string()).await;
             cleanup_storage_key(&state, &temporary_asset_key).await;
-            return Err(error);
+            return Err(error.into());
         }
     };
 
@@ -231,7 +235,7 @@ pub async fn upload_challenge_private_asset(
     {
         fail_challenge_private_asset_record(&state, &asset_row_id, &error.to_string()).await;
         cleanup_storage_key(&state, &temporary_storage_key).await;
-        return Err(error);
+        return Err(error.into());
     }
     let asset = match db::activate_challenge_private_asset_with_audit(
         &state.db,
@@ -244,7 +248,7 @@ pub async fn upload_challenge_private_asset(
         Ok(asset) => asset,
         Err(error) => {
             cleanup_storage_key(&state, &storage_key).await;
-            return Err(error);
+            return Err(error.into());
         }
     };
 
@@ -263,7 +267,7 @@ async fn validate_private_asset_zip_upload(
         validate_private_asset_zip_upload_blocking(&bytes, &asset_name, max_uncompressed_bytes)
     })
     .await
-    .map_err(|e| AppError::Internal(format!("private asset validation task failed: {e}")))?
+    .map_err(|e| ServiceError::Internal(format!("private asset validation task failed: {e}")))?
 }
 
 /// Inspect a private asset ZIP for envelope safety without extracting it.
@@ -306,7 +310,7 @@ async fn cleanup_unreferenced_private_asset_object(
         return Ok(());
     }
     if db::private_asset_storage_key_has_active_reference(&state.db, storage_key).await? {
-        return Err(AppError::Conflict);
+        return Err(ServiceError::Conflict.into());
     }
     cleanup_storage_key(state, storage_key).await;
     Ok(())
@@ -340,7 +344,7 @@ pub async fn list_admin_challenge_draft_private_assets(
 ) -> Result<Json<AdminChallengePrivateAssetListResponse>> {
     db::get_challenge_draft(&state.db, draft_id.as_str())
         .await?
-        .ok_or(AppError::NotFound)?;
+        .ok_or(ServiceError::NotFound)?;
     let items = db::list_challenge_private_asset_states(&state.db, draft_id.as_str()).await?;
     Ok(Json(AdminChallengePrivateAssetListResponse { items }))
 }
@@ -354,12 +358,12 @@ pub async fn validate_challenge_draft(
 ) -> Result<Json<ChallengeDraftResponse>> {
     let draft = db::get_challenge_draft(&state.db, draft_id.as_str())
         .await?
-        .ok_or(AppError::NotFound)?;
+        .ok_or(ServiceError::NotFound)?;
     if !matches!(
         draft.status,
         ChallengeDraftStatus::Draft | ChallengeDraftStatus::Validated
     ) {
-        return Err(AppError::Conflict);
+        return Err(ServiceError::Conflict.into());
     }
     let validation_limit = i64::from(state.config.challenge_draft_validations_per_day);
     let repository_path = RepositoryCheckoutPath::from_existing_dir(&body.repository_path)?;
@@ -408,7 +412,7 @@ pub async fn validate_challenge_draft(
             .await?;
             let draft = db::get_challenge_draft(&state.db, draft.id.as_str())
                 .await?
-                .ok_or(AppError::NotFound)?;
+                .ok_or(ServiceError::NotFound)?;
             Ok(Json(draft))
         }
         Err(error) => {
@@ -467,7 +471,7 @@ pub async fn abandon_challenge_draft(
     Ok(Json(
         db::get_challenge_draft(&state.db, draft_id.as_str())
             .await?
-            .ok_or(AppError::NotFound)?,
+            .ok_or(ServiceError::NotFound)?,
     ))
 }
 
@@ -493,9 +497,9 @@ pub async fn cleanup_challenge_drafts(
             state.storage.delete(temporary_storage_key).await?;
         }
         db::delete_challenge_private_asset(&state.db, asset.id.as_str()).await?;
-        purged = purged
-            .checked_add(1)
-            .ok_or_else(|| AppError::Internal("private asset purge count overflow".to_string()))?;
+        purged = purged.checked_add(1).ok_or_else(|| {
+            ServiceError::Internal("private asset purge count overflow".to_string())
+        })?;
     }
 
     Ok(Json(ChallengeDraftCleanupResponse {
@@ -515,7 +519,7 @@ pub async fn approve_challenge_draft(
         .expected_validation_bundle_sha256
         .as_ref()
         .ok_or_else(|| {
-            AppError::BadRequest(
+            ServiceError::BadRequest(
                 "expected_validation_bundle_sha256 is required when approving a draft".to_string(),
             )
         })?;
@@ -531,7 +535,7 @@ pub async fn approve_challenge_draft(
     Ok(Json(
         db::get_challenge_draft(&state.db, draft_id.as_str())
             .await?
-            .ok_or(AppError::NotFound)?,
+            .ok_or(ServiceError::NotFound)?,
     ))
 }
 
@@ -544,9 +548,9 @@ pub async fn reject_challenge_draft(
 ) -> Result<Json<ChallengeDraftResponse>> {
     let draft = db::get_challenge_draft(&state.db, draft_id.as_str())
         .await?
-        .ok_or(AppError::NotFound)?;
+        .ok_or(ServiceError::NotFound)?;
     if draft.status == ChallengeDraftStatus::Published {
-        return Err(AppError::Conflict);
+        return Err(ServiceError::Conflict.into());
     }
     let audit_event = db::CreateChallengeDraftAuditEventInput {
         event_id: ChallengeDraftAuditEventId::generate(),
@@ -568,7 +572,7 @@ pub async fn reject_challenge_draft(
     Ok(Json(
         db::get_challenge_draft(&state.db, draft.id.as_str())
             .await?
-            .ok_or(AppError::NotFound)?,
+            .ok_or(ServiceError::NotFound)?,
     ))
 }
 
@@ -591,7 +595,7 @@ pub async fn publish_challenge_draft(
         return Ok(Json(draft));
     }
     let publish_claim_id = claim.publish_claim_id.ok_or_else(|| {
-        AppError::Internal("publishing draft claim missing publish claim id".to_string())
+        ServiceError::Internal("publishing draft claim missing publish claim id".to_string())
     })?;
     let publish_result = publish_claimed_challenge_draft(
         &state,
@@ -615,7 +619,7 @@ pub async fn publish_challenge_draft(
     Ok(Json(
         db::get_challenge_draft(&state.db, draft.id.as_str())
             .await?
-            .ok_or(AppError::NotFound)?,
+            .ok_or(ServiceError::NotFound)?,
     ))
 }
 
@@ -632,12 +636,13 @@ async fn publish_claimed_challenge_draft(
     let approved_bundle_sha256 = draft
         .approved_bundle_sha256
         .as_ref()
-        .ok_or_else(|| AppError::Conflict)?;
+        .ok_or_else(|| ServiceError::Conflict)?;
     if *approved_bundle_sha256 != bundle_sha256 {
-        return Err(AppError::Validation(
+        return Err(ServiceError::Validation(
             "challenge draft content changed after approval; validate and approve the draft again before publishing"
                 .to_string(),
-        ));
+        )
+        .into());
     }
     let proposal_root = repository_path
         .as_path()
@@ -750,7 +755,7 @@ async fn prepare_and_publish_new_challenge_draft(
         shared::models::paths::ManagedBundlePath::from_existing_dir(ctx.final_public_bundle_path)?;
     let managed_statement_path =
         shared::models::paths::ManagedStatementPath::from_existing_file(&statement_path)?;
-    db::publish_new_challenge_draft(
+    Ok(db::publish_new_challenge_draft(
         &state.db,
         &db::PublishNewChallengeDraftInput {
             draft_id: ctx.draft.id.clone(),
@@ -769,17 +774,7 @@ async fn prepare_and_publish_new_challenge_draft(
             bundle_sha256: ctx.bundle_sha256,
         },
     )
-    .await
-}
-
-/// Maps database unique-constraint failures to the API conflict error used by draft creation.
-fn map_unique_conflict(error: AppError) -> AppError {
-    match error {
-        AppError::Database(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
-            AppError::Conflict
-        }
-        error => error,
-    }
+    .await?)
 }
 
 /// Ensures a draft path follows the canonical `challenges/{challenge_name}` repository layout.
@@ -789,9 +784,9 @@ fn validate_challenge_draft_path(
 ) -> Result<()> {
     let expected = format!("challenges/{challenge_name}");
     if path.as_str() != expected {
-        return Err(AppError::BadRequest(format!(
-            "challenge_path must be `{expected}`"
-        )));
+        return Err(
+            ServiceError::BadRequest(format!("challenge_path must be `{expected}`")).into(),
+        );
     }
     Ok(())
 }
@@ -810,16 +805,18 @@ async fn validate_draft_repository(
         challenge_creation::validate_challenge_creation_repository(&proposal_root).await?;
     let manifest_sha256 = challenge_creation::normalized_manifest_sha256(&manifest)?;
     if manifest_sha256 != draft.manifest_sha256 {
-        return Err(AppError::Validation(format!(
+        return Err(ServiceError::Validation(format!(
             "manifest hash mismatch: draft has {}, repository has {}",
             draft.manifest_sha256, manifest_sha256
-        )));
+        ))
+        .into());
     }
     if manifest.challenge_name != draft.challenge_name {
-        return Err(AppError::Validation(format!(
+        return Err(ServiceError::Validation(format!(
             "manifest challenge_name mismatch: draft has {}, repository has {}",
             draft.challenge_name, manifest.challenge_name
-        )));
+        ))
+        .into());
     }
     let bundle_sha256 = match manifest.request {
         ChallengeCreationRequestKind::ArchiveChallenge => {
@@ -846,7 +843,7 @@ async fn validate_and_hash_runtime_bundle(
 ) -> Result<Sha256Digest> {
     let validation_claim_id = ChallengeDraftPublishClaimId::generate();
     let runtime_bundle_path = temporary_runtime_bundle_path(state, draft, &validation_claim_id);
-    let validation = async {
+    let validation: Result<Sha256Digest> = async {
         assemble_runtime_bundle(state, draft, proposal_root, manifest, &runtime_bundle_path)
             .await?;
         challenge_bundle::validate_challenge_bundle(&runtime_bundle_path).await?;
@@ -854,7 +851,10 @@ async fn validate_and_hash_runtime_bundle(
         if state.config.requires_digest_pinned_images() {
             challenge_bundle::validate_digest_pinned_images(&spec)?;
         }
-        challenge_creation::draft_review_runtime_bundle_sha256(&runtime_bundle_path, manifest).await
+        Ok(
+            challenge_creation::draft_review_runtime_bundle_sha256(&runtime_bundle_path, manifest)
+                .await?,
+        )
     }
     .await;
     cleanup_runtime_bundle(&runtime_bundle_path).await;
@@ -871,26 +871,28 @@ async fn ensure_repository_checkout_matches_commit(
     tokio::task::spawn_blocking(move || {
         let head = run_git(&repository_path, &["rev-parse", "--verify", "HEAD"])?;
         let head = GitCommitSha::try_new(head.trim()).map_err(|e| {
-            AppError::Validation(format!("repository HEAD is not a valid Git commit: {e}"))
+            ServiceError::Validation(format!("repository HEAD is not a valid Git commit: {e}"))
         })?;
         if head != expected_commit {
-            return Err(AppError::Validation(format!(
+            return Err(ServiceError::Validation(format!(
                 "repository HEAD commit {} does not match reviewed draft commit {}",
                 head, expected_commit
-            )));
+            ))
+            .into());
         }
 
         let status = run_git(&repository_path, &["status", "--porcelain=v1"])?;
         if !status.trim().is_empty() {
-            return Err(AppError::Validation(
+            return Err(ServiceError::Validation(
                 "repository checkout has uncommitted changes; validate and publish from a clean checkout at the reviewed commit"
                     .to_string(),
-            ));
+            )
+            .into());
         }
         Ok(())
     })
     .await
-    .map_err(|e| AppError::Internal(format!("repository Git inspection task failed: {e}")))?
+    .map_err(|e| ServiceError::Internal(format!("repository Git inspection task failed: {e}")))?
 }
 
 /// Run one Git command inside the reviewed repository checkout and return stdout as UTF-8.
@@ -900,16 +902,19 @@ fn run_git(repository_path: &Path, args: &[&str]) -> Result<String> {
         .arg(repository_path)
         .args(args)
         .output()
-        .map_err(|e| AppError::Validation(format!("failed to inspect repository with git: {e}")))?;
+        .map_err(|e| {
+            ServiceError::Validation(format!("failed to inspect repository with git: {e}"))
+        })?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(AppError::Validation(format!(
+        return Err(ServiceError::Validation(format!(
             "failed to inspect repository with git: {}",
             stderr.trim()
-        )));
+        ))
+        .into());
     }
-    String::from_utf8(output.stdout)
-        .map_err(|e| AppError::Validation(format!("git output was not UTF-8: {e}")))
+    Ok(String::from_utf8(output.stdout)
+        .map_err(|e| ServiceError::Validation(format!("git output was not UTF-8: {e}")))?)
 }
 
 /// Builds the managed runtime bundle by combining public bundle files and private overlays.
@@ -921,7 +926,7 @@ async fn assemble_runtime_bundle(
     runtime_bundle_path: &Path,
 ) -> Result<()> {
     let bundle_path = manifest.bundle_path.as_ref().ok_or_else(|| {
-        AppError::BadRequest("bundle_path is required for publishable drafts".to_string())
+        ServiceError::BadRequest("bundle_path is required for publishable drafts".to_string())
     })?;
     let public_bundle_path = proposal_root.join(bundle_path.as_path());
     let public_spec = challenge_bundle::read_challenge_bundle_spec(&public_bundle_path).await?;
@@ -952,15 +957,15 @@ async fn assemble_public_bundle(
     public_runtime_bundle_path: &Path,
 ) -> Result<()> {
     let bundle_path = manifest.bundle_path.as_ref().ok_or_else(|| {
-        AppError::BadRequest("bundle_path is required for publishable drafts".to_string())
+        ServiceError::BadRequest("bundle_path is required for publishable drafts".to_string())
     })?;
     let public_bundle_path = proposal_root.join(bundle_path.as_path());
-    challenge_bundle::copy_challenge_bundle_dir(
+    Ok(challenge_bundle::copy_challenge_bundle_dir(
         &public_bundle_path,
         public_runtime_bundle_path,
         true,
     )
-    .await
+    .await?)
 }
 
 /// Final managed runtime-bundle path for a published draft.
@@ -1034,7 +1039,7 @@ async fn promote_runtime_bundle(
         tokio::fs::create_dir_all(parent).await?;
     }
     if tokio::fs::try_exists(final_bundle_path).await? {
-        return Err(AppError::Conflict);
+        return Err(ServiceError::Conflict.into());
     }
     tokio::fs::rename(temporary_bundle_path, final_bundle_path).await?;
     Ok(())
@@ -1066,10 +1071,11 @@ fn validate_private_assets_for_publish(
         .collect();
     for requirement in &manifest.private_assets {
         if requirement.required && !uploaded.contains(requirement.asset_name.as_str()) {
-            return Err(AppError::BadRequest(format!(
+            return Err(ServiceError::BadRequest(format!(
                 "required private asset `{}` has not been uploaded",
                 requirement.asset_name
-            )));
+            ))
+            .into());
         }
     }
 
@@ -1088,10 +1094,11 @@ fn validate_private_assets_for_publish(
         .iter()
         .any(|asset| asset.kind == ChallengePrivateAssetKind::PrivateBenchmarkData);
     if uses_static_private_benchmark && !private_benchmark_uploaded {
-        return Err(AppError::BadRequest(
+        return Err(ServiceError::BadRequest(
             "static official benchmark challenges must upload a private_benchmark_data asset"
                 .to_string(),
-        ));
+        )
+        .into());
     }
 
     Ok(())
@@ -1118,10 +1125,11 @@ async fn validate_private_asset_required_paths(
             if tokio::fs::try_exists(&path).await? {
                 continue;
             }
-            return Err(AppError::BadRequest(format!(
+            return Err(ServiceError::BadRequest(format!(
                 "private asset `{}` did not provide required runtime path `{required_path}`",
                 requirement.asset_name
-            )));
+            ))
+            .into());
         }
     }
 
@@ -1147,7 +1155,7 @@ async fn extract_private_asset_overlay(
         )
     })
     .await
-    .map_err(|e| AppError::Internal(format!("private asset extraction task failed: {e}")))?
+    .map_err(|e| ServiceError::Internal(format!("private asset extraction task failed: {e}")))?
 }
 
 /// Expands a private asset ZIP while enforcing containment, size, and no-overwrite rules.
@@ -1163,7 +1171,7 @@ fn extract_private_asset_overlay_blocking(
         MAX_PRIVATE_ASSET_FILE_COUNT,
         max_uncompressed_bytes,
     );
-    extract_zip_bytes_to_dir(bytes, target_dir, &policy)
+    Ok(extract_zip_bytes_to_dir(bytes, target_dir, &policy)?)
 }
 
 /// Returns the trimmed message only when it carries non-whitespace content.

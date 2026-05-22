@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde_json::Value;
 use sqlx::{PgPool, Row};
 
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::models::challenge_creation::{
     AdminChallengePrivateAssetResponse, ChallengeCreationManifest, ChallengeCreationRequestKind,
     ChallengeDraftResponse, ChallengeDraftStatus, ChallengeDraftValidationRecordResponse,
@@ -96,7 +96,7 @@ pub(super) fn row_to_draft_response(
 ) -> Result<ChallengeDraftResponse> {
     let manifest_json: Value = row.try_get("manifest_json")?;
     let manifest: ChallengeCreationManifest =
-        serde_json::from_value(manifest_json).map_err(|e| AppError::Internal(e.to_string()))?;
+        serde_json::from_value(manifest_json).map_err(|e| ServiceError::Internal(e.to_string()))?;
     let published_challenge_id = optional_challenge_id_from_row(&row, "published_challenge_id")?;
     let published_challenge_name = if published_challenge_id.is_some() {
         Some(challenge_name_from_row(&row, "challenge_name")?)
@@ -189,7 +189,7 @@ fn github_repo_remote_from_row(
 ) -> Result<GithubRepoRemote> {
     let value: String = row.try_get(column)?;
     GithubRepoRemote::try_new(&value)
-        .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
+        .map_err(|e| ServiceError::Internal(format!("invalid stored {column}: {e}")))
 }
 
 /// Reads github pull request url from a database row and validates its domain shape.
@@ -199,7 +199,7 @@ fn github_pull_request_url_from_row(
 ) -> Result<GithubPullRequestUrl> {
     let value: String = row.try_get(column)?;
     GithubPullRequestUrl::try_new(&value)
-        .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
+        .map_err(|e| ServiceError::Internal(format!("invalid stored {column}: {e}")))
 }
 
 /// Reads github pull request number from a database row and validates its domain shape.
@@ -209,21 +209,21 @@ fn github_pull_request_number_from_row(
 ) -> Result<GithubPullRequestNumber> {
     let value: i32 = row.try_get(column)?;
     GithubPullRequestNumber::try_new(value.to_string())
-        .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
+        .map_err(|e| ServiceError::Internal(format!("invalid stored {column}: {e}")))
 }
 
 /// Reads git commit sha from a database row and validates its domain shape.
 fn git_commit_sha_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<GitCommitSha> {
     let value: String = row.try_get(column)?;
     GitCommitSha::try_new(&value)
-        .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
+        .map_err(|e| ServiceError::Internal(format!("invalid stored {column}: {e}")))
 }
 
 /// Reads sha256 digest from a database row and validates its domain shape.
 fn sha256_digest_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<Sha256Digest> {
     let value: String = row.try_get(column)?;
     Sha256Digest::try_new(&value)
-        .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
+        .map_err(|e| ServiceError::Internal(format!("invalid stored {column}: {e}")))
 }
 
 /// Reads optional sha256 digest from a database row and validates its domain shape.
@@ -236,7 +236,7 @@ fn optional_sha256_digest_from_row(
     };
     Sha256Digest::try_new(&value)
         .map(Some)
-        .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
+        .map_err(|e| ServiceError::Internal(format!("invalid stored {column}: {e}")))
 }
 
 /// Reads storage key from a database row and validates its domain shape.
@@ -246,7 +246,7 @@ pub(super) fn storage_key_from_row(
 ) -> Result<StorageKey> {
     let value: String = row.try_get(column)?;
     StorageKey::try_new(&value)
-        .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
+        .map_err(|e| ServiceError::Internal(format!("invalid stored {column}: {e}")))
 }
 
 /// Reads an optional storage key from a database row and validates its domain shape.
@@ -259,7 +259,7 @@ pub(super) fn optional_storage_key_from_row(
     };
     StorageKey::try_new(&value)
         .map(Some)
-        .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
+        .map_err(|e| ServiceError::Internal(format!("invalid stored {column}: {e}")))
 }
 
 /// Reads repo relative path from a database row and validates its domain shape.
@@ -269,7 +269,7 @@ fn repo_relative_path_from_row(
 ) -> Result<RepoRelativePath> {
     let value: String = row.try_get(column)?;
     RepoRelativePath::try_new(&value)
-        .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
+        .map_err(|e| ServiceError::Internal(format!("invalid stored {column}: {e}")))
 }
 
 /// Converts a database row into the validation record response model.
@@ -295,7 +295,7 @@ fn request_kind_from_row(
 ) -> Result<ChallengeCreationRequestKind> {
     let value: String = row.try_get(column)?;
     ChallengeCreationRequestKind::from_storage_value(&value)
-        .ok_or_else(|| AppError::Internal(format!("unknown stored {column} `{value}`")))
+        .ok_or_else(|| ServiceError::Internal(format!("unknown stored {column} `{value}`")))
 }
 
 /// Reads draft status from a database row and validates its domain shape.
@@ -305,7 +305,7 @@ pub(super) fn draft_status_from_row(
 ) -> Result<ChallengeDraftStatus> {
     let value: String = row.try_get(column)?;
     ChallengeDraftStatus::from_storage_value(&value)
-        .ok_or_else(|| AppError::Internal(format!("unknown stored {column} `{value}`")))
+        .ok_or_else(|| ServiceError::Internal(format!("unknown stored {column} `{value}`")))
 }
 
 /// Reads validation status from a database row and validates its domain shape.
@@ -315,7 +315,7 @@ fn validation_status_from_row(
 ) -> Result<ChallengeDraftValidationStatus> {
     let value: String = row.try_get(column)?;
     ChallengeDraftValidationStatus::from_storage_value(&value)
-        .ok_or_else(|| AppError::Internal(format!("unknown stored {column} `{value}`")))
+        .ok_or_else(|| ServiceError::Internal(format!("unknown stored {column} `{value}`")))
 }
 
 /// Reads private asset status from a database row and validates its domain shape.
@@ -325,7 +325,7 @@ fn private_asset_status_from_row(
 ) -> Result<ChallengePrivateAssetStatus> {
     let value: String = row.try_get(column)?;
     ChallengePrivateAssetStatus::from_storage_value(&value)
-        .ok_or_else(|| AppError::Internal(format!("unknown stored {column} `{value}`")))
+        .ok_or_else(|| ServiceError::Internal(format!("unknown stored {column} `{value}`")))
 }
 
 /// Reads private asset kind from a database row and validates its domain shape.
@@ -335,5 +335,5 @@ fn private_asset_kind_from_row(
 ) -> Result<ChallengePrivateAssetKind> {
     let value: String = row.try_get(column)?;
     ChallengePrivateAssetKind::from_storage_value(&value)
-        .ok_or_else(|| AppError::Internal(format!("unknown stored {column} `{value}`")))
+        .ok_or_else(|| ServiceError::Internal(format!("unknown stored {column} `{value}`")))
 }

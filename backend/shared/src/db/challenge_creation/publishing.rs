@@ -1,6 +1,6 @@
 use sqlx::{PgPool, Postgres, Transaction};
 
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::models::challenge::ChallengeBundleSpec;
 use crate::models::challenge_creation::{ChallengeDraftResponse, ChallengeDraftStatus};
 use crate::models::hashes::Sha256Digest;
@@ -76,23 +76,24 @@ pub async fn claim_challenge_draft_for_publish(
             .fetch_optional(&mut *tx)
             .await?;
     let Some(current) = current else {
-        return Err(AppError::NotFound);
+        return Err(ServiceError::NotFound);
     };
-    let current = ChallengeDraftStatus::from_storage_value(&current)
-        .ok_or_else(|| AppError::Internal(format!("unknown challenge draft status `{current}`")))?;
+    let current = ChallengeDraftStatus::from_storage_value(&current).ok_or_else(|| {
+        ServiceError::Internal(format!("unknown challenge draft status `{current}`"))
+    })?;
     match current {
         ChallengeDraftStatus::Published => {
             tx.commit().await?;
             let draft = get_challenge_draft(pool, draft_id)
                 .await?
-                .ok_or(AppError::NotFound)?;
+                .ok_or(ServiceError::NotFound)?;
             return Ok(ClaimedChallengeDraftForPublish {
                 draft,
                 publish_claim_id: None,
             });
         }
         ChallengeDraftStatus::Approved => {}
-        _ => return Err(AppError::Conflict),
+        _ => return Err(ServiceError::Conflict),
     }
 
     let publish_claim_id = ChallengeDraftPublishClaimId::generate();
@@ -112,13 +113,13 @@ pub async fn claim_challenge_draft_for_publish(
     .execute(&mut *tx)
     .await?;
     if claim.rows_affected() != 1 {
-        return Err(AppError::Conflict);
+        return Err(ServiceError::Conflict);
     }
     tx.commit().await?;
 
     let draft = get_challenge_draft(pool, draft_id)
         .await?
-        .ok_or(AppError::NotFound)?;
+        .ok_or(ServiceError::NotFound)?;
     Ok(ClaimedChallengeDraftForPublish {
         draft,
         publish_claim_id: Some(publish_claim_id),
@@ -175,7 +176,7 @@ pub async fn fail_challenge_draft_publish(
     .execute(pool)
     .await?;
     if result.rows_affected() == 0 {
-        return Err(AppError::Conflict);
+        return Err(ServiceError::Conflict);
     }
     Ok(())
 }
@@ -207,7 +208,7 @@ pub async fn mark_challenge_draft_published(
     .await?;
 
     if result.rows_affected() == 0 {
-        return Err(AppError::Conflict);
+        return Err(ServiceError::Conflict);
     }
     Ok(())
 }
@@ -324,7 +325,7 @@ async fn resolve_active_challenge_id_by_name_tx(
     .fetch_optional(&mut **tx)
     .await?;
 
-    let row = row.ok_or(AppError::NotFound)?;
+    let row = row.ok_or(ServiceError::NotFound)?;
     super::super::ids::challenge_id_from_row(&row, "challenge_id")
 }
 
@@ -348,7 +349,7 @@ async fn ensure_agent_owns_challenge_tx(
     .fetch_one(&mut **tx)
     .await?;
     if !owns_challenge {
-        return Err(AppError::Forbidden(
+        return Err(ServiceError::Forbidden(
             "only a challenge owner can publish an archive draft for this challenge".to_string(),
         ));
     }
@@ -383,7 +384,7 @@ async fn mark_challenge_draft_published_tx(
     .await?;
 
     if result.rows_affected() == 0 {
-        return Err(AppError::Conflict);
+        return Err(ServiceError::Conflict);
     }
     Ok(())
 }
@@ -406,7 +407,7 @@ async fn archive_challenge_tx(
     .await?;
 
     if result.rows_affected() == 0 {
-        return Err(AppError::NotFound);
+        return Err(ServiceError::NotFound);
     }
     Ok(())
 }

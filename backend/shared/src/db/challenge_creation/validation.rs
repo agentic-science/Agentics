@@ -1,6 +1,6 @@
 use sqlx::{PgPool, Postgres, Transaction};
 
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::models::challenge_creation::{
     ChallengeDraftStatus, ChallengeDraftValidationRecordResponse, ChallengeDraftValidationStatus,
 };
@@ -56,15 +56,16 @@ pub async fn begin_challenge_draft_validation(
     .fetch_optional(&mut *tx)
     .await?;
     let Some((status, active_validation_record_id)) = status else {
-        return Err(AppError::NotFound);
+        return Err(ServiceError::NotFound);
     };
-    let status = ChallengeDraftStatus::from_storage_value(&status)
-        .ok_or_else(|| AppError::Internal(format!("unknown challenge draft status `{status}`")))?;
+    let status = ChallengeDraftStatus::from_storage_value(&status).ok_or_else(|| {
+        ServiceError::Internal(format!("unknown challenge draft status `{status}`"))
+    })?;
     if !matches!(
         status,
         ChallengeDraftStatus::Draft | ChallengeDraftStatus::Validated
     ) {
-        return Err(AppError::Conflict);
+        return Err(ServiceError::Conflict);
     }
     let active_validation_record_id = if active_validation_record_id.is_some() {
         clear_stale_active_validation_tx(
@@ -84,7 +85,7 @@ pub async fn begin_challenge_draft_validation(
         active_validation_record_id
     };
     if active_validation_record_id.is_some() {
-        return Err(AppError::Conflict);
+        return Err(ServiceError::Conflict);
     }
 
     let recent_validations = count_recent_challenge_draft_validations_tx(
@@ -94,7 +95,7 @@ pub async fn begin_challenge_draft_validation(
     )
     .await?;
     if recent_validations >= validation_limit {
-        return Err(AppError::TooManyRequests(format!(
+        return Err(ServiceError::TooManyRequests(format!(
             "challenge draft validation quota exceeded for `{}`: {} of {} validations used in the last 24 hours",
             input.draft_id, recent_validations, validation_limit
         )));
@@ -131,7 +132,7 @@ pub async fn begin_challenge_draft_validation(
     .execute(&mut *tx)
     .await?;
     if claim.rows_affected() != 1 {
-        return Err(AppError::Conflict);
+        return Err(ServiceError::Conflict);
     }
 
     tx.commit().await?;
@@ -171,7 +172,7 @@ pub async fn finish_challenge_draft_validation(
         ChallengeDraftValidationStatus::Passed => ChallengeDraftStatus::Validated,
         ChallengeDraftValidationStatus::Failed => ChallengeDraftStatus::Draft,
         ChallengeDraftValidationStatus::Running => {
-            return Err(AppError::Internal(
+            return Err(ServiceError::Internal(
                 "running draft validation cannot finish as running".to_string(),
             ));
         }
@@ -197,7 +198,7 @@ pub async fn finish_challenge_draft_validation(
     .fetch_optional(&mut *tx)
     .await?;
     let Some(row) = row else {
-        return Err(AppError::Conflict);
+        return Err(ServiceError::Conflict);
     };
 
     let update = sqlx::query(
@@ -227,7 +228,7 @@ pub async fn finish_challenge_draft_validation(
     .await?;
     if update.rows_affected() == 0 {
         tx.commit().await?;
-        return Err(AppError::Conflict);
+        return Err(ServiceError::Conflict);
     }
 
     create_challenge_draft_audit_event_tx(&mut tx, audit_event).await?;

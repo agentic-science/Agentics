@@ -8,7 +8,7 @@ use std::str::FromStr;
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 
 /// User-facing validation message for repository-relative paths.
 pub const REPO_RELATIVE_PATH_ERROR_MESSAGE: &str =
@@ -57,7 +57,7 @@ impl AsRef<Path> for RepoRelativePath {
 }
 
 impl FromStr for RepoRelativePath {
-    type Err = AppError;
+    type Err = ServiceError;
 
     /// Handles from str for this module.
     fn from_str(value: &str) -> Result<Self> {
@@ -150,7 +150,7 @@ macro_rules! define_relative_path_type {
         }
 
         impl FromStr for $type_name {
-            type Err = AppError;
+            type Err = ServiceError;
 
             /// Handles from str for this module.
             fn from_str(value: &str) -> Result<Self> {
@@ -273,7 +273,7 @@ macro_rules! define_managed_path_type {
             /// Borrow the canonical filesystem path as UTF-8 for storage.
             pub fn as_str(&self) -> Result<&str> {
                 self.0.to_str().ok_or_else(|| {
-                    AppError::Internal(format!("{} is not valid UTF-8", $field))
+                    ServiceError::Internal(format!("{} is not valid UTF-8", $field))
                 })
             }
         }
@@ -348,7 +348,7 @@ define_managed_path_type!(
 fn canonical_existing_dir(value: &str, field: &str) -> Result<PathBuf> {
     let value = value.trim();
     if value.is_empty() || value.chars().any(|c| c.is_control()) {
-        return Err(AppError::BadRequest(format!(
+        return Err(ServiceError::BadRequest(format!(
             "{field} must be a valid directory path"
         )));
     }
@@ -358,12 +358,14 @@ fn canonical_existing_dir(value: &str, field: &str) -> Result<PathBuf> {
 /// Handles canonical existing dir path for this module.
 fn canonical_existing_dir_path(path: &Path, field: &str) -> Result<PathBuf> {
     let canonical = std::fs::canonicalize(path).map_err(|e| {
-        AppError::BadRequest(format!("{field} does not exist or cannot be resolved: {e}"))
+        ServiceError::BadRequest(format!("{field} does not exist or cannot be resolved: {e}"))
     })?;
     let metadata = std::fs::metadata(&canonical)
-        .map_err(|e| AppError::BadRequest(format!("{field} cannot be inspected: {e}")))?;
+        .map_err(|e| ServiceError::BadRequest(format!("{field} cannot be inspected: {e}")))?;
     if !metadata.is_dir() {
-        return Err(AppError::BadRequest(format!("{field} must be a directory")));
+        return Err(ServiceError::BadRequest(format!(
+            "{field} must be a directory"
+        )));
     }
     Ok(canonical)
 }
@@ -371,12 +373,12 @@ fn canonical_existing_dir_path(path: &Path, field: &str) -> Result<PathBuf> {
 /// Handles canonical existing file path for this module.
 fn canonical_existing_file_path(path: &Path, field: &str) -> Result<PathBuf> {
     let canonical = std::fs::canonicalize(path).map_err(|e| {
-        AppError::BadRequest(format!("{field} does not exist or cannot be resolved: {e}"))
+        ServiceError::BadRequest(format!("{field} does not exist or cannot be resolved: {e}"))
     })?;
     let metadata = std::fs::metadata(&canonical)
-        .map_err(|e| AppError::BadRequest(format!("{field} cannot be inspected: {e}")))?;
+        .map_err(|e| ServiceError::BadRequest(format!("{field} cannot be inspected: {e}")))?;
     if !metadata.is_file() {
-        return Err(AppError::BadRequest(format!("{field} must be a file")));
+        return Err(ServiceError::BadRequest(format!("{field} must be a file")));
     }
     Ok(canonical)
 }
@@ -392,13 +394,13 @@ fn validate_relative_path(value: &str) -> Result<String> {
             .bytes()
             .any(|byte| byte.is_ascii_whitespace() || byte.is_ascii_control())
     {
-        return Err(AppError::BadRequest(
+        return Err(ServiceError::BadRequest(
             REPO_RELATIVE_PATH_ERROR_MESSAGE.to_string(),
         ));
     }
     let path = Path::new(value);
     if path.is_absolute() {
-        return Err(AppError::BadRequest(
+        return Err(ServiceError::BadRequest(
             REPO_RELATIVE_PATH_ERROR_MESSAGE.to_string(),
         ));
     }
@@ -408,7 +410,7 @@ fn validate_relative_path(value: &str) -> Result<String> {
         match component {
             Component::Normal(part) => {
                 let Some(part) = part.to_str() else {
-                    return Err(AppError::BadRequest(
+                    return Err(ServiceError::BadRequest(
                         REPO_RELATIVE_PATH_ERROR_MESSAGE.to_string(),
                     ));
                 };
@@ -417,21 +419,21 @@ fn validate_relative_path(value: &str) -> Result<String> {
                         byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.')
                     })
                 {
-                    return Err(AppError::BadRequest(
+                    return Err(ServiceError::BadRequest(
                         REPO_RELATIVE_PATH_ERROR_MESSAGE.to_string(),
                     ));
                 }
                 parts.push(part);
             }
             _ => {
-                return Err(AppError::BadRequest(
+                return Err(ServiceError::BadRequest(
                     REPO_RELATIVE_PATH_ERROR_MESSAGE.to_string(),
                 ));
             }
         }
     }
     if parts.is_empty() || parts.join("/") != value {
-        return Err(AppError::BadRequest(
+        return Err(ServiceError::BadRequest(
             REPO_RELATIVE_PATH_ERROR_MESSAGE.to_string(),
         ));
     }

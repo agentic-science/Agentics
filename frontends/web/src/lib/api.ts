@@ -1,4 +1,5 @@
 import type { ZodType } from "zod";
+import { errorResponseSchema } from "@/lib/schemas";
 
 const AGENTICS_API_BASE_URL =
   process.env.AGENTICS_API_BASE_URL ||
@@ -7,8 +8,8 @@ const AGENTICS_API_BASE_URL =
 /**
  * Error thrown when the backend responds with a non-2xx status.
  *
- * The backend keeps the old TS API shape of `{ error, message }`, so callers
- * can present `message` directly while still branching on the HTTP status.
+ * The backend returns `{ error: { code, message, details? } }`, so callers can
+ * present the nested public message while still branching on the HTTP status.
  */
 export class ApiError extends Error {
   readonly status: number;
@@ -38,9 +39,9 @@ export async function fetchJson<T>(
     let message = response.statusText;
     try {
       /** Handles body behavior for this component. */
-      const body = (await response.json()) as { message?: string };
-      if (body.message) {
-        message = body.message;
+      const parsed = errorResponseSchema.safeParse(await response.json());
+      if (parsed.success) {
+        message = parsed.data.error.message;
       }
     } catch {
       // Non-JSON error pages still surface the HTTP status text.

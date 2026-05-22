@@ -18,6 +18,7 @@
 pub mod admin_auth_throttle;
 pub mod auth_handlers;
 pub mod challenge_creation_handlers;
+pub mod error;
 pub mod extractors;
 pub mod handlers;
 mod pioneer_code_security;

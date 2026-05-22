@@ -1,11 +1,13 @@
 //! Shared text validation for public request and manifest fields.
 
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 
 /// Validate that a string field contains visible non-whitespace content.
 pub fn require_non_empty(value: &str, field: &str) -> Result<()> {
     if value.trim().is_empty() {
-        return Err(AppError::Validation(format!("{field} must not be empty")));
+        return Err(ServiceError::Validation(format!(
+            "{field} must not be empty"
+        )));
     }
 
     Ok(())
@@ -14,12 +16,12 @@ pub fn require_non_empty(value: &str, field: &str) -> Result<()> {
 /// Validate display text that is bounded by UTF-8 bytes and excludes binary controls.
 pub fn validate_bounded_display_text(value: &str, field: &str, max_bytes: usize) -> Result<()> {
     if value.len() > max_bytes {
-        return Err(AppError::Validation(format!(
+        return Err(ServiceError::Validation(format!(
             "{field} must be at most {max_bytes} UTF-8 bytes"
         )));
     }
     if value.chars().any(is_disallowed_display_text_char) {
-        return Err(AppError::Validation(format!(
+        return Err(ServiceError::Validation(format!(
             "{field} must not contain non-text control characters"
         )));
     }

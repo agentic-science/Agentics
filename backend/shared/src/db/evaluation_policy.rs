@@ -2,7 +2,7 @@ use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use chrono::{DateTime, Utc};
 
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::models::challenge::{ChallengeBundleSpec, ChallengeEligibilityType};
 use crate::models::evaluation::ScoringMode;
 use crate::models::ids::{AgentId, ChallengeId};
@@ -40,9 +40,9 @@ pub async fn ensure_published_challenge_supports_eval_type(
 ) -> Result<PublishedChallengeAdmission> {
     let challenge = get_published_challenge(pool, challenge_id).await?;
     let challenge =
-        challenge.ok_or_else(|| AppError::BadRequest("challenge not found".to_string()))?;
+        challenge.ok_or_else(|| ServiceError::BadRequest("challenge not found".to_string()))?;
     let spec: ChallengeBundleSpec = serde_json::from_value(challenge.spec_json)
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+        .map_err(|e| ServiceError::Internal(e.to_string()))?;
     ensure_challenge_supports_eval_type(
         pool,
         &challenge.challenge_id,
@@ -87,16 +87,16 @@ fn ensure_target_supports_eval_type(
     eval_type: ScoringMode,
 ) -> Result<()> {
     let target = spec.target(target).ok_or_else(|| {
-        AppError::BadRequest(format!("challenge does not support target `{target}`"))
+        ServiceError::BadRequest(format!("challenge does not support target `{target}`"))
     })?;
 
     if eval_type == ScoringMode::Validation && !target.validation_enabled {
-        return Err(AppError::BadRequest(
+        return Err(ServiceError::BadRequest(
             "validation pass is disabled for this challenge and target".to_string(),
         ));
     }
     if eval_type == ScoringMode::Official && !spec.datasets.private_benchmark_enabled {
-        return Err(AppError::BadRequest(
+        return Err(ServiceError::BadRequest(
             "challenge does not have private benchmark data enabled".to_string(),
         ));
     }
@@ -123,7 +123,7 @@ pub(super) async fn lock_active_challenge_for_admission_tx(
     .fetch_optional(&mut **tx)
     .await?;
 
-    let row = row.ok_or_else(|| AppError::BadRequest("challenge not found".to_string()))?;
+    let row = row.ok_or_else(|| ServiceError::BadRequest("challenge not found".to_string()))?;
     Ok(ChallengeRecord {
         challenge_id: challenge_id_from_row(&row, "challenge_id")?,
         challenge_name: challenge_name_from_row(&row, "challenge_name")?,
@@ -165,7 +165,7 @@ pub(super) fn ensure_validation_uses_public_bundle(
         && spec.datasets.private_benchmark_enabled
         && bundle_path == public_bundle_path
     {
-        return Err(AppError::BadRequest(
+        return Err(ServiceError::BadRequest(
             "validation is unavailable because this private-benchmark challenge does not have a distinct public bundle path"
                 .to_string(),
         ));
@@ -179,14 +179,14 @@ fn ensure_challenge_accepts_submissions(spec: &ChallengeBundleSpec) -> Result<()
     let now = Utc::now();
     let starts_at = parse_required_challenge_time(&spec.starts_at, "starts_at")?;
     if now < starts_at {
-        return Err(AppError::Forbidden(
+        return Err(ServiceError::Forbidden(
             "challenge has not started yet".to_string(),
         ));
     }
     if let Some(closes_at) = parse_challenge_time(spec.closes_at.as_deref(), "closes_at")?
         && now >= closes_at
     {
-        return Err(AppError::Forbidden("challenge has closed".to_string()));
+        return Err(ServiceError::Forbidden("challenge has closed".to_string()));
     }
     Ok(())
 }
@@ -195,7 +195,7 @@ fn ensure_challenge_accepts_submissions(spec: &ChallengeBundleSpec) -> Result<()
 fn parse_required_challenge_time(value: &str, field: &str) -> Result<DateTime<Utc>> {
     DateTime::parse_from_rfc3339(value)
         .map(|date| date.with_timezone(&Utc))
-        .map_err(|e| AppError::Internal(format!("{field} is not valid RFC3339: {e}")))
+        .map_err(|e| ServiceError::Internal(format!("{field} is not valid RFC3339: {e}")))
 }
 
 /// Ensures challenge eligibility before continuing.
@@ -209,13 +209,13 @@ async fn ensure_challenge_eligibility(
         ChallengeEligibilityType::Open => Ok(()),
         ChallengeEligibilityType::PrivateShortlist => {
             if !challenge_has_shortlist(pool, challenge_id).await? {
-                return Err(AppError::Forbidden(
+                return Err(ServiceError::Forbidden(
                     "challenge requires a shortlist, but no shortlist has been uploaded yet"
                         .to_string(),
                 ));
             }
             if !agent_is_shortlisted(pool, challenge_id, agent_id).await? {
-                return Err(AppError::Forbidden(
+                return Err(ServiceError::Forbidden(
                     "agent is not eligible for this challenge".to_string(),
                 ));
             }
@@ -247,7 +247,7 @@ async fn ensure_challenge_eligibility_tx(
             .fetch_one(&mut **tx)
             .await?;
             if !has_shortlist {
-                return Err(AppError::Forbidden(
+                return Err(ServiceError::Forbidden(
                     "challenge requires a shortlist, but no shortlist has been uploaded yet"
                         .to_string(),
                 ));
@@ -267,7 +267,7 @@ async fn ensure_challenge_eligibility_tx(
             .fetch_one(&mut **tx)
             .await?;
             if !is_shortlisted {
-                return Err(AppError::Forbidden(
+                return Err(ServiceError::Forbidden(
                     "agent is not eligible for this challenge".to_string(),
                 ));
             }
@@ -283,7 +283,7 @@ fn managed_bundle_path_from_row(
 ) -> Result<crate::models::paths::ManagedBundlePath> {
     let value: String = row.try_get(column)?;
     crate::models::paths::ManagedBundlePath::from_existing_dir(value)
-        .map_err(|e| AppError::Internal(format!("stored invalid {column}: {e}")))
+        .map_err(|e| ServiceError::Internal(format!("stored invalid {column}: {e}")))
 }
 
 /// Read a managed statement path from a locked challenge row.
@@ -293,7 +293,7 @@ fn managed_statement_path_from_row(
 ) -> Result<crate::models::paths::ManagedStatementPath> {
     let value: String = row.try_get(column)?;
     crate::models::paths::ManagedStatementPath::from_existing_file(value)
-        .map_err(|e| AppError::Internal(format!("stored invalid {column}: {e}")))
+        .map_err(|e| ServiceError::Internal(format!("stored invalid {column}: {e}")))
 }
 
 /// Read an optional Moltbook post URL from a locked challenge row.
@@ -305,7 +305,7 @@ fn optional_moltbook_post_url_from_row(
     value
         .map(crate::models::urls::MoltbookPostUrl::try_new)
         .transpose()
-        .map_err(|e| AppError::Internal(format!("stored invalid {column}: {e}")))
+        .map_err(|e| ServiceError::Internal(format!("stored invalid {column}: {e}")))
 }
 
 /// Parses challenge time from an external boundary string.
@@ -314,7 +314,7 @@ fn parse_challenge_time(value: Option<&str>, field: &str) -> Result<Option<DateT
         .map(|value| {
             DateTime::parse_from_rfc3339(value)
                 .map(|date| date.with_timezone(&Utc))
-                .map_err(|e| AppError::Internal(format!("invalid challenge {field}: {e}")))
+                .map_err(|e| ServiceError::Internal(format!("invalid challenge {field}: {e}")))
         })
         .transpose()
 }

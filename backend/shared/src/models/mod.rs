@@ -27,10 +27,28 @@ mod contract_tests;
 
 use serde::{Deserialize, Serialize};
 
+use crate::error::ServiceErrorCode;
+
 /// Standard error response shape used by all API extractors and handlers.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ErrorResponse {
-    pub error: String,
+    pub error: ErrorBody,
+}
+
+/// Standard nested API error body.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct ErrorBody {
+    pub code: ServiceErrorCode,
+    pub message: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub details: Vec<ErrorDetail>,
+}
+
+/// Optional structured validation detail for one request problem.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct ErrorDetail {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub field: Option<String>,
     pub message: String,
 }
 

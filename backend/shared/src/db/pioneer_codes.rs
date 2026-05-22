@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
 
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::models::ids::{AgentId, AgentPioneerCodeId};
 use crate::models::pioneer_codes::INVALID_OR_UNAVAILABLE_PIONEER_CODE;
 
@@ -170,7 +170,7 @@ pub async fn get_pioneer_code_detail(
     .bind(id.as_str())
     .fetch_optional(pool)
     .await?
-    .ok_or(AppError::NotFound)?;
+    .ok_or(ServiceError::NotFound)?;
 
     let use_rows = sqlx::query(
         r#"
@@ -302,7 +302,7 @@ pub async fn revoke_pioneer_code(
     .fetch_optional(&mut *tx)
     .await?;
     if row.is_none() {
-        return Err(AppError::NotFound);
+        return Err(ServiceError::NotFound);
     }
 
     let agent_id_rows = sqlx::query(
@@ -335,7 +335,7 @@ pub async fn revoke_pioneer_code(
         .execute(&mut *tx)
         .await?;
         i64::try_from(result.rows_affected())
-            .map_err(|_| AppError::Internal("revoked agent count overflow".to_string()))?
+            .map_err(|_| ServiceError::Internal("revoked agent count overflow".to_string()))?
     };
 
     let revoked_token_count = if agent_ids.is_empty() {
@@ -353,7 +353,7 @@ pub async fn revoke_pioneer_code(
         .execute(&mut *tx)
         .await?;
         i64::try_from(result.rows_affected())
-            .map_err(|_| AppError::Internal("revoked token count overflow".to_string()))?
+            .map_err(|_| ServiceError::Internal("revoked token count overflow".to_string()))?
     };
 
     tx.commit().await?;
@@ -365,8 +365,8 @@ pub async fn revoke_pioneer_code(
 }
 
 /// Convert a unavailable-code condition into the public generic error.
-fn unavailable_pioneer_code() -> AppError {
-    AppError::Forbidden(INVALID_OR_UNAVAILABLE_PIONEER_CODE.to_string())
+fn unavailable_pioneer_code() -> ServiceError {
+    ServiceError::Forbidden(INVALID_OR_UNAVAILABLE_PIONEER_CODE.to_string())
 }
 
 /// Parse a pioneer-code row into the typed DB record.
@@ -374,7 +374,7 @@ fn pioneer_code_record_from_row(row: &sqlx::postgres::PgRow) -> Result<PioneerCo
     let id: String = row.try_get("id")?;
     Ok(PioneerCodeRecord {
         id: AgentPioneerCodeId::try_new(id)
-            .map_err(|e| AppError::Internal(format!("stored invalid pioneer code id: {e}")))?,
+            .map_err(|e| ServiceError::Internal(format!("stored invalid pioneer code id: {e}")))?,
         code_display: row.try_get("code_display")?,
         label: row.try_get("label")?,
         note: row.try_get("note")?,
@@ -393,7 +393,7 @@ fn pioneer_code_use_from_row(row: &sqlx::postgres::PgRow) -> Result<PioneerCodeU
     let agent_id: String = row.try_get("agent_id")?;
     Ok(PioneerCodeUseRecord {
         agent_id: AgentId::try_new(agent_id).map_err(|e| {
-            AppError::Internal(format!("stored invalid pioneer-code agent id: {e}"))
+            ServiceError::Internal(format!("stored invalid pioneer-code agent id: {e}"))
         })?,
         agent_display_name: row.try_get("agent_display_name")?,
         registration_kind: row.try_get("registration_kind")?,

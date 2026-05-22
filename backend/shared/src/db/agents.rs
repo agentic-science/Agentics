@@ -6,7 +6,7 @@ use serde_json::Value;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use crate::db::pioneer_codes::{PioneerCodeRegistrationKind, consume_pioneer_code_for_agent_tx};
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::models::ids::{AgentId, AgentTokenId};
 
 use super::ids::{agent_id_from_row, agent_token_id_from_row};
@@ -94,7 +94,7 @@ pub(crate) async fn enforce_active_agent_quota_tx(
     lock_quota_scope(tx, "global:active-agents").await?;
     let active = count_active_agents_tx(tx).await?;
     if active >= max_active_agents {
-        return Err(AppError::TooManyRequests(format!(
+        return Err(ServiceError::TooManyRequests(format!(
             "agent registration quota exceeded: {active} of {max_active_agents} active agents are already registered"
         )));
     }
@@ -242,7 +242,7 @@ pub async fn disable_agent(pool: &PgPool, agent_id: &str) -> Result<()> {
         .await?;
 
     if row.is_none() {
-        return Err(AppError::NotFound);
+        return Err(ServiceError::NotFound);
     }
 
     sqlx::query(

@@ -21,7 +21,7 @@ use shared::db::{
     refresh_evaluation_job_claim, requeue_running_evaluation_job_for_capacity,
     upsert_service_heartbeat,
 };
-use shared::error::AppError;
+use shared::error::ServiceError;
 use shared::models::evaluation::EvaluationStatus;
 use shared::models::ids::{EvaluationId, EvaluationJobId};
 use shared::runner::{
@@ -328,7 +328,7 @@ pub async fn run_worker_cycle(
                 "evaluation completed"
             );
         }
-        Err(AppError::RunnerCapacity(error_msg)) => {
+        Err(ServiceError::RunnerCapacity(error_msg)) => {
             let requeued = requeue_running_evaluation_job_for_capacity(
                 db,
                 &job.id,

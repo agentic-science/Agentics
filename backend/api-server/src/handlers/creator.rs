@@ -7,9 +7,10 @@ use axum::{
 };
 use serde::Deserialize;
 
+use crate::error::ApiResult as Result;
 use shared::challenge_creation;
 use shared::db;
-use shared::error::{AppError, Result};
+use shared::error::ServiceError;
 use shared::models::challenge::ChallengeBundleSpec;
 use shared::models::ids::{AgentId, ChallengeId, ChallengeShortlistRevisionId};
 use shared::models::names::TargetName;
@@ -69,9 +70,9 @@ pub async fn create_challenge_shortlist_revision(
     let (challenge_id, challenge_name, _) =
         resolve_creator_challenge_scope(&state.db, &creator, &id, None).await?;
     let requested_count = i64::try_from(body.agent_ids_to_add.len())
-        .map_err(|_| AppError::BadRequest("shortlist payload is too large".to_string()))?;
+        .map_err(|_| ServiceError::BadRequest("shortlist payload is too large".to_string()))?;
     let raw_json = serde_json::to_vec(&body)
-        .map_err(|e| AppError::Internal(format!("failed to encode shortlist revision: {e}")))?;
+        .map_err(|e| ServiceError::Internal(format!("failed to encode shortlist revision: {e}")))?;
     let agent_ids_to_add = normalize_shortlist_agent_ids(&body.agent_ids_to_add)?;
 
     let revision_id = ChallengeShortlistRevisionId::generate();
@@ -100,7 +101,7 @@ pub async fn create_challenge_shortlist_revision(
         Ok(response) => Ok((StatusCode::CREATED, Json(response))),
         Err(error) => {
             cleanup_storage_key(&state, &stored_key).await;
-            Err(error)
+            Err(error.into())
         }
     }
 }
@@ -130,11 +131,11 @@ async fn resolve_creator_challenge_scope(
 )> {
     let challenge_id = parse_request_value::<ChallengeId>(raw_challenge_id)?;
     let challenge = db::get_published_challenge(pool, &challenge_id).await?;
-    let challenge = challenge.ok_or(AppError::NotFound)?;
+    let challenge = challenge.ok_or(ServiceError::NotFound)?;
     if !db::agent_owns_challenge(pool, &challenge.challenge_id, &creator.agent_id).await? {
-        return Err(AppError::Forbidden(
-            "agent is not an owner of this challenge".to_string(),
-        ));
+        return Err(
+            ServiceError::Forbidden("agent is not an owner of this challenge".to_string()).into(),
+        );
     }
 
     let target = resolve_target_from_spec(&challenge.spec_json, requested_target)?;
@@ -150,15 +151,13 @@ fn resolve_target_from_spec(
         return Ok(None);
     };
 
-    let spec: ChallengeBundleSpec =
-        serde_json::from_value(spec_json.clone()).map_err(|e| AppError::Internal(e.to_string()))?;
+    let spec: ChallengeBundleSpec = serde_json::from_value(spec_json.clone())
+        .map_err(|e| ServiceError::Internal(e.to_string()))?;
     let target = parse_request_value::<TargetName>(target)?;
     if spec.target(&target).is_some() {
         return Ok(Some(target));
     }
-    Err(AppError::BadRequest(format!(
-        "challenge does not support target `{target}`"
-    )))
+    Err(ServiceError::BadRequest(format!("challenge does not support target `{target}`")).into())
 }
 
 /// Deduplicate a shortlist delta and reject empty uploads before persistence.
@@ -168,9 +167,10 @@ fn normalize_shortlist_agent_ids(agent_ids: &[AgentId]) -> Result<Vec<AgentId>> 
         unique.insert(agent_id.clone());
     }
     if unique.is_empty() {
-        return Err(AppError::BadRequest(
+        return Err(ServiceError::BadRequest(
             "agent_ids_to_add must contain at least one agent id".to_string(),
-        ));
+        )
+        .into());
     }
     Ok(unique.into_iter().collect())
 }

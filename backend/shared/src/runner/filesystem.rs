@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::validation::archive::extract_zip_file_to_dir;
 use crate::zip_project::{
     ZipProjectPhaseFailureReason, ZipProjectPhaseName, zip_project_archive_policy,
@@ -33,7 +33,7 @@ pub(super) async fn extract_zip_safe(artifact_path: &Path, target_dir: &Path) ->
         extract_zip_file_to_dir(&artifact_path, &target_dir, &zip_project_archive_policy())
     })
     .await
-    .map_err(|e| AppError::Internal(format!("zip extraction task failed: {e}")))?
+    .map_err(|e| ServiceError::Internal(format!("zip extraction task failed: {e}")))?
 }
 
 /// Ensures disk limit before continuing.
@@ -45,10 +45,10 @@ pub(super) async fn ensure_disk_limit(
     let path = path.to_path_buf();
     let bytes = tokio::task::spawn_blocking(move || directory_size(&path))
         .await
-        .map_err(|e| AppError::Internal(format!("disk usage task failed: {e}")))??;
+        .map_err(|e| ServiceError::Internal(format!("disk usage task failed: {e}")))??;
     let limit_bytes = disk_limit_mb
         .checked_mul(1024 * 1024)
-        .ok_or_else(|| AppError::Runner("disk limit overflow".to_string()))?;
+        .ok_or_else(|| ServiceError::Runner("disk limit overflow".to_string()))?;
     if bytes > limit_bytes {
         return Err(phase_error(
             phase,
@@ -65,12 +65,12 @@ pub(super) async fn ensure_prepare_disk_limit(path: &Path, disk_limit_mb: u64) -
     let path = path.to_path_buf();
     let bytes = tokio::task::spawn_blocking(move || directory_size(&path))
         .await
-        .map_err(|e| AppError::Internal(format!("prepare disk usage task failed: {e}")))??;
+        .map_err(|e| ServiceError::Internal(format!("prepare disk usage task failed: {e}")))??;
     let limit_bytes = disk_limit_mb
         .checked_mul(1024 * 1024)
-        .ok_or_else(|| AppError::Runner("prepare disk limit overflow".to_string()))?;
+        .ok_or_else(|| ServiceError::Runner("prepare disk limit overflow".to_string()))?;
     if bytes > limit_bytes {
-        return Err(AppError::Runner(format!(
+        return Err(ServiceError::Runner(format!(
             "prepare phase exceeded disk limit: {bytes} > {limit_bytes} bytes"
         )));
     }
@@ -83,7 +83,7 @@ pub(super) async fn copy_dir_all(source: &Path, destination: &Path) -> Result<()
     let destination = destination.to_path_buf();
     tokio::task::spawn_blocking(move || copy_dir_all_blocking(&source, &destination))
         .await
-        .map_err(|e| AppError::Internal(format!("copy task failed: {e}")))?
+        .map_err(|e| ServiceError::Internal(format!("copy task failed: {e}")))?
 }
 
 /// Handles cleanup paths for this module.
@@ -92,7 +92,7 @@ pub(super) async fn cleanup_paths<const N: usize>(paths: [PathBuf; N]) -> Result
         match tokio::fs::remove_dir_all(path).await {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(AppError::Io(e)),
+            Err(e) => return Err(ServiceError::Io(e)),
         }
     }
     Ok(())
@@ -140,7 +140,7 @@ fn inspect_tree(
             usage.bytes = usage
                 .bytes
                 .checked_add(metadata.len())
-                .ok_or_else(|| AppError::Runner("directory size overflow".to_string()))?;
+                .ok_or_else(|| ServiceError::Runner("directory size overflow".to_string()))?;
             continue;
         }
 
@@ -161,7 +161,7 @@ fn inspect_tree(
             usage.dirs = usage
                 .dirs
                 .checked_add(1)
-                .ok_or_else(|| AppError::Runner("directory count overflow".to_string()))?;
+                .ok_or_else(|| ServiceError::Runner("directory count overflow".to_string()))?;
             if let Some((visible_run_name, limits)) = output_limits
                 && usage.dirs > limits.max_dirs
             {
@@ -176,7 +176,7 @@ fn inspect_tree(
 
             let child_depth = depth
                 .checked_add(1)
-                .ok_or_else(|| AppError::Runner("directory depth overflow".to_string()))?;
+                .ok_or_else(|| ServiceError::Runner("directory depth overflow".to_string()))?;
             for entry in std::fs::read_dir(&current)? {
                 let entry = entry?;
                 pending.push((entry.path(), child_depth));
@@ -185,7 +185,7 @@ fn inspect_tree(
             usage.files = usage
                 .files
                 .checked_add(1)
-                .ok_or_else(|| AppError::Runner("file count overflow".to_string()))?;
+                .ok_or_else(|| ServiceError::Runner("file count overflow".to_string()))?;
             if let Some((visible_run_name, limits)) = output_limits
                 && usage.files > limits.max_files
             {
@@ -200,7 +200,7 @@ fn inspect_tree(
             usage.bytes = usage
                 .bytes
                 .checked_add(metadata.len())
-                .ok_or_else(|| AppError::Runner("directory size overflow".to_string()))?;
+                .ok_or_else(|| ServiceError::Runner("directory size overflow".to_string()))?;
         } else if let Some(visible_run_name) = reject_non_regular_for_run {
             return Err(non_regular_output_error(
                 visible_run_name,
@@ -210,7 +210,7 @@ fn inspect_tree(
             usage.bytes = usage
                 .bytes
                 .checked_add(metadata.len())
-                .ok_or_else(|| AppError::Runner("directory size overflow".to_string()))?;
+                .ok_or_else(|| ServiceError::Runner("directory size overflow".to_string()))?;
         }
     }
 
@@ -224,7 +224,7 @@ fn output_limit_error(
     actual: u64,
     limit: u64,
     unit: &str,
-) -> AppError {
+) -> ServiceError {
     phase_error(
         ZipProjectPhaseName::Run,
         ZipProjectPhaseFailureReason::ResourceLimit,
@@ -236,7 +236,7 @@ fn output_limit_error(
 }
 
 /// Build a non-regular-file output error.
-fn non_regular_output_error(visible_run_name: &str, message: &str) -> AppError {
+fn non_regular_output_error(visible_run_name: &str, message: &str) -> ServiceError {
     phase_error(
         ZipProjectPhaseName::Run,
         ZipProjectPhaseFailureReason::RunnerError,
@@ -421,7 +421,7 @@ mod tests {
         let result = extract_zip_safe(&zip_path, &target_dir).await;
 
         assert!(
-            matches!(result, Err(AppError::Validation(message)) if message.contains("at most"))
+            matches!(result, Err(ServiceError::Validation(message)) if message.contains("at most"))
         );
 
         drop(std::fs::remove_file(zip_path));

@@ -11,10 +11,11 @@ use reqwest::Url;
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 
+use crate::error::ApiResult as Result;
 use shared::auth;
 use shared::config::AgentRegistrationMode;
 use shared::db;
-use shared::error::{AppError, Result};
+use shared::error::ServiceError;
 use shared::models::auth::{
     AdminLoginRequest, AdminSessionResponse, CreatorMeResponse, CreatorSessionResponse,
     GithubOauthCallbackRequest, GithubOauthLoginRequest, GithubOauthLoginResponse,
@@ -49,7 +50,7 @@ struct GithubUserResponse {
 pub async fn admin_login(
     State(state): State<AppState>,
     ConnectInfo(remote_addr): ConnectInfo<std::net::SocketAddr>,
-    Json(request): Json<AdminLoginRequest>,
+    ValidatedJson(request): ValidatedJson<AdminLoginRequest>,
 ) -> Result<(
     StatusCode,
     AppendHeaders<[(HeaderName, String); 2]>,
@@ -59,7 +60,7 @@ pub async fn admin_login(
         state
             .admin_auth_throttle
             .record_failed_attempt(&request.username, &remote_addr.ip().to_string())?;
-        return Err(AppError::Unauthorized);
+        return Err(ServiceError::Unauthorized.into());
     }
     if request.username != state.config.admin_username
         || !state
@@ -69,7 +70,7 @@ pub async fn admin_login(
         state
             .admin_auth_throttle
             .record_failed_attempt(&request.username, &remote_addr.ip().to_string())?;
-        return Err(AppError::Unauthorized);
+        return Err(ServiceError::Unauthorized.into());
     }
     let username = request.username.trim().to_string();
 
@@ -134,14 +135,14 @@ pub async fn admin_session(
 ) -> Result<Json<AdminSessionResponse>> {
     let cookie_header = headers.get(header::COOKIE).and_then(|h| h.to_str().ok());
     let session_token = cookie_value(cookie_header, &state.config.web_session_cookie_name)
-        .ok_or(AppError::Unauthorized)?;
+        .ok_or(ServiceError::Unauthorized)?;
     let csrf_token = cookie_value(cookie_header, &state.config.web_csrf_cookie_name)
-        .ok_or(AppError::Unauthorized)?;
+        .ok_or(ServiceError::Unauthorized)?;
     let session = db::authenticate_admin_session(&state.db, &session_token)
         .await?
-        .ok_or(AppError::Unauthorized)?;
+        .ok_or(ServiceError::Unauthorized)?;
     if auth::hash_opaque_token(&csrf_token) != session.csrf_token_hash {
-        return Err(AppError::Unauthorized);
+        return Err(ServiceError::Unauthorized.into());
     }
 
     Ok(Json(AdminSessionResponse {
@@ -174,7 +175,7 @@ pub async fn github_oauth_login(
         AgentRegistrationMode::PioneerCode => match request.pioneer_code.as_ref() {
             Some(code) => {
                 let Ok(code) = PioneerCode::try_new(code.expose_secret().to_string()) else {
-                    return Err(reject_failed_pioneer_code().await);
+                    return Err(reject_failed_pioneer_code().await.into());
                 };
                 Some(auth::hash_opaque_token(code.expose_secret()))
             }
@@ -184,7 +185,7 @@ pub async fn github_oauth_login(
     };
     let expires_at = Utc::now()
         .checked_add_signed(Duration::minutes(OAUTH_STATE_TTL_MINUTES))
-        .ok_or_else(|| AppError::Internal("OAuth state TTL overflow".to_string()))?;
+        .ok_or_else(|| ServiceError::Internal("OAuth state TTL overflow".to_string()))?;
     db::delete_expired_web_auth_rows(&state.db).await?;
     db::create_github_oauth_state(
         &state.db,
@@ -204,7 +205,7 @@ pub async fn github_oauth_login(
         .append_pair("state", &state_token);
 
     let authorization_url = GithubOauthAuthorizationUrl::try_from_url(authorization_url)
-        .map_err(|e| AppError::Internal(format!("generated invalid GitHub OAuth URL: {e}")))?;
+        .map_err(|e| ServiceError::Internal(format!("generated invalid GitHub OAuth URL: {e}")))?;
 
     Ok(Json(GithubOauthLoginResponse {
         authorization_url,
@@ -224,14 +225,15 @@ pub async fn github_oauth_callback(
     let state_hash = auth::hash_opaque_token(&request.state);
     let oauth_state = db::consume_github_oauth_state(&state.db, &state_hash)
         .await?
-        .ok_or(AppError::Unauthorized)?;
+        .ok_or(ServiceError::Unauthorized)?;
 
     let access_token = exchange_github_code(&state, &request.code).await?;
     let github_user = fetch_github_user(&state, &access_token).await?;
     if github_user.id <= 0 || github_user.login.trim().is_empty() {
-        return Err(AppError::BadRequest(
+        return Err(ServiceError::BadRequest(
             "GitHub OAuth returned an invalid creator identity".to_string(),
-        ));
+        )
+        .into());
     }
 
     let fallback_agent_id = AgentId::generate();
@@ -250,9 +252,9 @@ pub async fn github_oauth_callback(
     {
         Ok(agent_id) => agent_id,
         Err(error) if is_invalid_pioneer_code(&error) => {
-            return Err(reject_failed_pioneer_code().await);
+            return Err(reject_failed_pioneer_code().await.into());
         }
-        Err(error) => return Err(error),
+        Err(error) => return Err(error.into()),
     };
 
     let session_token = auth::create_web_session_token();
@@ -304,7 +306,7 @@ pub async fn creator_me(creator: CreatorAuth) -> Result<Json<CreatorMeResponse>>
 
 /// Return the current creator identity and CSRF token for browser session bootstrap.
 pub async fn creator_session(creator: CreatorAuth) -> Result<Json<CreatorSessionResponse>> {
-    let csrf_token = creator.csrf_token.ok_or(AppError::Unauthorized)?;
+    let csrf_token = creator.csrf_token.ok_or(ServiceError::Unauthorized)?;
     Ok(Json(CreatorSessionResponse {
         agent_id: creator.agent_id,
         github_user_id: creator.github_user_id,
@@ -353,28 +355,30 @@ async fn exchange_github_code(state: &AppState, code: &str) -> Result<SecretStri
         .body(token_body)
         .send()
         .await
-        .map_err(|e| AppError::Internal(format!("GitHub OAuth token request failed: {e}")))?;
+        .map_err(|e| ServiceError::Internal(format!("GitHub OAuth token request failed: {e}")))?;
     if !response.status().is_success() {
-        return Err(AppError::BadRequest(format!(
+        return Err(ServiceError::BadRequest(format!(
             "GitHub OAuth token request failed with status {}",
             response.status()
-        )));
+        ))
+        .into());
     }
     let body = response
         .json::<GithubAccessTokenResponse>()
         .await
-        .map_err(|e| AppError::Internal(format!("invalid GitHub OAuth token response: {e}")))?;
+        .map_err(|e| ServiceError::Internal(format!("invalid GitHub OAuth token response: {e}")))?;
     if let Some(error) = body.error {
-        return Err(AppError::BadRequest(format!(
+        return Err(ServiceError::BadRequest(format!(
             "GitHub OAuth token exchange failed: {}",
             body.error_description.unwrap_or(error)
-        )));
+        ))
+        .into());
     }
-    body.access_token.ok_or_else(|| {
-        AppError::BadRequest(
+    Ok(body.access_token.ok_or_else(|| {
+        ServiceError::BadRequest(
             "GitHub OAuth token response did not include an access token".to_string(),
         )
-    })
+    })?)
 }
 
 /// Fetches the GitHub account identity associated with an OAuth access token.
@@ -389,17 +393,18 @@ async fn fetch_github_user(
         .header(reqwest::header::USER_AGENT, GITHUB_USER_AGENT)
         .send()
         .await
-        .map_err(|e| AppError::Internal(format!("GitHub user request failed: {e}")))?;
+        .map_err(|e| ServiceError::Internal(format!("GitHub user request failed: {e}")))?;
     if !response.status().is_success() {
-        return Err(AppError::BadRequest(format!(
+        return Err(ServiceError::BadRequest(format!(
             "GitHub user request failed with status {}",
             response.status()
-        )));
+        ))
+        .into());
     }
-    response
+    Ok(response
         .json::<GithubUserResponse>()
         .await
-        .map_err(|e| AppError::Internal(format!("invalid GitHub user response: {e}")))
+        .map_err(|e| ServiceError::Internal(format!("invalid GitHub user response: {e}")))?)
 }
 
 /// Reads one required OAuth configuration value with a user-facing error name.
@@ -407,39 +412,39 @@ fn required_oauth_config<'a>(value: Option<&'a str>, name: &str) -> Result<&'a s
     let value = value
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| AppError::BadRequest(format!("{name} is not configured")))?;
+        .ok_or_else(|| ServiceError::BadRequest(format!("{name} is not configured")))?;
     Ok(value)
 }
 
 /// Encodes OAuth form fields using the URL crate instead of hand-built escaping.
 fn form_urlencoded(values: &[(&str, &str)]) -> Result<String> {
     let mut url = Url::parse("https://agentics.local/")
-        .map_err(|e| AppError::Internal(format!("invalid form helper URL: {e}")))?;
+        .map_err(|e| ServiceError::Internal(format!("invalid form helper URL: {e}")))?;
     {
         let mut pairs = url.query_pairs_mut();
         for (key, value) in values {
             pairs.append_pair(key, value);
         }
     }
-    url.query()
-        .map(ToOwned::to_owned)
-        .ok_or_else(|| AppError::Internal("failed to encode OAuth token request".to_string()))
+    Ok(url.query().map(ToOwned::to_owned).ok_or_else(|| {
+        ServiceError::Internal("failed to encode OAuth token request".to_string())
+    })?)
 }
 
 /// Converts configured session lifetime hours into seconds with overflow checking.
 fn session_ttl_seconds(state: &AppState) -> Result<i64> {
-    state
+    Ok(state
         .config
         .web_session_ttl_hours
         .checked_mul(60 * 60)
-        .ok_or_else(|| AppError::Internal("web session TTL overflow".to_string()))
+        .ok_or_else(|| ServiceError::Internal("web session TTL overflow".to_string()))?)
 }
 
 /// Computes the absolute expiration time for a newly issued web session.
 fn session_expires_at(ttl_seconds: i64) -> Result<chrono::DateTime<Utc>> {
-    Utc::now()
+    Ok(Utc::now()
         .checked_add_signed(Duration::seconds(ttl_seconds))
-        .ok_or_else(|| AppError::Internal("web session TTL overflow".to_string()))
+        .ok_or_else(|| ServiceError::Internal("web session TTL overflow".to_string()))?)
 }
 
 /// Builds the session and CSRF cookies for a successful browser login.

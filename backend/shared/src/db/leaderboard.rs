@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use serde_json::Value;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction};
 
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::models::challenge::{ChallengeBundleSpec, MetricDirection};
 use crate::models::evaluation::{MetricValue, PublicCaseResult};
 use crate::models::ids::{ChallengeId, SolutionSubmissionId};
@@ -55,8 +55,9 @@ pub(super) async fn repair_leaderboard_entry_for_solution_submission_tx<'a>(
         let Some((spec_json,)) = spec_json else {
             return Ok(());
         };
-        let spec = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
-            .map_err(|e| AppError::Internal(format!("stored challenge spec is invalid: {e}")))?;
+        let spec = serde_json::from_value::<ChallengeBundleSpec>(spec_json).map_err(|e| {
+            ServiceError::Internal(format!("stored challenge spec is invalid: {e}"))
+        })?;
 
         let replacement_rows = sqlx::query(
             r#"
@@ -275,9 +276,9 @@ async fn list_leaderboard_rows(
     let requested_limit = limit.max(1);
     let challenge = get_public_challenge(pool, challenge_id)
         .await?
-        .ok_or(AppError::NotFound)?;
+        .ok_or(ServiceError::NotFound)?;
     let spec = serde_json::from_value::<ChallengeBundleSpec>(challenge.spec_json)
-        .map_err(|e| AppError::Internal(format!("stored challenge spec is invalid: {e}")))?;
+        .map_err(|e| ServiceError::Internal(format!("stored challenge spec is invalid: {e}")))?;
     let mut query = QueryBuilder::<Postgres>::new(
         r#"
         SELECT
@@ -389,7 +390,7 @@ pub(super) async fn upsert_leaderboard_entry_for_solution_submission_tx<'a>(
         return Ok(false);
     };
     let spec = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
-        .map_err(|e| AppError::Internal(format!("stored challenge spec is invalid: {e}")))?;
+        .map_err(|e| ServiceError::Internal(format!("stored challenge spec is invalid: {e}")))?;
 
     lock_leaderboard_scope(tx, &challenge_id, target.as_str(), &agent_id).await?;
 
@@ -413,9 +414,9 @@ pub(super) async fn upsert_leaderboard_entry_for_solution_submission_tx<'a>(
     }
 
     let public_results_json =
-        serde_json::to_value(public_results).map_err(|e| AppError::Internal(e.to_string()))?;
-    let aggregate_metrics_json =
-        serde_json::to_value(aggregate_metrics).map_err(|e| AppError::Internal(e.to_string()))?;
+        serde_json::to_value(public_results).map_err(|e| ServiceError::Internal(e.to_string()))?;
+    let aggregate_metrics_json = serde_json::to_value(aggregate_metrics)
+        .map_err(|e| ServiceError::Internal(e.to_string()))?;
 
     sqlx::query(
         r#"
@@ -463,8 +464,8 @@ pub(super) async fn update_official_metrics_for_solution_submission_tx<'a>(
         return Ok(());
     };
 
-    let official_metrics_json =
-        serde_json::to_value(official_metrics).map_err(|e| AppError::Internal(e.to_string()))?;
+    let official_metrics_json = serde_json::to_value(official_metrics)
+        .map_err(|e| ServiceError::Internal(e.to_string()))?;
 
     sqlx::query(
         "UPDATE leaderboard_entries SET official_metrics_json = $4, updated_at = NOW() WHERE challenge_id = $1::uuid AND target = $2 AND agent_id = $3::uuid"

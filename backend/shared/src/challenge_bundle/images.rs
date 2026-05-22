@@ -1,6 +1,6 @@
 //! Target hardware and Docker image validation for challenge bundles.
 
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::models::challenge::{
     ChallengeTargetSpec, HardwareProfileSpec, ResourceProfileSpec, StageResourceProfile,
     TargetAccelerator,
@@ -90,7 +90,7 @@ fn validate_supported_image_reference(
                 field,
             )?;
             if !image.tag().starts_with(CPU_IMAGE_TAG_PREFIX) {
-                return Err(AppError::Validation(format!(
+                return Err(ServiceError::Validation(format!(
                     "{field} tag must start with `{CPU_IMAGE_TAG_PREFIX}` for target `linux-arm64-cpu`"
                 )));
             }
@@ -104,7 +104,7 @@ fn validate_supported_image_reference(
             )?;
             let expected_prefix = format!("{cuda_variant}-");
             if !image.tag().starts_with(&expected_prefix) {
-                return Err(AppError::Validation(format!(
+                return Err(ServiceError::Validation(format!(
                     "{field} tag must start with `{expected_prefix}` to match resource_profile.hardware_metadata.cuda_variant"
                 )));
             }
@@ -125,7 +125,7 @@ fn require_supported_image_repository(
         return Ok(());
     }
     let supported = supported_repositories.join(", ");
-    Err(AppError::Validation(format!(
+    Err(ServiceError::Validation(format!(
         "{field} must use a supported Agentics image repository for target `{target}`; supported repositories: {supported}"
     )))
 }
@@ -196,17 +196,17 @@ fn validate_cuda_hardware<'a>(
     field: &str,
 ) -> Result<&'a str> {
     let hardware = hardware.ok_or_else(|| {
-        AppError::Validation(format!("{field}.kind must be `cuda` for accelerator `gpu`"))
+        ServiceError::Validation(format!("{field}.kind must be `cuda` for accelerator `gpu`"))
     })?;
     if hardware.kind != "cuda" {
-        return Err(AppError::Validation(format!(
+        return Err(ServiceError::Validation(format!(
             "{field}.kind must be `cuda` for accelerator `gpu`"
         )));
     }
 
     require_required_optional_string(&hardware.gpu_model, &format!("{field}.gpu_model"))?;
     let gpu_count = hardware.gpu_count.ok_or_else(|| {
-        AppError::Validation(format!("{field}.gpu_count must be greater than zero"))
+        ServiceError::Validation(format!("{field}.gpu_count must be greater than zero"))
     })?;
     validate_positive_u32(gpu_count, &format!("{field}.gpu_count"))?;
 
@@ -220,12 +220,12 @@ fn validate_cuda_hardware<'a>(
             .map(|(variant, _)| *variant)
             .collect::<Vec<_>>()
             .join(", ");
-        return Err(AppError::Validation(format!(
+        return Err(ServiceError::Validation(format!(
             "{field}.cuda_variant `{cuda_variant}` is not supported for new CUDA targets; supported variants: {supported}"
         )));
     };
     if cuda_version != expected_cuda_version {
-        return Err(AppError::Validation(format!(
+        return Err(ServiceError::Validation(format!(
             "{field}.cuda_version must be `{expected_cuda_version}` for cuda_variant `{cuda_variant}`"
         )));
     }
@@ -247,7 +247,7 @@ fn require_required_optional_string<'a>(value: &'a Option<String>, field: &str) 
             require_non_empty(value, field)?;
             Ok(value)
         }
-        None => Err(AppError::Validation(format!("{field} is required"))),
+        None => Err(ServiceError::Validation(format!("{field} is required"))),
     }
 }
 
@@ -257,12 +257,12 @@ pub(super) fn require_image_digest_reference(
     field: &str,
 ) -> Result<()> {
     if image.is_local() {
-        return Err(AppError::Validation(format!(
+        return Err(ServiceError::Validation(format!(
             "{field} must use a registry image with an immutable @sha256:<digest> reference"
         )));
     }
     if image.digest().is_none() {
-        return Err(AppError::Validation(format!(
+        return Err(ServiceError::Validation(format!(
             "{field} must include an immutable @sha256:<digest> reference"
         )));
     }

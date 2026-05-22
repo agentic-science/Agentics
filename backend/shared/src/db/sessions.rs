@@ -5,7 +5,7 @@ use sqlx::{PgPool, Row};
 
 use crate::db::agents::enforce_active_agent_quota_tx;
 use crate::db::pioneer_codes::{PioneerCodeRegistrationKind, consume_pioneer_code_for_agent_tx};
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::models::ids::AgentId;
 use crate::models::pioneer_codes::INVALID_OR_UNAVAILABLE_PIONEER_CODE;
 
@@ -137,7 +137,7 @@ pub async fn upsert_github_creator_agent_with_pioneer_code(
         let id = agent_id_from_row(&row, "id")?;
         let status: String = row.try_get("status")?;
         if status != "active" {
-            return Err(AppError::Forbidden(
+            return Err(ServiceError::Forbidden(
                 "linked GitHub creator agent is disabled".to_string(),
             ));
         }
@@ -160,7 +160,7 @@ pub async fn upsert_github_creator_agent_with_pioneer_code(
     }
 
     if pioneer_code_required_for_new_agent && pioneer_code_hash.is_none() {
-        return Err(AppError::Forbidden(
+        return Err(ServiceError::Forbidden(
             INVALID_OR_UNAVAILABLE_PIONEER_CODE.to_string(),
         ));
     }
@@ -345,11 +345,13 @@ pub async fn authenticate_creator_session(
         session_id,
         agent_id: row
             .try_get::<Option<String>, _>("agent_id")?
-            .ok_or_else(|| AppError::Internal("creator session missing agent id".to_string()))?,
+            .ok_or_else(|| {
+                ServiceError::Internal("creator session missing agent id".to_string())
+            })?,
         github_user_id: row
             .try_get::<Option<i64>, _>("github_user_id")?
             .ok_or_else(|| {
-                AppError::Internal("creator session missing GitHub user id".to_string())
+                ServiceError::Internal("creator session missing GitHub user id".to_string())
             })?,
         github_login: row.try_get("github_login")?,
         csrf_token_hash: row.try_get("csrf_token_hash")?,
@@ -391,7 +393,7 @@ pub async fn authenticate_admin_session(
         session_id,
         admin_username: row
             .try_get::<Option<String>, _>("admin_username")?
-            .ok_or_else(|| AppError::Internal("admin session missing username".to_string()))?,
+            .ok_or_else(|| ServiceError::Internal("admin session missing username".to_string()))?,
         csrf_token_hash: row.try_get("csrf_token_hash")?,
         expires_at: row.try_get("expires_at")?,
     }))

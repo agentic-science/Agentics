@@ -4,7 +4,26 @@ use std::collections::HashSet;
 use std::io::{Read, Seek};
 use std::path::{Component, Path};
 
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
+
+/// Local challenge/archive validation failures before service-boundary mapping.
+#[derive(Debug, thiserror::Error)]
+pub enum ChallengeValidationError {
+    #[error("archive traversal rejected: {0}")]
+    ArchiveTraversal(String),
+    #[error("invalid manifest: {0}")]
+    InvalidManifest(String),
+    #[error("unsafe path rejected: {0}")]
+    UnsafePath(String),
+    #[error("unsupported target: {0}")]
+    UnsupportedTarget(String),
+}
+
+impl From<ChallengeValidationError> for ServiceError {
+    fn from(error: ChallengeValidationError) -> Self {
+        ServiceError::Validation(error.to_string())
+    }
+}
 
 /// ZIP archive envelope policy for one external contract.
 #[derive(Debug, Clone)]
@@ -62,24 +81,27 @@ impl NormalizedArchivePath {
     /// Normalize and validate an archive entry path.
     pub fn try_new(raw: &str, label: &str) -> Result<Self> {
         if raw.is_empty() || raw.contains('\0') || raw.starts_with('/') || raw.starts_with('\\') {
-            return Err(AppError::Validation(format!(
-                "{label} contains an unsafe ZIP entry path"
-            )));
+            return Err(ChallengeValidationError::ArchiveTraversal(format!(
+                "{label} contains an unsafe ZIP entry path",
+            ))
+            .into());
         }
 
         let trimmed = raw.trim_matches(['/', '\\']);
         if trimmed.is_empty() {
-            return Err(AppError::Validation(format!(
-                "{label} contains an unsafe ZIP entry path"
-            )));
+            return Err(ChallengeValidationError::ArchiveTraversal(format!(
+                "{label} contains an unsafe ZIP entry path",
+            ))
+            .into());
         }
 
         let mut parts = Vec::new();
         for part in trimmed.split(['/', '\\']) {
             if part.is_empty() || part == "." || part == ".." {
-                return Err(AppError::Validation(format!(
-                    "{label} contains unsafe path `{raw}`"
-                )));
+                return Err(ChallengeValidationError::UnsafePath(format!(
+                    "{label} contains unsafe path `{raw}`",
+                ))
+                .into());
             }
             parts.push(part);
         }
@@ -94,7 +116,7 @@ impl NormalizedArchivePath {
             match component {
                 Component::Normal(value) => {
                     let value = value.to_str().ok_or_else(|| {
-                        AppError::Validation(format!(
+                        ServiceError::Validation(format!(
                             "{label} contains a path that is not valid UTF-8: {}",
                             path.display()
                         ))
@@ -103,10 +125,11 @@ impl NormalizedArchivePath {
                 }
                 Component::CurDir => {}
                 Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
-                    return Err(AppError::Validation(format!(
+                    return Err(ChallengeValidationError::UnsafePath(format!(
                         "{label} contains unsafe path `{}`",
-                        path.display()
-                    )));
+                        path.display(),
+                    ))
+                    .into());
                 }
             }
         }
@@ -202,7 +225,7 @@ impl ArchiveEnvelope {
 /// Validate a ZIP archive already loaded in memory.
 pub fn inspect_zip_bytes(bytes: &[u8], policy: &ArchiveEnvelopePolicy) -> Result<ArchiveEnvelope> {
     let archive_size = u64::try_from(bytes.len())
-        .map_err(|_| AppError::Validation(format!("{} is too large", policy.label())))?;
+        .map_err(|_| ServiceError::Validation(format!("{} is too large", policy.label())))?;
     ensure_archive_size(archive_size, policy)?;
     let reader = std::io::Cursor::new(bytes);
     let mut archive = zip::ZipArchive::new(reader)?;
@@ -239,7 +262,7 @@ pub fn extract_zip_bytes_to_dir(
     policy: &ArchiveEnvelopePolicy,
 ) -> Result<()> {
     let archive_size = u64::try_from(bytes.len())
-        .map_err(|_| AppError::Validation(format!("{} is too large", policy.label())))?;
+        .map_err(|_| ServiceError::Validation(format!("{} is too large", policy.label())))?;
     ensure_archive_size(archive_size, policy)?;
     let reader = std::io::Cursor::new(bytes);
     let mut archive = zip::ZipArchive::new(reader)?;
@@ -261,7 +284,7 @@ fn extract_validated_zip_archive<R: Read + Seek>(
             std::fs::create_dir_all(&outpath)?;
         } else {
             if outpath.exists() {
-                return Err(AppError::Validation(format!(
+                return Err(ServiceError::Validation(format!(
                     "{} cannot overwrite existing path `{}`",
                     envelope.label(),
                     entry.path()
@@ -284,7 +307,7 @@ fn extract_validated_zip_archive<R: Read + Seek>(
 /// Validate archive size against policy.
 fn ensure_archive_size(archive_size: u64, policy: &ArchiveEnvelopePolicy) -> Result<()> {
     if archive_size > policy.max_archive_bytes() {
-        return Err(AppError::Validation(format!(
+        return Err(ServiceError::Validation(format!(
             "{} must be at most {} bytes",
             policy.label(),
             policy.max_archive_bytes()
@@ -300,7 +323,7 @@ fn inspect_zip_archive<R: Read + Seek>(
     policy: &ArchiveEnvelopePolicy,
 ) -> Result<ArchiveEnvelope> {
     if archive.len() > policy.max_entries() {
-        return Err(AppError::Validation(format!(
+        return Err(ServiceError::Validation(format!(
             "{} must contain at most {} entries",
             policy.label(),
             policy.max_entries()
@@ -317,7 +340,7 @@ fn inspect_zip_archive<R: Read + Seek>(
                 .unix_mode()
                 .is_some_and(|mode| mode & 0o170000 == 0o120000)
         {
-            return Err(AppError::Validation(format!(
+            return Err(ServiceError::Validation(format!(
                 "{} must not contain symlinks",
                 policy.label()
             )));
@@ -325,7 +348,7 @@ fn inspect_zip_archive<R: Read + Seek>(
 
         let path = NormalizedArchivePath::try_new(file.name(), policy.label())?;
         if !seen_paths.insert(path.clone()) {
-            return Err(AppError::Validation(format!(
+            return Err(ServiceError::Validation(format!(
                 "{} contains duplicate path `{path}`",
                 policy.label()
             )));
@@ -333,9 +356,9 @@ fn inspect_zip_archive<R: Read + Seek>(
 
         expanded_size = expanded_size
             .checked_add(file.size())
-            .ok_or_else(|| AppError::Validation(format!("{} is too large", policy.label())))?;
+            .ok_or_else(|| ServiceError::Validation(format!("{} is too large", policy.label())))?;
         if expanded_size > policy.max_expanded_bytes() {
-            return Err(AppError::Validation(format!(
+            return Err(ServiceError::Validation(format!(
                 "{} must expand to at most {} bytes",
                 policy.label(),
                 policy.max_expanded_bytes()

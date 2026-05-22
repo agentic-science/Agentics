@@ -3,13 +3,14 @@ use super::topologies::{
     run_setup_and_build, run_solution_invocations,
 };
 use super::{
-    AppError, ChallengeExecutionSpec, CoexecutedBenchmarkRequest, EVALUATION_LOG_BYTES_PER_RUN,
+    ChallengeExecutionSpec, CoexecutedBenchmarkRequest, EVALUATION_LOG_BYTES_PER_RUN,
     EvaluationJobExecution, EvaluationLimitConfig, EvaluationLogs, EvaluatorRequest,
     EvaluatorRunResult, ExecutionResult, OutputTreeLimits, PipedStdioRequest, Result,
     RetainedRunnerTree, RunPlanRequest, RunnerAttempt, RunnerContext, RunnerStorage, ScoringMode,
-    SetupBuildRequest, SolutionRunRequest, cleanup_paths, configure_run_count_limits, copy_dir_all,
-    evaluation_runner_log_key, extract_zip_safe, make_container_readable_tree, pre_pull_image,
-    read_limited_result_json, resolve_run_plan, sanitize_runner_error, validate_evaluator_result,
+    ServiceError, SetupBuildRequest, SolutionRunRequest, cleanup_paths, configure_run_count_limits,
+    copy_dir_all, evaluation_runner_log_key, extract_zip_safe, make_container_readable_tree,
+    pre_pull_image, read_limited_result_json, resolve_run_plan, sanitize_runner_error,
+    validate_evaluator_result,
 };
 
 /// Execute one evaluation job in Docker and return the validated evaluator result.
@@ -30,7 +31,7 @@ pub async fn execute_evaluation_job(
     let attempt = RunnerAttempt::new(job_id, worker_id, attempt_count);
     let runner_runtime_root = config
         .runner_runtime_root()
-        .map_err(|error| AppError::Runner(error.to_string()))?;
+        .map_err(|error| ServiceError::Runner(error.to_string()))?;
     let working_root = runner_runtime_root
         .join("agentics-eval-artifacts")
         .join(&attempt.transient_name);
@@ -73,7 +74,7 @@ pub async fn execute_evaluation_job(
     };
     let max_log_bytes = EVALUATION_LOG_BYTES_PER_RUN
         .checked_mul(limits.max_runs)
-        .ok_or_else(|| AppError::Runner("evaluation log limit overflow".to_string()))?;
+        .ok_or_else(|| ServiceError::Runner("evaluation log limit overflow".to_string()))?;
     let mut logs = EvaluationLogs::new(max_log_bytes);
     let runner_storage = RunnerStorage::from_config(config)?;
     let output_limits = OutputTreeLimits {
@@ -91,7 +92,7 @@ pub async fn execute_evaluation_job(
 
     let execution = async {
         let target = spec.target(&payload.target).ok_or_else(|| {
-            AppError::Runner(format!(
+            ServiceError::Runner(format!(
                 "challenge contract does not declare target `{}`",
                 payload.target
             ))
@@ -241,7 +242,7 @@ pub async fn execute_evaluation_job(
         let result_raw =
             read_limited_result_json(&result_path, limits.max_result_json_bytes).await?;
         let mut result: EvaluatorRunResult = serde_json::from_str(&result_raw)
-            .map_err(|e| AppError::Runner(format!("invalid result.json: {e}")))?;
+            .map_err(|e| ServiceError::Runner(format!("invalid result.json: {e}")))?;
         validate_evaluator_result(&mut result, eval_type, &spec.metric_schema, limits)?;
 
         Ok(ExecutionResult {
@@ -255,13 +256,13 @@ pub async fn execute_evaluation_job(
     let cleanup = cleanup_paths([working_root]).await;
     match (execution, log_write, cleanup) {
         (Ok(result), Ok(_), Ok(())) => Ok(result),
-        (Ok(_), Err(log_err), Ok(())) => Err(log_err),
+        (Ok(_), Err(log_err), Ok(())) => Err(log_err.into()),
         (Ok(_), Ok(_), Err(cleanup_err)) => Err(cleanup_err),
-        (Ok(_), Err(log_err), Err(cleanup_err)) => Err(AppError::Runner(format!(
+        (Ok(_), Err(log_err), Err(cleanup_err)) => Err(ServiceError::Runner(format!(
             "{log_err}; additionally failed to clean runner workspace: {cleanup_err}"
         ))),
         (Err(run_err), _, Ok(())) => Err(sanitize_runner_error(eval_type, run_err)),
-        (Err(run_err), _, Err(cleanup_err)) => Err(AppError::Runner(format!(
+        (Err(run_err), _, Err(cleanup_err)) => Err(ServiceError::Runner(format!(
             "{}; additionally failed to clean runner workspace: {cleanup_err}",
             sanitize_runner_error(eval_type, run_err)
         ))),

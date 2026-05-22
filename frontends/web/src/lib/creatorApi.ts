@@ -20,6 +20,7 @@ import {
   creatorChallengeStatsResponseSchema,
   creatorMeResponseSchema,
   creatorSessionResponseSchema,
+  errorResponseSchema,
   type GithubOauthCallbackRequest,
   type GithubOauthLoginRequest,
   type GithubOauthLoginResponse,
@@ -275,8 +276,8 @@ async function creatorFetchJson<T>(
     let message = response.statusText;
     try {
       /** Handles body behavior for this component. */
-      const body = (await response.json()) as { message?: string };
-      message = body.message ?? message;
+      const parsed = errorResponseSchema.safeParse(await response.json());
+      message = parsed.success ? parsed.data.error.message : message;
     } catch {
       // Non-JSON error responses still surface the status text.
     }

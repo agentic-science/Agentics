@@ -1,6 +1,6 @@
 //! Cross-field GitHub provenance validation for challenge drafts.
 
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::models::github::GithubPullRequestNumber;
 use crate::models::urls::{GithubPullRequestUrl, GithubRepoRemote};
 
@@ -21,18 +21,18 @@ impl GithubPullRequestRef {
     ) -> Result<Self> {
         let pr_repo_key = pr_url
             .repository_key()
-            .map_err(|e| AppError::Validation(e.to_string()))?;
+            .map_err(|e| ServiceError::Validation(e.to_string()))?;
         if repo_url.repository_key() != &pr_repo_key {
-            return Err(AppError::Validation(format!(
+            return Err(ServiceError::Validation(format!(
                 "pr_url repository `{pr_repo_key}` must match repo_url repository `{}`",
                 repo_url.repository_key()
             )));
         }
         let pr_url_number = pr_url
             .number()
-            .map_err(|e| AppError::Validation(e.to_string()))?;
+            .map_err(|e| ServiceError::Validation(e.to_string()))?;
         if pr_number.as_str() != pr_url_number {
-            return Err(AppError::Validation(format!(
+            return Err(ServiceError::Validation(format!(
                 "pr_url pull request number `{pr_url_number}` must match pr_number `{pr_number}`"
             )));
         }

@@ -8,7 +8,7 @@ use super::ids::{
     agent_id_from_row, challenge_id_from_row, challenge_name_from_row,
     challenge_shortlist_revision_id_from_row, optional_solution_submission_id_from_row,
 };
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::models::challenge::{
     AdminChallengeListItemDto, ChallengeBundleSpec, ChallengeLifecycleStatus, ChallengeListItemDto,
     PublishChallengeResponse,
@@ -97,7 +97,7 @@ pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeLi
             let spec = spec_json
                 .map(serde_json::from_value::<ChallengeBundleSpec>)
                 .transpose()
-                .map_err(|e| AppError::Internal(e.to_string()))?;
+                .map_err(|e| ServiceError::Internal(e.to_string()))?;
             Ok(AdminChallengeListItemDto {
                 challenge_id: challenge_id_from_row(&r, "challenge_id")?,
                 challenge_name: challenge_name_from_row(&r, "name")?,
@@ -167,7 +167,7 @@ async fn update_challenge_moltbook_discussion(
     .fetch_optional(pool)
     .await?;
 
-    let row = row.ok_or(AppError::NotFound)?;
+    let row = row.ok_or(ServiceError::NotFound)?;
     Ok(ChallengeMoltbookDiscussionRecord {
         challenge_id: challenge_id_from_row(&row, "challenge_id")?,
         challenge_name: challenge_name_from_row(&row, "challenge_name")?,
@@ -192,7 +192,7 @@ pub async fn publish_challenge_tx(
     input: &PublishChallengeInput<'_>,
 ) -> Result<PublishChallengeResponse> {
     let spec_json =
-        serde_json::to_value(input.spec).map_err(|e| AppError::Internal(e.to_string()))?;
+        serde_json::to_value(input.spec).map_err(|e| ServiceError::Internal(e.to_string()))?;
     let summary_json = localized_text_to_json(input.summary)?;
 
     let row = sqlx::query(
@@ -238,7 +238,7 @@ pub async fn publish_challenge_tx(
     .bind(parse_optional_time(input.spec.closes_at.as_deref())?)
     .bind(
         serde_json::to_value(&input.spec.eligibility)
-            .map_err(|e| AppError::Internal(e.to_string()))?,
+            .map_err(|e| ServiceError::Internal(e.to_string()))?,
     )
     .bind(input.spec.validation_submission_limit)
     .bind(input.spec.official_submission_limit)
@@ -249,9 +249,9 @@ pub async fn publish_challenge_tx(
     .fetch_one(&mut **tx)
     .await
     .map_err(|error| match error {
-        sqlx::Error::RowNotFound => AppError::Conflict,
-        sqlx::Error::Database(db_error) if db_error.is_unique_violation() => AppError::Conflict,
-        error => AppError::Database(error),
+        sqlx::Error::RowNotFound => ServiceError::Conflict,
+        sqlx::Error::Database(db_error) if db_error.is_unique_violation() => ServiceError::Conflict,
+        error => ServiceError::Database(error),
     })?;
 
     Ok(PublishChallengeResponse {
@@ -268,7 +268,7 @@ pub async fn publish_challenge_tx(
 fn parse_required_time(value: &str) -> Result<DateTime<Utc>> {
     DateTime::parse_from_rfc3339(value)
         .map(|date| date.with_timezone(&Utc))
-        .map_err(|e| AppError::Validation(format!("invalid challenge timestamp: {e}")))
+        .map_err(|e| ServiceError::Validation(format!("invalid challenge timestamp: {e}")))
 }
 
 /// Parses optional time from an external boundary string.
@@ -277,18 +277,17 @@ fn parse_optional_time(value: Option<&str>) -> Result<Option<DateTime<Utc>>> {
         .map(|value| {
             DateTime::parse_from_rfc3339(value)
                 .map(|date| date.with_timezone(&Utc))
-                .map_err(|e| AppError::Validation(format!("invalid challenge timestamp: {e}")))
+                .map_err(|e| ServiceError::Validation(format!("invalid challenge timestamp: {e}")))
         })
         .transpose()
 }
 
 /// Converts this value to json string.
 fn to_json_string<T: serde::Serialize>(value: T) -> Result<String> {
-    let value = serde_json::to_value(value).map_err(|e| AppError::Internal(e.to_string()))?;
-    value
-        .as_str()
-        .map(ToOwned::to_owned)
-        .ok_or_else(|| AppError::Internal("challenge enum did not serialize to string".to_string()))
+    let value = serde_json::to_value(value).map_err(|e| ServiceError::Internal(e.to_string()))?;
+    value.as_str().map(ToOwned::to_owned).ok_or_else(|| {
+        ServiceError::Internal("challenge enum did not serialize to string".to_string())
+    })
 }
 
 /// Archive a challenge shell while preserving private assets and historical submissions.
@@ -306,7 +305,7 @@ pub async fn archive_challenge(pool: &PgPool, challenge_id: &ChallengeId) -> Res
     .await?;
 
     if result.rows_affected() == 0 {
-        return Err(AppError::NotFound);
+        return Err(ServiceError::NotFound);
     }
     Ok(())
 }
@@ -467,9 +466,9 @@ pub async fn create_challenge_shortlist_revision(
         .await?;
         added_count = added_count
             .checked_add(i64::try_from(result.rows_affected()).map_err(|_| {
-                AppError::Internal("shortlist added row count overflow".to_string())
+                ServiceError::Internal("shortlist added row count overflow".to_string())
             })?)
-            .ok_or_else(|| AppError::Internal("shortlist added count overflow".to_string()))?;
+            .ok_or_else(|| ServiceError::Internal("shortlist added count overflow".to_string()))?;
     }
 
     let row = sqlx::query(
@@ -524,7 +523,7 @@ async fn ensure_shortlist_agents_exist(
         .fetch_one(&mut **tx)
         .await?;
         if !exists {
-            return Err(AppError::BadRequest(format!(
+            return Err(ServiceError::BadRequest(format!(
                 "shortlisted agent `{agent_id}` does not exist"
             )));
         }
@@ -539,7 +538,7 @@ pub async fn list_challenge_shortlist(
 ) -> Result<ChallengeShortlistResponse> {
     let challenge = get_public_challenge(pool, challenge_id)
         .await?
-        .ok_or(AppError::NotFound)?;
+        .ok_or(ServiceError::NotFound)?;
     let rows = sqlx::query(
         r#"
         SELECT s.agent_id::text AS agent_id, a.display_name AS agent_display_name, s.added_by_agent_id::text AS added_by_agent_id, s.created_at
@@ -580,7 +579,7 @@ pub async fn get_creator_challenge_stats(
 ) -> Result<CreatorChallengeStatsResponse> {
     let challenge = get_public_challenge(pool, challenge_id)
         .await?
-        .ok_or(AppError::NotFound)?;
+        .ok_or(ServiceError::NotFound)?;
     let target_raw = target.map(TargetName::as_str);
     let row = sqlx::query(
         r#"
@@ -683,7 +682,7 @@ pub async fn list_creator_challenge_participants(
 ) -> Result<CreatorChallengeParticipantsResponse> {
     let challenge = get_public_challenge(pool, challenge_id)
         .await?
-        .ok_or(AppError::NotFound)?;
+        .ok_or(ServiceError::NotFound)?;
     let target_raw = target.map(TargetName::as_str);
     let rows = sqlx::query(
         r#"
@@ -854,7 +853,7 @@ pub async fn list_published_challenges(
         .into_iter()
         .map(|r| {
             let spec: ChallengeBundleSpec = serde_json::from_value(r.try_get("spec_json")?)
-                .map_err(|e| AppError::Internal(e.to_string()))?;
+                .map_err(|e| ServiceError::Internal(e.to_string()))?;
             Ok(ChallengeListItemDto {
                 challenge_id: challenge_id_from_row(&r, "challenge_id")?,
                 challenge_name: challenge_name_from_row(&r, "name")?,
@@ -868,10 +867,10 @@ pub async fn list_published_challenges(
         })
         .collect::<Result<Vec<_>>>()?;
     let returned_count = i64::try_from(items.len())
-        .map_err(|_| AppError::Internal("challenge list length overflow".to_string()))?;
+        .map_err(|_| ServiceError::Internal("challenge list length overflow".to_string()))?;
     let consumed = offset
         .checked_add(returned_count)
-        .ok_or_else(|| AppError::Internal("challenge list offset overflow".to_string()))?;
+        .ok_or_else(|| ServiceError::Internal("challenge list offset overflow".to_string()))?;
     Ok(PublishedChallengeList {
         items,
         total_count,
@@ -973,12 +972,12 @@ pub(super) fn localized_text_from_row(
 ) -> Result<LocalizedText> {
     let value: Value = row.try_get(column)?;
     serde_json::from_value(value)
-        .map_err(|e| AppError::Internal(format!("stored {column} is invalid: {e}")))
+        .map_err(|e| ServiceError::Internal(format!("stored {column} is invalid: {e}")))
 }
 
 /// Serialize localized text for JSONB binding.
 fn localized_text_to_json(value: &LocalizedText) -> Result<Value> {
-    serde_json::to_value(value).map_err(|e| AppError::Internal(e.to_string()))
+    serde_json::to_value(value).map_err(|e| ServiceError::Internal(e.to_string()))
 }
 
 /// Reads managed bundle path from a database row and validates its domain shape.
@@ -988,7 +987,7 @@ fn managed_bundle_path_from_row(
 ) -> Result<ManagedBundlePath> {
     let value: String = row.try_get(column)?;
     ManagedBundlePath::from_existing_dir(value)
-        .map_err(|e| AppError::Internal(format!("stored invalid {column}: {e}")))
+        .map_err(|e| ServiceError::Internal(format!("stored invalid {column}: {e}")))
 }
 
 /// Reads managed statement path from a database row and validates its domain shape.
@@ -998,7 +997,7 @@ fn managed_statement_path_from_row(
 ) -> Result<ManagedStatementPath> {
     let value: String = row.try_get(column)?;
     ManagedStatementPath::from_existing_file(value)
-        .map_err(|e| AppError::Internal(format!("stored invalid {column}: {e}")))
+        .map_err(|e| ServiceError::Internal(format!("stored invalid {column}: {e}")))
 }
 
 /// Read an optional Moltbook post URL from a database row.
@@ -1010,7 +1009,7 @@ fn optional_moltbook_post_url_from_row(
     value
         .map(MoltbookPostUrl::try_new)
         .transpose()
-        .map_err(|e| AppError::Internal(format!("stored invalid {column}: {e}")))
+        .map_err(|e| ServiceError::Internal(format!("stored invalid {column}: {e}")))
 }
 
 /// Converts a database row into the shortlist revision response model.
@@ -1034,7 +1033,7 @@ fn row_to_shortlist_revision_response(
 fn storage_key_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<StorageKey> {
     let value: String = row.try_get(column)?;
     StorageKey::try_new(&value)
-        .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
+        .map_err(|e| ServiceError::Internal(format!("invalid stored {column}: {e}")))
 }
 
 /// Reads a challenge lifecycle status and validates its stored value.
@@ -1044,7 +1043,7 @@ fn challenge_status_from_row(
 ) -> Result<ChallengeLifecycleStatus> {
     let value: String = row.try_get(column)?;
     ChallengeLifecycleStatus::from_storage_value(&value)
-        .ok_or_else(|| AppError::Internal(format!("unexpected challenge status `{value}`")))
+        .ok_or_else(|| ServiceError::Internal(format!("unexpected challenge status `{value}`")))
 }
 
 /// Reads an optional solution-submission status for creator participant rows.
@@ -1056,7 +1055,7 @@ fn optional_solution_submission_status_from_row(
     value
         .map(|value| {
             SolutionSubmissionStatus::from_storage_value(&value).ok_or_else(|| {
-                AppError::Internal(format!("unexpected solution submission status `{value}`"))
+                ServiceError::Internal(format!("unexpected solution submission status `{value}`"))
             })
         })
         .transpose()
@@ -1066,7 +1065,7 @@ fn optional_solution_submission_status_from_row(
 fn sha256_digest_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<Sha256Digest> {
     let value: String = row.try_get(column)?;
     Sha256Digest::try_new(&value)
-        .map_err(|e| AppError::Internal(format!("invalid stored {column}: {e}")))
+        .map_err(|e| ServiceError::Internal(format!("invalid stored {column}: {e}")))
 }
 
 /// Handles optional datetime rfc3339 for this module.

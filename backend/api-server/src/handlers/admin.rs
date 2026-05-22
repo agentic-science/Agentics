@@ -3,12 +3,12 @@
 use super::{
     AdminAuth, AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto,
     AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse, AgentId,
-    AgentPioneerCodeId, AgentStatus, AppError, AppState, ChallengeId, CreatePioneerCodeRequest,
-    DateTime, DisableAgentResponse, EvaluationJobId, EvaluationJobResponse, EvaluationJobStatus,
-    Json, Path, PioneerCode, PioneerCodeDetailResponse, PioneerCodeListResponse, PioneerCodeStatus,
+    AgentPioneerCodeId, AgentStatus, AppState, ChallengeId, CreatePioneerCodeRequest, DateTime,
+    DisableAgentResponse, EvaluationJobId, EvaluationJobResponse, EvaluationJobStatus, Json, Path,
+    PioneerCode, PioneerCodeDetailResponse, PioneerCodeListResponse, PioneerCodeStatus,
     QueueEvaluationJobInput, Result, RevokePioneerCodeResponse, SUBMISSION_QUOTA_WINDOW_SECONDS,
-    ScoringMode, SolutionSubmissionPath, State, StatusCode, Utc, ValidatedJson, auth, db,
-    parse_request_value, presenters,
+    ScoringMode, ServiceError, SolutionSubmissionPath, State, StatusCode, Utc, ValidatedJson, auth,
+    db, parse_request_value, presenters,
 };
 use shared::models::challenge::MoltbookCommunityDto;
 use shared::models::request::{
@@ -34,14 +34,16 @@ pub async fn create_pioneer_code(
     } = body;
 
     if max_uses == 0 || max_uses < -1 {
-        return Err(AppError::BadRequest(
+        return Err(ServiceError::BadRequest(
             "max_uses must be a positive integer or -1 for local testing".to_string(),
-        ));
+        )
+        .into());
     }
     if max_uses == -1 && !state.config.allows_local_registration_testing_knobs() {
-        return Err(AppError::BadRequest(
+        return Err(ServiceError::BadRequest(
             "unlimited pioneer codes are only allowed for loopback local testing".to_string(),
-        ));
+        )
+        .into());
     }
 
     let (code_display, code_hash, label) = {
@@ -68,12 +70,7 @@ pub async fn create_pioneer_code(
         },
     )
     .await
-    .map_err(|e| match e {
-        AppError::Database(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
-            AppError::Conflict
-        }
-        _ => e,
-    })?;
+    .map_err(ServiceError::unique_violation_as_conflict)?;
 
     Ok((
         StatusCode::CREATED,
@@ -96,7 +93,8 @@ pub async fn get_pioneer_code(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<PioneerCodeDetailResponse>> {
-    let id = AgentPioneerCodeId::try_new(id).map_err(|e| AppError::BadRequest(e.to_string()))?;
+    let id =
+        AgentPioneerCodeId::try_new(id).map_err(|e| ServiceError::BadRequest(e.to_string()))?;
     let (code, uses) = db::get_pioneer_code_detail(&state.db, &id).await?;
     Ok(Json(presenters::present_pioneer_code_detail(&code, &uses)?))
 }
@@ -107,7 +105,8 @@ pub async fn revoke_pioneer_code(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<RevokePioneerCodeResponse>> {
-    let id = AgentPioneerCodeId::try_new(id).map_err(|e| AppError::BadRequest(e.to_string()))?;
+    let id =
+        AgentPioneerCodeId::try_new(id).map_err(|e| ServiceError::BadRequest(e.to_string()))?;
     let outcome = db::revoke_pioneer_code(&state.db, &id).await?;
     Ok(Json(RevokePioneerCodeResponse {
         id,
@@ -126,24 +125,26 @@ fn resolve_pioneer_code_request(
         if let Some(label) = label
             && code.label() != Some(label)
         {
-            return Err(AppError::BadRequest(
+            return Err(ServiceError::BadRequest(
                 "label must match the pioneer code prefix when code is supplied".to_string(),
-            ));
+            )
+            .into());
         }
         return Ok(code);
     }
 
-    PioneerCode::generate(label).map_err(|e| AppError::BadRequest(e.to_string()))
+    Ok(PioneerCode::generate(label).map_err(|e| ServiceError::BadRequest(e.to_string()))?)
 }
 
 /// Parse an optional RFC3339 timestamp from an API request field.
 fn parse_optional_rfc3339(raw: Option<&str>, field: &str) -> Result<Option<DateTime<Utc>>> {
-    raw.map(|value| {
-        DateTime::parse_from_rfc3339(value)
-            .map(|value| value.with_timezone(&Utc))
-            .map_err(|e| AppError::BadRequest(format!("{field} must be RFC3339: {e}")))
-    })
-    .transpose()
+    Ok(raw
+        .map(|value| {
+            DateTime::parse_from_rfc3339(value)
+                .map(|value| value.with_timezone(&Utc))
+                .map_err(|e| ServiceError::BadRequest(format!("{field} must be RFC3339: {e}")))
+        })
+        .transpose()?)
 }
 
 /// List challenge shells and published benchmark contracts for admins.
@@ -272,7 +273,7 @@ pub async fn rejudge(
             target: job.target,
             eval_type: ScoringMode::Official,
             status: EvaluationJobStatus::from_storage_value(&job.status).ok_or_else(|| {
-                AppError::Internal(format!(
+                ServiceError::Internal(format!(
                     "stored invalid evaluation job status `{}`",
                     job.status
                 ))
@@ -306,7 +307,7 @@ pub async fn official_run(
             target: job.target,
             eval_type: ScoringMode::Official,
             status: EvaluationJobStatus::from_storage_value(&job.status).ok_or_else(|| {
-                AppError::Internal(format!(
+                ServiceError::Internal(format!(
                     "stored invalid evaluation job status `{}`",
                     job.status
                 ))
@@ -321,7 +322,7 @@ pub async fn disable_agent(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<DisableAgentResponse>> {
-    let id = AgentId::try_new(id).map_err(|e| AppError::BadRequest(e.to_string()))?;
+    let id = AgentId::try_new(id).map_err(|e| ServiceError::BadRequest(e.to_string()))?;
     db::disable_agent(&state.db, id.as_str()).await?;
     Ok(Json(DisableAgentResponse {
         id,

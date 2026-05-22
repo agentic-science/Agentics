@@ -1,7 +1,7 @@
 use axum::{
     Json,
     extract::{FromRequest, FromRequestParts, Path, Request},
-    http::{Method, StatusCode, header, request::Parts},
+    http::{Method, header, request::Parts},
 };
 use secrecy::ExposeSecret;
 use serde::de::DeserializeOwned;
@@ -11,9 +11,11 @@ use shared::db::{
     AuthenticatedAdminSession, authenticate_admin_session, authenticate_agent_token,
     authenticate_creator_session,
 };
-use shared::error::AppError;
-use shared::models::auth::GithubOauthCallbackRequest;
-use shared::models::auth::GithubOauthLoginRequest;
+use shared::error::ServiceError;
+use shared::models::ErrorDetail;
+use shared::models::auth::{
+    AdminLoginRequest, GithubOauthCallbackRequest, GithubOauthLoginRequest,
+};
 use shared::models::challenge_creation::{
     CreateChallengeDraftRequest, ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest,
     ValidateChallengeDraftRequest,
@@ -23,9 +25,9 @@ use shared::models::request::{
     CreateChallengeShortlistRevisionRequest, CreatePioneerCodeRequest,
     CreateSolutionSubmissionRequest, RegisterAgentRequest, SetChallengeMoltbookDiscussionRequest,
 };
-use shared::validation::text;
 
 use crate::admin_auth_throttle::remote_addr_from_parts;
+use crate::error::ApiError;
 use crate::state::AppState;
 
 const X_AGENTICS_ADMIN_AUTOMATION: &str = "x-agentics-admin-automation";
@@ -38,7 +40,7 @@ const X_AGENTICS_ADMIN_AUTOMATION: &str = "x-agentics-admin-automation";
 pub struct SolutionSubmissionPath(pub SolutionSubmissionId);
 
 impl FromRequestParts<AppState> for SolutionSubmissionPath {
-    type Rejection = (StatusCode, Json<shared::models::ErrorResponse>);
+    type Rejection = ApiError;
 
     /// Parses the path segment as a canonical solution-submission id.
     async fn from_request_parts(
@@ -63,7 +65,7 @@ impl FromRequestParts<AppState> for SolutionSubmissionPath {
 pub struct ChallengeDraftIdPath(pub ChallengeDraftId);
 
 impl FromRequestParts<AppState> for ChallengeDraftIdPath {
-    type Rejection = (StatusCode, Json<shared::models::ErrorResponse>);
+    type Rejection = ApiError;
 
     /// Parses the path segment as a canonical challenge-draft id.
     async fn from_request_parts(
@@ -92,7 +94,7 @@ pub struct AgentAuth {
 }
 
 impl FromRequestParts<AppState> for AgentAuth {
-    type Rejection = (StatusCode, axum::Json<shared::models::ErrorResponse>);
+    type Rejection = ApiError;
 
     /// Authenticates the bearer token and returns the active agent context.
     async fn from_request_parts(
@@ -131,7 +133,7 @@ pub struct AdminAuth {
 }
 
 impl FromRequestParts<AppState> for AdminAuth {
-    type Rejection = (StatusCode, axum::Json<shared::models::ErrorResponse>);
+    type Rejection = ApiError;
 
     /// Authenticates admin requests through Basic auth or session cookies plus CSRF.
     async fn from_request_parts(
@@ -155,17 +157,11 @@ impl FromRequestParts<AppState> for AdminAuth {
                 });
             }
             let remote_addr = remote_addr_from_parts(parts);
-            if let Err(AppError::TooManyRequests(message)) = state
+            if let Err(ServiceError::TooManyRequests(message)) = state
                 .admin_auth_throttle
                 .record_failed_attempt(&parsed.username, &remote_addr)
             {
-                return Err((
-                    StatusCode::TOO_MANY_REQUESTS,
-                    axum::Json(shared::models::ErrorResponse {
-                        error: "too_many_requests".to_string(),
-                        message,
-                    }),
-                ));
+                return Err(ServiceError::too_many_requests(message).into());
             }
             return Err(unauthorized("需要有效的 admin basic auth"));
         }
@@ -204,7 +200,7 @@ pub struct CreatorAuth {
 }
 
 impl FromRequestParts<AppState> for CreatorAuth {
-    type Rejection = (StatusCode, axum::Json<shared::models::ErrorResponse>);
+    type Rejection = ApiError;
 
     /// Authenticates creator web requests through the GitHub-linked session cookie.
     async fn from_request_parts(
@@ -267,10 +263,7 @@ impl WebSessionCsrf for shared::db::AuthenticatedCreatorSession {
 }
 
 /// Validates CSRF headers for state-changing web-session requests.
-fn require_session_csrf<S: WebSessionCsrf>(
-    parts: &Parts,
-    session: &S,
-) -> Result<(), (StatusCode, axum::Json<shared::models::ErrorResponse>)> {
+fn require_session_csrf<S: WebSessionCsrf>(parts: &Parts, session: &S) -> Result<(), ApiError> {
     if !requires_csrf(&parts.method) {
         return Ok(());
     }
@@ -287,9 +280,7 @@ fn require_session_csrf<S: WebSessionCsrf>(
 }
 
 /// Requires an explicit non-simple header before Basic-auth admin mutations.
-fn require_basic_admin_automation_header(
-    parts: &Parts,
-) -> Result<(), (StatusCode, axum::Json<shared::models::ErrorResponse>)> {
+fn require_basic_admin_automation_header(parts: &Parts) -> Result<(), ApiError> {
     if !requires_csrf(&parts.method) {
         return Ok(());
     }
@@ -308,25 +299,13 @@ fn require_basic_admin_automation_header(
 }
 
 /// Builds a localized unauthorized API rejection.
-fn unauthorized(message: &str) -> (StatusCode, axum::Json<shared::models::ErrorResponse>) {
-    (
-        StatusCode::UNAUTHORIZED,
-        axum::Json(shared::models::ErrorResponse {
-            error: "unauthorized".to_string(),
-            message: message.to_string(),
-        }),
-    )
+fn unauthorized(message: &str) -> ApiError {
+    ServiceError::unauthorized(message).into()
 }
 
 /// Builds a localized forbidden API rejection.
-fn forbidden(message: &str) -> (StatusCode, axum::Json<shared::models::ErrorResponse>) {
-    (
-        StatusCode::FORBIDDEN,
-        axum::Json(shared::models::ErrorResponse {
-            error: "forbidden".to_string(),
-            message: message.to_string(),
-        }),
-    )
+fn forbidden(message: &str) -> ApiError {
+    ServiceError::Forbidden(message.to_string()).into()
 }
 
 /// Returns whether an HTTP method can mutate server state and therefore needs CSRF.
@@ -351,10 +330,10 @@ fn cookie_value(cookie_header: Option<&str>, name: &str) -> Option<String> {
 ///
 /// Serde handles type-level and unknown-field validation on the shared request
 /// structs. This trait covers semantic checks such as required non-empty
-/// strings while preserving the API's `{ error, message }` error shape.
+/// strings while preserving the API error envelope.
 pub trait ValidateRequest {
     /// Performs semantic validation after serde has accepted the request shape.
-    fn validate(&self) -> Result<(), String>;
+    fn validate(&self) -> std::result::Result<(), ServiceError>;
 }
 
 /// Axum JSON extractor that rejects malformed or semantically invalid request bodies.
@@ -366,7 +345,7 @@ where
     S: Send + Sync,
     T: DeserializeOwned + ValidateRequest,
 {
-    type Rejection = (StatusCode, Json<shared::models::ErrorResponse>);
+    type Rejection = ApiError;
 
     /// Deserializes a JSON body and runs the request's semantic validator.
     async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
@@ -374,50 +353,74 @@ where
             .await
             .map_err(|rejection| bad_request(&rejection.body_text()))?;
 
-        value.validate().map_err(|message| bad_request(&message))?;
+        value.validate()?;
 
         Ok(Self(value))
     }
 }
 
 /// Builds a structured bad-request rejection for JSON and path validation failures.
-fn bad_request(message: &str) -> (StatusCode, Json<shared::models::ErrorResponse>) {
-    (
-        StatusCode::BAD_REQUEST,
-        Json(shared::models::ErrorResponse {
-            error: "bad_request".to_string(),
-            message: message.to_string(),
-        }),
-    )
+fn bad_request(message: &str) -> ApiError {
+    ServiceError::bad_request(message).into()
 }
 
 /// Validates that a string request field has visible, non-whitespace content.
-fn require_non_empty(value: &str, field: &str) -> Result<(), String> {
-    text::require_non_empty(value, field).map_err(|error| match error {
-        AppError::Validation(message) => message,
-        other => other.to_string(),
-    })
+fn require_non_empty(value: &str, field: &str) -> std::result::Result<(), ServiceError> {
+    if !value.trim().is_empty() {
+        return Ok(());
+    }
+    Err(field_validation_error(
+        field,
+        format!("{field} must not be empty"),
+        "must not be empty",
+    ))
+}
+
+/// Builds a request-validation error with one structured field detail.
+fn field_validation_error(
+    field: &str,
+    message: impl Into<String>,
+    detail_message: impl Into<String>,
+) -> ServiceError {
+    ServiceError::validation_failed(
+        message,
+        vec![ErrorDetail {
+            field: Some(field.to_string()),
+            message: detail_message.into(),
+        }],
+    )
 }
 
 impl ValidateRequest for RegisterAgentRequest {
     /// Ensures agent registration provides a display name.
-    fn validate(&self) -> Result<(), String> {
+    fn validate(&self) -> std::result::Result<(), ServiceError> {
         require_non_empty(&self.display_name, "display_name")
+    }
+}
+
+impl ValidateRequest for AdminLoginRequest {
+    /// Defers empty credential handling to the login handler so failures stay unauthorized.
+    fn validate(&self) -> std::result::Result<(), ServiceError> {
+        Ok(())
     }
 }
 
 impl ValidateRequest for CreatePioneerCodeRequest {
     /// Defers pioneer-code semantics to the handler, which needs runtime config.
-    fn validate(&self) -> Result<(), String> {
+    fn validate(&self) -> std::result::Result<(), ServiceError> {
         Ok(())
     }
 }
 
 impl ValidateRequest for CreateChallengeDraftRequest {
     /// Ensures GitHub draft metadata has positive numeric identifiers.
-    fn validate(&self) -> Result<(), String> {
+    fn validate(&self) -> std::result::Result<(), ServiceError> {
         if self.pr_author_github_user_id <= 0 {
-            return Err("pr_author_github_user_id must be greater than zero".to_string());
+            return Err(field_validation_error(
+                "pr_author_github_user_id",
+                "pr_author_github_user_id must be greater than zero",
+                "must be greater than zero",
+            ));
         }
         Ok(())
     }
@@ -425,14 +428,14 @@ impl ValidateRequest for CreateChallengeDraftRequest {
 
 impl ValidateRequest for GithubOauthLoginRequest {
     /// Defers pioneer-code semantics to the handler, which needs runtime config.
-    fn validate(&self) -> Result<(), String> {
+    fn validate(&self) -> std::result::Result<(), ServiceError> {
         Ok(())
     }
 }
 
 impl ValidateRequest for GithubOauthCallbackRequest {
     /// Ensures the browser returned both OAuth values before backend exchange.
-    fn validate(&self) -> Result<(), String> {
+    fn validate(&self) -> std::result::Result<(), ServiceError> {
         require_non_empty(&self.code, "code")?;
         require_non_empty(&self.state, "state")
     }
@@ -440,37 +443,41 @@ impl ValidateRequest for GithubOauthCallbackRequest {
 
 impl ValidateRequest for UploadChallengePrivateAssetRequest {
     /// Ensures private asset uploads contain an encoded ZIP payload.
-    fn validate(&self) -> Result<(), String> {
+    fn validate(&self) -> std::result::Result<(), ServiceError> {
         require_non_empty(&self.asset_base64, "asset_base64")
     }
 }
 
 impl ValidateRequest for ValidateChallengeDraftRequest {
     /// Ensures draft validation references a local checkout path.
-    fn validate(&self) -> Result<(), String> {
+    fn validate(&self) -> std::result::Result<(), ServiceError> {
         require_non_empty(&self.repository_path, "repository_path")
     }
 }
 
 impl ValidateRequest for ReviewChallengeDraftRequest {
     /// Accepts review decisions because serde has already validated the enum payload.
-    fn validate(&self) -> Result<(), String> {
+    fn validate(&self) -> std::result::Result<(), ServiceError> {
         Ok(())
     }
 }
 
 impl ValidateRequest for CreateSolutionSubmissionRequest {
     /// Ensures solution submissions contain an encoded artifact payload.
-    fn validate(&self) -> Result<(), String> {
+    fn validate(&self) -> std::result::Result<(), ServiceError> {
         require_non_empty(&self.artifact_base64, "artifact_base64")
     }
 }
 
 impl ValidateRequest for CreateChallengeShortlistRevisionRequest {
     /// Ensures shortlist updates add at least one agent id.
-    fn validate(&self) -> Result<(), String> {
+    fn validate(&self) -> std::result::Result<(), ServiceError> {
         if self.agent_ids_to_add.is_empty() {
-            return Err("agent_ids_to_add must contain at least one agent id".to_string());
+            return Err(field_validation_error(
+                "agent_ids_to_add",
+                "agent_ids_to_add must contain at least one agent id",
+                "must contain at least one agent id",
+            ));
         }
         Ok(())
     }
@@ -478,7 +485,7 @@ impl ValidateRequest for CreateChallengeShortlistRevisionRequest {
 
 impl ValidateRequest for SetChallengeMoltbookDiscussionRequest {
     /// URL syntax is validated by the typed request field during deserialization.
-    fn validate(&self) -> Result<(), String> {
+    fn validate(&self) -> std::result::Result<(), ServiceError> {
         Ok(())
     }
 }

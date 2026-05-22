@@ -6,6 +6,7 @@ import {
   adminChallengePrivateAssetListResponseSchema,
   adminLoginRequestSchema,
   adminSessionResponseSchema,
+  errorResponseSchema,
 } from "@/lib/schemas";
 
 const ADMIN_API_BASE_URL =
@@ -46,8 +47,8 @@ export async function adminFetchJson<T>(
     let message = response.statusText;
     try {
       /** Handles body behavior for this component. */
-      const body = (await response.json()) as { message?: string };
-      message = body.message ?? message;
+      const parsed = errorResponseSchema.safeParse(await response.json());
+      message = parsed.success ? parsed.data.error.message : message;
     } catch {
       // Non-JSON error responses still surface the status text.
     }
@@ -75,8 +76,8 @@ export async function adminLogin(
     let message = response.statusText;
     try {
       /** Handles body behavior for this component. */
-      const body = (await response.json()) as { message?: string };
-      message = body.message ?? message;
+      const parsed = errorResponseSchema.safeParse(await response.json());
+      message = parsed.success ? parsed.data.error.message : message;
     } catch {
       // Non-JSON error responses still surface the status text.
     }
@@ -96,8 +97,8 @@ export async function adminSession(): Promise<AdminSessionResponse> {
   if (!response.ok) {
     let message = response.statusText;
     try {
-      const body = (await response.json()) as { message?: string };
-      message = body.message ?? message;
+      const parsed = errorResponseSchema.safeParse(await response.json());
+      message = parsed.success ? parsed.data.error.message : message;
     } catch {
       // Non-JSON error responses still surface the status text.
     }
@@ -133,8 +134,8 @@ export async function adminLogout(csrfToken: string): Promise<void> {
     let message = response.statusText;
     try {
       /** Handles body behavior for this component. */
-      const body = (await response.json()) as { message?: string };
-      message = body.message ?? message;
+      const parsed = errorResponseSchema.safeParse(await response.json());
+      message = parsed.success ? parsed.data.error.message : message;
     } catch {
       // Non-JSON error responses still surface the status text.
     }

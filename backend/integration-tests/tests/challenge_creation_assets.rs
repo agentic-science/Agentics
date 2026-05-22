@@ -10,7 +10,7 @@ use helpers::{
 use serde_json::json;
 use shared::{
     db,
-    error::AppError,
+    error::ServiceError,
     models::{
         challenge_creation::ChallengePrivateAssetKind,
         hashes::Sha256Digest,
@@ -246,7 +246,7 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
     for result in [result_a, result_b] {
         match result {
             Ok(_) => created += 1,
-            Err(AppError::TooManyRequests(message)) => {
+            Err(ServiceError::TooManyRequests(message)) => {
                 assert!(
                     message.contains("private asset quota exceeded"),
                     "unexpected quota message: {message}"

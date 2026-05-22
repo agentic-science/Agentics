@@ -1,8 +1,9 @@
 //! Shared target selection and MVP target policy validation.
 
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::models::challenge::{ChallengeTargetSpec, DockerPlatform, TargetAccelerator};
 use crate::models::names::{ChallengeName, TargetName};
+use crate::validation::archive::ChallengeValidationError;
 
 /// Hosted MVP target with no accelerator.
 pub const LINUX_ARM64_NO_ACCELERATOR_TARGET: &str = "linux-arm64-cpu";
@@ -37,16 +38,16 @@ pub fn select_targets_from_spec(
             .iter()
             .find(|candidate| &candidate.name == target)
             .ok_or_else(|| {
-                AppError::Validation(format!(
+                ServiceError::from(ChallengeValidationError::UnsupportedTarget(format!(
                     "challenge `{challenge_name}` does not support target `{target}`"
-                ))
+                )))
             })?;
         validate_selected_targets(challenge_name, &[target], mode)?;
         return Ok(vec![target.name.clone()]);
     }
 
     match targets {
-        [] => Err(AppError::Validation(format!(
+        [] => Err(ServiceError::Validation(format!(
             "challenge `{challenge_name}` does not declare any targets"
         ))),
         targets => {
@@ -55,7 +56,7 @@ pub fn select_targets_from_spec(
                 .map(|target| target.name.as_str())
                 .collect::<Vec<_>>()
                 .join(", ");
-            Err(AppError::Validation(format!(
+            Err(ServiceError::Validation(format!(
                 "target is required for challenge `{challenge_name}`; pass --target <target> or --all-targets. Available targets: {available}"
             )))
         }
@@ -81,7 +82,7 @@ fn validate_selected_targets(
         return Ok(());
     }
 
-    Err(AppError::Validation(format!(
+    Err(ServiceError::Validation(format!(
         "validation pass is disabled for challenge `{challenge_name}` target(s): {}; submit officially or ask the challenge owner to enable validation",
         disabled.join(", ")
     )))
@@ -102,15 +103,15 @@ pub fn validate_submission_target_policy(target: &ChallengeTargetSpec, field: &s
             DockerPlatform::LinuxArm64,
             TargetAccelerator::Gpu,
         ),
-        MACOS_ARM64_NO_ACCELERATOR_DEV_TARGET => Err(AppError::Validation(format!(
+        MACOS_ARM64_NO_ACCELERATOR_DEV_TARGET => Err(ServiceError::Validation(format!(
             "{field}.name `{}` is a platform-development target and cannot be used for hosted challenge deployment or submissions",
             target.name
         ))),
-        "linux-amd64-cpu" | "linux-amd64-cuda" => Err(AppError::Validation(format!(
+        "linux-amd64-cpu" | "linux-amd64-cuda" => Err(ServiceError::Validation(format!(
             "{field}.name `{}` is reserved for post-MVP deployment support",
             target.name
         ))),
-        other => Err(AppError::Validation(format!(
+        other => Err(ServiceError::Validation(format!(
             "{field}.name `{other}` is not supported for MVP hosted challenge deployment; supported targets: {LINUX_ARM64_NO_ACCELERATOR_TARGET}, {LINUX_ARM64_ACCELERATOR_TARGET}"
         ))),
     }
@@ -122,10 +123,10 @@ pub fn validate_platform_dev_target_name(target: &TargetName, field: &str) -> Re
         LINUX_ARM64_NO_ACCELERATOR_TARGET
         | LINUX_ARM64_ACCELERATOR_TARGET
         | MACOS_ARM64_NO_ACCELERATOR_DEV_TARGET => Ok(()),
-        "linux-amd64-cpu" | "linux-amd64-cuda" => Err(AppError::Validation(format!(
+        "linux-amd64-cpu" | "linux-amd64-cuda" => Err(ServiceError::Validation(format!(
             "{field} `{target}` is reserved for post-MVP platform development"
         ))),
-        other => Err(AppError::Validation(format!(
+        other => Err(ServiceError::Validation(format!(
             "{field} `{other}` is not supported for MVP platform development; supported targets: {LINUX_ARM64_NO_ACCELERATOR_TARGET}, {LINUX_ARM64_ACCELERATOR_TARGET}, {MACOS_ARM64_NO_ACCELERATOR_DEV_TARGET}"
         ))),
     }
@@ -139,14 +140,14 @@ fn require_target_shape(
     accelerator: TargetAccelerator,
 ) -> Result<()> {
     if target.docker_platform != docker_platform {
-        return Err(AppError::Validation(format!(
+        return Err(ServiceError::Validation(format!(
             "{field}.docker_platform must be `{}` for target `{}`",
             docker_platform.as_str(),
             target.name
         )));
     }
     if target.accelerator != accelerator {
-        return Err(AppError::Validation(format!(
+        return Err(ServiceError::Validation(format!(
             "{field}.accelerator must be {} for target `{}`",
             accelerator_json_name(accelerator),
             target.name

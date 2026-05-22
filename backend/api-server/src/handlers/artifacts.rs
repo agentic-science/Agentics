@@ -2,8 +2,9 @@
 
 use axum::Json;
 
+use crate::error::ApiResult as Result;
 use shared::db;
-use shared::error::{AppError, Result};
+use shared::error::ServiceError;
 use shared::models::request::{
     SolutionSubmissionArtifactFileDto, SolutionSubmissionArtifactResponse,
     SolutionSubmissionLogsResponse,
@@ -32,7 +33,7 @@ pub(super) async fn read_solution_submission_artifact_summary(
         read_solution_submission_artifact_summary_blocking(&artifact_key, artifact_bytes)
     })
     .await
-    .map_err(|e| AppError::Internal(format!("artifact summary task failed: {e}")))?
+    .map_err(|e| ServiceError::Internal(format!("artifact summary task failed: {e}")))?
 }
 
 /// Read a submitter-visible validation log response, truncating the payload for transport.
@@ -64,7 +65,7 @@ pub(super) async fn read_solution_submission_logs(
     let visible_bytes = if truncated {
         bytes
             .get(..MAX_LOG_RESPONSE_BYTES)
-            .ok_or_else(|| AppError::Internal("log truncation range invalid".to_string()))?
+            .ok_or_else(|| ServiceError::Internal("log truncation range invalid".to_string()))?
     } else {
         bytes.as_slice()
     };
@@ -102,7 +103,7 @@ fn read_solution_submission_artifact_summary_blocking(
 
         let mut buf = Vec::new();
         let compressed_size = i64::try_from(entry.compressed_size()).map_err(|_| {
-            AppError::BadRequest(
+            ServiceError::BadRequest(
                 "artifact ZIP entry compressed size exceeds supported range".to_string(),
             )
         })?;
@@ -124,12 +125,12 @@ fn read_solution_submission_artifact_summary_blocking(
         let content = if let Some(text) = inline_text {
             total_inline_text_bytes = total_inline_text_bytes
                 .checked_add(u64::try_from(buf.len()).map_err(|_| {
-                    AppError::BadRequest(
+                    ServiceError::BadRequest(
                         "artifact inline text size exceeds supported range".to_string(),
                     )
                 })?)
                 .ok_or_else(|| {
-                    AppError::BadRequest("artifact inline text budget overflow".to_string())
+                    ServiceError::BadRequest("artifact inline text budget overflow".to_string())
                 })?;
             Some(text.to_string())
         } else {
@@ -139,7 +140,9 @@ fn read_solution_submission_artifact_summary_blocking(
         files.push(SolutionSubmissionArtifactFileDto {
             path: entry_path.clone(),
             size: i64::try_from(size).map_err(|_| {
-                AppError::BadRequest("artifact ZIP entry size exceeds supported range".to_string())
+                ServiceError::BadRequest(
+                    "artifact ZIP entry size exceeds supported range".to_string(),
+                )
             })?,
             compressed_size,
             language: Some(infer_language(&entry_path)),
@@ -156,13 +159,15 @@ fn read_solution_submission_artifact_summary_blocking(
             .map(|file_name| file_name.to_string_lossy().to_string())
             .unwrap_or_default(),
         archive_size: i64::try_from(archive_size).map_err(|_| {
-            AppError::BadRequest("artifact ZIP size exceeds supported range".to_string())
+            ServiceError::BadRequest("artifact ZIP size exceeds supported range".to_string())
         })?,
         file_count: i64::try_from(files.len()).map_err(|_| {
-            AppError::BadRequest("artifact ZIP file count exceeds supported range".to_string())
+            ServiceError::BadRequest("artifact ZIP file count exceeds supported range".to_string())
         })?,
         total_uncompressed_size: i64::try_from(envelope.expanded_size()).map_err(|_| {
-            AppError::BadRequest("artifact ZIP expanded size exceeds supported range".to_string())
+            ServiceError::BadRequest(
+                "artifact ZIP expanded size exceeds supported range".to_string(),
+            )
         })?,
         files,
     })
@@ -256,7 +261,10 @@ mod tests {
             read_solution_submission_artifact_summary(&path.to_string_lossy(), bytes).await;
         drop(std::fs::remove_file(path));
 
-        assert!(matches!(result, Err(AppError::Validation(message)) if message.contains("unsafe")));
+        let error = result.expect_err("unsafe archive entry should be rejected");
+        assert!(
+            matches!(error.as_service_error(), ServiceError::Validation(message) if message.contains("unsafe"))
+        );
     }
 
     #[tokio::test]
@@ -273,8 +281,9 @@ mod tests {
             read_solution_submission_artifact_summary(&path.to_string_lossy(), bytes).await;
         drop(std::fs::remove_file(path));
 
+        let error = result.expect_err("oversized archive should be rejected");
         assert!(
-            matches!(result, Err(AppError::Validation(message)) if message.contains("at most"))
+            matches!(error.as_service_error(), ServiceError::Validation(message) if message.contains("at most"))
         );
     }
 

@@ -37,12 +37,20 @@ async fn request_validation_returns_contract_error_shape(pool: sqlx::PgPool) {
         .json()
         .await
         .expect("failed to decode empty-display-name response");
-    assert_eq!(empty_display_name_body["error"], "bad_request");
+    assert_eq!(empty_display_name_body["error"]["code"], "bad_request");
     assert!(
-        empty_display_name_body["message"]
+        empty_display_name_body["error"]["message"]
             .as_str()
             .unwrap()
             .contains("display_name")
+    );
+    assert_eq!(
+        empty_display_name_body["error"]["details"][0]["field"],
+        "display_name"
+    );
+    assert_eq!(
+        empty_display_name_body["error"]["details"][0]["message"],
+        "must not be empty"
     );
 
     let unknown_field = client
@@ -59,7 +67,7 @@ async fn request_validation_returns_contract_error_shape(pool: sqlx::PgPool) {
         .json()
         .await
         .expect("failed to decode unknown-field response");
-    assert_eq!(unknown_field_body["error"], "bad_request");
+    assert_eq!(unknown_field_body["error"]["code"], "bad_request");
 
     let invalid_challenge_id = client
         .get(api_url(&app, "/api/public/challenges/bad%20id"))
@@ -71,9 +79,9 @@ async fn request_validation_returns_contract_error_shape(pool: sqlx::PgPool) {
         .json()
         .await
         .expect("failed to decode invalid challenge id response");
-    assert_eq!(invalid_challenge_id_body["error"], "bad_request");
+    assert_eq!(invalid_challenge_id_body["error"]["code"], "bad_request");
     assert!(
-        invalid_challenge_id_body["message"]
+        invalid_challenge_id_body["error"]["message"]
             .as_str()
             .expect("message should be a string")
             .contains("challenge_id")
@@ -101,9 +109,9 @@ async fn admin_basic_mutation_requires_automation_header(pool: sqlx::PgPool) {
 
     assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
     let body: serde_json::Value = response.json().await.expect("failed to decode error");
-    assert_eq!(body["error"], "forbidden");
+    assert_eq!(body["error"]["code"], "forbidden");
     assert!(
-        body["message"]
+        body["error"]["message"]
             .as_str()
             .expect("message should be a string")
             .contains("x-agentics-admin-automation")
@@ -191,9 +199,9 @@ async fn solution_submission_rejects_invalid_target_before_artifact_decode(pool:
         .json()
         .await
         .expect("failed to decode malformed-target error");
-    assert_eq!(malformed_error["error"], "bad_request");
+    assert_eq!(malformed_error["error"]["code"], "bad_request");
     assert!(
-        malformed_error["message"]
+        malformed_error["error"]["message"]
             .as_str()
             .expect("error message")
             .contains("target")
@@ -214,9 +222,9 @@ async fn solution_submission_rejects_invalid_target_before_artifact_decode(pool:
     assert_eq!(response.status(), 400);
 
     let error: serde_json::Value = response.json().await.expect("failed to decode error");
-    assert_eq!(error["error"], "bad_request");
+    assert_eq!(error["error"]["code"], "bad_request");
     assert!(
-        error["message"]
+        error["error"]["message"]
             .as_str()
             .expect("error message")
             .contains("target")
@@ -285,7 +293,7 @@ async fn solution_submission_rejects_oversized_manifest_note_before_storage(pool
     assert_eq!(response.status(), 400);
     let body: serde_json::Value = response.json().await.expect("failed to decode error");
     assert!(
-        body["message"]
+        body["error"]["message"]
             .as_str()
             .expect("error message")
             .contains("note must be at most 1024 UTF-8 bytes")
@@ -320,9 +328,9 @@ async fn invalid_solution_submission_path_ids_return_bad_request(pool: sqlx::PgP
             .expect("failed to send invalid path-id request");
         assert_eq!(response.status(), 400);
         let error: serde_json::Value = response.json().await.expect("failed to decode error");
-        assert_eq!(error["error"], "bad_request");
+        assert_eq!(error["error"]["code"], "bad_request");
         assert!(
-            error["message"]
+            error["error"]["message"]
                 .as_str()
                 .expect("error message")
                 .contains("solution_submission_id")
@@ -383,7 +391,7 @@ async fn solution_submission_rejects_legacy_round_field_before_artifact_decode(p
         .await
         .expect("failed to decode error");
     assert!(
-        unknown_error["message"]
+        unknown_error["error"]["message"]
             .as_str()
             .expect("message")
             .contains("round")
@@ -408,7 +416,7 @@ async fn solution_submission_rejects_legacy_round_field_before_artifact_decode(p
         .await
         .expect("failed to decode error");
     assert!(
-        malformed_error["message"]
+        malformed_error["error"]["message"]
             .as_str()
             .expect("message")
             .contains("round_id")
@@ -476,7 +484,7 @@ async fn solution_submission_rejects_unstarted_and_closed_challenges_before_arti
         assert_eq!(response.status(), 403);
         let error: serde_json::Value = response.json().await.expect("failed to decode error");
         assert!(
-            error["message"]
+            error["error"]["message"]
                 .as_str()
                 .expect("message")
                 .contains(expected_message)
@@ -531,7 +539,7 @@ async fn private_shortlist_challenge_requires_owner_delta_before_artifact_decode
         .await
         .expect("failed to decode missing-shortlist error");
     assert_eq!(
-        missing_error["message"],
+        missing_error["error"]["message"],
         "challenge requires a shortlist, but no shortlist has been uploaded yet"
     );
 
@@ -636,7 +644,7 @@ async fn private_shortlist_challenge_requires_owner_delta_before_artifact_decode
         .await
         .expect("failed to decode outsider error");
     assert_eq!(
-        outsider_error["message"],
+        outsider_error["error"]["message"],
         "agent is not eligible for this challenge"
     );
 
@@ -687,7 +695,7 @@ async fn challenge_submission_limit_rejects_before_extra_artifact_work(pool: sql
     assert_eq!(rejected.status(), reqwest::StatusCode::TOO_MANY_REQUESTS);
     let error: serde_json::Value = rejected.json().await.expect("failed to decode quota error");
     assert!(
-        error["message"]
+        error["error"]["message"]
             .as_str()
             .expect("message")
             .contains("challenge limit exceeded")
@@ -777,7 +785,7 @@ async fn parent_solution_submission_must_match_agent_and_scope(pool: sqlx::PgPoo
     assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
     let error: serde_json::Value = response.json().await.expect("error json");
     assert!(
-        error["message"]
+        error["error"]["message"]
             .as_str()
             .expect("message")
             .contains("same agent, challenge_id, and target"),

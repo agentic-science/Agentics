@@ -6,7 +6,7 @@ use bollard::models::{DeviceRequest, HostConfigLogConfig};
 use bollard::query_parameters::LogsOptionsBuilder;
 use futures::StreamExt;
 
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::models::challenge::TargetAccelerator;
 
 /// Handles docker log config for this module.
@@ -39,7 +39,7 @@ pub(super) fn accelerator_device_requests(
         TargetAccelerator::None => Ok(None),
         TargetAccelerator::Gpu => {
             let count = accelerator_count.ok_or_else(|| {
-                AppError::Runner(
+                ServiceError::Runner(
                     "accelerator `gpu` requires resource_profile.hardware_metadata.gpu_count"
                         .to_string(),
                 )
@@ -83,7 +83,7 @@ pub(super) async fn collect_container_logs(
                 }
             }
             Err(e) => {
-                return Err(AppError::Docker(format!(
+                return Err(ServiceError::Docker(format!(
                     "collect container logs failed: {e}"
                 )));
             }

@@ -74,9 +74,8 @@ async fn validation_rejects_private_benchmark_bundle_alias(pool: sqlx::PgPool) {
         .json()
         .await
         .expect("failed to decode validation error");
-    let message = body["message"]
+    let message = body["error"]["message"]
         .as_str()
-        .or_else(|| body["error"]["message"].as_str())
         .unwrap_or_else(|| panic!("missing error message: {body:#}"));
     assert!(
         message.contains("distinct public bundle path"),

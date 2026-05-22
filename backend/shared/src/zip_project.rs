@@ -7,7 +7,7 @@ use std::io::Read;
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::models::paths::{LogRelativePath, ScriptPath};
 use crate::validation::archive::{ArchiveEnvelopePolicy, inspect_zip_bytes};
 use crate::validation::text;
@@ -168,7 +168,7 @@ impl ZipProjectManifest {
     /// Parse and validate a manifest JSON payload.
     pub fn parse_json(raw: &str) -> Result<Self> {
         let manifest: Self = serde_json::from_str(raw).map_err(|e| {
-            AppError::Validation(format!("invalid {ZIP_PROJECT_MANIFEST_FILE}: {e}"))
+            ServiceError::Validation(format!("invalid {ZIP_PROJECT_MANIFEST_FILE}: {e}"))
         })?;
         manifest.validate()?;
         Ok(manifest)
@@ -180,10 +180,10 @@ impl ZipProjectManifest {
         let reader = std::io::Cursor::new(bytes);
         let mut archive = zip::ZipArchive::new(reader)?;
         let mut manifest = archive.by_name(ZIP_PROJECT_MANIFEST_FILE).map_err(|_| {
-            AppError::Validation(format!("{ZIP_PROJECT_MANIFEST_FILE} is required"))
+            ServiceError::Validation(format!("{ZIP_PROJECT_MANIFEST_FILE} is required"))
         })?;
         if manifest.size() > 128 * 1024 {
-            return Err(AppError::Validation(format!(
+            return Err(ServiceError::Validation(format!(
                 "{ZIP_PROJECT_MANIFEST_FILE} must be at most 131072 bytes"
             )));
         }
@@ -196,12 +196,12 @@ impl ZipProjectManifest {
     /// Validate protocol versioning, submitter metadata, and script paths.
     pub fn validate(&self) -> Result<()> {
         if self.protocol != ZIP_PROJECT_PROTOCOL {
-            return Err(AppError::Validation(format!(
+            return Err(ServiceError::Validation(format!(
                 "protocol must be {ZIP_PROJECT_PROTOCOL}"
             )));
         }
         if self.protocol_version != ZIP_PROJECT_PROTOCOL_VERSION {
-            return Err(AppError::Validation(format!(
+            return Err(ServiceError::Validation(format!(
                 "protocol_version must be {ZIP_PROJECT_PROTOCOL_VERSION}"
             )));
         }

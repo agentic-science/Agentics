@@ -1,10 +1,10 @@
 use super::{
-    AppError, ChallengeBundleSpec, CoexecutedBenchmarkPrepareRequest, CoexecutedBenchmarkRequest,
+    ChallengeBundleSpec, CoexecutedBenchmarkPrepareRequest, CoexecutedBenchmarkRequest,
     ContainerRequest, EvaluationLogs, EvaluatorRequest, Path, PipedStdioRequest, Result,
-    RetainedRunTree, RetainedRunnerTree, RunnerContext, SessionPlanRequest, SetupBuildRequest,
-    SolutionRunRequest, WritablePhase, ZIP_PROJECT_MANIFEST_FILE, ZipProjectManifest,
-    ZipProjectPhaseName, append_named_logs, append_phase_logs, append_run_logs, bind_mount,
-    cleanup_paths, coexecuted_benchmark_prepare, container_name, copy_dir_all,
+    RetainedRunTree, RetainedRunnerTree, RunnerContext, ServiceError, SessionPlanRequest,
+    SetupBuildRequest, SolutionRunRequest, WritablePhase, ZIP_PROJECT_MANIFEST_FILE,
+    ZipProjectManifest, ZipProjectPhaseName, append_named_logs, append_phase_logs, append_run_logs,
+    bind_mount, cleanup_paths, coexecuted_benchmark_prepare, container_name, copy_dir_all,
     copy_evaluator_visible_run_tree, effective_accelerator_count, effective_phase_limits,
     ensure_container_succeeded, ensure_declared_outputs_exist, ensure_disk_limit,
     ensure_prepare_disk_limit, evaluator_limits, include_log_excerpts,
@@ -25,7 +25,7 @@ pub(super) async fn read_solution_manifest(
     let raw = tokio::fs::read_to_string(&manifest_path)
         .await
         .map_err(|e| {
-            AppError::Validation(format!(
+            ServiceError::Validation(format!(
                 "missing {ZIP_PROJECT_MANIFEST_FILE} in solution submission: {e}"
             ))
         })?;
@@ -173,7 +173,7 @@ async fn run_setup_and_build_bounded(
     }
 
     retained_workspace.ok_or_else(|| {
-        AppError::Internal("setup/build phase list unexpectedly ended empty".to_string())
+        ServiceError::Internal("setup/build phase list unexpectedly ended empty".to_string())
     })
 }
 
@@ -188,7 +188,7 @@ pub(super) async fn run_solution_invocations(
         .phase_execution_plan()
         .into_iter()
         .find(|phase| phase.name == ZipProjectPhaseName::Run)
-        .ok_or_else(|| AppError::Runner("zip_project manifest has no run phase".to_string()))?;
+        .ok_or_else(|| ServiceError::Runner("zip_project manifest has no run phase".to_string()))?;
 
     let mut retained_run_trees = Vec::with_capacity(request.run_manifest.runs.len());
     for (run_index, run) in request.run_manifest.runs.iter().enumerate() {
@@ -383,7 +383,7 @@ pub(super) async fn run_evaluator(
         visible_log_content(request.eval_type, &outcome.logs),
     );
     if outcome.timed_out || outcome.exit_code != 0 {
-        return Err(AppError::Runner(format!(
+        return Err(ServiceError::Runner(format!(
             "evaluator container failed: exit_code={}, timed_out={}",
             outcome.exit_code, outcome.timed_out
         )));
@@ -404,7 +404,7 @@ pub(super) async fn run_piped_stdio_session(
         .phase_execution_plan()
         .into_iter()
         .find(|phase| phase.name == ZipProjectPhaseName::Run)
-        .ok_or_else(|| AppError::Runner("zip_project manifest has no run phase".to_string()))?;
+        .ok_or_else(|| ServiceError::Runner("zip_project manifest has no run phase".to_string()))?;
     let session_plan = resolve_piped_stdio_session_plan(
         SessionPlanRequest {
             runner,
@@ -426,8 +426,9 @@ pub(super) async fn run_piped_stdio_session(
     tokio::fs::create_dir_all(&session_input_dir).await?;
     tokio::fs::write(
         request.session_root.join("session.json"),
-        serde_json::to_vec_pretty(&session_plan.manifest)
-            .map_err(|e| AppError::Internal(format!("serialize session manifest failed: {e}")))?,
+        serde_json::to_vec_pretty(&session_plan.manifest).map_err(|e| {
+            ServiceError::Internal(format!("serialize session manifest failed: {e}"))
+        })?,
     )
     .await?;
     materialize_input_files(
@@ -575,13 +576,13 @@ pub(super) async fn run_piped_stdio_session(
         visible_log_content(request.eval_type, &outcome.interactor.logs),
     );
     if outcome.participant.timed_out || outcome.participant.exit_code != 0 {
-        return Err(AppError::Runner(format!(
+        return Err(ServiceError::Runner(format!(
             "participant container failed: exit_code={}, timed_out={}",
             outcome.participant.exit_code, outcome.participant.timed_out
         )));
     }
     if outcome.interactor.timed_out || outcome.interactor.exit_code != 0 {
-        return Err(AppError::Runner(format!(
+        return Err(ServiceError::Runner(format!(
             "interactor container failed: exit_code={}, timed_out={}",
             outcome.interactor.exit_code, outcome.interactor.timed_out
         )));
@@ -604,7 +605,7 @@ pub(super) async fn run_coexecuted_benchmark(
         .execution
         .coexecuted_benchmark()
         .ok_or_else(|| {
-            AppError::Runner("challenge execution is not coexecuted_benchmark".to_string())
+            ServiceError::Runner("challenge execution is not coexecuted_benchmark".to_string())
         })?;
     let retained_prepared_root =
         if let Some(prepare) = coexecuted_benchmark_prepare(execution, request.eval_type) {
@@ -709,7 +710,7 @@ pub(super) async fn run_coexecuted_benchmark(
         visible_log_content(request.eval_type, &outcome.logs),
     );
     if outcome.timed_out || outcome.exit_code != 0 {
-        return Err(AppError::Runner(format!(
+        return Err(ServiceError::Runner(format!(
             "benchmark container failed: exit_code={}, timed_out={}",
             outcome.exit_code, outcome.timed_out
         )));

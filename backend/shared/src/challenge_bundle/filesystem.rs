@@ -4,7 +4,7 @@ use std::path::Path;
 
 use sha2::{Digest, Sha256};
 
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::models::hashes::Sha256Digest;
 
 /// Return a deterministic SHA-256 digest of all files in a bundle tree.
@@ -12,7 +12,7 @@ pub async fn challenge_bundle_tree_sha256(bundle_root: &Path) -> Result<Sha256Di
     let bundle_root = bundle_root.to_path_buf();
     tokio::task::spawn_blocking(move || challenge_bundle_tree_sha256_blocking(&bundle_root))
         .await
-        .map_err(|e| AppError::Internal(format!("bundle digest task failed: {e}")))?
+        .map_err(|e| ServiceError::Internal(format!("bundle digest task failed: {e}")))?
 }
 
 /// Copy a challenge bundle directory while rejecting symlinks.
@@ -27,7 +27,7 @@ pub async fn copy_challenge_bundle_dir(
         copy_challenge_bundle_dir_blocking(&source, &target, replace_existing)
     })
     .await
-    .map_err(|e| AppError::Internal(format!("bundle copy task failed: {e}")))?
+    .map_err(|e| ServiceError::Internal(format!("bundle copy task failed: {e}")))?
 }
 
 /// Copy a challenge bundle directory while excluding one bundle-relative tree.
@@ -49,7 +49,7 @@ pub async fn copy_challenge_bundle_dir_excluding(
         )
     })
     .await
-    .map_err(|e| AppError::Internal(format!("public bundle copy task failed: {e}")))?
+    .map_err(|e| ServiceError::Internal(format!("public bundle copy task failed: {e}")))?
 }
 
 /// Compute a bundle-tree digest synchronously for execution on a blocking thread.
@@ -69,18 +69,18 @@ fn hash_bundle_tree(hasher: &mut Sha256, bundle_root: &Path) -> Result<()> {
         for entry in entries {
             let path = entry.path();
             let metadata = std::fs::symlink_metadata(&path)?;
-            let relative_path = path
-                .strip_prefix(bundle_root)
-                .map_err(|e| AppError::Internal(format!("failed to build bundle digest: {e}")))?;
+            let relative_path = path.strip_prefix(bundle_root).map_err(|e| {
+                ServiceError::Internal(format!("failed to build bundle digest: {e}"))
+            })?;
             let relative_path = relative_path.to_str().ok_or_else(|| {
-                AppError::Validation(format!(
+                ServiceError::Validation(format!(
                     "bundle path must be UTF-8 for digesting: {}",
                     path.display()
                 ))
             })?;
 
             if metadata.file_type().is_symlink() {
-                return Err(AppError::Validation(format!(
+                return Err(ServiceError::Validation(format!(
                     "challenge bundle must not contain symlinks: {}",
                     path.display()
                 )));
@@ -113,7 +113,7 @@ fn hash_file(hasher: &mut Sha256, path: &Path) -> Result<()> {
             break;
         }
         let chunk = buffer.get(..bytes_read).ok_or_else(|| {
-            AppError::Internal("file read exceeded digest buffer bounds".to_string())
+            ServiceError::Internal("file read exceeded digest buffer bounds".to_string())
         })?;
         hasher.update(chunk);
     }
@@ -140,7 +140,7 @@ fn copy_challenge_bundle_dir_blocking(
             if target.is_dir() {
                 return Ok(());
             }
-            return Err(AppError::Validation(format!(
+            return Err(ServiceError::Validation(format!(
                 "managed bundle target exists and is not a directory: {}",
                 target.display()
             )));
@@ -157,7 +157,7 @@ fn copy_challenge_bundle_dir_blocking(
             let target_path = current_target.join(entry.file_name());
             let meta = std::fs::symlink_metadata(&source_path)?;
             if meta.file_type().is_symlink() {
-                return Err(AppError::Validation(format!(
+                return Err(ServiceError::Validation(format!(
                     "challenge bundle must not contain symlinks: {}",
                     source_path.display()
                 )));
@@ -185,7 +185,7 @@ fn copy_challenge_bundle_dir_excluding_blocking(
     replace_existing: bool,
 ) -> Result<()> {
     if excluded_relative_tree.as_os_str().is_empty() || excluded_relative_tree.is_absolute() {
-        return Err(AppError::Validation(
+        return Err(ServiceError::Validation(
             "excluded challenge bundle path must be relative and non-empty".to_string(),
         ));
     }
@@ -195,7 +195,7 @@ fn copy_challenge_bundle_dir_excluding_blocking(
             if target.is_dir() {
                 return Ok(());
             }
-            return Err(AppError::Validation(format!(
+            return Err(ServiceError::Validation(format!(
                 "managed public bundle target exists and is not a directory: {}",
                 target.display()
             )));
@@ -208,7 +208,7 @@ fn copy_challenge_bundle_dir_excluding_blocking(
     while let Some(current_source) = stack.pop() {
         let relative_dir = current_source
             .strip_prefix(source)
-            .map_err(|e| AppError::Internal(format!("failed to copy public bundle: {e}")))?;
+            .map_err(|e| ServiceError::Internal(format!("failed to copy public bundle: {e}")))?;
         if is_path_within_tree(relative_dir, excluded_relative_tree) {
             continue;
         }
@@ -218,16 +218,16 @@ fn copy_challenge_bundle_dir_excluding_blocking(
         for entry in std::fs::read_dir(&current_source)? {
             let entry = entry?;
             let source_path = entry.path();
-            let relative_path = source_path
-                .strip_prefix(source)
-                .map_err(|e| AppError::Internal(format!("failed to copy public bundle: {e}")))?;
+            let relative_path = source_path.strip_prefix(source).map_err(|e| {
+                ServiceError::Internal(format!("failed to copy public bundle: {e}"))
+            })?;
             if is_path_within_tree(relative_path, excluded_relative_tree) {
                 continue;
             }
 
             let meta = std::fs::symlink_metadata(&source_path)?;
             if meta.file_type().is_symlink() {
-                return Err(AppError::Validation(format!(
+                return Err(ServiceError::Validation(format!(
                     "challenge bundle must not contain symlinks: {}",
                     source_path.display()
                 )));

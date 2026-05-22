@@ -230,8 +230,10 @@ async fn challenges_stats_tolerates_hidden_submission_details() {
         .and(query_param("target", "linux-arm64-cpu"))
         .and(query_param("limit", "20"))
         .respond_with(ResponseTemplate::new(403).set_body_json(json!({
-            "error": "forbidden",
-            "message": "result details are hidden"
+            "error": {
+                "code": "forbidden",
+                "message": "result details are hidden"
+            }
         })))
         .mount(&server)
         .await;
@@ -721,8 +723,10 @@ async fn submissions_report_uses_validation_rank_score_without_official_eval() {
         ))
         .and(header("authorization", "Bearer test-token"))
         .respond_with(ResponseTemplate::new(403).set_body_json(json!({
-            "error": "forbidden",
-            "message": "leaderboard is hidden"
+            "error": {
+                "code": "forbidden",
+                "message": "leaderboard is hidden"
+            }
         })))
         .mount(&server)
         .await;
@@ -731,8 +735,10 @@ async fn submissions_report_uses_validation_rank_score_without_official_eval() {
             "/api/public/solution-submissions/11111111-1111-4111-8111-111111111111/ranking-context",
         ))
         .respond_with(ResponseTemplate::new(403).set_body_json(json!({
-            "error": "forbidden",
-            "message": "leaderboard is hidden"
+            "error": {
+                "code": "forbidden",
+                "message": "leaderboard is hidden"
+            }
         })))
         .mount(&server)
         .await;
@@ -779,8 +785,10 @@ async fn submissions_report_tolerates_hidden_public_ranking_context() {
             "/api/public/solution-submissions/11111111-1111-4111-8111-111111111111/ranking-context",
         ))
         .respond_with(ResponseTemplate::new(403).set_body_json(json!({
-            "error": "forbidden",
-            "message": "leaderboard is hidden"
+            "error": {
+                "code": "forbidden",
+                "message": "leaderboard is hidden"
+            }
         })))
         .mount(&server)
         .await;
@@ -936,8 +944,10 @@ async fn submissions_rank_falls_back_to_public_context_after_auth_forbidden() {
         ))
         .and(query_param("target", "linux-arm64-cpu"))
         .respond_with(ResponseTemplate::new(403).set_body_json(json!({
-            "error": "forbidden",
-            "message": "ranking context hidden"
+            "error": {
+                "code": "forbidden",
+                "message": "ranking context hidden"
+            }
         })))
         .expect(1)
         .mount(&server)

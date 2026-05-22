@@ -1,7 +1,8 @@
 //! Score-distribution builders for public challenge metric views.
 
+use crate::error::ApiResult as Result;
 use shared::db::LeaderboardMetricEntry;
-use shared::error::{AppError, Result};
+use shared::error::ServiceError;
 use shared::models::challenge::{ChallengeBundleSpec, MetricVisibility};
 use shared::models::evaluation::MetricValue;
 use shared::models::ids::ChallengeId;
@@ -27,15 +28,15 @@ pub(super) fn build_score_distribution_response(
         .collect::<Vec<_>>();
     values.sort_by(f64::total_cmp);
     let count = i64::try_from(values.len())
-        .map_err(|_| AppError::Internal("score distribution count overflow".to_string()))?;
+        .map_err(|_| ServiceError::Internal("score distribution count overflow".to_string()))?;
     let (min, max, mean, quantiles, histogram) = if values.is_empty() {
         (None, None, None, Vec::new(), Vec::new())
     } else {
         let min = values.first().copied().ok_or_else(|| {
-            AppError::Internal("score distribution unexpectedly empty".to_string())
+            ServiceError::Internal("score distribution unexpectedly empty".to_string())
         })?;
         let max = values.last().copied().ok_or_else(|| {
-            AppError::Internal("score distribution unexpectedly empty".to_string())
+            ServiceError::Internal("score distribution unexpectedly empty".to_string())
         })?;
         let sum: f64 = values.iter().sum();
         let mean = sum / values.len() as f64;
@@ -104,10 +105,11 @@ fn ensure_metric_is_publicly_distributable(
         return Ok(());
     }
 
-    Err(AppError::Forbidden(
+    Err(ServiceError::Forbidden(
         "score distribution is available only for rank_score, best_rank_score, or the public primary ranking metric"
             .to_string(),
-    ))
+    )
+    .into())
 }
 
 /// Build nearest-rank quantiles used by the public distribution API.
@@ -137,12 +139,12 @@ fn nearest_rank_quantile(values: &[f64], numerator: usize, denominator: usize) -
         .checked_mul(numerator)
         .and_then(|value| value.checked_add(denominator / 2))
         .and_then(|value| value.checked_div(denominator))
-        .ok_or_else(|| AppError::Internal("quantile index overflow".to_string()))?
+        .ok_or_else(|| ServiceError::Internal("quantile index overflow".to_string()))?
         .min(max_index);
-    values
+    Ok(values
         .get(rounded_index)
         .copied()
-        .ok_or_else(|| AppError::Internal("quantile index out of range".to_string()))
+        .ok_or_else(|| ServiceError::Internal("quantile index out of range".to_string()))?)
 }
 
 /// Build at most ten histogram buckets for already-sorted finite values.
@@ -150,17 +152,17 @@ fn build_histogram(values: &[f64]) -> Result<Vec<ScoreDistributionBucketDto>> {
     let min = values
         .first()
         .copied()
-        .ok_or_else(|| AppError::Internal("histogram values unexpectedly empty".to_string()))?;
+        .ok_or_else(|| ServiceError::Internal("histogram values unexpectedly empty".to_string()))?;
     let max = values
         .last()
         .copied()
-        .ok_or_else(|| AppError::Internal("histogram values unexpectedly empty".to_string()))?;
+        .ok_or_else(|| ServiceError::Internal("histogram values unexpectedly empty".to_string()))?;
     if min == max {
         return Ok(vec![ScoreDistributionBucketDto {
             lower: min,
             upper: max,
             count: i64::try_from(values.len())
-                .map_err(|_| AppError::Internal("histogram count overflow".to_string()))?,
+                .map_err(|_| ServiceError::Internal("histogram count overflow".to_string()))?,
         }]);
     }
 
@@ -171,10 +173,10 @@ fn build_histogram(values: &[f64]) -> Result<Vec<ScoreDistributionBucketDto>> {
         let index = histogram_bucket_index(*value, min, width, bucket_count)?;
         let count = counts
             .get_mut(index)
-            .ok_or_else(|| AppError::Internal("histogram bucket index invalid".to_string()))?;
+            .ok_or_else(|| ServiceError::Internal("histogram bucket index invalid".to_string()))?;
         *count = count
             .checked_add(1)
-            .ok_or_else(|| AppError::Internal("histogram count overflow".to_string()))?;
+            .ok_or_else(|| ServiceError::Internal("histogram count overflow".to_string()))?;
     }
 
     let mut buckets = Vec::with_capacity(counts.len());
@@ -184,9 +186,9 @@ fn build_histogram(values: &[f64]) -> Result<Vec<ScoreDistributionBucketDto>> {
             Some(next_index) if next_index == bucket_count => max,
             Some(next_index) => min + width * next_index as f64,
             None => {
-                return Err(AppError::Internal(
-                    "histogram bucket index overflow".to_string(),
-                ));
+                return Err(
+                    ServiceError::Internal("histogram bucket index overflow".to_string()).into(),
+                );
             }
         };
         buckets.push(ScoreDistributionBucketDto {
@@ -203,7 +205,7 @@ fn histogram_bucket_index(value: f64, min: f64, width: f64, bucket_count: usize)
     for index in 0..bucket_count {
         let next_index = index
             .checked_add(1)
-            .ok_or_else(|| AppError::Internal("histogram bucket index overflow".to_string()))?;
+            .ok_or_else(|| ServiceError::Internal("histogram bucket index overflow".to_string()))?;
         if next_index == bucket_count {
             return Ok(index);
         }
@@ -212,15 +214,15 @@ fn histogram_bucket_index(value: f64, min: f64, width: f64, bucket_count: usize)
             return Ok(index);
         }
     }
-    bucket_count
+    Ok(bucket_count
         .checked_sub(1)
-        .ok_or_else(|| AppError::Internal("histogram bucket count invalid".to_string()))
+        .ok_or_else(|| ServiceError::Internal("histogram bucket count invalid".to_string()))?)
 }
 
 #[cfg(test)]
 mod tests {
     use shared::db::LeaderboardMetricEntry;
-    use shared::error::AppError;
+    use shared::error::ServiceError;
     use shared::models::challenge::{
         ChallengeBundleSpec, ChallengeEligibilitySpec, ChallengeEligibilityType,
         ChallengeExecutionSpec, ChallengeResultDetailVisibility,
@@ -473,7 +475,10 @@ mod tests {
             vec![entry(20.0, -20.0)],
         )
         .expect_err("official-only primary metric should be rejected");
-        assert!(matches!(error, AppError::Forbidden(_)));
+        assert!(matches!(
+            error.as_service_error(),
+            ServiceError::Forbidden(_)
+        ));
 
         let error = build_score_distribution_response(
             challenge_id("11111111-1111-4111-8111-111111111111"),
@@ -484,6 +489,9 @@ mod tests {
             vec![entry(20.0, -20.0)],
         )
         .expect_err("official_score built-in is no longer exposed");
-        assert!(matches!(error, AppError::Forbidden(_)));
+        assert!(matches!(
+            error.as_service_error(),
+            ServiceError::Forbidden(_)
+        ));
     }
 }

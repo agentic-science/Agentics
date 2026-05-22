@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use bollard::Docker;
 
 use crate::config::Config;
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::models::challenge::{
     ChallengeBundleSpec, ChallengeExecutionSpec, ChallengePrepareSpec, ChallengeRunManifest,
     CoexecutedBenchmarkPrepareSpec, DockerPlatform, MetricSchemaSpec, PipedStdioPrepareSpec,
@@ -402,16 +402,16 @@ impl std::fmt::Debug for EvaluationJobExecution<'_> {
 
 /// Return the durable storage key used for one runner log.
 pub fn evaluation_runner_log_key(job_id: &str, attempt_count: i32) -> Result<StorageKey> {
-    StorageKey::try_new(format!(
+    Ok(StorageKey::try_new(format!(
         "eval-artifacts/{job_id}/attempt-{attempt_count}/runner.log"
-    ))
+    ))?)
 }
 
 /// Remove private official benchmark identifiers from runner errors crossing trust boundaries.
-fn sanitize_runner_error(eval_type: ScoringMode, error: AppError) -> AppError {
+fn sanitize_runner_error(eval_type: ScoringMode, error: ServiceError) -> ServiceError {
     match eval_type {
         ScoringMode::Validation => error,
-        ScoringMode::Official => AppError::Runner(
+        ScoringMode::Official => ServiceError::Runner(
             "official evaluation failed; runner details are redacted for private benchmark execution"
                 .to_string(),
         ),
@@ -427,13 +427,13 @@ fn validate_evaluator_result(
 ) -> Result<()> {
     result
         .validate_size_limits(limits.max_public_results, limits.max_result_log_bytes)
-        .map_err(|e| AppError::Runner(format!("invalid result.json: {e}")))?;
+        .map_err(|e| ServiceError::Runner(format!("invalid result.json: {e}")))?;
     result
         .validate_for_mode(eval_type)
-        .map_err(|e| AppError::Runner(format!("invalid result.json: {e}")))?;
+        .map_err(|e| ServiceError::Runner(format!("invalid result.json: {e}")))?;
     result
         .complete_metric_result(metric_schema, eval_type)
-        .map_err(|e| AppError::Runner(format!("invalid result.json: {e}")))?;
+        .map_err(|e| ServiceError::Runner(format!("invalid result.json: {e}")))?;
     result.mode = Some(eval_type);
     Ok(())
 }
@@ -445,21 +445,21 @@ fn configure_run_count_limits(
     logs: &mut EvaluationLogs,
 ) -> Result<()> {
     let run_count = u64::try_from(run_manifest.runs.len())
-        .map_err(|_| AppError::Runner("run count exceeds supported range".to_string()))?;
+        .map_err(|_| ServiceError::Runner("run count exceeds supported range".to_string()))?;
     if run_count == 0 {
-        return Err(AppError::Runner(
+        return Err(ServiceError::Runner(
             "run manifest must declare at least one run".to_string(),
         ));
     }
     if run_count > limits.max_runs {
-        return Err(AppError::Runner(format!(
+        return Err(ServiceError::Runner(format!(
             "run manifest exceeded runner run limit: {run_count} > {} runs",
             limits.max_runs
         )));
     }
     let log_limit = run_count
         .checked_mul(EVALUATION_LOG_BYTES_PER_RUN)
-        .ok_or_else(|| AppError::Runner("evaluation log limit overflow".to_string()))?;
+        .ok_or_else(|| ServiceError::Runner("evaluation log limit overflow".to_string()))?;
     logs.set_limit(log_limit);
     Ok(())
 }
@@ -468,21 +468,21 @@ fn configure_run_count_limits(
 async fn read_limited_result_json(path: &Path, max_bytes: u64) -> Result<String> {
     let metadata = tokio::fs::symlink_metadata(path)
         .await
-        .map_err(|e| AppError::Runner(format!("missing result.json: {e}")))?;
+        .map_err(|e| ServiceError::Runner(format!("missing result.json: {e}")))?;
     if !metadata.is_file() {
-        return Err(AppError::Runner(
+        return Err(ServiceError::Runner(
             "result.json is not a regular file".to_string(),
         ));
     }
     let size = metadata.len();
     if size > max_bytes {
-        return Err(AppError::Runner(format!(
+        return Err(ServiceError::Runner(format!(
             "result.json exceeded size limit: {size} > {max_bytes} bytes"
         )));
     }
     tokio::fs::read_to_string(path)
         .await
-        .map_err(|e| AppError::Runner(format!("invalid result.json bytes: {e}")))
+        .map_err(|e| ServiceError::Runner(format!("invalid result.json bytes: {e}")))
 }
 
 /// Enumerates run manifest source variants supported by this module.
@@ -850,7 +850,7 @@ fn run_manifest_source(
             } else if let Some(prepare) = spec.execution.validation_prepare() {
                 Ok(RunManifestSource::Prepared(prepare))
             } else {
-                Err(AppError::Runner(
+                Err(ServiceError::Runner(
                     "challenge does not declare validation runs or validation prepare".to_string(),
                 ))
             }
@@ -861,7 +861,7 @@ fn run_manifest_source(
             } else if let Some(prepare) = spec.execution.official_prepare() {
                 Ok(RunManifestSource::Prepared(prepare))
             } else {
-                Err(AppError::Runner(
+                Err(ServiceError::Runner(
                     "challenge does not declare official runs or official prepare".to_string(),
                 ))
             }
@@ -874,10 +874,9 @@ fn piped_stdio_session_source(
     spec: &ChallengeBundleSpec,
     eval_type: ScoringMode,
 ) -> Result<PipedStdioSessionSource<'_>> {
-    let execution = spec
-        .execution
-        .piped_stdio()
-        .ok_or_else(|| AppError::Runner("challenge execution is not piped_stdio".to_string()))?;
+    let execution = spec.execution.piped_stdio().ok_or_else(|| {
+        ServiceError::Runner("challenge execution is not piped_stdio".to_string())
+    })?;
     match eval_type {
         ScoringMode::Validation => {
             if let Some(path) = &execution.validation_session {
@@ -885,7 +884,7 @@ fn piped_stdio_session_source(
             } else if let Some(prepare) = &execution.validation_prepare {
                 Ok(PipedStdioSessionSource::Prepared(prepare))
             } else {
-                Err(AppError::Runner(
+                Err(ServiceError::Runner(
                     "challenge does not declare validation session or validation prepare"
                         .to_string(),
                 ))
@@ -897,7 +896,7 @@ fn piped_stdio_session_source(
             } else if let Some(prepare) = &execution.official_prepare {
                 Ok(PipedStdioSessionSource::Prepared(prepare))
             } else {
-                Err(AppError::Runner(
+                Err(ServiceError::Runner(
                     "challenge does not declare official session or official prepare".to_string(),
                 ))
             }
@@ -925,18 +924,18 @@ fn effective_accelerator_count(
         TargetAccelerator::None => Ok(None),
         TargetAccelerator::Gpu => {
             let hardware = profile.hardware_metadata.as_ref().ok_or_else(|| {
-                AppError::Runner(
+                ServiceError::Runner(
                     "accelerator `gpu` requires resource_profile.hardware_metadata".to_string(),
                 )
             })?;
             let count = hardware.gpu_count.ok_or_else(|| {
-                AppError::Runner(
+                ServiceError::Runner(
                     "accelerator `gpu` requires resource_profile.hardware_metadata.gpu_count"
                         .to_string(),
                 )
             })?;
             if count == 0 {
-                return Err(AppError::Runner(
+                return Err(ServiceError::Runner(
                     "resource_profile.hardware_metadata.gpu_count must be greater than zero"
                         .to_string(),
                 ));
@@ -955,7 +954,7 @@ fn effective_phase_limits(
         ZipProjectPhaseName::Setup => &profile.solution.setup,
         ZipProjectPhaseName::Build => &profile.solution.build,
         ZipProjectPhaseName::Run => profile.solution.run.as_ref().ok_or_else(|| {
-            AppError::Runner(
+            ServiceError::Runner(
                 "resource_profile.solution.run is required for solution run".to_string(),
             )
         })?,

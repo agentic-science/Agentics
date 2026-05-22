@@ -18,7 +18,7 @@ use tokio::io::{AsyncWrite, AsyncWriteExt};
 use tokio::time::timeout;
 
 use crate::config::Config;
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::models::challenge::{DockerPlatform, TargetAccelerator};
 use crate::models::ids::EvaluationJobId;
 use crate::zip_project::{DockerNetworkMode, ZipProjectPhaseLimits};
@@ -108,19 +108,21 @@ pub(super) async fn run_container(
         (Ok(result), Ok(()), Ok(())) => Ok(result),
         (Ok(_), Err(permission_err), Ok(())) => Err(permission_err),
         (Ok(_), Ok(()), Err(cleanup_err)) => Err(cleanup_err),
-        (Ok(_), Err(permission_err), Err(cleanup_err)) => Err(AppError::Docker(format!(
+        (Ok(_), Err(permission_err), Err(cleanup_err)) => Err(ServiceError::Docker(format!(
             "{permission_err}; additionally failed to remove runner container: {cleanup_err}"
         ))),
         (Err(run_err), Ok(()), Ok(())) => Err(run_err),
-        (Err(run_err), Err(permission_err), Ok(())) => Err(AppError::Docker(format!(
+        (Err(run_err), Err(permission_err), Ok(())) => Err(ServiceError::Docker(format!(
             "{run_err}; additionally failed to repair bind mount permissions: {permission_err}"
         ))),
-        (Err(run_err), Ok(()), Err(cleanup_err)) => Err(AppError::Docker(format!(
+        (Err(run_err), Ok(()), Err(cleanup_err)) => Err(ServiceError::Docker(format!(
             "{run_err}; additionally failed to remove runner container: {cleanup_err}"
         ))),
-        (Err(run_err), Err(permission_err), Err(cleanup_err)) => Err(AppError::Docker(format!(
-            "{run_err}; additionally failed to repair bind mount permissions: {permission_err}; additionally failed to remove runner container: {cleanup_err}"
-        ))),
+        (Err(run_err), Err(permission_err), Err(cleanup_err)) => {
+            Err(ServiceError::Docker(format!(
+                "{run_err}; additionally failed to repair bind mount permissions: {permission_err}; additionally failed to remove runner container: {cleanup_err}"
+            )))
+        }
     }
 }
 
@@ -144,7 +146,7 @@ pub(super) async fn run_interactive_stdio_session(
         Err(create_error) => {
             return match remove_container(docker, &participant_id).await {
                 Ok(()) => Err(create_error),
-                Err(cleanup_error) => Err(AppError::Docker(format!(
+                Err(cleanup_error) => Err(ServiceError::Docker(format!(
                     "{create_error}; additionally failed to remove participant container: {cleanup_error}"
                 ))),
             };
@@ -267,7 +269,9 @@ async fn repair_bind_mount_permissions(
     let create_resp = docker
         .create_container(Some(create_opts), container_config)
         .await
-        .map_err(|e| AppError::Docker(format!("create permission repair container failed: {e}")))?;
+        .map_err(|e| {
+            ServiceError::Docker(format!("create permission repair container failed: {e}"))
+        })?;
     let container_id = create_resp.id;
     let run_result = run_created_container(
         docker,
@@ -280,7 +284,7 @@ async fn repair_bind_mount_permissions(
         if outcome.exit_code == 0 && !outcome.timed_out {
             Ok(())
         } else {
-            Err(AppError::Docker(format!(
+            Err(ServiceError::Docker(format!(
                 "permission repair container failed: exit_code={}, timed_out={}, logs={}",
                 outcome.exit_code, outcome.timed_out, outcome.logs
             )))
@@ -291,7 +295,7 @@ async fn repair_bind_mount_permissions(
         (Ok(()), Ok(())) => Ok(()),
         (Ok(()), Err(cleanup_err)) => Err(cleanup_err),
         (Err(run_err), Ok(())) => Err(run_err),
-        (Err(run_err), Err(cleanup_err)) => Err(AppError::Docker(format!(
+        (Err(run_err), Err(cleanup_err)) => Err(ServiceError::Docker(format!(
             "{run_err}; additionally failed to remove permission repair container: {cleanup_err}"
         ))),
     }
@@ -316,7 +320,9 @@ pub async fn reconcile_runner_containers(
                 remove_container(docker, &container_id).await?;
                 summary.removed_stopped =
                     summary.removed_stopped.checked_add(1).ok_or_else(|| {
-                        AppError::Internal("removed stopped container count overflow".to_string())
+                        ServiceError::Internal(
+                            "removed stopped container count overflow".to_string(),
+                        )
                     })?;
             }
             continue;
@@ -339,7 +345,9 @@ pub async fn reconcile_runner_containers(
                 kill_and_remove_container(docker, &container_id).await?;
                 summary.removed_running =
                     summary.removed_running.checked_add(1).ok_or_else(|| {
-                        AppError::Internal("removed running container count overflow".to_string())
+                        ServiceError::Internal(
+                            "removed running container count overflow".to_string(),
+                        )
                     })?;
             }
         }
@@ -373,12 +381,16 @@ pub async fn remove_stale_local_validation_containers(
         if matches!(container.state, Some(ContainerSummaryStateEnum::RUNNING)) {
             kill_and_remove_container(docker, &container_id).await?;
             summary.removed_running = summary.removed_running.checked_add(1).ok_or_else(|| {
-                AppError::Internal("removed local validation container count overflow".to_string())
+                ServiceError::Internal(
+                    "removed local validation container count overflow".to_string(),
+                )
             })?;
         } else {
             remove_container(docker, &container_id).await?;
             summary.removed_stopped = summary.removed_stopped.checked_add(1).ok_or_else(|| {
-                AppError::Internal("removed local validation container count overflow".to_string())
+                ServiceError::Internal(
+                    "removed local validation container count overflow".to_string(),
+                )
             })?;
         }
     }
@@ -409,7 +421,7 @@ async fn list_agentics_runner_containers(
     let containers = docker
         .list_containers(Some(options))
         .await
-        .map_err(|e| AppError::Docker(format!("list runner containers failed: {e}")))?;
+        .map_err(|e| ServiceError::Docker(format!("list runner containers failed: {e}")))?;
     Ok(containers
         .into_iter()
         .filter(|container| container_has_runner_scope(container, scope))
@@ -443,9 +455,9 @@ async fn remove_stopped_runner_containers_from_list(
             continue;
         };
         remove_container(docker, &container_id).await?;
-        removed = removed
-            .checked_add(1)
-            .ok_or_else(|| AppError::Internal("removed container count overflow".to_string()))?;
+        removed = removed.checked_add(1).ok_or_else(|| {
+            ServiceError::Internal("removed container count overflow".to_string())
+        })?;
     }
 
     Ok(removed)
@@ -575,10 +587,11 @@ pub fn connect_docker(config: &Config) -> Result<Docker> {
         .map(str::trim)
         .filter(|host| !host.is_empty())
     {
-        Some(host) => Docker::connect_with_host(host)
-            .map_err(|e| AppError::Docker(format!("failed to connect to Docker host {host}: {e}"))),
+        Some(host) => Docker::connect_with_host(host).map_err(|e| {
+            ServiceError::Docker(format!("failed to connect to Docker host {host}: {e}"))
+        }),
         None => Docker::connect_with_defaults()
-            .map_err(|e| AppError::Docker(format!("failed to connect to Docker: {e}"))),
+            .map_err(|e| ServiceError::Docker(format!("failed to connect to Docker: {e}"))),
     }
 }
 
@@ -654,7 +667,7 @@ pub(super) async fn pre_pull_image(
     let mut stream = docker.create_image(Some(opts), None, None);
     while let Some(item) = stream.next().await {
         if let Err(e) = item {
-            return Err(AppError::Docker(format!(
+            return Err(ServiceError::Docker(format!(
                 "failed to pull image {image}: {e}"
             )));
         }
@@ -684,12 +697,12 @@ async fn create_container(
         .limits
         .memory_limit_mb
         .checked_mul(1024 * 1024)
-        .ok_or_else(|| AppError::Runner("memory limit overflow".to_string()))?;
+        .ok_or_else(|| ServiceError::Runner("memory limit overflow".to_string()))?;
     let memory = i64::try_from(memory_bytes)
-        .map_err(|_| AppError::Runner("memory limit exceeds Docker API range".to_string()))?;
+        .map_err(|_| ServiceError::Runner("memory limit exceeds Docker API range".to_string()))?;
     let nano_cpus = i64::from(request.limits.cpu_limit_millis)
         .checked_mul(1_000_000)
-        .ok_or_else(|| AppError::Runner("CPU limit overflow".to_string()))?;
+        .ok_or_else(|| ServiceError::Runner("CPU limit overflow".to_string()))?;
     let mut host_config = hardened_container_host_config(
         request.limits.network_access.docker_network_mode(),
         request.mounts,
@@ -734,7 +747,7 @@ async fn create_container(
     let create_resp = docker
         .create_container(Some(create_opts), container_config)
         .await
-        .map_err(|e| AppError::Docker(format!("create container failed: {e}")))?;
+        .map_err(|e| ServiceError::Docker(format!("create container failed: {e}")))?;
     Ok(create_resp.id)
 }
 
@@ -748,7 +761,7 @@ async fn run_created_container(
     docker
         .start_container(container_id, None::<StartContainerOptions>)
         .await
-        .map_err(|e| AppError::Docker(format!("start container failed: {e}")))?;
+        .map_err(|e| ServiceError::Docker(format!("start container failed: {e}")))?;
     let started = Instant::now();
 
     let wait_opts = WaitContainerOptionsBuilder::default()
@@ -779,7 +792,9 @@ async fn run_created_container(
             docker
                 .kill_container(container_id, Some(kill_opts))
                 .await
-                .map_err(|e| AppError::Docker(format!("kill timed out container failed: {e}")))?;
+                .map_err(|e| {
+                    ServiceError::Docker(format!("kill timed out container failed: {e}"))
+                })?;
             (124, true)
         }
     };
@@ -809,11 +824,11 @@ async fn run_attached_interactive_pair(
     docker
         .start_container(participant_id, None::<StartContainerOptions>)
         .await
-        .map_err(|e| AppError::Docker(format!("start participant container failed: {e}")))?;
+        .map_err(|e| ServiceError::Docker(format!("start participant container failed: {e}")))?;
     docker
         .start_container(interactor_id, None::<StartContainerOptions>)
         .await
-        .map_err(|e| AppError::Docker(format!("start interactor container failed: {e}")))?;
+        .map_err(|e| ServiceError::Docker(format!("start interactor container failed: {e}")))?;
 
     let started = Instant::now();
     let participant_output = participant_attach.output;
@@ -847,7 +862,7 @@ async fn run_attached_interactive_pair(
             wait_container_exit(docker, participant_id),
             wait_container_exit(docker, interactor_id)
         );
-        Ok::<_, AppError>((participant?, interactor?))
+        Ok::<_, ServiceError>((participant?, interactor?))
     };
     let session_timeout = tokio::time::sleep(Duration::from_secs(timeout_sec));
     tokio::pin!(participant_pump);
@@ -944,12 +959,12 @@ async fn run_attached_interactive_pair(
             )
             .await;
             if let Err(cleanup_error) = kill_result {
-                return Err(AppError::Docker(format!(
+                return Err(ServiceError::Docker(format!(
                     "{original_message}; additionally failed to stop interactive containers: {cleanup_error}"
                 )));
             }
             if let Err(cleanup_error) = drain_result {
-                return Err(AppError::Docker(format!(
+                return Err(ServiceError::Docker(format!(
                     "{original_message}; additionally failed to finish interactive stdio pumps: {cleanup_error}"
                 )));
             }
@@ -959,7 +974,7 @@ async fn run_attached_interactive_pair(
     }
 
     let (participant_exit, interactor_exit) = exits.ok_or_else(|| {
-        AppError::Docker("interactive containers exited without status".to_string())
+        ServiceError::Docker("interactive containers exited without status".to_string())
     })?;
     let (participant_pump, interactor_pump) = finish_attached_pump_pair(
         participant_pump_state,
@@ -1001,7 +1016,7 @@ impl AttachedPumpState {
 
 enum InteractiveTerminal {
     Timeout,
-    Error(AppError),
+    Error(ServiceError),
 }
 
 /// Kill both containers in an interactive pair, preserving both errors if both fail.
@@ -1017,7 +1032,7 @@ async fn kill_interactive_pair(
     match (participant, interactor) {
         (Ok(()), Ok(())) => Ok(()),
         (Err(error), Ok(())) | (Ok(()), Err(error)) => Err(error),
-        (Err(participant_error), Err(interactor_error)) => Err(AppError::Docker(format!(
+        (Err(participant_error), Err(interactor_error)) => Err(ServiceError::Docker(format!(
             "{participant_error}; additionally failed to stop interactor container: {interactor_error}"
         ))),
     }
@@ -1036,9 +1051,9 @@ where
     match state {
         AttachedPumpState::Pending => timeout(pump_timeout, pump)
             .await
-            .map_err(|_| AppError::Docker(format!("{label} stdio pump did not stop")))?,
+            .map_err(|_| ServiceError::Docker(format!("{label} stdio pump did not stop")))?,
         AttachedPumpState::Completed(outcome) => Ok(outcome),
-        AttachedPumpState::Failed => Err(AppError::Docker(format!(
+        AttachedPumpState::Failed => Err(ServiceError::Docker(format!(
             "{label} stdio pump failed before shutdown"
         ))),
     }
@@ -1116,7 +1131,7 @@ where
         AttachedPumpState::Pending => {
             timeout(pump_timeout, pump)
                 .await
-                .map_err(|_| AppError::Docker(format!("{label} stdio pump did not stop")))??;
+                .map_err(|_| ServiceError::Docker(format!("{label} stdio pump did not stop")))??;
             Ok(())
         }
         AttachedPumpState::Completed(_) | AttachedPumpState::Failed => Ok(()),
@@ -1137,7 +1152,7 @@ async fn attach_container_stdio(
     docker
         .attach_container(container_id, Some(options))
         .await
-        .map_err(|e| AppError::Docker(format!("attach container failed: {e}")))
+        .map_err(|e| ServiceError::Docker(format!("attach container failed: {e}")))
 }
 
 /// Outcome from pumping one attached output stream into the opposite stdin.
@@ -1182,17 +1197,17 @@ async fn pump_attached_output(
             Ok(LogOutput::StdOut { message }) | Ok(LogOutput::Console { message }) => {
                 let chunk_len = u64::try_from(message.len()).unwrap_or(u64::MAX);
                 relayed = relayed.checked_add(chunk_len).ok_or_else(|| {
-                    AppError::Docker(format!("{label} interaction byte count overflowed"))
+                    ServiceError::Docker(format!("{label} interaction byte count overflowed"))
                 })?;
                 if relayed > max_interaction_bytes {
                     drop(peer_input.shutdown().await);
                     kill_switch.kill_both().await;
-                    return Err(AppError::Docker(format!(
+                    return Err(ServiceError::Docker(format!(
                         "{label} interaction output exceeded {max_interaction_bytes} bytes"
                     )));
                 }
                 peer_input.write_all(&message).await.map_err(|e| {
-                    AppError::Docker(format!("write {label} interaction bytes failed: {e}"))
+                    ServiceError::Docker(format!("write {label} interaction bytes failed: {e}"))
                 })?;
             }
             Ok(LogOutput::StdErr { message }) => {
@@ -1201,7 +1216,7 @@ async fn pump_attached_output(
             Ok(LogOutput::StdIn { .. }) => {}
             Err(error) => {
                 drop(peer_input.shutdown().await);
-                return Err(AppError::Docker(format!(
+                return Err(ServiceError::Docker(format!(
                     "read {label} attached output failed: {error}"
                 )));
             }
@@ -1211,7 +1226,7 @@ async fn pump_attached_output(
     peer_input
         .shutdown()
         .await
-        .map_err(|e| AppError::Docker(format!("shutdown {label} peer stdin failed: {e}")))?;
+        .map_err(|e| ServiceError::Docker(format!("shutdown {label} peer stdin failed: {e}")))?;
     let mut logs = String::from_utf8_lossy(&logs).into_owned();
     if logs_truncated {
         logs.push_str(&format!(
@@ -1229,8 +1244,8 @@ async fn wait_container_exit(docker: &Docker, container_id: &str) -> Result<i64>
     let mut results = docker.wait_container(container_id, Some(wait_opts));
     let mut exit_code = 1;
     while let Some(result) = results.next().await {
-        let status =
-            result.map_err(|error| AppError::Docker(format!("wait container failed: {error}")))?;
+        let status = result
+            .map_err(|error| ServiceError::Docker(format!("wait container failed: {error}")))?;
         exit_code = status.status_code;
     }
     Ok(exit_code)
@@ -1251,7 +1266,7 @@ async fn remove_container(docker: &Docker, container_id: &str) -> Result<()> {
     {
         let message = error.to_string();
         if !is_benign_remove_race(&message) {
-            return Err(AppError::Docker(format!(
+            return Err(ServiceError::Docker(format!(
                 "remove runner container failed: {error}"
             )));
         }
@@ -1273,7 +1288,7 @@ async fn kill_and_remove_container(docker: &Docker, container_id: &str) -> Resul
     if let Err(error) = docker.kill_container(container_id, Some(kill_opts)).await {
         let message = error.to_string();
         if !message.contains("is not running") && !message.contains("No such container") {
-            return Err(AppError::Docker(format!(
+            return Err(ServiceError::Docker(format!(
                 "kill orphaned runner container failed: {error}"
             )));
         }
@@ -1289,7 +1304,7 @@ async fn kill_container_if_running(docker: &Docker, container_id: &str) -> Resul
     if let Err(error) = docker.kill_container(container_id, Some(kill_opts)).await {
         let message = error.to_string();
         if !message.contains("is not running") && !message.contains("No such container") {
-            return Err(AppError::Docker(format!(
+            return Err(ServiceError::Docker(format!(
                 "kill interactive runner container failed: {error}"
             )));
         }
@@ -1319,9 +1334,9 @@ fn combine_interactive_cleanup_results(
 
     match (run_result, cleanup_errors.is_empty()) {
         (Ok(outcome), true) => Ok(outcome),
-        (Ok(_), false) => Err(AppError::Docker(cleanup_errors.join("; additionally "))),
+        (Ok(_), false) => Err(ServiceError::Docker(cleanup_errors.join("; additionally "))),
         (Err(error), true) => Err(error),
-        (Err(error), false) => Err(AppError::Docker(format!(
+        (Err(error), false) => Err(ServiceError::Docker(format!(
             "{error}; additionally {}",
             cleanup_errors.join("; additionally ")
         ))),

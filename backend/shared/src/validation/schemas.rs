@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use schemars::{JsonSchema, schema_for};
 use serde_json::{Map, Value};
 
+use crate::models::ErrorResponse;
 use crate::models::auth::{
     AdminLoginRequest, AdminSessionResponse, CreatorMeResponse, CreatorSessionResponse,
     GithubOauthCallbackRequest, GithubOauthLoginRequest, GithubOauthLoginResponse,
@@ -112,6 +113,7 @@ pub fn export_web_schemas() -> Result<BTreeMap<String, Value>, serde_json::Error
     )?;
     insert_schema::<DisableAgentResponse>(&mut schemas, "disableAgentResponseSchema")?;
     insert_schema::<EvaluationJobResponse>(&mut schemas, "evaluationJobResponseSchema")?;
+    insert_schema::<ErrorResponse>(&mut schemas, "errorResponseSchema")?;
     insert_schema::<GithubOauthCallbackRequest>(&mut schemas, "githubOauthCallbackRequestSchema")?;
     insert_schema::<GithubOauthLoginRequest>(&mut schemas, "githubOauthLoginRequestSchema")?;
     insert_schema::<GithubOauthLoginResponse>(&mut schemas, "githubOauthLoginResponseSchema")?;

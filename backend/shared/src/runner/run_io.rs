@@ -6,7 +6,7 @@ use tokio::io::AsyncWriteExt;
 use super::errors::phase_error;
 use super::filesystem::{OutputTreeLimits, validate_evaluator_visible_output_tree};
 use super::{ContainerOutcome, ScoringMode};
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::models::challenge::{ChallengeRunInputFile, ChallengeRunInterface, ChallengeRunSpec};
 use crate::models::names::RunName;
 use crate::zip_project::{ZipProjectPhaseFailureReason, ZipProjectPhaseName};
@@ -56,7 +56,7 @@ pub(super) async fn make_container_writable_tree(root: &Path) -> Result<()> {
         Ok(())
     })
     .await
-    .map_err(|e| AppError::Internal(format!("container writable chmod task failed: {e}")))?
+    .map_err(|e| ServiceError::Internal(format!("container writable chmod task failed: {e}")))?
 }
 
 #[cfg(unix)]
@@ -101,7 +101,7 @@ pub(super) async fn make_container_readable_tree(root: &Path) -> Result<()> {
         Ok(())
     })
     .await
-    .map_err(|e| AppError::Internal(format!("container readable chmod task failed: {e}")))?
+    .map_err(|e| ServiceError::Internal(format!("container readable chmod task failed: {e}")))?
 }
 
 #[cfg(not(unix))]
@@ -120,9 +120,9 @@ pub(super) async fn make_container_readable_tree(_root: &Path) -> Result<()> {
 pub(super) fn run_alias(index: usize) -> Result<RunName> {
     let display_index = index
         .checked_add(1)
-        .ok_or_else(|| AppError::Internal("run alias index overflowed".to_string()))?;
+        .ok_or_else(|| ServiceError::Internal("run alias index overflowed".to_string()))?;
     RunName::try_new(format!("run-{display_index:04}"))
-        .map_err(|e| AppError::Internal(format!("generated invalid run alias: {e}")))
+        .map_err(|e| ServiceError::Internal(format!("generated invalid run alias: {e}")))
 }
 
 /// Copy a solution run tree into the evaluator-visible area while rejecting symlinks and devices.
@@ -139,7 +139,7 @@ pub(super) async fn copy_evaluator_visible_run_tree(
         copy_evaluator_visible_run_tree_blocking(&source, &destination, &visible_run_name, limits)
     })
     .await
-    .map_err(|e| AppError::Internal(format!("evaluator output copy task failed: {e}")))?
+    .map_err(|e| ServiceError::Internal(format!("evaluator output copy task failed: {e}")))?
 }
 
 /// Blocking implementation for evaluator-visible run tree sanitization and copy.
@@ -197,7 +197,7 @@ pub(super) async fn materialize_run_io(
 ) -> Result<()> {
     let stdin = match (&run.stdin_json, &run.stdin_text) {
         (Some(value), None) => serde_json::to_string(value)
-            .map_err(|e| AppError::Internal(format!("serialize stdin_json failed: {e}")))?,
+            .map_err(|e| ServiceError::Internal(format!("serialize stdin_json failed: {e}")))?,
         (None, Some(value)) => value.clone(),
         _ => String::new(),
     };
@@ -246,7 +246,7 @@ async fn write_run_input_file(
                     ScoringMode::Validation => format!(" source `{source_path}`"),
                     ScoringMode::Official => String::new(),
                 };
-                AppError::Runner(format!(
+                ServiceError::Runner(format!(
                     "copy run `{visible_run_name}` input{source} failed: {e}"
                 ))
             })?;
@@ -257,7 +257,7 @@ async fn write_run_input_file(
         value.clone()
     } else if let Some(value) = &input.content_json {
         serde_json::to_string(value)
-            .map_err(|e| AppError::Internal(format!("serialize content_json failed: {e}")))?
+            .map_err(|e| ServiceError::Internal(format!("serialize content_json failed: {e}")))?
     } else {
         String::new()
     };
@@ -283,7 +283,7 @@ pub(super) async fn write_run_metadata(
         output_dir: format!("/solution-runs/{}/output", run.run_name),
     };
     let bytes = serde_json::to_vec_pretty(&metadata)
-        .map_err(|e| AppError::Internal(format!("serialize run metadata failed: {e}")))?;
+        .map_err(|e| ServiceError::Internal(format!("serialize run metadata failed: {e}")))?;
     let metadata_path = io_root.join("agentics-run.json");
     let mut file = tokio::fs::OpenOptions::new()
         .write(true)

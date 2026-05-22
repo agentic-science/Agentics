@@ -3,7 +3,7 @@
 use shared::db::{
     AgentRecord, ChallengeRecord, PioneerCodeRecord, PioneerCodeUseRecord, SolutionSubmissionRecord,
 };
-use shared::error::{AppError, Result};
+use shared::error::{Result, ServiceError};
 use shared::models::challenge::{
     ChallengeBundleSpec, ChallengeDetailResponse, MoltbookCommunityDto,
 };
@@ -60,7 +60,7 @@ fn present_pioneer_code(code: &PioneerCodeRecord) -> Result<PioneerCodeDto> {
         max_uses: code.max_uses,
         use_count: code.use_count,
         status: PioneerCodeStatus::from_storage_value(&code.status).ok_or_else(|| {
-            AppError::Internal(format!(
+            ServiceError::Internal(format!(
                 "stored invalid pioneer-code status `{}`",
                 code.status
             ))
@@ -79,7 +79,7 @@ fn present_pioneer_code_use(use_record: &PioneerCodeUseRecord) -> Result<Pioneer
         agent_display_name: use_record.agent_display_name.clone(),
         registration_kind: PioneerCodeUseKind::from_storage_value(&use_record.registration_kind)
             .ok_or_else(|| {
-                AppError::Internal(format!(
+                ServiceError::Internal(format!(
                     "stored invalid pioneer-code registration kind `{}`",
                     use_record.registration_kind
                 ))
@@ -95,7 +95,7 @@ pub fn present_challenge_detail(
     moltbook: MoltbookCommunityDto,
 ) -> Result<ChallengeDetailResponse> {
     let spec: ChallengeBundleSpec = serde_json::from_value(challenge.spec_json.clone())
-        .map_err(|e| AppError::Internal(format!("stored challenge spec is invalid: {e}")))?;
+        .map_err(|e| ServiceError::Internal(format!("stored challenge spec is invalid: {e}")))?;
 
     Ok(ChallengeDetailResponse {
         challenge_id: challenge.challenge_id.clone(),
@@ -117,7 +117,7 @@ pub fn present_create_solution_submission(
         .evaluation_job_id
         .clone()
         .ok_or_else(|| {
-            AppError::Internal(
+            ServiceError::Internal(
                 "created solution submission is missing its initial evaluation job id".to_string(),
             )
         })?;
@@ -193,7 +193,7 @@ pub fn present_solution_submission(
             .evaluation_job_id
             .as_ref()
             .map(|id| {
-                Ok::<_, AppError>(shared::models::evaluation::EvaluationJobDto {
+                Ok::<_, ServiceError>(shared::models::evaluation::EvaluationJobDto {
                     id: id.clone(),
                     target: solution_submission.target.clone(),
                     status: evaluation_job_status_from_storage(
@@ -241,7 +241,7 @@ pub fn present_solution_submission(
 /// Parse a persisted solution-submission status for response DTOs.
 fn solution_submission_status_from_storage(value: &str) -> Result<SolutionSubmissionStatus> {
     SolutionSubmissionStatus::from_storage_value(value).ok_or_else(|| {
-        AppError::Internal(format!(
+        ServiceError::Internal(format!(
             "stored invalid solution submission status `{value}`"
         ))
     })
@@ -250,7 +250,7 @@ fn solution_submission_status_from_storage(value: &str) -> Result<SolutionSubmis
 /// Parse a persisted evaluation job status for response DTOs.
 fn evaluation_job_status_from_storage(value: &str) -> Result<EvaluationJobStatus> {
     EvaluationJobStatus::from_storage_value(value).ok_or_else(|| {
-        AppError::Internal(format!("stored invalid evaluation job status `{value}`"))
+        ServiceError::Internal(format!("stored invalid evaluation job status `{value}`"))
     })
 }
 

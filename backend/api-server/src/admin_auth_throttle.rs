@@ -7,7 +7,7 @@ use axum::extract::ConnectInfo;
 use axum::http::request::Parts;
 use governor::{DefaultKeyedRateLimiter, Quota, RateLimiter};
 
-use shared::error::{AppError, Result};
+use shared::error::{Result, ServiceError};
 
 const ADMIN_AUTH_FAILURES_PER_MINUTE: u32 = 5;
 
@@ -27,7 +27,7 @@ impl AdminAuthThrottle {
     /// Create a limiter with the MVP failed-attempt policy.
     pub fn new() -> Result<Self> {
         let attempts = NonZeroU32::new(ADMIN_AUTH_FAILURES_PER_MINUTE).ok_or_else(|| {
-            AppError::Internal("admin auth throttle limit must be non-zero".to_string())
+            ServiceError::Internal("admin auth throttle limit must be non-zero".to_string())
         })?;
         Ok(Self {
             limiter: RateLimiter::keyed(Quota::per_minute(attempts)),
@@ -38,7 +38,7 @@ impl AdminAuthThrottle {
     pub fn record_failed_attempt(&self, username: &str, remote_addr: &str) -> Result<()> {
         let key = throttle_key(username, remote_addr);
         self.limiter.check_key(&key).map_err(|_| {
-            AppError::TooManyRequests(
+            ServiceError::TooManyRequests(
                 "too many failed admin authentication attempts; try again later".to_string(),
             )
         })

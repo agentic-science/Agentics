@@ -2,7 +2,7 @@
 
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::models::challenge_creation::{
     ChallengeCreationManifest, ChallengeDraftResponse, ChallengeDraftStatus,
     ChallengePrivateAssetKind,
@@ -95,19 +95,19 @@ pub async fn create_challenge_draft(
     audit_event: &CreateChallengeDraftAuditEventInput,
 ) -> Result<ChallengeDraftResponse> {
     if audit_event.draft_id != input.draft_id {
-        return Err(AppError::Internal(
+        return Err(ServiceError::Internal(
             "draft creation audit event targets a different draft".to_string(),
         ));
     }
     let manifest_json =
-        serde_json::to_value(&input.manifest).map_err(|e| AppError::Internal(e.to_string()))?;
+        serde_json::to_value(&input.manifest).map_err(|e| ServiceError::Internal(e.to_string()))?;
     let mut tx = pool.begin().await?;
     let scope = format!("challenge-drafts:agent:{}", input.creator_agent_id);
     lock_quota_scope(&mut tx, &scope).await?;
     let active_drafts =
         count_active_challenge_drafts_for_agent_tx(&mut tx, &input.creator_agent_id).await?;
     if active_drafts >= input.max_active_drafts {
-        return Err(AppError::TooManyRequests(format!(
+        return Err(ServiceError::TooManyRequests(format!(
             "challenge draft quota exceeded: {active_drafts} of {} active drafts are already open",
             input.max_active_drafts
         )));
@@ -144,7 +144,7 @@ pub async fn create_challenge_draft(
     .bind(input.repo_url.as_str())
     .bind(input.repo_url.repository_key().as_str())
     .bind(input.pr_number.as_i32().map_err(|e| {
-        AppError::Internal(format!(
+        ServiceError::Internal(format!(
             "invalid typed pull request number reached database: {e}"
         ))
     })?)
@@ -341,7 +341,7 @@ pub async fn approve_validated_challenge_draft(
     .await?;
 
     if result.rows_affected() == 0 {
-        return Err(AppError::Conflict);
+        return Err(ServiceError::Conflict);
     }
     Ok(())
 }
@@ -378,7 +378,7 @@ pub async fn approve_validated_challenge_draft_with_audit(
     .await?;
 
     let Some(row) = row else {
-        return Err(AppError::Conflict);
+        return Err(ServiceError::Conflict);
     };
     let approved_bundle_sha256: Option<String> = row.try_get("approved_bundle_sha256")?;
     create_challenge_draft_audit_event_tx(
@@ -424,7 +424,7 @@ pub async fn update_challenge_draft_status(
     .await?;
 
     if result.rows_affected() == 0 {
-        return Err(AppError::Conflict);
+        return Err(ServiceError::Conflict);
     }
     Ok(())
 }
@@ -456,7 +456,7 @@ pub async fn update_challenge_draft_status_with_audit(
     .await?;
 
     if result.rows_affected() == 0 {
-        return Err(AppError::Conflict);
+        return Err(ServiceError::Conflict);
     }
     create_challenge_draft_audit_event_tx(&mut tx, audit_event).await?;
     tx.commit().await?;
@@ -486,7 +486,7 @@ pub async fn abandon_challenge_draft(
     .await?;
 
     if result.rows_affected() == 0 {
-        return Err(AppError::Conflict);
+        return Err(ServiceError::Conflict);
     }
     Ok(())
 }
@@ -516,7 +516,7 @@ pub async fn abandon_challenge_draft_with_audit(
     .await?;
 
     if result.rows_affected() == 0 {
-        return Err(AppError::Conflict);
+        return Err(ServiceError::Conflict);
     }
     create_challenge_draft_audit_event_tx(&mut tx, audit_event).await?;
     tx.commit().await?;
@@ -540,7 +540,7 @@ pub async fn abandon_stale_challenge_drafts(pool: &PgPool, ttl_days: i64) -> Res
     .await?;
 
     i64::try_from(result.rows_affected()).map_err(|_| {
-        AppError::Internal("abandoned draft count exceeds supported range".to_string())
+        ServiceError::Internal("abandoned draft count exceeds supported range".to_string())
     })
 }
 

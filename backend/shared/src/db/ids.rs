@@ -1,7 +1,7 @@
 use sqlx::Row;
 use uuid::Uuid;
 
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::models::ids::{
     AgentId, AgentTokenId, ChallengeDraftId, ChallengeDraftValidationRecordId, ChallengeId,
     ChallengePrivateAssetId, ChallengeShortlistRevisionId, EvaluationJobId, SolutionSubmissionId,
@@ -15,7 +15,7 @@ pub(in crate::db) fn challenge_name_from_row(
 ) -> Result<ChallengeName> {
     let raw: String = row.try_get(column)?;
     ChallengeName::try_new(raw).map_err(|e| {
-        AppError::Internal(format!(
+        ServiceError::Internal(format!(
             "stored invalid challenge name in column `{column}`: {e}"
         ))
     })
@@ -36,7 +36,7 @@ pub(in crate::db) fn target_from_row(
 ) -> Result<TargetName> {
     let raw: String = row.try_get(column)?;
     TargetName::try_new(raw).map_err(|e| {
-        AppError::Internal(format!(
+        ServiceError::Internal(format!(
             "stored invalid target name in column `{column}`: {e}"
         ))
     })
@@ -49,7 +49,7 @@ pub(in crate::db) fn asset_name_from_row(
 ) -> Result<AssetName> {
     let raw: String = row.try_get(column)?;
     AssetName::try_new(raw).map_err(|e| {
-        AppError::Internal(format!(
+        ServiceError::Internal(format!(
             "stored invalid asset name in column `{column}`: {e}"
         ))
     })
@@ -62,7 +62,7 @@ pub(in crate::db) fn solution_submission_id_from_row(
 ) -> Result<SolutionSubmissionId> {
     let raw = uuid_or_string_from_row(row, column)?;
     SolutionSubmissionId::try_new(raw).map_err(|e| {
-        AppError::Internal(format!(
+        ServiceError::Internal(format!(
             "stored invalid solution submission id in column `{column}`: {e}"
         ))
     })
@@ -148,7 +148,7 @@ pub(in crate::db) fn optional_challenge_id_from_row(
         .map(ChallengeId::try_new)
         .transpose()
         .map_err(|e| {
-            AppError::Internal(format!(
+            ServiceError::Internal(format!(
                 "stored invalid challenge id in column `{column}`: {e}"
             ))
         })
@@ -163,7 +163,7 @@ pub(in crate::db) fn optional_solution_submission_id_from_row(
         .map(SolutionSubmissionId::try_new)
         .transpose()
         .map_err(|e| {
-            AppError::Internal(format!(
+            ServiceError::Internal(format!(
                 "stored invalid solution submission id in column `{column}`: {e}"
             ))
         })
@@ -202,7 +202,7 @@ fn parse_uuid_id_from_row<T>(
 ) -> Result<T> {
     let raw = uuid_or_string_from_row(row, column)?;
     parser(raw).map_err(|e| {
-        AppError::Internal(format!("stored invalid {label} in column `{column}`: {e}"))
+        ServiceError::Internal(format!("stored invalid {label} in column `{column}`: {e}"))
     })
 }
 

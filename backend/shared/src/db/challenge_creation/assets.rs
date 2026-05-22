@@ -6,7 +6,7 @@ use super::{
     create_challenge_draft_audit_event_tx, lock_quota_scope,
 };
 use crate::db::ids::agent_id_from_row;
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::models::challenge_creation::{ChallengeDraftStatus, ChallengePrivateAssetResponse};
 use crate::models::ids::{AgentId, ChallengeDraftAuditEventId, ChallengePrivateAssetId};
 use crate::storage::StorageKey;
@@ -22,7 +22,7 @@ pub async fn reserve_challenge_private_asset(
     pending_timeout_minutes: i32,
 ) -> Result<ChallengePrivateAssetResponse> {
     let max_bytes_per_draft = i64::try_from(max_bytes_per_draft).map_err(|_| {
-        AppError::Internal("private asset quota limit exceeds supported range".to_string())
+        ServiceError::Internal("private asset quota limit exceeds supported range".to_string())
     })?;
     let mut tx = pool.begin().await?;
     let scope = format!("challenge-draft:{}:private-assets", input.draft_id);
@@ -39,9 +39,9 @@ pub async fn reserve_challenge_private_asset(
         sum_private_asset_bytes_for_draft_tx(&mut tx, input.draft_id.as_str()).await?;
     let next_total = existing_bytes
         .checked_add(input.size_bytes)
-        .ok_or_else(|| AppError::BadRequest("private asset size overflow".to_string()))?;
+        .ok_or_else(|| ServiceError::BadRequest("private asset size overflow".to_string()))?;
     if next_total > max_bytes_per_draft {
-        return Err(AppError::TooManyRequests(format!(
+        return Err(ServiceError::TooManyRequests(format!(
             "private asset quota exceeded for draft `{}`: {} of {} bytes would be used",
             input.draft_id, next_total, max_bytes_per_draft
         )));
@@ -165,7 +165,7 @@ async fn activate_challenge_private_asset_tx(
     .fetch_optional(&mut **tx)
     .await?;
     let Some(row) = row else {
-        return Err(AppError::Conflict);
+        return Err(ServiceError::Conflict);
     };
     sqlx::query(
         r#"
@@ -250,12 +250,12 @@ async fn ensure_private_asset_upload_allowed_tx(
     .fetch_optional(&mut **tx)
     .await?;
     let Some(row) = row else {
-        return Err(AppError::NotFound);
+        return Err(ServiceError::NotFound);
     };
 
     let creator_agent_id = agent_id_from_row(&row, "creator_agent_id")?;
     if creator_agent_id != input.uploader_agent_id {
-        return Err(AppError::NotFound);
+        return Err(ServiceError::NotFound);
     }
     if row
         .try_get::<Option<String>, _>("active_validation_record_id")?
@@ -270,7 +270,7 @@ async fn ensure_private_asset_upload_allowed_tx(
         .fetch_one(&mut **tx)
         .await?;
         if active_validation_record_id.is_some() {
-            return Err(AppError::Conflict);
+            return Err(ServiceError::Conflict);
         }
     }
     let status = draft_status_from_row(&row, "status")?;
@@ -278,7 +278,7 @@ async fn ensure_private_asset_upload_allowed_tx(
         status,
         ChallengeDraftStatus::Draft | ChallengeDraftStatus::Validated
     ) {
-        return Err(AppError::Conflict);
+        return Err(ServiceError::Conflict);
     }
 
     Ok(())

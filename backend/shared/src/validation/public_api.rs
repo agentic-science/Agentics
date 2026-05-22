@@ -1,6 +1,6 @@
 //! Shared validation for public read API query contracts.
 
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::models::challenge::ChallengeBundleSpec;
 use crate::models::names::TargetName;
 
@@ -28,7 +28,7 @@ pub fn bounded_public_limit(
 ) -> Result<i64> {
     let limit = requested.unwrap_or(default_limit);
     if !(1..=MAX_PUBLIC_LIST_LIMIT).contains(&limit) {
-        return Err(AppError::BadRequest(format!(
+        return Err(ServiceError::BadRequest(format!(
             "{label} limit must be between 1 and {MAX_PUBLIC_LIST_LIMIT}"
         )));
     }
@@ -39,7 +39,7 @@ pub fn bounded_public_limit(
 pub fn bounded_public_offset(requested: Option<i64>, label: &str) -> Result<i64> {
     let offset = requested.unwrap_or(0);
     if offset < 0 {
-        return Err(AppError::BadRequest(format!(
+        return Err(ServiceError::BadRequest(format!(
             "{label} offset must be greater than or equal to 0"
         )));
     }
@@ -65,17 +65,17 @@ pub fn resolve_required_public_target(
     requested_target: Option<&str>,
 ) -> Result<TargetName> {
     let Some(target) = requested_target else {
-        return Err(AppError::BadRequest(
+        return Err(ServiceError::BadRequest(
             "target query parameter is required".to_string(),
         ));
     };
     let target = target
         .parse::<TargetName>()
-        .map_err(|e| AppError::BadRequest(e.to_string()))?;
+        .map_err(|e| ServiceError::BadRequest(e.to_string()))?;
     if spec.target(&target).is_some() {
         return Ok(target);
     }
-    Err(AppError::BadRequest(format!(
+    Err(ServiceError::BadRequest(format!(
         "challenge does not support target `{target}`"
     )))
 }

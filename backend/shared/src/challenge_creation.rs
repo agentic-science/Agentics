@@ -8,7 +8,7 @@ use sha2::{Digest, Sha256};
 use crate::challenge_bundle::{
     read_challenge_bundle_spec, read_challenge_run_manifest, read_piped_stdio_session_manifest,
 };
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::models::challenge::{MAX_CHALLENGE_KEYWORDS, MIN_CHALLENGE_KEYWORDS};
 use crate::models::challenge_creation::{
     AGENTICS_CHALLENGE_MANIFEST_FILE, ChallengeCreationManifest, ChallengeCreationRequestKind,
@@ -23,7 +23,7 @@ pub async fn read_challenge_creation_manifest(root: &Path) -> Result<ChallengeCr
     let manifest_path = root.join(AGENTICS_CHALLENGE_MANIFEST_FILE);
     let raw = tokio::fs::read_to_string(&manifest_path).await?;
     let manifest: ChallengeCreationManifest = serde_json::from_str(&raw).map_err(|e| {
-        AppError::Validation(format!("invalid {AGENTICS_CHALLENGE_MANIFEST_FILE}: {e}"))
+        ServiceError::Validation(format!("invalid {AGENTICS_CHALLENGE_MANIFEST_FILE}: {e}"))
     })?;
     validate_challenge_creation_manifest(&manifest)?;
     Ok(manifest)
@@ -46,7 +46,9 @@ pub async fn validate_challenge_creation_repository(
 /// Validate semantic fields that do not depend on local filesystem state.
 pub fn validate_challenge_creation_manifest(manifest: &ChallengeCreationManifest) -> Result<()> {
     if manifest.schema_version != 1 {
-        return Err(AppError::Validation("schema_version must be 1".to_string()));
+        return Err(ServiceError::Validation(
+            "schema_version must be 1".to_string(),
+        ));
     }
     require_non_empty(&manifest.title, "title")?;
     require_non_empty(&manifest.summary.en, "summary.en")?;
@@ -57,22 +59,22 @@ pub fn validate_challenge_creation_manifest(manifest: &ChallengeCreationManifest
     match manifest.request {
         ChallengeCreationRequestKind::NewChallenge => {
             let _bundle_path = manifest.bundle_path.as_ref().ok_or_else(|| {
-                AppError::Validation("bundle_path is required for new_challenge".to_string())
+                ServiceError::Validation("bundle_path is required for new_challenge".to_string())
             })?;
             if manifest.archive.is_some() {
-                return Err(AppError::Validation(
+                return Err(ServiceError::Validation(
                     "archive must be omitted for new_challenge".to_string(),
                 ));
             }
         }
         ChallengeCreationRequestKind::ArchiveChallenge => {
             if manifest.bundle_path.is_some() {
-                return Err(AppError::Validation(
+                return Err(ServiceError::Validation(
                     "bundle_path must be omitted for archive_challenge".to_string(),
                 ));
             }
             let archive = manifest.archive.as_ref().ok_or_else(|| {
-                AppError::Validation("archive is required for archive_challenge".to_string())
+                ServiceError::Validation("archive is required for archive_challenge".to_string())
             })?;
             require_non_empty(&archive.reason, "archive.reason")?;
         }
@@ -83,7 +85,7 @@ pub fn validate_challenge_creation_manifest(manifest: &ChallengeCreationManifest
 
 /// Return a stable SHA-256 digest of a normalized manifest JSON representation.
 pub fn normalized_manifest_sha256(manifest: &ChallengeCreationManifest) -> Result<Sha256Digest> {
-    let bytes = serde_json::to_vec(manifest).map_err(|e| AppError::Internal(e.to_string()))?;
+    let bytes = serde_json::to_vec(manifest).map_err(|e| ServiceError::Internal(e.to_string()))?;
     Ok(sha256_digest(&bytes))
 }
 
@@ -106,7 +108,7 @@ pub async fn draft_review_bundle_sha256(
         draft_review_bundle_sha256_blocking(&proposal_root, &manifest, &private_assets)
     })
     .await
-    .map_err(|e| AppError::Internal(format!("draft digest task failed: {e}")))?
+    .map_err(|e| ServiceError::Internal(format!("draft digest task failed: {e}")))?
 }
 
 /// Return a deterministic digest for an assembled runtime bundle reviewed by an admin.
@@ -124,7 +126,7 @@ pub async fn draft_review_runtime_bundle_sha256(
         draft_review_runtime_bundle_sha256_blocking(&runtime_bundle_root, &manifest)
     })
     .await
-    .map_err(|e| AppError::Internal(format!("runtime bundle digest task failed: {e}")))?
+    .map_err(|e| ServiceError::Internal(format!("runtime bundle digest task failed: {e}")))?
 }
 
 /// Return the SHA-256 digest of arbitrary bytes.
@@ -144,7 +146,7 @@ fn draft_review_bundle_sha256_blocking(
     hash_field(&mut hasher, "format", b"agentics-draft-review-v1");
 
     let manifest_bytes =
-        serde_json::to_vec(manifest).map_err(|e| AppError::Internal(e.to_string()))?;
+        serde_json::to_vec(manifest).map_err(|e| ServiceError::Internal(e.to_string()))?;
     hash_field(&mut hasher, "manifest", &manifest_bytes);
 
     if let Some(bundle_path) = &manifest.bundle_path {
@@ -178,7 +180,7 @@ fn draft_review_runtime_bundle_sha256_blocking(
     hash_field(&mut hasher, "format", b"agentics-draft-runtime-review-v1");
 
     let manifest_bytes =
-        serde_json::to_vec(manifest).map_err(|e| AppError::Internal(e.to_string()))?;
+        serde_json::to_vec(manifest).map_err(|e| ServiceError::Internal(e.to_string()))?;
     hash_field(&mut hasher, "manifest", &manifest_bytes);
     hash_public_tree(&mut hasher, runtime_bundle_root)?;
 
@@ -195,18 +197,18 @@ fn hash_public_tree(hasher: &mut Sha256, bundle_root: &Path) -> Result<()> {
         for entry in entries {
             let path = entry.path();
             let metadata = std::fs::symlink_metadata(&path)?;
-            let relative_path = path
-                .strip_prefix(bundle_root)
-                .map_err(|e| AppError::Internal(format!("failed to build review digest: {e}")))?;
+            let relative_path = path.strip_prefix(bundle_root).map_err(|e| {
+                ServiceError::Internal(format!("failed to build review digest: {e}"))
+            })?;
             let relative_path = relative_path.to_str().ok_or_else(|| {
-                AppError::Validation(format!(
+                ServiceError::Validation(format!(
                     "public bundle path must be UTF-8 for review digest: {}",
                     path.display()
                 ))
             })?;
 
             if metadata.file_type().is_symlink() {
-                return Err(AppError::Validation(format!(
+                return Err(ServiceError::Validation(format!(
                     "public bundle must not contain symlinks: {}",
                     path.display()
                 )));
@@ -239,7 +241,7 @@ fn hash_file(hasher: &mut Sha256, path: &Path) -> Result<()> {
             break;
         }
         let chunk = buffer.get(..bytes_read).ok_or_else(|| {
-            AppError::Internal("file read exceeded digest buffer bounds".to_string())
+            ServiceError::Internal("file read exceeded digest buffer bounds".to_string())
         })?;
         hasher.update(chunk);
     }
@@ -261,7 +263,7 @@ async fn validate_challenge_creation_repository_with_manifest(
     manifest: &ChallengeCreationManifest,
 ) -> Result<()> {
     if !tokio::fs::try_exists(root.join(AGENTICS_CHALLENGE_MANIFEST_FILE)).await? {
-        return Err(AppError::Validation(format!(
+        return Err(ServiceError::Validation(format!(
             "{AGENTICS_CHALLENGE_MANIFEST_FILE} is required"
         )));
     }
@@ -284,25 +286,25 @@ async fn validate_public_bundle(
     let bundle_dir = root.join(bundle_path.as_path());
     let spec = read_challenge_bundle_spec(&bundle_dir).await?;
     if spec.challenge_name != manifest.challenge_name {
-        return Err(AppError::Validation(format!(
+        return Err(ServiceError::Validation(format!(
             "bundle challenge_name mismatch: expected {}, got {}",
             manifest.challenge_name, spec.challenge_name
         )));
     }
     if spec.challenge_title != manifest.title {
-        return Err(AppError::Validation(format!(
+        return Err(ServiceError::Validation(format!(
             "bundle challenge_title mismatch: expected {}, got {}",
             manifest.title, spec.challenge_title
         )));
     }
     if spec.summary != manifest.summary {
-        return Err(AppError::Validation(format!(
+        return Err(ServiceError::Validation(format!(
             "bundle summary mismatch: expected {}, got {}",
             manifest.summary, spec.summary
         )));
     }
     if spec.keywords != manifest.keywords {
-        return Err(AppError::Validation(
+        return Err(ServiceError::Validation(
             "bundle keywords must match agentics.challenge.json keywords".to_string(),
         ));
     }
@@ -315,7 +317,7 @@ async fn validate_public_bundle(
     if let Some(private_benchmark_dir) = spec.datasets.private_benchmark_dir.as_ref()
         && tokio::fs::try_exists(bundle_dir.join(private_benchmark_dir.as_path())).await?
     {
-        return Err(AppError::Validation(format!(
+        return Err(ServiceError::Validation(format!(
             "datasets.private_benchmark_dir `{private_benchmark_dir}` must be provided through private asset uploads, not committed to the public challenge repository"
         )));
     }
@@ -364,7 +366,7 @@ async fn validate_public_bundle(
 /// Validate public challenge keywords in the proposal manifest.
 fn validate_manifest_keywords(manifest: &ChallengeCreationManifest) -> Result<()> {
     if !(MIN_CHALLENGE_KEYWORDS..=MAX_CHALLENGE_KEYWORDS).contains(&manifest.keywords.len()) {
-        return Err(AppError::Validation(format!(
+        return Err(ServiceError::Validation(format!(
             "keywords must contain between {MIN_CHALLENGE_KEYWORDS} and {MAX_CHALLENGE_KEYWORDS} entries"
         )));
     }
@@ -372,7 +374,7 @@ fn validate_manifest_keywords(manifest: &ChallengeCreationManifest) -> Result<()
     for keyword in &manifest.keywords {
         let normalized = keyword.as_str().to_lowercase();
         if !seen.insert(normalized) {
-            return Err(AppError::Validation(format!(
+            return Err(ServiceError::Validation(format!(
                 "duplicate challenge keyword `{keyword}`"
             )));
         }
@@ -382,11 +384,11 @@ fn validate_manifest_keywords(manifest: &ChallengeCreationManifest) -> Result<()
 
 /// Handles assert public file exists for this module.
 async fn assert_public_file_exists(path: PathBuf, field: &str) -> Result<()> {
-    let meta = tokio::fs::metadata(&path)
-        .await
-        .map_err(|_| AppError::Validation(format!("{field} does not exist: {}", path.display())))?;
+    let meta = tokio::fs::metadata(&path).await.map_err(|_| {
+        ServiceError::Validation(format!("{field} does not exist: {}", path.display()))
+    })?;
     if !meta.is_file() {
-        return Err(AppError::Validation(format!(
+        return Err(ServiceError::Validation(format!(
             "{field} is not a file: {}",
             path.display()
         )));
@@ -396,11 +398,11 @@ async fn assert_public_file_exists(path: PathBuf, field: &str) -> Result<()> {
 
 /// Handles assert public dir exists for this module.
 async fn assert_public_dir_exists(path: PathBuf, field: &str) -> Result<()> {
-    let meta = tokio::fs::metadata(&path)
-        .await
-        .map_err(|_| AppError::Validation(format!("{field} does not exist: {}", path.display())))?;
+    let meta = tokio::fs::metadata(&path).await.map_err(|_| {
+        ServiceError::Validation(format!("{field} does not exist: {}", path.display()))
+    })?;
     if !meta.is_dir() {
-        return Err(AppError::Validation(format!(
+        return Err(ServiceError::Validation(format!(
             "{field} is not a directory: {}",
             path.display()
         )));
@@ -415,7 +417,7 @@ fn validate_private_asset_requirements(
     let mut ids = HashSet::with_capacity(private_assets.len());
     for asset in private_assets {
         if !ids.insert(asset.asset_name.as_str()) {
-            return Err(AppError::Validation(format!(
+            return Err(ServiceError::Validation(format!(
                 "private_assets contains duplicate asset_name `{}`",
                 asset.asset_name
             )));
@@ -426,7 +428,7 @@ fn validate_private_asset_requirements(
         let mut required_paths = HashSet::with_capacity(asset.required_paths.len());
         for path in &asset.required_paths {
             if !required_paths.insert(path.as_str()) {
-                return Err(AppError::Validation(format!(
+                return Err(ServiceError::Validation(format!(
                     "private_assets `{}` contains duplicate required_paths entry `{path}`",
                     asset.asset_name
                 )));
@@ -455,7 +457,7 @@ fn reject_private_files(root: &Path) -> Result<()> {
                 continue;
             }
             if is_forbidden_public_repo_name(&file_name) {
-                return Err(AppError::Validation(format!(
+                return Err(ServiceError::Validation(format!(
                     "public challenge repo must not contain private benchmark or secret material: {}",
                     path.display()
                 )));
@@ -465,7 +467,7 @@ fn reject_private_files(root: &Path) -> Result<()> {
             if meta.is_dir() {
                 stack.push(path);
             } else if meta.file_type().is_symlink() {
-                return Err(AppError::Validation(format!(
+                return Err(ServiceError::Validation(format!(
                     "public challenge repo must not contain symlinks: {}",
                     path.display()
                 )));

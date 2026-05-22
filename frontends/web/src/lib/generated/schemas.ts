@@ -2625,6 +2625,41 @@ export const disableAgentResponseSchema = z
   })
   .describe("Admin response returned after disabling an agent.");
 
+export const errorResponseSchema = z
+  .object({
+    error: z
+      .object({
+        code: z
+          .enum([
+            "bad_request",
+            "unauthorized",
+            "forbidden",
+            "not_found",
+            "conflict",
+            "too_many_requests",
+            "payload_too_large",
+            "internal_error",
+          ])
+          .describe(
+            "Stable API-facing error code derived from transport-neutral service errors.",
+          ),
+        message: z.string(),
+        details: z
+          .array(
+            z
+              .object({ field: z.string().optional(), message: z.string() })
+              .describe(
+                "Optional structured validation detail for one request problem.",
+              ),
+          )
+          .optional(),
+      })
+      .describe("Standard nested API error body."),
+  })
+  .describe(
+    "Standard error response shape used by all API extractors and handlers.",
+  );
+
 export const evaluationJobResponseSchema = z
   .object({
     job_id: z
@@ -4502,6 +4537,7 @@ export type CreatorSessionResponse = z.infer<
   typeof creatorSessionResponseSchema
 >;
 export type DisableAgentResponse = z.infer<typeof disableAgentResponseSchema>;
+export type ErrorResponse = z.infer<typeof errorResponseSchema>;
 export type EvaluationJobResponse = z.infer<typeof evaluationJobResponseSchema>;
 export type GithubOauthCallbackRequest = z.infer<
   typeof githubOauthCallbackRequestSchema

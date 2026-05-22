@@ -1,6 +1,6 @@
 use sqlx::PgPool;
 
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::models::evaluation::{
     EvaluationStatus, MetricValue, PublicCaseResult, RunMetricResult, ScoreSummary, ScoringMode,
     SolutionSubmissionStatus,
@@ -89,15 +89,15 @@ pub async fn mark_evaluation_finished(
     let mut tx = pool.begin().await?;
 
     let public_results_json = serde_json::to_value(&result.public_results)
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+        .map_err(|e| ServiceError::Internal(e.to_string()))?;
     let validation_summary_json = serde_json::to_value(&result.validation_summary)
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+        .map_err(|e| ServiceError::Internal(e.to_string()))?;
     let official_json = serde_json::to_value(&result.official_summary)
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+        .map_err(|e| ServiceError::Internal(e.to_string()))?;
     let aggregate_metrics_json = serde_json::to_value(&result.aggregate_metrics)
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-    let run_metrics_json =
-        serde_json::to_value(&result.run_metrics).map_err(|e| AppError::Internal(e.to_string()))?;
+        .map_err(|e| ServiceError::Internal(e.to_string()))?;
+    let run_metrics_json = serde_json::to_value(&result.run_metrics)
+        .map_err(|e| ServiceError::Internal(e.to_string()))?;
     let status_str = if result.status == EvaluationStatus::Completed {
         EvaluationStatus::Completed.as_str()
     } else {
@@ -151,7 +151,7 @@ pub async fn mark_evaluation_finished(
     .await?;
 
     if evaluation_update.rows_affected() != 1 {
-        return Err(AppError::Conflict);
+        return Err(ServiceError::Conflict);
     }
 
     let has_previous_official_result =

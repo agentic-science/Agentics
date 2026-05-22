@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde_json::Value;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::models::challenge::{ChallengeBundleSpec, TargetAccelerator};
 use crate::models::evaluation::{
     EvaluationDto, EvaluationJobPayload, EvaluationJobStatus, EvaluationStatus, MetricValue,
@@ -89,7 +89,7 @@ pub async fn create_solution_submission_with_job(
     let mut tx = pool.begin().await?;
     let challenge = lock_active_challenge_for_admission_tx(&mut tx, &input.challenge_id).await?;
     let spec: ChallengeBundleSpec = serde_json::from_value(challenge.spec_json.clone())
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+        .map_err(|e| ServiceError::Internal(e.to_string()))?;
     ensure_challenge_supports_eval_type_tx(
         &mut tx,
         &challenge.challenge_id,
@@ -153,7 +153,7 @@ pub async fn create_solution_submission_with_job(
         challenge_name: challenge.challenge_name.clone(),
         target: input.target.clone(),
     })
-    .map_err(|e| AppError::Internal(e.to_string()))?;
+    .map_err(|e| ServiceError::Internal(e.to_string()))?;
 
     let priority = if input.eval_type == ScoringMode::Official {
         10
@@ -242,7 +242,7 @@ fn required_accelerator_for_target(
     target: &TargetName,
 ) -> Result<TargetAccelerator> {
     let target_spec = spec.target(target).ok_or_else(|| {
-        AppError::Internal(format!(
+        ServiceError::Internal(format!(
             "challenge `{}` does not declare target `{target}` after admission validation",
             spec.challenge_name
         ))
@@ -274,7 +274,7 @@ async fn ensure_parent_solution_submission_matches_scope_tx<'a>(
     .fetch_optional(&mut **tx)
     .await?;
     let Some(row) = row else {
-        return Err(AppError::BadRequest(
+        return Err(ServiceError::BadRequest(
             "parent_solution_submission_id does not reference an existing solution submission"
                 .to_string(),
         ));
@@ -290,13 +290,13 @@ async fn ensure_parent_solution_submission_matches_scope_tx<'a>(
         || &parent_challenge_id != challenge_id
         || &parent_target != target
     {
-        return Err(AppError::BadRequest(
+        return Err(ServiceError::BadRequest(
             "parent_solution_submission_id must belong to the same agent, challenge_id, and target"
                 .to_string(),
         ));
     }
     if parent_status != SolutionSubmissionStatus::Completed.as_str() || !parent_visible {
-        return Err(AppError::BadRequest(
+        return Err(ServiceError::BadRequest(
             "parent_solution_submission_id must reference a completed visible solution submission"
                 .to_string(),
         ));
@@ -358,7 +358,7 @@ async fn enforce_quota_admission(
     .await?;
     let limit = input.quota_admission.per_agent_challenge_limit;
     if used >= limit {
-        return Err(AppError::TooManyRequests(format!(
+        return Err(ServiceError::TooManyRequests(format!(
             "{} quota exceeded for challenge `{}`: {} of {} runs used in the last 24 hours",
             input.eval_type.as_str(),
             input.challenge_name,
@@ -377,7 +377,7 @@ async fn enforce_quota_admission(
         )
         .await?;
         if used >= limit {
-            return Err(AppError::TooManyRequests(format!(
+            return Err(ServiceError::TooManyRequests(format!(
                 "{} challenge limit exceeded for challenge `{}`: {} of {} lifetime runs used",
                 input.eval_type.as_str(),
                 input.challenge_name,
@@ -390,7 +390,7 @@ async fn enforce_quota_admission(
     if let Some(max_active) = input.quota_admission.max_active_official_jobs {
         let active = count_active_evaluation_jobs_tx(tx, ScoringMode::Official).await?;
         if active >= max_active {
-            return Err(AppError::TooManyRequests(format!(
+            return Err(ServiceError::TooManyRequests(format!(
                 "official evaluation queue is full: {active} of {max_active} official jobs are staged, queued, or running"
             )));
         }
@@ -615,7 +615,7 @@ async fn get_solution_submission_by_id_inner(
     let official_eval = parse_eval_from_row(&r, "official_eval")?;
     let challenge_spec_json: Value = r.try_get("challenge_spec_json")?;
     let challenge_spec = serde_json::from_value::<ChallengeBundleSpec>(challenge_spec_json)
-        .map_err(|e| AppError::Internal(format!("stored challenge spec is invalid: {e}")))?;
+        .map_err(|e| ServiceError::Internal(format!("stored challenge spec is invalid: {e}")))?;
 
     Ok(Some(SolutionSubmissionRecord {
         id: solution_submission_id_from_row(&r, "id")?,
@@ -776,7 +776,7 @@ pub async fn list_public_solution_submissions_for_challenge(
             let challenge_spec_json: Value = r.try_get("challenge_spec_json")?;
             let challenge_spec = serde_json::from_value::<ChallengeBundleSpec>(challenge_spec_json)
                 .map_err(|e| {
-                    AppError::Internal(format!("stored challenge spec is invalid: {e}"))
+                    ServiceError::Internal(format!("stored challenge spec is invalid: {e}"))
                 })?;
             let official_metrics: Vec<MetricValue> = decode_optional_json(
                 r.try_get::<Option<Value>, _>("official_metrics")?,
@@ -900,10 +900,10 @@ fn parse_eval_from_row(row: &sqlx::postgres::PgRow, prefix: &str) -> Result<Opti
         row.try_get(format!("{}_finished_at", prefix).as_str())?;
 
     let status = EvaluationStatus::from_storage_value(&status_str).ok_or_else(|| {
-        AppError::Internal(format!("unexpected evaluation status `{status_str}`"))
+        ServiceError::Internal(format!("unexpected evaluation status `{status_str}`"))
     })?;
     let eval_type = ScoringMode::from_storage_value(&eval_type_str).ok_or_else(|| {
-        AppError::Internal(format!("unexpected evaluation type `{eval_type_str}`"))
+        ServiceError::Internal(format!("unexpected evaluation type `{eval_type_str}`"))
     })?;
     let public_results: Vec<PublicCaseResult> =
         decode_optional_json(public_results_json, &format!("{prefix} public results"))?
@@ -945,7 +945,7 @@ fn solution_submission_status_from_row(
 ) -> Result<SolutionSubmissionStatus> {
     let value: String = row.try_get(column)?;
     SolutionSubmissionStatus::from_storage_value(&value).ok_or_else(|| {
-        AppError::Internal(format!("unexpected solution submission status `{value}`"))
+        ServiceError::Internal(format!("unexpected solution submission status `{value}`"))
     })
 }
 
@@ -958,7 +958,7 @@ fn optional_evaluation_job_status_from_row(
     value
         .map(|value| {
             EvaluationJobStatus::from_storage_value(&value).ok_or_else(|| {
-                AppError::Internal(format!("unexpected evaluation job status `{value}`"))
+                ServiceError::Internal(format!("unexpected evaluation job status `{value}`"))
             })
         })
         .transpose()
@@ -973,7 +973,7 @@ fn optional_evaluation_status_from_row(
     value
         .map(|value| {
             EvaluationStatus::from_storage_value(&value).ok_or_else(|| {
-                AppError::Internal(format!("unexpected evaluation status `{value}`"))
+                ServiceError::Internal(format!("unexpected evaluation status `{value}`"))
             })
         })
         .transpose()
@@ -987,8 +987,9 @@ fn optional_scoring_mode_from_row(
     let value: Option<String> = row.try_get(column)?;
     value
         .map(|value| {
-            ScoringMode::from_storage_value(&value)
-                .ok_or_else(|| AppError::Internal(format!("unexpected evaluation type `{value}`")))
+            ScoringMode::from_storage_value(&value).ok_or_else(|| {
+                ServiceError::Internal(format!("unexpected evaluation type `{value}`"))
+            })
         })
         .transpose()
 }
@@ -996,8 +997,9 @@ fn optional_scoring_mode_from_row(
 /// Reads storage key from a database row and validates its domain shape.
 fn storage_key_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<StorageKey> {
     let value: String = row.try_get(column)?;
-    StorageKey::try_new(&value)
-        .map_err(|e| AppError::Internal(format!("stored invalid storage key in `{column}`: {e}")))
+    StorageKey::try_new(&value).map_err(|e| {
+        ServiceError::Internal(format!("stored invalid storage key in `{column}`: {e}"))
+    })
 }
 
 /// Reads optional storage key from a database row and validates its domain shape.
@@ -1008,7 +1010,9 @@ fn optional_storage_key_from_row(
     row.try_get::<Option<String>, _>(column)?
         .map(StorageKey::try_new)
         .transpose()
-        .map_err(|e| AppError::Internal(format!("stored invalid storage key in `{column}`: {e}")))
+        .map_err(|e| {
+            ServiceError::Internal(format!("stored invalid storage key in `{column}`: {e}"))
+        })
 }
 
 /// Reads optional evaluation job id from a database row and validates its domain shape.
@@ -1020,7 +1024,7 @@ fn optional_evaluation_job_id_from_row(
         .map(EvaluationJobId::try_new)
         .transpose()
         .map_err(|e| {
-            AppError::Internal(format!(
+            ServiceError::Internal(format!(
                 "stored invalid evaluation job id in column `{column}`: {e}"
             ))
         })
@@ -1035,7 +1039,7 @@ fn optional_evaluation_id_from_row(
         .map(EvaluationId::try_new)
         .transpose()
         .map_err(|e| {
-            AppError::Internal(format!(
+            ServiceError::Internal(format!(
                 "stored invalid evaluation id in column `{column}`: {e}"
             ))
         })

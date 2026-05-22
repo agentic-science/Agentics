@@ -7,7 +7,7 @@ use sqlx::{PgPool, Row};
 use super::ids::{solution_submission_id_from_row, uuid_string_from_row};
 use super::leaderboard::repair_leaderboard_entry_for_solution_submission_tx;
 use crate::db::challenges::PublishChallengeInput;
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::models::evaluation::ScoringMode;
 use crate::models::ids::{EvaluationJobId, SolutionSubmissionId};
 use crate::models::request::AdminServiceHeartbeatDto;
@@ -37,7 +37,7 @@ pub async fn upsert_service_heartbeat(
     payload: &HeartbeatPayload,
 ) -> Result<()> {
     let payload_json =
-        serde_json::to_value(payload).map_err(|e| AppError::Internal(e.to_string()))?;
+        serde_json::to_value(payload).map_err(|e| ServiceError::Internal(e.to_string()))?;
 
     sqlx::query(
         r#"
@@ -163,19 +163,22 @@ pub async fn ensure_challenges_seeded_from_root(
                 .bind(&spec.challenge_title)
                 .bind(
                     serde_json::to_value(&spec.summary)
-                        .map_err(|e| AppError::Internal(e.to_string()))?,
+                        .map_err(|e| ServiceError::Internal(e.to_string()))?,
                 )
                 .bind(managed_bundle_path.as_str()?)
                 .bind(public_bundle_path.as_str()?)
                 .bind(managed_statement_path.as_str()?)
-                .bind(serde_json::to_value(&spec).map_err(|e| AppError::Internal(e.to_string()))?)
+                .bind(
+                    serde_json::to_value(&spec)
+                        .map_err(|e| ServiceError::Internal(e.to_string()))?,
+                )
                 .execute(pool)
                 .await?;
             }
 
-            synced = synced
-                .checked_add(1)
-                .ok_or_else(|| AppError::Internal("challenge sync count overflow".to_string()))?;
+            synced = synced.checked_add(1).ok_or_else(|| {
+                ServiceError::Internal("challenge sync count overflow".to_string())
+            })?;
         }
     }
 
@@ -350,9 +353,9 @@ pub async fn reap_stuck_jobs(pool: &PgPool, timeout_minutes: i32) -> Result<Stal
 
     Ok(StaleJobReapResult {
         requeued: u64::try_from(requeued_jobs.len())
-            .map_err(|_| AppError::Internal("requeued job count overflow".to_string()))?,
+            .map_err(|_| ServiceError::Internal("requeued job count overflow".to_string()))?,
         failed: u64::try_from(failed_jobs.len().saturating_add(staged_jobs.len()))
-            .map_err(|_| AppError::Internal("failed job count overflow".to_string()))?,
+            .map_err(|_| ServiceError::Internal("failed job count overflow".to_string()))?,
     })
 }
 
@@ -360,7 +363,7 @@ pub async fn reap_stuck_jobs(pool: &PgPool, timeout_minutes: i32) -> Result<Stal
 fn eval_type_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<ScoringMode> {
     let value: String = row.try_get(column)?;
     ScoringMode::from_storage_value(&value)
-        .ok_or_else(|| AppError::Internal(format!("unknown stored {column} `{value}`")))
+        .ok_or_else(|| ServiceError::Internal(format!("unknown stored {column} `{value}`")))
 }
 
 /// Keep an older completed official result visible while a stale official rerun is repaired.

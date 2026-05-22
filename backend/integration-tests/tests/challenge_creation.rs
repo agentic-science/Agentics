@@ -12,7 +12,7 @@ use helpers::{
     api_url, basic_auth_header, create_creator_session, spawn_app_with_config, test_config,
 };
 use serde_json::json;
-use shared::error::AppError;
+use shared::error::ServiceError;
 use shared::models::challenge_creation::ChallengeDraftValidationStatus;
 use shared::models::hashes::Sha256Digest;
 use shared::models::ids::{
@@ -51,7 +51,7 @@ async fn challenge_draft_rejects_short_commit_sha(pool: sqlx::PgPool) {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body: serde_json::Value = response.json().await.expect("error json");
     assert!(
-        body["message"]
+        body["error"]["message"]
             .as_str()
             .expect("error message")
             .contains("commit_sha must be a full")
@@ -210,7 +210,7 @@ async fn draft_validation_claim_blocks_overlap_and_approval(pool: sqlx::PgPool) 
     )
     .await;
     assert!(
-        matches!(overlapping, Err(shared::error::AppError::Conflict)),
+        matches!(overlapping, Err(shared::error::ServiceError::Conflict)),
         "overlapping validation should conflict"
     );
 
@@ -1024,13 +1024,13 @@ async fn stale_publish_claim_cannot_mutate_newer_publish_claim(pool: sqlx::PgPoo
         shared::db::fail_challenge_draft_publish(&pool, draft_id, &first_claim, "stale failure")
             .await
             .expect_err("stale claim should not fail newer publish");
-    assert!(matches!(stale_fail, AppError::Conflict));
+    assert!(matches!(stale_fail, ServiceError::Conflict));
 
     let stale_complete =
         shared::db::mark_challenge_draft_published(&pool, draft_id, &first_claim, None)
             .await
             .expect_err("stale claim should not complete newer publish");
-    assert!(matches!(stale_complete, AppError::Conflict));
+    assert!(matches!(stale_complete, ServiceError::Conflict));
 
     let claim_after_stale: Option<String> = sqlx::query_scalar(
         "SELECT publish_claim_id::text FROM challenge_drafts WHERE id = $1::uuid",

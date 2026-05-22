@@ -17,9 +17,40 @@ use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tokio::io::AsyncWriteExt;
 
-use crate::error::AppError;
+use crate::error::ServiceError;
 
-pub type Result<T> = std::result::Result<T, AppError>;
+pub type Result<T> = std::result::Result<T, StorageError>;
+
+/// Local storage-layer failures before conversion to service/API errors.
+#[derive(Debug, thiserror::Error)]
+pub enum StorageError {
+    #[error("{0}")]
+    InvalidKey(String),
+    #[error("{0}")]
+    SymlinkRejected(String),
+    #[error("storage object already exists: {0}")]
+    ObjectConflict(String),
+    #[error("storage object not found: {0}")]
+    ObjectNotFound(String),
+    #[error("storage invariant violated: {0}")]
+    Internal(String),
+    #[error("storage IO error: {0}")]
+    Io(#[from] std::io::Error),
+}
+
+impl From<StorageError> for ServiceError {
+    fn from(error: StorageError) -> Self {
+        match error {
+            StorageError::InvalidKey(message) | StorageError::SymlinkRejected(message) => {
+                ServiceError::BadRequest(message)
+            }
+            StorageError::ObjectConflict(_) => ServiceError::Conflict,
+            StorageError::ObjectNotFound(_) => ServiceError::NotFound,
+            StorageError::Internal(message) => ServiceError::Internal(message),
+            StorageError::Io(error) => ServiceError::Io(error),
+        }
+    }
+}
 
 /// Opaque object key relative to the configured Agentics storage namespace.
 ///
@@ -55,7 +86,7 @@ impl fmt::Display for StorageKey {
 }
 
 impl FromStr for StorageKey {
-    type Err = AppError;
+    type Err = StorageError;
 
     /// Handles from str for this module.
     fn from_str(value: &str) -> Result<Self> {
@@ -159,7 +190,7 @@ impl LocalStorage {
             if let Ok(metadata) = std::fs::symlink_metadata(&current)
                 && metadata.file_type().is_symlink()
             {
-                return Err(AppError::BadRequest(format!(
+                return Err(StorageError::SymlinkRejected(format!(
                     "storage key resolves through a symlink: {}",
                     current.display()
                 )));
@@ -173,7 +204,7 @@ impl LocalStorage {
         if let Ok(metadata) = std::fs::symlink_metadata(full)
             && metadata.file_type().is_symlink()
         {
-            return Err(AppError::BadRequest(format!(
+            return Err(StorageError::SymlinkRejected(format!(
                 "storage key resolves to a symlink: {}",
                 full.display()
             )));
@@ -190,10 +221,13 @@ impl Storage for LocalStorage {
         self.reject_symlink_prefixes(&key_path)?;
         let parent = full
             .parent()
-            .ok_or_else(|| AppError::Internal("storage key has no parent".to_string()))?;
+            .ok_or_else(|| StorageError::Internal("storage key has no parent".to_string()))?;
         tokio::fs::create_dir_all(parent).await?;
         self.reject_symlink_prefixes(&key_path)?;
         self.reject_symlink_object(&full)?;
+        if tokio::fs::try_exists(&full).await? {
+            return Err(StorageError::ObjectConflict(key.to_string()));
+        }
         let temporary_full = parent.join(format!(".agentics-write-{}", uuid::Uuid::new_v4()));
         let write_result = async {
             let mut temporary = tokio::fs::OpenOptions::new()
@@ -206,8 +240,11 @@ impl Storage for LocalStorage {
             drop(temporary);
             self.reject_symlink_prefixes(&key_path)?;
             self.reject_symlink_object(&full)?;
+            if tokio::fs::try_exists(&full).await? {
+                return Err(StorageError::ObjectConflict(key.to_string()));
+            }
             tokio::fs::rename(&temporary_full, &full).await?;
-            Ok::<(), AppError>(())
+            Ok::<(), StorageError>(())
         }
         .await;
         if let Err(error) = write_result {
@@ -238,6 +275,12 @@ impl Storage for LocalStorage {
         self.reject_symlink_prefixes(&durable_key_path)?;
         self.reject_symlink_object(&durable_full)?;
 
+        if !tokio::fs::try_exists(&temporary_full).await? {
+            return Err(StorageError::ObjectNotFound(temporary_key.to_string()));
+        }
+        if tokio::fs::try_exists(&durable_full).await? {
+            return Err(StorageError::ObjectConflict(durable_key.to_string()));
+        }
         tokio::fs::hard_link(&temporary_full, &durable_full).await?;
         if let Err(error) = tokio::fs::remove_file(&temporary_full).await {
             let cleanup_result = tokio::fs::remove_file(&durable_full).await;
@@ -256,7 +299,13 @@ impl Storage for LocalStorage {
         let (full, key_path) = self.resolve(key);
         self.reject_symlink_prefixes(&key_path)?;
         self.reject_symlink_object(&full)?;
-        Ok(tokio::fs::read(&full).await?)
+        match tokio::fs::read(&full).await {
+            Ok(bytes) => Ok(bytes),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                Err(StorageError::ObjectNotFound(key.to_string()))
+            }
+            Err(error) => Err(error.into()),
+        }
     }
 
     /// Handles exists for this module.
@@ -327,8 +376,8 @@ fn validate_storage_key(value: &str) -> Result<String> {
 }
 
 /// Handles invalid storage key for this module.
-fn invalid_storage_key() -> AppError {
-    AppError::BadRequest(
+fn invalid_storage_key() -> StorageError {
+    StorageError::InvalidKey(
         "storage key must be a non-empty relative path with safe ASCII components and no `.` or `..` components".to_string(),
     )
 }
@@ -337,8 +386,7 @@ fn invalid_storage_key() -> AppError {
 mod tests {
     use std::path::PathBuf;
 
-    use super::{LocalStorage, Storage, StorageKey};
-    use crate::error::AppError;
+    use super::{LocalStorage, Storage, StorageError, StorageKey};
 
     /// Verifies that local storage returns relative keys.
     #[tokio::test]
@@ -376,7 +424,7 @@ mod tests {
             "a b",
         ] {
             let result = StorageKey::try_new(key);
-            assert!(matches!(result, Err(AppError::BadRequest(_))));
+            assert!(matches!(result, Err(StorageError::InvalidKey(_))));
         }
         drop(std::fs::remove_dir_all(root));
     }
@@ -392,7 +440,7 @@ mod tests {
 
         let result = storage.put(&storage_key("link/escape.txt"), b"bad").await;
 
-        assert!(matches!(result, Err(AppError::BadRequest(_))));
+        assert!(matches!(result, Err(StorageError::SymlinkRejected(_))));
         assert!(!outside.join("escape.txt").exists());
         drop(std::fs::remove_dir_all(root));
         drop(std::fs::remove_dir_all(outside));
@@ -413,7 +461,7 @@ mod tests {
             .put(&storage_key("objects/object.txt"), b"bad")
             .await;
 
-        assert!(matches!(result, Err(AppError::BadRequest(_))));
+        assert!(matches!(result, Err(StorageError::SymlinkRejected(_))));
         assert!(!outside.join("escape.txt").exists());
         drop(std::fs::remove_dir_all(root));
         drop(std::fs::remove_dir_all(outside));

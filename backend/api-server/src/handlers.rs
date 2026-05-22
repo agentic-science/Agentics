@@ -22,10 +22,11 @@ use tracing::warn;
 use url::form_urlencoded;
 use uuid::Uuid;
 
+use crate::error::ApiResult as Result;
 use shared::auth;
 use shared::config::AgentRegistrationMode;
 use shared::db::{self, QueueEvaluationJobInput};
-use shared::error::{AppError, Result};
+use shared::error::ServiceError;
 use shared::models::challenge::{
     ChallengeBundleSpec, ChallengeResultDetailVisibility, ChallengeSolutionPublicationPolicy,
     ChallengeVisibility, MoltbookCommunityDto,
@@ -67,8 +68,9 @@ where
     T: std::str::FromStr,
     T::Err: std::fmt::Display,
 {
-    raw.parse::<T>()
-        .map_err(|e| AppError::BadRequest(e.to_string()))
+    Ok(raw
+        .parse::<T>()
+        .map_err(|e| ServiceError::BadRequest(e.to_string()))?)
 }
 
 // ---------------------------------------------------------------------------
@@ -115,10 +117,10 @@ pub async fn register_agent(
     let agent = match state.config.agent_registration_mode() {
         AgentRegistrationMode::PioneerCode => {
             let Some(code) = body.pioneer_code.as_ref() else {
-                return Err(reject_failed_pioneer_code().await);
+                return Err(reject_failed_pioneer_code().await.into());
             };
             let Ok(code) = PioneerCode::try_new(code.expose_secret().to_string()) else {
-                return Err(reject_failed_pioneer_code().await);
+                return Err(reject_failed_pioneer_code().await.into());
             };
             let code_hash = auth::hash_opaque_token(code.expose_secret());
             match db::register_agent_with_pioneer_code(
@@ -132,9 +134,9 @@ pub async fn register_agent(
             {
                 Ok(agent) => agent,
                 Err(error) if is_invalid_pioneer_code(&error) => {
-                    return Err(reject_failed_pioneer_code().await);
+                    return Err(reject_failed_pioneer_code().await.into());
                 }
-                Err(error) => return Err(error),
+                Err(error) => return Err(error.into()),
             }
         }
         AgentRegistrationMode::Public => {
@@ -221,7 +223,7 @@ async fn get_challenge_detail_response(
     challenge_id: ChallengeId,
 ) -> Result<Json<shared::models::challenge::ChallengeDetailResponse>> {
     let challenge = db::get_public_challenge(&state.db, &challenge_id).await?;
-    let challenge = challenge.ok_or(AppError::NotFound)?;
+    let challenge = challenge.ok_or(ServiceError::NotFound)?;
 
     let statement = tokio::fs::read_to_string(challenge.statement_path.as_path()).await?;
     let moltbook = MoltbookCommunityDto {
@@ -281,7 +283,8 @@ async fn create_solution_submission_for_mode(
     )
     .await?;
 
-    let artifact_bytes = artifacts::base64_decode(&body.artifact_base64).ok_or(AppError::Base64)?;
+    let artifact_bytes =
+        artifacts::base64_decode(&body.artifact_base64).ok_or(ServiceError::Base64)?;
     let manifest = shared::zip_project::ZipProjectManifest::from_zip_bytes(&artifact_bytes)?;
 
     let solution_submission_id = SolutionSubmissionId::generate();
@@ -333,7 +336,7 @@ async fn create_solution_submission_for_mode(
         Ok(solution_submission) => solution_submission,
         Err(error) => {
             cleanup_storage_key(&state, &temporary_artifact_key).await;
-            return Err(error);
+            return Err(error.into());
         }
     };
 
@@ -344,19 +347,19 @@ async fn create_solution_submission_for_mode(
     {
         cleanup_solution_submission_record(&state, &solution_submission.id).await;
         cleanup_storage_key(&state, &temporary_artifact_key).await;
-        return Err(error);
+        return Err(error.into());
     }
 
     if let Err(error) = db::mark_evaluation_job_ready(&state.db, &job_id).await {
         cleanup_solution_submission_record(&state, &solution_submission.id).await;
         cleanup_storage_key(&state, &artifact_key).await;
         cleanup_storage_key(&state, &temporary_artifact_key).await;
-        return Err(error);
+        return Err(error.into());
     }
     let solution_submission = db::get_solution_submission_by_id(&state.db, &solution_submission.id)
         .await?
         .ok_or_else(|| {
-            AppError::Internal(
+            ServiceError::Internal(
                 "solution submission disappeared after staged job was marked ready".to_string(),
             )
         })?;
@@ -418,10 +421,11 @@ async fn ensure_submission_quota_available(
     .await?;
 
     if used >= limit {
-        return Err(AppError::TooManyRequests(format!(
+        return Err(ServiceError::TooManyRequests(format!(
             "{} quota exceeded for challenge `{challenge_id}`: {used} of {limit} runs used in the last 24 hours",
             eval_type.as_str()
-        )));
+        ))
+        .into());
     }
 
     if let Some(limit) = challenge_lifetime_limit {
@@ -434,10 +438,11 @@ async fn ensure_submission_quota_available(
         )
         .await?;
         if used >= limit {
-            return Err(AppError::TooManyRequests(format!(
+            return Err(ServiceError::TooManyRequests(format!(
                 "{} challenge limit exceeded for challenge `{challenge_id}`: {used} of {limit} lifetime runs used",
                 eval_type.as_str()
-            )));
+            ))
+            .into());
         }
     }
 
@@ -445,9 +450,10 @@ async fn ensure_submission_quota_available(
         let active = db::count_active_evaluation_jobs(&state.db, ScoringMode::Official).await?;
         let max_active = i64::from(state.config.max_active_official_jobs);
         if active >= max_active {
-            return Err(AppError::TooManyRequests(format!(
+            return Err(ServiceError::TooManyRequests(format!(
                 "official evaluation queue is full: {active} of {max_active} official jobs are queued or running"
-            )));
+            ))
+            .into());
         }
     }
 
@@ -503,12 +509,12 @@ impl ChallengeCatalogQuery {
 
     /// Returns validated challenge-list pagination parameters.
     fn page(&self) -> Result<PublicPagination> {
-        public_api::public_pagination(
+        Ok(public_api::public_pagination(
             self.limit,
             self.offset,
             DEFAULT_PUBLIC_CHALLENGE_LIST_LIMIT,
             "challenge list",
-        )
+        )?)
     }
 
     /// Returns validated search and keyword filters for challenge catalog queries.
@@ -519,11 +525,12 @@ impl ChallengeCatalogQuery {
             .iter()
             .map(|raw| ChallengeKeyword::try_new(raw.clone()))
             .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(|e| AppError::Validation(e.to_string()))?;
+            .map_err(|e| ServiceError::Validation(e.to_string()))?;
         if keywords.len() > 6 {
-            return Err(AppError::Validation(
+            return Err(ServiceError::Validation(
                 "challenge catalog filters accept at most 6 keywords".to_string(),
-            ));
+            )
+            .into());
         }
         Ok(db::ChallengeCatalogFilters { search, keywords })
     }
@@ -531,9 +538,9 @@ impl ChallengeCatalogQuery {
 
 /// Parse a signed integer query parameter for public catalog pagination.
 fn parse_i64_query_param(value: &str, field: &str) -> Result<i64> {
-    value
+    Ok(value
         .parse()
-        .map_err(|_| AppError::BadRequest(format!("{field} must be an integer")))
+        .map_err(|_| ServiceError::BadRequest(format!("{field} must be an integer")))?)
 }
 
 /// Normalize a public challenge catalog text search query.
@@ -546,10 +553,11 @@ fn normalized_challenge_search(raw: Option<&str>) -> Result<Option<String>> {
         return Ok(None);
     }
     if normalized.len() > 120 || normalized.chars().any(char::is_control) {
-        return Err(AppError::Validation(
+        return Err(ServiceError::Validation(
             "challenge search query must be at most 120 UTF-8 bytes and contain no control characters"
                 .to_string(),
-        ));
+        )
+        .into());
     }
     Ok(Some(normalized.to_string()))
 }
@@ -570,9 +578,9 @@ pub async fn get_solution_submission(
     agent: AgentAuth,
 ) -> Result<Json<SolutionSubmissionResponse>> {
     let solution_submission = db::get_solution_submission_by_id(&state.db, &id).await?;
-    let solution_submission = solution_submission.ok_or(AppError::NotFound)?;
+    let solution_submission = solution_submission.ok_or(ServiceError::NotFound)?;
     if solution_submission.agent_id != agent.agent_id {
-        return Err(AppError::NotFound);
+        return Err(ServiceError::NotFound.into());
     }
     Ok(Json(presenters::present_solution_submission(
         &solution_submission,
@@ -596,9 +604,9 @@ pub async fn get_solution_submission_result_report(
     agent: AgentAuth,
 ) -> Result<Json<SolutionSubmissionResultReportResponse>> {
     let solution_submission = db::get_solution_submission_by_id(&state.db, &id).await?;
-    let solution_submission = solution_submission.ok_or(AppError::NotFound)?;
+    let solution_submission = solution_submission.ok_or(ServiceError::NotFound)?;
     if solution_submission.agent_id != agent.agent_id {
-        return Err(AppError::NotFound);
+        return Err(ServiceError::NotFound.into());
     }
     Ok(Json(SolutionSubmissionResultReportResponse {
         solution_submission: presenters::present_solution_submission(
@@ -615,9 +623,9 @@ pub async fn get_solution_submission_logs(
     agent: AgentAuth,
 ) -> Result<Json<SolutionSubmissionLogsResponse>> {
     let solution_submission = db::get_solution_submission_by_id(&state.db, &id).await?;
-    let solution_submission = solution_submission.ok_or(AppError::NotFound)?;
+    let solution_submission = solution_submission.ok_or(ServiceError::NotFound)?;
     if solution_submission.agent_id != agent.agent_id {
-        return Err(AppError::NotFound);
+        return Err(ServiceError::NotFound.into());
     }
     artifacts::read_solution_submission_logs(&state, &solution_submission).await
 }
@@ -630,9 +638,9 @@ pub async fn get_solution_submission_ranking_context(
     Query(query): Query<RankingContextQuery>,
 ) -> Result<Json<RankingContextResponse>> {
     let solution_submission = db::get_solution_submission_by_id(&state.db, &id).await?;
-    let solution_submission = solution_submission.ok_or(AppError::NotFound)?;
+    let solution_submission = solution_submission.ok_or(ServiceError::NotFound)?;
     if solution_submission.agent_id != agent.agent_id {
-        return Err(AppError::NotFound);
+        return Err(ServiceError::NotFound.into());
     }
     ensure_ranking_scope_matches_submission(&solution_submission, &query)?;
     let response = build_ranking_context(
@@ -682,9 +690,9 @@ pub async fn get_public_solution_submission(
     State(state): State<AppState>,
 ) -> Result<Json<SolutionSubmissionResponse>> {
     let solution_submission = db::get_public_solution_submission_by_id(&state.db, &id).await?;
-    let solution_submission = solution_submission.ok_or(AppError::NotFound)?;
+    let solution_submission = solution_submission.ok_or(ServiceError::NotFound)?;
     if !solution_submission.visible_after_eval {
-        return Err(AppError::NotFound);
+        return Err(ServiceError::NotFound.into());
     }
     ensure_public_result_detail_visible(&state.db, &solution_submission.challenge_id).await?;
     Ok(Json(presenters::present_solution_submission(
@@ -699,9 +707,9 @@ pub async fn get_public_solution_submission_result_report(
     State(state): State<AppState>,
 ) -> Result<Json<SolutionSubmissionResultReportResponse>> {
     let solution_submission = db::get_public_solution_submission_by_id(&state.db, &id).await?;
-    let solution_submission = solution_submission.ok_or(AppError::NotFound)?;
+    let solution_submission = solution_submission.ok_or(ServiceError::NotFound)?;
     if !solution_submission.visible_after_eval {
-        return Err(AppError::NotFound);
+        return Err(ServiceError::NotFound.into());
     }
     ensure_public_result_detail_visible(&state.db, &solution_submission.challenge_id).await?;
     Ok(Json(SolutionSubmissionResultReportResponse {
@@ -719,9 +727,9 @@ pub async fn get_public_solution_submission_ranking_context(
     Query(query): Query<RankingContextQuery>,
 ) -> Result<Json<RankingContextResponse>> {
     let solution_submission = db::get_public_solution_submission_by_id(&state.db, &id).await?;
-    let solution_submission = solution_submission.ok_or(AppError::NotFound)?;
+    let solution_submission = solution_submission.ok_or(ServiceError::NotFound)?;
     if !solution_submission.visible_after_eval {
-        return Err(AppError::NotFound);
+        return Err(ServiceError::NotFound.into());
     }
     ensure_ranking_scope_matches_submission(&solution_submission, &query)?;
     let (_challenge, spec) =
@@ -744,9 +752,9 @@ pub async fn get_public_artifact(
     State(state): State<AppState>,
 ) -> Result<Json<SolutionSubmissionArtifactResponse>> {
     let solution_submission = db::get_public_solution_submission_by_id(&state.db, &id).await?;
-    let solution_submission = solution_submission.ok_or(AppError::NotFound)?;
+    let solution_submission = solution_submission.ok_or(ServiceError::NotFound)?;
     if !solution_submission.visible_after_eval {
-        return Err(AppError::NotFound);
+        return Err(ServiceError::NotFound.into());
     }
     ensure_public_solution_artifact_visible(&state.db, &solution_submission.challenge_id).await?;
 
@@ -817,11 +825,11 @@ pub struct PublicListQuery {
 impl PublicListQuery {
     /// Returns the requested list limit after applying the public API bounds.
     fn limit(&self) -> Result<i64> {
-        public_api::bounded_public_limit(
+        Ok(public_api::bounded_public_limit(
             self.limit,
             DEFAULT_PUBLIC_SUBMISSION_LIST_LIMIT,
             "solution submission list",
-        )
+        )?)
     }
 }
 
@@ -835,11 +843,11 @@ pub struct LeaderboardQuery {
 impl LeaderboardQuery {
     /// Returns the requested leaderboard size after applying public API bounds.
     fn limit(&self) -> Result<i64> {
-        public_api::bounded_public_limit(
+        Ok(public_api::bounded_public_limit(
             self.limit,
             DEFAULT_PUBLIC_LEADERBOARD_LIMIT,
             "leaderboard",
-        )
+        )?)
     }
 }
 
@@ -863,9 +871,9 @@ async fn load_challenge_policy(
     challenge_id: &ChallengeId,
 ) -> Result<(db::ChallengeRecord, ChallengeBundleSpec)> {
     let challenge = db::get_public_challenge(pool, challenge_id).await?;
-    let challenge = challenge.ok_or(AppError::NotFound)?;
+    let challenge = challenge.ok_or(ServiceError::NotFound)?;
     let spec: ChallengeBundleSpec = serde_json::from_value(challenge.spec_json.clone())
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+        .map_err(|e| ServiceError::Internal(e.to_string()))?;
     Ok((challenge, spec))
 }
 
@@ -888,7 +896,7 @@ fn ensure_public_result_detail_visible_for_spec(spec: &ChallengeBundleSpec) -> R
             Ok(())
         }
         ChallengeResultDetailVisibility::SubmitterLivePublicAfterClose
-        | ChallengeResultDetailVisibility::SubmitterOnly => Err(AppError::NotFound),
+        | ChallengeResultDetailVisibility::SubmitterOnly => Err(ServiceError::NotFound.into()),
     }
 }
 
@@ -903,7 +911,9 @@ async fn ensure_public_solution_artifact_visible(
         ChallengeResultDetailVisibility::SubmitterLivePublicAfterClose
             if challenge_has_closed(&spec)? => {}
         ChallengeResultDetailVisibility::SubmitterLivePublicAfterClose
-        | ChallengeResultDetailVisibility::SubmitterOnly => return Err(AppError::NotFound),
+        | ChallengeResultDetailVisibility::SubmitterOnly => {
+            return Err(ServiceError::NotFound.into());
+        }
     }
 
     match spec.solution_publication {
@@ -912,7 +922,9 @@ async fn ensure_public_solution_artifact_visible(
             Ok(())
         }
         ChallengeSolutionPublicationPolicy::Private
-        | ChallengeSolutionPublicationPolicy::PublicAfterClose => Err(AppError::NotFound),
+        | ChallengeSolutionPublicationPolicy::PublicAfterClose => {
+            Err(ServiceError::NotFound.into())
+        }
     }
 }
 
@@ -925,7 +937,7 @@ fn ensure_visibility_allows_public(
         ChallengeVisibility::PublicLive => Ok(()),
         ChallengeVisibility::PublicAfterClose if challenge_has_closed(spec)? => Ok(()),
         ChallengeVisibility::PublicAfterClose | ChallengeVisibility::Hidden => {
-            Err(AppError::NotFound)
+            Err(ServiceError::NotFound.into())
         }
     }
 }
@@ -936,7 +948,7 @@ fn challenge_has_closed(spec: &ChallengeBundleSpec) -> Result<bool> {
         return Ok(false);
     };
     let closes_at = DateTime::parse_from_rfc3339(closes_at)
-        .map_err(|e| AppError::Internal(format!("invalid persisted challenge closes_at: {e}")))?
+        .map_err(|e| ServiceError::Internal(format!("invalid persisted challenge closes_at: {e}")))?
         .with_timezone(&Utc);
     Ok(Utc::now() >= closes_at)
 }
@@ -949,9 +961,10 @@ fn ensure_ranking_scope_matches_submission(
     if solution_submission.challenge_id != query.challenge_id
         || solution_submission.target != query.target
     {
-        return Err(AppError::BadRequest(
+        return Err(ServiceError::BadRequest(
             "ranking scope must match the solution submission challenge_id and target".to_string(),
-        ));
+        )
+        .into());
     }
     Ok(())
 }
@@ -965,19 +978,19 @@ async fn build_ranking_context(
 ) -> Result<RankingContextResponse> {
     let challenge = db::get_public_challenge(pool, challenge_id)
         .await?
-        .ok_or(AppError::NotFound)?;
+        .ok_or(ServiceError::NotFound)?;
     let entries = db::list_leaderboard_entries(pool, challenge_id, target, 10_000).await?;
     let total_ranked = i64::try_from(entries.len())
-        .map_err(|_| AppError::Internal("leaderboard entry count overflow".to_string()))?;
+        .map_err(|_| ServiceError::Internal("leaderboard entry count overflow".to_string()))?;
     let ranked_entries = entries
         .into_iter()
         .enumerate()
         .map(|(index, entry)| {
             let rank_index = index
                 .checked_add(1)
-                .ok_or_else(|| AppError::Internal("leaderboard rank overflow".to_string()))?;
+                .ok_or_else(|| ServiceError::Internal("leaderboard rank overflow".to_string()))?;
             let rank = i64::try_from(rank_index)
-                .map_err(|_| AppError::Internal("leaderboard rank overflow".to_string()))?;
+                .map_err(|_| ServiceError::Internal("leaderboard rank overflow".to_string()))?;
             Ok(RankedLeaderboardEntryDto { rank, entry })
         })
         .collect::<Result<Vec<_>>>()?;
@@ -988,10 +1001,11 @@ async fn build_ranking_context(
         .map(|index| {
             index
                 .checked_add(1)
-                .ok_or_else(|| AppError::Internal("leaderboard rank overflow".to_string()))
+                .ok_or_else(|| ServiceError::Internal("leaderboard rank overflow".to_string()))
                 .and_then(|rank_index| {
-                    i64::try_from(rank_index)
-                        .map_err(|_| AppError::Internal("leaderboard rank overflow".to_string()))
+                    i64::try_from(rank_index).map_err(|_| {
+                        ServiceError::Internal("leaderboard rank overflow".to_string())
+                    })
                 })
         })
         .transpose()?;
@@ -1011,10 +1025,10 @@ async fn build_ranking_context(
         let end = index
             .checked_add(4)
             .map(|end| end.min(ranked_entries.len()))
-            .ok_or_else(|| AppError::Internal("leaderboard context overflow".to_string()))?;
+            .ok_or_else(|| ServiceError::Internal("leaderboard context overflow".to_string()))?;
         ranked_entries
             .get(start..end)
-            .ok_or_else(|| AppError::Internal("leaderboard context range invalid".to_string()))?
+            .ok_or_else(|| ServiceError::Internal("leaderboard context range invalid".to_string()))?
             .to_vec()
     } else {
         ranked_entries.iter().take(5).cloned().collect()

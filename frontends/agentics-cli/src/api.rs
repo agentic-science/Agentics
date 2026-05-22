@@ -418,8 +418,8 @@ where
                 "Agentics API returned {} {}: {} ({})",
                 status.as_u16(),
                 status.canonical_reason().unwrap_or("error"),
-                error.message,
-                error.error
+                error.error.message,
+                error.error.code
             ),
         )
         .into());
@@ -506,8 +506,10 @@ mod tests {
         Mock::given(method("GET"))
             .and(path("/api/public/challenges"))
             .respond_with(ResponseTemplate::new(400).set_body_json(json!({
-                "error": "bad_request",
-                "message": "name must not be empty"
+                "error": {
+                    "code": "bad_request",
+                    "message": "name must not be empty"
+                }
             })))
             .mount(&server)
             .await;

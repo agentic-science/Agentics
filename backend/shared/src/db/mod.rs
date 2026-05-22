@@ -16,6 +16,35 @@ pub mod sessions;
 pub mod solution_submissions;
 pub mod validation_quotas;
 
+use crate::error::ServiceError;
+
+/// Local database workflow failures before conversion to service errors.
+#[derive(Debug, thiserror::Error)]
+pub enum DbWorkflowError {
+    #[error("admission conflict: {0}")]
+    AdmissionConflict(String),
+    #[error("not found: {0}")]
+    NotFound(String),
+    #[error("quota exhausted: {0}")]
+    QuotaExhausted(String),
+    #[error("invalid stored data: {0}")]
+    InvalidStoredData(String),
+    #[error("raw SQL failure: {0}")]
+    Sql(#[from] sqlx::Error),
+}
+
+impl From<DbWorkflowError> for ServiceError {
+    fn from(error: DbWorkflowError) -> Self {
+        match error {
+            DbWorkflowError::AdmissionConflict(_) => ServiceError::Conflict,
+            DbWorkflowError::NotFound(_) => ServiceError::NotFound,
+            DbWorkflowError::QuotaExhausted(message) => ServiceError::TooManyRequests(message),
+            DbWorkflowError::InvalidStoredData(message) => ServiceError::Internal(message),
+            DbWorkflowError::Sql(error) => ServiceError::Database(error),
+        }
+    }
+}
+
 pub use agents::*;
 pub use challenge_creation::*;
 pub use challenges::*;

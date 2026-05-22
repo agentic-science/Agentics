@@ -37,9 +37,9 @@ async fn validation_run_is_rejected_when_challenge_disables_validation(pool: sql
     assert_eq!(response.status(), 400);
 
     let error: serde_json::Value = response.json().await.expect("failed to decode error");
-    assert_eq!(error["error"], "bad_request");
+    assert_eq!(error["error"]["code"], "bad_request");
     assert!(
-        error["message"]
+        error["error"]["message"]
             .as_str()
             .expect("error message")
             .contains("validation pass is disabled")
@@ -113,9 +113,9 @@ async fn validation_run_quota_rejects_and_resets(pool: sqlx::PgPool) {
         .json()
         .await
         .expect("failed to decode quota error");
-    assert_eq!(quota_error["error"], "too_many_requests");
+    assert_eq!(quota_error["error"]["code"], "too_many_requests");
     assert!(
-        quota_error["message"]
+        quota_error["error"]["message"]
             .as_str()
             .expect("quota error message")
             .contains("validation quota exceeded")
@@ -211,9 +211,9 @@ async fn official_submission_quota_rejects_before_artifact_decode(pool: sqlx::Pg
         .json()
         .await
         .expect("failed to decode quota error");
-    assert_eq!(quota_error["error"], "too_many_requests");
+    assert_eq!(quota_error["error"]["code"], "too_many_requests");
     assert!(
-        quota_error["message"]
+        quota_error["error"]["message"]
             .as_str()
             .expect("quota error message")
             .contains("official quota exceeded")
@@ -276,9 +276,9 @@ async fn official_active_queue_limit_rejects_before_artifact_decode(pool: sqlx::
         .json()
         .await
         .expect("failed to decode active queue error");
-    assert_eq!(quota_error["error"], "too_many_requests");
+    assert_eq!(quota_error["error"]["code"], "too_many_requests");
     assert!(
-        quota_error["message"]
+        quota_error["error"]["message"]
             .as_str()
             .expect("active queue error message")
             .contains("official evaluation queue is full")

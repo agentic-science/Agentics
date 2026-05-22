@@ -2,7 +2,7 @@ use serde_json::Value;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use crate::config::WorkerAccelerators;
-use crate::error::{AppError, Result};
+use crate::error::{Result, ServiceError};
 use crate::models::challenge::{ChallengeBundleSpec, TargetAccelerator};
 use crate::models::evaluation::{EvaluationJobPayload, ScoringMode};
 use crate::models::ids::{ChallengeId, EvaluationJobId, SolutionSubmissionId};
@@ -76,7 +76,7 @@ pub async fn claim_next_evaluation_job(
 
     let eval_type_raw: String = r.try_get("eval_type")?;
     let eval_type = ScoringMode::from_storage_value(&eval_type_raw).ok_or_else(|| {
-        AppError::Internal(format!("unexpected evaluation job type `{eval_type_raw}`"))
+        ServiceError::Internal(format!("unexpected evaluation job type `{eval_type_raw}`"))
     })?;
     let solution_submission_id = solution_submission_id_from_row(&r, "solution_submission_id")?;
 
@@ -93,7 +93,7 @@ pub async fn claim_next_evaluation_job(
     .await?;
 
     let payload: EvaluationJobPayload = serde_json::from_value(r.try_get("payload_json")?)
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+        .map_err(|e| ServiceError::Internal(e.to_string()))?;
 
     tx.commit().await?;
 
@@ -219,7 +219,7 @@ pub async fn mark_evaluation_job_ready(pool: &PgPool, job_id: &EvaluationJobId) 
     .await?;
 
     let Some(row) = row else {
-        return Err(AppError::Internal(format!(
+        return Err(ServiceError::Internal(format!(
             "staged evaluation job `{job_id}` is not staged"
         )));
     };
@@ -277,12 +277,12 @@ pub async fn queue_evaluation_job(
     .bind(input.solution_submission_id.as_str())
     .fetch_one(&mut *tx)
     .await
-    .map_err(|_| AppError::NotFound)?;
+    .map_err(|_| ServiceError::NotFound)?;
     let was_visible: bool = row.try_get("visible_after_eval")?;
 
     let spec_json: Value = row.try_get("spec_json")?;
     let spec: ChallengeBundleSpec =
-        serde_json::from_value(spec_json).map_err(|e| AppError::Internal(e.to_string()))?;
+        serde_json::from_value(spec_json).map_err(|e| ServiceError::Internal(e.to_string()))?;
 
     let target = target_from_row(&row, "target")?;
     let challenge_id = challenge_id_from_row(&row, "challenge_id")?;
@@ -314,7 +314,7 @@ pub async fn queue_evaluation_job(
         challenge_name: challenge_name.clone(),
         target: target.clone(),
     })
-    .map_err(|e| AppError::Internal(e.to_string()))?;
+    .map_err(|e| ServiceError::Internal(e.to_string()))?;
 
     let eval_type_str = input.eval_type.as_str();
     let required_accelerator = required_accelerator_for_target(&spec, &target)?;
@@ -323,7 +323,7 @@ pub async fn queue_evaluation_job(
             lock_quota_scope(&mut tx, "global:official-active").await?;
             let active = count_active_evaluation_jobs_tx(&mut tx, ScoringMode::Official).await?;
             if active >= max_active {
-                return Err(AppError::TooManyRequests(format!(
+                return Err(ServiceError::TooManyRequests(format!(
                     "official evaluation queue is full: {active} of {max_active} official jobs are staged, queued, or running"
                 )));
             }
@@ -379,7 +379,8 @@ pub async fn queue_evaluation_job(
         eval_type: input.eval_type,
         status: "queued".to_string(),
         attempt_count: 0,
-        payload: serde_json::from_value(payload).map_err(|e| AppError::Internal(e.to_string()))?,
+        payload: serde_json::from_value(payload)
+            .map_err(|e| ServiceError::Internal(e.to_string()))?,
     })
 }
 
@@ -389,8 +390,9 @@ fn storage_key_from_row(
     column: &str,
 ) -> Result<crate::storage::StorageKey> {
     let value: String = row.try_get(column)?;
-    crate::storage::StorageKey::try_new(&value)
-        .map_err(|e| AppError::Internal(format!("stored invalid storage key in `{column}`: {e}")))
+    crate::storage::StorageKey::try_new(&value).map_err(|e| {
+        ServiceError::Internal(format!("stored invalid storage key in `{column}`: {e}"))
+    })
 }
 
 /// Reads required worker accelerator from a database row.
@@ -400,7 +402,7 @@ fn required_accelerator_from_row(
 ) -> Result<TargetAccelerator> {
     let value: String = row.try_get(column)?;
     TargetAccelerator::from_storage_value(&value).ok_or_else(|| {
-        AppError::Internal(format!(
+        ServiceError::Internal(format!(
             "stored invalid required accelerator `{value}` in `{column}`"
         ))
     })
@@ -412,7 +414,7 @@ fn required_accelerator_for_target(
     target: &TargetName,
 ) -> Result<TargetAccelerator> {
     let target_spec = spec.target(target).ok_or_else(|| {
-        AppError::Internal(format!(
+        ServiceError::Internal(format!(
             "challenge `{}` does not declare target `{target}` after admission validation",
             spec.challenge_name
         ))
@@ -427,11 +429,11 @@ fn managed_bundle_path_from_row(
 ) -> Result<ManagedBundlePath> {
     let value: String = row.try_get(column)?;
     ManagedBundlePath::from_existing_dir(value)
-        .map_err(|e| AppError::Internal(format!("stored invalid {column}: {e}")))
+        .map_err(|e| ServiceError::Internal(format!("stored invalid {column}: {e}")))
 }
 
 /// Handles map active job conflict for this module.
-fn map_active_job_conflict(error: sqlx::Error) -> AppError {
+fn map_active_job_conflict(error: sqlx::Error) -> ServiceError {
     match error {
         sqlx::Error::Database(db_err)
             if db_err.constraint().is_some_and(|constraint| {
@@ -439,9 +441,12 @@ fn map_active_job_conflict(error: sqlx::Error) -> AppError {
                     || constraint == "idx_evaluation_jobs_one_active_per_submission_mode"
             }) =>
         {
-            AppError::Conflict
+            super::DbWorkflowError::AdmissionConflict(
+                "one active evaluation job already exists for this submission".to_string(),
+            )
+            .into()
         }
-        other => AppError::Database(other),
+        other => super::DbWorkflowError::Sql(other).into(),
     }
 }
 
@@ -512,7 +517,7 @@ async fn ensure_no_active_job_for_submission_tx(
     .fetch_one(&mut **tx)
     .await?;
     if active {
-        return Err(AppError::Conflict);
+        return Err(ServiceError::Conflict);
     }
     Ok(())
 }
