@@ -411,71 +411,12 @@ async fn apply_install_action(
     rollback: &mut InstallRollback,
 ) -> Result<String, ProfileError> {
     match action {
-        InstallAction::EnsureIdentity => {
-            if !command_success(
-                "getent",
-                vec!["group".to_string(), config.service_group.clone()],
-            )
-            .await?
-            {
-                checked_process(
-                    "groupadd",
-                    vec!["--system".to_string(), config.service_group.clone()],
-                )
-                .await?;
-            }
-            if !command_success(
-                "getent",
-                vec!["passwd".to_string(), config.service_user.clone()],
-            )
-            .await?
-            {
-                checked_process(
-                    "useradd",
-                    vec![
-                        "--system".to_string(),
-                        "--gid".to_string(),
-                        config.service_group.clone(),
-                        "--home-dir".to_string(),
-                        config.state_root.to_string_lossy().to_string(),
-                        "--shell".to_string(),
-                        "/usr/sbin/nologin".to_string(),
-                        config.service_user.clone(),
-                    ],
-                )
-                .await?;
-            }
-            Ok(format!(
-                "ensured {}:{}",
-                config.service_user, config.service_group
-            ))
-        }
+        InstallAction::EnsureIdentity => ensure_service_identity(config).await,
         InstallAction::EnsureDir {
             path,
             mode,
             service_group_owned,
-        } => {
-            if !path.exists() {
-                tokio::fs::create_dir_all(path).await?;
-                rollback.created_paths.push(path.clone());
-            }
-            checked_process(
-                "chmod",
-                vec![mode.to_string(), path.to_string_lossy().to_string()],
-            )
-            .await?;
-            if *service_group_owned {
-                checked_process(
-                    "chown",
-                    vec![
-                        format!("root:{}", config.service_group),
-                        path.to_string_lossy().to_string(),
-                    ],
-                )
-                .await?;
-            }
-            Ok(format!("ensured {}", path.display()))
-        }
+        } => ensure_profile_directory(config, path, mode, *service_group_owned, rollback).await,
         InstallAction::CopyFile {
             source,
             destination,
@@ -483,45 +424,148 @@ async fn apply_install_action(
             mode,
             service_group_readable,
         } => {
-            if destination.exists() && !overwrite {
-                apply_file_permissions(config, destination, mode, *service_group_readable).await?;
-                return Ok(format!("{} already exists", destination.display()));
-            }
-            if let Some(parent) = destination.parent() {
-                tokio::fs::create_dir_all(parent).await?;
-            }
-            if destination.exists() {
-                rollback.backup_file(destination).await?;
-            } else {
-                rollback.created_paths.push(destination.clone());
-            }
-            tokio::fs::copy(source, destination).await?;
-            apply_file_permissions(config, destination, mode, *service_group_readable).await?;
-            Ok(format!("installed {}", destination.display()))
+            install_profile_file(
+                config,
+                source,
+                destination,
+                *overwrite,
+                mode,
+                *service_group_readable,
+                rollback,
+            )
+            .await
         }
-        InstallAction::PrepareStorage => {
-            let mut storage_config = crate::dgx::DgxStorageConfig::from_env()?;
-            if crate::support::env_non_empty(ENV_DGX_PERSIST_FSTAB).is_none() {
-                storage_config.persist_fstab = true;
-            }
-            let reports =
-                prepare_storage_config(storage_config, false, Some(STORAGE_CONFIRMATION), false)
-                    .await
-                    .map_err(ProfileError::Storage)?;
-            let failures = reports.iter().filter(|line| line.is_failure()).count();
-            if failures == 0 {
-                Ok("prepared storage".to_string())
-            } else {
-                Err(ProfileError::Unsafe(format!(
-                    "storage preparation reported {failures} failure(s)"
-                )))
-            }
-        }
-        InstallAction::SystemdDaemonReload => {
-            systemctl_if_available(["daemon-reload"]).await?;
-            Ok("reloaded systemd units".to_string())
-        }
+        InstallAction::PrepareStorage => prepare_profile_storage().await,
+        InstallAction::SystemdDaemonReload => reload_systemd_units().await,
     }
+}
+
+async fn ensure_service_identity(config: &DgxProfileConfig) -> Result<String, ProfileError> {
+    ensure_service_group(&config.service_group).await?;
+    ensure_service_user(config).await?;
+    Ok(format!(
+        "ensured {}:{}",
+        config.service_user, config.service_group
+    ))
+}
+
+async fn ensure_service_group(service_group: &str) -> Result<(), ProfileError> {
+    if command_success(
+        "getent",
+        vec!["group".to_string(), service_group.to_string()],
+    )
+    .await?
+    {
+        return Ok(());
+    }
+    checked_process(
+        "groupadd",
+        vec!["--system".to_string(), service_group.to_string()],
+    )
+    .await
+}
+
+async fn ensure_service_user(config: &DgxProfileConfig) -> Result<(), ProfileError> {
+    if command_success(
+        "getent",
+        vec!["passwd".to_string(), config.service_user.clone()],
+    )
+    .await?
+    {
+        return Ok(());
+    }
+    checked_process(
+        "useradd",
+        vec![
+            "--system".to_string(),
+            "--gid".to_string(),
+            config.service_group.clone(),
+            "--home-dir".to_string(),
+            config.state_root.to_string_lossy().to_string(),
+            "--shell".to_string(),
+            "/usr/sbin/nologin".to_string(),
+            config.service_user.clone(),
+        ],
+    )
+    .await
+}
+
+async fn ensure_profile_directory(
+    config: &DgxProfileConfig,
+    path: &Path,
+    mode: &str,
+    service_group_owned: bool,
+    rollback: &mut InstallRollback,
+) -> Result<String, ProfileError> {
+    if !path.exists() {
+        tokio::fs::create_dir_all(path).await?;
+        rollback.created_paths.push(path.to_path_buf());
+    }
+    checked_process(
+        "chmod",
+        vec![mode.to_string(), path.to_string_lossy().to_string()],
+    )
+    .await?;
+    if service_group_owned {
+        checked_process(
+            "chown",
+            vec![
+                format!("root:{}", config.service_group),
+                path.to_string_lossy().to_string(),
+            ],
+        )
+        .await?;
+    }
+    Ok(format!("ensured {}", path.display()))
+}
+
+async fn install_profile_file(
+    config: &DgxProfileConfig,
+    source: &Path,
+    destination: &Path,
+    overwrite: bool,
+    mode: &str,
+    service_group_readable: bool,
+    rollback: &mut InstallRollback,
+) -> Result<String, ProfileError> {
+    if destination.exists() && !overwrite {
+        apply_file_permissions(config, destination, mode, service_group_readable).await?;
+        return Ok(format!("{} already exists", destination.display()));
+    }
+    if let Some(parent) = destination.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+    if destination.exists() {
+        rollback.backup_file(destination).await?;
+    } else {
+        rollback.created_paths.push(destination.to_path_buf());
+    }
+    tokio::fs::copy(source, destination).await?;
+    apply_file_permissions(config, destination, mode, service_group_readable).await?;
+    Ok(format!("installed {}", destination.display()))
+}
+
+async fn prepare_profile_storage() -> Result<String, ProfileError> {
+    let mut storage_config = crate::dgx::DgxStorageConfig::from_env()?;
+    if crate::support::env_non_empty(ENV_DGX_PERSIST_FSTAB).is_none() {
+        storage_config.persist_fstab = true;
+    }
+    let reports = prepare_storage_config(storage_config, false, Some(STORAGE_CONFIRMATION), false)
+        .await
+        .map_err(ProfileError::Storage)?;
+    let failures = reports.iter().filter(|line| line.is_failure()).count();
+    if failures == 0 {
+        Ok("prepared storage".to_string())
+    } else {
+        Err(ProfileError::Unsafe(format!(
+            "storage preparation reported {failures} failure(s)"
+        )))
+    }
+}
+
+async fn reload_systemd_units() -> Result<String, ProfileError> {
+    systemctl_if_available(["daemon-reload"]).await?;
+    Ok("reloaded systemd units".to_string())
 }
 
 async fn apply_file_permissions(
@@ -632,86 +676,109 @@ async fn apply_uninstall_action(
     action: &UninstallAction,
 ) -> Result<String, ProfileError> {
     match action {
-        UninstallAction::StopServices => {
-            for service in SERVICES
-                .iter()
-                .copied()
-                .filter(|service| *service != "agentics-docker.service")
-            {
-                let _ignored = systemctl_if_available(["stop", service]).await;
-            }
-            Ok("stopped application services".to_string())
-        }
-        UninstallAction::StopDockerService => {
-            let _ignored = systemctl_if_available(["stop", "agentics-docker.service"]).await;
-            Ok("stopped Agentics Docker service".to_string())
-        }
+        UninstallAction::StopServices => stop_application_services().await,
+        UninstallAction::StopDockerService => stop_agentics_docker_service().await,
         UninstallAction::RemoveDockerContainers => remove_agentics_docker_containers(config).await,
-        UninstallAction::RemoveFstabEntries => {
-            remove_fstab_entries(
-                Path::new("/etc/fstab"),
-                &[&config.state_root, &config.test_state_root],
-            )
-            .await
-        }
-        UninstallAction::RemoveProjectEntries => {
-            remove_lines_matching_paths(
-                Path::new("/etc/projects"),
-                &[&config.state_root, &config.test_state_root],
-            )
-            .await?;
-            remove_lines_matching_paths(
-                Path::new("/etc/projid"),
-                &[&config.state_root, &config.test_state_root],
-            )
-            .await
-        }
+        UninstallAction::RemoveFstabEntries => remove_agentics_fstab_entries(config).await,
+        UninstallAction::RemoveProjectEntries => remove_agentics_project_entries(config).await,
         UninstallAction::UnmountTree(root) => unmount_tree(root).await,
-        UninstallAction::RemoveQuotaStorage => {
-            remove_path_if_exists(&config.state_root.join("loop-images")).await?;
-            remove_path_if_exists(&config.state_root.join("docker-data-root")).await?;
-            remove_path_if_exists(&config.state_root.join("phase-mounts")).await?;
-            remove_path_if_exists(&config.test_state_root).await?;
-            Ok("removed quota storage paths".to_string())
-        }
-        UninstallAction::RemoveSystemdUnits => {
-            for service in SERVICES {
-                let _ignored = systemctl_if_available(["disable", service]).await;
-                remove_path_if_exists(&config.systemd_root.join(service)).await?;
-            }
-            let _ignored = systemctl_if_available(["daemon-reload"]).await;
-            let _ignored = systemctl_if_available(["reset-failed"]).await;
-            Ok("removed systemd units".to_string())
-        }
-        UninstallAction::RemoveRuntimeDir => {
-            remove_path_if_exists(Path::new("/run/agentics")).await?;
-            Ok("removed /run/agentics".to_string())
-        }
-        UninstallAction::RemovePath(path) => {
-            remove_path_if_exists(path).await?;
-            Ok(format!("removed {}", path.display()))
-        }
-        UninstallAction::RemoveIdentity => {
-            if command_success(
-                "getent",
-                vec!["passwd".to_string(), config.service_user.clone()],
-            )
-            .await?
-            {
-                let _ignored = checked_process("userdel", vec![config.service_user.clone()]).await;
-            }
-            if command_success(
-                "getent",
-                vec!["group".to_string(), config.service_group.clone()],
-            )
-            .await?
-            {
-                let _ignored =
-                    checked_process("groupdel", vec![config.service_group.clone()]).await;
-            }
-            Ok("removed service identity if unused".to_string())
-        }
+        UninstallAction::RemoveQuotaStorage => remove_quota_storage(config).await,
+        UninstallAction::RemoveSystemdUnits => remove_systemd_units(config).await,
+        UninstallAction::RemoveRuntimeDir => remove_runtime_dir().await,
+        UninstallAction::RemovePath(path) => remove_profile_path(path).await,
+        UninstallAction::RemoveIdentity => remove_service_identity(config).await,
     }
+}
+
+async fn stop_application_services() -> Result<String, ProfileError> {
+    for service in SERVICES
+        .iter()
+        .copied()
+        .filter(|service| *service != "agentics-docker.service")
+    {
+        let _ignored = systemctl_if_available(["stop", service]).await;
+    }
+    Ok("stopped application services".to_string())
+}
+
+async fn stop_agentics_docker_service() -> Result<String, ProfileError> {
+    let _ignored = systemctl_if_available(["stop", "agentics-docker.service"]).await;
+    Ok("stopped Agentics Docker service".to_string())
+}
+
+async fn remove_agentics_fstab_entries(config: &DgxProfileConfig) -> Result<String, ProfileError> {
+    remove_fstab_entries(
+        Path::new("/etc/fstab"),
+        &[&config.state_root, &config.test_state_root],
+    )
+    .await
+}
+
+async fn remove_agentics_project_entries(
+    config: &DgxProfileConfig,
+) -> Result<String, ProfileError> {
+    remove_lines_matching_paths(
+        Path::new("/etc/projects"),
+        &[&config.state_root, &config.test_state_root],
+    )
+    .await?;
+    remove_lines_matching_paths(
+        Path::new("/etc/projid"),
+        &[&config.state_root, &config.test_state_root],
+    )
+    .await
+}
+
+async fn remove_quota_storage(config: &DgxProfileConfig) -> Result<String, ProfileError> {
+    for path in [
+        config.state_root.join("loop-images"),
+        config.state_root.join("docker-data-root"),
+        config.state_root.join("phase-mounts"),
+        config.test_state_root.clone(),
+    ] {
+        remove_path_if_exists(&path).await?;
+    }
+    Ok("removed quota storage paths".to_string())
+}
+
+async fn remove_systemd_units(config: &DgxProfileConfig) -> Result<String, ProfileError> {
+    for service in SERVICES {
+        let _ignored = systemctl_if_available(["disable", service]).await;
+        remove_path_if_exists(&config.systemd_root.join(service)).await?;
+    }
+    let _ignored = systemctl_if_available(["daemon-reload"]).await;
+    let _ignored = systemctl_if_available(["reset-failed"]).await;
+    Ok("removed systemd units".to_string())
+}
+
+async fn remove_runtime_dir() -> Result<String, ProfileError> {
+    remove_path_if_exists(Path::new("/run/agentics")).await?;
+    Ok("removed /run/agentics".to_string())
+}
+
+async fn remove_profile_path(path: &Path) -> Result<String, ProfileError> {
+    remove_path_if_exists(path).await?;
+    Ok(format!("removed {}", path.display()))
+}
+
+async fn remove_service_identity(config: &DgxProfileConfig) -> Result<String, ProfileError> {
+    if command_success(
+        "getent",
+        vec!["passwd".to_string(), config.service_user.clone()],
+    )
+    .await?
+    {
+        let _ignored = checked_process("userdel", vec![config.service_user.clone()]).await;
+    }
+    if command_success(
+        "getent",
+        vec!["group".to_string(), config.service_group.clone()],
+    )
+    .await?
+    {
+        let _ignored = checked_process("groupdel", vec![config.service_group.clone()]).await;
+    }
+    Ok("removed service identity if unused".to_string())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1077,7 +1144,12 @@ pub enum ProfileError {
 
 #[cfg(test)]
 mod tests {
-    use super::{InstallPlan, UninstallPlan, is_agentics_fstab_entry, validate_uninstall_roots};
+    use std::path::PathBuf;
+
+    use super::{
+        InstallPlan, UninstallPlan, is_agentics_fstab_entry, remove_lines_matching_paths,
+        validate_uninstall_roots,
+    };
     use crate::dgx::DgxProfileConfig;
 
     fn config() -> DgxProfileConfig {
@@ -1147,5 +1219,37 @@ mod tests {
             "/srv/agentics/loop-images/unrelated.xfs /mnt/unrelated xfs loop,prjquota 0 0",
             &roots,
         ));
+    }
+
+    /// Verifies project-file cleanup rewrites only Agentics-owned lines and writes a backup.
+    #[tokio::test]
+    async fn project_cleanup_backs_up_and_preserves_unrelated_lines() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let projects = tempdir.path().join("projects");
+        tokio::fs::write(
+            &projects,
+            "100001:/srv/agentics/phase-mounts/solution-run/slots/64mb/slot-001\n2:/var/lib/other\n",
+        )
+        .await
+        .expect("write projects");
+        let root = PathBuf::from("/srv/agentics");
+
+        let message = remove_lines_matching_paths(&projects, &[&root])
+            .await
+            .expect("remove project entries");
+
+        assert!(message.contains("backup"));
+        assert_eq!(
+            tokio::fs::read_to_string(&projects)
+                .await
+                .expect("read rewritten projects"),
+            "2:/var/lib/other\n",
+        );
+        let backups = std::fs::read_dir(tempdir.path())
+            .expect("read tempdir")
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().starts_with("projects."))
+            .count();
+        assert_eq!(backups, 1);
     }
 }
