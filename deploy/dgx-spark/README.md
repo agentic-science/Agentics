@@ -1,8 +1,6 @@
 # DGX Spark MVP Deployment Profile
 
-This profile is the `M0.2.5-DGX-2` deployment target for a single DGX Spark
-host. It is Linux-only and assumes the host inventory summarized in
-`docs/dgx-spark/en.md` has been completed.
+This profile is the deployment target for a single DGX Spark host. It is Linux-only and assumes the host inventory summarized in `docs/dgx-spark/en.md` has been completed.
 
 The `ExecStart=` paths in these service files are Linux systemd paths for the
 DGX hosted profile. macOS rehearsal uses the foreground `cargo` and `bun`
