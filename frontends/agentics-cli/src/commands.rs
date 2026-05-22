@@ -6,7 +6,7 @@ use anyhow::{Context, Result, bail};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use secrecy::{ExposeSecret, SecretString};
 use shared::config::Config;
-use shared::models::challenge::ChallengeDetailResponse;
+use shared::models::challenge::{ChallengeBundleSpec, ChallengeDetailResponse};
 use shared::models::challenge_creation::{
     ChallengePrivateAssetKind, ReviewChallengeDraftRequest, ValidateChallengeDraftRequest,
 };
@@ -629,41 +629,99 @@ async fn validate_remote(
 
 /// Validates local invariants for this contract.
 async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) -> Result<String> {
+    reject_remote_only_local_flags(&args)?;
+    let context = prepare_local_validation(args).await?;
+    let target_reports = execute_local_validation_targets(&context, output_format).await?;
+    let report = output::LocalValidationReport {
+        challenge_name: context.spec.challenge_name,
+        bundle_dir: context.bundle_dir,
+        storage_root: context.storage_root,
+        package: context.package_report,
+        targets: target_reports,
+    };
+    output::render_local_validation_report(&report, output_format)
+}
+
+fn reject_remote_only_local_flags(args: &ValidateArgs) -> Result<()> {
     if args.no_wait {
         bail!("--no-wait can only be used with --remote validation");
     }
     if args.parent_solution_submission_id.is_some() {
         bail!("--parent-solution-submission-id can only be used with --remote validation");
     }
+    Ok(())
+}
 
+#[derive(Debug)]
+struct LocalValidationContext {
+    bundle_dir: PathBuf,
+    spec: ChallengeBundleSpec,
+    targets: Vec<TargetName>,
+    package: package::SolutionPackage,
+    package_report: output::LocalValidationPackageReport,
+    storage_root: PathBuf,
+    config: Config,
+}
+
+async fn prepare_local_validation(args: ValidateArgs) -> Result<LocalValidationContext> {
     let bundle_dir = args
         .bundle_dir
         .as_deref()
         .context("--bundle-dir is required for local validation")?;
     let bundle_dir = canonical_dir(bundle_dir, "challenge bundle")?;
     let spec = shared::challenge_bundle::read_challenge_bundle_spec(&bundle_dir).await?;
-    let requested_challenge_name = args
-        .challenge_name
-        .as_ref()
-        .context("challenge_name is required for local validation")?;
-    if &spec.challenge_name != requested_challenge_name {
+    require_requested_challenge(&spec, args.challenge_name.as_ref())?;
+    let targets = select_local_targets(&spec, args.target.as_ref(), args.all_targets)?;
+    let package = package::package_solution_workspace(&args.dir)?;
+    let storage_root = prepare_local_storage_root(args.local_storage_dir.as_deref()).await?;
+    let config = local_runner_config(&storage_root)?;
+    let package_report = local_package_report(&package);
+
+    Ok(LocalValidationContext {
+        bundle_dir,
+        spec,
+        targets,
+        package,
+        package_report,
+        storage_root,
+        config,
+    })
+}
+
+fn require_requested_challenge(
+    spec: &ChallengeBundleSpec,
+    requested_challenge_name: Option<&ChallengeName>,
+) -> Result<()> {
+    let requested_challenge_name =
+        requested_challenge_name.context("challenge_name is required for local validation")?;
+    if &spec.challenge_name == requested_challenge_name {
+        Ok(())
+    } else {
         bail!(
             "local challenge bundle declares challenge `{}`, but command requested `{}`",
             spec.challenge_name,
             requested_challenge_name
         );
     }
+}
 
-    let targets = targets::select_targets_from_spec(
+fn select_local_targets(
+    spec: &ChallengeBundleSpec,
+    target: Option<&TargetName>,
+    all_targets: bool,
+) -> Result<Vec<TargetName>> {
+    targets::select_targets_from_spec(
         &spec.challenge_name,
         &spec.targets,
-        args.target.as_ref(),
-        args.all_targets,
+        target,
+        all_targets,
         TargetSelectionMode::Validation,
     )
-    .map_err(|error| anyhow::anyhow!(error.to_string()))?;
-    let package = package::package_solution_workspace(&args.dir)?;
-    let storage_root = resolve_local_storage_dir(args.local_storage_dir.as_deref())?;
+    .map_err(|error| anyhow::anyhow!(error.to_string()))
+}
+
+async fn prepare_local_storage_root(configured: Option<&Path>) -> Result<PathBuf> {
+    let storage_root = resolve_local_storage_dir(configured)?;
     tokio::fs::create_dir_all(&storage_root)
         .await
         .with_context(|| {
@@ -672,14 +730,17 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
                 storage_root.display()
             )
         })?;
-    let storage_root = tokio::fs::canonicalize(&storage_root)
+    tokio::fs::canonicalize(&storage_root)
         .await
         .with_context(|| {
             format!(
                 "failed to resolve local validation storage {}",
                 storage_root.display()
             )
-        })?;
+        })
+}
+
+fn local_runner_config(storage_root: &Path) -> Result<Config> {
     let storage_root_value = storage_root.to_str().ok_or_else(|| {
         anyhow::anyhow!(
             "local validation storage path is not valid UTF-8: {}",
@@ -690,35 +751,48 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
     let mut config = Config::from_env()?;
     config.storage_root = storage_root_value.to_string();
     config.validate_runner_storage()?;
+    Ok(config)
+}
 
-    let docker = shared::runner::connect_docker(&config)?;
-    shared::runner::remove_stale_local_validation_containers(&docker).await?;
-    let storage = LocalStorage::new(&storage_root);
-    let package_report = output::LocalValidationPackageReport {
+fn local_package_report(
+    package: &package::SolutionPackage,
+) -> output::LocalValidationPackageReport {
+    output::LocalValidationPackageReport {
         workspace_dir: package.workspace_dir.clone(),
         file_count: package.file_count,
         uncompressed_bytes: package.uncompressed_bytes,
         zip_bytes: package.bytes.len(),
-    };
-    let mut target_reports = Vec::with_capacity(targets.len());
-    for target in targets {
-        let job_id = local_validation_job_id(&spec.challenge_name, &target)?;
+    }
+}
+
+async fn execute_local_validation_targets(
+    context: &LocalValidationContext,
+    output_format: cli::OutputFormat,
+) -> Result<Vec<output::LocalValidationTargetReport>> {
+    let docker = shared::runner::connect_docker(&context.config)?;
+    shared::runner::remove_stale_local_validation_containers(&docker).await?;
+    let storage = LocalStorage::new(&context.storage_root);
+    let mut target_reports = Vec::with_capacity(context.targets.len());
+    for target in &context.targets {
+        let job_id = local_validation_job_id(&context.spec.challenge_name, target)?;
         let artifact_key = StorageKey::try_new(format!("local-validation/{job_id}/solution.zip"))?;
-        let stored_artifact_key = storage.put(&artifact_key, &package.bytes).await?;
+        let stored_artifact_key = storage.put(&artifact_key, &context.package.bytes).await?;
         let payload = EvaluationJobPayload {
             artifact_key: stored_artifact_key,
-            bundle_path: shared::models::paths::ManagedBundlePath::from_existing_dir(&bundle_dir)?,
+            bundle_path: shared::models::paths::ManagedBundlePath::from_existing_dir(
+                &context.bundle_dir,
+            )?,
             public_bundle_path: shared::models::paths::ManagedBundlePath::from_existing_dir(
-                &bundle_dir,
+                &context.bundle_dir,
             )?,
             challenge_id: None,
-            challenge_name: spec.challenge_name.clone(),
+            challenge_name: context.spec.challenge_name.clone(),
             target: target.clone(),
         };
-        let log_path = storage_root.join(runner_log_key(&job_id));
+        let log_path = context.storage_root.join(runner_log_key(&job_id));
         match shared::runner::execute_evaluation_job(shared::runner::EvaluationJobExecution {
             docker: &docker,
-            config: &config,
+            config: &context.config,
             job_id: &job_id,
             worker_id: "local-validation",
             attempt_count: 1,
@@ -732,10 +806,10 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
             Ok(execution) => {
                 let primary_metric = shared::models::evaluation::MetricValue::find_by_name(
                     &execution.result.aggregate_metrics,
-                    &spec.metric_schema.ranking.primary_metric_name,
+                    &context.spec.metric_schema.ranking.primary_metric_name,
                 );
                 target_reports.push(output::LocalValidationTargetReport {
-                    target,
+                    target: target.clone(),
                     log_path,
                     primary_metric,
                     result: execution.result,
@@ -744,13 +818,13 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
             Err(error) => {
                 return Err(local_validation_error(
                     LocalValidationErrorContext {
-                        challenge_name: &spec.challenge_name,
-                        bundle_dir: &bundle_dir,
-                        storage_root: &storage_root,
-                        package: &package_report,
+                        challenge_name: &context.spec.challenge_name,
+                        bundle_dir: &context.bundle_dir,
+                        storage_root: &context.storage_root,
+                        package: &context.package_report,
                         completed_targets: &target_reports,
                         output_format,
-                        failed_target: &target,
+                        failed_target: target,
                         log_path: &log_path,
                     },
                     error.into(),
@@ -758,15 +832,7 @@ async fn validate_local(args: ValidateArgs, output_format: cli::OutputFormat) ->
             }
         }
     }
-
-    let report = output::LocalValidationReport {
-        challenge_name: spec.challenge_name,
-        bundle_dir,
-        storage_root,
-        package: package_report,
-        targets: target_reports,
-    };
-    output::render_local_validation_report(&report, output_format)
+    Ok(target_reports)
 }
 
 #[derive(Debug, Clone, Copy)]
