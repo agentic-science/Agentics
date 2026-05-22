@@ -20,160 +20,234 @@ pub(super) async fn repair_leaderboard_entry_for_solution_submission_tx<'a>(
     tx: &mut Transaction<'a, Postgres>,
     solution_submission_id: &SolutionSubmissionId,
 ) -> Result<()> {
+    let Some(scope) = find_leaderboard_repair_scope(tx, solution_submission_id).await? else {
+        return Ok(());
+    };
+
+    lock_leaderboard_scope(tx, &scope.challenge_id, &scope.target, &scope.agent_id).await?;
+    if !leaderboard_entry_points_to_submission(tx, &scope, solution_submission_id).await? {
+        return Ok(());
+    }
+
+    let Some(spec) = load_repair_challenge_spec(tx, &scope.challenge_id).await? else {
+        return Ok(());
+    };
+    match best_replacement_candidate(tx, &scope, solution_submission_id, &spec).await? {
+        Some(best) => upsert_replacement_leaderboard_entry(tx, &scope, &best).await?,
+        None => delete_leaderboard_entry(tx, &scope).await?,
+    }
+    Ok(())
+}
+
+#[derive(Debug, Clone)]
+struct LeaderboardRepairScope {
+    challenge_id: String,
+    target: String,
+    agent_id: String,
+}
+
+async fn find_leaderboard_repair_scope<'a>(
+    tx: &mut Transaction<'a, Postgres>,
+    solution_submission_id: &SolutionSubmissionId,
+) -> Result<Option<LeaderboardRepairScope>> {
     let row: Option<(String, String, String)> = sqlx::query_as(
         "SELECT challenge_id::text AS challenge_id, target, agent_id::text AS agent_id FROM solution_submissions WHERE id = $1::uuid LIMIT 1"
     )
     .bind(solution_submission_id.as_str())
     .fetch_optional(&mut **tx)
     .await?;
+    Ok(
+        row.map(|(challenge_id, target, agent_id)| LeaderboardRepairScope {
+            challenge_id,
+            target,
+            agent_id,
+        }),
+    )
+}
 
-    let Some((challenge_id, target, agent_id)) = row else {
-        return Ok(());
-    };
-
-    lock_leaderboard_scope(tx, &challenge_id, &target, &agent_id).await?;
-
-    let leaderboard_entry: Option<(String,)> = sqlx::query_as(
+async fn leaderboard_entry_points_to_submission<'a>(
+    tx: &mut Transaction<'a, Postgres>,
+    scope: &LeaderboardRepairScope,
+    solution_submission_id: &SolutionSubmissionId,
+) -> Result<bool> {
+    let entry: Option<(String,)> = sqlx::query_as(
         "SELECT best_solution_submission_id::text AS best_solution_submission_id FROM leaderboard_entries WHERE challenge_id = $1::uuid AND target = $2 AND agent_id = $3::uuid LIMIT 1"
     )
-    .bind(&challenge_id)
-    .bind(&target)
-    .bind(&agent_id)
+    .bind(&scope.challenge_id)
+    .bind(&scope.target)
+    .bind(&scope.agent_id)
     .fetch_optional(&mut **tx)
     .await?;
+    Ok(entry
+        .map(|entry| entry.0 == solution_submission_id.as_str())
+        .unwrap_or(false))
+}
 
-    if leaderboard_entry
-        .map(|e| e.0 == solution_submission_id.as_str())
-        .unwrap_or(false)
-    {
-        let spec_json: Option<(Value,)> = sqlx::query_as(
-            "SELECT spec_json FROM challenges WHERE challenge_id = $1::uuid LIMIT 1",
-        )
-        .bind(&challenge_id)
-        .fetch_optional(&mut **tx)
-        .await?;
-        let Some((spec_json,)) = spec_json else {
-            return Ok(());
-        };
-        let spec = serde_json::from_value::<ChallengeBundleSpec>(spec_json).map_err(|e| {
-            ServiceError::Internal(format!("stored challenge spec is invalid: {e}"))
-        })?;
-
-        let replacement_rows = sqlx::query(
-            r#"
-            SELECT
-                s.id::text AS id,
-                s.created_at,
-                COALESCE(
-                    oe.rank_score,
-                    ve.rank_score,
-                    (oe.official_summary_json->>'score')::double precision,
-                    (ve.validation_summary_json->>'score')::double precision
-                ) AS ranking_score,
-                COALESCE(oe.public_results_json, ve.public_results_json, '[]'::jsonb) AS public_results,
-                COALESCE(oe.aggregate_metrics_json, ve.aggregate_metrics_json, '[]'::jsonb) AS aggregate_metrics,
-                COALESCE(oe.aggregate_metrics_json, '[]'::jsonb) AS official_metrics
-            FROM solution_submissions s
-            LEFT JOIN LATERAL (
-                SELECT rank_score, aggregate_metrics_json, validation_summary_json, public_results_json
-                FROM evaluations
-                WHERE solution_submission_id = s.id AND eval_type = 'validation' AND status = 'completed' AND target = s.target
-                ORDER BY created_at DESC LIMIT 1
-            ) ve ON TRUE
-            LEFT JOIN LATERAL (
-                SELECT rank_score, aggregate_metrics_json, official_summary_json, public_results_json
-                FROM evaluations
-                WHERE solution_submission_id = s.id AND eval_type = 'official' AND status = 'completed' AND target = s.target
-                ORDER BY created_at DESC LIMIT 1
-            ) oe ON TRUE
-            WHERE s.challenge_id = $1::uuid AND s.agent_id = $2::uuid AND s.id <> $3::uuid
-              AND s.target = $4
-              AND s.visible_after_eval = TRUE AND s.status = 'completed'
-              AND COALESCE(
-                    oe.rank_score,
-                    ve.rank_score,
-                    (oe.official_summary_json->>'score')::double precision,
-                    (ve.validation_summary_json->>'score')::double precision
-                  ) IS NOT NULL
-            "#
-        )
-        .bind(&challenge_id)
-        .bind(&agent_id)
-        .bind(solution_submission_id.as_str())
-        .bind(&target)
-        .fetch_all(&mut **tx)
-        .await?;
-
-        let mut candidates = replacement_rows
-            .into_iter()
-            .map(|row| {
-                let aggregate_metrics = decode_optional_json(
-                    Some(row.try_get::<Value, _>("aggregate_metrics")?),
-                    "leaderboard replacement aggregate metrics",
-                )?
-                .unwrap_or_default();
-                Ok(LeaderboardReplacementCandidate {
-                    id: row.try_get("id")?,
-                    created_at: row.try_get("created_at")?,
-                    rank_score: row.try_get("ranking_score")?,
-                    public_results_json: row.try_get("public_results")?,
-                    aggregate_metrics,
-                    aggregate_metrics_json: row.try_get("aggregate_metrics")?,
-                    official_metrics_json: row.try_get("official_metrics")?,
-                })
+async fn load_repair_challenge_spec<'a>(
+    tx: &mut Transaction<'a, Postgres>,
+    challenge_id: &str,
+) -> Result<Option<ChallengeBundleSpec>> {
+    let spec_json: Option<(Value,)> =
+        sqlx::query_as("SELECT spec_json FROM challenges WHERE challenge_id = $1::uuid LIMIT 1")
+            .bind(challenge_id)
+            .fetch_optional(&mut **tx)
+            .await?;
+    spec_json
+        .map(|(value,)| {
+            serde_json::from_value::<ChallengeBundleSpec>(value).map_err(|error| {
+                ServiceError::Internal(format!("stored challenge spec is invalid: {error}"))
             })
-            .collect::<Result<Vec<_>>>()?;
-        candidates.sort_by(|a, b| {
-            compare_rank_payloads(
-                &spec,
-                a.rank_score,
-                &a.aggregate_metrics,
-                b.rank_score,
-                &b.aggregate_metrics,
-            )
-            .then_with(|| a.created_at.cmp(&b.created_at))
-            .then_with(|| a.id.cmp(&b.id))
-        });
+        })
+        .transpose()
+}
 
-        if let Some(best) = candidates.into_iter().next() {
-            sqlx::query(
-                r#"
-                INSERT INTO leaderboard_entries (
-                    challenge_id, target, agent_id, best_solution_submission_id, best_rank_score,
-                    public_results_json, aggregate_metrics_json, official_metrics_json, updated_at
-                )
-                VALUES ($1::uuid, $2, $3::uuid, $4::uuid, $5, $6, $7, $8, NOW())
-                ON CONFLICT (challenge_id, target, agent_id) DO UPDATE
-                SET best_solution_submission_id = EXCLUDED.best_solution_submission_id,
-                    best_rank_score = EXCLUDED.best_rank_score,
-                    public_results_json = EXCLUDED.public_results_json,
-                    aggregate_metrics_json = EXCLUDED.aggregate_metrics_json,
-                    official_metrics_json = EXCLUDED.official_metrics_json,
-                    updated_at = NOW()
-                "#,
-            )
-            .bind(&challenge_id)
-            .bind(&target)
-            .bind(&agent_id)
-            .bind(&best.id)
-            .bind(best.rank_score)
-            .bind(&best.public_results_json)
-            .bind(&best.aggregate_metrics_json)
-            .bind(&best.official_metrics_json)
-            .execute(&mut **tx)
-            .await?;
-        } else {
-            sqlx::query(
-                "DELETE FROM leaderboard_entries WHERE challenge_id = $1::uuid AND target = $2 AND agent_id = $3::uuid",
-            )
-            .bind(&challenge_id)
-            .bind(&target)
-            .bind(&agent_id)
-            .execute(&mut **tx)
-            .await?;
-        }
-    }
+async fn best_replacement_candidate<'a>(
+    tx: &mut Transaction<'a, Postgres>,
+    scope: &LeaderboardRepairScope,
+    solution_submission_id: &SolutionSubmissionId,
+    spec: &ChallengeBundleSpec,
+) -> Result<Option<LeaderboardReplacementCandidate>> {
+    let rows = replacement_candidate_rows(tx, scope, solution_submission_id).await?;
+    let mut candidates = rows
+        .into_iter()
+        .map(leaderboard_replacement_candidate_from_row)
+        .collect::<Result<Vec<_>>>()?;
+    candidates.sort_by(|a, b| compare_replacement_candidates(spec, a, b));
+    Ok(candidates.into_iter().next())
+}
 
+async fn replacement_candidate_rows<'a>(
+    tx: &mut Transaction<'a, Postgres>,
+    scope: &LeaderboardRepairScope,
+    solution_submission_id: &SolutionSubmissionId,
+) -> Result<Vec<sqlx::postgres::PgRow>> {
+    Ok(sqlx::query(
+        r#"
+        SELECT
+            s.id::text AS id,
+            s.created_at,
+            COALESCE(
+                oe.rank_score,
+                ve.rank_score,
+                (oe.official_summary_json->>'score')::double precision,
+                (ve.validation_summary_json->>'score')::double precision
+            ) AS ranking_score,
+            COALESCE(oe.public_results_json, ve.public_results_json, '[]'::jsonb) AS public_results,
+            COALESCE(oe.aggregate_metrics_json, ve.aggregate_metrics_json, '[]'::jsonb) AS aggregate_metrics,
+            COALESCE(oe.aggregate_metrics_json, '[]'::jsonb) AS official_metrics
+        FROM solution_submissions s
+        LEFT JOIN LATERAL (
+            SELECT rank_score, aggregate_metrics_json, validation_summary_json, public_results_json
+            FROM evaluations
+            WHERE solution_submission_id = s.id AND eval_type = 'validation' AND status = 'completed' AND target = s.target
+            ORDER BY created_at DESC LIMIT 1
+        ) ve ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT rank_score, aggregate_metrics_json, official_summary_json, public_results_json
+            FROM evaluations
+            WHERE solution_submission_id = s.id AND eval_type = 'official' AND status = 'completed' AND target = s.target
+            ORDER BY created_at DESC LIMIT 1
+        ) oe ON TRUE
+        WHERE s.challenge_id = $1::uuid AND s.agent_id = $2::uuid AND s.id <> $3::uuid
+          AND s.target = $4
+          AND s.visible_after_eval = TRUE AND s.status = 'completed'
+          AND COALESCE(
+                oe.rank_score,
+                ve.rank_score,
+                (oe.official_summary_json->>'score')::double precision,
+                (ve.validation_summary_json->>'score')::double precision
+              ) IS NOT NULL
+        "#,
+    )
+    .bind(&scope.challenge_id)
+    .bind(&scope.agent_id)
+    .bind(solution_submission_id.as_str())
+    .bind(&scope.target)
+    .fetch_all(&mut **tx)
+    .await?)
+}
+
+fn leaderboard_replacement_candidate_from_row(
+    row: sqlx::postgres::PgRow,
+) -> Result<LeaderboardReplacementCandidate> {
+    let aggregate_metrics = decode_optional_json(
+        Some(row.try_get::<Value, _>("aggregate_metrics")?),
+        "leaderboard replacement aggregate metrics",
+    )?
+    .unwrap_or_default();
+    Ok(LeaderboardReplacementCandidate {
+        id: row.try_get("id")?,
+        created_at: row.try_get("created_at")?,
+        rank_score: row.try_get("ranking_score")?,
+        public_results_json: row.try_get("public_results")?,
+        aggregate_metrics,
+        aggregate_metrics_json: row.try_get("aggregate_metrics")?,
+        official_metrics_json: row.try_get("official_metrics")?,
+    })
+}
+
+fn compare_replacement_candidates(
+    spec: &ChallengeBundleSpec,
+    a: &LeaderboardReplacementCandidate,
+    b: &LeaderboardReplacementCandidate,
+) -> Ordering {
+    compare_rank_payloads(
+        spec,
+        a.rank_score,
+        &a.aggregate_metrics,
+        b.rank_score,
+        &b.aggregate_metrics,
+    )
+    .then_with(|| a.created_at.cmp(&b.created_at))
+    .then_with(|| a.id.cmp(&b.id))
+}
+
+async fn upsert_replacement_leaderboard_entry<'a>(
+    tx: &mut Transaction<'a, Postgres>,
+    scope: &LeaderboardRepairScope,
+    best: &LeaderboardReplacementCandidate,
+) -> Result<()> {
+    sqlx::query(
+        r#"
+        INSERT INTO leaderboard_entries (
+            challenge_id, target, agent_id, best_solution_submission_id, best_rank_score,
+            public_results_json, aggregate_metrics_json, official_metrics_json, updated_at
+        )
+        VALUES ($1::uuid, $2, $3::uuid, $4::uuid, $5, $6, $7, $8, NOW())
+        ON CONFLICT (challenge_id, target, agent_id) DO UPDATE
+        SET best_solution_submission_id = EXCLUDED.best_solution_submission_id,
+            best_rank_score = EXCLUDED.best_rank_score,
+            public_results_json = EXCLUDED.public_results_json,
+            aggregate_metrics_json = EXCLUDED.aggregate_metrics_json,
+            official_metrics_json = EXCLUDED.official_metrics_json,
+            updated_at = NOW()
+        "#,
+    )
+    .bind(&scope.challenge_id)
+    .bind(&scope.target)
+    .bind(&scope.agent_id)
+    .bind(&best.id)
+    .bind(best.rank_score)
+    .bind(&best.public_results_json)
+    .bind(&best.aggregate_metrics_json)
+    .bind(&best.official_metrics_json)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+async fn delete_leaderboard_entry<'a>(
+    tx: &mut Transaction<'a, Postgres>,
+    scope: &LeaderboardRepairScope,
+) -> Result<()> {
+    sqlx::query(
+        "DELETE FROM leaderboard_entries WHERE challenge_id = $1::uuid AND target = $2 AND agent_id = $3::uuid",
+    )
+    .bind(&scope.challenge_id)
+    .bind(&scope.target)
+    .bind(&scope.agent_id)
+    .execute(&mut **tx)
+    .await?;
     Ok(())
 }
 
