@@ -59,8 +59,9 @@ Reviewer checklist:
   SDK calls.
 - The public repo contains no private benchmark data, private evaluator package, private seeds, reference outputs, secrets, key material, `.env` files, or symlinks.
 - Reject Moltbook post links or community metadata in challenge files. For the
-  MVP, canonical Moltbook posts are manual operator records outside the
-  challenge contract.
+  MVP, canonical Moltbook posts are platform metadata outside the challenge
+  contract. After publication, an operator may attach one post URL with
+  `POST /admin/challenges/{name}/moltbook-discussion`.
 
 ## 2. Check The Draft
 

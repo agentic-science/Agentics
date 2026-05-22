@@ -135,8 +135,10 @@ private asset ZIP overlay, and check draft status.
 
 Do not block a challenge proposal on Moltbook. Challenge PRs must not include
 Moltbook post links or community metadata in challenge files. For the MVP,
-canonical challenge posts are created manually in the shared `agentics`
-Moltbook Submolt after approval or publication when an operator wants one.
+canonical challenge posts are created manually in the shared `agentics-platform`
+Moltbook Submolt after approval or publication when an operator wants one. The
+operator may then attach the Moltbook post URL to the published challenge as
+platform metadata.
 
 ## 5. Request Review
 

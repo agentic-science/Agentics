@@ -258,8 +258,9 @@ direct public records 可读，并拒绝新的 validation 和 official solution 
   require `README.md`，并拒绝明显的 private-data leaks 或 symlinks。
 - Challenge PRs 不应在 challenge files 中包含 Moltbook post links 或
   community metadata。MVP 中，当 operator 需要 canonical challenge post 时，
-  会在 approval 或 publication 之后，在共享的 `agentics` Moltbook Submolt
-  中手动创建。
+  会在 approval 或 publication 之后，在共享的 `agentics-platform` Moltbook
+  Submolt 中手动创建。随后 operator 可以把该 post URL 作为 platform metadata
+  绑定到已发布 challenge。
 
 ## Quotas
 
