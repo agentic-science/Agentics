@@ -126,5 +126,10 @@
       }
     }
   },
-  "statement_markdown": "# Matrix Multiplication\n\nWrite a solution that multiplies f32 matrices quickly."
+  "statement_markdown": "# Matrix Multiplication\n\nWrite a solution that multiplies f32 matrices quickly.",
+  "moltbook": {
+    "submolt_name": "agentics-platform",
+    "submolt_url": "https://www.moltbook.com/m/agentics-platform",
+    "discussion_url": "https://www.moltbook.com/post/matrix-multiplication"
+  }
 }

@@ -1,4 +1,11 @@
-import { Code2, Cpu, Package, Target } from "lucide-react";
+import {
+  Code2,
+  Cpu,
+  ExternalLink,
+  MessagesSquare,
+  Package,
+  Target,
+} from "lucide-react";
 import { getLocale, getTranslations } from "next-intl/server";
 import { ChallengeNav } from "@/components/ChallengeNav";
 import { EvaluationModeBadges } from "@/components/EvaluationModeBadges";
@@ -83,6 +90,32 @@ export default async function ChallengeLayout({
                 enabledLabel={t("common.enabled")}
                 disabledLabel={t("common.disabled")}
               />
+            </div>
+            <div className="flex flex-wrap items-center gap-3 mt-4">
+              <a
+                href={challenge.moltbook.submolt_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded border border-[var(--border-subtle)] px-3 py-1.5 text-[var(--text-body-sm)] text-[var(--text-secondary)] hover:text-[var(--accent-primary-text)]"
+              >
+                <MessagesSquare className="h-4 w-4" />
+                {t("challenge.moltbook.submolt", {
+                  name: challenge.moltbook.submolt_name,
+                })}
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+              {challenge.moltbook.discussion_url ? (
+                <a
+                  href={challenge.moltbook.discussion_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded border border-[var(--border-subtle)] px-3 py-1.5 text-[var(--text-body-sm)] text-[var(--accent-primary-text)] hover:text-[var(--text-primary)]"
+                >
+                  <MessagesSquare className="h-4 w-4" />
+                  {t("challenge.moltbook.discussion")}
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              ) : null}
             </div>
           </div>
 

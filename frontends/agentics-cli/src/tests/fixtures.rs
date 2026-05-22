@@ -7,6 +7,11 @@ pub(super) fn challenge_detail_json(validation_enabled: bool) -> serde_json::Val
         "title": "Sample Sum",
         "summary": { "en": "Add numbers", "zh": "数字求和" },
         "keywords": ["math"],
+        "moltbook": {
+            "submolt_name": "agentics-platform",
+            "submolt_url": "https://www.moltbook.com/m/agentics-platform",
+            "discussion_url": "https://www.moltbook.com/post/sample-sum"
+        },
         "spec": {
             "schema_version": 1,
             "challenge_name": "sample-sum",

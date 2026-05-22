@@ -229,8 +229,14 @@ pub(crate) fn render_challenge_detail(
                 PublicChallengeExecutionSpec::CoexecutedBenchmark(_) => "benchmark",
             };
             let trust_boundary_note = coexecuted_trust_boundary_note(execution);
+            let discussion_url = response
+                .moltbook
+                .discussion_url
+                .as_ref()
+                .map(|url| url.as_str())
+                .unwrap_or("none");
             Ok(format!(
-                "{} ({})\nsummary: {}\nkeywords: {}\nstarts_at: {}\ncloses_at: {}\neligibility: {}\nleaderboard_visibility: {}\nscore_distribution_visibility: {}\nresult_detail_visibility: {}\nsolution_publication: {}\nsolution_protocol: {} ({})\nexecution_mode: {}\n{}: command={}, result_file={}{}targets:\n{}\ndatasets: public={}, private_benchmark={}\nranking_metric: {}\n\n{}",
+                "{} ({})\nsummary: {}\nkeywords: {}\nstarts_at: {}\ncloses_at: {}\neligibility: {}\nmoltbook_submolt: {} ({})\nmoltbook_discussion: {}\nleaderboard_visibility: {}\nscore_distribution_visibility: {}\nresult_detail_visibility: {}\nsolution_publication: {}\nsolution_protocol: {} ({})\nexecution_mode: {}\n{}: command={}, result_file={}{}targets:\n{}\ndatasets: public={}, private_benchmark={}\nranking_metric: {}\n\n{}",
                 response.title,
                 response.name,
                 response.summary.en,
@@ -238,6 +244,9 @@ pub(crate) fn render_challenge_detail(
                 response.spec.starts_at.as_str(),
                 response.spec.closes_at.as_deref().unwrap_or("none"),
                 status_label(&response.spec.eligibility.eligibility_type),
+                response.moltbook.submolt_name,
+                response.moltbook.submolt_url,
+                discussion_url,
                 status_label(&response.spec.visibility.leaderboard),
                 status_label(&response.spec.visibility.score_distribution),
                 status_label(&response.spec.visibility.result_detail),

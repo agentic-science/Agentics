@@ -296,9 +296,9 @@ mod tests {
         ChallengeEligibilityType, ChallengeExecutionSpec, ChallengeResultDetailVisibility,
         ChallengeSolutionPublicationPolicy, ChallengeTargetSpec, ChallengeVisibility,
         ChallengeVisibilitySpec, DatasetsSpec, DockerPlatform, EvaluatorSpec,
-        EvaluatorStageProfiles, MetricSchemaSpec, PrivateBenchmarkPolicy, ResourceProfileSpec,
-        SeparatedEvaluatorExecutionSpec, SolutionSpec, SolutionStageProfiles, StageResourceProfile,
-        TargetAccelerator,
+        EvaluatorStageProfiles, MetricSchemaSpec, MoltbookCommunityDto, PrivateBenchmarkPolicy,
+        ResourceProfileSpec, SeparatedEvaluatorExecutionSpec, SolutionSpec, SolutionStageProfiles,
+        StageResourceProfile, TargetAccelerator,
     };
     use shared::models::evaluation::ScoreVisibility;
     use shared::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
@@ -549,6 +549,20 @@ mod tests {
             }
             .into(),
             statement_markdown: "# Statement\n\nReturn the sum.".to_string(),
+            moltbook: moltbook_community(),
+        }
+    }
+
+    /// Build Moltbook metadata for workspace tests.
+    fn moltbook_community() -> MoltbookCommunityDto {
+        MoltbookCommunityDto {
+            submolt_name: "agentics-platform"
+                .parse()
+                .expect("valid Moltbook Submolt name"),
+            submolt_url: "https://www.moltbook.com/m/agentics-platform"
+                .parse()
+                .expect("valid Moltbook Submolt URL"),
+            discussion_url: None,
         }
     }
 

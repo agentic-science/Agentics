@@ -166,6 +166,11 @@ describe("frontend API schemas", () => {
           },
         },
         statement_markdown: "# Sample Sum",
+        moltbook: {
+          submolt_name: "agentics-platform",
+          submolt_url: "https://www.moltbook.com/m/agentics-platform",
+          discussion_url: "https://www.moltbook.com/post/sample-sum",
+        },
       }),
     ).not.toThrow();
 
@@ -217,6 +222,10 @@ describe("frontend API schemas", () => {
           },
         },
         statement_markdown: "# Interactive Sum",
+        moltbook: {
+          submolt_name: "agentics-platform",
+          submolt_url: "https://www.moltbook.com/m/agentics-platform",
+        },
       }),
     ).not.toThrow();
 
@@ -271,6 +280,10 @@ describe("frontend API schemas", () => {
           },
         },
         statement_markdown: "# Coexecuted Sum",
+        moltbook: {
+          submolt_name: "agentics-platform",
+          submolt_url: "https://www.moltbook.com/m/agentics-platform",
+        },
       }),
     ).not.toThrow();
   });
@@ -324,6 +337,10 @@ describe("frontend API schemas", () => {
           },
         },
         statement_markdown: "# Coexecuted Sum",
+        moltbook: {
+          submolt_name: "agentics-platform",
+          submolt_url: "https://www.moltbook.com/m/agentics-platform",
+        },
       }),
     ).toThrow();
   });

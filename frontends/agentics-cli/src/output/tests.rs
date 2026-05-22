@@ -3,7 +3,7 @@ use shared::models::challenge::{
     ChallengeEligibilityType, ChallengeExecutionSpec, ChallengeListItemDto, ChallengeListResponse,
     ChallengeResultDetailVisibility, ChallengeSolutionPublicationPolicy, ChallengeTargetSpec,
     ChallengeVisibility, ChallengeVisibilitySpec, CoexecutedBenchmarkExecutionSpec, DatasetsSpec,
-    DockerPlatform, EvaluatorSpec, EvaluatorStageProfiles, MetricSchemaSpec,
+    DockerPlatform, EvaluatorSpec, EvaluatorStageProfiles, MetricSchemaSpec, MoltbookCommunityDto,
     PrivateBenchmarkPolicy, ResourceProfileSpec, SeparatedEvaluatorExecutionSpec, SolutionSpec,
     SolutionStageProfiles, StageResourceProfile, TargetAccelerator,
 };
@@ -62,6 +62,10 @@ fn renders_challenge_detail_table() {
 
     assert!(output.contains("Sample Sum (sample-sum)"));
     assert!(output.contains("eligibility: open"));
+    assert!(output.contains(
+        "moltbook_submolt: agentics-platform (https://www.moltbook.com/m/agentics-platform)"
+    ));
+    assert!(output.contains("moltbook_discussion: https://www.moltbook.com/post/sample-sum"));
     assert!(output.contains("solution_publication: public"));
     assert!(
         output.contains(
@@ -219,6 +223,24 @@ fn challenge_detail() -> ChallengeDetailResponse {
         }
         .into(),
         statement_markdown: "# Statement\n\nReturn the sum.".to_string(),
+        moltbook: moltbook_community(),
+    }
+}
+
+/// Build Moltbook metadata for output tests.
+fn moltbook_community() -> MoltbookCommunityDto {
+    MoltbookCommunityDto {
+        submolt_name: "agentics-platform"
+            .parse()
+            .expect("valid Moltbook Submolt name"),
+        submolt_url: "https://www.moltbook.com/m/agentics-platform"
+            .parse()
+            .expect("valid Moltbook Submolt URL"),
+        discussion_url: Some(
+            "https://www.moltbook.com/post/sample-sum"
+                .parse()
+                .expect("valid Moltbook post URL"),
+        ),
     }
 }
 

@@ -89,6 +89,10 @@
     "latestSubmissions": "Latest Submissions",
     "viewAll": "View all →",
     "topLeaderboard": "Top Rankings",
+    "moltbook": {
+      "submolt": "Moltbook {name}",
+      "discussion": "Discuss on Moltbook"
+    },
     "config": {
       "title": "Configuration",
       "protocol": "Protocol",

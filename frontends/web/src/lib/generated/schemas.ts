@@ -410,6 +410,11 @@ export const adminChallengeListResponseSchema = z
             )
             .optional(),
           private_benchmark_enabled: z.boolean().optional(),
+          moltbook_discussion_url: z
+            .string()
+            .url()
+            .regex(/^https:\/\/www\.moltbook\.com\/post\/[A-Za-z0-9_-]+$/)
+            .optional(),
           created_at: z.string(),
           updated_at: z.string(),
         })
@@ -1375,6 +1380,28 @@ export const challengeDetailResponseSchema = z
         "Public projection of a challenge contract safe for unauthenticated clients.",
       ),
     statement_markdown: z.string(),
+    moltbook: z
+      .object({
+        submolt_name: z
+          .string()
+          .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){0,28}[a-z0-9]$/)
+          .min(2)
+          .max(30),
+        submolt_url: z
+          .string()
+          .url()
+          .regex(
+            /^https:\/\/www\.moltbook\.com\/m\/[a-z0-9](?:[a-z0-9]|-(?!-)){0,28}[a-z0-9]$/,
+          ),
+        discussion_url: z
+          .string()
+          .url()
+          .regex(/^https:\/\/www\.moltbook\.com\/post\/[A-Za-z0-9_-]+$/)
+          .optional(),
+      })
+      .describe(
+        "Public Moltbook community metadata exposed on challenge detail surfaces.",
+      ),
   })
   .describe(
     "Public challenge detail response with spec and Markdown statement.",
@@ -1927,6 +1954,40 @@ export const challengeListResponseSchema = z
     has_more: z.boolean(),
   })
   .describe("Public challenge catalog response.");
+
+export const challengeMoltbookDiscussionResponseSchema = z
+  .object({
+    challenge_name: z
+      .string()
+      .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+      .min(3)
+      .max(63),
+    moltbook: z
+      .object({
+        submolt_name: z
+          .string()
+          .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){0,28}[a-z0-9]$/)
+          .min(2)
+          .max(30),
+        submolt_url: z
+          .string()
+          .url()
+          .regex(
+            /^https:\/\/www\.moltbook\.com\/m\/[a-z0-9](?:[a-z0-9]|-(?!-)){0,28}[a-z0-9]$/,
+          ),
+        discussion_url: z
+          .string()
+          .url()
+          .regex(/^https:\/\/www\.moltbook\.com\/post\/[A-Za-z0-9_-]+$/)
+          .optional(),
+      })
+      .describe(
+        "Public Moltbook community metadata exposed on challenge detail surfaces.",
+      ),
+  })
+  .describe(
+    "Admin response after setting or clearing a challenge Moltbook discussion anchor.",
+  );
 
 export const challengePrivateAssetResponseSchema = z
   .object({
@@ -2982,6 +3043,18 @@ export const scoreDistributionResponseSchema = z
   })
   .describe(
     "Aggregate distribution of one visible metric within a challenge and target.",
+  );
+
+export const setChallengeMoltbookDiscussionRequestSchema = z
+  .object({
+    discussion_url: z
+      .string()
+      .url()
+      .regex(/^https:\/\/www\.moltbook\.com\/post\/[A-Za-z0-9_-]+$/),
+  })
+  .strict()
+  .describe(
+    "Admin payload for attaching a Moltbook discussion post to a published challenge.",
   );
 
 export const solutionSubmissionArtifactResponseSchema = z
@@ -4299,6 +4372,9 @@ export type ChallengeDraftResponse = z.infer<
   typeof challengeDraftResponseSchema
 >;
 export type ChallengeListResponse = z.infer<typeof challengeListResponseSchema>;
+export type ChallengeMoltbookDiscussionResponse = z.infer<
+  typeof challengeMoltbookDiscussionResponseSchema
+>;
 export type ChallengePrivateAssetResponse = z.infer<
   typeof challengePrivateAssetResponseSchema
 >;
@@ -4367,6 +4443,9 @@ export type RevokePioneerCodeResponse = z.infer<
 >;
 export type ScoreDistributionResponse = z.infer<
   typeof scoreDistributionResponseSchema
+>;
+export type SetChallengeMoltbookDiscussionRequest = z.infer<
+  typeof setChallengeMoltbookDiscussionRequestSchema
 >;
 export type SolutionSubmissionArtifactResponse = z.infer<
   typeof solutionSubmissionArtifactResponseSchema

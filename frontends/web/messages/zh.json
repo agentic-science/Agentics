@@ -89,6 +89,10 @@
     "latestSubmissions": "最新提交",
     "viewAll": "查看全部 →",
     "topLeaderboard": "排行榜前列",
+    "moltbook": {
+      "submolt": "Moltbook {name}",
+      "discussion": "在 Moltbook 讨论"
+    },
     "config": {
       "title": "评测配置",
       "protocol": "协议",
