@@ -15,7 +15,6 @@ use bollard::query_parameters::{
 use futures::{Stream, StreamExt};
 use sqlx::PgPool;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
-use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
 use crate::config::Config;
@@ -827,91 +826,301 @@ async fn run_attached_interactive_pair(
         interactor_id: interactor_id.to_string(),
     };
 
-    let participant_pump = tokio::spawn(pump_attached_output(
+    let participant_pump = pump_attached_output(
         "participant",
         participant_output,
         interactor_input,
         max_interaction_bytes_per_direction,
         PLATFORM_CONTAINER_LOG_LIMIT_BYTES,
         kill_switch.clone(),
-    ));
-    let interactor_pump = tokio::spawn(pump_attached_output(
+    );
+    let interactor_pump = pump_attached_output(
         "interactor",
         interactor_output,
         participant_input,
         max_interaction_bytes_per_direction,
         PLATFORM_CONTAINER_LOG_LIMIT_BYTES,
         kill_switch,
-    ));
-
-    let wait_result = timeout(Duration::from_secs(timeout_sec), async {
+    );
+    let wait_pair = async {
         let (participant, interactor) = tokio::join!(
             wait_container_exit(docker, participant_id),
             wait_container_exit(docker, interactor_id)
         );
         Ok::<_, AppError>((participant?, interactor?))
-    })
-    .await;
-
-    let mut wait_error = None;
-    let (participant_exit, interactor_exit, timed_out) = match wait_result {
-        Ok(result) => match result {
-            Ok((participant_exit, interactor_exit)) => (participant_exit, interactor_exit, false),
-            Err(error) => {
-                wait_error = Some(error);
-                (1, 1, false)
-            }
-        },
-        Err(_) => {
-            kill_container_if_running(docker, participant_id).await?;
-            kill_container_if_running(docker, interactor_id).await?;
-            (124, 124, true)
-        }
     };
+    let session_timeout = tokio::time::sleep(Duration::from_secs(timeout_sec));
+    tokio::pin!(participant_pump);
+    tokio::pin!(interactor_pump);
+    tokio::pin!(wait_pair);
+    tokio::pin!(session_timeout);
+
+    let mut participant_pump_state = AttachedPumpState::Pending;
+    let mut interactor_pump_state = AttachedPumpState::Pending;
+    let mut exits = None;
+    let mut wait_pending = true;
+    let mut terminal = None;
+
+    loop {
+        if terminal.is_some()
+            || exits.is_some()
+            || (!wait_pending
+                && !participant_pump_state.is_pending()
+                && !interactor_pump_state.is_pending())
+        {
+            break;
+        }
+
+        tokio::select! {
+            result = &mut participant_pump, if participant_pump_state.is_pending() => {
+                match result {
+                    Ok(outcome) => participant_pump_state = AttachedPumpState::Completed(outcome),
+                    Err(error) => {
+                        participant_pump_state = AttachedPumpState::Failed;
+                        terminal = Some(InteractiveTerminal::Error(error));
+                    }
+                }
+            }
+            result = &mut interactor_pump, if interactor_pump_state.is_pending() => {
+                match result {
+                    Ok(outcome) => interactor_pump_state = AttachedPumpState::Completed(outcome),
+                    Err(error) => {
+                        interactor_pump_state = AttachedPumpState::Failed;
+                        terminal = Some(InteractiveTerminal::Error(error));
+                    }
+                }
+            }
+            result = &mut wait_pair, if wait_pending => {
+                wait_pending = false;
+                match result {
+                    Ok(pair) => exits = Some(pair),
+                    Err(error) => terminal = Some(InteractiveTerminal::Error(error)),
+                }
+            }
+            () = &mut session_timeout => {
+                terminal = Some(InteractiveTerminal::Timeout);
+            }
+        }
+    }
 
     let pump_timeout = Duration::from_secs(shutdown_grace_secs);
-    let participant_pump =
-        finish_attached_pump("participant", participant_pump, pump_timeout).await;
-    let interactor_pump = finish_attached_pump("interactor", interactor_pump, pump_timeout).await;
-    let participant_pump = match participant_pump {
-        Ok(outcome) => outcome,
-        Err(error) => return Err(error),
-    };
-    let interactor_pump = match interactor_pump {
-        Ok(outcome) => outcome,
-        Err(error) => return Err(error),
-    };
-    if let Some(error) = wait_error {
-        return Err(error);
+    match terminal {
+        Some(InteractiveTerminal::Timeout) => {
+            kill_interactive_pair(docker, participant_id, interactor_id).await?;
+            let (participant_pump, interactor_pump) = finish_attached_pump_pair(
+                participant_pump_state,
+                participant_pump.as_mut(),
+                interactor_pump_state,
+                interactor_pump.as_mut(),
+                pump_timeout,
+            )
+            .await?;
+
+            let wall_time_ms = duration_millis(started.elapsed());
+            return Ok(InteractiveSessionOutcome {
+                participant: ContainerOutcome {
+                    exit_code: 124,
+                    logs: participant_pump.logs,
+                    timed_out: true,
+                    wall_time_ms,
+                },
+                interactor: ContainerOutcome {
+                    exit_code: 124,
+                    logs: interactor_pump.logs,
+                    timed_out: true,
+                    wall_time_ms,
+                },
+            });
+        }
+        Some(InteractiveTerminal::Error(error)) => {
+            let original_message = error.to_string();
+            let kill_result = kill_interactive_pair(docker, participant_id, interactor_id).await;
+            let drain_result = drain_attached_pumps_for_cleanup(
+                participant_pump_state,
+                participant_pump.as_mut(),
+                interactor_pump_state,
+                interactor_pump.as_mut(),
+                pump_timeout,
+            )
+            .await;
+            if let Err(cleanup_error) = kill_result {
+                return Err(AppError::Docker(format!(
+                    "{original_message}; additionally failed to stop interactive containers: {cleanup_error}"
+                )));
+            }
+            if let Err(cleanup_error) = drain_result {
+                return Err(AppError::Docker(format!(
+                    "{original_message}; additionally failed to finish interactive stdio pumps: {cleanup_error}"
+                )));
+            }
+            return Err(error);
+        }
+        None => {}
     }
+
+    let (participant_exit, interactor_exit) = exits.ok_or_else(|| {
+        AppError::Docker("interactive containers exited without status".to_string())
+    })?;
+    let (participant_pump, interactor_pump) = finish_attached_pump_pair(
+        participant_pump_state,
+        participant_pump.as_mut(),
+        interactor_pump_state,
+        interactor_pump.as_mut(),
+        pump_timeout,
+    )
+    .await?;
 
     let wall_time_ms = duration_millis(started.elapsed());
     Ok(InteractiveSessionOutcome {
         participant: ContainerOutcome {
             exit_code: participant_exit,
             logs: participant_pump.logs,
-            timed_out,
+            timed_out: false,
             wall_time_ms,
         },
         interactor: ContainerOutcome {
             exit_code: interactor_exit,
             logs: interactor_pump.logs,
-            timed_out,
+            timed_out: false,
             wall_time_ms,
         },
     })
 }
 
-/// Finish one attached stdio pump and convert task failures into Docker errors.
-async fn finish_attached_pump(
+enum AttachedPumpState {
+    Pending,
+    Completed(AttachedPumpOutcome),
+    Failed,
+}
+
+impl AttachedPumpState {
+    fn is_pending(&self) -> bool {
+        matches!(self, Self::Pending)
+    }
+}
+
+enum InteractiveTerminal {
+    Timeout,
+    Error(AppError),
+}
+
+/// Kill both containers in an interactive pair, preserving both errors if both fail.
+async fn kill_interactive_pair(
+    docker: &Docker,
+    participant_id: &str,
+    interactor_id: &str,
+) -> Result<()> {
+    let (participant, interactor) = tokio::join!(
+        kill_container_if_running(docker, participant_id),
+        kill_container_if_running(docker, interactor_id)
+    );
+    match (participant, interactor) {
+        (Ok(()), Ok(())) => Ok(()),
+        (Err(error), Ok(())) | (Ok(()), Err(error)) => Err(error),
+        (Err(participant_error), Err(interactor_error)) => Err(AppError::Docker(format!(
+            "{participant_error}; additionally failed to stop interactor container: {interactor_error}"
+        ))),
+    }
+}
+
+/// Finish one attached stdio pump and convert timeout failures into Docker errors.
+async fn finish_attached_pump_future<F>(
     label: &'static str,
-    pump: JoinHandle<Result<AttachedPumpOutcome>>,
+    state: AttachedPumpState,
+    pump: Pin<&mut F>,
     pump_timeout: Duration,
-) -> Result<AttachedPumpOutcome> {
-    timeout(pump_timeout, pump)
-        .await
-        .map_err(|_| AppError::Docker(format!("{label} stdio pump did not stop")))?
-        .map_err(|e| AppError::Docker(format!("{label} stdio pump task failed: {e}")))?
+) -> Result<AttachedPumpOutcome>
+where
+    F: Future<Output = Result<AttachedPumpOutcome>>,
+{
+    match state {
+        AttachedPumpState::Pending => timeout(pump_timeout, pump)
+            .await
+            .map_err(|_| AppError::Docker(format!("{label} stdio pump did not stop")))?,
+        AttachedPumpState::Completed(outcome) => Ok(outcome),
+        AttachedPumpState::Failed => Err(AppError::Docker(format!(
+            "{label} stdio pump failed before shutdown"
+        ))),
+    }
+}
+
+/// Finish both attached pumps concurrently and return their collected logs.
+async fn finish_attached_pump_pair<F, G>(
+    participant_state: AttachedPumpState,
+    participant_pump: Pin<&mut F>,
+    interactor_state: AttachedPumpState,
+    interactor_pump: Pin<&mut G>,
+    pump_timeout: Duration,
+) -> Result<(AttachedPumpOutcome, AttachedPumpOutcome)>
+where
+    F: Future<Output = Result<AttachedPumpOutcome>>,
+    G: Future<Output = Result<AttachedPumpOutcome>>,
+{
+    let participant = finish_attached_pump_future(
+        "participant",
+        participant_state,
+        participant_pump,
+        pump_timeout,
+    );
+    let interactor = finish_attached_pump_future(
+        "interactor",
+        interactor_state,
+        interactor_pump,
+        pump_timeout,
+    );
+    let (participant, interactor) = tokio::join!(participant, interactor);
+    Ok((participant?, interactor?))
+}
+
+/// Finish all still-pending pumps after a session-level error.
+async fn drain_attached_pumps_for_cleanup<F, G>(
+    participant_state: AttachedPumpState,
+    participant_pump: Pin<&mut F>,
+    interactor_state: AttachedPumpState,
+    interactor_pump: Pin<&mut G>,
+    pump_timeout: Duration,
+) -> Result<()>
+where
+    F: Future<Output = Result<AttachedPumpOutcome>>,
+    G: Future<Output = Result<AttachedPumpOutcome>>,
+{
+    let participant = drain_attached_pump_for_cleanup(
+        "participant",
+        participant_state,
+        participant_pump,
+        pump_timeout,
+    );
+    let interactor = drain_attached_pump_for_cleanup(
+        "interactor",
+        interactor_state,
+        interactor_pump,
+        pump_timeout,
+    );
+    let (participant, interactor) = tokio::join!(participant, interactor);
+    participant?;
+    interactor?;
+    Ok(())
+}
+
+/// Drain one pending pump for cleanup; completed or failed pumps need no more work.
+async fn drain_attached_pump_for_cleanup<F>(
+    label: &'static str,
+    state: AttachedPumpState,
+    pump: Pin<&mut F>,
+    pump_timeout: Duration,
+) -> Result<()>
+where
+    F: Future<Output = Result<AttachedPumpOutcome>>,
+{
+    match state {
+        AttachedPumpState::Pending => {
+            timeout(pump_timeout, pump)
+                .await
+                .map_err(|_| AppError::Docker(format!("{label} stdio pump did not stop")))??;
+            Ok(())
+        }
+        AttachedPumpState::Completed(_) | AttachedPumpState::Failed => Ok(()),
+    }
 }
 
 /// Attach to stdin/stdout/stderr for one interactive container.

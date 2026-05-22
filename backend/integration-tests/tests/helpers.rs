@@ -14,6 +14,7 @@ use shared::config::{AgentRegistrationMode, Config, RunnerWritableStorageMode};
 use shared::runner::connect_docker;
 use shared::storage::{LocalStorage, Storage};
 use sqlx::PgPool;
+use tokio::task::JoinHandle;
 
 /// Resolve the generated id for a published challenge fixture.
 pub async fn published_challenge_id(pool: &PgPool, challenge_name: &str) -> String {
@@ -30,6 +31,13 @@ pub async fn published_challenge_id(pool: &PgPool, challenge_name: &str) -> Stri
 pub struct TestApp {
     pub addr: SocketAddr,
     pub _client: reqwest::Client,
+    server_task: JoinHandle<()>,
+}
+
+impl Drop for TestApp {
+    fn drop(&mut self) {
+        self.server_task.abort();
+    }
 }
 
 /// Creator session material used by tests instead of a live GitHub OAuth round trip.
@@ -79,7 +87,7 @@ pub async fn spawn_app_with_config(pool: PgPool, config: Config) -> TestApp {
         .expect("failed to bind test listener");
     let addr = listener.local_addr().unwrap();
 
-    tokio::spawn(async move {
+    let server_task = tokio::spawn(async move {
         axum::serve(
             listener,
             app.into_make_service_with_connect_info::<SocketAddr>(),
@@ -96,6 +104,7 @@ pub async fn spawn_app_with_config(pool: PgPool, config: Config) -> TestApp {
     TestApp {
         addr,
         _client: client,
+        server_task,
     }
 }
 
