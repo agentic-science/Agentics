@@ -32,12 +32,22 @@ const mediaExportMocks = {
   webm: vi.fn(() => Promise.resolve()),
 };
 
-vi.doMock("./communicationGraphExport", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("./communicationGraphExport")>();
+vi.mock("./communicationGraphExport", () => {
+  const exportCommunicationGraphJson = (graph: unknown) => {
+    const url = URL.createObjectURL(
+      new Blob([JSON.stringify(graph, null, 2)], {
+        type: "application/json",
+      }),
+    );
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "agentics-communication-graph.json";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
 
   return {
-    ...actual,
+    exportCommunicationGraphJson,
     exportCommunicationGraphGif: mediaExportMocks.gif,
     exportCommunicationGraphWebm: mediaExportMocks.webm,
   };

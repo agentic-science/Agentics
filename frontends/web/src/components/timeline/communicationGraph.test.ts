@@ -6,7 +6,7 @@ import {
   deriveCommunicationTimeline,
   validateCommunicationGraph,
 } from "./communicationGraph";
-import { deriveCommunicationTimelineFrameState } from "./communicationGraphExport";
+import { deriveCommunicationTimelineFrameState } from "./communicationGraphFrame";
 
 function graphWith(
   overrides: Partial<CommunicationGraph> = {},
