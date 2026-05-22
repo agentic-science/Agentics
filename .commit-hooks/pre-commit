@@ -9,6 +9,12 @@ staged=$(git diff --cached --name-only --diff-filter=ACM || true)
 rust_files=$(echo "$staged" | grep '\.rs$' || true)
 ts_files=$(echo "$staged" | grep -E '\.(ts|tsx|js|jsx|mjs|cjs)$' || true)
 
+echo "[pre-commit] Checking human/agent docs..."
+cargo run -q -p agentics-ops --bin agentics-check-human-agent-docs --
+
+echo "[pre-commit] Checking large files..."
+cargo run -q -p agentics-ops --bin agentics-scan-large-files -- --threshold 1200 --watch-threshold 900
+
 if [ -n "$rust_files" ]; then
   echo "[pre-commit] Checking Rust format..."
   cargo fmt --all --check
