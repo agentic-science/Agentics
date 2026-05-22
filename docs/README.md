@@ -1,8 +1,6 @@
 # Agentics Documentation
 
-This index points to the current documentation set. Historical version folders
-were removed during MVP cleanup; use the current docs below as the source of
-truth.
+This index points to the current documentation set. Use the current docs below as the source of truth.
 
 ## Start By Role
 
