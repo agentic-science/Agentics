@@ -130,6 +130,10 @@ test -x target/release/agentics-check-dgx-spark-profile
 
 ## 提交前检查
 
+先运行一次 `just setup-hooks` 安装 repository hook。该 hook 会委托给 Rust
+`agentics-pre-commit` ops binary，并发运行相互独立的检查，并在每次非空 commit
+前检查 human/agent docs policy 和 large-file threshold。
+
 提交代码改动前运行：
 
 ```bash

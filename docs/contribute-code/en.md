@@ -132,6 +132,11 @@ Build the web frontend:
 
 ## Checks Before Commit
 
+Install the repository hook once with `just setup-hooks`. The hook delegates to
+the Rust `agentics-pre-commit` ops binary, runs independent checks concurrently,
+and always checks the human/agent docs policy and large-file threshold before a
+non-empty commit.
+
 Run checks before committing code changes:
 
 ```bash

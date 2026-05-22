@@ -109,35 +109,38 @@ pub struct ScanConfig {
 
 impl ScanConfig {
     fn from_cli(cli: Cli) -> Result<Self, LargeFileScanError> {
-        if cli.threshold == 0 {
+        let watch_threshold = if cli.watch_threshold == 0 {
+            None
+        } else {
+            Some(cli.watch_threshold)
+        };
+        Self::new(cli.root, cli.threshold, watch_threshold)
+    }
+
+    /// Build scanner configuration from explicit inputs.
+    pub fn new(
+        root: PathBuf,
+        threshold: usize,
+        watch_threshold: Option<usize>,
+    ) -> Result<Self, LargeFileScanError> {
+        if threshold == 0 {
             return Err(LargeFileScanError::InvalidConfig(
                 "threshold must be greater than zero".to_string(),
             ));
         }
-        let watch_threshold = if cli.watch_threshold == 0 {
-            None
-        } else if cli.watch_threshold >= cli.threshold {
+        if let Some(watch_threshold) = watch_threshold
+            && watch_threshold >= threshold
+        {
             return Err(LargeFileScanError::InvalidConfig(format!(
                 "watch threshold {} must be lower than threshold {}",
-                cli.watch_threshold, cli.threshold
+                watch_threshold, threshold
             )));
-        } else {
-            Some(cli.watch_threshold)
-        };
+        }
         Ok(Self {
-            root: cli.root,
-            threshold: cli.threshold,
-            watch_threshold,
-        })
-    }
-
-    #[cfg(test)]
-    fn new(root: PathBuf, threshold: usize, watch_threshold: Option<usize>) -> Self {
-        Self {
             root,
             threshold,
             watch_threshold,
-        }
+        })
     }
 }
 
@@ -245,46 +248,61 @@ pub fn scan_large_files(config: &ScanConfig) -> Result<ScanReport, LargeFileScan
     })
 }
 
-fn print_report(report: &ScanReport) -> ExitCode {
+/// Whether a large-file report passes the hard threshold.
+pub fn report_passed(report: &ScanReport) -> bool {
+    report.oversized.is_empty()
+}
+
+/// Render a large-file report into deterministic output lines.
+pub fn render_report(report: &ScanReport) -> Vec<String> {
+    let mut lines = Vec::new();
     if report.oversized.is_empty() {
-        println!(
+        lines.push(format!(
             "[{PREFIX}] PASS scanned {} code files; no files at or above {} lines",
             report.scanned_files, report.threshold
-        );
+        ));
     } else {
-        println!(
+        lines.push(format!(
             "[{PREFIX}] FAIL {} code files are at or above {} lines",
             report.oversized.len(),
             report.threshold
-        );
+        ));
         for file in &report.oversized {
-            println!(
+            lines.push(format!(
                 "[{PREFIX}] FAIL {:>5} {}",
                 file.lines,
                 display_path(&file.path)
-            );
+            ));
         }
     }
 
     if let Some(watch_threshold) = report.watch_threshold
         && !report.watch.is_empty()
     {
-        println!(
+        lines.push(format!(
             "[{PREFIX}] WARN {} code files are between {} and {} lines",
             report.watch.len(),
             watch_threshold,
             report.threshold
-        );
+        ));
         for file in &report.watch {
-            println!(
+            lines.push(format!(
                 "[{PREFIX}] WARN {:>5} {}",
                 file.lines,
                 display_path(&file.path)
-            );
+            ));
         }
     }
 
-    if report.oversized.is_empty() {
+    lines
+}
+
+fn print_report(report: &ScanReport) -> ExitCode {
+    for line in render_report(report) {
+        println!("{line}");
+    }
+
+    if report_passed(report) {
         ExitCode::SUCCESS
     } else {
         ExitCode::from(1)
@@ -393,7 +411,7 @@ mod tests {
         std::fs::create_dir_all(source_root.join("generated")).expect("create generated dir");
         write_lines(&source_root.join("generated").join("huge.rs"), 10);
 
-        let config = ScanConfig::new(temp.path().to_path_buf(), 3, Some(2));
+        let config = ScanConfig::new(temp.path().to_path_buf(), 3, Some(2)).expect("valid config");
         let report = scan_large_files(&config).expect("scan temp repo");
 
         assert_eq!(report.scanned_files, 4);

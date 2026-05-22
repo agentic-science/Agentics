@@ -89,11 +89,11 @@ pub struct DocCheckConfig {
 
 impl DocCheckConfig {
     fn from_cli(cli: Cli) -> Self {
-        Self { root: cli.root }
+        Self::new(cli.root)
     }
 
-    #[cfg(test)]
-    fn new(root: PathBuf) -> Self {
+    /// Build scanner configuration from an explicit repository root.
+    pub fn new(root: PathBuf) -> Self {
         Self { root }
     }
 }
@@ -399,26 +399,44 @@ pub fn scan_human_agent_docs(
     })
 }
 
-fn print_report(report: &DocCheckReport) -> ExitCode {
+/// Whether a human/agent document report has no policy violations.
+pub fn report_passed(report: &DocCheckReport) -> bool {
+    report.violations.is_empty()
+}
+
+/// Render a human/agent document report into deterministic output lines.
+pub fn render_report(report: &DocCheckReport) -> Vec<String> {
+    let mut lines = Vec::new();
     if report.violations.is_empty() {
-        println!(
+        lines.push(format!(
             "[{PREFIX}] PASS scanned {} README.md files, {} effective AGENTS.md sources, and {} CLAUDE.md files; {} valid Claude symlink(s)",
             report.readme_files_seen,
             report.effective_agent_sources.len(),
             report.claude_files_seen,
             report.valid_claude_links.len()
-        );
-        return ExitCode::SUCCESS;
+        ));
+        return lines;
     }
 
-    println!(
+    lines.push(format!(
         "[{PREFIX}] FAIL {} human/agent doc violation(s)",
         report.violations.len()
-    );
+    ));
     for violation in &report.violations {
-        println!("[{PREFIX}] FAIL {}", violation.message());
+        lines.push(format!("[{PREFIX}] FAIL {}", violation.message()));
     }
-    ExitCode::from(1)
+    lines
+}
+
+fn print_report(report: &DocCheckReport) -> ExitCode {
+    for line in render_report(report) {
+        println!("{line}");
+    }
+    if report_passed(report) {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    }
 }
 
 impl DocViolation {
