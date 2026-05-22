@@ -2,5 +2,5 @@ use std::process::ExitCode;
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    agentics_ops::agents_claude_links::run_from_process().await
+    agentics_ops::human_agent_docs::run_from_process().await
 }
