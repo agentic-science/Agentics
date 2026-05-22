@@ -1,0 +1,9 @@
+threshold = 30.0
+missing = "pessimistic"
+
+exclude = [
+    "backend/integration-tests/**",
+    "**/tests.rs",
+    "**/tests/**",
+    "**/contract_tests.rs",
+]

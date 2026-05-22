@@ -1,0 +1,4 @@
+interface:
+  display_name: "Rust Risk Workflow"
+  short_description: "Run Rust coverage and CRAP reports"
+  default_prompt: "Use $rust-risk-workflow to run Agentics Rust coverage and CRAP risk analysis."

@@ -164,6 +164,31 @@ agentics-check-local-mvp
 Set `AGENTICS_ADMIN_PASSWORD` and `AGENTICS_WEB_BASE_URL` to include admin and
 web checks.
 
+For Rust change-risk coverage, use `cargo llvm-cov` to write LCOV and
+`cargo crap` to rank complex, under-covered functions:
+
+```bash
+just rust-risk-unit
+```
+
+This unit/package workflow excludes the `integration-tests` crate so it does
+not require a database or prepared DGX quota storage. The LCOV file is written
+to `target/llvm-cov/agentics-workspace.lcov`.
+
+For a fuller signal that includes DB-backed integration tests, start the local
+Postgres service and run:
+
+```bash
+just infra-up
+AGENTICS_DATABASE_URL='postgres://agentics:agentics@127.0.0.1:5432/agentics_test' \
+  just rust-risk-integration
+```
+
+`rust-risk-integration` skips only the two quota-root integration tests that
+require `agentics-prepare-dgx-spark-test-storage`; the rest of the integration
+suite contributes coverage before the CRAP report is produced. Set
+`AGENTICS_CRAP_TOP` to change how many ranked functions are printed.
+
 On Linux DGX development hosts, quota-sensitive runner tests need a test-owned
 XFS quota root. Prepare it separately from the production `/srv/agentics`
 runtime tree:

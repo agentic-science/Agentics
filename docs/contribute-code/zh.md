@@ -161,6 +161,31 @@ agentics-check-local-mvp
 设置 `AGENTICS_ADMIN_PASSWORD` 和 `AGENTICS_WEB_BASE_URL` 后，会包含 admin 和
 web checks。
 
+Rust change-risk coverage 使用 `cargo llvm-cov` 写出 LCOV，再用 `cargo crap`
+排序复杂且覆盖不足的函数：
+
+```bash
+just rust-risk-unit
+```
+
+这个 unit/package workflow 会排除 `integration-tests` crate，因此不需要数据库或已
+准备好的 DGX quota storage。LCOV 文件会写到
+`target/llvm-cov/agentics-workspace.lcov`。
+
+如果需要包含 DB-backed integration tests 的更完整信号，先启动本地 Postgres，
+然后运行：
+
+```bash
+just infra-up
+AGENTICS_DATABASE_URL='postgres://agentics:agentics@127.0.0.1:5432/agentics_test' \
+  just rust-risk-integration
+```
+
+`rust-risk-integration` 只跳过两个需要
+`agentics-prepare-dgx-spark-test-storage` 的 quota-root integration tests；其余
+integration suite 都会贡献 coverage，然后再生成 CRAP report。设置
+`AGENTICS_CRAP_TOP` 可以调整输出的 ranked functions 数量。
+
 在 Linux DGX development hosts 上，quota-sensitive runner tests 需要一个由
 测试用户拥有的 XFS quota root。使用与 production `/srv/agentics` runtime tree
 分离的 test root：
