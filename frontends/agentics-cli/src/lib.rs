@@ -29,8 +29,9 @@ use clap::Parser;
 
 use crate::api::ApiClient;
 use crate::cli::{
-    AuthCommand, ChallengeCreatorCommand, ChallengesCommand, Cli, Commands, ConfigCommand,
-    LeaderboardCommand, MetricsCommand, SubmissionsCommand,
+    AuthArgs, AuthCommand, ChallengeCreatorArgs, ChallengeCreatorCommand, ChallengesArgs,
+    ChallengesCommand, Cli, Commands, ConfigArgs, ConfigCommand, InitSolutionArgs, LeaderboardArgs,
+    LeaderboardCommand, MetricsArgs, MetricsCommand, SubmissionsArgs, SubmissionsCommand,
 };
 use crate::config::{ConfigStore, Environment, ResolvedSettings};
 
@@ -62,169 +63,206 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
         store.path().to_path_buf(),
     )?;
 
-    match cli.command {
+    dispatch_command(cli.command, output_format, &store, file_config, &settings).await
+}
+
+async fn dispatch_command(
+    command: Commands,
+    output_format: crate::cli::OutputFormat,
+    store: &ConfigStore,
+    file_config: crate::config::CliConfig,
+    settings: &ResolvedSettings,
+) -> Result<String> {
+    match command {
         Commands::Register(args) => {
-            commands::register(args, output_format, &store, file_config, &settings).await
+            commands::register(args, output_format, store, file_config, settings).await
         }
-        Commands::Auth(args) => match args.command {
-            AuthCommand::Status => output::render_auth_status(&settings, output_format),
-        },
-        Commands::Config(args) => match args.command {
-            ConfigCommand::Show => output::render_auth_status(&settings, output_format),
-            ConfigCommand::Set { key, value } => {
-                commands::set_config(key, &value, output_format, &store, &settings)
-            }
-        },
-        Commands::Challenges(args) => {
-            let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-            match args.command {
-                ChallengesCommand::List => {
-                    let response = client.list_challenges().await?;
-                    output::render_challenge_list(&response, output_format)
-                }
-                ChallengesCommand::Show { challenge_id } => {
-                    let response = client.get_challenge(&challenge_id).await?;
-                    output::render_challenge_detail(&response, output_format)
-                }
-                ChallengesCommand::Stats {
-                    challenge_id,
-                    target,
-                    metric,
-                } => {
-                    commands::challenge_stats(
-                        challenge_id,
-                        target,
-                        metric,
-                        output_format,
-                        &settings,
-                    )
-                    .await
-                }
-            }
+        Commands::Auth(args) => dispatch_auth(args, output_format, settings),
+        Commands::Config(args) => dispatch_config(args, output_format, store, settings),
+        Commands::Challenges(args) => dispatch_challenges(args, output_format, settings).await,
+        Commands::ChallengeCreator(args) => {
+            dispatch_challenge_creator(args, output_format, settings).await
         }
-        Commands::ChallengeCreator(args) => match args.command {
-            ChallengeCreatorCommand::Draft { command } => {
-                commands::challenge_draft(command, output_format, &settings).await
-            }
-            ChallengeCreatorCommand::Stats {
-                challenge_id: _,
-                target: _,
-            } => {
+        Commands::InitSolution(args) => dispatch_init_solution(args, output_format, settings).await,
+        Commands::Submit(args) => commands::submit(args, output_format, settings).await,
+        Commands::Validate(args) => commands::validate(args, output_format, settings).await,
+        Commands::Submissions(args) => dispatch_submissions(args, output_format, settings).await,
+        Commands::Leaderboard(args) => dispatch_leaderboard(args, output_format, settings).await,
+        Commands::Metrics(args) => dispatch_metrics(args, output_format, settings).await,
+    }
+}
+
+fn dispatch_auth(
+    args: AuthArgs,
+    output_format: crate::cli::OutputFormat,
+    settings: &ResolvedSettings,
+) -> Result<String> {
+    match args.command {
+        AuthCommand::Status => output::render_auth_status(settings, output_format),
+    }
+}
+
+fn dispatch_config(
+    args: ConfigArgs,
+    output_format: crate::cli::OutputFormat,
+    store: &ConfigStore,
+    settings: &ResolvedSettings,
+) -> Result<String> {
+    match args.command {
+        ConfigCommand::Show => output::render_auth_status(settings, output_format),
+        ConfigCommand::Set { key, value } => {
+            commands::set_config(key, &value, output_format, store, settings)
+        }
+    }
+}
+
+async fn dispatch_challenges(
+    args: ChallengesArgs,
+    output_format: crate::cli::OutputFormat,
+    settings: &ResolvedSettings,
+) -> Result<String> {
+    let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
+    match args.command {
+        ChallengesCommand::List => {
+            let response = client.list_challenges().await?;
+            output::render_challenge_list(&response, output_format)
+        }
+        ChallengesCommand::Show { challenge_id } => {
+            let response = client.get_challenge(&challenge_id).await?;
+            output::render_challenge_detail(&response, output_format)
+        }
+        ChallengesCommand::Stats {
+            challenge_id,
+            target,
+            metric,
+        } => commands::challenge_stats(challenge_id, target, metric, output_format, settings).await,
+    }
+}
+
+async fn dispatch_challenge_creator(
+    args: ChallengeCreatorArgs,
+    output_format: crate::cli::OutputFormat,
+    settings: &ResolvedSettings,
+) -> Result<String> {
+    match args.command {
+        ChallengeCreatorCommand::Draft { command } => {
+            commands::challenge_draft(command, output_format, settings).await
+        }
+        ChallengeCreatorCommand::Stats {
+            challenge_id: _,
+            target: _,
+        } => {
+            anyhow::bail!(
+                "creator stats require GitHub OAuth web-session support; use the creator web UI"
+            )
+        }
+        ChallengeCreatorCommand::Participants {
+            challenge_id: _,
+            target: _,
+        } => {
+            anyhow::bail!(
+                "creator participants require GitHub OAuth web-session support; use the creator web UI"
+            )
+        }
+        ChallengeCreatorCommand::Shortlist { command } => {
+            commands::challenge_shortlist(command, output_format, settings)
+        }
+    }
+}
+
+async fn dispatch_init_solution(
+    args: InitSolutionArgs,
+    output_format: crate::cli::OutputFormat,
+    settings: &ResolvedSettings,
+) -> Result<String> {
+    let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
+    let challenge = client.get_challenge(&args.challenge_id).await?;
+    let summary = workspace::init_solution_workspace(
+        &challenge,
+        args.dir,
+        args.runtime_profile,
+        args.interface,
+    )?;
+    output::render_init_solution(&summary, output_format)
+}
+
+async fn dispatch_submissions(
+    args: SubmissionsArgs,
+    output_format: crate::cli::OutputFormat,
+    settings: &ResolvedSettings,
+) -> Result<String> {
+    let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
+    match args.command {
+        SubmissionsCommand::List {
+            challenge_id,
+            target,
+            limit,
+        } => {
+            commands::list_public_solution_submissions(
+                challenge_id,
+                target,
+                limit,
+                output_format,
+                settings,
+            )
+            .await
+        }
+        SubmissionsCommand::Show { submission_id } => {
+            let response = client
+                .get_public_solution_submission(&submission_id)
+                .await?;
+            output::render_solution_submission_status(&response, output_format)
+        }
+        SubmissionsCommand::Status { submission_id } => {
+            let response = client.get_solution_submission(&submission_id).await?;
+            output::render_solution_submission_status(&response, output_format)
+        }
+        SubmissionsCommand::Wait {
+            submission_id,
+            poll_interval_ms,
+            timeout_sec,
+        } => {
+            let response = commands::wait_for_solution_submission(
+                &client,
+                &submission_id,
+                std::time::Duration::from_millis(poll_interval_ms.max(1)),
+                std::time::Duration::from_secs(timeout_sec),
+            )
+            .await?;
+            output::render_solution_submission_status(&response, output_format)
+        }
+        SubmissionsCommand::Logs { submission_id } => {
+            let response = client.get_solution_submission_logs(&submission_id).await?;
+            output::render_solution_submission_logs(&response, output_format)
+        }
+        SubmissionsCommand::Report { submission_id } => {
+            commands::solution_submission_report(submission_id, output_format, settings).await
+        }
+        SubmissionsCommand::Rank {
+            submission_id,
+            challenge,
+            target,
+        } => {
+            let challenge_detail = client.get_challenge(&challenge).await?;
+            if challenge_detail.spec.target(&target).is_none() {
                 anyhow::bail!(
-                    "creator stats require GitHub OAuth web-session support; use the creator web UI"
-                )
+                    "challenge `{}` does not support target `{target}`",
+                    challenge_detail.challenge_name
+                );
             }
-            ChallengeCreatorCommand::Participants {
-                challenge_id: _,
-                target: _,
-            } => {
-                anyhow::bail!(
-                    "creator participants require GitHub OAuth web-session support; use the creator web UI"
-                )
-            }
-            ChallengeCreatorCommand::Shortlist { command } => {
-                commands::challenge_shortlist(command, output_format, &settings)
-            }
-        },
-        Commands::InitSolution(args) => {
-            let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-            let challenge = client.get_challenge(&args.challenge_id).await?;
-            let summary = workspace::init_solution_workspace(
-                &challenge,
-                args.dir,
-                args.runtime_profile,
-                args.interface,
-            )?;
-            output::render_init_solution(&summary, output_format)
-        }
-        Commands::Submit(args) => commands::submit(args, output_format, &settings).await,
-        Commands::Validate(args) => commands::validate(args, output_format, &settings).await,
-        Commands::Submissions(args) => {
-            let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-            match args.command {
-                SubmissionsCommand::List {
-                    challenge_id,
-                    target,
-                    limit,
-                } => {
-                    commands::list_public_solution_submissions(
-                        challenge_id,
-                        target,
-                        limit,
-                        output_format,
-                        &settings,
-                    )
-                    .await
-                }
-                SubmissionsCommand::Show { submission_id } => {
-                    let response = client
-                        .get_public_solution_submission(&submission_id)
-                        .await?;
-                    output::render_solution_submission_status(&response, output_format)
-                }
-                SubmissionsCommand::Status { submission_id } => {
-                    let response = client.get_solution_submission(&submission_id).await?;
-                    output::render_solution_submission_status(&response, output_format)
-                }
-                SubmissionsCommand::Wait {
-                    submission_id,
-                    poll_interval_ms,
-                    timeout_sec,
-                } => {
-                    let response = commands::wait_for_solution_submission(
-                        &client,
+            let response = if settings.token_configured() {
+                match client
+                    .get_solution_submission_ranking_context(
                         &submission_id,
-                        std::time::Duration::from_millis(poll_interval_ms.max(1)),
-                        std::time::Duration::from_secs(timeout_sec),
+                        &challenge_detail.challenge_id,
+                        &target,
                     )
-                    .await?;
-                    output::render_solution_submission_status(&response, output_format)
-                }
-                SubmissionsCommand::Logs { submission_id } => {
-                    let response = client.get_solution_submission_logs(&submission_id).await?;
-                    output::render_solution_submission_logs(&response, output_format)
-                }
-                SubmissionsCommand::Report { submission_id } => {
-                    commands::solution_submission_report(submission_id, output_format, &settings)
-                        .await
-                }
-                SubmissionsCommand::Rank {
-                    submission_id,
-                    challenge,
-                    target,
-                } => {
-                    let challenge_detail = client.get_challenge(&challenge).await?;
-                    if challenge_detail.spec.target(&target).is_none() {
-                        anyhow::bail!(
-                            "challenge `{}` does not support target `{target}`",
-                            challenge_detail.challenge_name
-                        );
-                    }
-                    let response = if settings.token_configured() {
-                        match client
-                            .get_solution_submission_ranking_context(
-                                &submission_id,
-                                &challenge_detail.challenge_id,
-                                &target,
-                            )
-                            .await
-                        {
-                            Ok(context) => context,
-                            Err(error)
-                                if ApiClient::is_not_found(&error)
-                                    || ApiClient::is_forbidden(&error) =>
-                            {
-                                client
-                                    .get_public_solution_submission_ranking_context(
-                                        &submission_id,
-                                        &challenge_detail.challenge_id,
-                                        &target,
-                                    )
-                                    .await?
-                            }
-                            Err(error) => return Err(error),
-                        }
-                    } else {
+                    .await
+                {
+                    Ok(context) => context,
+                    Err(error)
+                        if ApiClient::is_not_found(&error) || ApiClient::is_forbidden(&error) =>
+                    {
                         client
                             .get_public_solution_submission_ranking_context(
                                 &submission_id,
@@ -232,37 +270,56 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
                                 &target,
                             )
                             .await?
-                    };
-                    output::render_ranking_context(&response, output_format)
+                    }
+                    Err(error) => return Err(error),
                 }
-            }
+            } else {
+                client
+                    .get_public_solution_submission_ranking_context(
+                        &submission_id,
+                        &challenge_detail.challenge_id,
+                        &target,
+                    )
+                    .await?
+            };
+            output::render_ranking_context(&response, output_format)
         }
-        Commands::Leaderboard(args) => {
-            let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-            match args.command {
-                LeaderboardCommand::Show {
-                    challenge_id,
-                    target,
-                } => {
-                    let response = client.get_leaderboard(&challenge_id, &target).await?;
-                    output::render_leaderboard(&response, output_format)
-                }
-            }
+    }
+}
+
+async fn dispatch_leaderboard(
+    args: LeaderboardArgs,
+    output_format: crate::cli::OutputFormat,
+    settings: &ResolvedSettings,
+) -> Result<String> {
+    let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
+    match args.command {
+        LeaderboardCommand::Show {
+            challenge_id,
+            target,
+        } => {
+            let response = client.get_leaderboard(&challenge_id, &target).await?;
+            output::render_leaderboard(&response, output_format)
         }
-        Commands::Metrics(args) => {
-            let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-            match args.command {
-                MetricsCommand::Distribution {
-                    challenge_id,
-                    target,
-                    metric,
-                } => {
-                    let response = client
-                        .get_score_distribution(&challenge_id, &target, &metric)
-                        .await?;
-                    output::render_score_distribution(&response, output_format)
-                }
-            }
+    }
+}
+
+async fn dispatch_metrics(
+    args: MetricsArgs,
+    output_format: crate::cli::OutputFormat,
+    settings: &ResolvedSettings,
+) -> Result<String> {
+    let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
+    match args.command {
+        MetricsCommand::Distribution {
+            challenge_id,
+            target,
+            metric,
+        } => {
+            let response = client
+                .get_score_distribution(&challenge_id, &target, &metric)
+                .await?;
+            output::render_score_distribution(&response, output_format)
         }
     }
 }
