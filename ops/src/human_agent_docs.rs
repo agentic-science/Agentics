@@ -12,18 +12,21 @@
 //!   valid symlink to such a source.
 //!
 //! The command is read-only and idempotent, so rollback and dry-run modes do
-//! not apply. Ctrl-C cancellation is handled by the shared ops wrapper.
+//! not apply. Ctrl-C sets a cooperative cancellation flag for the blocking
+//! filesystem walk.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use clap::Parser;
 use ignore::WalkBuilder;
 use thiserror::Error;
 
-use crate::support::{INTERRUPTED_EXIT, run_with_ctrl_c};
+use crate::support::INTERRUPTED_EXIT;
 
 const PREFIX: &str = "agentics-human-agent-docs";
 const AGENTS_FILE: &str = "AGENTS.md";
@@ -58,10 +61,13 @@ pub struct Cli {
 /// Run this command from process args and env.
 pub async fn run_from_process() -> ExitCode {
     let cli = Cli::parse();
-    run_with_ctrl_c(PREFIX, async move {
-        let task = tokio::task::spawn_blocking(move || run(cli));
-        match task.await {
+    let cancel = Arc::new(AtomicBool::new(false));
+    let task_cancel = Arc::clone(&cancel);
+    let task = tokio::task::spawn_blocking(move || run(cli, Some(task_cancel)));
+    tokio::select! {
+        result = task => match result {
             Ok(Ok(report)) => print_report(&report),
+            Ok(Err(HumanAgentDocError::Cancelled)) => ExitCode::from(INTERRUPTED_EXIT),
             Ok(Err(error)) => {
                 eprintln!("[{PREFIX}] ERROR: {error}");
                 ExitCode::from(2)
@@ -71,14 +77,21 @@ pub async fn run_from_process() -> ExitCode {
                 eprintln!("[{PREFIX}] ERROR: scan task failed: {error}");
                 ExitCode::from(2)
             }
+        },
+        signal = tokio::signal::ctrl_c() => {
+            cancel.store(true, Ordering::Relaxed);
+            match signal {
+                Ok(()) => eprintln!("[{PREFIX}] interrupted by Ctrl-C"),
+                Err(error) => eprintln!("[{PREFIX}] failed to listen for Ctrl-C: {error}"),
+            }
+            ExitCode::from(INTERRUPTED_EXIT)
         }
-    })
-    .await
+    }
 }
 
-fn run(cli: Cli) -> Result<DocCheckReport, HumanAgentDocError> {
+fn run(cli: Cli, cancel: Option<Arc<AtomicBool>>) -> Result<DocCheckReport, HumanAgentDocError> {
     let config = DocCheckConfig::from_cli(cli);
-    scan_human_agent_docs(&config)
+    scan_human_agent_docs_with_cancel(&config, cancel.as_deref())
 }
 
 /// Scanner configuration.
@@ -188,11 +201,23 @@ pub enum HumanAgentDocError {
         path: PathBuf,
         source: std::io::Error,
     },
+
+    /// The scan was cancelled.
+    #[error("scan cancelled")]
+    Cancelled,
 }
 
 /// Scan the repository for human/agent instruction document policy.
 pub fn scan_human_agent_docs(
     config: &DocCheckConfig,
+) -> Result<DocCheckReport, HumanAgentDocError> {
+    scan_human_agent_docs_with_cancel(config, None)
+}
+
+/// Scan the repository for human/agent instruction document policy with cancellation.
+pub fn scan_human_agent_docs_with_cancel(
+    config: &DocCheckConfig,
+    cancel: Option<&AtomicBool>,
 ) -> Result<DocCheckReport, HumanAgentDocError> {
     let root =
         std::fs::canonicalize(&config.root).map_err(|source| HumanAgentDocError::ResolveRoot {
@@ -222,6 +247,7 @@ pub fn scan_human_agent_docs(
         })
         .build()
     {
+        ensure_not_cancelled(cancel)?;
         let entry = entry?;
         let path = entry.path();
         let Some(file_name) = path.file_name() else {
@@ -397,6 +423,14 @@ pub fn scan_human_agent_docs(
         valid_claude_links,
         violations,
     })
+}
+
+fn ensure_not_cancelled(cancel: Option<&AtomicBool>) -> Result<(), HumanAgentDocError> {
+    if cancel.is_some_and(|cancel| cancel.load(Ordering::Relaxed)) {
+        Err(HumanAgentDocError::Cancelled)
+    } else {
+        Ok(())
+    }
 }
 
 /// Whether a human/agent document report has no policy violations.
@@ -631,6 +665,21 @@ mod tests {
             .expect("scan temp repo");
 
         assert!(report.violations.is_empty());
+    }
+
+    #[test]
+    fn scan_stops_when_cancelled() {
+        let temp = tempfile::tempdir().expect("create temp repo");
+        write_file(&temp.path().join("README.md"), "root");
+
+        let cancel = AtomicBool::new(true);
+        let error = scan_human_agent_docs_with_cancel(
+            &DocCheckConfig::new(temp.path().to_path_buf()),
+            Some(&cancel),
+        )
+        .expect_err("cancelled scan should stop");
+
+        assert!(matches!(error, HumanAgentDocError::Cancelled));
     }
 
     #[cfg(unix)]

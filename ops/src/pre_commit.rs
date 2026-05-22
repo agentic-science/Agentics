@@ -10,6 +10,8 @@
 
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Stdio};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use clap::Parser;
@@ -18,15 +20,15 @@ use tokio::process::Command;
 
 use crate::human_agent_docs::{
     DocCheckConfig, render_report as render_human_agent_doc_report,
-    report_passed as human_agent_doc_report_passed, scan_human_agent_docs,
+    report_passed as human_agent_doc_report_passed, scan_human_agent_docs_with_cancel,
 };
 use crate::large_files::{
     DEFAULT_LINE_THRESHOLD, DEFAULT_WATCH_THRESHOLD, ScanConfig,
     render_report as render_large_file_report, report_passed as large_file_report_passed,
-    scan_large_files,
+    scan_large_files_with_cancel,
 };
 use crate::support::{
-    CommandOutput, DEFAULT_OUTPUT_LIMIT_BYTES, SupportError, run_command, run_with_ctrl_c,
+    CommandOutput, DEFAULT_OUTPUT_LIMIT_BYTES, INTERRUPTED_EXIT, SupportError, run_command,
 };
 
 const PREFIX: &str = "agentics-pre-commit";
@@ -56,8 +58,10 @@ pub struct Cli {
 /// Run this command from process args and env.
 pub async fn run_from_process() -> ExitCode {
     let cli = Cli::parse();
-    run_with_ctrl_c(PREFIX, async move {
-        match run(cli).await {
+    let cancel = Arc::new(AtomicBool::new(false));
+    let run_cancel = Arc::clone(&cancel);
+    tokio::select! {
+        result = run(cli, run_cancel) => match result {
             Ok(summary) => {
                 summary.print();
                 summary.exit_code()
@@ -66,23 +70,31 @@ pub async fn run_from_process() -> ExitCode {
                 eprintln!("[{PREFIX}] ERROR: {error}");
                 ExitCode::from(2)
             }
+        },
+        signal = tokio::signal::ctrl_c() => {
+            cancel.store(true, Ordering::Relaxed);
+            match signal {
+                Ok(()) => eprintln!("[{PREFIX}] interrupted by Ctrl-C"),
+                Err(error) => eprintln!("[{PREFIX}] failed to listen for Ctrl-C: {error}"),
+            }
+            ExitCode::from(INTERRUPTED_EXIT)
         }
-    })
-    .await
+    }
 }
 
-async fn run(cli: Cli) -> Result<PreCommitSummary, PreCommitError> {
+async fn run(cli: Cli, cancel: Arc<AtomicBool>) -> Result<PreCommitSummary, PreCommitError> {
     let repo_root = resolve_git_root(&cli.root).await?;
     let staged = staged_files(&repo_root).await?;
     if staged.is_empty() {
         return Ok(PreCommitSummary::empty());
     }
 
-    let human_agent_docs = run_human_agent_docs_check(repo_root.clone());
+    let human_agent_docs = run_human_agent_docs_check(repo_root.clone(), Arc::clone(&cancel));
     let large_files = run_large_files_check(
         repo_root.clone(),
         cli.large_file_threshold,
         cli.large_file_watch_threshold,
+        Arc::clone(&cancel),
     );
     let rust = run_rust_checks(repo_root.clone(), staged.has_rust);
     let web = run_web_lint_check(repo_root.join("frontends/web"), staged.has_web);
@@ -143,10 +155,10 @@ async fn run_git<const N: usize>(
         })
 }
 
-async fn run_human_agent_docs_check(repo_root: PathBuf) -> CheckOutcome {
+async fn run_human_agent_docs_check(repo_root: PathBuf, cancel: Arc<AtomicBool>) -> CheckOutcome {
     match tokio::task::spawn_blocking(move || {
         let config = DocCheckConfig::new(repo_root);
-        scan_human_agent_docs(&config)
+        scan_human_agent_docs_with_cancel(&config, Some(&cancel))
     })
     .await
     {
@@ -171,6 +183,7 @@ async fn run_large_files_check(
     repo_root: PathBuf,
     threshold: usize,
     watch_threshold: usize,
+    cancel: Arc<AtomicBool>,
 ) -> CheckOutcome {
     let watch_threshold = if watch_threshold == 0 {
         None
@@ -181,7 +194,9 @@ async fn run_large_files_check(
         Ok(config) => config,
         Err(error) => return CheckOutcome::error("large files", error.to_string()),
     };
-    match tokio::task::spawn_blocking(move || scan_large_files(&config)).await {
+    match tokio::task::spawn_blocking(move || scan_large_files_with_cancel(&config, Some(&cancel)))
+        .await
+    {
         Ok(Ok(report)) => {
             if large_file_report_passed(&report) {
                 CheckOutcome::pass("large files", render_large_file_report(&report))

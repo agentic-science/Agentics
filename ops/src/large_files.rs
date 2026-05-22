@@ -4,18 +4,20 @@
 //! the `ignore` crate, counts lines without shelling out to `git`, `find`, or
 //! `wc`, and reports deterministic results for review logs. It is read-only,
 //! idempotent, has no rollback or dry-run mode because it never mutates state,
-//! and uses the shared Ctrl-C handling wrapper for cancellation.
+//! and cooperatively stops the blocking filesystem walk after Ctrl-C.
 
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use clap::Parser;
 use ignore::WalkBuilder;
 use thiserror::Error;
 
-use crate::support::{INTERRUPTED_EXIT, run_with_ctrl_c};
+use crate::support::INTERRUPTED_EXIT;
 
 const PREFIX: &str = "agentics-large-files";
 
@@ -76,10 +78,13 @@ pub struct Cli {
 /// Run this command from process args and env.
 pub async fn run_from_process() -> ExitCode {
     let cli = Cli::parse();
-    run_with_ctrl_c(PREFIX, async move {
-        let task = tokio::task::spawn_blocking(move || run(cli));
-        match task.await {
+    let cancel = Arc::new(AtomicBool::new(false));
+    let task_cancel = Arc::clone(&cancel);
+    let task = tokio::task::spawn_blocking(move || run(cli, Some(task_cancel)));
+    tokio::select! {
+        result = task => match result {
             Ok(Ok(report)) => print_report(&report),
+            Ok(Err(LargeFileScanError::Cancelled)) => ExitCode::from(INTERRUPTED_EXIT),
             Ok(Err(error)) => {
                 eprintln!("[{PREFIX}] ERROR: {error}");
                 ExitCode::from(2)
@@ -89,14 +94,21 @@ pub async fn run_from_process() -> ExitCode {
                 eprintln!("[{PREFIX}] ERROR: scan task failed: {error}");
                 ExitCode::from(2)
             }
+        },
+        signal = tokio::signal::ctrl_c() => {
+            cancel.store(true, Ordering::Relaxed);
+            match signal {
+                Ok(()) => eprintln!("[{PREFIX}] interrupted by Ctrl-C"),
+                Err(error) => eprintln!("[{PREFIX}] failed to listen for Ctrl-C: {error}"),
+            }
+            ExitCode::from(INTERRUPTED_EXIT)
         }
-    })
-    .await
+    }
 }
 
-fn run(cli: Cli) -> Result<ScanReport, LargeFileScanError> {
+fn run(cli: Cli, cancel: Option<Arc<AtomicBool>>) -> Result<ScanReport, LargeFileScanError> {
     let config = ScanConfig::from_cli(cli)?;
-    scan_large_files(&config)
+    scan_large_files_with_cancel(&config, cancel.as_deref())
 }
 
 /// Scanner configuration.
@@ -189,10 +201,22 @@ pub enum LargeFileScanError {
     /// A line counter overflowed.
     #[error("line count overflowed while reading {0}")]
     LineCountOverflow(PathBuf),
+
+    /// The scan was cancelled.
+    #[error("scan cancelled")]
+    Cancelled,
 }
 
 /// Scan for large code files.
 pub fn scan_large_files(config: &ScanConfig) -> Result<ScanReport, LargeFileScanError> {
+    scan_large_files_with_cancel(config, None)
+}
+
+/// Scan for large code files with cooperative cancellation.
+pub fn scan_large_files_with_cancel(
+    config: &ScanConfig,
+    cancel: Option<&AtomicBool>,
+) -> Result<ScanReport, LargeFileScanError> {
     let root =
         std::fs::canonicalize(&config.root).map_err(|source| LargeFileScanError::ResolveRoot {
             path: config.root.clone(),
@@ -203,6 +227,7 @@ pub fn scan_large_files(config: &ScanConfig) -> Result<ScanReport, LargeFileScan
     let mut scanned_files = 0usize;
 
     for entry in WalkBuilder::new(&root).parents(true).build() {
+        ensure_not_cancelled(cancel)?;
         let entry = entry?;
         if !entry
             .file_type()
@@ -219,10 +244,21 @@ pub fn scan_large_files(config: &ScanConfig) -> Result<ScanReport, LargeFileScan
         scanned_files = scanned_files
             .checked_add(1)
             .ok_or_else(|| LargeFileScanError::LineCountOverflow(relative_path.clone()))?;
-        let lines = count_lines(path).map_err(|source| LargeFileScanError::ReadFile {
-            path: relative_path.clone(),
-            source,
-        })?;
+        let lines = match count_lines(path, cancel) {
+            Ok(lines) => lines,
+            Err(source)
+                if source.kind() == std::io::ErrorKind::Interrupted
+                    && cancel.is_some_and(|cancel| cancel.load(Ordering::Relaxed)) =>
+            {
+                return Err(LargeFileScanError::Cancelled);
+            }
+            Err(source) => {
+                return Err(LargeFileScanError::ReadFile {
+                    path: relative_path.clone(),
+                    source,
+                });
+            }
+        };
         let file = FileLineCount {
             path: relative_path,
             lines,
@@ -246,6 +282,14 @@ pub fn scan_large_files(config: &ScanConfig) -> Result<ScanReport, LargeFileScan
         oversized,
         watch,
     })
+}
+
+fn ensure_not_cancelled(cancel: Option<&AtomicBool>) -> Result<(), LargeFileScanError> {
+    if cancel.is_some_and(|cancel| cancel.load(Ordering::Relaxed)) {
+        Err(LargeFileScanError::Cancelled)
+    } else {
+        Ok(())
+    }
 }
 
 /// Whether a large-file report passes the hard threshold.
@@ -323,12 +367,18 @@ fn relative_path(root: &Path, path: &Path) -> PathBuf {
         .map_or_else(|_| path.to_path_buf(), Path::to_path_buf)
 }
 
-fn count_lines(path: &Path) -> Result<usize, std::io::Error> {
+fn count_lines(path: &Path, cancel: Option<&AtomicBool>) -> Result<usize, std::io::Error> {
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);
     let mut buffer = Vec::new();
     let mut lines = 0usize;
     loop {
+        if cancel.is_some_and(|cancel| cancel.load(Ordering::Relaxed)) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Interrupted,
+                "scan cancelled",
+            ));
+        }
         buffer.clear();
         let bytes_read = reader.read_until(b'\n', &mut buffer)?;
         if bytes_read == 0 {
@@ -435,6 +485,22 @@ mod tests {
                 lines: 2,
             }]
         );
+    }
+
+    #[test]
+    fn scan_stops_when_cancelled() {
+        let temp = tempfile::tempdir().expect("create temp repo");
+        let source_root = temp.path().join("src");
+        std::fs::create_dir_all(&source_root).expect("create source dir");
+        write_lines(&source_root.join("large.rs"), 3);
+
+        let config = ScanConfig::new(temp.path().to_path_buf(), 3, Some(2)).expect("valid config");
+        let cancel = AtomicBool::new(true);
+
+        let error = scan_large_files_with_cancel(&config, Some(&cancel))
+            .expect_err("cancelled scan should stop");
+
+        assert!(matches!(error, LargeFileScanError::Cancelled));
     }
 
     fn write_lines(path: &Path, line_count: usize) {
