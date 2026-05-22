@@ -149,6 +149,27 @@ pub async fn requeue_running_evaluation_job_for_capacity(
     last_error: &str,
 ) -> Result<bool> {
     let mut tx = pool.begin().await?;
+    let Some(solution_submission_id) =
+        requeue_claimed_job_for_capacity(&mut tx, job_id, worker_id, attempt_count, last_error)
+            .await?
+    else {
+        tx.commit().await?;
+        return Ok(false);
+    };
+
+    delete_running_evaluation_for_job(&mut tx, job_id).await?;
+    repair_submission_after_capacity_requeue(&mut tx, &solution_submission_id).await?;
+    tx.commit().await?;
+    Ok(true)
+}
+
+async fn requeue_claimed_job_for_capacity(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    job_id: &EvaluationJobId,
+    worker_id: &str,
+    attempt_count: i32,
+    last_error: &str,
+) -> Result<Option<SolutionSubmissionId>> {
     let row = sqlx::query(
         r#"
         UPDATE evaluation_jobs
@@ -169,37 +190,43 @@ pub async fn requeue_running_evaluation_job_for_capacity(
     .bind(worker_id)
     .bind(attempt_count)
     .bind(last_error)
-    .fetch_optional(&mut *tx)
+    .fetch_optional(&mut **tx)
     .await?;
 
-    let Some(row) = row else {
-        tx.commit().await?;
-        return Ok(false);
-    };
+    row.map(|row| solution_submission_id_from_row(&row, "solution_submission_id"))
+        .transpose()
+}
 
+async fn delete_running_evaluation_for_job(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    job_id: &EvaluationJobId,
+) -> Result<()> {
     sqlx::query("DELETE FROM evaluations WHERE job_id = $1::uuid AND status = 'running'")
         .bind(job_id.as_str())
-        .execute(&mut *tx)
+        .execute(&mut **tx)
         .await?;
+    Ok(())
+}
 
-    let solution_submission_id = solution_submission_id_from_row(&row, "solution_submission_id")?;
+async fn repair_submission_after_capacity_requeue(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    solution_submission_id: &SolutionSubmissionId,
+) -> Result<()> {
     let visible_after_eval = sqlx::query_scalar::<_, bool>(
         "SELECT visible_after_eval FROM solution_submissions WHERE id = $1::uuid FOR UPDATE",
     )
     .bind(solution_submission_id.as_str())
-    .fetch_one(&mut *tx)
+    .fetch_one(&mut **tx)
     .await?;
     if !visible_after_eval {
         sqlx::query(
             "UPDATE solution_submissions SET status = 'queued', visible_after_eval = FALSE, updated_at = NOW() WHERE id = $1::uuid"
         )
         .bind(solution_submission_id.as_str())
-        .execute(&mut *tx)
+        .execute(&mut **tx)
         .await?;
     }
-
-    tx.commit().await?;
-    Ok(true)
+    Ok(())
 }
 
 /// Make a staged queued job eligible for worker claiming after its artifact is durable.
