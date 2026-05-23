@@ -11,6 +11,7 @@ export const adminCapacityResponseSchema = z
         max_active_official_jobs: z.number().int().gte(0),
         max_active_agents: z.number().int().gte(0),
       })
+      .strict()
       .describe(
         "Admin-visible quota limits that bound evaluation and registration capacity.",
       ),
@@ -20,10 +21,12 @@ export const adminCapacityResponseSchema = z
         active_validation_jobs: z.number().int(),
         active_official_jobs: z.number().int(),
       })
+      .strict()
       .describe(
         "Admin-visible runtime usage for the configured quota envelope.",
       ),
   })
+  .strict()
   .describe(
     "Admin response used by the operations console to inspect platform capacity.",
   );
@@ -134,22 +137,26 @@ export const adminChallengeListResponseSchema = z
                         .any()
                         .superRefine((x, ctx) => {
                           const schemas = [
-                            z.object({
-                              reference: z
-                                .string()
-                                .regex(
-                                  /^(agentics-linux-arm64-cpu|agentics-linux-arm64-cuda):[A-Za-z0-9_.-]+$/,
-                                ),
-                              source: z.literal("local"),
-                            }),
-                            z.object({
-                              reference: z
-                                .string()
-                                .regex(
-                                  /^[^/.:]+[.:][^/]*\/[^\s@:]+(\/[^\s@:]+)*:[^\s@]+(@sha256:[0-9a-f]{64})?$/,
-                                ),
-                              source: z.literal("registry"),
-                            }),
+                            z
+                              .object({
+                                reference: z
+                                  .string()
+                                  .regex(
+                                    /^(agentics-linux-arm64-cpu|agentics-linux-arm64-cuda):[A-Za-z0-9_.-]+$/,
+                                  ),
+                                source: z.literal("local"),
+                              })
+                              .strict(),
+                            z
+                              .object({
+                                reference: z
+                                  .string()
+                                  .regex(
+                                    /^[^/.:]+[.:][^/]*\/[^\s@:]+(\/[^\s@:]+)*:[^\s@]+(@sha256:[0-9a-f]{64})?$/,
+                                  ),
+                                source: z.literal("registry"),
+                              })
+                              .strict(),
                           ];
                           const { errors, failed } = schemas.reduce<{
                             errors: z.core.$ZodIssue[];
@@ -198,22 +205,26 @@ export const adminChallengeListResponseSchema = z
                         .any()
                         .superRefine((x, ctx) => {
                           const schemas = [
-                            z.object({
-                              reference: z
-                                .string()
-                                .regex(
-                                  /^(agentics-linux-arm64-cpu|agentics-linux-arm64-cuda):[A-Za-z0-9_.-]+$/,
-                                ),
-                              source: z.literal("local"),
-                            }),
-                            z.object({
-                              reference: z
-                                .string()
-                                .regex(
-                                  /^[^/.:]+[.:][^/]*\/[^\s@:]+(\/[^\s@:]+)*:[^\s@]+(@sha256:[0-9a-f]{64})?$/,
-                                ),
-                              source: z.literal("registry"),
-                            }),
+                            z
+                              .object({
+                                reference: z
+                                  .string()
+                                  .regex(
+                                    /^(agentics-linux-arm64-cpu|agentics-linux-arm64-cuda):[A-Za-z0-9_.-]+$/,
+                                  ),
+                                source: z.literal("local"),
+                              })
+                              .strict(),
+                            z
+                              .object({
+                                reference: z
+                                  .string()
+                                  .regex(
+                                    /^[^/.:]+[.:][^/]*\/[^\s@:]+(\/[^\s@:]+)*:[^\s@]+(@sha256:[0-9a-f]{64})?$/,
+                                  ),
+                                source: z.literal("registry"),
+                              })
+                              .strict(),
                           ];
                           const { errors, failed } = schemas.reduce<{
                             errors: z.core.$ZodIssue[];
@@ -363,6 +374,7 @@ export const adminChallengeListResponseSchema = z
                           cuda_version: z.string().optional(),
                           driver_minimum: z.string().optional(),
                         })
+                        .strict()
                         .describe(
                           "Optional hardware metadata advertised with a resource profile.",
                         )
@@ -424,9 +436,11 @@ export const adminChallengeListResponseSchema = z
           created_at: z.string(),
           updated_at: z.string(),
         })
+        .strict()
         .describe("One row in the admin challenge list."),
     ),
   })
+  .strict()
   .describe("Admin challenge list response.");
 
 export const adminChallengePrivateAssetListResponseSchema = z
@@ -486,11 +500,13 @@ export const adminChallengePrivateAssetListResponseSchema = z
           failed_at: z.string().optional(),
           failure_message: z.string().optional(),
         })
+        .strict()
         .describe(
           "Admin-only response for one private asset upload lifecycle record.",
         ),
     ),
   })
+  .strict()
   .describe(
     "Admin-only list response for private asset upload lifecycle records.",
   );
@@ -509,11 +525,13 @@ export const adminServiceHeartbeatListResponseSchema = z
           last_seen_at: z.string(),
           payload: z.any(),
         })
+        .strict()
         .describe(
           "One service heartbeat row displayed in the admin operations console.",
         ),
     ),
   })
+  .strict()
   .describe("Admin service heartbeat list response.");
 
 export const adminSessionResponseSchema = z
@@ -522,6 +540,7 @@ export const adminSessionResponseSchema = z
     csrf_token: z.string(),
     expires_at: z.string(),
   })
+  .strict()
   .describe("Admin session material returned after a successful login.");
 
 export const adminSolutionSubmissionListResponseSchema = z
@@ -644,11 +663,13 @@ export const adminSolutionSubmissionListResponseSchema = z
           created_at: z.string(),
           updated_at: z.string(),
         })
+        .strict()
         .describe(
           "One solution submission row in the admin operations console.",
         ),
     ),
   })
+  .strict()
   .describe("Admin solution submission list response.");
 
 export const challengeAdminResponseSchema = z
@@ -686,6 +707,7 @@ export const challengeAdminResponseSchema = z
     created_at: z.string(),
     updated_at: z.string(),
   })
+  .strict()
   .describe("Admin-facing challenge metadata response.");
 
 export const challengeDetailResponseSchema = z
@@ -753,6 +775,7 @@ export const challengeDetailResponseSchema = z
               .string()
               .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
           })
+          .strict()
           .describe("Local solution format constraints declared by a bundle."),
         targets: z.array(
           z
@@ -820,22 +843,26 @@ export const challengeDetailResponseSchema = z
                     .any()
                     .superRefine((x, ctx) => {
                       const schemas = [
-                        z.object({
-                          reference: z
-                            .string()
-                            .regex(
-                              /^(agentics-linux-arm64-cpu|agentics-linux-arm64-cuda):[A-Za-z0-9_.-]+$/,
-                            ),
-                          source: z.literal("local"),
-                        }),
-                        z.object({
-                          reference: z
-                            .string()
-                            .regex(
-                              /^[^/.:]+[.:][^/]*\/[^\s@:]+(\/[^\s@:]+)*:[^\s@]+(@sha256:[0-9a-f]{64})?$/,
-                            ),
-                          source: z.literal("registry"),
-                        }),
+                        z
+                          .object({
+                            reference: z
+                              .string()
+                              .regex(
+                                /^(agentics-linux-arm64-cpu|agentics-linux-arm64-cuda):[A-Za-z0-9_.-]+$/,
+                              ),
+                            source: z.literal("local"),
+                          })
+                          .strict(),
+                        z
+                          .object({
+                            reference: z
+                              .string()
+                              .regex(
+                                /^[^/.:]+[.:][^/]*\/[^\s@:]+(\/[^\s@:]+)*:[^\s@]+(@sha256:[0-9a-f]{64})?$/,
+                              ),
+                            source: z.literal("registry"),
+                          })
+                          .strict(),
                       ];
                       const { errors, failed } = schemas.reduce<{
                         errors: z.core.$ZodIssue[];
@@ -881,22 +908,26 @@ export const challengeDetailResponseSchema = z
                     .any()
                     .superRefine((x, ctx) => {
                       const schemas = [
-                        z.object({
-                          reference: z
-                            .string()
-                            .regex(
-                              /^(agentics-linux-arm64-cpu|agentics-linux-arm64-cuda):[A-Za-z0-9_.-]+$/,
-                            ),
-                          source: z.literal("local"),
-                        }),
-                        z.object({
-                          reference: z
-                            .string()
-                            .regex(
-                              /^[^/.:]+[.:][^/]*\/[^\s@:]+(\/[^\s@:]+)*:[^\s@]+(@sha256:[0-9a-f]{64})?$/,
-                            ),
-                          source: z.literal("registry"),
-                        }),
+                        z
+                          .object({
+                            reference: z
+                              .string()
+                              .regex(
+                                /^(agentics-linux-arm64-cpu|agentics-linux-arm64-cuda):[A-Za-z0-9_.-]+$/,
+                              ),
+                            source: z.literal("local"),
+                          })
+                          .strict(),
+                        z
+                          .object({
+                            reference: z
+                              .string()
+                              .regex(
+                                /^[^/.:]+[.:][^/]*\/[^\s@:]+(\/[^\s@:]+)*:[^\s@]+(@sha256:[0-9a-f]{64})?$/,
+                              ),
+                            source: z.literal("registry"),
+                          })
+                          .strict(),
                       ];
                       const { errors, failed } = schemas.reduce<{
                         errors: z.core.$ZodIssue[];
@@ -1043,6 +1074,7 @@ export const challengeDetailResponseSchema = z
                       cuda_version: z.string().optional(),
                       driver_minimum: z.string().optional(),
                     })
+                    .strict()
                     .describe(
                       "Optional hardware metadata advertised with a resource profile.",
                     )
@@ -1279,6 +1311,7 @@ export const challengeDetailResponseSchema = z
                 "Whether official runs can evaluate against private benchmark data.",
               ),
           })
+          .strict()
           .describe(
             "Public dataset metadata with private benchmark paths removed.",
           ),
@@ -1355,6 +1388,7 @@ export const challengeDetailResponseSchema = z
                     ),
                   metric_description: z.string().optional(),
                 })
+                .strict()
                 .describe(
                   "One metric that an evaluator may emit in aggregate or per-run result payloads.",
                 ),
@@ -1374,8 +1408,10 @@ export const challengeDetailResponseSchema = z
                   )
                   .default([]),
               })
+              .strict()
               .describe("Ranking configuration for a challenge."),
           })
+          .strict()
           .describe(
             "Metric definitions and ranking metadata used to interpret evaluator output.",
           )
@@ -1419,10 +1455,12 @@ export const challengeDetailResponseSchema = z
           .regex(/^https:\/\/www\.moltbook\.com\/post\/[A-Za-z0-9_-]+$/)
           .optional(),
       })
+      .strict()
       .describe(
         "Public Moltbook community metadata exposed on challenge detail surfaces.",
       ),
   })
+  .strict()
   .describe(
     "Public challenge detail response with spec and Markdown statement.",
   );
@@ -1432,6 +1470,7 @@ export const challengeDraftCleanupResponseSchema = z
     abandoned_drafts: z.number().int(),
     purged_private_assets: z.number().int(),
   })
+  .strict()
   .describe(
     "Admin response returned after abandoning stale drafts and deleting\npurge-eligible unpublished private asset records.",
   );
@@ -1652,6 +1691,7 @@ export const challengeDraftListResponseSchema = z
                     ),
                   created_at: z.string(),
                 })
+                .strict()
                 .describe(
                   "API response for one private benchmark asset bound to a draft.",
                 ),
@@ -1687,15 +1727,18 @@ export const challengeDraftListResponseSchema = z
                     .optional(),
                   created_at: z.string(),
                 })
+                .strict()
                 .describe("API response for one validation record."),
             )
             .default([]),
           created_at: z.string(),
           updated_at: z.string(),
         })
+        .strict()
         .describe("API response for one challenge draft."),
     ),
   })
+  .strict()
   .describe("List response for admin challenge draft review.");
 
 export const challengeDraftResponseSchema = z
@@ -1897,6 +1940,7 @@ export const challengeDraftResponseSchema = z
               ),
             created_at: z.string(),
           })
+          .strict()
           .describe(
             "API response for one private benchmark asset bound to a draft.",
           ),
@@ -1930,12 +1974,14 @@ export const challengeDraftResponseSchema = z
               .optional(),
             created_at: z.string(),
           })
+          .strict()
           .describe("API response for one validation record."),
       )
       .default([]),
     created_at: z.string(),
     updated_at: z.string(),
   })
+  .strict()
   .describe("API response for one challenge draft.");
 
 export const challengeListResponseSchema = z
@@ -1984,6 +2030,7 @@ export const challengeListResponseSchema = z
             .strict()
             .describe("Eligibility policy for a challenge."),
         })
+        .strict()
         .describe("One row in the public challenge catalog."),
     ),
     total_count: z.number().int(),
@@ -1991,6 +2038,7 @@ export const challengeListResponseSchema = z
     offset: z.number().int(),
     has_more: z.boolean(),
   })
+  .strict()
   .describe("Public challenge catalog response.");
 
 export const challengeMoltbookDiscussionResponseSchema = z
@@ -2023,10 +2071,12 @@ export const challengeMoltbookDiscussionResponseSchema = z
           .regex(/^https:\/\/www\.moltbook\.com\/post\/[A-Za-z0-9_-]+$/)
           .optional(),
       })
+      .strict()
       .describe(
         "Public Moltbook community metadata exposed on challenge detail surfaces.",
       ),
   })
+  .strict()
   .describe(
     "Admin response after setting or clearing a challenge Moltbook discussion anchor.",
   );
@@ -2063,6 +2113,7 @@ export const challengePrivateAssetResponseSchema = z
       .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
     created_at: z.string(),
   })
+  .strict()
   .describe("API response for one private benchmark asset bound to a draft.");
 
 export const challengeShortlistResponseSchema = z
@@ -2094,9 +2145,11 @@ export const challengeShortlistResponseSchema = z
             ),
           created_at: z.string(),
         })
+        .strict()
         .describe("One effective shortlisted agent row."),
     ),
   })
+  .strict()
   .describe("Effective shortlist response.");
 
 export const challengeShortlistRevisionResponseSchema = z
@@ -2124,6 +2177,7 @@ export const challengeShortlistRevisionResponseSchema = z
     storage_key: z.string().regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
     created_at: z.string(),
   })
+  .strict()
   .describe("Persisted shortlist revision response.");
 
 export const createChallengeDraftRequestSchema = z
@@ -2463,6 +2517,7 @@ export const creatorChallengeDraftResponseSchema = z
               ),
             created_at: z.string(),
           })
+          .strict()
           .describe(
             "API response for one private benchmark asset bound to a draft.",
           ),
@@ -2495,6 +2550,7 @@ export const creatorChallengeDraftResponseSchema = z
               .optional(),
             created_at: z.string(),
           })
+          .strict()
           .describe(
             "Creator-facing validation record response without server-local checkout paths.",
           ),
@@ -2503,6 +2559,7 @@ export const creatorChallengeDraftResponseSchema = z
     created_at: z.string(),
     updated_at: z.string(),
   })
+  .strict()
   .describe("Creator-facing response for one challenge draft.");
 
 export const creatorChallengeParticipantsResponseSchema = z
@@ -2546,11 +2603,13 @@ export const creatorChallengeParticipantsResponseSchema = z
             .optional(),
           latest_solution_submission_at: z.string().optional(),
         })
+        .strict()
         .describe(
           "One challenge participant row visible to the challenge owner.",
         ),
     ),
   })
+  .strict()
   .describe("Challenge-owner participant list for shortlist decisions.");
 
 export const creatorChallengeStatsResponseSchema = z
@@ -2583,6 +2642,7 @@ export const creatorChallengeStatsResponseSchema = z
     best_rank_score_max: z.number().optional(),
     best_rank_score_mean: z.number().optional(),
   })
+  .strict()
   .describe(
     "Challenge-owner statistics for one challenge and optional target.",
   );
@@ -2596,6 +2656,7 @@ export const creatorMeResponseSchema = z
     github_user_id: z.number().int(),
     github_login: z.string(),
   })
+  .strict()
   .describe("Current creator session identity.");
 
 export const creatorSessionResponseSchema = z
@@ -2609,6 +2670,7 @@ export const creatorSessionResponseSchema = z
     csrf_token: z.string(),
     expires_at: z.string(),
   })
+  .strict()
   .describe(
     "Creator identity returned after a successful GitHub OAuth callback.",
   );
@@ -2623,6 +2685,7 @@ export const disableAgentResponseSchema = z
       .enum(["active", "disabled"])
       .describe("Persistent lifecycle state for an agent account."),
   })
+  .strict()
   .describe("Admin response returned after disabling an agent.");
 
 export const errorResponseSchema = z
@@ -2648,14 +2711,17 @@ export const errorResponseSchema = z
           .array(
             z
               .object({ field: z.string().optional(), message: z.string() })
+              .strict()
               .describe(
                 "Optional structured validation detail for one request problem.",
               ),
           )
           .optional(),
       })
+      .strict()
       .describe("Standard nested API error body."),
   })
+  .strict()
   .describe(
     "Standard error response shape used by all API extractors and handlers.",
   );
@@ -2731,6 +2797,7 @@ export const evaluationJobResponseSchema = z
       .enum(["staged", "queued", "running", "completed", "failed"])
       .describe("Persistent lifecycle state for an evaluation job."),
   })
+  .strict()
   .describe(
     "Admin response returned when an official evaluation job is queued.",
   );
@@ -2753,6 +2820,7 @@ export const githubOauthLoginResponseSchema = z
       .regex(/^https:\/\/github\.com\/login\/oauth\/authorize\?[^#]+$/),
     state: z.string(),
   })
+  .strict()
   .describe("URL returned to a browser or CLI so it can start GitHub OAuth.");
 
 export const leaderboardResponseSchema = z
@@ -2800,15 +2868,18 @@ export const leaderboardResponseSchema = z
                 .min(1),
               value: z.number(),
             })
+            .strict()
             .describe("Numeric value for one declared metric.")
             .optional(),
           updated_at: z.string(),
         })
+        .strict()
         .describe(
           "One leaderboard row for an agent's best solution submission.",
         ),
     ),
   })
+  .strict()
   .describe("Challenge leaderboard response.");
 
 export const pioneerCodeDetailResponseSchema = z
@@ -2834,6 +2905,7 @@ export const pioneerCodeDetailResponseSchema = z
         created_at: z.string(),
         revoked_at: z.string().optional(),
       })
+      .strict()
       .describe("Admin-visible pioneer-code metadata."),
     uses: z.array(
       z
@@ -2852,9 +2924,11 @@ export const pioneerCodeDetailResponseSchema = z
             ),
           used_at: z.string(),
         })
+        .strict()
         .describe("Agent account created through a pioneer code."),
     ),
   })
+  .strict()
   .describe("Admin detail response for one pioneer code.");
 
 export const pioneerCodeListResponseSchema = z
@@ -2881,9 +2955,11 @@ export const pioneerCodeListResponseSchema = z
           created_at: z.string(),
           revoked_at: z.string().optional(),
         })
+        .strict()
         .describe("Admin-visible pioneer-code metadata."),
     ),
   })
+  .strict()
   .describe("Admin list response for pioneer codes.");
 
 export const publicSolutionSubmissionListResponseSchema = z
@@ -2943,14 +3019,17 @@ export const publicSolutionSubmissionListResponseSchema = z
                 .min(1),
               value: z.number(),
             })
+            .strict()
             .describe("Numeric value for one declared metric.")
             .optional(),
           created_at: z.string(),
           updated_at: z.string(),
         })
+        .strict()
         .describe("One row in a public challenge solution submission list."),
     ),
   })
+  .strict()
   .describe("Public solution submission list response.");
 
 export const publicStatsResponseSchema = z
@@ -2959,6 +3038,7 @@ export const publicStatsResponseSchema = z
     agent_count: z.number().int(),
     solution_submission_count: z.number().int(),
   })
+  .strict()
   .describe("Aggregate public observer counters.");
 
 export const publishChallengeResponseSchema = z
@@ -2977,6 +3057,7 @@ export const publishChallengeResponseSchema = z
     public_bundle_path: z.string(),
     statement_path: z.string(),
   })
+  .strict()
   .describe("Admin response returned after publishing a challenge bundle.");
 
 export const rankingContextResponseSchema = z
@@ -3031,10 +3112,12 @@ export const rankingContextResponseSchema = z
               .min(1),
             value: z.number(),
           })
+          .strict()
           .describe("Numeric value for one declared metric.")
           .optional(),
         updated_at: z.string(),
       })
+      .strict()
       .describe("One leaderboard row for an agent's best solution submission.")
       .optional(),
     nearby_entries: z.array(
@@ -3070,19 +3153,23 @@ export const rankingContextResponseSchema = z
                     .min(1),
                   value: z.number(),
                 })
+                .strict()
                 .describe("Numeric value for one declared metric.")
                 .optional(),
               updated_at: z.string(),
             })
+            .strict()
             .describe(
               "One leaderboard row for an agent's best solution submission.",
             ),
         })
+        .strict()
         .describe(
           "Leaderboard row with its rank in one explicit challenge and target scope.",
         ),
     ),
   })
+  .strict()
   .describe(
     "Ranking context for a solution submission in one explicit leaderboard scope.",
   );
@@ -3121,6 +3208,7 @@ export const revokePioneerCodeResponseSchema = z
     revoked_agent_count: z.number().int(),
     revoked_token_count: z.number().int(),
   })
+  .strict()
   .describe("Response returned after revoking a pioneer code.");
 
 export const scoreDistributionResponseSchema = z
@@ -3149,6 +3237,7 @@ export const scoreDistributionResponseSchema = z
     quantiles: z.array(
       z
         .object({ quantile: z.number(), value: z.number() })
+        .strict()
         .describe("One quantile in a score distribution response."),
     ),
     histogram: z.array(
@@ -3158,9 +3247,11 @@ export const scoreDistributionResponseSchema = z
           upper: z.number(),
           count: z.number().int(),
         })
+        .strict()
         .describe("One histogram bucket in a score distribution response."),
     ),
   })
+  .strict()
   .describe(
     "Aggregate distribution of one visible metric within a challenge and target.",
   );
@@ -3193,9 +3284,11 @@ export const solutionSubmissionArtifactResponseSchema = z
           is_text: z.boolean(),
           content: z.string().optional(),
         })
+        .strict()
         .describe("One extracted file entry from a submitted archive."),
     ),
   })
+  .strict()
   .describe("Archive browser response for a solution submission artifact.");
 
 export const solutionSubmissionLogsResponseSchema = z
@@ -3211,6 +3304,7 @@ export const solutionSubmissionLogsResponseSchema = z
     content: z.string().optional(),
     truncated: z.boolean(),
   })
+  .strict()
   .describe("Logs associated with a solution submission.");
 
 export const solutionSubmissionResponseSchema = z
@@ -3257,6 +3351,7 @@ export const solutionSubmissionResponseSchema = z
           .min(1),
         value: z.number(),
       })
+      .strict()
       .describe("Numeric value for one declared metric.")
       .optional(),
     visible_after_eval: z.boolean(),
@@ -3280,6 +3375,7 @@ export const solutionSubmissionResponseSchema = z
           .enum(["staged", "queued", "running", "completed", "failed"])
           .describe("Persistent lifecycle state for an evaluation job."),
       })
+      .strict()
       .describe(
         "Minimal job DTO returned when a solution submission queues an evaluation.",
       )
@@ -3362,6 +3458,7 @@ export const solutionSubmissionResponseSchema = z
                 .min(1),
               value: z.number(),
             })
+            .strict()
             .describe("Numeric value for one declared metric."),
         ),
         run_metrics: z.array(
@@ -3389,10 +3486,12 @@ export const solutionSubmissionResponseSchema = z
                         .min(1),
                       value: z.number(),
                     })
+                    .strict()
                     .describe("Numeric value for one declared metric."),
                 )
                 .default([]),
             })
+            .strict()
             .describe(
               "Metric values for one evaluator-defined run, case, seed, shard, or scenario.",
             ),
@@ -3409,6 +3508,7 @@ export const solutionSubmissionResponseSchema = z
               score: z.number(),
               message: z.string().optional(),
             })
+            .strict()
             .describe(
               "Public per-case result exposed for validation feedback.",
             ),
@@ -3427,6 +3527,7 @@ export const solutionSubmissionResponseSchema = z
               .int()
               .describe("Total number of cases in the aggregate."),
           })
+          .strict()
           .describe(
             "Aggregate score summary for validation or official datasets.",
           )
@@ -3445,6 +3546,7 @@ export const solutionSubmissionResponseSchema = z
               .int()
               .describe("Total number of cases in the aggregate."),
           })
+          .strict()
           .describe(
             "Aggregate score summary for validation or official datasets.",
           )
@@ -3456,6 +3558,7 @@ export const solutionSubmissionResponseSchema = z
         started_at: z.string().optional(),
         finished_at: z.string().optional(),
       })
+      .strict()
       .describe("API DTO for a persisted evaluation.")
       .optional(),
     validation_evaluation: z
@@ -3536,6 +3639,7 @@ export const solutionSubmissionResponseSchema = z
                 .min(1),
               value: z.number(),
             })
+            .strict()
             .describe("Numeric value for one declared metric."),
         ),
         run_metrics: z.array(
@@ -3563,10 +3667,12 @@ export const solutionSubmissionResponseSchema = z
                         .min(1),
                       value: z.number(),
                     })
+                    .strict()
                     .describe("Numeric value for one declared metric."),
                 )
                 .default([]),
             })
+            .strict()
             .describe(
               "Metric values for one evaluator-defined run, case, seed, shard, or scenario.",
             ),
@@ -3583,6 +3689,7 @@ export const solutionSubmissionResponseSchema = z
               score: z.number(),
               message: z.string().optional(),
             })
+            .strict()
             .describe(
               "Public per-case result exposed for validation feedback.",
             ),
@@ -3601,6 +3708,7 @@ export const solutionSubmissionResponseSchema = z
               .int()
               .describe("Total number of cases in the aggregate."),
           })
+          .strict()
           .describe(
             "Aggregate score summary for validation or official datasets.",
           )
@@ -3619,6 +3727,7 @@ export const solutionSubmissionResponseSchema = z
               .int()
               .describe("Total number of cases in the aggregate."),
           })
+          .strict()
           .describe(
             "Aggregate score summary for validation or official datasets.",
           )
@@ -3630,6 +3739,7 @@ export const solutionSubmissionResponseSchema = z
         started_at: z.string().optional(),
         finished_at: z.string().optional(),
       })
+      .strict()
       .describe("API DTO for a persisted evaluation.")
       .optional(),
     official_evaluation: z
@@ -3710,6 +3820,7 @@ export const solutionSubmissionResponseSchema = z
                 .min(1),
               value: z.number(),
             })
+            .strict()
             .describe("Numeric value for one declared metric."),
         ),
         run_metrics: z.array(
@@ -3737,10 +3848,12 @@ export const solutionSubmissionResponseSchema = z
                         .min(1),
                       value: z.number(),
                     })
+                    .strict()
                     .describe("Numeric value for one declared metric."),
                 )
                 .default([]),
             })
+            .strict()
             .describe(
               "Metric values for one evaluator-defined run, case, seed, shard, or scenario.",
             ),
@@ -3757,6 +3870,7 @@ export const solutionSubmissionResponseSchema = z
               score: z.number(),
               message: z.string().optional(),
             })
+            .strict()
             .describe(
               "Public per-case result exposed for validation feedback.",
             ),
@@ -3775,6 +3889,7 @@ export const solutionSubmissionResponseSchema = z
               .int()
               .describe("Total number of cases in the aggregate."),
           })
+          .strict()
           .describe(
             "Aggregate score summary for validation or official datasets.",
           )
@@ -3793,6 +3908,7 @@ export const solutionSubmissionResponseSchema = z
               .int()
               .describe("Total number of cases in the aggregate."),
           })
+          .strict()
           .describe(
             "Aggregate score summary for validation or official datasets.",
           )
@@ -3804,11 +3920,13 @@ export const solutionSubmissionResponseSchema = z
         started_at: z.string().optional(),
         finished_at: z.string().optional(),
       })
+      .strict()
       .describe("API DTO for a persisted evaluation.")
       .optional(),
     created_at: z.string(),
     updated_at: z.string(),
   })
+  .strict()
   .describe(
     "Solution submission detail DTO used by both public and authenticated routes.",
   );
@@ -3867,6 +3985,7 @@ export const solutionSubmissionResultReportResponseSchema = z
               .min(1),
             value: z.number(),
           })
+          .strict()
           .describe("Numeric value for one declared metric.")
           .optional(),
         visible_after_eval: z.boolean(),
@@ -3890,6 +4009,7 @@ export const solutionSubmissionResultReportResponseSchema = z
               .enum(["staged", "queued", "running", "completed", "failed"])
               .describe("Persistent lifecycle state for an evaluation job."),
           })
+          .strict()
           .describe(
             "Minimal job DTO returned when a solution submission queues an evaluation.",
           )
@@ -3976,6 +4096,7 @@ export const solutionSubmissionResultReportResponseSchema = z
                     .min(1),
                   value: z.number(),
                 })
+                .strict()
                 .describe("Numeric value for one declared metric."),
             ),
             run_metrics: z.array(
@@ -4004,10 +4125,12 @@ export const solutionSubmissionResultReportResponseSchema = z
                             .min(1),
                           value: z.number(),
                         })
+                        .strict()
                         .describe("Numeric value for one declared metric."),
                     )
                     .default([]),
                 })
+                .strict()
                 .describe(
                   "Metric values for one evaluator-defined run, case, seed, shard, or scenario.",
                 ),
@@ -4024,6 +4147,7 @@ export const solutionSubmissionResultReportResponseSchema = z
                   score: z.number(),
                   message: z.string().optional(),
                 })
+                .strict()
                 .describe(
                   "Public per-case result exposed for validation feedback.",
                 ),
@@ -4042,6 +4166,7 @@ export const solutionSubmissionResultReportResponseSchema = z
                   .int()
                   .describe("Total number of cases in the aggregate."),
               })
+              .strict()
               .describe(
                 "Aggregate score summary for validation or official datasets.",
               )
@@ -4060,6 +4185,7 @@ export const solutionSubmissionResultReportResponseSchema = z
                   .int()
                   .describe("Total number of cases in the aggregate."),
               })
+              .strict()
               .describe(
                 "Aggregate score summary for validation or official datasets.",
               )
@@ -4071,6 +4197,7 @@ export const solutionSubmissionResultReportResponseSchema = z
             started_at: z.string().optional(),
             finished_at: z.string().optional(),
           })
+          .strict()
           .describe("API DTO for a persisted evaluation.")
           .optional(),
         validation_evaluation: z
@@ -4155,6 +4282,7 @@ export const solutionSubmissionResultReportResponseSchema = z
                     .min(1),
                   value: z.number(),
                 })
+                .strict()
                 .describe("Numeric value for one declared metric."),
             ),
             run_metrics: z.array(
@@ -4183,10 +4311,12 @@ export const solutionSubmissionResultReportResponseSchema = z
                             .min(1),
                           value: z.number(),
                         })
+                        .strict()
                         .describe("Numeric value for one declared metric."),
                     )
                     .default([]),
                 })
+                .strict()
                 .describe(
                   "Metric values for one evaluator-defined run, case, seed, shard, or scenario.",
                 ),
@@ -4203,6 +4333,7 @@ export const solutionSubmissionResultReportResponseSchema = z
                   score: z.number(),
                   message: z.string().optional(),
                 })
+                .strict()
                 .describe(
                   "Public per-case result exposed for validation feedback.",
                 ),
@@ -4221,6 +4352,7 @@ export const solutionSubmissionResultReportResponseSchema = z
                   .int()
                   .describe("Total number of cases in the aggregate."),
               })
+              .strict()
               .describe(
                 "Aggregate score summary for validation or official datasets.",
               )
@@ -4239,6 +4371,7 @@ export const solutionSubmissionResultReportResponseSchema = z
                   .int()
                   .describe("Total number of cases in the aggregate."),
               })
+              .strict()
               .describe(
                 "Aggregate score summary for validation or official datasets.",
               )
@@ -4250,6 +4383,7 @@ export const solutionSubmissionResultReportResponseSchema = z
             started_at: z.string().optional(),
             finished_at: z.string().optional(),
           })
+          .strict()
           .describe("API DTO for a persisted evaluation.")
           .optional(),
         official_evaluation: z
@@ -4334,6 +4468,7 @@ export const solutionSubmissionResultReportResponseSchema = z
                     .min(1),
                   value: z.number(),
                 })
+                .strict()
                 .describe("Numeric value for one declared metric."),
             ),
             run_metrics: z.array(
@@ -4362,10 +4497,12 @@ export const solutionSubmissionResultReportResponseSchema = z
                             .min(1),
                           value: z.number(),
                         })
+                        .strict()
                         .describe("Numeric value for one declared metric."),
                     )
                     .default([]),
                 })
+                .strict()
                 .describe(
                   "Metric values for one evaluator-defined run, case, seed, shard, or scenario.",
                 ),
@@ -4382,6 +4519,7 @@ export const solutionSubmissionResultReportResponseSchema = z
                   score: z.number(),
                   message: z.string().optional(),
                 })
+                .strict()
                 .describe(
                   "Public per-case result exposed for validation feedback.",
                 ),
@@ -4400,6 +4538,7 @@ export const solutionSubmissionResultReportResponseSchema = z
                   .int()
                   .describe("Total number of cases in the aggregate."),
               })
+              .strict()
               .describe(
                 "Aggregate score summary for validation or official datasets.",
               )
@@ -4418,6 +4557,7 @@ export const solutionSubmissionResultReportResponseSchema = z
                   .int()
                   .describe("Total number of cases in the aggregate."),
               })
+              .strict()
               .describe(
                 "Aggregate score summary for validation or official datasets.",
               )
@@ -4429,15 +4569,18 @@ export const solutionSubmissionResultReportResponseSchema = z
             started_at: z.string().optional(),
             finished_at: z.string().optional(),
           })
+          .strict()
           .describe("API DTO for a persisted evaluation.")
           .optional(),
         created_at: z.string(),
         updated_at: z.string(),
       })
+      .strict()
       .describe(
         "Solution submission detail DTO used by both public and authenticated routes.",
       ),
   })
+  .strict()
   .describe(
     "Redacted or owner-visible result report for a solution submission.",
   );

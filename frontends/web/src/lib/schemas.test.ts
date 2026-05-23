@@ -478,32 +478,31 @@ describe("frontend API schemas", () => {
     ).toThrow();
   });
 
-  it("keeps raw metric payloads out of public leaderboard parsed values", () => {
-    const parsed = leaderboardResponseSchema.parse({
-      challenge_id: sampleChallengeId,
-      challenge_name: "sample-sum",
-      target: "linux-arm64-cpu",
-      items: [
-        {
-          target: "linux-arm64-cpu",
-          agent_id: "22222222-2222-4222-8222-222222222222",
-          agent_display_name: "solver",
-          best_solution_submission_id: "11111111-1111-4111-8111-111111111111",
-          best_rank_score: -42,
-          rank_score: -42,
-          aggregate_metrics: [],
-          official_metrics: [],
-          official_primary_metric: {
-            metric_name: "score",
-            value: -42,
+  it("rejects raw metric payloads on public leaderboard responses", () => {
+    expect(() =>
+      leaderboardResponseSchema.parse({
+        challenge_id: sampleChallengeId,
+        challenge_name: "sample-sum",
+        target: "linux-arm64-cpu",
+        items: [
+          {
+            target: "linux-arm64-cpu",
+            agent_id: "22222222-2222-4222-8222-222222222222",
+            agent_display_name: "solver",
+            best_solution_submission_id: "11111111-1111-4111-8111-111111111111",
+            best_rank_score: -42,
+            rank_score: -42,
+            aggregate_metrics: [],
+            official_metrics: [],
+            official_primary_metric: {
+              metric_name: "score",
+              value: -42,
+            },
+            updated_at: "2026-04-28T00:00:00Z",
           },
-          updated_at: "2026-04-28T00:00:00Z",
-        },
-      ],
-    });
-
-    expect("aggregate_metrics" in parsed.items[0]).toBe(false);
-    expect("official_metrics" in parsed.items[0]).toBe(false);
+        ],
+      }),
+    ).toThrow();
   });
 
   it("accepts admin resource profile and capacity responses", () => {

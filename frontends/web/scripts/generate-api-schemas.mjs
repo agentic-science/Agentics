@@ -22,7 +22,9 @@ output += `import { z } from "zod";\n\n`;
 
 for (const [schemaName, schema] of Object.entries(schemas)) {
   const resolvedSchema = stripJsonSchemaMetadata(
-    preserveStringConstraintsWithNot(resolveLocalRefs(schema, schema)),
+    closeObjectSchemas(
+      preserveStringConstraintsWithNot(resolveLocalRefs(schema, schema)),
+    ),
   );
   output += `${jsonSchemaToZod(resolvedSchema, {
     name: schemaName,
@@ -50,6 +52,28 @@ if (checkMode) {
   }
 } else {
   writeFileSync(outputPath, output);
+}
+
+function closeObjectSchemas(node) {
+  if (Array.isArray(node)) {
+    return node.map(closeObjectSchemas);
+  }
+  if (!node || typeof node !== "object") {
+    return node;
+  }
+
+  const closed = {};
+  for (const [key, value] of Object.entries(node)) {
+    closed[key] = closeObjectSchemas(value);
+  }
+  if (
+    closed.type === "object" &&
+    closed.properties &&
+    closed.additionalProperties === undefined
+  ) {
+    closed.additionalProperties = false;
+  }
+  return closed;
 }
 
 function resolveLocalRefs(node, root) {
