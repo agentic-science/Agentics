@@ -128,12 +128,11 @@ pub(crate) async fn challenge_draft(
             admin,
         } => {
             let admin_password = resolve_admin_password(&admin, settings)?;
+            let repository_path = admin_repository_path_to_wire(&repository_path)?;
             let response = client
                 .validate_challenge_draft_admin(
                     &draft_id,
-                    &ValidateChallengeDraftRequest {
-                        repository_path: repository_path.to_string_lossy().to_string(),
-                    },
+                    &ValidateChallengeDraftRequest { repository_path },
                     &admin.admin_username,
                     &admin_password,
                 )
@@ -185,12 +184,11 @@ pub(crate) async fn challenge_draft(
             admin,
         } => {
             let admin_password = resolve_admin_password(&admin, settings)?;
+            let repository_path = admin_repository_path_to_wire(&repository_path)?;
             let response = client
                 .publish_challenge_draft_admin(
                     &draft_id,
-                    &ValidateChallengeDraftRequest {
-                        repository_path: repository_path.to_string_lossy().to_string(),
-                    },
+                    &ValidateChallengeDraftRequest { repository_path },
                     &admin.admin_username,
                     &admin_password,
                 )
@@ -224,6 +222,16 @@ pub(crate) async fn challenge_draft(
             output::render_challenge_draft_cleanup(&response, output_format)
         }
     }
+}
+
+/// Converts an admin repository path into the UTF-8 API wire contract.
+fn admin_repository_path_to_wire(path: &Path) -> Result<String> {
+    path.to_str().map(ToOwned::to_owned).with_context(|| {
+        format!(
+            "admin repository path `{}` is not valid UTF-8; pass a UTF-8 path",
+            path.display()
+        )
+    })
 }
 
 /// Handles challenge shortlist for this module.

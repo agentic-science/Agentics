@@ -211,3 +211,48 @@ async fn challenge_creator_validates_draft_with_admin_auth() {
 
     assert!(output.contains("status: validated"));
 }
+
+/// Verifies admin draft validation rejects non-UTF-8 repository paths before the API request.
+#[cfg(unix)]
+#[tokio::test]
+async fn challenge_creator_rejects_non_utf8_admin_repository_path() {
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt;
+
+    let server = MockServer::start().await;
+    let temp = tempfile::tempdir().expect("tempdir");
+    let config_path = temp.path().join("config.toml");
+    let args = vec![
+        OsString::from("agentics"),
+        OsString::from("--config"),
+        config_path.as_os_str().to_owned(),
+        OsString::from("--api-base-url"),
+        OsString::from(server.uri()),
+        OsString::from("challenge-creator"),
+        OsString::from("draft"),
+        OsString::from("validate"),
+        OsString::from("dddddddd-dddd-4ddd-8ddd-dddddddddddd"),
+        OsString::from("--repository-path"),
+        OsString::from_vec(b"/tmp/challenges-\xff".to_vec()),
+        OsString::from("--admin-username"),
+        OsString::from("admin"),
+    ];
+    let cli = Cli::parse_from(args);
+
+    let error = execute(
+        cli,
+        Environment {
+            admin_password: Some(SecretString::from("secret")),
+            ..Environment::default()
+        },
+    )
+    .await
+    .expect_err("non-UTF-8 repository path should be rejected");
+    let requests = server
+        .received_requests()
+        .await
+        .expect("requests should be recorded");
+
+    assert!(requests.is_empty());
+    assert!(error.to_string().contains("not valid UTF-8"));
+}
