@@ -1,7 +1,8 @@
 use std::path::Path;
 
 use serde::Serialize;
-use tokio::io::AsyncWriteExt;
+use tokio::fs::OpenOptions;
+use tokio::io::{AsyncWriteExt, BufReader};
 
 use super::errors::phase_error;
 use super::filesystem::{OutputTreeLimits, validate_evaluator_visible_output_tree};
@@ -239,7 +240,7 @@ async fn write_run_input_file(
         tokio::fs::create_dir_all(parent).await?;
     }
     if let Some(source_path) = &input.source_path {
-        tokio::fs::copy(input_source_root.join(source_path.as_path()), path)
+        let source = tokio::fs::File::open(input_source_root.join(source_path.as_path()))
             .await
             .map_err(|e| {
                 let source = match eval_type {
@@ -248,6 +249,15 @@ async fn write_run_input_file(
                 };
                 ServiceError::Runner(format!(
                     "copy run `{visible_run_name}` input{source} failed: {e}"
+                ))
+            })?;
+        let mut target = create_run_input_destination(&path, input, visible_run_name).await?;
+        tokio::io::copy(&mut BufReader::new(source), &mut target)
+            .await
+            .map_err(|e| {
+                ServiceError::Runner(format!(
+                    "copy run `{visible_run_name}` input `{}` failed: {e}",
+                    input.path
                 ))
             })?;
         return Ok(());
@@ -261,8 +271,33 @@ async fn write_run_input_file(
     } else {
         String::new()
     };
-    tokio::fs::write(path, content).await?;
+    let mut target = create_run_input_destination(&path, input, visible_run_name).await?;
+    target.write_all(content.as_bytes()).await.map_err(|e| {
+        ServiceError::Runner(format!(
+            "write run `{visible_run_name}` input `{}` failed: {e}",
+            input.path
+        ))
+    })?;
     Ok(())
+}
+
+/// Creates a run input destination without overwriting any existing file.
+async fn create_run_input_destination(
+    path: &Path,
+    input: &ChallengeRunInputFile,
+    visible_run_name: &str,
+) -> Result<tokio::fs::File> {
+    OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .await
+        .map_err(|e| {
+            ServiceError::Runner(format!(
+                "create run `{visible_run_name}` input `{}` failed: {e}",
+                input.path
+            ))
+        })
 }
 
 /// Writes run metadata to the target path.
@@ -360,9 +395,12 @@ mod tests {
 
     use uuid::Uuid;
 
-    use super::{copy_evaluator_visible_run_tree, write_run_metadata};
-    use crate::models::challenge::{ChallengeRunInterface, ChallengeRunSpec};
+    use super::{copy_evaluator_visible_run_tree, materialize_input_files, write_run_metadata};
+    use crate::models::challenge::{
+        ChallengeRunInputFile, ChallengeRunInterface, ChallengeRunSpec,
+    };
     use crate::models::names::RunName;
+    use crate::models::paths::RunInputPath;
     use crate::runner::ContainerOutcome;
     use crate::runner::filesystem::OutputTreeLimits;
 
@@ -471,6 +509,43 @@ mod tests {
             "unexpected error: {error}"
         );
         assert!(!destination.exists());
+
+        fs::remove_dir_all(root).expect("test root should clean up");
+    }
+
+    /// Verifies input materialization never overwrites an existing target path.
+    #[tokio::test]
+    async fn materialize_input_files_rejects_existing_destination() {
+        let root = std::env::temp_dir().join(format!("agentics-run-input-test-{}", Uuid::new_v4()));
+        let input_dir = root.join("input");
+        fs::create_dir_all(&input_dir).expect("input dir should be created");
+        fs::write(input_dir.join("case.txt"), b"existing").expect("existing input should be set");
+        let input = ChallengeRunInputFile {
+            path: RunInputPath::try_new("case.txt").expect("input path should parse"),
+            source_path: None,
+            content: Some("replacement".to_string()),
+            content_json: None,
+        };
+
+        let error = materialize_input_files(
+            &[input],
+            "run-0001",
+            crate::runner::ScoringMode::Validation,
+            &root,
+            &input_dir,
+        )
+        .await
+        .expect_err("existing destination should be rejected");
+        assert!(
+            error
+                .to_string()
+                .contains("create run `run-0001` input `case.txt` failed"),
+            "unexpected error: {error}"
+        );
+        assert_eq!(
+            fs::read_to_string(input_dir.join("case.txt")).expect("existing input should remain"),
+            "existing"
+        );
 
         fs::remove_dir_all(root).expect("test root should clean up");
     }

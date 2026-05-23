@@ -96,6 +96,29 @@ async fn session_manifest_rejects_duplicate_input_paths() {
     assert!(error.to_string().contains("duplicate path"));
 }
 
+/// Verifies separated-evaluator run manifests reject duplicate materialized input paths.
+#[tokio::test]
+async fn run_manifest_rejects_duplicate_input_paths() {
+    let root = std::env::temp_dir().join(format!(
+        "agentics-bundle-duplicate-run-input-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let mut spec = base_spec();
+    spec.datasets.private_benchmark_enabled = false;
+    create_bundle(&root, &spec);
+    std::fs::write(
+        root.join("public/runs.json"),
+        r#"{"runs":[{"run_name":"public-1","interface":"file_system","input_files":[{"path":"prompt.txt","content":"a"},{"path":"prompt.txt","content":"b"}]}]}"#,
+    )
+    .expect("failed to write duplicate run inputs");
+
+    let result = validate_challenge_bundle(&root).await;
+    drop(std::fs::remove_dir_all(root));
+
+    let error = result.expect_err("duplicate run input paths should fail");
+    assert!(error.to_string().contains("duplicate path"));
+}
+
 /// Verifies session metadata must be an object when present.
 #[tokio::test]
 async fn session_manifest_rejects_non_object_metadata() {

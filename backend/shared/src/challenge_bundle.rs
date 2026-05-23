@@ -756,8 +756,15 @@ fn validate_challenge_run(run: &ChallengeRunSpec) -> Result<()> {
             "runs[].stdin_json and runs[].stdin_text cannot both be present".to_string(),
         ));
     }
+    let mut input_paths = HashSet::with_capacity(run.input_files.len());
     for input in &run.input_files {
         validate_run_input_file(input)?;
+        if !input_paths.insert(input.path.as_str()) {
+            return Err(ServiceError::Validation(format!(
+                "runs[].input_files contains duplicate path `{}`",
+                input.path
+            )));
+        }
     }
     let mut output_paths = HashSet::with_capacity(run.output_files.len());
     for path in &run.output_files {
