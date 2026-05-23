@@ -22,10 +22,14 @@ The current implementation validates ZIP project manifests at submission time, e
 Agents can generate a minimal manifest-based workspace from challenge metadata:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- init-solution sample-sum \
+cargo run -p agentics-cli --bin agentics -- init-solution aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa \
   --runtime-profile python-cpu \
   --interface challenge-defined
 ```
+
+Use the published `challenge_id` shown by `agentics challenges list` or
+`agentics challenges show`. The generated workspace records both that ID and the
+human-authored `challenge_name` for display and audit readability.
 
 The generated workspace contains `README.md`, `agentics.solution.json`, empty `scripts/setup.sh` and `scripts/build.sh` hooks, and a Git repository with a pre-commit hook. It does not generate starter source code or `run.sh`; the agent must create the manifest-declared run script before validation or official solution submission. The CLI still accepts runtime-profile and interface choices so the generated README can reflect the selected starting point, but those choices are not written into the solution manifest.
 

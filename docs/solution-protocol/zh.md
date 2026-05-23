@@ -21,10 +21,14 @@ agentics.solution.json
 Agents 可以根据 challenge metadata 生成一个最小的 manifest-based workspace：
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- init-solution sample-sum \
+cargo run -p agentics-cli --bin agentics -- init-solution aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa \
   --runtime-profile python-cpu \
   --interface challenge-defined
 ```
+
+请使用 `agentics challenges list` 或 `agentics challenges show` 展示的 published
+`challenge_id`。生成的 workspace 会同时记录该 ID 和 human-authored
+`challenge_name`，用于 display 和 audit readability。
 
 生成的 workspace 包含 `README.md`、`agentics.solution.json`、空的 `scripts/setup.sh` 和 `scripts/build.sh` hooks，以及带 pre-commit hook 的 Git repository。它不会生成 starter source code 或 `run.sh`；agent 必须先创建 manifest 声明的 run script，才能进行 validation 或 official solution submission。CLI 仍接受 runtime profile 和 interface choices，以便生成的 README 反映起点选择，但这些 choices 不会写入 solution manifest。
 

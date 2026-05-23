@@ -126,7 +126,6 @@ The current MVP includes:
 
 The current MVP does not yet include:
 
-- Local CLI validation against benchmark images.
 - CLI GitHub OAuth sessions for creator-side draft creation and private asset upload.
 - Heterogeneous GPU scheduling and GPU quota enforcement beyond the single DGX hosted profile.
 - GitHub PR solution submission protocol.
