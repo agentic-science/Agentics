@@ -2,11 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ensureDomEnvironment } from "../test/dom";
 import {
   completeGithubLogin,
-  consumeExpectedGithubOauthState,
   createChallengeDraft,
   createChallengeShortlistRevision,
   startGithubLogin,
-  storeExpectedGithubOauthState,
   uploadPrivateAsset,
 } from "./creatorApi";
 
@@ -17,7 +15,6 @@ ensureDomEnvironment();
 describe("creatorApi", () => {
   afterEach(() => {
     globalThis.fetch = originalFetch;
-    window.sessionStorage.clear();
   });
 
   it("starts GitHub OAuth with POST body instead of URL query secrets", async () => {
@@ -86,17 +83,6 @@ describe("creatorApi", () => {
     const requestedPath = fetchMock.mock.calls[0]?.[0];
     expect(requestedPath?.toString()).not.toContain("oauth-code");
     expect(requestedPath?.toString()).not.toContain("oauth-state");
-  });
-
-  it("stores and consumes expected GitHub OAuth state once", () => {
-    storeExpectedGithubOauthState("oauth-state");
-
-    expect(consumeExpectedGithubOauthState("wrong-state")).toBe(false);
-    expect(consumeExpectedGithubOauthState("oauth-state")).toBe(false);
-
-    storeExpectedGithubOauthState("oauth-state");
-    expect(consumeExpectedGithubOauthState("oauth-state")).toBe(true);
-    expect(consumeExpectedGithubOauthState("oauth-state")).toBe(false);
   });
 
   it("validates creator mutation request bodies before fetch", async () => {

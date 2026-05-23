@@ -9,6 +9,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { CommunicationTimelineGraph } from "./CommunicationTimelineGraph";
 import {
@@ -33,6 +34,7 @@ const initialGraph = cloneCommunicationGraph(defaultCommunicationGraph);
 
 /** Renders the internal communication graph animation editor. */
 export function EasterEditor() {
+  const t = useTranslations("timelineEditor");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const visualClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
@@ -90,7 +92,7 @@ export function EasterEditor() {
     try {
       contents = await file.text();
     } catch {
-      setImportErrors([`Could not read ${file.name}.`]);
+      setImportErrors([t("readFileFailed", { name: file.name })]);
       return;
     }
 
@@ -99,7 +101,7 @@ export function EasterEditor() {
       parsed = JSON.parse(contents);
     } catch (error) {
       setImportErrors([
-        error instanceof Error ? error.message : "Invalid JSON.",
+        error instanceof Error ? error.message : t("invalidJson"),
       ]);
       return;
     }
@@ -134,7 +136,7 @@ export function EasterEditor() {
       }
     } catch (error) {
       setExportErrors([
-        error instanceof Error ? error.message : "The animation export failed.",
+        error instanceof Error ? error.message : t("exportFailedFallback"),
       ]);
     } finally {
       setExportingMedia(null);
@@ -231,16 +233,12 @@ export function EasterEditor() {
     <div className={styles.page}>
       <header className={styles.header}>
         <div className={styles.titleBlock}>
-          <h1 className={styles.title}>Communication Graph Editor</h1>
-          <p className={styles.subtitle}>
-            Build the timeline graph visually, validate it, import or export
-            JSON, and preview the Agentics communication animation with derived
-            causal timing.
-          </p>
+          <h1 className={styles.title}>{t("title")}</h1>
+          <p className={styles.subtitle}>{t("subtitle")}</p>
         </div>
       </header>
 
-      <section className={styles.panel} aria-label="Animation workspace">
+      <section className={styles.panel} aria-label={t("workspace")}>
         <div className={styles.buttonRow}>
           <button
             className={styles.button}
@@ -251,7 +249,7 @@ export function EasterEditor() {
             }}
           >
             <Upload size={16} />
-            Import
+            {t("import")}
           </button>
           <input
             ref={fileInputRef}
@@ -270,7 +268,7 @@ export function EasterEditor() {
               onClick={() => setExportMenuOpen((open) => !open)}
             >
               <Download size={16} />
-              {isExporting ? "Exporting..." : "Export"}
+              {isExporting ? t("exporting") : t("export")}
               {isExporting ? null : <ChevronDown size={14} />}
             </button>
             {exportMenuOpen ? (
@@ -314,7 +312,7 @@ export function EasterEditor() {
             }}
           >
             <Trash2 size={16} />
-            Clear
+            {t("clear")}
           </button>
           <button
             className={`${styles.button} ${isPlaying ? styles.playButtonActive : ""}`}
@@ -325,10 +323,10 @@ export function EasterEditor() {
                 mode === "edit" ? "presentation" : "edit",
               );
             }}
-            title={isPlaying ? "Stop presentation" : "Play presentation"}
+            title={isPlaying ? t("stopPresentation") : t("playPresentation")}
           >
             {isPlaying ? <Square size={16} /> : <Play size={16} />}
-            {isPlaying ? "Stop" : "Play"}
+            {isPlaying ? t("stop") : t("play")}
           </button>
         </div>
 
@@ -340,7 +338,7 @@ export function EasterEditor() {
         >
           {isPlaying ? (
             <CommunicationTimelineGraph
-              title="Communication graph presentation"
+              title={t("presentationTitle")}
               graph={graph}
               className={styles.previewGraph}
             />
@@ -357,40 +355,40 @@ export function EasterEditor() {
         <div className={styles.controls}>
           <div className={styles.controlGrid}>
             <NumberField
-              label="Number of Agents"
+              label={t("agents")}
               min={1}
               value={graph.agentCount}
               onChange={(value) => updateDimensions("agentCount", value)}
             />
             <NumberField
-              label="Time steps"
+              label={t("timeSteps")}
               min={1}
               value={graph.timeSteps}
               onChange={(value) => updateDimensions("timeSteps", value)}
             />
             <NumberField
-              label="Step Duration"
+              label={t("stepDuration")}
               min={0.01}
               step={0.01}
               value={graph.animation.t}
               onChange={(value) => updateAnimation("t", value)}
             />
             <NumberField
-              label="Glow Duration"
+              label={t("glowDuration")}
               min={0.01}
               step={0.01}
               value={graph.animation.t_glow}
               onChange={(value) => updateAnimation("t_glow", value)}
             />
             <NumberField
-              label="Glow Hold"
+              label={t("glowHold")}
               min={0.01}
               step={0.01}
               value={graph.animation.t_last}
               onChange={(value) => updateAnimation("t_last", value)}
             />
             <NumberField
-              label="Fade-out Duration"
+              label={t("fadeoutDuration")}
               min={0.01}
               step={0.01}
               value={graph.animation.t_fadeout}
@@ -402,16 +400,16 @@ export function EasterEditor() {
       {importErrors.length > 0 ? (
         <EditorErrorDialog
           errors={importErrors}
-          title="Import failed"
-          description="The current graph was not replaced. Fix these issues and import the JSON again."
+          title={t("importFailed")}
+          description={t("importFailedDescription")}
           onClose={() => setImportErrors([])}
         />
       ) : null}
       {exportErrors.length > 0 ? (
         <EditorErrorDialog
           errors={exportErrors}
-          title="Export failed"
-          description="The current graph is unchanged. Try another export format or adjust the graph."
+          title={t("exportFailed")}
+          description={t("exportFailedDescription")}
           onClose={() => setExportErrors([])}
         />
       ) : null}
@@ -430,6 +428,7 @@ function CommunicationGraphVisualEditor({
   onPointClick: (point: IndexedPoint) => void;
   selectedPoint: IndexedPoint | null;
 }) {
+  const t = useTranslations("timelineEditor");
   const model = deriveCommunicationTimeline(graph);
   const discoveryKeys = new Set(graph.discoveries.map(pointKey));
   const connectedKeys = new Set(
@@ -440,9 +439,9 @@ function CommunicationGraphVisualEditor({
     <svg
       className={`${styles.previewGraph} ${styles.visualEditorGraph}`}
       viewBox={`0 0 ${model.width} ${model.height}`}
-      aria-label="Interactive communication graph editor"
+      aria-label={t("editorLabel")}
     >
-      <title>Interactive communication graph editor</title>
+      <title>{t("editorLabel")}</title>
       <rect
         className={styles.editorCanvasHitArea}
         x="0"
@@ -515,7 +514,10 @@ function CommunicationGraphVisualEditor({
               role="button"
               tabIndex={0}
               aria-pressed={isSelected}
-              aria-label={`Node agent ${node.index[0]}, t${node.index[1]}. Double click or right click to toggle discovery.`}
+              aria-label={t("nodeLabel", {
+                agent: node.index[0],
+                time: node.index[1],
+              })}
               onPointerDown={(event) => {
                 event.stopPropagation();
               }}
@@ -583,6 +585,8 @@ function EditorErrorDialog({
   onClose: () => void;
   title: string;
 }) {
+  const t = useTranslations("timelineEditor");
+
   return (
     <div className={styles.dialogBackdrop}>
       <div
@@ -599,7 +603,7 @@ function EditorErrorDialog({
             className={styles.dialogCloseButton}
             type="button"
             onClick={onClose}
-            aria-label={`Close ${title.toLowerCase()} details`}
+            aria-label={t("closeDetails", { title: title.toLowerCase() })}
           >
             <X size={16} />
           </button>
@@ -615,7 +619,7 @@ function EditorErrorDialog({
           type="button"
           onClick={onClose}
         >
-          OK
+          {t("ok")}
         </button>
       </div>
     </div>

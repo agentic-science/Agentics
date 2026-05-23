@@ -9,6 +9,7 @@ import {
   Trash2,
   XCircle,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Fragment, type ReactNode, useState } from "react";
 import type { ZodType } from "zod";
 import {
@@ -60,6 +61,8 @@ export function ChallengeDraftReviewPanel({
   onError,
   onMessage,
 }: ChallengeDraftReviewPanelProps) {
+  const t = useTranslations("admin.draftReview");
+  const common = useTranslations("common");
   const [repositoryPath, setRepositoryPath] = useState(
     "challenge-repos/agentics-challenges",
   );
@@ -92,7 +95,7 @@ export function ChallengeDraftReviewPanel({
       );
       setAssetRowsByDraftId((current) => ({ ...current, [draftId]: rows }));
     } catch (e) {
-      onError(adminErrorMessage(e));
+      onError(adminErrorMessage(e, t("unknown")));
     } finally {
       setLoadingAssetsDraftId(null);
     }
@@ -105,17 +108,17 @@ export function ChallengeDraftReviewPanel({
   ) => {
     const draftId = draft.id;
     if (!csrfToken) {
-      onError("Sign in before reviewing challenge drafts.");
+      onError(t("signIn"));
       return;
     }
     if (
       (action === "validate" || action === "publish") &&
       !repositoryPath.trim()
     ) {
-      onError("Repository path is required for validation and publish.");
+      onError(t("repositoryRequired"));
       return;
     }
-    if (!confirmDraftAction(draftId, action)) {
+    if (!confirmDraftAction(draftId, action, t)) {
       return;
     }
 
@@ -126,18 +129,18 @@ export function ChallengeDraftReviewPanel({
           ? parseAdminDraftMutationRequest(
               validateChallengeDraftRequestSchema,
               { repository_path: repositoryPath.trim() },
-              "Invalid repository path.",
+              t("invalidRepository"),
             )
           : parseAdminDraftMutationRequest(
               reviewChallengeDraftRequestSchema,
               {
-                message: draftReviewMessage(action, reviewMessage),
+                message: draftReviewMessage(action, reviewMessage, t),
                 expected_validation_bundle_sha256:
                   action === "approve"
                     ? draft.validation_bundle_sha256
                     : undefined,
               },
-              "Invalid review message.",
+              t("invalidReview"),
             );
       const response = await adminFetchJson(
         `/admin/challenge-drafts/${encodeURIComponent(draftId)}/${action}`,
@@ -149,10 +152,12 @@ export function ChallengeDraftReviewPanel({
         },
       );
       onError(null);
-      onMessage(`Draft ${response.id.slice(0, 8)} ${action} completed.`);
+      onMessage(
+        t("completed", { id: response.id.slice(0, 8), action: action }),
+      );
       await onRefresh({ quiet: true });
     } catch (e) {
-      onError(adminErrorMessage(e));
+      onError(adminErrorMessage(e, t("unknown")));
     } finally {
       setBusyDraftId(null);
     }
@@ -161,14 +166,10 @@ export function ChallengeDraftReviewPanel({
   /** Cleans up drafts through the admin API. */
   const cleanupDrafts = async () => {
     if (!csrfToken) {
-      onError("Sign in before cleaning up stale drafts.");
+      onError(t("cleanupSignIn"));
       return;
     }
-    if (
-      !window.confirm(
-        "Clean up stale challenge drafts and delete expired private assets?",
-      )
-    ) {
+    if (!window.confirm(t("cleanupConfirm"))) {
       return;
     }
 
@@ -182,11 +183,14 @@ export function ChallengeDraftReviewPanel({
       );
       onError(null);
       onMessage(
-        `Cleanup abandoned ${response.abandoned_drafts} drafts and purged ${response.purged_private_assets} assets.`,
+        t("cleanupResult", {
+          drafts: response.abandoned_drafts,
+          assets: response.purged_private_assets,
+        }),
       );
       await onRefresh({ quiet: true });
     } catch (e) {
-      onError(adminErrorMessage(e));
+      onError(adminErrorMessage(e, t("unknown")));
     } finally {
       setBusyDraftId(null);
     }
@@ -199,21 +203,20 @@ export function ChallengeDraftReviewPanel({
           <div>
             <SectionTitle
               icon={<GitPullRequest className="w-4 h-4" />}
-              title="Challenge draft review"
+              title={t("title")}
             />
             <p className="mt-2 text-[var(--text-body-sm)] text-[var(--text-secondary)]">
-              Validate GitHub-backed drafts, freeze approved review digests, and
-              publish immutable challenge contracts.
+              {t("description")}
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-[minmax(260px,1fr)_minmax(200px,280px)_auto] gap-3 w-full lg:w-auto">
             <TextInput
-              label="Repository path"
+              label={t("repositoryPath")}
               value={repositoryPath}
               onChange={setRepositoryPath}
             />
             <TextInput
-              label="Review message"
+              label={t("reviewMessage")}
               value={reviewMessage}
               onChange={setReviewMessage}
             />
@@ -224,7 +227,7 @@ export function ChallengeDraftReviewPanel({
               disabled={!csrfToken || busyDraftId === "cleanup"}
             >
               <Trash2 className="w-4 h-4" />
-              Cleanup stale
+              {t("cleanupStale")}
             </button>
           </div>
         </div>
@@ -232,28 +235,30 @@ export function ChallengeDraftReviewPanel({
 
       <div className="card overflow-x-auto">
         <div className="flex items-center justify-between gap-4 mb-4">
-          <span className="badge badge-default">{drafts.length} rows</span>
+          <span className="badge badge-default">
+            {common("rows", { count: drafts.length })}
+          </span>
         </div>
         {drafts.length === 0 ? (
-          <div className="empty-state">No drafts loaded.</div>
+          <div className="empty-state">{t("noDrafts")}</div>
         ) : (
           <table className="data-table">
             <thead>
               <tr>
-                <th>Draft</th>
-                <th>Status</th>
-                <th>Creator</th>
-                <th>Digests</th>
-                <th>Assets</th>
-                <th>Updated</th>
-                <th>Actions</th>
+                <th>{t("draft")}</th>
+                <th>{t("status")}</th>
+                <th>{t("creator")}</th>
+                <th>{t("digests")}</th>
+                <th>{t("assets")}</th>
+                <th>{t("updated")}</th>
+                <th>{t("actions")}</th>
               </tr>
             </thead>
             <tbody>
               {drafts.map((draft) => {
                 const busy = busyDraftId === draft.id;
                 const assetRows = assetRowsByDraftId[draft.id];
-                const assetWarning = draftAssetWarning(draft, assetRows);
+                const assetWarning = draftAssetWarning(draft, assetRows, t);
                 return (
                   <Fragment key={draft.id}>
                     <tr>
@@ -274,7 +279,7 @@ export function ChallengeDraftReviewPanel({
                         </a>
                       </td>
                       <td>
-                        <StatusBadge status={draft.status} />
+                        <LocalizedStatusBadge status={draft.status} />
                       </td>
                       <td>
                         <div className="font-mono">
@@ -286,24 +291,28 @@ export function ChallengeDraftReviewPanel({
                       </td>
                       <td className="font-mono text-[var(--text-caption)]">
                         <Digest
-                          label="manifest"
+                          displayLabel={t("manifestDigest")}
                           value={draft.manifest_sha256}
                         />
                         <Digest
-                          label="validated"
+                          displayLabel={t("validatedDigest")}
                           value={draft.validation_bundle_sha256}
                         />
                         <Digest
-                          label="approved"
+                          displayLabel={t("approvedDigest")}
                           value={draft.approved_bundle_sha256}
                         />
                       </td>
                       <td>
                         <div className="font-mono">
-                          {draft.private_assets.length} active
+                          {t("activeAssets", {
+                            count: draft.private_assets.length,
+                          })}
                         </div>
                         <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
-                          {draft.manifest.private_assets.length} declared
+                          {t("declaredAssets", {
+                            count: draft.manifest.private_assets.length,
+                          })}
                         </div>
                         {assetWarning ? (
                           <div className="mt-1 text-[var(--text-caption)] text-[var(--status-warning)]">
@@ -317,8 +326,8 @@ export function ChallengeDraftReviewPanel({
                           disabled={!csrfToken}
                         >
                           {expandedDraftId === draft.id
-                            ? "Hide lifecycle"
-                            : "Inspect lifecycle"}
+                            ? t("hideLifecycle")
+                            : t("inspectLifecycle")}
                         </button>
                       </td>
                       <td className="text-[var(--text-muted)]">
@@ -327,7 +336,7 @@ export function ChallengeDraftReviewPanel({
                       <td>
                         <div className="flex flex-wrap gap-2">
                           <ActionButton
-                            label="Validate"
+                            label={t("validate")}
                             icon={<RefreshCw className="w-3 h-3" />}
                             disabled={busy || !csrfToken || !!assetWarning}
                             onClick={() =>
@@ -335,7 +344,7 @@ export function ChallengeDraftReviewPanel({
                             }
                           />
                           <ActionButton
-                            label="Approve"
+                            label={t("approve")}
                             icon={<CheckCircle2 className="w-3 h-3" />}
                             disabled={
                               busy ||
@@ -348,7 +357,7 @@ export function ChallengeDraftReviewPanel({
                             }
                           />
                           <ActionButton
-                            label="Publish"
+                            label={t("publish")}
                             icon={<Send className="w-3 h-3" />}
                             disabled={busy || !csrfToken || !!assetWarning}
                             onClick={() =>
@@ -356,14 +365,14 @@ export function ChallengeDraftReviewPanel({
                             }
                           />
                           <ActionButton
-                            label="Reject"
+                            label={t("reject")}
                             icon={<XCircle className="w-3 h-3" />}
                             disabled={busy || !csrfToken}
                             onClick={() => void runDraftAction(draft, "reject")}
                             danger
                           />
                           <ActionButton
-                            label="Abandon"
+                            label={t("abandon")}
                             icon={<RotateCcw className="w-3 h-3" />}
                             disabled={busy || !csrfToken}
                             onClick={() =>
@@ -415,6 +424,7 @@ function parseAdminDraftMutationRequest<T>(
 function draftReviewMessage(
   action: "approve" | "reject" | "abandon",
   input: string,
+  t: ReturnType<typeof useTranslations>,
 ): string {
   const message = input.trim();
   if (message) {
@@ -423,11 +433,11 @@ function draftReviewMessage(
 
   switch (action) {
     case "approve":
-      return "approved";
+      return t("approved");
     case "reject":
-      return "rejected";
+      return t("rejected");
     case "abandon":
-      return "abandoned";
+      return t("abandoned");
   }
 }
 
@@ -435,19 +445,20 @@ function draftReviewMessage(
 function confirmDraftAction(
   draftId: string,
   action: "validate" | "approve" | "publish" | "reject" | "abandon",
+  t: ReturnType<typeof useTranslations>,
 ): boolean {
   const shortId = draftId.slice(0, 8);
   switch (action) {
     case "validate":
       return true;
     case "approve":
-      return window.confirm(`Approve draft ${shortId}?`);
+      return window.confirm(t("approveConfirm", { id: shortId }));
     case "publish":
-      return window.confirm(`Publish draft ${shortId} as a live challenge?`);
+      return window.confirm(t("publishConfirm", { id: shortId }));
     case "reject":
-      return window.confirm(`Reject draft ${shortId}?`);
+      return window.confirm(t("rejectConfirm", { id: shortId }));
     case "abandon":
-      return window.confirm(`Abandon draft ${shortId}?`);
+      return window.confirm(t("abandonConfirm", { id: shortId }));
   }
 }
 
@@ -455,6 +466,7 @@ function confirmDraftAction(
 function draftAssetWarning(
   draft: ChallengeDraftListItem,
   lifecycleRows: AdminChallengePrivateAssetListResponse | undefined,
+  t: ReturnType<typeof useTranslations>,
 ): string | null {
   const activeNames = new Set(
     draft.private_assets.map((asset) => asset.asset_name),
@@ -466,14 +478,16 @@ function draftAssetWarning(
     (name) => !activeNames.has(name),
   );
   if (missing.length > 0) {
-    return `Missing required asset: ${missing.join(", ")}`;
+    return t("missingRequiredAsset", { assets: missing.join(", ") });
   }
 
   const nonActiveRequired = lifecycleRows?.items
     .filter((asset) => asset.required && asset.status !== "active")
     .map((asset) => `${asset.asset_name} (${asset.status})`);
   if (nonActiveRequired && nonActiveRequired.length > 0) {
-    return `Required asset not active: ${nonActiveRequired.join(", ")}`;
+    return t("requiredAssetNotActive", {
+      assets: nonActiveRequired.join(", "),
+    });
   }
 
   return null;
@@ -489,17 +503,20 @@ function PrivateAssetLifecycleTable({
   loading: boolean;
   locale: string;
 }) {
+  const t = useTranslations("admin.draftReview");
+  const common = useTranslations("common");
+
   if (loading) {
     return (
       <div className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] p-4 text-[var(--text-muted)]">
-        Loading private asset lifecycle rows...
+        {t("loadingLifecycle")}
       </div>
     );
   }
   if (assets.length === 0) {
     return (
       <div className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] p-4 text-[var(--text-muted)]">
-        No private asset lifecycle rows.
+        {t("noLifecycle")}
       </div>
     );
   }
@@ -509,14 +526,14 @@ function PrivateAssetLifecycleTable({
       <table className="data-table">
         <thead>
           <tr>
-            <th>Asset</th>
-            <th>Status</th>
-            <th>Required</th>
-            <th>Size</th>
-            <th>Digest</th>
-            <th>Storage</th>
-            <th>Updated</th>
-            <th>Failure</th>
+            <th>{t("asset")}</th>
+            <th>{t("status")}</th>
+            <th>{t("required")}</th>
+            <th>{t("size")}</th>
+            <th>{t("digest")}</th>
+            <th>{t("storage")}</th>
+            <th>{t("updated")}</th>
+            <th>{t("failure")}</th>
           </tr>
         </thead>
         <tbody>
@@ -529,9 +546,9 @@ function PrivateAssetLifecycleTable({
                 </div>
               </td>
               <td>
-                <StatusBadge status={asset.status} />
+                <LocalizedStatusBadge status={asset.status} />
               </td>
-              <td>{asset.required ? "yes" : "no"}</td>
+              <td>{asset.required ? common("yes") : common("no")}</td>
               <td className="font-mono">{asset.size_bytes}</td>
               <td className="font-mono text-[var(--text-caption)]">
                 {asset.sha256.slice(0, 12)}
@@ -540,7 +557,9 @@ function PrivateAssetLifecycleTable({
                 <div>{asset.storage_key}</div>
                 {asset.temporary_storage_key ? (
                   <div className="text-[var(--text-muted)]">
-                    temp {asset.temporary_storage_key}
+                    {t("temporaryStorage", {
+                      key: asset.temporary_storage_key,
+                    })}
                   </div>
                 ) : null}
               </td>
@@ -590,27 +609,51 @@ function ActionButton({
 
 /** Renders the digest component. */
 function Digest({
-  label,
+  displayLabel,
   value,
 }: {
-  label: string;
+  displayLabel: string;
   value: string | undefined;
 }) {
   return (
     <div>
-      <span className="text-[var(--text-muted)]">{label}: </span>
+      <span className="text-[var(--text-muted)]">{displayLabel}: </span>
       {value ? value.slice(0, 12) : "—"}
     </div>
   );
 }
 
+/** Renders a localized status badge for known platform statuses. */
+function LocalizedStatusBadge({ status }: { status: string }) {
+  const t = useTranslations("common.statuses");
+  const labels: Record<string, string> = {
+    active: t("active"),
+    abandoned: t("abandoned"),
+    approved: t("approved"),
+    completed: t("completed"),
+    disabled: t("disabled"),
+    draft: t("draft"),
+    failed: t("failed"),
+    passed: t("passed"),
+    pending: t("pending"),
+    published: t("published"),
+    publishing: t("publishing"),
+    queued: t("queued"),
+    rejected: t("rejected"),
+    revoked: t("revoked"),
+    running: t("running"),
+    validated: t("validated"),
+  };
+  return <StatusBadge status={status}>{labels[status] ?? status}</StatusBadge>;
+}
+
 /** Normalizes unknown errors into a displayable message. */
-function adminErrorMessage(error: unknown): string {
+function adminErrorMessage(error: unknown, unknownMessage: string): string {
   if (error instanceof AdminApiError) {
     return error.message;
   }
   if (error instanceof Error) {
     return error.message;
   }
-  return "Unknown draft review error.";
+  return unknownMessage;
 }

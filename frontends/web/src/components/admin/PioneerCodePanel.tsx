@@ -1,6 +1,7 @@
 "use client";
 
 import { KeyRound } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { type FormEvent, useState } from "react";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { AdminApiError, adminFetchJson } from "@/lib/adminApi";
@@ -34,6 +35,8 @@ export function PioneerCodePanel({
   onError: (message: string | null) => void;
   onMessage: (message: string | null) => void;
 }) {
+  const t = useTranslations("admin.pioneer");
+  const common = useTranslations("common");
   const [form, setForm] = useState({
     label: "",
     code: "",
@@ -47,29 +50,27 @@ export function PioneerCodePanel({
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!csrfToken) {
-      onError("Sign in before creating pioneer codes.");
+      onError(t("signInCreate"));
       return;
     }
 
     if (!/^-?\d+$/.test(form.maxUses.trim())) {
-      onError("max_uses must be an integer.");
+      onError(t("maxUsesInteger"));
       return;
     }
     const maxUses = Number.parseInt(form.maxUses, 10);
     if (maxUses === 0 || maxUses < -1) {
-      onError("max_uses must be -1 or a positive integer.");
+      onError(t("maxUsesRange"));
       return;
     }
     const label = form.label.trim();
     if (label && !PIONEER_LABEL_PATTERN.test(label)) {
-      onError("label must be at most 6 lowercase letters, digits, or _.");
+      onError(t("labelInvalid"));
       return;
     }
     const code = form.code.trim();
     if (code && !PIONEER_CODE_PATTERN.test(code)) {
-      onError(
-        "code must be 8 lowercase hex chars or <label>-<8 lowercase hex chars>.",
-      );
+      onError(t("codeInvalid"));
       return;
     }
     const expiresAt = form.expiresAt.trim();
@@ -77,7 +78,7 @@ export function PioneerCodePanel({
       expiresAt &&
       (!RFC3339_PATTERN.test(expiresAt) || Number.isNaN(Date.parse(expiresAt)))
     ) {
-      onError("expires_at must be an RFC3339 timestamp.");
+      onError(t("expiresInvalid"));
       return;
     }
 
@@ -89,10 +90,7 @@ export function PioneerCodePanel({
       ...(expiresAt ? { expires_at: expiresAt } : {}),
     });
     if (!parsedRequest.success) {
-      onError(
-        parsedRequest.error.issues[0]?.message ??
-          "Invalid pioneer code request.",
-      );
+      onError(parsedRequest.error.issues[0]?.message ?? t("invalidRequest"));
       return;
     }
     const request: CreatePioneerCodeRequest = parsedRequest.data;
@@ -106,17 +104,22 @@ export function PioneerCodePanel({
       );
       setDetail(created);
       setForm({ label: "", code: "", note: "", maxUses: "1", expiresAt: "" });
-      onMessage(`Created pioneer code ${created.code.code_display}.`);
+      onMessage(t("createdMessage", { code: created.code.code_display }));
       await onRefresh({ quiet: true });
     } catch (e) {
-      onError(adminErrorMessage(e));
+      onError(
+        adminErrorMessage(e, {
+          accessDenied: t("accessDenied"),
+          unknown: t("unknown"),
+        }),
+      );
     }
   };
 
   /** Loads usage detail for one pioneer code. */
   const inspect = async (id: string) => {
     if (!csrfToken) {
-      onError("Sign in before inspecting pioneer codes.");
+      onError(t("signInInspect"));
       return;
     }
     try {
@@ -128,14 +131,19 @@ export function PioneerCodePanel({
         ),
       );
     } catch (e) {
-      onError(adminErrorMessage(e));
+      onError(
+        adminErrorMessage(e, {
+          accessDenied: t("accessDenied"),
+          unknown: t("unknown"),
+        }),
+      );
     }
   };
 
   /** Revokes one pioneer code and disables agents created through it. */
   const revoke = async (id: string) => {
     if (!csrfToken) {
-      onError("Sign in before revoking pioneer codes.");
+      onError(t("signInRevoke"));
       return;
     }
     const code = pioneerCodes.items.find((item) => item.id === id);
@@ -143,7 +151,7 @@ export function PioneerCodePanel({
     const display = code?.code_display ?? detail?.code.code_display ?? id;
     if (
       !window.confirm(
-        `Revoke ${display} and disable ${affectedUses} created agents?`,
+        t("revokeConfirm", { code: display, count: affectedUses }),
       )
     ) {
       return;
@@ -156,12 +164,20 @@ export function PioneerCodePanel({
         { method: "POST" },
       );
       onMessage(
-        `Revoked ${response.revoked_agent_count} agents and ${response.revoked_token_count} tokens.`,
+        t("revokedMessage", {
+          agents: response.revoked_agent_count,
+          tokens: response.revoked_token_count,
+        }),
       );
       await onRefresh({ quiet: true });
       await inspect(id);
     } catch (e) {
-      onError(adminErrorMessage(e));
+      onError(
+        adminErrorMessage(e, {
+          accessDenied: t("accessDenied"),
+          unknown: t("unknown"),
+        }),
+      );
     }
   };
 
@@ -171,12 +187,12 @@ export function PioneerCodePanel({
         <div className="flex items-center gap-2">
           <KeyRound className="w-4 h-4 text-[var(--accent-primary-text)]" />
           <h2 className="text-[var(--text-h3)] font-semibold">
-            Create pioneer code
+            {t("createTitle")}
           </h2>
         </div>
         <label className="flex flex-col gap-1">
           <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
-            Label
+            {t("label")}
           </span>
           <input
             className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 text-[var(--text-body-sm)] outline-none focus:border-[var(--accent-primary-500)]"
@@ -190,12 +206,12 @@ export function PioneerCodePanel({
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
-            Code
+            {t("code")}
           </span>
           <input
             className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 font-mono text-[var(--text-body-sm)] outline-none focus:border-[var(--accent-primary-500)]"
             value={form.code}
-            placeholder="auto-generate when blank"
+            placeholder={t("codePlaceholder")}
             onChange={(event) =>
               setForm((current) => ({ ...current, code: event.target.value }))
             }
@@ -203,7 +219,7 @@ export function PioneerCodePanel({
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
-            Max uses
+            {t("maxUses")}
           </span>
           <input
             className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 text-[var(--text-body-sm)] outline-none focus:border-[var(--accent-primary-500)]"
@@ -218,7 +234,7 @@ export function PioneerCodePanel({
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
-            Expires at
+            {t("expiresAt")}
           </span>
           <input
             className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 text-[var(--text-body-sm)] outline-none focus:border-[var(--accent-primary-500)]"
@@ -234,7 +250,7 @@ export function PioneerCodePanel({
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
-            Note
+            {t("note")}
           </span>
           <textarea
             className="min-h-24 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 text-[var(--text-body-sm)] outline-none focus:border-[var(--accent-primary-500)]"
@@ -246,7 +262,7 @@ export function PioneerCodePanel({
         </label>
         <button type="submit" className="btn btn-primary" disabled={!csrfToken}>
           <KeyRound className="w-4 h-4" />
-          Create code
+          {t("create")}
         </button>
       </form>
 
@@ -254,25 +270,23 @@ export function PioneerCodePanel({
         <div className="card overflow-x-auto">
           <div className="flex items-center justify-between gap-4 mb-4">
             <h2 className="text-[var(--text-h3)] font-semibold">
-              Pioneer codes
+              {t("title")}
             </h2>
             <span className="badge badge-default">
-              {pioneerCodes.items.length} rows
+              {common("rows", { count: pioneerCodes.items.length })}
             </span>
           </div>
           {pioneerCodes.items.length === 0 ? (
-            <div className="empty-state">
-              Create or refresh pioneer codes to review beta access.
-            </div>
+            <div className="empty-state">{t("empty")}</div>
           ) : (
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Code</th>
-                  <th>Uses</th>
-                  <th>Status</th>
-                  <th>Note</th>
-                  <th>Actions</th>
+                  <th>{t("code")}</th>
+                  <th>{t("uses")}</th>
+                  <th>{t("status")}</th>
+                  <th>{t("note")}</th>
+                  <th>{t("actions")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -281,10 +295,12 @@ export function PioneerCodePanel({
                     <td className="font-mono">{code.code_display}</td>
                     <td>
                       {code.use_count}/
-                      {code.max_uses === -1 ? "unlimited" : code.max_uses}
+                      {code.max_uses === -1
+                        ? common("unlimited")
+                        : code.max_uses}
                     </td>
                     <td>
-                      <StatusBadge status={code.status} />
+                      <LocalizedStatusBadge status={code.status} />
                     </td>
                     <td>{code.note || "—"}</td>
                     <td>
@@ -294,7 +310,7 @@ export function PioneerCodePanel({
                           className="btn btn-secondary btn-sm"
                           onClick={() => void inspect(code.id)}
                         >
-                          Inspect
+                          {t("inspect")}
                         </button>
                         <button
                           type="button"
@@ -302,7 +318,7 @@ export function PioneerCodePanel({
                           disabled={code.status === "revoked"}
                           onClick={() => void revoke(code.id)}
                         >
-                          Revoke
+                          {t("revoke")}
                         </button>
                       </div>
                     </td>
@@ -320,28 +336,28 @@ export function PioneerCodePanel({
                 {detail.code.code_display}
               </h2>
               <span className="badge badge-default">
-                {detail.uses.length} created agents
+                {t("createdAgents", { count: detail.uses.length })}
               </span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5 text-[var(--text-body-sm)]">
               <div>
-                <span className="text-[var(--text-muted)]">Note</span>
+                <span className="text-[var(--text-muted)]">{t("note")}</span>
                 <div>{detail.code.note || "—"}</div>
               </div>
               <div>
-                <span className="text-[var(--text-muted)]">Created</span>
+                <span className="text-[var(--text-muted)]">{t("created")}</span>
                 <div>{formatDate(detail.code.created_at)}</div>
               </div>
             </div>
             {detail.uses.length === 0 ? (
-              <div className="empty-state">No agents have used this code.</div>
+              <div className="empty-state">{t("noUses")}</div>
             ) : (
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Agent</th>
-                    <th>Kind</th>
-                    <th>Used</th>
+                    <th>{t("agent")}</th>
+                    <th>{t("kind")}</th>
+                    <th>{t("used")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -366,16 +382,29 @@ export function PioneerCodePanel({
     </section>
   );
 }
+/** Renders a localized status badge for known pioneer-code statuses. */
+function LocalizedStatusBadge({ status }: { status: string }) {
+  const t = useTranslations("common.statuses");
+  const labels: Record<string, string> = {
+    active: t("active"),
+    revoked: t("revoked"),
+  };
+  return <StatusBadge status={status}>{labels[status] ?? status}</StatusBadge>;
+}
+
 /** Normalizes unknown pioneer-code admin errors into a displayable message. */
-function adminErrorMessage(error: unknown): string {
+function adminErrorMessage(
+  error: unknown,
+  fallback: { accessDenied: string; unknown: string },
+): string {
   if (error instanceof AdminApiError) {
     if (error.status === 401) {
-      return "Access denied. Check the admin username and password.";
+      return fallback.accessDenied;
     }
     return error.message;
   }
   if (error instanceof Error) {
     return error.message;
   }
-  return "Unknown admin console error.";
+  return fallback.unknown;
 }

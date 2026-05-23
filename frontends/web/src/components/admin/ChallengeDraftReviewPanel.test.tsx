@@ -1,7 +1,10 @@
+import { NextIntlClientProvider } from "next-intl";
+import type { ReactNode } from "react";
 import type { Mock } from "vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { adminFetchJson } from "@/lib/adminApi";
 import type { ChallengeDraftListItem } from "@/lib/schemas";
+import messages from "../../../messages/en.json";
 import { ensureDomEnvironment } from "../../test/dom";
 import { ChallengeDraftReviewPanel } from "./ChallengeDraftReviewPanel";
 
@@ -39,7 +42,7 @@ describe("ChallengeDraftReviewPanel", () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     adminFetchJsonMock.mockResolvedValue({ id: draft.id });
     const onRefresh = vi.fn(async () => {});
-    const view = render(
+    const view = renderChallengeDraftReviewPanel(
       <ChallengeDraftReviewPanel
         csrfToken="csrf-token"
         drafts={[draft]}
@@ -81,7 +84,7 @@ describe("ChallengeDraftReviewPanel", () => {
   it("sends the visible validation digest when approving a draft", async () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     adminFetchJsonMock.mockResolvedValue({ id: draft.id });
-    const view = render(
+    const view = renderChallengeDraftReviewPanel(
       <ChallengeDraftReviewPanel
         csrfToken="csrf-token"
         drafts={[
@@ -119,6 +122,14 @@ describe("ChallengeDraftReviewPanel", () => {
     confirm.mockRestore();
   });
 });
+
+function renderChallengeDraftReviewPanel(children: ReactNode) {
+  return render(
+    <NextIntlClientProvider locale="en" messages={messages}>
+      {children}
+    </NextIntlClientProvider>,
+  );
+}
 
 const draft = {
   id: "44444444-4444-4444-8444-444444444444",

@@ -1,6 +1,7 @@
 "use client";
 
 import { Moon, Sun } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 
 /** Describes the theme mode shape used by this module. */
@@ -20,6 +21,7 @@ function getResolvedTheme(mode: ThemeMode): ResolvedTheme {
 
 /** Renders the theme switcher component. */
 export function ThemeSwitcher() {
+  const t = useTranslations("theme");
   const [mode, setMode] = useState<ThemeMode>("system");
   const [resolved, setResolved] = useState<ResolvedTheme>("dark");
   const [mounted, setMounted] = useState(false);
@@ -66,19 +68,25 @@ export function ThemeSwitcher() {
 
   if (!mounted) {
     return (
-      <button type="button" className="btn btn-ghost btn-sm" aria-label="Theme">
+      <button
+        type="button"
+        className="btn btn-ghost btn-sm"
+        aria-label={t("button")}
+      >
         <Sun className="w-4 h-4" />
       </button>
     );
   }
+
+  const label = t("current", { mode: t(`mode.${mode}`) });
 
   return (
     <button
       type="button"
       className="btn btn-ghost btn-sm"
       onClick={cycle}
-      aria-label={`Theme: ${mode}`}
-      title={`Theme: ${mode}`}
+      aria-label={label}
+      title={label}
     >
       {resolved === "dark" ? (
         <Moon className="w-4 h-4" />

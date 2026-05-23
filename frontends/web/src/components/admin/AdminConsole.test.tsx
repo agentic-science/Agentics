@@ -8,6 +8,7 @@ import {
   adminSession,
 } from "@/lib/adminApi";
 import { adminChallengeListResponseSchema } from "@/lib/schemas";
+import messages from "../../../messages/en.json";
 import { ensureDomEnvironment } from "../../test/dom";
 
 import { AdminConsole } from "./AdminConsole";
@@ -300,7 +301,7 @@ describe("AdminConsole", () => {
 /** Builds the render admin console test fixture. */
 function renderAdminConsole() {
   return render(
-    <NextIntlClientProvider locale="en" messages={{}}>
+    <NextIntlClientProvider locale="en" messages={messages}>
       <AdminConsole />
     </NextIntlClientProvider>,
   );

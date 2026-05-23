@@ -10,6 +10,7 @@ import {
   UploadCloud,
   Users,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { type FormEvent, useEffect, useState } from "react";
 import {
   ConsoleSectionTitle as SectionTitle,
@@ -31,7 +32,6 @@ import {
   getCreatorChallengeStats,
   getCreatorSession,
   startGithubLogin,
-  storeExpectedGithubOauthState,
   uploadChallengePrivateAssetRequestSchema,
   uploadPrivateAsset,
 } from "@/lib/creatorApi";
@@ -86,6 +86,7 @@ const assetKinds: ChallengePrivateAssetKind[] = [
 
 /** Renders the creator console component. */
 export function CreatorConsole() {
+  const t = useTranslations("creator");
   const [creator, setCreator] = useState<CreatorMeResponse | null>(null);
   const [csrfToken, setCsrfToken] = useState("");
   const [draft, setDraft] = useState<CreatorChallengeDraftResponse | null>(
@@ -136,6 +137,12 @@ export function CreatorConsole() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const displayCreatorError = (error: unknown) =>
+    creatorErrorMessage(error, {
+      signIn: t("messages.signInBeforeContinue"),
+      invalidJson: t("messages.invalidManifestJson"),
+      unknown: t("messages.unknown"),
+    });
 
   useEffect(() => {
     const lastDraftId = window.localStorage.getItem(LAST_DRAFT_STORAGE_KEY);
@@ -161,10 +168,9 @@ export function CreatorConsole() {
     setError(null);
     try {
       const response = await startGithubLogin(pioneerCode.trim());
-      storeExpectedGithubOauthState(response.state);
       window.location.href = response.authorization_url;
     } catch (e) {
-      setError(creatorErrorMessage(e));
+      setError(displayCreatorError(e));
       setLoading(false);
     }
   };
@@ -177,10 +183,10 @@ export function CreatorConsole() {
       const session = await getCreatorSession();
       setCreator(session);
       setCsrfToken(session.csrf_token);
-      setMessage("Creator identity refreshed.");
+      setMessage(t("messages.identityRefreshed"));
     } catch (e) {
       setCreator(null);
-      setError(creatorErrorMessage(e));
+      setError(displayCreatorError(e));
     } finally {
       setLoading(false);
     }
@@ -190,22 +196,22 @@ export function CreatorConsole() {
   const submitDraft = async (event: FormEvent) => {
     event.preventDefault();
     if (!creator) {
-      setError("Sign in with GitHub before creating a challenge draft.");
+      setError(t("messages.signInBeforeDraft"));
       return;
     }
     if (!csrfToken) {
-      setError("Refresh the creator session before creating a draft.");
+      setError(t("messages.refreshBeforeDraft"));
       return;
     }
 
     const prNumberText = draftForm.prNumber.trim();
     if (!/^[1-9]\d*$/.test(prNumberText)) {
-      setError("PR number must be a positive integer.");
+      setError(t("messages.prNumberInvalid"));
       return;
     }
     const prNumber = Number(prNumberText);
     if (!Number.isSafeInteger(prNumber) || prNumber > 2147483647) {
-      setError("PR number is too large.");
+      setError(t("messages.prNumberTooLarge"));
       return;
     }
 
@@ -215,7 +221,7 @@ export function CreatorConsole() {
         draftForm.manifestText,
       ) as ChallengeCreationManifest;
     } catch (e) {
-      setError(creatorErrorMessage(e));
+      setError(displayCreatorError(e));
       return;
     }
 
@@ -231,7 +237,7 @@ export function CreatorConsole() {
     const parsedRequest = createChallengeDraftRequestSchema.safeParse(request);
     if (!parsedRequest.success) {
       setError(
-        parsedRequest.error.issues[0]?.message ?? "Invalid draft request.",
+        parsedRequest.error.issues[0]?.message ?? t("messages.invalidDraft"),
       );
       return;
     }
@@ -245,9 +251,9 @@ export function CreatorConsole() {
       );
       rememberDraft(response.id);
       setDraft(response);
-      setMessage(`Challenge draft created: ${response.id}`);
+      setMessage(t("messages.draftCreated", { id: response.id }));
     } catch (e) {
-      setError(creatorErrorMessage(e));
+      setError(displayCreatorError(e));
     } finally {
       setLoading(false);
     }
@@ -257,7 +263,7 @@ export function CreatorConsole() {
   const inspectDraft = async (event: FormEvent) => {
     event.preventDefault();
     if (!draftLookupId.trim()) {
-      setError("Enter a draft id to inspect.");
+      setError(t("messages.enterDraft"));
       return;
     }
 
@@ -267,9 +273,9 @@ export function CreatorConsole() {
       const response = await getChallengeDraft(draftLookupId.trim());
       rememberDraft(response.id);
       setDraft(response);
-      setMessage(`Loaded draft ${response.id}.`);
+      setMessage(t("messages.draftLoaded", { id: response.id }));
     } catch (e) {
-      setError(creatorErrorMessage(e));
+      setError(displayCreatorError(e));
     } finally {
       setLoading(false);
     }
@@ -279,11 +285,11 @@ export function CreatorConsole() {
   const uploadAsset = async (event: FormEvent) => {
     event.preventDefault();
     if (!csrfToken) {
-      setError("Refresh the creator session before uploading private assets.");
+      setError(t("messages.refreshBeforeAsset"));
       return;
     }
     if (!assetForm.file) {
-      setError("Choose a ZIP asset before uploading.");
+      setError(t("messages.chooseZip"));
       return;
     }
 
@@ -300,8 +306,7 @@ export function CreatorConsole() {
         uploadChallengePrivateAssetRequestSchema.safeParse(request);
       if (!parsedRequest.success) {
         setError(
-          parsedRequest.error.issues[0]?.message ??
-            "Invalid private asset request.",
+          parsedRequest.error.issues[0]?.message ?? t("messages.invalidAsset"),
         );
         return;
       }
@@ -313,9 +318,9 @@ export function CreatorConsole() {
       const refreshed = await getChallengeDraft(assetForm.draftId.trim());
       rememberDraft(refreshed.id);
       setDraft(refreshed);
-      setMessage(`Uploaded private asset ${assetForm.assetName}.`);
+      setMessage(t("messages.assetUploaded", { name: assetForm.assetName }));
     } catch (e) {
-      setError(creatorErrorMessage(e));
+      setError(displayCreatorError(e));
     } finally {
       setLoading(false);
     }
@@ -324,7 +329,7 @@ export function CreatorConsole() {
   /** Loads owner surfaces for the selected challenge. */
   const loadOwnerSurfaces = async () => {
     if (!ownerForm.challengeId.trim()) {
-      setError("Enter a published challenge id.");
+      setError(t("messages.enterChallenge"));
       return;
     }
 
@@ -342,9 +347,9 @@ export function CreatorConsole() {
       setStats(statsResponse);
       setParticipants(participantsResponse);
       setShortlist(shortlistResponse);
-      setMessage(`Loaded owner surfaces for ${challengeId}.`);
+      setMessage(t("messages.ownerLoaded", { id: challengeId }));
     } catch (e) {
-      setError(creatorErrorMessage(e));
+      setError(displayCreatorError(e));
     } finally {
       setLoading(false);
     }
@@ -354,11 +359,11 @@ export function CreatorConsole() {
   const uploadShortlist = async (event: FormEvent) => {
     event.preventDefault();
     if (!csrfToken) {
-      setError("Refresh the creator session before uploading a shortlist.");
+      setError(t("messages.refreshBeforeShortlist"));
       return;
     }
     if (!ownerForm.challengeId.trim()) {
-      setError("Enter a published challenge id.");
+      setError(t("messages.enterChallenge"));
       return;
     }
 
@@ -366,14 +371,15 @@ export function CreatorConsole() {
     try {
       payload = JSON.parse(ownerForm.shortlistText);
     } catch (e) {
-      setError(creatorErrorMessage(e));
+      setError(displayCreatorError(e));
       return;
     }
     const parsedPayload =
       createChallengeShortlistRevisionRequestSchema.safeParse(payload);
     if (!parsedPayload.success) {
       setError(
-        parsedPayload.error.issues[0]?.message ?? "Invalid shortlist JSON.",
+        parsedPayload.error.issues[0]?.message ??
+          t("messages.invalidShortlist"),
       );
       return;
     }
@@ -389,9 +395,9 @@ export function CreatorConsole() {
       );
       setShortlistRevision(response);
       setShortlist(await getChallengeShortlist(challengeId));
-      setMessage(`Uploaded shortlist revision ${response.id}.`);
+      setMessage(t("messages.shortlistUploaded", { id: response.id }));
     } catch (e) {
-      setError(creatorErrorMessage(e));
+      setError(displayCreatorError(e));
     } finally {
       setLoading(false);
     }
@@ -411,17 +417,16 @@ export function CreatorConsole() {
           <div>
             <span className="badge badge-validation mb-4">
               <GitPullRequest className="w-3 h-3" />
-              Creator Observatory
+              {t("hero.badge")}
             </span>
             <h1
               className="text-[var(--text-h1)] font-bold leading-[var(--leading-h1)]"
               style={{ fontFamily: "var(--font-sans)" }}
             >
-              Challenge draft console
+              {t("hero.title")}
             </h1>
             <p className="mt-3 max-w-2xl text-[var(--text-body)] leading-[var(--leading-body)] text-[var(--text-secondary)]">
-              Create GitHub-backed challenge drafts and upload private benchmark
-              assets without using the admin identity model.
+              {t("hero.description")}
             </p>
           </div>
           <CreatorIdentityPanel
@@ -451,28 +456,28 @@ export function CreatorConsole() {
           <form className="card flex flex-col gap-4" onSubmit={submitDraft}>
             <SectionTitle
               icon={<GitPullRequest className="w-4 h-4" />}
-              title="Create draft"
+              title={t("draft.create")}
             />
             <TextInput
-              label="Repository URL"
+              label={t("draft.repositoryUrl")}
               value={draftForm.repoUrl}
               onChange={(repoUrl) => setDraftForm({ ...draftForm, repoUrl })}
               required
             />
             <TextInput
-              label="PR number"
+              label={t("draft.prNumber")}
               value={draftForm.prNumber}
               onChange={(prNumber) => setDraftForm({ ...draftForm, prNumber })}
               required
             />
             <TextInput
-              label="PR URL"
+              label={t("draft.prUrl")}
               value={draftForm.prUrl}
               onChange={(prUrl) => setDraftForm({ ...draftForm, prUrl })}
               required
             />
             <TextInput
-              label="Commit SHA"
+              label={t("draft.commitSha")}
               value={draftForm.commitSha}
               onChange={(commitSha) =>
                 setDraftForm({ ...draftForm, commitSha })
@@ -480,7 +485,7 @@ export function CreatorConsole() {
               required
             />
             <TextInput
-              label="Challenge path"
+              label={t("draft.challengePath")}
               value={draftForm.challengePath}
               onChange={(challengePath) =>
                 setDraftForm({ ...draftForm, challengePath })
@@ -489,7 +494,7 @@ export function CreatorConsole() {
             />
             <label className="flex flex-col gap-1">
               <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
-                Manifest JSON
+                {t("draft.manifestJson")}
               </span>
               <textarea
                 className="min-h-80 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 font-mono text-[var(--text-caption)] leading-relaxed outline-none focus:border-[var(--accent-primary-500)]"
@@ -509,17 +514,17 @@ export function CreatorConsole() {
               disabled={loading}
             >
               <GitPullRequest className="w-4 h-4" />
-              Create draft
+              {t("draft.create")}
             </button>
           </form>
 
           <form className="card flex flex-col gap-4" onSubmit={inspectDraft}>
             <SectionTitle
               icon={<RefreshCw className="w-4 h-4" />}
-              title="Inspect draft"
+              title={t("draft.inspect")}
             />
             <TextInput
-              label="Draft ID"
+              label={t("draft.draftId")}
               value={draftLookupId}
               onChange={setDraftLookupId}
               required
@@ -529,23 +534,23 @@ export function CreatorConsole() {
               className="btn btn-secondary"
               disabled={loading}
             >
-              Load draft
+              {t("draft.load")}
             </button>
           </form>
 
           <form className="card flex flex-col gap-4" onSubmit={uploadAsset}>
             <SectionTitle
               icon={<UploadCloud className="w-4 h-4" />}
-              title="Upload private asset"
+              title={t("draft.uploadPrivateAsset")}
             />
             <TextInput
-              label="Draft ID"
+              label={t("draft.draftId")}
               value={assetForm.draftId}
               onChange={(draftId) => setAssetForm({ ...assetForm, draftId })}
               required
             />
             <TextInput
-              label="Asset Name"
+              label={t("draft.assetName")}
               value={assetForm.assetName}
               onChange={(assetName) =>
                 setAssetForm({ ...assetForm, assetName })
@@ -554,7 +559,7 @@ export function CreatorConsole() {
             />
             <label className="flex flex-col gap-1">
               <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
-                Asset kind
+                {t("draft.assetKind")}
               </span>
               <select
                 className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 text-[var(--text-body-sm)] outline-none focus:border-[var(--accent-primary-500)]"
@@ -584,7 +589,7 @@ export function CreatorConsole() {
                   })
                 }
               />
-              Required for publish
+              {t("draft.requiredForPublish")}
             </label>
             <input
               type="file"
@@ -603,7 +608,7 @@ export function CreatorConsole() {
               disabled={loading}
             >
               <FileArchive className="w-4 h-4" />
-              Upload asset
+              {t("draft.uploadAsset")}
             </button>
           </form>
         </div>
@@ -616,10 +621,10 @@ export function CreatorConsole() {
           <div className="card flex flex-col gap-4">
             <SectionTitle
               icon={<BarChart3 className="w-4 h-4" />}
-              title="Owner statistics"
+              title={t("owner.statisticsForm")}
             />
             <TextInput
-              label="Published challenge id"
+              label={t("owner.publishedChallengeId")}
               value={ownerForm.challengeId}
               onChange={(challengeId) =>
                 setOwnerForm({ ...ownerForm, challengeId })
@@ -627,7 +632,7 @@ export function CreatorConsole() {
               required
             />
             <TextInput
-              label="Target"
+              label={t("owner.target")}
               value={ownerForm.target}
               onChange={(target) => setOwnerForm({ ...ownerForm, target })}
             />
@@ -638,18 +643,18 @@ export function CreatorConsole() {
               onClick={() => void loadOwnerSurfaces()}
             >
               <Users className="w-4 h-4" />
-              Load owner surfaces
+              {t("owner.load")}
             </button>
           </div>
 
           <form className="card flex flex-col gap-4" onSubmit={uploadShortlist}>
             <SectionTitle
               icon={<ListPlus className="w-4 h-4" />}
-              title="Upload shortlist delta"
+              title={t("owner.uploadShortlist")}
             />
             <label className="flex flex-col gap-1">
               <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
-                Delta JSON
+                {t("owner.deltaJson")}
               </span>
               <textarea
                 className="min-h-40 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 font-mono text-[var(--text-caption)] leading-relaxed outline-none focus:border-[var(--accent-primary-500)]"
@@ -669,7 +674,7 @@ export function CreatorConsole() {
               disabled={loading}
             >
               <ListPlus className="w-4 h-4" />
-              Upload delta
+              {t("owner.uploadDelta")}
             </button>
           </form>
         </div>
@@ -701,19 +706,19 @@ function CreatorIdentityPanel({
   onSignIn: () => Promise<void>;
   onRefresh: () => Promise<void>;
 }) {
+  const t = useTranslations("creator.identity");
+
   return (
     <div className="card min-w-full lg:min-w-[360px] lg:max-w-[420px]">
       <div className="flex items-center gap-2 mb-4">
         <KeyRound className="w-4 h-4 text-[var(--accent-primary-text)]" />
-        <h2 className="text-[var(--text-h3)] font-semibold">
-          Creator identity
-        </h2>
+        <h2 className="text-[var(--text-h3)] font-semibold">{t("title")}</h2>
       </div>
       {creator ? (
         <div className="space-y-3">
           <div>
             <div className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
-              GitHub account
+              {t("githubAccount")}
             </div>
             <div className="font-mono text-[var(--text-body-sm)]">
               {creator.github_login} · {creator.github_user_id}
@@ -721,7 +726,7 @@ function CreatorIdentityPanel({
           </div>
           <div>
             <div className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
-              Agent ID
+              {t("agentId")}
             </div>
             <div className="font-mono text-[var(--text-caption)] text-[var(--text-muted)] break-all">
               {creator.agent_id}
@@ -734,18 +739,17 @@ function CreatorIdentityPanel({
             disabled={loading}
           >
             <RefreshCw className="w-4 h-4" />
-            Refresh
+            {t("refresh")}
           </button>
         </div>
       ) : (
         <div className="space-y-4">
           <p className="text-[var(--text-body-sm)] text-[var(--text-secondary)]">
-            GitHub OAuth is required before creating drafts or uploading private
-            assets.
+            {t("oauthRequired")}
           </p>
           <label className="flex flex-col gap-1">
             <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
-              Pioneer code for new creators
+              {t("pioneerCode")}
             </span>
             <input
               className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 text-[var(--text-body-sm)] outline-none focus:border-[var(--accent-primary-500)]"
@@ -761,7 +765,7 @@ function CreatorIdentityPanel({
             disabled={loading}
           >
             <GitPullRequest className="w-4 h-4" />
-            Sign in with GitHub
+            {t("signIn")}
           </button>
         </div>
       )}
@@ -775,13 +779,13 @@ function DraftDetail({
 }: {
   draft: CreatorChallengeDraftResponse | null;
 }) {
+  const t = useTranslations("creator.draft");
+  const common = useTranslations("common");
+
   if (!draft) {
     return (
       <div className="card">
-        <div className="empty-state">
-          Create or load a challenge draft to inspect its assets, validation
-          records, and publication state.
-        </div>
+        <div className="empty-state">{t("empty")}</div>
       </div>
     );
   }
@@ -792,7 +796,7 @@ function DraftDetail({
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
           <div>
             <div className="flex flex-wrap items-center gap-2 mb-3">
-              <StatusBadge status={draft.status} />
+              <LocalizedStatusBadge status={draft.status} />
               <span className="badge badge-default">{draft.request}</span>
             </div>
             <h2 className="text-[var(--text-h2)] font-semibold">
@@ -812,33 +816,33 @@ function DraftDetail({
             className="btn btn-secondary"
           >
             <GitPullRequest className="w-4 h-4" />
-            Open PR
+            {t("openPr")}
           </a>
         </div>
 
         <dl className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 text-[var(--text-body-sm)]">
-          <Metadata label="Draft ID" value={draft.id} />
-          <Metadata label="Challenge Name" value={draft.challenge_name} />
-          <Metadata label="Creator" value={draft.creator_github_login} />
-          <Metadata label="Commit" value={shortHash(draft.commit_sha)} />
+          <Metadata label={t("draftId")} value={draft.id} />
+          <Metadata label={t("challengeName")} value={draft.challenge_name} />
+          <Metadata label={t("creator")} value={draft.creator_github_login} />
+          <Metadata label={t("commit")} value={shortHash(draft.commit_sha)} />
           <Metadata
-            label="Manifest hash"
+            label={t("manifestHash")}
             value={shortHash(draft.manifest_sha256)}
           />
           <Metadata
-            label="Validation bundle"
+            label={t("validationBundle")}
             value={shortHash(draft.validation_bundle_sha256)}
           />
           <Metadata
-            label="Approved bundle"
+            label={t("approvedBundle")}
             value={shortHash(draft.approved_bundle_sha256)}
           />
           <Metadata
-            label="Published challenge"
+            label={t("publishedChallenge")}
             value={draft.published_challenge_name ?? "—"}
           />
           <Metadata
-            label="Published challenge ID"
+            label={t("publishedChallengeId")}
             value={draft.published_challenge_id ?? "—"}
           />
         </dl>
@@ -848,21 +852,21 @@ function DraftDetail({
         <div className="flex items-center justify-between gap-4 mb-4">
           <SectionTitle
             icon={<FileArchive className="w-4 h-4" />}
-            title="Private assets"
+            title={t("privateAssets")}
           />
           <span className="badge badge-default">
-            {draft.private_assets.length} rows
+            {common("rows", { count: draft.private_assets.length })}
           </span>
         </div>
         {draft.private_assets.length === 0 ? (
-          <div className="empty-state">No private assets uploaded.</div>
+          <div className="empty-state">{t("noPrivateAssets")}</div>
         ) : (
           <table className="data-table">
             <thead>
               <tr>
-                <th>Asset</th>
-                <th>Kind</th>
-                <th>Size</th>
+                <th>{t("asset")}</th>
+                <th>{t("kind")}</th>
+                <th>{t("size")}</th>
                 <th>SHA-256</th>
               </tr>
             </thead>
@@ -872,7 +876,7 @@ function DraftDetail({
                   <td>
                     <div className="font-mono">{asset.asset_name}</div>
                     <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
-                      {asset.required ? "required" : "optional"}
+                      {asset.required ? t("required") : t("optional")}
                     </div>
                   </td>
                   <td>{asset.kind}</td>
@@ -889,28 +893,28 @@ function DraftDetail({
         <div className="flex items-center justify-between gap-4 mb-4">
           <SectionTitle
             icon={<RefreshCw className="w-4 h-4" />}
-            title="Validation records"
+            title={t("validationRecords")}
           />
           <span className="badge badge-default">
-            {draft.validation_records.length} rows
+            {common("rows", { count: draft.validation_records.length })}
           </span>
         </div>
         {draft.validation_records.length === 0 ? (
-          <div className="empty-state">No validation records yet.</div>
+          <div className="empty-state">{t("noValidationRecords")}</div>
         ) : (
           <table className="data-table">
             <thead>
               <tr>
-                <th>Status</th>
-                <th>Message</th>
-                <th>Bundle</th>
+                <th>{t("status")}</th>
+                <th>{t("message")}</th>
+                <th>{t("bundle")}</th>
               </tr>
             </thead>
             <tbody>
               {draft.validation_records.map((record) => (
                 <tr key={record.id}>
                   <td>
-                    <StatusBadge status={record.status} />
+                    <LocalizedStatusBadge status={record.status} />
                   </td>
                   <td>{record.message}</td>
                   <td className="font-mono">
@@ -943,44 +947,50 @@ function OwnerSurfaces({
   shortlist: ChallengeShortlistResponse | null;
   shortlistRevision: ChallengeShortlistRevisionResponse | null;
 }) {
+  const t = useTranslations("creator.owner");
+  const common = useTranslations("common");
+
   return (
     <div className="flex flex-col gap-5">
       <div className="card">
         <SectionTitle
           icon={<BarChart3 className="w-4 h-4" />}
-          title="Challenge statistics"
+          title={t("statistics")}
         />
         {!stats ? (
-          <div className="empty-state mt-4">Load a published challenge.</div>
+          <div className="empty-state mt-4">{t("loadChallenge")}</div>
         ) : (
           <dl className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-4 text-[var(--text-body-sm)]">
-            <Metadata label="Agents" value={stats.agent_count.toString()} />
             <Metadata
-              label="Submissions"
+              label={t("agents")}
+              value={stats.agent_count.toString()}
+            />
+            <Metadata
+              label={t("submissions")}
               value={stats.solution_submission_count.toString()}
             />
             <Metadata
-              label="Completed"
+              label={t("completed")}
               value={stats.completed_solution_submission_count.toString()}
             />
             <Metadata
-              label="Failed"
+              label={t("failed")}
               value={stats.failed_solution_submission_count.toString()}
             />
             <Metadata
-              label="Queued or running"
+              label={t("queuedOrRunning")}
               value={stats.queued_or_running_solution_submission_count.toString()}
             />
             <Metadata
-              label="Validation runs"
+              label={t("validationRuns")}
               value={stats.validation_run_count.toString()}
             />
             <Metadata
-              label="Official runs"
+              label={t("officialRuns")}
               value={stats.official_run_count.toString()}
             />
             <Metadata
-              label="Best score mean"
+              label={t("bestScoreMean")}
               value={formatOptionalScore(stats.best_rank_score_mean)}
             />
           </dl>
@@ -991,23 +1001,23 @@ function OwnerSurfaces({
         <div className="flex items-center justify-between gap-4 mb-4">
           <SectionTitle
             icon={<Users className="w-4 h-4" />}
-            title="Participants"
+            title={t("participants")}
           />
           <span className="badge badge-default">
-            {participants?.items.length ?? 0} rows
+            {common("rows", { count: participants?.items.length ?? 0 })}
           </span>
         </div>
         {!participants || participants.items.length === 0 ? (
-          <div className="empty-state">No participants loaded.</div>
+          <div className="empty-state">{t("noParticipants")}</div>
         ) : (
           <table className="data-table">
             <thead>
               <tr>
-                <th>Agent</th>
-                <th>Submissions</th>
-                <th>Best</th>
-                <th>Status</th>
-                <th>Latest</th>
+                <th>{t("agent")}</th>
+                <th>{t("submissions")}</th>
+                <th>{t("best")}</th>
+                <th>{common("status")}</th>
+                <th>{t("latest")}</th>
               </tr>
             </thead>
             <tbody>
@@ -1043,27 +1053,29 @@ function OwnerSurfaces({
         <div className="flex items-center justify-between gap-4 mb-4">
           <SectionTitle
             icon={<ListPlus className="w-4 h-4" />}
-            title="Shortlist"
+            title={t("shortlist")}
           />
           <span className="badge badge-default">
-            {shortlist?.items.length ?? 0} rows
+            {common("rows", { count: shortlist?.items.length ?? 0 })}
           </span>
         </div>
         {shortlistRevision ? (
           <div className="mb-4 text-[var(--text-body-sm)] text-[var(--text-secondary)]">
-            Last revision added {shortlistRevision.added_count} of{" "}
-            {shortlistRevision.requested_count} requested agents.
+            {t("lastRevision", {
+              added: shortlistRevision.added_count,
+              requested: shortlistRevision.requested_count,
+            })}
           </div>
         ) : null}
         {!shortlist || shortlist.items.length === 0 ? (
-          <div className="empty-state">No shortlisted agents loaded.</div>
+          <div className="empty-state">{t("noShortlist")}</div>
         ) : (
           <table className="data-table">
             <thead>
               <tr>
-                <th>Agent</th>
-                <th>Added by</th>
-                <th>Created</th>
+                <th>{t("agent")}</th>
+                <th>{t("addedBy")}</th>
+                <th>{t("created")}</th>
               </tr>
             </thead>
             <tbody>
@@ -1087,6 +1099,30 @@ function OwnerSurfaces({
       </div>
     </div>
   );
+}
+
+/** Renders a localized status badge for known platform statuses. */
+function LocalizedStatusBadge({ status }: { status: string }) {
+  const t = useTranslations("common.statuses");
+  const labels: Record<string, string> = {
+    active: t("active"),
+    abandoned: t("abandoned"),
+    approved: t("approved"),
+    completed: t("completed"),
+    disabled: t("disabled"),
+    draft: t("draft"),
+    failed: t("failed"),
+    passed: t("passed"),
+    pending: t("pending"),
+    published: t("published"),
+    publishing: t("publishing"),
+    queued: t("queued"),
+    rejected: t("rejected"),
+    revoked: t("revoked"),
+    running: t("running"),
+    validated: t("validated"),
+  };
+  return <StatusBadge status={status}>{labels[status] ?? status}</StatusBadge>;
 }
 
 /** Renders the metadata component. */
@@ -1131,18 +1167,21 @@ async function fileToBase64(file: File): Promise<string> {
 }
 
 /** Normalizes unknown errors into a displayable message. */
-function creatorErrorMessage(error: unknown): string {
+function creatorErrorMessage(
+  error: unknown,
+  fallback: { signIn: string; invalidJson: string; unknown: string },
+): string {
   if (error instanceof CreatorApiError) {
     if (error.status === 401) {
-      return "Sign in with GitHub before continuing.";
+      return fallback.signIn;
     }
     return error.message;
   }
   if (error instanceof SyntaxError) {
-    return "Manifest JSON is not valid JSON.";
+    return fallback.invalidJson;
   }
   if (error instanceof Error) {
     return error.message;
   }
-  return "Unknown creator console error.";
+  return fallback.unknown;
 }

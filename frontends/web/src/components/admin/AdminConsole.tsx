@@ -12,7 +12,7 @@ import {
   Server,
   ShieldCheck,
 } from "lucide-react";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
   type ReactNode,
   useCallback,
@@ -88,6 +88,7 @@ const emptyData: AdminData = {
 /** Renders the admin console component. */
 export function AdminConsole() {
   const locale = useLocale();
+  const t = useTranslations("admin");
   const [credentials, setCredentials] = useState<AdminCredentials>({
     username: "admin",
     password: "",
@@ -155,7 +156,7 @@ export function AdminConsole() {
 
   const loginAndRefresh: AdminRefresh = async (options = {}) => {
     if (!isConfigured) {
-      setError("Enter admin credentials before loading operator data.");
+      setError(t("messages.enterCredentials"));
       return;
     }
 
@@ -168,10 +169,15 @@ export function AdminConsole() {
       setCredentials({ username: session.username, password: "" });
       setData(await fetchAdminData(session.csrf_token));
       if (!options.quiet) {
-        setMessage("Admin session started and operator data refreshed.");
+        setMessage(t("messages.sessionStarted"));
       }
     } catch (e) {
-      setError(adminErrorMessage(e));
+      setError(
+        adminErrorMessage(e, {
+          accessDenied: t("messages.accessDenied"),
+          unknown: t("messages.unknown"),
+        }),
+      );
     } finally {
       setLoading(false);
     }
@@ -198,7 +204,12 @@ export function AdminConsole() {
           e.status !== 401 &&
           e.status !== 403
         ) {
-          setError(adminErrorMessage(e));
+          setError(
+            adminErrorMessage(e, {
+              accessDenied: t("messages.accessDenied"),
+              unknown: t("messages.unknown"),
+            }),
+          );
         }
       }
     };
@@ -208,7 +219,7 @@ export function AdminConsole() {
     return () => {
       cancelled = true;
     };
-  }, [fetchAdminData]);
+  }, [fetchAdminData, t]);
 
   /** Handles sign out for the current session. */
   const signOut = async () => {
@@ -225,9 +236,14 @@ export function AdminConsole() {
       setCsrfToken("");
       setSessionUsername(null);
       setData(emptyData);
-      setMessage("Admin session ended.");
+      setMessage(t("messages.sessionEnded"));
     } catch (e) {
-      setError(adminErrorMessage(e));
+      setError(
+        adminErrorMessage(e, {
+          accessDenied: t("messages.accessDenied"),
+          unknown: t("messages.unknown"),
+        }),
+      );
     } finally {
       setLoading(false);
     }
@@ -235,7 +251,7 @@ export function AdminConsole() {
 
   const refresh: AdminRefresh = async (options = {}) => {
     if (!csrfToken) {
-      setError("Sign in before refreshing operator data.");
+      setError(t("messages.signInBeforeRefresh"));
       return;
     }
 
@@ -244,10 +260,15 @@ export function AdminConsole() {
     try {
       setData(await fetchAdminData(csrfToken));
       if (!options.quiet) {
-        setMessage("Operator data refreshed.");
+        setMessage(t("messages.dataRefreshed"));
       }
     } catch (e) {
-      setError(adminErrorMessage(e));
+      setError(
+        adminErrorMessage(e, {
+          accessDenied: t("messages.accessDenied"),
+          unknown: t("messages.unknown"),
+        }),
+      );
     } finally {
       setLoading(false);
     }
@@ -271,17 +292,16 @@ export function AdminConsole() {
           <div>
             <span className="badge badge-official mb-4">
               <ShieldCheck className="w-3 h-3" />
-              Admin Observatory
+              {t("hero.badge")}
             </span>
             <h1
               className="text-[var(--text-h1)] font-bold leading-[var(--leading-h1)]"
               style={{ fontFamily: "var(--font-sans)" }}
             >
-              Platform operations console
+              {t("hero.title")}
             </h1>
             <p className="mt-3 max-w-2xl text-[var(--text-body)] leading-[var(--leading-body)] text-[var(--text-secondary)]">
-              Publish challenge contracts, inspect evaluation flow, and keep
-              worker capacity visible without leaving the Agentics observatory.
+              {t("hero.description")}
             </p>
           </div>
           <CredentialPanel
@@ -308,12 +328,12 @@ export function AdminConsole() {
 
       <nav className="tab-list overflow-x-auto">
         {[
-          ["overview", "Overview"],
-          ["challenges", "Challenges"],
-          ["drafts", "Drafts"],
-          ["pioneer-codes", "Pioneer codes"],
-          ["capacity", "Capacity"],
-          ["operations", "Operations"],
+          ["overview", t("tabs.overview")],
+          ["challenges", t("tabs.challenges")],
+          ["drafts", t("tabs.drafts")],
+          ["pioneer-codes", t("tabs.pioneerCodes")],
+          ["capacity", t("tabs.capacity")],
+          ["operations", t("tabs.operations")],
         ].map(([id, label]) => (
           <button
             key={id}
@@ -380,6 +400,7 @@ function OverviewPanel({
   data: AdminData;
   statusCounts: Record<string, number>;
 }) {
+  const t = useTranslations("admin.overview");
   const activeWorkers = data.heartbeats.items.length;
   const queued = statusCounts.queued ?? 0;
   const running = statusCounts.running ?? 0;
@@ -389,37 +410,37 @@ function OverviewPanel({
     <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-5">
       <StatCard
         icon={<FlaskConical className="w-5 h-5" />}
-        label="Challenges"
+        label={t("challenges")}
         value={data.challenges.items.length.toString()}
         tone="teal"
       />
       <StatCard
         icon={<GitPullRequest className="w-5 h-5" />}
-        label="Drafts"
+        label={t("drafts")}
         value={data.drafts.items.length.toString()}
         tone="teal"
       />
       <StatCard
         icon={<Boxes className="w-5 h-5" />}
-        label="Solution submissions"
+        label={t("solutionSubmissions")}
         value={data.submissions.items.length.toString()}
         tone="amber"
       />
       <StatCard
         icon={<Activity className="w-5 h-5" />}
-        label="Queued / Running"
+        label={t("queuedRunning")}
         value={`${queued} / ${running}`}
         tone="amber"
       />
       <StatCard
         icon={<Gauge className="w-5 h-5" />}
-        label="Official capacity"
+        label={t("officialCapacity")}
         value={`${activeOfficialJobs}/${data.capacity?.quotas.max_active_official_jobs ?? "—"}`}
         tone="amber"
       />
       <StatCard
         icon={<Server className="w-5 h-5" />}
-        label="Worker heartbeats"
+        label={t("workerHeartbeats")}
         value={activeWorkers.toString()}
         tone="teal"
       />
@@ -468,29 +489,30 @@ function ChallengeAdminPanel({
   challenges: AdminChallengeListItem[];
   locale: string;
 }) {
+  const t = useTranslations("admin.challengeRegistry");
+  const common = useTranslations("common");
+
   return (
     <section className="grid grid-cols-1 gap-6">
       <div className="card overflow-x-auto">
         <div className="flex items-center justify-between gap-4 mb-4">
-          <h2 className="text-[var(--text-h3)] font-semibold">
-            Challenge registry
-          </h2>
-          <span className="badge badge-default">{challenges.length} rows</span>
+          <h2 className="text-[var(--text-h3)] font-semibold">{t("title")}</h2>
+          <span className="badge badge-default">
+            {common("rows", { count: challenges.length })}
+          </span>
         </div>
         {challenges.length === 0 ? (
-          <div className="empty-state">
-            Load admin data to inspect challenges.
-          </div>
+          <div className="empty-state">{t("empty")}</div>
         ) : (
           <table className="data-table">
             <thead>
               <tr>
-                <th>Challenge</th>
-                <th>Status</th>
-                <th>Eligibility</th>
-                <th>Targets</th>
-                <th>Modes</th>
-                <th>Updated</th>
+                <th>{t("challenge")}</th>
+                <th>{t("status")}</th>
+                <th>{t("eligibility")}</th>
+                <th>{t("targets")}</th>
+                <th>{t("modes")}</th>
+                <th>{t("updated")}</th>
               </tr>
             </thead>
             <tbody>
@@ -506,7 +528,7 @@ function ChallengeAdminPanel({
                     </div>
                   </td>
                   <td>
-                    <StatusBadge status={challenge.status} />
+                    <LocalizedStatusBadge status={challenge.status} />
                   </td>
                   <td>
                     <div className="font-mono">
@@ -514,8 +536,10 @@ function ChallengeAdminPanel({
                     </div>
                     <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
                       {challenge.starts_at
-                        ? `starts ${formatDate(challenge.starts_at, locale)}`
-                        : "starts anytime"}
+                        ? t("starts", {
+                            date: formatDate(challenge.starts_at, locale),
+                          })
+                        : t("startsAnytime")}
                     </div>
                   </td>
                   <td>
@@ -544,35 +568,35 @@ function CapacityPanel({
 }: {
   capacity: AdminCapacityResponse | null;
 }) {
+  const t = useTranslations("admin.capacity");
+
   if (!capacity) {
     return (
       <section className="card">
-        <div className="empty-state">
-          Load admin data to inspect resource profiles and quotas.
-        </div>
+        <div className="empty-state">{t("empty")}</div>
       </section>
     );
   }
 
   const quotaRows = [
     [
-      "Validation per agent/challenge",
+      t("validationPerAgentChallenge"),
       capacity.quotas.validation_runs_per_agent_challenge_day.toString(),
     ],
     [
-      "Official per agent/challenge",
+      t("officialPerAgentChallenge"),
       capacity.quotas.official_runs_per_agent_challenge_day.toString(),
     ],
     [
-      "Active official jobs",
+      t("activeOfficialJobs"),
       capacity.quotas.max_active_official_jobs.toString(),
     ],
-    ["Active agents", capacity.quotas.max_active_agents.toString()],
+    [t("activeAgents"), capacity.quotas.max_active_agents.toString()],
   ];
   const usageRows = [
-    ["Agents", capacity.usage.active_agents.toString()],
-    ["Validation jobs", capacity.usage.active_validation_jobs.toString()],
-    ["Official jobs", capacity.usage.active_official_jobs.toString()],
+    [t("agents"), capacity.usage.active_agents.toString()],
+    [t("validationJobs"), capacity.usage.active_validation_jobs.toString()],
+    [t("officialJobs"), capacity.usage.active_official_jobs.toString()],
   ];
 
   return (
@@ -580,17 +604,16 @@ function CapacityPanel({
       <div className="card overflow-x-auto">
         <SectionTitle
           icon={<Gauge className="w-4 h-4" />}
-          title="Resource profiles and quotas"
+          title={t("quotaTitle")}
         />
         <p className="mt-2 mb-4 text-[var(--text-body-sm)] text-[var(--text-secondary)]">
-          Limits are loaded from backend configuration and enforced before
-          uploads consume storage or worker capacity.
+          {t("quotaDescription")}
         </p>
         <table className="data-table">
           <thead>
             <tr>
-              <th>Quota</th>
-              <th>Limit</th>
+              <th>{t("quota")}</th>
+              <th>{t("limit")}</th>
             </tr>
           </thead>
           <tbody>
@@ -606,17 +629,18 @@ function CapacityPanel({
       <div className="card overflow-x-auto">
         <SectionTitle
           icon={<Activity className="w-4 h-4" />}
-          title="Current capacity usage"
+          title={t("usageTitle")}
         />
         <p className="mt-2 mb-4 text-[var(--text-body-sm)] text-[var(--text-secondary)]">
-          Rolling submission quotas use a {capacity.quota_window_seconds / 3600}
-          h window.
+          {t("usageDescription", {
+            hours: capacity.quota_window_seconds / 3600,
+          })}
         </p>
         <table className="data-table">
           <thead>
             <tr>
-              <th>Resource</th>
-              <th>Current usage</th>
+              <th>{t("resource")}</th>
+              <th>{t("currentUsage")}</th>
             </tr>
           </thead>
           <tbody>
@@ -635,6 +659,7 @@ function CapacityPanel({
 
 /** Renders the target summary component. */
 function TargetSummary({ challenge }: { challenge: AdminChallengeListItem }) {
+  const t = useTranslations("admin.challengeRegistry");
   const targets = challenge.targets ?? [];
   if (targets.length === 0) {
     return <span className="text-[var(--text-muted)]">—</span>;
@@ -647,16 +672,19 @@ function TargetSummary({ challenge }: { challenge: AdminChallengeListItem }) {
         const evaluatorRun = target.resource_profile.evaluator.run;
         const solutionRunSummary = solutionRun
           ? `${solutionRun.cpu_limit_millis}m/${solutionRun.memory_limit_mb} MiB`
-          : "not used";
+          : t("notUsed");
         return (
           <div key={target.name}>
             <div className="font-mono text-[var(--text-caption)]">
               {target.name}
             </div>
             <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
-              {target.docker_platform} · solution run {solutionRunSummary}·
-              evaluator run {evaluatorRun.cpu_limit_millis}m/
-              {evaluatorRun.memory_limit_mb} MiB
+              {target.docker_platform} ·{" "}
+              {t("solutionRun", { summary: solutionRunSummary })} ·{" "}
+              {t("evaluatorRun", {
+                cpu: evaluatorRun.cpu_limit_millis,
+                memory: evaluatorRun.memory_limit_mb,
+              })}
             </div>
           </div>
         );
@@ -667,6 +695,7 @@ function TargetSummary({ challenge }: { challenge: AdminChallengeListItem }) {
 
 /** Renders the mode summary component. */
 function ModeSummary({ challenge }: { challenge: AdminChallengeListItem }) {
+  const t = useTranslations("admin.challengeRegistry");
   const targets = challenge.targets ?? [];
   /** Handles validation enabled behavior for this component. */
   const validationEnabled = targets.some((target) => target.validation_enabled);
@@ -678,7 +707,9 @@ function ModeSummary({ challenge }: { challenge: AdminChallengeListItem }) {
           validationEnabled ? "badge-success" : "badge-default"
         }`}
       >
-        validation {validationEnabled ? "on" : "off"}
+        {t("validationMode", {
+          state: validationEnabled ? t("on") : t("off"),
+        })}
       </span>
       <span
         className={`badge ${
@@ -687,7 +718,9 @@ function ModeSummary({ challenge }: { challenge: AdminChallengeListItem }) {
             : "badge-default"
         }`}
       >
-        official {challenge.private_benchmark_enabled ? "on" : "off"}
+        {t("officialMode", {
+          state: challenge.private_benchmark_enabled ? t("on") : t("off"),
+        })}
       </span>
     </div>
   );
@@ -711,30 +744,33 @@ function OperationsPanel({
   onError: (message: string | null) => void;
   onMessage: (message: string | null) => void;
 }) {
+  const t = useTranslations("admin.operations");
+  const common = useTranslations("common");
+
   return (
     <section className="grid grid-cols-1 gap-6">
       <div className="card overflow-x-auto">
         <div className="flex items-center justify-between gap-4 mb-4">
           <SectionTitle
             icon={<Boxes className="w-4 h-4" />}
-            title="Solution submission operations"
+            title={t("submissionsTitle")}
           />
-          <span className="badge badge-default">{submissions.length} rows</span>
+          <span className="badge badge-default">
+            {common("rows", { count: submissions.length })}
+          </span>
         </div>
         {submissions.length === 0 ? (
-          <div className="empty-state">
-            Load admin data to inspect solution submissions.
-          </div>
+          <div className="empty-state">{t("submissionsEmpty")}</div>
         ) : (
           <table className="data-table">
             <thead>
               <tr>
-                <th>Submission</th>
-                <th>Status</th>
-                <th>Latest job</th>
-                <th>Rank</th>
-                <th>Updated</th>
-                <th>Actions</th>
+                <th>{t("submission")}</th>
+                <th>{t("status")}</th>
+                <th>{t("latestJob")}</th>
+                <th>{t("rank")}</th>
+                <th>{t("updated")}</th>
+                <th>{t("actions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -752,18 +788,18 @@ function OperationsPanel({
                       {submission.target}
                     </div>
                     <div className="text-[var(--text-caption)] text-[var(--text-muted)] max-w-[20rem] truncate">
-                      {submission.note || "No note"}
+                      {submission.note || t("noNote")}
                     </div>
                   </td>
                   <td>
-                    <StatusBadge status={submission.status} />
+                    <LocalizedStatusBadge status={submission.status} />
                   </td>
                   <td>
                     <div className="font-mono text-[var(--text-caption)]">
                       {submission.latest_job_id?.slice(0, 8) ?? "—"}
                     </div>
                     <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
-                      {submission.latest_job_eval_type ?? "no job"} ·{" "}
+                      {submission.latest_job_eval_type ?? t("noJob")} ·{" "}
                       {submission.latest_job_status ?? "—"}
                     </div>
                   </td>
@@ -793,20 +829,22 @@ function OperationsPanel({
         <div className="flex items-center justify-between gap-4 mb-4">
           <SectionTitle
             icon={<Server className="w-4 h-4" />}
-            title="Worker heartbeats"
+            title={t("heartbeatsTitle")}
           />
-          <span className="badge badge-default">{heartbeats.length} rows</span>
+          <span className="badge badge-default">
+            {common("rows", { count: heartbeats.length })}
+          </span>
         </div>
         {heartbeats.length === 0 ? (
-          <div className="empty-state">No worker heartbeats recorded yet.</div>
+          <div className="empty-state">{t("heartbeatsEmpty")}</div>
         ) : (
           <table className="data-table">
             <thead>
               <tr>
-                <th>Service</th>
-                <th>Status</th>
-                <th>Last seen</th>
-                <th>Payload</th>
+                <th>{t("service")}</th>
+                <th>{t("status")}</th>
+                <th>{t("lastSeen")}</th>
+                <th>{t("payload")}</th>
               </tr>
             </thead>
             <tbody>
@@ -814,7 +852,7 @@ function OperationsPanel({
                 <tr key={heartbeat.service_name}>
                   <td className="font-mono">{heartbeat.service_name}</td>
                   <td>
-                    <StatusBadge
+                    <LocalizedStatusBadge
                       status={String(heartbeat.payload.status ?? "unknown")}
                     />
                   </td>
@@ -851,6 +889,8 @@ function SubmissionActions({
   const [pendingAction, setPendingAction] = useState<
     "rejudge" | "official-run" | "disable-agent" | null
   >(null);
+  const t = useTranslations("admin.operations");
+  const adminMessages = useTranslations("admin.messages");
 
   /** Runs action and refreshes affected data. */
   const runAction = async (
@@ -860,7 +900,11 @@ function SubmissionActions({
     try {
       setPendingAction(action);
       if (action === "disable-agent") {
-        if (!window.confirm(`Disable agent ${submission.agent_display_name}?`))
+        if (
+          !window.confirm(
+            t("disableConfirm", { name: submission.agent_display_name }),
+          )
+        )
           return;
         await adminFetchJson(
           `/admin/agents/${encodeURIComponent(submission.agent_id)}/disable`,
@@ -868,13 +912,18 @@ function SubmissionActions({
           csrfToken,
           { method: "POST" },
         );
-        onMessage(`Disabled agent ${submission.agent_display_name}.`);
+        onMessage(t("disabledAgent", { name: submission.agent_display_name }));
       } else {
         const actionLabel =
-          action === "official-run" ? "queue an official run for" : "rejudge";
+          action === "official-run"
+            ? t("officialRunAction")
+            : t("rejudgeAction");
         if (
           !window.confirm(
-            `${actionLabel} submission ${submission.id.slice(0, 8)}?`,
+            t("queueConfirm", {
+              action: actionLabel,
+              id: submission.id.slice(0, 8),
+            }),
           )
         )
           return;
@@ -884,12 +933,22 @@ function SubmissionActions({
           csrfToken,
           { method: "POST" },
         );
-        onMessage(`Queued ${response.eval_type} job ${response.job_id}.`);
+        onMessage(
+          t("queuedJob", {
+            evalType: response.eval_type,
+            jobId: response.job_id,
+          }),
+        );
       }
       onError(null);
       await onRefresh({ quiet: true });
     } catch (e) {
-      onError(adminErrorMessage(e));
+      onError(
+        adminErrorMessage(e, {
+          accessDenied: adminMessages("accessDenied"),
+          unknown: adminMessages("unknown"),
+        }),
+      );
     } finally {
       setPendingAction(null);
     }
@@ -904,7 +963,7 @@ function SubmissionActions({
         disabled={!csrfToken || pendingAction !== null}
       >
         <RefreshCw className="w-3 h-3" />
-        Rejudge
+        {t("rejudge")}
       </button>
       <button
         type="button"
@@ -913,7 +972,7 @@ function SubmissionActions({
         disabled={!csrfToken || pendingAction !== null}
       >
         <Play className="w-3 h-3" />
-        Official
+        {t("official")}
       </button>
       <button
         type="button"
@@ -922,22 +981,49 @@ function SubmissionActions({
         disabled={!csrfToken || pendingAction !== null}
       >
         <Ban className="w-3 h-3" />
-        Disable agent
+        {t("disableAgent")}
       </button>
     </div>
   );
 }
 
+/** Renders a localized status badge for known platform statuses. */
+function LocalizedStatusBadge({ status }: { status: string }) {
+  const t = useTranslations("common.statuses");
+  const labels: Record<string, string> = {
+    active: t("active"),
+    abandoned: t("abandoned"),
+    approved: t("approved"),
+    completed: t("completed"),
+    disabled: t("disabled"),
+    draft: t("draft"),
+    failed: t("failed"),
+    passed: t("passed"),
+    pending: t("pending"),
+    published: t("published"),
+    publishing: t("publishing"),
+    queued: t("queued"),
+    rejected: t("rejected"),
+    revoked: t("revoked"),
+    running: t("running"),
+    validated: t("validated"),
+  };
+  return <StatusBadge status={status}>{labels[status] ?? status}</StatusBadge>;
+}
+
 /** Normalizes unknown errors into a displayable message. */
-function adminErrorMessage(error: unknown): string {
+function adminErrorMessage(
+  error: unknown,
+  fallback: { accessDenied: string; unknown: string },
+): string {
   if (error instanceof AdminApiError) {
     if (error.status === 401) {
-      return "Access denied. Check the admin username and password.";
+      return fallback.accessDenied;
     }
     return error.message;
   }
   if (error instanceof Error) {
     return error.message;
   }
-  return "Unknown admin console error.";
+  return fallback.unknown;
 }

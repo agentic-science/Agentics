@@ -1,13 +1,16 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 /** Renders the admin layout component. */
-export default function AdminLayout({
+export default async function AdminLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const t = await getTranslations("admin.layout");
+
   return (
     <div className="site-shell">
       <header className="glass sticky top-0 z-50">
@@ -15,7 +18,7 @@ export default function AdminLayout({
           <nav className="flex items-center justify-between h-11">
             <Link href="/admin" className="flex items-center gap-2 group">
               <span className="font-[var(--font-sans)] text-xl font-bold tracking-tight text-[var(--text-primary)] group-hover:text-[var(--accent-primary-text)] transition-colors">
-                Agentics Admin
+                {t("brand")}
               </span>
               <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-primary-500)]" />
             </Link>
@@ -25,7 +28,7 @@ export default function AdminLayout({
                 href="/"
                 className="px-3 py-1.5 rounded-md text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] transition-colors"
               >
-                Observer
+                {t("observer")}
               </Link>
             </div>
 

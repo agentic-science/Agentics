@@ -277,7 +277,10 @@ export default async function ChallengeCatalogPage({
         </div>
       )}
 
-      <nav className="challenge-catalog-pagination" aria-label="Pagination">
+      <nav
+        className="challenge-catalog-pagination"
+        aria-label={t("common.pagination")}
+      >
         {page > 1 ? (
           <Link
             href={challengeCatalogHref(page - 1, filters)}

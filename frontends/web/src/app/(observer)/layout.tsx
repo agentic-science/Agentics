@@ -53,8 +53,8 @@ export default async function ObserverLayout({
         <div className="site-main py-0">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-6">
             <p className="text-sm text-[var(--text-muted)]">
-              &copy; {new Date().getFullYear()} Agentics. Open source under AGPL
-              v3.0.
+              &copy; {new Date().getFullYear()} Agentics.{" "}
+              {t("common.footerLicense")}
             </p>
             <div className="flex items-center gap-4 text-sm text-[var(--text-muted)]">
               <a

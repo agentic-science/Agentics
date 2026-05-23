@@ -31,9 +31,6 @@ import {
   uploadChallengePrivateAssetRequestSchema,
 } from "@/lib/schemas";
 
-const CREATOR_CSRF_STORAGE_KEY = "agentics.creator.csrf_token";
-const CREATOR_OAUTH_STATE_STORAGE_KEY = "agentics.creator.oauth_state";
-
 /** Describes the challenge creation manifest shape used by this module. */
 export type ChallengeCreationManifest =
   CreatorChallengeDraftResponse["manifest"];
@@ -64,43 +61,6 @@ export class CreatorApiError extends Error {
   }
 }
 
-/** Reads creator csrf token from browser session storage. */
-export function readCreatorCsrfToken(): string {
-  if (typeof window === "undefined") {
-    return "";
-  }
-
-  return window.sessionStorage.getItem(CREATOR_CSRF_STORAGE_KEY) ?? "";
-}
-
-/** Stores creator csrf token in browser state. */
-export function storeCreatorCsrfToken(csrfToken: string): void {
-  if (typeof window !== "undefined") {
-    window.sessionStorage.setItem(CREATOR_CSRF_STORAGE_KEY, csrfToken);
-  }
-}
-
-/** Stores the expected OAuth state before navigating to GitHub. */
-export function storeExpectedGithubOauthState(state: string): void {
-  if (typeof window !== "undefined") {
-    window.sessionStorage.setItem(CREATOR_OAUTH_STATE_STORAGE_KEY, state);
-  }
-}
-
-/** Consumes the expected OAuth state and returns whether it matches. */
-export function consumeExpectedGithubOauthState(
-  returnedState: string,
-): boolean {
-  if (typeof window === "undefined") {
-    return false;
-  }
-  const expected = window.sessionStorage.getItem(
-    CREATOR_OAUTH_STATE_STORAGE_KEY,
-  );
-  window.sessionStorage.removeItem(CREATOR_OAUTH_STATE_STORAGE_KEY);
-  return Boolean(expected) && expected === returnedState;
-}
-
 /** Fetches creator me for the requested UI scope. */
 export async function getCreatorMe(): Promise<CreatorMeResponse> {
   return creatorFetchJson("/api/creator/me", creatorMeResponseSchema);
@@ -108,12 +68,7 @@ export async function getCreatorMe(): Promise<CreatorMeResponse> {
 
 /** Fetches creator session bootstrap data including the current csrf token. */
 export async function getCreatorSession(): Promise<CreatorSessionResponse> {
-  const session = await creatorFetchJson(
-    "/api/creator/session",
-    creatorSessionResponseSchema,
-  );
-  storeCreatorCsrfToken(session.csrf_token);
-  return session;
+  return creatorFetchJson("/api/creator/session", creatorSessionResponseSchema);
 }
 
 /** Starts github login and returns the next navigation target. */

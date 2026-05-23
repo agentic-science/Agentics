@@ -89,7 +89,7 @@ export function CodeBrowser({ files }: { files: FileItem[] }) {
                 {getFileIcon(activeFile.path)}
                 <span>{activeFile.path}</span>
                 <span className="text-[var(--text-muted)]">
-                  {activeFile.size.toLocaleString()} bytes
+                  {activeFile.size.toLocaleString()} {t("bytes")}
                 </span>
               </div>
               {activeFile.is_text && activeFile.content && (

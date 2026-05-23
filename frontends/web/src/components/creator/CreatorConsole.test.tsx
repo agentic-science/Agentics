@@ -1,4 +1,5 @@
 import type { RenderResult } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
 import type { Mock } from "vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -10,10 +11,10 @@ import {
   getCreatorChallengeStats,
   getCreatorSession,
   startGithubLogin,
-  storeExpectedGithubOauthState,
   uploadPrivateAsset,
 } from "@/lib/creatorApi";
 import type { CreatorChallengeDraftResponse } from "@/lib/schemas";
+import messages from "../../../messages/en.json";
 import { ensureDomEnvironment } from "../../test/dom";
 
 import { CreatorConsole } from "./CreatorConsole";
@@ -44,9 +45,6 @@ vi.mock("@/lib/creatorApi", () => {
     getCreatorChallengeStats: vi.fn(),
     getCreatorSession: vi.fn(),
     startGithubLogin: vi.fn(),
-    storeExpectedGithubOauthState: vi.fn((state: string) => {
-      window.sessionStorage.setItem("agentics.creator.oauth_state", state);
-    }),
     uploadChallengePrivateAssetRequestSchema: passthroughSchema,
     uploadPrivateAsset: vi.fn(),
   };
@@ -67,13 +65,11 @@ const getCreatorChallengeParticipantsMock =
 const getCreatorChallengeStatsMock = getCreatorChallengeStats as Mock;
 const getCreatorSessionMock = getCreatorSession as Mock;
 const startGithubLoginMock = startGithubLogin as Mock;
-const storeExpectedGithubOauthStateMock = storeExpectedGithubOauthState as Mock;
 const uploadPrivateAssetMock = uploadPrivateAsset as Mock;
 
 describe("CreatorConsole", () => {
   beforeEach(() => {
     window.localStorage.clear();
-    window.sessionStorage.clear();
     getCreatorSessionMock.mockRejectedValue(new Error("not signed in"));
     startGithubLoginMock.mockResolvedValue({
       authorization_url: "https://github.com/login/oauth/authorize",
@@ -126,7 +122,7 @@ describe("CreatorConsole", () => {
   });
 
   it("blocks draft creation until a GitHub creator session is loaded", async () => {
-    const view = render(<CreatorConsole />);
+    const view = renderCreatorConsole();
     fillDraftRequiredFields(view);
 
     fireEvent.click(view.getByRole("button", { name: "Create draft" }));
@@ -140,18 +136,15 @@ describe("CreatorConsole", () => {
   });
 
   it("starts GitHub OAuth without a pioneer code for returning creators", async () => {
-    const view = render(<CreatorConsole />);
+    const view = renderCreatorConsole();
 
     fireEvent.click(view.getByRole("button", { name: "Sign in with GitHub" }));
 
     await waitFor(() => expect(startGithubLoginMock).toHaveBeenCalledWith(""));
-    expect(storeExpectedGithubOauthStateMock).toHaveBeenCalledWith(
-      "oauth-state",
-    );
   });
 
   it("starts GitHub OAuth with a pioneer code", async () => {
-    const view = render(<CreatorConsole />);
+    const view = renderCreatorConsole();
 
     fireEvent.input(view.getByLabelText("Pioneer code for new creators"), {
       target: { value: " jack-deadbeef " },
@@ -160,9 +153,6 @@ describe("CreatorConsole", () => {
 
     await waitFor(() =>
       expect(startGithubLoginMock).toHaveBeenCalledWith("jack-deadbeef"),
-    );
-    expect(storeExpectedGithubOauthStateMock).toHaveBeenCalledWith(
-      "oauth-state",
     );
   });
 
@@ -176,7 +166,7 @@ describe("CreatorConsole", () => {
     });
     createChallengeDraftMock.mockResolvedValue(challengeDraftResponse);
 
-    const view = render(<CreatorConsole />);
+    const view = renderCreatorConsole();
 
     expect(await view.findByText(/octocat/)).toBeTruthy();
     fillDraftRequiredFields(view);
@@ -215,7 +205,7 @@ describe("CreatorConsole", () => {
       expires_at: "2026-05-16T00:00:00Z",
     });
 
-    const view = render(<CreatorConsole />);
+    const view = renderCreatorConsole();
 
     expect(await view.findByText(/octocat/)).toBeTruthy();
     fillDraftRequiredFields(view);
@@ -230,6 +220,15 @@ describe("CreatorConsole", () => {
     expect(createChallengeDraftMock).not.toHaveBeenCalled();
   });
 });
+
+/** Builds the creator console test fixture with translations. */
+function renderCreatorConsole() {
+  return render(
+    <NextIntlClientProvider locale="en" messages={messages}>
+      <CreatorConsole />
+    </NextIntlClientProvider>,
+  );
+}
 
 /** Builds the fill draft required fields test fixture. */
 function fillDraftRequiredFields(view: RenderResult) {

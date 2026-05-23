@@ -3,22 +3,19 @@
 import { GitPullRequest, LoaderCircle } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
-import {
-  CreatorApiError,
-  completeGithubLogin,
-  consumeExpectedGithubOauthState,
-  storeCreatorCsrfToken,
-} from "@/lib/creatorApi";
+import { CreatorApiError, completeGithubLogin } from "@/lib/creatorApi";
 
 /** Renders the creator oauth callback component. */
 export function CreatorOAuthCallback() {
+  const t = useTranslations("creator.oauth");
   const searchParams = useSearchParams();
   const started = useRef(false);
   const [status, setStatus] = useState<"loading" | "success" | "error">(
     "loading",
   );
-  const [message, setMessage] = useState("Completing GitHub sign-in.");
+  const [message, setMessage] = useState(t("fallback"));
 
   useEffect(() => {
     if (started.current) {
@@ -30,38 +27,32 @@ export function CreatorOAuthCallback() {
     window.history.replaceState(null, "", window.location.pathname);
     if (!code || !state) {
       setStatus("error");
-      setMessage("GitHub did not return the required OAuth code and state.");
-      return;
-    }
-    if (!consumeExpectedGithubOauthState(state)) {
-      setStatus("error");
-      setMessage("GitHub OAuth state did not match this browser session.");
+      setMessage(t("missingCodeState"));
       return;
     }
 
     void completeGithubLogin(code, state)
       .then((session) => {
-        storeCreatorCsrfToken(session.csrf_token);
         setStatus("success");
-        setMessage(`Signed in as ${session.github_login}.`);
+        setMessage(t("signedIn", { login: session.github_login }));
       })
       .catch((error) => {
         setStatus("error");
-        setMessage(oauthErrorMessage(error));
+        setMessage(oauthErrorMessage(error, t("failed")));
       });
-  }, [searchParams]);
+  }, [searchParams, t]);
 
   return (
     <section className="card-elevated max-w-2xl mx-auto">
       <span className="badge badge-validation mb-4">
         <GitPullRequest className="w-3 h-3" />
-        Creator OAuth
+        {t("badge")}
       </span>
       <h1
         className="text-[var(--text-h1)] font-bold leading-[var(--leading-h1)]"
         style={{ fontFamily: "var(--font-sans)" }}
       >
-        GitHub sign-in
+        {t("title")}
       </h1>
       <p className="mt-3 text-[var(--text-body)] text-[var(--text-secondary)]">
         {message}
@@ -72,7 +63,7 @@ export function CreatorOAuthCallback() {
         ) : null}
         {status !== "loading" ? (
           <Link href="/creator" className="btn btn-primary">
-            Return to creator console
+            {t("return")}
           </Link>
         ) : null}
       </div>
@@ -81,12 +72,12 @@ export function CreatorOAuthCallback() {
 }
 
 /** Normalizes unknown errors into a displayable message. */
-function oauthErrorMessage(error: unknown): string {
+function oauthErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof CreatorApiError) {
     return error.message;
   }
   if (error instanceof Error) {
     return error.message;
   }
-  return "GitHub OAuth failed.";
+  return fallback;
 }

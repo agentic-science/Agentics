@@ -1,6 +1,8 @@
 import type { RenderResult } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
 import type { SVGProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import messages from "../../../messages/en.json";
 import { ensureDomEnvironment } from "../../test/dom";
 
 type MotionSvgProps<Element> = SVGProps<Element> & {
@@ -65,6 +67,14 @@ const createObjectUrlMock = vi.fn(
 const revokeObjectUrlMock = vi.fn((_url: string) => undefined);
 let anchorClickSpy: ReturnType<typeof vi.spyOn>;
 
+function renderEasterEditor(): RenderResult {
+  return render(
+    <NextIntlClientProvider locale="en" messages={messages}>
+      <EasterEditor />
+    </NextIntlClientProvider>,
+  );
+}
+
 async function exportCurrentGraph(view: RenderResult) {
   fireEvent.click(view.getByRole("button", { name: "Export" }));
   fireEvent.click(view.getByRole("menuitem", { name: "JSON" }));
@@ -120,7 +130,7 @@ describe("EasterEditor", () => {
   });
 
   it("shows import validation errors in a dialog without replacing the current graph", async () => {
-    const view = render(<EasterEditor />);
+    const view = renderEasterEditor();
     const fileInput =
       view.container.querySelector<HTMLInputElement>('input[type="file"]');
 
@@ -150,7 +160,7 @@ describe("EasterEditor", () => {
   });
 
   it("keeps the editor visual-first without manual JSON or form sections", () => {
-    const view = render(<EasterEditor />);
+    const view = renderEasterEditor();
 
     expect(view.queryByText("Visual editor")).toBeNull();
     expect(view.queryByText(/agents ·/)).toBeNull();
@@ -166,7 +176,7 @@ describe("EasterEditor", () => {
   });
 
   it("opens the export menu with JSON, WebM, and GIF actions", () => {
-    const view = render(<EasterEditor />);
+    const view = renderEasterEditor();
 
     fireEvent.click(view.getByRole("button", { name: "Export" }));
 
@@ -176,7 +186,7 @@ describe("EasterEditor", () => {
   });
 
   it("shows friendly field names and updated animation defaults", () => {
-    const view = render(<EasterEditor />);
+    const view = renderEasterEditor();
 
     expect(view.getByLabelText("Number of Agents")).toBeTruthy();
     expect(view.getByLabelText("Step Duration")).toHaveProperty("value", "1");
@@ -189,7 +199,7 @@ describe("EasterEditor", () => {
   });
 
   it("adds links by clicking dots in the visual editor", async () => {
-    const view = render(<EasterEditor />);
+    const view = renderEasterEditor();
 
     const source = view.getByLabelText(/Node agent 0, t1/);
     fireEvent.click(source);
@@ -207,7 +217,7 @@ describe("EasterEditor", () => {
   });
 
   it("deselects a selected source when empty editor space is clicked", async () => {
-    const view = render(<EasterEditor />);
+    const view = renderEasterEditor();
     const source = view.getByLabelText(/Node agent 0, t1/);
 
     fireEvent.click(source);
@@ -225,7 +235,7 @@ describe("EasterEditor", () => {
   });
 
   it("toggles discovery dots with double click and right click", async () => {
-    const view = render(<EasterEditor />);
+    const view = renderEasterEditor();
     const node = view.getByLabelText(/Node agent 0, t1/);
 
     fireEvent.doubleClick(node);
@@ -240,7 +250,7 @@ describe("EasterEditor", () => {
   });
 
   it("clears links and discoveries without resetting graph dimensions", async () => {
-    const view = render(<EasterEditor />);
+    const view = renderEasterEditor();
 
     fireEvent.click(view.getByRole("button", { name: "Clear" }));
 
@@ -252,7 +262,7 @@ describe("EasterEditor", () => {
   });
 
   it("toggles presentation with the single play button", () => {
-    const view = render(<EasterEditor />);
+    const view = renderEasterEditor();
 
     fireEvent.click(view.getByRole("button", { name: "Play" }));
 
@@ -269,7 +279,7 @@ describe("EasterEditor", () => {
   });
 
   it("exports the current valid graph JSON", async () => {
-    const view = render(<EasterEditor />);
+    const view = renderEasterEditor();
 
     fireEvent.click(view.getByRole("button", { name: "Clear" }));
     const graph = await exportCurrentGraph(view);
@@ -283,7 +293,7 @@ describe("EasterEditor", () => {
   });
 
   it("exports WebM and GIF through the media helpers", async () => {
-    const view = render(<EasterEditor />);
+    const view = renderEasterEditor();
 
     fireEvent.click(view.getByRole("button", { name: "Export" }));
     fireEvent.click(view.getByRole("menuitem", { name: "WebM" }));
@@ -315,7 +325,7 @@ describe("EasterEditor", () => {
         resolveWebm = resolve;
       }),
     );
-    const view = render(<EasterEditor />);
+    const view = renderEasterEditor();
 
     fireEvent.click(view.getByRole("button", { name: "Export" }));
     fireEvent.click(view.getByRole("menuitem", { name: "WebM" }));
