@@ -1,3 +1,4 @@
+use super::options::append_bounded_log_bytes;
 use super::*;
 
 /// Verifies that bounded log append truncates by byte limit.
