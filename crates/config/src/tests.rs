@@ -206,7 +206,7 @@ fn runner_output_and_result_limits_must_be_valid() {
         ),
         (
             Config {
-                runner_max_runs: 13,
+                runner_max_runs: 101,
                 ..test_config()
             },
             "AGENTICS_RUNNER_MAX_RUNS",

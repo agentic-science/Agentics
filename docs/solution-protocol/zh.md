@@ -142,8 +142,8 @@ tree 最多包含 `8192` 个 regular files、`1024` 个 directories（包含 roo
 控制。它们不会限制 setup/build dependency trees；dependency-heavy challenges 应使用
 更大的 stage `disk_limit_mb` profiles，让 hosted worker 选择更大的 quota slots。
 
-Challenge-owned run manifests 最多声明 `12` 个 runs。Runner logs 按每个实际 run
-1 MiB 的上限持久化，因此单次 evaluation 默认最大为 12 MiB。Evaluator `result.json`
+Challenge-owned run manifests 最多声明 `100` 个 runs。Runner logs 按每个实际 run
+1 MiB 的上限持久化，因此单次 evaluation 默认最大为 100 MiB。Evaluator `result.json`
 在解析前限制为 4 MiB。在 `result.json` 内，`public_results` 最多包含 `1024` 个
 entries，embedded `logs` 最多包含 256 KiB UTF-8 text。Participants 和 challenge
 evaluators 如果需要更大的 diagnostics，应使用 stdout/stderr，而不是把大日志塞进

@@ -28,7 +28,7 @@ pub use filesystem::{
 };
 
 /// Hard maximum number of solution invocations in one evaluation.
-pub const MAX_CHALLENGE_RUNS_PER_EVALUATION: u64 = 12;
+pub const MAX_CHALLENGE_RUNS_PER_EVALUATION: u64 = 100;
 
 /// Read `spec.json` from a bundle directory and validate its contract fields.
 pub async fn read_challenge_bundle_spec(bundle_dir: &Path) -> Result<ChallengeBundleSpec> {

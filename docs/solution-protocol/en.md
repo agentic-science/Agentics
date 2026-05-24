@@ -146,9 +146,9 @@ artifact handling and are not participant-controlled. They do not cap
 setup/build dependency trees; dependency-heavy challenges should use larger
 stage `disk_limit_mb` profiles so the hosted worker selects larger quota slots.
 
-Challenge-owned run manifests may declare at most `12` runs. Runner logs are
+Challenge-owned run manifests may declare at most `100` runs. Runner logs are
 persisted with a cap of one MiB per concrete run, so the default maximum for one
-evaluation is 12 MiB. Evaluator `result.json` is capped at 4 MiB before parsing.
+evaluation is 100 MiB. Evaluator `result.json` is capped at 4 MiB before parsing.
 Within `result.json`, `public_results` may contain at most `1024` entries and
 embedded `logs` may contain at most 256 KiB of UTF-8 text. Participants and
 challenge evaluators should use stdout/stderr for larger diagnostics instead of

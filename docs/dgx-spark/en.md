@@ -138,7 +138,7 @@ AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true
 AGENTICS_RUNNER_MAX_OUTPUT_FILES=8192
 AGENTICS_RUNNER_MAX_OUTPUT_DIRS=1024
 AGENTICS_RUNNER_MAX_OUTPUT_DEPTH=32
-AGENTICS_RUNNER_MAX_RUNS=12
+AGENTICS_RUNNER_MAX_RUNS=100
 AGENTICS_RUNNER_MAX_RESULT_JSON_BYTES=4194304
 AGENTICS_RUNNER_MAX_PUBLIC_RESULTS=1024
 AGENTICS_RUNNER_MAX_RESULT_LOG_BYTES=262144
@@ -186,7 +186,7 @@ effective phase `disk_limit_mb`. Align challenge resource profiles to slot
 classes when an exact hard phase limit is required. The separate evaluator-visible
 run tree cap defaults to 8192 files, 1024 directories, and depth 32; setup/build
 dependency installs are governed by the XFS byte and inode quota instead. Each
-evaluation may run at most 12 solution invocations. Persisted runner logs are
+evaluation may run at most 100 solution invocations. Persisted runner logs are
 capped at one MiB per concrete run, `result.json` is capped at 4 MiB before
 parsing, public evaluator feedback is capped at 1024 entries, and embedded evaluator
 result logs are capped at 256 KiB. `piped_stdio` interaction traffic is capped

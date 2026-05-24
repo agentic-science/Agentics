@@ -175,7 +175,7 @@ async fn run_manifest_rejects_too_many_runs() {
     drop(std::fs::remove_dir_all(root));
 
     let error = result.expect_err("too many runs should be rejected");
-    assert!(error.to_string().contains("at most 12 runs"));
+    assert!(error.to_string().contains("at most 100 runs"));
 }
 
 /// Verifies that run names cannot escape evaluator-visible filesystem paths.

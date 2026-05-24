@@ -175,7 +175,7 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
         runner_max_output_files: 8192,
         runner_max_output_dirs: 1024,
         runner_max_output_depth: 32,
-        runner_max_runs: 12,
+        runner_max_runs: 100,
         runner_max_result_json_bytes: 4 * 1024 * 1024,
         runner_max_public_results: 1024,
         runner_max_result_log_bytes: 256 * 1024,
