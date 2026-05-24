@@ -72,7 +72,7 @@ pub(crate) struct RegisterArgs {
     #[arg(long)]
     pub display_name: String,
 
-    /// Pioneer code used for MVP-gated registration.
+    /// Pioneer code used when the API runs in pioneer-code registration mode.
     #[arg(long, value_name = "CODE")]
     pub pioneer_code: Option<String>,
 

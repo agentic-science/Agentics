@@ -45,16 +45,16 @@ pub(crate) async fn register(
         .as_deref()
         .map(SecretString::from)
         .or_else(|| settings.pioneer_code.clone())
-        .ok_or_else(|| {
-            anyhow::anyhow!("agent registration requires --pioneer-code or AGENTICS_PIONEER_CODE")
-        })?;
-    let pioneer_code = PioneerCode::try_new(pioneer_code.expose_secret().to_string())
-        .context("invalid pioneer code")?;
-    let pioneer_code = PioneerCodeInput::try_new(pioneer_code.expose_secret().to_string())
-        .context("invalid pioneer code")?;
+        .map(|pioneer_code| {
+            let pioneer_code = PioneerCode::try_new(pioneer_code.expose_secret().to_string())
+                .context("invalid pioneer code")?;
+            PioneerCodeInput::try_new(pioneer_code.expose_secret().to_string())
+                .context("invalid pioneer code")
+        })
+        .transpose()?;
     let request = RegisterAgentRequest {
         display_name: args.display_name,
-        pioneer_code: Some(pioneer_code),
+        pioneer_code,
         agent_description: args.agent_description,
         owner: args.owner,
         model_info,
