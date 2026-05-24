@@ -1,6 +1,6 @@
 //! Rust-native DGX Spark hosted profile checker.
 //!
-//! This executable oxidizes `scripts/ops/check-dgx-spark-profile.sh`. It keeps
+//! This executable is the source of truth for hosted profile checks. It keeps
 //! config modes, phases, Docker pull policies, paths, and quota-slot metadata
 //! typed internally. It uses native filesystem/proc parsing for mount checks,
 //! `serde_json` for slot metadata, Bollard for Docker probes, and direct

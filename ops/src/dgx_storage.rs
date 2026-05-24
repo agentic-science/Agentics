@@ -1,11 +1,10 @@
 //! Rust-native DGX Spark storage preparation.
 //!
-//! This module oxidizes `prepare-dgx-spark-storage.sh` and
-//! `prepare-dgx-spark-test-storage.sh` without editing those shell references.
-//! It prepares loopback XFS images, project-quota mounts, runner runtime paths,
-//! and bounded writable slot metadata. External commands are used only at OS
-//! tooling boundaries where Rust does not provide stable native APIs for XFS
-//! formatting, mounting, and project-quota assignment.
+//! This module is the source of truth for DGX Spark storage preparation. It
+//! prepares loopback XFS images, project-quota mounts, runner runtime paths, and
+//! bounded writable slot metadata. External commands are used only at OS tooling
+//! boundaries where Rust does not provide stable native APIs for XFS formatting,
+//! mounting, and project-quota assignment.
 //!
 //! Safety: destructive/rootful execution requires Linux, root, explicit
 //! confirmation, and supports `--dry-run`. The implementation is idempotent and

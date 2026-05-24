@@ -1,10 +1,9 @@
 //! Rust-native DGX Spark host inventory checker.
 //!
-//! This executable oxidizes `scripts/ops/check-dgx-spark-host.sh` while keeping
-//! the shell script as an imperfect reference. It performs Linux-gated host,
-//! storage, Docker, and NVIDIA inventory checks. Native filesystem/proc
-//! inspection and Bollard Docker APIs are used where practical; NVIDIA toolkit
-//! commands remain explicit process boundaries because they are host tools.
+//! This executable is the source of truth for Linux-gated host, storage, Docker,
+//! and NVIDIA inventory checks. Native filesystem/proc inspection and Bollard
+//! Docker APIs are used where practical; NVIDIA toolkit commands remain explicit
+//! process boundaries because they are host tools.
 //!
 //! Cancellation: process execution and Docker probes are raced against Ctrl-C
 //! in `run_from_process`. The command is read-only unless the optional NVIDIA

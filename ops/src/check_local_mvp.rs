@@ -1,9 +1,8 @@
 //! Rust-native local MVP operational checker.
 //!
-//! This executable oxidizes `scripts/ops/check-local-mvp.sh` without changing
-//! that shell reference. It checks Docker daemon reachability, API health,
-//! public challenge catalog shape, optional admin surfaces, and optional web
-//! frontend reachability.
+//! This executable is the source of truth for local MVP checks. It checks Docker
+//! daemon reachability, API health, public challenge catalog shape, optional
+//! admin surfaces, and optional web frontend reachability.
 //!
 //! Native operations: HTTP requests use `reqwest`, JSON contracts use domain
 //! DTOs, Docker reachability uses `bollard`, URLs use `url`, and secrets use

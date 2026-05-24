@@ -1,11 +1,10 @@
 //! Rust-native DGX Spark profile management.
 //!
-//! This module oxidizes `manage-dgx-spark-profile.sh` into a separate
-//! `agentics-manage-dgx-spark-profile` binary. It installs systemd units,
-//! starts/stops services, removes Agentics-owned Docker containers, and can
-//! uninstall quota storage. External commands remain only where the operating
-//! system owns the behavior: service management, Unix identity management,
-//! mounts, and system configuration files.
+//! This module implements the `agentics-manage-dgx-spark-profile` binary. It
+//! installs systemd units, starts/stops services, removes Agentics-owned Docker
+//! containers, and can uninstall quota storage. External commands remain only
+//! where the operating system owns the behavior: service management, Unix
+//! identity management, mounts, and system configuration files.
 //!
 //! Mutating commands support `--dry-run`. Destructive purge requires
 //! `AGENTICS_DGX_PROFILE_CONFIRM=uninstall-purge` unless dry-run is used.

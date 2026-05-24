@@ -1,10 +1,10 @@
 //! Rust-native local demo orchestration.
 //!
-//! This module oxidizes `scripts/dev/local-demo.sh` as the
-//! `agentics-local-demo` binary. It parses dotenv files natively, generates a
-//! non-default admin password, manages the local Postgres container through
-//! Bollard, runs migrations and demo seeding through `sqlx`, writes demo ZIP
-//! artifacts through the `zip` crate, and supervises API/web child processes.
+//! This module implements the `agentics-local-demo` binary. It parses dotenv
+//! files natively, generates a non-default admin password, manages the local
+//! Postgres container through Bollard, runs migrations and demo seeding through
+//! `sqlx`, writes demo ZIP artifacts through the `zip` crate, and supervises
+//! API/web child processes.
 //! `cargo` and `bun` remain direct process boundaries because they are the
 //! project toolchains being supervised.
 //!
