@@ -74,6 +74,7 @@ pub struct CreateAdminSessionInput {
 #[derive(Debug, Clone)]
 pub struct CreateGithubOauthStateInput {
     pub state_hash: String,
+    pub browser_nonce_hash: String,
     pub pioneer_code_hash: Option<String>,
     pub expires_at: DateTime<Utc>,
 }
@@ -213,11 +214,12 @@ pub async fn create_github_oauth_state(
 ) -> Result<()> {
     sqlx::query(
         r#"
-        INSERT INTO github_oauth_states (state_hash, pioneer_code_hash, expires_at)
-        VALUES ($1, $2, $3)
+        INSERT INTO github_oauth_states (state_hash, browser_nonce_hash, pioneer_code_hash, expires_at)
+        VALUES ($1, $2, $3, $4)
         "#,
     )
     .bind(&input.state_hash)
+    .bind(&input.browser_nonce_hash)
     .bind(&input.pioneer_code_hash)
     .bind(input.expires_at)
     .execute(pool)
@@ -230,16 +232,19 @@ pub async fn create_github_oauth_state(
 pub async fn consume_github_oauth_state(
     pool: &PgPool,
     state_hash: &str,
+    browser_nonce_hash: &str,
 ) -> Result<Option<ConsumedGithubOauthState>> {
     let row = sqlx::query(
         r#"
         DELETE FROM github_oauth_states
         WHERE state_hash = $1
+          AND browser_nonce_hash = $2
           AND expires_at > NOW()
         RETURNING pioneer_code_hash
         "#,
     )
     .bind(state_hash)
+    .bind(browser_nonce_hash)
     .fetch_optional(pool)
     .await?;
 

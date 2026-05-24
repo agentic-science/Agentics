@@ -35,7 +35,6 @@ pub struct GithubOauthLoginRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct GithubOauthLoginResponse {
     pub authorization_url: GithubOauthAuthorizationUrl,
-    pub state: String,
 }
 
 /// Browser-submitted request that completes GitHub OAuth.

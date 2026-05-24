@@ -24,7 +24,6 @@ describe("creatorApi", () => {
           JSON.stringify({
             authorization_url:
               "https://github.com/login/oauth/authorize?client_id=test&state=oauth-state",
-            state: "oauth-state",
           }),
           {
             status: 200,

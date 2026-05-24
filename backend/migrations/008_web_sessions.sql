@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS web_sessions (
 
 CREATE TABLE IF NOT EXISTS github_oauth_states (
   state_hash TEXT PRIMARY KEY,
+  browser_nonce_hash TEXT NOT NULL,
   expires_at TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

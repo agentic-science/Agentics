@@ -2818,7 +2818,6 @@ export const githubOauthLoginResponseSchema = z
       .string()
       .url()
       .regex(/^https:\/\/github\.com\/login\/oauth\/authorize\?[^#]+$/),
-    state: z.string(),
   })
   .strict()
   .describe("URL returned to a browser or CLI so it can start GitHub OAuth.");

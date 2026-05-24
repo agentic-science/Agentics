@@ -29,6 +29,7 @@ use crate::pioneer_code_security::{is_invalid_pioneer_code, reject_failed_pionee
 use crate::state::AppState;
 
 const OAUTH_STATE_TTL_MINUTES: i64 = 10;
+const OAUTH_NONCE_COOKIE_NAME: &str = "agentics_oauth_nonce";
 const GITHUB_USER_AGENT: &str = "Agentics";
 
 /// Minimal JSON shape returned by GitHub's OAuth token exchange endpoint.
@@ -156,7 +157,11 @@ pub async fn admin_session(
 pub async fn github_oauth_login(
     State(state): State<AppState>,
     ValidatedJson(request): ValidatedJson<GithubOauthLoginRequest>,
-) -> Result<Json<GithubOauthLoginResponse>> {
+) -> Result<(
+    StatusCode,
+    AppendHeaders<[(HeaderName, String); 1]>,
+    Json<GithubOauthLoginResponse>,
+)> {
     let client_id = required_oauth_config(
         state.config.github_oauth_client_id.as_deref(),
         "AGENTICS_GITHUB_OAUTH_CLIENT_ID",
@@ -171,6 +176,8 @@ pub async fn github_oauth_login(
     )?;
     let state_token = auth::create_oauth_state();
     let state_hash = auth::hash_opaque_token(&state_token);
+    let browser_nonce = auth::create_oauth_browser_nonce();
+    let browser_nonce_hash = auth::hash_opaque_token(&browser_nonce);
     let pioneer_code_hash = match state.config.agent_registration_mode() {
         AgentRegistrationMode::PioneerCode => match request.pioneer_code.as_ref() {
             Some(code) => {
@@ -191,6 +198,7 @@ pub async fn github_oauth_login(
         &state.db,
         &db::CreateGithubOauthStateInput {
             state_hash,
+            browser_nonce_hash,
             pioneer_code_hash,
             expires_at,
         },
@@ -207,30 +215,40 @@ pub async fn github_oauth_login(
     let authorization_url = GithubOauthAuthorizationUrl::try_from_url(authorization_url)
         .map_err(|e| ServiceError::Internal(format!("generated invalid GitHub OAuth URL: {e}")))?;
 
-    Ok(Json(GithubOauthLoginResponse {
-        authorization_url,
-        state: state_token,
-    }))
+    Ok((
+        StatusCode::OK,
+        AppendHeaders([oauth_nonce_cookie(&state, &browser_nonce)]),
+        Json(GithubOauthLoginResponse { authorization_url }),
+    ))
 }
 
 /// Complete GitHub OAuth and issue a creator web session.
 pub async fn github_oauth_callback(
     State(state): State<AppState>,
+    headers: HeaderMap,
     ValidatedJson(request): ValidatedJson<GithubOauthCallbackRequest>,
 ) -> Result<(
     StatusCode,
-    AppendHeaders<[(HeaderName, String); 2]>,
+    AppendHeaders<[(HeaderName, String); 3]>,
     Json<CreatorSessionResponse>,
 )> {
-    let oauth_state = consume_callback_oauth_state(&state, &request.state).await?;
+    let cookie_header = headers.get(header::COOKIE).and_then(|h| h.to_str().ok());
+    let browser_nonce =
+        cookie_value(cookie_header, OAUTH_NONCE_COOKIE_NAME).ok_or(ServiceError::Unauthorized)?;
+    let oauth_state = consume_callback_oauth_state(&state, &request.state, &browser_nonce).await?;
     let access_token = exchange_github_code(&state, &request.code).await?;
     let github_user = validate_github_user(fetch_github_user(&state, &access_token).await?)?;
     let agent_id = upsert_callback_creator_agent(&state, &oauth_state, &github_user).await?;
     let issued_session = issue_creator_session(&state, agent_id, &github_user).await?;
+    let [session_cookie, csrf_cookie] = issued_session.headers;
 
     Ok((
         StatusCode::OK,
-        issued_session.headers,
+        AppendHeaders([
+            session_cookie,
+            csrf_cookie,
+            expired_oauth_nonce_cookie(&state),
+        ]),
         Json(issued_session.response),
     ))
 }
@@ -238,9 +256,11 @@ pub async fn github_oauth_callback(
 async fn consume_callback_oauth_state(
     state: &AppState,
     state_token: &str,
+    browser_nonce: &str,
 ) -> Result<db::ConsumedGithubOauthState> {
     let state_hash = auth::hash_opaque_token(state_token);
-    db::consume_github_oauth_state(&state.db, &state_hash)
+    let browser_nonce_hash = auth::hash_opaque_token(browser_nonce);
+    db::consume_github_oauth_state(&state.db, &state_hash, &browser_nonce_hash)
         .await?
         .ok_or_else(|| ServiceError::Unauthorized.into())
 }
@@ -293,7 +313,7 @@ async fn upsert_callback_creator_agent(
 }
 
 struct IssuedCreatorSession {
-    headers: AppendHeaders<[(HeaderName, String); 2]>,
+    headers: [(HeaderName, String); 2],
     response: CreatorSessionResponse,
 }
 
@@ -321,12 +341,7 @@ async fn issue_creator_session(
     .await?;
 
     Ok(IssuedCreatorSession {
-        headers: AppendHeaders(session_cookies(
-            state,
-            &session_token,
-            &csrf_token,
-            ttl_seconds,
-        )),
+        headers: session_cookies(state, &session_token, &csrf_token, ttl_seconds),
         response: CreatorSessionResponse {
             agent_id,
             github_user_id: github_user.id,
@@ -487,6 +502,34 @@ fn session_expires_at(ttl_seconds: i64) -> Result<chrono::DateTime<Utc>> {
     Ok(Utc::now()
         .checked_add_signed(Duration::seconds(ttl_seconds))
         .ok_or_else(|| ServiceError::Internal("web session TTL overflow".to_string()))?)
+}
+
+/// Builds a browser-binding OAuth nonce cookie.
+fn oauth_nonce_cookie(state: &AppState, browser_nonce: &str) -> (HeaderName, String) {
+    (
+        header::SET_COOKIE,
+        build_cookie(
+            OAUTH_NONCE_COOKIE_NAME,
+            browser_nonce,
+            OAUTH_STATE_TTL_MINUTES * 60,
+            true,
+            state.config.web_session_cookie_secure,
+        ),
+    )
+}
+
+/// Builds an expired OAuth nonce cookie after a successful callback.
+fn expired_oauth_nonce_cookie(state: &AppState) -> (HeaderName, String) {
+    (
+        header::SET_COOKIE,
+        build_cookie(
+            OAUTH_NONCE_COOKIE_NAME,
+            "",
+            0,
+            true,
+            state.config.web_session_cookie_secure,
+        ),
+    )
 }
 
 /// Builds the session and CSRF cookies for a successful browser login.

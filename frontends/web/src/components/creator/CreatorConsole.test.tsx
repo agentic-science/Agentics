@@ -73,7 +73,6 @@ describe("CreatorConsole", () => {
     getCreatorSessionMock.mockRejectedValue(new Error("not signed in"));
     startGithubLoginMock.mockResolvedValue({
       authorization_url: "https://github.com/login/oauth/authorize",
-      state: "oauth-state",
     });
     getChallengeDraftMock.mockRejectedValue(new Error("not configured"));
     getChallengeShortlistMock.mockResolvedValue({

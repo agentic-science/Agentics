@@ -44,6 +44,11 @@ pub fn create_oauth_state() -> String {
     format!("agentics_oauth_{}", random_url_token(32))
 }
 
+/// Create an opaque browser nonce that binds an OAuth state to one browser.
+pub fn create_oauth_browser_nonce() -> String {
+    format!("agentics_oauth_nonce_{}", random_url_token(32))
+}
+
 /// Hash an opaque token before storing or comparing it.
 pub fn hash_opaque_token(token: &str) -> String {
     let mut hasher = Sha256::new();

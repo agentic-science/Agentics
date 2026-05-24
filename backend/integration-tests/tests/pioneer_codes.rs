@@ -217,12 +217,28 @@ async fn github_oauth_login_start_uses_post_body(pool: sqlx::PgPool) {
         .expect("failed to call old OAuth start route");
     assert_eq!(get_response.status(), StatusCode::METHOD_NOT_ALLOWED);
 
-    let post_response: serde_json::Value = client
+    let post_response = client
         .post(api_url(&app, "/api/auth/github/login"))
         .json(&serde_json::json!({ "pioneer_code": "deadbeef" }))
         .send()
         .await
-        .expect("failed to start OAuth login")
+        .expect("failed to start OAuth login");
+    assert_eq!(post_response.status(), StatusCode::OK);
+    let set_cookie = post_response
+        .headers()
+        .get_all(reqwest::header::SET_COOKIE)
+        .iter()
+        .map(|value| value.to_str().expect("set-cookie should be valid"))
+        .collect::<Vec<_>>();
+    assert!(
+        set_cookie
+            .iter()
+            .any(|value| value.starts_with("agentics_oauth_nonce=")
+                && value.contains("HttpOnly")
+                && value.contains("SameSite=Lax")),
+        "OAuth start should bind state to an HttpOnly browser nonce cookie"
+    );
+    let post_response: serde_json::Value = post_response
         .json()
         .await
         .expect("failed to decode OAuth login response");
@@ -231,6 +247,46 @@ async fn github_oauth_login_start_uses_post_body(pool: sqlx::PgPool) {
         .expect("authorization_url should exist");
     assert!(authorization_url.starts_with("https://github.com/login/oauth/authorize"));
     assert!(!authorization_url.contains("pioneer_code"));
+    assert!(
+        post_response.get("state").is_none(),
+        "raw OAuth state stays inside the authorization URL"
+    );
+}
+
+/// Verifies OAuth callback state cannot be consumed without the initiating browser nonce.
+#[sqlx::test(migrations = "../migrations")]
+async fn github_oauth_state_requires_browser_nonce(pool: sqlx::PgPool) {
+    let state = "oauth-state";
+    let nonce = "oauth-browser-nonce";
+    shared::db::create_github_oauth_state(
+        &pool,
+        &shared::db::CreateGithubOauthStateInput {
+            state_hash: shared::auth::hash_opaque_token(state),
+            browser_nonce_hash: shared::auth::hash_opaque_token(nonce),
+            pioneer_code_hash: None,
+            expires_at: chrono::Utc::now() + chrono::Duration::minutes(10),
+        },
+    )
+    .await
+    .expect("OAuth state should insert");
+
+    let wrong_nonce = shared::db::consume_github_oauth_state(
+        &pool,
+        &shared::auth::hash_opaque_token(state),
+        &shared::auth::hash_opaque_token("wrong-browser-nonce"),
+    )
+    .await
+    .expect("wrong nonce lookup should not fail");
+    assert!(wrong_nonce.is_none());
+
+    let consumed = shared::db::consume_github_oauth_state(
+        &pool,
+        &shared::auth::hash_opaque_token(state),
+        &shared::auth::hash_opaque_token(nonce),
+    )
+    .await
+    .expect("matching nonce should consume state");
+    assert!(consumed.is_some());
 }
 
 /// Verifies creator OAuth account creation uses the same code consumption primitive.
