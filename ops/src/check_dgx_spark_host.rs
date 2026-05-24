@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::process::ExitCode;
 use std::time::Duration;
 
+use agentics_contracts::zip_project::DockerNetworkMode;
 use bollard::Docker;
 use bollard::container::LogOutput;
 use bollard::models::{ContainerCreateBody, DeviceRequest, HostConfig, HostConfigLogConfig};
@@ -25,7 +26,6 @@ use bollard::query_parameters::{
 };
 use clap::Parser;
 use futures::StreamExt;
-use shared::zip_project::DockerNetworkMode;
 use uuid::Uuid;
 
 use crate::dgx::{

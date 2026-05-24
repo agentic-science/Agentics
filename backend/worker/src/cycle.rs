@@ -13,22 +13,22 @@ use tokio::time::interval;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
-use shared::config::Config;
-use shared::db::pool::create_pool;
-use shared::db::{
+use agentics_config::Config;
+use agentics_domain::error::ServiceError;
+use agentics_domain::models::evaluation::EvaluationStatus;
+use agentics_domain::models::ids::{EvaluationId, EvaluationJobId};
+use agentics_persistence::pool::create_pool;
+use agentics_persistence::{
     HeartbeatPayload, PersistedEvaluationResult, claim_next_evaluation_job,
     mark_evaluation_finished, mark_evaluation_started, reap_stuck_jobs,
     refresh_evaluation_job_claim, requeue_running_evaluation_job_for_capacity,
     upsert_service_heartbeat,
 };
-use shared::error::ServiceError;
-use shared::models::evaluation::EvaluationStatus;
-use shared::models::ids::{EvaluationId, EvaluationJobId};
-use shared::runner::{
+use agentics_runner::{
     EvaluationJobExecution, RunnerContainerScope, connect_docker, evaluation_runner_log_key,
     execute_evaluation_job, reconcile_runner_containers,
 };
-use shared::storage::LocalStorage;
+use agentics_storage::LocalStorage;
 
 use crate::host_probe::{enforce_host_probe, enforce_worker_gpu_probe};
 
@@ -38,7 +38,7 @@ pub struct Worker {
     config: Arc<Config>,
     db: sqlx::PgPool,
     docker: Docker,
-    storage: Arc<dyn shared::storage::Storage>,
+    storage: Arc<dyn agentics_storage::Storage>,
     worker_id: String,
 }
 
@@ -60,7 +60,7 @@ impl Worker {
                 "reconciled runner containers from previous attempts"
             );
         }
-        let storage: Arc<dyn shared::storage::Storage> =
+        let storage: Arc<dyn agentics_storage::Storage> =
             Arc::new(LocalStorage::new(&config.storage_root));
         let worker_id = worker_instance_id();
 
@@ -151,7 +151,7 @@ pub async fn run_worker_cycle(
     db: &sqlx::PgPool,
     docker: &Docker,
     config: &Config,
-    storage: &dyn shared::storage::Storage,
+    storage: &dyn agentics_storage::Storage,
     worker_id: &str,
 ) -> anyhow::Result<()> {
     let reaped = reap_stuck_jobs(db, config.worker_stale_job_minutes.max(1)).await?;
@@ -210,7 +210,7 @@ pub async fn run_worker_cycle(
     let evaluation_id = EvaluationId::generate();
     let evaluation_inserted = mark_evaluation_started(
         db,
-        &shared::db::MarkEvaluationStartedInput {
+        &agentics_persistence::MarkEvaluationStartedInput {
             evaluation_id,
             solution_submission_id: job.solution_submission_id.clone(),
             job_id: job.id.clone(),

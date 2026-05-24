@@ -5,14 +5,14 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use agentics_config::{AgentRegistrationMode, Config, RunnerWritableStorageMode};
+use agentics_runner::connect_docker;
+use agentics_storage::{LocalStorage, Storage};
 use api_server::admin_auth_throttle::AdminAuthThrottle;
 use api_server::router;
 use api_server::state::AppState;
 use chrono::{Duration, Utc};
 use secrecy::SecretString;
-use shared::config::{AgentRegistrationMode, Config, RunnerWritableStorageMode};
-use shared::runner::connect_docker;
-use shared::storage::{LocalStorage, Storage};
 use sqlx::PgPool;
 use tokio::task::JoinHandle;
 
@@ -60,7 +60,7 @@ pub async fn spawn_app(pool: PgPool) -> TestApp {
 /// directories while exercising the real router and startup seeding path.
 pub async fn spawn_app_with_config(pool: PgPool, config: Config) -> TestApp {
     if std::fs::exists(&config.challenges_root).expect("failed to inspect challenge root") {
-        shared::db::ensure_challenges_seeded_from_root(
+        agentics_persistence::ensure_challenges_seeded_from_root(
             &pool,
             &config.challenges_root,
             &config.storage_root,
@@ -130,7 +130,7 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
             .expect("valid test Moltbook Submolt URL"),
         worker_poll_interval_ms: 3000,
         worker_stale_job_minutes: 1,
-        worker_accelerators: shared::config::WorkerAccelerators::None,
+        worker_accelerators: agentics_config::WorkerAccelerators::None,
         worker_gpu_probe_image: None,
         validation_runs_per_agent_challenge_day: 20,
         official_runs_per_agent_challenge_day: 5,
@@ -166,8 +166,8 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
         web_session_cookie_secure: false,
         agent_registration_mode: AgentRegistrationMode::Public,
         docker_host: std::env::var("AGENTICS_TEST_DOCKER_HOST").ok(),
-        host_probe_mode: shared::config::HostProbeMode::Off,
-        runner_security_profile: shared::config::RunnerSecurityProfile::Development,
+        host_probe_mode: agentics_config::HostProbeMode::Off,
+        runner_security_profile: agentics_config::RunnerSecurityProfile::Development,
         require_digest_pinned_images: false,
         runner_writable_storage_mode: RunnerWritableStorageMode::Unbounded,
         runner_runtime_root: None,
@@ -221,8 +221,8 @@ pub async fn create_creator_session(
     github_user_id: i64,
     github_login: &str,
 ) -> TestCreatorSession {
-    let fallback_agent_id = shared::models::ids::AgentId::generate();
-    let agent_id = shared::db::upsert_github_creator_agent(
+    let fallback_agent_id = agentics_domain::models::ids::AgentId::generate();
+    let agent_id = agentics_persistence::upsert_github_creator_agent(
         pool,
         &fallback_agent_id,
         github_user_id,
@@ -231,14 +231,14 @@ pub async fn create_creator_session(
     )
     .await
     .expect("creator account should upsert");
-    let session_token = shared::auth::create_web_session_token();
-    let csrf_token = shared::auth::create_csrf_token();
-    shared::db::create_creator_session(
+    let session_token = agentics_services::auth::create_web_session_token();
+    let csrf_token = agentics_services::auth::create_csrf_token();
+    agentics_persistence::create_creator_session(
         pool,
-        &shared::db::CreateCreatorSessionInput {
+        &agentics_persistence::CreateCreatorSessionInput {
             session_id: uuid::Uuid::new_v4().to_string(),
-            session_token_hash: shared::auth::hash_opaque_token(&session_token),
-            csrf_token_hash: shared::auth::hash_opaque_token(&csrf_token),
+            session_token_hash: agentics_services::auth::hash_opaque_token(&session_token),
+            csrf_token_hash: agentics_services::auth::hash_opaque_token(&csrf_token),
             agent_id: agent_id.as_str().to_string(),
             github_user_id,
             github_login: github_login.to_string(),

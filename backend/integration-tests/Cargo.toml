@@ -4,7 +4,13 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-shared = { workspace = true }
+agentics-config = { workspace = true }
+agentics-contracts = { workspace = true }
+agentics-domain = { workspace = true }
+agentics-persistence = { workspace = true }
+agentics-runner = { workspace = true }
+agentics-services = { workspace = true }
+agentics-storage = { workspace = true }
 api-server = { path = "../api-server" }
 worker = { path = "../worker" }
 

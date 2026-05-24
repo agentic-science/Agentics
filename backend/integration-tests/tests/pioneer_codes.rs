@@ -2,12 +2,12 @@
 
 mod helpers;
 
+use agentics_config::AgentRegistrationMode;
+use agentics_domain::models::ids::AgentPioneerCodeId;
 use helpers::{
     api_url, basic_auth_header, examples_challenges_root, spawn_app_with_config, test_config,
 };
 use reqwest::StatusCode;
-use shared::config::AgentRegistrationMode;
-use shared::models::ids::AgentPioneerCodeId;
 
 /// Verifies default MVP registration mode rejects code-free registration and consumes finite codes.
 #[sqlx::test(migrations = "../migrations")]
@@ -258,11 +258,11 @@ async fn github_oauth_login_start_uses_post_body(pool: sqlx::PgPool) {
 async fn github_oauth_state_requires_browser_nonce(pool: sqlx::PgPool) {
     let state = "oauth-state";
     let nonce = "oauth-browser-nonce";
-    shared::db::create_github_oauth_state(
+    agentics_persistence::create_github_oauth_state(
         &pool,
-        &shared::db::CreateGithubOauthStateInput {
-            state_hash: shared::auth::hash_opaque_token(state),
-            browser_nonce_hash: shared::auth::hash_opaque_token(nonce),
+        &agentics_persistence::CreateGithubOauthStateInput {
+            state_hash: agentics_services::auth::hash_opaque_token(state),
+            browser_nonce_hash: agentics_services::auth::hash_opaque_token(nonce),
             pioneer_code_hash: None,
             expires_at: chrono::Utc::now() + chrono::Duration::minutes(10),
         },
@@ -270,19 +270,19 @@ async fn github_oauth_state_requires_browser_nonce(pool: sqlx::PgPool) {
     .await
     .expect("OAuth state should insert");
 
-    let wrong_nonce = shared::db::consume_github_oauth_state(
+    let wrong_nonce = agentics_persistence::consume_github_oauth_state(
         &pool,
-        &shared::auth::hash_opaque_token(state),
-        &shared::auth::hash_opaque_token("wrong-browser-nonce"),
+        &agentics_services::auth::hash_opaque_token(state),
+        &agentics_services::auth::hash_opaque_token("wrong-browser-nonce"),
     )
     .await
     .expect("wrong nonce lookup should not fail");
     assert!(wrong_nonce.is_none());
 
-    let consumed = shared::db::consume_github_oauth_state(
+    let consumed = agentics_persistence::consume_github_oauth_state(
         &pool,
-        &shared::auth::hash_opaque_token(state),
-        &shared::auth::hash_opaque_token(nonce),
+        &agentics_services::auth::hash_opaque_token(state),
+        &agentics_services::auth::hash_opaque_token(nonce),
     )
     .await
     .expect("matching nonce should consume state");
@@ -293,11 +293,11 @@ async fn github_oauth_state_requires_browser_nonce(pool: sqlx::PgPool) {
 #[sqlx::test(migrations = "../migrations")]
 async fn creator_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
     let code = "team-deadbeef";
-    let code_hash = shared::auth::hash_opaque_token(code);
+    let code_hash = agentics_services::auth::hash_opaque_token(code);
     let code_id = AgentPioneerCodeId::generate();
-    shared::db::create_pioneer_code(
+    agentics_persistence::create_pioneer_code(
         &pool,
-        &shared::db::CreatePioneerCodeInput {
+        &agentics_persistence::CreatePioneerCodeInput {
             id: code_id.clone(),
             code_display: code.to_string(),
             code_hash: code_hash.clone(),
@@ -311,8 +311,8 @@ async fn creator_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
     .await
     .expect("pioneer code should insert");
 
-    let first_agent_id = shared::models::ids::AgentId::generate();
-    let stored_agent_id = shared::db::upsert_github_creator_agent_with_pioneer_code(
+    let first_agent_id = agentics_domain::models::ids::AgentId::generate();
+    let stored_agent_id = agentics_persistence::upsert_github_creator_agent_with_pioneer_code(
         &pool,
         &first_agent_id,
         42,
@@ -325,8 +325,8 @@ async fn creator_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
     .expect("first oauth login should create agent");
     assert_eq!(stored_agent_id, first_agent_id);
 
-    let repeated_agent_id = shared::models::ids::AgentId::generate();
-    let repeated = shared::db::upsert_github_creator_agent_with_pioneer_code(
+    let repeated_agent_id = agentics_domain::models::ids::AgentId::generate();
+    let repeated = agentics_persistence::upsert_github_creator_agent_with_pioneer_code(
         &pool,
         &repeated_agent_id,
         42,
@@ -339,22 +339,23 @@ async fn creator_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
     .expect("repeat oauth login should not consume another code");
     assert_eq!(repeated, first_agent_id);
 
-    let repeated_without_code = shared::db::upsert_github_creator_agent_with_pioneer_code(
-        &pool,
-        &shared::models::ids::AgentId::generate(),
-        42,
-        "creator-login-returned",
-        None,
-        true,
-        1_000,
-    )
-    .await
-    .expect("existing oauth creator should not need another pioneer code");
+    let repeated_without_code =
+        agentics_persistence::upsert_github_creator_agent_with_pioneer_code(
+            &pool,
+            &agentics_domain::models::ids::AgentId::generate(),
+            42,
+            "creator-login-returned",
+            None,
+            true,
+            1_000,
+        )
+        .await
+        .expect("existing oauth creator should not need another pioneer code");
     assert_eq!(repeated_without_code, first_agent_id);
 
-    let missing_code = shared::db::upsert_github_creator_agent_with_pioneer_code(
+    let missing_code = agentics_persistence::upsert_github_creator_agent_with_pioneer_code(
         &pool,
-        &shared::models::ids::AgentId::generate(),
+        &agentics_domain::models::ids::AgentId::generate(),
         43,
         "new-creator-without-code",
         None,
@@ -366,22 +367,22 @@ async fn creator_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
     assert!(
         missing_code
             .to_string()
-            .contains(shared::models::pioneer_codes::INVALID_OR_UNAVAILABLE_PIONEER_CODE)
+            .contains(agentics_domain::models::pioneer_codes::INVALID_OR_UNAVAILABLE_PIONEER_CODE)
     );
 
-    let (detail, uses) = shared::db::get_pioneer_code_detail(&pool, &code_id)
+    let (detail, uses) = agentics_persistence::get_pioneer_code_detail(&pool, &code_id)
         .await
         .expect("pioneer code detail should load");
     assert_eq!(detail.use_count, 1);
     assert_eq!(uses.len(), 1);
     assert_eq!(uses[0].registration_kind, "creator_oauth");
 
-    shared::db::disable_agent(&pool, first_agent_id.as_str())
+    agentics_persistence::disable_agent(&pool, first_agent_id.as_str())
         .await
         .expect("agent should disable");
-    let disabled = shared::db::upsert_github_creator_agent_with_pioneer_code(
+    let disabled = agentics_persistence::upsert_github_creator_agent_with_pioneer_code(
         &pool,
-        &shared::models::ids::AgentId::generate(),
+        &agentics_domain::models::ids::AgentId::generate(),
         42,
         "creator-login",
         Some(&code_hash),

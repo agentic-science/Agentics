@@ -2,11 +2,11 @@
 
 mod helpers;
 
+use agentics_config::Config;
 use helpers::{
     api_url, examples_challenges_root, published_challenge_id, spawn_app, spawn_app_with_config,
     test_config,
 };
-use shared::config::Config;
 
 /// Verifies that admin read models power operator console.
 #[sqlx::test(migrations = "../migrations")]
@@ -19,10 +19,10 @@ async fn admin_read_models_power_operator_console(pool: sqlx::PgPool) {
         config.expose_admin_password_for_http_basic(),
     );
     let client = reqwest::Client::new();
-    shared::db::upsert_service_heartbeat(
+    agentics_persistence::upsert_service_heartbeat(
         &pool,
         "test-worker",
-        &shared::db::HeartbeatPayload {
+        &agentics_persistence::HeartbeatPayload {
             status: "idle".to_string(),
             accelerators: vec!["none".to_string()],
             job_id: None,
@@ -516,9 +516,9 @@ async fn admin_official_run_rejects_submission_with_active_job(pool: sqlx::PgPoo
         .expect("failed to request admin official run");
     assert_eq!(admin_response.status(), 409);
 
-    let active_official_jobs: i64 = shared::db::count_active_evaluation_jobs(
+    let active_official_jobs: i64 = agentics_persistence::count_active_evaluation_jobs(
         &pool,
-        shared::models::evaluation::ScoringMode::Official,
+        agentics_domain::models::evaluation::ScoringMode::Official,
     )
     .await
     .expect("failed to count official jobs");

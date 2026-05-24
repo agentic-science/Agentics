@@ -1,19 +1,19 @@
 //! Conversion helpers from database records to API DTOs.
 
-use shared::db::{
-    AgentRecord, ChallengeRecord, PioneerCodeRecord, PioneerCodeUseRecord, SolutionSubmissionRecord,
-};
-use shared::error::{Result, ServiceError};
-use shared::models::challenge::{
+use agentics_domain::error::{Result, ServiceError};
+use agentics_domain::models::challenge::{
     ChallengeBundleSpec, ChallengeDetailResponse, MoltbookCommunityDto,
 };
-use shared::models::evaluation::{
+use agentics_domain::models::evaluation::{
     EvaluationDto, EvaluationJobStatus, ScoringMode, SolutionSubmissionStatus,
 };
-use shared::models::pioneer_codes::{PioneerCodeStatus, PioneerCodeUseKind};
-use shared::models::request::{
+use agentics_domain::models::pioneer_codes::{PioneerCodeStatus, PioneerCodeUseKind};
+use agentics_domain::models::request::{
     CreateSolutionSubmissionResponse, PioneerCodeDetailResponse, PioneerCodeDto,
     PioneerCodeListResponse, PioneerCodeUseDto, RegisterAgentResponse, SolutionSubmissionResponse,
+};
+use agentics_persistence::{
+    AgentRecord, ChallengeRecord, PioneerCodeRecord, PioneerCodeUseRecord, SolutionSubmissionRecord,
 };
 
 /// Present a newly registered agent together with its one-time bearer token.
@@ -177,7 +177,7 @@ pub fn present_solution_submission(
             .official_evaluation
             .as_ref()
             .and_then(|evaluation| {
-                shared::models::evaluation::MetricValue::find_by_name(
+                agentics_domain::models::evaluation::MetricValue::find_by_name(
                     &evaluation.aggregate_metrics,
                     &solution_submission
                         .challenge_spec
@@ -193,7 +193,7 @@ pub fn present_solution_submission(
             .evaluation_job_id
             .as_ref()
             .map(|id| {
-                Ok::<_, ServiceError>(shared::models::evaluation::EvaluationJobDto {
+                Ok::<_, ServiceError>(agentics_domain::models::evaluation::EvaluationJobDto {
                     id: id.clone(),
                     target: solution_submission.target.clone(),
                     status: evaluation_job_status_from_storage(

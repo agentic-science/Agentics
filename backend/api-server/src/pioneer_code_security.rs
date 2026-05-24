@@ -2,8 +2,8 @@
 
 use std::time::Duration;
 
-use shared::error::ServiceError;
-use shared::models::pioneer_codes::INVALID_OR_UNAVAILABLE_PIONEER_CODE;
+use agentics_domain::error::ServiceError;
+use agentics_domain::models::pioneer_codes::INVALID_OR_UNAVAILABLE_PIONEER_CODE;
 
 /// Minimum response delay applied to failed pioneer-code verification.
 const FAILED_PIONEER_CODE_DELAY: Duration = Duration::from_millis(500);

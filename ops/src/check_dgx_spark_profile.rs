@@ -17,6 +17,8 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Duration;
 
+use agentics_config::{HostProbeMode, RunnerSecurityProfile, RunnerWritableStorageMode};
+use agentics_contracts::zip_project::DockerNetworkMode;
 use bollard::Docker;
 use bollard::container::LogOutput;
 use bollard::models::{ContainerCreateBody, HostConfig, HostConfigLogConfig, Mount, MountType};
@@ -26,8 +28,6 @@ use bollard::query_parameters::{
 };
 use clap::Parser;
 use futures::StreamExt;
-use shared::config::{HostProbeMode, RunnerSecurityProfile, RunnerWritableStorageMode};
-use shared::zip_project::DockerNetworkMode;
 use uuid::Uuid;
 
 use crate::dgx::{

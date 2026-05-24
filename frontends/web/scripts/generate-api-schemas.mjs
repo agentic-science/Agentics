@@ -12,7 +12,7 @@ const checkMode = process.argv.includes("--check");
 
 const rawSchemas = execFileSync(
   "cargo",
-  ["run", "--quiet", "-p", "shared", "--bin", "export_web_schemas"],
+  ["run", "--quiet", "-p", "agentics-contracts", "--bin", "export-web-schemas"],
   { cwd: repoRoot, encoding: "utf8" },
 );
 const schemas = JSON.parse(rawSchemas);

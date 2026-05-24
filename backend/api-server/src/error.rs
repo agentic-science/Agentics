@@ -1,10 +1,10 @@
+use agentics_domain::error::{ServiceError, ServiceErrorCode};
+use agentics_domain::models::{ErrorBody, ErrorResponse};
 use axum::{
     Json,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use shared::error::{ServiceError, ServiceErrorCode};
-use shared::models::{ErrorBody, ErrorResponse};
 use tracing::error;
 
 #[derive(Debug)]
@@ -63,8 +63,14 @@ impl From<zip::result::ZipError> for ApiError {
     }
 }
 
-impl From<shared::storage::StorageError> for ApiError {
-    fn from(error: shared::storage::StorageError) -> Self {
+impl From<agentics_storage::StorageError> for ApiError {
+    fn from(error: agentics_storage::StorageError) -> Self {
+        Self::new(ServiceError::from(error))
+    }
+}
+
+impl From<agentics_domain::storage::StorageKeyError> for ApiError {
+    fn from(error: agentics_domain::storage::StorageKeyError) -> Self {
         Self::new(ServiceError::from(error))
     }
 }
@@ -98,10 +104,10 @@ impl IntoResponse for ApiError {
 
 #[cfg(test)]
 mod tests {
+    use agentics_domain::error::{ServiceError, ServiceErrorCode};
     use axum::body::to_bytes;
     use axum::response::IntoResponse;
     use serde_json::Value;
-    use shared::error::{ServiceError, ServiceErrorCode};
 
     use super::ApiError;
 

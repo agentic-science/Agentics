@@ -9,7 +9,7 @@ async fn validation_rejects_private_benchmark_bundle_alias(pool: sqlx::PgPool) {
     let (_public_bundle, private_bundle) = create_coexecuted_benchmark_bundles(bundles.path());
     let config = test_config(storage.path(), challenges.path());
     let app = spawn_app_with_config(pool.clone(), config).await;
-    let coexecuted_challenge_id = shared::models::ids::ChallengeId::generate();
+    let coexecuted_challenge_id = agentics_domain::models::ids::ChallengeId::generate();
     sqlx::query(
         r#"
         INSERT INTO challenges (

@@ -9,8 +9,8 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
+use agentics_config::{HostProbeMode, RunnerSecurityProfile, RunnerWritableStorageMode};
 use serde::{Deserialize, Serialize};
-use shared::config::{HostProbeMode, RunnerSecurityProfile, RunnerWritableStorageMode};
 use thiserror::Error;
 
 use crate::support::{self, SupportError};

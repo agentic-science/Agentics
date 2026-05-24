@@ -6,25 +6,25 @@ use axum::{
 use secrecy::ExposeSecret;
 use serde::de::DeserializeOwned;
 
-use shared::auth;
-use shared::db::{
-    AuthenticatedAdminSession, authenticate_admin_session, authenticate_agent_token,
-    authenticate_creator_session,
-};
-use shared::error::ServiceError;
-use shared::models::ErrorDetail;
-use shared::models::auth::{
+use agentics_domain::error::ServiceError;
+use agentics_domain::models::ErrorDetail;
+use agentics_domain::models::auth::{
     AdminLoginRequest, GithubOauthCallbackRequest, GithubOauthLoginRequest,
 };
-use shared::models::challenge_creation::{
+use agentics_domain::models::challenge_creation::{
     CreateChallengeDraftRequest, ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest,
     ValidateChallengeDraftRequest,
 };
-use shared::models::ids::{AgentId, AgentTokenId, ChallengeDraftId, SolutionSubmissionId};
-use shared::models::request::{
+use agentics_domain::models::ids::{AgentId, AgentTokenId, ChallengeDraftId, SolutionSubmissionId};
+use agentics_domain::models::request::{
     CreateChallengeShortlistRevisionRequest, CreatePioneerCodeRequest,
     CreateSolutionSubmissionRequest, RegisterAgentRequest, SetChallengeMoltbookDiscussionRequest,
 };
+use agentics_persistence::{
+    AuthenticatedAdminSession, authenticate_admin_session, authenticate_agent_token,
+    authenticate_creator_session,
+};
+use agentics_services::auth;
 
 use crate::admin_auth_throttle::remote_addr_from_parts;
 use crate::error::ApiError;
@@ -255,7 +255,7 @@ impl WebSessionCsrf for AuthenticatedAdminSession {
     }
 }
 
-impl WebSessionCsrf for shared::db::AuthenticatedCreatorSession {
+impl WebSessionCsrf for agentics_persistence::AuthenticatedCreatorSession {
     /// Returns the hashed CSRF token for a creator web session.
     fn csrf_token_hash(&self) -> &str {
         &self.csrf_token_hash

@@ -10,8 +10,8 @@ use super::{
     ScoringMode, ServiceError, SolutionSubmissionPath, State, StatusCode, Utc, ValidatedJson, auth,
     db, parse_request_value, presenters,
 };
-use shared::models::challenge::MoltbookCommunityDto;
-use shared::models::request::{
+use agentics_domain::models::challenge::MoltbookCommunityDto;
+use agentics_domain::models::request::{
     ChallengeMoltbookDiscussionResponse, SetChallengeMoltbookDiscussionRequest,
 };
 
@@ -151,10 +151,10 @@ fn parse_optional_rfc3339(raw: Option<&str>, field: &str) -> Result<Option<DateT
 pub async fn list_admin_challenges(
     _admin: AdminAuth,
     State(state): State<AppState>,
-) -> Result<Json<shared::models::challenge::AdminChallengeListResponse>> {
+) -> Result<Json<agentics_domain::models::challenge::AdminChallengeListResponse>> {
     let items = db::list_admin_challenges(&state.db).await?;
     Ok(Json(
-        shared::models::challenge::AdminChallengeListResponse { items },
+        agentics_domain::models::challenge::AdminChallengeListResponse { items },
     ))
 }
 

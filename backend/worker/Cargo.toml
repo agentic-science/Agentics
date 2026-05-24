@@ -15,7 +15,12 @@ name = "worker"
 path = "src/lib.rs"
 
 [dependencies]
-shared = { workspace = true }
+agentics-config = { workspace = true }
+agentics-contracts = { workspace = true }
+agentics-domain = { workspace = true }
+agentics-persistence = { workspace = true }
+agentics-runner = { workspace = true }
+agentics-storage = { workspace = true }
 
 tokio = { workspace = true }
 tracing = { workspace = true }

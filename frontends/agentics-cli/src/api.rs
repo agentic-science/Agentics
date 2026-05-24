@@ -1,22 +1,22 @@
-use anyhow::{Context, Result};
-use reqwest::{Client, Method, Url};
-use secrecy::{ExposeSecret, SecretString};
-use serde::Serialize;
-use serde::de::DeserializeOwned;
-use shared::models::ErrorResponse;
-use shared::models::challenge::{ChallengeDetailResponse, ChallengeListResponse};
-use shared::models::challenge_creation::{
+use agentics_domain::models::ErrorResponse;
+use agentics_domain::models::challenge::{ChallengeDetailResponse, ChallengeListResponse};
+use agentics_domain::models::challenge_creation::{
     ChallengeDraftCleanupResponse, ChallengeDraftResponse, ReviewChallengeDraftRequest,
     ValidateChallengeDraftRequest,
 };
-use shared::models::ids::{ChallengeDraftId, ChallengeId, SolutionSubmissionId};
-use shared::models::names::{MetricName, TargetName};
-use shared::models::request::{
+use agentics_domain::models::ids::{ChallengeDraftId, ChallengeId, SolutionSubmissionId};
+use agentics_domain::models::names::{MetricName, TargetName};
+use agentics_domain::models::request::{
     CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse, LeaderboardResponse,
     PublicSolutionSubmissionListResponse, RankingContextResponse, RegisterAgentRequest,
     RegisterAgentResponse, ScoreDistributionResponse, SolutionSubmissionLogsResponse,
     SolutionSubmissionResponse, SolutionSubmissionResultReportResponse,
 };
+use anyhow::{Context, Result};
+use reqwest::{Client, Method, Url};
+use secrecy::{ExposeSecret, SecretString};
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 
 use crate::config::ApiBaseUrl;
 
@@ -444,9 +444,9 @@ where
 
 #[cfg(test)]
 mod tests {
+    use agentics_domain::models::pioneer_codes::PioneerCodeInput;
+    use agentics_domain::models::request::RegisterAgentRequest;
     use serde_json::json;
-    use shared::models::pioneer_codes::PioneerCodeInput;
-    use shared::models::request::RegisterAgentRequest;
     use wiremock::matchers::{body_json, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 

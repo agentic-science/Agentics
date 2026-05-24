@@ -1,4 +1,5 @@
-use shared::models::challenge::{
+use agentics_contracts::zip_project::ZipProjectNetworkAccess;
+use agentics_domain::models::challenge::{
     ChallengeBundleSpec, ChallengeDetailResponse, ChallengeEligibilitySpec,
     ChallengeEligibilityType, ChallengeExecutionSpec, ChallengeListItemDto, ChallengeListResponse,
     ChallengeResultDetailVisibility, ChallengeSolutionPublicationPolicy, ChallengeTargetSpec,
@@ -7,13 +8,14 @@ use shared::models::challenge::{
     PrivateBenchmarkPolicy, ResourceProfileSpec, SeparatedEvaluatorExecutionSpec, SolutionSpec,
     SolutionStageProfiles, StageResourceProfile, TargetAccelerator,
 };
-use shared::models::evaluation::ScoreVisibility;
-use shared::models::ids::ChallengeId;
-use shared::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
-use shared::models::localization::LocalizedText;
-use shared::models::names::{ChallengeKeyword, ChallengeName, ResourceProfileName, TargetName};
-use shared::models::paths::BundleRelativePath;
-use shared::zip_project::ZipProjectNetworkAccess;
+use agentics_domain::models::evaluation::ScoreVisibility;
+use agentics_domain::models::ids::ChallengeId;
+use agentics_domain::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
+use agentics_domain::models::localization::LocalizedText;
+use agentics_domain::models::names::{
+    ChallengeKeyword, ChallengeName, ResourceProfileName, TargetName,
+};
+use agentics_domain::models::paths::BundleRelativePath;
 
 use super::{OutputFormat, render_challenge_detail, render_challenge_list};
 

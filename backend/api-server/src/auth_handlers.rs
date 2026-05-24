@@ -12,17 +12,17 @@ use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 
 use crate::error::ApiResult as Result;
-use shared::auth;
-use shared::config::AgentRegistrationMode;
-use shared::db;
-use shared::error::ServiceError;
-use shared::models::auth::{
+use agentics_config::AgentRegistrationMode;
+use agentics_domain::error::ServiceError;
+use agentics_domain::models::auth::{
     AdminLoginRequest, AdminSessionResponse, CreatorMeResponse, CreatorSessionResponse,
     GithubOauthCallbackRequest, GithubOauthLoginRequest, GithubOauthLoginResponse,
 };
-use shared::models::ids::AgentId;
-use shared::models::pioneer_codes::PioneerCode;
-use shared::models::urls::GithubOauthAuthorizationUrl;
+use agentics_domain::models::ids::AgentId;
+use agentics_domain::models::pioneer_codes::PioneerCode;
+use agentics_domain::models::urls::GithubOauthAuthorizationUrl;
+use agentics_persistence as db;
+use agentics_services::auth;
 
 use crate::extractors::{AdminAuth, CreatorAuth, ValidatedJson};
 use crate::pioneer_code_security::{is_invalid_pioneer_code, reject_failed_pioneer_code};

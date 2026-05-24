@@ -316,7 +316,7 @@ async fn worker_completes_coexecuted_benchmark_submission(pool: sqlx::PgPool) {
     let (public_bundle, private_bundle) = create_coexecuted_benchmark_bundles(bundles.path());
     let config = test_config(storage.path(), challenges.path());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
-    let coexecuted_challenge_id = shared::models::ids::ChallengeId::generate();
+    let coexecuted_challenge_id = agentics_domain::models::ids::ChallengeId::generate();
     sqlx::query(
         r#"
         INSERT INTO challenges (

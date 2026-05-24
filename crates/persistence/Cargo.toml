@@ -1,0 +1,23 @@
+[package]
+name = "agentics-persistence"
+version.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+agentics-domain = { workspace = true }
+agentics-contracts = { workspace = true }
+agentics-config = { workspace = true }
+agentics-storage = { workspace = true }
+tokio = { workspace = true }
+sqlx = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+secrecy = { workspace = true }
+uuid = { workspace = true }

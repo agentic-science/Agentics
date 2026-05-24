@@ -2,17 +2,17 @@ use std::fs::{self, File};
 use std::io::{Cursor, Seek, Write};
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result, bail};
-use ignore::{DirEntry, WalkBuilder};
-use shared::validation::archive::NormalizedArchivePath;
-use shared::zip_project::validate_zip_project_archive_envelope;
-use shared::zip_project::{
+use agentics_contracts::validation::archive::NormalizedArchivePath;
+use agentics_contracts::zip_project::validate_zip_project_archive_envelope;
+use agentics_contracts::zip_project::{
     MAX_ZIP_PROJECT_ARTIFACT_BYTES, MAX_ZIP_PROJECT_FILE_COUNT, MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES,
 };
+use anyhow::{Context, Result, bail};
+use ignore::{DirEntry, WalkBuilder};
 use zip::CompressionMethod;
 use zip::write::SimpleFileOptions;
 
-const REQUIRED_MANIFEST: &str = shared::zip_project::ZIP_PROJECT_MANIFEST_FILE;
+const REQUIRED_MANIFEST: &str = agentics_contracts::zip_project::ZIP_PROJECT_MANIFEST_FILE;
 
 #[derive(Debug, Clone)]
 /// Carries solution package data across this module boundary.
@@ -84,7 +84,7 @@ fn package_solution_workspace_with_limits(
     }
     let manifest_raw = std::fs::read_to_string(&manifest_path)
         .with_context(|| format!("failed to read {}", manifest_path.display()))?;
-    let manifest = shared::zip_project::ZipProjectManifest::parse_json(&manifest_raw)?;
+    let manifest = agentics_contracts::zip_project::ZipProjectManifest::parse_json(&manifest_raw)?;
 
     let mut required_scripts = Vec::new();
     if let Some(setup) = &manifest.commands.setup {

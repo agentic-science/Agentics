@@ -5,7 +5,7 @@
 //! public challenge catalog shape, optional admin surfaces, and optional web
 //! frontend reachability.
 //!
-//! Native operations: HTTP requests use `reqwest`, JSON contracts use shared
+//! Native operations: HTTP requests use `reqwest`, JSON contracts use domain
 //! DTOs, Docker reachability uses `bollard`, URLs use `url`, and secrets use
 //! `secrecy`. It does not invoke `sh`, `curl`, `python3`, `docker`, or any other
 //! command-line process.
@@ -21,19 +21,19 @@ use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::Duration;
 
+use agentics_config::{
+    DEFAULT_ADMIN_USERNAME, DEFAULT_API_HOST, DEFAULT_API_PORT, ENV_AGENTICS_ADMIN_PASSWORD,
+    ENV_AGENTICS_ADMIN_USERNAME, ENV_AGENTICS_API_BASE_URL, ENV_AGENTICS_API_PORT,
+    ENV_AGENTICS_WEB_BASE_URL, default_local_api_base_url,
+};
+use agentics_domain::models::HealthResponse;
+use agentics_domain::models::challenge::ChallengeListResponse;
+use agentics_domain::models::request::{AdminCapacityResponse, AdminServiceHeartbeatListResponse};
 use bollard::Docker;
 use clap::Parser;
 use reqwest::{Client, StatusCode};
 use secrecy::{ExposeSecret, SecretString};
 use serde::de::DeserializeOwned;
-use shared::config::{
-    DEFAULT_ADMIN_USERNAME, DEFAULT_API_HOST, DEFAULT_API_PORT, ENV_AGENTICS_ADMIN_PASSWORD,
-    ENV_AGENTICS_ADMIN_USERNAME, ENV_AGENTICS_API_BASE_URL, ENV_AGENTICS_API_PORT,
-    ENV_AGENTICS_WEB_BASE_URL, default_local_api_base_url,
-};
-use shared::models::HealthResponse;
-use shared::models::challenge::ChallengeListResponse;
-use shared::models::request::{AdminCapacityResponse, AdminServiceHeartbeatListResponse};
 use thiserror::Error;
 use url::Url;
 

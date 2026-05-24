@@ -16,7 +16,11 @@ reqwest = { workspace = true }
 secrecy = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-shared = { workspace = true }
+agentics-config = { workspace = true }
+agentics-contracts = { workspace = true }
+agentics-domain = { workspace = true }
+agentics-runner = { workspace = true }
+agentics-storage = { workspace = true }
 tokio = { workspace = true }
 toml = "1.0"
 zip = { workspace = true }

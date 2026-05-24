@@ -12,7 +12,7 @@ use axum::{
 use tower_http::cors::CorsLayer;
 
 use crate::state::AppState;
-use shared::config::Config;
+use agentics_config::Config;
 
 const ZIP_SUBMISSION_JSON_BODY_LIMIT_BYTES: usize = 32 * 1024 * 1024;
 const PRIVATE_ASSET_JSON_OVERHEAD_BYTES: u64 = 1024 * 1024;

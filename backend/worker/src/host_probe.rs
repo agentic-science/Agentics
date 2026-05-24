@@ -3,6 +3,11 @@
 use std::process::{ExitStatus, Stdio};
 use std::time::Duration;
 
+use agentics_config::{
+    Config, DEFAULT_HOST_PROBE_COMMAND, ENV_AGENTICS_HOST_PROBE_COMMAND, HostProbeMode,
+    WorkerAccelerators,
+};
+use agentics_contracts::zip_project::DockerNetworkMode;
 use bollard::Docker;
 use bollard::container::LogOutput;
 use bollard::models::{ContainerCreateBody, DeviceRequest, HostConfig, HostConfigLogConfig};
@@ -11,11 +16,6 @@ use bollard::query_parameters::{
     RemoveContainerOptionsBuilder, StartContainerOptions, WaitContainerOptionsBuilder,
 };
 use futures::StreamExt;
-use shared::config::{
-    Config, DEFAULT_HOST_PROBE_COMMAND, ENV_AGENTICS_HOST_PROBE_COMMAND, HostProbeMode,
-    WorkerAccelerators,
-};
-use shared::zip_project::DockerNetworkMode;
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::{Child, ChildStderr, ChildStdout, Command};
 use tokio::time::timeout;
@@ -418,7 +418,7 @@ fn bounded_utf8(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use shared::config::HostProbeMode;
+    use agentics_config::HostProbeMode;
 
     use super::{
         append_bounded_bytes, bounded_utf8, handle_probe_failure, output_contains_failure,

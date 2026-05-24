@@ -1,15 +1,15 @@
 //! Score-distribution builders for public challenge metric views.
 
 use crate::error::ApiResult as Result;
-use shared::db::LeaderboardMetricEntry;
-use shared::error::ServiceError;
-use shared::models::challenge::{ChallengeBundleSpec, MetricVisibility};
-use shared::models::evaluation::MetricValue;
-use shared::models::ids::ChallengeId;
-use shared::models::names::{ChallengeName, MetricName, TargetName};
-use shared::models::request::{
+use agentics_domain::error::ServiceError;
+use agentics_domain::models::challenge::{ChallengeBundleSpec, MetricVisibility};
+use agentics_domain::models::evaluation::MetricValue;
+use agentics_domain::models::ids::ChallengeId;
+use agentics_domain::models::names::{ChallengeName, MetricName, TargetName};
+use agentics_domain::models::request::{
     ScoreDistributionBucketDto, ScoreDistributionQuantileDto, ScoreDistributionResponse,
 };
+use agentics_persistence::LeaderboardMetricEntry;
 
 /// Build a distribution response from the visible best leaderboard entries in scope.
 pub(super) fn build_score_distribution_response(
@@ -221,9 +221,9 @@ fn histogram_bucket_index(value: f64, min: f64, width: f64, bucket_count: usize)
 
 #[cfg(test)]
 mod tests {
-    use shared::db::LeaderboardMetricEntry;
-    use shared::error::ServiceError;
-    use shared::models::challenge::{
+    use agentics_contracts::zip_project::ZipProjectNetworkAccess;
+    use agentics_domain::error::ServiceError;
+    use agentics_domain::models::challenge::{
         ChallengeBundleSpec, ChallengeEligibilitySpec, ChallengeEligibilityType,
         ChallengeExecutionSpec, ChallengeResultDetailVisibility,
         ChallengeSolutionPublicationPolicy, ChallengeTargetSpec, ChallengeVisibility,
@@ -233,15 +233,15 @@ mod tests {
         SeparatedEvaluatorExecutionSpec, SolutionSpec, SolutionStageProfiles, StageResourceProfile,
         TargetAccelerator,
     };
-    use shared::models::evaluation::{MetricValue, ScoreVisibility};
-    use shared::models::ids::ChallengeId;
-    use shared::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
-    use shared::models::localization::LocalizedText;
-    use shared::models::names::{
+    use agentics_domain::models::evaluation::{MetricValue, ScoreVisibility};
+    use agentics_domain::models::ids::ChallengeId;
+    use agentics_domain::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
+    use agentics_domain::models::localization::LocalizedText;
+    use agentics_domain::models::names::{
         ChallengeKeyword, ChallengeName, MetricName, ResourceProfileName, TargetName,
     };
-    use shared::models::paths::BundleRelativePath;
-    use shared::zip_project::ZipProjectNetworkAccess;
+    use agentics_domain::models::paths::BundleRelativePath;
+    use agentics_persistence::LeaderboardMetricEntry;
 
     use super::build_score_distribution_response;
 

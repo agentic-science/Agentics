@@ -2,16 +2,18 @@
 
 mod helpers;
 
+use agentics_config::WorkerAccelerators;
+use agentics_domain::models::challenge::TargetAccelerator;
+use agentics_domain::models::evaluation::{
+    EvaluationStatus, MetricValue, ScoreSummary, ScoringMode,
+};
+use agentics_domain::models::ids::{EvaluationId, EvaluationJobId, SolutionSubmissionId};
+use agentics_domain::models::names::MetricName;
+use agentics_persistence::{MarkEvaluationStartedInput, PersistedEvaluationResult};
 use helpers::{
     api_url, examples_challenges_root, published_challenge_id, sample_sum_solution,
     solution_zip_base64, spawn_app_with_config, test_config,
 };
-use shared::config::WorkerAccelerators;
-use shared::db::{MarkEvaluationStartedInput, PersistedEvaluationResult};
-use shared::models::challenge::TargetAccelerator;
-use shared::models::evaluation::{EvaluationStatus, MetricValue, ScoreSummary, ScoringMode};
-use shared::models::ids::{EvaluationId, EvaluationJobId, SolutionSubmissionId};
-use shared::models::names::MetricName;
 
 /// Verifies that stale running job fails after max attempts.
 #[sqlx::test(migrations = "../migrations")]
@@ -69,7 +71,7 @@ async fn stale_running_job_fails_after_max_attempts(pool: sqlx::PgPool) {
     .await
     .expect("failed to mark job stale");
 
-    let result = shared::db::reap_stuck_jobs(&pool, 1)
+    let result = agentics_persistence::reap_stuck_jobs(&pool, 1)
         .await
         .expect("failed to reap stale jobs");
 
@@ -150,23 +152,24 @@ async fn refreshed_job_lease_is_not_reaped(pool: sqlx::PgPool) {
 
     let job_id = EvaluationJobId::try_new(job_id).expect("stored job id is valid");
     let stale_attempt_refreshed =
-        shared::db::refresh_evaluation_job_claim(&pool, &job_id, "worker-1", 2)
+        agentics_persistence::refresh_evaluation_job_claim(&pool, &job_id, "worker-1", 2)
             .await
             .expect("failed to reject stale attempt refresh");
     assert!(!stale_attempt_refreshed);
 
     let wrong_worker_refreshed =
-        shared::db::refresh_evaluation_job_claim(&pool, &job_id, "worker-2", 1)
+        agentics_persistence::refresh_evaluation_job_claim(&pool, &job_id, "worker-2", 1)
             .await
             .expect("failed to reject wrong worker refresh");
     assert!(!wrong_worker_refreshed);
 
-    let refreshed = shared::db::refresh_evaluation_job_claim(&pool, &job_id, "worker-1", 1)
-        .await
-        .expect("failed to refresh job lease");
+    let refreshed =
+        agentics_persistence::refresh_evaluation_job_claim(&pool, &job_id, "worker-1", 1)
+            .await
+            .expect("failed to refresh job lease");
     assert!(refreshed);
 
-    let result = shared::db::reap_stuck_jobs(&pool, 1)
+    let result = agentics_persistence::reap_stuck_jobs(&pool, 1)
         .await
         .expect("failed to reap stale jobs");
 
@@ -269,7 +272,7 @@ async fn worker_accelerator_capability_filters_job_claims(pool: sqlx::PgPool) {
     let gpu_submission_id = uuid::Uuid::new_v4().to_string();
     let cpu_job_id = uuid::Uuid::new_v4().to_string();
     let gpu_job_id = uuid::Uuid::new_v4().to_string();
-    let accelerator_challenge_id = shared::models::ids::ChallengeId::generate();
+    let accelerator_challenge_id = agentics_domain::models::ids::ChallengeId::generate();
     let bundle_root = tempfile::tempdir().expect("failed to create bundle tempdir");
     let private_bundle = bundle_root.path().join("private-bundle");
     let public_bundle = bundle_root.path().join("public-bundle");
@@ -370,28 +373,37 @@ async fn worker_accelerator_capability_filters_job_claims(pool: sqlx::PgPool) {
         .expect("job should insert");
     }
 
-    let cpu_claim =
-        shared::db::claim_next_evaluation_job(&pool, "cpu-only-worker", WorkerAccelerators::None)
-            .await
-            .expect("CPU worker claim query should succeed")
-            .expect("CPU worker should claim the CPU job");
+    let cpu_claim = agentics_persistence::claim_next_evaluation_job(
+        &pool,
+        "cpu-only-worker",
+        WorkerAccelerators::None,
+    )
+    .await
+    .expect("CPU worker claim query should succeed")
+    .expect("CPU worker should claim the CPU job");
     assert_eq!(cpu_claim.id.as_str(), cpu_job_id);
     assert_eq!(cpu_claim.required_accelerator, TargetAccelerator::None);
 
-    let skipped_gpu_claim =
-        shared::db::claim_next_evaluation_job(&pool, "cpu-only-worker-2", WorkerAccelerators::None)
-            .await
-            .expect("CPU worker claim query should succeed");
+    let skipped_gpu_claim = agentics_persistence::claim_next_evaluation_job(
+        &pool,
+        "cpu-only-worker-2",
+        WorkerAccelerators::None,
+    )
+    .await
+    .expect("CPU worker claim query should succeed");
     assert!(
         skipped_gpu_claim.is_none(),
         "CPU-only workers must skip queued GPU jobs"
     );
 
-    let gpu_claim =
-        shared::db::claim_next_evaluation_job(&pool, "gpu-worker", WorkerAccelerators::Gpu)
-            .await
-            .expect("GPU worker claim query should succeed")
-            .expect("GPU worker should claim the GPU job");
+    let gpu_claim = agentics_persistence::claim_next_evaluation_job(
+        &pool,
+        "gpu-worker",
+        WorkerAccelerators::Gpu,
+    )
+    .await
+    .expect("GPU worker claim query should succeed")
+    .expect("GPU worker should claim the GPU job");
     assert_eq!(gpu_claim.id.as_str(), gpu_job_id);
     assert_eq!(gpu_claim.required_accelerator, TargetAccelerator::Gpu);
 }
@@ -437,15 +449,18 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
     let solution_submission_id = SolutionSubmissionId::try_new(solution_submission_id)
         .expect("API returned valid solution submission id");
 
-    let first_claim =
-        shared::db::claim_next_evaluation_job(&pool, "worker-a", WorkerAccelerators::None)
-            .await
-            .expect("failed to claim first job")
-            .expect("missing first job");
+    let first_claim = agentics_persistence::claim_next_evaluation_job(
+        &pool,
+        "worker-a",
+        WorkerAccelerators::None,
+    )
+    .await
+    .expect("failed to claim first job")
+    .expect("missing first job");
     assert_eq!(first_claim.solution_submission_id, solution_submission_id);
     assert_eq!(first_claim.attempt_count, 1);
     assert!(
-        shared::db::mark_evaluation_started(
+        agentics_persistence::mark_evaluation_started(
             &pool,
             &MarkEvaluationStartedInput {
                 evaluation_id: EvaluationId::generate(),
@@ -473,7 +488,7 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
     .execute(&pool)
     .await
     .expect("failed to age first claim");
-    let reaped = shared::db::reap_stuck_jobs(&pool, 1)
+    let reaped = agentics_persistence::reap_stuck_jobs(&pool, 1)
         .await
         .expect("failed to reap first claim");
     assert_eq!(reaped.requeued, 1);
@@ -498,15 +513,18 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
         "requeue should clear stale running evaluations before a new worker starts"
     );
 
-    let second_claim =
-        shared::db::claim_next_evaluation_job(&pool, "worker-b", WorkerAccelerators::None)
-            .await
-            .expect("failed to claim second job")
-            .expect("missing second job");
+    let second_claim = agentics_persistence::claim_next_evaluation_job(
+        &pool,
+        "worker-b",
+        WorkerAccelerators::None,
+    )
+    .await
+    .expect("failed to claim second job")
+    .expect("missing second job");
     assert_eq!(second_claim.id, first_claim.id);
     assert_eq!(second_claim.attempt_count, 2);
     assert!(
-        shared::db::mark_evaluation_started(
+        agentics_persistence::mark_evaluation_started(
             &pool,
             &MarkEvaluationStartedInput {
                 evaluation_id: EvaluationId::generate(),
@@ -531,7 +549,7 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
         None,
     );
     assert!(
-        !shared::db::mark_evaluation_finished(&pool, &stale_failure)
+        !agentics_persistence::mark_evaluation_finished(&pool, &stale_failure)
             .await
             .expect("stale finish should be ignored cleanly")
     );
@@ -555,12 +573,12 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
         Some(1.0),
     );
     assert!(
-        shared::db::mark_evaluation_finished(&pool, &current_success)
+        agentics_persistence::mark_evaluation_finished(&pool, &current_success)
             .await
             .expect("current finish should persist")
     );
     assert!(
-        !shared::db::mark_evaluation_finished(&pool, &stale_failure)
+        !agentics_persistence::mark_evaluation_finished(&pool, &stale_failure)
             .await
             .expect("late stale finish should be ignored")
     );
@@ -688,8 +706,8 @@ async fn concurrent_official_completions_keep_best_leaderboard_result(pool: sqlx
         Some(0.25),
     );
     let (winning_finished, losing_finished) = tokio::join!(
-        shared::db::mark_evaluation_finished(&pool, &winning_result),
-        shared::db::mark_evaluation_finished(&pool, &losing_result),
+        agentics_persistence::mark_evaluation_finished(&pool, &winning_result),
+        agentics_persistence::mark_evaluation_finished(&pool, &losing_result),
     );
     assert!(winning_finished.expect("winner should finish"));
     assert!(losing_finished.expect("loser should finish"));
@@ -752,7 +770,7 @@ async fn stale_visible_official_reruns_preserve_prior_public_result(pool: sqlx::
     .execute(&pool)
     .await
     .expect("failed to age failed rejudge");
-    let failed = shared::db::reap_stuck_jobs(&pool, 1)
+    let failed = agentics_persistence::reap_stuck_jobs(&pool, 1)
         .await
         .expect("failed to reap stale failed rejudge");
     assert_eq!(failed.requeued, 0);
@@ -773,7 +791,7 @@ async fn stale_visible_official_reruns_preserve_prior_public_result(pool: sqlx::
     .execute(&pool)
     .await
     .expect("failed to age requeued rejudge");
-    let requeued = shared::db::reap_stuck_jobs(&pool, 1)
+    let requeued = agentics_persistence::reap_stuck_jobs(&pool, 1)
         .await
         .expect("failed to reap stale requeued rejudge");
     assert_eq!(requeued.requeued, 1);
@@ -817,11 +835,11 @@ async fn start_official_rejudge(
     pool: &sqlx::PgPool,
     solution_submission_id: &SolutionSubmissionId,
     worker_id: &str,
-) -> shared::db::EvaluationJobRecord {
+) -> agentics_persistence::EvaluationJobRecord {
     let rejudge_id = EvaluationJobId::generate();
-    shared::db::queue_evaluation_job(
+    agentics_persistence::queue_evaluation_job(
         pool,
-        &shared::db::QueueEvaluationJobInput {
+        &agentics_persistence::QueueEvaluationJobInput {
             job_id: rejudge_id.clone(),
             solution_submission_id: solution_submission_id.clone(),
             eval_type: ScoringMode::Official,
@@ -830,14 +848,15 @@ async fn start_official_rejudge(
     )
     .await
     .expect("official rejudge should queue");
-    let claim = shared::db::claim_next_evaluation_job(pool, worker_id, WorkerAccelerators::None)
-        .await
-        .expect("failed to claim rejudge")
-        .expect("missing rejudge");
+    let claim =
+        agentics_persistence::claim_next_evaluation_job(pool, worker_id, WorkerAccelerators::None)
+            .await
+            .expect("failed to claim rejudge")
+            .expect("missing rejudge");
     assert_eq!(claim.id, rejudge_id);
     assert_eq!(claim.solution_submission_id, *solution_submission_id);
     assert!(
-        shared::db::mark_evaluation_started(
+        agentics_persistence::mark_evaluation_started(
             pool,
             &MarkEvaluationStartedInput {
                 evaluation_id: EvaluationId::generate(),
@@ -901,7 +920,7 @@ async fn finish_next_job_with_score(
         Some(score),
     );
     assert!(
-        shared::db::mark_evaluation_finished(pool, &result)
+        agentics_persistence::mark_evaluation_finished(pool, &result)
             .await
             .expect("failed to finish evaluation")
     );
@@ -912,14 +931,15 @@ async fn claim_and_start_job(
     pool: &sqlx::PgPool,
     solution_submission_id: &SolutionSubmissionId,
     worker_id: &str,
-) -> shared::db::EvaluationJobRecord {
-    let claim = shared::db::claim_next_evaluation_job(pool, worker_id, WorkerAccelerators::None)
-        .await
-        .expect("failed to claim job")
-        .expect("missing queued job");
+) -> agentics_persistence::EvaluationJobRecord {
+    let claim =
+        agentics_persistence::claim_next_evaluation_job(pool, worker_id, WorkerAccelerators::None)
+            .await
+            .expect("failed to claim job")
+            .expect("missing queued job");
     assert_eq!(claim.solution_submission_id, *solution_submission_id);
     assert!(
-        shared::db::mark_evaluation_started(
+        agentics_persistence::mark_evaluation_started(
             pool,
             &MarkEvaluationStartedInput {
                 evaluation_id: EvaluationId::generate(),
@@ -939,7 +959,7 @@ async fn claim_and_start_job(
 
 /// Handles persisted result for this module.
 fn persisted_result(
-    job: &shared::db::EvaluationJobRecord,
+    job: &agentics_persistence::EvaluationJobRecord,
     worker_id: &str,
     solution_submission_id: &SolutionSubmissionId,
     status: EvaluationStatus,

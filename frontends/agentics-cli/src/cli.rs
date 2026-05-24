@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
+use agentics_domain::models::github::GithubPullRequestNumber;
+use agentics_domain::models::hashes::{GitCommitSha, Sha256Digest};
+use agentics_domain::models::ids::{ChallengeDraftId, ChallengeId, SolutionSubmissionId};
+use agentics_domain::models::names::{AssetName, ChallengeName, MetricName, TargetName};
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use shared::models::github::GithubPullRequestNumber;
-use shared::models::hashes::{GitCommitSha, Sha256Digest};
-use shared::models::ids::{ChallengeDraftId, ChallengeId, SolutionSubmissionId};
-use shared::models::names::{AssetName, ChallengeName, MetricName, TargetName};
 
 /// Agent-facing command line for registration, challenge discovery, and
 /// solution submission workflows.

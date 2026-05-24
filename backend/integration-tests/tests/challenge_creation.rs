@@ -6,18 +6,18 @@ mod helpers;
 
 use std::path::Path;
 
+use agentics_domain::error::ServiceError;
+use agentics_domain::models::challenge_creation::ChallengeDraftValidationStatus;
+use agentics_domain::models::hashes::Sha256Digest;
+use agentics_domain::models::ids::{
+    ChallengeDraftAuditEventId, ChallengeDraftId, ChallengeDraftValidationRecordId, ChallengeId,
+};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use challenge_creation_helpers::*;
 use helpers::{
     api_url, basic_auth_header, create_creator_session, spawn_app_with_config, test_config,
 };
 use serde_json::json;
-use shared::error::ServiceError;
-use shared::models::challenge_creation::ChallengeDraftValidationStatus;
-use shared::models::hashes::Sha256Digest;
-use shared::models::ids::{
-    ChallengeDraftAuditEventId, ChallengeDraftId, ChallengeDraftValidationRecordId, ChallengeId,
-};
 
 use reqwest::StatusCode;
 
@@ -181,9 +181,9 @@ async fn draft_validation_claim_blocks_overlap_and_approval(pool: sqlx::PgPool) 
     let first_validation_id = ChallengeDraftValidationRecordId::generate();
     let second_validation_id = ChallengeDraftValidationRecordId::generate();
 
-    shared::db::begin_challenge_draft_validation(
+    agentics_persistence::begin_challenge_draft_validation(
         &pool,
-        &shared::db::BeginChallengeDraftValidationInput {
+        &agentics_persistence::BeginChallengeDraftValidationInput {
             validation_record_id: first_validation_id.clone(),
             draft_id: draft_id.clone(),
             repository_path: repository.path().to_string_lossy().to_string(),
@@ -196,9 +196,9 @@ async fn draft_validation_claim_blocks_overlap_and_approval(pool: sqlx::PgPool) 
     .await
     .expect("first validation claim should reserve");
 
-    let overlapping = shared::db::begin_challenge_draft_validation(
+    let overlapping = agentics_persistence::begin_challenge_draft_validation(
         &pool,
-        &shared::db::BeginChallengeDraftValidationInput {
+        &agentics_persistence::BeginChallengeDraftValidationInput {
             validation_record_id: second_validation_id.clone(),
             draft_id: draft_id.clone(),
             repository_path: repository.path().to_string_lossy().to_string(),
@@ -210,7 +210,10 @@ async fn draft_validation_claim_blocks_overlap_and_approval(pool: sqlx::PgPool) 
     )
     .await;
     assert!(
-        matches!(overlapping, Err(shared::error::ServiceError::Conflict)),
+        matches!(
+            overlapping,
+            Err(agentics_domain::error::ServiceError::Conflict)
+        ),
         "overlapping validation should conflict"
     );
 
@@ -258,16 +261,16 @@ async fn draft_validation_claim_blocks_overlap_and_approval(pool: sqlx::PgPool) 
 
     let validation_digest =
         Sha256Digest::try_new("b".repeat(64)).expect("validation digest should parse");
-    shared::db::finish_challenge_draft_validation(
+    agentics_persistence::finish_challenge_draft_validation(
         &pool,
-        &shared::db::FinishChallengeDraftValidationInput {
+        &agentics_persistence::FinishChallengeDraftValidationInput {
             validation_record_id: first_validation_id,
             draft_id: draft_id.clone(),
             status: ChallengeDraftValidationStatus::Passed,
             message: "passed".to_string(),
             bundle_sha256: Some(validation_digest),
         },
-        &shared::db::CreateChallengeDraftAuditEventInput {
+        &agentics_persistence::CreateChallengeDraftAuditEventInput {
             event_id: ChallengeDraftAuditEventId::generate(),
             draft_id,
             actor_agent_id: None,
@@ -998,7 +1001,7 @@ async fn stale_publish_claim_cannot_mutate_newer_publish_claim(pool: sqlx::PgPoo
     .await
     .expect("failed to approve draft directly");
 
-    let first = shared::db::claim_challenge_draft_for_publish(&pool, draft_id, 30)
+    let first = agentics_persistence::claim_challenge_draft_for_publish(&pool, draft_id, 30)
         .await
         .expect("first publish claim should reserve");
     let first_claim = first
@@ -1012,7 +1015,7 @@ async fn stale_publish_claim_cannot_mutate_newer_publish_claim(pool: sqlx::PgPoo
     .await
     .expect("failed to age publish claim");
 
-    let second = shared::db::claim_challenge_draft_for_publish(&pool, draft_id, 30)
+    let second = agentics_persistence::claim_challenge_draft_for_publish(&pool, draft_id, 30)
         .await
         .expect("second publish claim should reserve after stale reset");
     let second_claim = second
@@ -1020,14 +1023,18 @@ async fn stale_publish_claim_cannot_mutate_newer_publish_claim(pool: sqlx::PgPoo
         .expect("second publish claim id should exist");
     assert_ne!(first_claim, second_claim);
 
-    let stale_fail =
-        shared::db::fail_challenge_draft_publish(&pool, draft_id, &first_claim, "stale failure")
-            .await
-            .expect_err("stale claim should not fail newer publish");
+    let stale_fail = agentics_persistence::fail_challenge_draft_publish(
+        &pool,
+        draft_id,
+        &first_claim,
+        "stale failure",
+    )
+    .await
+    .expect_err("stale claim should not fail newer publish");
     assert!(matches!(stale_fail, ServiceError::Conflict));
 
     let stale_complete =
-        shared::db::mark_challenge_draft_published(&pool, draft_id, &first_claim, None)
+        agentics_persistence::mark_challenge_draft_published(&pool, draft_id, &first_claim, None)
             .await
             .expect_err("stale claim should not complete newer publish");
     assert!(matches!(stale_complete, ServiceError::Conflict));
@@ -1041,7 +1048,7 @@ async fn stale_publish_claim_cannot_mutate_newer_publish_claim(pool: sqlx::PgPoo
     .expect("failed to query publish claim");
     assert_eq!(claim_after_stale.as_deref(), Some(second_claim.as_str()));
 
-    shared::db::mark_challenge_draft_published(&pool, draft_id, &second_claim, None)
+    agentics_persistence::mark_challenge_draft_published(&pool, draft_id, &second_claim, None)
         .await
         .expect("newer claim should complete publish");
     let status_and_claim: (String, Option<String>) = sqlx::query_as(

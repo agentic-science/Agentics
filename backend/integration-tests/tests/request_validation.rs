@@ -512,13 +512,13 @@ async fn private_shortlist_challenge_requires_owner_delta_before_artifact_decode
     let client = reqwest::Client::new();
     let owner = create_creator_session(&pool, 2001, "shortlist-owner").await;
     let non_owner = create_creator_session(&pool, 2002, "not-owner").await;
-    let challenge_id = shared::models::ids::ChallengeId::try_new(
+    let challenge_id = agentics_domain::models::ids::ChallengeId::try_new(
         published_challenge_id(&pool, "shortlist-challenge").await,
     )
     .expect("test challenge id is valid");
-    let owner_agent_id =
-        shared::models::ids::AgentId::try_new(&owner.agent_id).expect("valid owner agent id");
-    shared::db::add_challenge_owner(&pool, &challenge_id, &owner_agent_id)
+    let owner_agent_id = agentics_domain::models::ids::AgentId::try_new(&owner.agent_id)
+        .expect("valid owner agent id");
+    agentics_persistence::add_challenge_owner(&pool, &challenge_id, &owner_agent_id)
         .await
         .expect("owner should be granted");
 

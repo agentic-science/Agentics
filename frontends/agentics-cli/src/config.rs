@@ -4,14 +4,14 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use agentics_config::{
+    DEFAULT_API_HOST, DEFAULT_API_PORT, ENV_AGENTICS_ADMIN_PASSWORD, ENV_AGENTICS_API_BASE_URL,
+    ENV_AGENTICS_API_PORT, default_local_api_base_url,
+};
 use anyhow::{Context, Result, anyhow, bail};
 use reqwest::Url;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
-use shared::config::{
-    DEFAULT_API_HOST, DEFAULT_API_PORT, ENV_AGENTICS_ADMIN_PASSWORD, ENV_AGENTICS_API_BASE_URL,
-    ENV_AGENTICS_API_PORT, default_local_api_base_url,
-};
 
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 /// Carries cli config data across this module boundary.

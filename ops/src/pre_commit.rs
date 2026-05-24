@@ -474,7 +474,7 @@ mod tests {
     #[test]
     fn staged_file_classification_detects_rust_and_frontend_work() {
         let staged = StagedFiles::from_paths(vec![
-            PathBuf::from("backend/shared/src/lib.rs"),
+            PathBuf::from("crates/domain/src/lib.rs"),
             PathBuf::from("frontends/web/src/app/page.tsx"),
             PathBuf::from("docs/README.md"),
         ]);

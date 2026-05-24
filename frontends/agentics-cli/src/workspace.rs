@@ -2,16 +2,16 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use anyhow::{Context, Result, bail};
-use serde::Serialize;
-use shared::models::challenge::ChallengeDetailResponse;
-use shared::models::ids::ChallengeId;
-use shared::models::names::ChallengeName;
-use shared::models::paths::ScriptPath;
-use shared::zip_project::{
+use agentics_contracts::zip_project::{
     ZIP_PROJECT_MANIFEST_FILE, ZIP_PROJECT_PROTOCOL, ZIP_PROJECT_PROTOCOL_VERSION,
     ZipProjectCommands, ZipProjectManifest,
 };
+use agentics_domain::models::challenge::ChallengeDetailResponse;
+use agentics_domain::models::ids::ChallengeId;
+use agentics_domain::models::names::ChallengeName;
+use agentics_domain::models::paths::ScriptPath;
+use anyhow::{Context, Result, bail};
+use serde::Serialize;
 
 use crate::cli::{SolutionInterface, SolutionRuntimeProfile};
 
@@ -294,7 +294,8 @@ impl SolutionInterface {
 mod tests {
     use std::fs;
 
-    use shared::models::challenge::{
+    use agentics_contracts::zip_project::{ZipProjectManifest, ZipProjectNetworkAccess};
+    use agentics_domain::models::challenge::{
         ChallengeBundleSpec, ChallengeDetailResponse, ChallengeEligibilitySpec,
         ChallengeEligibilityType, ChallengeExecutionSpec, ChallengeResultDetailVisibility,
         ChallengeSolutionPublicationPolicy, ChallengeTargetSpec, ChallengeVisibility,
@@ -303,13 +304,14 @@ mod tests {
         ResourceProfileSpec, SeparatedEvaluatorExecutionSpec, SolutionSpec, SolutionStageProfiles,
         StageResourceProfile, TargetAccelerator,
     };
-    use shared::models::evaluation::ScoreVisibility;
-    use shared::models::ids::ChallengeId;
-    use shared::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
-    use shared::models::localization::LocalizedText;
-    use shared::models::names::{ChallengeKeyword, ChallengeName, ResourceProfileName, TargetName};
-    use shared::models::paths::BundleRelativePath;
-    use shared::zip_project::{ZipProjectManifest, ZipProjectNetworkAccess};
+    use agentics_domain::models::evaluation::ScoreVisibility;
+    use agentics_domain::models::ids::ChallengeId;
+    use agentics_domain::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
+    use agentics_domain::models::localization::LocalizedText;
+    use agentics_domain::models::names::{
+        ChallengeKeyword, ChallengeName, ResourceProfileName, TargetName,
+    };
+    use agentics_domain::models::paths::BundleRelativePath;
 
     use super::{default_workspace_dir, init_solution_workspace};
     use crate::cli::{SolutionInterface, SolutionRuntimeProfile};

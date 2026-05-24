@@ -2,14 +2,7 @@
 
 mod helpers;
 
-use base64::{Engine as _, engine::general_purpose::STANDARD};
-use helpers::{
-    TestCreatorSession, api_url, basic_auth_header, create_creator_session, spawn_app_with_config,
-    test_config, zip_project_zip_base64,
-};
-use serde_json::json;
-use shared::{
-    db,
+use agentics_domain::{
     error::ServiceError,
     models::{
         challenge_creation::ChallengePrivateAssetKind,
@@ -19,8 +12,15 @@ use shared::{
         },
         names::AssetName,
     },
-    storage::StorageKey,
 };
+use agentics_persistence as db;
+use agentics_storage::StorageKey;
+use base64::{Engine as _, engine::general_purpose::STANDARD};
+use helpers::{
+    TestCreatorSession, api_url, basic_auth_header, create_creator_session, spawn_app_with_config,
+    test_config, zip_project_zip_base64,
+};
+use serde_json::json;
 
 /// Add creator session headers to a request builder.
 fn creator_auth(
@@ -341,7 +341,7 @@ async fn stale_pending_private_asset_retry_replaces_unreferenced_object(pool: sq
     let asset_bytes = STANDARD
         .decode(&asset_base64)
         .expect("test asset base64 should decode");
-    let sha256 = shared::challenge_creation::sha256_digest(&asset_bytes);
+    let sha256 = agentics_contracts::challenge_creation::sha256_digest(&asset_bytes);
     let storage_key = StorageKey::try_new(format!(
         "challenge-drafts/{}/private-assets/official-cases-{}.bin",
         draft_id, sha256

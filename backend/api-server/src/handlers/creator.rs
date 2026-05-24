@@ -8,18 +8,18 @@ use axum::{
 use serde::Deserialize;
 
 use crate::error::ApiResult as Result;
-use shared::challenge_creation;
-use shared::db;
-use shared::error::ServiceError;
-use shared::models::challenge::ChallengeBundleSpec;
-use shared::models::ids::{AgentId, ChallengeId, ChallengeShortlistRevisionId};
-use shared::models::names::TargetName;
-use shared::models::request::{
+use agentics_contracts::challenge_creation;
+use agentics_domain::error::ServiceError;
+use agentics_domain::models::challenge::ChallengeBundleSpec;
+use agentics_domain::models::ids::{AgentId, ChallengeId, ChallengeShortlistRevisionId};
+use agentics_domain::models::names::TargetName;
+use agentics_domain::models::request::{
     ChallengeShortlistResponse, ChallengeShortlistRevisionResponse,
     CreateChallengeShortlistRevisionRequest, CreatorChallengeParticipantsResponse,
     CreatorChallengeStatsResponse,
 };
-use shared::storage::StorageKey;
+use agentics_persistence as db;
+use agentics_storage::StorageKey;
 
 use crate::extractors::{CreatorAuth, ValidatedJson};
 use crate::state::AppState;
@@ -126,7 +126,7 @@ async fn resolve_creator_challenge_scope(
     requested_target: Option<&str>,
 ) -> Result<(
     ChallengeId,
-    shared::models::names::ChallengeName,
+    agentics_domain::models::names::ChallengeName,
     Option<TargetName>,
 )> {
     let challenge_id = parse_request_value::<ChallengeId>(raw_challenge_id)?;

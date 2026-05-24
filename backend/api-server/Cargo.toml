@@ -15,7 +15,12 @@ name = "api"
 path = "src/main.rs"
 
 [dependencies]
-shared = { workspace = true }
+agentics-config = { workspace = true }
+agentics-contracts = { workspace = true }
+agentics-domain = { workspace = true }
+agentics-persistence = { workspace = true }
+agentics-services = { workspace = true }
+agentics-storage = { workspace = true }
 
 axum = { workspace = true }
 tower-http = { version = "0.6", features = ["trace", "cors", "fs"] }

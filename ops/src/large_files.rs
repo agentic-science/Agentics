@@ -439,7 +439,7 @@ mod tests {
 
     #[test]
     fn code_file_detection_skips_generated_and_locks() {
-        assert!(is_code_file(Path::new("backend/shared/src/lib.rs")));
+        assert!(is_code_file(Path::new("crates/domain/src/lib.rs")));
         assert!(is_code_file(Path::new("frontends/web/src/app/globals.css")));
         assert!(is_code_file(Path::new("Dockerfile")));
         assert!(should_skip(Path::new(

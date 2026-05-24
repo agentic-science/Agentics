@@ -22,7 +22,7 @@ target
 node_modules
 .playwright-mcp/
 .agentics-demo/
-storage/
+/storage/
 
 # Python caches and local environments
 __pycache__/

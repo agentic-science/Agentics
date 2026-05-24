@@ -11,8 +11,13 @@ use tracing::warn;
 use uuid::Uuid;
 
 use crate::error::ApiResult as Result;
-use shared::error::ServiceError;
-use shared::models::challenge_creation::{
+use agentics_contracts::validation::archive::{
+    ArchiveEnvelopePolicy, extract_zip_bytes_to_dir, inspect_zip_bytes,
+};
+use agentics_contracts::validation::github::GithubPullRequestRef;
+use agentics_contracts::{challenge_bundle, challenge_creation};
+use agentics_domain::error::ServiceError;
+use agentics_domain::models::challenge_creation::{
     AdminChallengePrivateAssetListResponse, ChallengeCreationManifest,
     ChallengeCreationRequestKind, ChallengeDraftCleanupResponse, ChallengeDraftListResponse,
     ChallengeDraftResponse, ChallengeDraftStatus, ChallengeDraftValidationStatus,
@@ -20,19 +25,15 @@ use shared::models::challenge_creation::{
     CreatorChallengeDraftResponse, ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest,
     ValidateChallengeDraftRequest,
 };
-use shared::models::hashes::{GitCommitSha, Sha256Digest};
-use shared::models::ids::{
+use agentics_domain::models::hashes::{GitCommitSha, Sha256Digest};
+use agentics_domain::models::ids::{
     ChallengeDraftAuditEventId, ChallengeDraftId, ChallengeDraftPublishClaimId,
     ChallengeDraftValidationRecordId, ChallengePrivateAssetId,
 };
-use shared::models::names::ChallengeName;
-use shared::models::paths::{RepoRelativePath, RepositoryCheckoutPath};
-use shared::storage::StorageKey;
-use shared::validation::archive::{
-    ArchiveEnvelopePolicy, extract_zip_bytes_to_dir, inspect_zip_bytes,
-};
-use shared::validation::github::GithubPullRequestRef;
-use shared::{challenge_bundle, challenge_creation, db};
+use agentics_domain::models::names::ChallengeName;
+use agentics_domain::models::paths::{RepoRelativePath, RepositoryCheckoutPath};
+use agentics_persistence as db;
+use agentics_storage::StorageKey;
 
 use crate::extractors::{AdminAuth, ChallengeDraftIdPath, CreatorAuth, ValidatedJson};
 use crate::state::AppState;
@@ -749,12 +750,15 @@ async fn prepare_and_publish_new_challenge_draft(
     .await?;
 
     let statement_path = ctx.final_bundle_path.join("statement.md");
-    let managed_bundle_path =
-        shared::models::paths::ManagedBundlePath::from_existing_dir(ctx.final_bundle_path)?;
+    let managed_bundle_path = agentics_domain::models::paths::ManagedBundlePath::from_existing_dir(
+        ctx.final_bundle_path,
+    )?;
     let managed_public_bundle_path =
-        shared::models::paths::ManagedBundlePath::from_existing_dir(ctx.final_public_bundle_path)?;
+        agentics_domain::models::paths::ManagedBundlePath::from_existing_dir(
+            ctx.final_public_bundle_path,
+        )?;
     let managed_statement_path =
-        shared::models::paths::ManagedStatementPath::from_existing_file(&statement_path)?;
+        agentics_domain::models::paths::ManagedStatementPath::from_existing_file(&statement_path)?;
     Ok(db::publish_new_challenge_draft(
         &state.db,
         &db::PublishNewChallengeDraftInput {
@@ -1062,7 +1066,7 @@ async fn cleanup_runtime_bundle(path: &Path) {
 fn validate_private_assets_for_publish(
     draft: &ChallengeDraftResponse,
     manifest: &ChallengeCreationManifest,
-    spec: &shared::models::challenge::ChallengeBundleSpec,
+    spec: &agentics_domain::models::challenge::ChallengeBundleSpec,
 ) -> Result<()> {
     let uploaded: HashSet<&str> = draft
         .private_assets
@@ -1081,13 +1085,15 @@ fn validate_private_assets_for_publish(
 
     let uses_static_private_benchmark = spec.datasets.private_benchmark_enabled
         && match &spec.execution {
-            shared::models::challenge::ChallengeExecutionSpec::SeparatedEvaluator(execution) => {
-                execution.official_runs.is_some() && execution.official_prepare.is_none()
-            }
-            shared::models::challenge::ChallengeExecutionSpec::PipedStdio(execution) => {
+            agentics_domain::models::challenge::ChallengeExecutionSpec::SeparatedEvaluator(
+                execution,
+            ) => execution.official_runs.is_some() && execution.official_prepare.is_none(),
+            agentics_domain::models::challenge::ChallengeExecutionSpec::PipedStdio(execution) => {
                 execution.official_session.is_some() && execution.official_prepare.is_none()
             }
-            shared::models::challenge::ChallengeExecutionSpec::CoexecutedBenchmark(_) => false,
+            agentics_domain::models::challenge::ChallengeExecutionSpec::CoexecutedBenchmark(_) => {
+                false
+            }
         };
     let private_benchmark_uploaded = draft
         .private_assets

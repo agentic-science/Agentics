@@ -2,24 +2,26 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use agentics_config::Config;
+use agentics_contracts::validation::targets::{self, TargetSelectionMode};
+use agentics_domain::models::challenge::{ChallengeBundleSpec, ChallengeDetailResponse};
+use agentics_domain::models::challenge_creation::{
+    ChallengePrivateAssetKind, ReviewChallengeDraftRequest, ValidateChallengeDraftRequest,
+};
+use agentics_domain::models::evaluation::{
+    EvaluationJobPayload, ScoringMode, SolutionSubmissionStatus,
+};
+use agentics_domain::models::hashes::Sha256Digest;
+use agentics_domain::models::ids::{ChallengeDraftId, ChallengeId, SolutionSubmissionId};
+use agentics_domain::models::names::{ChallengeName, MetricName, TargetName};
+use agentics_domain::models::pioneer_codes::{PioneerCode, PioneerCodeInput};
+use agentics_domain::models::request::{
+    CreateSolutionSubmissionRequest, RankingContextResponse, RegisterAgentRequest,
+};
+use agentics_storage::{LocalStorage, Storage, StorageKey};
 use anyhow::{Context, Result, bail};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use secrecy::{ExposeSecret, SecretString};
-use shared::config::Config;
-use shared::models::challenge::{ChallengeBundleSpec, ChallengeDetailResponse};
-use shared::models::challenge_creation::{
-    ChallengePrivateAssetKind, ReviewChallengeDraftRequest, ValidateChallengeDraftRequest,
-};
-use shared::models::evaluation::{EvaluationJobPayload, ScoringMode, SolutionSubmissionStatus};
-use shared::models::hashes::Sha256Digest;
-use shared::models::ids::{ChallengeDraftId, ChallengeId, SolutionSubmissionId};
-use shared::models::names::{ChallengeName, MetricName, TargetName};
-use shared::models::pioneer_codes::{PioneerCode, PioneerCodeInput};
-use shared::models::request::{
-    CreateSolutionSubmissionRequest, RankingContextResponse, RegisterAgentRequest,
-};
-use shared::storage::{LocalStorage, Storage, StorageKey};
-use shared::validation::targets::{self, TargetSelectionMode};
 
 use crate::api::ApiClient;
 use crate::cli::{
@@ -677,7 +679,8 @@ async fn prepare_local_validation(args: ValidateArgs) -> Result<LocalValidationC
         .as_deref()
         .context("--bundle-dir is required for local validation")?;
     let bundle_dir = canonical_dir(bundle_dir, "challenge bundle")?;
-    let spec = shared::challenge_bundle::read_challenge_bundle_spec(&bundle_dir).await?;
+    let spec =
+        agentics_contracts::challenge_bundle::read_challenge_bundle_spec(&bundle_dir).await?;
     require_requested_challenge(&spec, args.challenge_name.as_ref())?;
     let targets = select_local_targets(&spec, args.target.as_ref(), args.all_targets)?;
     let package = package::package_solution_workspace(&args.dir)?;
@@ -777,8 +780,8 @@ async fn execute_local_validation_targets(
     context: &LocalValidationContext,
     output_format: cli::OutputFormat,
 ) -> Result<Vec<output::LocalValidationTargetReport>> {
-    let docker = shared::runner::connect_docker(&context.config)?;
-    shared::runner::remove_stale_local_validation_containers(&docker).await?;
+    let docker = agentics_runner::connect_docker(&context.config)?;
+    agentics_runner::remove_stale_local_validation_containers(&docker).await?;
     let storage = LocalStorage::new(&context.storage_root);
     let mut target_reports = Vec::with_capacity(context.targets.len());
     for target in &context.targets {
@@ -787,24 +790,25 @@ async fn execute_local_validation_targets(
         let stored_artifact_key = storage.put(&artifact_key, &context.package.bytes).await?;
         let payload = EvaluationJobPayload {
             artifact_key: stored_artifact_key,
-            bundle_path: shared::models::paths::ManagedBundlePath::from_existing_dir(
+            bundle_path: agentics_domain::models::paths::ManagedBundlePath::from_existing_dir(
                 &context.bundle_dir,
             )?,
-            public_bundle_path: shared::models::paths::ManagedBundlePath::from_existing_dir(
-                &context.bundle_dir,
-            )?,
+            public_bundle_path:
+                agentics_domain::models::paths::ManagedBundlePath::from_existing_dir(
+                    &context.bundle_dir,
+                )?,
             challenge_id: None,
             challenge_name: context.spec.challenge_name.clone(),
             target: target.clone(),
         };
         let log_path = context.storage_root.join(runner_log_key(&job_id));
-        match shared::runner::execute_evaluation_job(shared::runner::EvaluationJobExecution {
+        match agentics_runner::execute_evaluation_job(agentics_runner::EvaluationJobExecution {
             docker: &docker,
             config: &context.config,
             job_id: &job_id,
             worker_id: "local-validation",
             attempt_count: 1,
-            container_scope: shared::runner::RunnerContainerScope::LocalValidation,
+            container_scope: agentics_runner::RunnerContainerScope::LocalValidation,
             eval_type: ScoringMode::Validation,
             payload: &payload,
             storage: &storage,
@@ -812,7 +816,7 @@ async fn execute_local_validation_targets(
         .await
         {
             Ok(execution) => {
-                let primary_metric = shared::models::evaluation::MetricValue::find_by_name(
+                let primary_metric = agentics_domain::models::evaluation::MetricValue::find_by_name(
                     &execution.result.aggregate_metrics,
                     &context.spec.metric_schema.ranking.primary_metric_name,
                 );
@@ -988,7 +992,7 @@ async fn validate_parent_submission_scope(
 /// Handles batch error with created ids for this module.
 fn batch_error_with_created_ids(
     action: &str,
-    responses: &[shared::models::request::CreateSolutionSubmissionResponse],
+    responses: &[agentics_domain::models::request::CreateSolutionSubmissionResponse],
     package: Option<&package::SolutionPackage>,
     output_format: cli::OutputFormat,
     failed_target: &TargetName,
@@ -1015,7 +1019,7 @@ fn batch_error_with_created_ids(
 
 /// Handles batch status error for this module.
 fn batch_status_error(
-    responses: &[shared::models::request::SolutionSubmissionResponse],
+    responses: &[agentics_domain::models::request::SolutionSubmissionResponse],
     output_format: cli::OutputFormat,
     failed_target: &TargetName,
     error: anyhow::Error,
@@ -1081,7 +1085,7 @@ async fn poll_validation_run(
     validation_run_id: &SolutionSubmissionId,
     poll_interval: Duration,
     timeout: Duration,
-) -> Result<shared::models::request::SolutionSubmissionResponse> {
+) -> Result<agentics_domain::models::request::SolutionSubmissionResponse> {
     let deadline = Instant::now()
         .checked_add(timeout)
         .context("validation poll timeout is too large")?;
@@ -1103,7 +1107,7 @@ pub(crate) async fn wait_for_solution_submission(
     solution_submission_id: &SolutionSubmissionId,
     poll_interval: Duration,
     timeout: Duration,
-) -> Result<shared::models::request::SolutionSubmissionResponse> {
+) -> Result<agentics_domain::models::request::SolutionSubmissionResponse> {
     let deadline = Instant::now()
         .checked_add(timeout)
         .context("solution submission poll timeout is too large")?;

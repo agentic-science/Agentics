@@ -3,14 +3,14 @@
 use axum::Json;
 
 use crate::error::ApiResult as Result;
-use shared::db;
-use shared::error::ServiceError;
-use shared::models::request::{
+use agentics_contracts::validation::archive::inspect_zip_bytes;
+use agentics_contracts::zip_project::zip_project_archive_policy;
+use agentics_domain::error::ServiceError;
+use agentics_domain::models::request::{
     SolutionSubmissionArtifactFileDto, SolutionSubmissionArtifactResponse,
     SolutionSubmissionLogsResponse,
 };
-use shared::validation::archive::inspect_zip_bytes;
-use shared::zip_project::zip_project_archive_policy;
+use agentics_persistence as db;
 
 use crate::state::AppState;
 
@@ -215,7 +215,7 @@ mod tests {
     use std::io::Write;
     use std::path::PathBuf;
 
-    use shared::zip_project::MAX_ZIP_PROJECT_FILE_COUNT;
+    use agentics_contracts::zip_project::MAX_ZIP_PROJECT_FILE_COUNT;
     use uuid::Uuid;
 
     use super::*;

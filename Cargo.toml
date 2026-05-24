@@ -1,7 +1,13 @@
 [workspace]
 resolver = "3"
 members = [
-    "backend/shared",
+    "crates/domain",
+    "crates/contracts",
+    "crates/storage",
+    "crates/config",
+    "crates/persistence",
+    "crates/services",
+    "crates/runner",
     "backend/api-server",
     "backend/worker",
     "backend/integration-tests",
@@ -52,7 +58,13 @@ unwrap_used = "warn"
 wildcard_imports = "warn"
 
 [workspace.dependencies]
-shared = { path = "backend/shared" }
+agentics-domain = { path = "crates/domain" }
+agentics-contracts = { path = "crates/contracts" }
+agentics-storage = { path = "crates/storage" }
+agentics-config = { path = "crates/config" }
+agentics-persistence = { path = "crates/persistence" }
+agentics-services = { path = "crates/services" }
+agentics-runner = { path = "crates/runner" }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -81,3 +93,10 @@ governor = "0.10"
 futures = "0.3"
 tempfile = "3"
 nix = { version = "0.30", features = ["fs", "process", "signal", "user"] }
+sha2 = "0.11"
+rand = "0.10"
+hex = "0.4"
+async-trait = "0.1"
+tokio-util = "0.7"
+bytes = "1"
+http = "1"

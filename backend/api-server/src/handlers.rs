@@ -23,22 +23,24 @@ use url::form_urlencoded;
 use uuid::Uuid;
 
 use crate::error::ApiResult as Result;
-use shared::auth;
-use shared::config::AgentRegistrationMode;
-use shared::db::{self, QueueEvaluationJobInput};
-use shared::error::ServiceError;
-use shared::models::challenge::{
+use agentics_config::AgentRegistrationMode;
+use agentics_contracts::validation::public_api::{
+    self, DEFAULT_PUBLIC_CHALLENGE_LIST_LIMIT, DEFAULT_PUBLIC_LEADERBOARD_LIMIT,
+    DEFAULT_PUBLIC_SUBMISSION_LIST_LIMIT, PublicPagination,
+};
+use agentics_domain::error::ServiceError;
+use agentics_domain::models::challenge::{
     ChallengeBundleSpec, ChallengeResultDetailVisibility, ChallengeSolutionPublicationPolicy,
     ChallengeVisibility, MoltbookCommunityDto,
 };
-use shared::models::evaluation::{EvaluationJobStatus, ScoringMode};
-use shared::models::ids::{
+use agentics_domain::models::evaluation::{EvaluationJobStatus, ScoringMode};
+use agentics_domain::models::ids::{
     AgentId, AgentPioneerCodeId, AgentTokenId, ChallengeId, EvaluationJobId, SolutionSubmissionId,
 };
-use shared::models::names::{ChallengeKeyword, MetricName, TargetName};
-use shared::models::pioneer_codes::PioneerCode;
-use shared::models::pioneer_codes::PioneerCodeStatus;
-use shared::models::request::{
+use agentics_domain::models::names::{ChallengeKeyword, MetricName, TargetName};
+use agentics_domain::models::pioneer_codes::PioneerCode;
+use agentics_domain::models::pioneer_codes::PioneerCodeStatus;
+use agentics_domain::models::request::{
     AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto,
     AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse, AgentStatus,
     CreatePioneerCodeRequest, CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse,
@@ -49,11 +51,10 @@ use shared::models::request::{
     SolutionSubmissionLogsResponse, SolutionSubmissionResponse,
     SolutionSubmissionResultReportResponse,
 };
-use shared::storage::StorageKey;
-use shared::validation::public_api::{
-    self, DEFAULT_PUBLIC_CHALLENGE_LIST_LIMIT, DEFAULT_PUBLIC_LEADERBOARD_LIMIT,
-    DEFAULT_PUBLIC_SUBMISSION_LIST_LIMIT, PublicPagination,
-};
+use agentics_persistence as db;
+use agentics_persistence::QueueEvaluationJobInput;
+use agentics_services::auth;
+use agentics_storage::StorageKey;
 
 use crate::extractors::{AdminAuth, AgentAuth, SolutionSubmissionPath, ValidatedJson};
 use crate::pioneer_code_security::{is_invalid_pioneer_code, reject_failed_pioneer_code};
@@ -80,9 +81,9 @@ where
 /// Health endpoint that verifies database connectivity.
 pub async fn healthz(
     State(state): State<AppState>,
-) -> Result<Json<shared::models::HealthResponse>> {
-    let db = shared::db::pool::check_database(&state.db).await?;
-    Ok(Json(shared::models::HealthResponse {
+) -> Result<Json<agentics_domain::models::HealthResponse>> {
+    let db = agentics_persistence::pool::check_database(&state.db).await?;
+    Ok(Json(agentics_domain::models::HealthResponse {
         status: "ok".to_string(),
         service: "api-server".to_string(),
         environment: "development".to_string(),
@@ -155,19 +156,21 @@ pub async fn list_agent_challenges(
     _agent: AgentAuth,
     State(state): State<AppState>,
     RawQuery(raw_query): RawQuery,
-) -> Result<Json<shared::models::challenge::ChallengeListResponse>> {
+) -> Result<Json<agentics_domain::models::challenge::ChallengeListResponse>> {
     let query = ChallengeCatalogQuery::from_raw(raw_query.as_deref())?;
     let page = query.page()?;
     let filters = query.filters()?;
     let challenges =
         db::list_published_challenges(&state.db, page.limit, page.offset, &filters).await?;
-    Ok(Json(shared::models::challenge::ChallengeListResponse {
-        items: challenges.items,
-        total_count: challenges.total_count,
-        limit: challenges.limit,
-        offset: challenges.offset,
-        has_more: challenges.has_more,
-    }))
+    Ok(Json(
+        agentics_domain::models::challenge::ChallengeListResponse {
+            items: challenges.items,
+            total_count: challenges.total_count,
+            limit: challenges.limit,
+            offset: challenges.offset,
+            has_more: challenges.has_more,
+        },
+    ))
 }
 
 /// Fetch challenge details for authenticated agents.
@@ -175,7 +178,7 @@ pub async fn get_agent_challenge(
     _agent: AgentAuth,
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<Json<shared::models::challenge::ChallengeDetailResponse>> {
+) -> Result<Json<agentics_domain::models::challenge::ChallengeDetailResponse>> {
     get_challenge_detail_response(state, parse_request_value::<ChallengeId>(&id)?).await
 }
 
@@ -183,19 +186,21 @@ pub async fn get_agent_challenge(
 pub async fn list_challenges(
     State(state): State<AppState>,
     RawQuery(raw_query): RawQuery,
-) -> Result<Json<shared::models::challenge::ChallengeListResponse>> {
+) -> Result<Json<agentics_domain::models::challenge::ChallengeListResponse>> {
     let query = ChallengeCatalogQuery::from_raw(raw_query.as_deref())?;
     let page = query.page()?;
     let filters = query.filters()?;
     let challenges =
         db::list_published_challenges(&state.db, page.limit, page.offset, &filters).await?;
-    Ok(Json(shared::models::challenge::ChallengeListResponse {
-        items: challenges.items,
-        total_count: challenges.total_count,
-        limit: challenges.limit,
-        offset: challenges.offset,
-        has_more: challenges.has_more,
-    }))
+    Ok(Json(
+        agentics_domain::models::challenge::ChallengeListResponse {
+            items: challenges.items,
+            total_count: challenges.total_count,
+            limit: challenges.limit,
+            offset: challenges.offset,
+            has_more: challenges.has_more,
+        },
+    ))
 }
 
 /// Fetch aggregate public observer counters.
@@ -213,7 +218,7 @@ pub async fn get_public_stats(State(state): State<AppState>) -> Result<Json<Publ
 pub async fn get_challenge(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<Json<shared::models::challenge::ChallengeDetailResponse>> {
+) -> Result<Json<agentics_domain::models::challenge::ChallengeDetailResponse>> {
     get_challenge_detail_response(state, parse_request_value::<ChallengeId>(&id)?).await
 }
 
@@ -221,7 +226,7 @@ pub async fn get_challenge(
 async fn get_challenge_detail_response(
     state: AppState,
     challenge_id: ChallengeId,
-) -> Result<Json<shared::models::challenge::ChallengeDetailResponse>> {
+) -> Result<Json<agentics_domain::models::challenge::ChallengeDetailResponse>> {
     let challenge = db::get_public_challenge(&state.db, &challenge_id).await?;
     let challenge = challenge.ok_or(ServiceError::NotFound)?;
 
@@ -285,7 +290,8 @@ async fn create_solution_submission_for_mode(
 
     let artifact_bytes =
         artifacts::base64_decode(&body.artifact_base64).ok_or(ServiceError::Base64)?;
-    let manifest = shared::zip_project::ZipProjectManifest::from_zip_bytes(&artifact_bytes)?;
+    let manifest =
+        agentics_contracts::zip_project::ZipProjectManifest::from_zip_bytes(&artifact_bytes)?;
 
     let solution_submission_id = SolutionSubmissionId::generate();
     let job_id = EvaluationJobId::generate();

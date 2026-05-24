@@ -21,6 +21,11 @@ use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Stdio};
 use std::time::Duration;
 
+use agentics_config::{
+    DEFAULT_ADMIN_USERNAME, DEFAULT_API_HOST, ENV_AGENTICS_ADMIN_PASSWORD,
+    ENV_AGENTICS_ADMIN_USERNAME, ENV_AGENTICS_API_BASE_URL, ENV_AGENTICS_API_PORT,
+    ENV_AGENTICS_WEB_BASE_URL, default_local_api_base_url, default_local_web_base_url,
+};
 use bollard::Docker;
 use bollard::models::{
     ContainerCreateBody, HostConfig, Mount, MountType, PortBinding, VolumeCreateRequest,
@@ -32,11 +37,6 @@ use bollard::query_parameters::{
 use clap::{Parser, Subcommand};
 use futures::StreamExt;
 use secrecy::{ExposeSecret, SecretString};
-use shared::config::{
-    DEFAULT_ADMIN_USERNAME, DEFAULT_API_HOST, ENV_AGENTICS_ADMIN_PASSWORD,
-    ENV_AGENTICS_ADMIN_USERNAME, ENV_AGENTICS_API_BASE_URL, ENV_AGENTICS_API_PORT,
-    ENV_AGENTICS_WEB_BASE_URL, default_local_api_base_url, default_local_web_base_url,
-};
 use sqlx::Executor;
 use sqlx::postgres::PgPoolOptions;
 use tokio::process::Command;

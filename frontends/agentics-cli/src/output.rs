@@ -1,21 +1,23 @@
 use std::path::PathBuf;
 
-use anyhow::Result;
-use serde::Serialize;
-use serde_json::{Map, Value, json};
-use shared::models::challenge::{
+use agentics_domain::models::challenge::{
     ChallengeDetailResponse, ChallengeListResponse, MetricDirection, PublicChallengeExecutionSpec,
 };
-use shared::models::challenge_creation::{ChallengeDraftCleanupResponse, ChallengeDraftResponse};
-use shared::models::evaluation::{EvaluationDto, EvaluatorRunResult, MetricValue};
-use shared::models::ids::ChallengeId;
-use shared::models::names::{ChallengeName, MetricName, TargetName};
-use shared::models::request::{
+use agentics_domain::models::challenge_creation::{
+    ChallengeDraftCleanupResponse, ChallengeDraftResponse,
+};
+use agentics_domain::models::evaluation::{EvaluationDto, EvaluatorRunResult, MetricValue};
+use agentics_domain::models::ids::ChallengeId;
+use agentics_domain::models::names::{ChallengeName, MetricName, TargetName};
+use agentics_domain::models::request::{
     CreateSolutionSubmissionResponse, LeaderboardResponse, PublicSolutionSubmissionListResponse,
     RankingContextResponse, RegisterAgentResponse, ScoreDistributionResponse,
     SolutionSubmissionLogsResponse, SolutionSubmissionResponse,
     SolutionSubmissionResultReportResponse,
 };
+use anyhow::Result;
+use serde::Serialize;
+use serde_json::{Map, Value, json};
 
 use crate::cli::OutputFormat;
 use crate::config::ResolvedSettings;
@@ -683,7 +685,7 @@ pub(crate) fn render_solution_submission_logs(
             response
                 .log_key
                 .as_ref()
-                .map_or("none", shared::storage::StorageKey::as_str),
+                .map_or("none", agentics_storage::StorageKey::as_str),
             response.truncated,
             response.content.as_deref().unwrap_or("")
         )),
@@ -1038,7 +1040,7 @@ pub(crate) fn render_score_distribution(
 }
 
 /// Handles format targets for this module.
-fn format_targets(targets: &[shared::models::challenge::ChallengeTargetSpec]) -> String {
+fn format_targets(targets: &[agentics_domain::models::challenge::ChallengeTargetSpec]) -> String {
     if targets.is_empty() {
         return "  <none>".to_string();
     }
@@ -1075,13 +1077,13 @@ fn format_targets(targets: &[shared::models::challenge::ChallengeTargetSpec]) ->
 }
 
 /// Format public challenge keywords for compact CLI output.
-fn format_keywords(keywords: &[shared::models::names::ChallengeKeyword]) -> String {
+fn format_keywords(keywords: &[agentics_domain::models::names::ChallengeKeyword]) -> String {
     if keywords.is_empty() {
         "none".to_string()
     } else {
         keywords
             .iter()
-            .map(shared::models::names::ChallengeKeyword::as_str)
+            .map(agentics_domain::models::names::ChallengeKeyword::as_str)
             .collect::<Vec<_>>()
             .join(", ")
     }

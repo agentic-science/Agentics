@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use sqlx::PgPool;
 
-use shared::config::Config;
-use shared::storage::Storage;
+use agentics_config::Config;
+use agentics_storage::Storage;
 
 use crate::admin_auth_throttle::AdminAuthThrottle;
 

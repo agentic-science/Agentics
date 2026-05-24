@@ -17,12 +17,12 @@
 
 use std::sync::Arc;
 
+use agentics_config::Config;
+use agentics_persistence::pool::create_pool;
+use agentics_storage::LocalStorage;
 use api_server::admin_auth_throttle::AdminAuthThrottle;
 use api_server::router;
 use api_server::state::AppState;
-use shared::config::Config;
-use shared::db::pool::create_pool;
-use shared::storage::LocalStorage;
 use tokio::net::TcpListener;
 use tracing::info;
 
@@ -43,7 +43,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Seed challenges from challenges_root
     if tokio::fs::metadata(&config.challenges_root).await.is_ok() {
-        shared::db::ensure_challenges_seeded_from_root(
+        agentics_persistence::ensure_challenges_seeded_from_root(
             &db,
             &config.challenges_root,
             &config.storage_root,

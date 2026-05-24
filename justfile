@@ -101,7 +101,7 @@ web-format:
 
 # Prepare sqlx offline queries
 sqlx-prepare:
-    cd backend/shared && cargo sqlx prepare
+    cargo sqlx prepare --workspace
 
 # Clean build artifacts
 clean:

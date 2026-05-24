@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+use agentics_config::ENV_AGENTICS_ADMIN_PASSWORD;
 use secrecy::SecretString;
-use shared::config::ENV_AGENTICS_ADMIN_PASSWORD;
 use url::Url;
 use uuid::Uuid;
 

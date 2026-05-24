@@ -19,7 +19,7 @@ use std::sync::Arc;
 
 use tracing::info;
 
-use shared::config::Config;
+use agentics_config::Config;
 use worker::cycle::Worker;
 
 #[tokio::main]

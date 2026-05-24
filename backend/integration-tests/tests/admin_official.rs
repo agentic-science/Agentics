@@ -357,9 +357,10 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
     );
     run_worker_once(&pool, &config).await;
 
-    let admin_sum_id_typed = shared::models::ids::ChallengeId::try_new(admin_sum_id.clone())
-        .expect("test challenge id is valid");
-    shared::db::archive_challenge(&pool, &admin_sum_id_typed)
+    let admin_sum_id_typed =
+        agentics_domain::models::ids::ChallengeId::try_new(admin_sum_id.clone())
+            .expect("test challenge id is valid");
+    agentics_persistence::archive_challenge(&pool, &admin_sum_id_typed)
         .await
         .expect("challenge should archive");
     let archived_rejudge = client

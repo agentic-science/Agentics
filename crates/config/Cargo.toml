@@ -1,0 +1,22 @@
+[package]
+name = "agentics-config"
+version.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+agentics-domain = { workspace = true }
+agentics-contracts = { workspace = true }
+anyhow = { workspace = true }
+figment = { workspace = true }
+http = { workspace = true }
+nix = { workspace = true }
+secrecy = { workspace = true }
+serde = { workspace = true }
+url = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

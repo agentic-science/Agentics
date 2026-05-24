@@ -193,13 +193,13 @@ pub async fn create_draft_with_author_and_commit(
 
 /// Handles register agent for this module.
 pub async fn register_agent(pool: &sqlx::PgPool, name: &str) -> String {
-    let token = shared::auth::create_agent_token();
-    let token_hash = shared::auth::hash_agent_token(&token);
-    shared::db::register_agent(
+    let token = agentics_services::auth::create_agent_token();
+    let token_hash = agentics_services::auth::hash_agent_token(&token);
+    agentics_persistence::register_agent(
         pool,
-        &shared::db::RegisterAgentInput {
-            agent_id: shared::models::ids::AgentId::generate(),
-            token_id: shared::models::ids::AgentTokenId::generate(),
+        &agentics_persistence::RegisterAgentInput {
+            agent_id: agentics_domain::models::ids::AgentId::generate(),
+            token_id: agentics_domain::models::ids::AgentTokenId::generate(),
             token_hash,
             display_name: name.to_string(),
             agent_description: String::new(),

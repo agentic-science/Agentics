@@ -1,0 +1,24 @@
+[package]
+name = "agentics-domain"
+version.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+secrecy = { workspace = true }
+schemars = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+url = { workspace = true }
+nutype = { workspace = true }
+gix-hash = { workspace = true }
+oci-spec = { workspace = true }
+sqlx = { workspace = true }
+zip = { workspace = true }
+rand = { workspace = true }
+hex = { workspace = true }

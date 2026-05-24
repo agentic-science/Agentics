@@ -2,12 +2,12 @@
 
 mod helpers;
 
+use agentics_config::WorkerAccelerators;
+use agentics_domain::models::ids::ChallengeId;
+use agentics_domain::models::paths::{ManagedBundlePath, ManagedStatementPath};
 use helpers::{
     api_url, run_worker_once, spawn_app_with_config, test_config, zip_project_zip_base64,
 };
-use shared::config::WorkerAccelerators;
-use shared::models::ids::ChallengeId;
-use shared::models::paths::{ManagedBundlePath, ManagedStatementPath};
 
 const CUDA_TARGET: &str = "linux-arm64-cuda";
 const CUDA_IMAGE: &str = "ghcr.io/agentic-science/agentics-linux-arm64-cuda:cu130-ubuntu24.04-v0.2.5@sha256:8e3da4a65e297e3b1e9800da001fa2bbac9ed48453a6972117a0c3ad1d1eef13";
@@ -169,10 +169,10 @@ async fn publish_cuda_smoke_challenge(
     private_bundle: &std::path::Path,
     public_bundle: &std::path::Path,
 ) {
-    shared::challenge_bundle::validate_challenge_bundle(private_bundle)
+    agentics_contracts::challenge_bundle::validate_challenge_bundle(private_bundle)
         .await
         .expect("private CUDA smoke bundle should validate");
-    let spec = shared::challenge_bundle::read_challenge_bundle_spec(private_bundle)
+    let spec = agentics_contracts::challenge_bundle::read_challenge_bundle_spec(private_bundle)
         .await
         .expect("failed to read CUDA smoke spec");
     let managed_private =
@@ -182,9 +182,9 @@ async fn publish_cuda_smoke_challenge(
     let statement_path =
         ManagedStatementPath::from_existing_file(private_bundle.join("statement.md"))
             .expect("valid statement path");
-    shared::db::publish_challenge(
+    agentics_persistence::publish_challenge(
         pool,
-        &shared::db::PublishChallengeInput {
+        &agentics_persistence::PublishChallengeInput {
             challenge_id: &ChallengeId::generate(),
             challenge_name: &spec.challenge_name,
             bundle_path: &managed_private,
