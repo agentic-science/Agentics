@@ -17,10 +17,10 @@ import { fetchJson } from "@/lib/api";
 import { artifactIsPublic } from "@/lib/challengeVisibility";
 import { formatDate, formatScore } from "@/lib/format";
 import {
+  displayPrimaryMetric,
   formatDeclaredMetric,
   metricDirectionLabel,
   metricLabel,
-  primaryMetric,
   primaryMetricLabel,
 } from "@/lib/metrics";
 import {
@@ -104,8 +104,12 @@ export default async function SolutionSubmissionPage({
 
   const evalDto = selectSubmissionDisplayEvaluation(submission);
   const metricSchema = detail.spec.metric_schema;
-  const primary = primaryMetric(metricSchema, evalDto?.aggregate_metrics ?? []);
   const officialPrimary = submission.official_primary_metric;
+  const primary = displayPrimaryMetric(
+    metricSchema,
+    evalDto?.aggregate_metrics ?? [],
+    officialPrimary,
+  );
 
   return (
     <div className="flex flex-col gap-6">

@@ -2,11 +2,11 @@ import { formatMetricValue } from "@/lib/format";
 import type { ChallengeDetailResponse } from "@/lib/schemas";
 
 /** Describes the metric schema shape used by this module. */
-type MetricSchema = ChallengeDetailResponse["spec"]["metric_schema"];
+export type MetricSchema = ChallengeDetailResponse["spec"]["metric_schema"];
 /** Describes the metric definition shape used by this module. */
 type MetricDefinition = MetricSchema["metrics"][number];
 /** Describes the metric value shape used by this module. */
-type MetricValue = { metric_name: string; value: number };
+export type MetricValue = { metric_name: string; value: number };
 /** Describes translated labels for metric direction display. */
 type MetricDirectionLabels = { maximize: string; minimize: string };
 
@@ -26,6 +26,26 @@ export function primaryMetric(
   return metrics.find(
     (metric) => metric.metric_name === schema.ranking.primary_metric_name,
   );
+}
+
+/**
+ * Return the best public primary metric for submission pages.
+ *
+ * Public official score-only views redact aggregate metrics but keep the
+ * official primary metric, so use it as the display fallback when it matches
+ * the challenge ranking metric.
+ */
+export function displayPrimaryMetric(
+  schema: MetricSchema,
+  metrics: MetricValue[],
+  officialPrimaryMetric: MetricValue | null | undefined,
+): MetricValue | undefined {
+  const aggregatePrimary = primaryMetric(schema, metrics);
+  if (aggregatePrimary) return aggregatePrimary;
+  return officialPrimaryMetric?.metric_name ===
+    schema.ranking.primary_metric_name
+    ? officialPrimaryMetric
+    : undefined;
 }
 
 /** Human-facing metric label with a safe fallback for unknown names. */
