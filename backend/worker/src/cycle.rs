@@ -8,25 +8,15 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use bollard::Docker;
-use tokio::sync::watch;
 use tokio::time::interval;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 use uuid::Uuid;
 
 use agentics_config::Config;
-use agentics_domain::error::ServiceError;
-use agentics_domain::models::evaluation::EvaluationStatus;
-use agentics_domain::models::ids::{EvaluationId, EvaluationJobId};
 use agentics_persistence::pool::create_pool;
-use agentics_persistence::{
-    HeartbeatPayload, PersistedEvaluationResult, claim_next_evaluation_job,
-    mark_evaluation_finished, mark_evaluation_started, reap_stuck_jobs,
-    refresh_evaluation_job_claim, requeue_running_evaluation_job_for_capacity,
-    upsert_service_heartbeat,
-};
-use agentics_runner::{
-    EvaluationJobExecution, RunnerContainerScope, connect_docker, evaluation_runner_log_key,
-    execute_evaluation_job, reconcile_runner_containers,
+use agentics_runner::connect_docker;
+use agentics_services::evaluation_lifecycle::{
+    EvaluationWorkerService, reconcile_worker_containers,
 };
 use agentics_storage::LocalStorage;
 
@@ -51,7 +41,7 @@ impl Worker {
         let docker = connect_docker(&config)?;
         enforce_worker_gpu_probe(&config, &docker).await?;
         let cleanup =
-            reconcile_runner_containers(&docker, &db, config.worker_stale_job_minutes.max(1))
+            reconcile_worker_containers(&docker, &db, config.worker_stale_job_minutes.max(1))
                 .await?;
         if cleanup.total_removed() > 0 {
             info!(
@@ -144,9 +134,8 @@ fn sanitize_worker_label(value: &str) -> String {
 
 /// Run one worker poll iteration.
 ///
-/// A cycle reaps stale claims, claims at most one queued job, records heartbeat
-/// state, executes the runner, and persists either a completed evaluation or a
-/// failed evaluation with the runner error.
+/// The worker crate keeps the public test hook and delegates lifecycle decisions
+/// to `agentics-services`.
 pub async fn run_worker_cycle(
     db: &sqlx::PgPool,
     docker: &Docker,
@@ -154,336 +143,10 @@ pub async fn run_worker_cycle(
     storage: &dyn agentics_storage::Storage,
     worker_id: &str,
 ) -> anyhow::Result<()> {
-    let reaped = reap_stuck_jobs(db, config.worker_stale_job_minutes.max(1)).await?;
-    if reaped.requeued > 0 || reaped.failed > 0 {
-        info!(
-            requeued = reaped.requeued,
-            failed = reaped.failed,
-            "reaped stale jobs"
-        );
-    }
-    let cleanup =
-        reconcile_runner_containers(docker, db, config.worker_stale_job_minutes.max(1)).await?;
-    if cleanup.total_removed() > 0 {
-        info!(
-            removed_stopped = cleanup.removed_stopped,
-            removed_running = cleanup.removed_running,
-            "reconciled runner containers"
-        );
-    }
-
-    let job = claim_next_evaluation_job(db, worker_id, config.worker_accelerators).await?;
-
-    let Some(job) = job else {
-        // Heartbeats are the admin-facing signal that an otherwise idle worker
-        // is still alive and able to claim future jobs.
-        upsert_service_heartbeat(
-            db,
-            worker_id,
-            &HeartbeatPayload {
-                status: "idle".to_string(),
-                accelerators: config.worker_accelerators.heartbeat_values(),
-                job_id: None,
-                solution_submission_id: None,
-                last_completed_job_id: None,
-                last_failed_job_id: None,
-            },
-        )
+    EvaluationWorkerService::new(db, docker, config, storage)
+        .run_one_cycle(worker_id)
         .await?;
-        return Ok(());
-    };
-
-    upsert_service_heartbeat(
-        db,
-        worker_id,
-        &HeartbeatPayload {
-            status: "running".to_string(),
-            accelerators: config.worker_accelerators.heartbeat_values(),
-            job_id: Some(job.id.clone()),
-            solution_submission_id: Some(job.solution_submission_id.clone()),
-            last_completed_job_id: None,
-            last_failed_job_id: None,
-        },
-    )
-    .await?;
-
-    let evaluation_id = EvaluationId::generate();
-    let evaluation_inserted = mark_evaluation_started(
-        db,
-        &agentics_persistence::MarkEvaluationStartedInput {
-            evaluation_id,
-            solution_submission_id: job.solution_submission_id.clone(),
-            job_id: job.id.clone(),
-            worker_id: worker_id.to_string(),
-            claim_attempt_count: job.attempt_count,
-            target: job.target.clone(),
-            eval_type: job.eval_type,
-        },
-    )
-    .await?;
-    if !evaluation_inserted {
-        warn!(
-            job_id = %job.id,
-            worker_id,
-            attempt_count = job.attempt_count,
-            "evaluation row already exists for job; preserving original start record"
-        );
-    }
-
-    let (lease_stop_tx, lease_stop_rx) = watch::channel(false);
-    let lease_task = tokio::spawn(refresh_claim_until_stopped(
-        db.clone(),
-        job.id.clone(),
-        worker_id.to_string(),
-        job.attempt_count,
-        lease_refresh_interval(config),
-        lease_stop_rx,
-    ));
-
-    let exec_result = execute_evaluation_job(EvaluationJobExecution {
-        docker,
-        config,
-        job_id: job.id.as_str(),
-        worker_id,
-        attempt_count: job.attempt_count,
-        container_scope: RunnerContainerScope::HostedWorker,
-        eval_type: job.eval_type,
-        payload: &job.payload,
-        storage,
-    })
-    .await;
-    let _ = lease_stop_tx.send(true);
-    if let Err(join_err) = lease_task.await {
-        error!(error = %join_err, "job lease refresh task failed");
-    }
-
-    match exec_result {
-        Ok(result) => {
-            let job_id = job.id.clone();
-            let solution_submission_id = job.solution_submission_id.clone();
-            let rank_score = result.result.rank_score;
-
-            let persisted = mark_evaluation_finished(
-                db,
-                &PersistedEvaluationResult {
-                    solution_submission_id: solution_submission_id.clone(),
-                    job_id: job_id.clone(),
-                    worker_id: worker_id.to_string(),
-                    claim_attempt_count: job.attempt_count,
-                    target: job.target.clone(),
-                    eval_type: job.eval_type,
-                    status: EvaluationStatus::Completed,
-                    rank_score,
-                    aggregate_metrics: result.result.aggregate_metrics,
-                    run_metrics: result.result.run_metrics,
-                    public_results: result.result.public_results,
-                    validation_summary: result.result.validation_summary,
-                    official_summary: result.result.official_summary,
-                    log_key: Some(result.log_key),
-                    last_error: None,
-                },
-            )
-            .await?;
-            if !persisted {
-                warn!(
-                    job_id = %job_id,
-                    worker_id,
-                    attempt_count = job.attempt_count,
-                    "ignored evaluation completion from stale worker claim"
-                );
-                upsert_service_heartbeat(
-                    db,
-                    worker_id,
-                    &HeartbeatPayload {
-                        status: "idle".to_string(),
-                        accelerators: config.worker_accelerators.heartbeat_values(),
-                        job_id: None,
-                        solution_submission_id: None,
-                        last_completed_job_id: None,
-                        last_failed_job_id: None,
-                    },
-                )
-                .await?;
-                return Ok(());
-            }
-
-            upsert_service_heartbeat(
-                db,
-                worker_id,
-                &HeartbeatPayload {
-                    status: "idle".to_string(),
-                    accelerators: config.worker_accelerators.heartbeat_values(),
-                    job_id: None,
-                    solution_submission_id: None,
-                    last_completed_job_id: Some(job_id.clone()),
-                    last_failed_job_id: None,
-                },
-            )
-            .await?;
-
-            info!(
-                job_id = %job_id,
-                solution_submission_id = %solution_submission_id,
-                rank_score = ?rank_score,
-                "evaluation completed"
-            );
-        }
-        Err(ServiceError::RunnerCapacity(error_msg)) => {
-            let requeued = requeue_running_evaluation_job_for_capacity(
-                db,
-                &job.id,
-                worker_id,
-                job.attempt_count,
-                &error_msg,
-            )
-            .await?;
-            if !requeued {
-                warn!(
-                    job_id = %job.id,
-                    worker_id,
-                    attempt_count = job.attempt_count,
-                    error = %error_msg,
-                    "ignored capacity requeue from stale worker claim"
-                );
-            } else {
-                warn!(
-                    job_id = %job.id,
-                    solution_submission_id = %job.solution_submission_id,
-                    error = %error_msg,
-                    "evaluation requeued because runner capacity is temporarily unavailable"
-                );
-            }
-            upsert_service_heartbeat(
-                db,
-                worker_id,
-                &HeartbeatPayload {
-                    status: "idle".to_string(),
-                    accelerators: config.worker_accelerators.heartbeat_values(),
-                    job_id: None,
-                    solution_submission_id: None,
-                    last_completed_job_id: None,
-                    last_failed_job_id: None,
-                },
-            )
-            .await?;
-        }
-        Err(e) => {
-            let error_msg = e.to_string();
-            let log_key = evaluation_runner_log_key(job.id.as_str(), job.attempt_count).ok();
-            let persisted = mark_evaluation_finished(
-                db,
-                &PersistedEvaluationResult {
-                    solution_submission_id: job.solution_submission_id.clone(),
-                    job_id: job.id.clone(),
-                    worker_id: worker_id.to_string(),
-                    claim_attempt_count: job.attempt_count,
-                    target: job.target.clone(),
-                    eval_type: job.eval_type,
-                    status: EvaluationStatus::Failed,
-                    rank_score: None,
-                    aggregate_metrics: vec![],
-                    run_metrics: vec![],
-                    public_results: vec![],
-                    validation_summary: None,
-                    official_summary: None,
-                    log_key,
-                    last_error: Some(error_msg.clone()),
-                },
-            )
-            .await?;
-            if !persisted {
-                warn!(
-                    job_id = %job.id,
-                    worker_id,
-                    attempt_count = job.attempt_count,
-                    error = %error_msg,
-                    "ignored evaluation failure from stale worker claim"
-                );
-                upsert_service_heartbeat(
-                    db,
-                    worker_id,
-                    &HeartbeatPayload {
-                        status: "idle".to_string(),
-                        accelerators: config.worker_accelerators.heartbeat_values(),
-                        job_id: None,
-                        solution_submission_id: None,
-                        last_completed_job_id: None,
-                        last_failed_job_id: None,
-                    },
-                )
-                .await?;
-                return Ok(());
-            }
-
-            upsert_service_heartbeat(
-                db,
-                worker_id,
-                &HeartbeatPayload {
-                    status: "idle".to_string(),
-                    accelerators: config.worker_accelerators.heartbeat_values(),
-                    job_id: None,
-                    solution_submission_id: None,
-                    last_completed_job_id: None,
-                    last_failed_job_id: Some(job.id.clone()),
-                },
-            )
-            .await?;
-
-            error!(
-                job_id = %job.id,
-                solution_submission_id = %job.solution_submission_id,
-                error = %error_msg,
-                "evaluation failed"
-            );
-        }
-    }
-
     Ok(())
-}
-
-/// Handles lease refresh interval for this module.
-fn lease_refresh_interval(config: &Config) -> Duration {
-    let stale_minutes = u64::from(config.worker_stale_job_minutes.max(1).unsigned_abs());
-    let stale_window = Duration::from_mins(stale_minutes);
-    stale_window
-        .checked_div(3)
-        .unwrap_or(stale_window)
-        .clamp(Duration::from_secs(5), Duration::from_mins(1))
-}
-
-/// Handles refresh claim until stopped for this module.
-async fn refresh_claim_until_stopped(
-    db: sqlx::PgPool,
-    job_id: EvaluationJobId,
-    worker_id: String,
-    attempt_count: i32,
-    refresh_every: Duration,
-    mut stop: watch::Receiver<bool>,
-) {
-    let mut ticker = interval(refresh_every);
-    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-
-    loop {
-        tokio::select! {
-            _ = ticker.tick() => {
-                match refresh_evaluation_job_claim(&db, &job_id, &worker_id, attempt_count).await {
-                    Ok(true) => {}
-                    Ok(false) => {
-                        error!(job_id = %job_id, worker_id = %worker_id, attempt_count, "job lease no longer belongs to worker attempt");
-                        break;
-                    }
-                    Err(e) => {
-                        error!(job_id = %job_id, worker_id = %worker_id, attempt_count, error = %e, "failed to refresh job lease");
-                    }
-                }
-            }
-            changed = stop.changed() => {
-                if changed.is_err() || *stop.borrow() {
-                    break;
-                }
-            }
-        }
-    }
 }
 
 #[cfg(test)]

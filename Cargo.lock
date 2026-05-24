@@ -176,12 +176,20 @@ dependencies = [
 name = "agentics-services"
 version = "0.2.5"
 dependencies = [
+ "agentics-config",
  "agentics-domain",
+ "agentics-persistence",
+ "agentics-runner",
+ "agentics-storage",
  "base64",
+ "bollard",
  "hex",
  "rand 0.10.1",
  "secrecy",
  "sha2 0.11.0",
+ "sqlx",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -4794,6 +4802,7 @@ dependencies = [
  "agentics-domain",
  "agentics-persistence",
  "agentics-runner",
+ "agentics-services",
  "agentics-storage",
  "anyhow",
  "bollard",

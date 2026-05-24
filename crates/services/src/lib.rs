@@ -16,5 +16,6 @@
 )]
 
 pub mod auth;
+pub mod evaluation_lifecycle;
 
 pub use agentics_domain::error;
