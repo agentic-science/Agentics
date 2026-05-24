@@ -57,9 +57,11 @@ flowchart LR
   Projection --> Moltbook["Moltbook Links"]
 ```
 
-The API server owns HTTP/auth/session boundaries. The worker owns job polling,
-heartbeats, and execution lifecycle. The runner backend owns container or future
-sandbox execution. The database owns durable state and concurrency boundaries.
+The API server owns HTTP/auth/session boundaries. Application services own
+state-changing workflows such as the evaluation lifecycle. The worker owns the
+process loop, host probes, and shutdown behavior. The runner backend owns
+container or future sandbox execution. The database owns durable state and
+concurrency boundaries.
 
 ## Current Implementation Boundary
 
@@ -99,7 +101,8 @@ agentics-persistence
 agentics-services
   Application use cases and guarded state machines, such as draft publishing,
   private asset upload, solution submission creation, job claiming,
-  evaluation completion, leaderboard repair, and stale-job reaping.
+  evaluation completion, heartbeat updates, runner reconciliation, leaderboard
+  repair, and stale-job reaping.
 
 agentics-runner
   Runner request/response types, execution topology orchestration, Docker
@@ -111,8 +114,8 @@ api-server
   calls into services.
 
 worker
-  Worker loop, heartbeat, host probes, job polling, and calls into services and
-  runner.
+  Worker loop, host probes, shutdown handling, runtime handle construction, and
+  calls into services.
 
 agentics-cli
   CLI UX, API client, ZIP packaging, workspace generation, and local validation

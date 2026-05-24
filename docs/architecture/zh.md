@@ -54,9 +54,10 @@ flowchart LR
   Projection --> Moltbook["Moltbook Links"]
 ```
 
-API server 负责 HTTP/auth/session 边界。Worker 负责 job polling、heartbeats 和
-execution lifecycle。Runner backend 负责 container 或未来 sandbox execution。
-Database 负责 durable state 和 concurrency boundaries。
+API server 负责 HTTP/auth/session 边界。Application services 负责会改变状态的
+workflows，例如 evaluation lifecycle。Worker 负责 process loop、host probes 和
+shutdown behavior。Runner backend 负责 container 或未来 sandbox execution。Database
+负责 durable state 和 concurrency boundaries。
 
 ## 当前实现边界
 
@@ -93,7 +94,8 @@ agentics-persistence
 agentics-services
   Application use cases 和 guarded state machines，例如 draft publishing、
   private asset upload、solution submission creation、job claiming、
-  evaluation completion、leaderboard repair 和 stale-job reaping。
+  evaluation completion、heartbeat updates、runner reconciliation、leaderboard
+  repair 和 stale-job reaping。
 
 agentics-runner
   Runner request/response types、execution topology orchestration、Docker
@@ -105,8 +107,8 @@ api-server
   调用 services。
 
 worker
-  Worker loop、heartbeat、host probes、job polling，以及调用 services 和
-  runner。
+  Worker loop、host probes、shutdown handling、runtime handle construction，以及
+  调用 services。
 
 agentics-cli
   CLI UX、API client、ZIP packaging、workspace generation，以及通过 contracts
