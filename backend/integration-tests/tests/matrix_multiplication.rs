@@ -209,11 +209,14 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
         runner_log
     );
     assert_eq!(completed["evaluation"]["eval_type"], "official");
-    assert_eq!(
-        completed["evaluation"]["aggregate_metrics"],
-        serde_json::json!([])
+    assert!(
+        completed["evaluation"]["aggregate_metrics"]
+            .as_array()
+            .expect("aggregate metrics should be an array")
+            .iter()
+            .any(|metric| metric["metric_name"] == "total_wall_time_ms")
     );
-    assert!(completed["evaluation"]["official_summary"].is_null());
+    assert_eq!(completed["evaluation"]["official_summary"]["score"], 1.0);
     assert_eq!(
         completed["evaluation"]["run_metrics"],
         serde_json::json!([])

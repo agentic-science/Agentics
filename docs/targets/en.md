@@ -213,6 +213,11 @@ and score distributions expose only completed official evaluations for visible
 solution submissions. Validation-only evaluations remain owner/authenticated
 feedback and are not exposed through public lists.
 
+Authenticated submitter result reports expose official aggregate metrics and the
+official summary for the submitter's own submissions. Public result views remain
+score-oriented and continue to hide raw official aggregate, per-run, case, and
+log payloads.
+
 Public leaderboard and ranking-context DTOs do not include raw
 `aggregate_metrics` or `official_metrics` arrays. Those metric payloads remain
 backend-internal and are used only to compute ordering and allowed score

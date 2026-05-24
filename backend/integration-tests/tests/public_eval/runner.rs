@@ -108,7 +108,10 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
     assert_eq!(solution_submission["evaluation"]["rank_score"], 1.0);
     assert_eq!(
         solution_submission["evaluation"]["aggregate_metrics"],
-        serde_json::json!([])
+        serde_json::json!([
+            { "metric_name": "score", "value": 1.0 },
+            { "metric_name": "passed_cases", "value": 2.0 }
+        ])
     );
     assert_eq!(
         solution_submission["evaluation"]["run_metrics"],
@@ -118,7 +121,10 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
         solution_submission["evaluation"]["public_results"],
         serde_json::json!([])
     );
-    assert!(solution_submission["evaluation"]["official_summary"].is_null());
+    assert_eq!(
+        solution_submission["evaluation"]["official_summary"],
+        serde_json::json!({ "score": 1.0, "passed": 2, "total": 2 })
+    );
     assert!(solution_submission["evaluation"]["log_key"].is_null());
 
     let owner_logs: serde_json::Value = client

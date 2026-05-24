@@ -203,6 +203,10 @@ distributions 只暴露 visible solution submissions 上已完成的 official ev
 Validation-only evaluations 仍是 owner/authenticated feedback，不会通过 public
 lists 暴露。
 
+Authenticated submitter result reports 会为 submitter 自己的 submissions 展示
+official aggregate metrics 和 official summary。Public result views 仍以 score
+为中心，并继续隐藏原始 official aggregate、per-run、case 和 log payloads。
+
 Public leaderboard 和 ranking-context DTO 不包含原始 `aggregate_metrics` 或
 `official_metrics` arrays。这些 metric payloads 仍是 backend-internal 数据，只用于
 计算排序和允许公开的 score distributions。

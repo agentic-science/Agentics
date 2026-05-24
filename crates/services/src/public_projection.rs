@@ -52,6 +52,11 @@ impl SolutionSubmissionAudience {
     fn includes_validation_details(self) -> bool {
         matches!(self, Self::Owner)
     }
+
+    /// Returns whether this audience may see submitter-facing official aggregate feedback.
+    fn includes_official_aggregate_feedback(self) -> bool {
+        matches!(self, Self::Owner)
+    }
 }
 
 /// Fetch public challenge details by challenge id.
@@ -552,23 +557,35 @@ fn present_evaluation(
             Some(evaluation.clone())
         }
         ScoringMode::Validation => None,
-        ScoringMode::Official => Some(redact_private_benchmark_details(evaluation)),
+        ScoringMode::Official => Some(redact_private_benchmark_details(evaluation, audience)),
     }
 }
 
 /// Removes official-run fields that could reveal private benchmark cases or logs.
-fn redact_private_benchmark_details(evaluation: &EvaluationDto) -> EvaluationDto {
+fn redact_private_benchmark_details(
+    evaluation: &EvaluationDto,
+    audience: SolutionSubmissionAudience,
+) -> EvaluationDto {
+    let include_aggregate_feedback = audience.includes_official_aggregate_feedback();
     EvaluationDto {
         id: evaluation.id.clone(),
         target: evaluation.target.clone(),
         status: evaluation.status,
         eval_type: evaluation.eval_type,
         rank_score: evaluation.rank_score,
-        aggregate_metrics: Vec::new(),
+        aggregate_metrics: if include_aggregate_feedback {
+            evaluation.aggregate_metrics.clone()
+        } else {
+            Vec::new()
+        },
         run_metrics: Vec::new(),
         public_results: Vec::new(),
         validation_summary: None,
-        official_summary: None,
+        official_summary: if include_aggregate_feedback {
+            evaluation.official_summary.clone()
+        } else {
+            None
+        },
         log_key: None,
         started_at: evaluation.started_at.clone(),
         finished_at: evaluation.finished_at.clone(),
