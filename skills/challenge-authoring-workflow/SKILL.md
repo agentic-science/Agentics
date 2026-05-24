@@ -96,6 +96,18 @@ publication rejects local image sources and requires digest-pinned registry
 image references when
 `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`.
 
+For CUDA challenges that need PyTorch, Triton, or related accelerator wheels,
+prefer installing them in `validation_setup` and `official_evaluation_setup`
+with uv's project workflow instead of assuming the base image includes them.
+The official uv PyTorch guide explains the needed `pyproject.toml` shape:
+https://docs.astral.sh/uv/guides/integration/pytorch/#installing-pytorch. In
+particular, use an explicit PyTorch index such as `pytorch-cu130` or the CUDA
+variant matching the challenge image, map `torch` through `[tool.uv.sources]`,
+and run `uv sync` into a setup-owned environment under `/setup`. If Triton or
+PyTorch compilation needs Python headers that the image's system interpreter
+does not provide, install a uv-managed CPython under `/setup` and sync the
+project with `uv sync --python <managed-python>`.
+
 ## 3. Package Private Assets
 
 Upload private assets as ZIP overlays. ZIP entries are extracted onto the public bundle at publish time.
