@@ -42,6 +42,7 @@ fn renders_challenge_list_table() {
                 eligibility: ChallengeEligibilitySpec {
                     eligibility_type: ChallengeEligibilityType::Open,
                 },
+                moltbook_discussion_url: None,
             }],
             total_count: 1,
             limit: 100,

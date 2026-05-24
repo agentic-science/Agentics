@@ -893,6 +893,8 @@ pub struct ChallengeListItemDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub closes_at: Option<String>,
     pub eligibility: ChallengeEligibilitySpec,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub moltbook_discussion_url: Option<MoltbookPostUrl>,
 }
 
 /// Public challenge catalog response.

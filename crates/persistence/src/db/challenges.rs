@@ -810,7 +810,7 @@ pub async fn list_published_challenges(
 
     let rows = sqlx::query(
         r#"
-        SELECT challenge_id, name, title, summary, spec_json
+        SELECT challenge_id, name, title, summary, spec_json, moltbook_discussion_url
         FROM challenges
         WHERE status = 'active'
           AND spec_json IS NOT NULL
@@ -863,6 +863,10 @@ pub async fn list_published_challenges(
                 starts_at: spec.starts_at,
                 closes_at: spec.closes_at,
                 eligibility: spec.eligibility,
+                moltbook_discussion_url: optional_moltbook_post_url_from_row(
+                    &r,
+                    "moltbook_discussion_url",
+                )?,
             })
         })
         .collect::<Result<Vec<_>>>()?;

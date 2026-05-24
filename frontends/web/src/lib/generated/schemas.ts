@@ -2029,6 +2029,11 @@ export const challengeListResponseSchema = z
             })
             .strict()
             .describe("Eligibility policy for a challenge."),
+          moltbook_discussion_url: z
+            .string()
+            .url()
+            .regex(/^https:\/\/www\.moltbook\.com\/post\/[A-Za-z0-9_-]+$/)
+            .optional(),
         })
         .strict()
         .describe("One row in the public challenge catalog."),

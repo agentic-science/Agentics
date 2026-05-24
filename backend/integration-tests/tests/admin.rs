@@ -162,6 +162,25 @@ async fn admin_manages_challenge_moltbook_discussion_anchor(pool: sqlx::PgPool) 
         "https://www.moltbook.com/post/sample-sum"
     );
 
+    let public_list: serde_json::Value = client
+        .get(api_url(&app, "/api/public/challenges"))
+        .send()
+        .await
+        .expect("failed to fetch public challenge list")
+        .json()
+        .await
+        .expect("failed to decode public challenge list");
+    let listed_sample_sum = public_list["items"]
+        .as_array()
+        .expect("challenge list items should be an array")
+        .iter()
+        .find(|item| item["challenge_id"] == sample_sum_id.as_str())
+        .expect("sample-sum should be listed");
+    assert_eq!(
+        listed_sample_sum["moltbook_discussion_url"],
+        "https://www.moltbook.com/post/sample-sum"
+    );
+
     let response: serde_json::Value = client
         .delete(api_url(
             &app,
