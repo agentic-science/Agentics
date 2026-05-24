@@ -1,5 +1,7 @@
 use super::Config;
 use secrecy::SecretString;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 /// Verifies that loopback bind allows local default credentials.
 #[test]
@@ -245,6 +247,15 @@ fn production_runner_requires_bounded_mounts_layers_and_host_probes() {
     let mut config = test_config();
     config.runner_security_profile = super::RunnerSecurityProfile::Production;
     config.require_digest_pinned_images = true;
+    let runtime_root = tempfile::tempdir().expect("runtime root tempdir");
+    let phase_root = tempfile::tempdir().expect("phase root tempdir");
+    #[cfg(unix)]
+    {
+        std::fs::set_permissions(runtime_root.path(), std::fs::Permissions::from_mode(0o700))
+            .expect("runtime root permissions");
+        std::fs::set_permissions(phase_root.path(), std::fs::Permissions::from_mode(0o700))
+            .expect("phase root permissions");
+    }
 
     let error = config
         .validate_runner_storage()
@@ -264,8 +275,8 @@ fn production_runner_requires_bounded_mounts_layers_and_host_probes() {
     config.runner_writable_storage_mode = super::RunnerWritableStorageMode::XfsProjectQuotaSlots;
     config.runner_docker_layer_quota = false;
     config.api_host = "127.0.0.1".to_string();
-    config.runner_runtime_root = Some("/agentics-runtime".to_string());
-    config.runner_phase_mount_root = Some("/agentics-runner-slots".to_string());
+    config.runner_runtime_root = Some(runtime_root.path().display().to_string());
+    config.runner_phase_mount_root = Some(phase_root.path().display().to_string());
     let error = config
         .validate_runner_storage()
         .expect_err("quota-backed writable rootfs also needs Docker layer quota");
@@ -290,6 +301,34 @@ fn production_runner_requires_bounded_mounts_layers_and_host_probes() {
         config.validate_runner_storage().is_ok(),
         cfg!(target_os = "linux")
     );
+}
+
+/// Verifies production runners reject traversable runtime roots.
+#[test]
+#[cfg(unix)]
+fn production_runner_rejects_world_traversable_runtime_root() {
+    let runtime_root = tempfile::tempdir().expect("runtime root tempdir");
+    let phase_root = tempfile::tempdir().expect("phase root tempdir");
+    std::fs::set_permissions(runtime_root.path(), std::fs::Permissions::from_mode(0o755))
+        .expect("runtime root permissions");
+    std::fs::set_permissions(phase_root.path(), std::fs::Permissions::from_mode(0o700))
+        .expect("phase root permissions");
+
+    let config = Config {
+        runner_security_profile: super::RunnerSecurityProfile::Production,
+        require_digest_pinned_images: true,
+        runner_writable_storage_mode: super::RunnerWritableStorageMode::XfsProjectQuotaSlots,
+        runner_docker_layer_quota: true,
+        host_probe_mode: super::HostProbeMode::Require,
+        runner_runtime_root: Some(runtime_root.path().display().to_string()),
+        runner_phase_mount_root: Some(phase_root.path().display().to_string()),
+        ..test_config()
+    };
+
+    let error = config
+        .validate_runner_storage()
+        .expect_err("production runtime root must not be traversable");
+    assert!(error.to_string().contains("mode 0700"));
 }
 
 /// Verifies quota-backed runner storage requires a host-visible runtime root.

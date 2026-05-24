@@ -148,6 +148,10 @@ AGENTICS_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS=2
 
 Use a non-default `AGENTICS_ADMIN_PASSWORD` before exposing the hosted profile.
 Prepare GitHub OAuth credentials before creator routes are exposed.
+The storage/profile setup keeps `/srv/agentics/runtime` and
+`/srv/agentics/phase-mounts` owned by the `agentics` service user and mode
+`0700`; the worker and DGX profile check fail closed if those roots are
+group/world traversable.
 
 ## Storage Preparation
 

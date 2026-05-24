@@ -1,5 +1,6 @@
 //! Environment-backed runtime configuration.
 
+use anyhow::Context as _;
 use figment::{Figment, providers::Env};
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Deserializer};
@@ -860,6 +861,19 @@ impl Config {
         {
             anyhow::bail!("AGENTICS_RUNNER_RUNTIME_ROOT must be an absolute path");
         }
+        if self.runner_security_profile == RunnerSecurityProfile::Production {
+            self.validate_private_host_directory(
+                "AGENTICS_RUNNER_RUNTIME_ROOT",
+                self.runner_runtime_root.as_deref(),
+            )?;
+            if self.runner_writable_storage_mode == RunnerWritableStorageMode::XfsProjectQuotaSlots
+            {
+                self.validate_private_host_directory(
+                    "AGENTICS_RUNNER_PHASE_MOUNT_ROOT",
+                    self.runner_phase_mount_root.as_deref(),
+                )?;
+            }
+        }
 
         Ok(())
     }
@@ -995,6 +1009,23 @@ impl Config {
         Ok(())
     }
 
+    /// Validate a production runner host directory cannot be traversed by other users.
+    fn validate_private_host_directory(
+        &self,
+        env_name: &str,
+        value: Option<&str>,
+    ) -> anyhow::Result<()> {
+        let path = value
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| anyhow::anyhow!("{env_name} must be set for production runners"))?;
+        let path = Path::new(path);
+        if !path.is_absolute() {
+            anyhow::bail!("{env_name} must be an absolute path");
+        }
+        validate_private_host_directory_path(env_name, path)
+    }
+
     /// Return the configured agent-registration mode.
     pub fn agent_registration_mode(&self) -> AgentRegistrationMode {
         self.agent_registration_mode
@@ -1091,6 +1122,40 @@ fn is_loopback_host(host: &str) -> bool {
 fn validate_required_trimmed(value: Option<&str>, field: &str) -> anyhow::Result<()> {
     if value.is_none_or(|value| value.trim().is_empty()) {
         anyhow::bail!("{field} must be set when GitHub OAuth is configured");
+    }
+    Ok(())
+}
+
+/// Validate a production runner directory is owned by this worker user and non-traversable.
+fn validate_private_host_directory_path(env_name: &str, path: &Path) -> anyhow::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+
+        let metadata = std::fs::metadata(path)
+            .with_context(|| format!("{env_name} must exist for production runners"))?;
+        if !metadata.is_dir() {
+            anyhow::bail!("{env_name} must point to a directory");
+        }
+        let mode = metadata.permissions().mode() & 0o777;
+        if mode & 0o077 != 0 {
+            anyhow::bail!("{env_name} must be mode 0700 or stricter, got {mode:o}");
+        }
+        let effective_uid = nix::unistd::Uid::effective().as_raw();
+        if metadata.uid() != effective_uid {
+            anyhow::bail!(
+                "{env_name} must be owned by the worker service user uid {effective_uid}, got uid {}",
+                metadata.uid()
+            );
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let metadata = std::fs::metadata(path)
+            .with_context(|| format!("{env_name} must exist for production runners"))?;
+        if !metadata.is_dir() {
+            anyhow::bail!("{env_name} must point to a directory");
+        }
     }
     Ok(())
 }

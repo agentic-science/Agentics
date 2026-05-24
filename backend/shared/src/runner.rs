@@ -49,8 +49,8 @@ use docker::{
 };
 use errors::{ensure_container_succeeded, ensure_prepare_succeeded};
 use filesystem::{
-    OutputTreeLimits, cleanup_paths, copy_dir_all, ensure_disk_limit, ensure_prepare_disk_limit,
-    extract_zip_safe, validate_evaluator_visible_output_tree,
+    OutputTreeLimits, cleanup_paths, copy_dir_all, create_private_host_dir, ensure_disk_limit,
+    ensure_prepare_disk_limit, extract_zip_safe, validate_evaluator_visible_output_tree,
 };
 use logs::{
     EVALUATION_LOG_BYTES_PER_RUN, EvaluationLogs, append_named_logs, append_phase_logs,

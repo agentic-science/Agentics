@@ -12,7 +12,7 @@ clap = { version = "4", features = ["derive"] }
 dotenvy = "0.15"
 futures = { workspace = true }
 ignore = { workspace = true }
-nix = { version = "0.30", features = ["fs", "process", "signal", "user"] }
+nix = { workspace = true }
 reqwest = { workspace = true }
 secrecy = { workspace = true }
 serde = { workspace = true }

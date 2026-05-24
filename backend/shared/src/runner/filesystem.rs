@@ -98,6 +98,25 @@ pub(super) async fn cleanup_paths<const N: usize>(paths: [PathBuf; N]) -> Result
     Ok(())
 }
 
+/// Create a host-private runner directory before child permissions are widened for Docker.
+pub(super) async fn create_private_host_dir(path: &Path) -> Result<()> {
+    tokio::fs::create_dir_all(path).await?;
+    set_private_host_dir_permissions(path).await
+}
+
+#[cfg(unix)]
+async fn set_private_host_dir_permissions(path: &Path) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    tokio::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700)).await?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+async fn set_private_host_dir_permissions(_path: &Path) -> Result<()> {
+    Ok(())
+}
+
 /// Handles directory size for this module.
 fn directory_size(path: &Path) -> Result<u64> {
     inspect_tree(path, None, None).map(|usage| usage.bytes)

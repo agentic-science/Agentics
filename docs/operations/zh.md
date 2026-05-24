@@ -130,6 +130,13 @@ setup/build workspaces。Retained build、prepare 和 evaluator-visible run tree
 由已租用的 runner slots 支撑，直到依赖它们的 phases 完成。未来 hardening 可以加入
 non-root run phases 或 read-only root filesystems，但不能弱化当前 disk-boundary
 要求。
+
+Production runner paths 也必须是 host 上的私有目录。Worker 要求
+`AGENTICS_RUNNER_RUNTIME_ROOT` 和 `AGENTICS_RUNNER_PHASE_MOUNT_ROOT` 已存在、由
+worker service user 拥有，并且权限为 `0700` 或更严格。Worker 会用 `0700`
+创建 transient `agentics-eval-artifacts` attempt directories，然后才为了 Docker
+bind compatibility 放宽子路径权限，因此 official private bundles 不会因为可遍历的
+host scratch parent 暴露。
 Permission-repair sidecars 使用与 runner containers 相同的 Docker hardening
 baseline，保持 network disabled，将 root filesystem 设为 read-only，并且只写入它们
 要修复的 runner-owned bind mounts。

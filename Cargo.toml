@@ -80,3 +80,4 @@ oci-spec = { version = "0.9", default-features = false, features = ["distributio
 governor = "0.10"
 futures = "0.3"
 tempfile = "3"
+nix = { version = "0.30", features = ["fs", "process", "signal", "user"] }

@@ -133,6 +133,14 @@ workspaces. Retained build, prepare, and evaluator-visible run trees stay backed
 their leased runner slots until dependent phases finish. Future hardening can add
 non-root run phases or read-only root filesystems without weakening the current
 disk-boundary requirement.
+
+Production runner paths must also be private host directories. The worker
+requires `AGENTICS_RUNNER_RUNTIME_ROOT` and `AGENTICS_RUNNER_PHASE_MOUNT_ROOT`
+to exist, be owned by the worker service user, and be mode `0700` or stricter.
+The worker creates transient `agentics-eval-artifacts` attempt directories with
+mode `0700` before broadening child permissions for Docker bind compatibility,
+so official private bundles are not exposed through a traversable host scratch
+parent.
 Permission-repair sidecars use the same Docker hardening baseline as runner
 containers, keep networking disabled, mount their root filesystem read-only, and
 write only to the runner-owned bind mounts they repair.

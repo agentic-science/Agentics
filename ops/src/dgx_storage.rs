@@ -610,9 +610,16 @@ async fn chown_owned_paths(config: &DgxStorageConfig) -> Result<String, StorageE
                 ],
             )
             .await?;
+            checked_process(
+                "chmod",
+                vec!["700".to_string(), path.to_string_lossy().to_string()],
+            )
+            .await?;
         }
     }
-    Ok(format!("applied ownership {user_group}"))
+    Ok(format!(
+        "applied ownership {user_group} and private directory modes"
+    ))
 }
 
 async fn create_dir_all_recorded(

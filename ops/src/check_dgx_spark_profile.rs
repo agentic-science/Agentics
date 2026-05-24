@@ -12,6 +12,7 @@
 //! containers, then clean them up best-effort. There is no dry-run because this
 //! is a checker; rootful mutation belongs to the storage/profile commands.
 
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Duration;
@@ -117,6 +118,10 @@ async fn run(cli: Cli) -> Result<(HostProbeMode, Vec<ReportLine>), ProfileCheckE
         expected_docker_host(&config),
         check_xfs_mount(&config.docker_data_root, "Agentics Docker data root"),
         check_runtime_root(&config.runner_runtime_root),
+        check_private_host_dir(
+            &config.runner_phase_mount_root,
+            "runner phase mount root permissions",
+        ),
     ];
     for phase in &config.phases {
         reports.push(check_xfs_mount(
@@ -216,17 +221,52 @@ fn check_runtime_root(path: &Path) -> ReportLine {
             format!("{} is missing", path.display()),
         );
     }
-    if writable_probe(path) {
-        ReportLine::pass(
-            "runner runtime root",
-            format!("{} is writable", path.display()),
-        )
-    } else {
-        ReportLine::fail(
+    if let Some(error) = private_host_dir_error(path) {
+        return ReportLine::fail("runner runtime root", error);
+    }
+    if !writable_probe(path) {
+        return ReportLine::fail(
             "runner runtime root",
             format!("{} is not writable by this user", path.display()),
-        )
+        );
     }
+    ReportLine::pass(
+        "runner runtime root",
+        format!("{} is private and writable", path.display()),
+    )
+}
+
+fn check_private_host_dir(path: &Path, label: &str) -> ReportLine {
+    if !path.is_absolute() {
+        return ReportLine::fail(label, format!("{} must be absolute", path.display()));
+    }
+    if !path.is_dir() {
+        return ReportLine::fail(label, format!("{} is missing", path.display()));
+    }
+    match private_host_dir_error(path) {
+        Some(error) => ReportLine::fail(label, error),
+        None => ReportLine::pass(label, format!("{} is private", path.display())),
+    }
+}
+
+fn private_host_dir_error(path: &Path) -> Option<String> {
+    let metadata = std::fs::metadata(path).ok()?;
+    let mode = metadata.mode() & 0o777;
+    if mode & 0o077 != 0 {
+        return Some(format!(
+            "{} must be mode 0700 or stricter, got {mode:o}",
+            path.display()
+        ));
+    }
+    let effective_uid = nix::unistd::Uid::effective().as_raw();
+    if metadata.uid() != effective_uid {
+        return Some(format!(
+            "{} must be owned by uid {effective_uid}, got uid {}",
+            path.display(),
+            metadata.uid()
+        ));
+    }
+    None
 }
 
 async fn check_slots(config: &DgxProfileCheckConfig) -> Vec<ReportLine> {

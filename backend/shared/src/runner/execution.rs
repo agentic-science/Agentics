@@ -8,9 +8,9 @@ use super::{
     EvaluatorRunResult, ExecutionResult, OutputTreeLimits, PipedStdioRequest, Result,
     RetainedRunnerTree, RunPlanRequest, RunnerAttempt, RunnerContext, RunnerStorage, ScoringMode,
     ServiceError, SetupBuildRequest, SolutionRunRequest, cleanup_paths, configure_run_count_limits,
-    copy_dir_all, evaluation_runner_log_key, extract_zip_safe, make_container_readable_tree,
-    pre_pull_image, read_limited_result_json, resolve_run_plan, sanitize_runner_error,
-    validate_evaluator_result,
+    copy_dir_all, create_private_host_dir, evaluation_runner_log_key, extract_zip_safe,
+    make_container_readable_tree, pre_pull_image, read_limited_result_json, resolve_run_plan,
+    sanitize_runner_error, validate_evaluator_result,
 };
 
 /// Execute one evaluation job in Docker and return the validated evaluator result.
@@ -32,9 +32,8 @@ pub async fn execute_evaluation_job(
     let runner_runtime_root = config
         .runner_runtime_root()
         .map_err(|error| ServiceError::Runner(error.to_string()))?;
-    let working_root = runner_runtime_root
-        .join("agentics-eval-artifacts")
-        .join(&attempt.transient_name);
+    let artifact_root = runner_runtime_root.join("agentics-eval-artifacts");
+    let working_root = artifact_root.join(&attempt.transient_name);
     let source_root = working_root.join("source");
     let build_root = working_root.join("build-workspace");
     let run_work_root = working_root.join("solution-run-work");
@@ -45,8 +44,9 @@ pub async fn execute_evaluation_job(
     let challenge_bundle_root = working_root.join("challenge-bundle");
     let log_key = evaluation_runner_log_key(job_id, attempt_count)?;
 
+    create_private_host_dir(&artifact_root).await?;
     cleanup_paths([working_root.clone()]).await?;
-    tokio::fs::create_dir_all(&working_root).await?;
+    create_private_host_dir(&working_root).await?;
     tokio::fs::create_dir_all(&source_root).await?;
     tokio::fs::create_dir_all(&build_root).await?;
     tokio::fs::create_dir_all(&run_work_root).await?;

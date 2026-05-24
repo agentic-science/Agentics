@@ -145,6 +145,10 @@ AGENTICS_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS=2
 
 公开 hosted profile 前必须使用非默认 `AGENTICS_ADMIN_PASSWORD`。开放 creator
 routes 前需要准备 GitHub OAuth credentials。
+Storage/profile setup 会保持 `/srv/agentics/runtime` 和
+`/srv/agentics/phase-mounts` 由 `agentics` service user 拥有，且权限为 `0700`；
+如果这些 roots 可被 group/world 遍历，worker 和 DGX profile check 都会 fail
+closed。
 
 ## Storage Preparation
 
