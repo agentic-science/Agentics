@@ -58,7 +58,7 @@ flowchart LR
 ```
 
 The API server owns HTTP/auth/session boundaries. Application services own
-state-changing workflows such as the evaluation lifecycle. The worker owns the
+state-changing workflows and backend-owned projections. The worker owns the
 process loop, host probes, and shutdown behavior. The runner backend owns
 container or future sandbox execution. The database owns durable state and
 concurrency boundaries.
@@ -74,7 +74,8 @@ The codebase now uses explicit internal crates for the main backend boundaries:
 - `agentics-storage` for storage traits and local storage,
 - `agentics-config` for environment-backed runtime configuration,
 - `agentics-persistence` for SQLx repositories and row adapters,
-- `agentics-services` for transport-neutral service helpers,
+- `agentics-services` for transport-neutral application workflows and
+  projections,
 - `agentics-runner` for execution topology orchestration and the Docker runner
   backend.
 
@@ -99,10 +100,10 @@ agentics-persistence
   queries. It should know Postgres, but not Docker or HTTP.
 
 agentics-services
-  Application use cases and guarded state machines, such as draft publishing,
-  private asset upload, solution submission creation, job claiming,
-  evaluation completion, heartbeat updates, runner reconciliation, leaderboard
-  repair, and stale-job reaping.
+  Application use cases, guarded state machines, and backend-owned projections,
+  such as draft publishing, private asset upload, solution submission creation,
+  public result redaction, job claiming, evaluation completion, heartbeat
+  updates, runner reconciliation, leaderboard repair, and stale-job reaping.
 
 agentics-runner
   Runner request/response types, execution topology orchestration, Docker
@@ -246,16 +247,20 @@ challenge review checks, and DGX production profile are the accepted boundary.
 
 ## Refactor Status
 
-The first crate split and the runner backend boundary are in place. The remaining
-architecture work before MVP is mostly consolidation rather than new public
+The first crate split, runner backend boundary, and main service-layer
+consolidation are in place. `agentics-services` now owns the evaluation
+lifecycle, solution submission creation, challenge draft lifecycle, Moltbook
+challenge metadata updates, and public projection/redaction surfaces.
+
+The remaining architecture work before MVP is mostly discipline, not new public
 behavior:
 
-1. Move more state-changing orchestration from API handlers and worker cycle
-   code into `agentics-services`.
-2. Keep persistence focused on row and transaction primitives, with admission
+1. Keep persistence focused on row and transaction primitives, with admission
    decisions and state-machine transitions owned by services.
-3. Keep new validation rules in `agentics-contracts` and new execution behavior
+2. Keep new validation rules in `agentics-contracts` and new execution behavior
    behind `agentics-runner::RunnerBackend`.
+3. Move any newly discovered cross-boundary workflow into services instead of
+   adding stateful orchestration back to HTTP handlers or worker loops.
 
 This is a pre-MVP codebase, so internal module paths still do not need
 compatibility shims. The important compatibility surface is the documented public
