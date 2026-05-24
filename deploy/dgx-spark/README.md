@@ -52,7 +52,7 @@ gating remains the authoritative access control.
 | Developer test quota root | `/srv/agentics-test` |
 | Runner writable storage mode | `xfs-project-quota-slots` |
 | Runner quota slot classes | `64,256,1024,4096` MiB |
-| Runner result/log caps | 12 runs, 4 MiB `result.json`, 1 MiB persisted logs per run |
+| Runner result/log caps | 100 runs, 4 MiB `result.json`, 1 MiB persisted logs per run |
 | Runner security profile | `AGENTICS_RUNNER_SECURITY_PROFILE=production` |
 | Probe mode | `AGENTICS_HOST_PROBE_MODE=require` |
 | Worker accelerator capability | `AGENTICS_WORKER_ACCELERATORS=gpu` |

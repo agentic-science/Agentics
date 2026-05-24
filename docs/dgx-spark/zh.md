@@ -31,7 +31,7 @@ MVP hosted deployment targets：
 | Driver-reported CUDA | `13.0` |
 | NVIDIA container toolkit | `nvidia-container-toolkit 1.19.0-1`，`libnvidia-container1 1.19.0-1` |
 | Agentics Docker daemon | `unix:///run/agentics/docker.sock`，`overlay2` on XFS，data root `/srv/agentics/docker-data-root`，Docker GPU device requests 已启用 |
-| Runner quota slots | 每个 runner phase 都有 64 MiB、256 MiB、1 GiB 和 4 GiB XFS project-quota slots，每个 class 四个 slots，每 MiB 256 个 inodes |
+| Runner quota slots | 每个 runner phase 都有 64 MiB、256 MiB、1 GiB 和 4 GiB XFS project-quota slots，每个 class 100 个 slots，每 MiB 256 个 inodes |
 
 在 DGX host 上运行可重复的 Linux-gated inventory check：
 
@@ -158,7 +158,7 @@ closed。
 AGENTICS_DGX_CONFIRM=prepare-storage \
 AGENTICS_DGX_PERSIST_FSTAB=1 \
 AGENTICS_DGX_PHASE_SLOT_CLASSES_MB='64 256 1024 4096' \
-AGENTICS_DGX_PHASE_SLOTS_PER_CLASS=4 \
+AGENTICS_DGX_PHASE_SLOTS_PER_CLASS=100 \
 AGENTICS_DGX_PHASE_SLOT_INODES_PER_MB=256 \
 agentics-prepare-dgx-spark-storage
 ```
@@ -173,7 +173,7 @@ persistent directory layout，格式化缺失的 loopback XFS images，使用 `p
 - `/srv/agentics/docker-data-root`，200 GiB loopback XFS with `prjquota`。
 - 五个 phase mounts，每个 20 GiB，覆盖 solution setup/build/run 和 evaluator
   prepare/score。
-- 每个 class 和 phase 四个 quota slots，覆盖 64 MiB、256 MiB、1024 MiB 和
+- 每个 class 和 phase 100 个 quota slots，覆盖 64 MiB、256 MiB、1024 MiB 和
   4096 MiB limits。默认每 MiB `256` 个 inodes，因此这些 slots 的 inode hard
   limits 分别是 16384、65536、262144 和 1048576。
 

@@ -46,7 +46,7 @@ inspection. Override defaults with `AGENTICS_DEMO_API_HOST`,
 | Local test phase mount root | `/srv/agentics-test/phase-mounts` |
 
 Default DGX quota slot classes are `64`, `256`, `1024`, and `4096` MiB, with
-four slots per class and phase. The worker leases these slots for writable
+100 slots per class and phase. The worker leases these slots for writable
 container bind mounts and uses Docker `storage_opt.size` for container-layer
 writes. Slots also carry inode hard limits at the default `256` inodes per MiB:
 `16384`, `65536`, `262144`, and `1048576` inodes for the default classes.

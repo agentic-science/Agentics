@@ -33,7 +33,7 @@ The first inventory was captured on `MapleSpark` on May 12-13, 2026.
 | Driver-reported CUDA | `13.0` |
 | NVIDIA container toolkit | `nvidia-container-toolkit 1.19.0-1`, `libnvidia-container1 1.19.0-1` |
 | Agentics Docker daemon | `unix:///run/agentics/docker.sock`, `overlay2` on XFS, data root `/srv/agentics/docker-data-root`, Docker GPU device requests enabled |
-| Runner quota slots | 64 MiB, 256 MiB, 1 GiB, and 4 GiB XFS project-quota slots for each runner phase, four slots per class, with 256 inodes per MiB |
+| Runner quota slots | 64 MiB, 256 MiB, 1 GiB, and 4 GiB XFS project-quota slots for each runner phase, 100 slots per class, with 256 inodes per MiB |
 
 Run the repeatable Linux-gated inventory check on the DGX host:
 
@@ -161,7 +161,7 @@ Run only on Linux and only with operator privileges:
 AGENTICS_DGX_CONFIRM=prepare-storage \
 AGENTICS_DGX_PERSIST_FSTAB=1 \
 AGENTICS_DGX_PHASE_SLOT_CLASSES_MB='64 256 1024 4096' \
-AGENTICS_DGX_PHASE_SLOTS_PER_CLASS=4 \
+AGENTICS_DGX_PHASE_SLOTS_PER_CLASS=100 \
 AGENTICS_DGX_PHASE_SLOT_INODES_PER_MB=256 \
 agentics-prepare-dgx-spark-storage
 ```
@@ -177,7 +177,7 @@ On `MapleSpark`, the DGX-2 run mounted:
 - `/srv/agentics/docker-data-root`, 200 GiB loopback XFS with `prjquota`.
 - Five phase mounts, 20 GiB each, for solution setup/build/run and evaluator
   prepare/score.
-- Four quota slots per class and phase for 64 MiB, 256 MiB, 1024 MiB, and
+- 100 quota slots per class and phase for 64 MiB, 256 MiB, 1024 MiB, and
   4096 MiB limits. With the default `256` inodes per MiB, those slots have
   inode hard limits of 16384, 65536, 262144, and 1048576.
 

@@ -45,7 +45,7 @@ profile 将 `deploy/dgx-spark/agentics.env.example` 复制到
 | Local test phase mount root | `/srv/agentics-test/phase-mounts` |
 
 DGX 默认 quota slot classes 为 `64`、`256`、`1024` 和 `4096` MiB，每个 phase
-和 class 有四个 slots。Worker 会为 writable container bind mounts 租用这些
+和 class 有 100 个 slots。Worker 会为 writable container bind mounts 租用这些
 slots，并使用 Docker `storage_opt.size` 约束 container-layer writes。Slots 还会按默认
 每 MiB `256` 个 inodes 设置 inode hard limits：默认 classes 分别是 `16384`、
 `65536`、`262144` 和 `1048576` 个 inodes。Evaluator-visible run trees 另行限制为
