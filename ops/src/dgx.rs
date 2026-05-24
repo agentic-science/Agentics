@@ -92,7 +92,7 @@ pub enum DgxPhase {
     SolutionSetup,
     SolutionBuild,
     SolutionRun,
-    EvaluatorPrepare,
+    EvaluatorSetup,
     EvaluatorScore,
 }
 
@@ -102,7 +102,7 @@ impl DgxPhase {
             Self::SolutionSetup => "solution-setup",
             Self::SolutionBuild => "solution-build",
             Self::SolutionRun => "solution-run",
-            Self::EvaluatorPrepare => "evaluator-prepare",
+            Self::EvaluatorSetup => "evaluator-setup",
             Self::EvaluatorScore => "evaluator-score",
         }
     }
@@ -122,12 +122,12 @@ impl FromStr for DgxPhase {
             "solution-setup" => Ok(Self::SolutionSetup),
             "solution-build" => Ok(Self::SolutionBuild),
             "solution-run" => Ok(Self::SolutionRun),
-            "evaluator-prepare" => Ok(Self::EvaluatorPrepare),
+            "evaluator-setup" => Ok(Self::EvaluatorSetup),
             "evaluator-score" => Ok(Self::EvaluatorScore),
             other => Err(DgxConfigError::InvalidValue {
                 field: ENV_DGX_PHASES,
                 value: other.to_string(),
-                message: "expected one of solution-setup, solution-build, solution-run, evaluator-prepare, evaluator-score".to_string(),
+                message: "expected one of solution-setup, solution-build, solution-run, evaluator-setup, evaluator-score".to_string(),
             }),
         }
     }
@@ -412,7 +412,7 @@ pub fn default_phases() -> Vec<DgxPhase> {
         DgxPhase::SolutionSetup,
         DgxPhase::SolutionBuild,
         DgxPhase::SolutionRun,
-        DgxPhase::EvaluatorPrepare,
+        DgxPhase::EvaluatorSetup,
         DgxPhase::EvaluatorScore,
     ]
 }

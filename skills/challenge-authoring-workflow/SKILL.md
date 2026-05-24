@@ -47,18 +47,18 @@ competition-stage abstraction; staged series should use distinct challenge names
 and names.
 
 Every bundle must also declare the execution topology explicitly. Use
-`execution.mode: "separated_evaluator"`, `execution.evaluator.command`, and
-`execution.evaluator.result_file` for ordinary multi-run checker-style
-benchmarks. Use `execution.mode: "piped_stdio"`, `execution.interactor.command`,
-and `execution.interactor.result_file` for one interactive session where the
-trusted challenge-owned interactor is also the evaluator and writes
+`execution.mode: "separated_evaluator"`, `execution.separated_evaluator.command`, and
+`execution.separated_evaluator.result_file` for ordinary multi-run checker-style
+benchmarks. Use `execution.mode: "piped_stdio"`, `execution.interactive_evaluator.command`,
+and `execution.interactive_evaluator.result_file` for one interactive session where the
+trusted challenge-owned interactive-evaluator writes
 `result.json`. Use `execution.mode: "coexecuted_benchmark"`,
-`execution.benchmark.command`, `execution.benchmark.result_file`, and
+`execution.coexecuted_evaluator.command`, `execution.coexecuted_evaluator.result_file`, and
 `acknowledge_danger: true` only for throughput-style benchmarks where the
-trusted harness must import participant code from `/workspace` inside the
+trusted coexecuted-evaluator must import participant code from `/workspace` inside the
 evaluator-image container. Co-executed profiles must omit
 `resource_profile.solution.run`, and challenge authors must not place secrets in
-the co-executed environment.
+the coexecuted-evaluator environment.
 
 Use required `keywords` in both `agentics.challenge.json` and the bundle
 `spec.json` so the public catalog can support keyword filtering. Keep the two
@@ -71,13 +71,13 @@ the challenge is published, use the creator console to upload delta-only JSON
 with `agent_ids_to_add`. Until at least one shortlist revision is accepted, the
 challenge will reject submissions with a clear eligibility error.
 
-If the bundle declares `datasets.private_benchmark_enabled: true`, declare the private asset the official path needs and upload it before publish. Static `execution.official_runs` or `execution.official_session` usually needs `private_benchmark_data`. Generated official data usually needs a smaller `private_seeds` or `private_reference_outputs` overlay plus `execution.official_prepare`.
+If the bundle declares `datasets.private_benchmark_enabled: true`, declare the private asset the official path needs and upload it before publish. Static `execution.official_runs` or `execution.official_session` usually needs `private_benchmark_data`. Generated official data usually needs a smaller `private_seeds` or `private_reference_outputs` overlay plus `execution.official_evaluation_setup`.
 Use `private_assets[].required_paths` for any private overlay path that must
 exist in the final runtime bundle, for example `private-benchmark/runs.json` for
-static official data or `private-benchmark/config.json` for prepare-generated
+static official data or `private-benchmark/config.json` for setup-generated
 seed/config overlays.
 
-Run manifests and `piped_stdio` session manifests may use `input_files[].source_path` for large public or private input files. Public validation source paths must resolve inside the public bundle. Static official source paths usually resolve inside the uploaded private benchmark overlay. Prepare-generated official source paths resolve inside `/prepared`, relative to the generated run or session manifest's prepared workspace. Keep expected outputs and reference data evaluator-owned; do not expose them to solution inputs unless the challenge intentionally makes them public.
+Run manifests and `piped_stdio` session manifests may use `input_files[].source_path` for large public or private input files. Public validation source paths must resolve inside the public bundle. Static official source paths usually resolve inside the uploaded private benchmark overlay. Setup-generated official source paths resolve inside `/setup`, relative to the generated run or session manifest's setup workspace. Keep expected outputs and reference data evaluator-owned; do not expose them to solution inputs unless the challenge intentionally makes them public.
 
 Challenge bundles must use supported first-party Agentics images with explicit
 image sources. Local development may use `source: "local"` with
@@ -105,9 +105,9 @@ Rules:
 - Use safe relative paths only.
 - Do not include symlinks.
 - Do not overwrite public bundle files.
-- Keep paths aligned with `spec.json`; for example, include `private-benchmark/runs.json` when `execution.official_runs` points there, or `private-benchmark/config.json` when `execution.official_prepare` reads a private seed/config overlay.
+- Keep paths aligned with `spec.json`; for example, include `private-benchmark/runs.json` when `execution.official_runs` points there, or `private-benchmark/config.json` when `execution.official_evaluation_setup` reads a private seed/config overlay.
 - Include any private files referenced by static official `input_files[].source_path` entries.
-- For prepare-generated official data, document what the prepare phase generates and whether it uses external downloads. Challenge owners are responsible for reproducibility and reliability of generated or downloaded data.
+- For setup-generated official data, document what the setup phase generates and whether it uses external downloads. Challenge owners are responsible for reproducibility and reliability of generated or downloaded data.
 
 Asset uploads are reserved as `pending`, become `active` only after storage
 promotion succeeds, and are marked `failed` if write or promotion fails. Draft

@@ -1131,7 +1131,7 @@ export const challengeDetailResponseSchema = z
             const schemas = [
               z
                 .object({
-                  evaluator: z
+                  separated_evaluator: z
                     .object({
                       command: z.array(z.string()),
                       result_file: z
@@ -1146,14 +1146,14 @@ export const challengeDetailResponseSchema = z
                     .string()
                     .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
                     .optional(),
-                  validation_prepare: z
+                  validation_setup: z
                     .object({
                       command: z.array(z.string()),
                       result_runs_file: z
                         .string()
                         .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
                         .describe(
-                          "Relative path, under the prepared workspace, to the generated run manifest.",
+                          "Relative path, under the setup workspace, to the generated run manifest.",
                         ),
                       reproducibility_notes: z
                         .string()
@@ -1164,7 +1164,7 @@ export const challengeDetailResponseSchema = z
                     })
                     .strict()
                     .describe(
-                      "Optional evaluator-image command that prepares generated benchmark inputs.",
+                      "Optional separated-evaluator command that sets up generated benchmark inputs.",
                     )
                     .optional(),
                   mode: z.literal("separated_evaluator"),
@@ -1173,7 +1173,7 @@ export const challengeDetailResponseSchema = z
                 .describe("Public separated-evaluator topology metadata."),
               z
                 .object({
-                  interactor: z
+                  interactive_evaluator: z
                     .object({
                       command: z.array(z.string()),
                       result_file: z
@@ -1188,14 +1188,14 @@ export const challengeDetailResponseSchema = z
                     .string()
                     .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
                     .optional(),
-                  validation_prepare: z
+                  validation_setup: z
                     .object({
                       command: z.array(z.string()),
                       result_session_file: z
                         .string()
                         .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
                         .describe(
-                          "Relative path, under the prepared workspace, to the generated session manifest.",
+                          "Relative path, under the setup workspace, to the generated session manifest.",
                         ),
                       reproducibility_notes: z
                         .string()
@@ -1206,7 +1206,7 @@ export const challengeDetailResponseSchema = z
                     })
                     .strict()
                     .describe(
-                      "Optional interactor-image command that prepares one generated interactive session.",
+                      "Optional interactive-evaluator command that sets up one generated interactive session.",
                     )
                     .optional(),
                   mode: z.literal("piped_stdio"),
@@ -1215,7 +1215,7 @@ export const challengeDetailResponseSchema = z
                 .describe("Public piped-stdio topology metadata."),
               z
                 .object({
-                  benchmark: z
+                  coexecuted_evaluator: z
                     .object({
                       command: z.array(z.string()),
                       result_file: z
@@ -1227,7 +1227,7 @@ export const challengeDetailResponseSchema = z
                       "Evaluator entrypoint and output-file contract for a bundle.",
                     ),
                   acknowledge_danger: z.boolean(),
-                  validation_prepare: z
+                  validation_setup: z
                     .object({
                       command: z.array(z.string()),
                       reproducibility_notes: z
@@ -1239,13 +1239,13 @@ export const challengeDetailResponseSchema = z
                     })
                     .strict()
                     .describe(
-                      "Optional benchmark-image command that prepares files for a co-executed benchmark.",
+                      "Optional coexecuted-evaluator command that sets up files for a coexecuted run.",
                     )
                     .optional(),
                   mode: z.literal("coexecuted_benchmark"),
                 })
                 .strict()
-                .describe("Public co-executed benchmark topology metadata."),
+                .describe("Public coexecuted-evaluator topology metadata."),
             ];
             const { errors, failed } = schemas.reduce<{
               errors: z.core.$ZodIssue[];

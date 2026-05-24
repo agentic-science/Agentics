@@ -38,7 +38,7 @@ pub async fn execute_evaluation_job(
     let build_root = working_root.join("build-workspace");
     let run_work_root = working_root.join("solution-run-work");
     let runs_root = working_root.join("solution-runs");
-    let prepared_root = working_root.join("prepared");
+    let setup_root = working_root.join("setup");
     let session_root = working_root.join("session");
     let evaluator_output_root = working_root.join("evaluator-output");
     let challenge_bundle_root = working_root.join("challenge-bundle");
@@ -65,7 +65,8 @@ pub async fn execute_evaluation_job(
     if config.requires_digest_pinned_images() {
         agentics_contracts::challenge_bundle::validate_digest_pinned_images(&spec)?;
     }
-    let result_path = evaluator_output_root.join(spec.execution.evaluator().result_file.as_path());
+    let result_path =
+        evaluator_output_root.join(spec.execution.trusted_evaluator().result_file.as_path());
     let limits = EvaluationLimitConfig {
         max_runs: config.runner_max_runs,
         max_result_json_bytes: config.runner_max_result_json_bytes,
@@ -148,7 +149,7 @@ pub async fn execute_evaluation_job(
                         target: target.name.as_str(),
                         eval_type,
                         bundle_dir,
-                        prepared_root: &prepared_root,
+                        setup_root: &setup_root,
                     },
                     &mut logs,
                 )
@@ -183,10 +184,7 @@ pub async fn execute_evaluation_job(
                         accelerator: job_requirement.accelerator,
                         run_manifest_container_path: &run_plan.run_manifest_container_path,
                         bundle_dir,
-                        prepared_root: run_plan
-                            .prepared_root
-                            .as_ref()
-                            .map(RetainedRunnerTree::path),
+                        setup_root: run_plan.setup_root.as_ref().map(RetainedRunnerTree::path),
                         runs_root: &runs_root,
                         retained_run_trees: &retained_run_trees,
                         evaluator_output_root: &evaluator_output_root,
@@ -208,7 +206,7 @@ pub async fn execute_evaluation_job(
                         target: target.name.as_str(),
                         manifest: &manifest,
                         bundle_dir,
-                        prepared_root: &prepared_root,
+                        setup_root: &setup_root,
                         session_root: &session_root,
                         build_root: &build_workspace,
                         run_work_root: &run_work_root,
@@ -234,7 +232,7 @@ pub async fn execute_evaluation_job(
                         accelerator: job_requirement.accelerator,
                         target: target.name.as_str(),
                         bundle_dir,
-                        prepared_root: &prepared_root,
+                        setup_root: &setup_root,
                         build_root: &build_workspace,
                         evaluator_output_root: &evaluator_output_root,
                     },

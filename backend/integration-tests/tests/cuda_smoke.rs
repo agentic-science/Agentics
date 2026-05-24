@@ -216,7 +216,7 @@ fn write_cuda_smoke_bundles(root: &std::path::Path) -> (std::path::PathBuf, std:
         )
         .expect("failed to write public runs");
         std::fs::write(
-            bundle.join("evaluator/run.py"),
+            bundle.join("separated-evaluator/run.py"),
         r#"from __future__ import annotations
 
 import argparse
@@ -326,8 +326,8 @@ Path(args.output_path).write_text(json.dumps(payload))
             "solution_publication": "public",
             "execution": {
                 "mode": "separated_evaluator",
-                "evaluator": {
-                    "command": ["python", "evaluator/run.py"],
+                "separated_evaluator": {
+                    "command": ["python", "separated-evaluator/run.py"],
                     "result_file": "result.json"
                 },
                 "validation_runs": "public/runs.json",

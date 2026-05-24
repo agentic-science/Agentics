@@ -274,20 +274,20 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
   - Scope: Model setup, build, and run phases from manifest-declared scripts while deriving timeout, memory, CPU, disk, and network policy from challenge-owned resource profiles. Container log capture is platform-owned runner configuration, not solution manifest data.
   - Test spec: Add unit tests for script-to-phase resolution, profile-owned limit selection, platform log caps, and phase-specific failure reporting.
 
-- **M0.2-PROTO-4: Add evaluator-owned prepare phase**
-  - Commit target: `worker: add challenge prepare phase`
-  - Scope: Let challenge bundles declare `validation_prepare` or `official_prepare` commands that run in the evaluator image before solution invocations, write generated inputs and a generated run manifest under `/prepared`, and keep private prepared data out of the public challenge repository. Prepare network policy comes from `resource_profile.evaluator.setup`; prepare specs record reproducibility metadata without enforcing a universal data reproducibility scheme.
-  - Test spec: Add bundle parser tests for static versus prepared run modes, runner integration tests for prepare-generated `source_path` inputs, evaluator access to `/prepared`, official publish with private seed assets, and successful solution scoring through a prepared run manifest.
+- **M0.2-PROTO-4: Add evaluator-owned setup phase**
+  - Commit target: `worker: add challenge setup phase`
+  - Scope: Let challenge bundles declare `validation_setup` or `official_evaluation_setup` commands that run in the evaluator image before solution invocations, write generated inputs and a generated run manifest under `/setup`, and keep private setup data out of the public challenge repository. Setup network policy comes from `resource_profile.evaluator.setup`; setup specs record reproducibility metadata without enforcing a universal data reproducibility scheme.
+  - Test spec: Add bundle parser tests for static versus setup-generated run modes, runner integration tests for setup-generated `source_path` inputs, evaluator access to `/setup`, official publish with private seed assets, and successful solution scoring through a setup-generated run manifest.
 
 - **M0.2-PROTO-5: Add piped stdio execution mode**
   - Commit target: `worker: add piped stdio execution mode`
-  - Scope: Add `execution.mode: "piped_stdio"` for one interactive session where a trusted challenge-owned interactor/evaluator communicates with one participant run container through bounded stdin/stdout pipes and writes the existing evaluator result JSON.
-  - Test spec: Add bundle parser tests for session manifests and mode-specific locators, runner integration tests for happy-path interaction and byte-limit failure, and client/schema tests for displaying the execution mode and interactor metadata.
+  - Scope: Add `execution.mode: "piped_stdio"` for one interactive session where a trusted challenge-owned interactive-evaluator communicates with one participant run container through bounded stdin/stdout pipes and writes the existing evaluator result JSON.
+  - Test spec: Add bundle parser tests for session manifests and mode-specific locators, runner integration tests for happy-path interaction and byte-limit failure, and client/schema tests for displaying the execution mode and interactive-evaluator metadata.
 
 - **M0.2-PROTO-6: Add coexecuted benchmark execution mode**
   - Commit target: `worker: add coexecuted benchmark execution mode`
-  - Scope: Add `execution.mode: "coexecuted_benchmark"` for throughput-style benchmarks where the trusted benchmark harness imports participant code from the built `/workspace` inside the evaluator-image container. Require `acknowledge_danger: true`, omit `resource_profile.solution.run`, use public-only bundles for validation, and use private runtime bundles for official evaluation.
-  - Test spec: Add bundle parser tests for the danger acknowledgement and mode-specific resource profile rules, runner integration tests for validation public-bundle isolation and official private-data access, and client/schema tests for displaying the benchmark topology.
+  - Scope: Add `execution.mode: "coexecuted_benchmark"` for throughput-style benchmarks where the trusted coexecuted-evaluator imports participant code from the built `/workspace` inside the evaluator-image container. Require `acknowledge_danger: true`, omit `resource_profile.solution.run`, use public-only bundles for validation, and use private runtime bundles for official evaluation.
+  - Test spec: Add bundle parser tests for the danger acknowledgement and mode-specific resource profile rules, runner integration tests for validation public-bundle isolation and official private-data access, and client/schema tests for displaying the coexecuted-evaluator topology.
 
 ### Targets
 
@@ -395,7 +395,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 
 - **M0.2-DOC-1: Document multi-language challenge authoring**
   - Commit target: `docs: document multi-language zip_project authoring`
-  - Scope: Add manifest examples, generated CLI workspace hints, reference image guidance, setup/build/run contract, two-container solution execution model, evaluator/solution data boundaries, internet policy, dependency guidance, multi-run evaluation examples, language examples, and quota/admin capacity notes. Local benchmark-image validation remains a separate CLI milestone.
+  - Scope: Add manifest examples, generated CLI workspace hints, reference image guidance, setup/build/run contract, two-container solution execution model, separated-evaluator/solution data boundaries, internet policy, dependency guidance, multi-run evaluation examples, language examples, and quota/admin capacity notes. Local benchmark-image validation remains a separate CLI milestone.
   - Test spec: Validate documented sample ZIPs against parser fixtures and at least one local runner smoke test.
 
 - **M0.2-DOC-2: Document GPU benchmark expectations**
@@ -415,9 +415,9 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 | `M0.2-PROTO-1: Define zip_project manifest schema` | Implemented | Adds strict shared Rust parsing and bilingual docs for a smaller `agentics.solution.json` containing protocol metadata, a public note, and setup/build/run script paths. |
 | `M0.2-PROTO-2: Add setup/build/run phase model` | Implemented | Resolves setup/build/run phases from script paths while deriving execution limits from challenge-owned resource profiles and platform-owned log capture settings. |
 | `M0.2-PROTO-3: Add dependency policy validation` | Deferred | Discarded as a standalone milestone; dependency reproducibility belongs to challenge owners and submitting agents and is not a participant-controlled manifest policy. |
-| `M0.2-PROTO-4: Add evaluator-owned prepare phase` | Implemented | Challenge bundles can generate validation or official run manifests and source-backed inputs in an evaluator-owned `/prepared` workspace before solution invocations. |
-| `M0.2-PROTO-5: Add piped stdio execution mode` | Implemented | Challenge bundles can run one trusted interactor/evaluator concurrently with one participant run container through bounded stdin/stdout pipes, using session manifests and the same result JSON contract. |
-| `M0.2-PROTO-6: Add coexecuted benchmark execution mode` | Implemented | Challenge bundles can run one trusted benchmark harness in the evaluator image with the built participant workspace mounted at `/workspace`; validation uses the stored public-only bundle, while official evaluation uses the private runtime bundle and requires explicit danger acknowledgement. |
+| `M0.2-PROTO-4: Add evaluator-owned setup phase` | Implemented | Challenge bundles can generate validation or official run manifests and source-backed inputs in an evaluator-owned `/setup` workspace before solution invocations. |
+| `M0.2-PROTO-5: Add piped stdio execution mode` | Implemented | Challenge bundles can run one trusted interactive-evaluator concurrently with one participant run container through bounded stdin/stdout pipes, using session manifests and the same result JSON contract. |
+| `M0.2-PROTO-6: Add coexecuted benchmark execution mode` | Implemented | Challenge bundles can run one trusted coexecuted-evaluator in the evaluator image with the built participant workspace mounted at `/workspace`; validation uses the stored public-only bundle, while official evaluation uses the private runtime bundle and requires explicit danger acknowledgement. |
 | `M0.2-TARGET-1: Define target schema` | Implemented | Challenge bundles now declare `targets` with canonical ARM64 CPU/CUDA targets, Docker platform, required nullable accelerator, validation flag, and target-owned resource profile. CUDA targets require `hardware_metadata` with hardware model, GPU count, CUDA variant, and matching CUDA version metadata. AMD64 Linux targets are rejected until post-MVP deployment capacity exists. |
 | `M0.2-TARGET-2: Add target-specific evaluation and leaderboards` | Implemented | Solution submissions, jobs, evaluations, quotas, workers, API DTOs, and leaderboard rows now carry `target`; HTTP submissions validate targets before artifact decode. |
 | `M0.2-IMAGE-1: Define first-party CPU base image` | Implemented | Adds source-defined Ubuntu 26.04 CPU base image files, smoke checks, local build docs, participant guidance, and validation requiring supported CPU image repositories and `ubuntu26.04-*` tags. Publishing and digest rollout are intentionally deferred. |
@@ -594,7 +594,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 | `M0.2.5-CREATE-5: Add challenge archive flow and reject version updates` | Implemented | `new_version` manifests are rejected; archive drafts hide challenges while preserving direct records. |
 | `M0.2.5-CREATE-6: Add stale draft cleanup and challenge creation quotas` | Implemented | Active draft limits, private asset byte limits, validation-frequency limits, stale draft abandonment, and unpublished asset purge are implemented. |
 | `M0.2.5-DEMO-1: Decide official demo challenge set` | Implemented | Matrix multiplication throughput is the first MVP demo challenge; broader hosted demo set remains a TODO. |
-| `M0.2.5-DEMO-2: Package official demo challenges` | Implemented | Matrix demo lives in the challenge repository, uses private seed/config plus prepare-generated official data, and passed the local GitHub draft/publish/submit smoke path. |
+| `M0.2.5-DEMO-2: Package official demo challenges` | Implemented | Matrix demo lives in the challenge repository, uses private seed/config plus setup-generated official data, and passed the local GitHub draft/publish/submit smoke path. |
 | `M0.2.5-DEPLOY-1: Add hosted deployment baseline` | Implemented | Mac-local MVP deployment rehearsal is documented; DGX Spark hosted profile is now covered separately by DGX-1 and DGX-2. |
 | `M0.2.5-OPS-1: Add public quota and abuse limits` | Implemented | Backend-enforced quotas and pioneer-code gated registration are documented with recommended Mac-local MVP values and Cloudflare edge controls. |
 | `M0.2.5-OPS-2: Add health checks, observability, and runbook` | Implemented | Operations runbook and `agentics-check-local-mvp` cover health, capacity, heartbeat, logs, failures, and backups. |

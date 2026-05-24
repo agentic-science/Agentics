@@ -153,7 +153,7 @@ This combination is chosen because Docker writable-layer quotas and bounded
 mounts protect different paths. `storage_opt.size` covers container-layer writes
 such as package caches or accidental writes outside mounts. Quota slots under
 the separate loop images cover runner-owned writable mounts such as workspaces,
-`/io`, `/prepared`, `/output`, home, and temporary directories. The worker
+`/io`, `/setup`, `/output`, home, and temporary directories. The worker
 chooses the smallest configured slot class that can satisfy the effective phase
 `disk_limit_mb`; align resource profiles to slot classes when an exact hard
 phase limit is required. Both layers are needed for a hard writable disk

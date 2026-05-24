@@ -146,7 +146,7 @@ Hosted MVP 在接受 public evaluation jobs 前使用 Linux-only storage profile
 选择这个组合的原因是 Docker writable-layer quotas 和 bounded mounts
 保护的是不同路径。`storage_opt.size` 覆盖 package caches 或意外写入非挂载路径等
 container-layer writes。独立 loop images 下的 quota slots 覆盖 runner-owned
-writable mounts，例如 workspaces、`/io`、`/prepared`、`/output`、home 和
+writable mounts，例如 workspaces、`/io`、`/setup`、`/output`、home 和
 temporary directories。Worker 会选择可满足 effective phase `disk_limit_mb`
 的最小 configured slot class；如果需要 exact hard phase limit，应让 resource
 profiles 与 slot classes 对齐。二者共同覆盖所有 runner phases 的 hard writable

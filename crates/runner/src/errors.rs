@@ -72,14 +72,14 @@ pub(super) fn ensure_container_succeeded(
     Ok(())
 }
 
-/// Ensures prepare succeeded before continuing.
-pub(super) fn ensure_prepare_succeeded(
+/// Ensures setup succeeded before continuing.
+pub(super) fn ensure_setup_succeeded(
     outcome: &ContainerOutcome,
     include_log_excerpt: bool,
 ) -> Result<()> {
     if outcome.timed_out {
         return Err(RunnerError::Timeout(append_log_excerpt(
-            "prepare phase timed out",
+            "setup phase timed out",
             &outcome.logs,
             include_log_excerpt,
         ))
@@ -87,7 +87,7 @@ pub(super) fn ensure_prepare_succeeded(
     }
     if outcome.exit_code != 0 {
         return Err(RunnerError::ParticipantRunFailure(append_log_excerpt(
-            &format!("prepare phase exited with status {}", outcome.exit_code),
+            &format!("setup phase exited with status {}", outcome.exit_code),
             &outcome.logs,
             include_log_excerpt,
         ))

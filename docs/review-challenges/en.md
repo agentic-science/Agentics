@@ -38,19 +38,19 @@ same admin credentials for an HttpOnly browser session cookie and CSRF token.
   the selected hardware target.
 - Confirm validation is target-specific and only enabled when the selected
   execution mode has its validation source: `validation_runs` or
-  `validation_prepare` for `separated_evaluator`, and `validation_session` or
-  `validation_prepare` for `piped_stdio`. `coexecuted_benchmark` validation
-  uses the benchmark harness directly and may optionally declare
-  `validation_prepare`.
+  `validation_setup` for `separated_evaluator`, and `validation_session` or
+  `validation_setup` for `piped_stdio`. `coexecuted_benchmark` validation
+  uses the coexecuted-evaluator directly and may optionally declare
+  `validation_setup`.
 - Confirm official scoring has the selected execution mode's official source:
-  `official_runs` or `official_prepare` for `separated_evaluator`, and
-  `official_session` or `official_prepare` for `piped_stdio`, with private data
-  or generated benchmark preparation as intended. `coexecuted_benchmark`
-  official scoring uses the benchmark harness directly and may optionally
-  declare `official_prepare`.
+  `official_runs` or `official_evaluation_setup` for `separated_evaluator`, and
+  `official_session` or `official_evaluation_setup` for `piped_stdio`, with private data
+  or generated setup data as intended. `coexecuted_benchmark`
+  official scoring uses the coexecuted-evaluator directly and may optionally
+  declare `official_evaluation_setup`.
 - For `coexecuted_benchmark`, confirm `acknowledge_danger: true`,
   `resource_profile.solution.run` is omitted, and the challenge does not put
-  secrets in the co-executed container because participant code and private
+  secrets in the coexecuted-evaluator container because participant code and private
   official data share the evaluator-image environment.
 - Confirm metrics, ranking direction, and tie-breakers are unambiguous.
 - Confirm resource limits and network policies are appropriate for the selected

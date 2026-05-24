@@ -1120,9 +1120,10 @@ fn validate_private_assets_for_publish(
         && match &spec.execution {
             agentics_domain::models::challenge::ChallengeExecutionSpec::SeparatedEvaluator(
                 execution,
-            ) => execution.official_runs.is_some() && execution.official_prepare.is_none(),
+            ) => execution.official_runs.is_some() && execution.official_evaluation_setup.is_none(),
             agentics_domain::models::challenge::ChallengeExecutionSpec::PipedStdio(execution) => {
-                execution.official_session.is_some() && execution.official_prepare.is_none()
+                execution.official_session.is_some()
+                    && execution.official_evaluation_setup.is_none()
             }
             agentics_domain::models::challenge::ChallengeExecutionSpec::CoexecutedBenchmark(_) => {
                 false

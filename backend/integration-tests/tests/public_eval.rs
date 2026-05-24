@@ -39,8 +39,8 @@ fn create_validation_disabled_challenge(root: &Path) {
 /// Creates a minimal piped-stdio challenge after validating caller inputs.
 fn create_piped_stdio_challenge(root: &Path) {
     let bundle_dir = root.join("interactive-sum/v1");
-    std::fs::create_dir_all(bundle_dir.join("interactor"))
-        .expect("failed to create interactor dir");
+    std::fs::create_dir_all(bundle_dir.join("interactive-evaluator"))
+        .expect("failed to create interactive-evaluator dir");
     std::fs::create_dir_all(bundle_dir.join("public")).expect("failed to create public dir");
     std::fs::create_dir_all(bundle_dir.join("private-benchmark"))
         .expect("failed to create private benchmark dir");
@@ -68,7 +68,7 @@ fn create_piped_stdio_challenge(root: &Path) {
     )
     .expect("failed to write official session");
     std::fs::write(
-        bundle_dir.join("interactor/run.py"),
+        bundle_dir.join("interactive-evaluator/run.py"),
         r#"from __future__ import annotations
 
 import argparse
@@ -112,7 +112,7 @@ Path(args.output_path).write_text(json.dumps({
 }))
 "#,
     )
-    .expect("failed to write interactor");
+    .expect("failed to write interactive-evaluator");
     std::fs::write(
         bundle_dir.join("spec.json"),
         serde_json::json!({
@@ -120,7 +120,7 @@ Path(args.output_path).write_text(json.dumps({
             "challenge_name": "interactive-sum",
             "challenge_title": "Interactive Sum",
             "summary": {
-                "en": "Add numbers through a trusted interactive interactor.",
+                "en": "Add numbers through a trusted interactive-evaluator.",
                 "zh": "通过可信交互器完成加法。"
             },
             "keywords": ["interactive"],
@@ -164,8 +164,8 @@ Path(args.output_path).write_text(json.dumps({
             "solution_publication": "public",
             "execution": {
                 "mode": "piped_stdio",
-                "interactor": {
-                    "command": ["python", "interactor/run.py"],
+                "interactive_evaluator": {
+                    "command": ["python", "interactive-evaluator/run.py"],
                     "result_file": "result.json"
                 },
                 "validation_session": "public/session.json",
@@ -204,12 +204,13 @@ Path(args.output_path).write_text(json.dumps({
     .expect("failed to write spec");
 }
 
-/// Creates public/private bundle paths for a minimal co-executed benchmark challenge.
+/// Creates public/private bundle paths for a minimal coexecuted-evaluator challenge.
 fn create_coexecuted_benchmark_bundles(root: &Path) -> (std::path::PathBuf, std::path::PathBuf) {
     let public_bundle = root.join("coexecuted-public/v1");
     let private_bundle = root.join("coexecuted-private/v1");
     for bundle in [&public_bundle, &private_bundle] {
-        std::fs::create_dir_all(bundle.join("benchmark")).expect("failed to create benchmark dir");
+        std::fs::create_dir_all(bundle.join("coexecuted-evaluator"))
+            .expect("failed to create coexecuted-evaluator dir");
         std::fs::create_dir_all(bundle.join("public")).expect("failed to create public dir");
         std::fs::write(
             bundle.join("statement.md"),
@@ -219,7 +220,7 @@ fn create_coexecuted_benchmark_bundles(root: &Path) -> (std::path::PathBuf, std:
         std::fs::write(bundle.join("public/case.json"), r#"{"a":2,"b":3}"#)
             .expect("failed to write public case");
         std::fs::write(
-            bundle.join("benchmark/run.py"),
+            bundle.join("coexecuted-evaluator/run.py"),
             r#"from __future__ import annotations
 
 import argparse
@@ -269,7 +270,7 @@ if args.mode == "validation":
 Path(args.output_path).write_text(json.dumps(payload))
 "#,
         )
-        .expect("failed to write benchmark");
+        .expect("failed to write coexecuted-evaluator");
     }
     std::fs::create_dir_all(private_bundle.join("private-benchmark"))
         .expect("failed to create private benchmark dir");
@@ -284,7 +285,7 @@ Path(args.output_path).write_text(json.dumps(payload))
         "challenge_name": "coexecuted-sum",
         "challenge_title": "Coexecuted Sum",
         "summary": {
-            "en": "Import participant code in a trusted benchmark harness.",
+            "en": "Import participant code in a trusted coexecuted-evaluator.",
             "zh": "在可信基准程序中导入参赛代码。"
         },
         "keywords": ["benchmark"],
@@ -327,8 +328,8 @@ Path(args.output_path).write_text(json.dumps(payload))
         "solution_publication": "public",
         "execution": {
             "mode": "coexecuted_benchmark",
-            "benchmark": {
-                "command": ["python", "benchmark/run.py"],
+            "coexecuted_evaluator": {
+                "command": ["python", "coexecuted-evaluator/run.py"],
                 "result_file": "result.json"
             },
             "acknowledge_danger": true
@@ -372,7 +373,7 @@ Path(args.output_path).write_text(json.dumps(payload))
     (public_bundle, private_bundle)
 }
 
-/// Build a base64 ZIP containing a co-executed sum solution.
+/// Build a base64 ZIP containing a coexecuted-evaluator sum solution.
 fn coexecuted_sum_solution_zip_base64() -> String {
     zip_project_zip_base64(vec![
         (

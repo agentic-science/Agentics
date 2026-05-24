@@ -126,10 +126,10 @@ toolchains. That is an accepted MVP tradeoff, not a substitute for isolation:
 Docker writable-layer quotas bound writes to the container layer, the runtime
 root keeps transient Docker bind sources in a daemon-visible host path, and XFS
 project-quota slots bound runner-owned bind mounts such as workspaces, `/io`,
-`/prepared`, `/output`, home, and temporary directories. DGX slots also set an
+`/setup`, `/output`, home, and temporary directories. DGX slots also set an
 inode hard limit, defaulting to `256` inodes per MiB, so dependency installs are
 bounded without applying the evaluator-visible output file cap to setup/build
-workspaces. Retained build, prepare, and evaluator-visible run trees stay backed by
+workspaces. Retained build, setup, and evaluator-visible run trees stay backed by
 their leased runner slots until dependent phases finish. Future hardening can add
 non-root run phases or read-only root filesystems without weakening the current
 disk-boundary requirement.

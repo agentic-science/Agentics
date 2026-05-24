@@ -61,8 +61,8 @@ pub(super) fn challenge_detail_json(validation_enabled: bool) -> serde_json::Val
             ],
             "execution": {
                 "mode": "separated_evaluator",
-                "evaluator": {
-                    "command": ["python", "evaluator/run.py"],
+                "separated_evaluator": {
+                    "command": ["python", "separated-evaluator/run.py"],
                     "result_file": "result.json"
                 },
                 "validation_runs": "public/runs.json"

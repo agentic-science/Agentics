@@ -3,8 +3,8 @@ use serde_json::Value;
 
 use super::challenge::{
     ChallengeBundleSpec, ChallengeDetailResponse, ChallengeEligibilitySpec,
-    ChallengeEligibilityType, ChallengeExecutionSpec, ChallengePrepareSpec,
-    ChallengeResultDetailVisibility, ChallengeSolutionPublicationPolicy, ChallengeTargetSpec,
+    ChallengeEligibilityType, ChallengeExecutionSpec, ChallengeResultDetailVisibility,
+    ChallengeSetupSpec, ChallengeSolutionPublicationPolicy, ChallengeTargetSpec,
     ChallengeVisibility, ChallengeVisibilitySpec, DatasetsSpec, DockerPlatform, EvaluatorSpec,
     EvaluatorStageProfiles, HardwareProfileSpec, MetricDefinitionSpec, MetricDirection,
     MetricSchemaSpec, MetricVisibility, MoltbookCommunityDto, PrivateBenchmarkPolicy, RankingSpec,
@@ -54,15 +54,15 @@ fn challenge_detail_public_projection_omits_private_benchmark_locators() {
 
     assert!(!text.contains("private_benchmark_dir"));
     assert!(!text.contains("official_runs"));
-    assert!(!text.contains("official_prepare"));
+    assert!(!text.contains("official_evaluation_setup"));
     assert!(!text.contains("private-benchmark"));
     assert_eq!(
         value["spec"]["execution"]["mode"],
         serde_json::json!("separated_evaluator")
     );
     assert_eq!(
-        value["spec"]["execution"]["evaluator"]["command"],
-        serde_json::json!(["python", "evaluator/run.py"])
+        value["spec"]["execution"]["separated_evaluator"]["command"],
+        serde_json::json!(["python", "separated-evaluator/run.py"])
     );
     assert_eq!(
         value["spec"]["datasets"]["private_benchmark_enabled"],
@@ -239,15 +239,21 @@ fn challenge_detail_response() -> ChallengeDetailResponse {
             }],
             execution: ChallengeExecutionSpec::SeparatedEvaluator(
                 SeparatedEvaluatorExecutionSpec {
-                    evaluator: EvaluatorSpec {
-                        command: vec!["python".to_string(), "evaluator/run.py".to_string()],
+                    separated_evaluator: EvaluatorSpec {
+                        command: vec![
+                            "python".to_string(),
+                            "separated-evaluator/run.py".to_string(),
+                        ],
                         result_file: bundle_path("result.json"),
                     },
                     validation_runs: Some(bundle_path("public/runs.json")),
-                    validation_prepare: None,
+                    validation_setup: None,
                     official_runs: None,
-                    official_prepare: Some(ChallengePrepareSpec {
-                        command: vec!["python".to_string(), "evaluator/prepare.py".to_string()],
+                    official_evaluation_setup: Some(ChallengeSetupSpec {
+                        command: vec![
+                            "python".to_string(),
+                            "separated-evaluator/setup.py".to_string(),
+                        ],
                         result_runs_file: bundle_path("generated/runs.json"),
                         reproducibility_notes: Some(
                             "Generated from a fixed benchmark seed.".to_string(),

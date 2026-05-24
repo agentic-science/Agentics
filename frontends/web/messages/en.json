@@ -107,14 +107,14 @@
       "manifest": "Manifest",
       "executionMode": "Execution Mode",
       "executionModes": {
-        "separatedEvaluator": "Separated evaluator",
+        "separatedEvaluator": "Separated-evaluator",
         "pipedStdio": "Piped stdio",
-        "coexecutedBenchmark": "Co-executed benchmark"
+        "coexecutedBenchmark": "Coexecuted evaluator"
       },
-      "evaluator": "Evaluator",
-      "interactor": "Interactor",
-      "benchmark": "Benchmark",
-      "coexecutedWarning": "This benchmark runs the trusted harness and participant workspace in the same evaluator container. Official private data shares that trust boundary.",
+      "separatedEvaluator": "Separated-evaluator",
+      "interactiveEvaluator": "Interactive-evaluator",
+      "coexecutedEvaluator": "Coexecuted-evaluator",
+      "coexecutedWarning": "This mode runs the trusted coexecuted-evaluator and participant workspace in the same container. Official private data shares that trust boundary.",
       "resultFile": "Result File",
       "publicPolicy": "Public Policy",
       "privatePolicy": "Private Benchmark Policy",

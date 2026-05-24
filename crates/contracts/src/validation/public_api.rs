@@ -156,7 +156,7 @@ mod tests {
                 "solution_publication": "private",
                 "execution": {
                     "mode": "separated_evaluator",
-                    "evaluator": {"command": ["python", "evaluator/run.py"], "result_file": "result.json"}
+                    "separated_evaluator": {"command": ["python", "separated-evaluator/run.py"], "result_file": "result.json"}
                 },
                 "datasets": {
                     "public_dir": "public",
@@ -200,14 +200,14 @@ mod tests {
             },
             solution_publication: ChallengeSolutionPublicationPolicy::Private,
             execution: ChallengeExecutionSpec::SeparatedEvaluator(SeparatedEvaluatorExecutionSpec {
-                evaluator: EvaluatorSpec {
-                    command: vec!["python".to_string(), "evaluator/run.py".to_string()],
+                separated_evaluator: EvaluatorSpec {
+                    command: vec!["python".to_string(), "separated-evaluator/run.py".to_string()],
                     result_file: BundleRelativePath::try_new("result.json").expect("path"),
                 },
                 validation_runs: None,
-                validation_prepare: None,
+                validation_setup: None,
                 official_runs: None,
-                official_prepare: None,
+                official_evaluation_setup: None,
             }),
             datasets: DatasetsSpec {
                 public_dir: BundleRelativePath::try_new("public").expect("path"),

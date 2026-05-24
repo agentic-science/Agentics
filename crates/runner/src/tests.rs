@@ -1,6 +1,6 @@
 use super::{
-    RunnerAttempt, container_name, effective_phase_limits, evaluator_limits, prepare_limits,
-    read_limited_result_json,
+    RunnerAttempt, container_name, effective_phase_limits, evaluator_limits,
+    evaluator_setup_limits, read_limited_result_json,
 };
 use agentics_contracts::zip_project::{
     DockerNetworkMode, ZipProjectNetworkAccess, ZipProjectPhaseName, ZipProjectResolvedPhase,
@@ -46,19 +46,19 @@ fn solution_phase_limits_come_from_resource_profile() {
     assert_eq!(run.network_access, ZipProjectNetworkAccess::Loopback);
 }
 
-/// Verifies evaluator and prepare phases use challenge-owned network policy.
+/// Verifies evaluator and setup phases use challenge-owned network policy.
 #[test]
-fn evaluator_and_prepare_limits_use_challenge_owned_policy() {
+fn evaluator_and_evaluator_setup_limits_use_challenge_owned_policy() {
     let profile = resource_profile();
 
     let evaluator = evaluator_limits(&profile);
-    let prepare_limits = prepare_limits(&profile);
+    let evaluator_setup_limits = evaluator_setup_limits(&profile);
 
     assert_eq!(evaluator.timeout_sec, 55);
     assert_eq!(evaluator.network_access, ZipProjectNetworkAccess::Disabled);
-    assert_eq!(prepare_limits.timeout_sec, 44);
+    assert_eq!(evaluator_setup_limits.timeout_sec, 44);
     assert_eq!(
-        prepare_limits.network_access,
+        evaluator_setup_limits.network_access,
         ZipProjectNetworkAccess::Enabled
     );
 }

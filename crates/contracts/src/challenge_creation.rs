@@ -782,8 +782,8 @@ mod tests {
                 .expect("spec should parse");
         spec["execution"] = json!({
             "mode": "piped_stdio",
-            "interactor": {
-                "command": ["python", "evaluator/run.py"],
+            "interactive_evaluator": {
+                "command": ["python", "separated-evaluator/run.py"],
                 "result_file": "result.json"
             },
             "validation_session": "public/session.json",
@@ -898,8 +898,8 @@ mod tests {
                 "solution_publication": "public",
                 "execution": {
                     "mode": "separated_evaluator",
-                    "evaluator": {
-                        "command": ["python", "evaluator/run.py"],
+                    "separated_evaluator": {
+                        "command": ["python", "separated-evaluator/run.py"],
                         "result_file": "result.json"
                     },
                     "validation_runs": "public/runs.json",

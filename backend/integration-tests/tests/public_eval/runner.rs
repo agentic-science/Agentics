@@ -313,7 +313,7 @@ async fn worker_completes_piped_stdio_solution_submission(pool: sqlx::PgPool) {
     );
 }
 
-/// Verifies that the worker completes a co-executed benchmark without exposing private data to validation.
+/// Verifies that the worker completes a coexecuted-evaluator without exposing private data to validation.
 #[sqlx::test(migrations = "../migrations")]
 async fn worker_completes_coexecuted_benchmark_submission(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
@@ -332,7 +332,7 @@ async fn worker_completes_coexecuted_benchmark_submission(pool: sqlx::PgPool) {
             $5::uuid,
             'coexecuted-sum',
             'Coexecuted Sum',
-            '{"en":"Import participant code in a trusted benchmark harness.","zh":"在可信基准程序中导入参赛代码。"}'::jsonb,
+            '{"en":"Import participant code in a trusted coexecuted-evaluator.","zh":"在可信共执行评估器中导入参赛代码。"}'::jsonb,
             $1,
             $2,
             $3,

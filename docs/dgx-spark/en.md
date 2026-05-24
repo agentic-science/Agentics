@@ -106,7 +106,7 @@ The phase mount root has one loopback XFS mount for each writable runner class:
 - `solution-setup`
 - `solution-build`
 - `solution-run`
-- `evaluator-prepare`
+- `evaluator-setup`
 - `evaluator-score`
 
 ## Required Environment

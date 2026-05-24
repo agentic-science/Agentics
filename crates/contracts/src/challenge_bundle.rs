@@ -13,10 +13,10 @@ use crate::validation::{archive::ChallengeValidationError, targets, text};
 use crate::zip_project::{ZIP_PROJECT_MANIFEST_FILE, ZIP_PROJECT_PROTOCOL};
 use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge::{
-    ChallengeBundleSpec, ChallengeExecutionMode, ChallengePrepareSpec, ChallengeRunInputFile,
-    ChallengeRunManifest, ChallengeRunSpec, ChallengeSolutionPublicationPolicy,
-    CoexecutedBenchmarkPrepareSpec, MAX_CHALLENGE_KEYWORDS, MIN_CHALLENGE_KEYWORDS,
-    PipedStdioPrepareSpec, PipedStdioSessionManifest, PrivateBenchmarkPolicy,
+    ChallengeBundleSpec, ChallengeExecutionMode, ChallengeRunInputFile, ChallengeRunManifest,
+    ChallengeRunSpec, ChallengeSetupSpec, ChallengeSolutionPublicationPolicy,
+    CoexecutedBenchmarkSetupSpec, MAX_CHALLENGE_KEYWORDS, MIN_CHALLENGE_KEYWORDS,
+    PipedStdioSessionManifest, PipedStdioSetupSpec, PrivateBenchmarkPolicy,
 };
 use agentics_domain::models::paths::BundleRelativePath;
 
@@ -121,11 +121,13 @@ async fn assert_declared_execution_scripts(
     bundle_dir: &Path,
     spec: &ChallengeBundleSpec,
 ) -> Result<()> {
-    if let Some(script_path) = declared_evaluator_script(&spec.execution.evaluator().command) {
+    if let Some(script_path) =
+        declared_evaluator_script(&spec.execution.trusted_evaluator().command)
+    {
         let label = match spec.execution.mode() {
-            ChallengeExecutionMode::SeparatedEvaluator => "evaluator script",
-            ChallengeExecutionMode::PipedStdio => "interactor script",
-            ChallengeExecutionMode::CoexecutedBenchmark => "benchmark script",
+            ChallengeExecutionMode::SeparatedEvaluator => "separated-evaluator script",
+            ChallengeExecutionMode::PipedStdio => "interactive-evaluator script",
+            ChallengeExecutionMode::CoexecutedBenchmark => "coexecuted-evaluator script",
         };
         assert_path_type(&bundle_dir.join(script_path), "file", label).await?;
     }
@@ -134,36 +136,36 @@ async fn assert_declared_execution_scripts(
         agentics_domain::models::challenge::ChallengeExecutionSpec::SeparatedEvaluator(
             execution,
         ) => {
-            for (label, prepare) in [
+            for (label, setup) in [
                 (
-                    "validation prepare script",
-                    execution.validation_prepare.as_ref(),
+                    "validation setup script",
+                    execution.validation_setup.as_ref(),
                 ),
                 (
-                    "official prepare script",
-                    execution.official_prepare.as_ref(),
+                    "official evaluation setup script",
+                    execution.official_evaluation_setup.as_ref(),
                 ),
             ] {
-                if let Some(prepare) = prepare
-                    && let Some(script_path) = declared_evaluator_script(&prepare.command)
+                if let Some(setup) = setup
+                    && let Some(script_path) = declared_evaluator_script(&setup.command)
                 {
                     assert_path_type(&bundle_dir.join(script_path), "file", label).await?;
                 }
             }
         }
         agentics_domain::models::challenge::ChallengeExecutionSpec::PipedStdio(execution) => {
-            for (label, prepare) in [
+            for (label, setup) in [
                 (
-                    "validation prepare script",
-                    execution.validation_prepare.as_ref(),
+                    "validation setup script",
+                    execution.validation_setup.as_ref(),
                 ),
                 (
-                    "official prepare script",
-                    execution.official_prepare.as_ref(),
+                    "official evaluation setup script",
+                    execution.official_evaluation_setup.as_ref(),
                 ),
             ] {
-                if let Some(prepare) = prepare
-                    && let Some(script_path) = declared_evaluator_script(&prepare.command)
+                if let Some(setup) = setup
+                    && let Some(script_path) = declared_evaluator_script(&setup.command)
                 {
                     assert_path_type(&bundle_dir.join(script_path), "file", label).await?;
                 }
@@ -172,18 +174,18 @@ async fn assert_declared_execution_scripts(
         agentics_domain::models::challenge::ChallengeExecutionSpec::CoexecutedBenchmark(
             execution,
         ) => {
-            for (label, prepare) in [
+            for (label, setup) in [
                 (
-                    "validation prepare script",
-                    execution.validation_prepare.as_ref(),
+                    "validation setup script",
+                    execution.validation_setup.as_ref(),
                 ),
                 (
-                    "official prepare script",
-                    execution.official_prepare.as_ref(),
+                    "official evaluation setup script",
+                    execution.official_evaluation_setup.as_ref(),
                 ),
             ] {
-                if let Some(prepare) = prepare
-                    && let Some(script_path) = declared_evaluator_script(&prepare.command)
+                if let Some(setup) = setup
+                    && let Some(script_path) = declared_evaluator_script(&setup.command)
                 {
                     assert_path_type(&bundle_dir.join(script_path), "file", label).await?;
                 }
@@ -324,22 +326,22 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
             execution,
         ) => {
             validate_evaluator_command(
-                &execution.evaluator.command,
-                "execution.evaluator.command",
+                &execution.separated_evaluator.command,
+                "execution.separated_evaluator.command",
             )?;
         }
         agentics_domain::models::challenge::ChallengeExecutionSpec::PipedStdio(execution) => {
             validate_evaluator_command(
-                &execution.interactor.command,
-                "execution.interactor.command",
+                &execution.interactive_evaluator.command,
+                "execution.interactive_evaluator.command",
             )?;
         }
         agentics_domain::models::challenge::ChallengeExecutionSpec::CoexecutedBenchmark(
             execution,
         ) => {
             validate_evaluator_command(
-                &execution.benchmark.command,
-                "execution.benchmark.command",
+                &execution.coexecuted_evaluator.command,
+                "execution.coexecuted_evaluator.command",
             )?;
         }
     }
@@ -355,7 +357,7 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
 
     // Challenge authors may stage private benchmark data before enabling
     // official runs. Static official run manifests need a private directory,
-    // while prepare-generated official runs may only need private seeds.
+    // while setup-generated official runs may only need private seeds.
     match (
         spec.datasets.private_benchmark_enabled,
         spec.datasets.private_benchmark_dir.as_ref(),
@@ -433,8 +435,8 @@ fn validate_evaluator_command(command: &[String], field: &str) -> Result<()> {
     Ok(())
 }
 
-/// Validates prepare command invariants for this contract.
-fn validate_prepare_command(command: &[String], field: &str) -> Result<()> {
+/// Validates setup command invariants for this contract.
+fn validate_setup_command(command: &[String], field: &str) -> Result<()> {
     if command.is_empty() {
         return Err(ServiceError::Validation(format!(
             "{field} must not be empty"
@@ -602,37 +604,38 @@ fn validate_separated_evaluator_execution(
     spec: &ChallengeBundleSpec,
     execution: &agentics_domain::models::challenge::SeparatedEvaluatorExecutionSpec,
 ) -> Result<()> {
-    if let Some(prepare) = &execution.validation_prepare {
-        validate_prepare_spec(prepare, "execution.validation_prepare")?;
+    if let Some(setup) = &execution.validation_setup {
+        validate_setup_spec(setup, "execution.validation_setup")?;
     }
-    if let Some(prepare) = &execution.official_prepare {
-        validate_prepare_spec(prepare, "execution.official_prepare")?;
+    if let Some(setup) = &execution.official_evaluation_setup {
+        validate_setup_spec(setup, "execution.official_evaluation_setup")?;
     }
-    if execution.validation_runs.is_some() && execution.validation_prepare.is_some() {
+    if execution.validation_runs.is_some() && execution.validation_setup.is_some() {
         return Err(ServiceError::Validation(
-            "execution must not declare both validation_runs and validation_prepare".to_string(),
+            "execution must not declare both validation_runs and validation_setup".to_string(),
         ));
     }
-    if execution.official_runs.is_some() && execution.official_prepare.is_some() {
+    if execution.official_runs.is_some() && execution.official_evaluation_setup.is_some() {
         return Err(ServiceError::Validation(
-            "execution must not declare both official_runs and official_prepare".to_string(),
+            "execution must not declare both official_runs and official_evaluation_setup"
+                .to_string(),
         ));
     }
     if spec.targets.iter().any(|target| target.validation_enabled)
         && execution.validation_runs.is_none()
-        && execution.validation_prepare.is_none()
+        && execution.validation_setup.is_none()
     {
         return Err(ServiceError::Validation(
-            "execution.validation_runs or execution.validation_prepare is required when any target has validation_enabled true"
+            "execution.validation_runs or execution.validation_setup is required when any target has validation_enabled true"
                 .to_string(),
         ));
     }
     if spec.datasets.private_benchmark_enabled
         && execution.official_runs.is_none()
-        && execution.official_prepare.is_none()
+        && execution.official_evaluation_setup.is_none()
     {
         return Err(ServiceError::Validation(
-            "execution.official_runs or execution.official_prepare is required when private_benchmark_enabled is true"
+            "execution.official_runs or execution.official_evaluation_setup is required when private_benchmark_enabled is true"
                 .to_string(),
         ));
     }
@@ -644,44 +647,45 @@ fn validate_piped_stdio_execution(
     spec: &ChallengeBundleSpec,
     execution: &agentics_domain::models::challenge::PipedStdioExecutionSpec,
 ) -> Result<()> {
-    if let Some(prepare) = &execution.validation_prepare {
-        validate_piped_stdio_prepare_spec(prepare, "execution.validation_prepare")?;
+    if let Some(setup) = &execution.validation_setup {
+        validate_piped_stdio_setup_spec(setup, "execution.validation_setup")?;
     }
-    if let Some(prepare) = &execution.official_prepare {
-        validate_piped_stdio_prepare_spec(prepare, "execution.official_prepare")?;
+    if let Some(setup) = &execution.official_evaluation_setup {
+        validate_piped_stdio_setup_spec(setup, "execution.official_evaluation_setup")?;
     }
-    if execution.validation_session.is_some() && execution.validation_prepare.is_some() {
+    if execution.validation_session.is_some() && execution.validation_setup.is_some() {
         return Err(ServiceError::Validation(
-            "execution must not declare both validation_session and validation_prepare".to_string(),
+            "execution must not declare both validation_session and validation_setup".to_string(),
         ));
     }
-    if execution.official_session.is_some() && execution.official_prepare.is_some() {
+    if execution.official_session.is_some() && execution.official_evaluation_setup.is_some() {
         return Err(ServiceError::Validation(
-            "execution must not declare both official_session and official_prepare".to_string(),
+            "execution must not declare both official_session and official_evaluation_setup"
+                .to_string(),
         ));
     }
     if spec.targets.iter().any(|target| target.validation_enabled)
         && execution.validation_session.is_none()
-        && execution.validation_prepare.is_none()
+        && execution.validation_setup.is_none()
     {
         return Err(ServiceError::Validation(
-            "execution.validation_session or execution.validation_prepare is required when any target has validation_enabled true"
+            "execution.validation_session or execution.validation_setup is required when any target has validation_enabled true"
                 .to_string(),
         ));
     }
     if spec.datasets.private_benchmark_enabled
         && execution.official_session.is_none()
-        && execution.official_prepare.is_none()
+        && execution.official_evaluation_setup.is_none()
     {
         return Err(ServiceError::Validation(
-            "execution.official_session or execution.official_prepare is required when private_benchmark_enabled is true"
+            "execution.official_session or execution.official_evaluation_setup is required when private_benchmark_enabled is true"
                 .to_string(),
         ));
     }
     Ok(())
 }
 
-/// Validate co-executed benchmark topology fields.
+/// Validate coexecuted-evaluator topology fields.
 fn validate_coexecuted_benchmark_execution(
     _spec: &ChallengeBundleSpec,
     execution: &agentics_domain::models::challenge::CoexecutedBenchmarkExecutionSpec,
@@ -691,42 +695,42 @@ fn validate_coexecuted_benchmark_execution(
             "execution.acknowledge_danger must be true for coexecuted_benchmark".to_string(),
         ));
     }
-    if let Some(prepare) = &execution.validation_prepare {
-        validate_coexecuted_benchmark_prepare_spec(prepare, "execution.validation_prepare")?;
+    if let Some(setup) = &execution.validation_setup {
+        validate_coexecuted_benchmark_setup_spec(setup, "execution.validation_setup")?;
     }
-    if let Some(prepare) = &execution.official_prepare {
-        validate_coexecuted_benchmark_prepare_spec(prepare, "execution.official_prepare")?;
+    if let Some(setup) = &execution.official_evaluation_setup {
+        validate_coexecuted_benchmark_setup_spec(setup, "execution.official_evaluation_setup")?;
     }
     Ok(())
 }
 
-/// Validates prepare spec invariants for this contract.
-fn validate_prepare_spec(prepare: &ChallengePrepareSpec, field: &str) -> Result<()> {
-    validate_prepare_command(&prepare.command, &format!("{field}.command"))?;
-    if let Some(notes) = &prepare.reproducibility_notes {
+/// Validates setup spec invariants for this contract.
+fn validate_setup_spec(setup: &ChallengeSetupSpec, field: &str) -> Result<()> {
+    validate_setup_command(&setup.command, &format!("{field}.command"))?;
+    if let Some(notes) = &setup.reproducibility_notes {
         require_non_empty(notes, &format!("{field}.reproducibility_notes"))?;
     }
 
     Ok(())
 }
 
-/// Validates piped-stdio prepare spec invariants for this contract.
-fn validate_piped_stdio_prepare_spec(prepare: &PipedStdioPrepareSpec, field: &str) -> Result<()> {
-    validate_prepare_command(&prepare.command, &format!("{field}.command"))?;
-    if let Some(notes) = &prepare.reproducibility_notes {
+/// Validates piped-stdio setup spec invariants for this contract.
+fn validate_piped_stdio_setup_spec(setup: &PipedStdioSetupSpec, field: &str) -> Result<()> {
+    validate_setup_command(&setup.command, &format!("{field}.command"))?;
+    if let Some(notes) = &setup.reproducibility_notes {
         require_non_empty(notes, &format!("{field}.reproducibility_notes"))?;
     }
 
     Ok(())
 }
 
-/// Validates co-executed benchmark prepare spec invariants for this contract.
-fn validate_coexecuted_benchmark_prepare_spec(
-    prepare: &CoexecutedBenchmarkPrepareSpec,
+/// Validates coexecuted-evaluator setup spec invariants for this contract.
+fn validate_coexecuted_benchmark_setup_spec(
+    setup: &CoexecutedBenchmarkSetupSpec,
     field: &str,
 ) -> Result<()> {
-    validate_prepare_command(&prepare.command, &format!("{field}.command"))?;
-    if let Some(notes) = &prepare.reproducibility_notes {
+    validate_setup_command(&setup.command, &format!("{field}.command"))?;
+    if let Some(notes) = &setup.reproducibility_notes {
         require_non_empty(notes, &format!("{field}.reproducibility_notes"))?;
     }
 

@@ -78,24 +78,29 @@ fn renders_challenge_detail_table() {
             )
     );
     assert!(output.contains("execution_mode: separated_evaluator"));
-    assert!(output.contains("evaluator: command=python evaluator/run.py, result_file=result.json"));
+    assert!(output.contains(
+        "separated-evaluator: command=python separated-evaluator/run.py, result_file=result.json"
+    ));
     assert!(output.contains("ranking_metric: score"));
     assert!(output.ends_with("# Statement\n\nReturn the sum."));
 }
 
-/// Verifies that renders co-executed challenge detail table with the trust boundary.
+/// Verifies that renders coexecuted-evaluator challenge detail table with the trust boundary.
 #[test]
 fn renders_coexecuted_challenge_detail_table() {
     let mut detail = challenge_detail();
     detail.spec.execution =
         ChallengeExecutionSpec::CoexecutedBenchmark(CoexecutedBenchmarkExecutionSpec {
-            benchmark: EvaluatorSpec {
-                command: vec!["python".to_string(), "benchmark/run.py".to_string()],
+            coexecuted_evaluator: EvaluatorSpec {
+                command: vec![
+                    "python".to_string(),
+                    "coexecuted-evaluator/run.py".to_string(),
+                ],
                 result_file: bundle_path("result.json"),
             },
             acknowledge_danger: true,
-            validation_prepare: None,
-            official_prepare: None,
+            validation_setup: None,
+            official_evaluation_setup: None,
         })
         .into();
     detail.spec.targets[0].resource_profile.solution.run = None;
@@ -104,23 +109,28 @@ fn renders_coexecuted_challenge_detail_table() {
         render_challenge_detail(&detail, OutputFormat::Table).expect("render should succeed");
 
     assert!(output.contains("execution_mode: coexecuted_benchmark"));
-    assert!(output.contains("benchmark: command=python benchmark/run.py, result_file=result.json"));
-    assert!(output.contains("trust_boundary: benchmark harness and participant workspace"));
+    assert!(output.contains(
+        "coexecuted-evaluator: command=python coexecuted-evaluator/run.py, result_file=result.json"
+    ));
+    assert!(output.contains("trust_boundary: coexecuted-evaluator and participant workspace"));
 }
 
-/// Verifies that impossible co-executed DTOs fail before rendering.
+/// Verifies that impossible coexecuted-evaluator DTOs fail before rendering.
 #[test]
 fn rejects_impossible_coexecuted_challenge_detail_table() {
     let mut detail = challenge_detail();
     detail.spec.execution =
         ChallengeExecutionSpec::CoexecutedBenchmark(CoexecutedBenchmarkExecutionSpec {
-            benchmark: EvaluatorSpec {
-                command: vec!["python".to_string(), "benchmark/run.py".to_string()],
+            coexecuted_evaluator: EvaluatorSpec {
+                command: vec![
+                    "python".to_string(),
+                    "coexecuted-evaluator/run.py".to_string(),
+                ],
                 result_file: bundle_path("result.json"),
             },
             acknowledge_danger: true,
-            validation_prepare: None,
-            official_prepare: None,
+            validation_setup: None,
+            official_evaluation_setup: None,
         })
         .into();
 
@@ -208,14 +218,17 @@ fn challenge_detail() -> ChallengeDetailResponse {
             }],
             execution: ChallengeExecutionSpec::SeparatedEvaluator(
                 SeparatedEvaluatorExecutionSpec {
-                    evaluator: EvaluatorSpec {
-                        command: vec!["python".to_string(), "evaluator/run.py".to_string()],
+                    separated_evaluator: EvaluatorSpec {
+                        command: vec![
+                            "python".to_string(),
+                            "separated-evaluator/run.py".to_string(),
+                        ],
                         result_file: bundle_path("result.json"),
                     },
                     validation_runs: Some(bundle_path("public/runs.json")),
-                    validation_prepare: None,
+                    validation_setup: None,
                     official_runs: Some(bundle_path("private-benchmark/runs.json")),
-                    official_prepare: None,
+                    official_evaluation_setup: None,
                 },
             ),
             datasets: DatasetsSpec {

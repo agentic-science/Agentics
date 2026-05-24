@@ -36,10 +36,10 @@ WHERE c.name = rewritten_targets.name;
 
 UPDATE challenges
 SET spec_json = spec_json
-  #- '{execution,validation_prepare,external_data}'
-  #- '{execution,validation_prepare,cache_key_hint}'
-  #- '{execution,official_prepare,external_data}'
-  #- '{execution,official_prepare,cache_key_hint}'
+  #- '{execution,validation_setup,external_data}'
+  #- '{execution,validation_setup,cache_key_hint}'
+  #- '{execution,official_evaluation_setup,external_data}'
+  #- '{execution,official_evaluation_setup,cache_key_hint}'
 WHERE spec_json IS NOT NULL;
 
 UPDATE challenges

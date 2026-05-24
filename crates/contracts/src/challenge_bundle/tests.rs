@@ -3,12 +3,12 @@ use std::path::Path;
 use crate::zip_project::ZipProjectNetworkAccess;
 use agentics_domain::models::challenge::{
     ChallengeBundleSpec, ChallengeEligibilitySpec, ChallengeEligibilityType,
-    ChallengeExecutionSpec, ChallengePrepareSpec, ChallengeResultDetailVisibility,
+    ChallengeExecutionSpec, ChallengeResultDetailVisibility, ChallengeSetupSpec,
     ChallengeSolutionPublicationPolicy, ChallengeTargetSpec, ChallengeVisibility,
-    ChallengeVisibilitySpec, CoexecutedBenchmarkExecutionSpec, CoexecutedBenchmarkPrepareSpec,
+    ChallengeVisibilitySpec, CoexecutedBenchmarkExecutionSpec, CoexecutedBenchmarkSetupSpec,
     DatasetsSpec, DockerPlatform, EvaluatorSpec, EvaluatorStageProfiles, HardwareProfileSpec,
     MetricDirection, MetricSchemaSpec, MetricVisibility, PipedStdioExecutionSpec,
-    PipedStdioPrepareSpec, PrivateBenchmarkPolicy, ResourceProfileSpec,
+    PipedStdioSetupSpec, PrivateBenchmarkPolicy, ResourceProfileSpec,
     SeparatedEvaluatorExecutionSpec, SolutionSpec, SolutionStageProfiles, StageResourceProfile,
     TargetAccelerator,
 };
@@ -95,14 +95,17 @@ fn base_spec() -> ChallengeBundleSpec {
         },
         solution_publication: ChallengeSolutionPublicationPolicy::Public,
         execution: ChallengeExecutionSpec::SeparatedEvaluator(SeparatedEvaluatorExecutionSpec {
-            evaluator: EvaluatorSpec {
-                command: vec!["python".to_string(), "evaluator/run.py".to_string()],
+            separated_evaluator: EvaluatorSpec {
+                command: vec![
+                    "python".to_string(),
+                    "separated-evaluator/run.py".to_string(),
+                ],
                 result_file: bundle_path("result.json"),
             },
             validation_runs: Some(bundle_path("public/runs.json")),
-            validation_prepare: None,
+            validation_setup: None,
             official_runs: Some(bundle_path("private-benchmark/runs.json")),
-            official_prepare: None,
+            official_evaluation_setup: None,
         }),
         datasets: DatasetsSpec {
             public_dir: bundle_path("public"),
@@ -119,30 +122,36 @@ fn base_spec() -> ChallengeBundleSpec {
 fn base_piped_stdio_spec() -> ChallengeBundleSpec {
     let mut spec = base_spec();
     spec.execution = ChallengeExecutionSpec::PipedStdio(PipedStdioExecutionSpec {
-        interactor: EvaluatorSpec {
-            command: vec!["python".to_string(), "interactor/run.py".to_string()],
+        interactive_evaluator: EvaluatorSpec {
+            command: vec![
+                "python".to_string(),
+                "interactive-evaluator/run.py".to_string(),
+            ],
             result_file: bundle_path("result.json"),
         },
         validation_session: Some(bundle_path("public/session.json")),
-        validation_prepare: None,
+        validation_setup: None,
         official_session: Some(bundle_path("private-benchmark/session.json")),
-        official_prepare: None,
+        official_evaluation_setup: None,
     });
     spec
 }
 
-/// Build a valid co-executed benchmark spec for tests.
+/// Build a valid coexecuted-evaluator spec for tests.
 fn base_coexecuted_benchmark_spec() -> ChallengeBundleSpec {
     let mut spec = base_spec();
     spec.execution =
         ChallengeExecutionSpec::CoexecutedBenchmark(CoexecutedBenchmarkExecutionSpec {
-            benchmark: EvaluatorSpec {
-                command: vec!["python".to_string(), "benchmark/run.py".to_string()],
+            coexecuted_evaluator: EvaluatorSpec {
+                command: vec![
+                    "python".to_string(),
+                    "coexecuted-evaluator/run.py".to_string(),
+                ],
                 result_file: bundle_path("result.json"),
             },
             acknowledge_danger: true,
-            validation_prepare: Some(coexecuted_prepare_spec()),
-            official_prepare: Some(coexecuted_prepare_spec()),
+            validation_setup: Some(coexecuted_setup_spec()),
+            official_evaluation_setup: Some(coexecuted_setup_spec()),
         });
     for target in &mut spec.targets {
         target.resource_profile.solution.run = None;
@@ -175,7 +184,7 @@ fn separated_evaluator_mut(spec: &mut ChallengeBundleSpec) -> &mut SeparatedEval
     execution
 }
 
-/// Borrow co-executed benchmark execution in tests that start from `base_coexecuted_benchmark_spec`.
+/// Borrow coexecuted-evaluator execution in tests that start from `base_coexecuted_benchmark_spec`.
 fn coexecuted_benchmark_mut(
     spec: &mut ChallengeBundleSpec,
 ) -> &mut CoexecutedBenchmarkExecutionSpec {
@@ -332,7 +341,7 @@ fn legacy_top_level_scorer_field_is_rejected() {
 #[test]
 fn evaluator_unknown_fields_are_rejected() {
     let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
-    spec_json["execution"]["evaluator"]["extra"] = serde_json::json!("ignored");
+    spec_json["execution"]["separated_evaluator"]["extra"] = serde_json::json!("ignored");
 
     let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
         .expect_err("unknown evaluator field should fail");
@@ -570,40 +579,40 @@ fn legacy_hardware_field_is_rejected() {
     assert!(error.to_string().contains("hardware"));
 }
 
-/// Verifies removed prepare metadata fields are rejected.
+/// Verifies removed setup metadata fields are rejected.
 #[test]
-fn removed_prepare_metadata_fields_are_rejected() {
+fn removed_setup_metadata_fields_are_rejected() {
     for field in ["external_data", "cache_key_hint"] {
         let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
-        spec_json["execution"]["official_prepare"] = serde_json::json!({
-            "command": ["python", "evaluator/prepare.py"],
+        spec_json["execution"]["official_evaluation_setup"] = serde_json::json!({
+            "command": ["python", "separated-evaluator/setup.py"],
             "result_runs_file": "generated/runs.json"
         });
-        spec_json["execution"]["official_prepare"][field] = if field == "external_data" {
+        spec_json["execution"]["official_evaluation_setup"][field] = if field == "external_data" {
             serde_json::json!([])
         } else {
             serde_json::json!("dataset-v1")
         };
 
         let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
-            .expect_err("removed prepare metadata field should fail");
+            .expect_err("removed setup metadata field should fail");
 
         assert!(error.to_string().contains(field));
     }
 }
 
-/// Verifies removed prepare network fields are rejected.
+/// Verifies removed setup network fields are rejected.
 #[test]
-fn removed_prepare_network_access_field_is_rejected() {
+fn removed_setup_network_access_field_is_rejected() {
     let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
-    spec_json["execution"]["official_prepare"] = serde_json::json!({
-        "command": ["python", "evaluator/prepare.py"],
+    spec_json["execution"]["official_evaluation_setup"] = serde_json::json!({
+        "command": ["python", "separated-evaluator/setup.py"],
         "result_runs_file": "generated/runs.json",
         "network_access": "enabled"
     });
 
     let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
-        .expect_err("prepare network access should be stage-owned");
+        .expect_err("setup network access should be stage-owned");
 
     assert!(error.to_string().contains("network_access"));
 }
@@ -832,35 +841,35 @@ fn validation_run_manifest_required_only_when_target_enables_validation() {
     assert!(error.to_string().contains("execution.validation_runs"));
 }
 
-/// Verifies that validation prepare satisfies validation enabled target.
+/// Verifies that validation setup satisfies validation enabled target.
 #[test]
-fn validation_prepare_satisfies_validation_enabled_target() {
+fn validation_setup_satisfies_validation_enabled_target() {
     let mut spec = base_spec();
     let execution = separated_evaluator_mut(&mut spec);
     execution.validation_runs = None;
-    execution.validation_prepare = Some(prepare_spec());
+    execution.validation_setup = Some(setup_spec());
 
     assert!(validate_challenge_bundle_spec(&spec).is_ok());
 }
 
-/// Verifies that official prepare satisfies private benchmark execution.
+/// Verifies that official setup satisfies private benchmark execution.
 #[test]
-fn official_prepare_satisfies_private_benchmark_execution() {
+fn official_evaluation_setup_satisfies_private_benchmark_execution() {
     let mut spec = base_spec();
     let execution = separated_evaluator_mut(&mut spec);
     execution.official_runs = None;
-    execution.official_prepare = Some(prepare_spec());
+    execution.official_evaluation_setup = Some(setup_spec());
 
     assert!(validate_challenge_bundle_spec(&spec).is_ok());
 }
 
-/// Verifies that official prepare may omit private benchmark directory.
+/// Verifies that official setup may omit private benchmark directory.
 #[test]
-fn official_prepare_may_omit_private_benchmark_directory() {
+fn official_evaluation_setup_may_omit_private_benchmark_directory() {
     let mut spec = base_spec();
     let execution = separated_evaluator_mut(&mut spec);
     execution.official_runs = None;
-    execution.official_prepare = Some(prepare_spec());
+    execution.official_evaluation_setup = Some(setup_spec());
     spec.datasets.private_benchmark_dir = None;
 
     assert!(validate_challenge_bundle_spec(&spec).is_ok());
@@ -882,7 +891,7 @@ fn piped_stdio_static_sessions_are_valid_and_projected_publicly() {
         serde_json::json!("public/session.json")
     );
     assert!(execution_json.get("official_session").is_none());
-    assert!(execution_json.get("official_prepare").is_none());
+    assert!(execution_json.get("official_evaluation_setup").is_none());
 }
 
 /// Verifies that separated-evaluator-only run manifest fields are rejected for piped-stdio.
@@ -897,16 +906,16 @@ fn piped_stdio_rejects_run_manifest_fields() {
     assert!(error.to_string().contains("validation_runs"));
 }
 
-/// Verifies that static and prepared piped-stdio sessions are mutually exclusive.
+/// Verifies that static and setup-generated piped-stdio sessions are mutually exclusive.
 #[test]
-fn piped_stdio_static_and_prepare_sessions_are_mutually_exclusive() {
+fn piped_stdio_static_and_setup_sessions_are_mutually_exclusive() {
     let mut spec = base_piped_stdio_spec();
     if let ChallengeExecutionSpec::PipedStdio(execution) = &mut spec.execution {
-        execution.validation_prepare = Some(piped_prepare_spec());
+        execution.validation_setup = Some(piped_setup_spec());
     }
 
     let error = validate_challenge_bundle_spec(&spec)
-        .expect_err("validation session and prepare should conflict");
+        .expect_err("validation session and setup should conflict");
 
     assert!(error.to_string().contains("validation_session"));
 }
@@ -925,12 +934,12 @@ fn piped_stdio_validation_requires_session_source() {
     assert!(error.to_string().contains("validation_session"));
 }
 
-/// Verifies that co-executed benchmarks validate and hide official prepare metadata publicly.
+/// Verifies that coexecuted-evaluator challenges validate and hide official setup metadata publicly.
 #[test]
 fn coexecuted_benchmark_is_valid_and_projected_publicly() {
     let spec = base_coexecuted_benchmark_spec();
 
-    validate_challenge_bundle_spec(&spec).expect("co-executed benchmark spec should validate");
+    validate_challenge_bundle_spec(&spec).expect("coexecuted-evaluator spec should validate");
     let public = agentics_domain::models::challenge::PublicChallengeBundleSpec::from(spec);
     let execution_json =
         serde_json::to_value(public.execution).expect("public execution serializes");
@@ -943,12 +952,12 @@ fn coexecuted_benchmark_is_valid_and_projected_publicly() {
         execution_json["acknowledge_danger"],
         serde_json::json!(true)
     );
-    assert!(execution_json.get("benchmark").is_some());
-    assert!(execution_json.get("validation_prepare").is_some());
-    assert!(execution_json.get("official_prepare").is_none());
+    assert!(execution_json.get("coexecuted_evaluator").is_some());
+    assert!(execution_json.get("validation_setup").is_some());
+    assert!(execution_json.get("official_evaluation_setup").is_none());
 }
 
-/// Verifies that co-executed benchmarks require explicit danger acknowledgement.
+/// Verifies that coexecuted-evaluator challenges require explicit danger acknowledgement.
 #[test]
 fn coexecuted_benchmark_requires_danger_acknowledgement() {
     let mut spec = base_coexecuted_benchmark_spec();
@@ -959,7 +968,7 @@ fn coexecuted_benchmark_requires_danger_acknowledgement() {
     assert!(error.to_string().contains("acknowledge_danger"));
 }
 
-/// Verifies that co-executed benchmarks reject solution run-stage limits.
+/// Verifies that coexecuted-evaluator challenges reject solution run-stage limits.
 #[test]
 fn coexecuted_benchmark_rejects_solution_run_profile() {
     let mut spec = base_coexecuted_benchmark_spec();
@@ -972,7 +981,7 @@ fn coexecuted_benchmark_rejects_solution_run_profile() {
     ));
 
     let error = validate_challenge_bundle_spec(&spec)
-        .expect_err("co-executed benchmark should reject solution run profile");
+        .expect_err("coexecuted-evaluator should reject solution run profile");
 
     assert!(error.to_string().contains("solution.run"));
     assert!(error.to_string().contains("forbidden"));
@@ -984,7 +993,7 @@ fn solution_run_profile_is_required_for_modes_with_solution_run_container() {
     let mut separated = base_spec();
     separated.targets[0].resource_profile.solution.run = None;
     let separated_error = validate_challenge_bundle_spec(&separated)
-        .expect_err("separated evaluator should require solution run profile");
+        .expect_err("separated-evaluator should require solution run profile");
     assert!(separated_error.to_string().contains("solution.run"));
 
     let mut piped = base_piped_stdio_spec();
@@ -994,7 +1003,7 @@ fn solution_run_profile_is_required_for_modes_with_solution_run_container() {
     assert!(piped_error.to_string().contains("solution.run"));
 }
 
-/// Verifies that co-executed benchmarks reject static run and session locators.
+/// Verifies that coexecuted-evaluator challenges reject static run and session locators.
 #[test]
 fn coexecuted_benchmark_rejects_run_and_session_locators() {
     let mut spec_json =
@@ -1003,34 +1012,34 @@ fn coexecuted_benchmark_rejects_run_and_session_locators() {
     spec_json["execution"]["validation_session"] = serde_json::json!("public/session.json");
 
     let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
-        .expect_err("co-executed benchmark should reject foreign locator fields");
+        .expect_err("coexecuted-evaluator should reject foreign locator fields");
 
     let message = error.to_string();
     assert!(message.contains("validation_runs") || message.contains("validation_session"));
 }
 
-/// Verifies that co-executed prepare does not accept generated result-file locators.
+/// Verifies that coexecuted-evaluator setup does not accept generated result-file locators.
 #[test]
-fn coexecuted_benchmark_prepare_rejects_result_file_locators() {
+fn coexecuted_benchmark_setup_rejects_result_file_locators() {
     let mut spec_json =
         serde_json::to_value(base_coexecuted_benchmark_spec()).expect("spec serializes");
-    spec_json["execution"]["validation_prepare"]["result_runs_file"] =
+    spec_json["execution"]["validation_setup"]["result_runs_file"] =
         serde_json::json!("generated/runs.json");
 
     let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
-        .expect_err("co-executed prepare should reject result-file locators");
+        .expect_err("coexecuted-evaluator setup should reject result-file locators");
 
     assert!(error.to_string().contains("result_runs_file"));
 }
 
-/// Verifies that prepare and static runs are mutually exclusive per mode.
+/// Verifies that setup and static runs are mutually exclusive per mode.
 #[test]
-fn prepare_and_static_runs_are_mutually_exclusive_per_mode() {
+fn setup_and_static_runs_are_mutually_exclusive_per_mode() {
     let mut spec = base_spec();
-    separated_evaluator_mut(&mut spec).official_prepare = Some(prepare_spec());
+    separated_evaluator_mut(&mut spec).official_evaluation_setup = Some(setup_spec());
 
     let error = validate_challenge_bundle_spec(&spec)
-        .expect_err("official prepare and official runs should conflict");
+        .expect_err("official setup and official runs should conflict");
     assert!(error.to_string().contains("official_runs"));
 }
 
@@ -1078,7 +1087,8 @@ fn metric_schema_accepts_tie_breaker_metadata() {
 
 /// Creates bundle after validating caller inputs.
 fn create_bundle(root: &Path, spec: &ChallengeBundleSpec) {
-    std::fs::create_dir_all(root.join("evaluator")).expect("failed to create evaluator dir");
+    std::fs::create_dir_all(root.join("separated-evaluator"))
+        .expect("failed to create separated-evaluator dir");
     std::fs::create_dir_all(root.join("public")).expect("failed to create public dir");
     std::fs::write(
         root.join("public/runs.json"),
@@ -1092,13 +1102,14 @@ fn create_bundle(root: &Path, spec: &ChallengeBundleSpec) {
     .expect("failed to write spec");
     std::fs::write(root.join("statement.md"), "# Sample\n\nBody\n")
         .expect("failed to write statement");
-    std::fs::write(root.join("evaluator/run.py"), "print('ok')\n")
-        .expect("failed to write evaluator");
+    std::fs::write(root.join("separated-evaluator/run.py"), "print('ok')\n")
+        .expect("failed to write separated-evaluator");
 }
 
 /// Creates a piped-stdio bundle after validating caller inputs.
 fn create_piped_stdio_bundle(root: &Path, spec: &ChallengeBundleSpec) {
-    std::fs::create_dir_all(root.join("interactor")).expect("failed to create interactor dir");
+    std::fs::create_dir_all(root.join("interactive-evaluator"))
+        .expect("failed to create interactive-evaluator dir");
     std::fs::create_dir_all(root.join("public")).expect("failed to create public dir");
     std::fs::create_dir_all(root.join("private-benchmark"))
         .expect("failed to create private benchmark dir");
@@ -1121,32 +1132,41 @@ fn create_piped_stdio_bundle(root: &Path, spec: &ChallengeBundleSpec) {
     .expect("failed to write spec");
     std::fs::write(root.join("statement.md"), "# Sample\n\nBody\n")
         .expect("failed to write statement");
-    std::fs::write(root.join("interactor/run.py"), "print('ok')\n")
-        .expect("failed to write interactor");
+    std::fs::write(root.join("interactive-evaluator/run.py"), "print('ok')\n")
+        .expect("failed to write interactive-evaluator");
 }
 
-/// Handles prepare spec for this module.
-fn prepare_spec() -> ChallengePrepareSpec {
-    ChallengePrepareSpec {
-        command: vec!["python".to_string(), "evaluator/prepare.py".to_string()],
+/// Handles setup spec for this module.
+fn setup_spec() -> ChallengeSetupSpec {
+    ChallengeSetupSpec {
+        command: vec![
+            "python".to_string(),
+            "separated-evaluator/setup.py".to_string(),
+        ],
         result_runs_file: bundle_path("generated/runs.json"),
         reproducibility_notes: Some("Generated from deterministic private seeds.".to_string()),
     }
 }
 
-/// Handles piped prepare spec for this module.
-fn piped_prepare_spec() -> PipedStdioPrepareSpec {
-    PipedStdioPrepareSpec {
-        command: vec!["python".to_string(), "interactor/prepare.py".to_string()],
+/// Handles piped setup spec for this module.
+fn piped_setup_spec() -> PipedStdioSetupSpec {
+    PipedStdioSetupSpec {
+        command: vec![
+            "python".to_string(),
+            "interactive-evaluator/setup.py".to_string(),
+        ],
         result_session_file: bundle_path("generated/session.json"),
         reproducibility_notes: Some("Generated from deterministic private seeds.".to_string()),
     }
 }
 
-/// Handles co-executed benchmark prepare spec for this module.
-fn coexecuted_prepare_spec() -> CoexecutedBenchmarkPrepareSpec {
-    CoexecutedBenchmarkPrepareSpec {
-        command: vec!["python".to_string(), "benchmark/prepare.py".to_string()],
+/// Handles coexecuted-evaluator setup spec for this module.
+fn coexecuted_setup_spec() -> CoexecutedBenchmarkSetupSpec {
+    CoexecutedBenchmarkSetupSpec {
+        command: vec![
+            "python".to_string(),
+            "coexecuted-evaluator/setup.py".to_string(),
+        ],
         reproducibility_notes: Some("Generated from deterministic private seeds.".to_string()),
     }
 }

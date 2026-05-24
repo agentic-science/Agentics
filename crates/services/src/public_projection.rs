@@ -953,14 +953,17 @@ mod tests {
             solution_publication: ChallengeSolutionPublicationPolicy::Public,
             execution: ChallengeExecutionSpec::SeparatedEvaluator(
                 SeparatedEvaluatorExecutionSpec {
-                    evaluator: EvaluatorSpec {
-                        command: vec!["python".to_string(), "evaluator/run.py".to_string()],
+                    separated_evaluator: EvaluatorSpec {
+                        command: vec![
+                            "python".to_string(),
+                            "separated-evaluator/run.py".to_string(),
+                        ],
                         result_file: bundle_path("result.json"),
                     },
                     validation_runs: Some(bundle_path("public/runs.json")),
-                    validation_prepare: None,
+                    validation_setup: None,
                     official_runs: Some(bundle_path("private-benchmark/runs.json")),
-                    official_prepare: None,
+                    official_evaluation_setup: None,
                 },
             ),
             datasets: DatasetsSpec {

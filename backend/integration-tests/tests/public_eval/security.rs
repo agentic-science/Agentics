@@ -19,7 +19,7 @@ async fn validation_rejects_private_benchmark_bundle_alias(pool: sqlx::PgPool) {
             $4::uuid,
             'coexecuted-sum',
             'Coexecuted Sum',
-            '{"en":"Import participant code in a trusted benchmark harness.","zh":"在可信基准程序中导入参赛代码。"}'::jsonb,
+            '{"en":"Import participant code in a trusted coexecuted-evaluator.","zh":"在可信共执行评估器中导入参赛代码。"}'::jsonb,
             $1,
             $1,
             $2,

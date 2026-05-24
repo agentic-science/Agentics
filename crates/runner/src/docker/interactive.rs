@@ -19,65 +19,68 @@ use agentics_domain::error::{Result, ServiceError};
 pub(super) async fn run_attached_interactive_pair(
     docker: &Docker,
     participant_id: &str,
-    interactor_id: &str,
+    interactive_evaluator_id: &str,
     timeout_sec: u64,
     max_interaction_bytes_per_direction: u64,
     shutdown_grace_secs: u64,
 ) -> Result<InteractiveSessionOutcome> {
     let participant_attach = attach_container_stdio(docker, participant_id).await?;
-    let interactor_attach = attach_container_stdio(docker, interactor_id).await?;
+    let interactive_evaluator_attach =
+        attach_container_stdio(docker, interactive_evaluator_id).await?;
 
     docker
         .start_container(participant_id, None::<StartContainerOptions>)
         .await
         .map_err(|e| ServiceError::Docker(format!("start participant container failed: {e}")))?;
     docker
-        .start_container(interactor_id, None::<StartContainerOptions>)
+        .start_container(interactive_evaluator_id, None::<StartContainerOptions>)
         .await
-        .map_err(|e| ServiceError::Docker(format!("start interactor container failed: {e}")))?;
+        .map_err(|e| {
+            ServiceError::Docker(format!("start interactive-evaluator container failed: {e}"))
+        })?;
 
     let started = Instant::now();
     let participant_output = participant_attach.output;
     let participant_input = participant_attach.input;
-    let interactor_output = interactor_attach.output;
-    let interactor_input = interactor_attach.input;
+    let interactive_evaluator_output = interactive_evaluator_attach.output;
+    let interactive_evaluator_input = interactive_evaluator_attach.input;
     let kill_switch = InteractiveKillSwitch {
         docker: docker.clone(),
         participant_id: participant_id.to_string(),
-        interactor_id: interactor_id.to_string(),
+        interactive_evaluator_id: interactive_evaluator_id.to_string(),
     };
 
     let participant_pump = pump_attached_output(
         "participant",
         participant_output,
-        interactor_input,
+        interactive_evaluator_input,
         max_interaction_bytes_per_direction,
         PLATFORM_CONTAINER_LOG_LIMIT_BYTES,
         kill_switch.clone(),
     );
-    let interactor_pump = pump_attached_output(
-        "interactor",
-        interactor_output,
+    let interactive_evaluator_pump = pump_attached_output(
+        "interactive-evaluator",
+        interactive_evaluator_output,
         participant_input,
         max_interaction_bytes_per_direction,
         PLATFORM_CONTAINER_LOG_LIMIT_BYTES,
         kill_switch,
     );
     let wait_pair = async {
-        let (participant, interactor) = tokio::join!(
+        let (participant, interactive_evaluator) = tokio::join!(
             wait_container_exit(docker, participant_id),
-            wait_container_exit(docker, interactor_id)
+            wait_container_exit(docker, interactive_evaluator_id)
         );
-        Ok::<_, ServiceError>((participant?, interactor?))
+        Ok::<_, ServiceError>((participant?, interactive_evaluator?))
     };
     let session_timeout = tokio::time::sleep(Duration::from_secs(timeout_sec));
     tokio::pin!(participant_pump);
-    tokio::pin!(interactor_pump);
+    tokio::pin!(interactive_evaluator_pump);
     tokio::pin!(wait_pair);
     tokio::pin!(session_timeout);
 
     let mut participant_pump_state = AttachedPumpState::Pending;
-    let mut interactor_pump_state = AttachedPumpState::Pending;
+    let mut interactive_evaluator_pump_state = AttachedPumpState::Pending;
     let mut exits = None;
     let mut wait_pending = true;
     let mut terminal = None;
@@ -87,7 +90,7 @@ pub(super) async fn run_attached_interactive_pair(
             || exits.is_some()
             || (!wait_pending
                 && !participant_pump_state.is_pending()
-                && !interactor_pump_state.is_pending())
+                && !interactive_evaluator_pump_state.is_pending())
         {
             break;
         }
@@ -102,11 +105,11 @@ pub(super) async fn run_attached_interactive_pair(
                     }
                 }
             }
-            result = &mut interactor_pump, if interactor_pump_state.is_pending() => {
+            result = &mut interactive_evaluator_pump, if interactive_evaluator_pump_state.is_pending() => {
                 match result {
-                    Ok(outcome) => interactor_pump_state = AttachedPumpState::Completed(outcome),
+                    Ok(outcome) => interactive_evaluator_pump_state = AttachedPumpState::Completed(outcome),
                     Err(error) => {
-                        interactor_pump_state = AttachedPumpState::Failed;
+                        interactive_evaluator_pump_state = AttachedPumpState::Failed;
                         terminal = Some(InteractiveTerminal::Error(error));
                     }
                 }
@@ -127,12 +130,12 @@ pub(super) async fn run_attached_interactive_pair(
     let pump_timeout = Duration::from_secs(shutdown_grace_secs);
     match terminal {
         Some(InteractiveTerminal::Timeout) => {
-            kill_interactive_pair(docker, participant_id, interactor_id).await?;
-            let (participant_pump, interactor_pump) = finish_attached_pump_pair(
+            kill_interactive_pair(docker, participant_id, interactive_evaluator_id).await?;
+            let (participant_pump, interactive_evaluator_pump) = finish_attached_pump_pair(
                 participant_pump_state,
                 participant_pump.as_mut(),
-                interactor_pump_state,
-                interactor_pump.as_mut(),
+                interactive_evaluator_pump_state,
+                interactive_evaluator_pump.as_mut(),
                 pump_timeout,
             )
             .await?;
@@ -145,9 +148,9 @@ pub(super) async fn run_attached_interactive_pair(
                     timed_out: true,
                     wall_time_ms,
                 },
-                interactor: ContainerOutcome {
+                interactive_evaluator: ContainerOutcome {
                     exit_code: 124,
-                    logs: interactor_pump.logs,
+                    logs: interactive_evaluator_pump.logs,
                     timed_out: true,
                     wall_time_ms,
                 },
@@ -155,12 +158,13 @@ pub(super) async fn run_attached_interactive_pair(
         }
         Some(InteractiveTerminal::Error(error)) => {
             let original_message = error.to_string();
-            let kill_result = kill_interactive_pair(docker, participant_id, interactor_id).await;
+            let kill_result =
+                kill_interactive_pair(docker, participant_id, interactive_evaluator_id).await;
             let drain_result = drain_attached_pumps_for_cleanup(
                 participant_pump_state,
                 participant_pump.as_mut(),
-                interactor_pump_state,
-                interactor_pump.as_mut(),
+                interactive_evaluator_pump_state,
+                interactive_evaluator_pump.as_mut(),
                 pump_timeout,
             )
             .await;
@@ -179,14 +183,14 @@ pub(super) async fn run_attached_interactive_pair(
         None => {}
     }
 
-    let (participant_exit, interactor_exit) = exits.ok_or_else(|| {
+    let (participant_exit, interactive_evaluator_exit) = exits.ok_or_else(|| {
         ServiceError::Docker("interactive containers exited without status".to_string())
     })?;
-    let (participant_pump, interactor_pump) = finish_attached_pump_pair(
+    let (participant_pump, interactive_evaluator_pump) = finish_attached_pump_pair(
         participant_pump_state,
         participant_pump.as_mut(),
-        interactor_pump_state,
-        interactor_pump.as_mut(),
+        interactive_evaluator_pump_state,
+        interactive_evaluator_pump.as_mut(),
         pump_timeout,
     )
     .await?;
@@ -199,9 +203,9 @@ pub(super) async fn run_attached_interactive_pair(
             timed_out: false,
             wall_time_ms,
         },
-        interactor: ContainerOutcome {
-            exit_code: interactor_exit,
-            logs: interactor_pump.logs,
+        interactive_evaluator: ContainerOutcome {
+            exit_code: interactive_evaluator_exit,
+            logs: interactive_evaluator_pump.logs,
             timed_out: false,
             wall_time_ms,
         },
@@ -229,18 +233,20 @@ enum InteractiveTerminal {
 async fn kill_interactive_pair(
     docker: &Docker,
     participant_id: &str,
-    interactor_id: &str,
+    interactive_evaluator_id: &str,
 ) -> Result<()> {
-    let (participant, interactor) = tokio::join!(
+    let (participant, interactive_evaluator) = tokio::join!(
         kill_container_if_running(docker, participant_id),
-        kill_container_if_running(docker, interactor_id)
+        kill_container_if_running(docker, interactive_evaluator_id)
     );
-    match (participant, interactor) {
+    match (participant, interactive_evaluator) {
         (Ok(()), Ok(())) => Ok(()),
         (Err(error), Ok(())) | (Ok(()), Err(error)) => Err(error),
-        (Err(participant_error), Err(interactor_error)) => Err(ServiceError::Docker(format!(
-            "{participant_error}; additionally failed to stop interactor container: {interactor_error}"
-        ))),
+        (Err(participant_error), Err(interactive_evaluator_error)) => {
+            Err(ServiceError::Docker(format!(
+                "{participant_error}; additionally failed to stop interactive-evaluator container: {interactive_evaluator_error}"
+            )))
+        }
     }
 }
 
@@ -269,8 +275,8 @@ where
 async fn finish_attached_pump_pair<F, G>(
     participant_state: AttachedPumpState,
     participant_pump: Pin<&mut F>,
-    interactor_state: AttachedPumpState,
-    interactor_pump: Pin<&mut G>,
+    interactive_evaluator_state: AttachedPumpState,
+    interactive_evaluator_pump: Pin<&mut G>,
     pump_timeout: Duration,
 ) -> Result<(AttachedPumpOutcome, AttachedPumpOutcome)>
 where
@@ -283,22 +289,22 @@ where
         participant_pump,
         pump_timeout,
     );
-    let interactor = finish_attached_pump_future(
-        "interactor",
-        interactor_state,
-        interactor_pump,
+    let interactive_evaluator = finish_attached_pump_future(
+        "interactive-evaluator",
+        interactive_evaluator_state,
+        interactive_evaluator_pump,
         pump_timeout,
     );
-    let (participant, interactor) = tokio::join!(participant, interactor);
-    Ok((participant?, interactor?))
+    let (participant, interactive_evaluator) = tokio::join!(participant, interactive_evaluator);
+    Ok((participant?, interactive_evaluator?))
 }
 
 /// Finish all still-pending pumps after a session-level error.
 async fn drain_attached_pumps_for_cleanup<F, G>(
     participant_state: AttachedPumpState,
     participant_pump: Pin<&mut F>,
-    interactor_state: AttachedPumpState,
-    interactor_pump: Pin<&mut G>,
+    interactive_evaluator_state: AttachedPumpState,
+    interactive_evaluator_pump: Pin<&mut G>,
     pump_timeout: Duration,
 ) -> Result<()>
 where
@@ -311,15 +317,15 @@ where
         participant_pump,
         pump_timeout,
     );
-    let interactor = drain_attached_pump_for_cleanup(
-        "interactor",
-        interactor_state,
-        interactor_pump,
+    let interactive_evaluator = drain_attached_pump_for_cleanup(
+        "interactive-evaluator",
+        interactive_evaluator_state,
+        interactive_evaluator_pump,
         pump_timeout,
     );
-    let (participant, interactor) = tokio::join!(participant, interactor);
+    let (participant, interactive_evaluator) = tokio::join!(participant, interactive_evaluator);
     participant?;
-    interactor?;
+    interactive_evaluator?;
     Ok(())
 }
 
@@ -371,14 +377,14 @@ struct AttachedPumpOutcome {
 struct InteractiveKillSwitch {
     docker: Docker,
     participant_id: String,
-    interactor_id: String,
+    interactive_evaluator_id: String,
 }
 
 impl InteractiveKillSwitch {
     /// Best-effort kill both sides of an interactive session.
     async fn kill_both(&self) {
         drop(kill_container_if_running(&self.docker, &self.participant_id).await);
-        drop(kill_container_if_running(&self.docker, &self.interactor_id).await);
+        drop(kill_container_if_running(&self.docker, &self.interactive_evaluator_id).await);
     }
 }
 

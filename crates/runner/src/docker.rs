@@ -61,7 +61,7 @@ pub(super) struct ContainerOutcome {
 /// Carries two-container interactive session outcome data.
 pub(super) struct InteractiveSessionOutcome {
     pub(super) participant: ContainerOutcome,
-    pub(super) interactor: ContainerOutcome,
+    pub(super) interactive_evaluator: ContainerOutcome,
 }
 
 /// Summary of Agentics runner container reconciliation work.
@@ -123,22 +123,24 @@ pub(super) async fn run_container(
     }
 }
 
-/// Run one participant container and one trusted interactor container with crossed stdio.
+/// Run one participant container and one trusted interactive-evaluator container with crossed stdio.
 pub(super) async fn run_interactive_stdio_session(
     docker: &Docker,
     participant: ContainerRequest,
-    interactor: ContainerRequest,
+    interactive_evaluator: ContainerRequest,
     max_interaction_bytes_per_direction: u64,
     shutdown_grace_secs: u64,
 ) -> Result<InteractiveSessionOutcome> {
     let participant_fix = PermissionRepairRequest::from_container_request(&participant);
-    let interactor_fix = PermissionRepairRequest::from_container_request(&interactor);
+    let interactive_evaluator_fix =
+        PermissionRepairRequest::from_container_request(&interactive_evaluator);
     let timeout_sec = participant
         .limits
         .timeout_sec
-        .max(interactor.limits.timeout_sec);
+        .max(interactive_evaluator.limits.timeout_sec);
     let participant_id = create_container(docker, participant, true).await?;
-    let interactor_id = match create_container(docker, interactor, true).await {
+    let interactive_evaluator_id = match create_container(docker, interactive_evaluator, true).await
+    {
         Ok(container_id) => container_id,
         Err(create_error) => {
             return match remove_container(docker, &participant_id).await {
@@ -153,23 +155,23 @@ pub(super) async fn run_interactive_stdio_session(
     let run_result = run_attached_interactive_pair(
         docker,
         &participant_id,
-        &interactor_id,
+        &interactive_evaluator_id,
         timeout_sec,
         max_interaction_bytes_per_direction,
         shutdown_grace_secs,
     )
     .await;
     let participant_permission = participant_fix.repair(docker).await;
-    let interactor_permission = interactor_fix.repair(docker).await;
+    let interactive_evaluator_permission = interactive_evaluator_fix.repair(docker).await;
     let participant_remove = remove_container(docker, &participant_id).await;
-    let interactor_remove = remove_container(docker, &interactor_id).await;
+    let interactive_evaluator_remove = remove_container(docker, &interactive_evaluator_id).await;
 
     combine_interactive_cleanup_results(
         run_result,
         participant_permission,
-        interactor_permission,
+        interactive_evaluator_permission,
         participant_remove,
-        interactor_remove,
+        interactive_evaluator_remove,
     )
 }
 
@@ -886,16 +888,16 @@ async fn kill_container_if_running(docker: &Docker, container_id: &str) -> Resul
 fn combine_interactive_cleanup_results(
     run_result: Result<InteractiveSessionOutcome>,
     participant_permission: Result<()>,
-    interactor_permission: Result<()>,
+    interactive_evaluator_permission: Result<()>,
     participant_remove: Result<()>,
-    interactor_remove: Result<()>,
+    interactive_evaluator_remove: Result<()>,
 ) -> Result<InteractiveSessionOutcome> {
     let mut cleanup_errors = Vec::new();
     for result in [
         participant_permission,
-        interactor_permission,
+        interactive_evaluator_permission,
         participant_remove,
-        interactor_remove,
+        interactive_evaluator_remove,
     ] {
         if let Err(error) = result {
             cleanup_errors.push(error.to_string());

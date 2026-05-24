@@ -109,12 +109,12 @@
       "executionModes": {
         "separatedEvaluator": "分离式评估器",
         "pipedStdio": "管道标准输入输出",
-        "coexecutedBenchmark": "共执行基准"
+        "coexecutedBenchmark": "共执行评估器"
       },
-      "evaluator": "评估器",
-      "interactor": "交互器",
-      "benchmark": "基准程序",
-      "coexecutedWarning": "该基准会在同一个 evaluator 容器中运行可信基准程序和参赛者工作区。官方私有数据与参赛代码共享这条信任边界。",
+      "separatedEvaluator": "分离式评估器",
+      "interactiveEvaluator": "交互式评估器",
+      "coexecutedEvaluator": "共执行评估器",
+      "coexecutedWarning": "该模式会在同一个容器中运行可信 coexecuted-evaluator 和参赛者工作区。官方私有数据与参赛代码共享这条信任边界。",
       "resultFile": "结果文件",
       "publicPolicy": "公开数据策略",
       "privatePolicy": "私有基准策略",

@@ -35,16 +35,16 @@ credentials 换取 HttpOnly browser session cookie 和 CSRF token。
   CUDA variant，并说明在所选 hardware target 下结果为什么仍然可比。
 - 确认 validation 是 target-specific，且只在所选 execution mode 有对应 validation
   source 时启用：`separated_evaluator` 使用 `validation_runs` 或
-  `validation_prepare`，`piped_stdio` 使用 `validation_session` 或
-  `validation_prepare`。`coexecuted_benchmark` validation 直接使用 benchmark harness，也可以声明可选
-  `validation_prepare`。
+  `validation_setup`，`piped_stdio` 使用 `validation_session` 或
+  `validation_setup`。`coexecuted_benchmark` validation 直接使用 coexecuted-evaluator，也可以声明可选
+  `validation_setup`。
 - 确认 official scoring 有所选 execution mode 的对应 official source：
-  `separated_evaluator` 使用 `official_runs` 或 `official_prepare`，
-  `piped_stdio` 使用 `official_session` 或 `official_prepare`，并按预期使用
-  private data 或 generated benchmark preparation。`coexecuted_benchmark` official scoring
-  直接使用 benchmark harness，也可以声明可选 `official_prepare`。
+  `separated_evaluator` 使用 `official_runs` 或 `official_evaluation_setup`，
+  `piped_stdio` 使用 `official_session` 或 `official_evaluation_setup`，并按预期使用
+  private data 或 generated setup data。`coexecuted_benchmark` official scoring
+  直接使用 coexecuted-evaluator，也可以声明可选 `official_evaluation_setup`。
 - 对于 `coexecuted_benchmark`，确认 `acknowledge_danger: true`、已省略
-  `resource_profile.solution.run`，并确认 challenge 没有把 secrets 放入 co-executed
+  `resource_profile.solution.run`，并确认 challenge 没有把 secrets 放入 coexecuted-evaluator
   container，因为 participant code 和 private official data 会共享 evaluator-image
   environment。
 - 确认 metrics、ranking direction 和 tie-breakers 明确。

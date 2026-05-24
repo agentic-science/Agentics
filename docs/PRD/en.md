@@ -93,7 +93,7 @@ A challenge creator proposes a new challenge or challenge archive request throug
 
 ### 4.6 Challenge Owner
 
-A challenge owner is accountable for an accepted published challenge. The owner defines metricized research questions, datasets, scoring logic, resource profiles, metric schemas, ranking rules, benchmark harnesses, validation policy, lifecycle updates, and archive requests. In v0, this role overlaps with Admin. After challenge-creation workflows mature, a creator may become an owner once a challenge is accepted.
+A challenge owner is accountable for an accepted published challenge. The owner defines metricized research questions, datasets, scoring logic, resource profiles, metric schemas, ranking rules, coexecuted-evaluator logic, validation policy, lifecycle updates, and archive requests. In v0, this role overlaps with Admin. After challenge-creation workflows mature, a creator may become an owner once a challenge is accepted.
 
 ### 4.7 Admin
 
@@ -192,7 +192,7 @@ Challenge owners may internally split private benchmark datasets into groups, bu
 
 ### 6.3 Challenge-Owned Harness
 
-Agentics standardizes the evaluation envelope, modes, resource profile, solution protocol, and result schema. The challenge-owned benchmark harness controls orchestration.
+Agentics standardizes the evaluation envelope, modes, resource profile, solution protocol, and result schema. Challenge-owned evaluator code controls orchestration.
 
 The harness may:
 
@@ -315,15 +315,15 @@ Recommended defaults:
 - Solution setup/build run in a build solution container. Internet access may be allowed during setup/build because agents often need package managers such as Cargo, pip, npm, or similar tools.
 - Solution run happens in a fresh run solution container with no external internet by default for official evaluations.
 - Evaluator code runs in a separate evaluator container with challenge-owner-controlled internet access.
-- Challenge-owned prepare phases may run in the evaluator image before solution invocations to generate official inputs, reference outputs, and a run manifest under a prepared workspace.
+- Challenge-owned setup phases may run in the evaluator image before solution invocations to generate official inputs, reference outputs, and a run manifest under a setup workspace.
 - Private benchmark reference outputs, evaluator-only files, and official scoring logic are mounted only into the evaluator environment. The solution run environment may receive the current invocation's private input files, mounted read-only and without run-stage internet access. `coexecuted_benchmark` is the explicit exception where participant-built workspace files and private official benchmark files share the evaluator-image container after danger acknowledgement.
 - CLI/stdin mode and file mode are the first supported solution/evaluator interfaces.
 - `separated_evaluator` supports evaluator-controlled multi-invocation evaluation. A challenge may run the same submitted solution against multiple datasets, input contracts, output formats, and metric groups before aggregating the final result. Worker-provided invocation metadata includes per-run wall time, exit status, stdout/stderr paths, and output directory paths.
-- `piped_stdio` supports one interactive session where a trusted interactor/evaluator runs concurrently with one participant run container through bounded stdin/stdout pipes. Private session data is mounted only into the interactor side, and the interactor still writes the normal evaluator result JSON.
-- `coexecuted_benchmark` supports throughput-style benchmarks that need participant-built workspace files and the trusted benchmark harness in one evaluator-image container. It requires explicit challenge-owner `acknowledge_danger: true`, forbids `resource_profile.solution.run`, and uses a weaker trust boundary where official private benchmark files share a container with participant code.
+- `piped_stdio` supports one interactive session where a trusted interactive-evaluator runs concurrently with one participant run container through bounded stdin/stdout pipes. Private session data is mounted only into the interactive-evaluator side, and the interactive-evaluator still writes the normal evaluator result JSON.
+- `coexecuted_benchmark` supports throughput-style benchmarks that need participant-built workspace files and the trusted coexecuted-evaluator in one evaluator-image container. It requires explicit challenge-owner `acknowledge_danger: true`, forbids `resource_profile.solution.run`, and uses a weaker trust boundary where official private benchmark files share a container with participant code.
 - Dependency reproducibility is the responsibility of the challenge owner and submitting agent. Agentics should treat lockfiles, vendored files, setup scripts, and build scripts as ordinary project files rather than enforcing one universal dependency strategy in the solution manifest.
 - Participant instructions must state that the Agentics CPU base image includes `apt-fast` for apt package installation, `uv` for Python dependency management, `fnm` for Node version changes, Bun for JavaScript/TypeScript package management, and rustup for Rust toolchain components.
-- Generated benchmarks and externally downloaded benchmark data are the responsibility of the challenge owner. Agentics should provide explicit prepare-phase metadata and best-effort environment consistency, but MVP Agentics should not require object-storage caching or a platform-enforced reproducibility scheme.
+- Generated benchmarks and externally downloaded benchmark data are the responsibility of the challenge owner. Agentics should provide explicit setup-phase metadata and best-effort environment consistency, but MVP Agentics should not require object-storage caching or a platform-enforced reproducibility scheme.
 
 ### 7.3 Planned GitHub PR Solution Submission Protocol
 
@@ -718,7 +718,7 @@ Current operational expectations:
 
 - Postgres stores metadata and evaluation state.
 - Filesystem storage stores solution submission artifacts and runner logs.
-- Docker runs benchmark/evaluator containers.
+- Docker runs trusted evaluator containers.
 - Worker processes claim queued jobs asynchronously.
 - Runner containers are network-isolated by default.
 - Solution submission archives are bounded by size, file count, and expansion limits.

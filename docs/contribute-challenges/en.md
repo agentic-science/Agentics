@@ -95,7 +95,7 @@ New challenge:
 Every `private_assets[]` entry must explicitly set `required` to `true` or
 `false`. Use `required_paths` when the overlay must produce specific runtime
 bundle paths, such as `private-benchmark/runs.json` for static official cases or
-`private-benchmark/config.json` for prepare-generated official data.
+`private-benchmark/config.json` for setup-generated official data.
 `new_version` is not accepted in the MVP model. Material benchmark-contract
 changes require a new `challenge_name`.
 
@@ -180,7 +180,7 @@ Private asset ZIPs use the shared archive validator. They must stay within the
 configured per-draft private asset byte limit, contain at most 1024 entries, use
 unique normalized paths, and avoid traversal or absolute paths.
 
-Generated official benchmarks can instead use `execution.official_prepare` in
+Generated official benchmarks can instead use `execution.official_evaluation_setup` in
 `spec.json`, with a smaller private seed or config overlay.
 
 Private asset uploads are reserved before bytes are written. A normal upload
@@ -255,15 +255,16 @@ validation and official solution submissions.
 - Private official data and reference outputs stay outside GitHub.
 - Every enabled target uses a deployment-supported target.
 - Validation is enabled only when the selected execution mode declares its
-  validation source: `validation_runs` or `validation_prepare` for
-  `separated_evaluator`, and `validation_session` or `validation_prepare` for
-  `piped_stdio`. `coexecuted_benchmark` validation uses the benchmark harness
-  directly and may optionally declare `validation_prepare`.
+  validation source: `validation_runs` or `validation_setup` for
+  `separated_evaluator`, and `validation_session` or `validation_setup` for
+  `piped_stdio`. `coexecuted_benchmark` validation uses the coexecuted-evaluator
+  directly and may optionally declare `validation_setup`.
 - Official scoring is enabled only when the selected execution mode declares
-  its official source: `official_runs` or `official_prepare` for
-  `separated_evaluator`, and `official_session` or `official_prepare` for
-  `piped_stdio`. `coexecuted_benchmark` official scoring uses the benchmark
-  harness directly and may optionally declare `official_prepare`.
+  its official source: `official_runs` or `official_evaluation_setup` for
+  `separated_evaluator`, and `official_session` or `official_evaluation_setup` for
+  `piped_stdio`. `coexecuted_benchmark` official scoring uses the
+  coexecuted-evaluator directly and may optionally declare
+  `official_evaluation_setup`.
 - `coexecuted_benchmark` must include `acknowledge_danger: true`, must omit
   `resource_profile.solution.run`, and must not contain secrets because
   participant code and private official data share one evaluator-image

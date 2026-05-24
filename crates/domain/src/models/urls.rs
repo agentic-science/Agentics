@@ -348,7 +348,7 @@ impl_string_url_schema!(
     r"^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/pull/[0-9]+$"
 );
 
-/// External HTTPS URL referenced by challenge-owned prepare metadata.
+/// External HTTPS URL referenced by challenge-owned setup metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExternalDataUrl(Url);
 

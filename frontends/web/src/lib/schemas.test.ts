@@ -73,7 +73,7 @@ function targetFixture(validationEnabled: boolean) {
   };
 }
 
-/** Builds the co-executed target fixture without a participant run stage. */
+/** Builds the coexecuted-evaluator target fixture without a participant run stage. */
 function coexecutedTargetFixture() {
   const target = targetFixture(true);
   const { setup, build } = target.resource_profile.solution;
@@ -134,8 +134,8 @@ describe("frontend API schemas", () => {
           targets: [targetFixture(true)],
           execution: {
             mode: "separated_evaluator",
-            evaluator: {
-              command: ["python", "evaluator/run.py"],
+            separated_evaluator: {
+              command: ["python", "separated-evaluator/run.py"],
               result_file: "result.json",
             },
             validation_runs: "public/runs.json",
@@ -199,8 +199,8 @@ describe("frontend API schemas", () => {
           targets: [targetFixture(true)],
           execution: {
             mode: "piped_stdio",
-            interactor: {
-              command: ["python", "interactor/run.py"],
+            interactive_evaluator: {
+              command: ["python", "interactive-evaluator/run.py"],
               result_file: "result.json",
             },
             validation_session: "public/session.json",
@@ -255,13 +255,13 @@ describe("frontend API schemas", () => {
           targets: [coexecutedTargetFixture()],
           execution: {
             mode: "coexecuted_benchmark",
-            benchmark: {
-              command: ["python", "benchmark/run.py"],
+            coexecuted_evaluator: {
+              command: ["python", "coexecuted-evaluator/run.py"],
               result_file: "result.json",
             },
             acknowledge_danger: true,
-            validation_prepare: {
-              command: ["python", "benchmark/prepare.py"],
+            validation_setup: {
+              command: ["python", "coexecuted-evaluator/setup.py"],
             },
           },
           datasets: {
@@ -316,8 +316,8 @@ describe("frontend API schemas", () => {
           targets: [targetFixture(true)],
           execution: {
             mode: "coexecuted_benchmark",
-            benchmark: {
-              command: ["python", "benchmark/run.py"],
+            coexecuted_evaluator: {
+              command: ["python", "coexecuted-evaluator/run.py"],
               result_file: "result.json",
             },
             acknowledge_danger: true,

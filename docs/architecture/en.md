@@ -273,7 +273,7 @@ Agentics remains authoritative for:
 The trust and data-exposure model should become more explicit after MVP. The
 future model should derive and display properties such as:
 
-- whether private data is evaluator-only, interactor-only, or shared with
+- whether private data is separated-evaluator-only, interactive-evaluator-only, or shared with
   participant code,
 - whether official participant-containing stages have network access,
 - whether the sandbox is Docker default, Docker quota-hardened, or VM isolated.

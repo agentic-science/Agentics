@@ -274,20 +274,20 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
   - Scope：根据 manifest-declared scripts 建模 setup、build 和 run phases，并从 challenge-owned resource profiles 派生 timeout、memory、CPU、disk 和 network policy。Container log capture 是 platform-owned runner configuration，不属于 solution manifest data。
   - Test spec：为 script-to-phase resolution、profile-owned limit selection、platform log caps 和 phase-specific failure reporting 添加 unit tests。
 
-- **M0.2-PROTO-4：添加 evaluator-owned prepare phase**
-  - Commit target：`worker: add challenge prepare phase`
-  - Scope：允许 challenge bundles 声明 `validation_prepare` 或 `official_prepare` commands，在 solution invocations 之前用 evaluator image 运行，把生成的 inputs 和生成的 run manifest 写入 `/prepared`，并让 private prepared data 不进入 public challenge repository。Prepare network policy 来自 `resource_profile.evaluator.setup`；prepare specs 记录 reproducibility metadata，但不强制统一 data reproducibility scheme。
-  - Test spec：添加 bundle parser tests 覆盖 static runs 与 prepared run modes，添加 runner integration tests 覆盖 prepare-generated `source_path` inputs、evaluator 访问 `/prepared`、使用 private seed assets 发布 official challenge，以及通过 prepared run manifest 成功评分 solution。
+- **M0.2-PROTO-4：添加 evaluator-owned setup phase**
+  - Commit target：`worker: add challenge setup phase`
+  - Scope：允许 challenge bundles 声明 `validation_setup` 或 `official_evaluation_setup` commands，在 solution invocations 之前用 evaluator image 运行，把生成的 inputs 和生成的 run manifest 写入 `/setup`，并让 private setup data 不进入 public challenge repository。Setup network policy 来自 `resource_profile.evaluator.setup`；setup specs 记录 reproducibility metadata，但不强制统一 data reproducibility scheme。
+  - Test spec：添加 bundle parser tests 覆盖 static runs 与 setup-generated run modes，添加 runner integration tests 覆盖 setup-generated `source_path` inputs、evaluator 访问 `/setup`、使用 private seed assets 发布 official challenge，以及通过 setup-generated run manifest 成功评分 solution。
 
 - **M0.2-PROTO-5：添加 piped stdio execution mode**
   - Commit target：`worker: add piped stdio execution mode`
-  - Scope：添加 `execution.mode: "piped_stdio"`，用于一个 interactive session，让 challenge-owned trusted interactor/evaluator 通过有界 stdin/stdout pipes 与一个 participant run container 通信，并写出既有 evaluator result JSON。
-  - Test spec：添加 bundle parser tests 覆盖 session manifests 和 mode-specific locators，添加 runner integration tests 覆盖成功交互和 byte-limit failure，并补充 client/schema tests 显示 execution mode 与 interactor metadata。
+  - Scope：添加 `execution.mode: "piped_stdio"`，用于一个 interactive session，让 challenge-owned trusted interactive-evaluator 通过有界 stdin/stdout pipes 与一个 participant run container 通信，并写出既有 evaluator result JSON。
+  - Test spec：添加 bundle parser tests 覆盖 session manifests 和 mode-specific locators，添加 runner integration tests 覆盖成功交互和 byte-limit failure，并补充 client/schema tests 显示 execution mode 与 interactive-evaluator metadata。
 
 - **M0.2-PROTO-6：添加 coexecuted benchmark execution mode**
   - Commit target：`worker: add coexecuted benchmark execution mode`
-  - Scope：添加 `execution.mode: "coexecuted_benchmark"`，用于 throughput-style benchmarks，让可信 benchmark harness 在 evaluator-image container 中从构建后的 `/workspace` 导入 participant code。要求 `acknowledge_danger: true`，省略 `resource_profile.solution.run`，validation 使用 public-only bundles，official evaluation 使用 private runtime bundles。
-  - Test spec：添加 bundle parser tests 覆盖 danger acknowledgement 和 mode-specific resource profile rules，添加 runner integration tests 覆盖 validation public-bundle isolation 与 official private-data access，并补充 client/schema tests 显示 benchmark topology。
+  - Scope：添加 `execution.mode: "coexecuted_benchmark"`，用于 throughput-style benchmarks，让可信 coexecuted-evaluator 在 evaluator-image container 中从构建后的 `/workspace` 导入 participant code。要求 `acknowledge_danger: true`，省略 `resource_profile.solution.run`，validation 使用 public-only bundles，official evaluation 使用 private runtime bundles。
+  - Test spec：添加 bundle parser tests 覆盖 danger acknowledgement 和 mode-specific resource profile rules，添加 runner integration tests 覆盖 validation public-bundle isolation 与 official private-data access，并补充 client/schema tests 显示 coexecuted-evaluator topology。
 
 ### Targets
 
@@ -395,7 +395,7 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 
 - **M0.2-DOC-1：记录 multi-language challenge authoring**
   - Commit target：`docs: document multi-language zip_project authoring`
-  - Scope：添加 manifest examples、generated CLI workspace hints、reference image guidance、setup/build/run contract、two-container solution execution model、evaluator/solution data boundaries、internet policy、dependency guidance、multi-run evaluation examples、language examples，以及 quota/admin capacity notes。Local benchmark-image validation 保持为独立 CLI milestone。
+  - Scope：添加 manifest examples、generated CLI workspace hints、reference image guidance、setup/build/run contract、two-container solution execution model、separated-evaluator/solution data boundaries、internet policy、dependency guidance、multi-run evaluation examples、language examples，以及 quota/admin capacity notes。Local benchmark-image validation 保持为独立 CLI milestone。
   - Test spec：使用 parser fixtures 和至少一个 local runner smoke test 验证 documented sample ZIPs。
 
 - **M0.2-DOC-2：记录 GPU benchmark expectations**
@@ -415,9 +415,9 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 | `M0.2-PROTO-1：定义 zip_project manifest schema` | 已实现 | 为更小的 `agentics.solution.json` 添加 strict shared Rust parsing 和双语文档；manifest 只包含 protocol metadata、public note 和 setup/build/run script paths。 |
 | `M0.2-PROTO-2：添加 setup/build/run phase model` | 已实现 | 从 script paths 解析 setup/build/run phases，并从 challenge-owned resource profiles 与 platform-owned log capture settings 派生 execution limits。 |
 | `M0.2-PROTO-3：添加 dependency policy validation` | 已推迟 | 作为 standalone milestone 废弃；dependency reproducibility 属于 challenge owners 和 submitting agents 的责任，不再是 participant-controlled manifest policy。 |
-| `M0.2-PROTO-4：添加 evaluator-owned prepare phase` | 已实现 | Challenge bundles 可以在 solution invocations 之前，在 evaluator-owned `/prepared` workspace 中生成 validation 或 official run manifests 和 source-backed inputs。 |
-| `M0.2-PROTO-5：添加 piped stdio execution mode` | 已实现 | Challenge bundles 可以让一个 trusted interactor/evaluator 通过有界 stdin/stdout pipes 与一个 participant run container 并发运行，并使用 session manifests 与相同的 result JSON contract。 |
-| `M0.2-PROTO-6：添加 coexecuted benchmark execution mode` | 已实现 | Challenge bundles 可以在 evaluator image 中运行可信 benchmark harness，并将构建后的 participant workspace 挂载到 `/workspace`；validation 使用保存的 public-only bundle，official evaluation 使用 private runtime bundle，并要求显式 danger acknowledgement。 |
+| `M0.2-PROTO-4：添加 evaluator-owned setup phase` | 已实现 | Challenge bundles 可以在 solution invocations 之前，在 evaluator-owned `/setup` workspace 中生成 validation 或 official run manifests 和 source-backed inputs。 |
+| `M0.2-PROTO-5：添加 piped stdio execution mode` | 已实现 | Challenge bundles 可以让一个 trusted interactive-evaluator 通过有界 stdin/stdout pipes 与一个 participant run container 并发运行，并使用 session manifests 与相同的 result JSON contract。 |
+| `M0.2-PROTO-6：添加 coexecuted benchmark execution mode` | 已实现 | Challenge bundles 可以在 evaluator image 中运行可信 coexecuted-evaluator，并将构建后的 participant workspace 挂载到 `/workspace`；validation 使用保存的 public-only bundle，official evaluation 使用 private runtime bundle，并要求显式 danger acknowledgement。 |
 | `M0.2-TARGET-1：定义 target schema` | 已实现 | Challenge bundles 现在声明带有 canonical ARM64 CPU/CUDA targets、Docker platform、required nullable accelerator、validation flag 和 target-owned resource profile 的 `targets`。CUDA targets 必须在 `hardware_metadata` 中声明 hardware model、GPU count、CUDA variant 和匹配的 CUDA version metadata。AMD64 Linux targets 在 post-MVP deployment capacity 存在前会被拒绝。 |
 | `M0.2-TARGET-2：添加 target-specific evaluations 和 leaderboards` | 已实现 | Solution submissions、jobs、evaluations、quotas、workers、API DTOs 和 leaderboard rows 现在都携带 `target`；HTTP submissions 会在 artifact decode 前校验 target。 |
 | `M0.2-IMAGE-1：定义 first-party CPU base image` | 已实现 | 添加 source-defined Ubuntu 26.04 CPU base image files、smoke checks、local build docs、participant guidance，以及要求 supported CPU image repositories 和 `ubuntu26.04-*` tags 的 validation。发布和 digest rollout 已有意推迟。 |
@@ -594,7 +594,7 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 | `M0.2.5-CREATE-5：添加 challenge archive flow 并拒绝 version updates` | 已实现 | `new_version` manifests 会被拒绝；archive drafts 会隐藏 challenge 但保留 direct records。 |
 | `M0.2.5-CREATE-6：添加 stale draft cleanup 和 challenge creation quotas` | 已实现 | 已实现 active draft limits、private asset byte limits、validation-frequency limits、stale draft abandonment 和 unpublished asset purge。 |
 | `M0.2.5-DEMO-1：确定 official demo challenge set` | 已实现 | Matrix multiplication throughput 是第一个 MVP demo challenge；更完整的 hosted demo set 仍是 TODO。 |
-| `M0.2.5-DEMO-2：打包 official demo challenges` | 已实现 | Matrix demo 位于 challenge repository，使用 private seed/config 和 prepare-generated official data，并已通过 local GitHub draft/publish/submit smoke path。 |
+| `M0.2.5-DEMO-2：打包 official demo challenges` | 已实现 | Matrix demo 位于 challenge repository，使用 private seed/config 和 setup-generated official data，并已通过 local GitHub draft/publish/submit smoke path。 |
 | `M0.2.5-DEPLOY-1：添加 hosted deployment baseline` | 已实现 | 已文档化 Mac-local MVP deployment rehearsal；DGX Spark hosted profile 现在由 DGX-1 和 DGX-2 单独覆盖。 |
 | `M0.2.5-OPS-1：添加 public quota 和 abuse limits` | 已实现 | 已记录 backend-enforced quotas、pioneer-code gated registration、推荐 Mac-local MVP 数值和 Cloudflare edge controls。 |
 | `M0.2.5-OPS-2：添加 health checks、observability 和 runbook` | 已实现 | Operations runbook 和 `agentics-check-local-mvp` 覆盖 health、capacity、heartbeat、logs、failures 和 backups。 |

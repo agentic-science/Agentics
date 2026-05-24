@@ -78,16 +78,16 @@ export default async function ChallengePage({
   const execution = detail.spec.execution;
   const trustedExecutor =
     execution.mode === "piped_stdio"
-      ? execution.interactor
+      ? execution.interactive_evaluator
       : execution.mode === "coexecuted_benchmark"
-        ? execution.benchmark
-        : execution.evaluator;
+        ? execution.coexecuted_evaluator
+        : execution.separated_evaluator;
   const trustedExecutorLabel =
     execution.mode === "piped_stdio"
-      ? t("challenge.config.interactor")
+      ? t("challenge.config.interactiveEvaluator")
       : execution.mode === "coexecuted_benchmark"
-        ? t("challenge.config.benchmark")
-        : t("challenge.config.evaluator");
+        ? t("challenge.config.coexecutedEvaluator")
+        : t("challenge.config.separatedEvaluator");
   const executionModeLabel =
     execution.mode === "piped_stdio"
       ? t("challenge.config.executionModes.pipedStdio")

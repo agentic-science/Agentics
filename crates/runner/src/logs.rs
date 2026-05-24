@@ -182,12 +182,12 @@ mod tests {
         assert!(logs.as_bytes().len() <= 96);
     }
 
-    /// Verifies lowering the cap after prepare logs preserves the final bound.
+    /// Verifies lowering the cap after setup logs preserves the final bound.
     #[test]
     fn evaluation_logs_set_limit_truncates_existing_content() {
         let mut logs = EvaluationLogs::new(256);
 
-        append_named_logs(&mut logs, "prepare", &"x".repeat(120));
+        append_named_logs(&mut logs, "setup", &"x".repeat(120));
         logs.set_limit(80);
 
         let text = String::from_utf8_lossy(logs.as_bytes());

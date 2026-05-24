@@ -236,7 +236,7 @@ pub fn write_public_challenge(repo: &Path) -> String {
         .to_string(),
     );
     write_file(
-        &challenge_root.join("v1/evaluator/run.py"),
+        &challenge_root.join("v1/separated-evaluator/run.py"),
         SAMPLE_SUM_EVALUATOR,
     );
     write_file(
@@ -289,8 +289,8 @@ pub fn write_public_challenge(repo: &Path) -> String {
             "solution_publication": "public",
             "execution": {
                 "mode": "separated_evaluator",
-                "evaluator": {
-                    "command": ["python", "evaluator/run.py"],
+                "separated_evaluator": {
+                    "command": ["python", "separated-evaluator/run.py"],
                     "result_file": "result.json"
                 },
                 "validation_runs": "public/runs.json",

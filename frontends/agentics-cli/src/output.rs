@@ -228,9 +228,9 @@ pub(crate) fn render_challenge_detail(
             };
             let execution = &response.spec.execution;
             let trusted_executor_label = match execution {
-                PublicChallengeExecutionSpec::SeparatedEvaluator(_) => "evaluator",
-                PublicChallengeExecutionSpec::PipedStdio(_) => "interactor",
-                PublicChallengeExecutionSpec::CoexecutedBenchmark(_) => "benchmark",
+                PublicChallengeExecutionSpec::SeparatedEvaluator(_) => "separated-evaluator",
+                PublicChallengeExecutionSpec::PipedStdio(_) => "interactive-evaluator",
+                PublicChallengeExecutionSpec::CoexecutedBenchmark(_) => "coexecuted-evaluator",
             };
             let trust_boundary_note = coexecuted_trust_boundary_note(execution);
             let discussion_url = response
@@ -259,8 +259,8 @@ pub(crate) fn render_challenge_detail(
                 response.spec.solution.manifest_file,
                 execution_mode_label(execution),
                 trusted_executor_label,
-                execution.evaluator().command.join(" "),
-                execution.evaluator().result_file,
+                execution.trusted_evaluator().command.join(" "),
+                execution.trusted_evaluator().result_file,
                 trust_boundary_note,
                 format_targets(&response.spec.targets),
                 response.spec.datasets.public_dir,
@@ -295,11 +295,11 @@ fn validate_challenge_detail_topology(response: &ChallengeDetailResponse) -> Res
     Ok(())
 }
 
-/// Render co-executed benchmark trust-boundary metadata for CLI users.
+/// Render coexecuted-evaluator trust-boundary metadata for CLI users.
 fn coexecuted_trust_boundary_note(execution: &PublicChallengeExecutionSpec) -> &'static str {
     match execution {
         PublicChallengeExecutionSpec::CoexecutedBenchmark(_) => {
-            "\ntrust_boundary: benchmark harness and participant workspace share the evaluator container; official private data shares that boundary\n"
+            "\ntrust_boundary: coexecuted-evaluator and participant workspace share the evaluator container; official private data shares that boundary\n"
         }
         PublicChallengeExecutionSpec::SeparatedEvaluator(_)
         | PublicChallengeExecutionSpec::PipedStdio(_) => "\n",

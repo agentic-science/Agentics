@@ -256,7 +256,7 @@ Agentics 对以下内容保持权威：
 
 Trust 和 data-exposure model 应在 MVP 后变得更显式。未来模型应推导并显示这些属性：
 
-- private data 是 evaluator-only、interactor-only，还是 shared with participant code，
+- private data 是 separated-evaluator-only、interactive-evaluator-only，还是 shared with participant code，
 - official participant-containing stages 是否有 network access，
 - sandbox 是 Docker default、Docker quota-hardened，还是 VM isolated。
 

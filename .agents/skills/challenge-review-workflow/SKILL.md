@@ -21,16 +21,16 @@ Reviewer checklist:
   UTF-8 bytes.
 - `execution.mode` is `separated_evaluator`, `piped_stdio`, or
   `coexecuted_benchmark`. For
-  `separated_evaluator`, `execution.evaluator.command` plus
-  `execution.evaluator.result_file` identify the trusted evaluator entry point
-  and result JSON. For `piped_stdio`, `execution.interactor.command` plus
-  `execution.interactor.result_file` identify the trusted interactor/evaluator
+  `separated_evaluator`, `execution.separated_evaluator.command` plus
+  `execution.separated_evaluator.result_file` identify the trusted separated-evaluator entry point
+  and result JSON. For `piped_stdio`, `execution.interactive_evaluator.command` plus
+  `execution.interactive_evaluator.result_file` identify the trusted interactive-evaluator
   entry point and result JSON. For `coexecuted_benchmark`,
-  `execution.benchmark.command`, `execution.benchmark.result_file`, and
-  `acknowledge_danger: true` identify a weaker-trust benchmark harness that
+  `execution.coexecuted_evaluator.command`, `execution.coexecuted_evaluator.result_file`, and
+  `acknowledge_danger: true` identify a weaker-trust coexecuted-evaluator that
   imports participant code from `/workspace` inside the evaluator-image
   container. Confirm `resource_profile.solution.run` is omitted and no secrets
-  are placed in co-executed official data.
+  are placed in coexecuted-evaluator official data.
 - The metric schema has one primary ranking metric and clear metric descriptions.
 - Targets are realistic for the hosted worker budget.
 - Challenge-level `starts_at` is present, `starts_at` and optional `closes_at`
@@ -83,7 +83,7 @@ Confirm:
 - Any `private_assets[].required_paths` are produced by the uploaded active
   overlays after the runtime bundle is assembled.
 
-Private assets are ZIP overlays. They should add private paths such as `private-benchmark/runs.json` for static official runs or `private-benchmark/config.json` for prepare-generated official runs, and must not overwrite public files.
+Private assets are ZIP overlays. They should add private paths such as `private-benchmark/runs.json` for static official runs or `private-benchmark/config.json` for setup-generated official runs, and must not overwrite public files.
 
 Only active private assets are usable. A draft with a non-stale active
 validation should reject private asset mutation; stale validation claims are
@@ -93,7 +93,7 @@ admin private asset lifecycle endpoint when you need to inspect pending or
 failed private asset rows that are intentionally omitted from normal draft
 responses.
 
-For source-backed run inputs, confirm every public validation `input_files[].source_path` exists in the public bundle and every static official source path exists in the uploaded private overlay. For separated-evaluator prepare, confirm the prepare command, `result_runs_file`, `resource_profile.evaluator.setup.network_access`, and reproducibility notes. For piped-stdio prepare, confirm the prepare command, `result_session_file`, evaluator setup network policy, and reproducibility notes. For co-executed prepare, confirm there is no result locator, and review the benchmark command plus weaker trust boundary carefully. Evaluator-only reference outputs should stay out of solution inputs unless the challenge intentionally exposes public validation references.
+For source-backed run inputs, confirm every public validation `input_files[].source_path` exists in the public bundle and every static official source path exists in the uploaded private overlay. For separated-evaluator setup, confirm the setup command, `result_runs_file`, `resource_profile.evaluator.setup.network_access`, and reproducibility notes. For piped-stdio setup, confirm the setup command, `result_session_file`, evaluator setup network policy, and reproducibility notes. For coexecuted-evaluator setup, confirm there is no result locator, and review the coexecuted-evaluator command plus weaker trust boundary carefully. Evaluator-only reference outputs should stay out of solution inputs unless the challenge intentionally exposes public validation references.
 
 ## 3. Validate The Draft
 

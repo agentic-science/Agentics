@@ -1,18 +1,17 @@
 use super::{
-    ChallengeBundleSpec, CoexecutedBenchmarkPrepareRequest, CoexecutedBenchmarkRequest,
+    ChallengeBundleSpec, CoexecutedBenchmarkRequest, CoexecutedBenchmarkSetupRequest,
     ContainerRequest, EvaluationLogs, EvaluatorRequest, Path, PipedStdioRequest, Result,
     RetainedRunTree, RetainedRunnerTree, RunnerContext, ServiceError, SessionPlanRequest,
     SetupBuildRequest, SolutionRunRequest, WritablePhase, ZIP_PROJECT_MANIFEST_FILE,
     ZipProjectManifest, ZipProjectPhaseName, append_named_logs, append_phase_logs, append_run_logs,
-    bind_mount, cleanup_paths, coexecuted_benchmark_prepare, container_name, copy_dir_all,
+    bind_mount, cleanup_paths, coexecuted_benchmark_setup, container_name, copy_dir_all,
     copy_evaluator_visible_run_tree, effective_accelerator_count, effective_phase_limits,
     ensure_container_succeeded, ensure_declared_outputs_exist, ensure_disk_limit,
-    ensure_prepare_disk_limit, evaluator_limits, include_log_excerpts,
-    make_container_readable_tree, make_container_writable_tree, materialize_input_files,
-    materialize_run_io, phase_name, replace_dir_all, replace_dir_all_if_separate,
-    resolve_piped_stdio_session_plan, run_alias, run_coexecuted_benchmark_prepare_phase,
-    run_interface, validate_evaluator_visible_output_tree, visible_log_content,
-    writable_phase_for_solution_phase, write_run_metadata,
+    ensure_setup_disk_limit, evaluator_limits, include_log_excerpts, make_container_readable_tree,
+    make_container_writable_tree, materialize_input_files, materialize_run_io, phase_name,
+    replace_dir_all, replace_dir_all_if_separate, resolve_piped_stdio_session_plan, run_alias,
+    run_coexecuted_benchmark_setup_phase, run_interface, validate_evaluator_visible_output_tree,
+    visible_log_content, writable_phase_for_solution_phase, write_run_metadata,
 };
 
 /// Reads solution manifest from disk or storage.
@@ -322,14 +321,17 @@ pub(super) async fn run_evaluator(
         .await?;
     make_container_writable_tree(output_mount.path()).await?;
 
-    let mut cmd = request.spec.execution.evaluator().command.clone();
+    let mut cmd = request.spec.execution.trusted_evaluator().command.clone();
     cmd.extend([
         "--challenge-dir".to_string(),
         "/challenge".to_string(),
         "--solution-runs-dir".to_string(),
         "/solution-runs".to_string(),
         "--output-path".to_string(),
-        format!("/output/{}", request.spec.execution.evaluator().result_file),
+        format!(
+            "/output/{}",
+            request.spec.execution.trusted_evaluator().result_file
+        ),
         "--mode".to_string(),
         request.eval_type.evaluator_mode_arg().to_string(),
         "--runs-file".to_string(),
@@ -348,20 +350,20 @@ pub(super) async fn run_evaluator(
             true,
         ));
     }
-    if let Some(prepared_root) = request.prepared_root {
-        mounts.push(bind_mount(prepared_root, "/prepared", true));
+    if let Some(setup_root) = request.setup_root {
+        mounts.push(bind_mount(setup_root, "/setup", true));
     }
     let outcome = runner
         .backend
         .run_container(ContainerRequest {
-            name: container_name(runner.attempt, "evaluator"),
+            name: container_name(runner.attempt, "separated-evaluator"),
             image: request
                 .profile
                 .evaluator_image
                 .docker_reference()
                 .to_string(),
             cmd,
-            env: vec!["AGENTICS_PHASE=evaluator".to_string()],
+            env: vec!["AGENTICS_PHASE=separated-evaluator".to_string()],
             mounts,
             working_dir: "/challenge".to_string(),
             docker_platform: request.docker_platform,
@@ -369,17 +371,17 @@ pub(super) async fn run_evaluator(
             accelerator_count: effective_accelerator_count(request.profile, request.accelerator)?,
             limits: limits.clone(),
             docker_layer_quota_mb: runner.storage.docker_layer_quota_mb(&limits),
-            labels: runner.container_labels("evaluator", Some(&output_mount)),
+            labels: runner.container_labels("separated-evaluator", Some(&output_mount)),
         })
         .await?;
     append_named_logs(
         logs,
-        "evaluator",
+        "separated-evaluator",
         visible_log_content(request.eval_type, &outcome.logs),
     );
     if outcome.timed_out || outcome.exit_code != 0 {
         return Err(ServiceError::Runner(format!(
-            "evaluator container failed: exit_code={}, timed_out={}",
+            "separated-evaluator container failed: exit_code={}, timed_out={}",
             outcome.exit_code, outcome.timed_out
         )));
     }
@@ -410,7 +412,7 @@ pub(super) async fn run_piped_stdio_session(
             target: request.target,
             eval_type: request.eval_type,
             bundle_dir: request.bundle_dir,
-            prepared_root: request.prepared_root,
+            setup_root: request.setup_root,
         },
         logs,
     )
@@ -465,8 +467,8 @@ pub(super) async fn run_piped_stdio_session(
         .await?;
     make_container_writable_tree(output_mount.path()).await?;
 
-    let mut interactor_cmd = request.spec.execution.evaluator().command.clone();
-    interactor_cmd.extend([
+    let mut interactive_evaluator_cmd = request.spec.execution.trusted_evaluator().command.clone();
+    interactive_evaluator_cmd.extend([
         "--challenge-dir".to_string(),
         "/challenge".to_string(),
         "--session-file".to_string(),
@@ -474,24 +476,27 @@ pub(super) async fn run_piped_stdio_session(
         "--session-input-dir".to_string(),
         "/session/input".to_string(),
         "--output-path".to_string(),
-        format!("/output/{}", request.spec.execution.evaluator().result_file),
+        format!(
+            "/output/{}",
+            request.spec.execution.trusted_evaluator().result_file
+        ),
         "--mode".to_string(),
         request.eval_type.evaluator_mode_arg().to_string(),
         "--target".to_string(),
         request.target.to_string(),
     ]);
 
-    let mut interactor_mounts = vec![
+    let mut interactive_evaluator_mounts = vec![
         bind_mount(request.bundle_dir, "/challenge", true),
         bind_mount(request.session_root, "/session", true),
         bind_mount(output_mount.path(), "/output", false),
     ];
-    if let Some(prepared_root) = session_plan
-        .prepared_root
+    if let Some(setup_root) = session_plan
+        .setup_root
         .as_ref()
         .map(RetainedRunnerTree::path)
     {
-        interactor_mounts.push(bind_mount(prepared_root, "/prepared", true));
+        interactive_evaluator_mounts.push(bind_mount(setup_root, "/setup", true));
     }
 
     let outcome = runner
@@ -539,18 +544,18 @@ pub(super) async fn run_piped_stdio_session(
                 labels: runner.container_labels("run", Some(&io_mount)),
             },
             ContainerRequest {
-                name: container_name(runner.attempt, "interactor"),
+                name: container_name(runner.attempt, "interactive-evaluator"),
                 image: request
                     .profile
                     .evaluator_image
                     .docker_reference()
                     .to_string(),
-                cmd: interactor_cmd,
+                cmd: interactive_evaluator_cmd,
                 env: vec![
-                    "AGENTICS_PHASE=interactor".to_string(),
+                    "AGENTICS_PHASE=interactive-evaluator".to_string(),
                     format!("AGENTICS_MODE={}", request.eval_type.evaluator_mode_arg()),
                 ],
-                mounts: interactor_mounts,
+                mounts: interactive_evaluator_mounts,
                 working_dir: "/challenge".to_string(),
                 docker_platform: request.docker_platform,
                 accelerator: request.accelerator,
@@ -560,7 +565,7 @@ pub(super) async fn run_piped_stdio_session(
                 )?,
                 limits: evaluator_limits.clone(),
                 docker_layer_quota_mb: runner.storage.docker_layer_quota_mb(&evaluator_limits),
-                labels: runner.container_labels("interactor", Some(&output_mount)),
+                labels: runner.container_labels("interactive-evaluator", Some(&output_mount)),
             },
             request.max_interaction_bytes_per_direction,
             request.interaction_shutdown_grace_secs,
@@ -574,8 +579,8 @@ pub(super) async fn run_piped_stdio_session(
     );
     append_named_logs(
         logs,
-        "interactor",
-        visible_log_content(request.eval_type, &outcome.interactor.logs),
+        "interactive-evaluator",
+        visible_log_content(request.eval_type, &outcome.interactive_evaluator.logs),
     );
     if outcome.participant.timed_out || outcome.participant.exit_code != 0 {
         return Err(ServiceError::Runner(format!(
@@ -583,20 +588,20 @@ pub(super) async fn run_piped_stdio_session(
             outcome.participant.exit_code, outcome.participant.timed_out
         )));
     }
-    if outcome.interactor.timed_out || outcome.interactor.exit_code != 0 {
+    if outcome.interactive_evaluator.timed_out || outcome.interactive_evaluator.exit_code != 0 {
         return Err(ServiceError::Runner(format!(
-            "interactor container failed: exit_code={}, timed_out={}",
-            outcome.interactor.exit_code, outcome.interactor.timed_out
+            "interactive-evaluator container failed: exit_code={}, timed_out={}",
+            outcome.interactive_evaluator.exit_code, outcome.interactive_evaluator.timed_out
         )));
     }
     ensure_disk_limit(&io_root, run_limits.disk_limit_mb, ZipProjectPhaseName::Run).await?;
-    ensure_prepare_disk_limit(output_mount.path(), evaluator_limits.disk_limit_mb).await?;
+    ensure_setup_disk_limit(output_mount.path(), evaluator_limits.disk_limit_mb).await?;
     replace_dir_all_if_separate(output_mount.path(), request.evaluator_output_root).await?;
 
     Ok(())
 }
 
-/// Run the co-executed benchmark topology.
+/// Run the coexecuted-evaluator topology.
 pub(super) async fn run_coexecuted_benchmark(
     runner: RunnerContext<'_>,
     request: CoexecutedBenchmarkRequest<'_>,
@@ -609,20 +614,20 @@ pub(super) async fn run_coexecuted_benchmark(
         .ok_or_else(|| {
             ServiceError::Runner("challenge execution is not coexecuted_benchmark".to_string())
         })?;
-    let retained_prepared_root =
-        if let Some(prepare) = coexecuted_benchmark_prepare(execution, request.eval_type) {
+    let retained_setup_root =
+        if let Some(setup) = coexecuted_benchmark_setup(execution, request.eval_type) {
             Some(
-                run_coexecuted_benchmark_prepare_phase(
-                    CoexecutedBenchmarkPrepareRequest {
+                run_coexecuted_benchmark_setup_phase(
+                    CoexecutedBenchmarkSetupRequest {
                         runner,
                         profile: request.profile,
                         docker_platform: request.docker_platform,
                         accelerator: request.accelerator,
                         target: request.target,
                         eval_type: request.eval_type,
-                        prepare,
+                        setup,
                         bundle_dir: request.bundle_dir,
-                        prepared_root: request.prepared_root,
+                        setup_root: request.setup_root,
                     },
                     logs,
                 )
@@ -647,21 +652,21 @@ pub(super) async fn run_coexecuted_benchmark(
     tokio::fs::create_dir_all(output_mount.path().join("tmp")).await?;
     make_container_writable_tree(output_mount.path()).await?;
 
-    let mut cmd = execution.benchmark.command.clone();
+    let mut cmd = execution.coexecuted_evaluator.command.clone();
     cmd.extend([
         "--challenge-dir".to_string(),
         "/challenge".to_string(),
         "--workspace-dir".to_string(),
         "/workspace".to_string(),
         "--output-path".to_string(),
-        format!("/output/{}", execution.benchmark.result_file),
+        format!("/output/{}", execution.coexecuted_evaluator.result_file),
         "--mode".to_string(),
         request.eval_type.evaluator_mode_arg().to_string(),
         "--target".to_string(),
         request.target.to_string(),
     ]);
-    if retained_prepared_root.is_some() {
-        cmd.extend(["--prepared-dir".to_string(), "/prepared".to_string()]);
+    if retained_setup_root.is_some() {
+        cmd.extend(["--setup-dir".to_string(), "/setup".to_string()]);
     }
 
     let mut mounts = vec![
@@ -669,17 +674,14 @@ pub(super) async fn run_coexecuted_benchmark(
         bind_mount(request.build_root.path(), "/workspace", true),
         bind_mount(output_mount.path(), "/output", false),
     ];
-    if let Some(prepared_root) = retained_prepared_root
-        .as_ref()
-        .map(RetainedRunnerTree::path)
-    {
-        mounts.push(bind_mount(prepared_root, "/prepared", true));
+    if let Some(setup_root) = retained_setup_root.as_ref().map(RetainedRunnerTree::path) {
+        mounts.push(bind_mount(setup_root, "/setup", true));
     }
 
     let outcome = runner
         .backend
         .run_container(ContainerRequest {
-            name: container_name(runner.attempt, "benchmark"),
+            name: container_name(runner.attempt, "coexecuted-evaluator"),
             image: request
                 .profile
                 .evaluator_image
@@ -687,7 +689,7 @@ pub(super) async fn run_coexecuted_benchmark(
                 .to_string(),
             cmd,
             env: vec![
-                "AGENTICS_PHASE=benchmark".to_string(),
+                "AGENTICS_PHASE=coexecuted-evaluator".to_string(),
                 "AGENTICS_EXECUTION_MODE=coexecuted_benchmark".to_string(),
                 format!("AGENTICS_MODE={}", request.eval_type.evaluator_mode_arg()),
                 "AGENTICS_OUTPUT_DIR=/output".to_string(),
@@ -702,21 +704,21 @@ pub(super) async fn run_coexecuted_benchmark(
             accelerator_count: effective_accelerator_count(request.profile, request.accelerator)?,
             limits: limits.clone(),
             docker_layer_quota_mb: runner.storage.docker_layer_quota_mb(&limits),
-            labels: runner.container_labels("benchmark", Some(&output_mount)),
+            labels: runner.container_labels("coexecuted-evaluator", Some(&output_mount)),
         })
         .await?;
     append_named_logs(
         logs,
-        "benchmark",
+        "coexecuted-evaluator",
         visible_log_content(request.eval_type, &outcome.logs),
     );
     if outcome.timed_out || outcome.exit_code != 0 {
         return Err(ServiceError::Runner(format!(
-            "benchmark container failed: exit_code={}, timed_out={}",
+            "coexecuted-evaluator container failed: exit_code={}, timed_out={}",
             outcome.exit_code, outcome.timed_out
         )));
     }
-    ensure_prepare_disk_limit(output_mount.path(), limits.disk_limit_mb).await?;
+    ensure_setup_disk_limit(output_mount.path(), limits.disk_limit_mb).await?;
     replace_dir_all_if_separate(output_mount.path(), request.evaluator_output_root).await?;
 
     Ok(())

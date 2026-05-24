@@ -60,18 +60,18 @@ pub(super) async fn ensure_disk_limit(
     Ok(())
 }
 
-/// Ensures prepare disk limit before continuing.
-pub(super) async fn ensure_prepare_disk_limit(path: &Path, disk_limit_mb: u64) -> Result<()> {
+/// Ensures setup disk limit before continuing.
+pub(super) async fn ensure_setup_disk_limit(path: &Path, disk_limit_mb: u64) -> Result<()> {
     let path = path.to_path_buf();
     let bytes = tokio::task::spawn_blocking(move || directory_size(&path))
         .await
-        .map_err(|e| ServiceError::Internal(format!("prepare disk usage task failed: {e}")))??;
+        .map_err(|e| ServiceError::Internal(format!("setup disk usage task failed: {e}")))??;
     let limit_bytes = disk_limit_mb
         .checked_mul(1024 * 1024)
-        .ok_or_else(|| ServiceError::Runner("prepare disk limit overflow".to_string()))?;
+        .ok_or_else(|| ServiceError::Runner("setup disk limit overflow".to_string()))?;
     if bytes > limit_bytes {
         return Err(ServiceError::Runner(format!(
-            "prepare phase exceeded disk limit: {bytes} > {limit_bytes} bytes"
+            "setup phase exceeded disk limit: {bytes} > {limit_bytes} bytes"
         )));
     }
     Ok(())

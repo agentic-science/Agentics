@@ -36,9 +36,9 @@ use agentics_contracts::zip_project::{
 };
 use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge::{
-    ChallengeBundleSpec, ChallengeExecutionSpec, ChallengePrepareSpec, ChallengeRunManifest,
-    CoexecutedBenchmarkPrepareSpec, DockerPlatform, MetricSchemaSpec, PipedStdioPrepareSpec,
-    PipedStdioSessionManifest, ResourceProfileSpec, StageResourceProfile, TargetAccelerator,
+    ChallengeBundleSpec, ChallengeExecutionSpec, ChallengeRunManifest, ChallengeSetupSpec,
+    CoexecutedBenchmarkSetupSpec, DockerPlatform, MetricSchemaSpec, PipedStdioSessionManifest,
+    PipedStdioSetupSpec, ResourceProfileSpec, StageResourceProfile, TargetAccelerator,
 };
 use agentics_domain::models::evaluation::{EvaluationJobPayload, EvaluatorRunResult, ScoringMode};
 use agentics_domain::models::paths::BundleRelativePath;
@@ -61,10 +61,10 @@ pub use execution::execute_evaluation_job;
 
 use backend::{DockerRunnerBackend, RunnerBackend};
 use docker::{ContainerOutcome, ContainerRequest, bind_mount};
-use errors::{ensure_container_succeeded, ensure_prepare_succeeded};
+use errors::{ensure_container_succeeded, ensure_setup_succeeded};
 use filesystem::{
     OutputTreeLimits, cleanup_paths, copy_dir_all, create_private_host_dir, ensure_disk_limit,
-    ensure_prepare_disk_limit, extract_zip_safe, validate_evaluator_visible_output_tree,
+    ensure_setup_disk_limit, extract_zip_safe, validate_evaluator_visible_output_tree,
 };
 use logs::{
     EVALUATION_LOG_BYTES_PER_RUN, EvaluationLogs, append_named_logs, append_phase_logs,
@@ -277,7 +277,7 @@ struct EvaluatorRequest<'a> {
     accelerator: TargetAccelerator,
     run_manifest_container_path: &'a str,
     bundle_dir: &'a Path,
-    prepared_root: Option<&'a Path>,
+    setup_root: Option<&'a Path>,
     runs_root: &'a Path,
     retained_run_trees: &'a [RetainedRunTree],
     evaluator_output_root: &'a Path,
@@ -293,7 +293,7 @@ struct PipedStdioRequest<'a> {
     target: &'a str,
     manifest: &'a ZipProjectManifest,
     bundle_dir: &'a Path,
-    prepared_root: &'a Path,
+    setup_root: &'a Path,
     session_root: &'a Path,
     build_root: &'a RetainedRunnerTree,
     run_work_root: &'a Path,
@@ -302,7 +302,7 @@ struct PipedStdioRequest<'a> {
     interaction_shutdown_grace_secs: u64,
 }
 
-/// Carries co-executed benchmark request data across this module boundary.
+/// Carries coexecuted-evaluator request data across this module boundary.
 struct CoexecutedBenchmarkRequest<'a> {
     eval_type: ScoringMode,
     spec: &'a ChallengeBundleSpec,
@@ -311,7 +311,7 @@ struct CoexecutedBenchmarkRequest<'a> {
     accelerator: TargetAccelerator,
     target: &'a str,
     bundle_dir: &'a Path,
-    prepared_root: &'a Path,
+    setup_root: &'a Path,
     build_root: &'a RetainedRunnerTree,
     evaluator_output_root: &'a Path,
 }
@@ -321,14 +321,14 @@ struct ResolvedRunPlan {
     manifest: ChallengeRunManifest,
     input_source_root: PathBuf,
     run_manifest_container_path: String,
-    prepared_root: Option<RetainedRunnerTree>,
+    setup_root: Option<RetainedRunnerTree>,
 }
 
 /// Carries resolved interactive session data across this module boundary.
 struct ResolvedSessionPlan {
     manifest: PipedStdioSessionManifest,
     input_source_root: PathBuf,
-    prepared_root: Option<RetainedRunnerTree>,
+    setup_root: Option<RetainedRunnerTree>,
 }
 
 /// Carries run plan request data across this module boundary.
@@ -341,7 +341,7 @@ struct RunPlanRequest<'a> {
     target: &'a str,
     eval_type: ScoringMode,
     bundle_dir: &'a Path,
-    prepared_root: &'a Path,
+    setup_root: &'a Path,
 }
 
 /// Carries interactive session plan request data across this module boundary.
@@ -354,7 +354,7 @@ struct SessionPlanRequest<'a> {
     target: &'a str,
     eval_type: ScoringMode,
     bundle_dir: &'a Path,
-    prepared_root: &'a Path,
+    setup_root: &'a Path,
 }
 
 /// Platform-owned limits applied to one runner evaluation.
@@ -366,43 +366,43 @@ struct EvaluationLimitConfig {
     max_result_log_bytes: u64,
 }
 
-/// Carries prepare request data across this module boundary.
-struct PrepareRequest<'a> {
+/// Carries setup request data across this module boundary.
+struct EvaluatorSetupRequest<'a> {
     runner: RunnerContext<'a>,
     profile: &'a ResourceProfileSpec,
     docker_platform: DockerPlatform,
     accelerator: TargetAccelerator,
     target: &'a str,
     eval_type: ScoringMode,
-    prepare: &'a ChallengePrepareSpec,
+    setup: &'a ChallengeSetupSpec,
     bundle_dir: &'a Path,
-    prepared_root: &'a Path,
+    setup_root: &'a Path,
 }
 
-/// Carries piped-stdio prepare request data across this module boundary.
-struct PipedStdioPrepareRequest<'a> {
+/// Carries piped-stdio setup request data across this module boundary.
+struct PipedStdioSetupRequest<'a> {
     runner: RunnerContext<'a>,
     profile: &'a ResourceProfileSpec,
     docker_platform: DockerPlatform,
     accelerator: TargetAccelerator,
     target: &'a str,
     eval_type: ScoringMode,
-    prepare: &'a PipedStdioPrepareSpec,
+    setup: &'a PipedStdioSetupSpec,
     bundle_dir: &'a Path,
-    prepared_root: &'a Path,
+    setup_root: &'a Path,
 }
 
-/// Carries co-executed benchmark prepare request data across this module boundary.
-struct CoexecutedBenchmarkPrepareRequest<'a> {
+/// Carries coexecuted-evaluator setup request data across this module boundary.
+struct CoexecutedBenchmarkSetupRequest<'a> {
     runner: RunnerContext<'a>,
     profile: &'a ResourceProfileSpec,
     docker_platform: DockerPlatform,
     accelerator: TargetAccelerator,
     target: &'a str,
     eval_type: ScoringMode,
-    prepare: &'a CoexecutedBenchmarkPrepareSpec,
+    setup: &'a CoexecutedBenchmarkSetupSpec,
     bundle_dir: &'a Path,
-    prepared_root: &'a Path,
+    setup_root: &'a Path,
 }
 
 /// Docker label scope separating hosted worker containers from CLI local validation.
@@ -546,13 +546,13 @@ async fn read_limited_result_json(path: &Path, max_bytes: u64) -> Result<String>
 /// Enumerates run manifest source variants supported by this module.
 enum RunManifestSource<'a> {
     Static(&'a BundleRelativePath),
-    Prepared(&'a ChallengePrepareSpec),
+    SetupGenerated(&'a ChallengeSetupSpec),
 }
 
 /// Enumerates interactive session source variants supported by this module.
 enum PipedStdioSessionSource<'a> {
     Static(&'a BundleRelativePath),
-    Prepared(&'a PipedStdioPrepareSpec),
+    SetupGenerated(&'a PipedStdioSetupSpec),
 }
 
 /// Handles resolve run plan for this module.
@@ -571,43 +571,43 @@ async fn resolve_run_plan(
                 manifest,
                 input_source_root: request.bundle_dir.to_path_buf(),
                 run_manifest_container_path: format!("/challenge/{manifest_path}"),
-                prepared_root: None,
+                setup_root: None,
             })
         }
-        RunManifestSource::Prepared(prepare) => {
-            let retained_prepared_root = run_prepare_phase(
-                PrepareRequest {
+        RunManifestSource::SetupGenerated(setup) => {
+            let retained_setup_root = run_evaluator_setup_phase(
+                EvaluatorSetupRequest {
                     runner: request.runner,
                     profile: request.profile,
                     docker_platform: request.docker_platform,
                     accelerator: request.accelerator,
                     target: request.target,
                     eval_type: request.eval_type,
-                    prepare,
+                    setup,
                     bundle_dir: request.bundle_dir,
-                    prepared_root: request.prepared_root,
+                    setup_root: request.setup_root,
                 },
                 logs,
             )
             .await?;
-            let manifest_path = retained_prepared_root
+            let manifest_path = retained_setup_root
                 .path()
-                .join(prepare.result_runs_file.as_path());
+                .join(setup.result_runs_file.as_path());
             let manifest = agentics_contracts::challenge_bundle::read_challenge_run_manifest_file(
                 &manifest_path,
-                &format!("prepared run manifest {}", manifest_path.display()),
+                &format!("setup-generated run manifest {}", manifest_path.display()),
             )
             .await?;
             agentics_contracts::challenge_bundle::validate_challenge_run_manifest_sources(
-                retained_prepared_root.path(),
+                retained_setup_root.path(),
                 &manifest,
             )
             .await?;
             Ok(ResolvedRunPlan {
                 manifest,
-                input_source_root: retained_prepared_root.path().to_path_buf(),
-                run_manifest_container_path: format!("/prepared/{}", prepare.result_runs_file),
-                prepared_root: Some(retained_prepared_root),
+                input_source_root: retained_setup_root.path().to_path_buf(),
+                run_manifest_container_path: format!("/setup/{}", setup.result_runs_file),
+                setup_root: Some(retained_setup_root),
             })
         }
     }
@@ -628,77 +628,80 @@ async fn resolve_piped_stdio_session_plan(
             Ok(ResolvedSessionPlan {
                 manifest,
                 input_source_root: request.bundle_dir.to_path_buf(),
-                prepared_root: None,
+                setup_root: None,
             })
         }
-        PipedStdioSessionSource::Prepared(prepare) => {
-            let retained_prepared_root = run_piped_stdio_prepare_phase(
-                PipedStdioPrepareRequest {
+        PipedStdioSessionSource::SetupGenerated(setup) => {
+            let retained_setup_root = run_piped_stdio_setup_phase(
+                PipedStdioSetupRequest {
                     runner: request.runner,
                     profile: request.profile,
                     docker_platform: request.docker_platform,
                     accelerator: request.accelerator,
                     target: request.target,
                     eval_type: request.eval_type,
-                    prepare,
+                    setup,
                     bundle_dir: request.bundle_dir,
-                    prepared_root: request.prepared_root,
+                    setup_root: request.setup_root,
                 },
                 logs,
             )
             .await?;
-            let manifest_path = retained_prepared_root
+            let manifest_path = retained_setup_root
                 .path()
-                .join(prepare.result_session_file.as_path());
+                .join(setup.result_session_file.as_path());
             let manifest =
                 agentics_contracts::challenge_bundle::read_piped_stdio_session_manifest_file(
                     &manifest_path,
-                    &format!("prepared session manifest {}", manifest_path.display()),
+                    &format!(
+                        "setup-generated session manifest {}",
+                        manifest_path.display()
+                    ),
                 )
                 .await?;
             agentics_contracts::challenge_bundle::validate_piped_stdio_session_manifest_sources(
-                retained_prepared_root.path(),
+                retained_setup_root.path(),
                 &manifest,
             )
             .await?;
             Ok(ResolvedSessionPlan {
                 manifest,
-                input_source_root: retained_prepared_root.path().to_path_buf(),
-                prepared_root: Some(retained_prepared_root),
+                input_source_root: retained_setup_root.path().to_path_buf(),
+                setup_root: Some(retained_setup_root),
             })
         }
     }
 }
 
-/// Handles run prepare phase for this module.
-async fn run_prepare_phase(
-    request: PrepareRequest<'_>,
+/// Handles run setup phase for this module.
+async fn run_evaluator_setup_phase(
+    request: EvaluatorSetupRequest<'_>,
     logs: &mut EvaluationLogs,
 ) -> Result<RetainedRunnerTree> {
-    let limits = prepare_limits(request.profile);
-    let prepared_mount = request
+    let limits = evaluator_setup_limits(request.profile);
+    let setup_mount = request
         .runner
         .storage
         .writable_mount(
             request.runner.docker,
-            request.prepared_root,
-            WritablePhase::EvaluatorPrepare,
+            request.setup_root,
+            WritablePhase::EvaluatorSetup,
             limits.disk_limit_mb,
         )
         .await?;
-    make_container_writable_tree(prepared_mount.path()).await?;
-    let mut cmd = request.prepare.command.clone();
+    make_container_writable_tree(setup_mount.path()).await?;
+    let mut cmd = request.setup.command.clone();
     cmd.extend([
         "--challenge-dir".to_string(),
         "/challenge".to_string(),
-        "--prepared-dir".to_string(),
-        "/prepared".to_string(),
+        "--setup-dir".to_string(),
+        "/setup".to_string(),
         "--mode".to_string(),
         request.eval_type.evaluator_mode_arg().to_string(),
         "--target".to_string(),
         request.target.to_string(),
         "--runs-file".to_string(),
-        format!("/prepared/{}", request.prepare.result_runs_file),
+        format!("/setup/{}", request.setup.result_runs_file),
     ]);
 
     let outcome = request
@@ -707,7 +710,7 @@ async fn run_prepare_phase(
         .run_container(ContainerRequest {
             name: container_name(
                 request.runner.attempt,
-                &format!("prepare-{}", request.eval_type.evaluator_mode_arg()),
+                &format!("setup-{}", request.eval_type.evaluator_mode_arg()),
             ),
             image: request
                 .profile
@@ -716,12 +719,12 @@ async fn run_prepare_phase(
                 .to_string(),
             cmd,
             env: vec![
-                "AGENTICS_PHASE=prepare".to_string(),
+                "AGENTICS_PHASE=setup".to_string(),
                 format!("AGENTICS_MODE={}", request.eval_type.evaluator_mode_arg()),
             ],
             mounts: vec![
                 bind_mount(request.bundle_dir, "/challenge", true),
-                bind_mount(prepared_mount.path(), "/prepared", false),
+                bind_mount(setup_mount.path(), "/setup", false),
             ],
             working_dir: "/challenge".to_string(),
             docker_platform: request.docker_platform,
@@ -729,52 +732,50 @@ async fn run_prepare_phase(
             accelerator_count: effective_accelerator_count(request.profile, request.accelerator)?,
             limits: limits.clone(),
             docker_layer_quota_mb: request.runner.storage.docker_layer_quota_mb(&limits),
-            labels: request
-                .runner
-                .container_labels("prepare", Some(&prepared_mount)),
+            labels: request.runner.container_labels("setup", Some(&setup_mount)),
         })
         .await?;
     append_named_logs(
         logs,
-        &format!("prepare-{}", request.eval_type.evaluator_mode_arg()),
+        &format!("setup-{}", request.eval_type.evaluator_mode_arg()),
         visible_log_content(request.eval_type, &outcome.logs),
     );
-    ensure_prepare_succeeded(&outcome, include_log_excerpts(request.eval_type))?;
-    ensure_prepare_disk_limit(prepared_mount.path(), limits.disk_limit_mb).await?;
-    make_container_readable_tree(prepared_mount.path()).await?;
+    ensure_setup_succeeded(&outcome, include_log_excerpts(request.eval_type))?;
+    ensure_setup_disk_limit(setup_mount.path(), limits.disk_limit_mb).await?;
+    make_container_readable_tree(setup_mount.path()).await?;
 
-    Ok(RetainedRunnerTree::leased(prepared_mount))
+    Ok(RetainedRunnerTree::leased(setup_mount))
 }
 
-/// Run a trusted prepare command that emits one interactive session manifest.
-async fn run_piped_stdio_prepare_phase(
-    request: PipedStdioPrepareRequest<'_>,
+/// Run a trusted setup command that emits one interactive session manifest.
+async fn run_piped_stdio_setup_phase(
+    request: PipedStdioSetupRequest<'_>,
     logs: &mut EvaluationLogs,
 ) -> Result<RetainedRunnerTree> {
-    let limits = prepare_limits(request.profile);
-    let prepared_mount = request
+    let limits = evaluator_setup_limits(request.profile);
+    let setup_mount = request
         .runner
         .storage
         .writable_mount(
             request.runner.docker,
-            request.prepared_root,
-            WritablePhase::EvaluatorPrepare,
+            request.setup_root,
+            WritablePhase::EvaluatorSetup,
             limits.disk_limit_mb,
         )
         .await?;
-    make_container_writable_tree(prepared_mount.path()).await?;
-    let mut cmd = request.prepare.command.clone();
+    make_container_writable_tree(setup_mount.path()).await?;
+    let mut cmd = request.setup.command.clone();
     cmd.extend([
         "--challenge-dir".to_string(),
         "/challenge".to_string(),
-        "--prepared-dir".to_string(),
-        "/prepared".to_string(),
+        "--setup-dir".to_string(),
+        "/setup".to_string(),
         "--mode".to_string(),
         request.eval_type.evaluator_mode_arg().to_string(),
         "--target".to_string(),
         request.target.to_string(),
         "--session-file".to_string(),
-        format!("/prepared/{}", request.prepare.result_session_file),
+        format!("/setup/{}", request.setup.result_session_file),
     ]);
 
     let outcome = request
@@ -783,7 +784,7 @@ async fn run_piped_stdio_prepare_phase(
         .run_container(ContainerRequest {
             name: container_name(
                 request.runner.attempt,
-                &format!("prepare-{}", request.eval_type.evaluator_mode_arg()),
+                &format!("setup-{}", request.eval_type.evaluator_mode_arg()),
             ),
             image: request
                 .profile
@@ -792,12 +793,12 @@ async fn run_piped_stdio_prepare_phase(
                 .to_string(),
             cmd,
             env: vec![
-                "AGENTICS_PHASE=prepare".to_string(),
+                "AGENTICS_PHASE=setup".to_string(),
                 format!("AGENTICS_MODE={}", request.eval_type.evaluator_mode_arg()),
             ],
             mounts: vec![
                 bind_mount(request.bundle_dir, "/challenge", true),
-                bind_mount(prepared_mount.path(), "/prepared", false),
+                bind_mount(setup_mount.path(), "/setup", false),
             ],
             working_dir: "/challenge".to_string(),
             docker_platform: request.docker_platform,
@@ -805,46 +806,44 @@ async fn run_piped_stdio_prepare_phase(
             accelerator_count: effective_accelerator_count(request.profile, request.accelerator)?,
             limits: limits.clone(),
             docker_layer_quota_mb: request.runner.storage.docker_layer_quota_mb(&limits),
-            labels: request
-                .runner
-                .container_labels("prepare", Some(&prepared_mount)),
+            labels: request.runner.container_labels("setup", Some(&setup_mount)),
         })
         .await?;
     append_named_logs(
         logs,
-        &format!("prepare-{}", request.eval_type.evaluator_mode_arg()),
+        &format!("setup-{}", request.eval_type.evaluator_mode_arg()),
         visible_log_content(request.eval_type, &outcome.logs),
     );
-    ensure_prepare_succeeded(&outcome, include_log_excerpts(request.eval_type))?;
-    ensure_prepare_disk_limit(prepared_mount.path(), limits.disk_limit_mb).await?;
-    make_container_readable_tree(prepared_mount.path()).await?;
+    ensure_setup_succeeded(&outcome, include_log_excerpts(request.eval_type))?;
+    ensure_setup_disk_limit(setup_mount.path(), limits.disk_limit_mb).await?;
+    make_container_readable_tree(setup_mount.path()).await?;
 
-    Ok(RetainedRunnerTree::leased(prepared_mount))
+    Ok(RetainedRunnerTree::leased(setup_mount))
 }
 
-/// Run a trusted prepare command for a co-executed benchmark.
-async fn run_coexecuted_benchmark_prepare_phase(
-    request: CoexecutedBenchmarkPrepareRequest<'_>,
+/// Run a trusted setup command for a coexecuted-evaluator.
+async fn run_coexecuted_benchmark_setup_phase(
+    request: CoexecutedBenchmarkSetupRequest<'_>,
     logs: &mut EvaluationLogs,
 ) -> Result<RetainedRunnerTree> {
-    let limits = prepare_limits(request.profile);
-    let prepared_mount = request
+    let limits = evaluator_setup_limits(request.profile);
+    let setup_mount = request
         .runner
         .storage
         .writable_mount(
             request.runner.docker,
-            request.prepared_root,
-            WritablePhase::EvaluatorPrepare,
+            request.setup_root,
+            WritablePhase::EvaluatorSetup,
             limits.disk_limit_mb,
         )
         .await?;
-    make_container_writable_tree(prepared_mount.path()).await?;
-    let mut cmd = request.prepare.command.clone();
+    make_container_writable_tree(setup_mount.path()).await?;
+    let mut cmd = request.setup.command.clone();
     cmd.extend([
         "--challenge-dir".to_string(),
         "/challenge".to_string(),
-        "--prepared-dir".to_string(),
-        "/prepared".to_string(),
+        "--setup-dir".to_string(),
+        "/setup".to_string(),
         "--mode".to_string(),
         request.eval_type.evaluator_mode_arg().to_string(),
         "--target".to_string(),
@@ -857,7 +856,7 @@ async fn run_coexecuted_benchmark_prepare_phase(
         .run_container(ContainerRequest {
             name: container_name(
                 request.runner.attempt,
-                &format!("prepare-{}", request.eval_type.evaluator_mode_arg()),
+                &format!("setup-{}", request.eval_type.evaluator_mode_arg()),
             ),
             image: request
                 .profile
@@ -866,13 +865,13 @@ async fn run_coexecuted_benchmark_prepare_phase(
                 .to_string(),
             cmd,
             env: vec![
-                "AGENTICS_PHASE=prepare".to_string(),
+                "AGENTICS_PHASE=setup".to_string(),
                 "AGENTICS_EXECUTION_MODE=coexecuted_benchmark".to_string(),
                 format!("AGENTICS_MODE={}", request.eval_type.evaluator_mode_arg()),
             ],
             mounts: vec![
                 bind_mount(request.bundle_dir, "/challenge", true),
-                bind_mount(prepared_mount.path(), "/prepared", false),
+                bind_mount(setup_mount.path(), "/setup", false),
             ],
             working_dir: "/challenge".to_string(),
             docker_platform: request.docker_platform,
@@ -880,21 +879,19 @@ async fn run_coexecuted_benchmark_prepare_phase(
             accelerator_count: effective_accelerator_count(request.profile, request.accelerator)?,
             limits: limits.clone(),
             docker_layer_quota_mb: request.runner.storage.docker_layer_quota_mb(&limits),
-            labels: request
-                .runner
-                .container_labels("prepare", Some(&prepared_mount)),
+            labels: request.runner.container_labels("setup", Some(&setup_mount)),
         })
         .await?;
     append_named_logs(
         logs,
-        &format!("prepare-{}", request.eval_type.evaluator_mode_arg()),
+        &format!("setup-{}", request.eval_type.evaluator_mode_arg()),
         visible_log_content(request.eval_type, &outcome.logs),
     );
-    ensure_prepare_succeeded(&outcome, include_log_excerpts(request.eval_type))?;
-    ensure_prepare_disk_limit(prepared_mount.path(), limits.disk_limit_mb).await?;
-    make_container_readable_tree(prepared_mount.path()).await?;
+    ensure_setup_succeeded(&outcome, include_log_excerpts(request.eval_type))?;
+    ensure_setup_disk_limit(setup_mount.path(), limits.disk_limit_mb).await?;
+    make_container_readable_tree(setup_mount.path()).await?;
 
-    Ok(RetainedRunnerTree::leased(prepared_mount))
+    Ok(RetainedRunnerTree::leased(setup_mount))
 }
 
 /// Handles run manifest source for this module.
@@ -906,22 +903,22 @@ fn run_manifest_source(
         ScoringMode::Validation => {
             if let Some(path) = spec.execution.validation_runs() {
                 Ok(RunManifestSource::Static(path))
-            } else if let Some(prepare) = spec.execution.validation_prepare() {
-                Ok(RunManifestSource::Prepared(prepare))
+            } else if let Some(setup) = spec.execution.validation_setup() {
+                Ok(RunManifestSource::SetupGenerated(setup))
             } else {
                 Err(ServiceError::Runner(
-                    "challenge does not declare validation runs or validation prepare".to_string(),
+                    "challenge does not declare validation runs or validation setup".to_string(),
                 ))
             }
         }
         ScoringMode::Official => {
             if let Some(path) = spec.execution.official_runs() {
                 Ok(RunManifestSource::Static(path))
-            } else if let Some(prepare) = spec.execution.official_prepare() {
-                Ok(RunManifestSource::Prepared(prepare))
+            } else if let Some(setup) = spec.execution.official_evaluation_setup() {
+                Ok(RunManifestSource::SetupGenerated(setup))
             } else {
                 Err(ServiceError::Runner(
-                    "challenge does not declare official runs or official prepare".to_string(),
+                    "challenge does not declare official runs or official setup".to_string(),
                 ))
             }
         }
@@ -940,37 +937,36 @@ fn piped_stdio_session_source(
         ScoringMode::Validation => {
             if let Some(path) = &execution.validation_session {
                 Ok(PipedStdioSessionSource::Static(path))
-            } else if let Some(prepare) = &execution.validation_prepare {
-                Ok(PipedStdioSessionSource::Prepared(prepare))
+            } else if let Some(setup) = &execution.validation_setup {
+                Ok(PipedStdioSessionSource::SetupGenerated(setup))
             } else {
                 Err(ServiceError::Runner(
-                    "challenge does not declare validation session or validation prepare"
-                        .to_string(),
+                    "challenge does not declare validation session or validation setup".to_string(),
                 ))
             }
         }
         ScoringMode::Official => {
             if let Some(path) = &execution.official_session {
                 Ok(PipedStdioSessionSource::Static(path))
-            } else if let Some(prepare) = &execution.official_prepare {
-                Ok(PipedStdioSessionSource::Prepared(prepare))
+            } else if let Some(setup) = &execution.official_evaluation_setup {
+                Ok(PipedStdioSessionSource::SetupGenerated(setup))
             } else {
                 Err(ServiceError::Runner(
-                    "challenge does not declare official session or official prepare".to_string(),
+                    "challenge does not declare official session or official setup".to_string(),
                 ))
             }
         }
     }
 }
 
-/// Resolve the optional prepare command for one co-executed benchmark pass.
-fn coexecuted_benchmark_prepare(
+/// Resolve the optional setup command for one coexecuted-evaluator pass.
+fn coexecuted_benchmark_setup(
     execution: &agentics_domain::models::challenge::CoexecutedBenchmarkExecutionSpec,
     eval_type: ScoringMode,
-) -> Option<&CoexecutedBenchmarkPrepareSpec> {
+) -> Option<&CoexecutedBenchmarkSetupSpec> {
     match eval_type {
-        ScoringMode::Validation => execution.validation_prepare.as_ref(),
-        ScoringMode::Official => execution.official_prepare.as_ref(),
+        ScoringMode::Validation => execution.validation_setup.as_ref(),
+        ScoringMode::Official => execution.official_evaluation_setup.as_ref(),
     }
 }
 
@@ -1026,8 +1022,8 @@ fn evaluator_limits(profile: &ResourceProfileSpec) -> ZipProjectPhaseLimits {
     stage_limits(&profile.evaluator.run)
 }
 
-/// Handles prepare limits for this module.
-fn prepare_limits(profile: &ResourceProfileSpec) -> ZipProjectPhaseLimits {
+/// Handles setup limits for this module.
+fn evaluator_setup_limits(profile: &ResourceProfileSpec) -> ZipProjectPhaseLimits {
     stage_limits(&profile.evaluator.setup)
 }
 

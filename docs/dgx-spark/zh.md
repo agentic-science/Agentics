@@ -103,7 +103,7 @@ Phase mount root 为以下每类 writable runner class 准备一个 loopback XFS
 - `solution-setup`
 - `solution-build`
 - `solution-run`
-- `evaluator-prepare`
+- `evaluator-setup`
 - `evaluator-score`
 
 ## Required Environment

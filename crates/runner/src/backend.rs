@@ -19,7 +19,7 @@ pub(super) trait RunnerBackend: Sync {
     async fn run_interactive_stdio_session(
         &self,
         participant: ContainerRequest,
-        interactor: ContainerRequest,
+        interactive_evaluator: ContainerRequest,
         max_interaction_bytes_per_direction: u64,
         shutdown_grace_secs: u64,
     ) -> Result<InteractiveSessionOutcome>;
@@ -61,14 +61,14 @@ impl RunnerBackend for DockerRunnerBackend<'_> {
     async fn run_interactive_stdio_session(
         &self,
         participant: ContainerRequest,
-        interactor: ContainerRequest,
+        interactive_evaluator: ContainerRequest,
         max_interaction_bytes_per_direction: u64,
         shutdown_grace_secs: u64,
     ) -> Result<InteractiveSessionOutcome> {
         docker::run_interactive_stdio_session(
             self.docker,
             participant,
-            interactor,
+            interactive_evaluator,
             max_interaction_bytes_per_direction,
             shutdown_grace_secs,
         )
