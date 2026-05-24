@@ -8,6 +8,7 @@ workspace = true
 
 [dependencies]
 agentics-config = { workspace = true }
+agentics-contracts = { workspace = true }
 agentics-domain = { workspace = true }
 agentics-persistence = { workspace = true }
 agentics-runner = { workspace = true }
@@ -16,6 +17,8 @@ base64 = { workspace = true }
 bollard = { workspace = true }
 rand = { workspace = true }
 secrecy = { workspace = true }
+chrono = { workspace = true }
+serde_json = { workspace = true }
 sha2 = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true }

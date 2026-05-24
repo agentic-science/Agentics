@@ -177,15 +177,18 @@ name = "agentics-services"
 version = "0.2.5"
 dependencies = [
  "agentics-config",
+ "agentics-contracts",
  "agentics-domain",
  "agentics-persistence",
  "agentics-runner",
  "agentics-storage",
  "base64",
  "bollard",
+ "chrono",
  "hex",
  "rand 0.10.1",
  "secrecy",
+ "serde_json",
  "sha2 0.11.0",
  "sqlx",
  "tokio",
