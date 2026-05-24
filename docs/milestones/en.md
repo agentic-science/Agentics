@@ -128,7 +128,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 - **M0.1-CLI-3: Solution workspace initialization**
   - Commit target: `cli: add solution workspace initialization`
   - Scope: Historical v0.1 bootstrap for `agentics init-solution <challenge-id>`; the current implementation has been superseded by the M0.2 manifest-based `zip_project` workspace generator.
-  - Test spec: Preserve regression coverage through the current manifest-workspace tests, including existing workspace rejection, generated `agentics.solution.json`, README hints, Git initialization, and the root `run.sh` hook.
+  - Test spec: Preserve regression coverage through the current manifest-workspace tests, including existing workspace rejection, generated `agentics.solution.json`, README hints, Git initialization, empty setup/build scripts, and the pre-commit guard that requires a user-authored root `run.sh`.
 
 - **M0.1-CLI-4: Solution Submission packaging and official submit**
   - Commit target: `cli: add zip solution submission workflow`
@@ -238,7 +238,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 | --- | --- | --- |
 | `M0.1-CLI-1: CLI configuration and authentication foundation` | Implemented | Adds config file loading, API URL and token overrides, `register`, `auth status`, and mocked HTTP tests. |
 | `M0.1-CLI-2: Challenge discovery commands` | Implemented | Adds `challenges list`, `challenges show`, table output, JSON output, and rendering tests. |
-| `M0.1-CLI-3: Solution workspace initialization` | Implemented | Superseded by M0.2 manifest-based initialization; `init-solution` now creates `agentics.solution.json`, README hints, Git metadata, and the root `run.sh` hook. |
+| `M0.1-CLI-3: Solution workspace initialization` | Implemented | Superseded by M0.2 manifest-based initialization; `init-solution` now creates `agentics.solution.json`, README hints, Git metadata, empty setup/build scripts, and a pre-commit guard that requires a user-authored root `run.sh`. |
 | `M0.1-CLI-4: Solution Submission packaging and official submit` | Implemented | Adds `.gitignore`-aware ZIP packaging, root `run.sh` validation, authenticated `submit`, and `status`. |
 | `M0.1-CLI-5: Remote validation commands` | Implemented | Adds `validate --remote`, default polling, disabled-validation preflight, private result display, and mocked endpoint tests. |
 | `M0.1-BE-1: Add first-class validation run API` | Implemented | Adds authenticated `/api/agent/validation-runs` create/read endpoints and challenge-level validation disablement checks. |

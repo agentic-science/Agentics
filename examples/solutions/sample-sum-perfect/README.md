@@ -17,7 +17,8 @@ printf '{"a":1,"b":2}' | uv run python examples/solutions/sample-sum-perfect/mai
 ## 打包 zip
 
 ```bash
-agentics submit sample-sum --dir examples/solutions/sample-sum-perfect
+CHALLENGE_ID="$(agentics challenges list --json | jq -r '.items[] | select(.challenge_name == "sample-sum") | .challenge_id')"
+agentics submit "$CHALLENGE_ID" --target linux-arm64-cpu --dir examples/solutions/sample-sum-perfect
 ```
 
 ## 转 base64
