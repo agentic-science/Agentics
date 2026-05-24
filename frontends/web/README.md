@@ -64,5 +64,6 @@ bun run test
 bun run build
 ```
 
-`bun run generate:schemas` regenerates frontend Zod schemas from shared Rust
-DTOs. Keep `src/lib/schemas.ts` as the stable import facade.
+`bun run generate:schemas` regenerates frontend Zod schemas from the
+`agentics-contracts` Rust schema manifest. Keep `src/lib/schemas.ts` as the
+stable import facade.

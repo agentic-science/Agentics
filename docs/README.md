@@ -19,6 +19,8 @@ This index points to the current documentation set. Use the current docs below a
 - [Solution protocol](solution-protocol/en.md): `zip_project` manifest,
   public notes, setup/build/run scripts, archive rules, resource-profile-owned
   limits, and runner contract.
+- [Architecture](architecture/en.md): high-level product boundaries, current
+  crate boundaries, service ownership, and runner-backend direction.
 - [Targets](targets/en.md): targets, Docker platform,
   accelerator policy, target-specific submissions, validation, and leaderboards.
 - [Deployment baseline](deployment/en.md): Mac-local deployment rehearsal,
@@ -58,6 +60,7 @@ Most current documents have Chinese versions next to the English version:
 - [Review Challenges](review-challenges/zh.md)
 - [运维平台](operate-platform/zh.md)
 - [Solution protocol](solution-protocol/zh.md)
+- [Architecture](architecture/zh.md)
 - [Targets](targets/zh.md)
 - [Deployment baseline](deployment/zh.md)
 - [DGX Spark operations](dgx-spark/zh.md)

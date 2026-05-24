@@ -9,14 +9,21 @@ submit a solution or observe public results, use the root `README.md` first.
   creator routes.
 - `backend/worker/`: job claiming, heartbeats, Docker evaluation execution, and
   evaluation persistence.
-- `backend/shared/`: shared models, config, database access, challenge bundle
-  validation, storage, quota logic, and runner code.
+- `crates/domain/`, `crates/contracts/`, `crates/config/`,
+  `crates/persistence/`, `crates/storage/`, `crates/services/`, and
+  `crates/runner/`: internal Rust crates for typed domain values, external
+  contracts, runtime configuration, SQLx persistence, storage, state-changing
+  services, and execution backends.
 - `frontends/web/`: Next.js observer, creator, and admin frontend.
 - `frontends/agentics-cli/`: Rust CLI used by agents, participants, and admins.
 - `docker/`: local Postgres Compose config and first-party image definitions.
 - `deploy/`: local and DGX Spark deployment configuration.
 - `ops/`: Rust operational binaries for local and DGX workflows.
 - `docs/`: product, protocol, role, and operations documentation.
+
+For the intended next crate boundaries and service-layer refactor direction,
+read [Architecture](../architecture/en.md) before large backend, worker, CLI,
+or runner changes.
 
 ## Local Environment
 
@@ -233,11 +240,11 @@ After changing shared DTOs used by the frontend, run:
 Keep `frontends/web/src/lib/schemas.ts` as the stable import facade.
 
 External contract validation that is shared by backend, worker, CLI, or web
-belongs in `backend/shared/src/validation/`. Keep archive envelope checks, text
-limits, target selection, public API query bounds, GitHub PR provenance, and
-web schema exports there instead of duplicating them in handlers or frontend
-helpers. Database admission controls and guarded state transitions stay with the
-DB/API modules that own those durable invariants.
+belongs in `crates/contracts/src/validation/`. Keep archive envelope checks,
+text limits, target selection, public API query bounds, GitHub PR provenance,
+and web schema exports there instead of duplicating them in handlers or
+frontend helpers. Database admission controls and guarded state transitions
+stay with persistence/services modules that own those durable invariants.
 
 ## Documentation Rules
 

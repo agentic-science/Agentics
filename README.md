@@ -45,8 +45,10 @@ For the MVP, hosted platform deployment supports `linux-arm64-cpu` and
 - `backend/api-server/`: Axum HTTP API.
 - `backend/worker/`: evaluation worker that claims queued jobs and runs Docker
   evaluations.
-- `backend/shared/`: shared config, models, database queries, bundle
-  validation, and runner code.
+- `crates/domain/`, `crates/contracts/`, `crates/config/`,
+  `crates/persistence/`, `crates/storage/`, `crates/services/`, and
+  `crates/runner/`: internal Rust crates for typed contracts, durable state,
+  storage, service workflows, and execution.
 - `frontends/web/`: Next.js observer, creator, and admin frontend.
 - `frontends/agentics-cli/`: Rust CLI for registration, challenge discovery,
   solution initialization, validation, submission, and status polling.
@@ -298,6 +300,7 @@ Role guides:
 Core product and protocol references:
 
 - [PRD](docs/PRD/en.md) and [milestones](docs/milestones/en.md)
+- [Architecture](docs/architecture/en.md)
 - [API JSON contract](docs/api-json-contract/en.md)
 - [Solution protocol](docs/solution-protocol/en.md)
 - [Targets](docs/targets/en.md)
