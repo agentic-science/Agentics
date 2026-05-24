@@ -1,4 +1,5 @@
 import type { ZodType } from "zod";
+import { ApiClientError, browserApiBaseUrl, fetchJson } from "@/lib/http";
 import {
   type ChallengePrivateAssetResponse,
   type ChallengeShortlistResponse,
@@ -20,7 +21,6 @@ import {
   creatorChallengeStatsResponseSchema,
   creatorMeResponseSchema,
   creatorSessionResponseSchema,
-  errorResponseSchema,
   type GithubOauthCallbackRequest,
   type GithubOauthLoginRequest,
   type GithubOauthLoginResponse,
@@ -43,23 +43,12 @@ export type {
   CreateChallengeShortlistRevisionRequest,
   UploadChallengePrivateAssetRequest,
 };
-
 export {
+  ApiClientError as CreatorApiError,
   createChallengeDraftRequestSchema,
   createChallengeShortlistRevisionRequestSchema,
   uploadChallengePrivateAssetRequestSchema,
 };
-
-/** Error thrown when a creator-session API request fails. */
-export class CreatorApiError extends Error {
-  readonly status: number;
-
-  /** Stores the HTTP status alongside the backend error message. */
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
 
 /** Fetches creator me for the requested UI scope. */
 export async function getCreatorMe(): Promise<CreatorMeResponse> {
@@ -211,35 +200,12 @@ async function creatorFetchJson<T>(
   csrfToken?: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const headers: Record<string, string> = {
-    "content-type": "application/json",
-  };
-  if (csrfToken) {
-    headers["x-agentics-csrf-token"] = csrfToken;
-  }
-
-  const response = await fetch(path, {
-    ...init,
+  return fetchJson(path, schema, {
+    init,
+    csrfToken,
     credentials: "include",
-    headers: {
-      ...headers,
-      ...init.headers,
-    },
+    baseUrl: browserApiBaseUrl(),
   });
-
-  if (!response.ok) {
-    let message = response.statusText;
-    try {
-      /** Handles body behavior for this component. */
-      const parsed = errorResponseSchema.safeParse(await response.json());
-      message = parsed.success ? parsed.data.error.message : message;
-    } catch {
-      // Non-JSON error responses still surface the status text.
-    }
-    throw new CreatorApiError(response.status, message);
-  }
-
-  return schema.parse(await response.json());
 }
 
 /** Handles creator challenge path behavior for this module. */

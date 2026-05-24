@@ -1,4 +1,5 @@
 import { NextIntlClientProvider } from "next-intl";
+import { SWRConfig } from "swr";
 import type { Mock } from "vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -165,7 +166,7 @@ describe("AdminConsole", () => {
   it("validates credentials before calling the admin API", async () => {
     const view = renderAdminConsole();
 
-    fireEvent.click(view.getByRole("button", { name: "Sign in" }));
+    fireEvent.click(await view.findByRole("button", { name: "Sign in" }));
 
     expect(
       await view.findByText(
@@ -182,7 +183,7 @@ describe("AdminConsole", () => {
     fireEvent.input(view.getByLabelText("Password"), {
       target: { value: "secret" },
     });
-    fireEvent.click(view.getByRole("button", { name: "Sign in" }));
+    fireEvent.click(await view.findByRole("button", { name: "Sign in" }));
 
     await waitFor(() =>
       expect(adminLoginMock).toHaveBeenCalledWith({
@@ -237,7 +238,7 @@ describe("AdminConsole", () => {
     fireEvent.input(view.getByLabelText("Password"), {
       target: { value: "secret" },
     });
-    fireEvent.click(view.getByRole("button", { name: "Sign in" }));
+    fireEvent.click(await view.findByRole("button", { name: "Sign in" }));
     await view.findByText("Signed in as root");
 
     fireEvent.click(view.getByRole("button", { name: "Pioneer codes" }));
@@ -252,7 +253,7 @@ describe("AdminConsole", () => {
     fireEvent.input(view.getByLabelText("Password"), {
       target: { value: "secret" },
     });
-    fireEvent.click(view.getByRole("button", { name: "Sign in" }));
+    fireEvent.click(await view.findByRole("button", { name: "Sign in" }));
     await view.findByText("Signed in as root");
     fireEvent.click(view.getByRole("button", { name: "Pioneer codes" }));
 
@@ -279,7 +280,7 @@ describe("AdminConsole", () => {
     fireEvent.input(view.getByLabelText("Password"), {
       target: { value: "secret" },
     });
-    fireEvent.click(view.getByRole("button", { name: "Sign in" }));
+    fireEvent.click(await view.findByRole("button", { name: "Sign in" }));
     await view.findByText("Signed in as root");
     fireEvent.click(view.getByRole("button", { name: "Pioneer codes" }));
 
@@ -301,8 +302,10 @@ describe("AdminConsole", () => {
 /** Builds the render admin console test fixture. */
 function renderAdminConsole() {
   return render(
-    <NextIntlClientProvider locale="en" messages={messages}>
-      <AdminConsole />
-    </NextIntlClientProvider>,
+    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <AdminConsole />
+      </NextIntlClientProvider>
+    </SWRConfig>,
   );
 }
