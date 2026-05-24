@@ -19,20 +19,21 @@ async fn admin_read_models_power_operator_console(pool: sqlx::PgPool) {
         config.expose_admin_password_for_http_basic(),
     );
     let client = reqwest::Client::new();
-    agentics_persistence::upsert_service_heartbeat(
-        &pool,
-        "test-worker",
-        &agentics_persistence::HeartbeatPayload {
-            status: "idle".to_string(),
-            accelerators: vec!["none".to_string()],
-            job_id: None,
-            solution_submission_id: None,
-            last_completed_job_id: None,
-            last_failed_job_id: None,
-        },
-    )
-    .await
-    .expect("failed to insert heartbeat");
+    agentics_persistence::Repositories::new(&pool)
+        .maintenance()
+        .upsert_service_heartbeat(
+            "test-worker",
+            &agentics_persistence::HeartbeatPayload {
+                status: "idle".to_string(),
+                accelerators: vec!["none".to_string()],
+                job_id: None,
+                solution_submission_id: None,
+                last_completed_job_id: None,
+                last_failed_job_id: None,
+            },
+        )
+        .await
+        .expect("failed to insert heartbeat");
 
     let challenges: serde_json::Value = client
         .get(api_url(&app, "/admin/challenges"))
@@ -516,11 +517,10 @@ async fn admin_official_run_rejects_submission_with_active_job(pool: sqlx::PgPoo
         .expect("failed to request admin official run");
     assert_eq!(admin_response.status(), 409);
 
-    let active_official_jobs: i64 = agentics_persistence::count_active_evaluation_jobs(
-        &pool,
-        agentics_domain::models::evaluation::ScoringMode::Official,
-    )
-    .await
-    .expect("failed to count official jobs");
+    let active_official_jobs: i64 = agentics_persistence::Repositories::new(&pool)
+        .evaluation_jobs()
+        .count_active(agentics_domain::models::evaluation::ScoringMode::Official)
+        .await
+        .expect("failed to count official jobs");
     assert_eq!(active_official_jobs, 1);
 }

@@ -16,7 +16,12 @@
 )]
 
 mod auth;
-pub mod db;
+mod db;
 pub mod leaderboard_rules;
+pub mod repositories;
 
-pub use db::*;
+pub mod pool {
+    pub use crate::db::pool::*;
+}
+
+pub use repositories::*;

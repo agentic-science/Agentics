@@ -21,7 +21,10 @@ use agentics_domain::models::auth::{
 use agentics_domain::models::ids::AgentId;
 use agentics_domain::models::pioneer_codes::PioneerCode;
 use agentics_domain::models::urls::GithubOauthAuthorizationUrl;
-use agentics_persistence as db;
+use agentics_persistence::{
+    ConsumedGithubOauthState, CreateAdminSessionInput, CreateCreatorSessionInput,
+    CreateGithubOauthStateInput, Repositories,
+};
 use agentics_services::auth;
 
 use crate::extractors::{AdminAuth, CreatorAuth, ValidatedJson};
@@ -79,18 +82,18 @@ pub async fn admin_login(
     let csrf_token = auth::create_csrf_token();
     let ttl_seconds = session_ttl_seconds(&state)?;
     let expires_at = session_expires_at(ttl_seconds)?;
-    db::delete_expired_web_auth_rows(&state.db).await?;
-    db::create_admin_session(
-        &state.db,
-        &db::CreateAdminSessionInput {
+    let repos = Repositories::new(&state.db);
+    repos.sessions().delete_expired_web_auth_rows().await?;
+    repos
+        .sessions()
+        .create_admin_session(&CreateAdminSessionInput {
             session_id: uuid::Uuid::new_v4().to_string(),
             session_token_hash: auth::hash_opaque_token(&session_token),
             csrf_token_hash: auth::hash_opaque_token(&csrf_token),
             admin_username: username.clone(),
             expires_at,
-        },
-    )
-    .await?;
+        })
+        .await?;
 
     let headers = AppendHeaders(session_cookies(
         &state,
@@ -120,7 +123,10 @@ pub async fn admin_logout(
         headers.get(header::COOKIE).and_then(|h| h.to_str().ok()),
         &state.config.web_session_cookie_name,
     ) {
-        db::delete_web_session_by_token(&state.db, &session_token).await?;
+        Repositories::new(&state.db)
+            .sessions()
+            .delete_web_session_by_token(&session_token)
+            .await?;
     }
 
     Ok((
@@ -139,7 +145,9 @@ pub async fn admin_session(
         .ok_or(ServiceError::Unauthorized)?;
     let csrf_token = cookie_value(cookie_header, &state.config.web_csrf_cookie_name)
         .ok_or(ServiceError::Unauthorized)?;
-    let session = db::authenticate_admin_session(&state.db, &session_token)
+    let session = Repositories::new(&state.db)
+        .sessions()
+        .authenticate_admin(&session_token)
         .await?
         .ok_or(ServiceError::Unauthorized)?;
     if auth::hash_opaque_token(&csrf_token) != session.csrf_token_hash {
@@ -193,17 +201,17 @@ pub async fn github_oauth_login(
     let expires_at = Utc::now()
         .checked_add_signed(Duration::minutes(OAUTH_STATE_TTL_MINUTES))
         .ok_or_else(|| ServiceError::Internal("OAuth state TTL overflow".to_string()))?;
-    db::delete_expired_web_auth_rows(&state.db).await?;
-    db::create_github_oauth_state(
-        &state.db,
-        &db::CreateGithubOauthStateInput {
+    let repos = Repositories::new(&state.db);
+    repos.sessions().delete_expired_web_auth_rows().await?;
+    repos
+        .sessions()
+        .create_github_oauth_state(&CreateGithubOauthStateInput {
             state_hash,
             browser_nonce_hash,
             pioneer_code_hash,
             expires_at,
-        },
-    )
-    .await?;
+        })
+        .await?;
 
     let mut authorization_url = state.config.github_oauth_authorize_url.to_url();
     authorization_url
@@ -257,10 +265,12 @@ async fn consume_callback_oauth_state(
     state: &AppState,
     state_token: &str,
     browser_nonce: &str,
-) -> Result<db::ConsumedGithubOauthState> {
+) -> Result<ConsumedGithubOauthState> {
     let state_hash = auth::hash_opaque_token(state_token);
     let browser_nonce_hash = auth::hash_opaque_token(browser_nonce);
-    db::consume_github_oauth_state(&state.db, &state_hash, &browser_nonce_hash)
+    Repositories::new(&state.db)
+        .sessions()
+        .consume_github_oauth_state(&state_hash, &browser_nonce_hash)
         .await?
         .ok_or_else(|| ServiceError::Unauthorized.into())
 }
@@ -287,22 +297,23 @@ fn validate_github_user(user: GithubUserResponse) -> Result<VerifiedGithubUser> 
 
 async fn upsert_callback_creator_agent(
     state: &AppState,
-    oauth_state: &db::ConsumedGithubOauthState,
+    oauth_state: &ConsumedGithubOauthState,
     github_user: &VerifiedGithubUser,
 ) -> Result<AgentId> {
     let fallback_agent_id = AgentId::generate();
     let require_pioneer_code =
         state.config.agent_registration_mode() == AgentRegistrationMode::PioneerCode;
-    match db::upsert_github_creator_agent_with_pioneer_code(
-        &state.db,
-        &fallback_agent_id,
-        github_user.id,
-        &github_user.login,
-        oauth_state.pioneer_code_hash.as_deref(),
-        require_pioneer_code,
-        i64::from(state.config.max_active_agents),
-    )
-    .await
+    match Repositories::new(&state.db)
+        .sessions()
+        .upsert_github_creator_agent_with_pioneer_code(
+            &fallback_agent_id,
+            github_user.id,
+            &github_user.login,
+            oauth_state.pioneer_code_hash.as_deref(),
+            require_pioneer_code,
+            i64::from(state.config.max_active_agents),
+        )
+        .await
     {
         Ok(agent_id) => Ok(agent_id),
         Err(error) if is_invalid_pioneer_code(&error) => {
@@ -326,9 +337,9 @@ async fn issue_creator_session(
     let csrf_token = auth::create_csrf_token();
     let ttl_seconds = session_ttl_seconds(state)?;
     let expires_at = session_expires_at(ttl_seconds)?;
-    db::create_creator_session(
-        &state.db,
-        &db::CreateCreatorSessionInput {
+    Repositories::new(&state.db)
+        .sessions()
+        .create_creator_session(&CreateCreatorSessionInput {
             session_id: uuid::Uuid::new_v4().to_string(),
             session_token_hash: auth::hash_opaque_token(&session_token),
             csrf_token_hash: auth::hash_opaque_token(&csrf_token),
@@ -336,9 +347,8 @@ async fn issue_creator_session(
             github_user_id: github_user.id,
             github_login: github_user.login.clone(),
             expires_at,
-        },
-    )
-    .await?;
+        })
+        .await?;
 
     Ok(IssuedCreatorSession {
         headers: session_cookies(state, &session_token, &csrf_token, ttl_seconds),

@@ -24,7 +24,9 @@ use agentics_domain::models::request::{
     ScoreDistributionQuantileDto, ScoreDistributionResponse, SolutionSubmissionResponse,
     SolutionSubmissionResultReportResponse,
 };
-use agentics_persistence::{self as db, ChallengeRecord, LeaderboardMetricEntry};
+use agentics_persistence::{
+    ChallengeRecord, LeaderboardMetricEntry, Repositories, SolutionSubmissionRecord,
+};
 
 /// Audience-specific projection for solution submission details.
 #[derive(Debug, Clone, Copy)]
@@ -58,7 +60,10 @@ pub async fn get_challenge_detail(
     config: &Config,
     challenge_id: &ChallengeId,
 ) -> Result<ChallengeDetailResponse> {
-    let challenge = db::get_public_challenge(pool, challenge_id).await?;
+    let challenge = Repositories::new(pool)
+        .challenges()
+        .get_public(challenge_id)
+        .await?;
     let challenge = challenge.ok_or(ServiceError::NotFound)?;
     let statement = tokio::fs::read_to_string(challenge.statement_path.as_path()).await?;
     let moltbook = MoltbookCommunityDto {
@@ -92,7 +97,7 @@ pub fn present_challenge_detail(
 
 /// Present the response returned immediately after solution submission creation.
 pub fn present_create_solution_submission(
-    solution_submission: &db::SolutionSubmissionRecord,
+    solution_submission: &SolutionSubmissionRecord,
 ) -> Result<CreateSolutionSubmissionResponse> {
     let evaluation_job_id = solution_submission
         .evaluation_job_id
@@ -118,7 +123,7 @@ pub fn present_create_solution_submission(
 
 /// Present a solution submission while applying audience and benchmark visibility policy.
 pub fn present_solution_submission(
-    solution_submission: &db::SolutionSubmissionRecord,
+    solution_submission: &SolutionSubmissionRecord,
     audience: SolutionSubmissionAudience,
 ) -> Result<SolutionSubmissionResponse> {
     let evaluation = present_evaluation(solution_submission.evaluation.as_ref(), audience);
@@ -208,11 +213,15 @@ pub async fn list_public_solution_submissions(
         DEFAULT_PUBLIC_SUBMISSION_LIST_LIMIT,
         "solution submission list",
     )?;
-    let items =
-        db::list_public_solution_submissions_for_challenge(pool, challenge_id, &target, limit)
-            .await?;
-    let total_count =
-        db::count_public_solution_submissions_for_challenge(pool, challenge_id, &target).await?;
+    let repos = Repositories::new(pool);
+    let items = repos
+        .solution_submissions()
+        .list_public_for_challenge(challenge_id, &target, limit)
+        .await?;
+    let total_count = repos
+        .solution_submissions()
+        .count_public_for_challenge(challenge_id, &target)
+        .await?;
     Ok(PublicSolutionSubmissionListResponse { total_count, items })
 }
 
@@ -245,7 +254,7 @@ pub async fn get_public_solution_submission_result_report(
 pub async fn get_public_artifact_submission(
     pool: &sqlx::PgPool,
     id: &SolutionSubmissionId,
-) -> Result<db::SolutionSubmissionRecord> {
+) -> Result<SolutionSubmissionRecord> {
     let solution_submission = public_visible_solution_submission(pool, id).await?;
     ensure_public_solution_artifact_visible(pool, &solution_submission.challenge_id).await?;
     Ok(solution_submission)
@@ -278,7 +287,10 @@ pub async fn get_leaderboard(
     let target = public_api::resolve_required_public_target(&spec, target)?;
     let limit =
         public_api::bounded_public_limit(limit, DEFAULT_PUBLIC_LEADERBOARD_LIMIT, "leaderboard")?;
-    let items = db::list_leaderboard_entries(pool, challenge_id, &target, limit).await?;
+    let items = Repositories::new(pool)
+        .leaderboard()
+        .list_entries(challenge_id, &target, limit)
+        .await?;
     Ok(LeaderboardResponse {
         challenge_id: challenge.challenge_id,
         challenge_name: challenge.challenge_name,
@@ -297,9 +309,10 @@ pub async fn get_score_distribution(
     let (challenge, spec) = load_challenge_policy(pool, challenge_id).await?;
     ensure_visibility_allows_public(spec.visibility.score_distribution, &spec)?;
     let target = public_api::resolve_required_public_target(&spec, target)?;
-    let entries =
-        db::list_leaderboard_entries_with_metric_payloads(pool, challenge_id, &target, 10_000)
-            .await?;
+    let entries = Repositories::new(pool)
+        .leaderboard()
+        .list_entries_with_metric_payloads(challenge_id, &target, 10_000)
+        .await?;
     build_score_distribution_response(
         challenge.challenge_id,
         challenge.challenge_name,
@@ -317,10 +330,16 @@ pub async fn build_ranking_context(
     target: &TargetName,
     solution_submission_id: &SolutionSubmissionId,
 ) -> Result<RankingContextResponse> {
-    let challenge = db::get_public_challenge(pool, challenge_id)
+    let repos = Repositories::new(pool);
+    let challenge = repos
+        .challenges()
+        .get_public(challenge_id)
         .await?
         .ok_or(ServiceError::NotFound)?;
-    let entries = db::list_leaderboard_entries(pool, challenge_id, target, 10_000).await?;
+    let entries = repos
+        .leaderboard()
+        .list_entries(challenge_id, target, 10_000)
+        .await?;
     let total_ranked = i64::try_from(entries.len())
         .map_err(|_| ServiceError::Internal("leaderboard entry count overflow".to_string()))?;
     let ranked_entries = entries
@@ -393,8 +412,11 @@ pub async fn build_ranking_context(
 async fn public_visible_solution_submission(
     pool: &sqlx::PgPool,
     id: &SolutionSubmissionId,
-) -> Result<db::SolutionSubmissionRecord> {
-    let solution_submission = db::get_public_solution_submission_by_id(pool, id).await?;
+) -> Result<SolutionSubmissionRecord> {
+    let solution_submission = Repositories::new(pool)
+        .solution_submissions()
+        .get_public_by_id(id)
+        .await?;
     let solution_submission = solution_submission.ok_or(ServiceError::NotFound)?;
     if !solution_submission.visible_after_eval {
         return Err(ServiceError::NotFound);
@@ -406,8 +428,11 @@ async fn public_visible_solution_submission(
 async fn load_challenge_policy(
     pool: &sqlx::PgPool,
     challenge_id: &ChallengeId,
-) -> Result<(db::ChallengeRecord, ChallengeBundleSpec)> {
-    let challenge = db::get_public_challenge(pool, challenge_id).await?;
+) -> Result<(ChallengeRecord, ChallengeBundleSpec)> {
+    let challenge = Repositories::new(pool)
+        .challenges()
+        .get_public(challenge_id)
+        .await?;
     let challenge = challenge.ok_or(ServiceError::NotFound)?;
     let spec: ChallengeBundleSpec = serde_json::from_value(challenge.spec_json.clone())
         .map_err(|e| ServiceError::Internal(e.to_string()))?;
@@ -488,7 +513,7 @@ fn challenge_has_closed(spec: &ChallengeBundleSpec) -> Result<bool> {
 
 /// Rejects ranking-context requests whose scope does not match the submission record.
 pub fn ensure_ranking_scope_matches_submission(
-    solution_submission: &db::SolutionSubmissionRecord,
+    solution_submission: &SolutionSubmissionRecord,
     challenge_id: &ChallengeId,
     target: &TargetName,
 ) -> Result<()> {

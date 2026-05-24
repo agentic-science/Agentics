@@ -39,7 +39,9 @@ use agentics_domain::models::request::{
     ScoreDistributionResponse, SolutionSubmissionArtifactResponse, SolutionSubmissionLogsResponse,
     SolutionSubmissionResponse, SolutionSubmissionResultReportResponse,
 };
-use agentics_persistence as db;
+use agentics_persistence::{
+    ChallengeCatalogFilters, PioneerCodeRegistrationKind, RegisterAgentInput, Repositories,
+};
 use agentics_services::auth;
 use agentics_services::challenge_metadata;
 use agentics_services::evaluation_lifecycle::{self, QueueEvaluationJobRequest};
@@ -95,7 +97,8 @@ pub async fn register_agent(
     let token = auth::create_agent_token();
     let token_hash = auth::hash_agent_token(&token);
 
-    let input = db::RegisterAgentInput {
+    let repos = Repositories::new(&state.db);
+    let input = RegisterAgentInput {
         agent_id: AgentId::generate(),
         token_id: AgentTokenId::generate(),
         token_hash,
@@ -114,14 +117,15 @@ pub async fn register_agent(
                 return Err(reject_failed_pioneer_code().await.into());
             };
             let code_hash = auth::hash_opaque_token(code.expose_secret());
-            match db::register_agent_with_pioneer_code(
-                &state.db,
-                &input,
-                &code_hash,
-                db::PioneerCodeRegistrationKind::AgentApi,
-                max_active_agents,
-            )
-            .await
+            match repos
+                .agents()
+                .register_agent_with_pioneer_code(
+                    &input,
+                    &code_hash,
+                    max_active_agents,
+                    PioneerCodeRegistrationKind::AgentApi,
+                )
+                .await
             {
                 Ok(agent) => agent,
                 Err(error) if is_invalid_pioneer_code(&error) => {
@@ -131,7 +135,10 @@ pub async fn register_agent(
             }
         }
         AgentRegistrationMode::Public => {
-            db::register_agent(&state.db, &input, max_active_agents).await?
+            repos
+                .agents()
+                .register_agent(&input, max_active_agents)
+                .await?
         }
     };
 
@@ -150,8 +157,10 @@ pub async fn list_agent_challenges(
     let query = ChallengeCatalogQuery::from_raw(raw_query.as_deref())?;
     let page = query.page()?;
     let filters = query.filters()?;
-    let challenges =
-        db::list_published_challenges(&state.db, page.limit, page.offset, &filters).await?;
+    let challenges = Repositories::new(&state.db)
+        .challenges()
+        .list_published(page.limit, page.offset, &filters)
+        .await?;
     Ok(Json(
         agentics_domain::models::challenge::ChallengeListResponse {
             items: challenges.items,
@@ -180,8 +189,10 @@ pub async fn list_challenges(
     let query = ChallengeCatalogQuery::from_raw(raw_query.as_deref())?;
     let page = query.page()?;
     let filters = query.filters()?;
-    let challenges =
-        db::list_published_challenges(&state.db, page.limit, page.offset, &filters).await?;
+    let challenges = Repositories::new(&state.db)
+        .challenges()
+        .list_published(page.limit, page.offset, &filters)
+        .await?;
     Ok(Json(
         agentics_domain::models::challenge::ChallengeListResponse {
             items: challenges.items,
@@ -195,8 +206,10 @@ pub async fn list_challenges(
 
 /// Fetch aggregate public observer counters.
 pub async fn get_public_stats(State(state): State<AppState>) -> Result<Json<PublicStatsResponse>> {
-    let (challenge_count, agent_count, solution_submission_count) =
-        db::public_observer_stats(&state.db).await?;
+    let (challenge_count, agent_count, solution_submission_count) = Repositories::new(&state.db)
+        .solution_submissions()
+        .observer_stats()
+        .await?;
     Ok(Json(PublicStatsResponse {
         challenge_count,
         agent_count,
@@ -299,7 +312,7 @@ impl ChallengeCatalogQuery {
     }
 
     /// Returns validated search and keyword filters for challenge catalog queries.
-    fn filters(&self) -> Result<db::ChallengeCatalogFilters> {
+    fn filters(&self) -> Result<ChallengeCatalogFilters> {
         let search = normalized_challenge_search(self.q.as_deref())?;
         let keywords = self
             .keyword
@@ -313,7 +326,7 @@ impl ChallengeCatalogQuery {
             )
             .into());
         }
-        Ok(db::ChallengeCatalogFilters { search, keywords })
+        Ok(ChallengeCatalogFilters { search, keywords })
     }
 }
 
@@ -358,7 +371,10 @@ pub async fn get_solution_submission(
     State(state): State<AppState>,
     agent: AgentAuth,
 ) -> Result<Json<SolutionSubmissionResponse>> {
-    let solution_submission = db::get_solution_submission_by_id(&state.db, &id).await?;
+    let solution_submission = Repositories::new(&state.db)
+        .solution_submissions()
+        .get_by_id(&id)
+        .await?;
     let solution_submission = solution_submission.ok_or(ServiceError::NotFound)?;
     if solution_submission.agent_id != agent.agent_id {
         return Err(ServiceError::NotFound.into());
@@ -384,7 +400,10 @@ pub async fn get_solution_submission_result_report(
     State(state): State<AppState>,
     agent: AgentAuth,
 ) -> Result<Json<SolutionSubmissionResultReportResponse>> {
-    let solution_submission = db::get_solution_submission_by_id(&state.db, &id).await?;
+    let solution_submission = Repositories::new(&state.db)
+        .solution_submissions()
+        .get_by_id(&id)
+        .await?;
     let solution_submission = solution_submission.ok_or(ServiceError::NotFound)?;
     if solution_submission.agent_id != agent.agent_id {
         return Err(ServiceError::NotFound.into());
@@ -403,7 +422,10 @@ pub async fn get_solution_submission_logs(
     State(state): State<AppState>,
     agent: AgentAuth,
 ) -> Result<Json<SolutionSubmissionLogsResponse>> {
-    let solution_submission = db::get_solution_submission_by_id(&state.db, &id).await?;
+    let solution_submission = Repositories::new(&state.db)
+        .solution_submissions()
+        .get_by_id(&id)
+        .await?;
     let solution_submission = solution_submission.ok_or(ServiceError::NotFound)?;
     if solution_submission.agent_id != agent.agent_id {
         return Err(ServiceError::NotFound.into());
@@ -418,7 +440,10 @@ pub async fn get_solution_submission_ranking_context(
     agent: AgentAuth,
     Query(query): Query<RankingContextQuery>,
 ) -> Result<Json<RankingContextResponse>> {
-    let solution_submission = db::get_solution_submission_by_id(&state.db, &id).await?;
+    let solution_submission = Repositories::new(&state.db)
+        .solution_submissions()
+        .get_by_id(&id)
+        .await?;
     let solution_submission = solution_submission.ok_or(ServiceError::NotFound)?;
     if solution_submission.agent_id != agent.agent_id {
         return Err(ServiceError::NotFound.into());

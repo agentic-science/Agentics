@@ -60,13 +60,11 @@ pub async fn spawn_app(pool: PgPool) -> TestApp {
 /// directories while exercising the real router and startup seeding path.
 pub async fn spawn_app_with_config(pool: PgPool, config: Config) -> TestApp {
     if std::fs::exists(&config.challenges_root).expect("failed to inspect challenge root") {
-        agentics_persistence::ensure_challenges_seeded_from_root(
-            &pool,
-            &config.challenges_root,
-            &config.storage_root,
-        )
-        .await
-        .expect("failed to seed challenges");
+        agentics_persistence::Repositories::new(&pool)
+            .maintenance()
+            .ensure_challenges_seeded_from_root(&config.challenges_root, &config.storage_root)
+            .await
+            .expect("failed to seed challenges");
     }
 
     let storage = Arc::new(LocalStorage::new(&config.storage_root));
@@ -222,20 +220,17 @@ pub async fn create_creator_session(
     github_login: &str,
 ) -> TestCreatorSession {
     let fallback_agent_id = agentics_domain::models::ids::AgentId::generate();
-    let agent_id = agentics_persistence::upsert_github_creator_agent(
-        pool,
-        &fallback_agent_id,
-        github_user_id,
-        github_login,
-        1_000,
-    )
-    .await
-    .expect("creator account should upsert");
+    let repos = agentics_persistence::Repositories::new(pool);
+    let agent_id = repos
+        .sessions()
+        .upsert_github_creator_agent(&fallback_agent_id, github_user_id, github_login, 1_000)
+        .await
+        .expect("creator account should upsert");
     let session_token = agentics_services::auth::create_web_session_token();
     let csrf_token = agentics_services::auth::create_csrf_token();
-    agentics_persistence::create_creator_session(
-        pool,
-        &agentics_persistence::CreateCreatorSessionInput {
+    repos
+        .sessions()
+        .create_creator_session(&agentics_persistence::CreateCreatorSessionInput {
             session_id: uuid::Uuid::new_v4().to_string(),
             session_token_hash: agentics_services::auth::hash_opaque_token(&session_token),
             csrf_token_hash: agentics_services::auth::hash_opaque_token(&csrf_token),
@@ -245,10 +240,9 @@ pub async fn create_creator_session(
             expires_at: Utc::now()
                 .checked_add_signed(Duration::hours(24))
                 .expect("test creator session TTL should not overflow"),
-        },
-    )
-    .await
-    .expect("creator session should insert");
+        })
+        .await
+        .expect("creator session should insert");
 
     TestCreatorSession {
         agent_id: agent_id.as_str().to_string(),

@@ -10,11 +10,12 @@ use super::{
     PioneerCodeDetailResponse, PioneerCodeListResponse, PioneerCodeStatus,
     QueueEvaluationJobRequest, Result, RevokePioneerCodeResponse, SUBMISSION_QUOTA_WINDOW_SECONDS,
     ScoringMode, ServiceError, SolutionSubmissionPath, State, StatusCode, ValidatedJson, auth,
-    challenge_metadata, db, evaluation_lifecycle, parse_request_value, presenters,
+    challenge_metadata, evaluation_lifecycle, parse_request_value, presenters,
 };
 use agentics_domain::models::request::{
     ChallengeMoltbookDiscussionResponse, SetChallengeMoltbookDiscussionRequest,
 };
+use agentics_persistence::{CreatePioneerCodeInput, Repositories};
 
 // ---------------------------------------------------------------------------
 // Admin routes
@@ -57,9 +58,9 @@ pub async fn create_pioneer_code(
     };
     let expires_at = parse_optional_rfc3339(expires_at.as_deref(), "expires_at")?;
     let note = note.unwrap_or_default();
-    let record = db::create_pioneer_code(
-        &state.db,
-        &db::CreatePioneerCodeInput {
+    let record = Repositories::new(&state.db)
+        .pioneer_codes()
+        .create(&CreatePioneerCodeInput {
             id: AgentPioneerCodeId::generate(),
             code_hash,
             code_display,
@@ -68,10 +69,9 @@ pub async fn create_pioneer_code(
             max_uses,
             expires_at,
             created_by_admin_username: admin.username,
-        },
-    )
-    .await
-    .map_err(ServiceError::unique_violation_as_conflict)?;
+        })
+        .await
+        .map_err(ServiceError::unique_violation_as_conflict)?;
 
     Ok((
         StatusCode::CREATED,
@@ -84,7 +84,7 @@ pub async fn list_pioneer_codes(
     _admin: AdminAuth,
     State(state): State<AppState>,
 ) -> Result<Json<PioneerCodeListResponse>> {
-    let codes = db::list_pioneer_codes(&state.db).await?;
+    let codes = Repositories::new(&state.db).pioneer_codes().list().await?;
     Ok(Json(presenters::present_pioneer_code_list(&codes)?))
 }
 
@@ -96,7 +96,10 @@ pub async fn get_pioneer_code(
 ) -> Result<Json<PioneerCodeDetailResponse>> {
     let id =
         AgentPioneerCodeId::try_new(id).map_err(|e| ServiceError::BadRequest(e.to_string()))?;
-    let (code, uses) = db::get_pioneer_code_detail(&state.db, &id).await?;
+    let (code, uses) = Repositories::new(&state.db)
+        .pioneer_codes()
+        .detail(&id)
+        .await?;
     Ok(Json(presenters::present_pioneer_code_detail(&code, &uses)?))
 }
 
@@ -108,7 +111,10 @@ pub async fn revoke_pioneer_code(
 ) -> Result<Json<RevokePioneerCodeResponse>> {
     let id =
         AgentPioneerCodeId::try_new(id).map_err(|e| ServiceError::BadRequest(e.to_string()))?;
-    let outcome = db::revoke_pioneer_code(&state.db, &id).await?;
+    let outcome = Repositories::new(&state.db)
+        .pioneer_codes()
+        .revoke(&id)
+        .await?;
     Ok(Json(RevokePioneerCodeResponse {
         id,
         status: PioneerCodeStatus::Revoked,
@@ -153,7 +159,10 @@ pub async fn list_admin_challenges(
     _admin: AdminAuth,
     State(state): State<AppState>,
 ) -> Result<Json<agentics_domain::models::challenge::AdminChallengeListResponse>> {
-    let items = db::list_admin_challenges(&state.db).await?;
+    let items = Repositories::new(&state.db)
+        .challenges()
+        .list_admin()
+        .await?;
     Ok(Json(
         agentics_domain::models::challenge::AdminChallengeListResponse { items },
     ))
@@ -200,7 +209,10 @@ pub async fn list_admin_solution_submissions(
     _admin: AdminAuth,
     State(state): State<AppState>,
 ) -> Result<Json<AdminSolutionSubmissionListResponse>> {
-    let items = db::list_admin_solution_submissions(&state.db, 100).await?;
+    let items = Repositories::new(&state.db)
+        .solution_submissions()
+        .list_admin(100)
+        .await?;
     Ok(Json(AdminSolutionSubmissionListResponse { items }))
 }
 
@@ -209,7 +221,10 @@ pub async fn list_admin_service_heartbeats(
     _admin: AdminAuth,
     State(state): State<AppState>,
 ) -> Result<Json<AdminServiceHeartbeatListResponse>> {
-    let items = db::list_service_heartbeats(&state.db).await?;
+    let items = Repositories::new(&state.db)
+        .maintenance()
+        .list_service_heartbeats()
+        .await?;
     Ok(Json(AdminServiceHeartbeatListResponse { items }))
 }
 
@@ -218,11 +233,16 @@ pub async fn get_admin_capacity(
     _admin: AdminAuth,
     State(state): State<AppState>,
 ) -> Result<Json<AdminCapacityResponse>> {
-    let active_agents = db::count_active_agents(&state.db).await?;
-    let active_validation_jobs =
-        db::count_active_evaluation_jobs(&state.db, ScoringMode::Validation).await?;
-    let active_official_jobs =
-        db::count_active_evaluation_jobs(&state.db, ScoringMode::Official).await?;
+    let repos = Repositories::new(&state.db);
+    let active_agents = repos.agents().count_active().await?;
+    let active_validation_jobs = repos
+        .evaluation_jobs()
+        .count_active(ScoringMode::Validation)
+        .await?;
+    let active_official_jobs = repos
+        .evaluation_jobs()
+        .count_active(ScoringMode::Official)
+        .await?;
 
     Ok(Json(AdminCapacityResponse {
         quota_window_seconds: SUBMISSION_QUOTA_WINDOW_SECONDS,
@@ -317,7 +337,10 @@ pub async fn disable_agent(
     Path(id): Path<String>,
 ) -> Result<Json<DisableAgentResponse>> {
     let id = AgentId::try_new(id).map_err(|e| ServiceError::BadRequest(e.to_string()))?;
-    db::disable_agent(&state.db, id.as_str()).await?;
+    Repositories::new(&state.db)
+        .agents()
+        .disable(id.as_str())
+        .await?;
     Ok(Json(DisableAgentResponse {
         id,
         status: AgentStatus::Disabled,

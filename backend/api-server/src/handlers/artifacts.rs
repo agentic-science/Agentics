@@ -10,7 +10,7 @@ use agentics_domain::models::request::{
     SolutionSubmissionArtifactFileDto, SolutionSubmissionArtifactResponse,
     SolutionSubmissionLogsResponse,
 };
-use agentics_persistence as db;
+use agentics_persistence::SolutionSubmissionRecord;
 
 use crate::state::AppState;
 
@@ -36,7 +36,7 @@ pub(super) async fn read_solution_submission_artifact_summary(
 /// they are intentionally not part of the participant-facing log surface.
 pub(super) async fn read_solution_submission_logs(
     state: &AppState,
-    solution_submission: &db::SolutionSubmissionRecord,
+    solution_submission: &SolutionSubmissionRecord,
 ) -> Result<Json<SolutionSubmissionLogsResponse>> {
     const MAX_LOG_RESPONSE_BYTES: usize = 200_000;
 

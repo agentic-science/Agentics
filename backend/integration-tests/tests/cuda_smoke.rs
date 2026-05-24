@@ -182,9 +182,9 @@ async fn publish_cuda_smoke_challenge(
     let statement_path =
         ManagedStatementPath::from_existing_file(private_bundle.join("statement.md"))
             .expect("valid statement path");
-    agentics_persistence::publish_challenge(
-        pool,
-        &agentics_persistence::PublishChallengeInput {
+    agentics_persistence::Repositories::new(pool)
+        .challenges()
+        .publish(&agentics_persistence::PublishChallengeInput {
             challenge_id: &ChallengeId::generate(),
             challenge_name: &spec.challenge_name,
             bundle_path: &managed_private,
@@ -193,10 +193,9 @@ async fn publish_cuda_smoke_challenge(
             spec: &spec,
             title: &spec.challenge_title,
             summary: &spec.summary,
-        },
-    )
-    .await
-    .expect("failed to publish CUDA smoke challenge");
+        })
+        .await
+        .expect("failed to publish CUDA smoke challenge");
 }
 
 fn write_cuda_smoke_bundles(root: &std::path::Path) -> (std::path::PathBuf, std::path::PathBuf) {

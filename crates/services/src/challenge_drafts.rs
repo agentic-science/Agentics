@@ -26,7 +26,7 @@ use agentics_domain::models::ids::{
 };
 use agentics_domain::models::names::ChallengeName;
 use agentics_domain::models::paths::{RepoRelativePath, RepositoryCheckoutPath};
-use agentics_persistence as db;
+use agentics_persistence::{self as persistence, Repositories};
 use agentics_storage::{Storage, StorageKey};
 
 const CHALLENGE_DRAFT_QUOTA_WINDOW_SECONDS: i64 = 24 * 60 * 60;
@@ -67,38 +67,39 @@ pub async fn create_challenge_draft(
     let repo_url = body.repo_url.clone();
     let pr_number = body.pr_number.clone();
     let commit_sha = body.commit_sha;
-    let draft = db::create_challenge_draft(
-        pool,
-        &db::CreateChallengeDraftInput {
-            draft_id: draft_id.clone(),
-            creator_agent_id: creator.agent_id.clone(),
-            max_active_drafts: i64::from(config.max_active_challenge_drafts_per_agent),
-            creator_github_user_id: creator.github_user_id,
-            creator_github_login: creator.github_login.clone(),
-            repo_url: body.repo_url,
-            pr_number: body.pr_number,
-            pr_url: body.pr_url,
-            commit_sha: body.commit_sha,
-            challenge_path: body.challenge_path,
-            manifest_sha256,
-            manifest: body.manifest,
-        },
-        &db::CreateChallengeDraftAuditEventInput {
-            event_id: ChallengeDraftAuditEventId::generate(),
-            draft_id,
-            actor_agent_id: Some(creator.agent_id.clone()),
-            actor_admin_username: None,
-            action: "draft_created".to_string(),
-            message: "challenge draft created from GitHub PR".to_string(),
-            metadata: serde_json::json!({
-                "repo_url": repo_url,
-                "pr_number": pr_number,
-                "commit_sha": commit_sha
-            }),
-        },
-    )
-    .await
-    .map_err(ServiceError::unique_violation_as_conflict)?;
+    let draft = Repositories::new(pool)
+        .challenge_drafts()
+        .create(
+            &persistence::CreateChallengeDraftInput {
+                draft_id: draft_id.clone(),
+                creator_agent_id: creator.agent_id.clone(),
+                max_active_drafts: i64::from(config.max_active_challenge_drafts_per_agent),
+                creator_github_user_id: creator.github_user_id,
+                creator_github_login: creator.github_login.clone(),
+                repo_url: body.repo_url,
+                pr_number: body.pr_number,
+                pr_url: body.pr_url,
+                commit_sha: body.commit_sha,
+                challenge_path: body.challenge_path,
+                manifest_sha256,
+                manifest: body.manifest,
+            },
+            &persistence::CreateChallengeDraftAuditEventInput {
+                event_id: ChallengeDraftAuditEventId::generate(),
+                draft_id,
+                actor_agent_id: Some(creator.agent_id.clone()),
+                actor_admin_username: None,
+                action: "draft_created".to_string(),
+                message: "challenge draft created from GitHub PR".to_string(),
+                metadata: serde_json::json!({
+                    "repo_url": repo_url,
+                    "pr_number": pr_number,
+                    "commit_sha": commit_sha
+                }),
+            },
+        )
+        .await
+        .map_err(ServiceError::unique_violation_as_conflict)?;
 
     Ok(draft.into())
 }
@@ -109,7 +110,9 @@ pub async fn get_challenge_draft(
     creator_agent_id: &AgentId,
     draft_id: &ChallengeDraftId,
 ) -> Result<CreatorChallengeDraftResponse> {
-    let draft = db::get_challenge_draft(pool, draft_id.as_str())
+    let draft = Repositories::new(pool)
+        .challenge_drafts()
+        .get(draft_id.as_str())
         .await?
         .ok_or(ServiceError::NotFound)?;
     if draft.creator_agent_id != *creator_agent_id {
@@ -130,7 +133,10 @@ pub async fn upload_challenge_private_asset(
         draft_id,
         body,
     } = request;
-    let draft = db::get_challenge_draft(pool, draft_id.as_str())
+    let repos = Repositories::new(pool);
+    let draft = repos
+        .challenge_drafts()
+        .get(draft_id.as_str())
         .await?
         .ok_or(ServiceError::NotFound)?;
     if draft.creator_agent_id != creator_agent_id {
@@ -196,26 +202,27 @@ pub async fn upload_challenge_private_asset(
         Uuid::new_v4()
     ))?;
     let asset_row_id = ChallengePrivateAssetId::generate();
-    db::reserve_challenge_private_asset(
-        pool,
-        &db::CreateChallengePrivateAssetInput {
-            asset_row_id: asset_row_id.clone(),
-            draft_id: draft.id.clone(),
-            asset_name: body.asset_name.clone(),
-            kind: body.kind,
-            required: requirement.required,
-            size_bytes: asset_size_bytes_i64,
-            sha256,
-            storage_key: storage_key.clone(),
-            temporary_storage_key: temporary_asset_key.clone(),
-            uploader_agent_id: creator_agent_id.clone(),
-        },
-        config.challenge_private_asset_bytes_per_draft,
-        config.challenge_draft_validation_timeout_minutes,
-        config.challenge_private_asset_pending_timeout_minutes,
-    )
-    .await
-    .map_err(ServiceError::unique_violation_as_conflict)?;
+    repos
+        .challenge_drafts()
+        .reserve_private_asset(
+            &persistence::CreateChallengePrivateAssetInput {
+                asset_row_id: asset_row_id.clone(),
+                draft_id: draft.id.clone(),
+                asset_name: body.asset_name.clone(),
+                kind: body.kind,
+                required: requirement.required,
+                size_bytes: asset_size_bytes_i64,
+                sha256,
+                storage_key: storage_key.clone(),
+                temporary_storage_key: temporary_asset_key.clone(),
+                uploader_agent_id: creator_agent_id.clone(),
+            },
+            config.challenge_private_asset_bytes_per_draft,
+            config.challenge_draft_validation_timeout_minutes,
+            config.challenge_private_asset_pending_timeout_minutes,
+        )
+        .await
+        .map_err(ServiceError::unique_violation_as_conflict)?;
 
     let temporary_storage_key = match storage.put(&temporary_asset_key, &asset_bytes).await {
         Ok(key) => key,
@@ -238,13 +245,14 @@ pub async fn upload_challenge_private_asset(
         cleanup_storage_key(storage, &temporary_storage_key).await;
         return Err(error.into());
     }
-    let asset = match db::activate_challenge_private_asset_with_audit(
-        pool,
-        &asset_row_id,
-        ChallengeDraftAuditEventId::generate(),
-        &creator_agent_id,
-    )
-    .await
+    let asset = match Repositories::new(pool)
+        .challenge_drafts()
+        .activate_private_asset_with_audit(
+            &asset_row_id,
+            ChallengeDraftAuditEventId::generate(),
+            &creator_agent_id,
+        )
+        .await
     {
         Ok(asset) => asset,
         Err(error) => {
@@ -262,7 +270,11 @@ async fn fail_challenge_private_asset_record(
     asset_row_id: &ChallengePrivateAssetId,
     message: &str,
 ) {
-    if let Err(error) = db::fail_challenge_private_asset(pool, asset_row_id, message).await {
+    if let Err(error) = Repositories::new(pool)
+        .challenge_drafts()
+        .fail_private_asset(asset_row_id, message)
+        .await
+    {
         warn!(
             asset_row_id = %asset_row_id,
             error = %error,
@@ -280,7 +292,11 @@ async fn cleanup_unreferenced_private_asset_object(
     if !storage.exists(storage_key).await? {
         return Ok(());
     }
-    if db::private_asset_storage_key_has_active_reference(pool, storage_key).await? {
+    if Repositories::new(pool)
+        .challenge_drafts()
+        .private_asset_storage_key_has_active_reference(storage_key)
+        .await?
+    {
         return Err(ServiceError::Conflict);
     }
     cleanup_storage_key(storage, storage_key).await;
@@ -302,7 +318,7 @@ async fn cleanup_storage_key(storage: &dyn Storage, storage_key: &StorageKey) {
 pub async fn list_admin_challenge_drafts(
     pool: &sqlx::PgPool,
 ) -> Result<ChallengeDraftListResponse> {
-    let items = db::list_challenge_drafts(pool, 100).await?;
+    let items = Repositories::new(pool).challenge_drafts().list(100).await?;
     Ok(ChallengeDraftListResponse { items })
 }
 
@@ -311,10 +327,16 @@ pub async fn list_admin_challenge_draft_private_assets(
     pool: &sqlx::PgPool,
     draft_id: &ChallengeDraftId,
 ) -> Result<AdminChallengePrivateAssetListResponse> {
-    db::get_challenge_draft(pool, draft_id.as_str())
+    let repos = Repositories::new(pool);
+    repos
+        .challenge_drafts()
+        .get(draft_id.as_str())
         .await?
         .ok_or(ServiceError::NotFound)?;
-    let items = db::list_challenge_private_asset_states(pool, draft_id.as_str()).await?;
+    let items = repos
+        .challenge_drafts()
+        .list_private_asset_states(draft_id.as_str())
+        .await?;
     Ok(AdminChallengePrivateAssetListResponse { items })
 }
 
@@ -330,7 +352,10 @@ pub async fn validate_challenge_draft(
         draft_id,
         body,
     } = request;
-    let draft = db::get_challenge_draft(pool, draft_id.as_str())
+    let repos = Repositories::new(pool);
+    let draft = repos
+        .challenge_drafts()
+        .get(draft_id.as_str())
         .await?
         .ok_or(ServiceError::NotFound)?;
     if !matches!(
@@ -342,25 +367,26 @@ pub async fn validate_challenge_draft(
     let validation_limit = i64::from(config.challenge_draft_validations_per_day);
     let repository_path = RepositoryCheckoutPath::from_existing_dir(&body.repository_path)?;
     let validation_record_id = ChallengeDraftValidationRecordId::generate();
-    db::begin_challenge_draft_validation(
-        pool,
-        &db::BeginChallengeDraftValidationInput {
-            validation_record_id: validation_record_id.clone(),
-            draft_id: draft.id.clone(),
-            repository_path: repository_path.to_string(),
-            manifest_sha256: draft.manifest_sha256,
-        },
-        CHALLENGE_DRAFT_QUOTA_WINDOW_SECONDS,
-        validation_limit,
-        config.challenge_draft_validation_timeout_minutes,
-    )
-    .await?;
+    repos
+        .challenge_drafts()
+        .begin_validation(
+            &persistence::BeginChallengeDraftValidationInput {
+                validation_record_id: validation_record_id.clone(),
+                draft_id: draft.id.clone(),
+                repository_path: repository_path.to_string(),
+                manifest_sha256: draft.manifest_sha256,
+            },
+            CHALLENGE_DRAFT_QUOTA_WINDOW_SECONDS,
+            validation_limit,
+            config.challenge_draft_validation_timeout_minutes,
+        )
+        .await?;
     let validation = validate_draft_repository(storage, config, &draft, &repository_path).await;
 
     match validation {
         Ok((_, bundle_sha256)) => {
             let message = "challenge draft validation passed".to_string();
-            let audit_event = db::CreateChallengeDraftAuditEventInput {
+            let audit_event = persistence::CreateChallengeDraftAuditEventInput {
                 event_id: ChallengeDraftAuditEventId::generate(),
                 draft_id: draft.id.clone(),
                 actor_agent_id: None,
@@ -372,26 +398,29 @@ pub async fn validate_challenge_draft(
                     "bundle_sha256": &bundle_sha256
                 }),
             };
-            db::finish_challenge_draft_validation(
-                pool,
-                &db::FinishChallengeDraftValidationInput {
-                    validation_record_id,
-                    draft_id: draft.id.clone(),
-                    status: ChallengeDraftValidationStatus::Passed,
-                    message: message.clone(),
-                    bundle_sha256: Some(bundle_sha256),
-                },
-                &audit_event,
-            )
-            .await?;
-            let draft = db::get_challenge_draft(pool, draft.id.as_str())
+            repos
+                .challenge_drafts()
+                .finish_validation(
+                    &persistence::FinishChallengeDraftValidationInput {
+                        validation_record_id,
+                        draft_id: draft.id.clone(),
+                        status: ChallengeDraftValidationStatus::Passed,
+                        message: message.clone(),
+                        bundle_sha256: Some(bundle_sha256),
+                    },
+                    &audit_event,
+                )
+                .await?;
+            let draft = repos
+                .challenge_drafts()
+                .get(draft.id.as_str())
                 .await?
                 .ok_or(ServiceError::NotFound)?;
             Ok(draft)
         }
         Err(error) => {
             let message = error.to_string();
-            let audit_event = db::CreateChallengeDraftAuditEventInput {
+            let audit_event = persistence::CreateChallengeDraftAuditEventInput {
                 event_id: ChallengeDraftAuditEventId::generate(),
                 draft_id: draft.id.clone(),
                 actor_agent_id: None,
@@ -400,18 +429,19 @@ pub async fn validate_challenge_draft(
                 message: message.clone(),
                 metadata: serde_json::json!({ "repository_path": repository_path.to_string() }),
             };
-            db::finish_challenge_draft_validation(
-                pool,
-                &db::FinishChallengeDraftValidationInput {
-                    validation_record_id,
-                    draft_id: draft.id.clone(),
-                    status: ChallengeDraftValidationStatus::Failed,
-                    message: message.clone(),
-                    bundle_sha256: None,
-                },
-                &audit_event,
-            )
-            .await?;
+            repos
+                .challenge_drafts()
+                .finish_validation(
+                    &persistence::FinishChallengeDraftValidationInput {
+                        validation_record_id,
+                        draft_id: draft.id.clone(),
+                        status: ChallengeDraftValidationStatus::Failed,
+                        message: message.clone(),
+                        bundle_sha256: None,
+                    },
+                    &audit_event,
+                )
+                .await?;
             Err(error)
         }
     }
@@ -428,7 +458,8 @@ pub async fn abandon_challenge_draft(
         draft_id,
         body,
     } = request;
-    let audit_event = db::CreateChallengeDraftAuditEventInput {
+    let repos = Repositories::new(pool);
+    let audit_event = persistence::CreateChallengeDraftAuditEventInput {
         event_id: ChallengeDraftAuditEventId::generate(),
         draft_id: draft_id.clone(),
         actor_agent_id: None,
@@ -437,15 +468,14 @@ pub async fn abandon_challenge_draft(
         message: body.message.trim().to_string(),
         metadata: serde_json::json!({}),
     };
-    db::abandon_challenge_draft_with_audit(
-        pool,
-        &draft_id,
-        non_empty_message(&body.message),
-        &audit_event,
-    )
-    .await?;
+    repos
+        .challenge_drafts()
+        .abandon_with_audit(&draft_id, non_empty_message(&body.message), &audit_event)
+        .await?;
 
-    db::get_challenge_draft(pool, draft_id.as_str())
+    repos
+        .challenge_drafts()
+        .get(draft_id.as_str())
         .await?
         .ok_or(ServiceError::NotFound)
 }
@@ -457,13 +487,15 @@ pub async fn cleanup_challenge_drafts(
     storage: &dyn Storage,
     config: &Config,
 ) -> Result<ChallengeDraftCleanupResponse> {
-    let abandoned =
-        db::abandon_stale_challenge_drafts(pool, config.challenge_draft_ttl_days).await?;
-    let purge_candidates = db::list_unpublished_private_assets_for_purge(
-        pool,
-        config.unpublished_challenge_asset_grace_days,
-    )
-    .await?;
+    let repos = Repositories::new(pool);
+    let abandoned = repos
+        .challenge_drafts()
+        .abandon_stale(config.challenge_draft_ttl_days)
+        .await?;
+    let purge_candidates = repos
+        .challenge_drafts()
+        .list_unpublished_private_assets_for_purge(config.unpublished_challenge_asset_grace_days)
+        .await?;
 
     let mut purged = 0_i64;
     for asset in purge_candidates {
@@ -471,7 +503,10 @@ pub async fn cleanup_challenge_drafts(
         if let Some(temporary_storage_key) = &asset.temporary_storage_key {
             storage.delete(temporary_storage_key).await?;
         }
-        db::delete_challenge_private_asset(pool, asset.id.as_str()).await?;
+        repos
+            .challenge_drafts()
+            .delete_private_asset(asset.id.as_str())
+            .await?;
         purged = purged.checked_add(1).ok_or_else(|| {
             ServiceError::Internal("private asset purge count overflow".to_string())
         })?;
@@ -501,16 +536,20 @@ pub async fn approve_challenge_draft(
                 "expected_validation_bundle_sha256 is required when approving a draft".to_string(),
             )
         })?;
-    db::approve_validated_challenge_draft_with_audit(
-        pool,
-        &draft_id,
-        expected_validation_bundle_sha256,
-        non_empty_message(&body.message),
-        admin.username,
-        ChallengeDraftAuditEventId::generate(),
-    )
-    .await?;
-    db::get_challenge_draft(pool, draft_id.as_str())
+    let repos = Repositories::new(pool);
+    repos
+        .challenge_drafts()
+        .approve_validated_with_audit(
+            &draft_id,
+            expected_validation_bundle_sha256,
+            non_empty_message(&body.message),
+            admin.username,
+            ChallengeDraftAuditEventId::generate(),
+        )
+        .await?;
+    repos
+        .challenge_drafts()
+        .get(draft_id.as_str())
         .await?
         .ok_or(ServiceError::NotFound)
 }
@@ -525,13 +564,16 @@ pub async fn reject_challenge_draft(
         draft_id,
         body,
     } = request;
-    let draft = db::get_challenge_draft(pool, draft_id.as_str())
+    let repos = Repositories::new(pool);
+    let draft = repos
+        .challenge_drafts()
+        .get(draft_id.as_str())
         .await?
         .ok_or(ServiceError::NotFound)?;
     if draft.status == ChallengeDraftStatus::Published {
         return Err(ServiceError::Conflict);
     }
-    let audit_event = db::CreateChallengeDraftAuditEventInput {
+    let audit_event = persistence::CreateChallengeDraftAuditEventInput {
         event_id: ChallengeDraftAuditEventId::generate(),
         draft_id: draft.id.clone(),
         actor_agent_id: None,
@@ -540,15 +582,18 @@ pub async fn reject_challenge_draft(
         message: body.message.trim().to_string(),
         metadata: serde_json::json!({}),
     };
-    db::update_challenge_draft_status_with_audit(
-        pool,
-        &draft.id,
-        ChallengeDraftStatus::Rejected,
-        non_empty_message(&body.message),
-        &audit_event,
-    )
-    .await?;
-    db::get_challenge_draft(pool, draft.id.as_str())
+    repos
+        .challenge_drafts()
+        .update_status_with_audit(
+            &draft.id,
+            ChallengeDraftStatus::Rejected,
+            non_empty_message(&body.message),
+            &audit_event,
+        )
+        .await?;
+    repos
+        .challenge_drafts()
+        .get(draft.id.as_str())
         .await?
         .ok_or(ServiceError::NotFound)
 }
@@ -566,12 +611,14 @@ pub async fn publish_challenge_draft(
         body,
     } = request;
     let repository_path = RepositoryCheckoutPath::from_existing_dir(&body.repository_path)?;
-    let claim = db::claim_challenge_draft_for_publish(
-        pool,
-        draft_id.as_str(),
-        config.challenge_draft_publish_timeout_minutes,
-    )
-    .await?;
+    let repos = Repositories::new(pool);
+    let claim = repos
+        .challenge_drafts()
+        .claim_for_publish(
+            draft_id.as_str(),
+            config.challenge_draft_publish_timeout_minutes,
+        )
+        .await?;
     let draft = claim.draft;
     if draft.status == ChallengeDraftStatus::Published {
         return Ok(draft);
@@ -590,17 +637,16 @@ pub async fn publish_challenge_draft(
     )
     .await;
     if let Err(error) = publish_result {
-        db::fail_challenge_draft_publish(
-            pool,
-            draft.id.as_str(),
-            &publish_claim_id,
-            &error.to_string(),
-        )
-        .await?;
+        repos
+            .challenge_drafts()
+            .fail_publish(draft.id.as_str(), &publish_claim_id, &error.to_string())
+            .await?;
         return Err(error);
     }
 
-    db::get_challenge_draft(pool, draft.id.as_str())
+    repos
+        .challenge_drafts()
+        .get(draft.id.as_str())
         .await?
         .ok_or(ServiceError::NotFound)
 }
@@ -632,9 +678,9 @@ async fn publish_claimed_challenge_draft(
         .join(draft.challenge_path.as_path());
     match manifest.request {
         ChallengeCreationRequestKind::ArchiveChallenge => {
-            db::publish_archive_challenge_draft(
-                pool,
-                &db::PublishArchiveChallengeDraftInput {
+            Repositories::new(pool)
+                .challenge_drafts()
+                .publish_archive(&persistence::PublishArchiveChallengeDraftInput {
                     draft_id: draft.id.clone(),
                     publish_claim_id: publish_claim_id.clone(),
                     challenge_name: manifest.challenge_name.clone(),
@@ -643,9 +689,8 @@ async fn publish_claimed_challenge_draft(
                     admin_username: admin_username.to_string(),
                     repository_path: repository_path.to_string(),
                     bundle_sha256,
-                },
-            )
-            .await?;
+                })
+                .await?;
         }
         ChallengeCreationRequestKind::NewChallenge => {
             let final_bundle_path = runtime_bundle_path(config, draft, &manifest, publish_claim_id);
@@ -746,9 +791,9 @@ async fn prepare_and_publish_new_challenge_draft(
         )?;
     let managed_statement_path =
         agentics_domain::models::paths::ManagedStatementPath::from_existing_file(&statement_path)?;
-    db::publish_new_challenge_draft(
-        pool,
-        &db::PublishNewChallengeDraftInput {
+    Repositories::new(pool)
+        .challenge_drafts()
+        .publish_new(&persistence::PublishNewChallengeDraftInput {
             draft_id: ctx.draft.id.clone(),
             publish_claim_id: ctx.publish_claim_id.clone(),
             challenge_name: ctx.manifest.challenge_name.clone(),
@@ -763,9 +808,8 @@ async fn prepare_and_publish_new_challenge_draft(
             admin_username: ctx.admin_username.to_string(),
             repository_path: ctx.repository_path.to_string(),
             bundle_sha256: ctx.bundle_sha256,
-        },
-    )
-    .await
+        })
+        .await
 }
 
 /// Ensures a draft path follows the canonical `challenges/{challenge_name}` repository layout.

@@ -6,7 +6,7 @@ use agentics_domain::models::challenge::MoltbookCommunityDto;
 use agentics_domain::models::ids::ChallengeId;
 use agentics_domain::models::request::ChallengeMoltbookDiscussionResponse;
 use agentics_domain::models::urls::MoltbookPostUrl;
-use agentics_persistence as db;
+use agentics_persistence::{ChallengeMoltbookDiscussionRecord, Repositories};
 
 /// Attach a Moltbook discussion post to one published challenge.
 pub async fn set_challenge_moltbook_discussion(
@@ -15,7 +15,10 @@ pub async fn set_challenge_moltbook_discussion(
     challenge_id: &ChallengeId,
     discussion_url: &MoltbookPostUrl,
 ) -> Result<ChallengeMoltbookDiscussionResponse> {
-    let record = db::set_challenge_moltbook_discussion(pool, challenge_id, discussion_url).await?;
+    let record = Repositories::new(pool)
+        .challenges()
+        .set_moltbook_discussion(challenge_id, discussion_url)
+        .await?;
     Ok(challenge_moltbook_discussion_response(config, record))
 }
 
@@ -25,14 +28,17 @@ pub async fn clear_challenge_moltbook_discussion(
     config: &Config,
     challenge_id: &ChallengeId,
 ) -> Result<ChallengeMoltbookDiscussionResponse> {
-    let record = db::clear_challenge_moltbook_discussion(pool, challenge_id).await?;
+    let record = Repositories::new(pool)
+        .challenges()
+        .clear_moltbook_discussion(challenge_id)
+        .await?;
     Ok(challenge_moltbook_discussion_response(config, record))
 }
 
 /// Build the admin response shape for Moltbook discussion updates.
 fn challenge_moltbook_discussion_response(
     config: &Config,
-    record: db::ChallengeMoltbookDiscussionRecord,
+    record: ChallengeMoltbookDiscussionRecord,
 ) -> ChallengeMoltbookDiscussionResponse {
     ChallengeMoltbookDiscussionResponse {
         challenge_id: record.challenge_id,

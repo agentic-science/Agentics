@@ -29,8 +29,8 @@ pub use assets::{
     fail_challenge_private_asset, private_asset_storage_key_has_active_reference,
     reserve_challenge_private_asset,
 };
+pub use audit::CreateChallengeDraftAuditEventInput;
 use audit::create_challenge_draft_audit_event_tx;
-pub use audit::{CreateChallengeDraftAuditEventInput, create_challenge_draft_audit_event};
 pub use publishing::{
     ClaimedChallengeDraftForPublish, PublishArchiveChallengeDraftInput,
     PublishNewChallengeDraftInput, claim_challenge_draft_for_publish, fail_challenge_draft_publish,

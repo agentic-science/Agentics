@@ -360,7 +360,9 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
     let admin_sum_id_typed =
         agentics_domain::models::ids::ChallengeId::try_new(admin_sum_id.clone())
             .expect("test challenge id is valid");
-    agentics_persistence::archive_challenge(&pool, &admin_sum_id_typed)
+    agentics_persistence::Repositories::new(&pool)
+        .challenges()
+        .archive(&admin_sum_id_typed)
         .await
         .expect("challenge should archive");
     let archived_rejudge = client

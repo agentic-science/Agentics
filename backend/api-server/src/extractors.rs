@@ -20,10 +20,7 @@ use agentics_domain::models::request::{
     CreateChallengeShortlistRevisionRequest, CreatePioneerCodeRequest,
     CreateSolutionSubmissionRequest, RegisterAgentRequest, SetChallengeMoltbookDiscussionRequest,
 };
-use agentics_persistence::{
-    AuthenticatedAdminSession, authenticate_admin_session, authenticate_agent_token,
-    authenticate_creator_session,
-};
+use agentics_persistence::{AuthenticatedAdminSession, AuthenticatedCreatorSession, Repositories};
 use agentics_services::auth;
 
 use crate::admin_auth_throttle::remote_addr_from_parts;
@@ -109,7 +106,9 @@ impl FromRequestParts<AppState> for AgentAuth {
         let parsed = auth::parse_bearer_token(auth_header)
             .ok_or_else(|| unauthorized("缺少有效的 Bearer token"))?;
 
-        let agent = authenticate_agent_token(&state.db, &parsed.token)
+        let agent = Repositories::new(&state.db)
+            .agents()
+            .authenticate_token(&parsed.token)
             .await
             .map_err(|_| unauthorized("token 无效或已被撤销"))?
             .ok_or_else(|| unauthorized("token 无效或已被撤销"))?;
@@ -175,7 +174,9 @@ impl FromRequestParts<AppState> for AdminAuth {
         )
         .ok_or_else(|| unauthorized("需要有效的 admin session 或 basic auth"))?;
 
-        let session = authenticate_admin_session(&state.db, &session_token)
+        let session = Repositories::new(&state.db)
+            .sessions()
+            .authenticate_admin(&session_token)
             .await
             .map_err(|_| unauthorized("admin session 无效或已过期"))?
             .ok_or_else(|| unauthorized("admin session 无效或已过期"))?;
@@ -216,7 +217,9 @@ impl FromRequestParts<AppState> for CreatorAuth {
         )
         .ok_or_else(|| unauthorized("需要有效的 creator session"))?;
 
-        let session = authenticate_creator_session(&state.db, &session_token)
+        let session = Repositories::new(&state.db)
+            .sessions()
+            .authenticate_creator(&session_token)
             .await
             .map_err(|_| unauthorized("creator session 无效或已过期"))?
             .ok_or_else(|| unauthorized("creator session 无效或已过期"))?;
@@ -255,7 +258,7 @@ impl WebSessionCsrf for AuthenticatedAdminSession {
     }
 }
 
-impl WebSessionCsrf for agentics_persistence::AuthenticatedCreatorSession {
+impl WebSessionCsrf for AuthenticatedCreatorSession {
     /// Returns the hashed CSRF token for a creator web session.
     fn csrf_token_hash(&self) -> &str {
         &self.csrf_token_hash

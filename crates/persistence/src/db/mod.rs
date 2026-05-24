@@ -1,10 +1,16 @@
 //! Database access modules shared by the API server, worker, and tests.
 
+#![allow(
+    dead_code,
+    unreachable_pub,
+    reason = "SQL primitives are intentionally private behind repository facades; some helpers remain reserved for narrowly scoped repository methods"
+)]
+
 pub mod agents;
 pub mod challenge_creation;
 pub mod challenges;
 pub mod evaluation_jobs;
-mod evaluation_policy;
+pub(crate) mod evaluation_policy;
 pub mod evaluations;
 mod ids;
 mod json;
@@ -44,17 +50,3 @@ impl From<DbWorkflowError> for ServiceError {
         }
     }
 }
-
-pub use agents::*;
-pub use challenge_creation::*;
-pub use challenges::*;
-pub use evaluation_jobs::*;
-pub use evaluation_policy::*;
-pub use evaluations::*;
-pub use leaderboard::*;
-pub use maintenance::*;
-pub use pioneer_codes::*;
-pub use pool::*;
-pub use sessions::*;
-pub use solution_submissions::*;
-pub use validation_quotas::*;

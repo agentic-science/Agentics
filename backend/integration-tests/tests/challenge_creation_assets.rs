@@ -139,20 +139,21 @@ async fn private_asset_upload_rejects_active_validation_and_recovers_stale_claim
     )
     .expect("manifest sha should parse");
     let validation_record_id = ChallengeDraftValidationRecordId::generate();
-    db::begin_challenge_draft_validation(
-        &pool,
-        &db::BeginChallengeDraftValidationInput {
-            validation_record_id: validation_record_id.clone(),
-            draft_id: draft_id.clone(),
-            repository_path: storage.path().to_string_lossy().to_string(),
-            manifest_sha256,
-        },
-        24 * 60 * 60,
-        10,
-        30,
-    )
-    .await
-    .expect("validation claim should reserve");
+    db::Repositories::new(&pool)
+        .challenge_drafts()
+        .begin_validation(
+            &db::BeginChallengeDraftValidationInput {
+                validation_record_id: validation_record_id.clone(),
+                draft_id: draft_id.clone(),
+                repository_path: storage.path().to_string_lossy().to_string(),
+                manifest_sha256,
+            },
+            24 * 60 * 60,
+            10,
+            30,
+        )
+        .await
+        .expect("validation claim should reserve");
 
     let active_response =
         upload_private_asset(&client, &app, &creator, draft_id.as_str(), 11).await;
@@ -237,8 +238,12 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
         uploader_agent_id,
     };
 
-    let create_a = db::reserve_challenge_private_asset(&pool, &input_a, 12, 30, 30);
-    let create_b = db::reserve_challenge_private_asset(&pool, &input_b, 12, 30, 30);
+    let repos_a = db::Repositories::new(&pool);
+    let repos_b = db::Repositories::new(&pool);
+    let drafts_a = repos_a.challenge_drafts();
+    let drafts_b = repos_b.challenge_drafts();
+    let create_a = drafts_a.reserve_private_asset(&input_a, 12, 30, 30);
+    let create_b = drafts_b.reserve_private_asset(&input_b, 12, 30, 30);
     let (result_a, result_b) = tokio::join!(create_a, create_b);
 
     let mut created = 0;
@@ -293,7 +298,10 @@ async fn stale_pending_private_asset_reservation_can_be_retried(pool: sqlx::PgPo
     let uploader_agent_id = AgentId::try_new(&creator.agent_id).expect("valid creator agent id");
 
     let first = private_asset_input(&draft_id, &uploader_agent_id, "official-cases", "first");
-    db::reserve_challenge_private_asset(&pool, &first, 64, 30, 30)
+    let repos = db::Repositories::new(&pool);
+    repos
+        .challenge_drafts()
+        .reserve_private_asset(&first, 64, 30, 30)
         .await
         .expect("first pending asset should reserve");
     sqlx::query(
@@ -305,7 +313,9 @@ async fn stale_pending_private_asset_reservation_can_be_retried(pool: sqlx::PgPo
     .expect("failed to age pending asset");
 
     let second = private_asset_input(&draft_id, &uploader_agent_id, "official-cases", "second");
-    db::reserve_challenge_private_asset(&pool, &second, 64, 30, 30)
+    repos
+        .challenge_drafts()
+        .reserve_private_asset(&second, 64, 30, 30)
         .await
         .expect("stale pending asset should not block retry");
 
@@ -361,7 +371,9 @@ async fn stale_pending_private_asset_retry_replaces_unreferenced_object(pool: sq
             .expect("test temporary storage key is valid"),
         uploader_agent_id,
     };
-    db::reserve_challenge_private_asset(&pool, &first, 10_000_000, 30, 30)
+    db::Repositories::new(&pool)
+        .challenge_drafts()
+        .reserve_private_asset(&first, 10_000_000, 30, 30)
         .await
         .expect("first pending asset should reserve");
     let durable_path = storage.path().join(storage_key.as_str());
@@ -476,29 +488,40 @@ async fn private_asset_lifecycle_refreshes_draft_activity(pool: sqlx::PgPool) {
 
     age_draft_for_cleanup(&pool, &draft_id).await;
     let input_a = private_asset_input(&draft_id, &uploader_agent_id, "official-cases-a", "first");
-    db::reserve_challenge_private_asset(&pool, &input_a, 64, 30, 30)
+    let repos = db::Repositories::new(&pool);
+    repos
+        .challenge_drafts()
+        .reserve_private_asset(&input_a, 64, 30, 30)
         .await
         .expect("pending asset should reserve");
     assert_draft_survives_stale_cleanup(&pool, &draft_id).await;
 
     age_draft_for_cleanup(&pool, &draft_id).await;
-    db::activate_challenge_private_asset(&pool, &input_a.asset_row_id)
+    repos
+        .challenge_drafts()
+        .activate_private_asset(&input_a.asset_row_id)
         .await
         .expect("pending asset should activate");
     assert_draft_survives_stale_cleanup(&pool, &draft_id).await;
 
     let input_b = private_asset_input(&draft_id, &uploader_agent_id, "official-cases-b", "second");
-    db::reserve_challenge_private_asset(&pool, &input_b, 64, 30, 30)
+    repos
+        .challenge_drafts()
+        .reserve_private_asset(&input_b, 64, 30, 30)
         .await
         .expect("second pending asset should reserve");
     age_draft_for_cleanup(&pool, &draft_id).await;
-    db::fail_challenge_private_asset(&pool, &input_b.asset_row_id, "test failure")
+    repos
+        .challenge_drafts()
+        .fail_private_asset(&input_b.asset_row_id, "test failure")
         .await
         .expect("pending asset should fail");
     assert_draft_survives_stale_cleanup(&pool, &draft_id).await;
 
     age_draft_for_cleanup(&pool, &draft_id).await;
-    db::delete_challenge_private_asset(&pool, input_a.asset_row_id.as_str())
+    repos
+        .challenge_drafts()
+        .delete_private_asset(input_a.asset_row_id.as_str())
         .await
         .expect("active asset should delete");
     assert_draft_survives_stale_cleanup(&pool, &draft_id).await;
@@ -532,7 +555,9 @@ async fn stale_cleanup_preserves_rejected_draft_review_outcome(pool: sqlx::PgPoo
     .await
     .expect("failed to reject and age draft");
 
-    let abandoned = db::abandon_stale_challenge_drafts(&pool, 1)
+    let abandoned = db::Repositories::new(&pool)
+        .challenge_drafts()
+        .abandon_stale(1)
         .await
         .expect("stale cleanup should run");
     assert_eq!(abandoned, 0);
@@ -591,7 +616,9 @@ async fn age_draft_for_cleanup(pool: &sqlx::PgPool, draft_id: &ChallengeDraftId)
 
 /// Run stale cleanup and verify the draft remained active.
 async fn assert_draft_survives_stale_cleanup(pool: &sqlx::PgPool, draft_id: &ChallengeDraftId) {
-    db::abandon_stale_challenge_drafts(pool, 1)
+    db::Repositories::new(pool)
+        .challenge_drafts()
+        .abandon_stale(1)
         .await
         .expect("stale cleanup should run");
     let status: String =

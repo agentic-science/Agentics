@@ -16,10 +16,8 @@ use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::evaluation::EvaluationStatus;
 use agentics_domain::models::ids::{EvaluationId, EvaluationJobId, SolutionSubmissionId};
 use agentics_persistence::{
-    HeartbeatPayload, PersistedEvaluationResult, claim_next_evaluation_job,
-    mark_evaluation_finished, mark_evaluation_job_ready, mark_evaluation_started,
-    queue_evaluation_job, reap_stuck_jobs, refresh_evaluation_job_claim,
-    requeue_running_evaluation_job_for_capacity, upsert_service_heartbeat,
+    EvaluationJobRecord, HeartbeatPayload, MarkEvaluationStartedInput, PersistedEvaluationResult,
+    QueueEvaluationJobInput, Repositories,
 };
 use agentics_runner::{
     EvaluationJobExecution, ExecutionResult, RunnerContainerCleanupSummary, RunnerContainerScope,
@@ -98,8 +96,11 @@ impl<'a> EvaluationWorkerService<'a> {
     /// Run one worker polling cycle.
     pub async fn run_one_cycle(&self, worker_id: &str) -> Result<EvaluationWorkerCycleOutcome> {
         let maintenance = self.reap_and_reconcile().await?;
-        let job =
-            claim_next_evaluation_job(self.db, worker_id, self.config.worker_accelerators).await?;
+        let repos = Repositories::new(self.db);
+        let job = repos
+            .evaluation_jobs()
+            .claim_next(worker_id, self.config.worker_accelerators)
+            .await?;
 
         let Some(job) = job else {
             self.write_idle_heartbeat(worker_id, None, None).await?;
@@ -113,23 +114,24 @@ impl<'a> EvaluationWorkerService<'a> {
             return Ok(EvaluationWorkerCycleOutcome::Idle);
         };
 
-        upsert_service_heartbeat(
-            self.db,
-            worker_id,
-            &HeartbeatPayload {
-                status: "running".to_string(),
-                accelerators: self.config.worker_accelerators.heartbeat_values(),
-                job_id: Some(job.id.clone()),
-                solution_submission_id: Some(job.solution_submission_id.clone()),
-                last_completed_job_id: None,
-                last_failed_job_id: None,
-            },
-        )
-        .await?;
+        repos
+            .maintenance()
+            .upsert_service_heartbeat(
+                worker_id,
+                &HeartbeatPayload {
+                    status: "running".to_string(),
+                    accelerators: self.config.worker_accelerators.heartbeat_values(),
+                    job_id: Some(job.id.clone()),
+                    solution_submission_id: Some(job.solution_submission_id.clone()),
+                    last_completed_job_id: None,
+                    last_failed_job_id: None,
+                },
+            )
+            .await?;
 
-        let evaluation_inserted = mark_evaluation_started(
-            self.db,
-            &agentics_persistence::MarkEvaluationStartedInput {
+        let evaluation_inserted = repos
+            .evaluation_jobs()
+            .mark_started(&MarkEvaluationStartedInput {
                 evaluation_id: EvaluationId::generate(),
                 solution_submission_id: job.solution_submission_id.clone(),
                 job_id: job.id.clone(),
@@ -137,9 +139,8 @@ impl<'a> EvaluationWorkerService<'a> {
                 claim_attempt_count: job.attempt_count,
                 target: job.target.clone(),
                 eval_type: job.eval_type,
-            },
-        )
-        .await?;
+            })
+            .await?;
         if !evaluation_inserted {
             warn!(
                 job_id = %job.id,
@@ -190,7 +191,11 @@ impl<'a> EvaluationWorkerService<'a> {
     }
 
     async fn reap_and_reconcile(&self) -> Result<EvaluationWorkerMaintenanceSummary> {
-        let reaped = reap_stuck_jobs(self.db, self.config.worker_stale_job_minutes.max(1)).await?;
+        let repos = Repositories::new(self.db);
+        let reaped = repos
+            .maintenance()
+            .reap_stuck_jobs(self.config.worker_stale_job_minutes.max(1))
+            .await?;
         if reaped.requeued > 0 || reaped.failed > 0 {
             info!(
                 requeued = reaped.requeued,
@@ -221,16 +226,16 @@ impl<'a> EvaluationWorkerService<'a> {
     async fn finish_completed_job(
         &self,
         worker_id: &str,
-        job: &agentics_persistence::EvaluationJobRecord,
+        job: &EvaluationJobRecord,
         result: ExecutionResult,
     ) -> Result<EvaluationWorkerCycleOutcome> {
         let job_id = job.id.clone();
         let solution_submission_id = job.solution_submission_id.clone();
         let rank_score = result.result.rank_score;
 
-        let persisted = mark_evaluation_finished(
-            self.db,
-            &PersistedEvaluationResult {
+        let persisted = Repositories::new(self.db)
+            .evaluation_jobs()
+            .mark_finished(&PersistedEvaluationResult {
                 solution_submission_id: solution_submission_id.clone(),
                 job_id: job_id.clone(),
                 worker_id: worker_id.to_string(),
@@ -246,9 +251,8 @@ impl<'a> EvaluationWorkerService<'a> {
                 official_summary: result.result.official_summary,
                 log_key: Some(result.log_key),
                 last_error: None,
-            },
-        )
-        .await?;
+            })
+            .await?;
         if !persisted {
             warn!(
                 job_id = %job_id,
@@ -279,17 +283,13 @@ impl<'a> EvaluationWorkerService<'a> {
     async fn requeue_capacity_limited_job(
         &self,
         worker_id: &str,
-        job: &agentics_persistence::EvaluationJobRecord,
+        job: &EvaluationJobRecord,
         error_msg: &str,
     ) -> Result<EvaluationWorkerCycleOutcome> {
-        let requeued = requeue_running_evaluation_job_for_capacity(
-            self.db,
-            &job.id,
-            worker_id,
-            job.attempt_count,
-            error_msg,
-        )
-        .await?;
+        let requeued = Repositories::new(self.db)
+            .evaluation_jobs()
+            .requeue_for_capacity(&job.id, worker_id, job.attempt_count, error_msg)
+            .await?;
         if !requeued {
             warn!(
                 job_id = %job.id,
@@ -318,13 +318,13 @@ impl<'a> EvaluationWorkerService<'a> {
     async fn finish_failed_job(
         &self,
         worker_id: &str,
-        job: &agentics_persistence::EvaluationJobRecord,
+        job: &EvaluationJobRecord,
         error_msg: &str,
     ) -> Result<EvaluationWorkerCycleOutcome> {
         let log_key = evaluation_runner_log_key(job.id.as_str(), job.attempt_count).ok();
-        let persisted = mark_evaluation_finished(
-            self.db,
-            &PersistedEvaluationResult {
+        let persisted = Repositories::new(self.db)
+            .evaluation_jobs()
+            .mark_finished(&PersistedEvaluationResult {
                 solution_submission_id: job.solution_submission_id.clone(),
                 job_id: job.id.clone(),
                 worker_id: worker_id.to_string(),
@@ -340,9 +340,8 @@ impl<'a> EvaluationWorkerService<'a> {
                 official_summary: None,
                 log_key,
                 last_error: Some(error_msg.to_string()),
-            },
-        )
-        .await?;
+            })
+            .await?;
         if !persisted {
             warn!(
                 job_id = %job.id,
@@ -377,19 +376,20 @@ impl<'a> EvaluationWorkerService<'a> {
         last_completed_job_id: Option<EvaluationJobId>,
         last_failed_job_id: Option<EvaluationJobId>,
     ) -> Result<()> {
-        upsert_service_heartbeat(
-            self.db,
-            worker_id,
-            &HeartbeatPayload {
-                status: "idle".to_string(),
-                accelerators: self.config.worker_accelerators.heartbeat_values(),
-                job_id: None,
-                solution_submission_id: None,
-                last_completed_job_id,
-                last_failed_job_id,
-            },
-        )
-        .await
+        Repositories::new(self.db)
+            .maintenance()
+            .upsert_service_heartbeat(
+                worker_id,
+                &HeartbeatPayload {
+                    status: "idle".to_string(),
+                    accelerators: self.config.worker_accelerators.heartbeat_values(),
+                    job_id: None,
+                    solution_submission_id: None,
+                    last_completed_job_id,
+                    last_failed_job_id,
+                },
+            )
+            .await
     }
 }
 
@@ -407,7 +407,10 @@ pub async fn mark_staged_evaluation_job_ready(
     db: &sqlx::PgPool,
     job_id: &EvaluationJobId,
 ) -> Result<()> {
-    mark_evaluation_job_ready(db, job_id).await
+    Repositories::new(db)
+        .evaluation_jobs()
+        .mark_ready(job_id)
+        .await
 }
 
 /// Queue an evaluation job for an existing solution submission.
@@ -415,16 +418,15 @@ pub async fn queue_solution_evaluation_job(
     db: &sqlx::PgPool,
     request: QueueEvaluationJobRequest,
 ) -> Result<agentics_persistence::EvaluationJobRecord> {
-    queue_evaluation_job(
-        db,
-        &agentics_persistence::QueueEvaluationJobInput {
+    Repositories::new(db)
+        .evaluation_jobs()
+        .queue(&QueueEvaluationJobInput {
             job_id: EvaluationJobId::generate(),
             solution_submission_id: request.solution_submission_id,
             eval_type: request.eval_type,
             max_active_official_jobs: request.max_active_official_jobs,
-        },
-    )
-    .await
+        })
+        .await
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -463,7 +465,11 @@ async fn refresh_claim_until_stopped(
     loop {
         tokio::select! {
             _ = ticker.tick() => {
-                match refresh_evaluation_job_claim(&db, &job_id, &worker_id, attempt_count).await {
+                match Repositories::new(&db)
+                    .evaluation_jobs()
+                    .refresh_claim(&job_id, &worker_id, attempt_count)
+                    .await
+                {
                     Ok(true) => {}
                     Ok(false) => {
                         error!(job_id = %job_id, worker_id = %worker_id, attempt_count, "job lease no longer belongs to worker attempt");

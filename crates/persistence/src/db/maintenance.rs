@@ -133,7 +133,7 @@ pub async fn ensure_challenges_seeded_from_root(
             let challenge_name = &spec.challenge_name;
             let challenge_id = agentics_domain::models::ids::ChallengeId::generate();
 
-            if crate::db::publish_challenge(
+            if crate::db::challenges::publish_challenge(
                 pool,
                 &PublishChallengeInput {
                     challenge_id: &challenge_id,

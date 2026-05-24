@@ -12,7 +12,10 @@ use agentics_domain::models::names::TargetName;
 use agentics_domain::models::request::{
     CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse,
 };
-use agentics_persistence as db;
+use agentics_persistence::{
+    CreateSolutionSubmissionInput, PublishedChallengeAdmission, Repositories,
+    SolutionSubmissionQuotaAdmission,
+};
 use agentics_storage::{Storage, StorageKey};
 
 use crate::evaluation_lifecycle;
@@ -40,16 +43,13 @@ pub async fn create_solution_submission(
         body,
         eval_type,
     } = request;
+    let repos = Repositories::new(pool);
     let challenge_id = body.challenge_id;
     let target = body.target.clone();
-    let admission = db::ensure_published_challenge_supports_eval_type(
-        pool,
-        &challenge_id,
-        &target,
-        eval_type,
-        &agent_id,
-    )
-    .await?;
+    let admission = repos
+        .challenges()
+        .ensure_supports_eval_type(&challenge_id, &target, eval_type, &agent_id)
+        .await?;
     let canonical_challenge_id = admission.challenge_id.clone();
     let canonical_challenge_name = admission.challenge_name.clone();
     let challenge_lifetime_limit = challenge_lifetime_limit(&admission, eval_type);
@@ -63,14 +63,15 @@ pub async fn create_solution_submission(
         challenge_lifetime_limit,
     )
     .await?;
-    db::ensure_parent_solution_submission_matches_scope(
-        pool,
-        body.parent_solution_submission_id.as_ref(),
-        &agent_id,
-        &canonical_challenge_id,
-        &target,
-    )
-    .await?;
+    repos
+        .solution_submissions()
+        .ensure_parent_matches_scope(
+            body.parent_solution_submission_id.as_ref(),
+            &agent_id,
+            &canonical_challenge_id,
+            &target,
+        )
+        .await?;
 
     let artifact_bytes = base64_decode(&body.artifact_base64).ok_or(ServiceError::Base64)?;
     let manifest = ZipProjectManifest::from_zip_bytes(&artifact_bytes)?;
@@ -95,9 +96,9 @@ pub async fn create_solution_submission(
     let max_active_official_jobs =
         (eval_type == ScoringMode::Official).then_some(i64::from(config.max_active_official_jobs));
 
-    let solution_submission = db::create_solution_submission_with_job(
-        pool,
-        &db::CreateSolutionSubmissionInput {
+    let solution_submission = repos
+        .solution_submissions()
+        .create_with_job(&CreateSolutionSubmissionInput {
             solution_submission_id: solution_submission_id.clone(),
             job_id: job_id.clone(),
             agent_id,
@@ -110,15 +111,14 @@ pub async fn create_solution_submission(
             explanation: body.explanation.trim().to_string(),
             parent_solution_submission_id: body.parent_solution_submission_id,
             credit_text: body.credit_text.trim().to_string(),
-            quota_admission: db::SolutionSubmissionQuotaAdmission {
+            quota_admission: SolutionSubmissionQuotaAdmission {
                 window_seconds: SUBMISSION_QUOTA_WINDOW_SECONDS,
                 per_agent_challenge_limit: quota_limit,
                 challenge_lifetime_limit,
                 max_active_official_jobs,
             },
-        },
-    )
-    .await;
+        })
+        .await;
     let solution_submission = match solution_submission {
         Ok(solution_submission) => solution_submission,
         Err(error) => {
@@ -143,7 +143,9 @@ pub async fn create_solution_submission(
         cleanup_storage_key(storage, &temporary_artifact_key).await;
         return Err(error);
     }
-    let solution_submission = db::get_solution_submission_by_id(pool, &solution_submission.id)
+    let solution_submission = repos
+        .solution_submissions()
+        .get_by_id(&solution_submission.id)
         .await?
         .ok_or_else(|| {
             ServiceError::Internal(
@@ -159,7 +161,12 @@ async fn cleanup_solution_submission_record(
     pool: &sqlx::PgPool,
     solution_submission_id: &SolutionSubmissionId,
 ) {
-    if let Err(error) = db::delete_solution_submission(pool, solution_submission_id).await {
+    let repos = Repositories::new(pool);
+    if let Err(error) = repos
+        .solution_submissions()
+        .delete(solution_submission_id)
+        .await
+    {
         warn!(
             solution_submission_id = %solution_submission_id,
             error = %error,
@@ -189,19 +196,21 @@ async fn ensure_submission_quota_available(
     eval_type: ScoringMode,
     challenge_lifetime_limit: Option<i64>,
 ) -> Result<()> {
+    let repos = Repositories::new(pool);
     let limit = match eval_type {
         ScoringMode::Validation => i64::from(config.validation_runs_per_agent_challenge_day),
         ScoringMode::Official => i64::from(config.official_runs_per_agent_challenge_day),
     };
-    let used = db::count_recent_runs_for_agent_challenge(
-        pool,
-        agent_id,
-        challenge_id,
-        target,
-        eval_type,
-        SUBMISSION_QUOTA_WINDOW_SECONDS,
-    )
-    .await?;
+    let used = repos
+        .solution_submissions()
+        .count_recent_runs_for_agent_challenge(
+            agent_id,
+            challenge_id,
+            target,
+            eval_type,
+            SUBMISSION_QUOTA_WINDOW_SECONDS,
+        )
+        .await?;
 
     if used >= limit {
         return Err(ServiceError::TooManyRequests(format!(
@@ -211,14 +220,10 @@ async fn ensure_submission_quota_available(
     }
 
     if let Some(limit) = challenge_lifetime_limit {
-        let used = db::count_lifetime_runs_for_agent_challenge(
-            pool,
-            agent_id,
-            challenge_id,
-            target,
-            eval_type,
-        )
-        .await?;
+        let used = repos
+            .solution_submissions()
+            .count_lifetime_runs_for_agent_challenge(agent_id, challenge_id, target, eval_type)
+            .await?;
         if used >= limit {
             return Err(ServiceError::TooManyRequests(format!(
                 "{} challenge limit exceeded for challenge `{challenge_id}`: {used} of {limit} lifetime runs used",
@@ -228,7 +233,10 @@ async fn ensure_submission_quota_available(
     }
 
     if eval_type == ScoringMode::Official {
-        let active = db::count_active_evaluation_jobs(pool, ScoringMode::Official).await?;
+        let active = repos
+            .evaluation_jobs()
+            .count_active(ScoringMode::Official)
+            .await?;
         let max_active = i64::from(config.max_active_official_jobs);
         if active >= max_active {
             return Err(ServiceError::TooManyRequests(format!(
@@ -242,7 +250,7 @@ async fn ensure_submission_quota_available(
 
 /// Selects the challenge-level run limit that applies to the requested scoring mode.
 fn challenge_lifetime_limit(
-    admission: &db::PublishedChallengeAdmission,
+    admission: &PublishedChallengeAdmission,
     eval_type: ScoringMode,
 ) -> Option<i64> {
     match eval_type {

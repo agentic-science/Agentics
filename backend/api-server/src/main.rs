@@ -18,7 +18,7 @@
 use std::sync::Arc;
 
 use agentics_config::Config;
-use agentics_persistence::pool::create_pool;
+use agentics_persistence::{Repositories, pool::create_pool};
 use agentics_storage::LocalStorage;
 use api_server::admin_auth_throttle::AdminAuthThrottle;
 use api_server::router;
@@ -43,12 +43,10 @@ async fn main() -> anyhow::Result<()> {
 
     // Seed challenges from challenges_root
     if tokio::fs::metadata(&config.challenges_root).await.is_ok() {
-        agentics_persistence::ensure_challenges_seeded_from_root(
-            &db,
-            &config.challenges_root,
-            &config.storage_root,
-        )
-        .await?;
+        Repositories::new(&db)
+            .maintenance()
+            .ensure_challenges_seeded_from_root(&config.challenges_root, &config.storage_root)
+            .await?;
     }
 
     let state = AppState {

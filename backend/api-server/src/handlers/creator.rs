@@ -19,7 +19,7 @@ use agentics_domain::models::request::{
     CreateChallengeShortlistRevisionRequest, CreatorChallengeParticipantsResponse,
     CreatorChallengeStatsResponse,
 };
-use agentics_persistence as db;
+use agentics_persistence::{CreateChallengeShortlistRevisionInput, Repositories};
 use agentics_storage::StorageKey;
 
 use crate::extractors::{CreatorAuth, ValidatedJson};
@@ -42,8 +42,10 @@ pub async fn get_creator_challenge_stats(
 ) -> Result<Json<CreatorChallengeStatsResponse>> {
     let (challenge_id, _challenge_name, target) =
         resolve_creator_challenge_scope(&state.db, &creator, &id, query.target.as_deref()).await?;
-    let response =
-        db::get_creator_challenge_stats(&state.db, &challenge_id, target.as_ref()).await?;
+    let response = Repositories::new(&state.db)
+        .challenges()
+        .creator_stats(&challenge_id, target.as_ref())
+        .await?;
     Ok(Json(response))
 }
 
@@ -56,8 +58,10 @@ pub async fn list_creator_challenge_participants(
 ) -> Result<Json<CreatorChallengeParticipantsResponse>> {
     let (challenge_id, _challenge_name, target) =
         resolve_creator_challenge_scope(&state.db, &creator, &id, query.target.as_deref()).await?;
-    let response =
-        db::list_creator_challenge_participants(&state.db, &challenge_id, target.as_ref()).await?;
+    let response = Repositories::new(&state.db)
+        .challenges()
+        .creator_participants(&challenge_id, target.as_ref())
+        .await?;
     Ok(Json(response))
 }
 
@@ -83,9 +87,9 @@ pub async fn create_challenge_shortlist_revision(
     ))?;
     let stored_key = state.storage.put(&storage_key, &raw_json).await?;
 
-    let response = db::create_challenge_shortlist_revision(
-        &state.db,
-        &db::CreateChallengeShortlistRevisionInput {
+    let response = Repositories::new(&state.db)
+        .challenges()
+        .create_shortlist_revision(&CreateChallengeShortlistRevisionInput {
             revision_id,
             challenge_id,
             challenge_name,
@@ -94,9 +98,8 @@ pub async fn create_challenge_shortlist_revision(
             sha256,
             requested_count,
             agent_ids_to_add,
-        },
-    )
-    .await;
+        })
+        .await;
 
     match response {
         Ok(response) => Ok((StatusCode::CREATED, Json(response))),
@@ -115,7 +118,10 @@ pub async fn get_challenge_shortlist(
 ) -> Result<Json<ChallengeShortlistResponse>> {
     let (challenge_id, _challenge_name, _) =
         resolve_creator_challenge_scope(&state.db, &creator, &id, None).await?;
-    let response = db::list_challenge_shortlist(&state.db, &challenge_id).await?;
+    let response = Repositories::new(&state.db)
+        .challenges()
+        .list_shortlist(&challenge_id)
+        .await?;
     Ok(Json(response))
 }
 
@@ -131,9 +137,14 @@ async fn resolve_creator_challenge_scope(
     Option<TargetName>,
 )> {
     let challenge_id = parse_request_value::<ChallengeId>(raw_challenge_id)?;
-    let challenge = db::get_published_challenge(pool, &challenge_id).await?;
+    let repos = Repositories::new(pool);
+    let challenge = repos.challenges().get_published(&challenge_id).await?;
     let challenge = challenge.ok_or(ServiceError::NotFound)?;
-    if !db::agent_owns_challenge(pool, &challenge.challenge_id, &creator.agent_id).await? {
+    if !repos
+        .challenges()
+        .agent_owns(&challenge.challenge_id, &creator.agent_id)
+        .await?
+    {
         return Err(
             ServiceError::Forbidden("agent is not an owner of this challenge".to_string()).into(),
         );
