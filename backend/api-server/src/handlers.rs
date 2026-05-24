@@ -52,8 +52,8 @@ use agentics_domain::models::request::{
     SolutionSubmissionResultReportResponse,
 };
 use agentics_persistence as db;
-use agentics_persistence::QueueEvaluationJobInput;
 use agentics_services::auth;
+use agentics_services::evaluation_lifecycle::{self, QueueEvaluationJobRequest};
 use agentics_storage::StorageKey;
 
 use crate::extractors::{AdminAuth, AgentAuth, SolutionSubmissionPath, ValidatedJson};
@@ -356,7 +356,9 @@ async fn create_solution_submission_for_mode(
         return Err(error.into());
     }
 
-    if let Err(error) = db::mark_evaluation_job_ready(&state.db, &job_id).await {
+    if let Err(error) =
+        evaluation_lifecycle::mark_staged_evaluation_job_ready(&state.db, &job_id).await
+    {
         cleanup_solution_submission_record(&state, &solution_submission.id).await;
         cleanup_storage_key(&state, &artifact_key).await;
         cleanup_storage_key(&state, &temporary_artifact_key).await;

@@ -4,11 +4,11 @@ use super::{
     AdminAuth, AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto,
     AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse, AgentId,
     AgentPioneerCodeId, AgentStatus, AppState, ChallengeId, CreatePioneerCodeRequest, DateTime,
-    DisableAgentResponse, EvaluationJobId, EvaluationJobResponse, EvaluationJobStatus, Json, Path,
-    PioneerCode, PioneerCodeDetailResponse, PioneerCodeListResponse, PioneerCodeStatus,
-    QueueEvaluationJobInput, Result, RevokePioneerCodeResponse, SUBMISSION_QUOTA_WINDOW_SECONDS,
+    DisableAgentResponse, EvaluationJobResponse, EvaluationJobStatus, Json, Path, PioneerCode,
+    PioneerCodeDetailResponse, PioneerCodeListResponse, PioneerCodeStatus,
+    QueueEvaluationJobRequest, Result, RevokePioneerCodeResponse, SUBMISSION_QUOTA_WINDOW_SECONDS,
     ScoringMode, ServiceError, SolutionSubmissionPath, State, StatusCode, Utc, ValidatedJson, auth,
-    db, parse_request_value, presenters,
+    db, evaluation_lifecycle, parse_request_value, presenters,
 };
 use agentics_domain::models::challenge::MoltbookCommunityDto;
 use agentics_domain::models::request::{
@@ -254,10 +254,9 @@ pub async fn rejudge(
     _admin: AdminAuth,
     State(state): State<AppState>,
 ) -> Result<(StatusCode, Json<EvaluationJobResponse>)> {
-    let job = db::queue_evaluation_job(
+    let job = evaluation_lifecycle::queue_solution_evaluation_job(
         &state.db,
-        &QueueEvaluationJobInput {
-            job_id: EvaluationJobId::generate(),
+        QueueEvaluationJobRequest {
             solution_submission_id: id,
             eval_type: ScoringMode::Official,
             max_active_official_jobs: Some(i64::from(state.config.max_active_official_jobs)),
@@ -288,10 +287,9 @@ pub async fn official_run(
     _admin: AdminAuth,
     State(state): State<AppState>,
 ) -> Result<(StatusCode, Json<EvaluationJobResponse>)> {
-    let job = db::queue_evaluation_job(
+    let job = evaluation_lifecycle::queue_solution_evaluation_job(
         &state.db,
-        &QueueEvaluationJobInput {
-            job_id: EvaluationJobId::generate(),
+        QueueEvaluationJobRequest {
             solution_submission_id: id,
             eval_type: ScoringMode::Official,
             max_active_official_jobs: Some(i64::from(state.config.max_active_official_jobs)),
