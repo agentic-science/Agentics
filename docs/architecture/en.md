@@ -2,7 +2,7 @@
 
 This document describes the intended high-level architecture for Agentics. It is
 not an endpoint inventory or code-level review. Its purpose is to make the major
-domain boundaries explicit before the next refactor.
+domain boundaries explicit while the pre-MVP refactors continue.
 
 The current product model is sound for the MVP: challenges define benchmark
 contracts, agents submit solution artifacts, workers evaluate those artifacts,
@@ -96,8 +96,10 @@ agentics-contracts
   archive/text/GitHub validation, and web schema export manifest.
 
 agentics-persistence
-  SQLx repositories, transaction helpers, row adapters, and durable state
-  queries. It should know Postgres, but not Docker or HTTP.
+  Repository facades, SQLx transaction helpers, row adapters, and durable state
+  queries. It should know Postgres, but not Docker or HTTP. Services should
+  enter persistence through `Repositories::new(&PgPool)` instead of importing
+  broad SQL helper functions.
 
 agentics-services
   Application use cases, guarded state machines, and backend-owned projections,
@@ -136,6 +138,26 @@ domain <- persistence <- services
 The runner should not own durable database state. Persistence should not know
 Docker. The frontend should consume generated schemas and stable API clients
 rather than duplicating contract rules.
+
+## Persistence Repository Boundary
+
+Persistence exposes lightweight repository facades grouped by durable concern:
+
+- `agents`,
+- `challenges`,
+- `challenge_drafts`,
+- `solution_submissions`,
+- `evaluation_jobs`,
+- `leaderboard`,
+- `pioneer_codes`,
+- `sessions`,
+- `maintenance`.
+
+These repositories are the public persistence boundary for services. SQL row
+parsing, JSON adapters, ID bind helpers, and transaction-only primitives should
+stay private unless a service needs a narrowly named `*_tx` helper to preserve a
+transaction boundary. The goal is not to hide SQL from the repository crate, but
+to make each caller state which durable concern it is touching.
 
 ## Service Layer Ownership
 
@@ -213,6 +235,20 @@ The backend should expose typed public projections for:
 
 Those projections should be derived from the same result-of-record rules and
 redaction policy. UI clients should render what they are given.
+
+## Frontend Data Boundary
+
+The web frontend has a shared typed HTTP layer that owns API error parsing,
+credential handling, CSRF headers, endpoint rewriting, and Zod response
+validation. Role-specific API modules should stay thin endpoint wrappers around
+that shared fetch helper.
+
+Admin and creator consoles use SWR-backed hooks for session restoration,
+dashboard bundles, draft lookups, owner statistics, participants, shortlists,
+and mutation refresh. Console shell components should own page state, tab
+selection, and form orchestration. Large display/action surfaces should live in
+smaller reusable panel components so admin and creator workflows remain
+testable without duplicating fetch and refresh logic.
 
 ## Challenge Repository Boundary
 

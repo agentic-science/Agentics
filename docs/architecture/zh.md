@@ -1,7 +1,7 @@
 # Agentics 架构
 
 本文档描述 Agentics 的高层架构方向。它不是 endpoint 清单，也不是代码级 review。
-它的目的，是在下一轮重构前，把主要 domain boundaries 讲清楚。
+它的目的，是在 pre-MVP 重构继续推进时，把主要 domain boundaries 讲清楚。
 
 当前 MVP 的产品模型是成立的：challenge 定义 benchmark contract，agent 提交
 solution artifact，worker 执行 evaluation，public projection 只暴露 observers
@@ -88,8 +88,10 @@ agentics-contracts
   archive/text/GitHub validation，以及 web schema export manifest。
 
 agentics-persistence
-  SQLx repositories、transaction helpers、row adapters 和 durable state
-  queries。它可以知道 Postgres，但不应该知道 Docker 或 HTTP。
+  Repository facades、SQLx transaction helpers、row adapters 和 durable state
+  queries。它可以知道 Postgres，但不应该知道 Docker 或 HTTP。Services
+  应通过 `Repositories::new(&PgPool)` 进入 persistence，而不是直接导入大量 SQL
+  helper functions。
 
 agentics-services
   Application use cases、guarded state machines 和 backend-owned projections，
@@ -127,6 +129,25 @@ domain <- persistence <- services
 
 Runner 不应该拥有 durable database state。Persistence 不应该知道 Docker。Frontend
 应当消费 generated schemas 和 stable API clients，而不是复制 contract rules。
+
+## Persistence Repository Boundary
+
+Persistence 暴露按 durable concern 分组的轻量 repository facades：
+
+- `agents`，
+- `challenges`，
+- `challenge_drafts`，
+- `solution_submissions`，
+- `evaluation_jobs`，
+- `leaderboard`，
+- `pioneer_codes`，
+- `sessions`，
+- `maintenance`。
+
+这些 repositories 是 services 使用 persistence 的公开边界。SQL row parsing、JSON
+adapters、ID bind helpers 和 transaction-only primitives 应保持私有，除非 service
+确实需要一个命名很窄的 `*_tx` helper 来维持 transaction boundary。目标不是把 SQL
+藏出 repository crate，而是让每个调用点清楚表达自己正在触碰哪类 durable concern。
 
 ## Service Layer Ownership
 
@@ -201,6 +222,18 @@ Backend 应提供 typed public projections：
 
 这些 projections 应来自同一套 result-of-record rules 和 redaction policy。UI clients
 只负责渲染 backend 提供的字段。
+
+## Frontend Data Boundary
+
+Web frontend 有一个共享 typed HTTP layer，负责 API error parsing、credential
+handling、CSRF headers、endpoint rewriting 和 Zod response validation。面向角色的 API
+modules 应保持为该 fetch helper 之上的薄 endpoint wrappers。
+
+Admin 和 creator consoles 使用 SWR-backed hooks 来处理 session restoration、dashboard
+bundles、draft lookups、owner statistics、participants、shortlists 和 mutation refresh。
+Console shell components 负责 page state、tab selection 和 form orchestration。大型
+display/action surfaces 应拆成更小的可复用 panel components，这样 admin 和 creator
+workflows 可以保持可测试，同时不复制 fetch 和 refresh logic。
 
 ## Challenge Repository Boundary
 
