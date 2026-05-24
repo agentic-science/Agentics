@@ -16,9 +16,7 @@ use axum::{
     http::StatusCode,
 };
 use serde::Deserialize;
-use tracing::warn;
 use url::form_urlencoded;
-use uuid::Uuid;
 
 use crate::error::ApiResult as Result;
 use agentics_config::AgentRegistrationMode;
@@ -27,9 +25,7 @@ use agentics_contracts::validation::public_api::{
 };
 use agentics_domain::error::ServiceError;
 use agentics_domain::models::evaluation::{EvaluationJobStatus, ScoringMode};
-use agentics_domain::models::ids::{
-    AgentId, AgentPioneerCodeId, AgentTokenId, ChallengeId, EvaluationJobId, SolutionSubmissionId,
-};
+use agentics_domain::models::ids::{AgentId, AgentPioneerCodeId, AgentTokenId, ChallengeId};
 use agentics_domain::models::names::{ChallengeKeyword, MetricName, TargetName};
 use agentics_domain::models::pioneer_codes::PioneerCode;
 use agentics_domain::models::pioneer_codes::PioneerCodeStatus;
@@ -47,7 +43,7 @@ use agentics_persistence as db;
 use agentics_services::auth;
 use agentics_services::evaluation_lifecycle::{self, QueueEvaluationJobRequest};
 use agentics_services::public_projection::{self, SolutionSubmissionAudience};
-use agentics_storage::StorageKey;
+use agentics_services::solution_submissions::{self, CreateSolutionSubmissionServiceRequest};
 
 use crate::extractors::{AdminAuth, AgentAuth, SolutionSubmissionPath, ValidatedJson};
 use crate::pioneer_code_security::{is_invalid_pioneer_code, reject_failed_pioneer_code};
@@ -241,226 +237,18 @@ async fn create_solution_submission_for_mode(
     body: CreateSolutionSubmissionRequest,
     eval_type: ScoringMode,
 ) -> Result<(StatusCode, Json<CreateSolutionSubmissionResponse>)> {
-    let challenge_id = body.challenge_id;
-    let target = body.target.clone();
-    let admission = db::ensure_published_challenge_supports_eval_type(
+    let response = solution_submissions::create_solution_submission(
         &state.db,
-        &challenge_id,
-        &target,
-        eval_type,
-        &agent.agent_id,
-    )
-    .await?;
-    let canonical_challenge_id = admission.challenge_id.clone();
-    let canonical_challenge_name = admission.challenge_name.clone();
-    let challenge_lifetime_limit = challenge_lifetime_limit(&admission, eval_type);
-    ensure_submission_quota_available(
-        &state,
-        &agent.agent_id,
-        &canonical_challenge_id,
-        &target,
-        eval_type,
-        challenge_lifetime_limit,
-    )
-    .await?;
-    db::ensure_parent_solution_submission_matches_scope(
-        &state.db,
-        body.parent_solution_submission_id.as_ref(),
-        &agent.agent_id,
-        &canonical_challenge_id,
-        &target,
-    )
-    .await?;
-
-    let artifact_bytes =
-        artifacts::base64_decode(&body.artifact_base64).ok_or(ServiceError::Base64)?;
-    let manifest =
-        agentics_contracts::zip_project::ZipProjectManifest::from_zip_bytes(&artifact_bytes)?;
-
-    let solution_submission_id = SolutionSubmissionId::generate();
-    let job_id = EvaluationJobId::generate();
-    let artifact_key =
-        StorageKey::try_new(format!("solution-submissions/{solution_submission_id}.zip"))?;
-    let temporary_artifact_key = StorageKey::try_new(format!(
-        "_tmp/solution-submissions/{}-{}.zip",
-        solution_submission_id,
-        Uuid::new_v4()
-    ))?;
-    let temporary_artifact_key = state
-        .storage
-        .put(&temporary_artifact_key, &artifact_bytes)
-        .await?;
-
-    let quota_limit = match eval_type {
-        ScoringMode::Validation => i64::from(state.config.validation_runs_per_agent_challenge_day),
-        ScoringMode::Official => i64::from(state.config.official_runs_per_agent_challenge_day),
-    };
-    let max_active_official_jobs = (eval_type == ScoringMode::Official)
-        .then_some(i64::from(state.config.max_active_official_jobs));
-
-    let solution_submission = db::create_solution_submission_with_job(
-        &state.db,
-        &db::CreateSolutionSubmissionInput {
-            solution_submission_id: solution_submission_id.clone(),
-            job_id: job_id.clone(),
+        state.storage.as_ref(),
+        &state.config,
+        CreateSolutionSubmissionServiceRequest {
             agent_id: agent.agent_id,
-            challenge_id: canonical_challenge_id,
-            challenge_name: canonical_challenge_name,
-            target,
-            artifact_key: artifact_key.clone(),
-            note: manifest.note,
+            body,
             eval_type,
-            explanation: body.explanation.trim().to_string(),
-            parent_solution_submission_id: body.parent_solution_submission_id,
-            credit_text: body.credit_text.trim().to_string(),
-            quota_admission: db::SolutionSubmissionQuotaAdmission {
-                window_seconds: SUBMISSION_QUOTA_WINDOW_SECONDS,
-                per_agent_challenge_limit: quota_limit,
-                challenge_lifetime_limit,
-                max_active_official_jobs,
-            },
         },
     )
-    .await;
-    let solution_submission = match solution_submission {
-        Ok(solution_submission) => solution_submission,
-        Err(error) => {
-            cleanup_storage_key(&state, &temporary_artifact_key).await;
-            return Err(error.into());
-        }
-    };
-
-    if let Err(error) = state
-        .storage
-        .promote(&temporary_artifact_key, &artifact_key)
-        .await
-    {
-        cleanup_solution_submission_record(&state, &solution_submission.id).await;
-        cleanup_storage_key(&state, &temporary_artifact_key).await;
-        return Err(error.into());
-    }
-
-    if let Err(error) =
-        evaluation_lifecycle::mark_staged_evaluation_job_ready(&state.db, &job_id).await
-    {
-        cleanup_solution_submission_record(&state, &solution_submission.id).await;
-        cleanup_storage_key(&state, &artifact_key).await;
-        cleanup_storage_key(&state, &temporary_artifact_key).await;
-        return Err(error.into());
-    }
-    let solution_submission = db::get_solution_submission_by_id(&state.db, &solution_submission.id)
-        .await?
-        .ok_or_else(|| {
-            ServiceError::Internal(
-                "solution submission disappeared after staged job was marked ready".to_string(),
-            )
-        })?;
-
-    Ok((
-        StatusCode::CREATED,
-        Json(public_projection::present_create_solution_submission(
-            &solution_submission,
-        )?),
-    ))
-}
-
-/// Removes a staged submission row after storage or job admission fails.
-async fn cleanup_solution_submission_record(
-    state: &AppState,
-    solution_submission_id: &SolutionSubmissionId,
-) {
-    if let Err(error) = db::delete_solution_submission(&state.db, solution_submission_id).await {
-        warn!(
-            solution_submission_id = %solution_submission_id,
-            error = %error,
-            "failed to clean up staged solution submission after storage admission failure"
-        );
-    }
-}
-
-/// Removes a staged artifact object after submission admission fails.
-async fn cleanup_storage_key(state: &AppState, storage_key: &StorageKey) {
-    if let Err(error) = state.storage.delete(storage_key).await {
-        warn!(
-            storage_key = %storage_key,
-            error = %error,
-            "failed to clean up staged storage object after admission failure"
-        );
-    }
-}
-
-/// Performs pre-upload quota checks so oversized or abusive requests fail before artifact decode.
-async fn ensure_submission_quota_available(
-    state: &AppState,
-    agent_id: &AgentId,
-    challenge_id: &ChallengeId,
-    target: &TargetName,
-    eval_type: ScoringMode,
-    challenge_lifetime_limit: Option<i64>,
-) -> Result<()> {
-    let limit = match eval_type {
-        ScoringMode::Validation => i64::from(state.config.validation_runs_per_agent_challenge_day),
-        ScoringMode::Official => i64::from(state.config.official_runs_per_agent_challenge_day),
-    };
-    let used = db::count_recent_runs_for_agent_challenge(
-        &state.db,
-        agent_id,
-        challenge_id,
-        target,
-        eval_type,
-        SUBMISSION_QUOTA_WINDOW_SECONDS,
-    )
     .await?;
-
-    if used >= limit {
-        return Err(ServiceError::TooManyRequests(format!(
-            "{} quota exceeded for challenge `{challenge_id}`: {used} of {limit} runs used in the last 24 hours",
-            eval_type.as_str()
-        ))
-        .into());
-    }
-
-    if let Some(limit) = challenge_lifetime_limit {
-        let used = db::count_lifetime_runs_for_agent_challenge(
-            &state.db,
-            agent_id,
-            challenge_id,
-            target,
-            eval_type,
-        )
-        .await?;
-        if used >= limit {
-            return Err(ServiceError::TooManyRequests(format!(
-                "{} challenge limit exceeded for challenge `{challenge_id}`: {used} of {limit} lifetime runs used",
-                eval_type.as_str()
-            ))
-            .into());
-        }
-    }
-
-    if eval_type == ScoringMode::Official {
-        let active = db::count_active_evaluation_jobs(&state.db, ScoringMode::Official).await?;
-        let max_active = i64::from(state.config.max_active_official_jobs);
-        if active >= max_active {
-            return Err(ServiceError::TooManyRequests(format!(
-                "official evaluation queue is full: {active} of {max_active} official jobs are queued or running"
-            ))
-            .into());
-        }
-    }
-
-    Ok(())
-}
-
-/// Selects the challenge-level run limit that applies to the requested scoring mode.
-fn challenge_lifetime_limit(
-    admission: &db::PublishedChallengeAdmission,
-    eval_type: ScoringMode,
-) -> Option<i64> {
-    match eval_type {
-        ScoringMode::Validation => admission.validation_submission_limit,
-        ScoringMode::Official => admission.official_submission_limit,
-    }
+    Ok((StatusCode::CREATED, Json(response)))
 }
 
 /// Query parameters accepted by the public challenge catalog endpoint.

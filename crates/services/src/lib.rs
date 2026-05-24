@@ -18,5 +18,6 @@
 pub mod auth;
 pub mod evaluation_lifecycle;
 pub mod public_projection;
+pub mod solution_submissions;
 
 pub use agentics_domain::error;

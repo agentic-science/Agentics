@@ -6,6 +6,7 @@ use axum::{
     http::StatusCode,
 };
 use serde::Deserialize;
+use tracing::warn;
 
 use crate::error::ApiResult as Result;
 use agentics_contracts::challenge_creation;
@@ -24,7 +25,7 @@ use agentics_storage::StorageKey;
 use crate::extractors::{CreatorAuth, ValidatedJson};
 use crate::state::AppState;
 
-use super::{cleanup_storage_key, parse_request_value};
+use super::parse_request_value;
 
 /// Optional target query used by creator-owned challenge views.
 #[derive(Debug, Clone, Deserialize)]
@@ -173,4 +174,15 @@ fn normalize_shortlist_agent_ids(agent_ids: &[AgentId]) -> Result<Vec<AgentId>> 
         .into());
     }
     Ok(unique.into_iter().collect())
+}
+
+/// Removes a staged shortlist object after shortlist persistence fails.
+async fn cleanup_storage_key(state: &AppState, storage_key: &StorageKey) {
+    if let Err(error) = state.storage.delete(storage_key).await {
+        warn!(
+            storage_key = %storage_key,
+            error = %error,
+            "failed to clean up staged shortlist storage object"
+        );
+    }
 }

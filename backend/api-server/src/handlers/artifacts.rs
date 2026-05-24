@@ -17,12 +17,6 @@ use crate::state::AppState;
 const MAX_INLINE_TEXT_BYTES: u64 = 200_000;
 const MAX_TOTAL_INLINE_TEXT_BYTES: u64 = 1_000_000;
 
-/// Decode a base64 request payload after trimming transport whitespace.
-pub(super) fn base64_decode(input: &str) -> Option<Vec<u8>> {
-    use base64::{Engine as _, engine::general_purpose::STANDARD};
-    STANDARD.decode(input.trim()).ok()
-}
-
 /// Summarize a solution submission ZIP for safe public code browsing.
 pub(super) async fn read_solution_submission_artifact_summary(
     artifact_key: &str,
