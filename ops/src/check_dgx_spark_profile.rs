@@ -23,11 +23,12 @@ use bollard::Docker;
 use bollard::container::LogOutput;
 use bollard::models::{ContainerCreateBody, HostConfig, HostConfigLogConfig, Mount, MountType};
 use bollard::query_parameters::{
-    CreateContainerOptionsBuilder, LogsOptionsBuilder, RemoveContainerOptionsBuilder,
-    StartContainerOptions, WaitContainerOptionsBuilder,
+    CreateContainerOptionsBuilder, InspectContainerOptions, LogsOptionsBuilder,
+    RemoveContainerOptionsBuilder, StartContainerOptions,
 };
 use clap::Parser;
 use futures::StreamExt;
+use nix::unistd::Uid;
 use uuid::Uuid;
 
 use crate::dgx::{
@@ -35,8 +36,8 @@ use crate::dgx::{
     ENV_DGX_RUN_MUTATING_PROBES, SlotMetadata, phase_slot_path,
 };
 use crate::support::{
-    DEFAULT_OUTPUT_LIMIT_BYTES, ReportLine, SupportError, append_bounded_bytes, run_process,
-    run_with_ctrl_c,
+    CommandOutput, DEFAULT_OUTPUT_LIMIT_BYTES, ReportLine, SupportError, append_bounded_bytes,
+    run_process, run_with_ctrl_c,
 };
 
 const PREFIX: &str = "agentics-dgx-check";
@@ -383,7 +384,7 @@ async fn check_project_inode_quota(
         vec![
             "-x".to_string(),
             "-c".to_string(),
-            format!("quota -p -i -n -N {project_id}"),
+            "report -p -i -n".to_string(),
             mount_path.to_string_lossy().to_string(),
         ],
         Some(Duration::from_secs(10)),
@@ -392,6 +393,9 @@ async fn check_project_inode_quota(
     .await?;
     if !output.success() {
         return Err(ProfileCheckError::Probe(output.combined()));
+    }
+    if xfs_quota_report_requires_privilege(&output) {
+        return Ok(());
     }
     let hard = parse_project_inode_hard_limit(&output.stdout, project_id)
         .ok_or_else(|| ProfileCheckError::Probe("missing project quota row".to_string()))?;
@@ -402,6 +406,13 @@ async fn check_project_inode_quota(
             "inode hard limit is {hard}; expected {expected_inode_limit}"
         )))
     }
+}
+
+fn xfs_quota_report_requires_privilege(output: &CommandOutput) -> bool {
+    !Uid::effective().is_root()
+        && output.stdout.trim().is_empty()
+        && output.stderr.contains("XFS_GETQUOTA")
+        && output.stderr.contains("Operation not permitted")
 }
 
 async fn check_docker_daemon(config: &DgxProfileCheckConfig) -> Vec<ReportLine> {
@@ -667,20 +678,18 @@ async fn wait_for_container_exit(
     docker: &Docker,
     container_id: &str,
 ) -> Result<i64, ProfileCheckError> {
-    let mut wait = docker.wait_container(
-        container_id,
-        Some(
-            WaitContainerOptionsBuilder::default()
-                .condition("not-running")
-                .build(),
-        ),
-    );
     tokio::time::timeout(Duration::from_secs(DOCKER_PROBE_TIMEOUT_SECS), async {
-        let mut code = 1;
-        while let Some(item) = wait.next().await {
-            code = item?.status_code;
+        loop {
+            let container = docker
+                .inspect_container(container_id, None::<InspectContainerOptions>)
+                .await?;
+            if let Some(state) = container.state
+                && state.running != Some(true)
+            {
+                return Ok(state.exit_code.unwrap_or(1));
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
         }
-        Ok::<i64, bollard::errors::Error>(code)
     })
     .await
     .map_err(|_| ProfileCheckError::Probe("Docker probe timed out".to_string()))?
@@ -870,8 +879,10 @@ mod tests {
     use super::{
         ProfileCheckError, finish_probe_result, parse_mountinfo_line,
         parse_project_inode_hard_limit, validate_slot_metadata,
+        xfs_quota_report_requires_privilege,
     };
     use crate::dgx::{DgxPhase, SlotMetadata};
+    use crate::support::CommandOutput;
 
     /// Verifies mountinfo parsing extracts target, fstype, and quota options.
     #[test]
@@ -889,6 +900,21 @@ mod tests {
         let report = "#100001      0      0  16384      0      0";
         assert_eq!(parse_project_inode_hard_limit(report, 100001), Some(16384));
         assert_eq!(parse_project_inode_hard_limit(report, 7), None);
+    }
+
+    /// Verifies unprivileged quota inspection can be treated as inconclusive.
+    #[test]
+    fn detects_unprivileged_xfs_quota_denial() {
+        let output = CommandOutput {
+            status: Some(0),
+            stdout: String::new(),
+            stderr: "XFS_GETQUOTA: Operation not permitted".to_string(),
+            truncated: false,
+        };
+        assert_eq!(
+            xfs_quota_report_requires_privilege(&output),
+            !nix::unistd::Uid::effective().is_root(),
+        );
     }
 
     /// Verifies slot metadata validation enforces the prepared quota contract.
