@@ -647,8 +647,7 @@ fn ensure_metric_is_publicly_distributable(
     Err(ServiceError::Forbidden(
         "score distribution is available only for rank_score, best_rank_score, or the public primary ranking metric"
             .to_string(),
-    )
-    .into())
+    ))
 }
 
 /// Build nearest-rank quantiles used by the public distribution API.
@@ -680,10 +679,10 @@ fn nearest_rank_quantile(values: &[f64], numerator: usize, denominator: usize) -
         .and_then(|value| value.checked_div(denominator))
         .ok_or_else(|| ServiceError::Internal("quantile index overflow".to_string()))?
         .min(max_index);
-    Ok(values
+    values
         .get(rounded_index)
         .copied()
-        .ok_or_else(|| ServiceError::Internal("quantile index out of range".to_string()))?)
+        .ok_or_else(|| ServiceError::Internal("quantile index out of range".to_string()))
 }
 
 /// Build at most ten histogram buckets for already-sorted finite values.
@@ -725,9 +724,9 @@ fn build_histogram(values: &[f64]) -> Result<Vec<ScoreDistributionBucketDto>> {
             Some(next_index) if next_index == bucket_count => max,
             Some(next_index) => min + width * next_index as f64,
             None => {
-                return Err(
-                    ServiceError::Internal("histogram bucket index overflow".to_string()).into(),
-                );
+                return Err(ServiceError::Internal(
+                    "histogram bucket index overflow".to_string(),
+                ));
             }
         };
         buckets.push(ScoreDistributionBucketDto {
@@ -753,9 +752,9 @@ fn histogram_bucket_index(value: f64, min: f64, width: f64, bucket_count: usize)
             return Ok(index);
         }
     }
-    Ok(bucket_count
+    bucket_count
         .checked_sub(1)
-        .ok_or_else(|| ServiceError::Internal("histogram bucket count invalid".to_string()))?)
+        .ok_or_else(|| ServiceError::Internal("histogram bucket count invalid".to_string()))
 }
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 use std::io::{Cursor, Write};
 
-use super::extract_private_asset_overlay_blocking;
+use super::private_assets::extract_private_asset_overlay_blocking;
 
 /// Builds a small in-memory ZIP archive for private asset extraction tests.
 fn zip_with_file(path: &str, content: &[u8]) -> Vec<u8> {

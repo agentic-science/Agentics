@@ -41,6 +41,7 @@ use agentics_domain::models::request::{
 };
 use agentics_persistence as db;
 use agentics_services::auth;
+use agentics_services::challenge_metadata;
 use agentics_services::evaluation_lifecycle::{self, QueueEvaluationJobRequest};
 use agentics_services::public_projection::{self, SolutionSubmissionAudience};
 use agentics_services::solution_submissions::{self, CreateSolutionSubmissionServiceRequest};

@@ -9,10 +9,9 @@ use super::{
     DisableAgentResponse, EvaluationJobResponse, EvaluationJobStatus, Json, Path, PioneerCode,
     PioneerCodeDetailResponse, PioneerCodeListResponse, PioneerCodeStatus,
     QueueEvaluationJobRequest, Result, RevokePioneerCodeResponse, SUBMISSION_QUOTA_WINDOW_SECONDS,
-    ScoringMode, ServiceError, SolutionSubmissionPath, State, StatusCode, ValidatedJson, auth, db,
-    evaluation_lifecycle, parse_request_value, presenters,
+    ScoringMode, ServiceError, SolutionSubmissionPath, State, StatusCode, ValidatedJson, auth,
+    challenge_metadata, db, evaluation_lifecycle, parse_request_value, presenters,
 };
-use agentics_domain::models::challenge::MoltbookCommunityDto;
 use agentics_domain::models::request::{
     ChallengeMoltbookDiscussionResponse, SetChallengeMoltbookDiscussionRequest,
 };
@@ -168,10 +167,15 @@ pub async fn set_challenge_moltbook_discussion(
     ValidatedJson(body): ValidatedJson<SetChallengeMoltbookDiscussionRequest>,
 ) -> Result<Json<ChallengeMoltbookDiscussionResponse>> {
     let challenge_id = parse_request_value::<ChallengeId>(&id)?;
-    let record =
-        db::set_challenge_moltbook_discussion(&state.db, &challenge_id, &body.discussion_url)
-            .await?;
-    Ok(Json(challenge_moltbook_discussion_response(&state, record)))
+    Ok(Json(
+        challenge_metadata::set_challenge_moltbook_discussion(
+            &state.db,
+            &state.config,
+            &challenge_id,
+            &body.discussion_url,
+        )
+        .await?,
+    ))
 }
 
 /// Clear the Moltbook discussion post from a published challenge.
@@ -181,24 +185,14 @@ pub async fn clear_challenge_moltbook_discussion(
     Path(id): Path<String>,
 ) -> Result<Json<ChallengeMoltbookDiscussionResponse>> {
     let challenge_id = parse_request_value::<ChallengeId>(&id)?;
-    let record = db::clear_challenge_moltbook_discussion(&state.db, &challenge_id).await?;
-    Ok(Json(challenge_moltbook_discussion_response(&state, record)))
-}
-
-/// Build the admin response shape for Moltbook discussion updates.
-fn challenge_moltbook_discussion_response(
-    state: &AppState,
-    record: db::ChallengeMoltbookDiscussionRecord,
-) -> ChallengeMoltbookDiscussionResponse {
-    ChallengeMoltbookDiscussionResponse {
-        challenge_id: record.challenge_id,
-        challenge_name: record.challenge_name,
-        moltbook: MoltbookCommunityDto {
-            submolt_name: state.config.moltbook_submolt_name.clone(),
-            submolt_url: state.config.moltbook_submolt_url.clone(),
-            discussion_url: record.discussion_url,
-        },
-    }
+    Ok(Json(
+        challenge_metadata::clear_challenge_moltbook_discussion(
+            &state.db,
+            &state.config,
+            &challenge_id,
+        )
+        .await?,
+    ))
 }
 
 /// List recent solution submissions for admin operations.

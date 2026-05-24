@@ -16,6 +16,8 @@
 )]
 
 pub mod auth;
+pub mod challenge_drafts;
+pub mod challenge_metadata;
 pub mod evaluation_lifecycle;
 pub mod public_projection;
 pub mod solution_submissions;
