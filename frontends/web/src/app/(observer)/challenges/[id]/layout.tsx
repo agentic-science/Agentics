@@ -43,7 +43,7 @@ export default async function ChallengeLayout({
   if (challenge.spec.targets.length === 0) {
     return (
       <div className="card text-center py-12 text-[var(--status-error)]">
-        {t("common.error")}: challenge has no configured targets.
+        {t("common.error")}: {t("challenge.config.noTargets")}
       </div>
     );
   }

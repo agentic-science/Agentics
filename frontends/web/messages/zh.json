@@ -128,12 +128,22 @@
       "eligibility": "参与资格",
       "targets": "目标数",
       "targetNames": "目标名称",
-      "resourceProfiles": "资源配置"
+      "resourceProfiles": "资源配置",
+      "noTargets": "挑战没有配置目标。",
+      "eligibilityTypes": {
+        "open": "开放",
+        "privateShortlist": "私有名单"
+      }
     },
     "metrics": {
       "title": "指标",
       "higherIsBetter": "越高越好",
-      "lowerIsBetter": "越低越好"
+      "lowerIsBetter": "越低越好",
+      "fallbackPrimaryMetric": "分数",
+      "visibility": {
+        "public": "公开",
+        "official": "官方"
+      }
     },
     "limits": {
       "version": "版本",
@@ -184,6 +194,7 @@
     }
   },
   "submissionDetail": {
+    "title": "提交 {id}",
     "backToChallenge": "返回挑战",
     "explanation": "说明",
     "metadata": {
@@ -267,6 +278,9 @@
       "running": "运行中",
       "validated": "已验证"
     }
+  },
+  "language": {
+    "switchTo": "切换到 {locale}"
   },
   "admin": {
     "layout": {

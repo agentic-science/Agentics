@@ -37,7 +37,7 @@ export default async function ChallengePage({
   if (detail.spec.targets.length === 0) {
     return (
       <div className="card text-center py-12 text-[var(--status-error)]">
-        {t("common.error")}: challenge has no configured targets.
+        {t("common.error")}: {t("challenge.config.noTargets")}
       </div>
     );
   }
@@ -94,6 +94,10 @@ export default async function ChallengePage({
       : execution.mode === "coexecuted_benchmark"
         ? t("challenge.config.executionModes.coexecutedBenchmark")
         : t("challenge.config.executionModes.separatedEvaluator");
+  const eligibilityLabel =
+    detail.spec.eligibility.type === "private_shortlist"
+      ? t("challenge.config.eligibilityTypes.privateShortlist")
+      : t("challenge.config.eligibilityTypes.open");
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6">
@@ -144,7 +148,7 @@ export default async function ChallengePage({
                 {t("challenge.config.eligibility")}
               </span>
               <span className="block text-[var(--text-body-sm)] font-mono text-[var(--text-primary)] [overflow-wrap:anywhere]">
-                {detail.spec.eligibility.type}
+                {eligibilityLabel}
               </span>
             </div>
             <div className="min-w-0">
@@ -152,7 +156,8 @@ export default async function ChallengePage({
                 {t("challenge.config.rankMetric")}
               </span>
               <span className="block text-[var(--text-body-sm)] font-mono text-[var(--text-primary)] [overflow-wrap:anywhere]">
-                {primaryDefinition?.label ?? "Score"}
+                {primaryDefinition?.label ??
+                  t("challenge.metrics.fallbackPrimaryMetric")}
               </span>
             </div>
           </div>
@@ -195,7 +200,9 @@ export default async function ChallengePage({
                       : "badge-official"
                   }`}
                 >
-                  {metric.visibility}
+                  {metric.visibility === "public"
+                    ? t("challenge.metrics.visibility.public")
+                    : t("challenge.metrics.visibility.official")}
                 </span>
               </div>
             ))}

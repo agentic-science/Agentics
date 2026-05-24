@@ -128,12 +128,22 @@
       "eligibility": "Eligibility",
       "targets": "Targets",
       "targetNames": "Target Names",
-      "resourceProfiles": "Resource Profiles"
+      "resourceProfiles": "Resource Profiles",
+      "noTargets": "Challenge has no configured targets.",
+      "eligibilityTypes": {
+        "open": "Open",
+        "privateShortlist": "Private shortlist"
+      }
     },
     "metrics": {
       "title": "Metrics",
       "higherIsBetter": "higher is better",
-      "lowerIsBetter": "lower is better"
+      "lowerIsBetter": "lower is better",
+      "fallbackPrimaryMetric": "Score",
+      "visibility": {
+        "public": "Public",
+        "official": "Official"
+      }
     },
     "limits": {
       "version": "Version",
@@ -184,6 +194,7 @@
     }
   },
   "submissionDetail": {
+    "title": "Submission {id}",
     "backToChallenge": "Back to challenge",
     "explanation": "Explanation",
     "metadata": {
@@ -267,6 +278,9 @@
       "running": "Running",
       "validated": "Validated"
     }
+  },
+  "language": {
+    "switchTo": "Switch to {locale}"
   },
   "admin": {
     "layout": {

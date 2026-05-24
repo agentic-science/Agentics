@@ -1040,8 +1040,19 @@ function OwnerSurfaces({
                       {participant.best_solution_submission_id ?? "—"}
                     </div>
                   </td>
-                  <td>{participant.latest_status ?? "—"}</td>
-                  <td>{participant.latest_solution_submission_at ?? "—"}</td>
+                  <td>
+                    {participant.latest_status ? (
+                      <LocalizedStatusBadge
+                        status={participant.latest_status}
+                      />
+                    ) : (
+                      common("none")
+                    )}
+                  </td>
+                  <td>
+                    {participant.latest_solution_submission_at ??
+                      common("none")}
+                  </td>
                 </tr>
               ))}
             </tbody>

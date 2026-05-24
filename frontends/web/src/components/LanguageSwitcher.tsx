@@ -1,7 +1,7 @@
 "use client";
 
 import { Globe } from "lucide-react";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 const locales = [
   { code: "en", label: "EN" },
@@ -11,6 +11,7 @@ const locales = [
 /** Renders the language switcher component. */
 export function LanguageSwitcher() {
   const locale = useLocale();
+  const t = useTranslations("language");
 
   /** Navigates to the current route under the selected locale. */
   const switchLocale = (next: string) => {
@@ -33,7 +34,7 @@ export function LanguageSwitcher() {
               ? "text-[var(--accent-primary-text)]"
               : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
           }`}
-          aria-label={`Switch to ${loc.code}`}
+          aria-label={t("switchTo", { locale: loc.label })}
         >
           {loc.label}
         </button>

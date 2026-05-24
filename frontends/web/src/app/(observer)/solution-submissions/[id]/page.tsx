@@ -42,6 +42,11 @@ export default async function SolutionSubmissionPage({
     maximize: t("challenge.metrics.higherIsBetter"),
     minimize: t("challenge.metrics.lowerIsBetter"),
   };
+  const publicCaseStatusLabels = {
+    passed: t("common.statuses.passed"),
+    failed: t("common.statuses.failed"),
+    pending: t("common.statuses.pending"),
+  };
 
   const submission = await fetchJson(
     `/api/public/solution-submissions/${id}`,
@@ -120,7 +125,7 @@ export default async function SolutionSubmissionPage({
               className="text-[var(--text-h1)] font-bold text-[var(--text-primary)] leading-[var(--leading-h1)]"
               style={{ fontFamily: "var(--font-sans)" }}
             >
-              Submission {submission.id.slice(0, 8)}
+              {t("submissionDetail.title", { id: submission.id.slice(0, 8) })}
             </h1>
             <p className="text-[var(--text-body)] text-[var(--text-secondary)] mt-2 leading-[var(--leading-body)]">
               {submission.explanation}
@@ -354,12 +359,14 @@ export default async function SolutionSubmissionPage({
                                 : "badge-warning"
                           }`}
                         >
-                          {c.status}
+                          {publicCaseStatusLabels[
+                            c.status as keyof typeof publicCaseStatusLabels
+                          ] ?? c.status}
                         </span>
                       </td>
                       <td className="font-mono">{formatScore(c.score)}</td>
                       <td className="text-[var(--text-muted)] text-[var(--text-caption)]">
-                        {c.message ?? "—"}
+                        {c.message ?? t("common.none")}
                       </td>
                     </tr>
                   ))}
