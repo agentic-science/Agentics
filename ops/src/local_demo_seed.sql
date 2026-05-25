@@ -24,32 +24,33 @@ WITH source AS (
   FROM challenges
   WHERE name = 'sample-sum'
 ),
-fake(name, title, summary_en, summary_zh, keywords, ordinal) AS (
+fake(challenge_id, name, title, summary_en, summary_zh, keywords, ordinal) AS (
   VALUES
-    ('demo-ui-alpha', 'Orbital Protein Folding', 'Predict compact protein conformations under synthetic orbital constraints.', '在合成轨道约束下预测紧凑蛋白构象。', jsonb_build_array('biology', 'protein folding', 'simulation'), 1),
-    ('demo-ui-beta', 'Catalyst Search', 'Find reaction pathways that maximize yield while minimizing unsafe intermediates.', '寻找最大化产率并减少不安全中间体的反应路径。', jsonb_build_array('chemistry', 'catalysis', 'optimization'), 2),
-    ('demo-ui-gamma', 'Cellular Maze', 'Route signaling molecules through a noisy cellular grid without crossing blocked regions.', '让信号分子穿过嘈杂细胞网格，并避开阻塞区域。', jsonb_build_array('biology', 'planning', 'grid search'), 3),
-    ('demo-ui-delta', 'Climate Patch', 'Select localized interventions that reduce simulated heat stress under budget limits.', '在预算限制下选择局部干预以降低模拟热应激。', jsonb_build_array('climate', 'optimization', 'policy'), 4),
-    ('demo-ui-epsilon', 'Lab Scheduler', 'Optimize robotic wet-lab batches while preserving reagent and timing constraints.', '在保持试剂和时间约束的同时优化机器人湿实验批次。', jsonb_build_array('lab automation', 'scheduling', 'robotics'), 5),
-    ('demo-ui-zeta', 'Spectra Denoising', 'Recover clean spectral peaks from corrupted instrument traces.', '从受干扰的仪器轨迹中恢复干净的光谱峰。', jsonb_build_array('signal processing', 'spectra', 'denoising'), 6),
-    ('demo-ui-eta', 'Genome Primer', 'Design primer sets that cover target regions while avoiding off-target matches.', '设计覆盖目标区域并避免脱靶匹配的引物集合。', jsonb_build_array('genomics', 'primer design', 'biology'), 7),
-    ('demo-ui-theta', 'Graph Molecules', 'Generate candidate molecules that satisfy graph constraints and scoring rules.', '生成满足图约束和评分规则的候选分子。', jsonb_build_array('chemistry', 'graph search', 'molecules'), 8),
-    ('demo-ui-iota', 'Signal Forecast', 'Forecast sparse experimental signals with uncertainty-aware ranking.', '使用不确定性感知排序预测稀疏实验信号。', jsonb_build_array('forecasting', 'uncertainty', 'signals'), 9),
-    ('demo-ui-kappa', 'Microscopy Segment', 'Segment cell boundaries from noisy microscopy tiles with hidden labels.', '在隐藏标签下从噪声显微图块中分割细胞边界。', jsonb_build_array('microscopy', 'segmentation', 'biology'), 10)
+    ('30000000-0000-4000-8000-000000000001'::uuid, 'demo-ui-alpha', 'Orbital Protein Folding', 'Predict compact protein conformations under synthetic orbital constraints.', '在合成轨道约束下预测紧凑蛋白构象。', jsonb_build_array('biology', 'protein folding', 'simulation'), 1),
+    ('30000000-0000-4000-8000-000000000002'::uuid, 'demo-ui-beta', 'Catalyst Search', 'Find reaction pathways that maximize yield while minimizing unsafe intermediates.', '寻找最大化产率并减少不安全中间体的反应路径。', jsonb_build_array('chemistry', 'catalysis', 'optimization'), 2),
+    ('30000000-0000-4000-8000-000000000003'::uuid, 'demo-ui-gamma', 'Cellular Maze', 'Route signaling molecules through a noisy cellular grid without crossing blocked regions.', '让信号分子穿过嘈杂细胞网格，并避开阻塞区域。', jsonb_build_array('biology', 'planning', 'grid search'), 3),
+    ('30000000-0000-4000-8000-000000000004'::uuid, 'demo-ui-delta', 'Climate Patch', 'Select localized interventions that reduce simulated heat stress under budget limits.', '在预算限制下选择局部干预以降低模拟热应激。', jsonb_build_array('climate', 'optimization', 'policy'), 4),
+    ('30000000-0000-4000-8000-000000000005'::uuid, 'demo-ui-epsilon', 'Lab Scheduler', 'Optimize robotic wet-lab batches while preserving reagent and timing constraints.', '在保持试剂和时间约束的同时优化机器人湿实验批次。', jsonb_build_array('lab automation', 'scheduling', 'robotics'), 5),
+    ('30000000-0000-4000-8000-000000000006'::uuid, 'demo-ui-zeta', 'Spectra Denoising', 'Recover clean spectral peaks from corrupted instrument traces.', '从受干扰的仪器轨迹中恢复干净的光谱峰。', jsonb_build_array('signal processing', 'spectra', 'denoising'), 6),
+    ('30000000-0000-4000-8000-000000000007'::uuid, 'demo-ui-eta', 'Genome Primer', 'Design primer sets that cover target regions while avoiding off-target matches.', '设计覆盖目标区域并避免脱靶匹配的引物集合。', jsonb_build_array('genomics', 'primer design', 'biology'), 7),
+    ('30000000-0000-4000-8000-000000000008'::uuid, 'demo-ui-theta', 'Graph Molecules', 'Generate candidate molecules that satisfy graph constraints and scoring rules.', '生成满足图约束和评分规则的候选分子。', jsonb_build_array('chemistry', 'graph search', 'molecules'), 8),
+    ('30000000-0000-4000-8000-000000000009'::uuid, 'demo-ui-iota', 'Signal Forecast', 'Forecast sparse experimental signals with uncertainty-aware ranking.', '使用不确定性感知排序预测稀疏实验信号。', jsonb_build_array('forecasting', 'uncertainty', 'signals'), 9),
+    ('30000000-0000-4000-8000-000000000010'::uuid, 'demo-ui-kappa', 'Microscopy Segment', 'Segment cell boundaries from noisy microscopy tiles with hidden labels.', '在隐藏标签下从噪声显微图块中分割细胞边界。', jsonb_build_array('microscopy', 'segmentation', 'biology'), 10)
 )
 INSERT INTO challenges (
-  name, title, summary, bundle_path, public_bundle_path, statement_path, spec_json,
+  challenge_id, name, title, summary, bundle_key, public_bundle_key, statement_key, spec_json,
   starts_at, closes_at, eligibility_policy_json, validation_submission_limit,
   official_submission_limit, leaderboard_visibility, score_distribution_visibility,
   result_detail_visibility, solution_publication_policy, status, created_at, updated_at
 )
 SELECT
+  fake.challenge_id,
   fake.name,
   fake.title,
   jsonb_build_object('en', fake.summary_en, 'zh', fake.summary_zh),
-  source.bundle_path,
-  source.public_bundle_path,
-  source.statement_path,
+  source.bundle_key,
+  source.public_bundle_key,
+  source.statement_key,
   jsonb_set(
     jsonb_set(
       jsonb_set(source.spec_json, '{challenge_name}', to_jsonb(fake.name)),

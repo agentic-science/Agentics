@@ -11,6 +11,9 @@ use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::evaluation::ScoringMode;
 use agentics_domain::models::ids::{EvaluationJobId, SolutionSubmissionId};
 use agentics_domain::models::request::AdminServiceHeartbeatDto;
+use agentics_storage::{
+    Storage, StorageError, StorageKey, StorageWriteIntent, pack_directory_to_tar, storage_work_root,
+};
 
 /// JSON payload stored with each service heartbeat.
 ///
@@ -86,8 +89,9 @@ pub async fn list_service_heartbeats(pool: &PgPool) -> Result<Vec<AdminServiceHe
 /// do not block startup.
 pub async fn ensure_challenges_seeded_from_root(
     pool: &PgPool,
+    config: &agentics_config::Config,
+    storage: &dyn Storage,
     challenges_root: &str,
-    storage_root: &str,
 ) -> Result<usize> {
     tokio::fs::create_dir_all(challenges_root).await?;
     let mut entries = tokio::fs::read_dir(challenges_root).await?;
@@ -121,15 +125,54 @@ pub async fn ensure_challenges_seeded_from_root(
             let spec =
                 agentics_contracts::challenge_bundle::read_challenge_bundle_spec(&bundle_dir)
                     .await?;
-            let statement_path = bundle_dir.join("statement.md");
-            let managed_bundle_path =
-                agentics_domain::models::paths::ManagedBundlePath::from_existing_dir(&bundle_dir)?;
-            let public_bundle_path =
-                seeded_public_bundle_path(&bundle_dir, Path::new(storage_root), &spec).await?;
-            let managed_statement_path =
-                agentics_domain::models::paths::ManagedStatementPath::from_existing_file(
-                    &statement_path,
-                )?;
+            let bundle_digest =
+                agentics_contracts::challenge_bundle::challenge_bundle_tree_sha256(&bundle_dir)
+                    .await?;
+            let private_bundle_key = bundle_storage_key(
+                "challenge-bundles",
+                spec.challenge_name.as_str(),
+                &bundle_digest.to_hex(),
+            )?;
+            let public_bundle_dir =
+                seeded_public_bundle_dir(config, &bundle_dir, &spec, &bundle_digest.to_hex())
+                    .await?;
+            let public_digest = agentics_contracts::challenge_bundle::challenge_bundle_tree_sha256(
+                &public_bundle_dir,
+            )
+            .await?;
+            let public_bundle_key = bundle_storage_key(
+                "challenge-public-bundles",
+                spec.challenge_name.as_str(),
+                &public_digest.to_hex(),
+            )?;
+            let statement_key = StorageKey::try_new(format!(
+                "challenge-statements/{}/{}.md",
+                spec.challenge_name,
+                bundle_digest.to_hex()
+            ))?;
+            put_bundle_archive_if_missing(
+                storage,
+                config,
+                &private_bundle_key,
+                &bundle_dir,
+                "seeded-private",
+            )
+            .await?;
+            put_bundle_archive_if_missing(
+                storage,
+                config,
+                &public_bundle_key,
+                &public_bundle_dir,
+                "seeded-public",
+            )
+            .await?;
+            put_statement_if_missing(
+                storage,
+                config,
+                &statement_key,
+                &bundle_dir.join("statement.md"),
+            )
+            .await?;
             let challenge_name = &spec.challenge_name;
             let challenge_id = agentics_domain::models::ids::ChallengeId::generate();
 
@@ -138,9 +181,9 @@ pub async fn ensure_challenges_seeded_from_root(
                 &PublishChallengeInput {
                     challenge_id: &challenge_id,
                     challenge_name,
-                    bundle_path: &managed_bundle_path,
-                    public_bundle_path: &public_bundle_path,
-                    statement_path: &managed_statement_path,
+                    bundle_key: &private_bundle_key,
+                    public_bundle_key: &public_bundle_key,
+                    statement_key: &statement_key,
                     spec: &spec,
                     title: &spec.challenge_title,
                     summary: &spec.summary,
@@ -154,9 +197,9 @@ pub async fn ensure_challenges_seeded_from_root(
                     UPDATE challenges
                     SET title = $2,
                         summary = $3,
-                        bundle_path = $4,
-                        public_bundle_path = $5,
-                        statement_path = $6,
+                        bundle_key = $4,
+                        public_bundle_key = $5,
+                        statement_key = $6,
                         spec_json = $7,
                         status = 'active',
                         updated_at = NOW()
@@ -169,9 +212,9 @@ pub async fn ensure_challenges_seeded_from_root(
                     serde_json::to_value(&spec.summary)
                         .map_err(|e| ServiceError::Internal(e.to_string()))?,
                 )
-                .bind(managed_bundle_path.as_str()?)
-                .bind(public_bundle_path.as_str()?)
-                .bind(managed_statement_path.as_str()?)
+                .bind(private_bundle_key.as_str())
+                .bind(public_bundle_key.as_str())
+                .bind(statement_key.as_str())
                 .bind(
                     serde_json::to_value(&spec)
                         .map_err(|e| ServiceError::Internal(e.to_string()))?,
@@ -189,22 +232,21 @@ pub async fn ensure_challenges_seeded_from_root(
     Ok(synced)
 }
 
-/// Return the public-only bundle path for a seeded challenge.
-async fn seeded_public_bundle_path(
+/// Return a public-only bundle directory for a seeded challenge.
+async fn seeded_public_bundle_dir(
+    config: &agentics_config::Config,
     bundle_dir: &Path,
-    storage_root: &Path,
     spec: &agentics_domain::models::challenge::ChallengeBundleSpec,
-) -> Result<agentics_domain::models::paths::ManagedBundlePath> {
+    digest: &str,
+) -> Result<PathBuf> {
     if !spec.datasets.private_benchmark_enabled {
-        return agentics_domain::models::paths::ManagedBundlePath::from_existing_dir(bundle_dir);
+        return Ok(bundle_dir.to_path_buf());
     }
 
-    let digest =
-        agentics_contracts::challenge_bundle::challenge_bundle_tree_sha256(bundle_dir).await?;
-    let target = storage_root
+    let target = storage_work_root(config)?
         .join("seeded-public-bundles")
         .join(spec.challenge_name.as_str())
-        .join(digest.to_hex());
+        .join(digest);
     if let Some(private_benchmark_dir) = &spec.datasets.private_benchmark_dir {
         agentics_contracts::challenge_bundle::copy_challenge_bundle_dir_excluding(
             bundle_dir,
@@ -218,7 +260,71 @@ async fn seeded_public_bundle_path(
             .await?;
     }
 
-    agentics_domain::models::paths::ManagedBundlePath::from_existing_dir(&target)
+    Ok(target)
+}
+
+async fn put_bundle_archive_if_missing(
+    storage: &dyn Storage,
+    config: &agentics_config::Config,
+    key: &StorageKey,
+    bundle_dir: &Path,
+    label: &str,
+) -> Result<()> {
+    if storage.exists(key).await? {
+        return Ok(());
+    }
+    let archive_path = storage_work_root(config)?
+        .join("_tmp")
+        .join(format!("{label}-{}.tar", uuid::Uuid::new_v4()));
+    pack_directory_to_tar(bundle_dir, &archive_path).await?;
+    let result = storage
+        .put_file(
+            key,
+            &archive_path,
+            StorageWriteIntent::new(
+                "challenge bundle archive",
+                config.storage_max_bundle_archive_bytes,
+            ),
+        )
+        .await;
+    let cleanup = tokio::fs::remove_file(&archive_path).await;
+    if let Err(error) = cleanup
+        && error.kind() != std::io::ErrorKind::NotFound
+    {
+        return Err(error.into());
+    }
+    match result {
+        Ok(_) => Ok(()),
+        Err(StorageError::ObjectConflict(_)) => Ok(()),
+        Err(error) => Err(error.into()),
+    }
+}
+
+async fn put_statement_if_missing(
+    storage: &dyn Storage,
+    config: &agentics_config::Config,
+    key: &StorageKey,
+    statement_path: &Path,
+) -> Result<()> {
+    if storage.exists(key).await? {
+        return Ok(());
+    }
+    let bytes = tokio::fs::read(statement_path).await?;
+    match storage
+        .put(
+            key,
+            &bytes,
+            StorageWriteIntent::new("challenge statement", config.storage_max_statement_bytes),
+        )
+        .await
+    {
+        Ok(_) | Err(StorageError::ObjectConflict(_)) => Ok(()),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn bundle_storage_key(prefix: &str, challenge_name: &str, digest: &str) -> Result<StorageKey> {
+    StorageKey::try_new(format!("{prefix}/{challenge_name}/{digest}.tar")).map_err(Into::into)
 }
 
 /// Summary of stale job recovery work.

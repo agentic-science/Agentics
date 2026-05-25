@@ -309,6 +309,18 @@ fn normalize_matrix_targets_for_mvp(challenge_root: &Path) {
         .first_mut()
         .expect("matrix spec should retain one arm64 target");
     target["name"] = serde_json::Value::String("linux-arm64-cpu".to_string());
+    for stage_group in ["solution", "evaluator"] {
+        for stage in ["setup", "build", "run"] {
+            if let Some(network_access) = target
+                .get_mut("resource_profile")
+                .and_then(|profile| profile.get_mut(stage_group))
+                .and_then(|stages| stages.get_mut(stage))
+                .and_then(|stage| stage.get_mut("network_access"))
+            {
+                *network_access = serde_json::Value::String("disabled".to_string());
+            }
+        }
+    }
     std::fs::write(
         &spec_path,
         serde_json::to_vec_pretty(&spec).expect("matrix spec should serialize"),

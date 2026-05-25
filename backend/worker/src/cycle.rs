@@ -18,7 +18,7 @@ use agentics_runner::connect_docker;
 use agentics_services::evaluation_lifecycle::{
     EvaluationWorkerService, reconcile_worker_containers,
 };
-use agentics_storage::LocalStorage;
+use agentics_storage::build_storage;
 
 use crate::host_probe::{enforce_host_probe, enforce_worker_gpu_probe};
 
@@ -50,8 +50,7 @@ impl Worker {
                 "reconciled runner containers from previous attempts"
             );
         }
-        let storage: Arc<dyn agentics_storage::Storage> =
-            Arc::new(LocalStorage::new(&config.storage_root));
+        let storage = build_storage(&config).await?;
         let worker_id = worker_instance_id();
 
         Ok(Self {

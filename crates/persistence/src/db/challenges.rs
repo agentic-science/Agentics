@@ -18,7 +18,6 @@ use agentics_domain::models::hashes::Sha256Digest;
 use agentics_domain::models::ids::{AgentId, ChallengeId, ChallengeShortlistRevisionId};
 use agentics_domain::models::localization::LocalizedText;
 use agentics_domain::models::names::{ChallengeKeyword, ChallengeName, TargetName};
-use agentics_domain::models::paths::{ManagedBundlePath, ManagedStatementPath};
 use agentics_domain::models::request::{
     ChallengeShortlistResponse, ChallengeShortlistRevisionResponse, ChallengeShortlistedAgentDto,
     CreatorChallengeParticipantDto, CreatorChallengeParticipantsResponse,
@@ -51,9 +50,9 @@ pub struct ChallengeRecord {
     pub challenge_name: ChallengeName,
     pub title: String,
     pub summary: LocalizedText,
-    pub bundle_path: ManagedBundlePath,
-    pub public_bundle_path: ManagedBundlePath,
-    pub statement_path: ManagedStatementPath,
+    pub bundle_key: StorageKey,
+    pub public_bundle_key: StorageKey,
+    pub statement_key: StorageKey,
     pub spec_json: Value,
     pub moltbook_discussion_url: Option<MoltbookPostUrl>,
 }
@@ -71,9 +70,9 @@ pub struct ChallengeMoltbookDiscussionRecord {
 pub struct PublishChallengeInput<'a> {
     pub challenge_id: &'a ChallengeId,
     pub challenge_name: &'a ChallengeName,
-    pub bundle_path: &'a ManagedBundlePath,
-    pub public_bundle_path: &'a ManagedBundlePath,
-    pub statement_path: &'a ManagedStatementPath,
+    pub bundle_key: &'a StorageKey,
+    pub public_bundle_key: &'a StorageKey,
+    pub statement_key: &'a StorageKey,
     pub spec: &'a ChallengeBundleSpec,
     pub title: &'a str,
     pub summary: &'a LocalizedText,
@@ -198,7 +197,7 @@ pub async fn publish_challenge_tx(
     let row = sqlx::query(
         r#"
         INSERT INTO challenges (
-            challenge_id, name, title, summary, bundle_path, public_bundle_path, statement_path, spec_json,
+            challenge_id, name, title, summary, bundle_key, public_bundle_key, statement_key, spec_json,
             starts_at, closes_at, eligibility_policy_json, validation_submission_limit,
             official_submission_limit, leaderboard_visibility, score_distribution_visibility,
             result_detail_visibility, solution_publication_policy, status
@@ -207,9 +206,9 @@ pub async fn publish_challenge_tx(
         ON CONFLICT (name) DO UPDATE
         SET title = EXCLUDED.title,
             summary = EXCLUDED.summary,
-            bundle_path = EXCLUDED.bundle_path,
-            public_bundle_path = EXCLUDED.public_bundle_path,
-            statement_path = EXCLUDED.statement_path,
+            bundle_key = EXCLUDED.bundle_key,
+            public_bundle_key = EXCLUDED.public_bundle_key,
+            statement_key = EXCLUDED.statement_key,
             spec_json = EXCLUDED.spec_json,
             starts_at = EXCLUDED.starts_at,
             closes_at = EXCLUDED.closes_at,
@@ -223,16 +222,16 @@ pub async fn publish_challenge_tx(
             status = 'active',
             updated_at = NOW()
         WHERE challenges.spec_json IS NULL
-        RETURNING challenge_id, name AS challenge_name, title, bundle_path, public_bundle_path, statement_path
+        RETURNING challenge_id, name AS challenge_name, title, bundle_key, public_bundle_key, statement_key
         "#,
     )
     .bind(input.challenge_id.as_str())
     .bind(input.challenge_name.as_str())
     .bind(input.title)
     .bind(&summary_json)
-    .bind(input.bundle_path.as_str()?)
-    .bind(input.public_bundle_path.as_str()?)
-    .bind(input.statement_path.as_str()?)
+    .bind(input.bundle_key.as_str())
+    .bind(input.public_bundle_key.as_str())
+    .bind(input.statement_key.as_str())
     .bind(&spec_json)
     .bind(parse_required_time(&input.spec.starts_at)?)
     .bind(parse_optional_time(input.spec.closes_at.as_deref())?)
@@ -258,9 +257,9 @@ pub async fn publish_challenge_tx(
         challenge_id: challenge_id_from_row(&row, "challenge_id")?,
         challenge_name: challenge_name_from_row(&row, "challenge_name")?,
         title: row.try_get("title")?,
-        bundle_path: managed_bundle_path_from_row(&row, "bundle_path")?,
-        public_bundle_path: managed_bundle_path_from_row(&row, "public_bundle_path")?,
-        statement_path: managed_statement_path_from_row(&row, "statement_path")?,
+        bundle_key: storage_key_from_row(&row, "bundle_key")?,
+        public_bundle_key: storage_key_from_row(&row, "public_bundle_key")?,
+        statement_key: storage_key_from_row(&row, "statement_key")?,
     })
 }
 
@@ -891,7 +890,7 @@ pub async fn get_published_challenge(
 ) -> Result<Option<ChallengeRecord>> {
     let row = sqlx::query(
         r#"
-        SELECT challenge_id, name AS challenge_name, title, summary, bundle_path, public_bundle_path, statement_path, spec_json, moltbook_discussion_url
+        SELECT challenge_id, name AS challenge_name, title, summary, bundle_key, public_bundle_key, statement_key, spec_json, moltbook_discussion_url
         FROM challenges
         WHERE status = 'active'
           AND spec_json IS NOT NULL
@@ -913,7 +912,7 @@ pub async fn get_published_challenge_by_name(
 ) -> Result<Option<ChallengeRecord>> {
     let row = sqlx::query(
         r#"
-        SELECT challenge_id, name AS challenge_name, title, summary, bundle_path, public_bundle_path, statement_path, spec_json, moltbook_discussion_url
+        SELECT challenge_id, name AS challenge_name, title, summary, bundle_key, public_bundle_key, statement_key, spec_json, moltbook_discussion_url
         FROM challenges
         WHERE status = 'active'
           AND spec_json IS NOT NULL
@@ -936,7 +935,7 @@ pub async fn get_public_challenge(
 ) -> Result<Option<ChallengeRecord>> {
     let row = sqlx::query(
         r#"
-        SELECT challenge_id, name AS challenge_name, title, summary, bundle_path, public_bundle_path, statement_path, spec_json, moltbook_discussion_url
+        SELECT challenge_id, name AS challenge_name, title, summary, bundle_key, public_bundle_key, statement_key, spec_json, moltbook_discussion_url
         FROM challenges
         WHERE status IN ('active', 'archived')
           AND spec_json IS NOT NULL
@@ -958,9 +957,9 @@ fn row_to_challenge_record(r: sqlx::postgres::PgRow) -> Result<ChallengeRecord> 
         challenge_name: challenge_name_from_row(&r, "challenge_name")?,
         title: r.try_get("title")?,
         summary: localized_text_from_row(&r, "summary")?,
-        bundle_path: managed_bundle_path_from_row(&r, "bundle_path")?,
-        public_bundle_path: managed_bundle_path_from_row(&r, "public_bundle_path")?,
-        statement_path: managed_statement_path_from_row(&r, "statement_path")?,
+        bundle_key: storage_key_from_row(&r, "bundle_key")?,
+        public_bundle_key: storage_key_from_row(&r, "public_bundle_key")?,
+        statement_key: storage_key_from_row(&r, "statement_key")?,
         spec_json: r.try_get("spec_json")?,
         moltbook_discussion_url: optional_moltbook_post_url_from_row(
             &r,
@@ -982,26 +981,6 @@ pub(super) fn localized_text_from_row(
 /// Serialize localized text for JSONB binding.
 fn localized_text_to_json(value: &LocalizedText) -> Result<Value> {
     serde_json::to_value(value).map_err(|e| ServiceError::Internal(e.to_string()))
-}
-
-/// Reads managed bundle path from a database row and validates its domain shape.
-fn managed_bundle_path_from_row(
-    row: &sqlx::postgres::PgRow,
-    column: &str,
-) -> Result<ManagedBundlePath> {
-    let value: String = row.try_get(column)?;
-    ManagedBundlePath::from_existing_dir(value)
-        .map_err(|e| ServiceError::Internal(format!("stored invalid {column}: {e}")))
-}
-
-/// Reads managed statement path from a database row and validates its domain shape.
-fn managed_statement_path_from_row(
-    row: &sqlx::postgres::PgRow,
-    column: &str,
-) -> Result<ManagedStatementPath> {
-    let value: String = row.try_get(column)?;
-    ManagedStatementPath::from_existing_file(value)
-        .map_err(|e| ServiceError::Internal(format!("stored invalid {column}: {e}")))
 }
 
 /// Read an optional Moltbook post URL from a database row.

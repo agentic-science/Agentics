@@ -11,7 +11,8 @@ The Mac-local verified target is a single-machine deployment:
 
 - Postgres runs from `docker/platform-db/docker-compose.yml`.
 - API, worker, and web run as separate processes.
-- Storage is local filesystem storage under `AGENTICS_STORAGE_ROOT`.
+- Durable storage defaults to local object storage under
+  `AGENTICS_STORAGE_ROOT`; hosted deployments may use `AGENTICS_STORAGE_BACKEND=s3`.
 - The worker talks to the local Docker daemon.
 - Public traffic should terminate at a reverse proxy before reaching the API or web process.
 
@@ -44,7 +45,9 @@ Minimum local environment:
 ```bash
 export AGENTICS_DATABASE_URL='postgres://agentics:agentics@127.0.0.1:5432/agentics'
 export AGENTICS_CHALLENGES_ROOT="$PWD/examples/challenges"
+export AGENTICS_STORAGE_BACKEND='local'
 export AGENTICS_STORAGE_ROOT="$PWD/storage"
+export AGENTICS_STORAGE_WORK_ROOT="$PWD/storage-work"
 export AGENTICS_POSTGRES_PORT='5432'
 export AGENTICS_API_HOST='127.0.0.1'
 export AGENTICS_API_PORT='3100'
@@ -111,14 +114,50 @@ The MVP edge layer is Cloudflare-managed. It should:
 
 ## Storage And Backups
 
-`AGENTICS_STORAGE_ROOT` contains uploaded solution artifacts, runner logs, private runtime challenge bundles, public-only challenge bundles, and private asset overlays. Treat it as durable platform state.
+Agentics durable storage is object-key based. It stores uploaded solution ZIPs,
+runner logs, private asset ZIP overlays, immutable private/public challenge
+bundle archives, public statements, and small creator/admin JSON artifacts.
+Local mode maps object keys under `AGENTICS_STORAGE_ROOT`. S3 mode stores the
+same object keys in the configured bucket and prefix. `AGENTICS_STORAGE_WORK_ROOT`
+is local scratch space for packing, unpacking, and S3 downloads; do not put
+runner quota storage there.
+
+Use local mode for the Mac-local rehearsal:
+
+```bash
+export AGENTICS_STORAGE_BACKEND='local'
+export AGENTICS_STORAGE_ROOT="$PWD/storage"
+export AGENTICS_STORAGE_WORK_ROOT="$PWD/storage-work"
+```
+
+Use S3 or RustFS-compatible storage for hosted object storage:
+
+```bash
+export AGENTICS_STORAGE_BACKEND='s3'
+export AGENTICS_S3_BUCKET='agentics'
+export AGENTICS_S3_PREFIX='mvp'
+export AGENTICS_S3_REGION='us-east-1'
+export AGENTICS_S3_ENDPOINT_URL='https://s3.example.internal'
+export AGENTICS_S3_FORCE_PATH_STYLE='true'
+export AGENTICS_STORAGE_WORK_ROOT='/srv/agentics/storage-work'
+```
+
+Credentials come only from the AWS SDK provider chain, for example environment
+variables or an instance profile. Do not store S3 credentials in Agentics DB
+rows or challenge specs. Agentics still enforces object-size limits before
+durable writes and verifies S3 object length after upload.
 
 For hosted or public MVP operation:
 
-- Put `AGENTICS_STORAGE_ROOT` on a persistent volume.
-- Back up Postgres and `AGENTICS_STORAGE_ROOT` together.
+- In local mode, put `AGENTICS_STORAGE_ROOT` on a persistent volume.
+- In S3 mode, back up or replicate the bucket/prefix according to the storage
+  provider's policy.
+- Back up Postgres and durable object storage together.
 - Keep published private runtime bundles and public-only bundles immutable.
-- Use stale draft cleanup for unpublished private assets, not manual filesystem deletion.
+- Use stale draft cleanup for unpublished private assets, not manual object
+  deletion.
+- Configure S3 lifecycle cleanup for stale `_tmp/` objects; they are temporary
+  promotion keys and should not be retained as durable records.
 
 ## Hosted Runner Disk Isolation Decision
 

@@ -8,12 +8,15 @@ async fn validation_rejects_private_benchmark_bundle_alias(pool: sqlx::PgPool) {
     let bundles = tempfile::tempdir().expect("failed to create bundle tempdir");
     let (_public_bundle, private_bundle) = create_coexecuted_benchmark_bundles(bundles.path());
     let config = test_config(storage.path(), challenges.path());
+    let (private_key, _public_key, statement_key) =
+        store_challenge_bundle_objects(&config, "coexecuted-sum", &private_bundle, &private_bundle)
+            .await;
     let app = spawn_app_with_config(pool.clone(), config).await;
     let coexecuted_challenge_id = agentics_domain::models::ids::ChallengeId::generate();
     sqlx::query(
         r#"
         INSERT INTO challenges (
-            challenge_id, name, title, summary, bundle_path, public_bundle_path, statement_path, spec_json, starts_at, status
+            challenge_id, name, title, summary, bundle_key, public_bundle_key, statement_key, spec_json, starts_at, status
         )
         VALUES (
             $4::uuid,
@@ -29,8 +32,8 @@ async fn validation_rejects_private_benchmark_bundle_alias(pool: sqlx::PgPool) {
         )
         "#,
     )
-    .bind(private_bundle.to_string_lossy().to_string())
-    .bind(private_bundle.join("statement.md").to_string_lossy().to_string())
+    .bind(private_key.as_str())
+    .bind(statement_key.as_str())
     .bind(
         serde_json::from_str::<serde_json::Value>(
             &std::fs::read_to_string(private_bundle.join("spec.json"))
@@ -78,7 +81,7 @@ async fn validation_rejects_private_benchmark_bundle_alias(pool: sqlx::PgPool) {
         .as_str()
         .unwrap_or_else(|| panic!("missing error message: {body:#}"));
     assert!(
-        message.contains("distinct public bundle path"),
+        message.contains("distinct public bundle key"),
         "unexpected validation error: {body:#}"
     );
     let submitted_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM solution_submissions")

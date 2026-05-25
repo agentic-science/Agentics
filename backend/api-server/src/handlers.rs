@@ -231,7 +231,13 @@ async fn get_challenge_detail_response(
     challenge_id: ChallengeId,
 ) -> Result<Json<agentics_domain::models::challenge::ChallengeDetailResponse>> {
     Ok(Json(
-        public_projection::get_challenge_detail(&state.db, &state.config, &challenge_id).await?,
+        public_projection::get_challenge_detail(
+            &state.db,
+            state.storage.as_ref(),
+            &state.config,
+            &challenge_id,
+        )
+        .await?,
     ))
 }
 
@@ -531,7 +537,10 @@ pub async fn get_public_artifact(
         public_projection::get_public_artifact_submission(&state.db, &id).await?;
 
     let artifact_key = solution_submission.artifact_key.clone();
-    let artifact_bytes = state.storage.get(&artifact_key).await?;
+    let artifact_bytes = state
+        .storage
+        .get(&artifact_key, artifacts::solution_artifact_intent())
+        .await?;
     let artifact =
         artifacts::read_solution_submission_artifact_summary(artifact_key.as_str(), artifact_bytes)
             .await?;

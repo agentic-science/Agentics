@@ -89,7 +89,8 @@ deployment 会将它们安装到 `/opt/agentics/current/bin`；从 source checko
 | Release symlink | `/opt/agentics/current` |
 | Release versions | `/opt/agentics/releases/<release-id>` |
 | State root | `/srv/agentics` |
-| Storage root | `/srv/agentics/storage` |
+| Local storage root | `/srv/agentics/storage` |
+| Storage work root | `/srv/agentics/storage-work` |
 | Challenge checkout root | `/srv/agentics/challenges` |
 | Runtime root | `/srv/agentics/runtime` |
 | Agentics Docker socket | `/run/agentics/docker.sock` |
@@ -105,6 +106,11 @@ Phase mount root 为以下每类 writable runner class 准备一个 loopback XFS
 - `solution-run`
 - `evaluator-setup`
 - `evaluator-score`
+
+Durable object storage 可以继续使用 `/srv/agentics/storage` 下的 local mode，也可以通过
+`AGENTICS_STORAGE_BACKEND=s3` 使用 S3/RustFS-compatible bucket。Storage work root
+是 bundle packing、unpacking 和 S3 downloads 的本地 scratch；runner quota slots
+仍位于 `/srv/agentics/phase-mounts`。
 
 ## Required Environment
 

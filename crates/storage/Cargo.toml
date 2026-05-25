@@ -8,10 +8,16 @@ workspace = true
 
 [dependencies]
 agentics-domain = { workspace = true }
+agentics-config = { workspace = true }
 tokio = { workspace = true }
 thiserror = { workspace = true }
 async-trait = { workspace = true }
 uuid = { workspace = true }
+url = { workspace = true }
+aws-config = { workspace = true }
+aws-sdk-s3 = { workspace = true }
+tar = { workspace = true }
+anyhow = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

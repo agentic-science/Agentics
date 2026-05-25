@@ -71,7 +71,8 @@ The codebase now uses explicit internal crates for the main backend boundaries:
   vocabulary,
 - `agentics-contracts` for challenge bundles, solution manifests, validation
   policy, and frontend schema export,
-- `agentics-storage` for storage traits and local storage,
+- `agentics-storage` for durable object storage traits, local storage, and
+  S3-compatible storage,
 - `agentics-config` for environment-backed runtime configuration,
 - `agentics-persistence` for SQLx repositories and row adapters,
 - `agentics-services` for transport-neutral application workflows and
@@ -111,6 +112,12 @@ agentics-runner
   Runner request/response types, execution topology orchestration, Docker
   backend implementation, storage quota mounts, logs, and future runner
   backends.
+
+agentics-storage
+  Durable object storage boundary for solution ZIPs, runner logs, private
+  assets, challenge bundle archives, statements, and small JSON artifacts. Local
+  mode maps object keys to files; S3 mode stores the same keys in a bucket and
+  uses local work roots only for staging and materialization.
 
 api-server
   Routing, auth/session extraction, request parsing, response conversion, and

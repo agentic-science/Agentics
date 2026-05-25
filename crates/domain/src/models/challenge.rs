@@ -14,10 +14,9 @@ use super::names::{
     ChallengeKeyword, ChallengeName, MetricName, MoltbookSubmoltName, ResourceProfileName, RunName,
     TargetName,
 };
-use super::paths::{
-    BundleRelativePath, ManagedBundlePath, ManagedStatementPath, RunInputPath, RunOutputPath,
-};
+use super::paths::{BundleRelativePath, RunInputPath, RunOutputPath};
 use super::urls::{MoltbookPostUrl, MoltbookSubmoltUrl};
+use crate::storage::StorageKey;
 use crate::zip_project::ZipProjectNetworkAccess;
 
 /// Persistent lifecycle state for a challenge shell or published benchmark.
@@ -986,7 +985,7 @@ pub struct PublishChallengeResponse {
     pub challenge_id: ChallengeId,
     pub challenge_name: ChallengeName,
     pub title: String,
-    pub bundle_path: ManagedBundlePath,
-    pub public_bundle_path: ManagedBundlePath,
-    pub statement_path: ManagedStatementPath,
+    pub bundle_key: StorageKey,
+    pub public_bundle_key: StorageKey,
+    pub statement_key: StorageKey,
 }

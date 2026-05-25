@@ -102,8 +102,8 @@ pub async fn create_solution_submission_with_job(
     ensure_validation_uses_public_bundle(
         input.eval_type,
         &spec,
-        &challenge.bundle_path,
-        &challenge.public_bundle_path,
+        &challenge.bundle_key,
+        &challenge.public_bundle_key,
     )?;
     enforce_quota_admission(&mut tx, input).await?;
     ensure_parent_solution_submission_matches_scope_tx(
@@ -147,8 +147,8 @@ pub async fn create_solution_submission_with_job(
 
     let payload = serde_json::to_value(EvaluationJobPayload {
         artifact_key: input.artifact_key.clone(),
-        bundle_path: challenge.bundle_path.clone(),
-        public_bundle_path: challenge.public_bundle_path.clone(),
+        bundle_key: challenge.bundle_key.clone(),
+        public_bundle_key: challenge.public_bundle_key.clone(),
         challenge_id: Some(challenge.challenge_id.clone()),
         challenge_name: challenge.challenge_name.clone(),
         target: input.target.clone(),

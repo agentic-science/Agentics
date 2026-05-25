@@ -3057,9 +3057,11 @@ export const publishChallengeResponseSchema = z
       .min(3)
       .max(63),
     title: z.string(),
-    bundle_path: z.string(),
-    public_bundle_path: z.string(),
-    statement_path: z.string(),
+    bundle_key: z.string().regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+    public_bundle_key: z
+      .string()
+      .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+    statement_key: z.string().regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
   })
   .strict()
   .describe("Admin response returned after publishing a challenge bundle.");

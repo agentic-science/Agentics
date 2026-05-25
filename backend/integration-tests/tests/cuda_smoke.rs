@@ -4,7 +4,8 @@ mod helpers;
 
 use agentics_config::WorkerAccelerators;
 use agentics_domain::models::ids::ChallengeId;
-use agentics_domain::models::paths::{ManagedBundlePath, ManagedStatementPath};
+use agentics_domain::storage::StorageKey;
+use agentics_storage::{StorageWriteIntent, build_storage, pack_directory_to_tar};
 use helpers::{
     api_url, run_worker_once, spawn_app_with_config, test_config, zip_project_zip_base64,
 };
@@ -27,7 +28,7 @@ async fn dgx_cuda_smoke_completes_official_result_and_leaderboard(pool: sqlx::Pg
     config.worker_gpu_probe_image = Some(CUDA_IMAGE.to_string());
 
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
-    publish_cuda_smoke_challenge(&pool, &private_bundle, &public_bundle).await;
+    publish_cuda_smoke_challenge(&pool, &config, &private_bundle, &public_bundle).await;
     let client = reqwest::Client::new();
     let cuda_challenge_id: String =
         sqlx::query_scalar("SELECT challenge_id::text FROM challenges WHERE name = 'cuda-smoke'")
@@ -166,6 +167,7 @@ async fn dgx_cuda_smoke_completes_official_result_and_leaderboard(pool: sqlx::Pg
 
 async fn publish_cuda_smoke_challenge(
     pool: &sqlx::PgPool,
+    config: &agentics_config::Config,
     private_bundle: &std::path::Path,
     public_bundle: &std::path::Path,
 ) {
@@ -175,21 +177,69 @@ async fn publish_cuda_smoke_challenge(
     let spec = agentics_contracts::challenge_bundle::read_challenge_bundle_spec(private_bundle)
         .await
         .expect("failed to read CUDA smoke spec");
-    let managed_private =
-        ManagedBundlePath::from_existing_dir(private_bundle).expect("valid private bundle path");
-    let managed_public =
-        ManagedBundlePath::from_existing_dir(public_bundle).expect("valid public bundle path");
-    let statement_path =
-        ManagedStatementPath::from_existing_file(private_bundle.join("statement.md"))
-            .expect("valid statement path");
+    let storage = build_storage(config)
+        .await
+        .expect("storage should initialize");
+    let private_key = StorageKey::try_new("challenge-bundles/cuda-smoke/manual-private.tar")
+        .expect("valid private key");
+    let public_key = StorageKey::try_new("challenge-public-bundles/cuda-smoke/manual-public.tar")
+        .expect("valid public key");
+    let statement_key = StorageKey::try_new("challenge-statements/cuda-smoke/manual.md")
+        .expect("valid statement key");
+    let private_archive = config
+        .storage_work_root
+        .as_ref()
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::env::temp_dir().join("agentics-storage-work"))
+        .join("cuda-private.tar");
+    let public_archive = private_archive.with_file_name("cuda-public.tar");
+    pack_directory_to_tar(private_bundle, &private_archive)
+        .await
+        .expect("pack private bundle");
+    pack_directory_to_tar(public_bundle, &public_archive)
+        .await
+        .expect("pack public bundle");
+    storage
+        .put_file(
+            &private_key,
+            &private_archive,
+            StorageWriteIntent::new(
+                "challenge bundle archive",
+                config.storage_max_bundle_archive_bytes,
+            ),
+        )
+        .await
+        .expect("store private bundle");
+    storage
+        .put_file(
+            &public_key,
+            &public_archive,
+            StorageWriteIntent::new(
+                "challenge bundle archive",
+                config.storage_max_bundle_archive_bytes,
+            ),
+        )
+        .await
+        .expect("store public bundle");
+    let statement = tokio::fs::read(private_bundle.join("statement.md"))
+        .await
+        .expect("read statement");
+    storage
+        .put(
+            &statement_key,
+            &statement,
+            StorageWriteIntent::new("challenge statement", config.storage_max_statement_bytes),
+        )
+        .await
+        .expect("store statement");
     agentics_persistence::Repositories::new(pool)
         .challenges()
         .publish(&agentics_persistence::PublishChallengeInput {
             challenge_id: &ChallengeId::generate(),
             challenge_name: &spec.challenge_name,
-            bundle_path: &managed_private,
-            public_bundle_path: &managed_public,
-            statement_path: &statement_path,
+            bundle_key: &private_key,
+            public_bundle_key: &public_key,
+            statement_key: &statement_key,
             spec: &spec,
             title: &spec.challenge_title,
             summary: &spec.summary,

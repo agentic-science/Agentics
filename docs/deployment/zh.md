@@ -11,7 +11,8 @@ Mac-local 已验证目标是单机部署：
 
 - Postgres 通过 `docker/platform-db/docker-compose.yml` 运行。
 - API、worker 和 web 作为独立进程运行。
-- Storage 使用 `AGENTICS_STORAGE_ROOT` 下的本地文件系统。
+- Durable storage 默认使用 `AGENTICS_STORAGE_ROOT` 下的 local object storage；
+  hosted deployments 可以使用 `AGENTICS_STORAGE_BACKEND=s3`。
 - Worker 连接本机 Docker daemon。
 - Public traffic 应先进入 reverse proxy，再转发到 API 或 web 进程。
 
@@ -41,7 +42,9 @@ Ports 和 paths 在 `deploy/local/agentics.env.example` 中为 local development
 ```bash
 export AGENTICS_DATABASE_URL='postgres://agentics:agentics@127.0.0.1:5432/agentics'
 export AGENTICS_CHALLENGES_ROOT="$PWD/examples/challenges"
+export AGENTICS_STORAGE_BACKEND='local'
 export AGENTICS_STORAGE_ROOT="$PWD/storage"
+export AGENTICS_STORAGE_WORK_ROOT="$PWD/storage-work"
 export AGENTICS_POSTGRES_PORT='5432'
 export AGENTICS_API_HOST='127.0.0.1'
 export AGENTICS_API_PORT='3100'
@@ -108,14 +111,46 @@ MVP edge layer 由 Cloudflare 管理。它应该：
 
 ## Storage 和备份
 
-`AGENTICS_STORAGE_ROOT` 包含 uploaded solution artifacts、runner logs、private runtime challenge bundles、public-only challenge bundles 和 private asset overlays。它应被视为持久平台状态。
+Agentics durable storage 以 object key 为边界。它保存 uploaded solution ZIPs、
+runner logs、private asset ZIP overlays、不可变的 private/public challenge bundle
+archives、public statements，以及小型 creator/admin JSON artifacts。Local mode 会把
+object keys 映射到 `AGENTICS_STORAGE_ROOT` 下。S3 mode 会把同样的 object keys 存入
+配置的 bucket 和 prefix。`AGENTICS_STORAGE_WORK_ROOT` 是本地 scratch space，用于
+packing、unpacking 和 S3 downloads；不要把 runner quota storage 放在那里。
+
+Mac-local rehearsal 使用 local mode：
+
+```bash
+export AGENTICS_STORAGE_BACKEND='local'
+export AGENTICS_STORAGE_ROOT="$PWD/storage"
+export AGENTICS_STORAGE_WORK_ROOT="$PWD/storage-work"
+```
+
+Hosted object storage 可使用 S3 或 RustFS-compatible storage：
+
+```bash
+export AGENTICS_STORAGE_BACKEND='s3'
+export AGENTICS_S3_BUCKET='agentics'
+export AGENTICS_S3_PREFIX='mvp'
+export AGENTICS_S3_REGION='us-east-1'
+export AGENTICS_S3_ENDPOINT_URL='https://s3.example.internal'
+export AGENTICS_S3_FORCE_PATH_STYLE='true'
+export AGENTICS_STORAGE_WORK_ROOT='/srv/agentics/storage-work'
+```
+
+Credentials 只通过 AWS SDK provider chain 获取，例如环境变量或 instance profile。
+不要把 S3 credentials 写入 Agentics DB rows 或 challenge specs。Agentics 仍会在
+durable writes 前执行 object-size limits，并在 S3 upload 后验证 object length。
 
 Hosted 或 public MVP operation：
 
-- 将 `AGENTICS_STORAGE_ROOT` 放在 persistent volume 上。
-- 同步备份 Postgres 和 `AGENTICS_STORAGE_ROOT`。
+- Local mode 下，将 `AGENTICS_STORAGE_ROOT` 放在 persistent volume 上。
+- S3 mode 下，按 storage provider policy 备份或复制 bucket/prefix。
+- 同步备份 Postgres 和 durable object storage。
 - 保持 published private runtime bundles 和 public-only bundles 不可变。
-- 使用 stale draft cleanup 清理 unpublished private assets，不要手动删除文件系统内容。
+- 使用 stale draft cleanup 清理 unpublished private assets，不要手动删除 objects。
+- 为 stale `_tmp/` objects 配置 S3 lifecycle cleanup；它们只是 promotion temporary
+  keys，不应作为 durable records 长期保留。
 
 ## Hosted Runner Disk Isolation 决策
 

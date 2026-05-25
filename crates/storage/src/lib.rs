@@ -15,21 +15,26 @@
     )
 )]
 
-//! Storage abstraction for uploaded solution_submissions and runner logs.
+//! Durable object storage for submissions, private assets, logs, and challenge bundles.
 //!
 //! A storage key is an opaque object locator inside the configured storage
-//! backend. It is intentionally not called a path or URI: local development may
-//! map it onto a filesystem path, but callers must not rely on host filesystem
-//! semantics, absolute paths, parent traversal, schemes, authorities, or URL
-//! parsing. Storage backends own the mapping from `StorageKey` to physical
-//! storage.
+//! backend. Local development maps it onto a filesystem path, while hosted
+//! deployments may map it to an S3 object key. Runner writable storage is a
+//! separate local filesystem concern and is not represented by this crate.
 
+use std::fs;
+use std::io::Write;
 use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
 
+use agentics_config::{Config, StorageBackend};
 use agentics_domain::error::ServiceError;
 pub use agentics_domain::storage::{StorageKey, StorageKeyError};
 use async_trait::async_trait;
-use tokio::io::AsyncWriteExt;
+use aws_config::BehaviorVersion;
+use aws_sdk_s3::config::Region;
+use aws_sdk_s3::primitives::ByteStream;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 pub type Result<T> = std::result::Result<T, StorageError>;
 
@@ -44,6 +49,14 @@ pub enum StorageError {
     ObjectConflict(String),
     #[error("storage object not found: {0}")]
     ObjectNotFound(String),
+    #[error("{label} exceeds storage byte limit: {actual} > {limit} bytes")]
+    ObjectTooLarge {
+        label: &'static str,
+        actual: u64,
+        limit: u64,
+    },
+    #[error("storage backend error: {0}")]
+    Backend(String),
     #[error("storage invariant violated: {0}")]
     Internal(String),
     #[error("storage IO error: {0}")]
@@ -56,39 +69,143 @@ impl From<StorageError> for ServiceError {
             StorageError::InvalidKey(message) | StorageError::SymlinkRejected(message) => {
                 ServiceError::BadRequest(message)
             }
+            StorageError::ObjectTooLarge { .. } => ServiceError::BadRequest(error.to_string()),
             StorageError::ObjectConflict(_) => ServiceError::Conflict,
             StorageError::ObjectNotFound(_) => ServiceError::NotFound,
-            StorageError::Internal(message) => ServiceError::Internal(message),
+            StorageError::Internal(message) | StorageError::Backend(message) => {
+                ServiceError::Internal(message)
+            }
             StorageError::Io(error) => ServiceError::Io(error),
         }
     }
 }
 
-/// Minimal object-storage interface used by handlers and workers.
+/// Storage write/read purpose with an explicit byte cap.
+#[derive(Debug, Clone, Copy)]
+pub struct StorageWriteIntent {
+    label: &'static str,
+    max_bytes: u64,
+}
+
+impl StorageWriteIntent {
+    /// Create a write intent with a caller-owned byte limit.
+    pub const fn new(label: &'static str, max_bytes: u64) -> Self {
+        Self { label, max_bytes }
+    }
+
+    /// User-facing purpose label.
+    pub const fn label(self) -> &'static str {
+        self.label
+    }
+
+    /// Maximum bytes allowed for this object.
+    pub const fn max_bytes(self) -> u64 {
+        self.max_bytes
+    }
+
+    /// Verify a byte length against this intent.
+    pub fn ensure_len(self, actual: u64) -> Result<()> {
+        if actual > self.max_bytes {
+            return Err(StorageError::ObjectTooLarge {
+                label: self.label,
+                actual,
+                limit: self.max_bytes,
+            });
+        }
+        Ok(())
+    }
+}
+
+/// Minimal object-storage interface used by services and workers.
 #[async_trait]
 pub trait Storage: std::fmt::Debug + Send + Sync {
-    /// Store content at a storage-relative key and return that opaque key.
-    async fn put(&self, key: &StorageKey, content: &[u8]) -> Result<StorageKey>;
-    /// Atomically promote a temporary object to a durable storage-relative key.
-    ///
-    /// Implementations must not overwrite an existing durable object.
+    /// Store content at a storage-relative key. Implementations must not overwrite.
+    async fn put(
+        &self,
+        key: &StorageKey,
+        content: &[u8],
+        intent: StorageWriteIntent,
+    ) -> Result<StorageKey>;
+
+    /// Store a local file at a storage-relative key. Implementations must not overwrite.
+    async fn put_file(
+        &self,
+        key: &StorageKey,
+        source: &Path,
+        intent: StorageWriteIntent,
+    ) -> Result<StorageKey>;
+
+    /// Promote a temporary object to a durable storage-relative key without overwriting.
     async fn promote(
         &self,
         temporary_key: &StorageKey,
         durable_key: &StorageKey,
     ) -> Result<StorageKey>;
-    /// Read content from a storage-relative key.
-    async fn get(&self, key: &StorageKey) -> Result<Vec<u8>>;
+
+    /// Read content from a storage-relative key with an object-size cap.
+    async fn get(&self, key: &StorageKey, intent: StorageWriteIntent) -> Result<Vec<u8>>;
+
+    /// Download an object into a local file with an object-size cap.
+    async fn get_to_file(
+        &self,
+        key: &StorageKey,
+        destination: &Path,
+        intent: StorageWriteIntent,
+    ) -> Result<()>;
+
     /// Return whether a storage-relative key exists.
     async fn exists(&self, key: &StorageKey) -> Result<bool>;
+
     /// Delete a storage-relative key if it exists.
     async fn delete(&self, key: &StorageKey) -> Result<()>;
+
+    /// List object keys below a storage-relative prefix.
+    async fn list_prefix(&self, prefix: &StorageKey) -> Result<Vec<StorageKey>>;
+
+    /// Delete every object below a storage-relative prefix.
+    async fn delete_prefix(&self, prefix: &StorageKey) -> Result<u64> {
+        let keys = self.list_prefix(prefix).await?;
+        let mut deleted = 0u64;
+        for key in keys {
+            self.delete(&key).await?;
+            deleted = deleted.checked_add(1).ok_or_else(|| {
+                StorageError::Internal("deleted object count overflow".to_string())
+            })?;
+        }
+        Ok(deleted)
+    }
+}
+
+/// Build the configured durable storage backend.
+pub async fn build_storage(config: &Config) -> anyhow::Result<Arc<dyn Storage>> {
+    config.validate_object_storage_config()?;
+    match config.storage_backend {
+        StorageBackend::Local => Ok(Arc::new(LocalStorage::new(&config.storage_root))),
+        StorageBackend::S3 => Ok(Arc::new(S3Storage::from_config(config).await?)),
+    }
+}
+
+/// Return the host-local work root for object storage staging and materialization.
+pub fn storage_work_root(config: &Config) -> Result<PathBuf> {
+    let root = config
+        .storage_work_root
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| std::env::temp_dir().join("agentics-storage-work"));
+    if !root.is_absolute() {
+        return Err(StorageError::InvalidKey(
+            "AGENTICS_STORAGE_WORK_ROOT must be an absolute path".to_string(),
+        ));
+    }
+    Ok(root)
 }
 
 /// Filesystem-backed storage rooted at a configured directory.
 #[derive(Debug, Clone)]
 pub struct LocalStorage {
-    root: std::path::PathBuf,
+    root: PathBuf,
 }
 
 impl LocalStorage {
@@ -99,13 +216,11 @@ impl LocalStorage {
         }
     }
 
-    /// Handles resolve for this module.
     fn resolve(&self, key: &StorageKey) -> (PathBuf, PathBuf) {
         let key_path = key.as_path().to_path_buf();
         (self.root.join(&key_path), key_path)
     }
 
-    /// Handles reject symlink prefixes for this module.
     fn reject_symlink_prefixes(&self, key: &Path) -> Result<()> {
         let Some(parent) = key.parent() else {
             return Ok(());
@@ -116,7 +231,7 @@ impl LocalStorage {
                 return Err(invalid_storage_key());
             };
             current.push(part);
-            if let Ok(metadata) = std::fs::symlink_metadata(&current)
+            if let Ok(metadata) = fs::symlink_metadata(&current)
                 && metadata.file_type().is_symlink()
             {
                 return Err(StorageError::SymlinkRejected(format!(
@@ -128,9 +243,8 @@ impl LocalStorage {
         Ok(())
     }
 
-    /// Handles reject symlink object for this module.
     fn reject_symlink_object(&self, full: &Path) -> Result<()> {
-        if let Ok(metadata) = std::fs::symlink_metadata(full)
+        if let Ok(metadata) = fs::symlink_metadata(full)
             && metadata.file_type().is_symlink()
         {
             return Err(StorageError::SymlinkRejected(format!(
@@ -144,8 +258,31 @@ impl LocalStorage {
 
 #[async_trait]
 impl Storage for LocalStorage {
-    /// Handles put for this module.
-    async fn put(&self, key: &StorageKey, content: &[u8]) -> Result<StorageKey> {
+    async fn put(
+        &self,
+        key: &StorageKey,
+        content: &[u8],
+        intent: StorageWriteIntent,
+    ) -> Result<StorageKey> {
+        let len = u64::try_from(content.len()).map_err(|_| StorageError::ObjectTooLarge {
+            label: intent.label(),
+            actual: u64::MAX,
+            limit: intent.max_bytes(),
+        })?;
+        intent.ensure_len(len)?;
+        let (full, key_path) = self.resolve(key);
+        put_local_bytes(self, key, &full, &key_path, content).await?;
+        Ok(key.clone())
+    }
+
+    async fn put_file(
+        &self,
+        key: &StorageKey,
+        source: &Path,
+        intent: StorageWriteIntent,
+    ) -> Result<StorageKey> {
+        let len = tokio::fs::metadata(source).await?.len();
+        intent.ensure_len(len)?;
         let (full, key_path) = self.resolve(key);
         self.reject_symlink_prefixes(&key_path)?;
         let parent = full
@@ -158,15 +295,8 @@ impl Storage for LocalStorage {
             return Err(StorageError::ObjectConflict(key.to_string()));
         }
         let temporary_full = parent.join(format!(".agentics-write-{}", uuid::Uuid::new_v4()));
-        let write_result = async {
-            let mut temporary = tokio::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&temporary_full)
-                .await?;
-            temporary.write_all(content).await?;
-            temporary.flush().await?;
-            drop(temporary);
+        let copy_result = async {
+            tokio::fs::copy(source, &temporary_full).await?;
             self.reject_symlink_prefixes(&key_path)?;
             self.reject_symlink_object(&full)?;
             if tokio::fs::try_exists(&full).await? {
@@ -176,18 +306,10 @@ impl Storage for LocalStorage {
             Ok::<(), StorageError>(())
         }
         .await;
-        if let Err(error) = write_result {
-            if let Err(cleanup_error) = tokio::fs::remove_file(&temporary_full).await
-                && cleanup_error.kind() != std::io::ErrorKind::NotFound
-            {
-                return Err(cleanup_error.into());
-            }
-            return Err(error);
-        }
+        cleanup_temp_file_on_error(copy_result, &temporary_full).await?;
         Ok(key.clone())
     }
 
-    /// Handles promote for this module.
     async fn promote(
         &self,
         temporary_key: &StorageKey,
@@ -223,21 +345,76 @@ impl Storage for LocalStorage {
         Ok(durable_key.clone())
     }
 
-    /// Handles get for this module.
-    async fn get(&self, key: &StorageKey) -> Result<Vec<u8>> {
+    async fn get(&self, key: &StorageKey, intent: StorageWriteIntent) -> Result<Vec<u8>> {
         let (full, key_path) = self.resolve(key);
         self.reject_symlink_prefixes(&key_path)?;
         self.reject_symlink_object(&full)?;
-        match tokio::fs::read(&full).await {
-            Ok(bytes) => Ok(bytes),
+        let metadata = match tokio::fs::metadata(&full).await {
+            Ok(metadata) => metadata,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                Err(StorageError::ObjectNotFound(key.to_string()))
+                return Err(StorageError::ObjectNotFound(key.to_string()));
             }
-            Err(error) => Err(error.into()),
-        }
+            Err(error) => return Err(error.into()),
+        };
+        intent.ensure_len(metadata.len())?;
+        tokio::fs::read(&full).await.map_err(Into::into)
     }
 
-    /// Handles exists for this module.
+    async fn get_to_file(
+        &self,
+        key: &StorageKey,
+        destination: &Path,
+        intent: StorageWriteIntent,
+    ) -> Result<()> {
+        let (full, key_path) = self.resolve(key);
+        self.reject_symlink_prefixes(&key_path)?;
+        self.reject_symlink_object(&full)?;
+        let metadata = match tokio::fs::metadata(&full).await {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Err(StorageError::ObjectNotFound(key.to_string()));
+            }
+            Err(error) => return Err(error.into()),
+        };
+        intent.ensure_len(metadata.len())?;
+        if let Some(parent) = destination.parent() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+        let temporary =
+            destination.with_extension(format!("agentics-download-{}", uuid::Uuid::new_v4()));
+        let write_result = async {
+            if tokio::fs::try_exists(destination).await? {
+                return Err(StorageError::ObjectConflict(
+                    destination.display().to_string(),
+                ));
+            }
+            let mut source = tokio::fs::File::open(&full).await?;
+            let mut file = tokio::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&temporary)
+                .await?;
+            let copied = tokio::io::copy(&mut source, &mut file).await?;
+            if copied != metadata.len() {
+                return Err(StorageError::Internal(format!(
+                    "local object length changed while downloading {key}: expected {}, copied {copied}",
+                    metadata.len()
+                )));
+            }
+            file.flush().await?;
+            drop(file);
+            if tokio::fs::try_exists(destination).await? {
+                return Err(StorageError::ObjectConflict(
+                    destination.display().to_string(),
+                ));
+            }
+            tokio::fs::rename(&temporary, destination).await?;
+            Ok::<(), StorageError>(())
+        }
+        .await;
+        cleanup_temp_file_on_error(write_result, &temporary).await
+    }
+
     async fn exists(&self, key: &StorageKey) -> Result<bool> {
         let (full, key_path) = self.resolve(key);
         self.reject_symlink_prefixes(&key_path)?;
@@ -247,7 +424,6 @@ impl Storage for LocalStorage {
         Ok(false)
     }
 
-    /// Handles delete for this module.
     async fn delete(&self, key: &StorageKey) -> Result<()> {
         let (full, key_path) = self.resolve(key);
         self.reject_symlink_prefixes(&key_path)?;
@@ -259,9 +435,647 @@ impl Storage for LocalStorage {
         }
         Ok(())
     }
+
+    async fn list_prefix(&self, prefix: &StorageKey) -> Result<Vec<StorageKey>> {
+        let root = self.root.clone();
+        let prefix = prefix.as_str().to_string();
+        tokio::task::spawn_blocking(move || list_local_prefix(&root, &prefix))
+            .await
+            .map_err(|e| StorageError::Internal(e.to_string()))?
+    }
 }
 
-/// Handles invalid storage key for this module.
+/// S3-compatible durable object storage.
+#[derive(Debug, Clone)]
+pub struct S3Storage {
+    client: aws_sdk_s3::Client,
+    bucket: String,
+    prefix: Option<String>,
+    conditional_put: bool,
+}
+
+/// Connection settings for S3-compatible durable object storage.
+#[derive(Debug, Clone)]
+pub struct S3StorageOptions {
+    pub bucket: String,
+    pub prefix: Option<String>,
+    pub region: String,
+    pub endpoint_url: Option<url::Url>,
+    pub force_path_style: bool,
+}
+
+impl S3Storage {
+    /// Build an S3 storage client from runtime configuration.
+    pub async fn from_config(config: &Config) -> anyhow::Result<Self> {
+        Self::from_options(S3StorageOptions {
+            bucket: config
+                .s3_bucket
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| anyhow::anyhow!("AGENTICS_S3_BUCKET must be set"))?
+                .to_string(),
+            prefix: config.s3_prefix.clone(),
+            region: config.s3_region.clone(),
+            endpoint_url: config.s3_endpoint_url.clone(),
+            force_path_style: config.s3_force_path_style,
+        })
+        .await
+    }
+
+    /// Build an S3 storage client from explicit options.
+    pub async fn from_options(options: S3StorageOptions) -> anyhow::Result<Self> {
+        let bucket = options.bucket.trim().to_string();
+        if bucket.is_empty() {
+            anyhow::bail!("S3 bucket must be set");
+        }
+        let region = Region::new(options.region.trim().to_string());
+        let mut loader = aws_config::defaults(BehaviorVersion::latest()).region(region);
+        if let Some(endpoint) = options.endpoint_url.as_ref() {
+            loader = loader.endpoint_url(endpoint.as_str());
+        }
+        let shared_config = loader.load().await;
+        let mut s3_config = aws_sdk_s3::config::Builder::from(&shared_config);
+        if options.force_path_style {
+            s3_config = s3_config.force_path_style(true);
+        }
+        Ok(Self {
+            client: aws_sdk_s3::Client::from_conf(s3_config.build()),
+            bucket,
+            prefix: normalized_s3_prefix(options.prefix.as_deref())?,
+            conditional_put: options.endpoint_url.is_none(),
+        })
+    }
+
+    fn object_key(&self, key: &StorageKey) -> String {
+        match &self.prefix {
+            Some(prefix) => format!("{prefix}/{}", key.as_str()),
+            None => key.as_str().to_string(),
+        }
+    }
+
+    async fn object_len(&self, key: &StorageKey) -> Result<Option<u64>> {
+        let object_key = self.object_key(key);
+        match self
+            .client
+            .head_object()
+            .bucket(&self.bucket)
+            .key(&object_key)
+            .send()
+            .await
+        {
+            Ok(output) => {
+                let len = output.content_length().unwrap_or(0);
+                u64::try_from(len)
+                    .map(Some)
+                    .map_err(|_| StorageError::Internal("negative S3 content length".to_string()))
+            }
+            Err(error) if s3_error_is_not_found(&error) => Ok(None),
+            Err(error) => Err(StorageError::Backend(format!("{error:?}"))),
+        }
+    }
+
+    async fn verify_object_len(&self, key: &StorageKey, expected: u64) -> Result<()> {
+        let actual = self
+            .object_len(key)
+            .await?
+            .ok_or_else(|| StorageError::ObjectNotFound(key.to_string()))?;
+        if actual != expected {
+            return Err(StorageError::Internal(format!(
+                "S3 object length mismatch for {key}: expected {expected}, got {actual}"
+            )));
+        }
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl Storage for S3Storage {
+    async fn put(
+        &self,
+        key: &StorageKey,
+        content: &[u8],
+        intent: StorageWriteIntent,
+    ) -> Result<StorageKey> {
+        let len = u64::try_from(content.len()).map_err(|_| StorageError::ObjectTooLarge {
+            label: intent.label(),
+            actual: u64::MAX,
+            limit: intent.max_bytes(),
+        })?;
+        intent.ensure_len(len)?;
+        if self.exists(key).await? {
+            return Err(StorageError::ObjectConflict(key.to_string()));
+        }
+        let object_key = self.object_key(key);
+        let mut put_request = self
+            .client
+            .put_object()
+            .bucket(&self.bucket)
+            .key(&object_key)
+            .body(ByteStream::from(content.to_vec()));
+        if self.conditional_put {
+            put_request = put_request.if_none_match("*");
+        }
+        let put_result = put_request.send().await;
+        if let Err(error) = put_result {
+            if s3_error_is_conflict(&error) {
+                return Err(StorageError::ObjectConflict(key.to_string()));
+            }
+            return Err(StorageError::Backend(format!("{error:?}")));
+        }
+        if let Err(error) = self.verify_object_len(key, len).await {
+            drop(self.delete(key).await);
+            return Err(error);
+        }
+        Ok(key.clone())
+    }
+
+    async fn put_file(
+        &self,
+        key: &StorageKey,
+        source: &Path,
+        intent: StorageWriteIntent,
+    ) -> Result<StorageKey> {
+        let len = tokio::fs::metadata(source).await?.len();
+        intent.ensure_len(len)?;
+        if self.exists(key).await? {
+            return Err(StorageError::ObjectConflict(key.to_string()));
+        }
+        let object_key = self.object_key(key);
+        let body = ByteStream::from_path(source)
+            .await
+            .map_err(|e| StorageError::Io(std::io::Error::other(e)))?;
+        let mut put_request = self
+            .client
+            .put_object()
+            .bucket(&self.bucket)
+            .key(&object_key)
+            .body(body);
+        if self.conditional_put {
+            put_request = put_request.if_none_match("*");
+        }
+        let put_result = put_request.send().await;
+        if let Err(error) = put_result {
+            if s3_error_is_conflict(&error) {
+                return Err(StorageError::ObjectConflict(key.to_string()));
+            }
+            return Err(StorageError::Backend(format!("{error:?}")));
+        }
+        if let Err(error) = self.verify_object_len(key, len).await {
+            drop(self.delete(key).await);
+            return Err(error);
+        }
+        Ok(key.clone())
+    }
+
+    async fn promote(
+        &self,
+        temporary_key: &StorageKey,
+        durable_key: &StorageKey,
+    ) -> Result<StorageKey> {
+        if self.exists(durable_key).await? {
+            return Err(StorageError::ObjectConflict(durable_key.to_string()));
+        }
+        let source_len = self
+            .object_len(temporary_key)
+            .await?
+            .ok_or_else(|| StorageError::ObjectNotFound(temporary_key.to_string()))?;
+        let source = format!("{}/{}", self.bucket, self.object_key(temporary_key));
+        let copy_result = self
+            .client
+            .copy_object()
+            .bucket(&self.bucket)
+            .key(self.object_key(durable_key))
+            .copy_source(source)
+            .send()
+            .await;
+        if let Err(error) = copy_result {
+            return Err(StorageError::Backend(format!("{error:?}")));
+        }
+        self.verify_object_len(durable_key, source_len).await?;
+        self.delete(temporary_key).await?;
+        Ok(durable_key.clone())
+    }
+
+    async fn get(&self, key: &StorageKey, intent: StorageWriteIntent) -> Result<Vec<u8>> {
+        let object_len = self
+            .object_len(key)
+            .await?
+            .ok_or_else(|| StorageError::ObjectNotFound(key.to_string()))?;
+        intent.ensure_len(object_len)?;
+        let object_key = self.object_key(key);
+        let output = self
+            .client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(&object_key)
+            .send()
+            .await
+            .map_err(|e| StorageError::Backend(format!("{e:?}")))?;
+        let bytes = output
+            .body
+            .collect()
+            .await
+            .map_err(|e| StorageError::Backend(format!("{e:?}")))?
+            .into_bytes();
+        let len = u64::try_from(bytes.len()).map_err(|_| StorageError::ObjectTooLarge {
+            label: intent.label(),
+            actual: u64::MAX,
+            limit: intent.max_bytes(),
+        })?;
+        intent.ensure_len(len)?;
+        Ok(bytes.to_vec())
+    }
+
+    async fn get_to_file(
+        &self,
+        key: &StorageKey,
+        destination: &Path,
+        intent: StorageWriteIntent,
+    ) -> Result<()> {
+        let expected_len = self
+            .object_len(key)
+            .await?
+            .ok_or_else(|| StorageError::ObjectNotFound(key.to_string()))?;
+        intent.ensure_len(expected_len)?;
+        let output = self
+            .client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(self.object_key(key))
+            .send()
+            .await
+            .map_err(|e| StorageError::Backend(format!("{e:?}")))?;
+        if let Some(parent) = destination.parent() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+        let temporary =
+            destination.with_extension(format!("agentics-download-{}", uuid::Uuid::new_v4()));
+        let write_result = async {
+            if tokio::fs::try_exists(destination).await? {
+                return Err(StorageError::ObjectConflict(
+                    destination.display().to_string(),
+                ));
+            }
+            let mut file = tokio::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&temporary)
+                .await?;
+            let mut body = output.body.into_async_read();
+            let mut written = 0u64;
+            let mut buffer = [0u8; 64 * 1024];
+            loop {
+                let len = body
+                    .read(&mut buffer)
+                    .await
+                    .map_err(|e| StorageError::Backend(format!("{e:?}")))?;
+                if len == 0 {
+                    break;
+                }
+                let len_u64 = u64::try_from(len).map_err(|_| {
+                    StorageError::Internal("S3 download chunk length overflow".to_string())
+                })?;
+                written = written.checked_add(len_u64).ok_or_else(|| {
+                    StorageError::ObjectTooLarge {
+                        label: intent.label(),
+                        actual: u64::MAX,
+                        limit: intent.max_bytes(),
+                    }
+                })?;
+                intent.ensure_len(written)?;
+                let chunk = buffer.get(..len).ok_or_else(|| {
+                    StorageError::Internal("S3 download chunk range invalid".to_string())
+                })?;
+                file.write_all(chunk).await?;
+            }
+            if written != expected_len {
+                return Err(StorageError::Internal(format!(
+                    "S3 object length mismatch while downloading {key}: expected {expected_len}, wrote {written}"
+                )));
+            }
+            file.flush().await?;
+            drop(file);
+            if tokio::fs::try_exists(destination).await? {
+                return Err(StorageError::ObjectConflict(
+                    destination.display().to_string(),
+                ));
+            }
+            tokio::fs::rename(&temporary, destination).await?;
+            Ok::<(), StorageError>(())
+        }
+        .await;
+        cleanup_temp_file_on_error(write_result, &temporary).await
+    }
+
+    async fn exists(&self, key: &StorageKey) -> Result<bool> {
+        self.object_len(key).await.map(|value| value.is_some())
+    }
+
+    async fn delete(&self, key: &StorageKey) -> Result<()> {
+        self.client
+            .delete_object()
+            .bucket(&self.bucket)
+            .key(self.object_key(key))
+            .send()
+            .await
+            .map_err(|e| StorageError::Backend(format!("{e:?}")))?;
+        Ok(())
+    }
+
+    async fn list_prefix(&self, prefix: &StorageKey) -> Result<Vec<StorageKey>> {
+        let mut continuation_token = None;
+        let mut keys = Vec::new();
+        let physical_prefix = self.object_key(prefix);
+        loop {
+            let output = self
+                .client
+                .list_objects_v2()
+                .bucket(&self.bucket)
+                .prefix(&physical_prefix)
+                .set_continuation_token(continuation_token.clone())
+                .send()
+                .await
+                .map_err(|e| StorageError::Backend(format!("{e:?}")))?;
+            for object in output.contents() {
+                if let Some(key) = object.key() {
+                    let logical_key = self.strip_prefix(key)?;
+                    keys.push(logical_key);
+                }
+            }
+            continuation_token = output.next_continuation_token().map(ToOwned::to_owned);
+            if continuation_token.is_none() {
+                break;
+            }
+        }
+        Ok(keys)
+    }
+}
+
+impl S3Storage {
+    fn strip_prefix(&self, physical_key: &str) -> Result<StorageKey> {
+        let logical = match &self.prefix {
+            Some(prefix) => physical_key
+                .strip_prefix(prefix)
+                .and_then(|value| value.strip_prefix('/'))
+                .ok_or_else(|| {
+                    StorageError::Internal(format!(
+                        "S3 list returned key outside configured prefix: {physical_key}"
+                    ))
+                })?,
+            None => physical_key,
+        };
+        StorageKey::try_new(logical).map_err(|e| StorageError::InvalidKey(e.to_string()))
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn create_bucket_if_missing_for_tests(&self) -> Result<()> {
+        let create_bucket = self
+            .client
+            .create_bucket()
+            .bucket(&self.bucket)
+            .send()
+            .await;
+        if let Err(error) = create_bucket {
+            let text = format!("{error} {error:?}");
+            if !(text.contains("BucketAlreadyOwnedByYou")
+                || text.contains("BucketAlreadyExists")
+                || text.contains("Conflict")
+                || text.contains("409"))
+            {
+                return Err(StorageError::Backend(format!("{error:?}")));
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Create an immutable tar archive from a validated bundle directory.
+pub async fn pack_directory_to_tar(source_dir: &Path, archive_path: &Path) -> Result<()> {
+    let source_dir = source_dir.to_path_buf();
+    let archive_path = archive_path.to_path_buf();
+    tokio::task::spawn_blocking(move || pack_directory_to_tar_blocking(&source_dir, &archive_path))
+        .await
+        .map_err(|e| StorageError::Internal(e.to_string()))?
+}
+
+/// Extract an Agentics-managed bundle tar archive into a destination directory.
+pub async fn unpack_tar_to_directory(archive_path: &Path, destination_dir: &Path) -> Result<()> {
+    let archive_path = archive_path.to_path_buf();
+    let destination_dir = destination_dir.to_path_buf();
+    tokio::task::spawn_blocking(move || {
+        unpack_tar_to_directory_blocking(&archive_path, &destination_dir)
+    })
+    .await
+    .map_err(|e| StorageError::Internal(e.to_string()))?
+}
+
+async fn put_local_bytes(
+    storage: &LocalStorage,
+    key: &StorageKey,
+    full: &Path,
+    key_path: &Path,
+    content: &[u8],
+) -> Result<()> {
+    storage.reject_symlink_prefixes(key_path)?;
+    let parent = full
+        .parent()
+        .ok_or_else(|| StorageError::Internal("storage key has no parent".to_string()))?;
+    tokio::fs::create_dir_all(parent).await?;
+    storage.reject_symlink_prefixes(key_path)?;
+    storage.reject_symlink_object(full)?;
+    if tokio::fs::try_exists(full).await? {
+        return Err(StorageError::ObjectConflict(key.to_string()));
+    }
+    let temporary_full = parent.join(format!(".agentics-write-{}", uuid::Uuid::new_v4()));
+    let write_result = async {
+        let mut temporary = tokio::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary_full)
+            .await?;
+        temporary.write_all(content).await?;
+        temporary.flush().await?;
+        drop(temporary);
+        storage.reject_symlink_prefixes(key_path)?;
+        storage.reject_symlink_object(full)?;
+        if tokio::fs::try_exists(full).await? {
+            return Err(StorageError::ObjectConflict(key.to_string()));
+        }
+        tokio::fs::rename(&temporary_full, full).await?;
+        Ok::<(), StorageError>(())
+    }
+    .await;
+    cleanup_temp_file_on_error(write_result, &temporary_full).await
+}
+
+async fn cleanup_temp_file_on_error(result: Result<()>, temporary: &Path) -> Result<()> {
+    if let Err(error) = result {
+        if let Err(cleanup_error) = tokio::fs::remove_file(temporary).await
+            && cleanup_error.kind() != std::io::ErrorKind::NotFound
+        {
+            return Err(cleanup_error.into());
+        }
+        return Err(error);
+    }
+    Ok(())
+}
+
+fn list_local_prefix(root: &Path, prefix: &str) -> Result<Vec<StorageKey>> {
+    let start = root.join(prefix);
+    if !start.exists() {
+        return Ok(Vec::new());
+    }
+    let mut keys = Vec::new();
+    let mut stack = vec![start];
+    while let Some(path) = stack.pop() {
+        let metadata = fs::symlink_metadata(&path)?;
+        if metadata.file_type().is_symlink() {
+            continue;
+        }
+        if metadata.is_dir() {
+            for entry in fs::read_dir(&path)? {
+                stack.push(entry?.path());
+            }
+        } else if metadata.is_file() {
+            let relative = path
+                .strip_prefix(root)
+                .map_err(|e| StorageError::Internal(e.to_string()))?;
+            let key = relative
+                .to_str()
+                .ok_or_else(|| StorageError::InvalidKey("storage key is not UTF-8".to_string()))?
+                .replace('\\', "/");
+            keys.push(
+                StorageKey::try_new(&key).map_err(|e| StorageError::InvalidKey(e.to_string()))?,
+            );
+        }
+    }
+    keys.sort();
+    Ok(keys)
+}
+
+fn normalized_s3_prefix(value: Option<&str>) -> Result<Option<String>> {
+    let Some(prefix) = value.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+    StorageKey::try_new(prefix)
+        .map_err(|e| StorageError::InvalidKey(e.to_string()))
+        .map(|key| Some(key.to_string()))
+}
+
+fn s3_error_is_not_found<E: std::fmt::Debug + std::fmt::Display>(error: &E) -> bool {
+    let text = format!("{error} {error:?}");
+    text.contains("NotFound")
+        || text.contains("NoSuchKey")
+        || text.contains("NoSuchBucket")
+        || text.contains("404")
+}
+
+fn s3_error_is_conflict<E: std::fmt::Debug + std::fmt::Display>(error: &E) -> bool {
+    let text = format!("{error} {error:?}");
+    text.contains("PreconditionFailed") || text.contains("AlreadyExists") || text.contains("412")
+}
+
+fn pack_directory_to_tar_blocking(source_dir: &Path, archive_path: &Path) -> Result<()> {
+    if let Some(parent) = archive_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let temporary = archive_path.with_extension(format!("agentics-tar-{}", uuid::Uuid::new_v4()));
+    let file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temporary)?;
+    let result = (|| {
+        let mut builder = tar::Builder::new(file);
+        append_bundle_dir(&mut builder, source_dir, source_dir)?;
+        builder.finish()?;
+        fs::rename(&temporary, archive_path)?;
+        Ok::<(), StorageError>(())
+    })();
+    if let Err(error) = result {
+        if let Err(cleanup_error) = fs::remove_file(&temporary)
+            && cleanup_error.kind() != std::io::ErrorKind::NotFound
+        {
+            return Err(cleanup_error.into());
+        }
+        return Err(error);
+    }
+    Ok(())
+}
+
+fn append_bundle_dir(builder: &mut tar::Builder<fs::File>, root: &Path, dir: &Path) -> Result<()> {
+    for entry in fs::read_dir(dir)? {
+        let path = entry?.path();
+        let metadata = fs::symlink_metadata(&path)?;
+        let relative = path
+            .strip_prefix(root)
+            .map_err(|e| StorageError::Internal(e.to_string()))?;
+        if metadata.is_dir() {
+            builder.append_dir(relative, &path)?;
+            append_bundle_dir(builder, root, &path)?;
+        } else if metadata.is_file() {
+            builder.append_path_with_name(&path, relative)?;
+        } else {
+            return Err(StorageError::InvalidKey(format!(
+                "bundle archive contains unsupported filesystem entry: {}",
+                path.display()
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn unpack_tar_to_directory_blocking(archive_path: &Path, destination_dir: &Path) -> Result<()> {
+    fs::create_dir_all(destination_dir)?;
+    let file = fs::File::open(archive_path)?;
+    let mut archive = tar::Archive::new(file);
+    for entry in archive.entries()? {
+        let mut entry = entry?;
+        let relative = entry.path()?.into_owned();
+        validate_tar_path(&relative)?;
+        let target = destination_dir.join(&relative);
+        let entry_type = entry.header().entry_type();
+        if entry_type.is_dir() {
+            fs::create_dir_all(&target)?;
+        } else if entry_type.is_file() {
+            if let Some(parent) = target.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            let mut file = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&target)?;
+            std::io::copy(&mut entry, &mut file)?;
+            file.flush()?;
+        } else {
+            return Err(StorageError::InvalidKey(format!(
+                "bundle archive contains unsupported tar entry: {}",
+                relative.display()
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn validate_tar_path(path: &Path) -> Result<()> {
+    if path.as_os_str().is_empty() || path.is_absolute() {
+        return Err(StorageError::InvalidKey(
+            "bundle archive contains unsafe path".to_string(),
+        ));
+    }
+    for component in path.components() {
+        match component {
+            Component::Normal(_) => {}
+            _ => {
+                return Err(StorageError::InvalidKey(
+                    "bundle archive contains unsafe path".to_string(),
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
 fn invalid_storage_key() -> StorageError {
     StorageError::InvalidKey(
         "storage key must be a non-empty relative path with safe ASCII components and no `.` or `..` components".to_string(),
@@ -269,158 +1083,4 @@ fn invalid_storage_key() -> StorageError {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::path::PathBuf;
-
-    use super::{LocalStorage, Storage, StorageError, StorageKey, StorageKeyError};
-
-    /// Verifies that local storage returns relative keys.
-    #[tokio::test]
-    async fn local_storage_returns_relative_keys() {
-        let root = temp_storage_root("relative-keys");
-        let storage = LocalStorage::new(&root);
-
-        let key = storage
-            .put(&storage_key("objects/a.txt"), b"hello")
-            .await
-            .expect("put should succeed");
-
-        assert_eq!(key.as_str(), "objects/a.txt");
-        assert_eq!(
-            storage.get(&key).await.expect("get should succeed"),
-            b"hello"
-        );
-        assert!(root.join("objects/a.txt").is_file());
-        drop(std::fs::remove_dir_all(root));
-    }
-
-    /// Verifies that local storage rejects absolute and parent keys.
-    #[tokio::test]
-    async fn local_storage_rejects_absolute_and_parent_keys() {
-        let root = temp_storage_root("bad-keys");
-
-        for key in [
-            "",
-            "/tmp/escape.txt",
-            "../escape.txt",
-            "a/../escape.txt",
-            ".",
-            "a//b",
-            "a\\b",
-            "a b",
-        ] {
-            let result = StorageKey::try_new(key);
-            assert!(matches!(result, Err(StorageKeyError::InvalidKey)));
-        }
-        drop(std::fs::remove_dir_all(root));
-    }
-
-    #[cfg(unix)]
-    /// Verifies that local storage rejects symlink prefixes.
-    #[tokio::test]
-    async fn local_storage_rejects_symlink_prefixes() {
-        let root = temp_storage_root("symlink-root");
-        let outside = temp_storage_root("symlink-outside");
-        std::os::unix::fs::symlink(&outside, root.join("link")).expect("failed to create symlink");
-        let storage = LocalStorage::new(&root);
-
-        let result = storage.put(&storage_key("link/escape.txt"), b"bad").await;
-
-        assert!(matches!(result, Err(StorageError::SymlinkRejected(_))));
-        assert!(!outside.join("escape.txt").exists());
-        drop(std::fs::remove_dir_all(root));
-        drop(std::fs::remove_dir_all(outside));
-    }
-
-    #[cfg(unix)]
-    /// Verifies that local storage rejects symlink objects.
-    #[tokio::test]
-    async fn local_storage_rejects_symlink_objects() {
-        let root = temp_storage_root("symlink-object-root");
-        let outside = temp_storage_root("symlink-object-outside");
-        std::fs::create_dir_all(root.join("objects")).expect("objects dir should be created");
-        std::os::unix::fs::symlink(outside.join("escape.txt"), root.join("objects/object.txt"))
-            .expect("failed to create symlink");
-        let storage = LocalStorage::new(&root);
-
-        let result = storage
-            .put(&storage_key("objects/object.txt"), b"bad")
-            .await;
-
-        assert!(matches!(result, Err(StorageError::SymlinkRejected(_))));
-        assert!(!outside.join("escape.txt").exists());
-        drop(std::fs::remove_dir_all(root));
-        drop(std::fs::remove_dir_all(outside));
-    }
-
-    /// Verifies that local storage promotes without overwriting.
-    #[tokio::test]
-    async fn local_storage_promotes_without_overwriting() {
-        let root = temp_storage_root("promote");
-        let storage = LocalStorage::new(&root);
-
-        let temporary_key = storage
-            .put(&storage_key("_tmp/object.txt"), b"temporary")
-            .await
-            .expect("temporary put should succeed");
-        let durable_key = storage
-            .promote(&temporary_key, &storage_key("objects/object.txt"))
-            .await
-            .expect("promote should succeed");
-
-        assert_eq!(durable_key.as_str(), "objects/object.txt");
-        assert_eq!(
-            storage
-                .get(&storage_key("objects/object.txt"))
-                .await
-                .expect("durable object should exist"),
-            b"temporary"
-        );
-        assert!(
-            !storage
-                .exists(&temporary_key)
-                .await
-                .expect("temporary existence check should succeed")
-        );
-
-        let second_temporary_key = storage
-            .put(&storage_key("_tmp/object-2.txt"), b"second")
-            .await
-            .expect("second temporary put should succeed");
-        let overwrite = storage
-            .promote(&second_temporary_key, &storage_key("objects/object.txt"))
-            .await;
-        assert!(
-            overwrite.is_err(),
-            "promote must not overwrite an existing durable object"
-        );
-        assert_eq!(
-            storage
-                .get(&storage_key("objects/object.txt"))
-                .await
-                .expect("durable object should remain unchanged"),
-            b"temporary"
-        );
-        assert!(
-            storage
-                .exists(&second_temporary_key)
-                .await
-                .expect("failed promotion should leave temporary object")
-        );
-
-        drop(std::fs::remove_dir_all(root));
-    }
-
-    /// Handles storage key for this module.
-    fn storage_key(value: &str) -> StorageKey {
-        StorageKey::try_new(value).expect("test storage key is valid")
-    }
-
-    /// Handles temp storage root for this module.
-    fn temp_storage_root(label: &str) -> PathBuf {
-        let root =
-            std::env::temp_dir().join(format!("agentics-storage-{label}-{}", uuid::Uuid::new_v4()));
-        std::fs::create_dir_all(&root).expect("failed to create storage root");
-        root
-    }
-}
+mod tests;

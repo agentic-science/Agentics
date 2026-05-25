@@ -25,13 +25,15 @@ impl MaintenanceRepository<'_> {
 
     pub async fn ensure_challenges_seeded_from_root(
         &self,
+        config: &agentics_config::Config,
+        storage: &dyn agentics_storage::Storage,
         challenges_root: &str,
-        storage_root: &str,
     ) -> Result<usize> {
         db::maintenance::ensure_challenges_seeded_from_root(
             self.pool,
+            config,
+            storage,
             challenges_root,
-            storage_root,
         )
         .await
     }

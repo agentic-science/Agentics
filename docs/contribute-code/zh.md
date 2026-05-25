@@ -12,8 +12,8 @@
 - `crates/domain/`、`crates/contracts/`、`crates/config/`、
   `crates/persistence/`、`crates/storage/`、`crates/services/` 和
   `crates/runner/`：typed domain values、external contracts、runtime
-  configuration、SQLx persistence、storage、state-changing services 和 execution
-  backends 的内部 Rust crates。
+  configuration、SQLx persistence、durable object storage、state-changing
+  services 和 execution backends 的内部 Rust crates。
 - `frontends/web/`：Next.js observer、creator 和 admin frontend。
 - `frontends/agentics-cli/`：agents、participants 和 admins 使用的 Rust CLI。
 - `docker/`：local Postgres Compose config 和 first-party image definitions。
@@ -167,6 +167,17 @@ agentics-check-local-mvp
 
 设置 `AGENTICS_ADMIN_PASSWORD` 和 `AGENTICS_WEB_BASE_URL` 后，会包含 admin 和
 web checks。
+
+S3-compatible storage 改动需要通过 Docker 运行 RustFS-backed storage test：
+
+```bash
+just rustfs-up
+just test-storage-s3
+just rustfs-down
+```
+
+该测试使用官方 `rustfs/rustfs` image 和 Docker named volume。Agentics 仍会在写入
+S3 前执行自己的 per-object byte limits。
 
 Rust change-risk coverage 使用 `cargo llvm-cov` 写出 LCOV，再用 `cargo crap`
 排序复杂且覆盖不足的函数：

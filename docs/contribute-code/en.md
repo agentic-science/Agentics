@@ -12,8 +12,8 @@ submit a solution or observe public results, use the root `README.md` first.
 - `crates/domain/`, `crates/contracts/`, `crates/config/`,
   `crates/persistence/`, `crates/storage/`, `crates/services/`, and
   `crates/runner/`: internal Rust crates for typed domain values, external
-  contracts, runtime configuration, SQLx persistence, storage, state-changing
-  services, and execution backends.
+  contracts, runtime configuration, SQLx persistence, durable object storage,
+  state-changing services, and execution backends.
 - `frontends/web/`: Next.js observer, creator, and admin frontend.
 - `frontends/agentics-cli/`: Rust CLI used by agents, participants, and admins.
 - `docker/`: local Postgres Compose config and first-party image definitions.
@@ -170,6 +170,18 @@ agentics-check-local-mvp
 
 Set `AGENTICS_ADMIN_PASSWORD` and `AGENTICS_WEB_BASE_URL` to include admin and
 web checks.
+
+For S3-compatible storage changes, run the RustFS-backed storage test through
+Docker:
+
+```bash
+just rustfs-up
+just test-storage-s3
+just rustfs-down
+```
+
+The test uses the official `rustfs/rustfs` image and a Docker named volume.
+Agentics still enforces its own per-object byte limits before writing to S3.
 
 For Rust change-risk coverage, use `cargo llvm-cov` to write LCOV and
 `cargo crap` to rank complex, under-covered functions:

@@ -27,18 +27,25 @@ use agentics_domain::models::ids::{
 use agentics_domain::models::names::ChallengeName;
 use agentics_domain::models::paths::{RepoRelativePath, RepositoryCheckoutPath};
 use agentics_persistence::{self as persistence, Repositories};
-use agentics_storage::{Storage, StorageKey};
+use agentics_storage::{
+    Storage, StorageKey, StorageWriteIntent, pack_directory_to_tar, storage_work_root,
+};
 
 const CHALLENGE_DRAFT_QUOTA_WINDOW_SECONDS: i64 = 24 * 60 * 60;
 
 mod private_assets;
 mod types;
+mod utils;
 
 use private_assets::{extract_private_asset_overlay, validate_private_asset_zip_upload};
 pub use types::{
     ChallengeDraftAdmin, ChallengeDraftCreator, CreateChallengeDraftServiceRequest,
     PublishChallengeDraftServiceRequest, ReviewChallengeDraftServiceRequest,
     UploadChallengePrivateAssetServiceRequest, ValidateChallengeDraftServiceRequest,
+};
+use utils::{
+    base64_decode, challenge_bundle_storage_key, cleanup_file, cleanup_runtime_bundle,
+    cleanup_storage_key, non_empty_message,
 };
 
 /// Create a challenge draft bound to a public GitHub PR and manifest.
@@ -224,7 +231,17 @@ pub async fn upload_challenge_private_asset(
         .await
         .map_err(ServiceError::unique_violation_as_conflict)?;
 
-    let temporary_storage_key = match storage.put(&temporary_asset_key, &asset_bytes).await {
+    let temporary_storage_key = match storage
+        .put(
+            &temporary_asset_key,
+            &asset_bytes,
+            StorageWriteIntent::new(
+                "challenge private asset ZIP",
+                config.challenge_private_asset_bytes_per_draft,
+            ),
+        )
+        .await
+    {
         Ok(key) => key,
         Err(error) => {
             fail_challenge_private_asset_record(pool, &asset_row_id, &error.to_string()).await;
@@ -301,17 +318,6 @@ async fn cleanup_unreferenced_private_asset_object(
     }
     cleanup_storage_key(storage, storage_key).await;
     Ok(())
-}
-
-/// Deletes a private-asset storage object after a failed or repaired upload path.
-async fn cleanup_storage_key(storage: &dyn Storage, storage_key: &StorageKey) {
-    if let Err(error) = storage.delete(storage_key).await {
-        warn!(
-            storage_key = %storage_key,
-            error = %error,
-            "failed to clean up private asset temporary storage object"
-        );
-    }
 }
 
 /// List GitHub-backed challenge drafts for admin review.
@@ -693,11 +699,8 @@ async fn publish_claimed_challenge_draft(
                 .await?;
         }
         ChallengeCreationRequestKind::NewChallenge => {
-            let final_bundle_path = runtime_bundle_path(config, draft, &manifest, publish_claim_id);
             let temporary_bundle_path =
                 temporary_runtime_bundle_path(config, draft, publish_claim_id);
-            let final_public_bundle_path =
-                public_runtime_bundle_path(config, draft, &manifest, publish_claim_id);
             let temporary_public_bundle_path =
                 temporary_public_runtime_bundle_path(config, draft, publish_claim_id);
 
@@ -714,17 +717,13 @@ async fn publish_claimed_challenge_draft(
                     manifest: &manifest,
                     bundle_sha256,
                     temporary_bundle_path: &temporary_bundle_path,
-                    final_bundle_path: &final_bundle_path,
                     temporary_public_bundle_path: &temporary_public_bundle_path,
-                    final_public_bundle_path: &final_public_bundle_path,
                 },
             )
             .await;
             if let Err(error) = publish_new_result {
                 cleanup_runtime_bundle(&temporary_bundle_path).await;
-                cleanup_runtime_bundle(&final_bundle_path).await;
                 cleanup_runtime_bundle(&temporary_public_bundle_path).await;
-                cleanup_runtime_bundle(&final_public_bundle_path).await;
                 return Err(error);
             }
         }
@@ -742,9 +741,7 @@ struct PublishNewChallengeDraftContext<'a> {
     manifest: &'a ChallengeCreationManifest,
     bundle_sha256: Sha256Digest,
     temporary_bundle_path: &'a Path,
-    final_bundle_path: &'a Path,
     temporary_public_bundle_path: &'a Path,
-    final_public_bundle_path: &'a Path,
 }
 
 /// Assemble, validate, promote, and commit a new challenge publish attempt.
@@ -774,32 +771,80 @@ async fn prepare_and_publish_new_challenge_draft(
     if config.requires_digest_pinned_images() {
         challenge_bundle::validate_digest_pinned_images(&spec)?;
     }
-    promote_runtime_bundle(ctx.temporary_bundle_path, ctx.final_bundle_path).await?;
-    promote_runtime_bundle(
-        ctx.temporary_public_bundle_path,
-        ctx.final_public_bundle_path,
-    )
-    .await?;
-
-    let statement_path = ctx.final_bundle_path.join("statement.md");
-    let managed_bundle_path = agentics_domain::models::paths::ManagedBundlePath::from_existing_dir(
-        ctx.final_bundle_path,
+    let bundle_key = challenge_bundle_storage_key(
+        "challenge-bundles",
+        ctx.manifest.challenge_name.as_str(),
+        ctx.draft.id.as_str(),
+        ctx.publish_claim_id.as_str(),
     )?;
-    let managed_public_bundle_path =
-        agentics_domain::models::paths::ManagedBundlePath::from_existing_dir(
-            ctx.final_public_bundle_path,
-        )?;
-    let managed_statement_path =
-        agentics_domain::models::paths::ManagedStatementPath::from_existing_file(&statement_path)?;
-    Repositories::new(pool)
+    let public_bundle_key = challenge_bundle_storage_key(
+        "challenge-public-bundles",
+        ctx.manifest.challenge_name.as_str(),
+        ctx.draft.id.as_str(),
+        ctx.publish_claim_id.as_str(),
+    )?;
+    let statement_key = StorageKey::try_new(format!(
+        "challenge-statements/{}/{}-{}.md",
+        ctx.manifest.challenge_name, ctx.draft.id, ctx.publish_claim_id
+    ))?;
+    let private_archive_path = storage_work_root(config)?
+        .join("_tmp")
+        .join(format!("bundle-{}.tar", Uuid::new_v4()));
+    let public_archive_path = storage_work_root(config)?
+        .join("_tmp")
+        .join(format!("public-bundle-{}.tar", Uuid::new_v4()));
+    let storage_result = async {
+        pack_directory_to_tar(ctx.temporary_bundle_path, &private_archive_path).await?;
+        pack_directory_to_tar(ctx.temporary_public_bundle_path, &public_archive_path).await?;
+        storage
+            .put_file(
+                &bundle_key,
+                &private_archive_path,
+                StorageWriteIntent::new(
+                    "challenge bundle archive",
+                    config.storage_max_bundle_archive_bytes,
+                ),
+            )
+            .await?;
+        storage
+            .put_file(
+                &public_bundle_key,
+                &public_archive_path,
+                StorageWriteIntent::new(
+                    "challenge bundle archive",
+                    config.storage_max_bundle_archive_bytes,
+                ),
+            )
+            .await?;
+        let statement_bytes =
+            tokio::fs::read(ctx.temporary_bundle_path.join("statement.md")).await?;
+        storage
+            .put(
+                &statement_key,
+                &statement_bytes,
+                StorageWriteIntent::new("challenge statement", config.storage_max_statement_bytes),
+            )
+            .await?;
+        Ok::<(), ServiceError>(())
+    }
+    .await;
+    cleanup_file(&private_archive_path).await;
+    cleanup_file(&public_archive_path).await;
+    if let Err(error) = storage_result {
+        cleanup_storage_key(storage, &statement_key).await;
+        cleanup_storage_key(storage, &public_bundle_key).await;
+        cleanup_storage_key(storage, &bundle_key).await;
+        return Err(error);
+    }
+    let publish_result = Repositories::new(pool)
         .challenge_drafts()
         .publish_new(&persistence::PublishNewChallengeDraftInput {
             draft_id: ctx.draft.id.clone(),
             publish_claim_id: ctx.publish_claim_id.clone(),
             challenge_name: ctx.manifest.challenge_name.clone(),
-            bundle_path: managed_bundle_path,
-            public_bundle_path: managed_public_bundle_path,
-            statement_path: managed_statement_path,
+            bundle_key: bundle_key.clone(),
+            public_bundle_key: public_bundle_key.clone(),
+            statement_key: statement_key.clone(),
             spec,
             title: ctx.manifest.title.clone(),
             summary: ctx.manifest.summary.clone(),
@@ -809,7 +854,14 @@ async fn prepare_and_publish_new_challenge_draft(
             repository_path: ctx.repository_path.to_string(),
             bundle_sha256: ctx.bundle_sha256,
         })
-        .await
+        .await;
+    if let Err(error) = publish_result {
+        cleanup_storage_key(storage, &statement_key).await;
+        cleanup_storage_key(storage, &public_bundle_key).await;
+        cleanup_storage_key(storage, &bundle_key).await;
+        return Err(error);
+    }
+    Ok(())
 }
 
 /// Ensures a draft path follows the canonical `challenges/{challenge_name}` repository layout.
@@ -974,7 +1026,15 @@ async fn assemble_runtime_bundle(
         .await?;
 
     for asset in &draft.private_assets {
-        let bytes = storage.get(&asset.storage_key).await?;
+        let bytes = storage
+            .get(
+                &asset.storage_key,
+                StorageWriteIntent::new(
+                    "challenge private asset ZIP",
+                    config.challenge_private_asset_bytes_per_draft,
+                ),
+            )
+            .await?;
         extract_private_asset_overlay(
             &bytes,
             runtime_bundle_path,
@@ -1006,41 +1066,14 @@ async fn assemble_public_bundle(
     .await
 }
 
-/// Final managed runtime-bundle path for a published draft.
-fn runtime_bundle_path(
-    config: &Config,
-    draft: &ChallengeDraftResponse,
-    manifest: &ChallengeCreationManifest,
-    publish_claim_id: &ChallengeDraftPublishClaimId,
-) -> PathBuf {
-    Path::new(&config.storage_root)
-        .join("challenge-bundles")
-        .join(manifest.challenge_name.as_str())
-        .join(draft.id.as_str())
-        .join(publish_claim_id.as_str())
-}
-
-/// Final managed public-only bundle path for a published draft.
-fn public_runtime_bundle_path(
-    config: &Config,
-    draft: &ChallengeDraftResponse,
-    manifest: &ChallengeCreationManifest,
-    publish_claim_id: &ChallengeDraftPublishClaimId,
-) -> PathBuf {
-    Path::new(&config.storage_root)
-        .join("challenge-public-bundles")
-        .join(manifest.challenge_name.as_str())
-        .join(draft.id.as_str())
-        .join(publish_claim_id.as_str())
-}
-
-/// Attempt-scoped temporary runtime-bundle path under the same storage root.
+/// Attempt-scoped temporary runtime-bundle path under local storage work root.
 fn temporary_runtime_bundle_path(
     config: &Config,
     draft: &ChallengeDraftResponse,
     publish_claim_id: &ChallengeDraftPublishClaimId,
 ) -> PathBuf {
-    Path::new(&config.storage_root)
+    storage_work_root(config)
+        .unwrap_or_else(|_| std::env::temp_dir().join("agentics-storage-work"))
         .join("_tmp")
         .join("challenge-bundles")
         .join(format!(
@@ -1051,13 +1084,14 @@ fn temporary_runtime_bundle_path(
         ))
 }
 
-/// Attempt-scoped temporary public-only bundle path under the same storage root.
+/// Attempt-scoped temporary public-only bundle path under local storage work root.
 fn temporary_public_runtime_bundle_path(
     config: &Config,
     draft: &ChallengeDraftResponse,
     publish_claim_id: &ChallengeDraftPublishClaimId,
 ) -> PathBuf {
-    Path::new(&config.storage_root)
+    storage_work_root(config)
+        .unwrap_or_else(|_| std::env::temp_dir().join("agentics-storage-work"))
         .join("_tmp")
         .join("challenge-public-bundles")
         .join(format!(
@@ -1066,34 +1100,6 @@ fn temporary_public_runtime_bundle_path(
             publish_claim_id,
             Uuid::new_v4()
         ))
-}
-
-/// Atomically move a validated temporary bundle into its final managed path.
-async fn promote_runtime_bundle(
-    temporary_bundle_path: &Path,
-    final_bundle_path: &Path,
-) -> Result<()> {
-    if let Some(parent) = final_bundle_path.parent() {
-        tokio::fs::create_dir_all(parent).await?;
-    }
-    if tokio::fs::try_exists(final_bundle_path).await? {
-        return Err(ServiceError::Conflict);
-    }
-    tokio::fs::rename(temporary_bundle_path, final_bundle_path).await?;
-    Ok(())
-}
-
-/// Best-effort cleanup for failed runtime bundle assembly or publish.
-async fn cleanup_runtime_bundle(path: &Path) {
-    if let Err(error) = tokio::fs::remove_dir_all(path).await
-        && error.kind() != std::io::ErrorKind::NotFound
-    {
-        warn!(
-            path = %path.display(),
-            error = %error,
-            "failed to clean up challenge runtime bundle"
-        );
-    }
 }
 
 /// Verifies every private asset required by the manifest and bundle shape is present.
@@ -1172,22 +1178,6 @@ async fn validate_private_asset_required_paths(
     }
 
     Ok(())
-}
-
-/// Returns the trimmed message only when it carries non-whitespace content.
-fn non_empty_message(value: &str) -> Option<&str> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed)
-    }
-}
-
-/// Decodes user-provided base64 payloads after trimming transport whitespace.
-fn base64_decode(input: &str) -> Option<Vec<u8>> {
-    use base64::{Engine as _, engine::general_purpose::STANDARD};
-    STANDARD.decode(input.trim()).ok()
 }
 
 #[cfg(test)]

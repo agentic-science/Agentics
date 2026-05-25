@@ -18,7 +18,9 @@ use agentics_domain::models::pioneer_codes::{PioneerCode, PioneerCodeInput};
 use agentics_domain::models::request::{
     CreateSolutionSubmissionRequest, RankingContextResponse, RegisterAgentRequest,
 };
-use agentics_storage::{LocalStorage, Storage, StorageKey};
+use agentics_storage::{
+    LocalStorage, Storage, StorageKey, StorageWriteIntent, pack_directory_to_tar,
+};
 use anyhow::{Context, Result, bail};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use secrecy::{ExposeSecret, SecretString};
@@ -761,6 +763,8 @@ fn local_runner_config(storage_root: &Path) -> Result<Config> {
 
     let mut config = Config::from_env()?;
     config.storage_root = storage_root_value.to_string();
+    config.storage_backend = agentics_config::StorageBackend::Local;
+    config.storage_work_root = Some(storage_root.join("_work").to_string_lossy().to_string());
     config.validate_runner_storage()?;
     Ok(config)
 }
@@ -787,16 +791,34 @@ async fn execute_local_validation_targets(
     for target in &context.targets {
         let job_id = local_validation_job_id(&context.spec.challenge_name, target)?;
         let artifact_key = StorageKey::try_new(format!("local-validation/{job_id}/solution.zip"))?;
-        let stored_artifact_key = storage.put(&artifact_key, &context.package.bytes).await?;
+        let stored_artifact_key = storage
+            .put(
+                &artifact_key,
+                &context.package.bytes,
+                StorageWriteIntent::new(
+                    "solution artifact ZIP",
+                    agentics_contracts::zip_project::MAX_ZIP_PROJECT_ARTIFACT_BYTES,
+                ),
+            )
+            .await?;
+        let bundle_archive_path = context
+            .storage_root
+            .join("_tmp")
+            .join(format!("{job_id}-bundle.tar"));
+        pack_directory_to_tar(&context.bundle_dir, &bundle_archive_path).await?;
+        let bundle_key = StorageKey::try_new(format!("local-validation/{job_id}/bundle.tar"))?;
+        let stored_bundle_key = storage
+            .put_file(
+                &bundle_key,
+                &bundle_archive_path,
+                StorageWriteIntent::new("challenge bundle archive", 1024 * 1024 * 1024),
+            )
+            .await?;
+        drop(tokio::fs::remove_file(&bundle_archive_path).await);
         let payload = EvaluationJobPayload {
             artifact_key: stored_artifact_key,
-            bundle_path: agentics_domain::models::paths::ManagedBundlePath::from_existing_dir(
-                &context.bundle_dir,
-            )?,
-            public_bundle_path:
-                agentics_domain::models::paths::ManagedBundlePath::from_existing_dir(
-                    &context.bundle_dir,
-                )?,
+            bundle_key: stored_bundle_key.clone(),
+            public_bundle_key: stored_bundle_key,
             challenge_id: None,
             challenge_name: context.spec.challenge_name.clone(),
             target: target.clone(),

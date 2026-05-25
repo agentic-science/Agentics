@@ -7,7 +7,6 @@ use agentics_domain::models::challenge::{ChallengeBundleSpec, TargetAccelerator}
 use agentics_domain::models::evaluation::{EvaluationJobPayload, ScoringMode};
 use agentics_domain::models::ids::{ChallengeId, EvaluationJobId, SolutionSubmissionId};
 use agentics_domain::models::names::{ChallengeName, TargetName};
-use agentics_domain::models::paths::ManagedBundlePath;
 
 use super::evaluation_policy::{
     ensure_challenge_supports_eval_type_tx, ensure_validation_uses_public_bundle,
@@ -291,7 +290,7 @@ pub async fn queue_evaluation_job(
     let row = sqlx::query(
         r#"
         SELECT s.id, s.challenge_id, p.name AS challenge_name, s.target, s.agent_id::text AS agent_id, s.artifact_key, s.visible_after_eval,
-               p.bundle_path, p.public_bundle_path, p.spec_json
+               p.bundle_key, p.public_bundle_key, p.spec_json
         FROM solution_submissions s
         JOIN challenges p ON p.challenge_id = s.challenge_id
         WHERE s.id = $1::uuid
@@ -323,20 +322,15 @@ pub async fn queue_evaluation_job(
         &agent_id_from_row(&row, "agent_id")?,
     )
     .await?;
-    let bundle_path = managed_bundle_path_from_row(&row, "bundle_path")?;
-    let public_bundle_path = managed_bundle_path_from_row(&row, "public_bundle_path")?;
-    ensure_validation_uses_public_bundle(
-        input.eval_type,
-        &spec,
-        &bundle_path,
-        &public_bundle_path,
-    )?;
+    let bundle_key = storage_key_from_row(&row, "bundle_key")?;
+    let public_bundle_key = storage_key_from_row(&row, "public_bundle_key")?;
+    ensure_validation_uses_public_bundle(input.eval_type, &spec, &bundle_key, &public_bundle_key)?;
     ensure_no_active_job_for_submission_tx(&mut tx, &input.solution_submission_id).await?;
 
     let payload = serde_json::to_value(EvaluationJobPayload {
         artifact_key: storage_key_from_row(&row, "artifact_key")?,
-        bundle_path,
-        public_bundle_path,
+        bundle_key,
+        public_bundle_key,
         challenge_id: Some(challenge_id.clone()),
         challenge_name: challenge_name.clone(),
         target: target.clone(),
@@ -447,16 +441,6 @@ fn required_accelerator_for_target(
         ))
     })?;
     Ok(target_spec.accelerator)
-}
-
-/// Reads managed bundle path from a database row and validates its domain shape.
-fn managed_bundle_path_from_row(
-    row: &sqlx::postgres::PgRow,
-    column: &str,
-) -> Result<ManagedBundlePath> {
-    let value: String = row.try_get(column)?;
-    ManagedBundlePath::from_existing_dir(value)
-        .map_err(|e| ServiceError::Internal(format!("stored invalid {column}: {e}")))
 }
 
 /// Handles map active job conflict for this module.

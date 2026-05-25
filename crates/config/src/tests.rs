@@ -255,6 +255,58 @@ fn runner_output_and_result_limits_must_be_valid() {
     }
 }
 
+/// Verifies durable storage configuration fails closed for S3 and object limits.
+#[test]
+fn object_storage_config_requires_backend_specific_settings() {
+    for (config, expected) in [
+        (
+            Config {
+                storage_backend: super::StorageBackend::S3,
+                ..test_config()
+            },
+            "AGENTICS_S3_BUCKET",
+        ),
+        (
+            Config {
+                storage_max_bundle_archive_bytes: 0,
+                ..test_config()
+            },
+            "AGENTICS_STORAGE_MAX_BUNDLE_ARCHIVE_BYTES",
+        ),
+        (
+            Config {
+                storage_work_root: Some("relative-work".to_string()),
+                ..test_config()
+            },
+            "AGENTICS_STORAGE_WORK_ROOT",
+        ),
+        (
+            Config {
+                storage_backend: super::StorageBackend::S3,
+                s3_bucket: Some("agentics-test".to_string()),
+                s3_prefix: Some("../bad".to_string()),
+                ..test_config()
+            },
+            "AGENTICS_S3_PREFIX",
+        ),
+    ] {
+        let error = config
+            .validate_object_storage_config()
+            .expect_err("invalid storage config should be rejected");
+        assert!(error.to_string().contains(expected));
+    }
+
+    let config = Config {
+        storage_backend: super::StorageBackend::S3,
+        s3_bucket: Some("agentics-test".to_string()),
+        s3_prefix: Some("agentics/dev".to_string()),
+        s3_endpoint_url: Some("http://127.0.0.1:9000".parse().expect("valid S3 URL")),
+        s3_force_path_style: true,
+        ..test_config()
+    };
+    assert!(config.validate_object_storage_config().is_ok());
+}
+
 /// Verifies that hosted workers must bound bind mounts and writable rootfs.
 #[test]
 fn production_runner_requires_bounded_mounts_layers_and_host_probes() {
@@ -474,6 +526,16 @@ fn test_config() -> Config {
         api_host: super::default_api_host(),
         api_port: super::default_api_port(),
         storage_root: String::new(),
+        storage_backend: super::default_storage_backend(),
+        storage_work_root: None,
+        s3_bucket: None,
+        s3_prefix: None,
+        s3_region: super::default_s3_region(),
+        s3_endpoint_url: None,
+        s3_force_path_style: false,
+        storage_max_bundle_archive_bytes: super::default_storage_max_bundle_archive_bytes(),
+        storage_max_statement_bytes: super::default_storage_max_statement_bytes(),
+        storage_max_json_artifact_bytes: super::default_storage_max_json_artifact_bytes(),
         challenges_root: String::new(),
         admin_username: super::default_admin_username(),
         admin_password: super::default_admin_password(),

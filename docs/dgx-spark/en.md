@@ -92,7 +92,8 @@ checkout, use `cargo run -p agentics-ops --bin <binary> -- ...`.
 | Release symlink | `/opt/agentics/current` |
 | Release versions | `/opt/agentics/releases/<release-id>` |
 | State root | `/srv/agentics` |
-| Storage root | `/srv/agentics/storage` |
+| Local storage root | `/srv/agentics/storage` |
+| Storage work root | `/srv/agentics/storage-work` |
 | Challenge checkout root | `/srv/agentics/challenges` |
 | Runtime root | `/srv/agentics/runtime` |
 | Agentics Docker socket | `/run/agentics/docker.sock` |
@@ -108,6 +109,11 @@ The phase mount root has one loopback XFS mount for each writable runner class:
 - `solution-run`
 - `evaluator-setup`
 - `evaluator-score`
+
+Durable object storage may remain local under `/srv/agentics/storage` or use
+`AGENTICS_STORAGE_BACKEND=s3` with an S3/RustFS-compatible bucket. Storage work
+root is local scratch for bundle packing, unpacking, and S3 downloads; runner
+quota slots remain under `/srv/agentics/phase-mounts`.
 
 ## Required Environment
 

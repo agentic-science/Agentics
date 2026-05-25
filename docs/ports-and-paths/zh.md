@@ -10,6 +10,8 @@ reference。
 | Postgres host port | `AGENTICS_POSTGRES_PORT` | `5432` | Local Docker Compose 和 DGX rehearsal database access |
 | API listen port | `AGENTICS_API_PORT` | `3100` | API process on loopback |
 | Web listen port | `AGENTICS_WEB_PORT` | `3001` | Next.js web process on loopback |
+| RustFS S3 test port | `AGENTICS_RUSTFS_PORT` | `9000` | Local Docker RustFS test service |
+| RustFS console test port | `AGENTICS_RUSTFS_CONSOLE_PORT` | `9001` | Local Docker RustFS console |
 | Public HTTPS | reverse proxy config | `443` | 仅 hosted ingress |
 
 Foreground development 使用 `deploy/local/agentics.env.example`。DGX hosted
@@ -35,6 +37,7 @@ profile 将 `deploy/dgx-spark/agentics.env.example` 复制到
 | Persistent state root | `/srv/agentics` |
 | Challenge root | `/srv/agentics/challenges` |
 | Storage root | `/srv/agentics/storage` |
+| Storage work root | `/srv/agentics/storage-work` |
 | Runner runtime root | `/srv/agentics/runtime` |
 | Agentics Docker socket | `/run/agentics/docker.sock` |
 | Agentics Docker data root | `/srv/agentics/docker-data-root` |
@@ -53,6 +56,41 @@ slots，并使用 Docker `storage_opt.size` 约束 container-layer writes。Slot
 
 `/srv/agentics-test` 用于开发者运行 quota-sensitive integration tests。它必须用
 `agentics-prepare-dgx-spark-test-storage` 单独准备，且 hosted workers 不应使用。
+
+## Durable Object Storage
+
+`AGENTICS_STORAGE_BACKEND=local|s3` 选择 durable storage。Local mode 会把 object
+keys 映射到 `AGENTICS_STORAGE_ROOT` 下。S3 mode 会把同样的 keys 存入
+`AGENTICS_S3_BUCKET` 和可选 `AGENTICS_S3_PREFIX`；credentials 来自 AWS SDK
+provider chain。`AGENTICS_STORAGE_WORK_ROOT` 是 host-local scratch，用于 bundle
+archives、unpacked bundles 和 S3 downloads。
+
+当前 object-key prefixes：
+
+| Prefix | Contents |
+| --- | --- |
+| `solution-submissions/` | Uploaded solution ZIPs |
+| `eval-artifacts/` | Runner logs 和 evaluation artifacts |
+| `challenge-drafts/<draft-id>/private-assets/` | Uploaded private asset ZIP overlays |
+| `challenge-bundles/` | 不可变 private challenge bundle tar archives |
+| `challenge-public-bundles/` | 不可变 public-only challenge bundle tar archives |
+| `challenge-statements/` | Public `statement.md` objects |
+| `challenge-shortlists/` | Creator/admin shortlist JSON artifacts |
+| `_tmp/` | Temporary write/promote objects；stale 后可安全过期 |
+
+RustFS local testing 只通过 Docker：
+
+```bash
+just rustfs-up
+just test-storage-s3
+just rustfs-down
+```
+
+RustFS container 使用官方 `rustfs/rustfs` image 和 Docker named volume。`just
+rustfs-up` helper 默认使用 `--network host`，因为部分 DGX Docker bridge profiles
+会被有意关闭；设置 `AGENTICS_RUSTFS_DOCKER_NETWORK=bridge` 可改用显式 port
+publishing。如果改用 bind mounts，RustFS container 以 UID `10001` 运行，因此 host
+directory 必须允许该 UID 写入。
 
 Systemd units 仅适用于 Linux，并使用上述 release symlink paths。macOS
 development 使用前台 `cargo` 和 `bun` commands。

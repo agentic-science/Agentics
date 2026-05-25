@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use agentics_config::{AgentRegistrationMode, Config, RunnerWritableStorageMode};
 use agentics_runner::connect_docker;
-use agentics_storage::{LocalStorage, Storage};
+use agentics_storage::build_storage;
 use api_server::admin_auth_throttle::AdminAuthThrottle;
 use api_server::router;
 use api_server::state::AppState;
@@ -59,15 +59,16 @@ pub async fn spawn_app(pool: PgPool) -> TestApp {
 /// Tests use this to point storage and seeded challenge roots at temporary
 /// directories while exercising the real router and startup seeding path.
 pub async fn spawn_app_with_config(pool: PgPool, config: Config) -> TestApp {
+    let storage = build_storage(&config)
+        .await
+        .expect("failed to initialize test storage");
     if std::fs::exists(&config.challenges_root).expect("failed to inspect challenge root") {
         agentics_persistence::Repositories::new(&pool)
             .maintenance()
-            .ensure_challenges_seeded_from_root(&config.challenges_root, &config.storage_root)
+            .ensure_challenges_seeded_from_root(&config, storage.as_ref(), &config.challenges_root)
             .await
             .expect("failed to seed challenges");
     }
-
-    let storage = Arc::new(LocalStorage::new(&config.storage_root));
 
     let state = AppState {
         db: pool,
@@ -115,6 +116,16 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
         api_host: "127.0.0.1".to_string(),
         api_port: 0,
         storage_root: storage_root.to_string_lossy().to_string(),
+        storage_backend: agentics_config::StorageBackend::Local,
+        storage_work_root: Some(storage_root.join("_work").to_string_lossy().to_string()),
+        s3_bucket: None,
+        s3_prefix: None,
+        s3_region: "us-east-1".to_string(),
+        s3_endpoint_url: None,
+        s3_force_path_style: false,
+        storage_max_bundle_archive_bytes: 1024 * 1024 * 1024,
+        storage_max_statement_bytes: 1024 * 1024,
+        storage_max_json_artifact_bytes: 1024 * 1024,
         challenges_root: challenges_root.to_string_lossy().to_string(),
         admin_username: "admin".to_string(),
         admin_password: SecretString::from("secret"),
@@ -533,13 +544,15 @@ pub fn sample_sum_solution(expression: &str) -> String {
 /// Execute one production worker cycle against the integration-test database.
 pub async fn run_worker_once(pool: &PgPool, config: &Config) {
     let docker = connect_docker(config).expect("failed to connect to Docker");
-    let storage = LocalStorage::new(&config.storage_root);
+    let storage = build_storage(config)
+        .await
+        .expect("failed to initialize worker storage");
 
     worker::cycle::run_worker_cycle(
         pool,
         &docker,
         config,
-        &storage as &dyn Storage,
+        storage.as_ref(),
         "integration-test-worker",
     )
     .await

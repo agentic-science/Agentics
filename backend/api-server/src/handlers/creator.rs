@@ -85,7 +85,17 @@ pub async fn create_challenge_shortlist_revision(
     let storage_key = StorageKey::try_new(format!(
         "challenge-shortlists/{challenge_name}/{revision_id}.json"
     ))?;
-    let stored_key = state.storage.put(&storage_key, &raw_json).await?;
+    let stored_key = state
+        .storage
+        .put(
+            &storage_key,
+            &raw_json,
+            agentics_storage::StorageWriteIntent::new(
+                "challenge shortlist JSON",
+                state.config.storage_max_json_artifact_bytes,
+            ),
+        )
+        .await?;
 
     let response = Repositories::new(&state.db)
         .challenges()

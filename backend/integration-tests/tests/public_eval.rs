@@ -4,6 +4,8 @@ mod helpers;
 
 use std::path::Path;
 
+use agentics_domain::storage::StorageKey;
+use agentics_storage::{StorageWriteIntent, build_storage, pack_directory_to_tar};
 use helpers::{
     api_url, copy_dir_all, examples_challenges_root, grid_routing_solution_zip_base64,
     published_challenge_id, run_worker_once, sample_sum_solution, solution_zip_base64,
@@ -34,6 +36,71 @@ fn create_validation_disabled_challenge(root: &Path) {
         serde_json::to_string_pretty(&spec).expect("failed to serialize spec"),
     )
     .expect("failed to write copied spec");
+}
+
+async fn store_challenge_bundle_objects(
+    config: &agentics_config::Config,
+    challenge_name: &str,
+    private_bundle: &Path,
+    public_bundle: &Path,
+) -> (StorageKey, StorageKey, StorageKey) {
+    let storage = build_storage(config)
+        .await
+        .expect("storage backend should initialize");
+    let temp = tempfile::tempdir().expect("bundle archive tempdir");
+    let private_archive = temp.path().join("private.tar");
+    let public_archive = temp.path().join("public.tar");
+    pack_directory_to_tar(private_bundle, &private_archive)
+        .await
+        .expect("pack private challenge bundle");
+    pack_directory_to_tar(public_bundle, &public_archive)
+        .await
+        .expect("pack public challenge bundle");
+    let private_key = StorageKey::try_new(format!(
+        "challenge-bundles/{challenge_name}/manual-private.tar"
+    ))
+    .expect("valid private bundle key");
+    let public_key = StorageKey::try_new(format!(
+        "challenge-public-bundles/{challenge_name}/manual-public.tar"
+    ))
+    .expect("valid public bundle key");
+    let statement_key =
+        StorageKey::try_new(format!("challenge-statements/{challenge_name}/manual.md"))
+            .expect("valid statement key");
+    storage
+        .put_file(
+            &private_key,
+            &private_archive,
+            StorageWriteIntent::new(
+                "challenge bundle archive",
+                config.storage_max_bundle_archive_bytes,
+            ),
+        )
+        .await
+        .expect("store private challenge bundle");
+    storage
+        .put_file(
+            &public_key,
+            &public_archive,
+            StorageWriteIntent::new(
+                "challenge bundle archive",
+                config.storage_max_bundle_archive_bytes,
+            ),
+        )
+        .await
+        .expect("store public challenge bundle");
+    let statement = tokio::fs::read(private_bundle.join("statement.md"))
+        .await
+        .expect("read challenge statement");
+    storage
+        .put(
+            &statement_key,
+            &statement,
+            StorageWriteIntent::new("challenge statement", config.storage_max_statement_bytes),
+        )
+        .await
+        .expect("store challenge statement");
+    (private_key, public_key, statement_key)
 }
 
 /// Creates a minimal piped-stdio challenge after validating caller inputs.

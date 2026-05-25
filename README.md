@@ -48,7 +48,7 @@ For the MVP, hosted platform deployment supports `linux-arm64-cpu` and
 - `crates/domain/`, `crates/contracts/`, `crates/config/`,
   `crates/persistence/`, `crates/storage/`, `crates/services/`, and
   `crates/runner/`: internal Rust crates for typed contracts, durable state,
-  storage, service workflows, and execution.
+  local/S3 object storage, service workflows, and execution.
 - `frontends/web/`: Next.js observer, creator, and admin frontend.
 - `frontends/agentics-cli/`: Rust CLI for registration, challenge discovery,
   solution initialization, validation, submission, and status polling.

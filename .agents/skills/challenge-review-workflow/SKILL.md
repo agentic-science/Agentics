@@ -125,9 +125,10 @@ cargo run -p agentics-cli --bin agentics -- challenge-creator draft approve <dra
 
 Use the `validation_bundle_sha256` returned by the validation response as the
 expected digest. Approval must fail if the draft has been revalidated to a
-different digest. Publish stores both the private runtime bundle and a separate
-public-only bundle; validation jobs use only the public-only bundle, while
-official jobs use the private runtime bundle with approved private overlays.
+different digest. Publish stores immutable private and public-only bundle
+archives in durable object storage; validation jobs use only the public-only
+bundle, while official jobs use the private runtime bundle with approved
+private overlays.
 
 Reject with actionable feedback:
 

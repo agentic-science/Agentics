@@ -10,6 +10,8 @@ and MVP target support.
 | Postgres host port | `AGENTICS_POSTGRES_PORT` | `5432` | Local Docker Compose and DGX rehearsal database access |
 | API listen port | `AGENTICS_API_PORT` | `3100` | API process on loopback |
 | Web listen port | `AGENTICS_WEB_PORT` | `3001` | Next.js web process on loopback |
+| RustFS S3 test port | `AGENTICS_RUSTFS_PORT` | `9000` | Local Docker RustFS test service |
+| RustFS console test port | `AGENTICS_RUSTFS_CONSOLE_PORT` | `9001` | Local Docker RustFS console |
 | Public HTTPS | reverse proxy config | `443` | Hosted ingress only |
 
 Source `deploy/local/agentics.env.example` for foreground development. Copy
@@ -36,6 +38,7 @@ inspection. Override defaults with `AGENTICS_DEMO_API_HOST`,
 | Persistent state root | `/srv/agentics` |
 | Challenge root | `/srv/agentics/challenges` |
 | Storage root | `/srv/agentics/storage` |
+| Storage work root | `/srv/agentics/storage-work` |
 | Runner runtime root | `/srv/agentics/runtime` |
 | Agentics Docker socket | `/run/agentics/docker.sock` |
 | Agentics Docker data root | `/srv/agentics/docker-data-root` |
@@ -57,6 +60,42 @@ The `/srv/agentics-test` root is for developer-run quota-sensitive integration
 tests. It must be prepared separately with
 `agentics-prepare-dgx-spark-test-storage` and must not be used by hosted
 workers.
+
+## Durable Object Storage
+
+`AGENTICS_STORAGE_BACKEND=local|s3` selects durable storage. Local mode maps
+object keys below `AGENTICS_STORAGE_ROOT`. S3 mode stores the same keys under
+`AGENTICS_S3_BUCKET` and optional `AGENTICS_S3_PREFIX`; credentials come from
+the AWS SDK provider chain. `AGENTICS_STORAGE_WORK_ROOT` is host-local scratch
+for bundle archives, unpacked bundles, and S3 downloads.
+
+Current object-key prefixes:
+
+| Prefix | Contents |
+| --- | --- |
+| `solution-submissions/` | Uploaded solution ZIPs |
+| `eval-artifacts/` | Runner logs and evaluation artifacts |
+| `challenge-drafts/<draft-id>/private-assets/` | Uploaded private asset ZIP overlays |
+| `challenge-bundles/` | Immutable private challenge bundle tar archives |
+| `challenge-public-bundles/` | Immutable public-only challenge bundle tar archives |
+| `challenge-statements/` | Public `statement.md` objects |
+| `challenge-shortlists/` | Creator/admin shortlist JSON artifacts |
+| `_tmp/` | Temporary write/promote objects; safe to expire after they are stale |
+
+RustFS local testing uses Docker only:
+
+```bash
+just rustfs-up
+just test-storage-s3
+just rustfs-down
+```
+
+The RustFS container uses the official `rustfs/rustfs` image and a Docker named
+volume. The `just rustfs-up` helper defaults to `--network host` because some
+DGX Docker bridge profiles are intentionally disabled; set
+`AGENTICS_RUSTFS_DOCKER_NETWORK=bridge` to use explicit port publishing. If you
+switch to bind mounts, the RustFS container runs as UID `10001`, so the host
+directory must be writable by that UID.
 
 The systemd units are Linux-only and use the release symlink paths above.
 macOS development uses foreground `cargo` and `bun` commands instead.

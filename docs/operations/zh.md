@@ -219,7 +219,12 @@ root，quota-sensitive integration tests 会 fail fast。
 
 ## Logs
 
-当前日志输出到进程 stdout/stderr。Hosted rehearsal 应使用 supervisor 捕获每个服务的日志，例如 `systemd`、带文件日志的 `tmux`，或 container runtime。Worker evaluation logs 会写入 `AGENTICS_STORAGE_ROOT/eval-artifacts/<job-id>/runner.log`。Source extraction、build workspaces、prepared data、solution run I/O 和 evaluator output 等 runner scratch trees 是 per-job temporary workspaces，不应持久化在 durable storage 中。
+当前日志输出到进程 stdout/stderr。Hosted rehearsal 应使用 supervisor 捕获每个服务的日志，例如
+`systemd`、带文件日志的 `tmux`，或 container runtime。Worker evaluation logs 会写入
+durable object storage 的 `eval-artifacts/<job-id>/runner.log`；local storage mode
+下它映射到 `AGENTICS_STORAGE_ROOT`。Source extraction、build workspaces、prepared
+data、solution run I/O 和 evaluator output 等 runner scratch trees 是 per-job
+temporary workspaces，不应持久化在 durable storage 中。
 
 MVP rehearsal 最小日志保留策略：
 
@@ -294,15 +299,23 @@ Actions：
 
 ### Disk Usage 增长
 
-检查：
+Local storage mode 下检查：
 
 ```bash
 du -sh "$AGENTICS_STORAGE_ROOT"
 du -sh "$AGENTICS_STORAGE_ROOT"/eval-artifacts 2>/dev/null || true
-du -sh "$AGENTICS_STORAGE_ROOT"/solution-artifacts 2>/dev/null || true
+du -sh "$AGENTICS_STORAGE_ROOT"/solution-submissions 2>/dev/null || true
 ```
 
-使用 challenge draft cleanup 清理 stale unpublished private assets。Published private runtime bundles、published public-only bundles 和 completed solution artifacts 是持久 MVP records。
+S3 mode 下，用你的 S3 tooling 检查配置的 bucket 和 `AGENTICS_S3_PREFIX`。Agentics
+object keys 包括 `solution-submissions/`、`eval-artifacts/`、
+`challenge-drafts/<draft-id>/private-assets/`、`challenge-bundles/`、
+`challenge-public-bundles/`、`challenge-statements/` 和 `challenge-shortlists/`。
+
+使用 challenge draft cleanup 清理 stale unpublished private assets。Published private
+runtime bundle archives、published public-only bundle archives、statements 和
+completed solution artifacts 是持久 MVP records。请为 stale `_tmp/` keys 配置 S3
+lifecycle cleanup；它们只是 temporary write/promote objects，不应作为 records 长期保留。
 
 ### Public Abuse Spike
 
@@ -317,7 +330,8 @@ du -sh "$AGENTICS_STORAGE_ROOT"/solution-artifacts 2>/dev/null || true
 一起备份：
 
 - Postgres。
-- `AGENTICS_STORAGE_ROOT`。
+- Durable object storage：local mode 下是 `AGENTICS_STORAGE_ROOT`，S3 mode 下是
+  S3 bucket/prefix。
 - Deployed binary/build identifiers。
 - Published challenge repo commit SHAs 和 submodule revision。
 

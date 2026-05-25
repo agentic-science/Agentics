@@ -224,7 +224,14 @@ those slots belong to the hosted worker service user.
 
 ## Logs
 
-Current logging is process stdout/stderr. For hosted rehearsal, run each service under a supervisor that captures logs, for example `systemd`, `tmux` with file logging, or a container runtime. Worker evaluation logs are written under `AGENTICS_STORAGE_ROOT/eval-artifacts/<job-id>/runner.log`. Runner scratch trees for source extraction, build workspaces, prepared data, solution run I/O, and evaluator output are temporary per-job workspaces and should not persist in durable storage.
+Current logging is process stdout/stderr. For hosted rehearsal, run each service
+under a supervisor that captures logs, for example `systemd`, `tmux` with file
+logging, or a container runtime. Worker evaluation logs are written to durable
+object storage at `eval-artifacts/<job-id>/runner.log`; in local storage mode
+that maps under `AGENTICS_STORAGE_ROOT`. Runner scratch trees for source
+extraction, build workspaces, prepared data, solution run I/O, and evaluator
+output are temporary per-job workspaces and should not persist in durable
+storage.
 
 Minimum log retention for MVP rehearsal:
 
@@ -302,15 +309,25 @@ Actions:
 
 ### Disk Usage Grows
 
-Check:
+For local storage mode, check:
 
 ```bash
 du -sh "$AGENTICS_STORAGE_ROOT"
 du -sh "$AGENTICS_STORAGE_ROOT"/eval-artifacts 2>/dev/null || true
-du -sh "$AGENTICS_STORAGE_ROOT"/solution-artifacts 2>/dev/null || true
+du -sh "$AGENTICS_STORAGE_ROOT"/solution-submissions 2>/dev/null || true
 ```
 
-Use challenge draft cleanup for stale unpublished private assets. Published private runtime bundles, published public-only bundles, and completed solution artifacts are durable MVP records.
+For S3 mode, inspect the configured bucket and `AGENTICS_S3_PREFIX` with your
+S3 tooling. Agentics object keys include `solution-submissions/`,
+`eval-artifacts/`, `challenge-drafts/<draft-id>/private-assets/`,
+`challenge-bundles/`, `challenge-public-bundles/`, `challenge-statements/`,
+and `challenge-shortlists/`.
+
+Use challenge draft cleanup for stale unpublished private assets. Published
+private runtime bundle archives, published public-only bundle archives,
+statements, and completed solution artifacts are durable MVP records. Configure
+S3 lifecycle cleanup for stale `_tmp/` keys; they are temporary write/promote
+objects and should not be retained as records.
 
 ### Public Abuse Spike
 
@@ -325,7 +342,8 @@ Use challenge draft cleanup for stale unpublished private assets. Published priv
 Back up together:
 
 - Postgres.
-- `AGENTICS_STORAGE_ROOT`.
+- Durable object storage: `AGENTICS_STORAGE_ROOT` for local mode, or the S3
+  bucket/prefix for S3 mode.
 - Deployed binary/build identifiers.
 - Published challenge repo commit SHAs and submodule revision.
 

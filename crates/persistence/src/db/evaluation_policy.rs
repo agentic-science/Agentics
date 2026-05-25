@@ -7,7 +7,7 @@ use agentics_domain::models::challenge::{ChallengeBundleSpec, ChallengeEligibili
 use agentics_domain::models::evaluation::ScoringMode;
 use agentics_domain::models::ids::{AgentId, ChallengeId};
 use agentics_domain::models::names::{ChallengeName, TargetName};
-use agentics_domain::models::paths::ManagedBundlePath;
+use agentics_domain::storage::StorageKey;
 
 use super::challenges::{
     ChallengeRecord, agent_is_shortlisted, challenge_has_shortlist, get_published_challenge,
@@ -55,8 +55,8 @@ pub async fn ensure_published_challenge_supports_eval_type(
     ensure_validation_uses_public_bundle(
         eval_type,
         &spec,
-        &challenge.bundle_path,
-        &challenge.public_bundle_path,
+        &challenge.bundle_key,
+        &challenge.public_bundle_key,
     )?;
     Ok(PublishedChallengeAdmission {
         challenge_id: challenge.challenge_id,
@@ -111,7 +111,7 @@ pub(super) async fn lock_active_challenge_for_admission_tx(
 ) -> Result<ChallengeRecord> {
     let row = sqlx::query(
         r#"
-        SELECT challenge_id, name AS challenge_name, title, summary, bundle_path, public_bundle_path, statement_path, spec_json, moltbook_discussion_url
+        SELECT challenge_id, name AS challenge_name, title, summary, bundle_key, public_bundle_key, statement_key, spec_json, moltbook_discussion_url
         FROM challenges
         WHERE challenge_id = $1::uuid
           AND status = 'active'
@@ -129,9 +129,9 @@ pub(super) async fn lock_active_challenge_for_admission_tx(
         challenge_name: challenge_name_from_row(&row, "challenge_name")?,
         title: row.try_get("title")?,
         summary: localized_text_from_row(&row, "summary")?,
-        bundle_path: managed_bundle_path_from_row(&row, "bundle_path")?,
-        public_bundle_path: managed_bundle_path_from_row(&row, "public_bundle_path")?,
-        statement_path: managed_statement_path_from_row(&row, "statement_path")?,
+        bundle_key: storage_key_from_row(&row, "bundle_key")?,
+        public_bundle_key: storage_key_from_row(&row, "public_bundle_key")?,
+        statement_key: storage_key_from_row(&row, "statement_key")?,
         spec_json: row.try_get("spec_json")?,
         moltbook_discussion_url: optional_moltbook_post_url_from_row(
             &row,
@@ -158,15 +158,15 @@ pub(super) async fn ensure_challenge_supports_eval_type_tx(
 pub(super) fn ensure_validation_uses_public_bundle(
     eval_type: ScoringMode,
     spec: &ChallengeBundleSpec,
-    bundle_path: &ManagedBundlePath,
-    public_bundle_path: &ManagedBundlePath,
+    bundle_key: &StorageKey,
+    public_bundle_key: &StorageKey,
 ) -> Result<()> {
     if eval_type == ScoringMode::Validation
         && spec.datasets.private_benchmark_enabled
-        && bundle_path == public_bundle_path
+        && bundle_key == public_bundle_key
     {
         return Err(ServiceError::BadRequest(
-            "validation is unavailable because this private-benchmark challenge does not have a distinct public bundle path"
+            "validation is unavailable because this private-benchmark challenge does not have a distinct public bundle key"
                 .to_string(),
         ));
     }
@@ -276,23 +276,10 @@ async fn ensure_challenge_eligibility_tx(
     }
 }
 
-/// Read a managed bundle path from a locked challenge row.
-fn managed_bundle_path_from_row(
-    row: &sqlx::postgres::PgRow,
-    column: &str,
-) -> Result<agentics_domain::models::paths::ManagedBundlePath> {
+/// Read a storage key from a locked challenge row.
+fn storage_key_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<StorageKey> {
     let value: String = row.try_get(column)?;
-    agentics_domain::models::paths::ManagedBundlePath::from_existing_dir(value)
-        .map_err(|e| ServiceError::Internal(format!("stored invalid {column}: {e}")))
-}
-
-/// Read a managed statement path from a locked challenge row.
-fn managed_statement_path_from_row(
-    row: &sqlx::postgres::PgRow,
-    column: &str,
-) -> Result<agentics_domain::models::paths::ManagedStatementPath> {
-    let value: String = row.try_get(column)?;
-    agentics_domain::models::paths::ManagedStatementPath::from_existing_file(value)
+    StorageKey::try_new(&value)
         .map_err(|e| ServiceError::Internal(format!("stored invalid {column}: {e}")))
 }
 

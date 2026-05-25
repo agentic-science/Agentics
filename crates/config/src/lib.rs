@@ -13,6 +13,17 @@ use agentics_domain::models::urls::{
     GithubApiUserUrl, GithubOauthAuthorizeUrl, GithubOauthRedirectUrl, GithubOauthTokenUrl,
     MoltbookSubmoltUrl,
 };
+pub use local_urls::{default_local_api_base_url, default_local_web_base_url};
+pub use storage_config::StorageBackend;
+
+mod local_urls;
+mod storage_config;
+
+#[cfg(test)]
+use storage_config::{
+    default_s3_region, default_storage_backend, default_storage_max_bundle_archive_bytes,
+    default_storage_max_json_artifact_bytes, default_storage_max_statement_bytes,
+};
 
 /// Environment variable that configures the API listen port.
 pub const ENV_AGENTICS_API_PORT: &str = "AGENTICS_API_PORT";
@@ -75,6 +86,26 @@ pub struct Config {
     pub api_port: u16,
     #[serde(default = "default_storage_root")]
     pub storage_root: String,
+    #[serde(default = "storage_config::default_storage_backend")]
+    pub storage_backend: StorageBackend,
+    #[serde(default)]
+    pub storage_work_root: Option<String>,
+    #[serde(default)]
+    pub s3_bucket: Option<String>,
+    #[serde(default)]
+    pub s3_prefix: Option<String>,
+    #[serde(default = "storage_config::default_s3_region")]
+    pub s3_region: String,
+    #[serde(default)]
+    pub s3_endpoint_url: Option<url::Url>,
+    #[serde(default)]
+    pub s3_force_path_style: bool,
+    #[serde(default = "storage_config::default_storage_max_bundle_archive_bytes")]
+    pub storage_max_bundle_archive_bytes: u64,
+    #[serde(default = "storage_config::default_storage_max_statement_bytes")]
+    pub storage_max_statement_bytes: u64,
+    #[serde(default = "storage_config::default_storage_max_json_artifact_bytes")]
+    pub storage_max_json_artifact_bytes: u64,
     #[serde(default = "default_challenges_root")]
     pub challenges_root: String,
     #[serde(default = "default_admin_username")]
@@ -655,7 +686,7 @@ impl Config {
     pub fn validate_api_security(&self) -> anyhow::Result<()> {
         if self.uses_default_admin_credentials()
             && !self.allow_insecure_default_admin_credentials
-            && !is_loopback_host(&self.api_host)
+            && !local_urls::is_loopback_host(&self.api_host)
         {
             anyhow::bail!(
                 "refusing to bind API to `{}` with default admin credentials; set AGENTICS_ADMIN_PASSWORD or explicitly set AGENTICS_ALLOW_INSECURE_DEFAULT_ADMIN_CREDENTIALS=true for local-only development",
@@ -663,7 +694,7 @@ impl Config {
             );
         }
 
-        if !is_loopback_host(&self.api_host)
+        if !local_urls::is_loopback_host(&self.api_host)
             && self.agent_registration_mode == AgentRegistrationMode::Public
         {
             anyhow::bail!(
@@ -722,11 +753,14 @@ impl Config {
         if self.web_session_ttl_hours <= 0 {
             anyhow::bail!("AGENTICS_WEB_SESSION_TTL_HOURS must be greater than zero");
         }
-        validate_cookie_name(
+        local_urls::validate_cookie_name(
             &self.web_session_cookie_name,
             "AGENTICS_WEB_SESSION_COOKIE_NAME",
         )?;
-        validate_cookie_name(&self.web_csrf_cookie_name, "AGENTICS_WEB_CSRF_COOKIE_NAME")?;
+        local_urls::validate_cookie_name(
+            &self.web_csrf_cookie_name,
+            "AGENTICS_WEB_CSRF_COOKIE_NAME",
+        )?;
         if self.web_session_cookie_name == self.web_csrf_cookie_name {
             anyhow::bail!(
                 "AGENTICS_WEB_SESSION_COOKIE_NAME and AGENTICS_WEB_CSRF_COOKIE_NAME must differ"
@@ -736,7 +770,7 @@ impl Config {
             validate_cors_origin(&origin)?;
         }
         self.validate_moltbook_config()?;
-        if !is_loopback_host(&self.api_host) && !self.web_session_cookie_secure {
+        if !local_urls::is_loopback_host(&self.api_host) && !self.web_session_cookie_secure {
             anyhow::bail!(
                 "AGENTICS_WEB_SESSION_COOKIE_SECURE must be true when the API is reachable from another machine"
             );
@@ -763,8 +797,14 @@ impl Config {
             )?;
         }
         self.validate_hosted_image_policy()?;
+        self.validate_object_storage_config()?;
 
         Ok(())
+    }
+
+    /// Validate durable object storage configuration.
+    pub fn validate_object_storage_config(&self) -> anyhow::Result<()> {
+        storage_config::validate_object_storage_config(self)
     }
 
     /// Validate Moltbook platform-community configuration.
@@ -784,6 +824,7 @@ impl Config {
 
     /// Validate worker-only storage settings before claiming evaluation jobs.
     pub fn validate_runner_storage(&self) -> anyhow::Result<()> {
+        self.validate_object_storage_config()?;
         self.validate_runner_output_limits()?;
         self.validate_worker_accelerator_config()?;
         self.validate_hosted_image_policy()?;
@@ -1036,7 +1077,7 @@ impl Config {
 
     /// Return whether local-only testing knobs such as unlimited pioneer codes may be used.
     pub fn allows_local_registration_testing_knobs(&self) -> bool {
-        is_loopback_host(&self.api_host)
+        local_urls::is_loopback_host(&self.api_host)
     }
 
     /// Handles runner writable slot classes mb for this module.
@@ -1109,22 +1150,10 @@ impl Config {
     }
 }
 
-/// Returns whether loopback host holds.
-fn is_loopback_host(host: &str) -> bool {
-    let host = host.trim();
-    if host.eq_ignore_ascii_case("localhost") {
-        return true;
-    }
-
-    host.parse::<std::net::IpAddr>()
-        .map(|addr| addr.is_loopback())
-        .unwrap_or(false)
-}
-
 /// Validates required trimmed invariants for this contract.
-fn validate_required_trimmed(value: Option<&str>, field: &str) -> anyhow::Result<()> {
+pub(crate) fn validate_required_trimmed(value: Option<&str>, field: &str) -> anyhow::Result<()> {
     if value.is_none_or(|value| value.trim().is_empty()) {
-        anyhow::bail!("{field} must be set when GitHub OAuth is configured");
+        anyhow::bail!("{field} must be set");
     }
     Ok(())
 }
@@ -1159,31 +1188,6 @@ fn validate_private_host_directory_path(env_name: &str, path: &Path) -> anyhow::
         if !metadata.is_dir() {
             anyhow::bail!("{env_name} must point to a directory");
         }
-    }
-    Ok(())
-}
-
-/// Build the local API base URL from explicit host and port defaults.
-pub fn default_local_api_base_url(api_host: &str, api_port: u16) -> String {
-    format!("http://{api_host}:{api_port}")
-}
-
-/// Build the local web base URL from explicit host and port defaults.
-pub fn default_local_web_base_url(web_host: &str, web_port: u16) -> String {
-    format!("http://{web_host}:{web_port}")
-}
-
-/// Validates cookie name invariants for this contract.
-fn validate_cookie_name(value: &str, field: &str) -> anyhow::Result<()> {
-    let value = value.trim();
-    if value.is_empty() {
-        anyhow::bail!("{field} must not be empty");
-    }
-    if !value
-        .bytes()
-        .all(|byte| matches!(byte, b'!' | b'#'..=b'\'' | b'*' | b'+' | b'-' | b'.' | b'0'..=b'9' | b'A'..=b'Z' | b'^' | b'_' | b'`' | b'a'..=b'z' | b'|' | b'~'))
-    {
-        anyhow::bail!("{field} contains characters that are not valid in a cookie name");
     }
     Ok(())
 }

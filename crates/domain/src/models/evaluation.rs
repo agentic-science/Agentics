@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 use super::challenge::{MetricDirection, MetricSchemaSpec, MetricVisibility};
 use super::ids::{ChallengeId, EvaluationId, EvaluationJobId};
 use super::names::{ChallengeName, MetricName, RunName, TargetName};
-use super::paths::ManagedBundlePath;
 use crate::storage::StorageKey;
 
 /// Evaluation surface requested for a solution submission.
@@ -861,8 +860,8 @@ pub struct EvaluationJobDto {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct EvaluationJobPayload {
     pub artifact_key: StorageKey,
-    pub bundle_path: ManagedBundlePath,
-    pub public_bundle_path: ManagedBundlePath,
+    pub bundle_key: StorageKey,
+    pub public_bundle_key: StorageKey,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub challenge_id: Option<ChallengeId>,
     pub challenge_name: ChallengeName,

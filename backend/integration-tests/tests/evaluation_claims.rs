@@ -280,11 +280,6 @@ async fn worker_accelerator_capability_filters_job_claims(pool: sqlx::PgPool) {
     let cpu_job_id = uuid::Uuid::new_v4().to_string();
     let gpu_job_id = uuid::Uuid::new_v4().to_string();
     let accelerator_challenge_id = agentics_domain::models::ids::ChallengeId::generate();
-    let bundle_root = tempfile::tempdir().expect("failed to create bundle tempdir");
-    let private_bundle = bundle_root.path().join("private-bundle");
-    let public_bundle = bundle_root.path().join("public-bundle");
-    std::fs::create_dir_all(&private_bundle).expect("failed to create private bundle dir");
-    std::fs::create_dir_all(&public_bundle).expect("failed to create public bundle dir");
 
     sqlx::query(
         r#"
@@ -299,8 +294,18 @@ async fn worker_accelerator_capability_filters_job_claims(pool: sqlx::PgPool) {
 
     sqlx::query(
         r#"
-        INSERT INTO challenges (challenge_id, name, title, spec_json)
-        VALUES ($1::uuid, 'accelerator-claim', 'Accelerator Claim', '{}'::jsonb)
+        INSERT INTO challenges (
+            challenge_id, name, title, bundle_key, public_bundle_key, statement_key, spec_json
+        )
+        VALUES (
+            $1::uuid,
+            'accelerator-claim',
+            'Accelerator Claim',
+            'challenge-bundles/accelerator-claim/test.tar',
+            'challenge-public-bundles/accelerator-claim/test.tar',
+            'challenge-statements/accelerator-claim/test.md',
+            '{}'::jsonb
+        )
         "#,
     )
     .bind(accelerator_challenge_id.as_str())
@@ -350,8 +355,8 @@ async fn worker_accelerator_capability_filters_job_claims(pool: sqlx::PgPool) {
     ] {
         let payload = serde_json::json!({
             "artifact_key": format!("artifacts/{submission_id}.zip"),
-            "bundle_path": private_bundle.display().to_string(),
-            "public_bundle_path": public_bundle.display().to_string(),
+            "bundle_key": format!("challenge-bundles/{target}.tar"),
+            "public_bundle_key": format!("challenge-public-bundles/{target}.tar"),
             "challenge_id": accelerator_challenge_id.as_str(),
             "challenge_name": "accelerator-claim",
             "target": target,

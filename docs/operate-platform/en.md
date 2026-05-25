@@ -141,12 +141,14 @@ jobs.
 ## Logs And Backups
 
 Process logs are emitted to stdout and stderr. Worker evaluation logs are stored
-under `AGENTICS_STORAGE_ROOT/eval-artifacts/<job-id>/runner.log`.
+in durable object storage at `eval-artifacts/<job-id>/runner.log`; in local mode
+that path is under `AGENTICS_STORAGE_ROOT`.
 
 Back up together:
 
 - Postgres.
-- `AGENTICS_STORAGE_ROOT`.
+- Durable object storage: `AGENTICS_STORAGE_ROOT` for local mode, or the S3
+  bucket/prefix for S3 mode.
 - Deployed binary or build identifiers.
 - Published challenge repository commit SHAs and submodule revision.
 

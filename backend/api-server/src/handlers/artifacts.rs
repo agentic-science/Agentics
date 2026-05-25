@@ -4,7 +4,7 @@ use axum::Json;
 
 use crate::error::ApiResult as Result;
 use agentics_contracts::validation::archive::inspect_zip_bytes;
-use agentics_contracts::zip_project::zip_project_archive_policy;
+use agentics_contracts::zip_project::{MAX_ZIP_PROJECT_ARTIFACT_BYTES, zip_project_archive_policy};
 use agentics_domain::error::ServiceError;
 use agentics_domain::models::request::{
     SolutionSubmissionArtifactFileDto, SolutionSubmissionArtifactResponse,
@@ -54,7 +54,18 @@ pub(super) async fn read_solution_submission_logs(
         }));
     };
 
-    let bytes = state.storage.get(&log_key).await?;
+    let max_stored_log_bytes = state
+        .config
+        .runner_max_runs
+        .checked_mul(1024 * 1024)
+        .ok_or_else(|| ServiceError::Internal("runner log byte budget overflow".to_string()))?;
+    let bytes = state
+        .storage
+        .get(
+            &log_key,
+            agentics_storage::StorageWriteIntent::new("runner log", max_stored_log_bytes),
+        )
+        .await?;
     let truncated = bytes.len() > MAX_LOG_RESPONSE_BYTES;
     let visible_bytes = if truncated {
         bytes
@@ -71,6 +82,13 @@ pub(super) async fn read_solution_submission_logs(
         content: Some(content),
         truncated,
     }))
+}
+
+pub(super) fn solution_artifact_intent() -> agentics_storage::StorageWriteIntent {
+    agentics_storage::StorageWriteIntent::new(
+        "solution artifact ZIP",
+        MAX_ZIP_PROJECT_ARTIFACT_BYTES,
+    )
 }
 
 /// Perform ZIP parsing and safe summary construction on a blocking thread.

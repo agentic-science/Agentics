@@ -27,6 +27,7 @@ use agentics_domain::models::request::{
 use agentics_persistence::{
     ChallengeRecord, LeaderboardMetricEntry, Repositories, SolutionSubmissionRecord,
 };
+use agentics_storage::{Storage, StorageWriteIntent};
 
 /// Audience-specific projection for solution submission details.
 #[derive(Debug, Clone, Copy)]
@@ -62,6 +63,7 @@ impl SolutionSubmissionAudience {
 /// Fetch public challenge details by challenge id.
 pub async fn get_challenge_detail(
     pool: &sqlx::PgPool,
+    storage: &dyn Storage,
     config: &Config,
     challenge_id: &ChallengeId,
 ) -> Result<ChallengeDetailResponse> {
@@ -70,7 +72,15 @@ pub async fn get_challenge_detail(
         .get_public(challenge_id)
         .await?;
     let challenge = challenge.ok_or(ServiceError::NotFound)?;
-    let statement = tokio::fs::read_to_string(challenge.statement_path.as_path()).await?;
+    let statement_bytes = storage
+        .get(
+            &challenge.statement_key,
+            StorageWriteIntent::new("challenge statement", config.storage_max_statement_bytes),
+        )
+        .await?;
+    let statement = String::from_utf8(statement_bytes).map_err(|e| {
+        ServiceError::Internal(format!("stored challenge statement is not UTF-8: {e}"))
+    })?;
     let moltbook = MoltbookCommunityDto {
         submolt_name: config.moltbook_submolt_name.clone(),
         submolt_url: config.moltbook_submolt_url.clone(),

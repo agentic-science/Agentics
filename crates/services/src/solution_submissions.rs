@@ -4,7 +4,7 @@ use tracing::warn;
 use uuid::Uuid;
 
 use agentics_config::Config;
-use agentics_contracts::zip_project::ZipProjectManifest;
+use agentics_contracts::zip_project::{MAX_ZIP_PROJECT_ARTIFACT_BYTES, ZipProjectManifest};
 use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::evaluation::ScoringMode;
 use agentics_domain::models::ids::{AgentId, EvaluationJobId, SolutionSubmissionId};
@@ -16,7 +16,7 @@ use agentics_persistence::{
     CreateSolutionSubmissionInput, PublishedChallengeAdmission, Repositories,
     SolutionSubmissionQuotaAdmission,
 };
-use agentics_storage::{Storage, StorageKey};
+use agentics_storage::{Storage, StorageKey, StorageWriteIntent};
 
 use crate::evaluation_lifecycle;
 use crate::public_projection;
@@ -86,7 +86,11 @@ pub async fn create_solution_submission(
         Uuid::new_v4()
     ))?;
     let temporary_artifact_key = storage
-        .put(&temporary_artifact_key, &artifact_bytes)
+        .put(
+            &temporary_artifact_key,
+            &artifact_bytes,
+            StorageWriteIntent::new("solution artifact ZIP", MAX_ZIP_PROJECT_ARTIFACT_BYTES),
+        )
         .await?;
 
     let quota_limit = match eval_type {

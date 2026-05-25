@@ -134,13 +134,15 @@ startup 会 fail closed，并且 CPU-only workers 不能领取 GPU jobs。
 
 ## Logs 和 Backups
 
-Process logs 输出到 stdout 和 stderr。Worker evaluation logs 存储在
-`AGENTICS_STORAGE_ROOT/eval-artifacts/<job-id>/runner.log`。
+Process logs 输出到 stdout 和 stderr。Worker evaluation logs 存储在 durable object
+storage 的 `eval-artifacts/<job-id>/runner.log`；local mode 下该 path 位于
+`AGENTICS_STORAGE_ROOT`。
 
 需要一起备份：
 
 - Postgres。
-- `AGENTICS_STORAGE_ROOT`。
+- Durable object storage：local mode 下是 `AGENTICS_STORAGE_ROOT`，S3 mode 下是
+  S3 bucket/prefix。
 - Deployed binary 或 build identifiers。
 - Published challenge repository commit SHAs 和 submodule revision。
 

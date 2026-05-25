@@ -8,7 +8,7 @@ use super::{
     EvaluatorRunResult, ExecutionResult, JobRequirement, OutputTreeLimits, PipedStdioRequest,
     Result, RetainedRunnerTree, RunPlanRequest, RunnerAttempt, RunnerContext, RunnerStorage,
     ScoringMode, ServiceError, SetupBuildRequest, SolutionRunRequest, cleanup_paths,
-    configure_run_count_limits, copy_dir_all, create_private_host_dir, evaluation_runner_log_key,
+    configure_run_count_limits, create_private_host_dir, evaluation_runner_log_key,
     extract_zip_safe, make_container_readable_tree, read_limited_result_json, resolve_run_plan,
     sanitize_runner_error, validate_evaluator_result,
 };
@@ -54,11 +54,22 @@ pub async fn execute_evaluation_job(
     tokio::fs::create_dir_all(&session_root).await?;
     tokio::fs::create_dir_all(&evaluator_output_root).await?;
 
-    let bundle_source_path = match eval_type {
-        ScoringMode::Validation => &payload.public_bundle_path,
-        ScoringMode::Official => &payload.bundle_path,
+    let bundle_key = match eval_type {
+        ScoringMode::Validation => &payload.public_bundle_key,
+        ScoringMode::Official => &payload.bundle_key,
     };
-    copy_dir_all(bundle_source_path.as_path(), &challenge_bundle_root).await?;
+    let bundle_archive_path = working_root.join("challenge-bundle.tar");
+    storage
+        .get_to_file(
+            bundle_key,
+            &bundle_archive_path,
+            agentics_storage::StorageWriteIntent::new(
+                "challenge bundle archive",
+                config.storage_max_bundle_archive_bytes,
+            ),
+        )
+        .await?;
+    agentics_storage::unpack_tar_to_directory(&bundle_archive_path, &challenge_bundle_root).await?;
     make_container_readable_tree(&challenge_bundle_root).await?;
     let bundle_dir = challenge_bundle_root.as_path();
     let spec = agentics_contracts::challenge_bundle::read_challenge_bundle_spec(bundle_dir).await?;
@@ -117,7 +128,15 @@ pub async fn execute_evaluation_job(
             )
             .await?;
 
-        let artifact_bytes = storage.get(&payload.artifact_key).await?;
+        let artifact_bytes = storage
+            .get(
+                &payload.artifact_key,
+                agentics_storage::StorageWriteIntent::new(
+                    "solution artifact ZIP",
+                    agentics_contracts::zip_project::MAX_ZIP_PROJECT_ARTIFACT_BYTES,
+                ),
+            )
+            .await?;
         let artifact_path = working_root.join("solution.zip");
         tokio::fs::write(&artifact_path, artifact_bytes).await?;
         extract_zip_safe(&artifact_path, &source_root).await?;
@@ -255,7 +274,13 @@ pub async fn execute_evaluation_job(
     }
     .await;
 
-    let log_write = storage.put(&log_key, logs.as_bytes()).await;
+    let log_write = storage
+        .put(
+            &log_key,
+            logs.as_bytes(),
+            agentics_storage::StorageWriteIntent::new("runner log", max_log_bytes),
+        )
+        .await;
     let cleanup = cleanup_paths([working_root]).await;
     match (execution, log_write, cleanup) {
         (Ok(result), Ok(_), Ok(())) => Ok(result),

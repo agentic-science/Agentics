@@ -12,6 +12,8 @@ use agentics_domain::models::hashes::Sha256Digest;
 use agentics_domain::models::ids::{
     ChallengeDraftAuditEventId, ChallengeDraftId, ChallengeDraftValidationRecordId, ChallengeId,
 };
+use agentics_domain::storage::StorageKey;
+use agentics_storage::{StorageWriteIntent, build_storage, unpack_tar_to_directory};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use challenge_creation_helpers::*;
 use helpers::{
@@ -507,22 +509,22 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
     let published_challenge_id = published["published_challenge_id"]
         .as_str()
         .expect("published challenge id");
-    let (bundle_path, public_bundle_path): (String, String) =
-        sqlx::query_as("SELECT bundle_path, public_bundle_path FROM challenges WHERE name = $1")
+    let (bundle_key, public_bundle_key): (String, String) =
+        sqlx::query_as("SELECT bundle_key, public_bundle_key FROM challenges WHERE name = $1")
             .bind("sample-sum")
             .fetch_one(&pool)
             .await
-            .expect("bundle paths");
+            .expect("bundle keys");
+    let (_private_temp, private_dir) =
+        materialize_bundle_key(&config, &bundle_key, "private").await;
+    let (_public_temp, public_dir) =
+        materialize_bundle_key(&config, &public_bundle_key, "public").await;
     assert!(
-        std::path::Path::new(&bundle_path)
-            .join("private-benchmark/runs.json")
-            .exists(),
+        private_dir.join("private-benchmark/runs.json").exists(),
         "publish should assemble a runtime bundle with uploaded private benchmark data"
     );
     assert!(
-        !std::path::Path::new(&public_bundle_path)
-            .join("private-benchmark/runs.json")
-            .exists(),
+        !public_dir.join("private-benchmark/runs.json").exists(),
         "publish should also store a public-only bundle without private overlays"
     );
 
@@ -814,16 +816,16 @@ async fn concurrent_publish_requests_leave_one_published_bundle(pool: sqlx::PgPo
             .await
             .expect("challenge count");
     assert_eq!(challenge_count, 1);
-    let bundle_path: String =
-        sqlx::query_scalar("SELECT bundle_path FROM challenges WHERE name = $1")
+    let bundle_key: String =
+        sqlx::query_scalar("SELECT bundle_key FROM challenges WHERE name = $1")
             .bind("sample-sum")
             .fetch_one(&pool)
             .await
-            .expect("bundle path");
+            .expect("bundle key");
+    let (_bundle_temp, bundle_dir) =
+        materialize_bundle_key(&config, &bundle_key, "concurrent-private").await;
     assert!(
-        std::path::Path::new(&bundle_path)
-            .join("private-benchmark/runs.json")
-            .exists(),
+        bundle_dir.join("private-benchmark/runs.json").exists(),
         "published bundle should include promoted private benchmark data"
     );
     let draft_status: String =
@@ -906,15 +908,27 @@ async fn failed_publish_removes_claim_scoped_runtime_bundle(pool: sqlx::PgPool) 
         .error_for_status()
         .expect("draft should approve");
 
-    let existing_bundle = storage.path().join("existing-bundle");
-    std::fs::create_dir_all(&existing_bundle).expect("existing bundle dir");
-    let existing_statement = existing_bundle.join("statement.md");
-    std::fs::write(&existing_statement, "# Existing\n").expect("existing statement");
+    let existing_bundle_key = StorageKey::try_new("challenge-bundles/sample-sum/existing.tar")
+        .expect("existing bundle key");
+    let existing_public_bundle_key =
+        StorageKey::try_new("challenge-public-bundles/sample-sum/existing.tar")
+            .expect("existing public bundle key");
+    let existing_statement_key = StorageKey::try_new("challenge-statements/sample-sum/existing.md")
+        .expect("existing statement key");
+    let storage_backend = build_storage(&config).await.expect("storage backend");
+    storage_backend
+        .put(
+            &existing_statement_key,
+            b"# Existing\n",
+            StorageWriteIntent::new("challenge statement", config.storage_max_statement_bytes),
+        )
+        .await
+        .expect("existing statement should store");
     let existing_challenge_id = ChallengeId::generate();
     sqlx::query(
         r#"
         INSERT INTO challenges (
-            challenge_id, name, title, summary, bundle_path, public_bundle_path, statement_path, spec_json, starts_at, status
+            challenge_id, name, title, summary, bundle_key, public_bundle_key, statement_key, spec_json, starts_at, status
         )
         VALUES (
             $3::uuid,
@@ -922,7 +936,7 @@ async fn failed_publish_removes_claim_scoped_runtime_bundle(pool: sqlx::PgPool) 
             'Existing Sample Sum',
             '{"en":"Existing","zh":"Existing"}'::jsonb,
             $1,
-            $1,
+            $4,
             $2,
             '{"already":"published"}'::jsonb,
             '2026-01-01T00:00:00Z'::timestamptz,
@@ -930,9 +944,10 @@ async fn failed_publish_removes_claim_scoped_runtime_bundle(pool: sqlx::PgPool) 
         )
         "#,
     )
-    .bind(existing_bundle.to_string_lossy().to_string())
-    .bind(existing_statement.to_string_lossy().to_string())
+    .bind(existing_bundle_key.as_str())
+    .bind(existing_statement_key.as_str())
     .bind(existing_challenge_id.as_str())
+    .bind(existing_public_bundle_key.as_str())
     .execute(&pool)
     .await
     .expect("existing active challenge should insert");
@@ -1068,6 +1083,33 @@ async fn stale_publish_claim_cannot_mutate_newer_publish_claim(pool: sqlx::PgPoo
     .await
     .expect("failed to query published draft");
     assert_eq!(status_and_claim, ("published".to_string(), None));
+}
+
+/// Downloads and unpacks a stored challenge bundle archive for filesystem assertions.
+async fn materialize_bundle_key(
+    config: &agentics_config::Config,
+    bundle_key: &str,
+    label: &str,
+) -> (tempfile::TempDir, std::path::PathBuf) {
+    let storage_backend = build_storage(config).await.expect("storage backend");
+    let materialized = tempfile::tempdir().expect("materialized bundle tempdir");
+    let archive = materialized.path().join(format!("{label}.tar"));
+    storage_backend
+        .get_to_file(
+            &StorageKey::try_new(bundle_key).expect("valid bundle key"),
+            &archive,
+            StorageWriteIntent::new(
+                "challenge bundle archive",
+                config.storage_max_bundle_archive_bytes,
+            ),
+        )
+        .await
+        .expect("download challenge bundle");
+    let bundle_dir = materialized.path().join("bundle");
+    unpack_tar_to_directory(&archive, &bundle_dir)
+        .await
+        .expect("unpack challenge bundle");
+    (materialized, bundle_dir)
 }
 
 /// Returns true for a missing or empty directory, and panics on other filesystem errors.

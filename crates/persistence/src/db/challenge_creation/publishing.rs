@@ -10,7 +10,7 @@ use agentics_domain::models::ids::{
 };
 use agentics_domain::models::localization::LocalizedText;
 use agentics_domain::models::names::ChallengeName;
-use agentics_domain::models::paths::{ManagedBundlePath, ManagedStatementPath};
+use agentics_domain::storage::StorageKey;
 
 use super::super::challenges::{
     PublishChallengeInput, add_challenge_owner_tx, publish_challenge_tx,
@@ -26,9 +26,9 @@ pub struct PublishNewChallengeDraftInput {
     pub draft_id: ChallengeDraftId,
     pub publish_claim_id: ChallengeDraftPublishClaimId,
     pub challenge_name: ChallengeName,
-    pub bundle_path: ManagedBundlePath,
-    pub public_bundle_path: ManagedBundlePath,
-    pub statement_path: ManagedStatementPath,
+    pub bundle_key: StorageKey,
+    pub public_bundle_key: StorageKey,
+    pub statement_key: StorageKey,
     pub spec: ChallengeBundleSpec,
     pub title: String,
     pub summary: LocalizedText,
@@ -225,9 +225,9 @@ pub async fn publish_new_challenge_draft(
         &PublishChallengeInput {
             challenge_id: &challenge_id,
             challenge_name: &input.challenge_name,
-            bundle_path: &input.bundle_path,
-            public_bundle_path: &input.public_bundle_path,
-            statement_path: &input.statement_path,
+            bundle_key: &input.bundle_key,
+            public_bundle_key: &input.public_bundle_key,
+            statement_key: &input.statement_key,
             spec: &input.spec,
             title: &input.title,
             summary: &input.summary,

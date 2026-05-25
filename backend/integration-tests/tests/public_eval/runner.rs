@@ -321,12 +321,15 @@ async fn worker_completes_coexecuted_benchmark_submission(pool: sqlx::PgPool) {
     let bundles = tempfile::tempdir().expect("failed to create bundle tempdir");
     let (public_bundle, private_bundle) = create_coexecuted_benchmark_bundles(bundles.path());
     let config = test_config(storage.path(), challenges.path());
+    let (private_key, public_key, statement_key) =
+        store_challenge_bundle_objects(&config, "coexecuted-sum", &private_bundle, &public_bundle)
+            .await;
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let coexecuted_challenge_id = agentics_domain::models::ids::ChallengeId::generate();
     sqlx::query(
         r#"
         INSERT INTO challenges (
-            challenge_id, name, title, summary, bundle_path, public_bundle_path, statement_path, spec_json, starts_at, status
+            challenge_id, name, title, summary, bundle_key, public_bundle_key, statement_key, spec_json, starts_at, status
         )
         VALUES (
             $5::uuid,
@@ -342,9 +345,9 @@ async fn worker_completes_coexecuted_benchmark_submission(pool: sqlx::PgPool) {
         )
         "#,
     )
-    .bind(private_bundle.to_string_lossy().to_string())
-    .bind(public_bundle.to_string_lossy().to_string())
-    .bind(private_bundle.join("statement.md").to_string_lossy().to_string())
+    .bind(private_key.as_str())
+    .bind(public_key.as_str())
+    .bind(statement_key.as_str())
     .bind(
         serde_json::from_str::<serde_json::Value>(
             &std::fs::read_to_string(private_bundle.join("spec.json"))
