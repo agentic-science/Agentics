@@ -7,6 +7,3 @@
 [submodule "challenge-repos/Frontier-CS"]
 	path = challenge-repos/Frontier-CS
 	url = git@github.com:agentic-science/Frontier-CS.git
-[submodule "challenge-repos/test-solutions"]
-	path = challenge-repos/test-solutions
-	url = git@github.com:agentic-science/test-solutions.git
