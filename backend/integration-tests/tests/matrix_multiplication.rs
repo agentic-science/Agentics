@@ -5,6 +5,8 @@ mod helpers;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use agentics_config::Config;
+use agentics_storage::{StorageKey, StorageWriteIntent, build_storage};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use helpers::{
     TestCreatorSession, api_url, basic_auth_header, challenge_repo_root, copy_dir_all,
@@ -199,7 +201,7 @@ async fn matrix_challenge_can_be_published_and_solved(pool: sqlx::PgPool) {
     let runner_log = if completed["status"] == "completed" {
         String::new()
     } else {
-        latest_runner_log(&pool, storage.path(), submission_id).await
+        latest_runner_log(&pool, &config, submission_id).await
     };
     assert_eq!(
         completed["status"],
@@ -353,11 +355,7 @@ fn generate_smoke_private_asset(challenge_root: &Path) -> PathBuf {
 }
 
 /// Read latest runner log for a failed matrix evaluation.
-async fn latest_runner_log(
-    pool: &sqlx::PgPool,
-    storage_root: &Path,
-    submission_id: &str,
-) -> String {
+async fn latest_runner_log(pool: &sqlx::PgPool, config: &Config, submission_id: &str) -> String {
     let log_key: Option<String> = sqlx::query_scalar(
         "SELECT log_key FROM evaluations WHERE solution_submission_id = $1::uuid ORDER BY finished_at DESC NULLS LAST LIMIT 1",
     )
@@ -368,6 +366,18 @@ async fn latest_runner_log(
     let Some(log_key) = log_key else {
         return "<missing log key>".to_string();
     };
-    std::fs::read_to_string(storage_root.join(log_key))
+    let storage = match build_storage(config).await {
+        Ok(storage) => storage,
+        Err(error) => return format!("<failed to initialize storage: {error}>"),
+    };
+    let key = match StorageKey::try_new(log_key) {
+        Ok(key) => key,
+        Err(error) => return format!("<invalid runner log key: {error}>"),
+    };
+    let intent = StorageWriteIntent::new("runner log", config.runner_max_result_log_bytes);
+    storage
+        .get(&key, intent)
+        .await
+        .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
         .unwrap_or_else(|error| format!("<failed to read runner log: {error}>"))
 }

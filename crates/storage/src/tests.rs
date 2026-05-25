@@ -437,6 +437,17 @@ async fn rustfs_s3_storage_round_trips_when_configured() {
         storage.get(&key, TEST_INTENT).await.expect("S3 get"),
         b"hello"
     );
+    assert!(storage.exists(&key).await.expect("S3 exists"));
+    let download_dir = tempfile::tempdir().expect("S3 download tempdir");
+    let download_path = download_dir.path().join("value.txt");
+    storage
+        .get_to_file(&key, &download_path, TEST_INTENT)
+        .await
+        .expect("S3 get_to_file");
+    assert_eq!(
+        fs::read_to_string(download_path).expect("downloaded S3 object"),
+        "hello"
+    );
     assert!(matches!(
         storage.put(&key, b"again", TEST_INTENT).await,
         Err(StorageError::ObjectConflict(_))
@@ -665,6 +676,7 @@ async fn rustfs_storage_from_env() -> Option<S3Storage> {
         region,
         endpoint_url: Some(endpoint.parse().expect("valid RustFS endpoint URL")),
         force_path_style,
+        work_root: Some(temp_storage_root("rustfs-work")),
     })
     .await
     .expect("RustFS S3 storage should initialize");

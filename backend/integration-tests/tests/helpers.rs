@@ -5,9 +5,14 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use agentics_config::{AgentRegistrationMode, Config, RunnerWritableStorageMode};
+use agentics_config::{
+    AgentRegistrationMode, Config, DEFAULT_S3_BUCKET, DEFAULT_S3_ENDPOINT_URL,
+    DEFAULT_S3_FORCE_PATH_STYLE, DEFAULT_S3_REGION, ENV_AGENTICS_S3_BUCKET,
+    ENV_AGENTICS_S3_ENDPOINT_URL, ENV_AGENTICS_S3_FORCE_PATH_STYLE, ENV_AGENTICS_S3_PREFIX,
+    ENV_AGENTICS_S3_REGION, RunnerWritableStorageMode, StorageBackend,
+};
 use agentics_runner::connect_docker;
-use agentics_storage::build_storage;
+use agentics_storage::{S3Storage, build_storage};
 use api_server::admin_auth_throttle::AdminAuthThrottle;
 use api_server::router;
 use api_server::state::AppState;
@@ -59,6 +64,7 @@ pub async fn spawn_app(pool: PgPool) -> TestApp {
 /// Tests use this to point storage and seeded challenge roots at temporary
 /// directories while exercising the real router and startup seeding path.
 pub async fn spawn_app_with_config(pool: PgPool, config: Config) -> TestApp {
+    ensure_test_storage_bucket(&config).await;
     let storage = build_storage(&config)
         .await
         .expect("failed to initialize test storage");
@@ -116,13 +122,13 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
         api_host: "127.0.0.1".to_string(),
         api_port: 0,
         storage_root: storage_root.to_string_lossy().to_string(),
-        storage_backend: agentics_config::StorageBackend::Local,
+        storage_backend: StorageBackend::S3,
         storage_work_root: Some(storage_root.join("_work").to_string_lossy().to_string()),
-        s3_bucket: None,
-        s3_prefix: None,
-        s3_region: "us-east-1".to_string(),
-        s3_endpoint_url: None,
-        s3_force_path_style: false,
+        s3_bucket: Some(env_or_default(ENV_AGENTICS_S3_BUCKET, DEFAULT_S3_BUCKET)),
+        s3_prefix: Some(test_s3_prefix()),
+        s3_region: env_or_default(ENV_AGENTICS_S3_REGION, DEFAULT_S3_REGION),
+        s3_endpoint_url: Some(test_s3_endpoint_url()),
+        s3_force_path_style: test_s3_force_path_style(),
         storage_max_bundle_archive_bytes: 1024 * 1024 * 1024,
         storage_max_statement_bytes: 1024 * 1024,
         storage_max_json_artifact_bytes: 1024 * 1024,
@@ -199,6 +205,55 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
         runner_interaction_shutdown_grace_secs: 2,
         log_level: "error".to_string(),
     }
+}
+
+async fn ensure_test_storage_bucket(config: &Config) {
+    if config.storage_backend != StorageBackend::S3 {
+        return;
+    }
+    let storage = S3Storage::from_config(config)
+        .await
+        .expect("failed to initialize S3 test storage for bucket setup");
+    storage
+        .create_bucket_if_missing_for_tests()
+        .await
+        .expect("failed to create or inspect S3 test bucket");
+}
+
+fn env_or_default(name: &str, default: &str) -> String {
+    std::env::var(name)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| default.to_string())
+}
+
+fn test_s3_prefix() -> String {
+    let base = std::env::var(ENV_AGENTICS_S3_PREFIX)
+        .ok()
+        .map(|value| value.trim_matches('/').to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "test/local".to_string());
+    format!("{base}/{}", uuid::Uuid::new_v4())
+}
+
+fn test_s3_endpoint_url() -> url::Url {
+    env_or_default(ENV_AGENTICS_S3_ENDPOINT_URL, DEFAULT_S3_ENDPOINT_URL)
+        .parse()
+        .expect("S3 test endpoint URL must be valid")
+}
+
+fn test_s3_force_path_style() -> bool {
+    std::env::var(ENV_AGENTICS_S3_FORCE_PATH_STYLE)
+        .ok()
+        .map(|value| match value.trim().to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" => true,
+            "0" | "false" | "no" => false,
+            other => {
+                panic!("{ENV_AGENTICS_S3_FORCE_PATH_STYLE} must be true or false; got `{other}`")
+            }
+        })
+        .unwrap_or(DEFAULT_S3_FORCE_PATH_STYLE)
 }
 
 fn test_runner_namespace() -> agentics_config::RunnerNamespace {

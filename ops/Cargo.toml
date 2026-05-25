@@ -23,6 +23,7 @@ agentics-contracts = { workspace = true }
 agentics-domain = { workspace = true }
 agentics-persistence = { workspace = true }
 agentics-runner = { workspace = true }
+agentics-storage = { workspace = true }
 sqlx = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }

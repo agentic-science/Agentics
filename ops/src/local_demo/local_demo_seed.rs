@@ -272,6 +272,13 @@ pub(super) async fn seed_database(pool: &PgPool) -> Result<(), LocalDemoError> {
     Ok(())
 }
 
+pub(super) fn demo_artifact_keys() -> Result<Vec<StorageKey>, LocalDemoError> {
+    DEMO_RESULTS
+        .iter()
+        .map(|result| result.artifact_key())
+        .collect()
+}
+
 async fn load_challenge(
     repos: &Repositories,
     name: &str,

@@ -4,6 +4,8 @@ mod helpers;
 
 use std::path::Path;
 
+use agentics_config::Config;
+use agentics_storage::{StorageKey, build_storage};
 use helpers::{
     api_url, copy_dir_all, examples_challenges_root, published_challenge_name, run_worker_once,
     sample_sum_solution, solution_zip_base64, spawn_app_with_config, test_config,
@@ -77,7 +79,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     assert_eq!(not_visible_before.status(), 404);
 
     run_worker_once(&pool, &config).await;
-    assert_runner_persisted_only_intended_artifacts(storage.path(), &first_job_id);
+    assert_runner_persisted_only_intended_artifacts(&config, &first_job_id).await;
     set_official_primary_metric_for_submission(&pool, pending_id, 42.0, 1.0, 1).await;
 
     let second_response: serde_json::Value = client
@@ -391,19 +393,18 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
 }
 
 /// Confirms runner scratch work is cleaned instead of persisting private I/O trees.
-fn assert_runner_persisted_only_intended_artifacts(storage_root: &Path, job_id: &str) {
-    let durable_job_dir = storage_root.join("eval-artifacts").join(job_id);
-    let log_paths = std::fs::read_dir(&durable_job_dir)
-        .expect("durable job artifact directory should exist")
-        .map(|entry| {
-            entry
-                .expect("durable artifact entry")
-                .path()
-                .join("runner.log")
-        })
-        .collect::<Vec<_>>();
+async fn assert_runner_persisted_only_intended_artifacts(config: &Config, job_id: &str) {
+    let storage = build_storage(config)
+        .await
+        .expect("failed to initialize test storage");
+    let prefix = StorageKey::try_new(format!("eval-artifacts/{job_id}"))
+        .expect("test job artifact prefix is valid");
+    let keys = storage
+        .list_prefix(&prefix)
+        .await
+        .expect("durable job artifact prefix should be listable");
     assert!(
-        log_paths.iter().any(|path| path.exists()),
+        keys.iter().any(|key| key.as_str().ends_with("/runner.log")),
         "runner log should remain as the intended durable artifact"
     );
     for private_scratch in [
@@ -414,8 +415,9 @@ fn assert_runner_persisted_only_intended_artifacts(storage_root: &Path, job_id: 
         "evaluator-output",
     ] {
         assert!(
-            !durable_job_dir.join(private_scratch).exists(),
-            "runner scratch directory `{private_scratch}` must not be durable storage"
+            keys.iter()
+                .all(|key| !key.as_str().contains(&format!("/{private_scratch}/"))),
+            "runner scratch directory `{private_scratch}` must not be durable storage: {keys:?}"
         );
     }
     assert!(

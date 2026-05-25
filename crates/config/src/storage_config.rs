@@ -1,10 +1,40 @@
 use std::path::Path;
+use std::str::FromStr;
 
 use serde::Deserialize;
 
 use crate::{Config, validate_required_trimmed};
 
-const DEFAULT_STORAGE_BACKEND: StorageBackend = StorageBackend::Local;
+/// Environment variable that selects durable object storage backend.
+pub const ENV_AGENTICS_STORAGE_BACKEND: &str = "AGENTICS_STORAGE_BACKEND";
+/// Environment variable that configures local filesystem durable object storage.
+pub const ENV_AGENTICS_STORAGE_ROOT: &str = "AGENTICS_STORAGE_ROOT";
+/// Environment variable that configures local storage staging and downloads.
+pub const ENV_AGENTICS_STORAGE_WORK_ROOT: &str = "AGENTICS_STORAGE_WORK_ROOT";
+/// Environment variable that configures the S3-compatible bucket name.
+pub const ENV_AGENTICS_S3_BUCKET: &str = "AGENTICS_S3_BUCKET";
+/// Environment variable that configures the S3-compatible object key prefix.
+pub const ENV_AGENTICS_S3_PREFIX: &str = "AGENTICS_S3_PREFIX";
+/// Environment variable that configures the S3-compatible region.
+pub const ENV_AGENTICS_S3_REGION: &str = "AGENTICS_S3_REGION";
+/// Environment variable that configures the S3-compatible endpoint URL.
+pub const ENV_AGENTICS_S3_ENDPOINT_URL: &str = "AGENTICS_S3_ENDPOINT_URL";
+/// Environment variable that enables S3 path-style access.
+pub const ENV_AGENTICS_S3_FORCE_PATH_STYLE: &str = "AGENTICS_S3_FORCE_PATH_STYLE";
+
+/// Default durable object storage backend.
+pub const DEFAULT_STORAGE_BACKEND: StorageBackend = StorageBackend::S3;
+/// Default local filesystem durable object storage root for explicit local mode.
+pub const DEFAULT_STORAGE_ROOT: &str = "storage";
+/// Default S3-compatible bucket for local, test, and single-host deployments.
+pub const DEFAULT_S3_BUCKET: &str = "agentics";
+/// Default S3-compatible region for RustFS and local-compatible services.
+pub const DEFAULT_S3_REGION: &str = "us-east-1";
+/// Default local RustFS endpoint for non-Compose S3-backed development.
+pub const DEFAULT_S3_ENDPOINT_URL: &str = "http://127.0.0.1:9000";
+/// Default S3 path-style setting for RustFS-compatible object storage.
+pub const DEFAULT_S3_FORCE_PATH_STYLE: bool = true;
+
 const DEFAULT_STORAGE_MAX_BUNDLE_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
 const DEFAULT_STORAGE_MAX_STATEMENT_BYTES: u64 = 1024 * 1024;
 const DEFAULT_STORAGE_MAX_JSON_ARTIFACT_BYTES: u64 = 1024 * 1024;
@@ -30,14 +60,56 @@ impl StorageBackend {
     }
 }
 
+impl FromStr for StorageBackend {
+    type Err = anyhow::Error;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.trim() {
+            "local" => Ok(Self::Local),
+            "s3" => Ok(Self::S3),
+            other => anyhow::bail!(
+                "{ENV_AGENTICS_STORAGE_BACKEND} must be either `local` or `s3`; got `{other}`"
+            ),
+        }
+    }
+}
+
 /// Default durable storage backend.
 pub(crate) fn default_storage_backend() -> StorageBackend {
     DEFAULT_STORAGE_BACKEND
 }
 
+/// Default local filesystem durable object storage root for explicit local mode.
+pub(crate) fn default_storage_root() -> String {
+    DEFAULT_STORAGE_ROOT.to_string()
+}
+
+/// Default S3-compatible bucket.
+pub(crate) fn default_s3_bucket() -> Option<String> {
+    Some(DEFAULT_S3_BUCKET.to_string())
+}
+
 /// Default S3 region used by AWS-compatible local test services.
 pub(crate) fn default_s3_region() -> String {
-    "us-east-1".to_string()
+    DEFAULT_S3_REGION.to_string()
+}
+
+#[allow(
+    clippy::expect_used,
+    reason = "hard-coded default S3 endpoint is validated at compile-time by tests and has no runtime fallback"
+)]
+/// Default local RustFS endpoint for non-Compose S3-backed development.
+pub(crate) fn default_s3_endpoint_url() -> Option<url::Url> {
+    Some(
+        DEFAULT_S3_ENDPOINT_URL
+            .parse()
+            .expect("default S3 endpoint URL must be valid"),
+    )
+}
+
+/// Default S3 path-style access setting.
+pub(crate) fn default_s3_force_path_style() -> bool {
+    DEFAULT_S3_FORCE_PATH_STYLE
 }
 
 /// Default maximum stored challenge bundle archive bytes.

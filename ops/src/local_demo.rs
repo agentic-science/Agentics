@@ -7,21 +7,27 @@
 //! configured API and database are reachable.
 
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::Write;
+use std::io::{Cursor, Seek, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Duration;
 
 use agentics_config::{
-    DEFAULT_API_HOST, DEFAULT_API_PORT, ENV_AGENTICS_API_BASE_URL, default_local_api_base_url,
+    Config, DEFAULT_API_HOST, DEFAULT_API_PORT, ENV_AGENTICS_API_BASE_URL, ENV_AGENTICS_S3_BUCKET,
+    ENV_AGENTICS_S3_ENDPOINT_URL, ENV_AGENTICS_S3_FORCE_PATH_STYLE, ENV_AGENTICS_S3_PREFIX,
+    ENV_AGENTICS_S3_REGION, ENV_AGENTICS_STORAGE_BACKEND, ENV_AGENTICS_STORAGE_ROOT,
+    ENV_AGENTICS_STORAGE_WORK_ROOT, StorageBackend, default_local_api_base_url,
 };
+use agentics_storage::{StorageError, StorageWriteIntent, build_storage};
 use clap::{Parser, Subcommand};
 use secrecy::{ExposeSecret, SecretString};
 use sqlx::postgres::PgPoolOptions;
 use url::Url;
 use zip::CompressionMethod;
 use zip::write::SimpleFileOptions;
+
+#[cfg(test)]
+use std::fs::File;
 
 mod local_demo_config;
 use local_demo_config::{
@@ -38,19 +44,12 @@ const ENV_DEMO_ENV_FILE: &str = "AGENTICS_DEMO_ENV_FILE";
 const ENV_DEMO_DATABASE_NAME: &str = "AGENTICS_DEMO_DATABASE_NAME";
 const ENV_DEMO_DATABASE_URL: &str = "AGENTICS_DEMO_DATABASE_URL";
 const ENV_DEMO_DATABASE_URL_CONFIRM: &str = "AGENTICS_DEMO_DATABASE_URL_CONFIRM";
-const ENV_STORAGE_ROOT: &str = "AGENTICS_STORAGE_ROOT";
 const ENV_DATABASE_URL: &str = "AGENTICS_DATABASE_URL";
 
 const DEFAULT_DEMO_DATABASE_NAME: &str = "agentics_demo";
 const NON_LOOPBACK_DATABASE_CONFIRMATION: &str = "non-loopback-demo-db";
-const DEMO_ARTIFACT_IDS: &[&str] = &[
-    "20000000-0000-4000-8000-000000000001",
-    "20000000-0000-4000-8000-000000000002",
-    "20000000-0000-4000-8000-000000000003",
-    "20000000-0000-4000-8000-000000000101",
-    "20000000-0000-4000-8000-000000000102",
-    "20000000-0000-4000-8000-000000000103",
-];
+const DEMO_ARTIFACT_INTENT: StorageWriteIntent =
+    StorageWriteIntent::new("local demo solution artifact", 1024 * 1024);
 const DEMO_ARTIFACT_FILES: &[DemoArtifactFile] = &[
     DemoArtifactFile {
         path: "agentics.solution.json",
@@ -146,7 +145,7 @@ async fn seed_only(config: &LocalDemoConfig) -> Result<Vec<ReportLine>, LocalDem
 #[derive(Debug, Clone)]
 pub struct LocalDemoConfig {
     repo_root: PathBuf,
-    storage_root: PathBuf,
+    storage_config: Config,
     database_url: SecretString,
     api_base_url: Url,
 }
@@ -190,13 +189,69 @@ fn resolve_api_base_url(file_env: &HashMap<String, String>) -> Result<Url, Local
 }
 
 fn resolve_storage_root(repo_root: &Path, file_env: &HashMap<String, String>) -> PathBuf {
-    let storage_root = env_value(ENV_STORAGE_ROOT, file_env)
+    let storage_root = env_value(ENV_AGENTICS_STORAGE_ROOT, file_env)
         .map(PathBuf::from)
-        .unwrap_or_else(|| repo_root.join(".agentics-compose/dev/storage"));
+        .unwrap_or_else(|| PathBuf::from(agentics_config::DEFAULT_STORAGE_ROOT));
     if storage_root.is_absolute() {
         storage_root
     } else {
         repo_root.join(storage_root)
+    }
+}
+
+fn resolve_storage_work_root(
+    repo_root: &Path,
+    file_env: &HashMap<String, String>,
+) -> Option<String> {
+    env_value(ENV_AGENTICS_STORAGE_WORK_ROOT, file_env).map(|value| {
+        let path = PathBuf::from(value);
+        if path.is_absolute() {
+            path
+        } else {
+            repo_root.join(path)
+        }
+        .to_string_lossy()
+        .to_string()
+    })
+}
+
+fn resolve_storage_config(
+    repo_root: &Path,
+    file_env: &HashMap<String, String>,
+) -> Result<Config, LocalDemoError> {
+    let mut config =
+        Config::from_env().map_err(|error| LocalDemoError::InvalidConfig(error.to_string()))?;
+    config.storage_root = resolve_storage_root(repo_root, file_env)
+        .to_string_lossy()
+        .to_string();
+    config.storage_backend = env_value(ENV_AGENTICS_STORAGE_BACKEND, file_env)
+        .map(|value| value.parse::<StorageBackend>())
+        .transpose()
+        .map_err(|error| LocalDemoError::InvalidConfig(error.to_string()))?
+        .unwrap_or(config.storage_backend);
+    config.storage_work_root =
+        resolve_storage_work_root(repo_root, file_env).or(config.storage_work_root);
+    config.s3_bucket = env_value(ENV_AGENTICS_S3_BUCKET, file_env).or(config.s3_bucket);
+    config.s3_prefix = env_value(ENV_AGENTICS_S3_PREFIX, file_env).or(config.s3_prefix);
+    config.s3_region = env_value(ENV_AGENTICS_S3_REGION, file_env).unwrap_or(config.s3_region);
+    config.s3_endpoint_url = env_value(ENV_AGENTICS_S3_ENDPOINT_URL, file_env)
+        .map(|value| parse_url(ENV_AGENTICS_S3_ENDPOINT_URL, &value))
+        .transpose()?
+        .or(config.s3_endpoint_url);
+    config.s3_force_path_style = env_value(ENV_AGENTICS_S3_FORCE_PATH_STYLE, file_env)
+        .map(|value| parse_bool(ENV_AGENTICS_S3_FORCE_PATH_STYLE, &value))
+        .transpose()?
+        .unwrap_or(config.s3_force_path_style);
+    Ok(config)
+}
+
+fn parse_bool(name: &str, value: &str) -> Result<bool, LocalDemoError> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" => Ok(true),
+        "0" | "false" | "no" => Ok(false),
+        _ => Err(LocalDemoError::InvalidConfig(format!(
+            "{name} must be true or false"
+        ))),
     }
 }
 
@@ -208,10 +263,10 @@ impl LocalDemoConfig {
         let database_name = resolve_database_name(&file_env)?;
         let database_url = resolve_database_url(&database_name, &file_env)?;
         let api_base_url = resolve_api_base_url(&file_env)?;
-        let storage_root = resolve_storage_root(&repo_root, &file_env);
+        let storage_config = resolve_storage_config(&repo_root, &file_env)?;
         Ok(Self {
             repo_root,
-            storage_root,
+            storage_config,
             database_url: SecretString::from(database_url.to_string()),
             api_base_url,
         })
@@ -259,7 +314,7 @@ async fn run_migrations(config: &LocalDemoConfig) -> Result<(), LocalDemoError> 
 }
 
 async fn seed_database(config: &LocalDemoConfig) -> Result<Vec<ReportLine>, LocalDemoError> {
-    write_demo_artifacts(config)?;
+    write_demo_artifacts(config).await?;
     let pool = PgPoolOptions::new()
         .max_connections(3)
         .connect(config.database_url.expose_secret())
@@ -267,7 +322,7 @@ async fn seed_database(config: &LocalDemoConfig) -> Result<Vec<ReportLine>, Loca
     local_demo_seed::seed_database(&pool).await?;
     pool.close().await;
     Ok(vec![
-        ReportLine::pass("demo artifacts", "wrote sample solution ZIPs"),
+        ReportLine::pass("demo artifacts", "uploaded sample solution ZIPs"),
         ReportLine::pass(
             "demo seed",
             "inserted local-demo service heartbeat evidence",
@@ -275,24 +330,45 @@ async fn seed_database(config: &LocalDemoConfig) -> Result<Vec<ReportLine>, Loca
     ])
 }
 
-fn write_demo_artifacts(config: &LocalDemoConfig) -> Result<(), LocalDemoError> {
-    let artifact_dir = config.storage_root.join("solution-submissions");
-    std::fs::create_dir_all(&artifact_dir)?;
-    for id in DEMO_ARTIFACT_IDS {
-        write_demo_artifact(&artifact_dir.join(format!("{id}.zip")))?;
+async fn write_demo_artifacts(config: &LocalDemoConfig) -> Result<(), LocalDemoError> {
+    let storage = build_storage(&config.storage_config)
+        .await
+        .map_err(|error| LocalDemoError::StorageInit(error.to_string()))?;
+    let artifact_bytes = demo_artifact_bytes()?;
+    for key in local_demo_seed::demo_artifact_keys()? {
+        if storage.exists(&key).await? {
+            storage.delete(&key).await?;
+        }
+        storage
+            .put(&key, &artifact_bytes, DEMO_ARTIFACT_INTENT)
+            .await?;
     }
     Ok(())
 }
 
+#[cfg(test)]
 fn write_demo_artifact(path: &Path) -> Result<(), LocalDemoError> {
     let file = File::create(path)?;
-    let mut archive = zip::ZipWriter::new(file);
+    write_demo_artifact_to(file)?;
+    Ok(())
+}
+
+fn demo_artifact_bytes() -> Result<Vec<u8>, LocalDemoError> {
+    let cursor = Cursor::new(Vec::new());
+    let cursor = write_demo_artifact_to(cursor)?;
+    Ok(cursor.into_inner())
+}
+
+fn write_demo_artifact_to<W>(writer: W) -> Result<W, LocalDemoError>
+where
+    W: Write + Seek,
+{
+    let mut archive = zip::ZipWriter::new(writer);
     for entry in DEMO_ARTIFACT_FILES {
         archive.start_file(entry.path, demo_artifact_file_options(entry.executable))?;
         archive.write_all(entry.contents)?;
     }
-    archive.finish()?;
-    Ok(())
+    Ok(archive.finish()?)
 }
 
 fn demo_artifact_file_options(executable: bool) -> SimpleFileOptions {
@@ -338,6 +414,10 @@ pub enum LocalDemoError {
     Zip(#[from] zip::result::ZipError),
     #[error(transparent)]
     Service(#[from] agentics_domain::error::ServiceError),
+    #[error(transparent)]
+    Storage(#[from] StorageError),
+    #[error("storage initialization failed: {0}")]
+    StorageInit(String),
     #[error("invalid local demo config: {0}")]
     InvalidConfig(String),
     #[error("{0} timed out")]
@@ -351,8 +431,11 @@ mod tests {
     use std::fs::File;
     use std::io::Read;
 
+    use agentics_config::{Config, StorageBackend};
+    use secrecy::SecretString;
+
     use super::{
-        DemoDatabaseName, ENV_DEMO_DATABASE_URL, NON_LOOPBACK_DATABASE_CONFIRMATION,
+        DemoDatabaseName, ENV_DEMO_DATABASE_URL, NON_LOOPBACK_DATABASE_CONFIRMATION, parse_bool,
         resolve_demo_database_url, validate_demo_database_url, write_demo_artifact,
     };
 
@@ -409,6 +492,14 @@ mod tests {
         );
     }
 
+    /// Verifies boolean env parsing accepts only explicit boolean values.
+    #[test]
+    fn storage_bool_env_is_strict() {
+        assert!(parse_bool("FLAG", "true").unwrap());
+        assert!(!parse_bool("FLAG", "0").unwrap());
+        assert!(parse_bool("FLAG", "maybe").is_err());
+    }
+
     /// Verifies generated demo ZIPs contain the runnable solution contract.
     #[test]
     fn demo_artifact_zip_contains_solution_files() {
@@ -428,5 +519,32 @@ mod tests {
         assert!(archive.by_name("setup.sh").is_ok());
         assert!(archive.by_name("run.sh").is_ok());
         assert!(archive.by_name("main.py").is_ok());
+    }
+
+    /// Verifies demo artifact seeding writes through the configured storage backend.
+    #[tokio::test]
+    async fn demo_artifacts_are_uploaded_through_storage_backend() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let mut storage_config = Config::from_env().expect("default config should load");
+        storage_config.storage_backend = StorageBackend::Local;
+        storage_config.storage_root = tempdir.path().join("storage").display().to_string();
+        storage_config.storage_work_root = Some(tempdir.path().join("work").display().to_string());
+        let config = super::LocalDemoConfig {
+            repo_root: tempdir.path().to_path_buf(),
+            storage_config,
+            database_url: SecretString::from("postgres://agentics:agentics@localhost/demo"),
+            api_base_url: "http://127.0.0.1:3100".parse().expect("valid API URL"),
+        };
+
+        super::write_demo_artifacts(&config)
+            .await
+            .expect("demo artifacts should upload");
+
+        for key in super::local_demo_seed::demo_artifact_keys().expect("demo keys") {
+            assert!(
+                tempdir.path().join("storage").join(key.as_path()).exists(),
+                "demo artifact key should exist: {key}"
+            );
+        }
     }
 }

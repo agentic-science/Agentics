@@ -496,6 +496,7 @@ pub struct S3Storage {
     client: aws_sdk_s3::Client,
     bucket: String,
     prefix: Option<String>,
+    work_root: PathBuf,
 }
 
 /// Connection settings for S3-compatible durable object storage.
@@ -506,6 +507,7 @@ pub struct S3StorageOptions {
     pub region: String,
     pub endpoint_url: Option<url::Url>,
     pub force_path_style: bool,
+    pub work_root: Option<PathBuf>,
 }
 
 impl S3Storage {
@@ -523,6 +525,7 @@ impl S3Storage {
             region: config.s3_region.clone(),
             endpoint_url: config.s3_endpoint_url.clone(),
             force_path_style: config.s3_force_path_style,
+            work_root: Some(storage_work_root(config)?),
         })
         .await
     }
@@ -547,6 +550,9 @@ impl S3Storage {
             client: aws_sdk_s3::Client::from_conf(s3_config.build()),
             bucket,
             prefix: normalized_s3_prefix(options.prefix.as_deref())?,
+            work_root: options
+                .work_root
+                .unwrap_or_else(|| std::env::temp_dir().join("agentics-storage-work")),
         })
     }
 
@@ -670,35 +676,27 @@ impl Storage for S3Storage {
             .object_len(temporary_key)
             .await?
             .ok_or_else(|| StorageError::ObjectNotFound(temporary_key.to_string()))?;
-        let source = self
-            .client
-            .get_object()
-            .bucket(&self.bucket)
-            .key(self.object_key(temporary_key))
-            .send()
-            .await
-            .map_err(|e| StorageError::Backend(format!("{e:?}")))?;
-        let put_result = self
-            .client
-            .put_object()
-            .bucket(&self.bucket)
-            .key(self.object_key(durable_key))
-            .body(source.body)
-            .if_none_match("*")
-            .send()
-            .await;
-        if let Err(error) = put_result {
-            if s3_error_is_conflict(&error) {
-                return Err(StorageError::ObjectConflict(durable_key.to_string()));
-            }
-            return Err(StorageError::Backend(format!("{error:?}")));
+        tokio::fs::create_dir_all(&self.work_root).await?;
+        let local_temp = self
+            .work_root
+            .join(format!("agentics-s3-promote-{}", uuid::Uuid::new_v4()));
+        let intent = StorageWriteIntent::new("temporary storage object", source_len);
+        let promote_result = async {
+            self.get_to_file(temporary_key, &local_temp, intent).await?;
+            self.put_file(durable_key, &local_temp, intent).await?;
+            self.delete(temporary_key).await?;
+            Ok(durable_key.clone())
         }
-        if let Err(error) = self.verify_object_len(durable_key, source_len).await {
-            drop(self.delete(durable_key).await);
-            return Err(error);
+        .await;
+        let cleanup_result = tokio::fs::remove_file(&local_temp).await;
+        match cleanup_result {
+            Ok(()) => promote_result,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => promote_result,
+            Err(cleanup_error) => match promote_result {
+                Ok(_) => Err(cleanup_error.into()),
+                Err(error) => Err(error),
+            },
         }
-        self.delete(temporary_key).await?;
-        Ok(durable_key.clone())
     }
 
     async fn get(&self, key: &StorageKey, intent: StorageWriteIntent) -> Result<Vec<u8>> {
@@ -946,8 +944,11 @@ impl S3Storage {
         StorageKey::try_new(logical).map_err(|e| StorageError::InvalidKey(e.to_string()))
     }
 
-    #[cfg(test)]
-    pub(crate) async fn create_bucket_if_missing_for_tests(&self) -> Result<()> {
+    /// Create the configured bucket when a test harness owns the object store.
+    ///
+    /// Application startup intentionally does not create buckets; production
+    /// Compose and external S3 deployments provision storage outside the app.
+    pub async fn create_bucket_if_missing_for_tests(&self) -> Result<()> {
         let create_bucket = self
             .client
             .create_bucket()

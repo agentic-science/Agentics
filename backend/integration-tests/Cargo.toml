@@ -29,4 +29,5 @@ sqlx = { workspace = true }
 uuid = { workspace = true }
 bollard = { workspace = true }
 tempfile = { workspace = true }
+url = { workspace = true }
 zip = { workspace = true }

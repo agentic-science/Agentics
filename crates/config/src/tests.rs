@@ -86,6 +86,27 @@ fn mode_config_values_deserialize_through_typed_parsers() {
     assert!(super::RunnerNamespace::try_new("../prod").is_err());
 }
 
+/// Verifies durable storage defaults point at local RustFS-compatible S3.
+#[test]
+fn storage_defaults_use_rustfs_s3() {
+    let config = test_config();
+
+    assert_eq!(config.storage_backend, super::StorageBackend::S3);
+    assert_eq!(config.s3_bucket.as_deref(), Some(super::DEFAULT_S3_BUCKET));
+    assert_eq!(config.s3_region, super::DEFAULT_S3_REGION);
+    assert_eq!(
+        config
+            .s3_endpoint_url
+            .as_ref()
+            .map(url::Url::as_str)
+            .map(|value| value.trim_end_matches('/')),
+        Some(super::DEFAULT_S3_ENDPOINT_URL)
+    );
+    assert!(config.s3_force_path_style);
+    assert!(config.s3_prefix.is_none());
+    assert!(config.validate_object_storage_config().is_ok());
+}
+
 /// Verifies that default admin credentials are rejected on wildcard bind.
 #[test]
 fn default_admin_credentials_are_rejected_on_wildcard_bind() {
@@ -269,6 +290,7 @@ fn object_storage_config_requires_backend_specific_settings() {
         (
             Config {
                 storage_backend: super::StorageBackend::S3,
+                s3_bucket: None,
                 ..test_config()
             },
             "AGENTICS_S3_BUCKET",
@@ -303,6 +325,14 @@ fn object_storage_config_requires_backend_specific_settings() {
             },
             "AGENTICS_S3_PREFIX",
         ),
+        (
+            Config {
+                storage_backend: super::StorageBackend::S3,
+                s3_endpoint_url: Some("ftp://127.0.0.1".parse().expect("valid URL")),
+                ..test_config()
+            },
+            "AGENTICS_S3_ENDPOINT_URL",
+        ),
     ] {
         let error = config
             .validate_object_storage_config()
@@ -319,6 +349,15 @@ fn object_storage_config_requires_backend_specific_settings() {
         ..test_config()
     };
     assert!(config.validate_object_storage_config().is_ok());
+
+    let local_config = Config {
+        storage_backend: super::StorageBackend::Local,
+        s3_bucket: None,
+        s3_endpoint_url: None,
+        s3_force_path_style: false,
+        ..test_config()
+    };
+    assert!(local_config.validate_object_storage_config().is_ok());
 }
 
 /// Verifies that hosted workers must bound bind mounts and writable rootfs.
@@ -541,14 +580,14 @@ fn test_config() -> Config {
         database_url: SecretString::from(""),
         api_host: super::default_api_host(),
         api_port: super::default_api_port(),
-        storage_root: String::new(),
+        storage_root: super::storage_config::default_storage_root(),
         storage_backend: super::default_storage_backend(),
         storage_work_root: None,
-        s3_bucket: None,
+        s3_bucket: super::storage_config::default_s3_bucket(),
         s3_prefix: None,
         s3_region: super::default_s3_region(),
-        s3_endpoint_url: None,
-        s3_force_path_style: false,
+        s3_endpoint_url: super::storage_config::default_s3_endpoint_url(),
+        s3_force_path_style: super::storage_config::default_s3_force_path_style(),
         storage_max_bundle_archive_bytes: super::default_storage_max_bundle_archive_bytes(),
         storage_max_statement_bytes: super::default_storage_max_statement_bytes(),
         storage_max_json_artifact_bytes: super::default_storage_max_json_artifact_bytes(),

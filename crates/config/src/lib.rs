@@ -16,7 +16,13 @@ pub use runtime_modes::{
     AgentRegistrationMode, HostProbeMode, RunnerNamespace, RunnerSecurityProfile,
     RunnerWritableStorageMode, WorkerAccelerators,
 };
-pub use storage_config::StorageBackend;
+pub use storage_config::{
+    DEFAULT_S3_BUCKET, DEFAULT_S3_ENDPOINT_URL, DEFAULT_S3_FORCE_PATH_STYLE, DEFAULT_S3_REGION,
+    DEFAULT_STORAGE_BACKEND, DEFAULT_STORAGE_ROOT, ENV_AGENTICS_S3_BUCKET,
+    ENV_AGENTICS_S3_ENDPOINT_URL, ENV_AGENTICS_S3_FORCE_PATH_STYLE, ENV_AGENTICS_S3_PREFIX,
+    ENV_AGENTICS_S3_REGION, ENV_AGENTICS_STORAGE_BACKEND, ENV_AGENTICS_STORAGE_ROOT,
+    ENV_AGENTICS_STORAGE_WORK_ROOT, StorageBackend,
+};
 
 mod local_urls;
 mod runtime_modes;
@@ -90,21 +96,21 @@ pub struct Config {
     pub api_host: String,
     #[serde(default = "default_api_port")]
     pub api_port: u16,
-    #[serde(default = "default_storage_root")]
+    #[serde(default = "storage_config::default_storage_root")]
     pub storage_root: String,
     #[serde(default = "storage_config::default_storage_backend")]
     pub storage_backend: StorageBackend,
     #[serde(default)]
     pub storage_work_root: Option<String>,
-    #[serde(default)]
+    #[serde(default = "storage_config::default_s3_bucket")]
     pub s3_bucket: Option<String>,
     #[serde(default)]
     pub s3_prefix: Option<String>,
     #[serde(default = "storage_config::default_s3_region")]
     pub s3_region: String,
-    #[serde(default)]
+    #[serde(default = "storage_config::default_s3_endpoint_url")]
     pub s3_endpoint_url: Option<url::Url>,
-    #[serde(default)]
+    #[serde(default = "storage_config::default_s3_force_path_style")]
     pub s3_force_path_style: bool,
     #[serde(default = "storage_config::default_storage_max_bundle_archive_bytes")]
     pub storage_max_bundle_archive_bytes: u64,
@@ -262,11 +268,6 @@ fn default_api_host() -> String {
 /// Handles default api port for this module.
 fn default_api_port() -> u16 {
     DEFAULT_API_PORT
-}
-
-/// Handles default storage root for this module.
-fn default_storage_root() -> String {
-    "storage".to_string()
 }
 
 /// Handles default challenges root for this module.
