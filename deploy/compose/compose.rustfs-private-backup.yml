@@ -1,0 +1,60 @@
+name: agentics-rustfs-private-backup
+
+services:
+  rustfs-perms:
+    image: alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+    user: root
+    volumes:
+      - type: bind
+        source: ${AGENTICS_RUSTFS_BACKUP_DATA_DIR:-/srv/agentics/private-bundle-backups/rustfs-data}
+        target: /data
+    command: ["sh", "-c", "mkdir -p /data && chown -R 10001:10001 /data"]
+    restart: "no"
+
+  rustfs:
+    image: rustfs/rustfs:latest@sha256:f7cb98ef492fa3c3ed0dbd65df3ce2dd205c666e24e7d7234d9402c9ed1001f9
+    container_name: agentics-rustfs-private-backup
+    depends_on:
+      rustfs-perms:
+        condition: service_completed_successfully
+    env_file:
+      - ./env/rustfs-private-backup.env
+    environment:
+      RUSTFS_ADDRESS: :9000
+      RUSTFS_CONSOLE_ADDRESS: :9001
+      RUSTFS_ACCESS_KEY: ${AGENTICS_RUSTFS_BACKUP_ACCESS_KEY:?set AGENTICS_RUSTFS_BACKUP_ACCESS_KEY}
+      RUSTFS_SECRET_KEY: ${AGENTICS_RUSTFS_BACKUP_SECRET_KEY:?set AGENTICS_RUSTFS_BACKUP_SECRET_KEY}
+      RUSTFS_CONSOLE_ENABLE: "true"
+    ports:
+      - "${AGENTICS_RUSTFS_BACKUP_BIND_IP:-0.0.0.0}:${AGENTICS_RUSTFS_BACKUP_API_PORT:-9100}:9000"
+      - "${AGENTICS_RUSTFS_BACKUP_BIND_IP:-0.0.0.0}:${AGENTICS_RUSTFS_BACKUP_CONSOLE_PORT:-9101}:9001"
+    volumes:
+      - type: bind
+        source: ${AGENTICS_RUSTFS_BACKUP_DATA_DIR:-/srv/agentics/private-bundle-backups/rustfs-data}
+        target: /data
+    command: ["/data"]
+    restart: unless-stopped
+
+  rustfs-bucket-init:
+    image: minio/mc:latest@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    depends_on:
+      rustfs:
+        condition: service_started
+    env_file:
+      - ./env/rustfs-private-backup.env
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
+          if mc alias set backup http://rustfs:9000 "$${AGENTICS_RUSTFS_BACKUP_ACCESS_KEY}" "$${AGENTICS_RUSTFS_BACKUP_SECRET_KEY}" >/dev/null 2>&1; then
+            mc mb -p "backup/$${AGENTICS_RUSTFS_BACKUP_BUCKET}" >/dev/null 2>&1 || true
+            mc anonymous set none "backup/$${AGENTICS_RUSTFS_BACKUP_BUCKET}" >/dev/null 2>&1 || true
+            exit 0
+          fi
+          sleep 1
+        done
+        mc alias set backup http://rustfs:9000 "$${AGENTICS_RUSTFS_BACKUP_ACCESS_KEY}" "$${AGENTICS_RUSTFS_BACKUP_SECRET_KEY}" >/dev/null
+        mc mb -p "backup/$${AGENTICS_RUSTFS_BACKUP_BUCKET}" >/dev/null 2>&1 || true
+        mc anonymous set none "backup/$${AGENTICS_RUSTFS_BACKUP_BUCKET}" >/dev/null 2>&1 || true
+    restart: "no"

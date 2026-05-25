@@ -2,6 +2,7 @@ set fallback := true
 
 compose_dev := "docker compose --env-file deploy/compose/env/dev.env.example -f deploy/compose/compose.yml -f deploy/compose/compose.dev.yml"
 compose_test := "docker compose --env-file deploy/compose/env/test.env.example -f deploy/compose/compose.yml -f deploy/compose/compose.test.yml"
+compose_rustfs_private_backup := "docker compose --env-file deploy/compose/env/rustfs-private-backup.env -f deploy/compose/compose.rustfs-private-backup.yml"
 crap_lcov_unit := "target/llvm-cov/agentics-workspace.lcov"
 crap_lcov_integration := "target/llvm-cov/agentics-workspace-with-integration.lcov"
 rustfs_container := "agentics-rustfs-test"
@@ -43,6 +44,26 @@ rustfs-down:
 # Stop RustFS test service and remove its named volume
 rustfs-purge: rustfs-down
     docker volume rm {{rustfs_volume}} >/dev/null 2>&1 || true
+
+# Start the persistent RustFS backup store for migrated challenge private bundles
+rustfs-private-backup-up:
+    test -f deploy/compose/env/rustfs-private-backup.env
+    {{compose_rustfs_private_backup}} up -d --remove-orphans
+
+# Stop the persistent RustFS private bundle backup store without deleting data
+rustfs-private-backup-down:
+    test -f deploy/compose/env/rustfs-private-backup.env
+    {{compose_rustfs_private_backup}} down --remove-orphans
+
+# Show persistent RustFS private bundle backup store status
+rustfs-private-backup-ps:
+    test -f deploy/compose/env/rustfs-private-backup.env
+    {{compose_rustfs_private_backup}} ps
+
+# Follow persistent RustFS private bundle backup store logs
+rustfs-private-backup-logs:
+    test -f deploy/compose/env/rustfs-private-backup.env
+    {{compose_rustfs_private_backup}} logs -f
 
 # Run S3 storage tests against the local RustFS service
 test-storage-s3:
