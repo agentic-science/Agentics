@@ -12,6 +12,8 @@ and MVP target support.
 | Web listen port | `AGENTICS_WEB_PORT` | `3001` | Next.js web service on loopback by default |
 | RustFS S3 test port | `AGENTICS_RUSTFS_PORT` | `9000` | Local Docker RustFS test service |
 | RustFS console test port | `AGENTICS_RUSTFS_CONSOLE_PORT` | `9001` | Local Docker RustFS console |
+| Persistent private-bundle backup RustFS S3 port | `AGENTICS_RUSTFS_BACKUP_API_PORT` | `9100` | LAN-accessible private bundle backup store |
+| Persistent private-bundle backup RustFS console port | `AGENTICS_RUSTFS_BACKUP_CONSOLE_PORT` | `9101` | LAN-accessible private bundle backup console |
 | Public HTTPS | reverse proxy config | `443` | Hosted ingress only |
 
 Local Compose development reads `deploy/compose/env/dev.env.example`. Copy
@@ -38,6 +40,7 @@ DGX hosted profile.
 | Runner quota slots | `/srv/agentics/phase-mounts/<phase>/slots/<size>mb/slot-NNN` |
 | Local test quota root | `/srv/agentics-test` |
 | Local test phase mount root | `/srv/agentics-test/phase-mounts` |
+| Persistent private-bundle backup RustFS data root | `/srv/agentics/private-bundle-backups/rustfs-data` |
 
 Default DGX quota slot classes are `64`, `256`, `1024`, and `4096` MiB, with
 100 slots per class and phase. The worker leases these slots for writable
@@ -92,6 +95,20 @@ bridge mode and publishes the requested ports. If `AGENTICS_RUSTFS_DOCKER_NETWOR
 is set explicitly, custom ports are rejected because host networking cannot
 remap them. If you switch to bind mounts, the RustFS container runs as UID
 `10001`, so the host directory must be writable by that UID.
+
+The persistent private-bundle backup store is separate from the storage test
+helper and is not the Agentics durable storage backend:
+
+```bash
+cp deploy/compose/env/rustfs-private-backup.env.example deploy/compose/env/rustfs-private-backup.env
+just rustfs-private-backup-up
+```
+
+It uses `deploy/compose/compose.rustfs-private-backup.yml`, keeps object data
+under `AGENTICS_RUSTFS_BACKUP_DATA_DIR`, and stops without deleting data through
+`just rustfs-private-backup-down`. Copy objects from this backup bucket into the
+storage bucket used by a production rehearsal when you want to reuse backed-up
+private challenge bundles.
 
 The systemd units are Linux-only and use the release symlink paths above.
 Local development uses the Compose dev stack.

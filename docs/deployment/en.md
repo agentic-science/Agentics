@@ -114,6 +114,24 @@ export AGENTICS_S3_FORCE_PATH_STYLE='true'
 export AGENTICS_STORAGE_WORK_ROOT='/srv/agentics/storage-work'
 ```
 
+For repeated MVP production rehearsals that need to back up migrated challenge
+private bundles across stack rebuilds, start the dedicated RustFS backup
+compose service:
+
+```bash
+cp deploy/compose/env/rustfs-private-backup.env.example deploy/compose/env/rustfs-private-backup.env
+just rustfs-private-backup-up
+```
+
+The default store listens on `9100` for S3 and `9101` for the RustFS console,
+uses `/srv/agentics/private-bundle-backups/rustfs-data` for durable data, and
+creates the `migrated-challenge-private-bundles` bucket. This backup store is
+not the Agentics durable storage backend. When a production rehearsal starts
+with its own RustFS or S3 bucket, copy the needed private bundle objects from
+this backup store into the rehearsal storage before reusing previously migrated
+challenge metadata. `just rustfs-private-backup-down` stops the backup
+container without deleting objects.
+
 Credentials come only from the AWS SDK provider chain, for example environment
 variables or an instance profile. Do not store S3 credentials in Agentics DB
 rows or challenge specs. Agentics still enforces object-size limits before

@@ -12,6 +12,8 @@ reference。
 | Web listen port | `AGENTICS_WEB_PORT` | `3001` | Next.js web service，默认 loopback |
 | RustFS S3 test port | `AGENTICS_RUSTFS_PORT` | `9000` | Local Docker RustFS test service |
 | RustFS console test port | `AGENTICS_RUSTFS_CONSOLE_PORT` | `9001` | Local Docker RustFS console |
+| Persistent private-bundle backup RustFS S3 port | `AGENTICS_RUSTFS_BACKUP_API_PORT` | `9100` | LAN-accessible private bundle backup store |
+| Persistent private-bundle backup RustFS console port | `AGENTICS_RUSTFS_BACKUP_CONSOLE_PORT` | `9101` | LAN-accessible private bundle backup console |
 | Public HTTPS | reverse proxy config | `443` | 仅 hosted ingress |
 
 Local Compose development 读取 `deploy/compose/env/dev.env.example`。DGX hosted
@@ -38,6 +40,7 @@ profile 将 `deploy/dgx-spark/agentics.env.example` 复制到
 | Runner quota slots | `/srv/agentics/phase-mounts/<phase>/slots/<size>mb/slot-NNN` |
 | Local test quota root | `/srv/agentics-test` |
 | Local test phase mount root | `/srv/agentics-test/phase-mounts` |
+| Persistent private-bundle backup RustFS data root | `/srv/agentics/private-bundle-backups/rustfs-data` |
 
 DGX 默认 quota slot classes 为 `64`、`256`、`1024` 和 `4096` MiB，每个 phase
 和 class 有 100 个 slots。Worker 会为 writable container bind mounts 租用这些
@@ -87,6 +90,19 @@ rustfs-up` helper 默认使用 `--network host`，因为部分 DGX Docker bridge
 ports。如果显式设置 `AGENTICS_RUSTFS_DOCKER_NETWORK=host`，custom ports 会被拒绝，因为
 host networking 不能 remap ports。如果改用 bind mounts，RustFS container 以 UID
 `10001` 运行，因此 host directory 必须允许该 UID 写入。
+
+Persistent private-bundle backup store 与 storage test helper 分离，并且不是
+Agentics durable storage backend：
+
+```bash
+cp deploy/compose/env/rustfs-private-backup.env.example deploy/compose/env/rustfs-private-backup.env
+just rustfs-private-backup-up
+```
+
+它使用 `deploy/compose/compose.rustfs-private-backup.yml`，将 object data 保存在
+`AGENTICS_RUSTFS_BACKUP_DATA_DIR` 下，并且 `just rustfs-private-backup-down` 停止时不会
+删除 data。如果 production rehearsal 需要复用备份的 private challenge bundles，需要将
+objects 从这个 backup bucket 复制到该 rehearsal 使用的 storage bucket。
 
 Systemd units 仅适用于 Linux，并使用上述 release symlink paths。Local development
 使用 Compose dev stack。

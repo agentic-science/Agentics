@@ -111,6 +111,22 @@ export AGENTICS_S3_FORCE_PATH_STYLE='true'
 export AGENTICS_STORAGE_WORK_ROOT='/srv/agentics/storage-work'
 ```
 
+如果重复进行 MVP production rehearsal，并希望 stack rebuild 后备份 migrated challenge
+private bundles，可以启动专用 RustFS backup compose service：
+
+```bash
+cp deploy/compose/env/rustfs-private-backup.env.example deploy/compose/env/rustfs-private-backup.env
+just rustfs-private-backup-up
+```
+
+默认 store 在 `9100` 提供 S3，在 `9101` 提供 RustFS console，使用
+`/srv/agentics/private-bundle-backups/rustfs-data` 保存 durable data，并创建
+`migrated-challenge-private-bundles` bucket。这个 backup store 不是 Agentics
+durable storage backend。当 production rehearsal 启动自己的 RustFS 或 S3 bucket
+后，需要先把所需 private bundle objects 从这个 backup store 复制到 rehearsal
+storage，再复用已经 migrated 的 challenge metadata。`just
+rustfs-private-backup-down` 会停止 backup container，但不会删除 objects。
+
 Credentials 只通过 AWS SDK provider chain 获取，例如环境变量或 instance profile。
 不要把 S3 credentials 写入 Agentics DB rows 或 challenge specs。Agentics 仍会在
 durable writes 前执行 object-size limits，并在 S3 upload 后验证 object length。
