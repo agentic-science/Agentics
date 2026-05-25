@@ -73,6 +73,22 @@ override it only when you intentionally want a different cleanup namespace:
 AGENTICS_RUNNER_NAMESPACE=agentics-dev-$USER just compose-dev-up
 ```
 
+By default, the dev API and web ports bind to `127.0.0.1`. To inspect the
+frontend from another machine through Tailscale or a trusted LAN, bind only to
+that interface and allow the hostname used by the browser:
+
+```bash
+AGENTICS_COMPOSE_BIND_IP=100.x.y.z \
+AGENTICS_WEB_BASE_URL=http://your-host.tailnet.ts.net:3001 \
+AGENTICS_CORS_ALLOWED_ORIGINS=http://127.0.0.1:3001,http://localhost:3001,http://your-host.tailnet.ts.net:3001 \
+AGENTICS_WEB_ALLOWED_DEV_ORIGINS=your-host.tailnet.ts.net \
+just compose-dev-up
+```
+
+Use HTTPS, for example with Tailscale Serve, when testing auth flows over a
+remote hostname because dev cookies are marked secure when the API is reachable
+from another machine.
+
 Stop the dev stack with:
 
 ```bash

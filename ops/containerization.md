@@ -303,6 +303,23 @@ runner containers with a namespace and must still clean up stale containers.
 
 Development should not require DGX quota storage by default.
 
+### Development Remote Access
+
+The dev Compose override binds API and web host ports to `127.0.0.1` by
+default. When a developer wants to inspect the frontend from another trusted
+machine, such as over Tailscale, set:
+
+```bash
+AGENTICS_COMPOSE_BIND_IP=<tailscale-or-lan-ip>
+AGENTICS_WEB_BASE_URL=http://<browser-hostname>:3001
+AGENTICS_CORS_ALLOWED_ORIGINS=http://127.0.0.1:3001,http://localhost:3001,http://<browser-hostname>:3001
+AGENTICS_WEB_ALLOWED_DEV_ORIGINS=<browser-hostname>
+```
+
+Bind to the specific Tailscale or LAN IP instead of `0.0.0.0` unless the wider
+exposure is intentional. Auth flows should use HTTPS, for example through
+Tailscale Serve, because non-loopback API bindings require secure cookies.
+
 ## Containerized Integration Tests Second
 
 ### Test Objective

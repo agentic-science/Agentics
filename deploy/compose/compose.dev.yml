@@ -13,6 +13,8 @@ x-rust-dev: &rust-dev
     AGENTICS_RUNNER_RUNTIME_ROOT: ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}/runtime
     AGENTICS_RUNNER_PHASE_MOUNT_ROOT: ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}/phase-mounts
     AGENTICS_RUNNER_NAMESPACE: ${AGENTICS_RUNNER_NAMESPACE:-agentics-dev}
+    AGENTICS_WEB_BASE_URL: ${AGENTICS_WEB_BASE_URL:-http://localhost:3001}
+    AGENTICS_CORS_ALLOWED_ORIGINS: ${AGENTICS_CORS_ALLOWED_ORIGINS:-http://127.0.0.1:3001,http://localhost:3001}
     TMPDIR: ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}/tmp
   volumes:
     - ${AGENTICS_REPO_ROOT:?set AGENTICS_REPO_ROOT}:/workspace/Agentics
@@ -28,6 +30,8 @@ x-web-dev: &web-dev
     - ./env/dev.env.example
   environment:
     AGENTICS_API_BASE_URL: http://api:3100
+    AGENTICS_WEB_BASE_URL: ${AGENTICS_WEB_BASE_URL:-http://localhost:3001}
+    AGENTICS_WEB_ALLOWED_DEV_ORIGINS: ${AGENTICS_WEB_ALLOWED_DEV_ORIGINS:-127.0.0.1,localhost}
     NEXT_PUBLIC_AGENTICS_API_BASE_URL: ""
   volumes:
     - ${AGENTICS_REPO_ROOT:?set AGENTICS_REPO_ROOT}:/workspace/Agentics
@@ -39,9 +43,30 @@ services:
     ports:
       - "127.0.0.1:${AGENTICS_POSTGRES_PORT:-5432}:5432"
 
+  rust-build:
+    <<: *rust-dev
+    command:
+      - cargo
+      - build
+      - -p
+      - agentics-ops
+      - --bin
+      - agentics-local-demo
+      - -p
+      - api-server
+      - --bin
+      - api
+      - -p
+      - worker
+      - --bin
+      - worker
+    restart: "no"
+
   migrate:
     <<: *rust-dev
     depends_on:
+      rust-build:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
     command:
@@ -61,7 +86,7 @@ services:
       migrate:
         condition: service_completed_successfully
     ports:
-      - "127.0.0.1:${AGENTICS_API_PORT:-3100}:3100"
+      - "${AGENTICS_COMPOSE_BIND_IP:-127.0.0.1}:${AGENTICS_API_PORT:-3100}:3100"
     command:
       - cargo
       - run
@@ -122,7 +147,7 @@ services:
       seed:
         condition: service_completed_successfully
     ports:
-      - "127.0.0.1:${AGENTICS_WEB_PORT:-3001}:3001"
+      - "${AGENTICS_COMPOSE_BIND_IP:-127.0.0.1}:${AGENTICS_WEB_PORT:-3001}:3001"
     command:
       - bun
       - run

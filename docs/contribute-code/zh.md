@@ -72,6 +72,21 @@ namespace 时才覆盖它：
 AGENTICS_RUNNER_NAMESPACE=agentics-dev-$USER just compose-dev-up
 ```
 
+默认情况下，dev API 和 web ports 会 bind 到 `127.0.0.1`。如果要通过
+Tailscale 或可信 LAN 从另一台机器访问 frontend，请只 bind 到对应的网络接口，
+并允许浏览器实际使用的 hostname：
+
+```bash
+AGENTICS_COMPOSE_BIND_IP=100.x.y.z \
+AGENTICS_WEB_BASE_URL=http://your-host.tailnet.ts.net:3001 \
+AGENTICS_CORS_ALLOWED_ORIGINS=http://127.0.0.1:3001,http://localhost:3001,http://your-host.tailnet.ts.net:3001 \
+AGENTICS_WEB_ALLOWED_DEV_ORIGINS=your-host.tailnet.ts.net \
+just compose-dev-up
+```
+
+如果要在远程 hostname 上测试 auth flows，请使用 HTTPS，例如 Tailscale Serve。
+当 API 可以被其他机器访问时，dev cookies 会被标记为 secure。
+
 停止 dev stack：
 
 ```bash
