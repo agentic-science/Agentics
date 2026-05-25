@@ -783,13 +783,17 @@ mod tests {
         spec["execution"] = json!({
             "mode": "piped_stdio",
             "interactive_evaluator": {
-                "command": ["python", "separated-evaluator/run.py"],
+                "command": ["python", "interactive-evaluator/run.py"],
                 "result_file": "result.json"
             },
             "validation_session": "public/session.json",
             "official_session": "private-benchmark/session.json"
         });
         write_file(&spec_path, &spec.to_string());
+        write_file(
+            &repo.join("v1/interactive-evaluator/run.py"),
+            "print('ok')\n",
+        );
         write_file(
             &repo.join("v1/public/session.json"),
             &json!({

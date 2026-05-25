@@ -3,6 +3,7 @@
 mod helpers;
 
 use agentics_config::WorkerAccelerators;
+use agentics_domain::models::challenge::ChallengeExecutionMode;
 use agentics_domain::models::ids::ChallengeId;
 use agentics_domain::storage::StorageKey;
 use agentics_storage::{StorageWriteIntent, build_storage, pack_directory_to_tar};
@@ -12,6 +13,15 @@ use helpers::{
 
 const CUDA_TARGET: &str = "linux-arm64-cuda";
 const CUDA_IMAGE: &str = "ghcr.io/agentic-science/agentics-linux-arm64-cuda:cu130-ubuntu24.04-v0.2.5@sha256:8e3da4a65e297e3b1e9800da001fa2bbac9ed48453a6972117a0c3ad1d1eef13";
+const CUDA_EVALUATOR_SCRIPT: &str = "run.py";
+
+fn separated_evaluator_script_path() -> String {
+    format!(
+        "{}/{}",
+        ChallengeExecutionMode::SeparatedEvaluator.runtime_name(),
+        CUDA_EVALUATOR_SCRIPT
+    )
+}
 
 /// Verifies that a DGX GPU worker can validate, officially evaluate, persist,
 /// and rank a minimal CUDA solution.
@@ -257,7 +267,9 @@ fn write_cuda_smoke_bundles(root: &std::path::Path) -> (std::path::PathBuf, std:
     let public_bundle = root.join("cuda-smoke-public/v1");
 
     for bundle in [&private_bundle, &public_bundle] {
-        std::fs::create_dir_all(bundle.join("evaluator")).expect("failed to create evaluator dir");
+        let evaluator_dir = ChallengeExecutionMode::SeparatedEvaluator.runtime_name();
+        std::fs::create_dir_all(bundle.join(evaluator_dir))
+            .expect("failed to create evaluator dir");
         std::fs::create_dir_all(bundle.join("public")).expect("failed to create public dir");
         std::fs::write(
             bundle.join("statement.md"),
@@ -270,7 +282,7 @@ fn write_cuda_smoke_bundles(root: &std::path::Path) -> (std::path::PathBuf, std:
         )
         .expect("failed to write public runs");
         std::fs::write(
-            bundle.join("separated-evaluator/run.py"),
+            bundle.join(evaluator_dir).join(CUDA_EVALUATOR_SCRIPT),
         r#"from __future__ import annotations
 
 import argparse
@@ -381,7 +393,7 @@ Path(args.output_path).write_text(json.dumps(payload))
             "execution": {
                 "mode": "separated_evaluator",
                 "separated_evaluator": {
-                    "command": ["python", "separated-evaluator/run.py"],
+                    "command": ["python", separated_evaluator_script_path()],
                     "result_file": "result.json"
                 },
                 "validation_runs": "public/runs.json",

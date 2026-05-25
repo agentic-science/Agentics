@@ -124,12 +124,8 @@ async fn assert_declared_execution_scripts(
     if let Some(script_path) =
         declared_evaluator_script(&spec.execution.trusted_evaluator().command)
     {
-        let label = match spec.execution.mode() {
-            ChallengeExecutionMode::SeparatedEvaluator => "separated-evaluator script",
-            ChallengeExecutionMode::PipedStdio => "interactive-evaluator script",
-            ChallengeExecutionMode::CoexecutedBenchmark => "coexecuted-evaluator script",
-        };
-        assert_path_type(&bundle_dir.join(script_path), "file", label).await?;
+        let label = format!("{} script", spec.execution.mode().runtime_name());
+        assert_path_type(&bundle_dir.join(script_path), "file", &label).await?;
     }
 
     match &spec.execution {
@@ -328,12 +324,14 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
             validate_evaluator_command(
                 &execution.separated_evaluator.command,
                 "execution.separated_evaluator.command",
+                ChallengeExecutionMode::SeparatedEvaluator,
             )?;
         }
         agentics_domain::models::challenge::ChallengeExecutionSpec::PipedStdio(execution) => {
             validate_evaluator_command(
                 &execution.interactive_evaluator.command,
                 "execution.interactive_evaluator.command",
+                ChallengeExecutionMode::PipedStdio,
             )?;
         }
         agentics_domain::models::challenge::ChallengeExecutionSpec::CoexecutedBenchmark(
@@ -342,6 +340,7 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
             validate_evaluator_command(
                 &execution.coexecuted_evaluator.command,
                 "execution.coexecuted_evaluator.command",
+                ChallengeExecutionMode::CoexecutedBenchmark,
             )?;
         }
     }
@@ -417,7 +416,11 @@ pub fn validate_digest_pinned_images(spec: &ChallengeBundleSpec) -> Result<()> {
 }
 
 /// Validates evaluator command invariants for this contract.
-fn validate_evaluator_command(command: &[String], field: &str) -> Result<()> {
+fn validate_evaluator_command(
+    command: &[String],
+    field: &str,
+    mode: ChallengeExecutionMode,
+) -> Result<()> {
     if command.is_empty() {
         return Err(ServiceError::Validation(format!(
             "{field} must not be empty"
@@ -431,6 +434,8 @@ fn validate_evaluator_command(command: &[String], field: &str) -> Result<()> {
             )));
         }
     }
+
+    validate_declared_script_runtime(command, field, mode)?;
 
     Ok(())
 }
@@ -449,6 +454,27 @@ fn validate_setup_command(command: &[String], field: &str) -> Result<()> {
                 "{field}[{index}] must not contain NUL bytes"
             )));
         }
+    }
+
+    Ok(())
+}
+
+/// Validate that a bundle-owned script path matches the selected execution runtime.
+fn validate_declared_script_runtime(
+    command: &[String],
+    field: &str,
+    mode: ChallengeExecutionMode,
+) -> Result<()> {
+    let Some(script_path) = declared_evaluator_script(command) else {
+        return Ok(());
+    };
+    let expected_prefix = format!("{}/", mode.runtime_name());
+    if !script_path.starts_with(&expected_prefix) {
+        return Err(ServiceError::Validation(format!(
+            "{field} script path must live under `{}` for {} execution, got `{script_path}`",
+            mode.runtime_name(),
+            execution_mode_name(mode)
+        )));
     }
 
     Ok(())
@@ -605,10 +631,18 @@ fn validate_separated_evaluator_execution(
     execution: &agentics_domain::models::challenge::SeparatedEvaluatorExecutionSpec,
 ) -> Result<()> {
     if let Some(setup) = &execution.validation_setup {
-        validate_setup_spec(setup, "execution.validation_setup")?;
+        validate_setup_spec(
+            setup,
+            "execution.validation_setup",
+            ChallengeExecutionMode::SeparatedEvaluator,
+        )?;
     }
     if let Some(setup) = &execution.official_evaluation_setup {
-        validate_setup_spec(setup, "execution.official_evaluation_setup")?;
+        validate_setup_spec(
+            setup,
+            "execution.official_evaluation_setup",
+            ChallengeExecutionMode::SeparatedEvaluator,
+        )?;
     }
     if execution.validation_runs.is_some() && execution.validation_setup.is_some() {
         return Err(ServiceError::Validation(
@@ -648,10 +682,18 @@ fn validate_piped_stdio_execution(
     execution: &agentics_domain::models::challenge::PipedStdioExecutionSpec,
 ) -> Result<()> {
     if let Some(setup) = &execution.validation_setup {
-        validate_piped_stdio_setup_spec(setup, "execution.validation_setup")?;
+        validate_piped_stdio_setup_spec(
+            setup,
+            "execution.validation_setup",
+            ChallengeExecutionMode::PipedStdio,
+        )?;
     }
     if let Some(setup) = &execution.official_evaluation_setup {
-        validate_piped_stdio_setup_spec(setup, "execution.official_evaluation_setup")?;
+        validate_piped_stdio_setup_spec(
+            setup,
+            "execution.official_evaluation_setup",
+            ChallengeExecutionMode::PipedStdio,
+        )?;
     }
     if execution.validation_session.is_some() && execution.validation_setup.is_some() {
         return Err(ServiceError::Validation(
@@ -696,17 +738,31 @@ fn validate_coexecuted_benchmark_execution(
         ));
     }
     if let Some(setup) = &execution.validation_setup {
-        validate_coexecuted_benchmark_setup_spec(setup, "execution.validation_setup")?;
+        validate_coexecuted_benchmark_setup_spec(
+            setup,
+            "execution.validation_setup",
+            ChallengeExecutionMode::CoexecutedBenchmark,
+        )?;
     }
     if let Some(setup) = &execution.official_evaluation_setup {
-        validate_coexecuted_benchmark_setup_spec(setup, "execution.official_evaluation_setup")?;
+        validate_coexecuted_benchmark_setup_spec(
+            setup,
+            "execution.official_evaluation_setup",
+            ChallengeExecutionMode::CoexecutedBenchmark,
+        )?;
     }
     Ok(())
 }
 
 /// Validates setup spec invariants for this contract.
-fn validate_setup_spec(setup: &ChallengeSetupSpec, field: &str) -> Result<()> {
-    validate_setup_command(&setup.command, &format!("{field}.command"))?;
+fn validate_setup_spec(
+    setup: &ChallengeSetupSpec,
+    field: &str,
+    mode: ChallengeExecutionMode,
+) -> Result<()> {
+    let command_field = format!("{field}.command");
+    validate_setup_command(&setup.command, &command_field)?;
+    validate_declared_script_runtime(&setup.command, &command_field, mode)?;
     if let Some(notes) = &setup.reproducibility_notes {
         require_non_empty(notes, &format!("{field}.reproducibility_notes"))?;
     }
@@ -715,8 +771,14 @@ fn validate_setup_spec(setup: &ChallengeSetupSpec, field: &str) -> Result<()> {
 }
 
 /// Validates piped-stdio setup spec invariants for this contract.
-fn validate_piped_stdio_setup_spec(setup: &PipedStdioSetupSpec, field: &str) -> Result<()> {
-    validate_setup_command(&setup.command, &format!("{field}.command"))?;
+fn validate_piped_stdio_setup_spec(
+    setup: &PipedStdioSetupSpec,
+    field: &str,
+    mode: ChallengeExecutionMode,
+) -> Result<()> {
+    let command_field = format!("{field}.command");
+    validate_setup_command(&setup.command, &command_field)?;
+    validate_declared_script_runtime(&setup.command, &command_field, mode)?;
     if let Some(notes) = &setup.reproducibility_notes {
         require_non_empty(notes, &format!("{field}.reproducibility_notes"))?;
     }
@@ -728,8 +790,11 @@ fn validate_piped_stdio_setup_spec(setup: &PipedStdioSetupSpec, field: &str) -> 
 fn validate_coexecuted_benchmark_setup_spec(
     setup: &CoexecutedBenchmarkSetupSpec,
     field: &str,
+    mode: ChallengeExecutionMode,
 ) -> Result<()> {
-    validate_setup_command(&setup.command, &format!("{field}.command"))?;
+    let command_field = format!("{field}.command");
+    validate_setup_command(&setup.command, &command_field)?;
+    validate_declared_script_runtime(&setup.command, &command_field, mode)?;
     if let Some(notes) = &setup.reproducibility_notes {
         require_non_empty(notes, &format!("{field}.reproducibility_notes"))?;
     }

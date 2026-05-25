@@ -376,6 +376,37 @@ fn unknown_execution_modes_are_rejected() {
     assert!(error.to_string().contains("firecracker_benchmark"));
 }
 
+/// Verifies evaluator scripts live under the selected execution runtime directory.
+#[test]
+fn evaluator_script_must_match_execution_runtime_name() {
+    let mut spec = base_spec();
+    let execution = separated_evaluator_mut(&mut spec);
+    execution.separated_evaluator.command =
+        vec!["python".to_string(), "evaluator/run.py".to_string()];
+
+    let error =
+        validate_challenge_bundle_spec(&spec).expect_err("foreign evaluator dir should fail");
+
+    assert!(error.to_string().contains("separated-evaluator"));
+}
+
+/// Verifies generated setup scripts use the same runtime directory contract.
+#[test]
+fn evaluator_setup_script_must_match_execution_runtime_name() {
+    let mut spec = base_spec();
+    let execution = separated_evaluator_mut(&mut spec);
+    execution.validation_runs = None;
+    execution.validation_setup = Some(ChallengeSetupSpec {
+        command: vec!["python".to_string(), "setup/run.py".to_string()],
+        result_runs_file: bundle_path("public/runs.json"),
+        reproducibility_notes: None,
+    });
+
+    let error = validate_challenge_bundle_spec(&spec).expect_err("foreign setup dir should fail");
+
+    assert!(error.to_string().contains("separated-evaluator"));
+}
+
 /// Verifies that targets are required.
 #[test]
 fn targets_are_required() {

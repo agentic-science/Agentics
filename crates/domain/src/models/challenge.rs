@@ -475,6 +475,17 @@ pub enum ChallengeExecutionMode {
     CoexecutedBenchmark,
 }
 
+impl ChallengeExecutionMode {
+    /// Return the stable runtime name used for container labels and bundle script directories.
+    pub fn runtime_name(self) -> &'static str {
+        match self {
+            Self::SeparatedEvaluator => "separated-evaluator",
+            Self::PipedStdio => "interactive-evaluator",
+            Self::CoexecutedBenchmark => "coexecuted-evaluator",
+        }
+    }
+}
+
 /// Challenge-owned execution topology and run manifest locations for `zip_project`.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "mode", rename_all = "snake_case")]
