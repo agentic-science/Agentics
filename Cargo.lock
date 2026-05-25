@@ -107,6 +107,7 @@ dependencies = [
  "agentics-config",
  "agentics-contracts",
  "agentics-domain",
+ "agentics-persistence",
  "bollard",
  "clap",
  "dotenvy",

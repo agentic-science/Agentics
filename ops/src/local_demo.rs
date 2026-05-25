@@ -52,6 +52,8 @@ use local_demo_config::{
     resolve_demo_database_url, secure_admin_password_file, validate_demo_database_url,
 };
 
+mod local_demo_seed;
+
 mod process;
 use process::{
     DemoProcess, pid_is_running, read_log_tail, read_pid, start_named_process, stop_named_process,
@@ -922,7 +924,8 @@ async fn seed_database(config: &LocalDemoConfig) -> Result<Vec<ReportLine>, Loca
         .max_connections(3)
         .connect(config.database_url.expose_secret())
         .await?;
-    sqlx::raw_sql(DEMO_SEED_SQL).execute(&pool).await?;
+    local_demo_seed::seed_database(&pool).await?;
+    pool.close().await;
     Ok(vec![
         ReportLine::pass("demo artifacts", "wrote sample solution ZIPs"),
         ReportLine::pass(
@@ -1044,8 +1047,6 @@ fn deadline_after(duration: Duration) -> tokio::time::Instant {
         .unwrap_or_else(tokio::time::Instant::now)
 }
 
-const DEMO_SEED_SQL: &str = include_str!("local_demo_seed.sql");
-
 /// Local demo orchestration error.
 #[derive(Debug, thiserror::Error)]
 pub enum LocalDemoError {
@@ -1061,6 +1062,8 @@ pub enum LocalDemoError {
     Sqlx(#[from] sqlx::Error),
     #[error(transparent)]
     Zip(#[from] zip::result::ZipError),
+    #[error(transparent)]
+    Service(#[from] agentics_domain::error::ServiceError),
     #[error("invalid local demo config: {0}")]
     InvalidConfig(String),
     #[error("missing required tool: {0}")]

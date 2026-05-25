@@ -20,6 +20,7 @@ serde_json = { workspace = true }
 agentics-config = { workspace = true }
 agentics-contracts = { workspace = true }
 agentics-domain = { workspace = true }
+agentics-persistence = { workspace = true }
 sqlx = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
