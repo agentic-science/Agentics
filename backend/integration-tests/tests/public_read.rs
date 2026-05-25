@@ -5,7 +5,7 @@ mod helpers;
 use std::path::Path;
 
 use helpers::{
-    api_url, copy_dir_all, examples_challenges_root, published_challenge_id, run_worker_once,
+    api_url, copy_dir_all, examples_challenges_root, published_challenge_name, run_worker_once,
     sample_sum_solution, solution_zip_base64, spawn_app_with_config, test_config,
 };
 
@@ -16,7 +16,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     let config = test_config(storage.path(), &examples_challenges_root());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
-    let sample_sum_id = published_challenge_id(&pool, "sample-sum").await;
+    let sample_sum_id = published_challenge_name(&pool, "sample-sum").await;
 
     let agent_a: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
@@ -47,7 +47,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token_a}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": &sample_sum_id,
+            "challenge_name": &sample_sum_id,
             "target": "linux-arm64-cpu",
             "artifact_base64": good_artifact,
             "explanation": "perfect score"
@@ -85,7 +85,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token_b}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": &sample_sum_id,
+            "challenge_name": &sample_sum_id,
             "target": "linux-arm64-cpu",
             "artifact_base64": bad_artifact,
             "explanation": "bad score"
@@ -500,7 +500,7 @@ async fn public_artifact_respects_solution_publication_policy(pool: sqlx::PgPool
     let config = test_config(storage.path(), challenges.path());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
-    let private_artifact_id = published_challenge_id(&pool, "private-artifact-sum").await;
+    let private_artifact_id = published_challenge_name(&pool, "private-artifact-sum").await;
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
@@ -518,7 +518,7 @@ async fn public_artifact_respects_solution_publication_policy(pool: sqlx::PgPool
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": private_artifact_id,
+            "challenge_name": private_artifact_id,
             "target": "linux-arm64-cpu",
             "artifact_base64": solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']")),
             "explanation": "artifact should stay private"
@@ -563,8 +563,8 @@ async fn seeded_challenge_summaries_are_public(pool: sqlx::PgPool) {
     let config = test_config(storage.path(), &examples_challenges_root());
     let app = spawn_app_with_config(pool.clone(), config).await;
     let client = reqwest::Client::new();
-    let grid_routing_id = published_challenge_id(&pool, "grid-routing").await;
-    let sample_sum_id = published_challenge_id(&pool, "sample-sum").await;
+    let grid_routing_id = published_challenge_name(&pool, "grid-routing").await;
+    let sample_sum_id = published_challenge_name(&pool, "sample-sum").await;
 
     let public_challenge: serde_json::Value = client
         .get(api_url(
@@ -629,19 +629,19 @@ async fn insert_running_official_evaluation_for_submission(
 ) {
     let job_id = uuid::Uuid::new_v4().to_string();
     let evaluation_id = uuid::Uuid::new_v4().to_string();
-    let challenge_id: String = sqlx::query_scalar(
-        "SELECT challenge_id::text FROM solution_submissions WHERE id = $1::uuid",
+    let challenge_name: String = sqlx::query_scalar(
+        "SELECT challenge_name::text FROM solution_submissions WHERE id = $1::uuid",
     )
     .bind(solution_submission_id)
     .fetch_one(pool)
     .await
-    .expect("submission challenge id");
+    .expect("submission challenge name");
     sqlx::query(
         r#"
         INSERT INTO evaluation_jobs (
             id,
             solution_submission_id,
-            challenge_id,
+            challenge_name,
             target,
             eval_type,
             status,
@@ -653,7 +653,7 @@ async fn insert_running_official_evaluation_for_submission(
         VALUES (
             $1::uuid,
             $2::uuid,
-            $3::uuid,
+            $3,
             'linux-arm64-cpu',
             'official',
             'running',
@@ -666,7 +666,7 @@ async fn insert_running_official_evaluation_for_submission(
     )
     .bind(&job_id)
     .bind(solution_submission_id)
-    .bind(&challenge_id)
+    .bind(&challenge_name)
     .execute(pool)
     .await
     .expect("running official job should insert");
@@ -715,19 +715,19 @@ async fn insert_validation_evaluation_for_submission(
 ) {
     let job_id = uuid::Uuid::new_v4().to_string();
     let evaluation_id = uuid::Uuid::new_v4().to_string();
-    let challenge_id: String = sqlx::query_scalar(
-        "SELECT challenge_id::text FROM solution_submissions WHERE id = $1::uuid",
+    let challenge_name: String = sqlx::query_scalar(
+        "SELECT challenge_name::text FROM solution_submissions WHERE id = $1::uuid",
     )
     .bind(solution_submission_id)
     .fetch_one(pool)
     .await
-    .expect("submission challenge id");
+    .expect("submission challenge name");
     sqlx::query(
         r#"
         INSERT INTO evaluation_jobs (
             id,
             solution_submission_id,
-            challenge_id,
+            challenge_name,
             target,
             eval_type,
             status,
@@ -737,7 +737,7 @@ async fn insert_validation_evaluation_for_submission(
         VALUES (
             $1::uuid,
             $2::uuid,
-            $3::uuid,
+            $3,
             'linux-arm64-cpu',
             'validation',
             'completed',
@@ -748,7 +748,7 @@ async fn insert_validation_evaluation_for_submission(
     )
     .bind(&job_id)
     .bind(solution_submission_id)
-    .bind(&challenge_id)
+    .bind(&challenge_name)
     .execute(pool)
     .await
     .expect("validation job should insert");

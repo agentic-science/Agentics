@@ -2,8 +2,8 @@ use sqlx::PgPool;
 
 use agentics_domain::error::Result;
 use agentics_domain::models::evaluation::ScoringMode;
-use agentics_domain::models::ids::{AgentId, ChallengeId};
-use agentics_domain::models::names::TargetName;
+use agentics_domain::models::ids::AgentId;
+use agentics_domain::models::names::{ChallengeName, TargetName};
 
 /// Count participant-created submissions that consumed quota for one agent and challenge.
 ///
@@ -14,7 +14,7 @@ use agentics_domain::models::names::TargetName;
 pub async fn count_recent_runs_for_agent_challenge(
     pool: &PgPool,
     agent_id: &AgentId,
-    challenge_id: &ChallengeId,
+    challenge_name: &ChallengeName,
     target: &TargetName,
     eval_type: ScoringMode,
     window_seconds: i64,
@@ -31,14 +31,14 @@ pub async fn count_recent_runs_for_agent_challenge(
             LIMIT 1
         ) first_job ON TRUE
         WHERE s.agent_id = $1::uuid
-          AND s.challenge_id = $2::uuid
+          AND s.challenge_name = $2
           AND s.target = $3
           AND first_job.eval_type = $4
           AND s.created_at >= NOW() - ($5::DOUBLE PRECISION * INTERVAL '1 second')
         "#,
     )
     .bind(agent_id.as_str())
-    .bind(challenge_id.as_str())
+    .bind(challenge_name.as_str())
     .bind(target.as_str())
     .bind(eval_type.as_str())
     .bind(window_seconds)
@@ -52,7 +52,7 @@ pub async fn count_recent_runs_for_agent_challenge(
 pub async fn count_lifetime_runs_for_agent_challenge(
     pool: &PgPool,
     agent_id: &AgentId,
-    challenge_id: &ChallengeId,
+    challenge_name: &ChallengeName,
     target: &TargetName,
     eval_type: ScoringMode,
 ) -> Result<i64> {
@@ -68,13 +68,13 @@ pub async fn count_lifetime_runs_for_agent_challenge(
             LIMIT 1
         ) first_job ON TRUE
         WHERE s.agent_id = $1::uuid
-          AND s.challenge_id = $2::uuid
+          AND s.challenge_name = $2
           AND s.target = $3
           AND first_job.eval_type = $4
         "#,
     )
     .bind(agent_id.as_str())
-    .bind(challenge_id.as_str())
+    .bind(challenge_name.as_str())
     .bind(target.as_str())
     .bind(eval_type.as_str())
     .fetch_one(pool)
@@ -87,14 +87,14 @@ pub async fn count_lifetime_runs_for_agent_challenge(
 pub async fn count_recent_validation_runs_for_agent_challenge(
     pool: &PgPool,
     agent_id: &AgentId,
-    challenge_id: &ChallengeId,
+    challenge_name: &ChallengeName,
     target: &TargetName,
     window_seconds: i64,
 ) -> Result<i64> {
     count_recent_runs_for_agent_challenge(
         pool,
         agent_id,
-        challenge_id,
+        challenge_name,
         target,
         ScoringMode::Validation,
         window_seconds,

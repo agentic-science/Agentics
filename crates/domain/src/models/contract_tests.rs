@@ -16,7 +16,7 @@ use super::evaluation::{
     SolutionSubmissionStatus,
 };
 use super::hashes::OciSha256Digest;
-use super::ids::{AgentId, ChallengeId, EvaluationId, SolutionSubmissionId};
+use super::ids::{AgentId, EvaluationId, SolutionSubmissionId};
 use super::images::{ChallengeImageReference, OciRegistryImageReference};
 use super::localization::LocalizedText;
 use super::names::{
@@ -133,7 +133,6 @@ fn ensure_no_explicit_nulls(value: &Value, path: &str) -> Result<(), Box<dyn std
 /// Handles challenge detail response for this module.
 fn challenge_detail_response() -> ChallengeDetailResponse {
     ChallengeDetailResponse {
-        challenge_id: challenge_id("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
         challenge_name: challenge_name("matrix-multiplication"),
         title: "Matrix Multiplication".to_string(),
         summary: LocalizedText::new(
@@ -325,11 +324,6 @@ fn challenge_name(value: &str) -> ChallengeName {
     ChallengeName::try_new(value.to_string()).expect("test challenge name is valid")
 }
 
-/// Handles challenge id for this module.
-fn challenge_id(value: &str) -> ChallengeId {
-    ChallengeId::try_new(value).expect("test challenge id is valid")
-}
-
 /// Build a valid public challenge keyword for contract tests.
 fn challenge_keyword(value: &str) -> ChallengeKeyword {
     ChallengeKeyword::try_new(value.to_string()).expect("test challenge keyword is valid")
@@ -401,7 +395,6 @@ fn storage_key(value: &str) -> StorageKey {
 fn official_solution_submission_response() -> SolutionSubmissionResponse {
     SolutionSubmissionResponse {
         id: solution_submission_id("11111111-1111-4111-8111-111111111111"),
-        challenge_id: challenge_id("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
         challenge_name: challenge_name("matrix-multiplication"),
         challenge_title: Some("Matrix Multiplication".to_string()),
         target: target_name("linux-arm64-cpu"),

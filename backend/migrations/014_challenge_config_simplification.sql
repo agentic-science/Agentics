@@ -1,6 +1,6 @@
 WITH rewritten_targets AS (
   SELECT
-    c.name,
+    c.challenge_name,
     jsonb_agg(
       CASE
         WHEN target.target_json ->> 'accelerator' = 'cpu' THEN
@@ -27,12 +27,12 @@ WITH rewritten_targets AS (
   ) renamed
   WHERE c.spec_json IS NOT NULL
     AND c.spec_json ? 'targets'
-  GROUP BY c.name
+  GROUP BY c.challenge_name
 )
 UPDATE challenges c
 SET spec_json = jsonb_set(c.spec_json, '{targets}', rewritten_targets.targets_json, false)
 FROM rewritten_targets
-WHERE c.name = rewritten_targets.name;
+WHERE c.challenge_name = rewritten_targets.challenge_name;
 
 UPDATE challenges
 SET spec_json = spec_json

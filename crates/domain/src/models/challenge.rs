@@ -7,7 +7,6 @@ use schemars::{Schema, SchemaGenerator, json_schema};
 use serde::de::{Error as DeError, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use super::ids::ChallengeId;
 use super::images::ChallengeImageReference;
 use super::localization::LocalizedText;
 use super::names::{
@@ -893,7 +892,6 @@ impl Default for MetricSchemaSpec {
 /// One row in the public challenge catalog.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeListItemDto {
-    pub challenge_id: ChallengeId,
     pub challenge_name: ChallengeName,
     pub title: String,
     pub summary: LocalizedText,
@@ -929,7 +927,6 @@ pub struct MoltbookCommunityDto {
 /// Public challenge detail response with spec and Markdown statement.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeDetailResponse {
-    pub challenge_id: ChallengeId,
     pub challenge_name: ChallengeName,
     pub title: String,
     pub summary: LocalizedText,
@@ -943,7 +940,6 @@ pub struct ChallengeDetailResponse {
 /// Admin-facing challenge metadata response.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeAdminResponse {
-    pub challenge_id: ChallengeId,
     pub challenge_name: ChallengeName,
     pub title: String,
     pub summary: LocalizedText,
@@ -957,7 +953,6 @@ pub struct ChallengeAdminResponse {
 /// One row in the admin challenge list.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct AdminChallengeListItemDto {
-    pub challenge_id: ChallengeId,
     pub challenge_name: ChallengeName,
     pub title: String,
     pub summary: LocalizedText,
@@ -993,7 +988,6 @@ pub struct AdminChallengeListResponse {
 /// Admin response returned after publishing a challenge bundle.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct PublishChallengeResponse {
-    pub challenge_id: ChallengeId,
     pub challenge_name: ChallengeName,
     pub title: String,
     pub bundle_key: StorageKey,

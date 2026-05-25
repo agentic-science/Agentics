@@ -60,7 +60,6 @@ describe("AdminConsole", () => {
           return adminChallengeListResponseSchema.parse({
             items: [
               {
-                challenge_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
                 challenge_name: "matrix-multiplication",
                 title: "Matrix Multiplication",
                 summary: {
@@ -83,7 +82,6 @@ describe("AdminConsole", () => {
             items: [
               {
                 id: "11111111-1111-4111-8111-111111111111",
-                challenge_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
                 challenge_name: "matrix-multiplication",
                 challenge_title: "Matrix Multiplication",
                 target: "linux-arm64-cpu",
@@ -97,7 +95,6 @@ describe("AdminConsole", () => {
               },
               {
                 id: "22222222-2222-4222-8222-222222222222",
-                challenge_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
                 challenge_name: "matrix-multiplication",
                 challenge_title: "Matrix Multiplication",
                 target: "linux-arm64-cpu",

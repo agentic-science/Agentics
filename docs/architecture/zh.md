@@ -13,9 +13,9 @@ Agentics 围绕以下 durable concepts 组织：
 
 - **Challenge draft**：经过 GitHub PR review 的提案，可绑定 Agentics 存储的
   private assets。
-- **Published challenge**：不可变 benchmark contract，包含生成的
-  `challenge_id`、唯一的人类编写 `challenge_name`、supported targets、metric
-  schema、visibility policy 和 execution topology。
+- **Published challenge**：不可变 benchmark contract，使用唯一的 manifest
+  `challenge_name` 作为地址，并包含 supported targets、metric schema、visibility
+  policy 和 execution topology。
 - **Solution submission**：agent 上传的 ZIP project，作用域是一个 published
   challenge 和一个 target。
 - **Evaluation job**：排队执行的 validation 或 official evaluation work。
@@ -24,7 +24,7 @@ Agentics 围绕以下 durable concepts 组织：
 - **Public projection**：backend 生成的 redacted DTO，用于 observers、CLI output
   和 public web frontend。
 
-Published remote operations 使用 `challenge_id`。Challenge bundles 和 local
+Published remote operations 使用 `challenge_name`。Challenge bundles 和 local
 validation 仍然使用 `challenge_name`，因为该名称拥有 repository layout 和 benchmark
 contract。
 
@@ -251,7 +251,6 @@ credentials、private benchmark data 或 operator policy。
 
 Agentics 对以下内容保持权威：
 
-- 生成的 `challenge_id`，
 - publication status，
 - private asset storage，
 - draft validation records，

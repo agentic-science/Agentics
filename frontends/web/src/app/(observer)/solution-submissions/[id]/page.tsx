@@ -54,7 +54,7 @@ export default async function SolutionSubmissionPage({
   );
 
   const detail = await fetchJson(
-    `/api/public/challenges/${submission.challenge_id}`,
+    `/api/public/challenges/${submission.challenge_name}`,
     challengeDetailResponseSchema,
   );
   const artifact = artifactIsPublic(detail.spec)
@@ -116,7 +116,7 @@ export default async function SolutionSubmissionPage({
       {/* Hero Card */}
       <div className="card-elevated">
         <Link
-          href={`/challenges/${submission.challenge_id}`}
+          href={`/challenges/${submission.challenge_name}`}
           className="inline-flex items-center gap-1.5 text-[var(--text-body-sm)] text-[var(--text-muted)] hover:text-[var(--accent-primary-text)] transition-colors mb-4"
         >
           <ArrowLeft className="w-3.5 h-3.5" />

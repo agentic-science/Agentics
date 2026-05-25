@@ -25,7 +25,7 @@ export interface CreatorOwnerBundle {
 
 /** Published challenge owner scope used by creator data hooks. */
 export interface CreatorOwnerScope {
-  challengeId: string;
+  challengeName: string;
   target?: string;
 }
 
@@ -92,9 +92,9 @@ export async function fetchCreatorOwnerBundle(
   scope: CreatorOwnerScope,
 ): Promise<CreatorOwnerBundle> {
   const [stats, participants, shortlist] = await Promise.all([
-    getCreatorChallengeStats(scope.challengeId, scope.target),
-    getCreatorChallengeParticipants(scope.challengeId, scope.target),
-    getChallengeShortlist(scope.challengeId),
+    getCreatorChallengeStats(scope.challengeName, scope.target),
+    getCreatorChallengeParticipants(scope.challengeName, scope.target),
+    getChallengeShortlist(scope.challengeName),
   ]);
   return { stats, participants, shortlist };
 }
@@ -108,7 +108,7 @@ function creatorOwnerBundleKey(
 ): readonly ["creator-owner-bundle", string, string] {
   return [
     "creator-owner-bundle",
-    scope.challengeId,
+    scope.challengeName,
     scope.target ?? "",
   ] as const;
 }
@@ -121,7 +121,7 @@ function fetchCreatorOwnerBundleByKey(
   key: readonly ["creator-owner-bundle", string, string],
 ) {
   return fetchCreatorOwnerBundle({
-    challengeId: key[1],
+    challengeName: key[1],
     target: key[2] || undefined,
   });
 }

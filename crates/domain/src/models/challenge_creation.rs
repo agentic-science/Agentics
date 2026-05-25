@@ -5,8 +5,7 @@ use serde::{Deserialize, Serialize};
 use super::github::GithubPullRequestNumber;
 use super::hashes::{GitCommitSha, Sha256Digest};
 use super::ids::{
-    AgentId, ChallengeDraftId, ChallengeDraftValidationRecordId, ChallengeId,
-    ChallengePrivateAssetId,
+    AgentId, ChallengeDraftId, ChallengeDraftValidationRecordId, ChallengePrivateAssetId,
 };
 use super::localization::LocalizedText;
 use super::names::{AssetName, ChallengeKeyword, ChallengeName};
@@ -363,8 +362,6 @@ pub struct ChallengeDraftResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub validation_repository_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub published_challenge_id: Option<ChallengeId>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub published_challenge_name: Option<ChallengeName>,
     #[serde(default)]
     pub private_assets: Vec<ChallengePrivateAssetResponse>,
@@ -397,8 +394,6 @@ pub struct CreatorChallengeDraftResponse {
     pub approved_bundle_sha256: Option<Sha256Digest>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub validation_message: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub published_challenge_id: Option<ChallengeId>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub published_challenge_name: Option<ChallengeName>,
     #[serde(default)]
@@ -447,7 +442,6 @@ impl From<ChallengeDraftResponse> for CreatorChallengeDraftResponse {
             validation_bundle_sha256: draft.validation_bundle_sha256,
             approved_bundle_sha256: draft.approved_bundle_sha256,
             validation_message: draft.validation_message,
-            published_challenge_id: draft.published_challenge_id,
             published_challenge_name: draft.published_challenge_name,
             private_assets: draft.private_assets,
             validation_records: draft

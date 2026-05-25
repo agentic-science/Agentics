@@ -34,7 +34,6 @@ async fn challenges_list_uses_public_api_and_renders_table() {
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "items": [
                 {
-                    "challenge_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
                     "challenge_name": "sample-sum",
                     "title": "Sample Sum",
                     "summary": { "en": "Add numbers", "zh": "数字求和" },
@@ -67,7 +66,6 @@ async fn challenges_list_uses_public_api_and_renders_table() {
         .await
         .expect("challenge list should succeed");
 
-    assert!(output.contains("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"));
     assert!(output.contains("sample-sum"));
     assert!(output.contains("Sample Sum"));
 }
@@ -81,7 +79,6 @@ async fn global_json_flag_renders_structured_output() {
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "items": [
                 {
-                    "challenge_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
                     "challenge_name": "sample-sum",
                     "title": "Sample Sum",
                     "summary": { "en": "Add numbers", "zh": "数字求和" },
@@ -116,10 +113,6 @@ async fn global_json_flag_renders_structured_output() {
         .expect("challenge list should succeed");
     let value: serde_json::Value = serde_json::from_str(&output).expect("output should be JSON");
 
-    assert_eq!(
-        value["items"][0]["challenge_id"],
-        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
-    );
     assert_eq!(value["items"][0]["challenge_name"], "sample-sum");
 }
 
@@ -136,23 +129,19 @@ fn old_output_json_flag_is_removed() {
 async fn challenges_stats_combines_public_surfaces() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(
-            "/api/public/challenges/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        ))
+        .and(path("/api/public/challenges/sample-sum"))
         .respond_with(ResponseTemplate::new(200).set_body_json(challenge_detail_json(true)))
         .mount(&server)
         .await;
     Mock::given(method("GET"))
-        .and(path(
-            "/api/public/challenges/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/leaderboard",
-        ))
+        .and(path("/api/public/challenges/sample-sum/leaderboard"))
         .and(query_param("target", "linux-arm64-cpu"))
         .respond_with(ResponseTemplate::new(200).set_body_json(leaderboard_json()))
         .mount(&server)
         .await;
     Mock::given(method("GET"))
         .and(path(
-            "/api/public/challenges/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/score-distributions",
+            "/api/public/challenges/sample-sum/score-distributions",
         ))
         .and(query_param("target", "linux-arm64-cpu"))
         .and(query_param("metric", "score"))
@@ -161,7 +150,7 @@ async fn challenges_stats_combines_public_surfaces() {
         .await;
     Mock::given(method("GET"))
         .and(path(
-            "/api/public/challenges/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/solution-submissions",
+            "/api/public/challenges/sample-sum/solution-submissions",
         ))
         .and(query_param("target", "linux-arm64-cpu"))
         .and(query_param("limit", "20"))
@@ -179,7 +168,7 @@ async fn challenges_stats_combines_public_surfaces() {
         &server.uri(),
         "challenges",
         "stats",
-        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "sample-sum",
         "--target",
         "linux-arm64-cpu",
     ]);
@@ -200,23 +189,19 @@ async fn challenges_stats_combines_public_surfaces() {
 async fn challenges_stats_tolerates_hidden_submission_details() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(
-            "/api/public/challenges/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        ))
+        .and(path("/api/public/challenges/sample-sum"))
         .respond_with(ResponseTemplate::new(200).set_body_json(challenge_detail_json(true)))
         .mount(&server)
         .await;
     Mock::given(method("GET"))
-        .and(path(
-            "/api/public/challenges/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/leaderboard",
-        ))
+        .and(path("/api/public/challenges/sample-sum/leaderboard"))
         .and(query_param("target", "linux-arm64-cpu"))
         .respond_with(ResponseTemplate::new(200).set_body_json(leaderboard_json()))
         .mount(&server)
         .await;
     Mock::given(method("GET"))
         .and(path(
-            "/api/public/challenges/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/score-distributions",
+            "/api/public/challenges/sample-sum/score-distributions",
         ))
         .and(query_param("target", "linux-arm64-cpu"))
         .and(query_param("metric", "score"))
@@ -225,7 +210,7 @@ async fn challenges_stats_tolerates_hidden_submission_details() {
         .await;
     Mock::given(method("GET"))
         .and(path(
-            "/api/public/challenges/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/solution-submissions",
+            "/api/public/challenges/sample-sum/solution-submissions",
         ))
         .and(query_param("target", "linux-arm64-cpu"))
         .and(query_param("limit", "20"))
@@ -248,7 +233,7 @@ async fn challenges_stats_tolerates_hidden_submission_details() {
         &server.uri(),
         "challenges",
         "stats",
-        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "sample-sum",
         "--target",
         "linux-arm64-cpu",
     ]);
@@ -266,9 +251,7 @@ async fn challenges_stats_tolerates_hidden_submission_details() {
 async fn init_solution_fetches_challenge_and_creates_workspace() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(
-            "/api/public/challenges/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        ))
+        .and(path("/api/public/challenges/sample-sum"))
         .respond_with(ResponseTemplate::new(200).set_body_json(challenge_detail_json(true)))
         .mount(&server)
         .await;
@@ -283,7 +266,7 @@ async fn init_solution_fetches_challenge_and_creates_workspace() {
         "--api-base-url",
         &server.uri(),
         "init-solution",
-        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "sample-sum",
         "--dir",
         workspace_dir.to_str().expect("utf8 path"),
     ]);
@@ -306,9 +289,7 @@ async fn init_solution_fetches_challenge_and_creates_workspace() {
 async fn submit_packages_workspace_and_posts_authenticated_request() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(
-            "/api/public/challenges/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        ))
+        .and(path("/api/public/challenges/sample-sum"))
         .respond_with(ResponseTemplate::new(200).set_body_json(challenge_detail_json(true)))
         .mount(&server)
         .await;
@@ -318,7 +299,6 @@ async fn submit_packages_workspace_and_posts_authenticated_request() {
         .respond_with(ResponseTemplate::new(201).set_body_json(json!({
             "id": "11111111-1111-4111-8111-111111111111",
             "status": "queued",
-            "challenge_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
             "challenge_name": "sample-sum",
             "target": "linux-arm64-cpu",
             "artifact_key": "solution-submissions/11111111-1111-4111-8111-111111111111.zip",
@@ -352,7 +332,7 @@ async fn submit_packages_workspace_and_posts_authenticated_request() {
         "--token",
         "test-token",
         "submit",
-        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "sample-sum",
         "--target",
         "linux-arm64-cpu",
         "--dir",
@@ -376,7 +356,7 @@ async fn submit_packages_workspace_and_posts_authenticated_request() {
         serde_json::from_slice(&post.body).expect("request body should be JSON");
 
     assert!(output.contains("Submitted 11111111-1111-4111-8111-111111111111"));
-    assert_eq!(body["challenge_id"], "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+    assert_eq!(body["challenge_name"], "sample-sum");
     assert_eq!(body["target"], "linux-arm64-cpu");
     assert_eq!(body["explanation"], "first attempt");
     assert!(body["artifact_base64"].as_str().expect("artifact").len() > 20);
@@ -387,9 +367,7 @@ async fn submit_packages_workspace_and_posts_authenticated_request() {
 async fn submit_rejects_over_limit_manifest_note_before_upload() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(
-            "/api/public/challenges/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        ))
+        .and(path("/api/public/challenges/sample-sum"))
         .respond_with(ResponseTemplate::new(200).set_body_json(challenge_detail_json(true)))
         .mount(&server)
         .await;
@@ -420,7 +398,7 @@ async fn submit_rejects_over_limit_manifest_note_before_upload() {
         "--token",
         "test-token",
         "submit",
-        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "sample-sum",
         "--target",
         "linux-arm64-cpu",
         "--dir",
@@ -448,9 +426,7 @@ async fn submit_rejects_over_limit_manifest_note_before_upload() {
 async fn submit_rejects_unknown_target_before_packaging() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(
-            "/api/public/challenges/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        ))
+        .and(path("/api/public/challenges/sample-sum"))
         .respond_with(ResponseTemplate::new(200).set_body_json(challenge_detail_json(true)))
         .mount(&server)
         .await;
@@ -469,7 +445,7 @@ async fn submit_rejects_unknown_target_before_packaging() {
         "--token",
         "test-token",
         "submit",
-        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "sample-sum",
         "--target",
         "cpu-linux-ppc64le",
         "--dir",
@@ -486,10 +462,7 @@ async fn submit_rejects_unknown_target_before_packaging() {
 
     assert!(error.to_string().contains("target"));
     assert_eq!(requests.len(), 1);
-    assert_eq!(
-        requests[0].url.path(),
-        "/api/public/challenges/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
-    );
+    assert_eq!(requests[0].url.path(), "/api/public/challenges/sample-sum");
 }
 
 /// Verifies that submissions show fetches public solution submission details.
@@ -502,7 +475,6 @@ async fn submissions_show_fetches_public_solution_submission() {
         ))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "id": "11111111-1111-4111-8111-111111111111",
-            "challenge_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
             "challenge_name": "sample-sum",
             "challenge_title": "Sample Sum",
             "target": "linux-arm64-cpu",
@@ -551,7 +523,6 @@ async fn submissions_status_fetches_validation_run_id() {
         .and(header("authorization", "Bearer test-token"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "id": "22222222-2222-4222-8222-222222222222",
-            "challenge_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
             "challenge_name": "sample-sum",
             "challenge_title": "Sample Sum",
             "target": "linux-arm64-cpu",
@@ -623,7 +594,7 @@ async fn submissions_list_uses_public_target_api_with_default_limit() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path(
-            "/api/public/challenges/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/solution-submissions",
+            "/api/public/challenges/sample-sum/solution-submissions",
         ))
         .and(query_param("target", "linux-arm64-cpu"))
         .and(query_param("limit", "20"))
@@ -641,7 +612,7 @@ async fn submissions_list_uses_public_target_api_with_default_limit() {
         &server.uri(),
         "submissions",
         "list",
-        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "sample-sum",
         "--target",
         "linux-arm64-cpu",
     ]);
@@ -672,10 +643,7 @@ async fn submissions_report_uses_public_result_report_without_token() {
         .and(path(
             "/api/public/solution-submissions/11111111-1111-4111-8111-111111111111/ranking-context",
         ))
-        .and(query_param(
-            "challenge_id",
-            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        ))
+        .and(query_param("challenge_name", "sample-sum"))
         .and(query_param("target", "linux-arm64-cpu"))
         .respond_with(ResponseTemplate::new(200).set_body_json(ranking_context_json()))
         .mount(&server)
@@ -820,9 +788,7 @@ async fn submissions_report_tolerates_hidden_public_ranking_context() {
 async fn submissions_rank_uses_public_context_without_token() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(
-            "/api/public/challenges/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        ))
+        .and(path("/api/public/challenges/sample-sum"))
         .respond_with(ResponseTemplate::new(200).set_body_json(challenge_detail_json(true)))
         .mount(&server)
         .await;
@@ -830,10 +796,7 @@ async fn submissions_rank_uses_public_context_without_token() {
         .and(path(
             "/api/public/solution-submissions/11111111-1111-4111-8111-111111111111/ranking-context",
         ))
-        .and(query_param(
-            "challenge_id",
-            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        ))
+        .and(query_param("challenge_name", "sample-sum"))
         .and(query_param("target", "linux-arm64-cpu"))
         .respond_with(ResponseTemplate::new(200).set_body_json(ranking_context_json()))
         .expect(1)
@@ -852,7 +815,7 @@ async fn submissions_rank_uses_public_context_without_token() {
         "rank",
         "11111111-1111-4111-8111-111111111111",
         "--challenge",
-        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "sample-sum",
         "--target",
         "linux-arm64-cpu",
     ]);
@@ -870,9 +833,7 @@ async fn submissions_rank_uses_public_context_without_token() {
 async fn submissions_rank_uses_authenticated_context_with_token() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(
-            "/api/public/challenges/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        ))
+        .and(path("/api/public/challenges/sample-sum"))
         .respond_with(ResponseTemplate::new(200).set_body_json(challenge_detail_json(true)))
         .mount(&server)
         .await;
@@ -881,10 +842,7 @@ async fn submissions_rank_uses_authenticated_context_with_token() {
             "/api/agent/solution-submissions/11111111-1111-4111-8111-111111111111/ranking-context",
         ))
         .and(header("authorization", "Bearer test-token"))
-        .and(query_param(
-            "challenge_id",
-            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        ))
+        .and(query_param("challenge_name", "sample-sum"))
         .and(query_param("target", "linux-arm64-cpu"))
         .respond_with(ResponseTemplate::new(200).set_body_json(ranking_context_json()))
         .expect(1)
@@ -903,7 +861,7 @@ async fn submissions_rank_uses_authenticated_context_with_token() {
         "rank",
         "11111111-1111-4111-8111-111111111111",
         "--challenge",
-        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "sample-sum",
         "--target",
         "linux-arm64-cpu",
     ]);
@@ -927,9 +885,7 @@ async fn submissions_rank_uses_authenticated_context_with_token() {
 async fn submissions_rank_falls_back_to_public_context_after_auth_forbidden() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(
-            "/api/public/challenges/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        ))
+        .and(path("/api/public/challenges/sample-sum"))
         .respond_with(ResponseTemplate::new(200).set_body_json(challenge_detail_json(true)))
         .mount(&server)
         .await;
@@ -938,10 +894,7 @@ async fn submissions_rank_falls_back_to_public_context_after_auth_forbidden() {
             "/api/agent/solution-submissions/11111111-1111-4111-8111-111111111111/ranking-context",
         ))
         .and(header("authorization", "Bearer test-token"))
-        .and(query_param(
-            "challenge_id",
-            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        ))
+        .and(query_param("challenge_name", "sample-sum"))
         .and(query_param("target", "linux-arm64-cpu"))
         .respond_with(ResponseTemplate::new(403).set_body_json(json!({
             "error": {
@@ -956,10 +909,7 @@ async fn submissions_rank_falls_back_to_public_context_after_auth_forbidden() {
         .and(path(
             "/api/public/solution-submissions/11111111-1111-4111-8111-111111111111/ranking-context",
         ))
-        .and(query_param(
-            "challenge_id",
-            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        ))
+        .and(query_param("challenge_name", "sample-sum"))
         .and(query_param("target", "linux-arm64-cpu"))
         .respond_with(ResponseTemplate::new(200).set_body_json(ranking_context_json()))
         .expect(1)
@@ -978,7 +928,7 @@ async fn submissions_rank_falls_back_to_public_context_after_auth_forbidden() {
         "rank",
         "11111111-1111-4111-8111-111111111111",
         "--challenge",
-        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "sample-sum",
         "--target",
         "linux-arm64-cpu",
     ]);
@@ -1011,7 +961,7 @@ fn invalid_submit_target_fails_during_cli_parse() {
     let result = Cli::try_parse_from([
         "agentics",
         "submit",
-        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "sample-sum",
         "--target",
         "linux arm64",
     ]);

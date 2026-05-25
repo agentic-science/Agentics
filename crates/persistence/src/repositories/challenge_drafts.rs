@@ -243,13 +243,13 @@ impl ChallengeDraftsRepository<'_> {
         &self,
         draft_id: &str,
         publish_claim_id: &ChallengeDraftPublishClaimId,
-        published_challenge_id: Option<&agentics_domain::models::ids::ChallengeId>,
+        published_challenge_name: Option<&agentics_domain::models::names::ChallengeName>,
     ) -> Result<()> {
         db::challenge_creation::mark_challenge_draft_published(
             self.pool,
             draft_id,
             publish_claim_id,
-            published_challenge_id,
+            published_challenge_name,
         )
         .await
     }

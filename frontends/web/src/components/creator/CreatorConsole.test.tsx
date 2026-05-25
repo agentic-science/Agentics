@@ -76,18 +76,15 @@ describe("CreatorConsole", () => {
     });
     getChallengeDraftMock.mockRejectedValue(new Error("not configured"));
     getChallengeShortlistMock.mockResolvedValue({
-      challenge_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       challenge_name: "matrix-multiplication",
       items: [],
     });
     getCreatorChallengeParticipantsMock.mockResolvedValue({
-      challenge_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       challenge_name: "matrix-multiplication",
       target: "linux-arm64-cpu",
       items: [],
     });
     getCreatorChallengeStatsMock.mockResolvedValue({
-      challenge_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       challenge_name: "matrix-multiplication",
       target: "linux-arm64-cpu",
       agent_count: 0,
@@ -101,7 +98,6 @@ describe("CreatorConsole", () => {
     });
     createChallengeShortlistRevisionMock.mockResolvedValue({
       id: "33333333-3333-4333-8333-333333333333",
-      challenge_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       challenge_name: "matrix-multiplication",
       uploader_agent_id: "11111111-1111-4111-8111-111111111111",
       requested_count: 1,

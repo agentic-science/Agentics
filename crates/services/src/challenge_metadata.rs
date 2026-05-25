@@ -3,7 +3,7 @@
 use agentics_config::Config;
 use agentics_domain::error::Result;
 use agentics_domain::models::challenge::MoltbookCommunityDto;
-use agentics_domain::models::ids::ChallengeId;
+use agentics_domain::models::names::ChallengeName;
 use agentics_domain::models::request::ChallengeMoltbookDiscussionResponse;
 use agentics_domain::models::urls::MoltbookPostUrl;
 use agentics_persistence::{ChallengeMoltbookDiscussionRecord, Repositories};
@@ -12,12 +12,12 @@ use agentics_persistence::{ChallengeMoltbookDiscussionRecord, Repositories};
 pub async fn set_challenge_moltbook_discussion(
     pool: &sqlx::PgPool,
     config: &Config,
-    challenge_id: &ChallengeId,
+    challenge_name: &ChallengeName,
     discussion_url: &MoltbookPostUrl,
 ) -> Result<ChallengeMoltbookDiscussionResponse> {
     let record = Repositories::new(pool)
         .challenges()
-        .set_moltbook_discussion(challenge_id, discussion_url)
+        .set_moltbook_discussion(challenge_name, discussion_url)
         .await?;
     Ok(challenge_moltbook_discussion_response(config, record))
 }
@@ -26,11 +26,11 @@ pub async fn set_challenge_moltbook_discussion(
 pub async fn clear_challenge_moltbook_discussion(
     pool: &sqlx::PgPool,
     config: &Config,
-    challenge_id: &ChallengeId,
+    challenge_name: &ChallengeName,
 ) -> Result<ChallengeMoltbookDiscussionResponse> {
     let record = Repositories::new(pool)
         .challenges()
-        .clear_moltbook_discussion(challenge_id)
+        .clear_moltbook_discussion(challenge_name)
         .await?;
     Ok(challenge_moltbook_discussion_response(config, record))
 }
@@ -41,7 +41,6 @@ fn challenge_moltbook_discussion_response(
     record: ChallengeMoltbookDiscussionRecord,
 ) -> ChallengeMoltbookDiscussionResponse {
     ChallengeMoltbookDiscussionResponse {
-        challenge_id: record.challenge_id,
         challenge_name: record.challenge_name,
         moltbook: MoltbookCommunityDto {
             submolt_name: config.moltbook_submolt_name.clone(),

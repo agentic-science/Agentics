@@ -174,12 +174,10 @@ pub async fn ensure_challenges_seeded_from_root(
             )
             .await?;
             let challenge_name = &spec.challenge_name;
-            let challenge_id = agentics_domain::models::ids::ChallengeId::generate();
 
             if crate::db::challenges::publish_challenge(
                 pool,
                 &PublishChallengeInput {
-                    challenge_id: &challenge_id,
                     challenge_name,
                     bundle_key: &private_bundle_key,
                     public_bundle_key: &public_bundle_key,
@@ -203,7 +201,7 @@ pub async fn ensure_challenges_seeded_from_root(
                         spec_json = $7,
                         status = 'active',
                         updated_at = NOW()
-                    WHERE name = $1
+                    WHERE challenge_name = $1
                     "#,
                 )
                 .bind(challenge_name.as_str())

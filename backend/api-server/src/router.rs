@@ -36,7 +36,7 @@ pub fn router(config: &Config) -> Router<AppState> {
             get(crate::handlers::list_agent_challenges),
         )
         .route(
-            "/api/agent/challenges/{id}",
+            "/api/agent/challenges/{challenge_name}",
             get(crate::handlers::get_agent_challenge),
         )
         .route(
@@ -108,19 +108,19 @@ pub fn router(config: &Config) -> Router<AppState> {
                 .layer(DefaultBodyLimit::max(private_asset_json_body_limit(config))),
         )
         .route(
-            "/api/creator/challenges/{id}/stats",
+            "/api/creator/challenges/{challenge_name}/stats",
             get(crate::handlers::get_creator_challenge_stats),
         )
         .route(
-            "/api/creator/challenges/{id}/participants",
+            "/api/creator/challenges/{challenge_name}/participants",
             get(crate::handlers::list_creator_challenge_participants),
         )
         .route(
-            "/api/creator/challenges/{id}/shortlist-revisions",
+            "/api/creator/challenges/{challenge_name}/shortlist-revisions",
             post(crate::handlers::create_challenge_shortlist_revision),
         )
         .route(
-            "/api/creator/challenges/{id}/shortlist",
+            "/api/creator/challenges/{challenge_name}/shortlist",
             get(crate::handlers::get_challenge_shortlist),
         )
         // Public routes
@@ -130,19 +130,19 @@ pub fn router(config: &Config) -> Router<AppState> {
             get(crate::handlers::list_challenges),
         )
         .route(
-            "/api/public/challenges/{id}",
+            "/api/public/challenges/{challenge_name}",
             get(crate::handlers::get_challenge),
         )
         .route(
-            "/api/public/challenges/{id}/solution-submissions",
+            "/api/public/challenges/{challenge_name}/solution-submissions",
             get(crate::handlers::list_public_solution_submissions),
         )
         .route(
-            "/api/public/challenges/{id}/leaderboard",
+            "/api/public/challenges/{challenge_name}/leaderboard",
             get(crate::handlers::get_leaderboard),
         )
         .route(
-            "/api/public/challenges/{id}/score-distributions",
+            "/api/public/challenges/{challenge_name}/score-distributions",
             get(crate::handlers::get_score_distribution),
         )
         .route(
@@ -167,7 +167,7 @@ pub fn router(config: &Config) -> Router<AppState> {
             get(crate::handlers::list_admin_challenges),
         )
         .route(
-            "/admin/challenges/{id}/moltbook-discussion",
+            "/admin/challenges/{challenge_name}/moltbook-discussion",
             post(crate::handlers::set_challenge_moltbook_discussion)
                 .delete(crate::handlers::clear_challenge_moltbook_discussion),
         )

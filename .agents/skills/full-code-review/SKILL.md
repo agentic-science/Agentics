@@ -247,7 +247,7 @@ ambiguous locators, then inspect call flow manually:
 - `pub [a-zA-Z0-9_]*_(id|name): String|[a-zA-Z0-9_]*_(id|name): &str`
 - `challenge_name: String|challenge_name: &str|target: String`
 - `solution_submission_id: String|agent_id: String|metric_name: String`
-- `challenge_id|target_id|asset_id|run_id|resource_profile\.id|metric_id`
+- `challenge_name|target_id|asset_id|run_id|resource_profile\.id|metric_id`
 - `id_or_slug|challenge_name_or_slug|slug|identifier|name_or_id`
 - `bind\(&[a-zA-Z0-9_]*_id\)|join\(&[a-zA-Z0-9_]*_id\)`
 

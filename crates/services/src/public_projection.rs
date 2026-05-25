@@ -16,7 +16,7 @@ use agentics_domain::models::evaluation::{
     EvaluationDto, EvaluationJobDto, EvaluationJobStatus, MetricValue, ScoringMode,
     SolutionSubmissionStatus,
 };
-use agentics_domain::models::ids::{ChallengeId, SolutionSubmissionId};
+use agentics_domain::models::ids::SolutionSubmissionId;
 use agentics_domain::models::names::{ChallengeName, MetricName, TargetName};
 use agentics_domain::models::request::{
     CreateSolutionSubmissionResponse, LeaderboardResponse, PublicSolutionSubmissionListResponse,
@@ -60,16 +60,16 @@ impl SolutionSubmissionAudience {
     }
 }
 
-/// Fetch public challenge details by challenge id.
+/// Fetch public challenge details by challenge name.
 pub async fn get_challenge_detail(
     pool: &sqlx::PgPool,
     storage: &dyn Storage,
     config: &Config,
-    challenge_id: &ChallengeId,
+    challenge_name: &ChallengeName,
 ) -> Result<ChallengeDetailResponse> {
     let challenge = Repositories::new(pool)
         .challenges()
-        .get_public(challenge_id)
+        .get_public(challenge_name)
         .await?;
     let challenge = challenge.ok_or(ServiceError::NotFound)?;
     let statement_bytes = storage
@@ -99,7 +99,6 @@ pub fn present_challenge_detail(
         .map_err(|e| ServiceError::Internal(format!("stored challenge spec is invalid: {e}")))?;
 
     Ok(ChallengeDetailResponse {
-        challenge_id: challenge.challenge_id.clone(),
         challenge_name: challenge.challenge_name.clone(),
         title: challenge.title.clone(),
         summary: challenge.summary.clone(),
@@ -126,7 +125,6 @@ pub fn present_create_solution_submission(
     Ok(CreateSolutionSubmissionResponse {
         id: solution_submission.id.clone(),
         status: solution_submission_status_from_storage(&solution_submission.status)?,
-        challenge_id: solution_submission.challenge_id.clone(),
         challenge_name: solution_submission.challenge_name.clone(),
         target: solution_submission.target.clone(),
         artifact_key: solution_submission.artifact_key.clone(),
@@ -186,7 +184,6 @@ pub fn present_solution_submission(
 
     Ok(SolutionSubmissionResponse {
         id: solution_submission.id.clone(),
-        challenge_id: solution_submission.challenge_id.clone(),
         challenge_name: solution_submission.challenge_name.clone(),
         challenge_title: solution_submission.challenge_title.clone(),
         target: solution_submission.target.clone(),
@@ -216,11 +213,11 @@ pub fn present_solution_submission(
 /// List public solution submissions visible for one challenge and target.
 pub async fn list_public_solution_submissions(
     pool: &sqlx::PgPool,
-    challenge_id: &ChallengeId,
+    challenge_name: &ChallengeName,
     target: Option<&str>,
     limit: Option<i64>,
 ) -> Result<PublicSolutionSubmissionListResponse> {
-    let (_challenge, spec) = load_challenge_policy(pool, challenge_id).await?;
+    let (_challenge, spec) = load_challenge_policy(pool, challenge_name).await?;
     ensure_public_result_detail_visible_for_spec(&spec)?;
     let target = public_api::resolve_required_public_target(&spec, target)?;
     let limit = public_api::bounded_public_limit(
@@ -231,11 +228,11 @@ pub async fn list_public_solution_submissions(
     let repos = Repositories::new(pool);
     let items = repos
         .solution_submissions()
-        .list_public_for_challenge(challenge_id, &target, limit)
+        .list_public_for_challenge(challenge_name, &target, limit)
         .await?;
     let total_count = repos
         .solution_submissions()
-        .count_public_for_challenge(challenge_id, &target)
+        .count_public_for_challenge(challenge_name, &target)
         .await?;
     Ok(PublicSolutionSubmissionListResponse { total_count, items })
 }
@@ -246,7 +243,7 @@ pub async fn get_public_solution_submission(
     id: &SolutionSubmissionId,
 ) -> Result<SolutionSubmissionResponse> {
     let solution_submission = public_visible_solution_submission(pool, id).await?;
-    ensure_public_result_detail_visible(pool, &solution_submission.challenge_id).await?;
+    ensure_public_result_detail_visible(pool, &solution_submission.challenge_name).await?;
     present_solution_submission(&solution_submission, SolutionSubmissionAudience::Public)
 }
 
@@ -256,7 +253,7 @@ pub async fn get_public_solution_submission_result_report(
     id: &SolutionSubmissionId,
 ) -> Result<SolutionSubmissionResultReportResponse> {
     let solution_submission = public_visible_solution_submission(pool, id).await?;
-    ensure_public_result_detail_visible(pool, &solution_submission.challenge_id).await?;
+    ensure_public_result_detail_visible(pool, &solution_submission.challenge_name).await?;
     Ok(SolutionSubmissionResultReportResponse {
         solution_submission: present_solution_submission(
             &solution_submission,
@@ -271,7 +268,7 @@ pub async fn get_public_artifact_submission(
     id: &SolutionSubmissionId,
 ) -> Result<SolutionSubmissionRecord> {
     let solution_submission = public_visible_solution_submission(pool, id).await?;
-    ensure_public_solution_artifact_visible(pool, &solution_submission.challenge_id).await?;
+    ensure_public_solution_artifact_visible(pool, &solution_submission.challenge_name).await?;
     Ok(solution_submission)
 }
 
@@ -279,35 +276,35 @@ pub async fn get_public_artifact_submission(
 pub async fn get_public_solution_submission_ranking_context(
     pool: &sqlx::PgPool,
     id: &SolutionSubmissionId,
-    challenge_id: &ChallengeId,
+    challenge_name: &ChallengeName,
     target: &TargetName,
 ) -> Result<RankingContextResponse> {
     let solution_submission = public_visible_solution_submission(pool, id).await?;
-    ensure_ranking_scope_matches_submission(&solution_submission, challenge_id, target)?;
-    let (_challenge, spec) = load_challenge_policy(pool, &solution_submission.challenge_id).await?;
+    ensure_ranking_scope_matches_submission(&solution_submission, challenge_name, target)?;
+    let (_challenge, spec) =
+        load_challenge_policy(pool, &solution_submission.challenge_name).await?;
     public_api::resolve_required_public_target(&spec, Some(target.as_str()))?;
     ensure_visibility_allows_public(spec.visibility.leaderboard, &spec)?;
-    build_ranking_context(pool, challenge_id, target, &solution_submission.id).await
+    build_ranking_context(pool, challenge_name, target, &solution_submission.id).await
 }
 
 /// Fetch leaderboard rows for a challenge.
 pub async fn get_leaderboard(
     pool: &sqlx::PgPool,
-    challenge_id: &ChallengeId,
+    challenge_name: &ChallengeName,
     target: Option<&str>,
     limit: Option<i64>,
 ) -> Result<LeaderboardResponse> {
-    let (challenge, spec) = load_challenge_policy(pool, challenge_id).await?;
+    let (challenge, spec) = load_challenge_policy(pool, challenge_name).await?;
     ensure_visibility_allows_public(spec.visibility.leaderboard, &spec)?;
     let target = public_api::resolve_required_public_target(&spec, target)?;
     let limit =
         public_api::bounded_public_limit(limit, DEFAULT_PUBLIC_LEADERBOARD_LIMIT, "leaderboard")?;
     let items = Repositories::new(pool)
         .leaderboard()
-        .list_entries(challenge_id, &target, limit)
+        .list_entries(challenge_name, &target, limit)
         .await?;
     Ok(LeaderboardResponse {
-        challenge_id: challenge.challenge_id,
         challenge_name: challenge.challenge_name,
         target,
         items,
@@ -317,19 +314,18 @@ pub async fn get_leaderboard(
 /// Fetch a visible score distribution for a metric in one explicit target scope.
 pub async fn get_score_distribution(
     pool: &sqlx::PgPool,
-    challenge_id: &ChallengeId,
+    challenge_name: &ChallengeName,
     target: Option<&str>,
     metric_name: MetricName,
 ) -> Result<ScoreDistributionResponse> {
-    let (challenge, spec) = load_challenge_policy(pool, challenge_id).await?;
+    let (challenge, spec) = load_challenge_policy(pool, challenge_name).await?;
     ensure_visibility_allows_public(spec.visibility.score_distribution, &spec)?;
     let target = public_api::resolve_required_public_target(&spec, target)?;
     let entries = Repositories::new(pool)
         .leaderboard()
-        .list_entries_with_metric_payloads(challenge_id, &target, 10_000)
+        .list_entries_with_metric_payloads(challenge_name, &target, 10_000)
         .await?;
     build_score_distribution_response(
-        challenge.challenge_id,
         challenge.challenge_name,
         target,
         metric_name,
@@ -341,19 +337,19 @@ pub async fn get_score_distribution(
 /// Builds rank, percentile, and nearby leaderboard rows for one submitted solution.
 pub async fn build_ranking_context(
     pool: &sqlx::PgPool,
-    challenge_id: &ChallengeId,
+    challenge_name: &ChallengeName,
     target: &TargetName,
     solution_submission_id: &SolutionSubmissionId,
 ) -> Result<RankingContextResponse> {
     let repos = Repositories::new(pool);
     let challenge = repos
         .challenges()
-        .get_public(challenge_id)
+        .get_public(challenge_name)
         .await?
         .ok_or(ServiceError::NotFound)?;
     let entries = repos
         .leaderboard()
-        .list_entries(challenge_id, target, 10_000)
+        .list_entries(challenge_name, target, 10_000)
         .await?;
     let total_ranked = i64::try_from(entries.len())
         .map_err(|_| ServiceError::Internal("leaderboard entry count overflow".to_string()))?;
@@ -410,7 +406,6 @@ pub async fn build_ranking_context(
     };
 
     Ok(RankingContextResponse {
-        challenge_id: challenge.challenge_id,
         challenge_name: challenge.challenge_name,
         target: target.clone(),
         solution_submission_id: solution_submission_id.clone(),
@@ -442,11 +437,11 @@ async fn public_visible_solution_submission(
 /// Loads the public challenge record together with its parsed policy-bearing spec.
 async fn load_challenge_policy(
     pool: &sqlx::PgPool,
-    challenge_id: &ChallengeId,
+    challenge_name: &ChallengeName,
 ) -> Result<(ChallengeRecord, ChallengeBundleSpec)> {
     let challenge = Repositories::new(pool)
         .challenges()
-        .get_public(challenge_id)
+        .get_public(challenge_name)
         .await?;
     let challenge = challenge.ok_or(ServiceError::NotFound)?;
     let spec: ChallengeBundleSpec = serde_json::from_value(challenge.spec_json.clone())
@@ -457,9 +452,9 @@ async fn load_challenge_policy(
 /// Enforces whether unauthenticated users may inspect a submission's detailed result report.
 async fn ensure_public_result_detail_visible(
     pool: &sqlx::PgPool,
-    challenge_id: &ChallengeId,
+    challenge_name: &ChallengeName,
 ) -> Result<()> {
-    let (_challenge, spec) = load_challenge_policy(pool, challenge_id).await?;
+    let (_challenge, spec) = load_challenge_policy(pool, challenge_name).await?;
     ensure_public_result_detail_visible_for_spec(&spec)
 }
 
@@ -480,9 +475,9 @@ fn ensure_public_result_detail_visible_for_spec(spec: &ChallengeBundleSpec) -> R
 /// Enforces whether unauthenticated users may download a submission artifact.
 async fn ensure_public_solution_artifact_visible(
     pool: &sqlx::PgPool,
-    challenge_id: &ChallengeId,
+    challenge_name: &ChallengeName,
 ) -> Result<()> {
-    let (_challenge, spec) = load_challenge_policy(pool, challenge_id).await?;
+    let (_challenge, spec) = load_challenge_policy(pool, challenge_name).await?;
     match spec.visibility.result_detail {
         ChallengeResultDetailVisibility::SubmitterLivePublicLive => {}
         ChallengeResultDetailVisibility::SubmitterLivePublicAfterClose
@@ -529,12 +524,15 @@ fn challenge_has_closed(spec: &ChallengeBundleSpec) -> Result<bool> {
 /// Rejects ranking-context requests whose scope does not match the submission record.
 pub fn ensure_ranking_scope_matches_submission(
     solution_submission: &SolutionSubmissionRecord,
-    challenge_id: &ChallengeId,
+    challenge_name: &ChallengeName,
     target: &TargetName,
 ) -> Result<()> {
-    if solution_submission.challenge_id != *challenge_id || solution_submission.target != *target {
+    if solution_submission.challenge_name != *challenge_name
+        || solution_submission.target != *target
+    {
         return Err(ServiceError::BadRequest(
-            "ranking scope must match the solution submission challenge_id and target".to_string(),
+            "ranking scope must match the solution submission challenge_name and target"
+                .to_string(),
         ));
     }
     Ok(())
@@ -604,7 +602,6 @@ fn redact_private_benchmark_details(
 
 /// Build a distribution response from the visible best leaderboard entries in scope.
 pub(super) fn build_score_distribution_response(
-    challenge_id: ChallengeId,
     challenge_name: ChallengeName,
     target: TargetName,
     metric_name: MetricName,
@@ -641,7 +638,6 @@ pub(super) fn build_score_distribution_response(
     };
 
     Ok(ScoreDistributionResponse {
-        challenge_id,
         challenge_name,
         target,
         metric_name,
@@ -824,7 +820,6 @@ mod tests {
         TargetAccelerator,
     };
     use agentics_domain::models::evaluation::{MetricValue, ScoreVisibility};
-    use agentics_domain::models::ids::ChallengeId;
     use agentics_domain::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
     use agentics_domain::models::localization::LocalizedText;
     use agentics_domain::models::names::{
@@ -838,11 +833,6 @@ mod tests {
     /// Parse a valid challenge name for a focused score-distribution test.
     fn challenge_name(value: &str) -> ChallengeName {
         ChallengeName::try_new(value.to_string()).expect("test challenge name is valid")
-    }
-
-    /// Parse a valid challenge id for a focused score-distribution test.
-    fn challenge_id(value: &str) -> ChallengeId {
-        ChallengeId::try_new(value).expect("test challenge id is valid")
     }
 
     /// Parse a valid challenge keyword for a focused score-distribution test.
@@ -1020,7 +1010,6 @@ mod tests {
     fn primary_metric_distribution_uses_raw_metric_values_for_minimized_metrics() {
         let spec = minimized_metric_spec();
         let response = build_score_distribution_response(
-            challenge_id("11111111-1111-4111-8111-111111111111"),
             challenge_name("latency-challenge"),
             target_name("linux-arm64-cpu"),
             metric_name("latency_ms"),
@@ -1039,7 +1028,6 @@ mod tests {
     fn rank_score_distribution_uses_comparator_values() {
         let spec = minimized_metric_spec();
         let response = build_score_distribution_response(
-            challenge_id("11111111-1111-4111-8111-111111111111"),
             challenge_name("latency-challenge"),
             target_name("linux-arm64-cpu"),
             metric_name("rank_score"),
@@ -1060,7 +1048,6 @@ mod tests {
         spec.metric_schema.metrics[0].visibility = MetricVisibility::Official;
 
         let error = build_score_distribution_response(
-            challenge_id("11111111-1111-4111-8111-111111111111"),
             challenge_name("latency-challenge"),
             target_name("linux-arm64-cpu"),
             metric_name("latency_ms"),
@@ -1071,7 +1058,6 @@ mod tests {
         assert!(matches!(error, ServiceError::Forbidden(_)));
 
         let error = build_score_distribution_response(
-            challenge_id("11111111-1111-4111-8111-111111111111"),
             challenge_name("latency-challenge"),
             target_name("linux-arm64-cpu"),
             metric_name("official_score"),

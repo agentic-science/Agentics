@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge::{ChallengeBundleSpec, ChallengeEligibilityType};
 use agentics_domain::models::evaluation::ScoringMode;
-use agentics_domain::models::ids::{AgentId, ChallengeId};
+use agentics_domain::models::ids::AgentId;
 use agentics_domain::models::names::{ChallengeName, TargetName};
 use agentics_domain::storage::StorageKey;
 
@@ -13,13 +13,11 @@ use super::challenges::{
     ChallengeRecord, agent_is_shortlisted, challenge_has_shortlist, get_published_challenge,
     localized_text_from_row,
 };
-use super::ids::challenge_id_from_row;
 use super::ids::challenge_name_from_row;
 
 /// Published challenge admission data needed by API preflight checks.
 #[derive(Debug, Clone)]
 pub struct PublishedChallengeAdmission {
-    pub challenge_id: ChallengeId,
     pub challenge_name: ChallengeName,
     pub validation_submission_limit: Option<i64>,
     pub official_submission_limit: Option<i64>,
@@ -33,19 +31,19 @@ pub struct PublishedChallengeAdmission {
 /// inserting queued work as the authoritative guard.
 pub async fn ensure_published_challenge_supports_eval_type(
     pool: &PgPool,
-    challenge_id: &ChallengeId,
+    challenge_name: &ChallengeName,
     target: &TargetName,
     eval_type: ScoringMode,
     agent_id: &AgentId,
 ) -> Result<PublishedChallengeAdmission> {
-    let challenge = get_published_challenge(pool, challenge_id).await?;
+    let challenge = get_published_challenge(pool, challenge_name).await?;
     let challenge =
         challenge.ok_or_else(|| ServiceError::BadRequest("challenge not found".to_string()))?;
     let spec: ChallengeBundleSpec = serde_json::from_value(challenge.spec_json)
         .map_err(|e| ServiceError::Internal(e.to_string()))?;
     ensure_challenge_supports_eval_type(
         pool,
-        &challenge.challenge_id,
+        &challenge.challenge_name,
         &spec,
         target,
         eval_type,
@@ -59,7 +57,6 @@ pub async fn ensure_published_challenge_supports_eval_type(
         &challenge.public_bundle_key,
     )?;
     Ok(PublishedChallengeAdmission {
-        challenge_id: challenge.challenge_id,
         challenge_name: challenge.challenge_name,
         validation_submission_limit: spec.validation_submission_limit,
         official_submission_limit: spec.official_submission_limit,
@@ -69,14 +66,14 @@ pub async fn ensure_published_challenge_supports_eval_type(
 /// Ensures challenge supports eval type before continuing.
 pub(super) async fn ensure_challenge_supports_eval_type(
     pool: &PgPool,
-    challenge_id: &ChallengeId,
+    challenge_name: &ChallengeName,
     spec: &ChallengeBundleSpec,
     target: &TargetName,
     eval_type: ScoringMode,
     agent_id: &AgentId,
 ) -> Result<()> {
     ensure_challenge_accepts_submissions(spec)?;
-    ensure_challenge_eligibility(pool, challenge_id, spec, agent_id).await?;
+    ensure_challenge_eligibility(pool, challenge_name, spec, agent_id).await?;
     ensure_target_supports_eval_type(spec, target, eval_type)
 }
 
@@ -107,25 +104,24 @@ fn ensure_target_supports_eval_type(
 /// Lock an active challenge row for an admission transaction.
 pub(super) async fn lock_active_challenge_for_admission_tx(
     tx: &mut Transaction<'_, Postgres>,
-    challenge_id: &ChallengeId,
+    challenge_name: &ChallengeName,
 ) -> Result<ChallengeRecord> {
     let row = sqlx::query(
         r#"
-        SELECT challenge_id, name AS challenge_name, title, summary, bundle_key, public_bundle_key, statement_key, spec_json, moltbook_discussion_url
+        SELECT challenge_name, title, summary, bundle_key, public_bundle_key, statement_key, spec_json, moltbook_discussion_url
         FROM challenges
-        WHERE challenge_id = $1::uuid
+        WHERE challenge_name = $1
           AND status = 'active'
           AND spec_json IS NOT NULL
         FOR UPDATE
         "#,
     )
-    .bind(challenge_id.as_str())
+    .bind(challenge_name.as_str())
     .fetch_optional(&mut **tx)
     .await?;
 
     let row = row.ok_or_else(|| ServiceError::BadRequest("challenge not found".to_string()))?;
     Ok(ChallengeRecord {
-        challenge_id: challenge_id_from_row(&row, "challenge_id")?,
         challenge_name: challenge_name_from_row(&row, "challenge_name")?,
         title: row.try_get("title")?,
         summary: localized_text_from_row(&row, "summary")?,
@@ -143,14 +139,14 @@ pub(super) async fn lock_active_challenge_for_admission_tx(
 /// Authoritatively verify challenge admission while holding the challenge row lock.
 pub(super) async fn ensure_challenge_supports_eval_type_tx(
     tx: &mut Transaction<'_, Postgres>,
-    challenge_id: &ChallengeId,
+    challenge_name: &ChallengeName,
     spec: &ChallengeBundleSpec,
     target: &TargetName,
     eval_type: ScoringMode,
     agent_id: &AgentId,
 ) -> Result<()> {
     ensure_challenge_accepts_submissions(spec)?;
-    ensure_challenge_eligibility_tx(tx, challenge_id, spec, agent_id).await?;
+    ensure_challenge_eligibility_tx(tx, challenge_name, spec, agent_id).await?;
     ensure_target_supports_eval_type(spec, target, eval_type)
 }
 
@@ -201,20 +197,20 @@ fn parse_required_challenge_time(value: &str, field: &str) -> Result<DateTime<Ut
 /// Ensures challenge eligibility before continuing.
 async fn ensure_challenge_eligibility(
     pool: &PgPool,
-    challenge_id: &ChallengeId,
+    challenge_name: &ChallengeName,
     spec: &ChallengeBundleSpec,
     agent_id: &AgentId,
 ) -> Result<()> {
     match spec.eligibility.eligibility_type {
         ChallengeEligibilityType::Open => Ok(()),
         ChallengeEligibilityType::PrivateShortlist => {
-            if !challenge_has_shortlist(pool, challenge_id).await? {
+            if !challenge_has_shortlist(pool, challenge_name).await? {
                 return Err(ServiceError::Forbidden(
                     "challenge requires a shortlist, but no shortlist has been uploaded yet"
                         .to_string(),
                 ));
             }
-            if !agent_is_shortlisted(pool, challenge_id, agent_id).await? {
+            if !agent_is_shortlisted(pool, challenge_name, agent_id).await? {
                 return Err(ServiceError::Forbidden(
                     "agent is not eligible for this challenge".to_string(),
                 ));
@@ -227,7 +223,7 @@ async fn ensure_challenge_eligibility(
 /// Ensures challenge eligibility inside an admission transaction.
 async fn ensure_challenge_eligibility_tx(
     tx: &mut Transaction<'_, Postgres>,
-    challenge_id: &ChallengeId,
+    challenge_name: &ChallengeName,
     spec: &ChallengeBundleSpec,
     agent_id: &AgentId,
 ) -> Result<()> {
@@ -239,11 +235,11 @@ async fn ensure_challenge_eligibility_tx(
                 SELECT EXISTS (
                     SELECT 1
                     FROM challenge_shortlisted_agents
-                    WHERE challenge_id = $1::uuid
+                    WHERE challenge_name = $1
                 )
                 "#,
             )
-            .bind(challenge_id.as_str())
+            .bind(challenge_name.as_str())
             .fetch_one(&mut **tx)
             .await?;
             if !has_shortlist {
@@ -258,11 +254,11 @@ async fn ensure_challenge_eligibility_tx(
                 SELECT EXISTS (
                     SELECT 1
                     FROM challenge_shortlisted_agents
-                    WHERE challenge_id = $1::uuid AND agent_id = $2::uuid
+                    WHERE challenge_name = $1 AND agent_id = $2::uuid
                 )
                 "#,
             )
-            .bind(challenge_id.as_str())
+            .bind(challenge_name.as_str())
             .bind(agent_id.as_str())
             .fetch_one(&mut **tx)
             .await?;

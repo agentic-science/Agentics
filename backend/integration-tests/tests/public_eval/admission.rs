@@ -26,7 +26,7 @@ async fn validation_run_is_rejected_when_challenge_disables_validation(pool: sql
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": published_challenge_id(&pool, "validation-disabled").await,
+            "challenge_name": published_challenge_name(&pool, "validation-disabled").await,
             "target": "linux-arm64-cpu",
             "artifact_base64": "not-base64",
             "explanation": "should fail before artifact decode"
@@ -84,7 +84,7 @@ async fn validation_run_quota_rejects_and_resets(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": published_challenge_id(&pool, "sample-sum").await,
+            "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "first validation run"
@@ -99,7 +99,7 @@ async fn validation_run_quota_rejects_and_resets(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": published_challenge_id(&pool, "sample-sum").await,
+            "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
             "artifact_base64": "not-base64",
             "explanation": "should fail before artifact decode"
@@ -133,7 +133,7 @@ async fn validation_run_quota_rejects_and_resets(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": published_challenge_id(&pool, "sample-sum").await,
+            "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
             "artifact_base64": reset_artifact_base64,
             "explanation": "validation run after quota reset"
@@ -182,7 +182,7 @@ async fn official_submission_quota_rejects_before_artifact_decode(pool: sqlx::Pg
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": published_challenge_id(&pool, "sample-sum").await,
+            "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "first official run"
@@ -197,7 +197,7 @@ async fn official_submission_quota_rejects_before_artifact_decode(pool: sqlx::Pg
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": published_challenge_id(&pool, "sample-sum").await,
+            "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
             "artifact_base64": "not-base64",
             "explanation": "should fail before artifact decode"
@@ -247,7 +247,7 @@ async fn official_active_queue_limit_rejects_before_artifact_decode(pool: sqlx::
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": published_challenge_id(&pool, "sample-sum").await,
+            "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "fills active queue"
@@ -262,7 +262,7 @@ async fn official_active_queue_limit_rejects_before_artifact_decode(pool: sqlx::
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": published_challenge_id(&pool, "sample-sum").await,
+            "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
             "artifact_base64": "not-base64",
             "explanation": "should fail before artifact decode"
@@ -304,7 +304,7 @@ async fn concurrent_official_admission_locks_admit_only_one(pool: sqlx::PgPool) 
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": published_challenge_id(&pool, "sample-sum").await,
+            "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_a,
             "explanation": "concurrent official run A"
@@ -315,7 +315,7 @@ async fn concurrent_official_admission_locks_admit_only_one(pool: sqlx::PgPool) 
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": published_challenge_id(&pool, "sample-sum").await,
+            "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_b,
             "explanation": "concurrent official run B"

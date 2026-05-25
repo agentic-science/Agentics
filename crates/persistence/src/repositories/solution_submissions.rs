@@ -4,8 +4,8 @@ use crate::db;
 use crate::repositories::CreateSolutionSubmissionInput;
 use agentics_domain::error::Result;
 use agentics_domain::models::evaluation::ScoringMode;
-use agentics_domain::models::ids::{AgentId, ChallengeId, SolutionSubmissionId};
-use agentics_domain::models::names::TargetName;
+use agentics_domain::models::ids::{AgentId, SolutionSubmissionId};
+use agentics_domain::models::names::{ChallengeName, TargetName};
 use agentics_domain::models::request::{
     AdminSolutionSubmissionListItemDto, PublicSolutionSubmissionListItemDto,
 };
@@ -27,14 +27,14 @@ impl SolutionSubmissionsRepository<'_> {
         &self,
         parent_solution_submission_id: Option<&SolutionSubmissionId>,
         agent_id: &AgentId,
-        challenge_id: &ChallengeId,
+        challenge_name: &ChallengeName,
         target: &TargetName,
     ) -> Result<()> {
         db::solution_submissions::ensure_parent_solution_submission_matches_scope(
             self.pool,
             parent_solution_submission_id,
             agent_id,
-            challenge_id,
+            challenge_name,
             target,
         )
         .await
@@ -65,13 +65,13 @@ impl SolutionSubmissionsRepository<'_> {
 
     pub async fn list_public_for_challenge(
         &self,
-        challenge_id: &ChallengeId,
+        challenge_name: &ChallengeName,
         target: &TargetName,
         limit: i64,
     ) -> Result<Vec<PublicSolutionSubmissionListItemDto>> {
         db::solution_submissions::list_public_solution_submissions_for_challenge(
             self.pool,
-            challenge_id,
+            challenge_name,
             target,
             limit,
         )
@@ -80,12 +80,12 @@ impl SolutionSubmissionsRepository<'_> {
 
     pub async fn count_public_for_challenge(
         &self,
-        challenge_id: &ChallengeId,
+        challenge_name: &ChallengeName,
         target: &TargetName,
     ) -> Result<i64> {
         db::solution_submissions::count_public_solution_submissions_for_challenge(
             self.pool,
-            challenge_id,
+            challenge_name,
             target,
         )
         .await
@@ -98,7 +98,7 @@ impl SolutionSubmissionsRepository<'_> {
     pub async fn count_recent_runs_for_agent_challenge(
         &self,
         agent_id: &AgentId,
-        challenge_id: &ChallengeId,
+        challenge_name: &ChallengeName,
         target: &TargetName,
         eval_type: ScoringMode,
         window_seconds: i64,
@@ -106,7 +106,7 @@ impl SolutionSubmissionsRepository<'_> {
         db::validation_quotas::count_recent_runs_for_agent_challenge(
             self.pool,
             agent_id,
-            challenge_id,
+            challenge_name,
             target,
             eval_type,
             window_seconds,
@@ -117,14 +117,14 @@ impl SolutionSubmissionsRepository<'_> {
     pub async fn count_lifetime_runs_for_agent_challenge(
         &self,
         agent_id: &AgentId,
-        challenge_id: &ChallengeId,
+        challenge_name: &ChallengeName,
         target: &TargetName,
         eval_type: ScoringMode,
     ) -> Result<i64> {
         db::validation_quotas::count_lifetime_runs_for_agent_challenge(
             self.pool,
             agent_id,
-            challenge_id,
+            challenge_name,
             target,
             eval_type,
         )

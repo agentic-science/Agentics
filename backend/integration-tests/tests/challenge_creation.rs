@@ -10,8 +10,9 @@ use agentics_domain::error::ServiceError;
 use agentics_domain::models::challenge_creation::ChallengeDraftValidationStatus;
 use agentics_domain::models::hashes::Sha256Digest;
 use agentics_domain::models::ids::{
-    ChallengeDraftAuditEventId, ChallengeDraftId, ChallengeDraftValidationRecordId, ChallengeId,
+    ChallengeDraftAuditEventId, ChallengeDraftId, ChallengeDraftValidationRecordId,
 };
+use agentics_domain::models::names::ChallengeName;
 use agentics_domain::storage::StorageKey;
 use agentics_storage::{StorageWriteIntent, build_storage, unpack_tar_to_directory};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
@@ -506,15 +507,16 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
         .expect("published json");
     assert_eq!(published["status"], "published");
     assert_eq!(published["published_challenge_name"], "sample-sum");
-    let published_challenge_id = published["published_challenge_id"]
+    let published_challenge_name = published["published_challenge_name"]
         .as_str()
-        .expect("published challenge id");
-    let (bundle_key, public_bundle_key): (String, String) =
-        sqlx::query_as("SELECT bundle_key, public_bundle_key FROM challenges WHERE name = $1")
-            .bind("sample-sum")
-            .fetch_one(&pool)
-            .await
-            .expect("bundle keys");
+        .expect("published challenge name");
+    let (bundle_key, public_bundle_key): (String, String) = sqlx::query_as(
+        "SELECT bundle_key, public_bundle_key FROM challenges WHERE challenge_name = $1",
+    )
+    .bind("sample-sum")
+    .fetch_one(&pool)
+    .await
+    .expect("bundle keys");
     let (_private_temp, private_dir) =
         materialize_bundle_key(&config, &bundle_key, "private").await;
     let (_public_temp, public_dir) =
@@ -531,7 +533,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
     let public_challenge: serde_json::Value = client
         .get(api_url(
             &app,
-            &format!("/api/public/challenges/{published_challenge_id}"),
+            &format!("/api/public/challenges/{published_challenge_name}"),
         ))
         .send()
         .await
@@ -544,9 +546,9 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
     assert_eq!(public_challenge["spec"]["eligibility"]["type"], "open");
 
     let owner_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*)::BIGINT FROM challenge_owners WHERE challenge_id = $1::uuid AND agent_id = $2::uuid",
+        "SELECT COUNT(*)::BIGINT FROM challenge_owners WHERE challenge_name = $1 AND agent_id = $2::uuid",
     )
-    .bind(published_challenge_id)
+    .bind(published_challenge_name)
     .bind(&creator.agent_id)
     .fetch_one(&pool)
     .await
@@ -557,7 +559,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
         client.get(api_url(
             &app,
             &format!(
-                "/api/creator/challenges/{published_challenge_id}/stats?target=linux-arm64-cpu"
+                "/api/creator/challenges/{published_challenge_name}/stats?target=linux-arm64-cpu"
             ),
         )),
         &creator,
@@ -577,7 +579,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
     let participants: serde_json::Value = creator_auth(
         client.get(api_url(
             &app,
-            &format!("/api/creator/challenges/{published_challenge_id}/participants?target=linux-arm64-cpu"),
+            &format!("/api/creator/challenges/{published_challenge_name}/participants?target=linux-arm64-cpu"),
         )),
         &creator,
     )
@@ -595,7 +597,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
     let non_owner_stats = creator_auth(
         client.get(api_url(
             &app,
-            &format!("/api/creator/challenges/{published_challenge_id}/stats"),
+            &format!("/api/creator/challenges/{published_challenge_name}/stats"),
         )),
         &non_owner,
     )
@@ -699,7 +701,7 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
     assert_eq!(publish_response.status(), reqwest::StatusCode::BAD_REQUEST);
 
     let published_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*)::BIGINT FROM challenges WHERE name = $1 AND spec_json IS NOT NULL",
+        "SELECT COUNT(*)::BIGINT FROM challenges WHERE challenge_name = $1 AND spec_json IS NOT NULL",
     )
     .bind("sample-sum")
     .fetch_one(&pool)
@@ -810,14 +812,14 @@ async fn concurrent_publish_requests_leave_one_published_bundle(pool: sqlx::PgPo
     );
 
     let challenge_count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*)::BIGINT FROM challenges WHERE name = $1")
+        sqlx::query_scalar("SELECT COUNT(*)::BIGINT FROM challenges WHERE challenge_name = $1")
             .bind("sample-sum")
             .fetch_one(&pool)
             .await
             .expect("challenge count");
     assert_eq!(challenge_count, 1);
     let bundle_key: String =
-        sqlx::query_scalar("SELECT bundle_key FROM challenges WHERE name = $1")
+        sqlx::query_scalar("SELECT bundle_key FROM challenges WHERE challenge_name = $1")
             .bind("sample-sum")
             .fetch_one(&pool)
             .await
@@ -924,15 +926,15 @@ async fn failed_publish_removes_claim_scoped_runtime_bundle(pool: sqlx::PgPool) 
         )
         .await
         .expect("existing statement should store");
-    let existing_challenge_id = ChallengeId::generate();
+    let existing_challenge_name =
+        ChallengeName::try_new("sample-sum".to_string()).expect("sample-sum name is valid");
     sqlx::query(
         r#"
         INSERT INTO challenges (
-            challenge_id, name, title, summary, bundle_key, public_bundle_key, statement_key, spec_json, starts_at, status
+            challenge_name, title, summary, bundle_key, public_bundle_key, statement_key, spec_json, starts_at, status
         )
         VALUES (
-            $3::uuid,
-            'sample-sum',
+            $3,
             'Existing Sample Sum',
             '{"en":"Existing","zh":"Existing"}'::jsonb,
             $1,
@@ -946,7 +948,7 @@ async fn failed_publish_removes_claim_scoped_runtime_bundle(pool: sqlx::PgPool) 
     )
     .bind(existing_bundle_key.as_str())
     .bind(existing_statement_key.as_str())
-    .bind(existing_challenge_id.as_str())
+    .bind(existing_challenge_name.as_str())
     .bind(existing_public_bundle_key.as_str())
     .execute(&pool)
     .await

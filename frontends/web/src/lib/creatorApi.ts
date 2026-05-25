@@ -145,45 +145,45 @@ export async function uploadPrivateAsset(
 
 /** Fetches creator challenge stats for the requested UI scope. */
 export async function getCreatorChallengeStats(
-  challengeId: string,
+  challengeName: string,
   target?: string,
 ): Promise<CreatorChallengeStatsResponse> {
   return creatorFetchJson(
-    creatorChallengePath(challengeId, "stats", target),
+    creatorChallengePath(challengeName, "stats", target),
     creatorChallengeStatsResponseSchema,
   );
 }
 
 /** Fetches creator challenge participants for the requested UI scope. */
 export async function getCreatorChallengeParticipants(
-  challengeId: string,
+  challengeName: string,
   target?: string,
 ): Promise<CreatorChallengeParticipantsResponse> {
   return creatorFetchJson(
-    creatorChallengePath(challengeId, "participants", target),
+    creatorChallengePath(challengeName, "participants", target),
     creatorChallengeParticipantsResponseSchema,
   );
 }
 
 /** Fetches challenge shortlist for the requested UI scope. */
 export async function getChallengeShortlist(
-  challengeId: string,
+  challengeName: string,
 ): Promise<ChallengeShortlistResponse> {
   return creatorFetchJson(
-    `/api/creator/challenges/${encodeURIComponent(challengeId)}/shortlist`,
+    `/api/creator/challenges/${encodeURIComponent(challengeName)}/shortlist`,
     challengeShortlistResponseSchema,
   );
 }
 
 /** Creates challenge shortlist revision through the API. */
 export async function createChallengeShortlistRevision(
-  challengeId: string,
+  challengeName: string,
   request: CreateChallengeShortlistRevisionRequest,
   csrfToken: string,
 ): Promise<ChallengeShortlistRevisionResponse> {
   const body = createChallengeShortlistRevisionRequestSchema.parse(request);
   return creatorFetchJson(
-    `/api/creator/challenges/${encodeURIComponent(challengeId)}/shortlist-revisions`,
+    `/api/creator/challenges/${encodeURIComponent(challengeName)}/shortlist-revisions`,
     challengeShortlistRevisionResponseSchema,
     csrfToken,
     {
@@ -210,7 +210,7 @@ async function creatorFetchJson<T>(
 
 /** Handles creator challenge path behavior for this module. */
 function creatorChallengePath(
-  challengeId: string,
+  challengeName: string,
   surface: "stats" | "participants",
   target?: string,
 ): string {
@@ -219,5 +219,5 @@ function creatorChallengePath(
     params.set("target", target.trim());
   }
   const query = params.toString();
-  return `/api/creator/challenges/${encodeURIComponent(challengeId)}/${surface}${query ? `?${query}` : ""}`;
+  return `/api/creator/challenges/${encodeURIComponent(challengeName)}/${surface}${query ? `?${query}` : ""}`;
 }

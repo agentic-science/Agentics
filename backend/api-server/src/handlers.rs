@@ -25,8 +25,8 @@ use agentics_contracts::validation::public_api::{
 };
 use agentics_domain::error::ServiceError;
 use agentics_domain::models::evaluation::{EvaluationJobStatus, ScoringMode};
-use agentics_domain::models::ids::{AgentId, AgentPioneerCodeId, AgentTokenId, ChallengeId};
-use agentics_domain::models::names::{ChallengeKeyword, MetricName, TargetName};
+use agentics_domain::models::ids::{AgentId, AgentPioneerCodeId, AgentTokenId};
+use agentics_domain::models::names::{ChallengeKeyword, ChallengeName, MetricName, TargetName};
 use agentics_domain::models::pioneer_codes::PioneerCode;
 use agentics_domain::models::pioneer_codes::PioneerCodeStatus;
 use agentics_domain::models::request::{
@@ -176,9 +176,13 @@ pub async fn list_agent_challenges(
 pub async fn get_agent_challenge(
     _agent: AgentAuth,
     State(state): State<AppState>,
-    Path(id): Path<String>,
+    Path(challenge_name): Path<String>,
 ) -> Result<Json<agentics_domain::models::challenge::ChallengeDetailResponse>> {
-    get_challenge_detail_response(state, parse_request_value::<ChallengeId>(&id)?).await
+    get_challenge_detail_response(
+        state,
+        parse_request_value::<ChallengeName>(&challenge_name)?,
+    )
+    .await
 }
 
 /// List published challenges on the public API.
@@ -217,25 +221,29 @@ pub async fn get_public_stats(State(state): State<AppState>) -> Result<Json<Publ
     }))
 }
 
-/// Fetch public challenge details by challenge id.
+/// Fetch public challenge details by challenge name.
 pub async fn get_challenge(
     State(state): State<AppState>,
-    Path(id): Path<String>,
+    Path(challenge_name): Path<String>,
 ) -> Result<Json<agentics_domain::models::challenge::ChallengeDetailResponse>> {
-    get_challenge_detail_response(state, parse_request_value::<ChallengeId>(&id)?).await
+    get_challenge_detail_response(
+        state,
+        parse_request_value::<ChallengeName>(&challenge_name)?,
+    )
+    .await
 }
 
 /// Shared challenge-detail response path used by public and agent routes.
 async fn get_challenge_detail_response(
     state: AppState,
-    challenge_id: ChallengeId,
+    challenge_name: ChallengeName,
 ) -> Result<Json<agentics_domain::models::challenge::ChallengeDetailResponse>> {
     Ok(Json(
         public_projection::get_challenge_detail(
             &state.db,
             state.storage.as_ref(),
             &state.config,
-            &challenge_id,
+            &challenge_name,
         )
         .await?,
     ))
@@ -456,12 +464,12 @@ pub async fn get_solution_submission_ranking_context(
     }
     public_projection::ensure_ranking_scope_matches_submission(
         &solution_submission,
-        &query.challenge_id,
+        &query.challenge_name,
         &query.target,
     )?;
     let response = public_projection::build_ranking_context(
         &state.db,
-        &query.challenge_id,
+        &query.challenge_name,
         &query.target,
         &solution_submission.id,
     )
@@ -476,14 +484,14 @@ pub async fn get_solution_submission_ranking_context(
 /// List solution submissions that are visible after completed official evaluation.
 pub async fn list_public_solution_submissions(
     State(state): State<AppState>,
-    Path(id): Path<String>,
+    Path(challenge_name): Path<String>,
     Query(query): Query<PublicListQuery>,
 ) -> Result<Json<PublicSolutionSubmissionListResponse>> {
-    let challenge_id = parse_request_value::<ChallengeId>(&id)?;
+    let challenge_name = parse_request_value::<ChallengeName>(&challenge_name)?;
     Ok(Json(
         public_projection::list_public_solution_submissions(
             &state.db,
-            &challenge_id,
+            &challenge_name,
             query.target.as_deref(),
             query.limit,
         )
@@ -521,7 +529,7 @@ pub async fn get_public_solution_submission_ranking_context(
         public_projection::get_public_solution_submission_ranking_context(
             &state.db,
             &id,
-            &query.challenge_id,
+            &query.challenge_name,
             &query.target,
         )
         .await?,
@@ -550,14 +558,14 @@ pub async fn get_public_artifact(
 /// Fetch leaderboard rows for a challenge.
 pub async fn get_leaderboard(
     State(state): State<AppState>,
-    Path(id): Path<String>,
+    Path(challenge_name): Path<String>,
     Query(query): Query<LeaderboardQuery>,
 ) -> Result<Json<LeaderboardResponse>> {
-    let challenge_id = parse_request_value::<ChallengeId>(&id)?;
+    let challenge_name = parse_request_value::<ChallengeName>(&challenge_name)?;
     Ok(Json(
         public_projection::get_leaderboard(
             &state.db,
-            &challenge_id,
+            &challenge_name,
             query.target.as_deref(),
             query.limit,
         )
@@ -568,15 +576,15 @@ pub async fn get_leaderboard(
 /// Fetch a visible score distribution for a metric in one explicit target scope.
 pub async fn get_score_distribution(
     State(state): State<AppState>,
-    Path(id): Path<String>,
+    Path(challenge_name): Path<String>,
     Query(query): Query<ScoreDistributionQuery>,
 ) -> Result<Json<ScoreDistributionResponse>> {
-    let challenge_id = parse_request_value::<ChallengeId>(&id)?;
+    let challenge_name = parse_request_value::<ChallengeName>(&challenge_name)?;
     let metric_name = parse_request_value::<MetricName>(&query.metric)?;
     Ok(Json(
         public_projection::get_score_distribution(
             &state.db,
-            &challenge_id,
+            &challenge_name,
             query.target.as_deref(),
             metric_name,
         )
@@ -608,6 +616,6 @@ pub struct ScoreDistributionQuery {
 /// Query parameters that pin a submission ranking lookup to one challenge target.
 #[derive(Debug, Clone, Deserialize)]
 pub struct RankingContextQuery {
-    challenge_id: ChallengeId,
+    challenge_name: ChallengeName,
     target: TargetName,
 }

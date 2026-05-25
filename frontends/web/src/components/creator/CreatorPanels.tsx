@@ -170,12 +170,8 @@ export function DraftDetail({
             value={shortHash(draft.approved_bundle_sha256)}
           />
           <Metadata
-            label={t("publishedChallenge")}
+            label={t("publishedChallengeName")}
             value={draft.published_challenge_name ?? "—"}
-          />
-          <Metadata
-            label={t("publishedChallengeId")}
-            value={draft.published_challenge_id ?? "—"}
           />
         </dl>
       </div>

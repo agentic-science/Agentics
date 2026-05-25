@@ -19,16 +19,16 @@ export default async function ChallengeLayout({
   params,
 }: {
   children: React.ReactNode;
-  params: Promise<{ id: string }>;
+  params: Promise<{ challengeName: string }>;
 }) {
-  const { id } = await params;
+  const { challengeName } = await params;
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   let challenge: import("@/lib/schemas").ChallengeDetailResponse;
   let error: string | null = null;
 
   try {
     challenge = await fetchJson(
-      `/api/public/challenges/${id}`,
+      `/api/public/challenges/${challengeName}`,
       challengeDetailResponseSchema,
     );
   } catch (e) {
@@ -162,7 +162,7 @@ export default async function ChallengeLayout({
       </div>
 
       {/* Tabs */}
-      <ChallengeNav challengeId={id} defaultTarget={defaultTarget} />
+      <ChallengeNav challengeName={challengeName} defaultTarget={defaultTarget} />
 
       {/* Page Content */}
       {children}

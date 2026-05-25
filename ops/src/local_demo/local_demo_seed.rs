@@ -13,9 +13,7 @@ use agentics_domain::models::evaluation::{
     EvaluationJobStatus, EvaluationStatus, EvaluatorCaseStatus, MetricValue, PublicCaseResult,
     RunMetricResult, ScoreSummary, ScoringMode, SolutionSubmissionStatus,
 };
-use agentics_domain::models::ids::{
-    AgentId, ChallengeId, EvaluationId, EvaluationJobId, SolutionSubmissionId,
-};
+use agentics_domain::models::ids::{AgentId, EvaluationId, EvaluationJobId, SolutionSubmissionId};
 use agentics_domain::models::localization::LocalizedText;
 use agentics_domain::models::names::{
     ChallengeKeyword, ChallengeName, MetricName, RunName, TargetName,
@@ -39,7 +37,6 @@ const DEMO_PER_AGENT_CHALLENGE_LIMIT: i64 = 10_000;
 
 #[derive(Debug, Clone, Copy)]
 struct DemoChallengeSeed {
-    challenge_id: &'static str,
     name: &'static str,
     title: &'static str,
     summary_en: &'static str,
@@ -74,7 +71,6 @@ struct DemoEvaluationSeed {
 
 const DEMO_CHALLENGES: &[DemoChallengeSeed] = &[
     DemoChallengeSeed {
-        challenge_id: "30000000-0000-4000-8000-000000000001",
         name: "demo-ui-alpha",
         title: "Orbital Protein Folding",
         summary_en: "Predict compact protein conformations under synthetic orbital constraints.",
@@ -82,7 +78,6 @@ const DEMO_CHALLENGES: &[DemoChallengeSeed] = &[
         keywords: &["biology", "protein folding", "simulation"],
     },
     DemoChallengeSeed {
-        challenge_id: "30000000-0000-4000-8000-000000000002",
         name: "demo-ui-beta",
         title: "Catalyst Search",
         summary_en: "Find reaction pathways that maximize yield while minimizing unsafe intermediates.",
@@ -90,7 +85,6 @@ const DEMO_CHALLENGES: &[DemoChallengeSeed] = &[
         keywords: &["chemistry", "catalysis", "optimization"],
     },
     DemoChallengeSeed {
-        challenge_id: "30000000-0000-4000-8000-000000000003",
         name: "demo-ui-gamma",
         title: "Cellular Maze",
         summary_en: "Route signaling molecules through a noisy cellular grid without crossing blocked regions.",
@@ -98,7 +92,6 @@ const DEMO_CHALLENGES: &[DemoChallengeSeed] = &[
         keywords: &["biology", "planning", "grid search"],
     },
     DemoChallengeSeed {
-        challenge_id: "30000000-0000-4000-8000-000000000004",
         name: "demo-ui-delta",
         title: "Climate Patch",
         summary_en: "Select localized interventions that reduce simulated heat stress under budget limits.",
@@ -106,7 +99,6 @@ const DEMO_CHALLENGES: &[DemoChallengeSeed] = &[
         keywords: &["climate", "optimization", "policy"],
     },
     DemoChallengeSeed {
-        challenge_id: "30000000-0000-4000-8000-000000000005",
         name: "demo-ui-epsilon",
         title: "Lab Scheduler",
         summary_en: "Optimize robotic wet-lab batches while preserving reagent and timing constraints.",
@@ -114,7 +106,6 @@ const DEMO_CHALLENGES: &[DemoChallengeSeed] = &[
         keywords: &["lab automation", "scheduling", "robotics"],
     },
     DemoChallengeSeed {
-        challenge_id: "30000000-0000-4000-8000-000000000006",
         name: "demo-ui-zeta",
         title: "Spectra Denoising",
         summary_en: "Recover clean spectral peaks from corrupted instrument traces.",
@@ -122,7 +113,6 @@ const DEMO_CHALLENGES: &[DemoChallengeSeed] = &[
         keywords: &["signal processing", "spectra", "denoising"],
     },
     DemoChallengeSeed {
-        challenge_id: "30000000-0000-4000-8000-000000000007",
         name: "demo-ui-eta",
         title: "Genome Primer",
         summary_en: "Design primer sets that cover target regions while avoiding off-target matches.",
@@ -130,7 +120,6 @@ const DEMO_CHALLENGES: &[DemoChallengeSeed] = &[
         keywords: &["genomics", "primer design", "biology"],
     },
     DemoChallengeSeed {
-        challenge_id: "30000000-0000-4000-8000-000000000008",
         name: "demo-ui-theta",
         title: "Graph Molecules",
         summary_en: "Generate candidate molecules that satisfy graph constraints and scoring rules.",
@@ -138,7 +127,6 @@ const DEMO_CHALLENGES: &[DemoChallengeSeed] = &[
         keywords: &["chemistry", "graph search", "molecules"],
     },
     DemoChallengeSeed {
-        challenge_id: "30000000-0000-4000-8000-000000000009",
         name: "demo-ui-iota",
         title: "Signal Forecast",
         summary_en: "Forecast sparse experimental signals with uncertainty-aware ranking.",
@@ -146,7 +134,6 @@ const DEMO_CHALLENGES: &[DemoChallengeSeed] = &[
         keywords: &["forecasting", "uncertainty", "signals"],
     },
     DemoChallengeSeed {
-        challenge_id: "30000000-0000-4000-8000-000000000010",
         name: "demo-ui-kappa",
         title: "Microscopy Segment",
         summary_en: "Segment cell boundaries from noisy microscopy tiles with hidden labels.",
@@ -322,7 +309,7 @@ async fn cleanup_demo_rows(pool: &PgPool) -> Result<(), LocalDemoError> {
     }
     for challenge in DEMO_CHALLENGES {
         let name = challenge_name(challenge.name)?;
-        sqlx::query("DELETE FROM challenges WHERE name = $1")
+        sqlx::query("DELETE FROM challenges WHERE challenge_name = $1")
             .bind(name.as_str())
             .execute(pool)
             .await?;
@@ -331,12 +318,14 @@ async fn cleanup_demo_rows(pool: &PgPool) -> Result<(), LocalDemoError> {
 }
 
 async fn touch_base_challenges(pool: &PgPool) -> Result<(), LocalDemoError> {
-    sqlx::query("UPDATE challenges SET created_at = NOW(), updated_at = NOW() WHERE name = $1")
-        .bind(SAMPLE_SUM_CHALLENGE)
-        .execute(pool)
-        .await?;
     sqlx::query(
-        "UPDATE challenges SET created_at = NOW() - INTERVAL '1 second', updated_at = NOW() WHERE name = $1",
+        "UPDATE challenges SET created_at = NOW(), updated_at = NOW() WHERE challenge_name = $1",
+    )
+    .bind(SAMPLE_SUM_CHALLENGE)
+    .execute(pool)
+    .await?;
+    sqlx::query(
+        "UPDATE challenges SET created_at = NOW() - INTERVAL '1 second', updated_at = NOW() WHERE challenge_name = $1",
     )
     .bind(GRID_ROUTING_CHALLENGE)
     .execute(pool)
@@ -356,7 +345,6 @@ async fn publish_demo_challenges(
         })?;
 
     for challenge in DEMO_CHALLENGES {
-        let challenge_id = challenge_id(challenge.challenge_id)?;
         let challenge_name = challenge_name(challenge.name)?;
         let summary = LocalizedText::new(challenge.summary_en, challenge.summary_zh);
         let mut spec = source_spec.clone();
@@ -366,7 +354,6 @@ async fn publish_demo_challenges(
         spec.keywords = challenge_keywords(challenge.keywords)?;
 
         let input = PublishChallengeInput {
-            challenge_id: &challenge_id,
             challenge_name: &challenge_name,
             bundle_key: &source_challenge.bundle_key,
             public_bundle_key: &source_challenge.public_bundle_key,
@@ -415,7 +402,6 @@ async fn seed_demo_results(pool: &PgPool, repos: &Repositories) -> Result<(), Lo
                 solution_submission_id: submission_id.clone(),
                 job_id: job_id.clone(),
                 agent_id: agent_id(result.agent_id)?,
-                challenge_id: challenge.challenge_id,
                 challenge_name: challenge.challenge_name,
                 target: target.clone(),
                 artifact_key: result.artifact_key()?,
@@ -667,10 +653,6 @@ fn challenge_keywords(values: &[&str]) -> Result<Vec<ChallengeKeyword>, LocalDem
         .iter()
         .map(|value| challenge_keyword(value))
         .collect()
-}
-
-fn challenge_id(value: &str) -> Result<ChallengeId, LocalDemoError> {
-    ChallengeId::try_new(value).map_err(|error| seed_parse_error("challenge_id", value, error))
 }
 
 fn agent_id(value: &str) -> Result<AgentId, LocalDemoError> {

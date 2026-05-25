@@ -5,7 +5,7 @@ mod helpers;
 use std::path::Path;
 
 use helpers::{
-    api_url, basic_auth_header, copy_dir_all, examples_challenges_root, published_challenge_id,
+    api_url, basic_auth_header, copy_dir_all, examples_challenges_root, published_challenge_name,
     run_worker_once, sample_sum_solution, solution_zip_base64, spawn_app_with_config, test_config,
 };
 
@@ -53,7 +53,7 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
     config.official_runs_per_agent_challenge_day = 2;
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
-    let admin_sum_id = published_challenge_id(&pool, "admin-sum").await;
+    let admin_sum_id = published_challenge_name(&pool, "admin-sum").await;
     let admin_auth = basic_auth_header(
         &config.admin_username,
         config.expose_admin_password_for_http_basic(),
@@ -91,7 +91,7 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
         .header("Authorization", format!("Bearer {token_a}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": &admin_sum_id,
+            "challenge_name": &admin_sum_id,
             "target": "linux-arm64-cpu",
             "artifact_base64": perfect_zip,
             "explanation": "best rank score"
@@ -113,7 +113,7 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
         .header("Authorization", format!("Bearer {token_b}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": &admin_sum_id,
+            "challenge_name": &admin_sum_id,
             "target": "linux-arm64-cpu",
             "artifact_base64": private_benchmark_only_zip,
             "explanation": "passes private benchmark only"
@@ -342,7 +342,7 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
         .header("Authorization", format!("Bearer {token_b}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": &admin_sum_id,
+            "challenge_name": &admin_sum_id,
             "target": "linux-arm64-cpu",
             "artifact_base64": perfect_zip,
             "explanation": "second participant-created official submission should still fit quota"
@@ -358,8 +358,8 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
     run_worker_once(&pool, &config).await;
 
     let admin_sum_id_typed =
-        agentics_domain::models::ids::ChallengeId::try_new(admin_sum_id.clone())
-            .expect("test challenge id is valid");
+        agentics_domain::models::names::ChallengeName::try_new(admin_sum_id.clone())
+            .expect("test challenge name is valid");
     agentics_persistence::Repositories::new(&pool)
         .challenges()
         .archive(&admin_sum_id_typed)

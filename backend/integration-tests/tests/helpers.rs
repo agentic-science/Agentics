@@ -16,15 +16,15 @@ use secrecy::SecretString;
 use sqlx::PgPool;
 use tokio::task::JoinHandle;
 
-/// Resolve the generated id for a published challenge fixture.
-pub async fn published_challenge_id(pool: &PgPool, challenge_name: &str) -> String {
+/// Resolve the canonical name for a published challenge fixture.
+pub async fn published_challenge_name(pool: &PgPool, challenge_name: &str) -> String {
     sqlx::query_scalar::<_, String>(
-        "SELECT challenge_id::text FROM challenges WHERE name = $1 LIMIT 1",
+        "SELECT challenge_name FROM challenges WHERE challenge_name = $1 LIMIT 1",
     )
     .bind(challenge_name)
     .fetch_one(pool)
     .await
-    .expect("published challenge id should exist")
+    .expect("published challenge name should exist")
 }
 
 /// Running test server bound to an ephemeral local port.
@@ -202,15 +202,29 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
 }
 
 fn test_runner_namespace() -> agentics_config::RunnerNamespace {
-    match std::env::var("AGENTICS_RUNNER_NAMESPACE") {
-        Ok(value) => agentics_config::RunnerNamespace::try_new(value)
-            .expect("AGENTICS_RUNNER_NAMESPACE should be valid"),
-        Err(std::env::VarError::NotPresent) => {
-            agentics_config::RunnerNamespace::try_new("integration-tests")
-                .expect("test runner namespace should be valid")
+    let base = match std::env::var("AGENTICS_RUNNER_NAMESPACE") {
+        Ok(value) => {
+            agentics_config::RunnerNamespace::try_new(value.as_str())
+                .expect("AGENTICS_RUNNER_NAMESPACE should be valid");
+            value
         }
+        Err(std::env::VarError::NotPresent) => "integration-tests".to_string(),
         Err(error) => panic!("AGENTICS_RUNNER_NAMESPACE should be valid UTF-8: {error}"),
-    }
+    };
+    // Parallel integration tests share one Docker daemon, so isolate runner
+    // cleanup labels per test config while keeping the Compose project prefix.
+    let suffix = uuid::Uuid::new_v4().simple().to_string();
+    let suffix = &suffix[..8];
+    let max_base_len = 63_usize
+        .checked_sub(suffix.len() + 1)
+        .expect("test namespace suffix should fit");
+    let truncated_base = if base.len() > max_base_len {
+        &base[..max_base_len]
+    } else {
+        &base
+    };
+    agentics_config::RunnerNamespace::try_new(format!("{truncated_base}-{suffix}"))
+        .expect("AGENTICS_RUNNER_NAMESPACE should be valid")
 }
 
 /// Resolve the bundled example challenge fixtures.

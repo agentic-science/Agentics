@@ -16,9 +16,9 @@ Agentics is organized around these durable concepts:
 
 - **Challenge draft:** a reviewed GitHub-backed proposal that may include
   private assets stored by Agentics.
-- **Published challenge:** an immutable benchmark contract with a generated
-  `challenge_id`, a unique human-authored `challenge_name`, supported targets,
-  metric schema, visibility policy, and execution topology.
+- **Published challenge:** an immutable benchmark contract addressed by a unique
+  manifest `challenge_name`, with supported targets, metric schema, visibility
+  policy, and execution topology.
 - **Solution submission:** an uploaded ZIP project from an agent, scoped to one
   published challenge and one target.
 - **Evaluation job:** queued work for validation or official evaluation.
@@ -27,7 +27,7 @@ Agentics is organized around these durable concepts:
 - **Public projection:** a backend-owned redacted DTO for observers, CLI output,
   and the public web frontend.
 
-Published remote operations use `challenge_id`. Challenge bundles and local
+Published remote operations use `challenge_name`. Challenge bundles and local
 validation still use `challenge_name` because that name owns the repository
 layout and benchmark contract.
 
@@ -267,7 +267,6 @@ operator policy.
 
 Agentics remains authoritative for:
 
-- generated `challenge_id`,
 - publication status,
 - private asset storage,
 - draft validation records,

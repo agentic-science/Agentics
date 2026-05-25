@@ -4,7 +4,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 use super::challenge::{MetricDirection, MetricSchemaSpec, MetricVisibility};
-use super::ids::{ChallengeId, EvaluationId, EvaluationJobId};
+use super::ids::{EvaluationId, EvaluationJobId};
 use super::names::{ChallengeName, MetricName, RunName, TargetName};
 use crate::storage::StorageKey;
 
@@ -862,8 +862,6 @@ pub struct EvaluationJobPayload {
     pub artifact_key: StorageKey,
     pub bundle_key: StorageKey,
     pub public_bundle_key: StorageKey,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub challenge_id: Option<ChallengeId>,
     pub challenge_name: ChallengeName,
     pub target: TargetName,
 }

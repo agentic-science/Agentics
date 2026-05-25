@@ -122,7 +122,7 @@ export function CreatorConsole() {
     file: null,
   });
   const [ownerForm, setOwnerForm] = useState({
-    challengeId: "",
+    challengeName: "",
     target: "linux-arm64-cpu",
     shortlistText: JSON.stringify(
       { agent_ids_to_add: ["11111111-1111-4111-8111-111111111111"] },
@@ -357,7 +357,7 @@ export function CreatorConsole() {
 
   /** Loads owner surfaces for the selected challenge. */
   const loadOwnerSurfaces = async () => {
-    if (!ownerForm.challengeId.trim()) {
+    if (!ownerForm.challengeName.trim()) {
       setError(t("messages.enterChallenge"));
       return;
     }
@@ -365,15 +365,15 @@ export function CreatorConsole() {
     setLoading(true);
     setError(null);
     try {
-      const challengeId = ownerForm.challengeId.trim();
+      const challengeName = ownerForm.challengeName.trim();
       const target = ownerForm.target.trim() || undefined;
-      const scope = { challengeId, target };
+      const scope = { challengeName, target };
       setOwnerScope(scope);
       const bundle = await fetchCreatorOwnerBundle(scope);
       setStats(bundle.stats);
       setParticipants(bundle.participants);
       setShortlist(bundle.shortlist);
-      setMessage(t("messages.ownerLoaded", { id: challengeId }));
+      setMessage(t("messages.ownerLoaded", { id: challengeName }));
     } catch (e) {
       setError(displayCreatorError(e));
     } finally {
@@ -388,7 +388,7 @@ export function CreatorConsole() {
       setError(t("messages.refreshBeforeShortlist"));
       return;
     }
-    if (!ownerForm.challengeId.trim()) {
+    if (!ownerForm.challengeName.trim()) {
       setError(t("messages.enterChallenge"));
       return;
     }
@@ -413,15 +413,15 @@ export function CreatorConsole() {
     setLoading(true);
     setError(null);
     try {
-      const challengeId = ownerForm.challengeId.trim();
+      const challengeName = ownerForm.challengeName.trim();
       const response = await createChallengeShortlistRevision(
-        challengeId,
+        challengeName,
         parsedPayload.data,
         csrfToken,
       );
       setShortlistRevision(response);
       const scope = {
-        challengeId,
+        challengeName,
         target: ownerForm.target.trim() || undefined,
       };
       setOwnerScope(scope);
@@ -657,10 +657,10 @@ export function CreatorConsole() {
               title={t("owner.statisticsForm")}
             />
             <TextInput
-              label={t("owner.publishedChallengeId")}
-              value={ownerForm.challengeId}
-              onChange={(challengeId) =>
-                setOwnerForm({ ...ownerForm, challengeId })
+              label={t("owner.publishedChallengeName")}
+              value={ownerForm.challengeName}
+              onChange={(challengeName) =>
+                setOwnerForm({ ...ownerForm, challengeName })
               }
               required
             />

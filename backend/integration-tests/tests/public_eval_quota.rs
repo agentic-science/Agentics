@@ -6,7 +6,7 @@ use std::{fs, path::Path};
 
 use agentics_config::RunnerWritableStorageMode;
 use helpers::{
-    api_url, copy_dir_all, examples_challenges_root, published_challenge_id, run_worker_once,
+    api_url, copy_dir_all, examples_challenges_root, published_challenge_name, run_worker_once,
     sample_sum_solution, solution_zip_base64_with_scripts, spawn_app_with_config, test_config,
     zip_project_zip_base64,
 };
@@ -243,7 +243,7 @@ python main.py
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": published_challenge_id(&pool, "sample-sum").await,
+            "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "run writable disk limit probe"
@@ -331,7 +331,7 @@ python main.py
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": published_challenge_id(&pool, "sample-sum").await,
+            "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "run output file limit probe"
@@ -472,7 +472,7 @@ printf built > build/generated.txt
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": published_challenge_id(&pool, "sample-sum").await,
+            "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "dependency tree should not hit output file cap"

@@ -12,7 +12,7 @@ import {
   solutionSubmissionResponseSchema,
 } from "./schemas";
 
-const sampleChallengeId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const sampleChallengeName = "sample-sum";
 
 /** Builds the target fixture test fixture. */
 function targetFixture(validationEnabled: boolean) {
@@ -115,7 +115,6 @@ describe("frontend API schemas", () => {
   it("accepts public challenge detail responses", () => {
     expect(() =>
       challengeDetailResponseSchema.parse({
-        challenge_id: sampleChallengeId,
         challenge_name: "sample-sum",
         title: "Sample Sum",
         summary: { en: "Add two numbers.", zh: "数字求和。" },
@@ -180,7 +179,6 @@ describe("frontend API schemas", () => {
 
     expect(() =>
       challengeDetailResponseSchema.parse({
-        challenge_id: sampleChallengeId,
         challenge_name: "interactive-sum",
         title: "Interactive Sum",
         summary: { en: "Add numbers interactively.", zh: "交互式数字求和。" },
@@ -236,7 +234,6 @@ describe("frontend API schemas", () => {
 
     expect(() =>
       challengeDetailResponseSchema.parse({
-        challenge_id: sampleChallengeId,
         challenge_name: "coexecuted-sum",
         title: "Coexecuted Sum",
         summary: { en: "Benchmark imports code.", zh: "基准程序导入代码。" },
@@ -297,7 +294,6 @@ describe("frontend API schemas", () => {
   it("rejects impossible coexecuted target run profiles", () => {
     expect(() =>
       challengeDetailResponseSchema.parse({
-        challenge_id: sampleChallengeId,
         challenge_name: "coexecuted-sum",
         title: "Coexecuted Sum",
         summary: { en: "Benchmark imports code.", zh: "基准程序导入代码。" },
@@ -356,7 +352,6 @@ describe("frontend API schemas", () => {
     expect(() =>
       solutionSubmissionResponseSchema.parse({
         id: "11111111-1111-4111-8111-111111111111",
-        challenge_id: sampleChallengeId,
         challenge_name: "sample-sum",
         challenge_title: "Sample Sum",
         target: "linux-arm64-cpu",
@@ -386,7 +381,6 @@ describe("frontend API schemas", () => {
     expect(() =>
       solutionSubmissionResponseSchema.parse({
         id: "11111111-1111-4111-8111-111111111111",
-        challenge_id: sampleChallengeId,
         challenge_name: "sample-sum",
         challenge_title: "Sample Sum",
         target: "linux-arm64-cpu",
@@ -425,7 +419,6 @@ describe("frontend API schemas", () => {
     expect(() =>
       solutionSubmissionResponseSchema.parse({
         id: "11111111-1111-4111-8111-111111111111",
-        challenge_id: sampleChallengeId,
         challenge_name: "sample-sum",
         challenge_title: "Sample Sum",
         target: "linux-arm64-cpu",
@@ -462,7 +455,6 @@ describe("frontend API schemas", () => {
     expect(() =>
       solutionSubmissionResponseSchema.parse({
         id: "11111111-1111-4111-8111-111111111111",
-        challenge_id: sampleChallengeId,
         challenge_name: "sample-sum",
         target: "linux-arm64-cpu",
         agent_id: "22222222-2222-4222-8222-222222222222",
@@ -482,7 +474,6 @@ describe("frontend API schemas", () => {
   it("rejects storage keys with parent-directory components", () => {
     expect(() =>
       publishChallengeResponseSchema.parse({
-        challenge_id: sampleChallengeId,
         challenge_name: "sample-sum",
         title: "Sample Sum",
         bundle_key: "challenge-bundles/sample-sum/bundle.tar",
@@ -495,7 +486,6 @@ describe("frontend API schemas", () => {
   it("rejects raw metric payloads on public leaderboard responses", () => {
     expect(() =>
       leaderboardResponseSchema.parse({
-        challenge_id: sampleChallengeId,
         challenge_name: "sample-sum",
         target: "linux-arm64-cpu",
         items: [
@@ -524,7 +514,6 @@ describe("frontend API schemas", () => {
       adminChallengeListResponseSchema.parse({
         items: [
           {
-            challenge_id: sampleChallengeId,
             challenge_name: "sample-sum",
             title: "Sample Sum",
             summary: { en: "Add numbers", zh: "数字求和" },

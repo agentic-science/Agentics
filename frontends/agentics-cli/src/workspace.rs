@@ -7,7 +7,6 @@ use agentics_contracts::zip_project::{
     ZipProjectCommands, ZipProjectManifest,
 };
 use agentics_domain::models::challenge::ChallengeDetailResponse;
-use agentics_domain::models::ids::ChallengeId;
 use agentics_domain::models::names::ChallengeName;
 use agentics_domain::models::paths::ScriptPath;
 use anyhow::{Context, Result, bail};
@@ -37,7 +36,6 @@ const DEFAULT_RUN_SCRIPT_PATH: &str = "run.sh";
 /// Carries init solution summary data across this module boundary.
 pub(crate) struct InitSolutionSummary {
     pub workspace_dir: PathBuf,
-    pub challenge_id: ChallengeId,
     pub challenge_name: ChallengeName,
     pub challenge_title: String,
     pub runtime_profile: String,
@@ -84,7 +82,6 @@ pub(crate) fn init_solution_workspace(
 
     Ok(InitSolutionSummary {
         workspace_dir,
-        challenge_id: challenge.challenge_id.clone(),
         challenge_name: challenge.challenge_name.clone(),
         challenge_title: challenge.title.clone(),
         runtime_profile: runtime_profile.display_value().to_string(),
@@ -305,7 +302,6 @@ mod tests {
         StageResourceProfile, TargetAccelerator,
     };
     use agentics_domain::models::evaluation::ScoreVisibility;
-    use agentics_domain::models::ids::ChallengeId;
     use agentics_domain::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
     use agentics_domain::models::localization::LocalizedText;
     use agentics_domain::models::names::{
@@ -453,7 +449,6 @@ mod tests {
     /// Handles challenge detail for this module.
     fn challenge_detail() -> ChallengeDetailResponse {
         ChallengeDetailResponse {
-            challenge_id: challenge_id(),
             challenge_name: challenge_name("sample-sum"),
             title: "Sample Sum".to_string(),
             summary: localized_summary(),
@@ -579,12 +574,6 @@ mod tests {
     /// Handles challenge name for this module.
     fn challenge_name(value: &str) -> ChallengeName {
         ChallengeName::try_new(value.to_string()).expect("test challenge name is valid")
-    }
-
-    /// Handles challenge id for this module.
-    fn challenge_id() -> ChallengeId {
-        ChallengeId::try_new("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
-            .expect("test challenge id is valid")
     }
 
     /// Build a valid public challenge keyword for workspace tests.

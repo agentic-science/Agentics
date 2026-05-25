@@ -9,7 +9,6 @@ use agentics_domain::models::challenge::{
     SolutionStageProfiles, StageResourceProfile, TargetAccelerator,
 };
 use agentics_domain::models::evaluation::ScoreVisibility;
-use agentics_domain::models::ids::ChallengeId;
 use agentics_domain::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
 use agentics_domain::models::localization::LocalizedText;
 use agentics_domain::models::names::{
@@ -32,7 +31,6 @@ fn renders_challenge_list_table() {
     let output = render_challenge_list(
         &ChallengeListResponse {
             items: vec![ChallengeListItemDto {
-                challenge_id: challenge_id(),
                 challenge_name: challenge_name("sample-sum"),
                 title: "Sample Sum".to_string(),
                 summary: localized_summary(),
@@ -55,7 +53,7 @@ fn renders_challenge_list_table() {
 
     assert_eq!(
         output,
-        "ID                                    NAME        ELIGIBILITY  KEYWORDS    TITLE\naaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa  sample-sum  open         arithmetic  Sample Sum"
+        "NAME        ELIGIBILITY  KEYWORDS    TITLE\nsample-sum  open         arithmetic  Sample Sum"
     );
 }
 
@@ -140,7 +138,6 @@ fn rejects_impossible_coexecuted_challenge_detail_table() {
 /// Handles challenge detail for this module.
 fn challenge_detail() -> ChallengeDetailResponse {
     ChallengeDetailResponse {
-        challenge_id: challenge_id(),
         challenge_name: challenge_name("sample-sum"),
         title: "Sample Sum".to_string(),
         summary: localized_summary(),
@@ -276,12 +273,6 @@ fn localized_summary() -> LocalizedText {
 /// Handles challenge name for this module.
 fn challenge_name(value: &str) -> ChallengeName {
     ChallengeName::try_new(value.to_string()).expect("test challenge name is valid")
-}
-
-/// Handles challenge id for this module.
-fn challenge_id() -> ChallengeId {
-    ChallengeId::try_new("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
-        .expect("test challenge id is valid")
 }
 
 /// Build a valid public challenge keyword for output tests.

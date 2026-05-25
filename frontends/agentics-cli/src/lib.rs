@@ -127,15 +127,17 @@ async fn dispatch_challenges(
             let response = client.list_challenges().await?;
             output::render_challenge_list(&response, output_format)
         }
-        ChallengesCommand::Show { challenge_id } => {
-            let response = client.get_challenge(&challenge_id).await?;
+        ChallengesCommand::Show { challenge_name } => {
+            let response = client.get_challenge(&challenge_name).await?;
             output::render_challenge_detail(&response, output_format)
         }
         ChallengesCommand::Stats {
-            challenge_id,
+            challenge_name,
             target,
             metric,
-        } => commands::challenge_stats(challenge_id, target, metric, output_format, settings).await,
+        } => {
+            commands::challenge_stats(challenge_name, target, metric, output_format, settings).await
+        }
     }
 }
 
@@ -149,7 +151,7 @@ async fn dispatch_challenge_creator(
             commands::challenge_draft(command, output_format, settings).await
         }
         ChallengeCreatorCommand::Stats {
-            challenge_id: _,
+            challenge_name: _,
             target: _,
         } => {
             anyhow::bail!(
@@ -157,7 +159,7 @@ async fn dispatch_challenge_creator(
             )
         }
         ChallengeCreatorCommand::Participants {
-            challenge_id: _,
+            challenge_name: _,
             target: _,
         } => {
             anyhow::bail!(
@@ -176,7 +178,7 @@ async fn dispatch_init_solution(
     settings: &ResolvedSettings,
 ) -> Result<String> {
     let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-    let challenge = client.get_challenge(&args.challenge_id).await?;
+    let challenge = client.get_challenge(&args.challenge_name).await?;
     let summary = workspace::init_solution_workspace(
         &challenge,
         args.dir,
@@ -194,12 +196,12 @@ async fn dispatch_submissions(
     let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
     match args.command {
         SubmissionsCommand::List {
-            challenge_id,
+            challenge_name,
             target,
             limit,
         } => {
             commands::list_public_solution_submissions(
-                challenge_id,
+                challenge_name,
                 target,
                 limit,
                 output_format,
@@ -254,7 +256,7 @@ async fn dispatch_submissions(
                 match client
                     .get_solution_submission_ranking_context(
                         &submission_id,
-                        &challenge_detail.challenge_id,
+                        &challenge_detail.challenge_name,
                         &target,
                     )
                     .await
@@ -266,7 +268,7 @@ async fn dispatch_submissions(
                         client
                             .get_public_solution_submission_ranking_context(
                                 &submission_id,
-                                &challenge_detail.challenge_id,
+                                &challenge_detail.challenge_name,
                                 &target,
                             )
                             .await?
@@ -277,7 +279,7 @@ async fn dispatch_submissions(
                 client
                     .get_public_solution_submission_ranking_context(
                         &submission_id,
-                        &challenge_detail.challenge_id,
+                        &challenge_detail.challenge_name,
                         &target,
                     )
                     .await?
@@ -295,10 +297,10 @@ async fn dispatch_leaderboard(
     let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
     match args.command {
         LeaderboardCommand::Show {
-            challenge_id,
+            challenge_name,
             target,
         } => {
-            let response = client.get_leaderboard(&challenge_id, &target).await?;
+            let response = client.get_leaderboard(&challenge_name, &target).await?;
             output::render_leaderboard(&response, output_format)
         }
     }
@@ -312,12 +314,12 @@ async fn dispatch_metrics(
     let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
     match args.command {
         MetricsCommand::Distribution {
-            challenge_id,
+            challenge_name,
             target,
             metric,
         } => {
             let response = client
-                .get_score_distribution(&challenge_id, &target, &metric)
+                .get_score_distribution(&challenge_name, &target, &metric)
                 .await?;
             output::render_score_distribution(&response, output_format)
         }

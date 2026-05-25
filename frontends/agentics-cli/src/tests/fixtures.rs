@@ -3,7 +3,6 @@ use super::*;
 /// Handles challenge detail json for this module.
 pub(super) fn challenge_detail_json(validation_enabled: bool) -> serde_json::Value {
     json!({
-        "challenge_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         "challenge_name": "sample-sum",
         "title": "Sample Sum",
         "summary": { "en": "Add numbers", "zh": "数字求和" },
@@ -106,7 +105,6 @@ pub(super) fn public_submission_list_json() -> serde_json::Value {
         "items": [
             {
                 "id": "11111111-1111-4111-8111-111111111111",
-                "challenge_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
                 "challenge_name": "sample-sum",
                 "target": "linux-arm64-cpu",
                 "challenge_title": "Sample Sum",
@@ -128,7 +126,6 @@ pub(super) fn public_submission_list_json() -> serde_json::Value {
 /// Handles leaderboard json for this module.
 pub(super) fn leaderboard_json() -> serde_json::Value {
     json!({
-        "challenge_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         "challenge_name": "sample-sum",
         "target": "linux-arm64-cpu",
         "items": [
@@ -149,7 +146,6 @@ pub(super) fn leaderboard_json() -> serde_json::Value {
 /// Handles score distribution json for this module.
 pub(super) fn score_distribution_json() -> serde_json::Value {
     json!({
-        "challenge_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         "challenge_name": "sample-sum",
         "target": "linux-arm64-cpu",
         "metric_name": "score",
@@ -171,7 +167,6 @@ pub(super) fn score_distribution_json() -> serde_json::Value {
 pub(super) fn solution_submission_json() -> serde_json::Value {
     json!({
         "id": "11111111-1111-4111-8111-111111111111",
-        "challenge_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         "challenge_name": "sample-sum",
         "challenge_title": "Sample Sum",
         "target": "linux-arm64-cpu",
@@ -230,7 +225,6 @@ pub(super) fn validation_only_solution_submission_json() -> serde_json::Value {
 /// Handles ranking context json for this module.
 pub(super) fn ranking_context_json() -> serde_json::Value {
     json!({
-        "challenge_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         "challenge_name": "sample-sum",
         "target": "linux-arm64-cpu",
         "solution_submission_id": "11111111-1111-4111-8111-111111111111",

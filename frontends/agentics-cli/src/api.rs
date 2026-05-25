@@ -4,8 +4,8 @@ use agentics_domain::models::challenge_creation::{
     ChallengeDraftCleanupResponse, ChallengeDraftResponse, ReviewChallengeDraftRequest,
     ValidateChallengeDraftRequest,
 };
-use agentics_domain::models::ids::{ChallengeDraftId, ChallengeId, SolutionSubmissionId};
-use agentics_domain::models::names::{MetricName, TargetName};
+use agentics_domain::models::ids::{ChallengeDraftId, SolutionSubmissionId};
+use agentics_domain::models::names::{ChallengeName, MetricName, TargetName};
 use agentics_domain::models::request::{
     CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse, LeaderboardResponse,
     PublicSolutionSubmissionListResponse, RankingContextResponse, RegisterAgentRequest,
@@ -87,9 +87,9 @@ impl ApiClient {
     /// Fetches challenge for the requested scope.
     pub(crate) async fn get_challenge(
         &self,
-        challenge_id: &ChallengeId,
+        challenge_name: &ChallengeName,
     ) -> Result<ChallengeDetailResponse> {
-        let path = format!("/api/public/challenges/{challenge_id}");
+        let path = format!("/api/public/challenges/{challenge_name}");
         self.get_json(&path, false).await
     }
 
@@ -132,12 +132,12 @@ impl ApiClient {
     /// Fetches public visible solution submissions for one challenge target.
     pub(crate) async fn list_public_solution_submissions(
         &self,
-        challenge_id: &ChallengeId,
+        challenge_name: &ChallengeName,
         target: &TargetName,
         limit: i64,
     ) -> Result<PublicSolutionSubmissionListResponse> {
         let path = format!(
-            "/api/public/challenges/{challenge_id}/solution-submissions?target={target}&limit={limit}"
+            "/api/public/challenges/{challenge_name}/solution-submissions?target={target}&limit={limit}"
         );
         self.get_json(&path, false).await
     }
@@ -184,11 +184,11 @@ impl ApiClient {
     pub(crate) async fn get_solution_submission_ranking_context(
         &self,
         solution_submission_id: &SolutionSubmissionId,
-        challenge_id: &ChallengeId,
+        challenge_name: &ChallengeName,
         target: &TargetName,
     ) -> Result<RankingContextResponse> {
         let path = format!(
-            "/api/agent/solution-submissions/{solution_submission_id}/ranking-context?challenge_id={challenge_id}&target={target}"
+            "/api/agent/solution-submissions/{solution_submission_id}/ranking-context?challenge_name={challenge_name}&target={target}"
         );
         self.get_json(&path, true).await
     }
@@ -197,11 +197,11 @@ impl ApiClient {
     pub(crate) async fn get_public_solution_submission_ranking_context(
         &self,
         solution_submission_id: &SolutionSubmissionId,
-        challenge_id: &ChallengeId,
+        challenge_name: &ChallengeName,
         target: &TargetName,
     ) -> Result<RankingContextResponse> {
         let path = format!(
-            "/api/public/solution-submissions/{solution_submission_id}/ranking-context?challenge_id={challenge_id}&target={target}"
+            "/api/public/solution-submissions/{solution_submission_id}/ranking-context?challenge_name={challenge_name}&target={target}"
         );
         self.get_json(&path, false).await
     }
@@ -223,22 +223,22 @@ impl ApiClient {
     /// Fetches leaderboard for the requested scope.
     pub(crate) async fn get_leaderboard(
         &self,
-        challenge_id: &ChallengeId,
+        challenge_name: &ChallengeName,
         target: &TargetName,
     ) -> Result<LeaderboardResponse> {
-        let path = format!("/api/public/challenges/{challenge_id}/leaderboard?target={target}");
+        let path = format!("/api/public/challenges/{challenge_name}/leaderboard?target={target}");
         self.get_json(&path, false).await
     }
 
     /// Fetches score distribution for the requested scope.
     pub(crate) async fn get_score_distribution(
         &self,
-        challenge_id: &ChallengeId,
+        challenge_name: &ChallengeName,
         target: &TargetName,
         metric_name: &MetricName,
     ) -> Result<ScoreDistributionResponse> {
         let path = format!(
-            "/api/public/challenges/{challenge_id}/score-distributions?target={target}&metric={metric_name}"
+            "/api/public/challenges/{challenge_name}/score-distributions?target={target}&metric={metric_name}"
         );
         self.get_json(&path, false).await
     }

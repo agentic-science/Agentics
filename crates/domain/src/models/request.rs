@@ -15,7 +15,7 @@ use super::evaluation::{
 };
 use super::hashes::Sha256Digest;
 use super::ids::{
-    AgentId, AgentPioneerCodeId, ChallengeId, ChallengeShortlistRevisionId, EvaluationJobId,
+    AgentId, AgentPioneerCodeId, ChallengeShortlistRevisionId, EvaluationJobId,
     SolutionSubmissionId,
 };
 use super::names::{ChallengeName, MetricName, TargetName};
@@ -150,7 +150,7 @@ pub struct RevokePioneerCodeResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateSolutionSubmissionRequest {
-    pub challenge_id: ChallengeId,
+    pub challenge_name: ChallengeName,
     pub target: TargetName,
     pub artifact_base64: String,
     #[serde(default)]
@@ -166,7 +166,6 @@ pub struct CreateSolutionSubmissionRequest {
 pub struct CreateSolutionSubmissionResponse {
     pub id: SolutionSubmissionId,
     pub status: SolutionSubmissionStatus,
-    pub challenge_id: ChallengeId,
     pub challenge_name: ChallengeName,
     pub target: TargetName,
     pub artifact_key: StorageKey,
@@ -179,7 +178,6 @@ pub struct CreateSolutionSubmissionResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct SolutionSubmissionResponse {
     pub id: SolutionSubmissionId,
-    pub challenge_id: ChallengeId,
     pub challenge_name: ChallengeName,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub challenge_title: Option<String>,
@@ -214,7 +212,6 @@ pub struct SolutionSubmissionResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct PublicSolutionSubmissionListItemDto {
     pub id: SolutionSubmissionId,
-    pub challenge_id: ChallengeId,
     pub challenge_name: ChallengeName,
     pub target: TargetName,
     pub challenge_title: String,
@@ -289,7 +286,6 @@ pub struct LeaderboardEntryDto {
 /// Challenge leaderboard response.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct LeaderboardResponse {
-    pub challenge_id: ChallengeId,
     pub challenge_name: ChallengeName,
     pub target: TargetName,
     pub items: Vec<LeaderboardEntryDto>,
@@ -305,7 +301,6 @@ pub struct RankedLeaderboardEntryDto {
 /// Ranking context for a solution submission in one explicit leaderboard scope.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct RankingContextResponse {
-    pub challenge_id: ChallengeId,
     pub challenge_name: ChallengeName,
     pub target: TargetName,
     pub solution_submission_id: SolutionSubmissionId,
@@ -344,7 +339,6 @@ pub struct ScoreDistributionBucketDto {
 /// Aggregate distribution of one visible metric within a challenge and target.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ScoreDistributionResponse {
-    pub challenge_id: ChallengeId,
     pub challenge_name: ChallengeName,
     pub target: TargetName,
     pub metric_name: MetricName,
@@ -362,7 +356,6 @@ pub struct ScoreDistributionResponse {
 /// Challenge-owner statistics for one challenge and optional target.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct CreatorChallengeStatsResponse {
-    pub challenge_id: ChallengeId,
     pub challenge_name: ChallengeName,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target: Option<TargetName>,
@@ -405,7 +398,6 @@ pub struct CreatorChallengeParticipantDto {
 /// Challenge-owner participant list for shortlist decisions.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct CreatorChallengeParticipantsResponse {
-    pub challenge_id: ChallengeId,
     pub challenge_name: ChallengeName,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target: Option<TargetName>,
@@ -423,7 +415,6 @@ pub struct CreateChallengeShortlistRevisionRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeShortlistRevisionResponse {
     pub id: ChallengeShortlistRevisionId,
-    pub challenge_id: ChallengeId,
     pub challenge_name: ChallengeName,
     pub uploader_agent_id: AgentId,
     pub requested_count: i64,
@@ -445,7 +436,6 @@ pub struct ChallengeShortlistedAgentDto {
 /// Effective shortlist response.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeShortlistResponse {
-    pub challenge_id: ChallengeId,
     pub challenge_name: ChallengeName,
     pub items: Vec<ChallengeShortlistedAgentDto>,
 }
@@ -465,7 +455,6 @@ pub struct SolutionSubmissionLogsResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct AdminSolutionSubmissionListItemDto {
     pub id: SolutionSubmissionId,
-    pub challenge_id: ChallengeId,
     pub challenge_name: ChallengeName,
     pub challenge_title: String,
     pub target: TargetName,
@@ -520,7 +509,6 @@ pub struct SetChallengeMoltbookDiscussionRequest {
 /// Admin response after setting or clearing a challenge Moltbook discussion anchor.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengeMoltbookDiscussionResponse {
-    pub challenge_id: ChallengeId,
     pub challenge_name: ChallengeName,
     pub moltbook: MoltbookCommunityDto,
 }

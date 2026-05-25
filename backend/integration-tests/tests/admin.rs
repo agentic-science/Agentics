@@ -4,7 +4,7 @@ mod helpers;
 
 use agentics_config::Config;
 use helpers::{
-    api_url, examples_challenges_root, published_challenge_id, spawn_app, spawn_app_with_config,
+    api_url, examples_challenges_root, published_challenge_name, spawn_app, spawn_app_with_config,
     test_config,
 };
 
@@ -117,7 +117,7 @@ async fn admin_manages_challenge_moltbook_discussion_anchor(pool: sqlx::PgPool) 
         config.expose_admin_password_for_http_basic(),
     );
     let client = reqwest::Client::new();
-    let sample_sum_id = published_challenge_id(&pool, "sample-sum").await;
+    let sample_sum_id = published_challenge_name(&pool, "sample-sum").await;
 
     let response: serde_json::Value = client
         .post(api_url(
@@ -174,7 +174,7 @@ async fn admin_manages_challenge_moltbook_discussion_anchor(pool: sqlx::PgPool) 
         .as_array()
         .expect("challenge list items should be an array")
         .iter()
-        .find(|item| item["challenge_id"] == sample_sum_id.as_str())
+        .find(|item| item["challenge_name"] == sample_sum_id.as_str())
         .expect("sample-sum should be listed");
     assert_eq!(
         listed_sample_sum["moltbook_discussion_url"],
@@ -443,7 +443,7 @@ async fn admin_official_run_rejects_submission_with_active_job(pool: sqlx::PgPoo
         config.expose_admin_password_for_http_basic(),
     );
     let client = reqwest::Client::new();
-    let sample_sum_id = published_challenge_id(&pool, "sample-sum").await;
+    let sample_sum_id = published_challenge_name(&pool, "sample-sum").await;
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
@@ -461,7 +461,7 @@ async fn admin_official_run_rejects_submission_with_active_job(pool: sqlx::PgPoo
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": &sample_sum_id,
+            "challenge_name": &sample_sum_id,
             "target": "linux-arm64-cpu",
             "artifact_base64": helpers::solution_zip_base64(&helpers::sample_sum_solution("payload['a'] + payload['b']")),
             "explanation": "fills official queue"
@@ -476,7 +476,7 @@ async fn admin_official_run_rejects_submission_with_active_job(pool: sqlx::PgPoo
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": &sample_sum_id,
+            "challenge_name": &sample_sum_id,
             "target": "linux-arm64-cpu",
             "artifact_base64": helpers::solution_zip_base64(&helpers::sample_sum_solution("payload['a'] + payload['b']")),
             "explanation": "admin promotes this validation run"
@@ -514,7 +514,7 @@ async fn admin_official_run_rejects_submission_with_active_job(pool: sqlx::PgPoo
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": &sample_sum_id,
+            "challenge_name": &sample_sum_id,
             "target": "linux-arm64-cpu",
             "artifact_base64": "not-base64",
             "explanation": "public official run should still be rejected"

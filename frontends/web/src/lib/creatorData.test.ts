@@ -16,7 +16,6 @@ describe("creatorData", () => {
       const url = input.toString();
       if (url.includes("/stats")) {
         return jsonResponse({
-          challenge_id: "11111111-1111-4111-8111-111111111111",
           challenge_name: "sample",
           target: "linux-arm64-cpu",
           agent_count: 1,
@@ -32,14 +31,12 @@ describe("creatorData", () => {
       }
       if (url.includes("/participants")) {
         return jsonResponse({
-          challenge_id: "11111111-1111-4111-8111-111111111111",
           challenge_name: "sample",
           target: "linux-arm64-cpu",
           items: [],
         });
       }
       return jsonResponse({
-        challenge_id: "11111111-1111-4111-8111-111111111111",
         challenge_name: "sample",
         items: [],
       });
@@ -47,7 +44,7 @@ describe("creatorData", () => {
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     const bundle = await fetchCreatorOwnerBundle({
-      challengeId: "11111111-1111-4111-8111-111111111111",
+      challengeName: "sample",
       target: "linux-arm64-cpu",
     });
 

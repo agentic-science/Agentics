@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use super::{
     AdminAuth, AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto,
     AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse, AgentId,
-    AgentPioneerCodeId, AgentStatus, AppState, ChallengeId, CreatePioneerCodeRequest,
+    AgentPioneerCodeId, AgentStatus, AppState, ChallengeName, CreatePioneerCodeRequest,
     DisableAgentResponse, EvaluationJobResponse, EvaluationJobStatus, Json, Path, PioneerCode,
     PioneerCodeDetailResponse, PioneerCodeListResponse, PioneerCodeStatus,
     QueueEvaluationJobRequest, Result, RevokePioneerCodeResponse, SUBMISSION_QUOTA_WINDOW_SECONDS,
@@ -172,15 +172,15 @@ pub async fn list_admin_challenges(
 pub async fn set_challenge_moltbook_discussion(
     _admin: AdminAuth,
     State(state): State<AppState>,
-    Path(id): Path<String>,
+    Path(challenge_name): Path<String>,
     ValidatedJson(body): ValidatedJson<SetChallengeMoltbookDiscussionRequest>,
 ) -> Result<Json<ChallengeMoltbookDiscussionResponse>> {
-    let challenge_id = parse_request_value::<ChallengeId>(&id)?;
+    let challenge_name = parse_request_value::<ChallengeName>(&challenge_name)?;
     Ok(Json(
         challenge_metadata::set_challenge_moltbook_discussion(
             &state.db,
             &state.config,
-            &challenge_id,
+            &challenge_name,
             &body.discussion_url,
         )
         .await?,
@@ -191,14 +191,14 @@ pub async fn set_challenge_moltbook_discussion(
 pub async fn clear_challenge_moltbook_discussion(
     _admin: AdminAuth,
     State(state): State<AppState>,
-    Path(id): Path<String>,
+    Path(challenge_name): Path<String>,
 ) -> Result<Json<ChallengeMoltbookDiscussionResponse>> {
-    let challenge_id = parse_request_value::<ChallengeId>(&id)?;
+    let challenge_name = parse_request_value::<ChallengeName>(&challenge_name)?;
     Ok(Json(
         challenge_metadata::clear_challenge_moltbook_discussion(
             &state.db,
             &state.config,
-            &challenge_id,
+            &challenge_name,
         )
         .await?,
     ))

@@ -145,11 +145,6 @@ define_uuid_id_type!(
     "agent_pioneer_code_id must be a canonical UUID string"
 );
 define_uuid_id_type!(
-    ChallengeId,
-    "ChallengeId",
-    "challenge_id must be a canonical UUID string"
-);
-define_uuid_id_type!(
     ChallengeDraftId,
     "ChallengeDraftId",
     "challenge_draft_id must be a canonical UUID string"
@@ -197,7 +192,7 @@ define_uuid_id_type!(
 
 #[cfg(test)]
 mod tests {
-    use super::{AgentId, AgentTokenId, ChallengeDraftId, ChallengeId, SolutionSubmissionId};
+    use super::{AgentId, AgentTokenId, ChallengeDraftId, SolutionSubmissionId};
 
     /// Verifies that validates solution submission ids.
     #[test]
@@ -210,7 +205,6 @@ mod tests {
         assert!(SolutionSubmissionId::try_new("submission-1").is_err());
         assert!(SolutionSubmissionId::try_new(" f47ac10b-58cc-4372-a567-0e02b2c3d479").is_err());
         assert!(SolutionSubmissionId::try_new("f47ac10b58cc4372a5670e02b2c3d479").is_err());
-        assert!(ChallengeId::try_new(valid).is_ok());
     }
 
     /// Verifies that serde rejects invalid solution submission ids.

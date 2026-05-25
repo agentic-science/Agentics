@@ -4,7 +4,6 @@ mod helpers;
 
 use agentics_config::WorkerAccelerators;
 use agentics_domain::models::challenge::ChallengeExecutionMode;
-use agentics_domain::models::ids::ChallengeId;
 use agentics_domain::storage::StorageKey;
 use agentics_storage::{StorageWriteIntent, build_storage, pack_directory_to_tar};
 use helpers::{
@@ -40,11 +39,12 @@ async fn dgx_cuda_smoke_completes_official_result_and_leaderboard(pool: sqlx::Pg
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     publish_cuda_smoke_challenge(&pool, &config, &private_bundle, &public_bundle).await;
     let client = reqwest::Client::new();
-    let cuda_challenge_id: String =
-        sqlx::query_scalar("SELECT challenge_id::text FROM challenges WHERE name = 'cuda-smoke'")
-            .fetch_one(&pool)
-            .await
-            .expect("CUDA smoke challenge id should exist");
+    let cuda_challenge_name: String = sqlx::query_scalar(
+        "SELECT challenge_name::text FROM challenges WHERE challenge_name = 'cuda-smoke'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("CUDA smoke challenge name should exist");
 
     let registration: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
@@ -64,7 +64,7 @@ async fn dgx_cuda_smoke_completes_official_result_and_leaderboard(pool: sqlx::Pg
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": &cuda_challenge_id,
+            "challenge_name": &cuda_challenge_name,
             "target": CUDA_TARGET,
             "artifact_base64": cuda_solution_zip_base64(),
             "explanation": "DGX CUDA validation smoke"
@@ -110,7 +110,7 @@ async fn dgx_cuda_smoke_completes_official_result_and_leaderboard(pool: sqlx::Pg
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": &cuda_challenge_id,
+            "challenge_name": &cuda_challenge_name,
             "target": CUDA_TARGET,
             "artifact_base64": cuda_solution_zip_base64(),
             "explanation": "DGX CUDA official smoke"
@@ -156,7 +156,7 @@ async fn dgx_cuda_smoke_completes_official_result_and_leaderboard(pool: sqlx::Pg
         .get(api_url(
             &app,
             &format!(
-                "/api/public/challenges/{cuda_challenge_id}/leaderboard?target=linux-arm64-cuda"
+                "/api/public/challenges/{cuda_challenge_name}/leaderboard?target=linux-arm64-cuda"
             ),
         ))
         .send()
@@ -249,7 +249,6 @@ async fn publish_cuda_smoke_challenge(
     agentics_persistence::Repositories::new(pool)
         .challenges()
         .publish(&agentics_persistence::PublishChallengeInput {
-            challenge_id: &ChallengeId::generate(),
             challenge_name: &spec.challenge_name,
             bundle_key: &private_key,
             public_bundle_key: &public_key,

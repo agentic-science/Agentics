@@ -62,9 +62,10 @@ evaluator packages, secrets, `.env` files, private keys, or symlinks.
 ## Lifecycle Manifest
 
 `agentics.challenge.json` declares the requested lifecycle action.
-Drafts are addressed by `draft_id` and proposed `challenge_name`. A generated
-`challenge_id` does not exist until an approved draft is successfully published;
-do not put challenge IDs in challenge repositories or bundles.
+Drafts are addressed by `draft_id` and proposed `challenge_name`. The proposed
+challenge name becomes the published challenge handle after approval and
+publication; do not put generated platform IDs in challenge repositories or
+bundles.
 
 New challenge:
 

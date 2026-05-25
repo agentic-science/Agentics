@@ -11,7 +11,7 @@ use agentics_domain::models::ids::{EvaluationId, EvaluationJobId, SolutionSubmis
 use agentics_domain::models::names::MetricName;
 use agentics_persistence::{MarkEvaluationStartedInput, PersistedEvaluationResult};
 use helpers::{
-    api_url, examples_challenges_root, published_challenge_id, sample_sum_solution,
+    api_url, examples_challenges_root, published_challenge_name, sample_sum_solution,
     solution_zip_base64, spawn_app_with_config, test_config,
 };
 
@@ -39,7 +39,7 @@ async fn stale_running_job_fails_after_max_attempts(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": published_challenge_id(&pool, "sample-sum").await,
+            "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "stale job"
@@ -119,7 +119,7 @@ async fn refreshed_job_lease_is_not_reaped(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": published_challenge_id(&pool, "sample-sum").await,
+            "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "lease refresh"
@@ -208,7 +208,7 @@ async fn evaluation_rows_cannot_cross_submission_targets(pool: sqlx::PgPool) {
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": published_challenge_id(&pool, "sample-sum").await,
+            "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "target consistency"
@@ -233,7 +233,7 @@ async fn evaluation_rows_cannot_cross_submission_targets(pool: sqlx::PgPool) {
     let wrong_target_job = sqlx::query(
         r#"
         INSERT INTO evaluation_jobs (
-            id, solution_submission_id, challenge_id, target, required_accelerator, eval_type, status, payload_json
+            id, solution_submission_id, challenge_name, target, required_accelerator, eval_type, status, payload_json
         )
         VALUES (
             $1::uuid, $2::uuid, $3::uuid, 'linux-amd64-cpu', 'none', 'official', 'queued', '{}'::jsonb
@@ -242,7 +242,7 @@ async fn evaluation_rows_cannot_cross_submission_targets(pool: sqlx::PgPool) {
     )
     .bind(uuid::Uuid::new_v4().to_string())
     .bind(solution_submission_id)
-    .bind(published_challenge_id(&pool, "sample-sum").await)
+    .bind(published_challenge_name(&pool, "sample-sum").await)
     .execute(&pool)
     .await;
     assert!(
@@ -279,7 +279,9 @@ async fn worker_accelerator_capability_filters_job_claims(pool: sqlx::PgPool) {
     let gpu_submission_id = uuid::Uuid::new_v4().to_string();
     let cpu_job_id = uuid::Uuid::new_v4().to_string();
     let gpu_job_id = uuid::Uuid::new_v4().to_string();
-    let accelerator_challenge_id = agentics_domain::models::ids::ChallengeId::generate();
+    let accelerator_challenge_name =
+        agentics_domain::models::names::ChallengeName::try_new("accelerator-claim".to_string())
+            .expect("accelerator-claim name is valid");
 
     sqlx::query(
         r#"
@@ -295,11 +297,10 @@ async fn worker_accelerator_capability_filters_job_claims(pool: sqlx::PgPool) {
     sqlx::query(
         r#"
         INSERT INTO challenges (
-            challenge_id, name, title, bundle_key, public_bundle_key, statement_key, spec_json
+            challenge_name, title, bundle_key, public_bundle_key, statement_key, spec_json
         )
         VALUES (
-            $1::uuid,
-            'accelerator-claim',
+            $1,
             'Accelerator Claim',
             'challenge-bundles/accelerator-claim/test.tar',
             'challenge-public-bundles/accelerator-claim/test.tar',
@@ -308,7 +309,7 @@ async fn worker_accelerator_capability_filters_job_claims(pool: sqlx::PgPool) {
         )
         "#,
     )
-    .bind(accelerator_challenge_id.as_str())
+    .bind(accelerator_challenge_name.as_str())
     .execute(&pool)
     .await
     .expect("challenge should insert");
@@ -320,15 +321,15 @@ async fn worker_accelerator_capability_filters_job_claims(pool: sqlx::PgPool) {
         sqlx::query(
             r#"
             INSERT INTO solution_submissions (
-                id, challenge_id, target, agent_id, artifact_key, status
+                id, challenge_name, target, agent_id, artifact_key, status
             )
             VALUES (
-                $1::uuid, $2::uuid, $3, $4::uuid, $5, 'queued'
+                $1::uuid, $2, $3, $4::uuid, $5, 'queued'
             )
             "#,
         )
         .bind(submission_id)
-        .bind(accelerator_challenge_id.as_str())
+        .bind(accelerator_challenge_name.as_str())
         .bind(target)
         .bind(&agent_id)
         .bind(format!("artifacts/{submission_id}.zip"))
@@ -357,25 +358,24 @@ async fn worker_accelerator_capability_filters_job_claims(pool: sqlx::PgPool) {
             "artifact_key": format!("artifacts/{submission_id}.zip"),
             "bundle_key": format!("challenge-bundles/{target}.tar"),
             "public_bundle_key": format!("challenge-public-bundles/{target}.tar"),
-            "challenge_id": accelerator_challenge_id.as_str(),
-            "challenge_name": "accelerator-claim",
+            "challenge_name": accelerator_challenge_name.as_str(),
             "target": target,
         });
         sqlx::query(
             r#"
             INSERT INTO evaluation_jobs (
-                id, solution_submission_id, challenge_id, target,
+                id, solution_submission_id, challenge_name, target,
                 required_accelerator, eval_type, status, priority, payload_json
             )
             VALUES (
-                $1::uuid, $2::uuid, $3::uuid, $4,
+                $1::uuid, $2::uuid, $3, $4,
                 $5, 'validation', 'queued', $6, $7
             )
             "#,
         )
         .bind(job_id)
         .bind(submission_id)
-        .bind(accelerator_challenge_id.as_str())
+        .bind(accelerator_challenge_name.as_str())
         .bind(target)
         .bind(required_accelerator)
         .bind(priority)
@@ -439,7 +439,7 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": published_challenge_id(&pool, "sample-sum").await,
+            "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "stale worker finish"
@@ -652,7 +652,7 @@ async fn losing_official_submission_does_not_overwrite_leaderboard_best_metadata
         r#"
         SELECT best_solution_submission_id::text AS best_solution_submission_id, best_rank_score, official_metrics_json
         FROM leaderboard_entries
-        WHERE challenge_id = $2::uuid
+        WHERE challenge_name = $2
           AND target = 'linux-arm64-cpu'
           AND agent_id = $1::uuid
         "#,
@@ -662,7 +662,7 @@ async fn losing_official_submission_does_not_overwrite_leaderboard_best_metadata
             .as_str()
             .expect("missing agent id"),
     )
-    .bind(published_challenge_id(&pool, "sample-sum").await)
+    .bind(published_challenge_name(&pool, "sample-sum").await)
     .fetch_one(&pool)
     .await
     .expect("failed to query leaderboard entry");
@@ -730,7 +730,7 @@ async fn concurrent_official_completions_keep_best_leaderboard_result(pool: sqlx
         r#"
         SELECT best_solution_submission_id::text AS best_solution_submission_id, best_rank_score
         FROM leaderboard_entries
-        WHERE challenge_id = $2::uuid
+        WHERE challenge_name = $2
           AND target = 'linux-arm64-cpu'
           AND agent_id = $1::uuid
         "#,
@@ -740,7 +740,7 @@ async fn concurrent_official_completions_keep_best_leaderboard_result(pool: sqlx
             .as_str()
             .expect("missing agent id"),
     )
-    .bind(published_challenge_id(&pool, "sample-sum").await)
+    .bind(published_challenge_name(&pool, "sample-sum").await)
     .fetch_one(&pool)
     .await
     .expect("failed to query leaderboard entry");
@@ -831,7 +831,7 @@ async fn create_official_submission(
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": published_challenge_id(pool, "sample-sum").await,
+            "challenge_name": published_challenge_name(pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": explanation

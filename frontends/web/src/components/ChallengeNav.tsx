@@ -6,15 +6,15 @@ import { useTranslations } from "next-intl";
 
 /** Renders the challenge nav component. */
 export function ChallengeNav({
-  challengeId,
+  challengeName,
   defaultTarget,
 }: {
-  challengeId: string;
+  challengeName: string;
   defaultTarget: string;
 }) {
   const pathname = usePathname();
   const t = useTranslations("challenge");
-  const base = `/challenges/${challengeId}`;
+  const base = `/challenges/${challengeName}`;
 
   const tabs = [
     { href: base, label: t("overview"), end: true },

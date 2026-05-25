@@ -5,14 +5,14 @@ use agentics_config::WorkerAccelerators;
 use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge::{ChallengeBundleSpec, TargetAccelerator};
 use agentics_domain::models::evaluation::{EvaluationJobPayload, ScoringMode};
-use agentics_domain::models::ids::{ChallengeId, EvaluationJobId, SolutionSubmissionId};
+use agentics_domain::models::ids::{EvaluationJobId, SolutionSubmissionId};
 use agentics_domain::models::names::{ChallengeName, TargetName};
 
 use super::evaluation_policy::{
     ensure_challenge_supports_eval_type_tx, ensure_validation_uses_public_bundle,
 };
 use super::ids::{
-    agent_id_from_row, challenge_id_from_row, challenge_name_from_row, evaluation_job_id_from_row,
+    agent_id_from_row, challenge_name_from_row, evaluation_job_id_from_row,
     solution_submission_id_from_row, target_from_row,
 };
 use super::leaderboard::repair_leaderboard_entry_for_solution_submission_tx;
@@ -22,7 +22,6 @@ use super::leaderboard::repair_leaderboard_entry_for_solution_submission_tx;
 pub struct EvaluationJobRecord {
     pub id: EvaluationJobId,
     pub solution_submission_id: SolutionSubmissionId,
-    pub challenge_id: ChallengeId,
     pub challenge_name: ChallengeName,
     pub target: TargetName,
     pub required_accelerator: TargetAccelerator,
@@ -60,7 +59,7 @@ pub async fn claim_next_evaluation_job(
         SET status = 'running', claimed_at = NOW(), worker_id = $1, attempt_count = j.attempt_count + 1
         FROM next_job
         WHERE j.id = next_job.id
-        RETURNING j.id, j.solution_submission_id, j.challenge_id, j.target, j.required_accelerator, j.eval_type, j.status, j.attempt_count, j.payload_json
+        RETURNING j.id, j.solution_submission_id, j.challenge_name, j.target, j.required_accelerator, j.eval_type, j.status, j.attempt_count, j.payload_json
         "#
     )
     .bind(worker_id)
@@ -99,7 +98,6 @@ pub async fn claim_next_evaluation_job(
     Ok(Some(EvaluationJobRecord {
         id: evaluation_job_id_from_row(&r, "id")?,
         solution_submission_id,
-        challenge_id: challenge_id_from_row(&r, "challenge_id")?,
         challenge_name: payload.challenge_name.clone(),
         target: target_from_row(&r, "target")?,
         required_accelerator: required_accelerator_from_row(&r, "required_accelerator")?,
@@ -289,10 +287,10 @@ pub async fn queue_evaluation_job(
 
     let row = sqlx::query(
         r#"
-        SELECT s.id, s.challenge_id, p.name AS challenge_name, s.target, s.agent_id::text AS agent_id, s.artifact_key, s.visible_after_eval,
+        SELECT s.id, s.challenge_name, s.target, s.agent_id::text AS agent_id, s.artifact_key, s.visible_after_eval,
                p.bundle_key, p.public_bundle_key, p.spec_json
         FROM solution_submissions s
-        JOIN challenges p ON p.challenge_id = s.challenge_id
+        JOIN challenges p ON p.challenge_name = s.challenge_name
         WHERE s.id = $1::uuid
           AND p.status = 'active'
           AND p.spec_json IS NOT NULL
@@ -311,11 +309,10 @@ pub async fn queue_evaluation_job(
         serde_json::from_value(spec_json).map_err(|e| ServiceError::Internal(e.to_string()))?;
 
     let target = target_from_row(&row, "target")?;
-    let challenge_id = challenge_id_from_row(&row, "challenge_id")?;
     let challenge_name = challenge_name_from_row(&row, "challenge_name")?;
     ensure_challenge_supports_eval_type_tx(
         &mut tx,
-        &challenge_id,
+        &challenge_name,
         &spec,
         &target,
         input.eval_type,
@@ -331,7 +328,6 @@ pub async fn queue_evaluation_job(
         artifact_key: storage_key_from_row(&row, "artifact_key")?,
         bundle_key,
         public_bundle_key,
-        challenge_id: Some(challenge_id.clone()),
         challenge_name: challenge_name.clone(),
         target: target.clone(),
     })
@@ -356,13 +352,13 @@ pub async fn queue_evaluation_job(
 
     sqlx::query(
         r#"
-        INSERT INTO evaluation_jobs (id, solution_submission_id, challenge_id, target, required_accelerator, eval_type, status, priority, payload_json)
-        VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, 'queued', $7, $8)
+        INSERT INTO evaluation_jobs (id, solution_submission_id, challenge_name, target, required_accelerator, eval_type, status, priority, payload_json)
+        VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, 'queued', $7, $8)
         "#
     )
     .bind(input.job_id.as_str())
     .bind(input.solution_submission_id.as_str())
-    .bind(challenge_id.as_str())
+    .bind(challenge_name.as_str())
     .bind(target.as_str())
     .bind(required_accelerator.as_str())
     .bind(eval_type_str)
@@ -393,7 +389,6 @@ pub async fn queue_evaluation_job(
     Ok(EvaluationJobRecord {
         id: input.job_id.clone(),
         solution_submission_id: solution_submission_id_from_row(&row, "id")?,
-        challenge_id,
         challenge_name,
         target,
         required_accelerator,

@@ -44,20 +44,19 @@ pub async fn create_solution_submission(
         eval_type,
     } = request;
     let repos = Repositories::new(pool);
-    let challenge_id = body.challenge_id;
+    let challenge_name = body.challenge_name;
     let target = body.target.clone();
     let admission = repos
         .challenges()
-        .ensure_supports_eval_type(&challenge_id, &target, eval_type, &agent_id)
+        .ensure_supports_eval_type(&challenge_name, &target, eval_type, &agent_id)
         .await?;
-    let canonical_challenge_id = admission.challenge_id.clone();
     let canonical_challenge_name = admission.challenge_name.clone();
     let challenge_lifetime_limit = challenge_lifetime_limit(&admission, eval_type);
     ensure_submission_quota_available(
         pool,
         config,
         &agent_id,
-        &canonical_challenge_id,
+        &canonical_challenge_name,
         &target,
         eval_type,
         challenge_lifetime_limit,
@@ -68,7 +67,7 @@ pub async fn create_solution_submission(
         .ensure_parent_matches_scope(
             body.parent_solution_submission_id.as_ref(),
             &agent_id,
-            &canonical_challenge_id,
+            &canonical_challenge_name,
             &target,
         )
         .await?;
@@ -106,7 +105,6 @@ pub async fn create_solution_submission(
             solution_submission_id: solution_submission_id.clone(),
             job_id: job_id.clone(),
             agent_id,
-            challenge_id: canonical_challenge_id,
             challenge_name: canonical_challenge_name,
             target,
             artifact_key: artifact_key.clone(),
@@ -195,7 +193,7 @@ async fn ensure_submission_quota_available(
     pool: &sqlx::PgPool,
     config: &Config,
     agent_id: &AgentId,
-    challenge_id: &agentics_domain::models::ids::ChallengeId,
+    challenge_name: &agentics_domain::models::names::ChallengeName,
     target: &TargetName,
     eval_type: ScoringMode,
     challenge_lifetime_limit: Option<i64>,
@@ -209,7 +207,7 @@ async fn ensure_submission_quota_available(
         .solution_submissions()
         .count_recent_runs_for_agent_challenge(
             agent_id,
-            challenge_id,
+            challenge_name,
             target,
             eval_type,
             SUBMISSION_QUOTA_WINDOW_SECONDS,
@@ -218,7 +216,7 @@ async fn ensure_submission_quota_available(
 
     if used >= limit {
         return Err(ServiceError::TooManyRequests(format!(
-            "{} quota exceeded for challenge `{challenge_id}`: {used} of {limit} runs used in the last 24 hours",
+            "{} quota exceeded for challenge `{challenge_name}`: {used} of {limit} runs used in the last 24 hours",
             eval_type.as_str()
         )));
     }
@@ -226,11 +224,11 @@ async fn ensure_submission_quota_available(
     if let Some(limit) = challenge_lifetime_limit {
         let used = repos
             .solution_submissions()
-            .count_lifetime_runs_for_agent_challenge(agent_id, challenge_id, target, eval_type)
+            .count_lifetime_runs_for_agent_challenge(agent_id, challenge_name, target, eval_type)
             .await?;
         if used >= limit {
             return Err(ServiceError::TooManyRequests(format!(
-                "{} challenge limit exceeded for challenge `{challenge_id}`: {used} of {limit} lifetime runs used",
+                "{} challenge limit exceeded for challenge `{challenge_name}`: {used} of {limit} lifetime runs used",
                 eval_type.as_str()
             )));
         }

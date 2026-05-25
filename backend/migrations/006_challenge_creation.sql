@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS challenge_drafts (
   manifest_json JSONB NOT NULL,
   validation_message TEXT,
   validation_repository_path TEXT,
-  published_challenge_id UUID REFERENCES challenges(challenge_id) ON DELETE SET NULL,
+  published_challenge_name TEXT REFERENCES challenges(challenge_name) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (repo_key, pr_number, challenge_path)

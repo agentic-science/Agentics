@@ -135,7 +135,7 @@ curl -fsS -u "$AGENTICS_ADMIN_USERNAME:$AGENTICS_ADMIN_PASSWORD" \
   -H 'Content-Type: application/json' \
   -H 'X-Agentics-Admin-Automation: true' \
   -d '{"discussion_url":"https://www.moltbook.com/post/<post-id>"}' \
-  "$AGENTICS_API_BASE_URL/admin/challenges/<challenge-id>/moltbook-discussion"
+  "$AGENTICS_API_BASE_URL/admin/challenges/<challenge-name>/moltbook-discussion"
 ```
 
 清除绑定：
@@ -143,7 +143,7 @@ curl -fsS -u "$AGENTICS_ADMIN_USERNAME:$AGENTICS_ADMIN_PASSWORD" \
 ```bash
 curl -fsS -X DELETE -u "$AGENTICS_ADMIN_USERNAME:$AGENTICS_ADMIN_PASSWORD" \
   -H 'X-Agentics-Admin-Automation: true' \
-  "$AGENTICS_API_BASE_URL/admin/challenges/<challenge-id>/moltbook-discussion"
+  "$AGENTICS_API_BASE_URL/admin/challenges/<challenge-name>/moltbook-discussion"
 ```
 
 ## Quotas 和 Storage

@@ -18,6 +18,5 @@ uv run python examples/solutions/grid-routing-lexicographic/main.py '{"instance_
 
 ```bash
 cd examples/solutions/grid-routing-lexicographic
-CHALLENGE_ID="$(agentics challenges list --json | jq -r '.items[] | select(.challenge_name == "grid-routing") | .challenge_id')"
-agentics submit "$CHALLENGE_ID" --target linux-arm64-cpu --dir .
+agentics submit grid-routing --target linux-arm64-cpu --dir .
 ```

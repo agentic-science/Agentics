@@ -3,7 +3,7 @@
 mod helpers;
 
 use helpers::{
-    api_url, examples_challenges_root, published_challenge_id, run_worker_once,
+    api_url, examples_challenges_root, published_challenge_name, run_worker_once,
     sample_sum_solution, solution_zip_base64, spawn_app_with_config, test_config,
 };
 
@@ -32,7 +32,7 @@ async fn worker_keeps_failed_validation_run_logs_when_artifact_is_missing(pool: 
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
-            "challenge_id": published_challenge_id(&pool, "sample-sum").await,
+            "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
             "artifact_base64": artifact_base64,
             "explanation": "validation eval failure test"
