@@ -55,7 +55,7 @@ pub const ENV_DGX_PROBE_SLOT_CLASS_MB: &str = "AGENTICS_DGX_PROBE_SLOT_CLASS_MB"
 pub const ENV_DGX_RUN_MUTATING_PROBES: &str = "AGENTICS_DGX_RUN_MUTATING_PROBES";
 pub const ENV_DGX_RUN_DOCKER_SMOKE: &str = "AGENTICS_DGX_RUN_DOCKER_SMOKE";
 pub const ENV_DGX_CUDA_IMAGE: &str = "AGENTICS_DGX_CUDA_IMAGE";
-pub const ENV_DOCKER_HOST: &str = "AGENTICS_DOCKER_HOST";
+pub use crate::support::{ENV_DOCKER_HOST, ENV_DOCKER_SOCKET_PATH};
 pub const ENV_RUNNER_RUNTIME_ROOT: &str = "AGENTICS_RUNNER_RUNTIME_ROOT";
 pub const ENV_RUNNER_PHASE_MOUNT_ROOT: &str = "AGENTICS_RUNNER_PHASE_MOUNT_ROOT";
 pub const ENV_RUNNER_WRITABLE_SLOT_CLASSES_MB: &str = "AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB";
@@ -305,6 +305,7 @@ pub struct DgxProfileCheckConfig {
     pub phase_slot_inodes_per_mb: u64,
     pub phase_slots_per_class: u64,
     pub docker_host_uri: String,
+    pub expected_docker_host_uri: String,
     pub probe_image: String,
     pub pull_policy: DockerPullPolicy,
     pub phases: Vec<DgxPhase>,
@@ -362,6 +363,9 @@ impl DgxProfileCheckConfig {
             )?,
             docker_host_uri: support::env_non_empty(ENV_DOCKER_HOST)
                 .unwrap_or_else(|| DEFAULT_DOCKER_HOST_URI.to_string()),
+            expected_docker_host_uri: expected_profile_docker_host_uri(
+                support::env_non_empty(ENV_DOCKER_SOCKET_PATH).as_deref(),
+            ),
             probe_image: support::env_non_empty(ENV_DGX_PROBE_IMAGE)
                 .unwrap_or_else(|| DEFAULT_PROBE_IMAGE.to_string()),
             pull_policy: support::env_non_empty(ENV_DGX_DOCKER_PULL_POLICY)
@@ -375,6 +379,18 @@ impl DgxProfileCheckConfig {
             state_root,
         })
     }
+}
+
+/// Resolve the Docker host URI expected by the profile checker.
+pub fn expected_profile_docker_host_uri(socket_path: Option<&str>) -> String {
+    socket_path
+        .map(docker_host_uri_for_socket_path)
+        .unwrap_or_else(|| DEFAULT_DOCKER_HOST_URI.to_string())
+}
+
+/// Convert a Unix Docker socket path into the URI format accepted by Bollard.
+pub fn docker_host_uri_for_socket_path(socket_path: &str) -> String {
+    format!("unix://{socket_path}")
 }
 
 /// DGX systemd profile configuration.
@@ -602,7 +618,9 @@ pub enum DgxConfigError {
 #[cfg(test)]
 mod tests {
     use super::{
-        DgxPhase, DockerPullPolicy, SlotMetadata, parse_phases, parse_slot_classes, slot_name,
+        DEFAULT_DOCKER_HOST_URI, DgxPhase, DockerPullPolicy, SlotMetadata,
+        docker_host_uri_for_socket_path, expected_profile_docker_host_uri, parse_phases,
+        parse_slot_classes, slot_name,
     };
 
     /// Verifies phase parsing is typed and deduplicated.
@@ -634,6 +652,23 @@ mod tests {
             DockerPullPolicy::Never
         );
         assert!("sometimes".parse::<DockerPullPolicy>().is_err());
+    }
+
+    /// Verifies the profile checker can expect the production Compose host socket.
+    #[test]
+    fn resolves_expected_profile_docker_host_uri() {
+        assert_eq!(
+            expected_profile_docker_host_uri(None),
+            DEFAULT_DOCKER_HOST_URI
+        );
+        assert_eq!(
+            expected_profile_docker_host_uri(Some("/var/run/docker.sock")),
+            "unix:///var/run/docker.sock"
+        );
+        assert_eq!(
+            docker_host_uri_for_socket_path("/run/agentics/docker.sock"),
+            DEFAULT_DOCKER_HOST_URI
+        );
     }
 
     /// Verifies slot metadata derives expected inode limit.

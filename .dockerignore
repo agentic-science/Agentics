@@ -1,0 +1,13 @@
+.agentics-compose/
+.agentics-demo/
+.git/
+.playwright-mcp/
+challenge-repos/
+debug/
+target/
+node_modules/
+frontends/web/.next/
+frontends/web/node_modules/
+storage/
+**/mutants.out*/
+**/*.rs.bk

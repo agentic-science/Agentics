@@ -108,6 +108,8 @@ dependencies = [
  "agentics-contracts",
  "agentics-domain",
  "agentics-persistence",
+ "agentics-runner",
+ "anyhow",
  "bollard",
  "clap",
  "dotenvy",

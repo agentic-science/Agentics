@@ -77,12 +77,26 @@ use run_io::{
 };
 use storage::{RunnerStorage, WritableMountLease, WritablePhase};
 
-const RUNNER_KIND_LABEL: &str = "agentics.runner";
-const RUNNER_KIND_ZIP_PROJECT: &str = "zip_project";
-const RUNNER_NAMESPACE_LABEL: &str = "agentics.runner_namespace";
-const RUNNER_SCOPE_LABEL: &str = "agentics.runner_scope";
-const RUNNER_SCOPE_HOSTED_WORKER: &str = "hosted-worker";
-const RUNNER_SCOPE_LOCAL_VALIDATION: &str = "local-validation";
+/// Docker label marking an Agentics-owned runner container.
+pub const RUNNER_KIND_LABEL: &str = "agentics.runner";
+/// Docker label value for `zip_project` runner containers.
+pub const RUNNER_KIND_ZIP_PROJECT: &str = "zip_project";
+/// Docker label storing the runner namespace.
+pub const RUNNER_NAMESPACE_LABEL: &str = "agentics.runner_namespace";
+/// Docker label storing the runner ownership scope.
+pub const RUNNER_SCOPE_LABEL: &str = "agentics.runner_scope";
+/// Docker label value for hosted worker runner containers.
+pub const RUNNER_SCOPE_HOSTED_WORKER: &str = "hosted-worker";
+/// Docker label value for local validation runner containers.
+pub const RUNNER_SCOPE_LOCAL_VALIDATION: &str = "local-validation";
+/// Docker label storing the evaluation job id.
+pub const RUNNER_JOB_ID_LABEL: &str = "agentics.job_id";
+/// Docker label storing the worker id that created a runner container.
+pub const RUNNER_WORKER_ID_LABEL: &str = "agentics.worker_id";
+/// Docker label storing the evaluation attempt count.
+pub const RUNNER_ATTEMPT_COUNT_LABEL: &str = "agentics.attempt_count";
+/// Docker label storing the execution phase.
+pub const RUNNER_PHASE_LABEL: &str = "agentics.phase";
 
 /// Validated evaluator result plus the persisted runner log location.
 #[derive(Debug, Clone)]
@@ -158,13 +172,13 @@ impl RunnerContext<'_> {
         writable_mount: Option<&WritableMountLease>,
     ) -> HashMap<String, String> {
         let mut labels = HashMap::from([
-            ("agentics.job_id".to_string(), self.job_id.to_string()),
+            (RUNNER_JOB_ID_LABEL.to_string(), self.job_id.to_string()),
             (
-                "agentics.worker_id".to_string(),
+                RUNNER_WORKER_ID_LABEL.to_string(),
                 self.attempt.worker_id.clone(),
             ),
             (
-                "agentics.attempt_count".to_string(),
+                RUNNER_ATTEMPT_COUNT_LABEL.to_string(),
                 self.attempt.attempt_count.to_string(),
             ),
             (
@@ -175,7 +189,7 @@ impl RunnerContext<'_> {
                 RUNNER_SCOPE_LABEL.to_string(),
                 self.container_scope.as_label().to_string(),
             ),
-            ("agentics.phase".to_string(), phase.to_string()),
+            (RUNNER_PHASE_LABEL.to_string(), phase.to_string()),
         ]);
         if let Some(writable_mount) = writable_mount {
             labels.extend(writable_mount.docker_labels());

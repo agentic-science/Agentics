@@ -7,6 +7,7 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
+anyhow = { workspace = true }
 bollard = { workspace = true }
 clap = { version = "4", features = ["derive"] }
 dotenvy = "0.15"
@@ -21,6 +22,7 @@ agentics-config = { workspace = true }
 agentics-contracts = { workspace = true }
 agentics-domain = { workspace = true }
 agentics-persistence = { workspace = true }
+agentics-runner = { workspace = true }
 sqlx = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }

@@ -21,6 +21,15 @@ pub const DEFAULT_OUTPUT_LIMIT_BYTES: usize = 16 * 1024;
 /// Exit code used by POSIX shells for Ctrl-C.
 pub const INTERRUPTED_EXIT: u8 = 130;
 
+/// Environment variable for the Docker host URI used by ops commands.
+pub const ENV_DOCKER_HOST: &str = "AGENTICS_DOCKER_HOST";
+
+/// Environment variable for the host Docker socket path mounted into containers.
+pub const ENV_DOCKER_SOCKET_PATH: &str = "AGENTICS_DOCKER_SOCKET_PATH";
+
+/// Default host Docker socket path for production Compose.
+pub const DEFAULT_DOCKER_SOCKET_PATH: &str = "/var/run/docker.sock";
+
 /// Read a non-empty environment variable.
 pub fn env_non_empty(name: &str) -> Option<String> {
     std::env::var(name)

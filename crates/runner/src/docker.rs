@@ -248,7 +248,10 @@ async fn repair_bind_mount_permissions(
         super::RUNNER_KIND_LABEL.to_string(),
         super::RUNNER_KIND_ZIP_PROJECT.to_string(),
     );
-    labels.insert("agentics.phase".to_string(), "permission-fix".to_string());
+    labels.insert(
+        super::RUNNER_PHASE_LABEL.to_string(),
+        "permission-fix".to_string(),
+    );
 
     let host_config = permission_repair_host_config(mounts);
     let container_config = ContainerCreateBody {
@@ -516,12 +519,15 @@ impl RunnerContainerLabels {
         {
             return None;
         }
-        let job_id = EvaluationJobId::try_new(labels.get("agentics.job_id")?).ok()?;
-        let worker_id = labels.get("agentics.worker_id")?.to_string();
+        let job_id = EvaluationJobId::try_new(labels.get(super::RUNNER_JOB_ID_LABEL)?).ok()?;
+        let worker_id = labels.get(super::RUNNER_WORKER_ID_LABEL)?.to_string();
         if worker_id.trim().is_empty() {
             return None;
         }
-        let attempt_count = labels.get("agentics.attempt_count")?.parse::<i32>().ok()?;
+        let attempt_count = labels
+            .get(super::RUNNER_ATTEMPT_COUNT_LABEL)?
+            .parse::<i32>()
+            .ok()?;
         if attempt_count <= 0 {
             return None;
         }

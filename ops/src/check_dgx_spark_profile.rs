@@ -32,8 +32,8 @@ use nix::unistd::Uid;
 use uuid::Uuid;
 
 use crate::dgx::{
-    DEFAULT_DOCKER_HOST_URI, DgxPhase, DgxProfileCheckConfig, DockerPullPolicy,
-    ENV_DGX_RUN_MUTATING_PROBES, SlotMetadata, phase_slot_path,
+    DgxPhase, DgxProfileCheckConfig, DockerPullPolicy, ENV_DGX_RUN_MUTATING_PROBES, SlotMetadata,
+    phase_slot_path,
 };
 use crate::support::{
     CommandOutput, DEFAULT_OUTPUT_LIMIT_BYTES, ReportLine, SupportError, append_bounded_bytes,
@@ -176,14 +176,14 @@ fn expected_profile_modes(config: &DgxProfileCheckConfig) -> ReportLine {
 }
 
 fn expected_docker_host(config: &DgxProfileCheckConfig) -> ReportLine {
-    if config.docker_host_uri == DEFAULT_DOCKER_HOST_URI {
-        ReportLine::pass("Agentics Docker host", DEFAULT_DOCKER_HOST_URI)
+    if config.docker_host_uri == config.expected_docker_host_uri {
+        ReportLine::pass("Agentics Docker host", &config.expected_docker_host_uri)
     } else {
         ReportLine::fail(
             "Agentics Docker host",
             format!(
-                "AGENTICS_DOCKER_HOST should be {DEFAULT_DOCKER_HOST_URI}; got {}",
-                config.docker_host_uri
+                "AGENTICS_DOCKER_HOST should be {}; got {}",
+                config.expected_docker_host_uri, config.docker_host_uri
             ),
         )
     }

@@ -3,6 +3,7 @@ set fallback := true
 compose_dev := "docker compose --env-file deploy/compose/env/dev.env.example -f deploy/compose/compose.yml -f deploy/compose/compose.dev.yml"
 compose_test := "docker compose --env-file deploy/compose/env/test.env.example -f deploy/compose/compose.yml -f deploy/compose/compose.test.yml"
 compose_rustfs_private_backup := "docker compose --env-file deploy/compose/env/rustfs-private-backup.env -f deploy/compose/compose.rustfs-private-backup.yml"
+compose_prod := "cargo run -p agentics-ops --bin agentics-compose-prod --"
 crap_lcov_unit := "target/llvm-cov/agentics-workspace.lcov"
 crap_lcov_integration := "target/llvm-cov/agentics-workspace-with-integration.lcov"
 rustfs_container := "agentics-rustfs-test"
@@ -102,6 +103,34 @@ compose-dev-logs:
       project="${AGENTICS_COMPOSE_DEV_PROJECT:-agentics-dev-${USER:-local}}"; \
       namespace="${AGENTICS_RUNNER_NAMESPACE:-$project}"; \
       AGENTICS_REPO_ROOT="$PWD" AGENTICS_DEV_ROOT="$root" AGENTICS_RUNNER_NAMESPACE="$namespace" {{compose_dev}} -p "$project" logs -f
+
+# Build production Compose images
+compose-prod-build:
+    {{compose_prod}} build
+
+# Start the production Compose stack
+compose-prod-up:
+    {{compose_prod}} up
+
+# Stop the production Compose stack; requires --runner keep or --runner clean
+compose-prod-down *args:
+    {{compose_prod}} down {{args}}
+
+# Follow production Compose logs
+compose-prod-logs:
+    {{compose_prod}} logs
+
+# Show production Compose status
+compose-prod-ps:
+    {{compose_prod}} ps
+
+# Run production checks from the Compose check service
+compose-prod-check:
+    {{compose_prod}} check
+
+# Clean production runner containers by exact namespace labels
+compose-prod-clean-runners *args:
+    {{compose_prod}} clean-runners {{args}}
 
 # Start the dedicated Docker daemon used by containerized integration tests
 compose-test-docker-up:

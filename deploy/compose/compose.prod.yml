@@ -1,0 +1,193 @@
+name: ${AGENTICS_COMPOSE_PROD_PROJECT:-agentics-prod}
+
+x-app-image: &app-image
+  image: ${AGENTICS_APP_IMAGE:-agentics-app:prod-local}
+  build:
+    context: ../..
+    dockerfile: docker/app/Dockerfile
+
+x-app-env: &app-env
+  env_file:
+    - ${AGENTICS_COMPOSE_PROD_SERVICE_ENV_FILE:-./env/prod.env.example}
+  environment: &app-environment
+    AGENTICS_DATABASE_URL: postgres://${AGENTICS_POSTGRES_USER:-agentics}:${AGENTICS_POSTGRES_PASSWORD:?set AGENTICS_POSTGRES_PASSWORD}@postgres:5432/${AGENTICS_POSTGRES_DB:-agentics}
+    AGENTICS_STORAGE_BACKEND: ${AGENTICS_STORAGE_BACKEND:-s3}
+    AGENTICS_S3_BUCKET: ${AGENTICS_S3_BUCKET:-agentics}
+    AGENTICS_S3_REGION: ${AGENTICS_S3_REGION:-us-east-1}
+    AGENTICS_S3_ENDPOINT_URL: ${AGENTICS_S3_ENDPOINT_URL:-http://rustfs:9000}
+    AGENTICS_S3_FORCE_PATH_STYLE: ${AGENTICS_S3_FORCE_PATH_STYLE:-true}
+    AWS_ACCESS_KEY_ID: ${AGENTICS_RUSTFS_ACCESS_KEY:?set AGENTICS_RUSTFS_ACCESS_KEY}
+    AWS_SECRET_ACCESS_KEY: ${AGENTICS_RUSTFS_SECRET_KEY:?set AGENTICS_RUSTFS_SECRET_KEY}
+    AGENTICS_DOCKER_HOST: unix:///var/run/docker.sock
+
+x-app-user: &app-user
+  user: "${AGENTICS_RUNTIME_UID:-10001}:${AGENTICS_RUNTIME_GID:-10001}"
+
+x-storage-work-mount: &storage-work-mount
+  type: bind
+  source: ${AGENTICS_STORAGE_WORK_ROOT:?set AGENTICS_STORAGE_WORK_ROOT}
+  target: ${AGENTICS_STORAGE_WORK_ROOT:?set AGENTICS_STORAGE_WORK_ROOT}
+
+x-worker-mounts: &worker-mounts
+  - type: bind
+    source: ${AGENTICS_DOCKER_SOCKET_PATH:-/var/run/docker.sock}
+    target: /var/run/docker.sock
+  - type: bind
+    source: ${AGENTICS_RUNNER_RUNTIME_ROOT:?set AGENTICS_RUNNER_RUNTIME_ROOT}
+    target: ${AGENTICS_RUNNER_RUNTIME_ROOT:?set AGENTICS_RUNNER_RUNTIME_ROOT}
+  - type: bind
+    source: ${AGENTICS_RUNNER_PHASE_MOUNT_ROOT:?set AGENTICS_RUNNER_PHASE_MOUNT_ROOT}
+    target: ${AGENTICS_RUNNER_PHASE_MOUNT_ROOT:?set AGENTICS_RUNNER_PHASE_MOUNT_ROOT}
+  - *storage-work-mount
+
+services:
+  postgres:
+    restart: unless-stopped
+
+  rustfs-perms:
+    image: alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+    user: root
+    volumes:
+      - rustfs_data:/data
+    command: ["sh", "-c", "mkdir -p /data && chown -R 10001:10001 /data"]
+    restart: "no"
+
+  rustfs:
+    image: rustfs/rustfs:latest@sha256:f7cb98ef492fa3c3ed0dbd65df3ce2dd205c666e24e7d7234d9402c9ed1001f9
+    depends_on:
+      rustfs-perms:
+        condition: service_completed_successfully
+    env_file:
+      - ${AGENTICS_COMPOSE_PROD_SERVICE_ENV_FILE:-./env/prod.env.example}
+    environment:
+      RUSTFS_ADDRESS: :9000
+      RUSTFS_CONSOLE_ADDRESS: :9001
+      RUSTFS_ACCESS_KEY: ${AGENTICS_RUSTFS_ACCESS_KEY:?set AGENTICS_RUSTFS_ACCESS_KEY}
+      RUSTFS_SECRET_KEY: ${AGENTICS_RUSTFS_SECRET_KEY:?set AGENTICS_RUSTFS_SECRET_KEY}
+      RUSTFS_CONSOLE_ENABLE: "true"
+    volumes:
+      - rustfs_data:/data
+    command: ["/data"]
+    restart: unless-stopped
+
+  rustfs-bucket-init:
+    image: minio/mc:latest@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    depends_on:
+      rustfs:
+        condition: service_started
+    env_file:
+      - ${AGENTICS_COMPOSE_PROD_SERVICE_ENV_FILE:-./env/prod.env.example}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
+          if mc alias set prod http://rustfs:9000 "$${AGENTICS_RUSTFS_ACCESS_KEY}" "$${AGENTICS_RUSTFS_SECRET_KEY}" >/dev/null 2>&1; then
+            mc mb -p "prod/$${AGENTICS_S3_BUCKET}" >/dev/null 2>&1 || true
+            mc anonymous set none "prod/$${AGENTICS_S3_BUCKET}" >/dev/null 2>&1 || true
+            exit 0
+          fi
+          sleep 1
+        done
+        mc alias set prod http://rustfs:9000 "$${AGENTICS_RUSTFS_ACCESS_KEY}" "$${AGENTICS_RUSTFS_SECRET_KEY}" >/dev/null
+        mc mb -p "prod/$${AGENTICS_S3_BUCKET}" >/dev/null 2>&1 || true
+        mc anonymous set none "prod/$${AGENTICS_S3_BUCKET}" >/dev/null 2>&1 || true
+    restart: "no"
+
+  migrate:
+    <<: [*app-image, *app-env, *app-user]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["/usr/local/bin/agentics-migrate"]
+    restart: "no"
+
+  api:
+    <<: [*app-image, *app-env, *app-user]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      rustfs-bucket-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *app-environment
+      AGENTICS_API_HOST: 0.0.0.0
+      AGENTICS_DOCKER_HOST: ""
+    ports:
+      - "${AGENTICS_COMPOSE_BIND_IP:-127.0.0.1}:${AGENTICS_API_PORT:-3100}:3100"
+    volumes:
+      - *storage-work-mount
+    command: ["/usr/local/bin/api"]
+    restart: unless-stopped
+
+  worker-cpu:
+    <<: [*app-image, *app-env]
+    user: "${AGENTICS_RUNTIME_UID:-10001}:${AGENTICS_DOCKER_SOCKET_GID:-10001}"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      rustfs-bucket-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *app-environment
+      AGENTICS_WORKER_ACCELERATORS: none
+    volumes: *worker-mounts
+    command: ["/usr/local/bin/worker"]
+    restart: unless-stopped
+
+  worker-gpu:
+    <<: [*app-image, *app-env]
+    profiles: ["gpu"]
+    user: "${AGENTICS_RUNTIME_UID:-10001}:${AGENTICS_DOCKER_SOCKET_GID:-10001}"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      rustfs-bucket-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *app-environment
+      AGENTICS_WORKER_ACCELERATORS: gpu
+    volumes: *worker-mounts
+    command: ["/usr/local/bin/worker"]
+    restart: unless-stopped
+
+  web:
+    image: ${AGENTICS_WEB_IMAGE:-agentics-web:prod-local}
+    build:
+      context: ../..
+      dockerfile: docker/web/Dockerfile
+    env_file:
+      - ${AGENTICS_COMPOSE_PROD_SERVICE_ENV_FILE:-./env/prod.env.example}
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      AGENTICS_API_BASE_URL: http://api:3100
+      NEXT_PUBLIC_AGENTICS_API_BASE_URL: ""
+    ports:
+      - "${AGENTICS_COMPOSE_BIND_IP:-127.0.0.1}:${AGENTICS_WEB_PORT:-3001}:3001"
+    command: ["bun", "run", "start", "--", "-H", "0.0.0.0", "-p", "3001"]
+    restart: unless-stopped
+
+  check:
+    <<: [*app-image, *app-env]
+    profiles: ["check"]
+    depends_on:
+      api:
+        condition: service_started
+      web:
+        condition: service_started
+    environment:
+      <<: *app-environment
+      AGENTICS_API_BASE_URL: http://api:3100
+      AGENTICS_WEB_BASE_URL: http://web:3001
+      AGENTICS_DOCKER_HOST: unix:///var/run/docker.sock
+    volumes:
+      - type: bind
+        source: ${AGENTICS_DOCKER_SOCKET_PATH:-/var/run/docker.sock}
+        target: /var/run/docker.sock
+    command: ["/usr/local/bin/agentics-check-local-mvp"]
+    restart: "no"
+
+volumes:
+  rustfs_data:
